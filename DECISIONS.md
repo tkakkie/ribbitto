@@ -1,9 +1,13 @@
 # Decisions
 
 Decisions that later work must respect, newest last. Each entry is short:
-what was decided, why, and what else was considered. To change one, open an
-issue; when it is settled, add a new entry that supersedes the old one
-rather than editing history.
+what was decided, why, and what else was considered.
+
+**Keep it current:** add an entry in the same pull request whenever a
+decision is made that later work must follow (a technology, a data-model
+rule, a process choice). To change a decision, open an issue; when it is
+settled, add a new entry that supersedes the old one rather than editing
+history.
 
 ## 1. Go, not Rust
 

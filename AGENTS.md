@@ -27,10 +27,9 @@ Follow [`docs/workflow.md`](docs/workflow.md). The rules you must not skip:
 
 ## Commands
 
-- `go build ./... && go vet ./...` — must pass before you open a pull request.
-- `gofmt -l .` must print nothing.
-
-(`make check` replaces these once the Makefile exists.)
+- `make check` — checks formatting, vets, lints, builds and tests; must pass
+  before you open a pull request.
+- `make lint` — runs golangci-lint.
 
 ## Layout and dependency direction
 

@@ -85,7 +85,7 @@ sequenceDiagram
   A->>DB: INSERT message (event_seq = n)
   A->>DB: INSERT event_log (seq = n, event data)
   A->>DB: COMMIT
-  A->>H: "sequence advanced" (after commit)
+  A->>H: raise latest sequence of org to n (after commit)
 ```
 
 - **Take the sequence number first.** The `UPDATE` (scoped to the
@@ -102,12 +102,15 @@ sequenceDiagram
   unread state still works after old `event_log` rows are deleted.
 - **Only durable events go into `event_log`.** Typing indicators and presence
   are ephemeral and never replayed.
-- **The hub is notified after commit** with only "the sequence advanced";
-  it reads the events from `event_log`. A crash between commit and
-  notification loses nothing: the next reader catches up from the table.
-  With more than one server, the notification becomes PostgreSQL
-  `NOTIFY` sent inside the writing transaction, and listeners catch up from
-  the table after reconnecting.
+- **The hub is told the new sequence after commit.** It keeps, per
+  organisation, the highest committed sequence it has seen — a *value*, not
+  a one-shot signal (see *No lost wakeups* below) — and only ever raises it.
+  Events themselves are always read from `event_log`. A crash between
+  commit and telling the hub loses nothing: readers catch up from the table.
+  With more than one server, the value travels as PostgreSQL `NOTIFY`
+  (payload: organisation and sequence) sent inside the writing transaction;
+  each listener raises its local hub's value, and after reconnecting it
+  reads `organization.event_seq` and raises the value to that.
 
 ## Server-Sent Events *(planned, M3)*
 
@@ -129,9 +132,9 @@ sequenceDiagram
   B->>W: GET /events?after=cursor
   W->>C: start
   loop
-    C->>DB: event_log WHERE organization_id = org AND seq > cursor
-    C->>C: authorize each event for this connection, render, send
-    C->>C: wait for "sequence advanced"
+    C->>DB: event_log WHERE organization_id = org AND seq > cursor ORDER BY seq
+    C->>C: authorize, render, send each event; cursor = last seq read
+    C->>C: wait until hub's latest sequence of org > cursor (no wait if already)
   end
 ```
 
@@ -140,6 +143,17 @@ sequenceDiagram
   statement sees a new snapshot, so a message committed between reading the
   messages and reading `event_seq` would be missing from the page *and*
   skipped by the stream.
+- **No lost wakeups.** Waiting means "block until the hub's latest
+  sequence for this organisation is greater than my cursor", and that
+  condition is checked under the hub's lock *before* blocking. The hub's
+  value is level-triggered: if event 101 is committed after the connection
+  read `seq > 100` and found nothing, but before it starts waiting, the hub
+  already holds 101, so the wait returns at once and the next read delivers
+  it. Wakeups are broadcast (a condition variable, or a channel that is
+  closed and replaced on every raise), never a buffered per-connection
+  signal that could be dropped. The cursor advances to the last sequence
+  *read*, including events this connection may not see, so a filtered event
+  cannot keep the loop spinning.
 - Replay and live delivery go through the same per-connection loop, so they
   cannot interleave out of order. `Last-Event-ID` is preferred on reconnect;
   before htmx recreates the `EventSource`, the client puts its last cursor

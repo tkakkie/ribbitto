@@ -58,6 +58,7 @@ so local notes and tools do not change the output.
 
 - [Architecture](docs/architecture.md) — packages, allowed imports, request and real-time flow
 - [Domain](docs/domain.md) — glossary, entities, invariants, unread rules
+- [UI](docs/ui.md) — design direction, tokens, contrast
 - [Decisions](DECISIONS.md) — what was decided and why
 - [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow.md) · [Database development](docs/database.md)
 

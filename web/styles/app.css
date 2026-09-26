@@ -2,3 +2,115 @@
 @source "../../internal/web/**/*.templ";
 /* With source(none), Tailwind watches only @source paths, so include this directory to rebuild on CSS-only edits. */
 @source "./*.css";
+
+/*
+ * Design tokens (direction "B · Clear water", see docs/ui.md).
+ * Colours are semantic CSS variables so dark mode is one override block;
+ * Tailwind's @theme cannot sit inside a media query, so @theme inline maps
+ * utilities (bg-surface, text-muted, …) onto these variables.
+ * Contrast ratios for every pair are listed in docs/ui.md — recheck them
+ * there when you change a value here.
+ */
+:root {
+  color-scheme: light;
+  --rb-bg: #ffffff;
+  --rb-rail: #f1f3f2;
+  --rb-sidebar: #f7f8f7;
+  --rb-surface: #ffffff;
+  --rb-input: #f7f8f7;
+  --rb-border: #e3e6e4;
+  --rb-border-strong: #8a9096;
+  --rb-fg: #16181a;
+  --rb-muted: #595f66;
+  --rb-brand: #4a7a0f;
+  --rb-on-brand: #ffffff;
+  --rb-selected: #e9f1de;
+  --rb-on-selected: #2f4f08;
+  --rb-accent: #fbf3d5;
+  --rb-on-accent: #5c4a0c;
+  --rb-success: #0e7490;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --rb-bg: #0f1112;
+    --rb-rail: #0a0b0c;
+    --rb-sidebar: #141718;
+    --rb-surface: #171a1b;
+    --rb-input: #141718;
+    --rb-border: #26292b;
+    --rb-border-strong: #6b7278;
+    --rb-fg: #e6e8ea;
+    --rb-muted: #9aa1a8;
+    --rb-brand: #9ccc5a;
+    --rb-on-brand: #10170a;
+    --rb-selected: #1f2a14;
+    --rb-on-selected: #d6ecb8;
+    --rb-accent: #3a3316;
+    --rb-on-accent: #fbf3d5;
+    --rb-success: #5fc3dc;
+  }
+}
+
+@theme inline {
+  /* Only our tokens: no stray palette colours in templates. */
+  --color-*: initial;
+  --color-bg: var(--rb-bg);
+  --color-rail: var(--rb-rail);
+  --color-sidebar: var(--rb-sidebar);
+  --color-surface: var(--rb-surface);
+  --color-input: var(--rb-input);
+  --color-border: var(--rb-border);
+  --color-border-strong: var(--rb-border-strong);
+  --color-fg: var(--rb-fg);
+  --color-muted: var(--rb-muted);
+  --color-brand: var(--rb-brand);
+  --color-on-brand: var(--rb-on-brand);
+  --color-selected: var(--rb-selected);
+  --color-on-selected: var(--rb-on-selected);
+  --color-accent: var(--rb-accent);
+  --color-on-accent: var(--rb-on-accent);
+  --color-success: var(--rb-success);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+}
+
+@theme {
+  /* System fonts only (no web fonts: self-hosting and privacy), with Japanese fallbacks. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Type scale: dense, like direction B. */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.375rem;
+  --text-title: 0.9375rem;
+  --text-title--line-height: 1.375rem;
+  --text-heading: 1.25rem;
+  --text-heading--line-height: 1.75rem;
+  --text-display: 1.75rem;
+  --text-display--line-height: 2.25rem;
+
+  /* Spacing stays Tailwind's 4 px grid (--spacing: 0.25rem). */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 1px rgb(0 0 0 / 0.04);
+  --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+@layer base {
+  html {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}

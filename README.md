@@ -54,6 +54,13 @@ Generated Go, CSS and vendored scripts are committed, so `go build` needs
 neither templ nor Tailwind. CSS class detection is limited to `.templ` files
 so local notes and tools do not change the output.
 
+## Documentation
+
+- [Architecture](docs/architecture.md) — packages, allowed imports, request and real-time flow
+- [Domain](docs/domain.md) — glossary, entities, invariants, unread rules
+- [Decisions](DECISIONS.md) — what was decided and why
+- [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow.md) · [Database development](docs/database.md)
+
 ## Contributing
 
 The project is maintained by one person and developed with AI coding tools;

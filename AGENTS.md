@@ -45,6 +45,15 @@ It may import `web/static` for embedded assets. Do not add an import that breaks
 `db/migrations` is owned by `internal/infra/postgres` and may be imported
 only by it and `cmd/ribbitto`.
 
+## Where things are explained
+
+Read the relevant document before changing its area, and update it in the
+same pull request: [`docs/architecture.md`](docs/architecture.md)
+(packages, imports, data flow, real-time), [`docs/domain.md`](docs/domain.md)
+(terms, entities, invariants, unread rules), [`DECISIONS.md`](DECISIONS.md)
+(settled decisions — change them through an issue),
+[`docs/database.md`](docs/database.md).
+
 ## Writing code
 
 - Write boring Go: no generics or reflection unless they remove real
@@ -62,6 +71,9 @@ only by it and `cmd/ribbitto`.
 - Never use `templ.Raw` or build HTML by string concatenation.
 - Product vocabulary (ribbit, pond, marsh…) appears only in UI message
   files, never in identifiers.
+- UI strings go in `internal/web/i18n/locales/{en,ja}.toml`; use dotted,
+  neutral IDs (`hello.title`, never a product word), and update both languages
+  in the same PR. Templates get messages through `i18n.T(ctx, "message.id")`.
 - When a change alters terminology, invariants, data flow or dependency
   direction, update `docs/` in the same pull request.
 

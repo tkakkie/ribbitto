@@ -7,6 +7,14 @@ linters:
     - errcheck
     - forbidigo
     - revive
+  exclusions:
+    # Generated code must still obey the raw HTML ban and dependency rules.
+    generated: disable
+    rules:
+      - path: '_templ\.go$'
+        linters: [errcheck, revive]
+      - path: '^internal/infra/postgres/sqlcgen/'
+        linters: [errcheck, revive]
   settings:
     depguard:
       # Lax rules restrict listed imports only. Exact roots and slash prefixes

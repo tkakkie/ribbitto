@@ -1,0 +1,77 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - depguard
+    - errcheck
+    - forbidigo
+    - revive
+  settings:
+    depguard:
+      # Lax rules restrict internal imports only. Exact roots and slash prefixes
+      # allow each layer's sub-packages without allowing similarly named layers.
+      # File globs need separate selectors for roots and descendants.
+      # Every production rule excludes tests; overlapping rules apply independently.
+      rules:
+        domain:
+          list-mode: lax
+          files: ["**/internal/domain/*.go", "**/internal/domain/**/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/domain$
+            - github.com/tkakkie/ribbitto/internal/domain/
+          deny: &internal
+            - pkg: github.com/tkakkie/ribbitto/internal/
+              desc: Respect the dependency direction in AGENTS.md.
+        app:
+          list-mode: lax
+          files: ["**/internal/app/*.go", "**/internal/app/**/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/app$
+            - github.com/tkakkie/ribbitto/internal/app/
+            - github.com/tkakkie/ribbitto/internal/domain$
+            - github.com/tkakkie/ribbitto/internal/domain/
+          deny: *internal
+        postgres:
+          list-mode: lax
+          files: ["**/internal/infra/postgres/*.go", "**/internal/infra/postgres/**/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/infra/postgres$
+            - github.com/tkakkie/ribbitto/internal/infra/postgres/
+            - github.com/tkakkie/ribbitto/internal/domain$
+            - github.com/tkakkie/ribbitto/internal/domain/
+            - github.com/tkakkie/ribbitto/internal/app$
+            - github.com/tkakkie/ribbitto/internal/app/
+          deny: *internal
+        realtime:
+          list-mode: lax
+          files: ["**/internal/realtime/*.go", "**/internal/realtime/**/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/realtime$
+            - github.com/tkakkie/ribbitto/internal/realtime/
+            - github.com/tkakkie/ribbitto/internal/domain$
+            - github.com/tkakkie/ribbitto/internal/domain/
+          deny: *internal
+        web:
+          list-mode: lax
+          files: ["**/internal/web/*.go", "**/internal/web/**/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/web$
+            - github.com/tkakkie/ribbitto/internal/web/
+            - github.com/tkakkie/ribbitto/internal/domain$
+            - github.com/tkakkie/ribbitto/internal/domain/
+            - github.com/tkakkie/ribbitto/internal/app$
+            - github.com/tkakkie/ribbitto/internal/app/
+            - github.com/tkakkie/ribbitto/internal/realtime$
+            - github.com/tkakkie/ribbitto/internal/realtime/
+          deny: *internal
+    revive:
+      rules:
+        - name: exported
+    forbidigo:
+      analyze-types: true
+      exclude-godoc-examples: false
+      forbid:
+        - pattern: '^templ\.Raw$'
+          pkg: '^github\.com/a-h/templ$'
+          msg: Use escaped templ components instead of raw HTML.

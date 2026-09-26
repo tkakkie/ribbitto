@@ -1,0 +1,4 @@
+# Future sqlc output is isolated from handwritten PostgreSQL adapters.
+/internal/infra/postgres/sqlc/** linguist-generated=true
+# templ emits Go alongside each handwritten .templ source file.
+*_templ.go linguist-generated=true

@@ -30,17 +30,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: gofmt
-        run: |
-          unformatted=$(gofmt -l .)
-          if [ -n "$unformatted" ]; then
-            echo "These files need gofmt:"
-            echo "$unformatted"
-            exit 1
-          fi
-
-      - name: build
-        run: go build ./...
-
-      - name: vet
-        run: go vet ./...
+      # The Makefile pins golangci-lint for both local checks and CI.
+      - name: check
+        run: make check

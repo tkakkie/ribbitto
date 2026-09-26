@@ -7,6 +7,10 @@ updates:
       - "/tools/tbls"
     schedule:
       interval: weekly
+    groups:
+      templ:
+        patterns:
+          - "github.com/a-h/templ"
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

@@ -28,7 +28,7 @@ disagree, fix the disagreement in a pull request.
 | Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
 | Copilot | Reviews every pull request automatically (drafts included) at **Lite**, the repository setting, guided by `.github/instructions/code-review.instructions.md`. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
-| Grok | Adversarial review of `high` pull requests (from M1). Advisory. |
+| Grok | Adversarial review of `high` pull requests (from M1), run with `scripts/ai/grok-review.sh`. Advisory. |
 | Antigravity | Optional: UI screenshot review, experiments, stand-in for Grok. |
 
 Claude and Codex should end up with roughly equal shares of implementation.
@@ -147,6 +147,33 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
 than combine both sides, it needs a normal review.
+
+## Adversarial review
+
+From M1 on, **every `high` pull request gets one adversarial review by Grok
+before the maintainer is asked.** Running it is mandatory; its findings are
+advisory. It does not count towards the two review rounds.
+
+```sh
+scripts/ai/grok-review.sh <pr-number>
+```
+
+- The script checks out the PR head in a temporary worktree, builds the
+  prompt from `.github/prompts/adversarial.md` **on `origin/main`** (a PR
+  cannot rewrite its own review instructions) plus the PR title,
+  description and diff as delimited, untrusted blocks, and runs Grok
+  read-only: plan mode **and** only the `read_file`, `list_dir` and `grep`
+  tools, no web search, stdin closed.
+- It stops Grok and everything Grok started after `RIBBITTO_GROK_TIMEOUT`
+  seconds (default 1200; exit 124), and removes the worktree and temporary
+  files on success, failure, timeout, Ctrl-C and `TERM`.
+- `RIBBITTO_GROK_MODEL` picks a model (`grok models` lists them).
+  `RIBBITTO_GROK_PROMPT_REF` changes where the prompt is read from; use it
+  only to test a PR that edits the prompt itself.
+- Claude posts the report as a PR comment headed
+  `**Adversarial review — Grok** (at <SHA>)` and adds, for each finding,
+  *valid* (fixed in the PR or tracked as an issue) or *false positive* with
+  the reason.
 
 ## Risk
 

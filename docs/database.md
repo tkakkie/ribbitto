@@ -1,5 +1,8 @@
 # Database development
 
+**Keep it current:** update this file when configuration, the migration
+workflow or the integration-test setup changes.
+
 `RIBBITTO_DATABASE_URL` configures both the server and the explicit
 `migrate up|down|status` command. The server checks connectivity but never
 applies migrations. `.env.example` contains the local Compose URLs; export

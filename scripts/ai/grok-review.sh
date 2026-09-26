@@ -39,10 +39,10 @@ repo=$(git rev-parse --show-toplevel)
 git -C "$repo" fetch --quiet origin main || die "could not fetch main from origin"
 
 # Fail closed if this launcher was run from a file that differs from the
-# trusted one (for example scripts/ai/grok-review.sh in a PR checkout): a PR
-# could otherwise run any shell command before Grok's read-only limits apply.
-# The documented invocation feeds the trusted blob through bash <(git show …),
-# where there is no file to compare; that path is trusted by construction.
+# trusted one. This only catches an accidentally edited copy: a malicious
+# copy runs its own code before reaching this check, so the security
+# boundary is the documented invocation, bash <(git show origin/main:…),
+# which never executes a file a pull request can change.
 self=${BASH_SOURCE[0]}
 if [[ -f $self ]]; then
   trusted=$(git -C "$repo" rev-parse --verify --quiet "$trusted_ref:scripts/ai/grok-review.sh") \

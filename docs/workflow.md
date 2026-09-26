@@ -161,9 +161,11 @@ Run it from the maintainer's checkout, taking the launcher as it is on
 git fetch origin main && bash <(git show origin/main:scripts/ai/grok-review.sh) <pr-number>
 ```
 
-- If the launcher is run as a file that differs from
-  `origin/main:scripts/ai/grok-review.sh` (for example from a PR checkout),
-  it refuses to run, so a PR cannot execute its own version by mistake.
+- **The invocation above is the security boundary.** If the launcher is
+  run as a file that differs from `origin/main:scripts/ai/grok-review.sh`,
+  it refuses to run — but that only catches an accidentally edited copy: a
+  malicious copy runs its own code before any check (a script cannot vouch
+  for itself). Never run `scripts/ai/grok-review.sh` from a PR checkout.
 - It checks out the PR head in a temporary worktree and builds the prompt
   from `.github/prompts/adversarial.md` **on `origin/main`** (a PR cannot
   rewrite its own review instructions). Everything the PR controls — title,

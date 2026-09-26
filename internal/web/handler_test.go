@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,7 +15,7 @@ import (
 )
 
 func TestHandler(t *testing.T) {
-	handler, err := NewHandler()
+	handler, err := NewHandler("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +57,7 @@ func TestHandler(t *testing.T) {
 }
 
 func TestHello(t *testing.T) {
-	handler, err := NewHandler()
+	handler, err := NewHandler("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,5 +92,45 @@ func TestHello(t *testing.T) {
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, stylesheetURL, nil))
 	if w.Code != http.StatusOK || w.Body.String() != string(css) {
 		t.Error("hashed stylesheet URL does not serve the embedded CSS")
+	}
+}
+
+func TestDevelopmentAssets(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "css"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cssPath := filepath.Join(dir, "css", "app.css")
+	initialCSS := "body { color: red; }"
+	if err := os.WriteFile(cssPath, []byte(initialCSS), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandler(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousURL := ""
+	for _, css := range []string{initialCSS, "body { color: blue; }"} {
+		if err := os.WriteFile(cssPath, []byte(css), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+		wantURL := fmt.Sprintf("/static/css/app.css?v=%x", sha256.Sum256([]byte(css)))
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `<link rel="stylesheet" href="`+wantURL+`">`) {
+			t.Fatalf("page does not link to current CSS: status = %d, body = %s", w.Code, w.Body.String())
+		}
+		if previousURL != "" && strings.Contains(w.Body.String(), previousURL) {
+			t.Error("page still contains the previous stylesheet URL")
+		}
+		w = httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, wantURL, nil))
+		if w.Code != http.StatusOK || w.Body.String() != css {
+			t.Fatalf("stylesheet does not serve current CSS: status = %d, body = %q", w.Code, w.Body.String())
+		}
+		if got := w.Header().Get("Cache-Control"); got != "no-store" {
+			t.Errorf("Cache-Control = %q, want no-store", got)
+		}
+		previousURL = wantURL
 	}
 }

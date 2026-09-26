@@ -32,7 +32,7 @@ func run() error {
 		addr = ":8080"
 	}
 
-	handler, err := web.NewHandler()
+	handler, err := web.NewHandler(os.Getenv("RIBBITTO_DEV_ASSETS"))
 	if err != nil {
 		return err
 	}

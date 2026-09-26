@@ -32,9 +32,10 @@ make check                 # checks formatting, vets, lints, builds and tests
 ```
 
 `make dev` builds CSS before starting the server. It runs the pinned templ
-and Tailwind watchers together, restarting Go when templates, Go source, or
-the built CSS change. Reload the browser after an edit; the stylesheet URL
-contains a content hash so rebuilt CSS bypasses the immutable cache.
+and Tailwind watchers together, restarting Go when templates or Go source
+change. It sets `RIBBITTO_DEV_ASSETS=web/static` to serve assets from disk
+without caching and recompute the stylesheet URL's content hash on each page
+request. Reload the browser after an edit; rebuilt CSS needs no server restart.
 Ctrl-C stops the watchers and server.
 
 The standalone Tailwind CLI is downloaded and SHA-256 checked by `make css`

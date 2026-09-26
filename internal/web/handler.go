@@ -8,13 +8,14 @@ import (
 	"os"
 
 	"github.com/a-h/templ"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"github.com/tkakkie/ribbitto/web/static"
 )
 
 // NewHandler constructs the application's HTTP routes. A non-empty devAssets
 // directory serves live assets from disk instead of the embedded production assets.
-func NewHandler(devAssets string) (http.Handler, error) {
+func NewHandler(devAssets string, catalogues *i18n.Catalogues) (http.Handler, error) {
 	assets := static.FS()
 	if devAssets != "" {
 		assets = os.DirFS(devAssets)
@@ -35,7 +36,7 @@ func NewHandler(devAssets string) (http.Handler, error) {
 		})
 	}
 	mux := http.NewServeMux()
-	mux.Handle("GET /{$}", home)
+	mux.Handle("GET /{$}", catalogues.Middleware(home))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})

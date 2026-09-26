@@ -1,9 +1,11 @@
 package web
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,11 +13,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/web/static"
 )
 
 func TestHandler(t *testing.T) {
-	handler, err := NewHandler("")
+	handler, err := newTestHandler(t, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +60,7 @@ func TestHandler(t *testing.T) {
 }
 
 func TestHello(t *testing.T) {
-	handler, err := NewHandler("")
+	handler, err := newTestHandler(t, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +108,7 @@ func TestDevelopmentAssets(t *testing.T) {
 	if err := os.WriteFile(cssPath, []byte(initialCSS), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler(dir)
+	handler, err := newTestHandler(t, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,5 +135,80 @@ func TestDevelopmentAssets(t *testing.T) {
 			t.Errorf("Cache-Control = %q, want no-store", got)
 		}
 		previousURL = wantURL
+	}
+}
+
+func newTestHandler(t *testing.T, dir string) (http.Handler, error) {
+	t.Helper()
+	var logs bytes.Buffer
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&logs, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if logs.Len() != 0 {
+			t.Errorf("unexpected message fallback: %s", logs.String())
+		}
+	})
+	return NewHandler(dir, catalogues)
+}
+
+func TestHelloLanguages(t *testing.T) {
+	handler, err := newTestHandler(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct{ name, cookie, header, lang string }{
+		{"cookie English", "en", "ja", "en"},
+		{"cookie Japanese", "ja", "en", "ja"},
+		{"invalid cookie", "fr", "ja", "ja"},
+		{"regional cookie is invalid", "ja-JP", "en", "en"},
+		{"regional header", "", "ja-JP", "ja"},
+		{"weighted Japanese", "", "en;q=0.2, ja;q=0.9", "ja"},
+		{"weighted English", "", "ja;q=0.2, en;q=0.9", "en"},
+		{"zero weight", "", "ja;q=0, en;q=0.5", "en"},
+		{"absent", "", "", "en"},
+		{"malformed", "", "ja;q=broken", "en"},
+		{"unsupported", "", "fr", "en"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.Header.Set("Accept-Language", tt.header)
+			if tt.cookie != "" {
+				r.AddCookie(&http.Cookie{Name: "lang", Value: tt.cookie})
+			}
+			w := httptest.NewRecorder()
+			w.Header().Add("Vary", "Accept-Encoding")
+			if tt.cookie != "" {
+				w.Header().Add("Vary", "cookie")
+			}
+			handler.ServeHTTP(w, r)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d", w.Code)
+			}
+			text := "Hello from ribbitto"
+			if tt.lang == "ja" {
+				text = "ribbittoからこんにちは"
+			}
+			for _, want := range []string{`<html lang="` + tt.lang + `">`, "<title>ribbitto</title>", text} {
+				if !strings.Contains(w.Body.String(), want) {
+					t.Errorf("HTML missing %q", want)
+				}
+			}
+			tokens := map[string]int{}
+			for _, value := range w.Header().Values("Vary") {
+				for _, token := range strings.Split(value, ",") {
+					tokens[strings.ToLower(strings.TrimSpace(token))]++
+				}
+			}
+			for _, token := range []string{"accept-encoding", "accept-language", "cookie"} {
+				if tokens[token] != 1 {
+					t.Errorf("Vary tokens = %v; want %s once", tokens, token)
+				}
+			}
+			if len(w.Header().Values("Set-Cookie")) != 0 {
+				t.Error("language negotiation must not set a cookie")
+			}
+		})
 	}
 }

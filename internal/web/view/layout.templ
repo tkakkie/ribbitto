@@ -1,12 +1,14 @@
 package view
 
+import "github.com/tkakkie/ribbitto/internal/web/i18n"
+
 templ layout(stylesheetURL string) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang={ i18n.Language(ctx) }>
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>ribbitto</title>
+			<title>{ i18n.T(ctx, "app.title") }</title>
 			<link rel="stylesheet" href={ stylesheetURL }/>
 			<script defer src="/static/vendor/htmx-2.0.7.min.js"></script>
 			<script defer src="/static/vendor/htmx-ext-sse-2.2.4.min.js"></script>

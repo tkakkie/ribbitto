@@ -14,6 +14,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/web"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
 
 func main() {
@@ -56,7 +57,11 @@ func serve(ctx context.Context) error {
 		addr = ":8080"
 	}
 
-	handler, err := web.NewHandler(os.Getenv("RIBBITTO_DEV_ASSETS"))
+	catalogues, err := i18n.New(slog.Default())
+	if err != nil {
+		return err
+	}
+	handler, err := web.NewHandler(os.Getenv("RIBBITTO_DEV_ASSETS"), catalogues)
 	if err != nil {
 		return err
 	}

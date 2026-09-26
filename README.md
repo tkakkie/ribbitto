@@ -21,15 +21,22 @@ PostgreSQL with pgx, sqlc and goose.
 
 ## Development
 
-Requires Go (see `go.mod` for the version).
+Requires Go (see `go.mod` for the version) and Docker Compose for PostgreSQL 18.
 
 ```sh
-go run ./cmd/ribbitto        # serves http://localhost:8080/healthz
+cp .env.example .env
+set -a; . ./.env; set +a    # export configuration; the binary does not load .env
+make db-up                 # starts PostgreSQL and waits for health
+go run ./cmd/ribbitto migrate up
+go run ./cmd/ribbitto       # or: go run ./cmd/ribbitto serve
 make check                 # checks formatting, vets, lints, builds and tests
+make db-down               # stops PostgreSQL; keeps the named data volume
 ```
 
-More tooling (`make dev`, a local PostgreSQL) arrives with the
-first milestone.
+The server listens at http://localhost:8080/healthz and never migrates on
+startup. Use `ribbitto migrate up|down|status` with a built binary; `down`
+reverts one migration. See [database development](docs/database.md) for
+configuration, migration ownership and integration tests.
 
 ## Contributing
 

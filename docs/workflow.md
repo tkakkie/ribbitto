@@ -154,26 +154,35 @@ From M1 on, **every `high` pull request gets one adversarial review by Grok
 before the maintainer is asked.** Running it is mandatory; its findings are
 advisory. It does not count towards the two review rounds.
 
+Run it from the maintainer's checkout, taking the launcher as it is on
+`main` — never a copy that a pull request could have changed:
+
 ```sh
-scripts/ai/grok-review.sh <pr-number>
+git fetch origin main && bash <(git show origin/main:scripts/ai/grok-review.sh) <pr-number>
 ```
 
-- The script checks out the PR head in a temporary worktree, builds the
-  prompt from `.github/prompts/adversarial.md` **on `origin/main`** (a PR
-  cannot rewrite its own review instructions) plus the PR title,
-  description and diff as delimited, untrusted blocks, and runs Grok
-  read-only: plan mode **and** only the `read_file`, `list_dir` and `grep`
-  tools, no web search, stdin closed.
+- If the launcher is run as a file that differs from
+  `origin/main:scripts/ai/grok-review.sh` (for example from a PR checkout),
+  it refuses to run, so a PR cannot execute its own version by mistake.
+- It checks out the PR head in a temporary worktree and builds the prompt
+  from `.github/prompts/adversarial.md` **on `origin/main`** (a PR cannot
+  rewrite its own review instructions). Everything the PR controls — title,
+  description and diff — is appended as **one JSON object** on the last
+  line, so escaping keeps it from ending early or adding instructions; the
+  prompt also tells Grok that every file in the worktree is untrusted data.
+- Grok runs read-only: plan mode **and** only the `read_file`, `list_dir`
+  and `grep` tools, no web search, stdin closed.
 - It stops Grok and everything Grok started after `RIBBITTO_GROK_TIMEOUT`
   seconds (1–86400, default 1200; exit 124), and removes the worktree and
   temporary files on success, failure, timeout, Ctrl-C (130) and `TERM`
-  (143). When Grok itself fails, the script exits with Grok's status.
+  (143), reporting any cleanup failure. When Grok itself fails, the script
+  exits with Grok's status.
 - The title, description, base and head come from one `gh pr view`; the
   diff is computed locally from that base and head, so everything Grok sees
-  describes the same commit even if the PR is pushed to meanwhile.
+  describes the same commit even if the PR is pushed to in the meantime.
 - `RIBBITTO_GROK_MODEL` picks a model (`grok models` lists them).
-  `RIBBITTO_GROK_PROMPT_REF` changes where the prompt is read from; use it
-  only to test a PR that edits the prompt itself.
+  `RIBBITTO_GROK_TRUSTED_REF` changes where the launcher and prompt must
+  come from; use it only to test a PR that edits them.
 - Claude posts the report as a PR comment headed
   `**Adversarial review — Grok** (at <SHA>)` and adds, for each finding,
   *valid* (fixed in the PR or tracked as an issue) or *false positive* with

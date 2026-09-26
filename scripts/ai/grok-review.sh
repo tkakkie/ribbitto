@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Adversarial review of a pull request by Grok, read-only.
 #
-# Usage: scripts/ai/grok-review.sh <pr-number>
+# Usage (from the maintainer's checkout; runs the launcher as it is on main,
+# never a copy a pull request could have changed):
+#   git fetch origin main && bash <(git show origin/main:scripts/ai/grok-review.sh) <pr-number>
 #
 # Checks out the PR head in a temporary git worktree, builds a prompt from the
 # trusted .github/prompts/adversarial.md on origin/main plus the PR title,
@@ -11,8 +13,8 @@
 # Environment:
 #   RIBBITTO_GROK_TIMEOUT     seconds before Grok is stopped (1–86400, default 1200)
 #   RIBBITTO_GROK_MODEL       model id passed to `grok -m` (default: the CLI default; see `grok models`)
-#   RIBBITTO_GROK_PROMPT_REF  git ref to read the prompt from (default origin/main); change it
-#                             only to test a PR that edits the prompt itself
+#   RIBBITTO_GROK_TRUSTED_REF git ref the launcher and prompt must come from (default
+#                             origin/main); change it only to test a PR that edits them
 #
 # Exit status: 0 on success; 124 on timeout; 130/143 when interrupted; Grok's
 # own status when Grok fails; 1 for any other error.
@@ -31,9 +33,23 @@ timeout=${RIBBITTO_GROK_TIMEOUT:-1200}
 if ! [[ $timeout =~ ^[1-9][0-9]{0,4}$ ]] || ((timeout > 86400)); then
   die "RIBBITTO_GROK_TIMEOUT must be an integer from 1 to 86400 (seconds), got '$timeout'"
 fi
-prompt_ref=${RIBBITTO_GROK_PROMPT_REF:-origin/main}
+trusted_ref=${RIBBITTO_GROK_TRUSTED_REF:-origin/main}
 
 repo=$(git rev-parse --show-toplevel)
+git -C "$repo" fetch --quiet origin main || die "could not fetch main from origin"
+
+# Fail closed if this launcher was run from a file that differs from the
+# trusted one (for example scripts/ai/grok-review.sh in a PR checkout): a PR
+# could otherwise run any shell command before Grok's read-only limits apply.
+# The documented invocation feeds the trusted blob through bash <(git show …),
+# where there is no file to compare; that path is trusted by construction.
+self=${BASH_SOURCE[0]}
+if [[ -f $self ]]; then
+  trusted=$(git -C "$repo" rev-parse --verify --quiet "$trusted_ref:scripts/ai/grok-review.sh") \
+    || die "$trusted_ref has no scripts/ai/grok-review.sh"
+  [[ $(git hash-object "$self") == "$trusted" ]] \
+    || die "refusing to run: $self differs from $trusted_ref:scripts/ai/grok-review.sh. Run: bash <(git show $trusted_ref:scripts/ai/grok-review.sh) $pr"
+fi
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/grok-review.XXXXXX")
 worktree="$tmp/worktree"
 supervisor=""
@@ -52,7 +68,10 @@ cleanup() {
     echo "grok-review: could not remove worktree $worktree; run 'git worktree prune'" >&2
     [[ $status -eq 0 ]] && status=1
   fi
-  git -C "$repo" worktree prune 2>/dev/null || true
+  if ! git -C "$repo" worktree prune; then
+    echo "grok-review: 'git worktree prune' failed; stale worktree metadata may remain" >&2
+    [[ $status -eq 0 ]] && status=1
+  fi
   if ! rm -rf "$tmp"; then
     echo "grok-review: could not remove $tmp" >&2
     [[ $status -eq 0 ]] && status=1
@@ -66,15 +85,15 @@ trap 'exit 143' TERM
 # One API call gives a consistent snapshot of the PR: title, description and
 # the exact base and head commits. The diff is then computed locally from
 # those two commits, so the prompt, the worktree and the diff always describe
-# the same head even if someone pushes meanwhile.
+# the same head even if the PR is pushed to in the meantime.
 gh pr view "$pr" --json title,body,baseRefName,baseRefOid,headRefOid >"$tmp/pr.json" \
   || die "could not read PR #$pr with gh (does it exist?)"
 head_sha=$(jq -er .headRefOid "$tmp/pr.json") || die "PR #$pr has no head commit"
 base_sha=$(jq -er .baseRefOid "$tmp/pr.json") || die "PR #$pr has no base commit"
 base_ref=$(jq -er .baseRefName "$tmp/pr.json") || die "PR #$pr has no base branch"
 
-git -C "$repo" fetch --quiet origin main "refs/heads/$base_ref" "refs/pull/$pr/head" \
-  || die "could not fetch main, $base_ref and PR #$pr from origin"
+git -C "$repo" fetch --quiet origin "refs/heads/$base_ref" "refs/pull/$pr/head" \
+  || die "could not fetch $base_ref and PR #$pr from origin"
 for sha in "$base_sha" "$head_sha"; do
   git -C "$repo" cat-file -e "$sha^{commit}" 2>/dev/null \
     || die "commit $sha of PR #$pr is not available (the PR changed while starting); run again"
@@ -82,8 +101,8 @@ done
 
 # The prompt comes from main, never from the PR under review, so a PR cannot
 # rewrite its own review instructions.
-git -C "$repo" show "$prompt_ref:.github/prompts/adversarial.md" >"$tmp/prompt.md" \
-  || die "$prompt_ref has no .github/prompts/adversarial.md"
+git -C "$repo" show "$trusted_ref:.github/prompts/adversarial.md" >"$tmp/prompt.md" \
+  || die "$trusted_ref has no .github/prompts/adversarial.md"
 git -C "$repo" diff "$base_sha...$head_sha" >"$tmp/pr.diff" \
   || die "could not compute the diff of PR #$pr"
 git -C "$repo" worktree add --quiet --detach "$worktree" "$head_sha" \
@@ -93,14 +112,15 @@ title=$(jq -er .title "$tmp/pr.json") \
   || die "could not read PR title"
 body=$(jq -r '.body // ""' "$tmp/pr.json") \
   || die "could not read PR description"
-{
-  printf '\n---\n\nPull request #%s: base %s, head %s.\n\n' "$pr" "$base_sha" "$head_sha"
-  printf '<<<PR_TITLE (untrusted)\n%s\nPR_TITLE>>>\n\n' "$title"
-  printf '<<<PR_DESCRIPTION (untrusted)\n%s\nPR_DESCRIPTION>>>\n\n' "$body"
-  printf '<<<PR_DIFF (untrusted)\n'
-  cat "$tmp/pr.diff"
-  printf 'PR_DIFF>>>\n'
-} >>"$tmp/prompt.md"
+# Everything the PR controls goes into one JSON object on the last line of
+# the prompt. JSON escaping means no title, description or diff can end the
+# payload early or add text after it, unlike fixed delimiters.
+jq -cn --argjson number "$pr" --arg base "$base_sha" --arg head "$head_sha" \
+  --arg title "$title" --arg description "$body" --rawfile diff "$tmp/pr.diff" \
+  '{pull_request: $number, base_commit: $base, head_commit: $head,
+    title: $title, description: $description, diff: $diff}' >"$tmp/payload.json" \
+  || die "could not encode PR #$pr for the prompt"
+printf '\nUNTRUSTED_PAYLOAD_JSON: %s\n' "$(cat "$tmp/payload.json")" >>"$tmp/prompt.md"
 
 grok_args=(
   --prompt-file "$tmp/prompt.md"

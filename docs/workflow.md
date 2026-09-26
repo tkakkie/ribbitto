@@ -28,7 +28,7 @@ disagree, fix the disagreement in a pull request.
 | Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
 | Copilot | Reviews every pull request automatically (drafts included) at **Lite**, the repository setting, guided by `.github/instructions/code-review.instructions.md`. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
-| Grok | Adversarial review of `high` pull requests (from M1). Advisory. |
+| Grok | Adversarial review of `high` pull requests (from M1), run with `scripts/ai/grok-review.sh`. Advisory. |
 | Antigravity | Optional: UI screenshot review, experiments, stand-in for Grok. |
 
 Claude and Codex should end up with roughly equal shares of implementation.
@@ -147,6 +147,59 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
 than combine both sides, it needs a normal review.
+
+## Adversarial review
+
+From M1 on, **every `high` pull request gets one adversarial review by Grok
+before the maintainer is asked.** Running it is mandatory; its findings are
+advisory. It does not count towards the two review rounds.
+
+Run it from the maintainer's checkout, taking the launcher as it is on
+`main` — never a copy that a pull request could have changed:
+
+```sh
+git fetch origin main &&
+  launcher=$(git show origin/main:scripts/ai/grok-review.sh) &&
+  bash -c "$launcher" grok-review <pr-number>
+```
+
+Each step is joined with `&&`, so if the launcher cannot be read the command
+stops with a non-zero status instead of reporting a clean review. (Avoid
+`bash <(git show …)`: when `git show` fails, bash runs an empty script and
+exits 0.)
+
+- **The invocation above is the security boundary.** If the launcher is
+  run as a file that differs from `origin/main:scripts/ai/grok-review.sh`,
+  it refuses to run — but that only catches an accidentally edited copy: a
+  malicious copy runs its own code before any check (a script cannot vouch
+  for itself). Never run `scripts/ai/grok-review.sh` from a PR checkout.
+- It checks out the PR head in a temporary worktree and builds the prompt
+  from `.github/prompts/adversarial.md` **on `origin/main`** (a PR cannot
+  rewrite its own review instructions). Everything the PR controls — title,
+  description and diff — is appended as **one JSON object** on the last
+  line, so escaping keeps it from ending early or adding instructions; the
+  prompt also tells Grok that every file in the worktree is untrusted data.
+- Grok runs read-only: plan mode **and** only the `read_file`, `list_dir`
+  and `grep` tools, no web search, stdin closed.
+- Those tools are not a filesystem sandbox, so a PR whose tree contains any
+  symlink (mode `120000`) is refused before the prompt is built or anything
+  is checked out: a symlink could otherwise let Grok read files outside the
+  worktree.
+- It stops Grok and everything Grok started after `RIBBITTO_GROK_TIMEOUT`
+  seconds (1–86400, default 1200; exit 124), and removes the worktree and
+  temporary files on success, failure, timeout, Ctrl-C (130) and `TERM`
+  (143), reporting any cleanup failure. When Grok itself fails, the script
+  exits with Grok's status.
+- The title, description, base and head come from one `gh pr view`; the
+  diff is computed locally from that base and head, so everything Grok sees
+  describes the same commit even if the PR is pushed in the meantime.
+- `RIBBITTO_GROK_MODEL` picks a model (`grok models` lists them).
+  `RIBBITTO_GROK_TRUSTED_REF` changes where the launcher and prompt must
+  come from; use it only to test a PR that edits them.
+- Claude posts the report as a PR comment headed
+  `**Adversarial review — Grok** (at <SHA>)` and adds, for each finding,
+  *valid* (fixed in the PR or tracked as an issue) or *false positive* with
+  the reason.
 
 ## Risk
 

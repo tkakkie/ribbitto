@@ -38,6 +38,13 @@ startup. Use `ribbitto migrate up|down|status` with a built binary; `down`
 reverts one migration. See [database development](docs/database.md) for
 configuration, migration ownership and integration tests.
 
+## Documentation
+
+- [Architecture](docs/architecture.md) — packages, allowed imports, request and real-time flow
+- [Domain](docs/domain.md) — glossary, entities, invariants, unread rules
+- [Decisions](DECISIONS.md) — what was decided and why
+- [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow.md) · [Database development](docs/database.md)
+
 ## Contributing
 
 The project is maintained by one person and developed with AI coding tools;

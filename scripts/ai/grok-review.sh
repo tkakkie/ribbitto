@@ -125,6 +125,6 @@ wait "$supervisor" || status=$?
 supervisor=""
 case $status in
   0) ;;
-  124) die "Grok did not finish within ${timeout}s" ;;
+  124) echo "grok-review: Grok did not finish within ${timeout}s" >&2; exit 124 ;;
   *) die "Grok failed (exit $status)" ;;
 esac

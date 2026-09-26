@@ -70,6 +70,9 @@ same pull request: [`docs/architecture.md`](docs/architecture.md)
 - Never use `templ.Raw` or build HTML by string concatenation.
 - Product vocabulary (ribbit, pond, marsh…) appears only in UI message
   files, never in identifiers.
+- UI strings go in `internal/web/i18n/locales/{en,ja}.toml`; use dotted,
+  neutral IDs (`hello.title`, never a product word), and update both languages
+  in the same PR. Templates get messages through `i18n.T(ctx, "message.id")`.
 - When a change alters terminology, invariants, data flow or dependency
   direction, update `docs/` in the same pull request.
 

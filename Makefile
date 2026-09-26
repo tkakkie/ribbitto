@@ -15,7 +15,7 @@ generate: $(TEMPL)
 	go tool -modfile=tools/go.mod sqlc generate
 
 schema-docs:
-	go tool -modfile=tools/go.mod tbls doc --rm-dist
+	go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist
 
 $(TEMPL): tools/go.mod tools/go.sum
 	go -C tools build -o ../bin/templ github.com/a-h/templ/cmd/templ

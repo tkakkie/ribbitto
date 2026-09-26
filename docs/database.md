@@ -51,9 +51,12 @@ go run ./cmd/ribbitto migrate up
 make schema-docs
 ```
 
-tbls is pinned in `tools/go.mod`; `.tbls.yml` selects Markdown with Mermaid
-diagrams, without Graphviz or `schema.json`. The command replaces all of
-`docs/schema/`, so keep hand-written documentation elsewhere. Commit the
+tbls is pinned in its own module, `tools/tbls/go.mod`, to isolate its
+dependencies from templ and sqlc. `make schema-docs` runs
+`go tool -modfile=tools/tbls/go.mod tbls` from the repository root.
+`.tbls.yml` selects Markdown with Mermaid diagrams, without Graphviz or
+`schema.json`. The command replaces all of `docs/schema/`, so keep
+hand-written documentation elsewhere. Commit the
 generated directory with schema changes. CI migrates a fresh PostgreSQL 18
 database, regenerates the whole directory and requires
 `git status --porcelain docs/schema` to be empty, including untracked files.

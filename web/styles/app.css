@@ -29,6 +29,9 @@
   --rb-accent: #fbf3d5;
   --rb-on-accent: #5c4a0c;
   --rb-success: #0e7490;
+  --rb-warning: #8a5300;
+  --rb-danger: #b42318;
+  --rb-on-danger: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -50,6 +53,9 @@
     --rb-accent: #3a3316;
     --rb-on-accent: #fbf3d5;
     --rb-success: #5fc3dc;
+    --rb-warning: #f0b35a;
+    --rb-danger: #ff8a7a;
+    --rb-on-danger: #1a0806;
   }
 }
 
@@ -72,6 +78,9 @@
   --color-accent: var(--rb-accent);
   --color-on-accent: var(--rb-on-accent);
   --color-success: var(--rb-success);
+  --color-warning: var(--rb-warning);
+  --color-danger: var(--rb-danger);
+  --color-on-danger: var(--rb-on-danger);
   --color-transparent: transparent;
   --color-current: currentColor;
 }

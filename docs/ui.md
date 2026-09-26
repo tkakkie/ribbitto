@@ -47,6 +47,8 @@ these colours exist in templates.
 | `selected` / `on-selected` | `#e9f1de` / `#2f4f08` | `#1f2a14` / `#d6ecb8` | the current channel |
 | `accent` / `on-accent` | `#fbf3d5` / `#5c4a0c` | `#3a3316` / `#fbf3d5` | "New" divider, gentle highlights |
 | `success` | `#0e7490` | `#5fc3dc` | online dot (always with a label) |
+| `warning` | `#8a5300` | `#f0b35a` | warning text and icons (e.g. "reconnecting…") |
+| `danger` / `on-danger` | `#b42318` / `#ffffff` | `#ff8a7a` / `#1a0806` | error text; destructive buttons |
 
 | Other token | Value |
 |---|---|
@@ -59,8 +61,9 @@ these colours exist in templates.
 
 ## Contrast (WCAG 2.2 AA)
 
-Normal text, including button labels and typed text, needs 4.5:1; large text
-3:1; non-text indicators that convey state (focus ring, input borders,
+Normal text, including button labels, links and typed text, needs 4.5:1;
+large text — at least 24 px regular or 18.66 px bold (18 pt / 14 pt), or
+the equivalent size for Japanese text — needs 3:1; non-text indicators that convey state (focus ring, input borders,
 selection bar, online dot) 3:1 against what is next to them. Ratios are
 truncated, never rounded up. Decorative `border` dividers carry no
 information and are exempt; a control's boundary always uses
@@ -77,11 +80,17 @@ information and are exempt; a control's boundary always uses
 | `on-brand` on `brand` | button label | 4.5:1 | 5.14:1 | 9.74:1 |
 | `on-selected` on `selected` | selected channel label | 4.5:1 | 8.07:1 | 11.82:1 |
 | `on-accent` on `accent` | "New" divider label | 4.5:1 | 7.73:1 | 11.34:1 |
-| `brand` on `bg` | focus ring, links, selection bar | 3:1 | 5.14:1 | 10.09:1 |
+| `brand` on `bg` | link text | 4.5:1 | 5.14:1 | 10.09:1 |
+| `brand` on `bg` | focus ring, selection bar | 3:1 | 5.14:1 | 10.09:1 |
 | `brand` on `sidebar` | selection bar in sidebar | 3:1 | 4.83:1 | 9.60:1 |
 | `brand` on `selected` | selection bar on selected row | 3:1 | 4.43:1 | 8.00:1 |
 | `success` on `bg` | online dot | 3:1 | 5.35:1 | 9.30:1 |
 | `success` on `sidebar` | online dot in sidebar | 3:1 | 5.03:1 | 8.85:1 |
+| `warning` on `bg` | warning text | 4.5:1 | 6.32:1 | 10.18:1 |
+| `warning` on `sidebar` | warning text in sidebar | 4.5:1 | 5.94:1 | 9.69:1 |
+| `danger` on `bg` | error text | 4.5:1 | 6.57:1 | 8.26:1 |
+| `danger` on `sidebar` | error text in sidebar | 4.5:1 | 6.17:1 | 7.86:1 |
+| `on-danger` on `danger` | destructive button label | 4.5:1 | 6.57:1 | 8.47:1 |
 | `border-strong` on `bg` | input border | 3:1 | 3.22:1 | 3.87:1 |
 | `border-strong` on `input` | input border on input fill | 3:1 | 3.02:1 | 3.69:1 |
 

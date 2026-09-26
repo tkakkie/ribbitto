@@ -158,8 +158,15 @@ Run it from the maintainer's checkout, taking the launcher as it is on
 `main` — never a copy that a pull request could have changed:
 
 ```sh
-git fetch origin main && bash <(git show origin/main:scripts/ai/grok-review.sh) <pr-number>
+git fetch origin main &&
+  launcher=$(git show origin/main:scripts/ai/grok-review.sh) &&
+  bash -c "$launcher" grok-review <pr-number>
 ```
+
+Each step is joined with `&&`, so if the launcher cannot be read the command
+stops with a non-zero status instead of reporting a clean review. (Avoid
+`bash <(git show …)`: when `git show` fails, bash runs an empty script and
+exits 0.)
 
 - **The invocation above is the security boundary.** If the launcher is
   run as a file that differs from `origin/main:scripts/ai/grok-review.sh`,
@@ -175,8 +182,9 @@ git fetch origin main && bash <(git show origin/main:scripts/ai/grok-review.sh) 
 - Grok runs read-only: plan mode **and** only the `read_file`, `list_dir`
   and `grep` tools, no web search, stdin closed.
 - Those tools are not a filesystem sandbox, so a PR whose tree contains any
-  symlink (mode `120000`) is refused before anything is checked out: a
-  symlink could otherwise let Grok read files outside the worktree.
+  symlink (mode `120000`) is refused before the prompt is built or anything
+  is checked out: a symlink could otherwise let Grok read files outside the
+  worktree.
 - It stops Grok and everything Grok started after `RIBBITTO_GROK_TIMEOUT`
   seconds (1–86400, default 1200; exit 124), and removes the worktree and
   temporary files on success, failure, timeout, Ctrl-C (130) and `TERM`

@@ -3,7 +3,11 @@
 #
 # Usage (from the maintainer's checkout; runs the launcher as it is on main,
 # never a copy a pull request could have changed):
-#   git fetch origin main && bash <(git show origin/main:scripts/ai/grok-review.sh) <pr-number>
+#   git fetch origin main &&
+#     launcher=$(git show origin/main:scripts/ai/grok-review.sh) &&
+#     bash -c "$launcher" grok-review <pr-number>
+# (not `bash <(git show …)`: if git show failed, bash would run an empty
+# script and exit 0, so a failed fetch would look like a clean review)
 #
 # Checks out the PR head in a temporary git worktree, builds a prompt from the
 # trusted .github/prompts/adversarial.md on origin/main plus the PR title,
@@ -41,14 +45,14 @@ git -C "$repo" fetch --quiet origin main || die "could not fetch main from origi
 # Fail closed if this launcher was run from a file that differs from the
 # trusted one. This only catches an accidentally edited copy: a malicious
 # copy runs its own code before reaching this check, so the security
-# boundary is the documented invocation, bash <(git show origin/main:…),
-# which never executes a file a pull request can change.
-self=${BASH_SOURCE[0]}
+# boundary is the documented invocation (bash -c with the blob from
+# origin/main), which never executes a file a pull request can change.
+self=${BASH_SOURCE[0]:-}
 if [[ -f $self ]]; then
   trusted=$(git -C "$repo" rev-parse --verify --quiet "$trusted_ref:scripts/ai/grok-review.sh") \
     || die "$trusted_ref has no scripts/ai/grok-review.sh"
   [[ $(git hash-object "$self") == "$trusted" ]] \
-    || die "refusing to run: $self differs from $trusted_ref:scripts/ai/grok-review.sh. Run: bash <(git show $trusted_ref:scripts/ai/grok-review.sh) $pr"
+    || die "refusing to run: $self differs from $trusted_ref:scripts/ai/grok-review.sh. Run: launcher=\$(git show $trusted_ref:scripts/ai/grok-review.sh) && bash -c \"\$launcher\" grok-review $pr"
 fi
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/grok-review.XXXXXX")
 worktree="$tmp/worktree"
@@ -99,16 +103,10 @@ for sha in "$base_sha" "$head_sha"; do
     || die "commit $sha of PR #$pr is not available (the PR changed while starting); run again"
 done
 
-# The prompt comes from main, never from the PR under review, so a PR cannot
-# rewrite its own review instructions.
-git -C "$repo" show "$trusted_ref:.github/prompts/adversarial.md" >"$tmp/prompt.md" \
-  || die "$trusted_ref has no .github/prompts/adversarial.md"
-git -C "$repo" diff "$base_sha...$head_sha" >"$tmp/pr.diff" \
-  || die "could not compute the diff of PR #$pr"
 # Grok's read-only tools are not a filesystem sandbox: a symlink in the PR
 # could make read_file or grep read files outside the worktree (keys,
-# tokens). main has no symlinks, so refuse any PR that adds one, before
-# anything is checked out.
+# tokens). main has no symlinks, so refuse any PR that adds one before
+# building the prompt or checking anything out.
 symlinks=$(git -C "$repo" ls-tree -r "$head_sha" | awk '$1 == "120000" { sub(/^[^\t]*\t/, ""); print }') \
   || die "could not list the files of $head_sha"
 if [[ -n $symlinks ]]; then
@@ -116,6 +114,12 @@ if [[ -n $symlinks ]]; then
     "$pr" "$symlinks" >&2
   exit 1
 fi
+# The prompt comes from main, never from the PR under review, so a PR cannot
+# rewrite its own review instructions.
+git -C "$repo" show "$trusted_ref:.github/prompts/adversarial.md" >"$tmp/prompt.md" \
+  || die "$trusted_ref has no .github/prompts/adversarial.md"
+git -C "$repo" diff "$base_sha...$head_sha" >"$tmp/pr.diff" \
+  || die "could not compute the diff of PR #$pr"
 git -C "$repo" worktree add --quiet --detach "$worktree" "$head_sha" \
   || die "could not check out $head_sha"
 

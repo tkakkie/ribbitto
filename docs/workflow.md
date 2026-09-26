@@ -47,9 +47,10 @@ idea (maintainer, one line) or finding (AI)
 
 - The author proposes the *Implementer* (Claude or Codex, keeping the
   shares even); the maintainer confirms or changes it when adding `ready`.
-- Always start from the matching template (`gh issue create --template
-  <Feature|Bug|Task|Process improvement>`, or copy its headings into
-  `--body-file`). Do not add, rename or drop headings.
+- Always start from the matching template, for example
+  `gh issue create --template Feature --title "…"`. The other templates
+  are `Bug`, `Task` and `"Process improvement"`; with `--body-file`, copy
+  the template's headings. Do not add, rename or drop headings.
 - One issue fits one pull request of about 400 changed lines or fewer.
   Larger work is split into several issues before review.
 - Put milestone issues in their GitHub milestone.
@@ -60,7 +61,8 @@ idea (maintainer, one line) or finding (AI)
 ```
 `ready` issue
   → implementer AI works in its own worktree
-    (/Users/tomoya/dev/ribbitto/wt/<name>, branch claude/<topic> or codex/<topic>)
+    (maintainer setup: `../wt/<name>` next to the main checkout;
+     branch claude/<topic> or codex/<topic>)
   → draft pull request from the template, linked with "Closes #N"
   → CI and Copilot run automatically
   → the AI that did not implement it reviews        (see "Reviewing")

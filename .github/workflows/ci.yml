@@ -54,6 +54,18 @@ jobs:
             exit 1
           fi
 
+      - name: verify schema docs
+        env:
+          RIBBITTO_DATABASE_URL: postgres://postgres:ribbitto-ci-only@127.0.0.1:5432/ribbitto_schema?sslmode=disable
+        run: |
+          psql "$RIBBITTO_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ribbitto_schema TEMPLATE template0'
+          go run ./cmd/ribbitto migrate up
+          make schema-docs
+          if ! test -z "$(git status --porcelain docs/schema)"; then
+            git status --short docs/schema
+            exit 1
+          fi
+
       # The Makefile pins golangci-lint for both local checks and CI.
       - name: check
         run: make check

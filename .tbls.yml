@@ -1,0 +1,7 @@
+dsn: ${RIBBITTO_DATABASE_URL}
+# Keep the title stable across local and scratch databases.
+name: ribbitto
+docPath: docs/schema
+er:
+  format: mermaid
+disableOutputSchema: true

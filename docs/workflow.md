@@ -27,7 +27,7 @@ disagree, fix the disagreement in a pull request.
 | Maintainer | Writes rough ideas, approves issues, merges pull requests. |
 | Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
-| Copilot | Reviews every pull request automatically (drafts included). Advisory. |
+| Copilot | Reviews every pull request automatically (drafts included) at **Lite**, the repository setting, guided by `.github/instructions/code-review.instructions.md`. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
 | Grok | Adversarial review of `high` pull requests (from M1). Advisory. |
 | Antigravity | Optional: UI screenshot review, experiments, stand-in for Grok. |
 

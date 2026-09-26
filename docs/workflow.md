@@ -135,7 +135,8 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    each finding — not the rest of the PR — and reports:
 
    ```
-   **Closure verification — <Codex|Claude>** (<round-2 SHA>..<SHA>)
+   **Closure verification — <Claude|Codex>** (at <SHA>)
+   Compared: <round-2 SHA>..<SHA>
    - ✅ | ❌ finding — how it was checked
    ```
 

@@ -25,10 +25,10 @@ Requires Go (see `go.mod` for the version).
 
 ```sh
 go run ./cmd/ribbitto        # serves http://localhost:8080/healthz
-go build ./... && go vet ./...
+make check                 # checks formatting, vets, lints, builds and tests
 ```
 
-More tooling (`make dev`, `make check`, a local PostgreSQL) arrives with the
+More tooling (`make dev`, a local PostgreSQL) arrives with the
 first milestone.
 
 ## Contributing

@@ -3,3 +3,6 @@ other = "ribbitto"
 
 ["hello.title"]
 other = "ribbittoからこんにちは"
+
+["hello.tagline"]
+other = "カエルがロゴの、小さなセルフホスト型チームチャット。"

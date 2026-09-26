@@ -52,7 +52,8 @@ same pull request: [`docs/architecture.md`](docs/architecture.md)
 (packages, imports, data flow, real-time), [`docs/domain.md`](docs/domain.md)
 (terms, entities, invariants, unread rules), [`DECISIONS.md`](DECISIONS.md)
 (settled decisions — change them through an issue),
-[`docs/database.md`](docs/database.md).
+[`docs/database.md`](docs/database.md), [`docs/ui.md`](docs/ui.md) (design tokens — use
+only the token utilities, never raw colours).
 
 ## Writing code
 

@@ -3,3 +3,6 @@ other = "ribbitto"
 
 ["hello.title"]
 other = "Hello from ribbitto"
+
+["hello.tagline"]
+other = "A small, self-hostable team chat with a frog on the logo."

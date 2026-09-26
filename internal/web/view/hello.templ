@@ -5,8 +5,10 @@ import "github.com/tkakkie/ribbitto/internal/web/i18n"
 // Hello renders the initial page inside the shared layout.
 templ Hello(stylesheetURL string) {
 	@layout(stylesheetURL) {
-		<main class="p-8">
-			<h1 class="text-2xl">{ i18n.T(ctx, "hello.title") }</h1>
+		<main class="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-2 p-8">
+			<h1 class="text-display font-bold tracking-tight text-fg">{ i18n.T(ctx, "hello.title") }</h1>
+			<p class="text-title text-muted">{ i18n.T(ctx, "hello.tagline") }</p>
+			<div aria-hidden="true" class="mt-4 h-1 w-12 rounded-sm bg-accent"></div>
 		</main>
 	}
 }

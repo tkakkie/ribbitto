@@ -174,6 +174,9 @@ git fetch origin main && bash <(git show origin/main:scripts/ai/grok-review.sh) 
   prompt also tells Grok that every file in the worktree is untrusted data.
 - Grok runs read-only: plan mode **and** only the `read_file`, `list_dir`
   and `grep` tools, no web search, stdin closed.
+- Those tools are not a filesystem sandbox, so a PR whose tree contains any
+  symlink (mode `120000`) is refused before anything is checked out: a
+  symlink could otherwise let Grok read files outside the worktree.
 - It stops Grok and everything Grok started after `RIBBITTO_GROK_TIMEOUT`
   seconds (1–86400, default 1200; exit 124), and removes the worktree and
   temporary files on success, failure, timeout, Ctrl-C (130) and `TERM`
@@ -181,7 +184,7 @@ git fetch origin main && bash <(git show origin/main:scripts/ai/grok-review.sh) 
   exits with Grok's status.
 - The title, description, base and head come from one `gh pr view`; the
   diff is computed locally from that base and head, so everything Grok sees
-  describes the same commit even if the PR is pushed to in the meantime.
+  describes the same commit even if the PR is pushed in the meantime.
 - `RIBBITTO_GROK_MODEL` picks a model (`grok models` lists them).
   `RIBBITTO_GROK_TRUSTED_REF` changes where the launcher and prompt must
   come from; use it only to test a PR that edits them.

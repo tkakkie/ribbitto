@@ -85,7 +85,7 @@ trap 'exit 143' TERM
 # One API call gives a consistent snapshot of the PR: title, description and
 # the exact base and head commits. The diff is then computed locally from
 # those two commits, so the prompt, the worktree and the diff always describe
-# the same head even if the PR is pushed to in the meantime.
+# the same head even if the PR is pushed in the meantime.
 gh pr view "$pr" --json title,body,baseRefName,baseRefOid,headRefOid >"$tmp/pr.json" \
   || die "could not read PR #$pr with gh (does it exist?)"
 head_sha=$(jq -er .headRefOid "$tmp/pr.json") || die "PR #$pr has no head commit"
@@ -105,6 +105,17 @@ git -C "$repo" show "$trusted_ref:.github/prompts/adversarial.md" >"$tmp/prompt.
   || die "$trusted_ref has no .github/prompts/adversarial.md"
 git -C "$repo" diff "$base_sha...$head_sha" >"$tmp/pr.diff" \
   || die "could not compute the diff of PR #$pr"
+# Grok's read-only tools are not a filesystem sandbox: a symlink in the PR
+# could make read_file or grep read files outside the worktree (keys,
+# tokens). main has no symlinks, so refuse any PR that adds one, before
+# anything is checked out.
+symlinks=$(git -C "$repo" ls-tree -r "$head_sha" | awk '$1 == "120000" { sub(/^[^\t]*\t/, ""); print }') \
+  || die "could not list the files of $head_sha"
+if [[ -n $symlinks ]]; then
+  printf 'grok-review: refusing to review PR #%s: it contains symlinks, which could expose files outside the worktree:\n%s\n' \
+    "$pr" "$symlinks" >&2
+  exit 1
+fi
 git -C "$repo" worktree add --quiet --detach "$worktree" "$head_sha" \
   || die "could not check out $head_sha"
 

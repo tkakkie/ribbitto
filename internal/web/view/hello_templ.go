@@ -70,7 +70,7 @@ func Hello(stylesheetURL string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</p><div aria-hidden=\"true\" class=\"mt-4 h-1 w-12 rounded-sm bg-brand\"></div></main>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</p><div aria-hidden=\"true\" class=\"mt-4 h-1 w-12 rounded-sm bg-accent\"></div></main>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

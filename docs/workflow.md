@@ -165,8 +165,12 @@ scripts/ai/grok-review.sh <pr-number>
   read-only: plan mode **and** only the `read_file`, `list_dir` and `grep`
   tools, no web search, stdin closed.
 - It stops Grok and everything Grok started after `RIBBITTO_GROK_TIMEOUT`
-  seconds (default 1200; exit 124), and removes the worktree and temporary
-  files on success, failure, timeout, Ctrl-C and `TERM`.
+  seconds (1–86400, default 1200; exit 124), and removes the worktree and
+  temporary files on success, failure, timeout, Ctrl-C (130) and `TERM`
+  (143). When Grok itself fails, the script exits with Grok's status.
+- The title, description, base and head come from one `gh pr view`; the
+  diff is computed locally from that base and head, so everything Grok sees
+  describes the same commit even if the PR is pushed to meanwhile.
 - `RIBBITTO_GROK_MODEL` picks a model (`grok models` lists them).
   `RIBBITTO_GROK_PROMPT_REF` changes where the prompt is read from; use it
   only to test a PR that edits the prompt itself.

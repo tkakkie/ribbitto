@@ -7,22 +7,26 @@ disagree, fix the disagreement in a pull request.
 
 ## Principles
 
-1. **Anything an AI produces is reviewed by a different AI before a human
-   is asked to look at it.** Issues, pull requests and documents alike.
-2. **The human decides at two gates and nowhere else:** approving an issue
-   (`ready`) and merging a pull request. Everything between is done by the
-   AIs.
-3. **Process grows only from evidence.** A new rule here or in `AGENTS.md`
-   must point to the AI workflow log comment (#2) that motivated it; a
-   rule that never prevented anything can be removed.
+1. **Every issue and every pull request an AI writes is reviewed by the
+   other AI before the maintainer is asked to look at it** — including any
+   documentation the pull request changes. Review reports, Status updates,
+   workflow-log comments and chat messages are not reviewed.
+2. **The maintainer decides at two normal delivery gates:** approving an
+   issue (`ready`) and merging a pull request. Everything between is done
+   by the AIs. The maintainer is also asked when a review does not
+   converge (see "Reviewing") and when choosing retrospective proposals.
+3. **Process grows only from evidence.** From now on, a new process rule
+   comes from a `process` issue whose *Problem* section links the AI
+   workflow log comments (#2) that motivated it; a rule that never
+   prevented anything can be removed.
 
 ## Roles
 
 | Who | Does |
 |---|---|
 | Maintainer | Writes rough ideas, approves issues, merges pull requests. |
-| Claude | Shapes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
-| Codex | Shapes issues, implements (mainly well-specified work), reviews Claude's work. |
+| Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
+| Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
 | Copilot | Reviews every pull request automatically (drafts included). Advisory. |
 | Grok | Adversarial review of `high` pull requests (from M1). Advisory. |
 | Antigravity | Optional: UI screenshot review, experiments, stand-in for Grok. |
@@ -35,12 +39,14 @@ If one has done the last few issues, give the next one to the other.
 ```
 idea (maintainer, one line) or finding (AI)
   → author AI writes the issue from a template in .github/ISSUE_TEMPLATE/
-  → the other AI reviews it                        (see "Reviewing")
+  → the AI that did not write the issue reviews it  (see "Reviewing")
   → author AI applies the review
   → reviewer approves → add label `ai-reviewed`
-  → maintainer reads it → adds `ready`, or comments  ← human gate 1
+  → maintainer reads it → adds `ready`, or comments  ← gate 1
 ```
 
+- The author proposes the *Implementer* (Claude or Codex, keeping the
+  shares even); the maintainer confirms or changes it when adding `ready`.
 - Always start from the matching template (`gh issue create --template
   <Feature|Bug|Task|Process improvement>`, or copy its headings into
   `--body-file`). Do not add, rename or drop headings.
@@ -57,23 +63,24 @@ idea (maintainer, one line) or finding (AI)
     (/Users/tomoya/dev/ribbitto/wt/<name>, branch claude/<topic> or codex/<topic>)
   → draft pull request from the template, linked with "Closes #N"
   → CI and Copilot run automatically
-  → the other AI reviews                            (see "Reviewing")
+  → the AI that did not implement it reviews        (see "Reviewing")
   → implementer applies the review (and Copilot comments it agrees with)
   → reviewer approves → label `ai-reviewed` → mark ready for review
-  → Claude summarises the PR for the maintainer in Japanese
-  → maintainer reviews and merges                  ← human gate 2
+  → Claude explains the PR to the maintainer in Japanese, in the chat
+    (the PR itself stays in English)
+  → maintainer reviews and merges                  ← gate 2
 ```
 
 - `high` risk: the maintainer reads the whole diff; from M1, Grok also
   runs an adversarial review before the maintainer is asked.
 - `normal` risk: the maintainer reads the summary and "Look here".
-- All merges are manual for now. Auto-merge is added only when manual
-  merging becomes a burden, with the rules recorded in the bootstrap plan
-  (documentation-only changes first; head SHA checked twice).
+- All merges are manual. Auto-merge will be designed in its own `process`
+  issue if manual merging ever becomes a burden.
 
 ## Reviewing
 
-**Who reviews:** the AI that did not write it. Claude's work → Codex.
+**Who reviews:** for an issue, the AI that did not write the issue; for a
+pull request, the AI that did not implement it. Claude's work → Codex;
 Codex's work → Claude.
 
 **How many rounds:** at most **two** reviews by the other AI per issue or
@@ -135,9 +142,10 @@ gh issue view N --json title,body,comments \
   | limit 900 codex exec -s read-only -o review.md \
     "Review this GitHub issue following docs/workflow.md#reviewing. Reply in the report format."
 
-# Pull request (in a clean worktree at the PR head, after git fetch)
-limit 1800 codex exec review --base origin/main \
-  "Also follow docs/workflow.md#reviewing. Reply in the report format." < /dev/null
+# Pull request (in a clean worktree at the PR head, after git fetch).
+# Not `codex exec review --base …`: it rejects a custom prompt.
+limit 1800 codex exec -s read-only -o review.md \
+  "Review this pull request: run 'git diff origin/main...HEAD'. Follow docs/workflow.md#reviewing and reply in the report format." < /dev/null
 ```
 
 Claude reviews Codex's work: the orchestrating Claude session reviews

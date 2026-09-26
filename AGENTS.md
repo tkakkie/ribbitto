@@ -16,9 +16,10 @@ Follow [`docs/workflow.md`](docs/workflow.md). The rules you must not skip:
 
 - **Start of a session:** read the pinned Status issue (`gh issue view 1`)
   and `docs/roadmap.md`.
-- **Everything an AI writes — issues, pull requests, docs — is reviewed by
-  the other AI (Claude ↔ Codex) before the maintainer is asked.** At most
-  two review rounds; then ask the maintainer.
+- **Every issue and pull request an AI writes (including the docs it
+  changes) is reviewed by the other AI (Claude ↔ Codex) before the
+  maintainer is asked.** At most two review rounds; then ask the
+  maintainer.
 - Issues start from a template in `.github/ISSUE_TEMPLATE/`; keep its
   headings. No implementation without the `ready` label.
 - **End of a unit of work:** overwrite the Status issue body. When the

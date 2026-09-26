@@ -27,4 +27,5 @@ labels: ["process"]
 
 ## Implementer
 
-<!-- Claude or Codex. The other one reviews. -->
+<!-- Claude or Codex, proposed by the author; the maintainer confirms it
+     when adding `ready`. Outside contributors can leave this empty. -->

@@ -34,7 +34,8 @@ first milestone.
 ## Contributing
 
 The project is maintained by one person and developed with AI coding tools;
-see [`AGENTS.md`](AGENTS.md) for the conventions that apply to every change.
+see [`AGENTS.md`](AGENTS.md) for the conventions that apply to every change
+and [`docs/workflow.md`](docs/workflow.md) for how work flows.
 Issues and pull requests are welcome, in English.
 
 ## Licence

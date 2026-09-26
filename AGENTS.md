@@ -10,19 +10,19 @@ Server-Sent Events, Tailwind CSS, PostgreSQL (pgx, sqlc, goose). One
 maintainer, public repository. Everything in the repository — code,
 comments, docs, commits, issues, pull requests — is written in English.
 
-## Project state
+## Workflow
+
+Follow [`docs/workflow.md`](docs/workflow.md). The rules you must not skip:
 
 - **Start of a session:** read the pinned Status issue (`gh issue view 1`)
   and `docs/roadmap.md`.
-- **End of a unit of work** (a merged pull request, or stopping for the
-  day): overwrite the Status issue body (`gh issue edit 1 --body-file …`)
-  using its existing headings. Keep it under ~30 lines: replace, don't
-  append.
-- **When something goes wrong with the AI workflow** (a tool hangs, a
-  review misses something, work is redone, an instruction is
-  misunderstood): add a comment to the AI workflow log issue
-  (`gh issue comment 2`) — what happened, the cost, a guess at the cause.
-  One or two sentences each. Never include secrets or personal data.
+- **Everything an AI writes — issues, pull requests, docs — is reviewed by
+  the other AI (Claude ↔ Codex) before the maintainer is asked.** At most
+  two review rounds; then ask the maintainer.
+- Issues start from a template in `.github/ISSUE_TEMPLATE/`; keep its
+  headings. No implementation without the `ready` label.
+- **End of a unit of work:** overwrite the Status issue body. When the
+  workflow goes wrong, comment on the AI workflow log (#2).
 
 ## Commands
 
@@ -75,18 +75,14 @@ structs; only `web` produces HTML. Do not add an import that breaks this.
 
 ## Pull requests
 
-- Maintainer AI branches use `claude/<topic>` or `codex/<topic>`; the
-  other tool reviews the pull request. Branch names of outside
-  contributors are not restricted.
+- Maintainer AI branches use `claude/<topic>` or `codex/<topic>`. Branch
+  names of outside contributors are not restricted.
 - Conventional Commits title; squash-merged. Keep the diff under about 400
   lines excluding generated files; split larger work.
 - Fill in the pull request template briefly. UI changes include a
   screenshot.
 - Do not push to `main` and do not merge pull requests; the maintainer
   merges.
-
-## Running other AI CLIs headless
-
-Always close stdin (`< /dev/null`) and add a time limit when running
-`codex`, `grok` or `claude -p` from a script or in the background; without
-it they can wait for input forever.
+- When running `codex`, `grok` or `claude -p` headless, close stdin
+  (`< /dev/null`) and set a time limit, or they can wait forever
+  (see `docs/workflow.md#running-the-other-ai`).

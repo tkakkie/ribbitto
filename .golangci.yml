@@ -9,11 +9,17 @@ linters:
     - revive
   settings:
     depguard:
-      # Lax rules restrict internal imports only. Exact roots and slash prefixes
+      # Lax rules restrict listed imports only. Exact roots and slash prefixes
       # allow each layer's sub-packages without allowing similarly named layers.
       # File globs need separate selectors for roots and descendants.
-      # Every production rule excludes tests; overlapping rules apply independently.
+      # Layer rules exclude tests; migration ownership also applies to tests.
       rules:
+        migrations:
+          list-mode: lax
+          files: ["$all", "!**/internal/infra/postgres/*.go", "!**/internal/infra/postgres/**/*.go", "!**/cmd/ribbitto/*.go", "!**/cmd/ribbitto/**/*.go"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/db/migrations
+              desc: Only internal/infra/postgres and cmd/ribbitto own migrations.
         domain:
           list-mode: lax
           files: ["**/internal/domain/*.go", "**/internal/domain/**/*.go", "!$test"]

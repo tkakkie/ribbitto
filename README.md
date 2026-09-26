@@ -21,15 +21,25 @@ PostgreSQL with pgx, sqlc and goose.
 
 ## Development
 
-Requires Go (see `go.mod` for the version).
+Requires Go (see `go.mod` for the version) and Docker Compose for PostgreSQL 18.
 
 ```sh
-go run ./cmd/ribbitto        # serves http://localhost:8080/ and /healthz
+cp .env.example .env
+set -a; . ./.env; set +a    # export configuration; the binary does not load .env
+make db-up                 # starts PostgreSQL and waits for health
+go run ./cmd/ribbitto migrate up
+go run ./cmd/ribbitto       # serves http://localhost:8080/ (or: ... serve)
 make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
 make dev                   # watches templ and CSS; restarts the server
 make check                 # checks formatting, vets, lints, builds and tests
+make db-down               # stops PostgreSQL; keeps the named data volume
 ```
+
+The server listens at http://localhost:8080/healthz and never migrates on
+startup. Use `ribbitto migrate up|down|status` with a built binary; `down`
+reverts one migration. See [database development](docs/database.md) for
+configuration, migration ownership and integration tests.
 
 `make dev` builds CSS before starting the server. It runs the pinned templ
 and Tailwind watchers together, restarting Go when templates or Go source
@@ -43,7 +53,6 @@ The standalone Tailwind CLI is downloaded and SHA-256 checked by `make css`
 Generated Go, CSS and vendored scripts are committed, so `go build` needs
 neither templ nor Tailwind. CSS class detection is limited to `.templ` files
 so local notes and tools do not change the output.
-Local PostgreSQL tooling arrives later in M0.
 
 ## Contributing
 

@@ -2,3 +2,4 @@
 /internal/infra/postgres/sqlcgen/** linguist-generated=true
 # templ emits Go alongside each handwritten .templ source file.
 *_templ.go linguist-generated=true
+/web/static/vendor/** linguist-vendored

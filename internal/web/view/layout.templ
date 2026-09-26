@@ -1,0 +1,19 @@
+package view
+
+templ layout(stylesheetURL string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>ribbitto</title>
+			<link rel="stylesheet" href={ stylesheetURL }/>
+			<script defer src="/static/vendor/htmx-2.0.7.min.js"></script>
+			<script defer src="/static/vendor/htmx-ext-sse-2.2.4.min.js"></script>
+			<script defer src="/static/vendor/idiomorph-ext-0.7.4.min.js"></script>
+		</head>
+		<body>
+			{ children... }
+		</body>
+	</html>
+}

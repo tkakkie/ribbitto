@@ -30,6 +30,12 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: verify generated files
+        run: |
+          make generate
+          make css
+          git diff --exit-code
+
       # The Makefile pins golangci-lint for both local checks and CI.
       - name: check
         run: make check

@@ -10,6 +10,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/tkakkie/ribbitto/internal/web"
 )
 
 func main() {
@@ -30,14 +32,14 @@ func run() error {
 		addr = ":8080"
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("ok\n"))
-	})
+	handler, err := web.NewHandler()
+	if err != nil {
+		return err
+	}
 
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: mux,
+		Handler: handler,
 		// Bound header reading so a slow client cannot hold a connection
 		// open forever. No WriteTimeout: long-lived SSE responses will
 		// manage their own deadlines.

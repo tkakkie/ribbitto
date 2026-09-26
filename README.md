@@ -24,12 +24,25 @@ PostgreSQL with pgx, sqlc and goose.
 Requires Go (see `go.mod` for the version).
 
 ```sh
-go run ./cmd/ribbitto        # serves http://localhost:8080/healthz
+go run ./cmd/ribbitto        # serves http://localhost:8080/ and /healthz
+make generate              # regenerates committed templ Go files
+make css                   # rebuilds committed, minified Tailwind CSS
+make dev                   # watches templ and CSS; restarts the server
 make check                 # checks formatting, vets, lints, builds and tests
 ```
 
-More tooling (`make dev`, a local PostgreSQL) arrives with the
-first milestone.
+`make dev` builds CSS before starting the server. It runs the pinned templ
+and Tailwind watchers together, restarting Go when templates, Go source, or
+the built CSS change. Reload the browser after an edit; the stylesheet URL
+contains a content hash so rebuilt CSS bypasses the immutable cache.
+Ctrl-C stops the watchers and server.
+
+The standalone Tailwind CLI is downloaded and SHA-256 checked by `make css`
+(macOS ARM64 and Linux x64). No npm or JavaScript build step is needed.
+Generated Go, CSS and vendored scripts are committed, so `go build` needs
+neither templ nor Tailwind. CSS class detection is limited to `.templ` files
+so local notes and tools do not change the output.
+Local PostgreSQL tooling arrives later in M0.
 
 ## Contributing
 

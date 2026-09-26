@@ -210,4 +210,5 @@ per language and ID.
 
 - [`docs/domain.md`](domain.md) — entities, invariants, unread rules
 - [`docs/database.md`](database.md) — local database, migrations, tests
+- [`docs/schema/README.md`](schema/README.md) — generated reference for the current schema
 - [`DECISIONS.md`](../DECISIONS.md) — why things are the way they are

@@ -40,3 +40,23 @@ env -u RIBBITTO_TEST_DATABASE_URL -u RIBBITTO_REQUIRE_DB go test -count=1 -v ./i
 `make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`
 and `db/queries/`. Commit its pgx/v5 output in `internal/infra/postgres/sqlcgen/`;
 CI rejects generation changes to committed files. Never edit generated files.
+
+## Generated schema reference
+
+With the Compose database running and `RIBBITTO_DATABASE_URL` exported,
+apply migrations and regenerate the [schema reference](schema/README.md):
+
+```sh
+go run ./cmd/ribbitto migrate up
+make schema-docs
+```
+
+tbls is pinned in its own module, `tools/tbls/go.mod`, to isolate its
+dependencies from templ and sqlc. `make schema-docs` runs
+`go tool -modfile=tools/tbls/go.mod tbls` from the repository root.
+`.tbls.yml` selects Markdown with Mermaid diagrams, without Graphviz or
+`schema.json`. The command replaces all of `docs/schema/`, so keep
+hand-written documentation elsewhere. Commit the
+generated directory with schema changes. CI migrates a fresh PostgreSQL 18
+database, regenerates the whole directory and requires
+`git status --porcelain docs/schema` to be empty, including untracked files.

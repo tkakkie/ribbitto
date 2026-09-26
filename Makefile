@@ -8,11 +8,14 @@ TAILWIND_SHA_macos-arm64 := c47681e9948db20026a913a4aca4ee0269b4c0d4ef3f71343cb8
 TAILWIND_SHA_linux-x64 := b9ed9f8f640d3323711f9f68608aa266dff3adbc42e867c38ea2d009b973be11
 CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 
-.PHONY: check lint db-up db-down generate css dev
+.PHONY: check lint db-up db-down generate schema-docs css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
 	go tool -modfile=tools/go.mod sqlc generate
+
+schema-docs:
+	go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist
 
 $(TEMPL): tools/go.mod tools/go.sum
 	go -C tools build -o ../bin/templ github.com/a-h/templ/cmd/templ

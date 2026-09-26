@@ -7,7 +7,8 @@ words (ribbit, pond, marsh, …) appear only in UI message files.
 **Keep it current:** update this file in the same pull request whenever a
 term, an entity, a relation, an invariant or the unread rules change.
 Entities marked *planned* do not have tables yet; `db/migrations/` is the
-source of truth for what exists.
+source of truth for what exists. See the [generated schema reference](schema/README.md)
+for the current tables, columns and constraints.
 
 ## Glossary
 

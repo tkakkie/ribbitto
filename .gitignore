@@ -1,0 +1,23 @@
+# Build output
+/bin/
+/ribbitto
+/dist/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Test and coverage output
+*.test
+*.out
+coverage.*
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local AI tool state (settings meant for everyone are committed explicitly)
+.claude/settings.local.json

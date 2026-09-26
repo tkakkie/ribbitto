@@ -89,10 +89,14 @@ git -C "$repo" diff "$base_sha...$head_sha" >"$tmp/pr.diff" \
 git -C "$repo" worktree add --quiet --detach "$worktree" "$head_sha" \
   || die "could not check out $head_sha"
 
+title=$(jq -er .title "$tmp/pr.json") \
+  || die "could not read PR title"
+body=$(jq -r '.body // ""' "$tmp/pr.json") \
+  || die "could not read PR description"
 {
   printf '\n---\n\nPull request #%s: base %s, head %s.\n\n' "$pr" "$base_sha" "$head_sha"
-  printf '<<<PR_TITLE (untrusted)\n%s\nPR_TITLE>>>\n\n' "$(jq -r .title "$tmp/pr.json")"
-  printf '<<<PR_DESCRIPTION (untrusted)\n%s\nPR_DESCRIPTION>>>\n\n' "$(jq -r '.body // ""' "$tmp/pr.json")"
+  printf '<<<PR_TITLE (untrusted)\n%s\nPR_TITLE>>>\n\n' "$title"
+  printf '<<<PR_DESCRIPTION (untrusted)\n%s\nPR_DESCRIPTION>>>\n\n' "$body"
   printf '<<<PR_DIFF (untrusted)\n'
   cat "$tmp/pr.diff"
   printf 'PR_DIFF>>>\n'

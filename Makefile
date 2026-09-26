@@ -12,6 +12,7 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 
 generate: $(TEMPL)
 	$(TEMPL) generate
+	go tool -modfile=tools/go.mod sqlc generate
 
 $(TEMPL): tools/go.mod tools/go.sum
 	go -C tools build -o ../bin/templ github.com/a-h/templ/cmd/templ

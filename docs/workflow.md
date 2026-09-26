@@ -67,6 +67,8 @@ idea (maintainer, one line) or finding (AI)
   → CI and Copilot run automatically
   → the AI that did not implement it reviews        (see "Reviewing")
   → implementer applies the review (and Copilot comments it agrees with)
+  → at most two rounds; if round 2 leaves only mechanical fixes,
+    closure verification; otherwise the maintainer decides
   → reviewer approves → label `ai-reviewed` → mark ready for review
   → Claude explains the PR to the maintainer in Japanese, in the chat
     (the PR itself stays in English)
@@ -87,7 +89,9 @@ Codex's work → Claude.
 
 **How many rounds:** at most **two** reviews by the other AI per issue or
 pull request, counting re-reviews. Copilot and Grok do not count. If
-round two still has blocking findings, stop and ask the maintainer.
+round two still has blocking findings, a pull request may go through
+*closure verification* (below) when it qualifies; in every other case,
+stop and ask the maintainer.
 
 **What to check on an issue:**
 - The *why* is clear and the scope fits one pull request.
@@ -116,6 +120,32 @@ Verdict: approve | changes requested
 
 "Approve" with no findings is a valid review. Only `[blocking]` findings
 hold things up.
+
+**Closure verification** (pull requests only; after the two-round limit;
+at most once per PR; not a review round). Evidence: #2, the case of #14.
+
+1. **Eligibility is declared in the round-2 report,** after a normal
+   review of that revision, and only if every remaining blocking finding
+   is mechanical: the report names the exact fix, the reviewer has
+   verified that the fix works, and it needs no design or specification
+   decision. Without that declaration, ask the maintainer.
+2. The implementer applies exactly those fixes and nothing else.
+3. The reviewer checks that the whole diff since the round-2 SHA contains
+   only the named fixes, then re-runs the failing check or live test for
+   each finding — not the rest of the PR — and reports:
+
+   ```
+   **Closure verification — <Codex|Claude>** (<round-2 SHA>..<SHA>)
+   - ✅ | ❌ finding — how it was checked
+   ```
+
+4. All pass → `ai-reviewed` and the normal merge decision. Any other change
+   in the diff, a failed check, a new blocking finding or anything needing
+   a decision → ask the maintainer.
+
+A later merge of `main` to resolve conflicts is reported in a PR comment
+listing the files and how they were resolved; if the resolution does more
+than combine both sides, it needs a normal review.
 
 ## Risk
 

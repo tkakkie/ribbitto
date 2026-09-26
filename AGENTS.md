@@ -18,8 +18,9 @@ Follow [`docs/workflow.md`](docs/workflow.md). The rules you must not skip:
   and `docs/roadmap.md`.
 - **Every issue and pull request an AI writes (including the docs it
   changes) is reviewed by the other AI (Claude ↔ Codex) before the
-  maintainer is asked.** At most two review rounds; then ask the
-  maintainer.
+  maintainer is asked.** At most two review rounds; then either
+  closure verification (PRs with only mechanical, verified fixes left —
+  see `docs/workflow.md#reviewing`) or ask the maintainer.
 - Issues start from a template in `.github/ISSUE_TEMPLATE/`; keep its
   headings. No implementation without the `ready` label.
 - **End of a unit of work:** overwrite the Status issue body. When the

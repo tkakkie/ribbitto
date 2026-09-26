@@ -1,0 +1,4 @@
+@import "tailwindcss" source(none);
+@source "../../internal/web/**/*.templ";
+/* With source(none), Tailwind watches only @source paths, so include this directory to rebuild on CSS-only edits. */
+@source "./*.css";

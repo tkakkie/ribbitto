@@ -19,14 +19,22 @@ It is the only package that knows every layer.
 | `internal/domain` | Entities, value types, invariants, domain errors and domain event types. No I/O. | nothing |
 | `internal/app` | Use cases, the **only** authorization logic, transaction boundaries. Defines the interfaces it needs (repositories, event publisher). | `domain` |
 | `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces, connections, migrations. | `domain`, `app`, `db/migrations` |
-| `internal/realtime` | *(planned)* The SSE hub: connections, fan-out, presence. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
+| `internal/realtime` | *(planned, M3)* The SSE hub: connections, fan-out, presence. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
 | `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS and vendored JavaScript. | — |
 
-Sub-packages of a layer may import each other. Test files may import any
-package. These rules are enforced by depguard in `.golangci.yml`, so a
-violating import fails `make check`; this table and that file must agree.
+Sub-packages of a layer may import each other. depguard in `.golangci.yml`
+enforces the part of this table that matters most, and a violating import
+fails `make check`:
+
+- each layer's imports **within `internal/`** (other imports from this module
+  are listed above by convention, not enforced per layer);
+- `db/migrations` may be imported only by `internal/infra/postgres` and
+  `cmd/ribbitto` — **this also applies to test files**;
+- otherwise test files may import any package.
+
+This section and `.golangci.yml` must agree; change them together.
 
 ```mermaid
 flowchart LR
@@ -43,7 +51,7 @@ endpoint or a real-time path cannot quietly skip it; and because use cases
 return plain structs and only `web` renders HTML, a JSON API can be added
 next to the HTML handlers later without touching `app`.
 
-## Request flow
+## Request flow *(planned from M1: sessions, members and authorization do not exist yet)*
 
 ```mermaid
 sequenceDiagram
@@ -73,15 +81,16 @@ sequenceDiagram
   participant DB as PostgreSQL
   participant H as realtime hub
   A->>DB: BEGIN
-  A->>DB: UPDATE organization SET event_seq = event_seq + 1 RETURNING event_seq
+  A->>DB: UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq
   A->>DB: INSERT message (event_seq = n)
   A->>DB: INSERT event_log (seq = n, event data)
   A->>DB: COMMIT
   A->>H: "sequence advanced" (after commit)
 ```
 
-- **Take the sequence number first.** The `UPDATE` locks the organisation
-  row until commit, so sequence order equals commit order and no gap can be
+- **Take the sequence number first.** The `UPDATE` (scoped to the
+  organisation from the URL, `WHERE id = $1`) locks that organisation's row
+  until commit, so sequence order equals commit order and no gap can be
   skipped by a reader. A rolled-back transaction also rolls back the
   increment: no holes. The value is needed for `message.event_seq`, hence
   first.
@@ -115,12 +124,12 @@ sequenceDiagram
   participant DB as PostgreSQL
   participant C as connection goroutine
   B->>W: GET page
-  W->>DB: REPEATABLE READ, READ ONLY: page data + organization.event_seq
+  W->>DB: REPEATABLE READ, READ ONLY: page data + event_seq of this organisation
   W-->>B: HTML with cursor = event_seq
   B->>W: GET /events?after=cursor
   W->>C: start
   loop
-    C->>DB: event_log rows with seq > cursor
+    C->>DB: event_log WHERE organization_id = org AND seq > cursor
     C->>C: authorize each event for this connection, render, send
     C->>C: wait for "sequence advanced"
   end

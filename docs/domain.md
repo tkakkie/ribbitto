@@ -72,8 +72,13 @@ creation time.
 7. **Session tokens are never stored.** Only their SHA-256 hash is; passwords
    are stored only as Argon2id hashes.
 
-Row-level security in PostgreSQL is planned as a second line of defence
-after the MVP; until then, invariants 1–5 are enforced in code and by tests.
+These are **requirements for all code and migrations**, not a description
+of what is implemented today: only `organization` exists so far, and
+membership, sessions and authorization arrive in M1. Every migration that
+adds an organisation-owned table must include `organization_id` and
+composite foreign keys (1–3), and every use case must be covered by tests
+for 4–5 as it is written. Row-level security in PostgreSQL is planned as a
+second line of defence after the MVP.
 
 ## Unread rules *(planned, M2–M4)*
 

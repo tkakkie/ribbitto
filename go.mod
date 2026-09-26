@@ -3,6 +3,7 @@ module github.com/tkakkie/ribbitto
 go 1.27.1
 
 require (
+	github.com/a-h/templ v0.3.977
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/pressly/goose/v3 v3.28.0
 )

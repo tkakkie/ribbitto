@@ -103,7 +103,9 @@
   --text-display: 1.75rem;
   --text-display--line-height: 2.25rem;
 
-  /* Spacing stays Tailwind's 4 px grid (--spacing: 0.25rem). */
+  /* Spacing: a 4 px grid (p-1 = 4 px, p-4 = 16 px, …). */
+  --spacing: 0.25rem;
+
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;

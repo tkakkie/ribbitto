@@ -3,9 +3,12 @@ module github.com/tkakkie/ribbitto
 go 1.27.1
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/a-h/templ v0.3.1020
 	github.com/jackc/pgx/v5 v5.11.0
+	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/pressly/goose/v3 v3.28.0
+	golang.org/x/text v0.41.0
 )
 
 require (
@@ -16,5 +19,4 @@ require (
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
 )

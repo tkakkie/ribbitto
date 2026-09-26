@@ -196,6 +196,16 @@ the hash is recomputed per request, so rebuilt CSS appears without a
 restart. No inline scripts: a strict Content Security Policy can be added
 without rework.
 
+**Languages.** `internal/web/i18n` embeds the English and Japanese TOML
+catalogues (go-i18n). `cmd/ribbitto` creates one catalogue service for the
+process; middleware on HTML routes puts a localizer in the request context.
+A valid `lang` cookie wins over `Accept-Language`; the matcher's index picks
+a supported catalogue, defaulting to English, and HTML responses add
+`Accept-Language` and `Cookie` to `Vary`. Templates get text only through
+`i18n.T(ctx, "message.id")` and the page language through `i18n.Language`.
+A missing message falls back to English, then to the ID, and is logged once
+per language and ID.
+
 ## See also
 
 - [`docs/domain.md`](domain.md) — entities, invariants, unread rules

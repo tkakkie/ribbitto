@@ -18,8 +18,9 @@ Follow [`docs/workflow.md`](docs/workflow.md). The rules you must not skip:
   and `docs/roadmap.md`.
 - **Every issue and pull request an AI writes (including the docs it
   changes) is reviewed by the other AI (Claude ↔ Codex) before the
-  maintainer is asked.** At most two review rounds; then ask the
-  maintainer.
+  maintainer is asked.** At most two review rounds; then either
+  closure verification (PRs with only mechanical, verified fixes left —
+  see `docs/workflow.md#reviewing`) or ask the maintainer.
 - Issues start from a template in `.github/ISSUE_TEMPLATE/`; keep its
   headings. No implementation without the `ready` label.
 - **End of a unit of work:** overwrite the Status issue body. When the
@@ -70,6 +71,9 @@ same pull request: [`docs/architecture.md`](docs/architecture.md)
 - Never use `templ.Raw` or build HTML by string concatenation.
 - Product vocabulary (ribbit, pond, marsh…) appears only in UI message
   files, never in identifiers.
+- UI strings go in `internal/web/i18n/locales/{en,ja}.toml`; use dotted,
+  neutral IDs (`hello.title`, never a product word), and update both languages
+  in the same PR. Templates get messages through `i18n.T(ctx, "message.id")`.
 - When a change alters terminology, invariants, data flow or dependency
   direction, update `docs/` in the same pull request.
 

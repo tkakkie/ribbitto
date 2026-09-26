@@ -39,7 +39,8 @@ imports), `app` (use cases and the only authorization logic; imports
 (imports `domain`; receives authorization, rendering and event reading as
 interfaces), `web` (handlers and templ; imports `domain`, `app`,
 `realtime`, never `infra`). Handlers call use cases that return plain
-structs; only `web` produces HTML. Do not add an import that breaks this.
+structs; only `internal/web` produces HTML, with components in `internal/web/view`.
+It may import `web/static` for embedded assets. Do not add an import that breaks this.
 `db/migrations` is owned by `internal/infra/postgres` and may be imported
 only by it and `cmd/ribbitto`.
 

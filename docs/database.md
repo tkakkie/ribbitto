@@ -22,8 +22,9 @@ Integration tests use `RIBBITTO_TEST_DATABASE_URL`, an admin connection to
 the `postgres` database as the `postgres` superuser. `pgtest.New(t)` creates
 a database per test, cloned from a migrated template named by the first
 12 hex characters of a SHA-256 hash over sorted migration names and contents.
-A dedicated admin connection serializes template creation with a shared
-session advisory lock. Unfinished building databases are removed before
+A dedicated admin connection serializes template creation with an exclusive
+session advisory lock (`pg_advisory_lock`). Unfinished building databases
+are removed before
 rebuilding; a transaction publishes the final name and makes the template
 unconnectable. Every call checks the template under the lock without Go
 global caching. Cleanup closes the pool before dropping the database with
@@ -53,7 +54,8 @@ make schema-docs
 
 tbls is pinned in its own module, `tools/tbls/go.mod`, to isolate its
 dependencies from templ and sqlc. `make schema-docs` runs
-`go tool -modfile=tools/tbls/go.mod tbls` from the repository root.
+`go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist` from the repository
+root.
 `.tbls.yml` selects Markdown with Mermaid diagrams, without Graphviz or
 `schema.json`. The command replaces all of `docs/schema/`, so keep
 hand-written documentation elsewhere. Commit the

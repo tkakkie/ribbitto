@@ -30,6 +30,9 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	if services.Sessions == nil || services.SignIn == nil {
 		return nil, errors.New("web: Services.Sessions and Services.SignIn are required")
 	}
+	if services.Setup != nil && services.SetupSessions == nil {
+		return nil, errors.New("web: Services.SetupSessions is required when Services.Setup is set")
+	}
 	assets := static.FS()
 	if devAssets != "" {
 		assets = os.DirFS(devAssets)

@@ -275,7 +275,8 @@ func newTestHandler(t *testing.T, dir string) (http.Handler, error) {
 			t.Errorf("unexpected message fallback: %s", logs.String())
 		}
 	})
-	return NewHandler(dir, catalogues, Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: &fakeSetup{open: true}})
+	setup := &fakeSetup{open: true}
+	return NewHandler(dir, catalogues, Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: setup, SetupSessions: setup})
 }
 
 func TestHelloLanguages(t *testing.T) {
@@ -360,8 +361,9 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, services := range map[string]Services{
-		"no sessions": {SignIn: &fakeSignIn{}},
-		"no sign-in":  {Sessions: noSessions{}},
+		"no sessions":                     {SignIn: &fakeSignIn{}},
+		"no sign-in":                      {Sessions: noSessions{}},
+		"setup without a session creator": {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: &fakeSetup{}},
 	} {
 		if _, err := NewHandler("", catalogues, services); err == nil {
 			t.Errorf("%s: NewHandler accepted incomplete services", name)

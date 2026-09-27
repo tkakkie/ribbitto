@@ -54,9 +54,9 @@ var ErrInvalidHash = errors.New("invalid password hash")
 
 // Hasher hashes and verifies passwords with Argon2id. Its slots bound the
 // CPU and memory that concurrent hashing can use, but only across callers
-// that share it: cmd/ribbitto constructs exactly one Hasher per process and
-// passes it to every authentication use case. There is deliberately no
-// package-level semaphore (AGENTS.md: no global state).
+// that share it: in production, cmd/ribbitto must construct exactly one
+// Hasher per process and pass it to every authentication use case. There
+// is deliberately no package-level semaphore (AGENTS.md: no global state).
 type Hasher struct {
 	slots chan struct{}
 	wait  time.Duration

@@ -120,12 +120,15 @@ cleanup() {
     echo "grok-review: could not remove worktree $worktree; run 'git worktree prune'" >&2
     [[ $status -eq 0 ]] && status=1
   fi
-  if ! git -C "$repo" worktree prune; then
-    echo "grok-review: 'git worktree prune' failed; stale worktree metadata may remain" >&2
-    [[ $status -eq 0 ]] && status=1
-  fi
   if [[ -n $tmp ]] && ! rm -rf "$tmp"; then
     echo "grok-review: could not remove $tmp" >&2
+    [[ $status -eq 0 ]] && status=1
+  fi
+  # Prune after removing $tmp: a signal can make Bash start this cleanup while
+  # a just-forked `git worktree add` is still running (#84), so the worktree
+  # may appear after the check above. Pruning last forgets it once it is gone.
+  if ! git -C "$repo" worktree prune; then
+    echo "grok-review: 'git worktree prune' failed; stale worktree metadata may remain" >&2
     [[ $status -eq 0 ]] && status=1
   fi
   exit "$status"

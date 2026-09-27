@@ -1,7 +1,10 @@
 package auth_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"testing"
 	"time"
@@ -90,6 +93,74 @@ func TestSignIn(t *testing.T) {
 			}
 			if _, err := sessions.Resolve(t.Context(), token); !errors.Is(err, auth.ErrNoSession) {
 				t.Fatalf("token resolves after sign-out: %v", err)
+			}
+		})
+	}
+}
+
+// failingStore fails one kind of write and otherwise behaves like fakeStore.
+type failingStore struct {
+	*fakeStore
+	failCreate bool
+	failDelete []byte // the token hash whose deletion fails
+}
+
+func (f failingStore) CreateSession(ctx context.Context, hash []byte, accountID domain.ID, expiresAt time.Time) error {
+	if f.failCreate {
+		return errors.New("insert failed")
+	}
+	return f.fakeStore.CreateSession(ctx, hash, accountID, expiresAt)
+}
+
+func (f failingStore) DeleteSession(ctx context.Context, hash []byte) error {
+	if f.failDelete != nil && bytes.Equal(hash, f.failDelete) {
+		return errors.New("delete failed")
+	}
+	return f.fakeStore.DeleteSession(ctx, hash)
+}
+
+func TestSignInRotationFailures(t *testing.T) {
+	hasher, err := auth.NewHasher()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const password = "correct horse battery staple"
+	hash, err := hasher.Hash(t.Context(), password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alice := domain.Account{ID: domain.ID{7}, Email: "alice@example.com"}
+	for _, tt := range []struct {
+		name                   string
+		failCreate, failDelete bool
+	}{
+		{"creating the new session fails", true, false},
+		{"ending the previous session fails", false, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			base := &fakeStore{sessions: map[string]fakeSession{}}
+			previous, _, err := auth.NewSessions(base, time.Now).Create(t.Context(), alice.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			store := failingStore{fakeStore: base, failCreate: tt.failCreate}
+			if tt.failDelete {
+				raw, _ := base64.RawURLEncoding.DecodeString(previous)
+				sum := sha256.Sum256(raw)
+				store.failDelete = sum[:]
+			}
+			sessions := auth.NewSessions(store, time.Now)
+			signIn := auth.NewSignIn(fakeAccounts{account: alice, hash: hash}, hasher, sessions)
+			if _, _, err := signIn.SignIn(t.Context(), alice.Email, password, previous); err == nil {
+				t.Fatal("sign-in succeeded despite the store failure")
+			}
+			// The browser keeps its previous session, and no other one exists.
+			if _, err := auth.NewSessions(base, time.Now).Resolve(t.Context(), previous); err != nil {
+				t.Fatalf("previous session lost: %v", err)
+			}
+			// The new session was never created, or was undone.
+			if len(base.sessions) != 1 {
+				t.Fatalf("%d sessions after a failed sign-in, want 1", len(base.sessions))
 			}
 		})
 	}

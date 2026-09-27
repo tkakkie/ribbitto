@@ -88,7 +88,9 @@ func Account(ctx context.Context) (domain.Account, bool) {
 }
 
 // MaxBodyBytes bounds every request body. It is far above any form ribbitto
-// has; a route that needs more (uploads) will raise it for itself.
+// has. The reader it installs cannot be undone downstream, so a route that
+// needs more (uploads) will need LimitBody to exempt it or become
+// route-aware; a handler cannot raise the limit by itself.
 const MaxBodyBytes = 64 << 10
 
 // LimitBody caps request bodies at MaxBodyBytes. Reading past the cap fails

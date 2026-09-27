@@ -7,6 +7,8 @@ package sqlcgen
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
@@ -24,4 +26,15 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organ
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const nextEventSeq = `-- name: NextEventSeq :one
+UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq
+`
+
+func (q *Queries) NextEventSeq(ctx context.Context, id pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, nextEventSeq, id)
+	var event_seq int64
+	err := row.Scan(&event_seq)
+	return event_seq, err
 }

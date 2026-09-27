@@ -30,10 +30,11 @@ func TestMigrations(t *testing.T) {
 		}
 	})
 	for _, step := range []struct {
-		command string
-		present bool
-		state   string
-	}{{"up", true, "applied"}, {"down", false, "pending"}, {"up", true, "applied"}} {
+		command  string
+		present  bool
+		state    string
+		accounts bool
+	}{{"up", true, "applied", true}, {"down", true, "applied", false}, {"down", false, "pending", false}, {"up", true, "applied", true}} {
 		if err := postgres.Migrate(ctx, db, step.command, io.Discard); err != nil {
 			t.Fatal(err)
 		}
@@ -43,6 +44,11 @@ func TestMigrations(t *testing.T) {
 		}
 		if present != step.present {
 			t.Fatalf("after %s: table present = %t, want %t", step.command, present, step.present)
+		}
+		for _, table := range []string{"account", "session", "member"} {
+			if err := db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", "public."+table).Scan(&present); err != nil || present != step.accounts {
+				t.Fatalf("after %s: %s present = %t, want %t: %v", step.command, table, present, step.accounts, err)
+			}
 		}
 		var status bytes.Buffer
 		if err := postgres.Migrate(ctx, db, "status", &status); err != nil {

@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -111,6 +112,40 @@ func TestOpenRoutesLimitedBeforeWork(t *testing.T) {
 			w := postForm(handler, path, "email=a%40example.com&password=long+enough+password")
 			if w.Code != http.StatusTooManyRequests || setup.completed {
 				t.Fatalf("status %d, reached the use case: %v", w.Code, setup.completed)
+			}
+		})
+	}
+}
+
+// readRecorder fails the test's expectation if anyone reads the body.
+type readRecorder struct{ reads int }
+
+func (r *readRecorder) Read([]byte) (int, error) {
+	r.reads++
+	return 0, io.EOF
+}
+
+func TestLimitedFormsAreNotParsed(t *testing.T) {
+	for _, tt := range []struct {
+		path  string
+		drain func(*middleware.AuthLimits)
+	}{
+		{"/signin", func(l *middleware.AuthLimits) { drain(l.SignIn) }},
+		{"/setup", func(l *middleware.AuthLimits) { drain(l.Setup) }},
+		{"/signup", func(l *middleware.AuthLimits) { drain(l.SignUp) }},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			setup := &fakeSetup{open: true}
+			handler, limits := newLimitedHandler(t, Services{SignIn: &fakeSignIn{}, Setup: setup, SignUp: fakeSignUp{setup}, SetupSessions: setup})
+			tt.drain(limits)
+			body := &readRecorder{}
+			r := httptest.NewRequest(http.MethodPost, tt.path, body)
+			r.RemoteAddr = "192.0.2.1:1234"
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != http.StatusTooManyRequests || body.reads != 0 {
+				t.Fatalf("status %d, body read %d times", w.Code, body.reads)
 			}
 		})
 	}

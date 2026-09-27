@@ -2,6 +2,7 @@ package web
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -23,6 +24,10 @@ type Services struct {
 // NewHandler constructs the application's HTTP routes. A non-empty devAssets
 // directory serves live assets from disk instead of the embedded production assets.
 func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services) (http.Handler, error) {
+	// Fail at start-up rather than panic on the first request.
+	if services.Sessions == nil || services.SignIn == nil {
+		return nil, errors.New("web: Services.Sessions and Services.SignIn are required")
+	}
 	assets := static.FS()
 	if devAssets != "" {
 		assets = os.DirFS(devAssets)

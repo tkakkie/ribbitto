@@ -8,10 +8,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Account struct {
+	ID           pgtype.UUID
+	Email        string
+	DisplayName  string
+	PasswordHash string
+	CreatedAt    pgtype.Timestamptz
+}
+
+type Member struct {
+	ID             pgtype.UUID
+	OrganizationID pgtype.UUID
+	AccountID      pgtype.UUID
+	Role           string
+	JoinedEventSeq int64
+	CreatedAt      pgtype.Timestamptz
+}
+
 type Organization struct {
 	ID        pgtype.UUID
 	Slug      string
 	Name      string
 	EventSeq  int64
 	CreatedAt pgtype.Timestamptz
+}
+
+type Session struct {
+	ID        pgtype.UUID
+	TokenHash []byte
+	AccountID pgtype.UUID
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
 }

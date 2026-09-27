@@ -34,9 +34,15 @@ linters:
           allow:
             - github.com/tkakkie/ribbitto/internal/domain$
             - github.com/tkakkie/ribbitto/internal/domain/
-          deny: &internal
+          deny: &non_html
             - pkg: github.com/tkakkie/ribbitto/internal/
               desc: Respect the dependency direction in AGENTS.md.
+            - pkg: github.com/a-h/templ$
+              desc: Only internal/web produces HTML; see AGENTS.md.
+            - pkg: github.com/a-h/templ/
+              desc: Only internal/web produces HTML; see AGENTS.md.
+            - pkg: html/template$
+              desc: Only internal/web produces HTML; see AGENTS.md.
         app:
           list-mode: lax
           files: ["**/internal/app/*.go", "**/internal/app/**/*.go", "!$test"]
@@ -45,7 +51,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/domain$
             - github.com/tkakkie/ribbitto/internal/domain/
-          deny: *internal
+          deny: *non_html
         postgres:
           list-mode: lax
           files: ["**/internal/infra/postgres/*.go", "**/internal/infra/postgres/**/*.go", "!$test"]
@@ -56,7 +62,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/domain/
             - github.com/tkakkie/ribbitto/internal/app$
             - github.com/tkakkie/ribbitto/internal/app/
-          deny: *internal
+          deny: *non_html
         realtime:
           list-mode: lax
           files: ["**/internal/realtime/*.go", "**/internal/realtime/**/*.go", "!$test"]
@@ -65,7 +71,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/realtime/
             - github.com/tkakkie/ribbitto/internal/domain$
             - github.com/tkakkie/ribbitto/internal/domain/
-          deny: *internal
+          deny: *non_html
         web:
           list-mode: lax
           files: ["**/internal/web/*.go", "**/internal/web/**/*.go", "!$test"]
@@ -79,7 +85,9 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/realtime$
             - github.com/tkakkie/ribbitto/internal/realtime/
-          deny: *internal
+          deny: &internal
+            - pkg: github.com/tkakkie/ribbitto/internal/
+              desc: Respect the dependency direction in AGENTS.md.
     revive:
       rules:
         - name: exported

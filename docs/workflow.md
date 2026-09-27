@@ -286,17 +286,25 @@ The prompt carries the issue and its review comments, plus these rules:
   and `RIBBITTO_REQUIRE_DB=1`.
 
   ```sh
-  docker run -d --name ribbitto-codex-pg -p 127.0.0.1:55433:5432 \
-    -e POSTGRES_PASSWORD=codex-dev-only postgres:18 &&
-  for i in $(seq 1 30); do
-    docker exec ribbitto-codex-pg pg_isready -U postgres >/dev/null 2>&1 && break
-    sleep 1
-  done
+  # Reuse the container if it is already running; either way, wait for it.
+  if ! docker ps --format '{{.Names}}' | grep -qx ribbitto-codex-pg; then
+    docker run -d --name ribbitto-codex-pg -p 127.0.0.1:55433:5432 \
+      -e POSTGRES_PASSWORD=codex-dev-only postgres:18
+  fi &&
+  (
+    for i in $(seq 1 30); do
+      docker exec ribbitto-codex-pg pg_isready -U postgres >/dev/null 2>&1 && exit 0
+      sleep 1
+    done
+    echo "ribbitto-codex-pg: PostgreSQL not ready after 30 tries" >&2
+    exit 1
+  )
   ```
 
-  If `ribbitto-codex-pg` is still running from an earlier session, reuse
-  it. If port 55433 is taken, pick another and change both commands.
-  `docker rm -f ribbitto-codex-pg` removes the container when you are done.
+  Do not start Codex unless this exits 0. If a stopped container with that
+  name exists, `docker run` fails. Remove it with
+  `docker rm -f ribbitto-codex-pg`, which is also how to clean up when you
+  are done. If port 55433 is taken, pick another and change both commands.
 - **Handoff.** Codex does not commit, push or use GitHub. It leaves the
   changes in the working tree and writes a draft PR description to an
   untracked `PR_BODY.md`.

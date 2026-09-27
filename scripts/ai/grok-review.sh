@@ -129,8 +129,11 @@ cleanup() {
   exit "$status"
 }
 trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+# The first of INT and TERM wins and ignores the other. Ctrl-C delivers INT
+# to this shell and makes the Perl parent send TERM as well; without this,
+# the second trap could end the shell before cleanup ran (#84).
+trap 'trap "" INT TERM; exit 130' INT
+trap 'trap "" INT TERM; exit 143' TERM
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/grok-review.XXXXXX")
 worktree="$tmp/worktree"
 

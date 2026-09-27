@@ -112,3 +112,112 @@ func TestClientKey(t *testing.T) {
 		}
 	}
 }
+
+// sixtyFour is the i-th /64 in 2001:db8::/48.
+func sixtyFour(i int) netip.Prefix {
+	a := netip.MustParseAddr("2001:db8::").As16()
+	a[6], a[7] = byte(i>>8), byte(i)
+	return netip.PrefixFrom(netip.AddrFrom16(a), 64)
+}
+
+// One /48 must not fill the sign-in table by spreading over its /64s and
+// re-probing them to keep them alive.
+func TestSignInNetworkCannotFillTable(t *testing.T) {
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	l := NewAuthLimits(nil, func() time.Time { return now }).SignIn
+	for range 2 {
+		for i := range maxBuckets {
+			l.Allow(sixtyFour(i))
+		}
+		now = now.Add(30 * time.Second)
+	}
+	if !l.Allow(netip.MustParsePrefix("198.51.100.7/32")) {
+		t.Fatal("one /48 turned a new client away")
+	}
+}
+
+// The /64s of one /48 together get the /48's budget, not one each.
+func TestSignInNetworkBudget(t *testing.T) {
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	l := NewAuthLimits(nil, func() time.Time { return now }).SignIn
+	admitted := 0
+	for i := range 3600 {
+		if l.Allow(sixtyFour(i)) {
+			admitted++
+		}
+		now = now.Add(time.Second)
+	}
+	// A burst of 10, then one every 6 s: 10 + 599 within 3,599 s.
+	if admitted != 609 {
+		t.Fatalf("%d sign-ins admitted from one /48 in an hour, want 609", admitted)
+	}
+}
+
+// A request refused by one bucket takes nothing from the other, creates
+// no bucket and does not extend any bucket's retention.
+func TestRefusedRequestTakesNothing(t *testing.T) {
+	t0 := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	now := t0
+	l := NewAuthLimits(nil, func() time.Time { return now }).SignIn
+	a := sixtyFour(0)
+	l.Allow(a) // a: 4 tokens left
+	for i := 1; i < 10; i++ {
+		if !l.Allow(sixtyFour(i)) {
+			t.Fatalf("/64 %d refused within the /48 burst", i)
+		}
+	}
+	// The /48 is empty: a is refused although its own bucket has tokens.
+	now = t0.Add(time.Second)
+	if l.Allow(a) {
+		t.Fatal("admitted past an empty /48")
+	}
+	if got := l.buckets[a].limiter.TokensAt(now); got < 4 || got >= 5 {
+		t.Fatalf("the /48's refusal took a's token: %v left", got)
+	}
+	if l.buckets[a].last != t0 {
+		t.Fatal("a refused request moved last")
+	}
+	if l.Allow(sixtyFour(10)) || len(l.buckets) != 10 {
+		t.Fatalf("a refused /64 got a bucket: %d buckets", len(l.buckets))
+	}
+	// A /64 bucket refusing takes no /48 token: drain a, then let the /48
+	// earn exactly one token, which another /64 must still get.
+	for l.buckets[a].limiter.TokensAt(now) >= 1 {
+		l.buckets[a].limiter.AllowN(now, 1)
+	}
+	now = t0.Add(6 * time.Second)
+	if l.Allow(a) {
+		t.Fatal("a admitted with an empty bucket")
+	}
+	if !l.Allow(sixtyFour(11)) {
+		t.Fatal("a's refused request took the /48's token")
+	}
+}
+
+// Churn: a /48 keeps creating /64s and re-probing all the old ones after
+// its budget is spent. Its unevictable buckets stay within the documented
+// bound, and a client from elsewhere still gets in.
+func TestSignInNetworkChurn(t *testing.T) {
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	l := NewAuthLimits(nil, func() time.Time { return now }).SignIn
+	l.max = 40
+	window := time.Duration(signInBurst) * signInEvery
+	for step := range 600 {
+		for i := 0; i <= step; i++ {
+			l.Allow(sixtyFour(i))
+		}
+		unevictable := 0
+		for _, b := range l.buckets {
+			if now.Sub(b.last) < window {
+				unevictable++
+			}
+		}
+		if unevictable > 20 {
+			t.Fatalf("step %d: %d unevictable buckets from one /48, want at most 20", step, unevictable)
+		}
+		now = now.Add(time.Second)
+	}
+	if !l.Allow(netip.MustParsePrefix("198.51.100.7/32")) {
+		t.Fatal("a client from elsewhere was turned away after the churn")
+	}
+}

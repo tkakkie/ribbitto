@@ -192,25 +192,44 @@ GET sign-out. `cmd/ribbitto` creates the process's one `auth.Hasher` here
 and shares it with every authentication use case.
 
 **Rate limits** (`internal/web/middleware/ratelimit.go`). `POST /signin`,
-`/signup` and `/setup` are limited per client with token buckets: sign-in a
-burst of 5 then one every 12 s; sign-up and setup a burst of 3 then one
-every 10 minutes. The order inside each handler is: is the route open (a
-closed route answers 404 whatever the bucket or body), then the rate limit
-(429 with a localised page), then parsing and hashing. Each limiter keeps
-at most 10,000 buckets; a bucket is dropped only once it has refilled
-completely, and a full table refuses new clients (fail closed) rather than
-sharing a bucket, which would hand out a second burst. Limits live in
+`/signup` and `/setup` are limited with token buckets, per client and, for
+IPv6 clients, also per /48:
+
+- sign-in: a burst of 5, then one every 12 s per client; a /48 gets a burst
+  of 10, then one every 6 s, shared by all its /64s;
+- sign-up and setup: a burst of 3, then one every 10 minutes per client; a
+  /48 gets a burst of 6, then one every 5 minutes.
+
+A request is admitted only when both of its buckets have a token. It then
+takes one from each; a refused request takes none and creates no bucket. The
+order inside each handler is: is the route open (a closed route answers 404
+whatever the bucket or body), then the rate limit (429 with a localised
+page), then parsing and hashing.
+
+Each limiter keeps at most 10,000 client buckets and 10,000 /48 buckets. A
+bucket is dropped only once it has refilled completely, counted from the
+last token taken, so a stream of refused requests cannot keep it alive. A
+full table refuses new clients (fail closed) rather than sharing a bucket,
+which would hand out a second burst. The /48 budget bounds how many client
+buckets one /48 keeps alive: at most 20 for sign-in and 12 for sign-up and
+setup. An IPv6-only attack therefore needs at least 500 or 834 distinct
+/48s to fill a client table. An IPv4-only attack needs 10,000 addresses.
+Whoever holds that many can still turn new clients away for a while; that
+is accepted. The /48 is this application's choice, not a standard: unrelated
+clients whose smaller prefixes share a /48 share its budget. Limits live in
 memory, per process.
 
 The client is the peer's IPv4 address or IPv6 /64. Behind a reverse proxy
 (Caddy in production) every request comes from the proxy, so
 `RIBBITTO_TRUSTED_PROXIES` (comma-separated CIDRs, empty by default) names
-the proxies whose `X-Forwarded-For` is believed: its entries are read from
+the proxies whose `X-Forwarded-For` is believed. Its entries are read from
 the right, skipping trusted proxies, and the first other address is the
-client — a client cannot choose its key by adding entries on the left. A
-missing or malformed header, or one listing only trusted proxies, falls back
-to the peer. Addresses and CIDRs are compared in their IPv4 form when they
-are IPv4-mapped. The server refuses to start on an invalid CIDR.
+client, so a client cannot choose its key by adding entries on the left.
+The request falls back to the peer when the header is missing, lists only
+trusted proxies, or has a malformed entry at or right of that address.
+Entries further left are the client's own and are never parsed. Addresses
+and CIDRs are compared in their IPv4 form when they are IPv4-mapped. The
+server refuses to start on an invalid CIDR.
 
 `serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
 a `database/sql` handle, which goose needs.

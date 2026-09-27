@@ -92,7 +92,8 @@ account, and `joined_event_seq` starts at 1.
 4. **The organisation comes from the URL** (`/o/{slug}/…`), never from a
    request body. Setup creates the organisation; installation-wide sign-up
    and `/` resolve it from the setup row, never from the request. An account
-   that is not a member gets **404**.
+   that is not a member gets **404**. Enforced by `registerOrgRoutes` in
+   `internal/web/org.go`.
 5. **Authorization is decided only in `internal/app`.** Handlers and the
    real-time hub call it; they never re-implement it. The entry point is
    `internal/app/authz`: `Authorizer.Member` turns the signed-in account and
@@ -106,9 +107,8 @@ account, and `joined_event_seq` starts at 1.
 
 These are **requirements for all code and migrations**, not a description
 of what is implemented today: `organization`, `account`, `session`,
-`member` and `setup` have tables; setup authorization and the
-organisation-access entry point (`internal/app/authz`) are implemented,
-and organisation routes are wired to it later in M1. Every migration that adds an
+`member` and `setup` have tables; setup authorization is implemented, and
+organisation routes go through `internal/app/authz`. Every migration that adds an
 organisation-owned table must include `organization_id` and
 composite foreign keys (1–3), and every use case must be covered by tests
 for 4–5 as it is written. Row-level security in PostgreSQL is planned as a

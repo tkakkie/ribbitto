@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/web/static"
@@ -278,7 +279,7 @@ func newTestHandler(t *testing.T, dir string) (http.Handler, error) {
 		}
 	})
 	setup := &fakeSetup{open: true}
-	return NewHandler(dir, catalogues, Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: setup, SetupSessions: setup, SignUp: fakeSignUp{&fakeSetup{open: true}}})
+	return NewHandler(dir, catalogues, Services{Authz: noOrganisations{}, Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: setup, SetupSessions: setup, SignUp: fakeSignUp{&fakeSetup{open: true}}})
 }
 
 func TestHelloLanguages(t *testing.T) {
@@ -341,6 +342,17 @@ func TestHelloLanguages(t *testing.T) {
 	}
 }
 
+// noOrganisations makes nobody a member of anything.
+type noOrganisations struct{}
+
+func (noOrganisations) Member(context.Context, *domain.Account, string) (authz.Membership, error) {
+	return authz.Membership{}, authz.ErrNotFound
+}
+
+func (noOrganisations) HomeSlug(context.Context, *domain.Account) (string, error) {
+	return "", authz.ErrNotFound
+}
+
 // noSessions signs nobody in, for tests that do not need a session.
 type noSessions struct{}
 
@@ -365,8 +377,8 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 	for name, services := range map[string]Services{
 		"no sessions":                       {SignIn: &fakeSignIn{}},
 		"no sign-in":                        {Sessions: noSessions{}},
-		"setup without a session creator":   {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: &fakeSetup{}},
-		"sign-up without a session creator": {Sessions: noSessions{}, SignIn: &fakeSignIn{}, SignUp: fakeSignUp{&fakeSetup{}}},
+		"setup without a session creator":   {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Authz: noOrganisations{}, Setup: &fakeSetup{}},
+		"sign-up without a session creator": {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Authz: noOrganisations{}, SignUp: fakeSignUp{&fakeSetup{}}},
 	} {
 		if _, err := NewHandler("", catalogues, services); err == nil {
 			t.Errorf("%s: NewHandler accepted incomplete services", name)
@@ -398,7 +410,7 @@ func TestSessionLookupOnlyOnRegisteredRoutes(t *testing.T) {
 	} {
 		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
 			resolver := &countingResolver{}
-			handler, err := NewHandler("", catalogues, Services{Sessions: resolver, SignIn: &fakeSignIn{}})
+			handler, err := NewHandler("", catalogues, Services{Sessions: resolver, SignIn: &fakeSignIn{}, Authz: noOrganisations{}})
 			if err != nil {
 				t.Fatal(err)
 			}

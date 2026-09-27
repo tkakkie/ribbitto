@@ -232,8 +232,22 @@ sub setup_child {
   }
   return;
 }
+my $sent;
+# The launcher has exited: pass its status on. If a signal was sent after the
+# launcher's cleanup had already started (the fake `git worktree prune` ran
+# first), the run proves nothing about losing the signal; mark it too late.
+sub finish {
+  my $code = $? & 127 ? 128 + ($? & 127) : $? >> 8;
+  if (defined $sent) {
+    my $pruned = (Time::HiRes::stat("$out/prune"))[9];
+    if (defined $pruned && $pruned <= $sent) {
+      open my $d, '>>', "$out/delivered" or die $!; print $d "too late: cleanup had started\n"; close $d;
+    }
+  }
+  exit $code;
+}
 while (1) {
-  if (waitpid($pid, WNOHANG) == $pid) { exit($? & 127 ? 128 + ($? & 127) : $? >> 8) }
+  finish() if waitpid($pid, WNOHANG) == $pid;
   if ($signal) {
     my $target;
     if ($at eq 'ready') { $target = $pid if -e "$out/ready" }
@@ -249,15 +263,20 @@ while (1) {
       $target = $signal eq 'KILL' ? $child : $pid;
     }
     if (defined $target) {
+      # A launcher that exited in the meantime is never signalled (a zombie
+      # would accept the signal and look like a loss).
+      finish() if waitpid($pid, WNOHANG) == $pid;
       # "early" means the launcher had not yet computed the diff, the step just
       # before `git worktree add`, when the signal was sent.
       my $phase = -e "$out/diff-read" ? 'late' : 'early';
       $target = -$pid if $group && $target == $pid;
+      $sent = time;
       kill $signal, $target or die $!;
+      # Observed just after the signal, not at delivery.
       my ($parent, $command, $mine) = tree();
-      my @running = map { (split ' ', $command->{$_})[0] } grep { $mine->{$_} && $_ != $pid } sort keys %$parent;
+      my @after = map { (split ' ', $command->{$_})[0] } grep { $mine->{$_} && $_ != $pid } sort keys %$parent;
       open my $d, '>', "$out/delivered" or die $!;
-      print $d "$phase; running: @running\n";
+      print $d "$phase; running just after the signal: @after\n";
       close $d;
       $signal = '';
     }
@@ -288,6 +307,8 @@ DRIVER
     early-INT|early-TERM)
       if [[ ! -f $CASE_DIR/out/delivered ]]; then
         fail 'signal was not delivered before the launcher exited'
+      elif grep -q 'too late' "$CASE_DIR/out/delivered"; then
+        fail 'signal arrived after cleanup had started'
       elif grep -q '^early;' "$CASE_DIR/out/delivered"; then
         absent grok; absent worktree-added
       fi ;;
@@ -357,45 +378,58 @@ DRIVER
 
 # GROK_TEST_STRESS=<runs> is the reproducer for #84 instead of the normal
 # cases. It repeats the early SIGINT for each invocation (file, bash -c) and
-# target (the launcher's own process, its whole process group) and prints the
-# counts. A run whose signal was not delivered before the launcher exited is
-# counted separately, never as a pass or a failure.
+# target (the launcher's own process, its whole process group), prints one
+# line per run and a summary per row, and identifies the harness, launcher
+# and Bash. Runs whose signal was not delivered, or arrived after cleanup had
+# started, are counted separately, never as a pass or a failure. Exit status:
+# 1 if any run failed; 3 if a row has fewer than a quarter of its runs as
+# verified early signals (too little evidence); 0 otherwise.
 stress() {
-  local runs=$1 inv tgt out err pass fail undelivered early late i as_command
+  local runs=$1 inv tgt out err verdict detail pass fail skipped early late i as_command incomplete=0
   [[ $runs =~ ^[1-9][0-9]*$ ]] || { echo 'GROK_TEST_STRESS must be a positive integer' >&2; exit 2; }
   err=$(mktemp "${TMPDIR:-/tmp}/grok-review-stress.XXXXXX") || exit 1
-  printf 'bash %s (%s); launcher %s (blob %s); %s runs per row; jitter %s ms\n' \
-    "$BASH_VERSION" "$BASH" "$launcher" "$("$REAL_GIT" hash-object "$launcher")" "$runs" "${SIGNAL_JITTER_MS:-60}"
+  printf 'harness %s (blob %s); launcher %s (blob %s); bash %s (%s); %s runs per row; jitter %s ms\n' \
+    "${BASH_SOURCE[0]}" "$("$REAL_GIT" hash-object "${BASH_SOURCE[0]}")" \
+    "$launcher" "$("$REAL_GIT" hash-object "$launcher")" \
+    "$BASH_VERSION" "$BASH" "$runs" "${SIGNAL_JITTER_MS:-60}"
   for inv in file bash-c; do
     as_command=0
     [[ $inv == file ]] || as_command=1
     for tgt in process group; do
-      pass=0 fail=0 undelivered=0 early=0 late=0
+      pass=0 fail=0 skipped=0 early=0 late=0
       for ((i = 1; i <= runs; i++)); do
         out=$(LAUNCHER_AS_COMMAND=$as_command SIGNAL_TARGET=$tgt SIGNAL_JITTER_MS=${SIGNAL_JITTER_MS:-60} \
           run_case "stress-$inv-$tgt-$i" 130 early-INT default 49 2>"$err")
+        detail=$(grep '^PHASE' <<<"$out" | sed 's/^PHASE //' | tr '\n' ' ')
         if grep -q 'signal was not delivered' "$err"; then
-          undelivered=$((undelivered + 1))
+          verdict=UNDELIVERED; skipped=$((skipped + 1))
+        elif [[ $detail == *'too late'* ]]; then
+          verdict=TOO-LATE; skipped=$((skipped + 1))
         elif [[ $out == *'PASS '* ]]; then
-          pass=$((pass + 1))
-          if [[ $out == *'PHASE early;'* ]]; then early=$((early + 1)); else late=$((late + 1)); fi
+          verdict=PASS; pass=$((pass + 1))
+          if [[ $detail == early* ]]; then early=$((early + 1)); else late=$((late + 1)); fi
         else
-          fail=$((fail + 1))
-          printf '  FAIL %s-%s #%s: %s | %s\n' "$inv" "$tgt" "$i" \
-            "$(grep '^PHASE' <<<"$out")" "$(head -n 3 "$err" | tr '\n' ' ')"
+          verdict=FAIL; fail=$((fail + 1))
+          detail="$detail| $(grep -v '^grok-review:' "$err" | head -n 3 | tr '\n' ' ')"
         fi
+        printf '%s %s %s #%s: %s\n' "$verdict" "$inv" "$tgt" "$i" "$detail"
       done
-      printf '%-6s %-7s pass=%s (early %s, late %s) fail=%s undelivered=%s\n' \
-        "$inv" "$tgt" "$pass" "$early" "$late" "$fail" "$undelivered"
+      printf 'ROW %-6s %-7s pass=%s (early %s, late %s) fail=%s not-counted=%s\n' \
+        "$inv" "$tgt" "$pass" "$early" "$late" "$fail" "$skipped"
+      if ((early * 4 < runs)); then
+        echo "ROW $inv $tgt INCOMPLETE: fewer than a quarter of the runs were verified early signals"
+        incomplete=1
+      fi
       failures=$((failures + fail))
     done
   done
   rm -f "$err"
+  ((failures == 0)) || exit 1
+  ((incomplete == 0)) || exit 3
+  exit 0
 }
 if [[ -n ${GROK_TEST_STRESS:-} ]]; then
   stress "$GROK_TEST_STRESS"
-  [[ $failures -eq 0 ]]
-  exit
 fi
 
 run_case argument-missing 1 argument default

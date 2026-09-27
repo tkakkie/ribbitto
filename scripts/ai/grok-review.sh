@@ -22,6 +22,8 @@
 #   RIBBITTO_GROK_TEST_SETUP_DELAY  seconds (0–5, default 0) the supervisor's child
 #                             waits after creating Grok's process group; tests
 #                             only, to deliver signals during that setup
+#   RIBBITTO_GROK_SIGNAL_PARENT  set by the launcher for its child shell under the
+#                             Perl signal parent; not meant to be set by hand
 #
 # Exit status: 0 on success; 124 on timeout; 130/143 when interrupted; Grok's
 # own status when Grok fails; 126 if Grok's process group could not be

@@ -198,6 +198,12 @@ exits 0.)
   `RIBBITTO_GROK_TIMEOUT` (double the current limit, capped at 86400 seconds)
   and points to the invocation above, without printing a command. If the
   86400-second maximum is already in effect, it says so and suggests no rerun.
+- Ctrl-C always stops it. Bash can lose a SIGINT that arrives while it
+  forks a command (#84), so the script runs in a child shell under a small
+  Perl parent that turns INT into TERM for the shell and exits 130. Once
+  cleanup starts, further INT and TERM are ignored so it cannot be cut
+  short. `GROK_TEST_STRESS=<runs> bash scripts/ai/grok-review_test.sh`
+  repeats early SIGINTs to check this.
 - The title, description, base and head come from one `gh pr view`; the
   diff is computed locally from that base and head, so everything Grok sees
   describes the same commit even if the PR is pushed in the meantime.

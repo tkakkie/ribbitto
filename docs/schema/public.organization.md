@@ -4,7 +4,7 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false | [public.member](public.member.md) |  |  |
+| id | uuid | uuidv7() | false | [public.member](public.member.md) [public.setup](public.setup.md) |  |  |
 | slug | text |  | false |  |  |  |
 | name | text |  | false |  |  |  |
 | event_seq | bigint | 0 | false |  |  |  |
@@ -38,6 +38,7 @@
 erDiagram
 
 "public.member" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
+"public.setup" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 
 "public.organization" {
   uuid id
@@ -53,6 +54,11 @@ erDiagram
   text role
   bigint joined_event_seq
   timestamp_with_time_zone created_at
+}
+"public.setup" {
+  boolean id
+  uuid organization_id FK
+  timestamp_with_time_zone completed_at
 }
 ```
 

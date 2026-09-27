@@ -63,9 +63,16 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 				return
 			}
 		}
-		pages.render(w, r, http.StatusOK, func(url string) templ.Component {
-			return view.Hello(url, view.Viewer{SignedIn: signedIn, DisplayName: account.DisplayName})
-		})
+		viewer := view.Viewer{SignedIn: signedIn, DisplayName: account.DisplayName}
+		if !signedIn && services.SignUp != nil {
+			open, err := services.SignUp.Open(r.Context())
+			if err != nil {
+				serverError(w, r, "checking sign-up", err)
+				return
+			}
+			viewer.SignUpOpen = open
+		}
+		pages.render(w, r, http.StatusOK, func(url string) templ.Component { return view.Hello(url, viewer) })
 	})
 	registerSignIn(routes, pages, services.SignIn, services.SignUp)
 	registerSetup(routes, pages, services.Setup, services.SetupSessions)

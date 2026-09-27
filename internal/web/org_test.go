@@ -149,6 +149,29 @@ func (oneOrganisation) HomeSlug(context.Context, *domain.Account) (string, error
 	return "acme", nil
 }
 
+func TestHomeSignUpLink(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, open := range []bool{true, false} {
+		handler, err := NewHandler("", catalogues, Services{
+			Sessions: noSessions{},
+			Authz:    noOrganisations{},
+			SignUp:   fakeSignUp{&fakeSetup{open: open}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+		body := w.Body.String()
+		if w.Code != http.StatusOK || !strings.Contains(body, `href="/signin"`) || strings.Contains(body, `href="/signup"`) != open {
+			t.Fatalf("sign-up open %v: status %d, body %s", open, w.Code, body)
+		}
+	}
+}
+
 func TestOrgHomeRendering(t *testing.T) {
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	if err != nil {

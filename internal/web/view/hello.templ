@@ -6,6 +6,7 @@ import "github.com/tkakkie/ribbitto/internal/web/i18n"
 type Viewer struct {
 	SignedIn    bool
 	DisplayName string
+	SignUpOpen  bool // only asked for a signed-out viewer
 }
 
 // Hello renders the initial page inside the shared layout.
@@ -24,7 +25,12 @@ templ Hello(stylesheetURL string, viewer Viewer) {
 					@SignOutButton()
 				</div>
 			} else {
-				<a href="/signin" class="mt-6 inline-flex min-h-11 items-center self-start text-body font-semibold text-brand underline">{ i18n.T(ctx, "hello.sign_in") }</a>
+				<div class="mt-6 flex flex-wrap gap-6">
+					<a href="/signin" class="inline-flex min-h-11 items-center text-body font-semibold text-brand underline">{ i18n.T(ctx, "hello.sign_in") }</a>
+					if viewer.SignUpOpen {
+						<a href="/signup" class="inline-flex min-h-11 items-center text-body text-brand underline">{ i18n.T(ctx, "signup.title") }</a>
+					}
+				</div>
 			}
 		</main>
 	}

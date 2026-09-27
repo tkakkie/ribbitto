@@ -189,8 +189,9 @@ exits 0.)
   seconds (1–86400, default 1200; exit 124), and removes the worktree and
   temporary files on success, failure, timeout, Ctrl-C (130) and `TERM`
   (143), reporting any cleanup failure. When Grok itself fails, the script
-  exits with Grok's status; 126 means Grok's process group could not be
-  created, so Grok never started.
+  exits with Grok's status. If Grok's process group cannot be created, it
+  prints `could not create a process group for Grok` and exits 126 without
+  starting Grok.
 - The title, description, base and head come from one `gh pr view`; the
   diff is computed locally from that base and head, so everything Grok sees
   describes the same commit even if the PR is pushed in the meantime.

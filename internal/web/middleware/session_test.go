@@ -62,6 +62,26 @@ func TestSessionCookieAttributes(t *testing.T) {
 	}
 }
 
+func TestSessionCookieMaxAgeBoundaries(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		until  time.Duration
+		maxAge string
+	}{
+		{"half a second left", 500 * time.Millisecond, "1"},
+		{"already expired", -time.Second, "0"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			middleware.SetSessionCookie(w, "token", time.Now().Add(tt.until))
+			_, attributes := cookieAttributes(t, w.Header().Get("Set-Cookie"))
+			if got, ok := attributes["Max-Age"]; !ok || got != tt.maxAge {
+				t.Fatalf("Max-Age = %q, %v; want %q", got, ok, tt.maxAge)
+			}
+		})
+	}
+}
+
 // fakeResolver answers by token; every token it does not know is signed out.
 type fakeResolver map[string]error
 

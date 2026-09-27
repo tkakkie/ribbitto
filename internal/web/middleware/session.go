@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"time"
 
@@ -26,7 +27,13 @@ type accountKey struct{}
 
 // SetSessionCookie stores a session token in the browser until expiresAt.
 func SetSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
-	http.SetCookie(w, sessionCookie(token, int(time.Until(expiresAt).Seconds())))
+	// Round up: MaxAge 0 would mean "no Max-Age", a cookie that outlives the
+	// session until the browser closes. An expiry already past deletes it.
+	maxAge := int(math.Ceil(time.Until(expiresAt).Seconds()))
+	if maxAge <= 0 {
+		maxAge = -1
+	}
+	http.SetCookie(w, sessionCookie(token, maxAge))
 }
 
 // ClearSessionCookie tells the browser to drop the session cookie.

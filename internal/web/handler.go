@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/a-h/templ"
+	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -22,14 +23,15 @@ type Services struct {
 	SignUp        SignUpService
 	Setup         SetupService // nil disables both setup routes
 	SetupSessions SessionCreator
+	Authz         Authorizer
 }
 
 // NewHandler constructs the application's HTTP routes. A non-empty devAssets
 // directory serves live assets from disk instead of the embedded production assets.
 func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services) (http.Handler, error) {
 	// Fail at start-up rather than panic on the first request.
-	if services.Sessions == nil || services.SignIn == nil {
-		return nil, errors.New("web: Services.Sessions and Services.SignIn are required")
+	if services.Sessions == nil || services.SignIn == nil || services.Authz == nil {
+		return nil, errors.New("web: Services.Sessions, Services.SignIn and Services.Authz are required")
 	}
 	if (services.Setup != nil || services.SignUp != nil) && services.SetupSessions == nil {
 		return nil, errors.New("web: Services.SetupSessions is required when Services.Setup or Services.SignUp is set")
@@ -50,6 +52,17 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	routes := sessionMux{http.NewServeMux(), services.Sessions}
 	routes.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		account, signedIn := middleware.Account(r.Context())
+		if signedIn {
+			slug, err := services.Authz.HomeSlug(r.Context(), &account)
+			switch {
+			case err == nil:
+				http.Redirect(w, r, "/o/"+slug+"/", http.StatusSeeOther)
+				return
+			case !errors.Is(err, authz.ErrNotFound):
+				serverError(w, r, "finding home organisation", err)
+				return
+			}
+		}
 		pages.render(w, r, http.StatusOK, func(url string) templ.Component {
 			return view.Hello(url, view.Viewer{SignedIn: signedIn, DisplayName: account.DisplayName})
 		})
@@ -57,6 +70,7 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	registerSignIn(routes, pages, services.SignIn, services.SignUp)
 	registerSetup(routes, pages, services.Setup, services.SetupSessions)
 	registerSignUp(routes, pages, services.SignUp, services.SetupSessions)
+	registerOrgRoutes(routes, services.Authz, orgRoutes(pages))
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

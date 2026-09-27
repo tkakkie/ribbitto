@@ -84,3 +84,9 @@ other = "Create account and sign in"
 
 ["signup.error.email_taken"]
 other = "This email address is already registered."
+
+["org.role.owner"]
+other = "Owner"
+
+["org.role.member"]
+other = "Member"

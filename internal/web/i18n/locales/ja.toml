@@ -84,3 +84,9 @@ other = "アカウントを作成してサインイン"
 
 ["signup.error.email_taken"]
 other = "このメールアドレスは既に登録されています。"
+
+["org.role.owner"]
+other = "オーナー"
+
+["org.role.member"]
+other = "メンバー"

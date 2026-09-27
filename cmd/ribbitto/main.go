@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -100,6 +101,7 @@ func serve(ctx context.Context, databaseURL string) error {
 		Setup:         setupService,
 		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, enabled),
 		SetupSessions: sessions,
+		Authz:         authz.New(postgres.NewAuthzStore(pool)),
 	})
 	if err != nil {
 		return err

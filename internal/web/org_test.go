@@ -73,7 +73,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Sessions: sessions, Authz: authz.New(postgres.NewAuthzStore(pool))})
+	handler, err := NewHandler("", catalogues, Services{Sessions: sessions, SignIn: &fakeSignIn{}, Authz: authz.New(postgres.NewAuthzStore(pool))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,9 +156,11 @@ func TestHomeSignUpLink(t *testing.T) {
 	}
 	for _, open := range []bool{true, false} {
 		handler, err := NewHandler("", catalogues, Services{
-			Sessions: noSessions{},
-			Authz:    noOrganisations{},
-			SignUp:   fakeSignUp{&fakeSetup{open: open}},
+			Sessions:      noSessions{},
+			SignIn:        &fakeSignIn{},
+			Authz:         noOrganisations{},
+			SignUp:        fakeSignUp{&fakeSetup{open: open}},
+			SetupSessions: &fakeSetup{},
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -177,7 +179,7 @@ func TestOrgHomeRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, Authz: oneOrganisation{}})
+	handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -50,8 +50,10 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 	}
 	account, hash, err := s.accounts.AccountCredentials(ctx, email)
 	if errors.Is(err, ErrNoAccount) {
-		// Do the same Argon2id work as for a real account, so response time
-		// does not reveal whether the email has an account.
+		// Do one Argon2id verification as for a real account, which makes
+		// timing-based discovery of accounts much harder. Timing is not
+		// identical when a stored hash uses other parameters than the
+		// current ones.
 		if err := s.hasher.VerifyDummy(ctx, password); err != nil {
 			return "", time.Time{}, err
 		}

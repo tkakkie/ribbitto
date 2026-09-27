@@ -223,15 +223,19 @@ limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }   # limit 900 cmd args…
 Codex reviews Claude's work:
 
 ```sh
-# Issue (read-only; the issue is piped in, so stdin is not left open)
-gh issue view N --json title,body,comments \
+# Issue. Read-only Codex cannot reach GitHub, so the context is piped in
+# (which also keeps stdin from being left open): the issue with its
+# comments (earlier rounds) and the Status issue.
+{ gh issue view N --json title,body,comments; gh issue view 1 --json body; } \
   | limit 900 codex exec -s read-only -o review.md \
     "Review this GitHub issue following docs/workflow.md#reviewing. Reply in the report format."
 
-# Pull request (in a clean worktree at the PR head, after git fetch).
+# Pull request (in a clean worktree at the PR head, after git fetch): the
+# PR with its comments (earlier rounds), the linked issue and the Status issue.
 # Not `codex exec review --base …`: it rejects a custom prompt.
-limit 1800 codex exec -s read-only -o review.md \
-  "Review this pull request: run 'git diff origin/main...HEAD'. Follow docs/workflow.md#reviewing and reply in the report format." < /dev/null
+{ gh pr view P --json title,body,comments; gh issue view N --json title,body,comments; gh issue view 1 --json body; } \
+  | limit 1800 codex exec -s read-only -o review.md \
+    "Review this pull request: run 'git diff origin/main...HEAD'. Its GitHub context is on stdin. Follow docs/workflow.md#reviewing and reply in the report format."
 ```
 
 Claude reviews Codex's work: the orchestrating Claude session reviews
@@ -256,9 +260,10 @@ worktree. The profile allows:
   database, GitHub and the npm registry.
 
 Any other host is refused ("Network access to "example.com" was blocked:
-domain is not on the allowlist").
+domain is not on the allowlist"). The command uses a Bash array, so run it
+from bash or zsh, with `limit` defined as above:
 
-```sh
+```bash
 perms=(
   -c 'permissions.ribbitto.extends=":workspace"'
   -c 'permissions.ribbitto.network.enabled=true'
@@ -295,11 +300,11 @@ The orchestrator then:
 3. commits, pushes and opens the PR.
 
 **Reviews.** In `-s read-only` mode Codex cannot reach GitHub, so pipe in
-everything the review needs:
+everything the review needs, as the examples above do:
 
-- the issue or pull request with its comments;
-- the earlier review rounds;
-- the Status issue (#1), when the review should check it.
+- the issue, or the pull request and its linked issue, with their comments
+  (these include the earlier review rounds);
+- the Status issue (#1).
 
 ## Keeping state
 

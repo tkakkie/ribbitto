@@ -4,7 +4,7 @@ Closes #
 
 **Look here:** <!-- file:line, or "nothing in particular" -->
 
-**Verified by:** <!-- tests, commands, screenshots for UI changes -->
+**Verified by:** <!-- tests, commands; for UI changes, how to see them and what was checked in a browser (screenshots when the look is the point) -->
 
 **Risk:** <!-- high | normal — see docs/workflow.md#risk --> · **Author:** · **Reviewer:** · **Adversarial:** <!-- Grok, or n/a -->
 

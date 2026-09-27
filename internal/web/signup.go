@@ -19,7 +19,7 @@ type SignUpService interface {
 	SignUp(context.Context, string, string, string) (domain.ID, error)
 }
 
-func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpService, sessions SessionCreator) {
+func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpService, sessions SessionCreator, allow func(http.ResponseWriter, *http.Request) bool) {
 	// As with setup: without a sign-up service the routes do not exist, and
 	// with one they sit outside the session middleware, so whether sign-up
 	// is open is decided first, whatever the session state.
@@ -39,7 +39,7 @@ func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpServic
 		form := view.SignUpForm{Values: map[string]string{}, Errors: map[string]string{}}
 		status := http.StatusOK
 		if r.Method == http.MethodPost {
-			if !parseForm(w, r) {
+			if !allow(w, r) || !parseForm(w, r) {
 				return
 			}
 			for _, name := range []string{"display_name", "email"} {

@@ -39,6 +39,11 @@ make db-down               # stops PostgreSQL; keeps the named data volume
 The server listens at http://localhost:8080/healthz and never migrates on
 startup.
 
+Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the proxy's
+addresses as comma-separated CIDRs (for example `172.18.0.0/16` for Caddy
+on a Compose network) so that the sign-in, sign-up and setup rate limits
+see each client's address instead of the proxy's.
+
 The session cookie is always `Secure` (there is no switch to turn that off:
 it would be too easy to leave off in production). Browsers that treat
 `http://localhost` as a secure context keep such cookies over plain HTTP;

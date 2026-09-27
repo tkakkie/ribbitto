@@ -24,6 +24,7 @@ type Services struct {
 	Setup         SetupService // nil disables both setup routes
 	SetupSessions SessionCreator
 	Authz         Authorizer
+	Limits        *middleware.AuthLimits // nil: no rate limits (tests)
 }
 
 // NewHandler constructs the application's HTTP routes. A non-empty devAssets
@@ -74,9 +75,21 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 		}
 		pages.render(w, r, http.StatusOK, func(url string) templ.Component { return view.Hello(url, viewer) })
 	})
-	registerSignIn(routes, pages, services.SignIn, services.SignUp)
-	registerSetup(routes, pages, services.Setup, services.SetupSessions)
-	registerSignUp(routes, pages, services.SignUp, services.SetupSessions)
+	// limit returns the rate-limit check for one form. Handlers call it after
+	// deciding the route is open (a closed route stays 404) and before
+	// parsing or hashing anything.
+	limit := func(pick func(*middleware.AuthLimits) *middleware.RateLimiter) func(http.ResponseWriter, *http.Request) bool {
+		return func(w http.ResponseWriter, r *http.Request) bool {
+			if services.Limits == nil || services.Limits.Allow(pick(services.Limits), r) {
+				return true
+			}
+			pages.render(w, r, http.StatusTooManyRequests, view.TooManyRequests)
+			return false
+		}
+	}
+	registerSignIn(routes, pages, services.SignIn, services.SignUp, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignIn }))
+	registerSetup(routes, pages, services.Setup, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.Setup }))
+	registerSignUp(routes, pages, services.SignUp, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignUp }))
 	registerOrgRoutes(routes, services.Authz, orgRoutes(pages))
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))

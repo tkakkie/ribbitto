@@ -25,7 +25,7 @@ type SessionCreator interface {
 	Create(context.Context, domain.ID) (string, time.Time, error)
 }
 
-func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService, sessions SessionCreator) {
+func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService, sessions SessionCreator, allow func(http.ResponseWriter, *http.Request) bool) {
 	// Without a setup token the routes do not exist: /setup is then an
 	// unknown path, answered 404 by the router without a session lookup.
 	if service == nil {
@@ -44,7 +44,7 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 		form := view.SetupForm{Values: map[string]string{}, Errors: map[string]string{}}
 		status := http.StatusOK
 		if r.Method == http.MethodPost {
-			if !parseForm(w, r) {
+			if !allow(w, r) || !parseForm(w, r) {
 				return
 			}
 			for _, name := range []string{"organization_name", "slug", "display_name", "email"} {

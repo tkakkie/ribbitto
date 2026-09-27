@@ -191,6 +191,27 @@ the session row, clears the cookie and redirects to `/signin`; there is no
 GET sign-out. `cmd/ribbitto` creates the process's one `auth.Hasher` here
 and shares it with every authentication use case.
 
+**Rate limits** (`internal/web/middleware/ratelimit.go`). `POST /signin`,
+`/signup` and `/setup` are limited per client with token buckets: sign-in a
+burst of 5 then one every 12 s; sign-up and setup a burst of 3 then one
+every 10 minutes. The order inside each handler is: is the route open (a
+closed route answers 404 whatever the bucket or body), then the rate limit
+(429 with a localised page), then parsing and hashing. Each limiter keeps
+at most 10,000 buckets; a bucket is dropped only once it has refilled
+completely, and a full table refuses new clients (fail closed) rather than
+sharing a bucket, which would hand out a second burst. Limits live in
+memory, per process.
+
+The client is the peer's IPv4 address or IPv6 /64. Behind a reverse proxy
+(Caddy in production) every request comes from the proxy, so
+`RIBBITTO_TRUSTED_PROXIES` (comma-separated CIDRs, empty by default) names
+the proxies whose `X-Forwarded-For` is believed: its entries are read from
+the right, skipping trusted proxies, and the first other address is the
+client — a client cannot choose its key by adding entries on the left. A
+missing or malformed header, or one listing only trusted proxies, falls back
+to the peer. Addresses and CIDRs are compared in their IPv4 form when they
+are IPv4-mapped. The server refuses to start on an invalid CIDR.
+
 `serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
 a `database/sql` handle, which goose needs.
 

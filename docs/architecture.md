@@ -57,7 +57,7 @@ endpoint or a real-time path cannot quietly skip it; and because use cases
 return plain structs and only `web` renders HTML, a JSON API can be added
 next to the HTML handlers later without touching `app`.
 
-## Request flow *(planned from M1: sessions are wired; member resolution and authorization are not yet)*
+## Request flow *(planned from M1: sessions are wired; member resolution and authorization exist in `internal/app/authz` but no organisation route uses them yet)*
 
 ```mermaid
 sequenceDiagram

@@ -94,7 +94,10 @@ account, and `joined_event_seq` starts at 1.
    and `/` resolve it from the setup row, never from the request. An account
    that is not a member gets **404**.
 5. **Authorization is decided only in `internal/app`.** Handlers and the
-   real-time hub call it; they never re-implement it.
+   real-time hub call it; they never re-implement it. The entry point is
+   `internal/app/authz`: `Authorizer.Member` turns the signed-in account and
+   the slug from the URL into a membership, with one not-found error for an
+   unknown slug, a non-member and a signed-out caller.
 6. **`organization.event_seq` only increases, without gaps.** It is taken
    first in the writing transaction, and the same value is stored in both
    `event_log.seq` and the entity's own `event_seq` (for messages).
@@ -103,8 +106,9 @@ account, and `joined_event_seq` starts at 1.
 
 These are **requirements for all code and migrations**, not a description
 of what is implemented today: `organization`, `account`, `session`,
-`member` and `setup` have tables; setup authorization is implemented, with
-other use cases arriving later in M1. Every migration that adds an
+`member` and `setup` have tables; setup authorization and the
+organisation-access entry point (`internal/app/authz`) are implemented,
+and organisation routes are wired to it later in M1. Every migration that adds an
 organisation-owned table must include `organization_id` and
 composite foreign keys (1–3), and every use case must be covered by tests
 for 4–5 as it is written. Row-level security in PostgreSQL is planned as a

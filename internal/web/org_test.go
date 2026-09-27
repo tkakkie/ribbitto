@@ -193,6 +193,12 @@ func TestOrgHomeRendering(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, r)
 		body := w.Body.String()
+		// The signed-in organisation page gets the same security headers
+		// and script nonces as every other page (TestHTMLSecurity).
+		nonce := responseNonce(t, w)
+		if strings.Count(body, ` nonce="`+nonce+`"`) != 3 {
+			t.Errorf("%s: scripts lack the response nonce", lang)
+		}
 		if w.Code != http.StatusOK || !strings.Contains(body, `<form method="post" action="/signout">`) {
 			t.Fatalf("%s: status %d, body %s", lang, w.Code, body)
 		}

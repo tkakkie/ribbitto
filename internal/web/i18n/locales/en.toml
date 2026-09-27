@@ -95,4 +95,4 @@ other = "Member"
 other = "Too many attempts"
 
 ["ratelimit.message"]
-other = "Please wait a few minutes before trying again."
+other = "Please wait a while before trying again."

@@ -238,6 +238,15 @@ func TestParseBoundsAllocation(t *testing.T) {
 	}
 }
 
+func TestDummyHashTakesASlot(t *testing.T) {
+	t.Parallel()
+	// With no slot ever free, building the dummy hash must fail as busy,
+	// which shows it goes through the semaphore like every other hash.
+	if _, err := newHasher(0, 10*time.Millisecond); !errors.Is(err, ErrBusy) {
+		t.Fatalf("newHasher without slots: want ErrBusy, got %v", err)
+	}
+}
+
 func TestSlots(t *testing.T) {
 	t.Parallel()
 	h := newTestHasher(t)

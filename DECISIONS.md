@@ -108,9 +108,12 @@ current volume justifies).
 **Decided:** new password hashes use Argon2id with 19 MiB of memory, 2
 iterations and parallelism 1, a 16-byte salt and a 32-byte key, stored as a
 PHC string. Verification accepts other parameters only within fixed bounds
-(8–64 MiB, 1–10 iterations, parallelism 1–4, 16–64-byte salt and key). All
-hashing in a process shares `min(GOMAXPROCS, 4)` slots; a caller waits at
-most 5 s for one, otherwise the request fails with 503.
+(8–64 MiB, 1–10 iterations, parallelism 1–4, 16–64-byte salt and key). Each
+`auth.Hasher` has `min(GOMAXPROCS, 4)` slots; a caller waits at most 5 s for
+one, otherwise the request fails with 503. `cmd/ribbitto` creates exactly
+one `Hasher` per process and shares it with every authentication use case,
+so all hashing and verification at run time goes through the same slots.
+There is no package-level semaphore: `AGENTS.md` rules out global state.
 **Why:** these are OWASP's minimum recommended parameters, cheap enough for a
 small VPS. The slots bound concurrent Argon2id work: its working memory is
 about 76 MiB with the defaults and 256 MiB in the worst case the bounds

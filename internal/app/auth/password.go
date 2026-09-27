@@ -52,9 +52,11 @@ var ErrBusy = errors.New("password hasher busy")
 // parameters.
 var ErrInvalidHash = errors.New("invalid password hash")
 
-// Hasher hashes and verifies passwords with Argon2id. Construct one per
-// process and share it: its slots bound the CPU and memory that concurrent
-// hashing can use.
+// Hasher hashes and verifies passwords with Argon2id. Its slots bound the
+// CPU and memory that concurrent hashing can use, but only across callers
+// that share it: cmd/ribbitto constructs exactly one Hasher per process and
+// passes it to every authentication use case. There is deliberately no
+// package-level semaphore (AGENTS.md: no global state).
 type Hasher struct {
 	slots chan struct{}
 	wait  time.Duration
@@ -76,9 +78,10 @@ func newHasher(slots int, wait time.Duration) (*Hasher, error) {
 	if _, err := rand.Read(secret); err != nil {
 		return nil, fmt.Errorf("creating dummy password: %w", err)
 	}
-	dummy, err := encode(string(secret))
+	// Through Hash, so that even this start-up work takes a slot.
+	dummy, err := h.Hash(context.Background(), string(secret))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating dummy hash: %w", err)
 	}
 	h.dummy = dummy
 	return h, nil

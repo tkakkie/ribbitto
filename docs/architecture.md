@@ -79,6 +79,28 @@ The organisation always comes from the URL, never from a request body. An
 account that is not a member of that organisation gets 404, not 403, so the
 existence of an organisation or channel is not revealed.
 
+## Sessions
+
+`internal/app/auth.Sessions` owns the session lifecycle; the cookie and the
+middleware that call it arrive in #38.
+
+- **Create** (at sign-in or setup): 32 random bytes from `crypto/rand` are
+  the token, returned once as unpadded base64url for the cookie. Only the
+  token's SHA-256 hash is stored, with an absolute expiry 30 days ahead;
+  using the session never extends it.
+- **Resolve** (every request): the token is decoded strictly, hashed and
+  looked up together with its account, only while `expires_at` is after the
+  application clock's now. A malformed, unknown, deleted or expired token is
+  `auth.ErrNoSession`, meaning signed out; a store error stays an error, so
+  a database outage is not mistaken for a sign-out.
+- **Delete** (sign-out): the row goes, so the token stops working at once.
+- **Clean-up:** `ribbitto serve` deletes expired rows at start and then
+  hourly until shutdown. Expired sessions are already rejected; this only
+  keeps the table small.
+
+`serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
+a `database/sql` handle, which goose needs.
+
 ## Posting a message *(planned, M2–M3)*
 
 ```mermaid

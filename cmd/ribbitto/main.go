@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -48,14 +49,22 @@ func run() error {
 	if command != "serve" {
 		return postgres.Migrate(ctx, db, command, os.Stdout)
 	}
-	return serve(ctx)
+	return serve(ctx, os.Getenv("RIBBITTO_DATABASE_URL"))
 }
 
-func serve(ctx context.Context) error {
+func serve(ctx context.Context, databaseURL string) error {
 	addr := os.Getenv("RIBBITTO_ADDR")
 	if addr == "" {
 		addr = ":8080"
 	}
+
+	pool, err := postgres.OpenPool(ctx, databaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
+	go deleteExpiredSessions(ctx, sessions)
 
 	catalogues, err := i18n.New(slog.Default())
 	if err != nil {
@@ -96,4 +105,22 @@ func serve(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// deleteExpiredSessions runs once at start and then hourly until ctx ends
+// (shutdown). Failures are only logged: expired sessions are already
+// rejected, so a missed run just leaves rows until the next one.
+func deleteExpiredSessions(ctx context.Context, sessions *auth.Sessions) {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		if err := sessions.DeleteExpired(ctx); err != nil && ctx.Err() == nil {
+			slog.Error("deleting expired sessions", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }

@@ -223,19 +223,27 @@ limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }   # limit 900 cmd args…
 Codex reviews Claude's work:
 
 ```sh
-# Issue. Read-only Codex cannot reach GitHub, so the context is piped in
-# (which also keeps stdin from being left open): the issue with its
-# comments (earlier rounds) and the Status issue.
-{ gh issue view N --json title,body,comments; gh issue view 1 --json body; } \
-  | limit 900 codex exec -s read-only -o review.md \
-    "Review this GitHub issue following docs/workflow.md#reviewing. Reply in the report format."
+# Read-only Codex cannot reach GitHub, so the orchestrator fetches the
+# context first and passes it on stdin (which also keeps stdin from being
+# left open). Every fetch is chained with &&, so if any of them fails, Codex
+# does not start on partial context.
+
+# Issue: the issue with its comments (earlier rounds) and the Status issue.
+ctx=$(mktemp) &&
+  gh issue view N --json title,body,comments > "$ctx" &&
+  gh issue view 1 --json body >> "$ctx" &&
+  limit 900 codex exec -s read-only -o review.md \
+    "Review this GitHub issue following docs/workflow.md#reviewing. Reply in the report format." < "$ctx"
 
 # Pull request (in a clean worktree at the PR head, after git fetch): the
 # PR with its comments (earlier rounds), the linked issue and the Status issue.
 # Not `codex exec review --base …`: it rejects a custom prompt.
-{ gh pr view P --json title,body,comments; gh issue view N --json title,body,comments; gh issue view 1 --json body; } \
-  | limit 1800 codex exec -s read-only -o review.md \
-    "Review this pull request: run 'git diff origin/main...HEAD'. Its GitHub context is on stdin. Follow docs/workflow.md#reviewing and reply in the report format."
+ctx=$(mktemp) &&
+  gh pr view P --json title,body,comments > "$ctx" &&
+  gh issue view N --json title,body,comments >> "$ctx" &&
+  gh issue view 1 --json body >> "$ctx" &&
+  limit 1800 codex exec -s read-only -o review.md \
+    "Review this pull request: run 'git diff origin/main...HEAD'. Its GitHub context is on stdin. Follow docs/workflow.md#reviewing and reply in the report format." < "$ctx"
 ```
 
 Claude reviews Codex's work: the orchestrating Claude session reviews

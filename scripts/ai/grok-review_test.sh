@@ -257,7 +257,13 @@ DRIVER
     *)
       [[ -f $CASE_DIR/out/grok && -f $CASE_DIR/out/worktree-removed ]] || fail 'Grok or worktree cleanup not reached'
       case $mode in
-        timeout) contains "$CASE_DIR/out/stderr" 'timed out after 1 s' ;;
+        timeout)
+          contains "$CASE_DIR/out/stderr" 'timed out after 1 s'
+          contains "$CASE_DIR/out/stderr" 'Grok did not finish within 1s'
+          contains "$CASE_DIR/out/stderr" 'rerun with RIBBITTO_GROK_TIMEOUT=2 using the invocation in docs/workflow.md#adversarial-review'
+          if grep -Fq 'bash -c' "$CASE_DIR/out/stderr"; then
+            fail 'timeout hint contains a shell command'
+          fi ;;
         prune-*) contains "$CASE_DIR/out/stderr" "'git worktree prune' failed" ;;
       esac ;;
   esac

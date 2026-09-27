@@ -186,12 +186,18 @@ exits 0.)
   is checked out: a symlink could otherwise let Grok read files outside the
   worktree.
 - It stops Grok and everything Grok started after `RIBBITTO_GROK_TIMEOUT`
-  seconds (1–86400, default 1200; exit 124), and removes the worktree and
-  temporary files on success, failure, timeout, Ctrl-C (130) and `TERM`
-  (143), reporting any cleanup failure. When Grok itself fails, the script
-  exits with Grok's status. If Grok's process group cannot be created, it
-  prints `could not create a process group for Grok` and exits 126 without
-  starting Grok.
+  seconds (1–86400, default 3600 / 60 minutes; exit 124), and removes the
+  worktree and temporary files on success, failure, timeout, Ctrl-C (130)
+  and `TERM` (143), reporting any cleanup failure. When Grok itself fails,
+  the script exits with Grok's status. If Grok's process group cannot be
+  created, it prints `could not create a process group for Grok` and exits
+  126 without starting Grok.
+- The timeout is a backstop against a stuck CLI, not an estimate of review
+  time. Raise `RIBBITTO_GROK_TIMEOUT` when a larger PR needs more time or a
+  review times out. On timeout, the launcher suggests a value for
+  `RIBBITTO_GROK_TIMEOUT` (double the current limit, capped at 86400 seconds)
+  and points to the invocation above, without printing a command. If the
+  86400-second maximum is already in effect, it says so and suggests no rerun.
 - The title, description, base and head come from one `gh pr view`; the
   diff is computed locally from that base and head, so everything Grok sees
   describes the same commit even if the PR is pushed in the meantime.

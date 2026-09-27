@@ -15,7 +15,7 @@
 # removes everything it created. See docs/workflow.md#adversarial-review.
 #
 # Environment:
-#   RIBBITTO_GROK_TIMEOUT     seconds before Grok is stopped (1–86400, default 1200)
+#   RIBBITTO_GROK_TIMEOUT     seconds before Grok is stopped (1–86400, default 3600)
 #   RIBBITTO_GROK_MODEL       model id passed to `grok -m` (default: the CLI default; see `grok models`)
 #   RIBBITTO_GROK_TRUSTED_REF git ref the launcher and prompt must come from (default
 #                             origin/main); change it only to test a PR that edits them
@@ -35,7 +35,7 @@ pr=$1
 for cmd in grok gh git jq perl; do
   command -v "$cmd" >/dev/null || die "$cmd is not installed or not on PATH"
 done
-timeout=${RIBBITTO_GROK_TIMEOUT:-1200}
+timeout=${RIBBITTO_GROK_TIMEOUT:-3600}
 # Bounded so Perl's alarm() can represent it (a huge value would wrap to 0,
 # which disables the deadline).
 if ! [[ $timeout =~ ^[1-9][0-9]{0,4}$ ]] || ((timeout > 86400)); then
@@ -232,6 +232,15 @@ wait "$supervisor" || status=$?
 supervisor=""
 case $status in
   0) ;;
-  124) echo "grok-review: Grok did not finish within ${timeout}s" >&2; exit 124 ;;
+  124)
+    next=$(( timeout * 2 > 86400 ? 86400 : timeout * 2 ))
+    if [[ -t 2 ]]; then printf '\033[0m' >&2; fi
+    echo "grok-review: Grok did not finish within ${timeout}s" >&2
+    if (( next > timeout )); then
+      printf 'grok-review: rerun with RIBBITTO_GROK_TIMEOUT=%s using the invocation in docs/workflow.md#adversarial-review\n' "$next" >&2
+    else
+      echo 'grok-review: the 86400-second maximum is already in effect' >&2
+    fi
+    exit 124 ;;
   *) echo "grok-review: Grok failed (exit $status)" >&2; exit "$status" ;;
 esac

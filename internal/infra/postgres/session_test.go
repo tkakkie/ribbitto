@@ -22,7 +22,12 @@ func TestSessionStore(t *testing.T) {
 	if err := pool.QueryRow(ctx, "INSERT INTO account (email, display_name, password_hash) VALUES ('a@example.com', 'A', '$argon2id$x') RETURNING id").Scan(&id); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
+	// Start from the database clock: created_at comes from now() in SQL, and
+	// the table requires expires_at > created_at.
+	var now time.Time
+	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&now); err != nil {
+		t.Fatal(err)
+	}
 	sessions := auth.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return now })
 
 	older, _, err := sessions.Create(ctx, id)

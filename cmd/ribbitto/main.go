@@ -41,15 +41,15 @@ func run() error {
 	default:
 		return fmt.Errorf("usage: ribbitto [serve | migrate up|down|status]")
 	}
+	if command == "serve" {
+		return serve(ctx, os.Getenv("RIBBITTO_DATABASE_URL"))
+	}
 	db, err := postgres.Open(ctx, os.Getenv("RIBBITTO_DATABASE_URL"))
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
 	defer func() { _ = db.Close() }()
-	if command != "serve" {
-		return postgres.Migrate(ctx, db, command, os.Stdout)
-	}
-	return serve(ctx, os.Getenv("RIBBITTO_DATABASE_URL"))
+	return postgres.Migrate(ctx, db, command, os.Stdout)
 }
 
 func serve(ctx context.Context, databaseURL string) error {
@@ -60,11 +60,14 @@ func serve(ctx context.Context, databaseURL string) error {
 
 	pool, err := postgres.OpenPool(ctx, databaseURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
 	defer pool.Close()
 	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
-	go deleteExpiredSessions(ctx, sessions)
+	// Deferred after pool.Close, so it runs first: the clean-up must stop and
+	// return its connection on every exit path, or Close would wait for it.
+	stopCleanup := startSessionCleanup(ctx, sessions)
+	defer stopCleanup()
 
 	catalogues, err := i18n.New(slog.Default())
 	if err != nil {
@@ -107,9 +110,25 @@ func serve(ctx context.Context, databaseURL string) error {
 	return nil
 }
 
-// deleteExpiredSessions runs once at start and then hourly until ctx ends
-// (shutdown). Failures are only logged: expired sessions are already
-// rejected, so a missed run just leaves rows until the next one.
+// startSessionCleanup deletes expired sessions at once and then hourly. The
+// returned function cancels the loop, including a query in progress, and
+// waits for it to finish.
+func startSessionCleanup(ctx context.Context, sessions *auth.Sessions) (stop func()) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		deleteExpiredSessions(ctx, sessions)
+	}()
+	return func() {
+		cancel()
+		<-done
+	}
+}
+
+// deleteExpiredSessions runs until ctx ends. Failures are only logged:
+// expired sessions are already rejected, so a missed run just leaves rows
+// until the next one.
 func deleteExpiredSessions(ctx context.Context, sessions *auth.Sessions) {
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()

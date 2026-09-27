@@ -194,30 +194,91 @@ func TestRefusedRequestTakesNothing(t *testing.T) {
 	}
 }
 
-// Churn: a /48 keeps creating /64s and re-probing all the old ones after
-// its budget is spent. Its unevictable buckets stay within the documented
-// bound, and a client from elsewhere still gets in.
-func TestSignInNetworkChurn(t *testing.T) {
-	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	l := NewAuthLimits(nil, func() time.Time { return now }).SignIn
-	l.max = 40
-	window := time.Duration(signInBurst) * signInEvery
-	for step := range 600 {
-		for i := 0; i <= step; i++ {
-			l.Allow(sixtyFour(i))
-		}
-		unevictable := 0
-		for _, b := range l.buckets {
-			if now.Sub(b.last) < window {
-				unevictable++
+// Churn: a /48 tries a new /64 at every step, then hammers every /64 it
+// has had admitted. Over the run it gets more distinct /64s admitted than
+// the table holds, so buckets must be evicted, yet it never keeps more than
+// the documented number unevictable, and a client from elsewhere still gets
+// in.
+func TestNetworkChurn(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		pick  func(*AuthLimits) *RateLimiter
+		limit Limit
+		step  time.Duration
+		bound int
+	}{
+		{"sign-in", func(a *AuthLimits) *RateLimiter { return a.SignIn }, Limit{signInBurst, signInEvery}, time.Second, 20},
+		{"sign-up", func(a *AuthLimits) *RateLimiter { return a.SignUp }, Limit{onceBurst, onceEvery}, 30 * time.Second, 12},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+			l := tt.pick(NewAuthLimits(nil, func() time.Time { return now }))
+			l.max = 40
+			window := time.Duration(tt.limit.Burst) * tt.limit.Every
+			var admitted []netip.Prefix
+			for step := range 600 {
+				if fresh := sixtyFour(step); l.Allow(fresh) {
+					admitted = append(admitted, fresh)
+				}
+				for range 3 {
+					for _, old := range admitted {
+						l.Allow(old)
+					}
+				}
+				unevictable := 0
+				for _, b := range l.buckets {
+					if now.Sub(b.last) < window {
+						unevictable++
+					}
+				}
+				if unevictable > tt.bound {
+					t.Fatalf("step %d: %d unevictable buckets from one /48, want at most %d", step, unevictable, tt.bound)
+				}
+				now = now.Add(tt.step)
 			}
-		}
-		if unevictable > 20 {
-			t.Fatalf("step %d: %d unevictable buckets from one /48, want at most 20", step, unevictable)
-		}
-		now = now.Add(time.Second)
+			if len(admitted) <= l.max {
+				t.Fatalf("only %d distinct /64s admitted; the churn never outgrew the %d-entry table", len(admitted), l.max)
+			}
+			if !l.Allow(netip.MustParsePrefix("198.51.100.7/32")) {
+				t.Fatal("a client from elsewhere was turned away after the churn")
+			}
+		})
 	}
-	if !l.Allow(netip.MustParsePrefix("198.51.100.7/32")) {
-		t.Fatal("a client from elsewhere was turned away after the churn")
+}
+
+// The /48 table follows the client table's rules: a refused request does
+// not move a /48's last, a full /48 table refuses a new /48 without
+// creating a client bucket, and a /48 bucket is evicted only once it has
+// refilled, after which the new /48 gets exactly its own burst.
+func TestNetworkTable(t *testing.T) {
+	t0 := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	now := t0
+	l := NewNetworkRateLimiter(Limit{Burst: 5, Every: 12 * time.Second}, Limit{Burst: 2, Every: time.Minute}, func() time.Time { return now })
+	l.max = 2
+	x := netip.MustParsePrefix("2001:db8:1::/64")
+	y := netip.MustParsePrefix("2001:db8:2::/64")
+	xNet := netip.MustParsePrefix("2001:db8:1::/48")
+	if !l.Allow(x) || !l.Allow(y) || !l.Allow(x) {
+		t.Fatal("refused within the bursts")
+	}
+	now = t0.Add(30 * time.Second)
+	if l.Allow(x) {
+		t.Fatal("admitted past an empty /48")
+	}
+	if l.networks[xNet].last != t0 {
+		t.Fatal("a refused request moved the /48's last")
+	}
+	// Client buckets are evictable after 60 s, /48 buckets after 120 s.
+	z := func(i int) netip.Prefix {
+		return netip.PrefixFrom(netip.AddrFrom16([16]byte{0x20, 0x01, 0x0d, 0xb8, 0, 3, 0, byte(i)}), 64)
+	}
+	now = t0.Add(119 * time.Second)
+	if l.Allow(z(0)) || len(l.networks) != 2 || len(l.buckets) != 0 {
+		t.Fatalf("full /48 table: admitted, or %d /48 buckets and %d client buckets", len(l.networks), len(l.buckets))
+	}
+	now = t0.Add(120 * time.Second)
+	// z(0)'s own bucket still has tokens: only the /48 can refuse it.
+	if !l.Allow(z(0)) || !l.Allow(z(1)) || l.Allow(z(0)) {
+		t.Fatal("the new /48 did not get exactly its own burst of 2")
 	}
 }

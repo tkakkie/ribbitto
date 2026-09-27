@@ -210,12 +210,25 @@ Each limiter keeps at most 10,000 client buckets and 10,000 /48 buckets. A
 bucket is dropped only once it has refilled completely, counted from the
 last token taken, so a stream of refused requests cannot keep it alive. A
 full table refuses new clients (fail closed) rather than sharing a bucket,
-which would hand out a second burst. The /48 budget bounds how many client
-buckets one /48 keeps alive: at most 20 for sign-in and 12 for sign-up and
-setup. An IPv6-only attack therefore needs at least 500 or 834 distinct
-/48s to fill a client table. An IPv4-only attack needs 10,000 addresses.
-Whoever holds that many can still turn new clients away for a while; that
-is accepted. The /48 is this application's choice, not a standard: unrelated
+which would hand out a second burst.
+
+The /48 budget bounds how many client buckets one /48 keeps unevictable.
+
+- A client bucket stays unevictable for burst × interval after its last
+  admitted request: 60 s for sign-in, 30 minutes for sign-up and setup.
+- In that window a /48 is admitted at most 10 + 60/6 = 20 sign-in requests,
+  or 6 + 30/5 = 12 sign-up or setup requests, so it holds at most that many
+  unevictable client buckets. It may leave more evictable ones behind, but
+  those go as soon as the table is full.
+- Pinning a 10,000-entry client table (keeping it full of unevictable
+  buckets) therefore takes at least 500 distinct /48s for sign-in, or 834
+  for sign-up and setup. Pinning the /48 table takes 10,000 /48s.
+- An IPv4-only attack needs 10,000 addresses to pin a client table. IPv4
+  addresses and IPv6 /64s share that table, so a mix of both can pin it
+  together.
+
+Whoever holds that many addresses can still turn new clients away for a
+while; that is accepted. The /48 is this application's choice, not a standard: unrelated
 clients whose smaller prefixes share a /48 share its budget. Limits live in
 memory, per process.
 

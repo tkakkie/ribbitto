@@ -245,13 +245,16 @@ const (
 // admitted request: 60 s for sign-in, 30 minutes for sign-up and setup. In
 // that window one /48 is admitted at most 10 + 60/6 = 20 sign-in or
 // 6 + 30/5 = 12 sign-up or setup requests. It can therefore hold at most
-// that many unevictable client buckets. An IPv6-only attack needs at least
-// 500 (sign-in) or 834 (sign-up, setup) distinct /48s to fill a route's
-// 10,000-entry client table, and 10,000 /48s to fill its /48 table. An
-// IPv4-only attack needs 10,000 addresses to fill the client table, which
-// IPv4 addresses and IPv6 /64s share. Accepted: whoever holds that many
-// addresses can still turn new clients away until buckets become
-// evictable, but cannot get past the limits or grow memory.
+// that many unevictable client buckets. It may leave more evictable ones
+// behind, but those are dropped as soon as the table is full. To pin a
+// route's 10,000-entry client table, that is, keep it full of unevictable
+// buckets, an IPv6-only attack needs at least 500 (sign-in) or 834 (sign-up,
+// setup) distinct /48s, and pinning the /48 table needs 10,000 /48s. An
+// IPv4-only attack needs 10,000 addresses to pin the client table, which
+// IPv4 addresses and IPv6 /64s share, so a mix of both can pin it together.
+// Accepted: whoever holds that many addresses can still turn new clients
+// away until buckets become evictable, but cannot get past the limits or
+// grow memory.
 type AuthLimits struct {
 	SignIn, SignUp, Setup *RateLimiter
 	// Trusted proxies whose X-Forwarded-For is believed (ClientKey).

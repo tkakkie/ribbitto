@@ -228,6 +228,11 @@ if (!$pid) {
       defined dup2(fileno($r), 9) or die $!;
     }
   }
+  # OCCUPY_FDS starts the launcher with fds 3-8 open, so the signal parent's
+  # handoff pipe lands on fd 9 itself (#84).
+  if ($ENV{OCCUPY_FDS}) {
+    for my $fd (3 .. 8) { defined dup2(fileno(STDIN), $fd) or die $! }
+  }
   exec @ARGV; die "exec: $!";
 }
 my $deadline = time + 12;
@@ -335,6 +340,11 @@ while (1) {
   }
   if (time >= $deadline || ($signal && time >= $ready_deadline)) {
     print STDERR "test driver deadline exceeded\n";
+    if ($at) {
+      open my $d, '>', "$out/delivered" or die $!;
+      printf $d "class=timeout; launcher: %s; running just after the signal: %s\n", $top // '-', "@running";
+      close $d;
+    }
     kill 'KILL', -$pid; waitpid($pid, 0); exit 99;
   }
   # Poll quickly while waiting to signal early, so the signal lands close to
@@ -448,12 +458,14 @@ DRIVER
 # separately for reference. Runs whose signal was not delivered, or arrived
 # after cleanup had started, or whose order against the diff step is unknown
 # (ambiguous), are counted apart, never as a pass or a failure.
-# Exit status: 1 if any early run failed; 3 if a row has fewer than a quarter
-# of its runs as early signals (too little evidence); 0 otherwise.
+# Exit status: 1 if any early run failed or any run hung; 3 if a row has
+# fewer than a quarter of its runs as early signals (too little evidence);
+# 0 otherwise.
 # The stress verdict of one run: its record's class decides which tally the
 # run's pass or fail goes to. Only early runs are evidence; late ones are for
-# reference; ambiguous, too-late, undelivered and unrecorded runs are not
-# counted at all.
+# reference; ambiguous, too-late and undelivered runs are not counted at
+# all. A run that hit the driver's deadline, or left no record, is a failure
+# whatever its phase: the launcher did not stop.
 stress_verdict() {
   local record=$1 result=$2
   case $record in
@@ -462,11 +474,12 @@ stress_verdict() {
     class=ambiguous\;*) echo AMBIGUOUS ;;
     class=too-late\;*) echo TOO-LATE ;;
     class=undelivered\;*) echo UNDELIVERED ;;
+    class=timeout\;*) echo HUNG ;;
     *) echo NO-RECORD ;;
   esac
 }
 stress() {
-  local runs=$1 inv tgt out err verdict detail result early_pass early_fail late_pass late_fail skipped i as_command incomplete=0
+  local runs=$1 inv tgt out err verdict detail result early_pass early_fail late_pass late_fail hung skipped i as_command incomplete=0
   [[ $runs =~ ^[1-9][0-9]*$ ]] || { echo 'GROK_TEST_STRESS must be a positive integer' >&2; exit 2; }
   err=$(mktemp "${TMPDIR:-/tmp}/grok-review-stress.XXXXXX") || exit 1
   printf 'harness %s (blob %s); launcher %s (blob %s); bash %s (%s); %s runs per row; jitter %s ms\n' \
@@ -477,7 +490,7 @@ stress() {
     as_command=0
     [[ $inv == file ]] || as_command=1
     for tgt in process group; do
-      early_pass=0 early_fail=0 late_pass=0 late_fail=0 skipped=0
+      early_pass=0 early_fail=0 late_pass=0 late_fail=0 hung=0 skipped=0
       for ((i = 1; i <= runs; i++)); do
         out=$(LAUNCHER_AS_COMMAND=$as_command SIGNAL_TARGET=$tgt SIGNAL_JITTER_MS=${SIGNAL_JITTER_MS:-60} \
           run_case "stress-$inv-$tgt-$i" 130 early-INT default 49 2>"$err")
@@ -490,18 +503,19 @@ stress() {
           FAIL) early_fail=$((early_fail + 1)) ;;
           LATE-PASS) late_pass=$((late_pass + 1)) ;;
           LATE-FAIL) late_fail=$((late_fail + 1)) ;;
+          HUNG|NO-RECORD) hung=$((hung + 1)) ;;
           *) skipped=$((skipped + 1)) ;;
         esac
         [[ $result == pass ]] || detail="$detail | $(grep -v '^grok-review:' "$err" | head -n 3 | tr '\n' ' ')"
         printf '%s %s %s #%s: %s\n' "$verdict" "$inv" "$tgt" "$i" "$detail"
       done
-      printf 'ROW %-6s %-7s early: pass=%s fail=%s | late (reference): pass=%s fail=%s | not counted=%s\n' \
-        "$inv" "$tgt" "$early_pass" "$early_fail" "$late_pass" "$late_fail" "$skipped"
+      printf 'ROW %-6s %-7s early: pass=%s fail=%s | late (reference): pass=%s fail=%s | hung=%s | not counted=%s\n' \
+        "$inv" "$tgt" "$early_pass" "$early_fail" "$late_pass" "$late_fail" "$hung" "$skipped"
       if (((early_pass + early_fail) * 4 < runs)); then
         echo "ROW $inv $tgt INCOMPLETE: fewer than a quarter of the runs were early signals"
         incomplete=1
       fi
-      failures=$((failures + early_fail))
+      failures=$((failures + early_fail + hung))
     done
   done
   rm -f "$err"
@@ -543,6 +557,7 @@ selftest verdict-ambiguous-fail "$(stress_verdict 'class=ambiguous; launcher: pe
 selftest verdict-too-late-fail "$(stress_verdict 'class=too-late; launcher: perl; running: x' fail)" TOO-LATE
 selftest verdict-undelivered "$(stress_verdict 'class=undelivered; launcher: -; running: ' fail)" UNDELIVERED
 selftest verdict-no-record "$(stress_verdict '' pass)" NO-RECORD
+selftest verdict-timeout "$(stress_verdict 'class=timeout; launcher: perl; running: x' fail)" HUNG
 
 run_case argument-missing 1 argument default
 run_case argument-extra 1 argument default 49 extra
@@ -586,4 +601,5 @@ LAUNCHER_NAME=-s run_case option-like-launcher-name 1 mismatch default 49
 PRESET_HANDOFF=env SIGNAL_JITTER_MS=40 SIGNAL_BEFORE_DIFF=1 run_case preset-handoff-env-early-SIGINT-130 130 early-INT default 49
 PRESET_HANDOFF=fd SIGNAL_JITTER_MS=40 SIGNAL_BEFORE_DIFF=1 run_case preset-handoff-fd-early-SIGINT-130 130 early-INT default 49
 PRESET_HANDOFF=fd LAUNCHER_VIA_STDIN=1 run_case stdin-invocation-refused 1 stdin default 49
+OCCUPY_FDS=1 run_case handoff-pipe-on-fd-9-keeps-42 42 exit42 default 49
 [[ $failures -eq 0 ]]

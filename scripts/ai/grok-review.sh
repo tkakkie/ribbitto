@@ -76,7 +76,10 @@ if [[ -z $handoff || $handoff != "$expected" ]]; then
     read($random, my $bytes, 16) == 16 or die "grok-review: /dev/urandom: short read\n";
     close $random;
     my $token = unpack("H*", $bytes);
-    pipe(my $handoff, my $writer) or die "grok-review: pipe: $!\n";
+    # Without close-on-exec ($^F), so the pipe survives exec even if it
+    # already is fd 9; a closed fd 9 would make the child wrap itself again.
+    my ($handoff, $writer);
+    { local $^F = 255; pipe($handoff, $writer) or die "grok-review: pipe: $!\n"; }
     print $writer "$token\n";
     close $writer;
     my $block = POSIX::SigSet->new(SIGINT, SIGTERM);
@@ -84,8 +87,8 @@ if [[ -z $handoff || $handoff != "$expected" ]]; then
     sigprocmask(SIG_BLOCK, $block, $old) or die "grok-review: sigprocmask: $!\n";
     my $pid = fork() // die "grok-review: fork failed: $!\n";
     if ($pid == 0) {
-      # dup2 clears close-on-exec, so the shell sees the pipe as fd 9.
-      dup2(fileno($handoff), 9) // _exit(126);
+      my $fd = fileno($handoff);
+      if ($fd != 9) { dup2($fd, 9) // _exit(126); POSIX::close($fd); }
       $ENV{RIBBITTO_GROK_HANDOFF} = $token;
       sigprocmask(SIG_SETMASK, $old);
       { no warnings qw(exec); exec { $ARGV[0] } @ARGV; }

@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -131,5 +132,49 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}
 	if logs.Len() != 0 {
 		t.Errorf("unexpected message fallback: %s", logs.String())
+	}
+}
+
+// oneOrganisation makes the "live" session's account the owner of acme.
+type oneOrganisation struct{}
+
+func (oneOrganisation) Member(_ context.Context, account *domain.Account, slug string) (authz.Membership, error) {
+	if account == nil || slug != "acme" {
+		return authz.Membership{}, authz.ErrNotFound
+	}
+	return authz.Membership{Organization: domain.Organization{Slug: "acme", Name: "Acme Corporation"}, Member: domain.Member{Role: domain.RoleOwner}}, nil
+}
+
+func (oneOrganisation) HomeSlug(context.Context, *domain.Account) (string, error) {
+	return "acme", nil
+}
+
+func TestOrgHomeRendering(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, Authz: oneOrganisation{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for lang, texts := range map[string][]string{
+		"en": {"Acme Corporation", "Signed in as", "Alice", "Owner", "Sign out"},
+		"ja": {"Acme Corporation", "サインイン中:", "Alice", "オーナー", "サインアウト"},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/o/acme/", nil)
+		r.Header.Set("Accept-Language", lang)
+		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		body := w.Body.String()
+		if w.Code != http.StatusOK || !strings.Contains(body, `<form method="post" action="/signout">`) {
+			t.Fatalf("%s: status %d, body %s", lang, w.Code, body)
+		}
+		for _, text := range texts {
+			if !strings.Contains(body, text) {
+				t.Errorf("%s page lacks %q", lang, text)
+			}
+		}
 	}
 }

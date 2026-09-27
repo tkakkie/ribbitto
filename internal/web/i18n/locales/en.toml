@@ -90,3 +90,9 @@ other = "Owner"
 
 ["org.role.member"]
 other = "Member"
+
+["ratelimit.title"]
+other = "Too many attempts"
+
+["ratelimit.message"]
+other = "Please wait a few minutes before trying again."

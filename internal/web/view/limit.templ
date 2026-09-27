@@ -1,0 +1,13 @@
+package view
+
+import "github.com/tkakkie/ribbitto/internal/web/i18n"
+
+// TooManyRequests tells a client that has used up its attempts to wait.
+templ TooManyRequests(stylesheetURL string) {
+	@layout(stylesheetURL) {
+		<main class="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-8">
+			<h1 class="text-heading font-bold text-fg">{ i18n.T(ctx, "ratelimit.title") }</h1>
+			<p class="text-body text-muted">{ i18n.T(ctx, "ratelimit.message") }</p>
+		</main>
+	}
+}

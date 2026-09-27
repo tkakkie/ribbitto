@@ -18,7 +18,7 @@ type SignInService interface {
 	SignOut(ctx context.Context, token string) error
 }
 
-func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInService, signup SignUpService) {
+func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInService, signup SignUpService, allow func(http.ResponseWriter, *http.Request) bool) {
 	render := func(w http.ResponseWriter, r *http.Request, status int, form view.SignInForm) {
 		if signup != nil {
 			open, err := signup.Open(r.Context())
@@ -38,7 +38,7 @@ func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInServic
 		render(w, r, http.StatusOK, view.SignInForm{})
 	})
 	routes.HandleFunc("POST /signin", func(w http.ResponseWriter, r *http.Request) {
-		if !parseForm(w, r) {
+		if !allow(w, r) || !parseForm(w, r) {
 			return
 		}
 		email := r.PostForm.Get("email")

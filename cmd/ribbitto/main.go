@@ -20,6 +20,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
 func main() {
@@ -65,6 +66,10 @@ func serve(ctx context.Context, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	trusted, err := middleware.ParseTrustedProxies(os.Getenv("RIBBITTO_TRUSTED_PROXIES"))
+	if err != nil {
+		return fmt.Errorf("RIBBITTO_TRUSTED_PROXIES: %w", err)
+	}
 	addr := os.Getenv("RIBBITTO_ADDR")
 	if addr == "" {
 		addr = ":8080"
@@ -102,6 +107,7 @@ func serve(ctx context.Context, databaseURL string) error {
 		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, enabled),
 		SetupSessions: sessions,
 		Authz:         authz.New(postgres.NewAuthzStore(pool)),
+		Limits:        middleware.NewAuthLimits(trusted, time.Now),
 	})
 	if err != nil {
 		return err

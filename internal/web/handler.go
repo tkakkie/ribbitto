@@ -17,8 +17,10 @@ import (
 
 // Services are the use cases the handlers call.
 type Services struct {
-	Sessions middleware.SessionResolver
-	SignIn   SignInService
+	Sessions      middleware.SessionResolver
+	SignIn        SignInService
+	Setup         SetupService // nil disables both setup routes
+	SetupSessions SessionCreator
 }
 
 // NewHandler constructs the application's HTTP routes. A non-empty devAssets
@@ -27,6 +29,9 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	// Fail at start-up rather than panic on the first request.
 	if services.Sessions == nil || services.SignIn == nil {
 		return nil, errors.New("web: Services.Sessions and Services.SignIn are required")
+	}
+	if services.Setup != nil && services.SetupSessions == nil {
+		return nil, errors.New("web: Services.SetupSessions is required when Services.Setup is set")
 	}
 	assets := static.FS()
 	if devAssets != "" {
@@ -49,6 +54,7 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 		})
 	})
 	registerSignIn(routes, pages, services.SignIn)
+	registerSetup(routes, pages, services.Setup, services.SetupSessions)
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

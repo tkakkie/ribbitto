@@ -33,3 +33,45 @@ other = "Enter your email address and password."
 
 ["signin.error.invalid"]
 other = "The email address or password is incorrect."
+
+["setup.title"]
+other = "Set up ribbitto"
+
+["setup.submit"]
+other = "Create organisation and sign in"
+
+["setup.token"]
+other = "Setup token"
+
+["setup.organization_name"]
+other = "Organisation name"
+
+["setup.slug"]
+other = "Organisation URL slug"
+
+["setup.display_name"]
+other = "Display name"
+
+["setup.email"]
+other = "Email address"
+
+["setup.password"]
+other = "Password"
+
+["setup.error.token"]
+other = "The setup token is incorrect."
+
+["setup.error.organization_name"]
+other = "Enter an organisation name of 1–100 printable characters."
+
+["setup.error.slug"]
+other = "Use 1–63 lowercase letters, digits or hyphens, starting and ending with a letter or digit."
+
+["setup.error.display_name"]
+other = "Enter a display name of 1–50 printable characters."
+
+["setup.error.email"]
+other = "Enter a valid email address."
+
+["setup.error.password"]
+other = "Use a password of 15–128 characters."

@@ -61,6 +61,16 @@ Generated Go, CSS and vendored scripts are committed, so `go build` needs
 neither templ nor Tailwind. CSS class detection is limited to `.templ` files
 so local notes and tools do not change the output.
 
+## First-run setup
+
+After running migrations, set `RIBBITTO_SETUP_TOKEN` to at least 32 random
+characters before starting the server, then open `/setup`. Enter that token,
+the organisation name and URL slug, and the owner's display name, email and
+password. Successful setup signs the owner in and redirects to `/`.
+An unset or empty token disables setup; a non-empty token shorter than 32
+characters prevents startup. After setup, both GET and POST `/setup` return
+404 even if the token remains in the environment.
+
 ## Documentation
 
 - [Architecture](docs/architecture.md) — packages, allowed imports, request and real-time flow

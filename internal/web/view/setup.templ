@@ -1,0 +1,37 @@
+package view
+
+import "github.com/tkakkie/ribbitto/internal/web/i18n"
+
+// SetupForm retains only non-secret values and per-field message IDs.
+type SetupForm struct {
+	Values map[string]string
+	Errors map[string]string
+}
+
+// Setup renders the first-run setup form.
+templ Setup(stylesheetURL string, form SetupForm) {
+	@layout(stylesheetURL) {
+		<main class="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-8">
+			<h1 class="text-heading font-bold text-fg">{ i18n.T(ctx, "setup.title") }</h1>
+			<form method="post" action="/setup" class="flex flex-col gap-4">
+				for _, field := range []struct{ name, kind, autocomplete string }{
+					{"token", "password", "off"},
+					{"organization_name", "text", "organization"},
+					{"slug", "text", "off"},
+					{"display_name", "text", "nickname"},
+					{"email", "email", "username"},
+					{"password", "password", "new-password"},
+				} {
+					<label class="flex flex-col gap-1 text-body text-fg">
+						{ i18n.T(ctx, "setup." + field.name) }
+						<input type={ field.kind } name={ field.name } value={ form.Values[field.name] } autocomplete={ field.autocomplete } required class="min-h-11 rounded-md border border-border-strong bg-input px-3 py-2 text-body text-fg"/>
+						if message := form.Errors[field.name]; message != "" {
+							<span role="alert" class="text-body text-danger">{ i18n.T(ctx, message) }</span>
+						}
+					</label>
+				}
+				<button type="submit" class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand">{ i18n.T(ctx, "setup.submit") }</button>
+			</form>
+		</main>
+	}
+}

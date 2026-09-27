@@ -209,6 +209,12 @@ exits 0.)
   `RIBBITTO_GROK_TIMEOUT` (double the current limit, capped at 86400 seconds)
   and points to the invocation above, without printing a command. If the
   86400-second maximum is already in effect, it says so and suggests no rerun.
+- Known limitation (#84): Bash, 3.2 and 5.3 alike, can lose a SIGINT that
+  arrives while it forks a command. So a Ctrl-C in the first moments, before
+  Grok starts, is occasionally ignored and the review carries on (still
+  read-only and under the timeout). Press Ctrl-C again, or send `TERM`
+  (`kill <pid>`), which is not lost. A fix was tried in #87 and not merged:
+  its complexity outweighed this harm.
 - The title, description, base and head come from one `gh pr view`; the
   diff is computed locally from that base and head, so everything Grok sees
   describes the same commit even if the PR is pushed in the meantime.

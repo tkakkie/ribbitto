@@ -69,24 +69,9 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 	if !ok {
 		return "", time.Time{}, ErrInvalidCredentials
 	}
-	// Create the new session before ending the previous one: if creation
-	// fails, the browser keeps the session it had. If ending the previous
-	// one fails, undo the new one, so a failed sign-in never leaves the old
-	// token alive next to a new one.
-	token, expiresAt, err := s.sessions.Create(ctx, account.ID)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-	if previousToken != "" {
-		if err := s.sessions.Delete(ctx, previousToken); err != nil {
-			// Undo even if the request was cancelled meanwhile (a common
-			// reason the delete failed), but not forever.
-			undo, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			defer cancel()
-			return "", time.Time{}, errors.Join(err, s.sessions.Delete(undo, token))
-		}
-	}
-	return token, expiresAt, nil
+	// One transaction creates the new session and ends the one the browser
+	// sent, so a failed sign-in changes nothing.
+	return s.sessions.Replace(ctx, previousToken, account.ID)
 }
 
 // SignOut ends the session with this token.

@@ -30,6 +30,9 @@ type SessionStore interface {
 	// expires after now, and ErrNoSession otherwise.
 	SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (domain.Account, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
+	// ReplaceSession deletes the session with oldHash, if there is one, and
+	// stores the new session, atomically: either both happen or neither.
+	ReplaceSession(ctx context.Context, oldHash, newHash []byte, accountID domain.ID, expiresAt time.Time) error
 	DeleteExpiredSessions(ctx context.Context, before time.Time) error
 }
 
@@ -47,16 +50,42 @@ func NewSessions(store SessionStore, now func() time.Time) *Sessions {
 // Create starts a session for the account and returns its token, which only
 // the caller (the browser's cookie) keeps, and its expiry.
 func (s *Sessions) Create(ctx context.Context, accountID domain.ID) (string, time.Time, error) {
-	raw := make([]byte, tokenBytes)
-	if _, err := rand.Read(raw); err != nil {
-		return "", time.Time{}, fmt.Errorf("creating session token: %w", err)
+	token, hash, expiresAt, err := s.newToken()
+	if err != nil {
+		return "", time.Time{}, err
 	}
-	hash := sha256.Sum256(raw)
-	expiresAt := s.now().Add(SessionLifetime)
-	if err := s.store.CreateSession(ctx, hash[:], accountID, expiresAt); err != nil {
+	if err := s.store.CreateSession(ctx, hash, accountID, expiresAt); err != nil {
 		return "", time.Time{}, fmt.Errorf("storing session: %w", err)
 	}
-	return base64.RawURLEncoding.EncodeToString(raw), expiresAt, nil
+	return token, expiresAt, nil
+}
+
+// Replace starts a session for the account and, in the same transaction,
+// ends the session named by previousToken (the browser's cookie, possibly
+// empty or stale). A failure changes nothing, so the browser keeps the
+// session it had.
+func (s *Sessions) Replace(ctx context.Context, previousToken string, accountID domain.ID) (string, time.Time, error) {
+	old, ok := hashToken(previousToken)
+	if !ok {
+		return s.Create(ctx, accountID)
+	}
+	token, hash, expiresAt, err := s.newToken()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	if err := s.store.ReplaceSession(ctx, old, hash, accountID, expiresAt); err != nil {
+		return "", time.Time{}, fmt.Errorf("replacing session: %w", err)
+	}
+	return token, expiresAt, nil
+}
+
+func (s *Sessions) newToken() (token string, hash []byte, expiresAt time.Time, err error) {
+	raw := make([]byte, tokenBytes)
+	if _, err := rand.Read(raw); err != nil {
+		return "", nil, time.Time{}, fmt.Errorf("creating session token: %w", err)
+	}
+	sum := sha256.Sum256(raw)
+	return base64.RawURLEncoding.EncodeToString(raw), sum[:], s.now().Add(SessionLifetime), nil
 }
 
 // Resolve returns the account of a live session. ErrNoSession covers every

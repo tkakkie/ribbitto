@@ -36,12 +36,41 @@ func OpenPool(ctx context.Context, url string) (*pgxpool.Pool, error) {
 
 // SessionStore implements auth.SessionStore.
 type SessionStore struct {
+	db      sessionDB
 	queries *sqlcgen.Queries
 }
 
+// sessionDB is what the store needs: queries, plus transactions for
+// ReplaceSession. A *pgxpool.Pool is one.
+type sessionDB interface {
+	sqlcgen.DBTX
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
 // NewSessionStore returns a SessionStore that runs its queries on db.
-func NewSessionStore(db sqlcgen.DBTX) *SessionStore {
-	return &SessionStore{queries: sqlcgen.New(db)}
+func NewSessionStore(db sessionDB) *SessionStore {
+	return &SessionStore{db: db, queries: sqlcgen.New(db)}
+}
+
+// ReplaceSession deletes the old session and stores the new one in one
+// transaction.
+func (s *SessionStore) ReplaceSession(ctx context.Context, oldHash, newHash []byte, accountID domain.ID, expiresAt time.Time) error {
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		q := sqlcgen.New(tx)
+		if err := q.DeleteSessionByTokenHash(ctx, oldHash); err != nil {
+			return err
+		}
+		_, err := q.CreateSession(ctx, sqlcgen.CreateSessionParams{
+			TokenHash: newHash,
+			AccountID: pgtype.UUID{Bytes: accountID, Valid: true},
+			ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
+		})
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("replacing session: %w", withoutDetail(err))
+	}
+	return nil
 }
 
 // CreateSession stores a session by its token hash.

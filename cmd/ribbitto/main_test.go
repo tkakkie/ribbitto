@@ -18,6 +18,9 @@ func (blockingStore) SessionAccount(context.Context, []byte, time.Time) (domain.
 	return domain.Account{}, auth.ErrNoSession
 }
 func (blockingStore) DeleteSession(context.Context, []byte) error { return nil }
+func (blockingStore) ReplaceSession(context.Context, []byte, []byte, domain.ID, time.Time) error {
+	return nil
+}
 func (s blockingStore) DeleteExpiredSessions(ctx context.Context, _ time.Time) error {
 	close(s.started)
 	<-ctx.Done()

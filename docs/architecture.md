@@ -110,13 +110,12 @@ connects it to HTTP.
 An unknown email still runs one Argon2id verification against a dummy hash
 made with the current parameters and gets the same `ErrInvalidCredentials`
 as a wrong password, which makes timing-based discovery of accounts much
-harder. On success the session is **replaced**: the new one is created
-first, then the session named by the token the browser sent (if any) is
-deleted, so a token that existed before sign-in never becomes signed in
-(session fixation). If the insert fails, the old session is untouched; if
-deleting the old one fails, the new one is deleted again (with a context
-that the request's cancellation does not cut short), so a failed sign-in
-never leaves both. Signing out deletes the session row.
+harder. On success the session is **replaced** (`Sessions.Replace`): one
+transaction deletes the session named by the token the browser sent (if
+any) and inserts the new one, so a token that existed before sign-in never
+becomes signed in (session fixation), and a failed sign-in changes nothing
+— the browser keeps the session it had. Signing out deletes the session
+row.
 
 **Cookie.** The token travels in `__Host-session` with `Path=/`, no
 `Domain`, `HttpOnly`, `Secure`, `SameSite=Lax` and a `Max-Age` matching the

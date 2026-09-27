@@ -87,7 +87,11 @@ creation; `postgres.SetupStore` implements it with one transaction for the
 organisation, first sequence, owner account, membership and setup marker.
 `cmd/ribbitto` validates `RIBBITTO_SETUP_TOKEN` before opening the database:
 empty disables setup, and a non-empty value needs at least 32 characters.
-Both GET and POST `/setup` return 404 when disabled, without calling setup.
+When disabled, `/setup` is not registered at all, so GET and POST are the
+router's plain 404, without calling setup or looking up a session. When
+enabled, `/setup` is registered outside the session middleware (setup needs
+no signed-in account), so whether setup is open is decided first, whatever
+the session cookie or the state of the session store.
 Otherwise the handler checks `Open` before rendering or accepting a form.
 POST calls `Complete` (#31); closed setup (including a concurrent completion)
 returns 404, invalid fields or token return 422 without echoing secrets, and
@@ -144,7 +148,8 @@ from email or chat), and cross-origin POSTs are stopped separately (below).
 3. On everything except `/static/` and `/healthz`: security headers
    (below), then i18n.
 4. On each **registered** HTML route (the `sessionMux` in `NewHandler`
-   wraps routes one by one): `middleware.Session`. An unknown path or
+   wraps routes one by one; `/setup` is the one page registered without
+   it): `middleware.Session`. An unknown path or
    method gets its plain 404 or 405 without a session lookup, so it costs
    no query and stays 404 while the database is down. The middleware
    resolves the cookie and puts the account in the context

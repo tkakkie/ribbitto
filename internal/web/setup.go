@@ -26,11 +26,12 @@ type SessionCreator interface {
 }
 
 func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService, sessions SessionCreator) {
+	// Without a setup token the routes do not exist: /setup is then an
+	// unknown path, answered 404 by the router without a session lookup.
+	if service == nil {
+		return
+	}
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		if service == nil {
-			http.NotFound(w, r)
-			return
-		}
 		open, err := service.Open(r.Context())
 		if errors.Is(err, setup.ErrCompleted) || (err == nil && !open) {
 			http.NotFound(w, r)
@@ -86,6 +87,9 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 		}
 		pages.render(w, r, status, func(url string) templ.Component { return view.Setup(url, form) })
 	}
-	routes.HandleFunc("GET /setup", handler)
-	routes.HandleFunc("POST /setup", handler)
+	// Registered on the plain mux, not behind the session middleware: setup
+	// needs no signed-in account, so whether setup is open is decided first
+	// and a completed setup answers 404 whatever the session state.
+	routes.ServeMux.HandleFunc("GET /setup", handler)
+	routes.ServeMux.HandleFunc("POST /setup", handler)
 }

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -130,5 +131,48 @@ func TestSetup(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSetupAvailabilityBeforeSession(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name   string
+		setup  SetupService // nil: RIBBITTO_SETUP_TOKEN unset or empty
+		status int
+	}{
+		{"disabled", nil, http.StatusNotFound},
+		{"completed", &fakeSetup{open: false}, http.StatusNotFound},
+		{"open", &fakeSetup{open: true}, http.StatusOK},
+	} {
+		for _, method := range []string{http.MethodGet, http.MethodPost} {
+			t.Run(tt.name+" "+method, func(t *testing.T) {
+				// Every session lookup fails, as during a database outage.
+				resolver := &countingResolver{}
+				services := Services{Sessions: resolver, SignIn: &fakeSignIn{}, Setup: tt.setup}
+				if tt.setup != nil {
+					services.SetupSessions = tt.setup.(*fakeSetup)
+				}
+				handler, err := NewHandler("", catalogues, services)
+				if err != nil {
+					t.Fatal(err)
+				}
+				r := httptest.NewRequest(method, "/setup", strings.NewReader(""))
+				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "some-token"})
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, r)
+				want := tt.status
+				if tt.name == "open" && method == http.MethodPost {
+					want = http.StatusSeeOther // the fake accepts any form
+				}
+				if w.Code != want || resolver.calls != 0 {
+					t.Fatalf("status %d with %d session lookups; want %d with 0", w.Code, resolver.calls, want)
+				}
+			})
+		}
 	}
 }

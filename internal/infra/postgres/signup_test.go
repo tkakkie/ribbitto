@@ -35,10 +35,10 @@ func TestSignUp(t *testing.T) {
 	if account.Email != "alice@example.org" || member.Role != "member" || member.JoinedEventSeq != 2 {
 		t.Fatalf("account/member: %+v %+v", account, member)
 	}
-	for _, email := range []string{"alice@example.org", "Bad@Email"} {
+	for _, email := range []string{"alice@example.org", "Bad@Email", "e\u0301@example.org"} {
 		_, err := store.SignUp(ctx, "Alice", email, "$argon2id$test")
 		var fields signup.ValidationErrors
-		if email == "alice@example.org" && !errors.Is(err, signup.ErrEmailTaken) || email == "Bad@Email" && (!errors.As(err, &fields) || fields["email"] == nil) {
+		if email == "alice@example.org" && !errors.Is(err, signup.ErrEmailTaken) || email != "alice@example.org" && (!errors.As(err, &fields) || fields["email"] == nil) {
 			t.Fatalf("email %s: %v", email, err)
 		}
 		var accounts, members, otherMembers int

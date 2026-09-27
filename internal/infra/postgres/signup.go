@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -43,7 +44,9 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, email, hash string
 			if pgErr.Code == "23505" && pgErr.ConstraintName == "account_email_key" {
 				return domain.ID{}, signup.ErrEmailTaken
 			}
-			if pgErr.Code == "23514" && pgErr.ConstraintName == "account_email_check" {
+			// account.email has two CHECKs; the second (NFC) is named
+			// account_email_check1, so match by column prefix as setup does.
+			if pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "account_email_") {
 				return domain.ID{}, signup.ValidationErrors{"email": err}
 			}
 		}

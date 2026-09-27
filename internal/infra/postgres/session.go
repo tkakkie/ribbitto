@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/auth"
@@ -51,9 +52,20 @@ func (s *SessionStore) CreateSession(ctx context.Context, tokenHash []byte, acco
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
-		return fmt.Errorf("inserting session: %w", err)
+		return fmt.Errorf("inserting session: %w", withoutDetail(err))
 	}
 	return nil
+}
+
+// withoutDetail drops a PostgreSQL error's Detail, which for a unique
+// violation on token_hash would carry the hash into logs; token hashes
+// must never be logged. The code and constraint name are kept.
+func withoutDetail(err error) error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return err
+	}
+	return fmt.Errorf("%s (SQLSTATE %s, constraint %q)", pgErr.Message, pgErr.Code, pgErr.ConstraintName)
 }
 
 // SessionAccount returns the account of a session that expires after now.

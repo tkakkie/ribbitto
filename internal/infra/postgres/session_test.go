@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -66,6 +67,21 @@ func TestSessionStore(t *testing.T) {
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
+	}
+
+	// A duplicate token hash must not leave the hash reachable from the
+	// error: PgError.Detail would carry it, and a caller that unwraps and
+	// logs the error would log it.
+	hash := make([]byte, 32)
+	hash[0] = 0xab
+	store := postgres.NewSessionStore(pool)
+	if err := store.CreateSession(ctx, hash, id, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	err = store.CreateSession(ctx, hash, id, now.Add(time.Hour))
+	var pgErr *pgconn.PgError
+	if err == nil || errors.As(err, &pgErr) || strings.Contains(err.Error(), "ab00") {
+		t.Fatalf("duplicate token hash error exposes the database error: %v", err)
 	}
 
 	// Past the older session's expiry, clean-up removes only that one.

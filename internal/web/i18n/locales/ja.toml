@@ -80,7 +80,7 @@ other = "パスワードは15〜128文字で入力してください。"
 other = "ribbittoに登録"
 
 ["signup.submit"]
-other = "アカウントを作成してログイン"
+other = "アカウントを作成してサインイン"
 
 ["signup.error.email_taken"]
 other = "このメールアドレスは既に登録されています。"

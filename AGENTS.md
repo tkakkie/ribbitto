@@ -68,7 +68,8 @@ only the token utilities, never raw colours).
   choice, a constraint, or a trap; do not narrate the code.
 - Organisation-owned data is always scoped by `organization_id`; the
   organisation comes from the URL, never from a request body; a
-  non-member gets 404.
+  non-member gets 404. Setup creates the organisation; installation-wide
+  sign-up and `/` resolve it from the setup row, never from the request.
 - Never use `templ.Raw` or build HTML by string concatenation.
 - Product vocabulary (ribbit, pond, marsh…) appears only in UI message
   files, never in identifiers.

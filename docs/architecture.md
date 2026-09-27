@@ -75,7 +75,9 @@ sequenceDiagram
   W-->>B: HTML (full page or htmx fragment)
 ```
 
-The organisation always comes from the URL, never from a request body. An
+The organisation comes from the URL, never from a request body. Setup
+creates it; installation-wide sign-up and `/` resolve it from the setup row,
+never from the request. An
 account that is not a member of that organisation gets 404, not 403, so the
 existence of an organisation or channel is not revealed.
 
@@ -99,12 +101,19 @@ a busy hasher returns 503. Success creates a session for the owner through
 `auth.Sessions.Create`, sets the shared session cookie and redirects to `/`
 with 303. Setup and sign-in share the process's single password hasher.
 
+`internal/app/signup.Open` gates registration and the sign-in link on
+`RIBBITTO_SIGNUP=on` and completed setup. Its separate handler and form share
+the process hasher; one transaction reads the setup organisation, takes
+its next sequence first, then inserts the account and member. Duplicate
+email rolls back everything. Success creates a session and redirects to `/`
+with 303; invalid input returns 422 and a busy hasher returns 503.
+
 ## Sessions
 
 `internal/app/auth.Sessions` owns the session lifecycle; `internal/web/middleware`
 connects it to HTTP.
 
-- **Create** (at sign-in or setup): 32 random bytes from `crypto/rand` are
+- **Create** (at sign-in, sign-up or setup): 32 random bytes from `crypto/rand` are
   the token, returned once as unpadded base64url for the cookie. Only the
   token's SHA-256 hash is stored, with an absolute expiry 30 days ahead;
   using the session never extends it.

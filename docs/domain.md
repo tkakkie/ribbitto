@@ -90,7 +90,9 @@ account, and `joined_event_seq` starts at 1.
    organisation's data even if an id is guessed.
 3. **Organisation-owned data refers to `member`, never to `account`.**
 4. **The organisation comes from the URL** (`/o/{slug}/…`), never from a
-   request body. An account that is not a member gets **404**.
+   request body. Setup creates the organisation; installation-wide sign-up
+   and `/` resolve it from the setup row, never from the request. An account
+   that is not a member gets **404**.
 5. **Authorization is decided only in `internal/app`.** Handlers and the
    real-time hub call it; they never re-implement it.
 6. **`organization.event_seq` only increases, without gaps.** It is taken
@@ -156,9 +158,10 @@ transactions roll back. Repeated setup reports "already completed".
 ## MVP scope
 
 One organisation, created by a first-run setup that needs a setup token and
-succeeds only once. Sign-up can be switched on; new accounts then join that
-organisation as members. Two roles: `owner` and `member`. Public channels
-only: every member can read and write them.
+succeeds only once. `RIBBITTO_SIGNUP=on` opens sign-up after setup; new
+accounts join the setup row's organisation as members. `off`, empty or unset disables sign-up
+(GET and POST `/signup` return 404); any other value prevents startup.
+Two roles: `owner` and `member`. Public channels only: every member can read and write them.
 
 Later, in roughly this order: private channels, direct messages,
 invitations, reactions, editing and deleting, row-level security, several

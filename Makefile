@@ -46,7 +46,6 @@ $(TAILWIND):
 
 # Local caches under bin/ include third-party sources and invalid test fixtures.
 check:
-	bash scripts/ai/grok-review_test.sh
 	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
 	if [ -n "$$unformatted" ]; then \
 		echo "These files need gofmt:"; \
@@ -57,6 +56,7 @@ check:
 	$(MAKE) lint
 	go build ./...
 	go test ./...
+	bash scripts/ai/grok-review_test.sh
 
 lint: $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run ./...

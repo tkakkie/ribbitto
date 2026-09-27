@@ -152,9 +152,14 @@ run_case() {
     export PATH="$CASE_DIR/bin:$original_path" TMPDIR="$CASE_DIR/tmp" MODE="$mode"
     unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT
     [[ $limit == default ]] || export RIBBITTO_GROK_TIMEOUT="$limit"
+    if [[ ${LAUNCHER_AS_COMMAND:-0} == 1 ]]; then
+      set -- -c "$(cat "$launcher")" grok-review "$@"
+    else
+      set -- "$launcher" "$@"
+    fi
     # Reset SIGINT before exec: a shell started with '&' can inherit it ignored.
     # The driver also bounds every run, including a launcher with broken cleanup.
-    perl - "$BASH" "$launcher" "$@" <<'DRIVER'
+    perl - "$BASH" "$@" <<'DRIVER'
 use strict; use warnings;
 use POSIX qw(:sys_wait_h setpgid);
 my $pid = fork() // die $!;
@@ -254,5 +259,7 @@ run_case prune-success-to-1 1 prune-success default 49
 run_case prune-keeps-42 42 prune-failure default 49
 run_case symlink-before-prompt-diff-worktree 1 symlink default 49
 run_case single-json-payload 0 payload 86400 49
+LAUNCHER_AS_COMMAND=1 run_case bash-c-symlink-before-prompt-diff-worktree 1 symlink default 49
+LAUNCHER_AS_COMMAND=1 run_case bash-c-single-json-payload 0 payload 86400 49
 run_case untrusted-launcher 1 mismatch default 49
 [[ $failures -eq 0 ]]

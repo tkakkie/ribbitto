@@ -194,10 +194,10 @@ exits 0.)
   126 without starting Grok.
 - The timeout is a backstop against a stuck CLI, not an estimate of review
   time. Raise `RIBBITTO_GROK_TIMEOUT` when a larger PR needs more time or a
-  review times out. On timeout, the launcher prints a trusted rerun command
-  with `RIBBITTO_GROK_TIMEOUT` doubled, capped at 86400 seconds; keep the
-  `origin/main` launcher and `bash -c` invocation above when changing the
-  limit.
+  review times out. On timeout, the launcher suggests a value for
+  `RIBBITTO_GROK_TIMEOUT` (double the current limit, capped at 86400 seconds)
+  and points to the invocation above, without printing a command. If the
+  86400-second maximum is already in effect, it says so and suggests no rerun.
 - The title, description, base and head come from one `gh pr view`; the
   diff is computed locally from that base and head, so everything Grok sees
   describes the same commit even if the PR is pushed in the meantime.

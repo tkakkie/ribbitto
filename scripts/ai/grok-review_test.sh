@@ -260,7 +260,10 @@ DRIVER
         timeout)
           contains "$CASE_DIR/out/stderr" 'timed out after 1 s'
           contains "$CASE_DIR/out/stderr" 'Grok did not finish within 1s'
-          contains "$CASE_DIR/out/stderr" 'Rerun with a longer limit (for example, 2 seconds): git fetch origin main && launcher=$(git show origin/main:scripts/ai/grok-review.sh) && RIBBITTO_GROK_TIMEOUT=2 bash -c "$launcher" grok-review 49' ;;
+          contains "$CASE_DIR/out/stderr" 'rerun with RIBBITTO_GROK_TIMEOUT=2 using the invocation in docs/workflow.md#adversarial-review'
+          if grep -Fq 'bash -c' "$CASE_DIR/out/stderr"; then
+            fail 'timeout hint contains a shell command'
+          fi ;;
         prune-*) contains "$CASE_DIR/out/stderr" "'git worktree prune' failed" ;;
       esac ;;
   esac

@@ -234,8 +234,13 @@ case $status in
   0) ;;
   124)
     next=$(( timeout * 2 > 86400 ? 86400 : timeout * 2 ))
+    if [[ -t 2 ]]; then printf '\033[0m' >&2; fi
     echo "grok-review: Grok did not finish within ${timeout}s" >&2
-    printf 'grok-review: Rerun with a longer limit (for example, %s seconds): git fetch origin main && launcher=$(git show origin/main:scripts/ai/grok-review.sh) && RIBBITTO_GROK_TIMEOUT=%s bash -c "$launcher" grok-review %s\n' "$next" "$next" "$pr" >&2
+    if (( next > timeout )); then
+      printf 'grok-review: rerun with RIBBITTO_GROK_TIMEOUT=%s using the invocation in docs/workflow.md#adversarial-review\n' "$next" >&2
+    else
+      echo 'grok-review: the 86400-second maximum is already in effect' >&2
+    fi
     exit 124 ;;
   *) echo "grok-review: Grok failed (exit $status)" >&2; exit "$status" ;;
 esac

@@ -241,6 +241,66 @@ Post the result with `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems, so it
 does not replace this review.
 
+### Running Codex
+
+How the maintainer's orchestrating sessions run Codex (codex-cli 0.153).
+This records that setup, not general limits of Codex. Evidence: #48.
+
+**Implementation.** The global `~/.codex/config.toml` is shared with other
+projects and allows only localhost, so do not edit it. Instead, pass a
+per-run permission profile with `-c` and run the command from the issue's
+worktree. The profile allows:
+
+- writes only to the worktree;
+- network access only to localhost, the Go module proxy and checksum
+  database, GitHub and the npm registry.
+
+Any other host is refused ("Network access to "example.com" was blocked:
+domain is not on the allowlist").
+
+```sh
+perms=(
+  -c 'permissions.ribbitto.extends=":workspace"'
+  -c 'permissions.ribbitto.network.enabled=true'
+  -c 'permissions.ribbitto.network.allow_local_binding=true'
+  -c 'permissions.ribbitto.network.domains={"localhost"="allow","127.0.0.1"="allow","proxy.golang.org"="allow","sum.golang.org"="allow","storage.googleapis.com"="allow","github.com"="allow","api.github.com"="allow","codeload.github.com"="allow","objects.githubusercontent.com"="allow","release-assets.githubusercontent.com"="allow","raw.githubusercontent.com"="allow","registry.npmjs.org"="allow"}'
+  -c 'default_permissions="ribbitto"'
+)
+limit 3600 codex exec "${perms[@]}" -o result.md "$(cat prompt.md)" < /dev/null
+```
+
+The prompt carries the issue and its review comments, plus these rules:
+
+- **Go caches.** Only the worktree is writable, so use
+  `GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
+  GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath`
+  (`bin/` is git-ignored).
+- **Database.** Codex cannot use Docker. The orchestrator starts
+  PostgreSQL on a free local port, and the prompt says to run `make check`
+  with `RIBBITTO_TEST_DATABASE_URL=postgres://postgres:codex-dev-only@127.0.0.1:55433/postgres?sslmode=disable`
+  and `RIBBITTO_REQUIRE_DB=1`.
+
+  ```sh
+  docker run -d --name ribbitto-codex-pg -p 127.0.0.1:55433:5432 \
+    -e POSTGRES_PASSWORD=codex-dev-only postgres:18
+  ```
+- **Handoff.** Codex does not commit, push or use GitHub. It leaves the
+  changes in the working tree and writes a draft PR description to an
+  untracked `PR_BODY.md`.
+
+The orchestrator then:
+
+1. reviews the diff;
+2. runs what Codex could not (for example `make db-up` or a live `make dev`);
+3. commits, pushes and opens the PR.
+
+**Reviews.** In `-s read-only` mode Codex cannot reach GitHub, so pipe in
+everything the review needs:
+
+- the issue or pull request with its comments;
+- the earlier review rounds;
+- the Status issue (#1), when the review should check it.
+
 ## Keeping state
 
 - **Status (#1):** read it at the start of a session. At the end of a unit

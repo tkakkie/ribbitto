@@ -184,9 +184,9 @@ func parse(stored string) (params, error) {
 	if len(fields) != 3 {
 		return params{}, ErrInvalidHash
 	}
-	memory, ok1 := parseField(fields[0], "m=", minMemoryKiB, maxMemoryKiB)
-	iterations, ok2 := parseField(fields[1], "t=", minTime, maxTime)
-	threads, ok3 := parseField(fields[2], "p=", minThreads, maxThreads)
+	memory, ok1 := parseField(fields[0], "m=", 32, minMemoryKiB, maxMemoryKiB)
+	iterations, ok2 := parseField(fields[1], "t=", 32, minTime, maxTime)
+	threads, ok3 := parseField(fields[2], "p=", 8, minThreads, maxThreads)
 	if !ok1 || !ok2 || !ok3 {
 		return params{}, ErrInvalidHash
 	}
@@ -206,12 +206,14 @@ func parse(stored string) (params, error) {
 	return p, nil
 }
 
-func parseField(field, prefix string, lo, hi uint64) (uint64, bool) {
+// parseField parses with the bit size of the field's type, so the later
+// conversion cannot truncate even before the bounds are checked.
+func parseField(field, prefix string, bitSize int, lo, hi uint64) (uint64, bool) {
 	digits, found := strings.CutPrefix(field, prefix)
 	if !found {
 		return 0, false
 	}
-	n, err := strconv.ParseUint(digits, 10, 32)
+	n, err := strconv.ParseUint(digits, 10, bitSize)
 	// Reject non-canonical spellings such as leading zeros.
 	if err != nil || strconv.FormatUint(n, 10) != digits || n < lo || n > hi {
 		return 0, false

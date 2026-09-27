@@ -4,6 +4,22 @@ set -uo pipefail
 launcher=${1:-$(cd "$(dirname "$0")" && pwd)/grok-review.sh}
 launcher=$(cd "$(dirname "$launcher")" && pwd)/$(basename "$launcher")
 export REAL_GIT=$(command -v git)
+# One final class per signalled run (#84), shared by the driver and its
+# self-test. $before and $after bracket the kill; $phase is whether the diff
+# marker existed at $before. "too-late": the fake `git worktree prune` (in
+# cleanup) ran before the kill returned. "late": the diff was already done.
+# "ambiguous": the diff marker appeared while the signal was being sent, so
+# the order of delivery and diff is unknown. "early": neither.
+export CLASSIFY_PL='
+sub classify {
+  my ($sent, $phase, $before, $after, $diffed, $pruned) = @_;
+  return "undelivered" unless $sent;
+  return "too-late" if defined $pruned && $pruned <= $after;
+  return "late" if $phase eq "late";
+  return "ambiguous" if defined $diffed && $diffed <= $after;
+  return "early";
+}
+1;'
 original_path=$PATH
 failures=0
 CASE_DIR=
@@ -163,9 +179,8 @@ run_case() {
   fixtures || exit 1
   (
     export PATH="$CASE_DIR/bin:$original_path" TMPDIR="$CASE_DIR/tmp" MODE="$mode"
-    unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT RIBBITTO_GROK_TEST_SETUP_DELAY RIBBITTO_GROK_SIGNAL_PARENT
-    # A marker merely present in the environment must not disable the signal parent.
-    [[ -z ${PRESET_SIGNAL_PARENT:-} ]] || export RIBBITTO_GROK_SIGNAL_PARENT=1
+    unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT RIBBITTO_GROK_TEST_SETUP_DELAY \
+      RIBBITTO_GROK_SIGNAL_PARENT RIBBITTO_GROK_HANDOFF
     [[ -z ${SETUP_DELAY:-} ]] || export RIBBITTO_GROK_TEST_SETUP_DELAY="$SETUP_DELAY"
     # A file run inherits BASH_EXECUTION_STRING from the environment; the
     # launcher must not treat it as its own script.
@@ -173,6 +188,10 @@ run_case() {
     [[ $limit == default ]] || export RIBBITTO_GROK_TIMEOUT="$limit"
     if [[ ${LAUNCHER_AS_COMMAND:-0} == 1 ]]; then
       set -- -c "$(cat "$launcher")" grok-review "$@"
+    elif [[ -n ${LAUNCHER_VIA_STDIN:-} ]]; then
+      # `bash -s -- 49 < launcher` must be refused whatever the environment.
+      export DRIVER_STDIN="$launcher"
+      set -- -s -- "$@"
     elif [[ -n ${LAUNCHER_NAME:-} ]]; then
       # A launcher file whose name looks like an option, run as `bash -- -s`,
       # with commands on stdin that must never run.
@@ -189,13 +208,26 @@ run_case() {
     # The driver also bounds every run, including a launcher with broken cleanup.
     perl - "$BASH" "$@" <<'DRIVER'
 use strict; use warnings;
-use POSIX qw(:sys_wait_h setpgid);
+use POSIX qw(:sys_wait_h setpgid dup2);
 use Time::HiRes qw(time);
+eval $ENV{CLASSIFY_PL} or die $@;
 my $pid = fork() // die $!;
 if (!$pid) {
   setpgid(0, 0) or die $!;
   $SIG{INT} = $SIG{TERM} = 'DEFAULT';
   open STDIN, '<', $ENV{DRIVER_STDIN} // '/dev/null' or die $!;
+  # PRESET_HANDOFF sets the launcher's markers from outside to its real
+  # parent's pid (this driver), the old marker's value included, and with
+  # `fd` also gives it a fd 9 pipe holding a stale token. Neither may make
+  # it skip the Perl signal parent.
+  if ($ENV{PRESET_HANDOFF}) {
+    $ENV{RIBBITTO_GROK_SIGNAL_PARENT} = $ENV{RIBBITTO_GROK_HANDOFF} = getppid();
+    if ($ENV{PRESET_HANDOFF} eq 'fd') {
+      pipe(my $r, my $w) or die $!;
+      print $w "stale-token\n"; close $w;
+      defined dup2(fileno($r), 9) or die $!;
+    }
+  }
   exec @ARGV; die "exec: $!";
 }
 my $deadline = time + 12;
@@ -246,23 +278,19 @@ sub setup_child {
   }
   return;
 }
-my ($before, $after);
-# The launcher has exited: pass its status on, after classifying the signal.
-# $before and $after bracket the kill. An early signal (no diff before the
-# kill) is confirmed only if the diff marker appeared after $after; if it
-# appeared in between, the order of delivery and diff is unknown (ambiguous).
-# A signal sent after cleanup had started (the fake `git worktree prune` ran
-# first) proves nothing about losing it (too late).
+my ($before, $after, $phase, $top, @running);
+# The launcher has exited: pass its status on. A run that was meant to be
+# signalled gets exactly one record, `class=<class>; launcher: …; running
+# just after the signal: …`, classified by CLASSIFY_PL.
 sub finish {
   my $code = $? & 127 ? 128 + ($? & 127) : $? >> 8;
-  if (defined $before) {
-    my @notes;
-    my $diffed = (Time::HiRes::stat("$out/diff-read"))[9];
-    push @notes, 'ambiguous: diff reached while the signal was being sent'
-      if defined $diffed && $diffed > $before && $diffed <= $after;
-    my $pruned = (Time::HiRes::stat("$out/prune"))[9];
-    push @notes, 'too late: cleanup had started' if defined $pruned && $pruned <= $after;
-    open my $d, '>>', "$out/delivered" or die $!; print $d "$_\n" for @notes; close $d;
+  if ($at) {
+    my $class = classify(defined $before, $phase // '', $before, $after,
+      (Time::HiRes::stat("$out/diff-read"))[9], (Time::HiRes::stat("$out/prune"))[9]);
+    open my $d, '>', "$out/delivered" or die $!;
+    printf $d "class=%s; launcher: %s; running just after the signal: %s\n",
+      $class, $top // '-', "@running";
+    close $d;
   }
   exit $code;
 }
@@ -292,7 +320,7 @@ while (1) {
       # "early" means the launcher had not yet computed the diff, the step just
       # before `git worktree add`, when the signal was sent.
       $before = time;
-      my $phase = -e "$out/diff-read" ? 'late' : 'early';
+      $phase = -e "$out/diff-read" ? 'late' : 'early';
       $target = -$pid if $group && $target == $pid;
       kill $signal, $target or die $!;
       $after = time;
@@ -300,11 +328,8 @@ while (1) {
       # itself is `perl` when the signal parent (#84) is in place; ps shows
       # `(perl)` while its arguments cannot be read, e.g. as it handles the signal.
       my ($parent, $command, $mine) = tree();
-      my @running = map { (split ' ', $command->{$_})[0] } grep { $mine->{$_} && $_ != $pid } sort keys %$parent;
-      my $top = (split ' ', $command->{$pid} // '?')[0];
-      open my $d, '>', "$out/delivered" or die $!;
-      print $d "$phase; launcher: $top; running just after the signal: @running\n";
-      close $d;
+      @running = map { (split ' ', $command->{$_})[0] } grep { $mine->{$_} && $_ != $pid } sort keys %$parent;
+      $top = (split ' ', $command->{$pid} // '?')[0];
       $signal = '';
     }
   }
@@ -338,18 +363,18 @@ DRIVER
       contains "$CASE_DIR/out/stderr" 'RIBBITTO_GROK_TEST_SETUP_DELAY must be an integer from 0 to 5'
       absent gh; absent grok ;;
     early-INT|early-TERM)
-      if [[ ! -f $CASE_DIR/out/delivered ]]; then
-        fail 'signal was not delivered before the launcher exited'
-      elif grep -q 'too late' "$CASE_DIR/out/delivered"; then
-        fail 'signal arrived after cleanup had started'
-      elif grep -q '^early;' "$CASE_DIR/out/delivered" && ! grep -q '^ambiguous' "$CASE_DIR/out/delivered"; then
+      record=$(cat "$CASE_DIR/out/delivered" 2>/dev/null)
+      if [[ $record == class=early\;* ]]; then
         absent grok; absent worktree-added
       elif [[ -z ${GROK_TEST_STRESS:-} ]]; then
-        fail 'signal was not confirmed early; this case needs an early signal'
+        fail "signal not confirmed early (${record:-no record})"
       fi
       if [[ $mode == early-INT && -z ${GROK_TEST_STRESS:-} ]] && ! grep -Eq 'launcher: \(?perl\)?;' "$CASE_DIR/out/delivered"; then
         fail 'the Perl signal parent was not in place'
       fi ;;
+    stdin)
+      contains "$CASE_DIR/out/stderr" 'run the launcher as documented'
+      absent gh; absent grok ;;
     setup-INT|setup-TERM)
       # The launcher stops the supervisor with TERM while its child is still in
       # setup; the supervisor must hold that signal until the group exists,
@@ -425,8 +450,23 @@ DRIVER
 # (ambiguous), are counted apart, never as a pass or a failure.
 # Exit status: 1 if any early run failed; 3 if a row has fewer than a quarter
 # of its runs as early signals (too little evidence); 0 otherwise.
+# The stress verdict of one run: its record's class decides which tally the
+# run's pass or fail goes to. Only early runs are evidence; late ones are for
+# reference; ambiguous, too-late, undelivered and unrecorded runs are not
+# counted at all.
+stress_verdict() {
+  local record=$1 result=$2
+  case $record in
+    class=early\;*) [[ $result == pass ]] && echo PASS || echo FAIL ;;
+    class=late\;*) [[ $result == pass ]] && echo LATE-PASS || echo LATE-FAIL ;;
+    class=ambiguous\;*) echo AMBIGUOUS ;;
+    class=too-late\;*) echo TOO-LATE ;;
+    class=undelivered\;*) echo UNDELIVERED ;;
+    *) echo NO-RECORD ;;
+  esac
+}
 stress() {
-  local runs=$1 inv tgt out err verdict detail early_pass early_fail late_pass late_fail skipped i as_command incomplete=0
+  local runs=$1 inv tgt out err verdict detail result early_pass early_fail late_pass late_fail skipped i as_command incomplete=0
   [[ $runs =~ ^[1-9][0-9]*$ ]] || { echo 'GROK_TEST_STRESS must be a positive integer' >&2; exit 2; }
   err=$(mktemp "${TMPDIR:-/tmp}/grok-review-stress.XXXXXX") || exit 1
   printf 'harness %s (blob %s); launcher %s (blob %s); bash %s (%s); %s runs per row; jitter %s ms\n' \
@@ -441,24 +481,18 @@ stress() {
       for ((i = 1; i <= runs; i++)); do
         out=$(LAUNCHER_AS_COMMAND=$as_command SIGNAL_TARGET=$tgt SIGNAL_JITTER_MS=${SIGNAL_JITTER_MS:-60} \
           run_case "stress-$inv-$tgt-$i" 130 early-INT default 49 2>"$err")
-        detail=$(grep '^PHASE' <<<"$out" | sed 's/^PHASE //' | tr '\n' ' ')
-        if grep -q 'signal was not delivered' "$err"; then
-          verdict=UNDELIVERED; skipped=$((skipped + 1))
-        elif [[ $detail == *'too late'* ]]; then
-          verdict=TOO-LATE; skipped=$((skipped + 1))
-        elif [[ $detail == *ambiguous* ]]; then
-          verdict=AMBIGUOUS; skipped=$((skipped + 1))
-        elif [[ $out == *'PASS '* ]]; then
-          verdict=PASS
-          if [[ $detail == early* ]]; then early_pass=$((early_pass + 1)); else late_pass=$((late_pass + 1)); fi
-        else
-          detail="$detail| $(grep -v '^grok-review:' "$err" | head -n 3 | tr '\n' ' ')"
-          if [[ $detail == early* ]]; then
-            verdict=FAIL; early_fail=$((early_fail + 1))
-          else
-            verdict=LATE-FAIL; late_fail=$((late_fail + 1))
-          fi
-        fi
+        detail=$(sed -n 's/^PHASE //p' <<<"$out")
+        result=fail
+        [[ $out != *'PASS '* ]] || result=pass
+        verdict=$(stress_verdict "$detail" "$result")
+        case $verdict in
+          PASS) early_pass=$((early_pass + 1)) ;;
+          FAIL) early_fail=$((early_fail + 1)) ;;
+          LATE-PASS) late_pass=$((late_pass + 1)) ;;
+          LATE-FAIL) late_fail=$((late_fail + 1)) ;;
+          *) skipped=$((skipped + 1)) ;;
+        esac
+        [[ $result == pass ]] || detail="$detail | $(grep -v '^grok-review:' "$err" | head -n 3 | tr '\n' ' ')"
         printf '%s %s %s #%s: %s\n' "$verdict" "$inv" "$tgt" "$i" "$detail"
       done
       printf 'ROW %-6s %-7s early: pass=%s fail=%s | late (reference): pass=%s fail=%s | not counted=%s\n' \
@@ -478,6 +512,37 @@ stress() {
 if [[ -n ${GROK_TEST_STRESS:-} ]]; then
   stress "$GROK_TEST_STRESS"
 fi
+
+# Deterministic checks of the two classification steps above (#84): the
+# driver's classifier on fixed timestamps, and the stress verdicts on fixed
+# records, so ambiguous and too-late runs are provably excluded.
+selftest() {
+  local name=$1 got=$2 want=$3
+  if [[ $got == "$want" ]]; then
+    printf 'PASS %s\n' "$name"
+  else
+    printf 'FAIL %s\n  got %s, expected %s\n' "$name" "$got" "$want"
+    failures=$((failures + 1))
+  fi
+}
+classify_at() {
+  perl -e 'eval $ENV{CLASSIFY_PL} or die $@; my @a = map { $_ eq "-" ? undef : $_ } @ARGV; print classify(@a)' "$@"
+}
+selftest classify-early "$(classify_at 1 early 10 11 - -)" early
+selftest classify-early-diff-after "$(classify_at 1 early 10 11 12 -)" early
+selftest classify-ambiguous "$(classify_at 1 early 10 11 10.5 -)" ambiguous
+selftest classify-late "$(classify_at 1 late 10 11 9 -)" late
+selftest classify-too-late "$(classify_at 1 early 10 11 - 10.9)" too-late
+selftest classify-too-late-before-late "$(classify_at 1 late 10 11 9 10.9)" too-late
+selftest classify-undelivered "$(classify_at 0 - - - - -)" undelivered
+selftest verdict-early-pass "$(stress_verdict 'class=early; launcher: perl; running: x' pass)" PASS
+selftest verdict-early-fail "$(stress_verdict 'class=early; launcher: perl; running: x' fail)" FAIL
+selftest verdict-late-fail "$(stress_verdict 'class=late; launcher: perl; running: x' fail)" LATE-FAIL
+selftest verdict-ambiguous-pass "$(stress_verdict 'class=ambiguous; launcher: perl; running: x' pass)" AMBIGUOUS
+selftest verdict-ambiguous-fail "$(stress_verdict 'class=ambiguous; launcher: perl; running: x' fail)" AMBIGUOUS
+selftest verdict-too-late-fail "$(stress_verdict 'class=too-late; launcher: perl; running: x' fail)" TOO-LATE
+selftest verdict-undelivered "$(stress_verdict 'class=undelivered; launcher: -; running: ' fail)" UNDELIVERED
+selftest verdict-no-record "$(stress_verdict '' pass)" NO-RECORD
 
 run_case argument-missing 1 argument default
 run_case argument-extra 1 argument default 49 extra
@@ -516,5 +581,9 @@ LAUNCHER_AS_COMMAND=1 run_case bash-c-single-json-payload 0 payload 86400 49
 run_case untrusted-launcher 1 mismatch default 49
 INJECT_EXECUTION_STRING=1 run_case env-execution-string-ignored 1 mismatch default 49
 LAUNCHER_NAME=-s run_case option-like-launcher-name 1 mismatch default 49
-PRESET_SIGNAL_PARENT=1 SIGNAL_JITTER_MS=40 SIGNAL_BEFORE_DIFF=1 run_case preset-signal-parent-early-SIGINT-130 130 early-INT default 49
+# Markers set from outside to the launcher's real parent (this driver), with
+# and without a stale fd 9 pipe, must not skip the Perl signal parent.
+PRESET_HANDOFF=env SIGNAL_JITTER_MS=40 SIGNAL_BEFORE_DIFF=1 run_case preset-handoff-env-early-SIGINT-130 130 early-INT default 49
+PRESET_HANDOFF=fd SIGNAL_JITTER_MS=40 SIGNAL_BEFORE_DIFF=1 run_case preset-handoff-fd-early-SIGINT-130 130 early-INT default 49
+PRESET_HANDOFF=fd LAUNCHER_VIA_STDIN=1 run_case stdin-invocation-refused 1 stdin default 49
 [[ $failures -eq 0 ]]

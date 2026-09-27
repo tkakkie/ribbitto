@@ -22,8 +22,8 @@
 #   RIBBITTO_GROK_TEST_SETUP_DELAY  seconds (0–5, default 0) the supervisor's child
 #                             waits after creating Grok's process group; tests
 #                             only, to deliver signals during that setup
-#   RIBBITTO_GROK_SIGNAL_PARENT  set by the launcher to the Perl signal parent's pid
-#                             for its child shell; a value set by hand is ignored
+#   RIBBITTO_GROK_HANDOFF     internal: the Perl signal parent's token for its child
+#                             shell; honoured only with the matching fd 9 pipe
 #
 # Exit status: 0 on success; 124 on timeout; 130/143 when interrupted; Grok's
 # own status when Grok fails; 126 if Grok's process group could not be
@@ -38,41 +38,61 @@ for cmd in grok gh git jq perl; do
   command -v "$cmd" >/dev/null || die "$cmd is not installed or not on PATH"
 done
 
+# How this script was started decides how it can be re-run. Only `bash -c`
+# has `c` in $- and no source file; BASH_EXECUTION_STRING alone proves
+# nothing, because a file run inherits it from the environment. A file is
+# re-run after `--`, so a name that looks like an option (`-s`) stays a file.
+# Anything else (stdin) is refused.
+if [[ $- == *c* && -z ${BASH_SOURCE[0]:-} && -n ${BASH_EXECUTION_STRING:-} ]]; then
+  rerun=("$BASH" -c "$BASH_EXECUTION_STRING" "$0")
+elif [[ -n ${BASH_SOURCE[0]:-} && -f ${BASH_SOURCE[0]} ]]; then
+  rerun=("$BASH" -- "${BASH_SOURCE[0]}")
+else
+  die "run the launcher as documented (bash -c with the trusted blob, or as a file)"
+fi
+
 # Bash (3.2 and 5.3 alike) can lose a SIGINT that arrives while it forks a
 # command, and then carries on; SIGTERM is not lost (#84). So the rest of this
 # script runs in a child shell under a small Perl parent. The parent turns
 # INT into TERM for the shell, whose TERM trap cleans up, and then exits 130.
-# The child re-runs the same script: the same file, or with `bash -c`, the
-# same string, so it is still the trusted launcher. BASH_EXECUTION_STRING
-# alone does not prove `bash -c`: a file run inherits it from the
-# environment, and re-running that string would skip the file check below.
-# Only `bash -c` has `c` in $- and no source file. A file name is passed
-# after `--`, so one that looks like an option (`-s`) is still a file.
-# RIBBITTO_GROK_SIGNAL_PARENT holds the Perl parent's pid (exec keeps this
-# shell's pid), so only a shell whose parent really is that process skips the
-# wrapper; a value merely present in the environment does not.
-if [[ ${RIBBITTO_GROK_SIGNAL_PARENT:-} != "$PPID" ]]; then
-  export RIBBITTO_GROK_SIGNAL_PARENT=$$
-  if [[ $- == *c* && -z ${BASH_SOURCE[0]:-} && -n ${BASH_EXECUTION_STRING:-} ]]; then
-    set -- "$BASH" -c "$BASH_EXECUTION_STRING" "$0" "$@"
-  elif [[ -n ${BASH_SOURCE[0]:-} && -f ${BASH_SOURCE[0]} ]]; then
-    set -- "$BASH" -- "${BASH_SOURCE[0]}" "$@"
-  else
-    die "run the launcher as documented (bash -c with the trusted blob, or as a file)"
-  fi
+#
+# Handoff: the parent writes a fresh random token into a pipe that only its
+# child inherits, as fd 9, and puts the same token in RIBBITTO_GROK_HANDOFF.
+# The child counts as wrapped only if both match; a value merely present in
+# the environment, or any other fd 9, does not. Both are consumed here, so
+# nothing started later inherits them.
+handoff=""
+if [[ -n ${RIBBITTO_GROK_HANDOFF:-} && -p /dev/fd/9 ]]; then
+  IFS= read -r -t 1 -u 9 handoff || handoff=""
+  exec 9<&-
+fi
+expected=${RIBBITTO_GROK_HANDOFF:-}
+unset RIBBITTO_GROK_HANDOFF
+if [[ -z $handoff || $handoff != "$expected" ]]; then
   exec perl -e '
     use strict; use warnings;
-    use POSIX qw(:signal_h _exit);
+    use POSIX qw(:signal_h _exit dup2);
+    open my $random, "<", "/dev/urandom" or die "grok-review: /dev/urandom: $!\n";
+    read($random, my $bytes, 16) == 16 or die "grok-review: /dev/urandom: short read\n";
+    close $random;
+    my $token = unpack("H*", $bytes);
+    pipe(my $handoff, my $writer) or die "grok-review: pipe: $!\n";
+    print $writer "$token\n";
+    close $writer;
     my $block = POSIX::SigSet->new(SIGINT, SIGTERM);
     my $old = POSIX::SigSet->new;
     sigprocmask(SIG_BLOCK, $block, $old) or die "grok-review: sigprocmask: $!\n";
     my $pid = fork() // die "grok-review: fork failed: $!\n";
     if ($pid == 0) {
+      # dup2 clears close-on-exec, so the shell sees the pipe as fd 9.
+      dup2(fileno($handoff), 9) // _exit(126);
+      $ENV{RIBBITTO_GROK_HANDOFF} = $token;
       sigprocmask(SIG_SETMASK, $old);
       { no warnings qw(exec); exec { $ARGV[0] } @ARGV; }
       print STDERR "grok-review: cannot run $ARGV[0]: $!\n";
       _exit(127);
     }
+    close $handoff;
     my $code = 0;
     $SIG{INT}  = sub { $code ||= 130; kill "TERM", $pid };
     $SIG{TERM} = sub { $code ||= 143; kill "TERM", $pid };
@@ -81,7 +101,7 @@ if [[ ${RIBBITTO_GROK_SIGNAL_PARENT:-} != "$PPID" ]]; then
     do { $r = waitpid($pid, 0) } while ($r == -1 && $!{EINTR});
     my $status = $? & 127 ? 128 + ($? & 127) : $? >> 8;
     exit($code || $status);
-  ' "$@"
+  ' "${rerun[@]}" "$@"
 fi
 timeout=${RIBBITTO_GROK_TIMEOUT:-3600}
 # Bounded so Perl's alarm() can represent it (a huge value would wrap to 0,

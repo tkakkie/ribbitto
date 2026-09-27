@@ -165,6 +165,9 @@ run_case() {
     export PATH="$CASE_DIR/bin:$original_path" TMPDIR="$CASE_DIR/tmp" MODE="$mode"
     unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT RIBBITTO_GROK_TEST_SETUP_DELAY
     [[ -z ${SETUP_DELAY:-} ]] || export RIBBITTO_GROK_TEST_SETUP_DELAY="$SETUP_DELAY"
+    # A file run inherits BASH_EXECUTION_STRING from the environment; the
+    # launcher must not treat it as its own script.
+    [[ -z ${INJECT_EXECUTION_STRING:-} ]] || export BASH_EXECUTION_STRING='echo injected-string-ran >&2; exit 7'
     [[ $limit == default ]] || export RIBBITTO_GROK_TIMEOUT="$limit"
     if [[ ${LAUNCHER_AS_COMMAND:-0} == 1 ]]; then
       set -- -c "$(cat "$launcher")" grok-review "$@"
@@ -254,7 +257,10 @@ while (1) {
     elsif ($at eq 'gh') {
       # rand(0) means rand(1) in Perl, so no jitter must add nothing.
       $send_at //= time + ($jitter ? rand($jitter) : 0) if -e "$out/gh";
-      $target = $pid if defined $send_at && time >= $send_at;
+      # SIGNAL_BEFORE_DIFF sends at the latest when the prompt is read, the
+      # step before the diff, so the signal is early (committed cases).
+      $target = $pid if defined $send_at
+        && (time >= $send_at || ($ENV{SIGNAL_BEFORE_DIFF} && -e "$out/prompt-read"));
     }
     elsif (defined(my $child = setup_child())) {
       # Record the setup child too: if it is stopped before exec, the fake
@@ -293,6 +299,9 @@ DRIVER
   ) > "$CASE_DIR/out/stdout" 2> "$CASE_DIR/out/stderr"
   status=$?
   [[ $status == "$expected" ]] || fail "exit $status, expected $expected"
+  if [[ -n ${INJECT_EXECUTION_STRING:-} ]] && grep -Fq injected-string-ran "$CASE_DIR/out/stderr"; then
+    fail 'BASH_EXECUTION_STRING from the environment was run'
+  fi
   case $mode in
     argument) contains "$CASE_DIR/out/stderr" 'usage:'; absent gh; absent grok ;;
     validation) contains "$CASE_DIR/out/stderr" 'must be an integer from 1 to 86400'; absent gh; absent grok ;;
@@ -311,6 +320,8 @@ DRIVER
         fail 'signal arrived after cleanup had started'
       elif grep -q '^early;' "$CASE_DIR/out/delivered"; then
         absent grok; absent worktree-added
+      elif [[ -z ${GROK_TEST_STRESS:-} ]]; then
+        fail 'signal was sent late; this case needs an early signal'
       fi ;;
     setup-INT|setup-TERM)
       # The launcher stops the supervisor with TERM while its child is still in
@@ -380,12 +391,14 @@ DRIVER
 # cases. It repeats the early SIGINT for each invocation (file, bash -c) and
 # target (the launcher's own process, its whole process group), prints one
 # line per run and a summary per row, and identifies the harness, launcher
-# and Bash. Runs whose signal was not delivered, or arrived after cleanup had
-# started, are counted separately, never as a pass or a failure. Exit status:
-# 1 if any run failed; 3 if a row has fewer than a quarter of its runs as
-# verified early signals (too little evidence); 0 otherwise.
+# and Bash. Only early signals (sent before the diff step, so no Grok or
+# worktree may follow) count as evidence; late signals are reported
+# separately for reference. Runs whose signal was not delivered, or arrived
+# after cleanup had started, are counted apart, never as a pass or a failure.
+# Exit status: 1 if any early run failed; 3 if a row has fewer than a quarter
+# of its runs as early signals (too little evidence); 0 otherwise.
 stress() {
-  local runs=$1 inv tgt out err verdict detail pass fail skipped early late i as_command incomplete=0
+  local runs=$1 inv tgt out err verdict detail early_pass early_fail late_pass late_fail skipped i as_command incomplete=0
   [[ $runs =~ ^[1-9][0-9]*$ ]] || { echo 'GROK_TEST_STRESS must be a positive integer' >&2; exit 2; }
   err=$(mktemp "${TMPDIR:-/tmp}/grok-review-stress.XXXXXX") || exit 1
   printf 'harness %s (blob %s); launcher %s (blob %s); bash %s (%s); %s runs per row; jitter %s ms\n' \
@@ -396,7 +409,7 @@ stress() {
     as_command=0
     [[ $inv == file ]] || as_command=1
     for tgt in process group; do
-      pass=0 fail=0 skipped=0 early=0 late=0
+      early_pass=0 early_fail=0 late_pass=0 late_fail=0 skipped=0
       for ((i = 1; i <= runs; i++)); do
         out=$(LAUNCHER_AS_COMMAND=$as_command SIGNAL_TARGET=$tgt SIGNAL_JITTER_MS=${SIGNAL_JITTER_MS:-60} \
           run_case "stress-$inv-$tgt-$i" 130 early-INT default 49 2>"$err")
@@ -406,21 +419,25 @@ stress() {
         elif [[ $detail == *'too late'* ]]; then
           verdict=TOO-LATE; skipped=$((skipped + 1))
         elif [[ $out == *'PASS '* ]]; then
-          verdict=PASS; pass=$((pass + 1))
-          if [[ $detail == early* ]]; then early=$((early + 1)); else late=$((late + 1)); fi
+          verdict=PASS
+          if [[ $detail == early* ]]; then early_pass=$((early_pass + 1)); else late_pass=$((late_pass + 1)); fi
         else
-          verdict=FAIL; fail=$((fail + 1))
           detail="$detail| $(grep -v '^grok-review:' "$err" | head -n 3 | tr '\n' ' ')"
+          if [[ $detail == early* ]]; then
+            verdict=FAIL; early_fail=$((early_fail + 1))
+          else
+            verdict=LATE-FAIL; late_fail=$((late_fail + 1))
+          fi
         fi
         printf '%s %s %s #%s: %s\n' "$verdict" "$inv" "$tgt" "$i" "$detail"
       done
-      printf 'ROW %-6s %-7s pass=%s (early %s, late %s) fail=%s not-counted=%s\n' \
-        "$inv" "$tgt" "$pass" "$early" "$late" "$fail" "$skipped"
-      if ((early * 4 < runs)); then
-        echo "ROW $inv $tgt INCOMPLETE: fewer than a quarter of the runs were verified early signals"
+      printf 'ROW %-6s %-7s early: pass=%s fail=%s | late (reference): pass=%s fail=%s | not counted=%s\n' \
+        "$inv" "$tgt" "$early_pass" "$early_fail" "$late_pass" "$late_fail" "$skipped"
+      if (((early_pass + early_fail) * 4 < runs)); then
+        echo "ROW $inv $tgt INCOMPLETE: fewer than a quarter of the runs were early signals"
         incomplete=1
       fi
-      failures=$((failures + fail))
+      failures=$((failures + early_fail))
     done
   done
   rm -f "$err"
@@ -448,11 +465,12 @@ run_case SIGINT-130 130 INT default 49
 run_case SIGTERM-143 143 TERM default 49
 run_case prune-success-to-1 1 prune-success default 49
 run_case early-exit-keeps-42 42 early-exit default 49
-# Early SIGINT (#84), spread over the forks after gh, to the launcher's own
-# process and to its process group (Ctrl-C), in both invocations.
-SIGNAL_JITTER_MS=40 run_case early-SIGINT-130 130 early-INT default 49
-SIGNAL_JITTER_MS=40 SIGNAL_TARGET=group run_case early-SIGINT-group-130 130 early-INT default 49
-SIGNAL_JITTER_MS=40 LAUNCHER_AS_COMMAND=1 run_case bash-c-early-SIGINT-130 130 early-INT default 49
+# Early SIGINT (#84), spread over the forks between gh and the prompt step
+# and always before the diff, to the launcher's own process and to its
+# process group (Ctrl-C), in both invocations.
+SIGNAL_JITTER_MS=40 SIGNAL_BEFORE_DIFF=1 run_case early-SIGINT-130 130 early-INT default 49
+SIGNAL_JITTER_MS=40 SIGNAL_BEFORE_DIFF=1 SIGNAL_TARGET=group run_case early-SIGINT-group-130 130 early-INT default 49
+SIGNAL_JITTER_MS=40 SIGNAL_BEFORE_DIFF=1 LAUNCHER_AS_COMMAND=1 run_case bash-c-early-SIGINT-130 130 early-INT default 49
 run_case early-SIGTERM-143 143 early-TERM default 49
 SETUP_DELAY=2 run_case setup-SIGINT-130 130 setup-INT default 49
 SETUP_DELAY=2 run_case setup-SIGTERM-143 143 setup-TERM default 49
@@ -466,4 +484,5 @@ run_case single-json-payload 0 payload 86400 49
 LAUNCHER_AS_COMMAND=1 run_case bash-c-symlink-before-prompt-diff-worktree 1 symlink default 49
 LAUNCHER_AS_COMMAND=1 run_case bash-c-single-json-payload 0 payload 86400 49
 run_case untrusted-launcher 1 mismatch default 49
+INJECT_EXECUTION_STRING=1 run_case env-execution-string-ignored 1 mismatch default 49
 [[ $failures -eq 0 ]]

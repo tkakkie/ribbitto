@@ -43,13 +43,18 @@ done
 # script runs in a child shell under a small Perl parent. The parent turns
 # INT into TERM for the shell, whose TERM trap cleans up, and then exits 130.
 # The child re-runs the same script: the same file, or with `bash -c`, the
-# same string (BASH_EXECUTION_STRING), so it is still the trusted launcher.
+# same string, so it is still the trusted launcher. BASH_EXECUTION_STRING
+# alone does not prove `bash -c`: a file run inherits it from the
+# environment, and re-running that string would skip the file check below.
+# Only `bash -c` has `c` in $- and no source file.
 if [[ -z ${RIBBITTO_GROK_SIGNAL_PARENT:-} ]]; then
   export RIBBITTO_GROK_SIGNAL_PARENT=1
-  if [[ -n ${BASH_EXECUTION_STRING:-} ]]; then
+  if [[ $- == *c* && -z ${BASH_SOURCE[0]:-} && -n ${BASH_EXECUTION_STRING:-} ]]; then
     set -- "$BASH" -c "$BASH_EXECUTION_STRING" "$0" "$@"
+  elif [[ -n ${BASH_SOURCE[0]:-} && -f ${BASH_SOURCE[0]} ]]; then
+    set -- "$BASH" "${BASH_SOURCE[0]}" "$@"
   else
-    set -- "$BASH" "$0" "$@"
+    die "run the launcher as documented (bash -c with the trusted blob, or as a file)"
   fi
   exec perl -e '
     use strict; use warnings;

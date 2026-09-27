@@ -52,6 +52,15 @@ check:
 		echo "$$unformatted"; \
 		exit 1; \
 	fi
+	@set -eu; missing=$$(find internal -type f -name '*.go' ! -name '*_test.go' ! -path '*/testdata/*' \
+		| sed 's|/[^/]*$$||' | sort -u | while IFS= read -r dir; do \
+			if [ ! -f "$$dir/doc.go" ]; then printf '%s\n' "$$dir"; fi; \
+		done); \
+	if [ -n "$$missing" ]; then \
+		echo "These internal package directories are missing doc.go:"; \
+		echo "$$missing"; \
+		exit 1; \
+	fi
 	go vet ./...
 	$(MAKE) lint
 	go build ./...

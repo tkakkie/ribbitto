@@ -30,11 +30,17 @@ fails `make check`:
 
 - each layer's imports **within `internal/`** (other imports from this module
   are listed above by convention, not enforced per layer);
+- `domain`, `app`, `infra/postgres` and `realtime` cannot import
+  `github.com/a-h/templ` (including sub-packages) or `html/template`;
 - `db/migrations` may be imported only by `internal/infra/postgres` and
   `cmd/ribbitto` — **this also applies to test files**;
 - otherwise test files may import any package.
 
 This section and `.golangci.yml` must agree; change them together.
+
+`make check` also requires a `doc.go` in every directory under `internal/`
+that contains non-test Go files, including generated packages, as specified
+in `AGENTS.md`. Fixtures under `testdata/` are excluded.
 
 ```mermaid
 flowchart LR

@@ -189,13 +189,16 @@ exits 0.)
   seconds (1–86400, default 1200; exit 124), and removes the worktree and
   temporary files on success, failure, timeout, Ctrl-C (130) and `TERM`
   (143), reporting any cleanup failure. When Grok itself fails, the script
-  exits with Grok's status.
+  exits with Grok's status; 126 means Grok's process group could not be
+  created, so Grok never started.
 - The title, description, base and head come from one `gh pr view`; the
   diff is computed locally from that base and head, so everything Grok sees
   describes the same commit even if the PR is pushed in the meantime.
 - `RIBBITTO_GROK_MODEL` picks a model (`grok models` lists them).
   `RIBBITTO_GROK_TRUSTED_REF` changes where the launcher and prompt must
   come from; use it only to test a PR that edits them.
+  `RIBBITTO_GROK_TEST_SETUP_DELAY` exists only for
+  `scripts/ai/grok-review_test.sh`.
 - Claude posts the report as a PR comment headed
   `**Adversarial review — Grok** (at <SHA>)` and adds, for each finding,
   *valid* (fixed in the PR or tracked as an issue) or *false positive* with

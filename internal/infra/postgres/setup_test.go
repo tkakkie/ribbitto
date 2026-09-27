@@ -51,7 +51,7 @@ func TestSetup(t *testing.T) {
 				t.Fatalf("rejected token: %v", err)
 			}
 			counts(0)
-			for _, tc := range []struct{ slug, email, field string }{{"example", "A@b", "email"}, {"Bad", "a@b", "slug"}} {
+			for _, tc := range []struct{ slug, email, field string }{{"example", "A@b", "email"}, {"example", "e\u0301@b", "email"}, {"Bad", "a@b", "slug"}} {
 				_, err := store.Create(ctx, "Example", tc.slug, tc.email, "Owner", "$argon2id$test")
 				var fields setup.ValidationErrors
 				if !errors.As(err, &fields) || fields[tc.field] == nil {

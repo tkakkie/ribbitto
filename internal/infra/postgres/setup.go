@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -60,12 +61,14 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 			if open, checkErr := s.Open(ctx); checkErr == nil && !open {
 				return setup.Result{}, setup.ErrCompleted
 			}
-			switch pgErr.ConstraintName {
-			case "setup_pkey":
+			// Match by column prefix: PostgreSQL names a column's second
+			// CHECK "…_check1" (account.email has two), and more may follow.
+			switch name := pgErr.ConstraintName; {
+			case name == "setup_pkey":
 				return setup.Result{}, setup.ErrCompleted
-			case "account_email_key", "account_email_check":
+			case strings.HasPrefix(name, "account_email_"):
 				return setup.Result{}, setup.ValidationErrors{"email": errors.New("email is unavailable or invalid")}
-			case "organization_slug_key", "organization_slug_check":
+			case strings.HasPrefix(name, "organization_slug_"):
 				return setup.Result{}, setup.ValidationErrors{"slug": errors.New("slug is unavailable or invalid")}
 			}
 		}

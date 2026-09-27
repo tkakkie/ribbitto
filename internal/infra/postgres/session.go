@@ -68,7 +68,7 @@ func (s *SessionStore) SessionAccount(ctx context.Context, tokenHash []byte, now
 	if err != nil {
 		return domain.Account{}, fmt.Errorf("selecting session: %w", err)
 	}
-	return domain.Account{ID: row.Account.ID.Bytes, Email: row.Account.Email, DisplayName: row.Account.DisplayName}, nil
+	return domain.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName}, nil
 }
 
 // DeleteSession deletes the session with this token hash, if any.

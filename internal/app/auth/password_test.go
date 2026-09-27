@@ -180,6 +180,31 @@ func TestCancelledContextWithFreeSlot(t *testing.T) {
 	}
 }
 
+func TestWaitExpiredWithFreeSlot(t *testing.T) {
+	t.Parallel()
+	h, err := newHasher(1, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	calls := 0
+	// The first reading sets the deadline; every later one is past it, as
+	// when the goroutine resumes late and finds a slot free.
+	h.now = func() time.Time {
+		calls++
+		if calls == 1 {
+			return start
+		}
+		return start.Add(time.Second)
+	}
+	if _, err := h.Hash(t.Context(), "pw"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("Hash: want ErrBusy, got %v", err)
+	}
+	if len(h.slots) != 0 {
+		t.Fatal("slot still held after an expired wait")
+	}
+}
+
 // Not parallel: it measures the bytes allocated while parse runs, and
 // parallel tests stay paused until the sequential ones have finished.
 func TestParseBoundsAllocation(t *testing.T) {

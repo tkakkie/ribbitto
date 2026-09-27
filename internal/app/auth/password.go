@@ -58,6 +58,7 @@ var ErrInvalidHash = errors.New("invalid password hash")
 type Hasher struct {
 	slots chan struct{}
 	wait  time.Duration
+	now   func() time.Time
 	dummy string
 }
 
@@ -68,7 +69,7 @@ func NewHasher() (*Hasher, error) {
 }
 
 func newHasher(slots int, wait time.Duration) (*Hasher, error) {
-	h := &Hasher{slots: make(chan struct{}, slots), wait: wait}
+	h := &Hasher{slots: make(chan struct{}, slots), wait: wait, now: time.Now}
 	// The dummy hash protects an unknown account's sign-in with the same
 	// work as a real one, so it must use the current parameters.
 	secret := make([]byte, 32)
@@ -119,6 +120,7 @@ func (h *Hasher) acquire(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("%w: %w", ErrBusy, err)
 	}
+	deadline := h.now().Add(h.wait)
 	timer := time.NewTimer(h.wait)
 	defer timer.Stop()
 	select {
@@ -128,11 +130,16 @@ func (h *Hasher) acquire(ctx context.Context) error {
 	case <-timer.C:
 		return ErrBusy
 	}
-	// select picks at random when a slot frees up just as the context ends,
-	// so recheck: a cancelled caller must not start Argon2id.
+	// select picks at random among ready cases, and this goroutine may run
+	// late: recheck so that a caller past its context or its wait never
+	// starts Argon2id.
 	if err := ctx.Err(); err != nil {
 		h.release()
 		return fmt.Errorf("%w: %w", ErrBusy, err)
+	}
+	if !h.now().Before(deadline) {
+		h.release()
+		return ErrBusy
 	}
 	return nil
 }

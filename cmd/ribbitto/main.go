@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
@@ -80,38 +82,16 @@ func serve(ctx context.Context, databaseURL string) error {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
 	defer pool.Close()
-	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
-	// One hasher for the whole process: its slots are the cap on concurrent
-	// Argon2id work (DECISIONS.md 10).
-	hasher, err := auth.NewHasher()
-	if err != nil {
-		return err
-	}
-	var setupService web.SetupService
-	if token != "" {
-		setupService = setup.New(postgres.NewSetupStore(pool), hasher, token)
-	}
-	// Deferred after pool.Close, so it runs first: the clean-up must stop and
-	// return its connection on every exit path, or Close would wait for it.
-	stopCleanup := startSessionCleanup(ctx, sessions)
-	defer stopCleanup()
-
-	catalogues, err := i18n.New(slog.Default())
-	if err != nil {
-		return err
-	}
-	handler, err := web.NewHandler(os.Getenv("RIBBITTO_DEV_ASSETS"), catalogues, web.Services{
-		Sessions:      sessions,
-		SignIn:        auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
-		Setup:         setupService,
-		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, enabled),
-		SetupSessions: sessions,
-		Authz:         authz.New(postgres.NewAuthzStore(pool)),
-		Limits:        middleware.NewAuthLimits(trusted, time.Now),
+	handler, sessions, err := buildHandler(pool, handlerConfig{
+		setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
+		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"),
 	})
 	if err != nil {
 		return err
 	}
+	// Stop cleanup before closing its pool, including on listener failure.
+	stopCleanup := startSessionCleanup(ctx, sessions)
+	defer stopCleanup()
 
 	srv := &http.Server{
 		Addr:    addr,
@@ -143,6 +123,46 @@ func serve(ctx context.Context, databaseURL string) error {
 		return err
 	}
 	return nil
+}
+
+type handlerConfig struct {
+	setupToken, devAssets string
+	signupEnabled         bool
+	trustedProxies        []netip.Prefix
+}
+
+// buildHandler shares production wiring with the HTTPS acceptance test.
+func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth.Sessions, error) {
+	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
+	// One hasher for the whole process: its slots are the cap on concurrent
+	// Argon2id work (DECISIONS.md 10).
+	hasher, err := auth.NewHasher()
+	if err != nil {
+		return nil, nil, err
+	}
+	var setupService web.SetupService
+	if config.setupToken != "" {
+		setupService = setup.New(postgres.NewSetupStore(pool), hasher, config.setupToken)
+	}
+
+	catalogues, err := i18n.New(slog.Default())
+	if err != nil {
+		return nil, nil, err
+	}
+	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
+		Sessions:      sessions,
+		SignIn:        auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
+		Setup:         setupService,
+		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, config.signupEnabled),
+		SetupSessions: sessions,
+		Authz:         authz.New(postgres.NewAuthzStore(pool)),
+		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return handler, sessions, nil
 }
 
 func setupToken() (string, error) {

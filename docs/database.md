@@ -29,6 +29,10 @@ rebuilding; a transaction publishes the final name and makes the template
 unconnectable. Every call checks the template under the lock without Go
 global caching. Cleanup closes the pool before dropping the database with
 `WITH (FORCE)`. `pgtest.NewEmpty(t)` clones `template0` for migration tests.
+The `cmd/ribbitto` acceptance tests also start from `pgtest.NewEmpty`, apply
+`postgres.Migrate` as the CLI does, and serve the shared production handler
+on HTTPS with cookie jars. They verify the account flow, request protections,
+organisation isolation and a ten-client setup race.
 Do not point this variable at a production server.
 Tests skip only when the variable is unset; an empty or broken value fails.
 `RIBBITTO_REQUIRE_DB=1` also makes an unset URL fail, as required in CI.

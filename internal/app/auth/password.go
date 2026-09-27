@@ -38,6 +38,10 @@ const (
 	maxBytes     = 64
 	maxSlots     = 4
 	slotWait     = 5 * time.Second
+	// maxEncodedLen is the length of the longest string parse accepts:
+	// "$argon2id$v=19$m=65536,t=10,p=4$" plus 64-byte salt and key in base64.
+	// Checking it first keeps a huge stored value from being split or decoded.
+	maxEncodedLen = 205
 )
 
 // ErrBusy means every hashing slot stayed taken until the wait ended or the
@@ -112,16 +116,25 @@ func (h *Hasher) VerifyDummy(ctx context.Context, password string) error {
 }
 
 func (h *Hasher) acquire(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("%w: %w", ErrBusy, err)
+	}
 	timer := time.NewTimer(h.wait)
 	defer timer.Stop()
 	select {
 	case h.slots <- struct{}{}:
-		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("%w: %w", ErrBusy, ctx.Err())
 	case <-timer.C:
 		return ErrBusy
 	}
+	// select picks at random when a slot frees up just as the context ends,
+	// so recheck: a cancelled caller must not start Argon2id.
+	if err := ctx.Err(); err != nil {
+		h.release()
+		return fmt.Errorf("%w: %w", ErrBusy, err)
+	}
+	return nil
 }
 
 func (h *Hasher) release() { <-h.slots }
@@ -151,6 +164,9 @@ func format(p params) string {
 // parse accepts only the canonical form that format produces, so there is
 // exactly one spelling of each hash to reason about.
 func parse(stored string) (params, error) {
+	if len(stored) > maxEncodedLen {
+		return params{}, ErrInvalidHash
+	}
 	parts := strings.Split(stored, "$")
 	if len(parts) != 6 || parts[0] != "" || parts[1] != "argon2id" ||
 		parts[2] != "v="+strconv.Itoa(argon2.Version) {

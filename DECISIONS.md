@@ -112,12 +112,14 @@ PHC string. Verification accepts other parameters only within fixed bounds
 hashing in a process shares `min(GOMAXPROCS, 4)` slots; a caller waits at
 most 5 s for one, otherwise the request fails with 503.
 **Why:** these are OWASP's minimum recommended parameters, cheap enough for a
-small VPS; with at most four slots, Argon2id working memory stays around
-76 MiB (256 MiB in the worst case the bounds allow), so sign-in traffic
-cannot exhaust memory or CPU. The PHC string records the parameters, so
+small VPS. The slots bound concurrent Argon2id work: its working memory is
+about 76 MiB with the defaults and 256 MiB in the worst case the bounds
+allow. These are estimates for Argon2id alone, not ceilings for the whole
+process, and sustained traffic can still keep the CPU busy (rate limits,
+#33, address that). The PHC string records the parameters, so
 they can be raised later without invalidating stored hashes; the bounds
-keep a corrupt or planted hash from panicking the process or allocating
-unbounded memory.
+(and a length check before parsing) keep a corrupt or planted hash from
+panicking the process or allocating unbounded memory.
 **Considered:** RFC 9106's 64 MiB profile (too much memory per hash for a
 small server with several sign-ins at once); bcrypt (truncates passwords at
 72 bytes and is not memory-hard); no cap (a burst of sign-ins could exhaust

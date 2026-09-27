@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -152,6 +153,63 @@ func TestBusy(t *testing.T) {
 	h.release()
 	if ok, err := h.Verify(t.Context(), "pw", stored); !ok || err != nil {
 		t.Fatalf("after release: Verify = %v, %v", ok, err)
+	}
+}
+
+func TestCancelledContextWithFreeSlot(t *testing.T) {
+	t.Parallel()
+	h := newTestHasher(t)
+	stored := hashWith("pw", 8*1024, 1, 1, 16, 16)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	// Run many times: a race between a free slot and a done context would
+	// show up as an occasional success.
+	for range 100 {
+		if _, err := h.Hash(ctx, "pw"); !errors.Is(err, ErrBusy) {
+			t.Fatalf("Hash: want ErrBusy, got %v", err)
+		}
+		if _, err := h.Verify(ctx, "pw", stored); !errors.Is(err, ErrBusy) {
+			t.Fatalf("Verify: want ErrBusy, got %v", err)
+		}
+		if err := h.VerifyDummy(ctx, "pw"); !errors.Is(err, ErrBusy) {
+			t.Fatalf("VerifyDummy: want ErrBusy, got %v", err)
+		}
+	}
+	if len(h.slots) != 0 {
+		t.Fatalf("%d slots still held", len(h.slots))
+	}
+}
+
+// Not parallel: it measures the bytes allocated while parse runs, and
+// parallel tests stay paused until the sequential ones have finished.
+func TestParseBoundsAllocation(t *testing.T) {
+	longest := format(params{maxMemoryKiB, maxTime, maxThreads, make([]byte, maxBytes), make([]byte, maxBytes)})
+	if len(longest) != maxEncodedLen {
+		t.Fatalf("maxEncodedLen = %d, longest accepted hash has %d bytes", maxEncodedLen, len(longest))
+	}
+	if _, err := parse(longest); err != nil {
+		t.Fatalf("longest valid hash rejected: %v", err)
+	}
+	const huge = 16 << 20
+	for _, tt := range []struct{ name, stored string }{
+		{"one byte too long", longest + "A"},
+		{"huge salt", "$argon2id$v=19$m=8192,t=1,p=1$" + strings.Repeat("A", huge) + "$" + strings.Repeat("A", 22)},
+		{"huge salt of newlines", "$argon2id$v=19$m=8192,t=1,p=1$" + strings.Repeat("\n", huge) + "$" + strings.Repeat("A", 22)},
+		{"huge key", "$argon2id$v=19$m=8192,t=1,p=1$" + strings.Repeat("A", 22) + "$" + strings.Repeat("A", huge)},
+		{"many delimiters", strings.Repeat("$", huge)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var before, after runtime.MemStats
+			runtime.ReadMemStats(&before)
+			_, err := parse(tt.stored)
+			runtime.ReadMemStats(&after)
+			if !errors.Is(err, ErrInvalidHash) {
+				t.Fatalf("parse: want ErrInvalidHash, got %v", err)
+			}
+			if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 64<<10 {
+				t.Fatalf("parse allocated %d bytes for a %d-byte input", allocated, len(tt.stored))
+			}
+		})
 	}
 }
 

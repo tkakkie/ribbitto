@@ -1,0 +1,42 @@
+package main
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/domain"
+)
+
+// blockingStore's clean-up blocks until its context ends, like a query
+// waiting on a lock.
+type blockingStore struct{ started chan struct{} }
+
+func (blockingStore) CreateSession(context.Context, []byte, domain.ID, time.Time) error { return nil }
+func (blockingStore) SessionAccount(context.Context, []byte, time.Time) (domain.Account, error) {
+	return domain.Account{}, auth.ErrNoSession
+}
+func (blockingStore) DeleteSession(context.Context, []byte) error { return nil }
+func (s blockingStore) DeleteExpiredSessions(ctx context.Context, _ time.Time) error {
+	close(s.started)
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func TestSessionCleanupStops(t *testing.T) {
+	store := blockingStore{started: make(chan struct{})}
+	// The parent context stays alive, as when serve returns a listener error.
+	stop := startSessionCleanup(context.Background(), auth.NewSessions(store, time.Now))
+	<-store.started
+	stopped := make(chan struct{})
+	go func() {
+		stop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("stop did not cancel a blocked clean-up")
+	}
+}

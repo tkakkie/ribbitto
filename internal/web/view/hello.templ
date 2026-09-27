@@ -24,7 +24,7 @@ templ Hello(stylesheetURL string, viewer Viewer) {
 					@SignOutButton()
 				</div>
 			} else {
-				<a href="/signin" class="mt-6 self-start text-body font-semibold text-brand underline">{ i18n.T(ctx, "hello.sign_in") }</a>
+				<a href="/signin" class="mt-6 inline-flex min-h-11 items-center self-start text-body font-semibold text-brand underline">{ i18n.T(ctx, "hello.sign_in") }</a>
 			}
 		</main>
 	}
@@ -34,6 +34,6 @@ templ Hello(stylesheetURL string, viewer Viewer) {
 // a POST.
 templ SignOutButton() {
 	<form method="post" action="/signout">
-		<button type="submit" class="rounded-md border border-border-strong px-3 py-1 text-body text-fg">{ i18n.T(ctx, "signout.submit") }</button>
+		<button type="submit" class="min-h-11 rounded-md border border-border-strong px-3 py-1 text-body text-fg">{ i18n.T(ctx, "signout.submit") }</button>
 	</form>
 }

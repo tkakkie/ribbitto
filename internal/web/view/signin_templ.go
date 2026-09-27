@@ -113,7 +113,7 @@ func SignIn(stylesheetURL string, form SignInForm) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" autocomplete=\"username\" required class=\"rounded-md border border-border-strong bg-input px-3 py-2 text-body text-fg\"></label> <label class=\"flex flex-col gap-1 text-body text-fg\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" autocomplete=\"username\" required class=\"min-h-11 rounded-md border border-border-strong bg-input px-3 py-2 text-body text-fg\"></label> <label class=\"flex flex-col gap-1 text-body text-fg\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -126,14 +126,14 @@ func SignIn(stylesheetURL string, form SignInForm) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, " <input type=\"password\" name=\"password\" autocomplete=\"current-password\" required class=\"rounded-md border border-border-strong bg-input px-3 py-2 text-body text-fg\"></label> <button type=\"submit\" class=\"rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, " <input type=\"password\" name=\"password\" autocomplete=\"current-password\" required class=\"min-h-11 rounded-md border border-border-strong bg-input px-3 py-2 text-body text-fg\"></label> <button type=\"submit\" class=\"min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "signin.submit"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signin.templ`, Line: 29, Col: 132}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signin.templ`, Line: 29, Col: 141}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {

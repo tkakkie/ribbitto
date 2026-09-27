@@ -149,8 +149,9 @@ from email or chat), and cross-origin POSTs are stopped separately (below).
 `POST /signin` normalises the email and looks the account up. An unknown
 email still runs one Argon2id verification against a dummy hash made with
 the current parameters, and gets the same page, status and message as a
-wrong password, so neither the response nor its timing tells which
-accounts exist. On success the session named by the incoming cookie, if
+wrong password: the response does not tell which accounts exist, and the
+dummy verification makes timing-based discovery much harder (timing is not
+identical for a stored hash with other parameters). On success the session named by the incoming cookie, if
 any, is deleted and a new one is created — a token that existed before
 sign-in never becomes signed in (session fixation) — and the browser is
 redirected to `/` with 303. `POST /signout` deletes the session row, clears

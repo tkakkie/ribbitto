@@ -35,6 +35,43 @@ pr=$1
 for cmd in grok gh git jq perl; do
   command -v "$cmd" >/dev/null || die "$cmd is not installed or not on PATH"
 done
+
+# Bash (3.2 and 5.3 alike) can lose a SIGINT that arrives while it forks a
+# command, and then carries on; SIGTERM is not lost (#84). So the rest of this
+# script runs in a child shell under a small Perl parent. The parent turns
+# INT into TERM for the shell, whose TERM trap cleans up, and then exits 130.
+# The child re-runs the same script: the same file, or with `bash -c`, the
+# same string (BASH_EXECUTION_STRING), so it is still the trusted launcher.
+if [[ -z ${RIBBITTO_GROK_SIGNAL_PARENT:-} ]]; then
+  export RIBBITTO_GROK_SIGNAL_PARENT=1
+  if [[ -n ${BASH_EXECUTION_STRING:-} ]]; then
+    set -- "$BASH" -c "$BASH_EXECUTION_STRING" "$0" "$@"
+  else
+    set -- "$BASH" "$0" "$@"
+  fi
+  exec perl -e '
+    use strict; use warnings;
+    use POSIX qw(:signal_h _exit);
+    my $block = POSIX::SigSet->new(SIGINT, SIGTERM);
+    my $old = POSIX::SigSet->new;
+    sigprocmask(SIG_BLOCK, $block, $old) or die "grok-review: sigprocmask: $!\n";
+    my $pid = fork() // die "grok-review: fork failed: $!\n";
+    if ($pid == 0) {
+      sigprocmask(SIG_SETMASK, $old);
+      { no warnings qw(exec); exec { $ARGV[0] } @ARGV; }
+      print STDERR "grok-review: cannot run $ARGV[0]: $!\n";
+      _exit(127);
+    }
+    my $code = 0;
+    $SIG{INT}  = sub { $code ||= 130; kill "TERM", $pid };
+    $SIG{TERM} = sub { $code ||= 143; kill "TERM", $pid };
+    sigprocmask(SIG_SETMASK, $old);
+    my $r;
+    do { $r = waitpid($pid, 0) } while ($r == -1 && $!{EINTR});
+    my $status = $? & 127 ? 128 + ($? & 127) : $? >> 8;
+    exit($code || $status);
+  ' "$@"
+fi
 timeout=${RIBBITTO_GROK_TIMEOUT:-3600}
 # Bounded so Perl's alarm() can represent it (a huge value would wrap to 0,
 # which disables the deadline).
@@ -61,8 +98,8 @@ if [[ -f $self ]]; then
   [[ $(git hash-object "$self") == "$trusted" ]] \
     || die "refusing to run: $self differs from $trusted_ref:scripts/ai/grok-review.sh. Run: launcher=\$(git show $trusted_ref:scripts/ai/grok-review.sh) && bash -c \"\$launcher\" grok-review $pr"
 fi
-tmp=$(mktemp -d "${TMPDIR:-/tmp}/grok-review.XXXXXX")
-worktree="$tmp/worktree"
+tmp=""
+worktree=""
 supervisor=""
 
 # Runs on every exit path we can catch (success, failure, timeout, INT, TERM;
@@ -70,7 +107,9 @@ supervisor=""
 # does not hide, cleanup failures.
 cleanup() {
   local status=$?
-  trap - EXIT INT TERM
+  # A second Ctrl-C or TERM must not stop the cleanup halfway (#84).
+  trap '' INT TERM
+  trap - EXIT
   if [[ -n $supervisor ]] && kill -0 "$supervisor" 2>/dev/null; then
     kill -TERM "$supervisor" 2>/dev/null || true
     wait "$supervisor" 2>/dev/null || true
@@ -83,7 +122,7 @@ cleanup() {
     echo "grok-review: 'git worktree prune' failed; stale worktree metadata may remain" >&2
     [[ $status -eq 0 ]] && status=1
   fi
-  if ! rm -rf "$tmp"; then
+  if [[ -n $tmp ]] && ! rm -rf "$tmp"; then
     echo "grok-review: could not remove $tmp" >&2
     [[ $status -eq 0 ]] && status=1
   fi
@@ -92,6 +131,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/grok-review.XXXXXX")
+worktree="$tmp/worktree"
 
 # One API call gives a consistent snapshot of the PR: title, description and
 # the exact base and head commits. The diff is then computed locally from

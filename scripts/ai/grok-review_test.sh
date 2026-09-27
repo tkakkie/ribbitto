@@ -88,6 +88,11 @@ case "$*" in
     touch "$CASE_DIR/out/worktree-removed" ;;
   'worktree prune')
     touch "$CASE_DIR/out/prune"
+    # Like git, forget a registered worktree whose directory is gone (an
+    # interrupted `worktree add`).
+    if [[ -f $CASE_DIR/out/worktree-active && ! -d $(cat "$CASE_DIR/out/worktree-active") ]]; then
+      rm "$CASE_DIR/out/worktree-active"
+    fi
     [[ $MODE != prune-* ]] || exit 19 ;;
   *) echo "unexpected git: $*" >&2; exit 90 ;;
 esac
@@ -171,6 +176,7 @@ run_case() {
     perl - "$BASH" "$@" <<'DRIVER'
 use strict; use warnings;
 use POSIX qw(:sys_wait_h setpgid);
+use Time::HiRes qw(time);
 my $pid = fork() // die $!;
 if (!$pid) {
   setpgid(0, 0) or die $!;
@@ -186,20 +192,41 @@ my $out = "$ENV{CASE_DIR}/out";
 # inside process-group setup (RIBBITTO_GROK_TEST_SETUP_DELAY). setup-eof
 # kills that child, so the supervisor sees EOF instead of a confirmation.
 my ($signal, $at) = ('', '');
+# SIGNAL_JITTER_MS spreads an early signal over the next few milliseconds
+# after the marker, where the launcher forks one short command after another:
+# the window in which Bash has been seen to lose SIGINT (#84).
+my $jitter = ($ENV{SIGNAL_JITTER_MS} // 0) / 1000;
+my $send_at;
 if ($ENV{MODE} =~ /^(INT|TERM)$/) { ($signal, $at) = ($1, 'ready') }
 elsif ($ENV{MODE} =~ /^early-(INT|TERM)$/) { ($signal, $at) = ($1, 'gh') }
 elsif ($ENV{MODE} =~ /^setup-(INT|TERM)$/) { ($signal, $at) = ($1, 'setup') }
 elsif ($ENV{MODE} eq 'setup-eof') { ($signal, $at) = ('KILL', 'setup') }
-# The supervisor is the launcher's `perl -e` child; before it execs Grok, its
-# own child is still `perl -e` too.
-sub setup_child {
+# SIGNAL_TARGET=group sends the signal to the launcher's whole process group,
+# as Ctrl-C does; otherwise only to the launcher's own process.
+my $group = ($ENV{SIGNAL_TARGET} // '') eq 'group';
+# The launcher's descendants, with their parents and command lines. The
+# launcher may be a Perl signal parent around the shell (#84), so search the
+# whole tree rather than direct children.
+sub tree {
   my (%parent, %command);
   for (`ps -axo pid=,ppid=,command=`) {
     my ($p, $pp, $c) = /^\s*(\d+)\s+(\d+)\s+(.*)$/ or next;
     ($parent{$p}, $command{$p}) = ($pp, $c);
   }
-  for my $sup (grep { $parent{$_} == $pid && $command{$_} =~ /^perl -e/ } keys %parent) {
-    for my $child (grep { $parent{$_} == $sup && $command{$_} =~ /^perl -e/ } keys %parent) {
+  my %mine = ($pid => 1);
+  my $grew = 1;
+  while ($grew) {
+    $grew = 0;
+    for (keys %parent) { if (!$mine{$_} && $mine{$parent{$_}}) { $mine{$_} = 1; $grew = 1 } }
+  }
+  return (\%parent, \%command, \%mine);
+}
+# The supervisor is a `perl -e` below the launcher; before it execs Grok, its
+# own child is still `perl -e` too.
+sub setup_child {
+  my ($parent, $command, $mine) = tree();
+  for my $sup (grep { $mine->{$_} && $_ != $pid && $command->{$_} =~ /^perl -e/ } keys %$parent) {
+    for my $child (grep { $parent->{$_} == $sup && $command->{$_} =~ /^perl -e/ } keys %$parent) {
       return $child;
     }
   }
@@ -210,7 +237,11 @@ while (1) {
   if ($signal) {
     my $target;
     if ($at eq 'ready') { $target = $pid if -e "$out/ready" }
-    elsif ($at eq 'gh') { $target = $pid if -e "$out/gh" }
+    elsif ($at eq 'gh') {
+      # rand(0) means rand(1) in Perl, so no jitter must add nothing.
+      $send_at //= time + ($jitter ? rand($jitter) : 0) if -e "$out/gh";
+      $target = $pid if defined $send_at && time >= $send_at;
+    }
     elsif (defined(my $child = setup_child())) {
       # Record the setup child too: if it is stopped before exec, the fake
       # Grok never records it, and the leak check would not see it.
@@ -218,7 +249,16 @@ while (1) {
       $target = $signal eq 'KILL' ? $child : $pid;
     }
     if (defined $target) {
+      # "early" means the launcher had not yet computed the diff, the step just
+      # before `git worktree add`, when the signal was sent.
+      my $phase = -e "$out/diff-read" ? 'late' : 'early';
+      $target = -$pid if $group && $target == $pid;
       kill $signal, $target or die $!;
+      my ($parent, $command, $mine) = tree();
+      my @running = map { (split ' ', $command->{$_})[0] } grep { $mine->{$_} && $_ != $pid } sort keys %$parent;
+      open my $d, '>', "$out/delivered" or die $!;
+      print $d "$phase; running: @running\n";
+      close $d;
       $signal = '';
     }
   }
@@ -226,7 +266,9 @@ while (1) {
     print STDERR "test driver deadline exceeded\n";
     kill 'KILL', -$pid; waitpid($pid, 0); exit 99;
   }
-  select undef, undef, undef, 0.01;
+  # Poll quickly while waiting to signal early, so the signal lands close to
+  # the marker.
+  select undef, undef, undef, ($at eq 'gh' && $signal) ? 0.001 : 0.01;
 }
 DRIVER
   ) > "$CASE_DIR/out/stdout" 2> "$CASE_DIR/out/stderr"
@@ -243,7 +285,12 @@ DRIVER
     delay-validation)
       contains "$CASE_DIR/out/stderr" 'RIBBITTO_GROK_TEST_SETUP_DELAY must be an integer from 0 to 5'
       absent gh; absent grok ;;
-    early-INT|early-TERM) absent grok; absent worktree-added ;;
+    early-INT|early-TERM)
+      if [[ ! -f $CASE_DIR/out/delivered ]]; then
+        fail 'signal was not delivered before the launcher exited'
+      elif grep -q '^early;' "$CASE_DIR/out/delivered"; then
+        absent grok; absent worktree-added
+      fi ;;
     setup-INT|setup-TERM)
       # The launcher stops the supervisor with TERM while its child is still in
       # setup; the supervisor must hold that signal until the group exists,
@@ -295,6 +342,9 @@ DRIVER
       if live "$pid"; then fail "fake Grok process $pid leaked"; fi
     done < "$CASE_DIR/out/pids"
   fi
+  if [[ -n ${GROK_TEST_STRESS:-} ]]; then
+    printf 'PHASE %s\n' "$(cat "$CASE_DIR/out/delivered" 2>/dev/null || echo none)"
+  fi
   if [[ $failed == 0 ]]; then
     printf 'PASS %s\n' "$name"
   else
@@ -304,6 +354,49 @@ DRIVER
   fi
   fallback_cleanup
 }
+
+# GROK_TEST_STRESS=<runs> is the reproducer for #84 instead of the normal
+# cases. It repeats the early SIGINT for each invocation (file, bash -c) and
+# target (the launcher's own process, its whole process group) and prints the
+# counts. A run whose signal was not delivered before the launcher exited is
+# counted separately, never as a pass or a failure.
+stress() {
+  local runs=$1 inv tgt out err pass fail undelivered early late i as_command
+  [[ $runs =~ ^[1-9][0-9]*$ ]] || { echo 'GROK_TEST_STRESS must be a positive integer' >&2; exit 2; }
+  err=$(mktemp "${TMPDIR:-/tmp}/grok-review-stress.XXXXXX") || exit 1
+  printf 'bash %s (%s); launcher %s (blob %s); %s runs per row; jitter %s ms\n' \
+    "$BASH_VERSION" "$BASH" "$launcher" "$("$REAL_GIT" hash-object "$launcher")" "$runs" "${SIGNAL_JITTER_MS:-60}"
+  for inv in file bash-c; do
+    as_command=0
+    [[ $inv == file ]] || as_command=1
+    for tgt in process group; do
+      pass=0 fail=0 undelivered=0 early=0 late=0
+      for ((i = 1; i <= runs; i++)); do
+        out=$(LAUNCHER_AS_COMMAND=$as_command SIGNAL_TARGET=$tgt SIGNAL_JITTER_MS=${SIGNAL_JITTER_MS:-60} \
+          run_case "stress-$inv-$tgt-$i" 130 early-INT default 49 2>"$err")
+        if grep -q 'signal was not delivered' "$err"; then
+          undelivered=$((undelivered + 1))
+        elif [[ $out == *'PASS '* ]]; then
+          pass=$((pass + 1))
+          if [[ $out == *'PHASE early;'* ]]; then early=$((early + 1)); else late=$((late + 1)); fi
+        else
+          fail=$((fail + 1))
+          printf '  FAIL %s-%s #%s: %s | %s\n' "$inv" "$tgt" "$i" \
+            "$(grep '^PHASE' <<<"$out")" "$(head -n 3 "$err" | tr '\n' ' ')"
+        fi
+      done
+      printf '%-6s %-7s pass=%s (early %s, late %s) fail=%s undelivered=%s\n' \
+        "$inv" "$tgt" "$pass" "$early" "$late" "$fail" "$undelivered"
+      failures=$((failures + fail))
+    done
+  done
+  rm -f "$err"
+}
+if [[ -n ${GROK_TEST_STRESS:-} ]]; then
+  stress "$GROK_TEST_STRESS"
+  [[ $failures -eq 0 ]]
+  exit
+fi
 
 run_case argument-missing 1 argument default
 run_case argument-extra 1 argument default 49 extra
@@ -321,8 +414,11 @@ run_case SIGINT-130 130 INT default 49
 run_case SIGTERM-143 143 TERM default 49
 run_case prune-success-to-1 1 prune-success default 49
 run_case early-exit-keeps-42 42 early-exit default 49
-# SIGINT at this point is sometimes lost (about 4 %, Bash 3.2), so its case
-# waits for #84; SIGINT during setup and while Grok runs is covered below.
+# Early SIGINT (#84), spread over the forks after gh, to the launcher's own
+# process and to its process group (Ctrl-C), in both invocations.
+SIGNAL_JITTER_MS=40 run_case early-SIGINT-130 130 early-INT default 49
+SIGNAL_JITTER_MS=40 SIGNAL_TARGET=group run_case early-SIGINT-group-130 130 early-INT default 49
+SIGNAL_JITTER_MS=40 LAUNCHER_AS_COMMAND=1 run_case bash-c-early-SIGINT-130 130 early-INT default 49
 run_case early-SIGTERM-143 143 early-TERM default 49
 SETUP_DELAY=2 run_case setup-SIGINT-130 130 setup-INT default 49
 SETUP_DELAY=2 run_case setup-SIGTERM-143 143 setup-TERM default 49

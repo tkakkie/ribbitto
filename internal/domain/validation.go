@@ -5,14 +5,19 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
-// ValidateEmail returns the trimmed, lower-case address used for storage and lookup.
+// ValidateEmail returns the trimmed, lower-case NFC address used for storage and lookup.
 func ValidateEmail(value string) (string, error) {
 	if !utf8.ValidString(value) || strings.ContainsFunc(value, unicode.IsControl) {
 		return "", fmt.Errorf("email must contain valid text without control characters")
 	}
-	value = strings.ToLower(strings.TrimSpace(value))
+	value = norm.NFC.String(strings.ToLower(strings.TrimSpace(value)))
+	if strings.ContainsFunc(value, func(r rune) bool { return !unicode.IsPrint(r) || unicode.IsSpace(r) }) {
+		return "", fmt.Errorf("email must contain only printable characters without spaces")
+	}
 	local, host, found := strings.Cut(value, "@")
 	if !found || local == "" || host == "" || strings.Contains(host, "@") || len(value) > 254 {
 		return "", fmt.Errorf("email must have one @ with nonempty parts and at most 254 bytes")
@@ -20,12 +25,9 @@ func ValidateEmail(value string) (string, error) {
 	return value, nil
 }
 
-// ValidateDisplayName returns a trimmed name of 1–50 Unicode code points.
+// ValidateDisplayName returns a trimmed NFC name of 1–50 printable Unicode code points.
 func ValidateDisplayName(value string) (string, error) {
-	if strings.ContainsFunc(value, unicode.IsControl) {
-		return "", fmt.Errorf("display name must not contain control characters")
-	}
-	return validateText(strings.TrimSpace(value), 1, 50, "display name")
+	return validateText(value, 1, 50, "display name")
 }
 
 // ValidatePassword preserves the input and imposes only a 15–128 code point length.
@@ -36,7 +38,7 @@ func ValidatePassword(value string) (string, error) {
 	return value, nil
 }
 
-// ValidateOrganizationName accepts 1–100 Unicode code points without controls.
+// ValidateOrganizationName returns a trimmed NFC name of 1–100 printable Unicode code points.
 func ValidateOrganizationName(value string) (string, error) {
 	return validateText(value, 1, 100, "organization name")
 }
@@ -55,9 +57,15 @@ func ValidateSlug(value string) (string, error) {
 }
 
 func validateText(value string, minLength, maxLength int, field string) (string, error) {
+	if !utf8.ValidString(value) || strings.ContainsFunc(value, unicode.IsControl) {
+		return "", fmt.Errorf("%s must contain valid text without control characters", field)
+	}
+	value = norm.NFC.String(strings.TrimSpace(value))
 	length := utf8.RuneCountInString(value)
-	if !utf8.ValidString(value) || length < minLength || length > maxLength || strings.ContainsFunc(value, unicode.IsControl) {
-		return "", fmt.Errorf("%s must contain %d–%d Unicode code points without controls", field, minLength, maxLength)
+	// IsPrint allows only the ASCII space among spaces; also allow the
+	// ideographic space, which Japanese names use between family and given name.
+	if length < minLength || length > maxLength || strings.ContainsFunc(value, func(r rune) bool { return !unicode.IsPrint(r) && r != '\u3000' }) {
+		return "", fmt.Errorf("%s must contain %d–%d printable Unicode code points", field, minLength, maxLength)
 	}
 	return value, nil
 }

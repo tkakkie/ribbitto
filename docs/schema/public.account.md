@@ -16,8 +16,10 @@
 | ---- | ---- | ---------- |
 | account_created_at_not_null | n | NOT NULL created_at |
 | account_display_name_check | CHECK | CHECK (((length(display_name) >= 1) AND (length(display_name) <= 50))) |
+| account_display_name_check1 | CHECK | CHECK ((display_name = NORMALIZE(display_name, NFC))) |
 | account_display_name_not_null | n | NOT NULL display_name |
 | account_email_check | CHECK | CHECK (((email = lower(email)) AND (octet_length(email) <= 254))) |
+| account_email_check1 | CHECK | CHECK ((email = NORMALIZE(email, NFC))) |
 | account_email_not_null | n | NOT NULL email |
 | account_id_not_null | n | NOT NULL id |
 | account_password_hash_check | CHECK | CHECK (starts_with(password_hash, '$argon2id$'::text)) |

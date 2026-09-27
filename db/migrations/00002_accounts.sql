@@ -1,8 +1,8 @@
 -- +goose Up
 CREATE TABLE account (
   id            uuid        NOT NULL PRIMARY KEY DEFAULT uuidv7(),
-  email         text        NOT NULL UNIQUE CHECK (email = lower(email) AND octet_length(email) <= 254),
-  display_name  text        NOT NULL CHECK (length(display_name) BETWEEN 1 AND 50),
+  email         text        NOT NULL UNIQUE CHECK (email = lower(email) AND octet_length(email) <= 254) CHECK (email = normalize(email, NFC)),
+  display_name  text        NOT NULL CHECK (length(display_name) BETWEEN 1 AND 50) CHECK (display_name = normalize(display_name, NFC)),
   password_hash text        NOT NULL CHECK (starts_with(password_hash, '$argon2id$')),
   created_at    timestamptz NOT NULL DEFAULT now()
 );

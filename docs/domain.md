@@ -57,16 +57,21 @@ creation time.
 ## Validation
 
 `internal/domain` validates M1 form values. Text must be valid UTF-8.
-Email and display name are trimmed; email is also lower-cased before storage
-and lookup. Lengths count Unicode code points, except email (bytes) and slug
-(ASCII). Controls, including NUL, are rejected in email, display name and
-organisation name, including before trimming.
+Email, display name and organisation name are trimmed and normalised to Unicode
+NFC; email is also lower-cased before NFC normalisation, storage and lookup.
+Lengths count Unicode code points after normalisation, except email (bytes) and
+slug (ASCII). Controls, including NUL, are rejected before trimming. After
+trimming, these fields accept only printable characters (`unicode.IsPrint`),
+rejecting format characters such as zero-width spaces, RTL overrides, BOMs and
+soft hyphens, and line/paragraph separators. Names allow ASCII spaces and the ideographic space
+(U+3000, common in Japanese names) only; email rejects all spaces. The database also requires account email and display
+name to be NFC.
 
 - **Email:** exactly one `@`, nonempty parts on both sides, at most 254 bytes
   after normalisation.
-- **Display name:** 1–50 characters after trimming.
+- **Display name:** 1–50 characters after normalisation.
 - **Password:** 15–128 characters, preserved as entered, no composition rules.
-- **Organisation name:** 1–100 characters.
+- **Organisation name:** 1–100 characters after normalisation.
 - **Slug:** 1–63 characters from `a-z0-9-`, no leading or trailing `-`.
 
 Sessions store a unique 32-byte token hash and expire after their creation.

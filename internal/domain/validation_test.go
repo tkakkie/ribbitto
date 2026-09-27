@@ -39,9 +39,43 @@ func TestValidation(t *testing.T) {
 		{domain.ValidateEmail, "  USER@EXAMPLE.COM  ", "user@example.com"},
 		{domain.ValidateEmail, "  " + strings.Repeat("A", 252) + "@B  ", strings.Repeat("a", 252) + "@b"},
 		{domain.ValidateDisplayName, "　 Alice 　", "Alice"},
+		{domain.ValidateOrganizationName, "　 Example Team 　", "Example Team"},
+		{domain.ValidateEmail, "  E\u0301@EXAMPLE.COM  ", "é@example.com"},
+		{domain.ValidateDisplayName, "  e\u0301  ", "é"},
+		{domain.ValidateOrganizationName, "  e\u0301  ", "é"},
+		{domain.ValidateDisplayName, "Alice Smith", "Alice Smith"},
+		{domain.ValidateDisplayName, "山田\u3000太郎", "山田\u3000太郎"},
 	} {
 		if got, err := tc.validate(tc.input); err != nil || got != tc.want {
 			t.Errorf("normalizing %q: got %q, %v; want %q", tc.input, got, err, tc.want)
 		}
+	}
+}
+
+func TestValidationNonPrintableText(t *testing.T) {
+	for _, tc := range []struct{ name, text string }{
+		{"zero-width space", "\u200b"},
+		{"RTL override", "\u202e"},
+		{"BOM", "\ufeff"},
+		{"soft hyphen", "\u00ad"},
+		{"line separator", "\u2028"},
+		{"paragraph separator", "\u2029"},
+		{"nonbreaking space", "\u00a0"},
+		{"ASCII space", " "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := domain.ValidateEmail("a" + tc.text + "b@example.com"); err == nil {
+				t.Error("email accepted non-printable text or space")
+			}
+			if tc.text == " " {
+				return // ASCII spaces are allowed inside names.
+			}
+			if _, err := domain.ValidateDisplayName("a" + tc.text + "b"); err == nil {
+				t.Error("display name accepted non-printable text")
+			}
+			if _, err := domain.ValidateOrganizationName("a" + tc.text + "b"); err == nil {
+				t.Error("organization name accepted non-printable text")
+			}
+		})
 	}
 }

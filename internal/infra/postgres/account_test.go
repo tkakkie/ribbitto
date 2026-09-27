@@ -82,6 +82,8 @@ func TestAccountSchema(t *testing.T) {
 	for _, tc := range []struct{ name, sql, code string }{
 		{"duplicate email", "UPDATE account SET email = 'a@b' WHERE id = $2", "23505"},
 		{"uppercase email", "UPDATE account SET email = 'A@b' WHERE id = $2", "23514"},
+		{"non-NFC email", "UPDATE account SET email = 'e\u0301@b' WHERE id = $2", "23514"},
+		{"non-NFC name", "UPDATE account SET display_name = 'e\u0301' WHERE id = $2", "23514"},
 		{"long email", "UPDATE account SET email = repeat('a', 255) WHERE id = $2", "23514"},
 		{"empty name", "UPDATE account SET display_name = '' WHERE id = $2", "23514"},
 		{"long name", "UPDATE account SET display_name = repeat('界', 51) WHERE id = $2", "23514"},
@@ -110,7 +112,7 @@ func TestAccountSchema(t *testing.T) {
 	for _, offset := range []time.Duration{-time.Second, 0, time.Second} {
 		got, err := q.GetSessionByTokenHash(ctx, sqlcgen.GetSessionByTokenHashParams{TokenHash: session.TokenHash, Now: pgtype.Timestamptz{Time: expiry.Time.Add(offset), Valid: true}})
 		if offset < 0 {
-			if err != nil || got.Session.ID != session.ID || got.Account != accounts[1] {
+			if err != nil || got.Session.ID != session.ID || got.ID != accounts[1].ID || got.Email != accounts[1].Email || got.DisplayName != accounts[1].DisplayName {
 				t.Fatalf("live session: %+v, %v", got, err)
 			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {

@@ -257,7 +257,10 @@ DRIVER
     *)
       [[ -f $CASE_DIR/out/grok && -f $CASE_DIR/out/worktree-removed ]] || fail 'Grok or worktree cleanup not reached'
       case $mode in
-        timeout) contains "$CASE_DIR/out/stderr" 'timed out after 1 s' ;;
+        timeout)
+          contains "$CASE_DIR/out/stderr" 'timed out after 1 s'
+          contains "$CASE_DIR/out/stderr" 'Grok did not finish within 1s'
+          contains "$CASE_DIR/out/stderr" 'Rerun with a longer limit (for example, 7200 seconds): git fetch origin main && launcher=$(git show origin/main:scripts/ai/grok-review.sh) && RIBBITTO_GROK_TIMEOUT=7200 bash -c "$launcher" grok-review 49' ;;
         prune-*) contains "$CASE_DIR/out/stderr" "'git worktree prune' failed" ;;
       esac ;;
   esac

@@ -64,7 +64,7 @@ case "$*" in
   'fetch --quiet origin main'|'fetch --quiet origin refs/heads/main refs/pull/49/head') ;;
   'rev-parse --verify --quiet origin/main:scripts/ai/grok-review.sh')
     "$REAL_GIT" hash-object "$CASE_DIR/trusted.sh" ;;
-  'hash-object '*) "$REAL_GIT" hash-object "$2" ;;
+  'hash-object '*) "$REAL_GIT" "$@" ;;
   'cat-file -e aaaa^{commit}'|'cat-file -e bbbb^{commit}') ;;
   'ls-tree -r bbbb')
     if [[ $MODE == symlink ]]; then
@@ -163,7 +163,9 @@ run_case() {
   fixtures || exit 1
   (
     export PATH="$CASE_DIR/bin:$original_path" TMPDIR="$CASE_DIR/tmp" MODE="$mode"
-    unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT RIBBITTO_GROK_TEST_SETUP_DELAY
+    unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT RIBBITTO_GROK_TEST_SETUP_DELAY RIBBITTO_GROK_SIGNAL_PARENT
+    # A marker merely present in the environment must not disable the signal parent.
+    [[ -z ${PRESET_SIGNAL_PARENT:-} ]] || export RIBBITTO_GROK_SIGNAL_PARENT=1
     [[ -z ${SETUP_DELAY:-} ]] || export RIBBITTO_GROK_TEST_SETUP_DELAY="$SETUP_DELAY"
     # A file run inherits BASH_EXECUTION_STRING from the environment; the
     # launcher must not treat it as its own script.
@@ -171,6 +173,15 @@ run_case() {
     [[ $limit == default ]] || export RIBBITTO_GROK_TIMEOUT="$limit"
     if [[ ${LAUNCHER_AS_COMMAND:-0} == 1 ]]; then
       set -- -c "$(cat "$launcher")" grok-review "$@"
+    elif [[ -n ${LAUNCHER_NAME:-} ]]; then
+      # A launcher file whose name looks like an option, run as `bash -- -s`,
+      # with commands on stdin that must never run.
+      mkdir -p "$CASE_DIR/launch"
+      cp "$launcher" "$CASE_DIR/launch/$LAUNCHER_NAME"
+      printf 'echo stdin-commands-ran >&2; exit 9\n' > "$CASE_DIR/stdin"
+      export DRIVER_STDIN="$CASE_DIR/stdin"
+      cd "$CASE_DIR/launch" || exit 1
+      set -- -- "$LAUNCHER_NAME" "$@"
     else
       set -- "$launcher" "$@"
     fi
@@ -184,7 +195,7 @@ my $pid = fork() // die $!;
 if (!$pid) {
   setpgid(0, 0) or die $!;
   $SIG{INT} = $SIG{TERM} = 'DEFAULT';
-  open STDIN, '<', '/dev/null' or die $!;
+  open STDIN, '<', $ENV{DRIVER_STDIN} // '/dev/null' or die $!;
   exec @ARGV; die "exec: $!";
 }
 my $deadline = time + 12;
@@ -235,17 +246,23 @@ sub setup_child {
   }
   return;
 }
-my $sent;
-# The launcher has exited: pass its status on. If a signal was sent after the
-# launcher's cleanup had already started (the fake `git worktree prune` ran
-# first), the run proves nothing about losing the signal; mark it too late.
+my ($before, $after);
+# The launcher has exited: pass its status on, after classifying the signal.
+# $before and $after bracket the kill. An early signal (no diff before the
+# kill) is confirmed only if the diff marker appeared after $after; if it
+# appeared in between, the order of delivery and diff is unknown (ambiguous).
+# A signal sent after cleanup had started (the fake `git worktree prune` ran
+# first) proves nothing about losing it (too late).
 sub finish {
   my $code = $? & 127 ? 128 + ($? & 127) : $? >> 8;
-  if (defined $sent) {
+  if (defined $before) {
+    my @notes;
+    my $diffed = (Time::HiRes::stat("$out/diff-read"))[9];
+    push @notes, 'ambiguous: diff reached while the signal was being sent'
+      if defined $diffed && $diffed > $before && $diffed <= $after;
     my $pruned = (Time::HiRes::stat("$out/prune"))[9];
-    if (defined $pruned && $pruned <= $sent) {
-      open my $d, '>>', "$out/delivered" or die $!; print $d "too late: cleanup had started\n"; close $d;
-    }
+    push @notes, 'too late: cleanup had started' if defined $pruned && $pruned <= $after;
+    open my $d, '>>', "$out/delivered" or die $!; print $d "$_\n" for @notes; close $d;
   }
   exit $code;
 }
@@ -274,15 +291,19 @@ while (1) {
       finish() if waitpid($pid, WNOHANG) == $pid;
       # "early" means the launcher had not yet computed the diff, the step just
       # before `git worktree add`, when the signal was sent.
+      $before = time;
       my $phase = -e "$out/diff-read" ? 'late' : 'early';
       $target = -$pid if $group && $target == $pid;
-      $sent = time;
       kill $signal, $target or die $!;
-      # Observed just after the signal, not at delivery.
+      $after = time;
+      # Observed just after the signal, not at delivery. The launcher process
+      # itself is `perl` when the signal parent (#84) is in place; ps shows
+      # `(perl)` while its arguments cannot be read, e.g. as it handles the signal.
       my ($parent, $command, $mine) = tree();
-      my @after = map { (split ' ', $command->{$_})[0] } grep { $mine->{$_} && $_ != $pid } sort keys %$parent;
+      my @running = map { (split ' ', $command->{$_})[0] } grep { $mine->{$_} && $_ != $pid } sort keys %$parent;
+      my $top = (split ' ', $command->{$pid} // '?')[0];
       open my $d, '>', "$out/delivered" or die $!;
-      print $d "$phase; running just after the signal: @after\n";
+      print $d "$phase; launcher: $top; running just after the signal: @running\n";
       close $d;
       $signal = '';
     }
@@ -302,6 +323,9 @@ DRIVER
   if [[ -n ${INJECT_EXECUTION_STRING:-} ]] && grep -Fq injected-string-ran "$CASE_DIR/out/stderr"; then
     fail 'BASH_EXECUTION_STRING from the environment was run'
   fi
+  if [[ -n ${LAUNCHER_NAME:-} ]] && grep -Fq stdin-commands-ran "$CASE_DIR/out/stderr"; then
+    fail 'the launcher read commands from stdin instead of running its file'
+  fi
   case $mode in
     argument) contains "$CASE_DIR/out/stderr" 'usage:'; absent gh; absent grok ;;
     validation) contains "$CASE_DIR/out/stderr" 'must be an integer from 1 to 86400'; absent gh; absent grok ;;
@@ -318,10 +342,13 @@ DRIVER
         fail 'signal was not delivered before the launcher exited'
       elif grep -q 'too late' "$CASE_DIR/out/delivered"; then
         fail 'signal arrived after cleanup had started'
-      elif grep -q '^early;' "$CASE_DIR/out/delivered"; then
+      elif grep -q '^early;' "$CASE_DIR/out/delivered" && ! grep -q '^ambiguous' "$CASE_DIR/out/delivered"; then
         absent grok; absent worktree-added
       elif [[ -z ${GROK_TEST_STRESS:-} ]]; then
-        fail 'signal was sent late; this case needs an early signal'
+        fail 'signal was not confirmed early; this case needs an early signal'
+      fi
+      if [[ $mode == early-INT && -z ${GROK_TEST_STRESS:-} ]] && ! grep -Eq 'launcher: \(?perl\)?;' "$CASE_DIR/out/delivered"; then
+        fail 'the Perl signal parent was not in place'
       fi ;;
     setup-INT|setup-TERM)
       # The launcher stops the supervisor with TERM while its child is still in
@@ -394,7 +421,8 @@ DRIVER
 # and Bash. Only early signals (sent before the diff step, so no Grok or
 # worktree may follow) count as evidence; late signals are reported
 # separately for reference. Runs whose signal was not delivered, or arrived
-# after cleanup had started, are counted apart, never as a pass or a failure.
+# after cleanup had started, or whose order against the diff step is unknown
+# (ambiguous), are counted apart, never as a pass or a failure.
 # Exit status: 1 if any early run failed; 3 if a row has fewer than a quarter
 # of its runs as early signals (too little evidence); 0 otherwise.
 stress() {
@@ -418,6 +446,8 @@ stress() {
           verdict=UNDELIVERED; skipped=$((skipped + 1))
         elif [[ $detail == *'too late'* ]]; then
           verdict=TOO-LATE; skipped=$((skipped + 1))
+        elif [[ $detail == *ambiguous* ]]; then
+          verdict=AMBIGUOUS; skipped=$((skipped + 1))
         elif [[ $out == *'PASS '* ]]; then
           verdict=PASS
           if [[ $detail == early* ]]; then early_pass=$((early_pass + 1)); else late_pass=$((late_pass + 1)); fi
@@ -485,4 +515,6 @@ LAUNCHER_AS_COMMAND=1 run_case bash-c-symlink-before-prompt-diff-worktree 1 syml
 LAUNCHER_AS_COMMAND=1 run_case bash-c-single-json-payload 0 payload 86400 49
 run_case untrusted-launcher 1 mismatch default 49
 INJECT_EXECUTION_STRING=1 run_case env-execution-string-ignored 1 mismatch default 49
+LAUNCHER_NAME=-s run_case option-like-launcher-name 1 mismatch default 49
+PRESET_SIGNAL_PARENT=1 SIGNAL_JITTER_MS=40 SIGNAL_BEFORE_DIFF=1 run_case preset-signal-parent-early-SIGINT-130 130 early-INT default 49
 [[ $failures -eq 0 ]]

@@ -22,8 +22,8 @@
 #   RIBBITTO_GROK_TEST_SETUP_DELAY  seconds (0–5, default 0) the supervisor's child
 #                             waits after creating Grok's process group; tests
 #                             only, to deliver signals during that setup
-#   RIBBITTO_GROK_SIGNAL_PARENT  set by the launcher for its child shell under the
-#                             Perl signal parent; not meant to be set by hand
+#   RIBBITTO_GROK_SIGNAL_PARENT  set by the launcher to the Perl signal parent's pid
+#                             for its child shell; a value set by hand is ignored
 #
 # Exit status: 0 on success; 124 on timeout; 130/143 when interrupted; Grok's
 # own status when Grok fails; 126 if Grok's process group could not be
@@ -46,13 +46,17 @@ done
 # same string, so it is still the trusted launcher. BASH_EXECUTION_STRING
 # alone does not prove `bash -c`: a file run inherits it from the
 # environment, and re-running that string would skip the file check below.
-# Only `bash -c` has `c` in $- and no source file.
-if [[ -z ${RIBBITTO_GROK_SIGNAL_PARENT:-} ]]; then
-  export RIBBITTO_GROK_SIGNAL_PARENT=1
+# Only `bash -c` has `c` in $- and no source file. A file name is passed
+# after `--`, so one that looks like an option (`-s`) is still a file.
+# RIBBITTO_GROK_SIGNAL_PARENT holds the Perl parent's pid (exec keeps this
+# shell's pid), so only a shell whose parent really is that process skips the
+# wrapper; a value merely present in the environment does not.
+if [[ ${RIBBITTO_GROK_SIGNAL_PARENT:-} != "$PPID" ]]; then
+  export RIBBITTO_GROK_SIGNAL_PARENT=$$
   if [[ $- == *c* && -z ${BASH_SOURCE[0]:-} && -n ${BASH_EXECUTION_STRING:-} ]]; then
     set -- "$BASH" -c "$BASH_EXECUTION_STRING" "$0" "$@"
   elif [[ -n ${BASH_SOURCE[0]:-} && -f ${BASH_SOURCE[0]} ]]; then
-    set -- "$BASH" "${BASH_SOURCE[0]}" "$@"
+    set -- "$BASH" -- "${BASH_SOURCE[0]}" "$@"
   else
     die "run the launcher as documented (bash -c with the trusted blob, or as a file)"
   fi
@@ -102,7 +106,7 @@ self=${BASH_SOURCE[0]:-}
 if [[ -f $self ]]; then
   trusted=$(git -C "$repo" rev-parse --verify --quiet "$trusted_ref:scripts/ai/grok-review.sh") \
     || die "$trusted_ref has no scripts/ai/grok-review.sh"
-  [[ $(git hash-object "$self") == "$trusted" ]] \
+  [[ $(git hash-object -- "$self") == "$trusted" ]] \
     || die "refusing to run: $self differs from $trusted_ref:scripts/ai/grok-review.sh. Run: launcher=\$(git show $trusted_ref:scripts/ai/grok-review.sh) && bash -c \"\$launcher\" grok-review $pr"
 fi
 tmp=""

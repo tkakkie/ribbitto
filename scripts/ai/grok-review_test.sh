@@ -110,7 +110,15 @@ mark('prompt', do { local $/; <$f> });
 close $f;
 mark('grok');
 my $mode = $ENV{MODE};
-if ($mode eq 'descendants' || $mode eq 'timeout' || $mode eq 'INT' || $mode eq 'TERM') {
+if ($mode eq 'early-exit') {
+  # The leader exits at once and leaves a descendant; record its pid first so
+  # the cleanup assertion can find it.
+  my $child = fork() // die $!;
+  if (!$child) { sleep 60 while 1 }
+  open my $p, '>>', "$out/pids" or die $!; print $p "$child\n"; close $p;
+  exit 42;
+}
+if ($mode eq 'descendants' || $mode eq 'timeout' || $mode =~ /^(setup-)?(INT|TERM)$/) {
   my $child;
   $SIG{TERM} = sub { waitpid($child, 0); exit 0 };
   $child = fork() // die $!;
@@ -150,7 +158,8 @@ run_case() {
   fixtures || exit 1
   (
     export PATH="$CASE_DIR/bin:$original_path" TMPDIR="$CASE_DIR/tmp" MODE="$mode"
-    unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT
+    unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT RIBBITTO_GROK_TEST_SETUP_DELAY
+    [[ -z ${SETUP_DELAY:-} ]] || export RIBBITTO_GROK_TEST_SETUP_DELAY="$SETUP_DELAY"
     [[ $limit == default ]] || export RIBBITTO_GROK_TIMEOUT="$limit"
     if [[ ${LAUNCHER_AS_COMMAND:-0} == 1 ]]; then
       set -- -c "$(cat "$launcher")" grok-review "$@"
@@ -171,12 +180,47 @@ if (!$pid) {
 }
 my $deadline = time + 12;
 my $ready_deadline = time + 3;
-my $signal = $ENV{MODE} =~ /^(INT|TERM)$/ ? $1 : '';
+my $out = "$ENV{CASE_DIR}/out";
+# When to act: after Grok is ready, while the launcher is still talking to gh
+# (before the supervisor exists), or while the supervisor's child waits
+# inside process-group setup (RIBBITTO_GROK_TEST_SETUP_DELAY). setup-eof
+# kills that child, so the supervisor sees EOF instead of a confirmation.
+my ($signal, $at) = ('', '');
+if ($ENV{MODE} =~ /^(INT|TERM)$/) { ($signal, $at) = ($1, 'ready') }
+elsif ($ENV{MODE} =~ /^early-(INT|TERM)$/) { ($signal, $at) = ($1, 'gh') }
+elsif ($ENV{MODE} =~ /^setup-(INT|TERM)$/) { ($signal, $at) = ($1, 'setup') }
+elsif ($ENV{MODE} eq 'setup-eof') { ($signal, $at) = ('KILL', 'setup') }
+# The supervisor is the launcher's `perl -e` child; before it execs Grok, its
+# own child is still `perl -e` too.
+sub setup_child {
+  my (%parent, %command);
+  for (`ps -axo pid=,ppid=,command=`) {
+    my ($p, $pp, $c) = /^\s*(\d+)\s+(\d+)\s+(.*)$/ or next;
+    ($parent{$p}, $command{$p}) = ($pp, $c);
+  }
+  for my $sup (grep { $parent{$_} == $pid && $command{$_} =~ /^perl -e/ } keys %parent) {
+    for my $child (grep { $parent{$_} == $sup && $command{$_} =~ /^perl -e/ } keys %parent) {
+      return $child;
+    }
+  }
+  return;
+}
 while (1) {
   if (waitpid($pid, WNOHANG) == $pid) { exit($? & 127 ? 128 + ($? & 127) : $? >> 8) }
-  if ($signal && -e "$ENV{CASE_DIR}/out/ready") {
-    kill $signal, $pid or die $!;
-    $signal = '';
+  if ($signal) {
+    my $target;
+    if ($at eq 'ready') { $target = $pid if -e "$out/ready" }
+    elsif ($at eq 'gh') { $target = $pid if -e "$out/gh" }
+    elsif (defined(my $child = setup_child())) {
+      # Record the setup child too: if it is stopped before exec, the fake
+      # Grok never records it, and the leak check would not see it.
+      open my $p, '>>', "$out/pids" or die $!; print $p "$child\n"; close $p;
+      $target = $signal eq 'KILL' ? $child : $pid;
+    }
+    if (defined $target) {
+      kill $signal, $target or die $!;
+      $signal = '';
+    }
   }
   if (time >= $deadline || ($signal && time >= $ready_deadline)) {
     print STDERR "test driver deadline exceeded\n";
@@ -196,6 +240,20 @@ DRIVER
     symlink)
       contains "$CASE_DIR/out/stderr" 'contains symlinks'
       absent grok; absent prompt; absent prompt-read; absent diff-read; absent worktree-added ;;
+    delay-validation)
+      contains "$CASE_DIR/out/stderr" 'RIBBITTO_GROK_TEST_SETUP_DELAY must be an integer from 0 to 5'
+      absent gh; absent grok ;;
+    early-INT|early-TERM) absent grok; absent worktree-added ;;
+    setup-INT|setup-TERM)
+      # The launcher stops the supervisor with TERM while its child is still in
+      # setup; the supervisor must hold that signal until the group exists,
+      # then stop the whole group.
+      contains "$CASE_DIR/out/stderr" 'grok-review: terminated; stopped Grok'
+      [[ -f $CASE_DIR/out/worktree-removed ]] || fail 'worktree cleanup not reached' ;;
+    setup-eof)
+      contains "$CASE_DIR/out/stderr" 'grok-review: could not create a process group for Grok'
+      absent grok
+      [[ -f $CASE_DIR/out/worktree-removed ]] || fail 'worktree cleanup not reached' ;;
     *)
       [[ -f $CASE_DIR/out/grok && -f $CASE_DIR/out/worktree-removed ]] || fail 'Grok or worktree cleanup not reached'
       case $mode in
@@ -256,6 +314,16 @@ run_case timeout-124 124 timeout 1 49
 run_case SIGINT-130 130 INT default 49
 run_case SIGTERM-143 143 TERM default 49
 run_case prune-success-to-1 1 prune-success default 49
+run_case early-exit-keeps-42 42 early-exit default 49
+# SIGINT at this point is sometimes lost (about 4 %, Bash 3.2), so its case
+# waits for #84; SIGINT during setup and while Grok runs is covered below.
+run_case early-SIGTERM-143 143 early-TERM default 49
+SETUP_DELAY=2 run_case setup-SIGINT-130 130 setup-INT default 49
+SETUP_DELAY=2 run_case setup-SIGTERM-143 143 setup-TERM default 49
+SETUP_DELAY=2 run_case setup-eof-126 126 setup-eof default 49
+for value in abc 6 -1; do
+  SETUP_DELAY=$value run_case "setup-delay-$value" 1 delay-validation default 49
+done
 run_case prune-keeps-42 42 prune-failure default 49
 run_case symlink-before-prompt-diff-worktree 1 symlink default 49
 run_case single-json-payload 0 payload 86400 49

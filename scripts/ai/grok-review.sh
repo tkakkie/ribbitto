@@ -19,9 +19,13 @@
 #   RIBBITTO_GROK_MODEL       model id passed to `grok -m` (default: the CLI default; see `grok models`)
 #   RIBBITTO_GROK_TRUSTED_REF git ref the launcher and prompt must come from (default
 #                             origin/main); change it only to test a PR that edits them
+#   RIBBITTO_GROK_TEST_SETUP_DELAY  seconds (0–5, default 0) the supervisor's child
+#                             waits after creating Grok's process group; tests
+#                             only, to deliver signals during that setup
 #
 # Exit status: 0 on success; 124 on timeout; 130/143 when interrupted; Grok's
-# own status when Grok fails; 1 for any other error.
+# own status when Grok fails; 126 if Grok's process group could not be
+# created; 1 for any other error.
 set -euo pipefail
 
 die() { echo "grok-review: $*" >&2; exit 1; }
@@ -38,6 +42,9 @@ if ! [[ $timeout =~ ^[1-9][0-9]{0,4}$ ]] || ((timeout > 86400)); then
   die "RIBBITTO_GROK_TIMEOUT must be an integer from 1 to 86400 (seconds), got '$timeout'"
 fi
 trusted_ref=${RIBBITTO_GROK_TRUSTED_REF:-origin/main}
+setup_delay=${RIBBITTO_GROK_TEST_SETUP_DELAY:-0}
+[[ $setup_delay =~ ^[0-5]$ ]] \
+  || die "RIBBITTO_GROK_TEST_SETUP_DELAY must be an integer from 0 to 5 (seconds), got '$setup_delay'"
 
 repo=$(git rev-parse --show-toplevel)
 git -C "$repo" fetch --quiet origin main || die "could not fetch main from origin"
@@ -156,28 +163,44 @@ fi
 # the whole group (TERM, then KILL after a grace period) on expiry, on INT or
 # TERM, and also after Grok exits, so no descendant outlives the run.
 # Signals are blocked until the group exists and the handlers are installed.
-# It exits with Grok's status, 124 on timeout, 130/143 when interrupted.
+# It exits with Grok's status, 124 on timeout, 130/143 when interrupted, and
+# 126 if the process group could not be created.
 # Stdin is closed: headless CLIs can otherwise wait for input forever (#2).
 perl -e '
   use strict; use warnings;
   use POSIX qw(:signal_h setpgid _exit);
-  my ($limit, @cmd) = @ARGV;
+  my ($limit, $setup_delay, @cmd) = @ARGV;
   my $block = POSIX::SigSet->new(SIGINT, SIGTERM, SIGALRM);
   my $old = POSIX::SigSet->new;
   sigprocmask(SIG_BLOCK, $block, $old) or die "grok-review: sigprocmask: $!\n";
+  # Only the child calls setpgid, then confirms through the pipe before it
+  # execs. The parent setting the group as well raced with the child on
+  # macOS (EPERM, or ESRCH once the child had exited), so it never does (#82).
+  # Perl marks the pipe close-on-exec, so Grok does not inherit it.
+  pipe(my $group_ready, my $confirm) or die "grok-review: pipe: $!\n";
   my $pid = fork() // die "grok-review: fork failed: $!\n";
   if ($pid == 0) {
+    close $group_ready;
     setpgid(0, 0) or _exit(126);
+    sleep $setup_delay if $setup_delay;
+    syswrite($confirm, "1") == 1 or _exit(126);
+    close $confirm;
     sigprocmask(SIG_SETMASK, $old);
     { no warnings qw(exec); exec { $cmd[0] } @cmd; }
     print STDERR "grok-review: cannot run $cmd[0]: $!\n";
     _exit(127);
   }
-  # Set the group from the parent as well, so it exists before any signal is
-  # sent; EACCES only means the child has already exec-ed with its own group.
-  if (!setpgid($pid, $pid) && !$!{EACCES}) {
-    kill "KILL", $pid; waitpid($pid, 0);
-    die "grok-review: could not create a process group for Grok: $!\n";
+  close $confirm;
+  my $n;
+  do { $n = sysread($group_ready, my $byte, 1) } while (!defined $n && $!{EINTR});
+  close $group_ready;
+  # EOF without the confirmation byte: the child failed, or was killed, before
+  # it confirmed. It had not exec-ed, so it started nothing, and reaping it
+  # leaves nothing behind.
+  if (!$n) {
+    waitpid($pid, 0);
+    print STDERR "grok-review: could not create a process group for Grok\n";
+    exit 126;
   }
   my $reap_group = sub {
     return unless kill 0, -$pid;
@@ -202,7 +225,7 @@ perl -e '
   alarm 0;
   $reap_group->();
   exit $status;
-' "$timeout" grok "${grok_args[@]}" </dev/null &
+' "$timeout" "$setup_delay" grok "${grok_args[@]}" </dev/null &
 supervisor=$!
 status=0
 wait "$supervisor" || status=$?

@@ -103,18 +103,28 @@ type failingStore struct {
 	*fakeStore
 	failCreate bool
 	failDelete []byte // the token hash whose deletion fails
+	// cancel, if set, cancels the request after a successful insert; every
+	// later write under a cancelled context then fails, as with a database.
+	cancel context.CancelFunc
 }
 
 func (f failingStore) CreateSession(ctx context.Context, hash []byte, accountID domain.ID, expiresAt time.Time) error {
 	if f.failCreate {
 		return errors.New("insert failed")
 	}
-	return f.fakeStore.CreateSession(ctx, hash, accountID, expiresAt)
+	err := f.fakeStore.CreateSession(ctx, hash, accountID, expiresAt)
+	if f.cancel != nil {
+		f.cancel()
+	}
+	return err
 }
 
 func (f failingStore) DeleteSession(ctx context.Context, hash []byte) error {
 	if f.failDelete != nil && bytes.Equal(hash, f.failDelete) {
 		return errors.New("delete failed")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return f.fakeStore.DeleteSession(ctx, hash)
 }
@@ -133,9 +143,11 @@ func TestSignInRotationFailures(t *testing.T) {
 	for _, tt := range []struct {
 		name                   string
 		failCreate, failDelete bool
+		cancelAfterCreate      bool
 	}{
-		{"creating the new session fails", true, false},
-		{"ending the previous session fails", false, true},
+		{"creating the new session fails", true, false, false},
+		{"ending the previous session fails", false, true, false},
+		{"request cancelled after the insert", false, false, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			base := &fakeStore{sessions: map[string]fakeSession{}}
@@ -149,9 +161,13 @@ func TestSignInRotationFailures(t *testing.T) {
 				sum := sha256.Sum256(raw)
 				store.failDelete = sum[:]
 			}
+			ctx := t.Context()
+			if tt.cancelAfterCreate {
+				ctx, store.cancel = context.WithCancel(ctx)
+			}
 			sessions := auth.NewSessions(store, time.Now)
 			signIn := auth.NewSignIn(fakeAccounts{account: alice, hash: hash}, hasher, sessions)
-			if _, _, err := signIn.SignIn(t.Context(), alice.Email, password, previous); err == nil {
+			if _, _, err := signIn.SignIn(ctx, alice.Email, password, previous); err == nil {
 				t.Fatal("sign-in succeeded despite the store failure")
 			}
 			// The browser keeps its previous session, and no other one exists.

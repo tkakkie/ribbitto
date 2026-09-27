@@ -79,7 +79,11 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 	}
 	if previousToken != "" {
 		if err := s.sessions.Delete(ctx, previousToken); err != nil {
-			return "", time.Time{}, errors.Join(err, s.sessions.Delete(ctx, token))
+			// Undo even if the request was cancelled meanwhile (a common
+			// reason the delete failed), but not forever.
+			undo, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			return "", time.Time{}, errors.Join(err, s.sessions.Delete(undo, token))
 		}
 	}
 	return token, expiresAt, nil

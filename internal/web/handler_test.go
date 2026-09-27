@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"html"
 	"io/fs"
 	"log/slog"
@@ -339,4 +341,52 @@ type noSessions struct{}
 
 func (noSessions) Resolve(context.Context, string) (domain.Account, error) {
 	return domain.Account{}, auth.ErrNoSession
+}
+
+// countingResolver counts lookups and fails every one, like a database
+// outage.
+type countingResolver struct{ calls int }
+
+func (c *countingResolver) Resolve(context.Context, string) (domain.Account, error) {
+	c.calls++
+	return domain.Account{}, errors.New("connection refused")
+}
+
+func TestSessionLookupOnlyOnRegisteredRoutes(t *testing.T) {
+	var logs bytes.Buffer
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&logs, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		method, path string
+		status       int
+		lookups      int
+	}{
+		// Unknown paths and methods: plain 404/405, no lookup, even during
+		// an outage.
+		{http.MethodGet, "/missing", http.StatusNotFound, 0},
+		{http.MethodGet, "/nested/path", http.StatusNotFound, 0},
+		{http.MethodPost, "/", http.StatusMethodNotAllowed, 0},
+		// Routes outside the HTML middleware never look the session up.
+		{http.MethodGet, "/healthz", http.StatusOK, 0},
+		{http.MethodGet, "/static/css/app.css", http.StatusOK, 0},
+		// A registered page does, so the outage shows as 500 there.
+		{http.MethodGet, "/", http.StatusInternalServerError, 1},
+	} {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			resolver := &countingResolver{}
+			handler, err := NewHandler("", catalogues, resolver)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(tt.method, tt.path, nil)
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "some-token"})
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tt.status || resolver.calls != tt.lookups {
+				t.Fatalf("status %d with %d lookups; want %d with %d", w.Code, resolver.calls, tt.status, tt.lookups)
+			}
+		})
+	}
 }

@@ -122,12 +122,17 @@ from email or chat), and cross-origin POSTs are stopped separately (below).
    past it fails with `*http.MaxBytesError`, which handlers answer with 413;
    a route that answers without reading the body (a closed route's 404) is
    unaffected.
-3. On HTML routes only (not `/static/` or `/healthz`): security headers
-   (below), then i18n, then `middleware.Session`. It resolves the cookie and
-   puts the account in the context (`middleware.Account`). A token that
-   signs nobody in means signed out and the cookie is cleared; a store error
-   answers 500 and keeps the cookie, so an outage does not sign everyone
-   out. Responses to signed-in requests carry `Cache-Control: no-store`.
+3. On everything except `/static/` and `/healthz`: security headers
+   (below), then i18n.
+4. On each **registered** HTML route (the `sessionMux` in `NewHandler`
+   wraps routes one by one): `middleware.Session`. An unknown path or
+   method gets its plain 404 or 405 without a session lookup, so it costs
+   no query and stays 404 while the database is down. The middleware
+   resolves the cookie and puts the account in the context
+   (`middleware.Account`). A token that signs nobody in means signed out
+   and the cookie is cleared; a store error answers 500 and keeps the
+   cookie, so an outage does not sign everyone out. Responses to signed-in
+   requests carry `Cache-Control: no-store`.
 
 `serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
 a `database/sql` handle, which goose needs.

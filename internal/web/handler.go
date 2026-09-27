@@ -37,10 +37,10 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, sessions middlewa
 		})
 	}
 	// Register HTML routes here so new pages inherit the shared middleware.
-	pages := http.NewServeMux()
+	pages := sessionMux{http.NewServeMux(), sessions}
 	pages.Handle("GET /{$}", home)
 	mux := http.NewServeMux()
-	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(middleware.Session(sessions, pages))))
+	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(pages)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})
@@ -69,4 +69,23 @@ func stylesheetURLForAssets(assets fs.FS) (string, error) {
 		return "", fmt.Errorf("reading stylesheet: %w", err)
 	}
 	return fmt.Sprintf("/static/css/app.css?v=%x", sha256.Sum256(css)), nil
+}
+
+// sessionMux registers HTML routes behind the session middleware one by
+// one, rather than wrapping the whole mux: only a registered route looks the
+// session up, so an unknown path answers 404 without a database query (and
+// still 404, not 500, while the database is down).
+type sessionMux struct {
+	*http.ServeMux
+	sessions middleware.SessionResolver
+}
+
+// Handle registers handler for pattern behind the session middleware.
+func (m sessionMux) Handle(pattern string, handler http.Handler) {
+	m.ServeMux.Handle(pattern, middleware.Session(m.sessions, handler))
+}
+
+// HandleFunc registers f for pattern behind the session middleware.
+func (m sessionMux) HandleFunc(pattern string, f func(http.ResponseWriter, *http.Request)) {
+	m.Handle(pattern, http.HandlerFunc(f))
 }

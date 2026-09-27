@@ -280,15 +280,23 @@ The prompt carries the issue and its review comments, plus these rules:
   `GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
   GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath`
   (`bin/` is git-ignored).
-- **Database.** Codex cannot use Docker. The orchestrator starts
-  PostgreSQL on a free local port, and the prompt says to run `make check`
-  with `RIBBITTO_TEST_DATABASE_URL=postgres://postgres:codex-dev-only@127.0.0.1:55433/postgres?sslmode=disable`
+- **Database.** Codex cannot use Docker, so the orchestrator starts
+  PostgreSQL and waits until it is ready. The prompt then says to run
+  `make check` with `RIBBITTO_TEST_DATABASE_URL=postgres://postgres:codex-dev-only@127.0.0.1:55433/postgres?sslmode=disable`
   and `RIBBITTO_REQUIRE_DB=1`.
 
   ```sh
   docker run -d --name ribbitto-codex-pg -p 127.0.0.1:55433:5432 \
-    -e POSTGRES_PASSWORD=codex-dev-only postgres:18
+    -e POSTGRES_PASSWORD=codex-dev-only postgres:18 &&
+  for i in $(seq 1 30); do
+    docker exec ribbitto-codex-pg pg_isready -U postgres >/dev/null 2>&1 && break
+    sleep 1
+  done
   ```
+
+  If `ribbitto-codex-pg` is still running from an earlier session, reuse
+  it. If port 55433 is taken, pick another and change both commands.
+  `docker rm -f ribbitto-codex-pg` removes the container when you are done.
 - **Handoff.** Codex does not commit, push or use GitHub. It leaves the
   changes in the working tree and writes a draft PR description to an
   untracked `PR_BODY.md`.

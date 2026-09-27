@@ -37,7 +37,14 @@ make db-down               # stops PostgreSQL; keeps the named data volume
 ```
 
 The server listens at http://localhost:8080/healthz and never migrates on
-startup. Use `ribbitto migrate up|down|status` with a built binary; `down`
+startup.
+
+The session cookie is always `Secure` (there is no switch to turn that off:
+it would be too easy to leave off in production). Browsers that treat
+`http://localhost` as a secure context keep such cookies over plain HTTP;
+Chromium does for both `localhost` and `127.0.0.1` (checked when the cookie
+was added). If your browser drops the cookie, use a Chromium-based browser
+for local development or serve through HTTPS. Use `ribbitto migrate up|down|status` with a built binary; `down`
 reverts one migration. See [database development](docs/database.md) for
 configuration, migration ownership and integration tests.
 

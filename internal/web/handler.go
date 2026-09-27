@@ -16,7 +16,7 @@ import (
 
 // NewHandler constructs the application's HTTP routes. A non-empty devAssets
 // directory serves live assets from disk instead of the embedded production assets.
-func NewHandler(devAssets string, catalogues *i18n.Catalogues) (http.Handler, error) {
+func NewHandler(devAssets string, catalogues *i18n.Catalogues, sessions middleware.SessionResolver) (http.Handler, error) {
 	assets := static.FS()
 	if devAssets != "" {
 		assets = os.DirFS(devAssets)
@@ -40,7 +40,7 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues) (http.Handler, er
 	pages := http.NewServeMux()
 	pages.Handle("GET /{$}", home)
 	mux := http.NewServeMux()
-	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(pages)))
+	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(middleware.Session(sessions, pages))))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})
@@ -57,7 +57,10 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues) (http.Handler, er
 		}
 		http.FileServerFS(assets).ServeHTTP(w, r)
 	})))
-	return mux, nil
+	// Outermost: reject cross-origin state changes before anything else runs.
+	// It lets GET, HEAD and OPTIONS through, so every route that changes
+	// state must be a POST.
+	return http.NewCrossOriginProtection().Handler(middleware.LimitBody(mux)), nil
 }
 
 func stylesheetURLForAssets(assets fs.FS) (string, error) {

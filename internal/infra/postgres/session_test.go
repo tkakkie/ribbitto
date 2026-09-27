@@ -84,6 +84,32 @@ func TestSessionStore(t *testing.T) {
 		t.Fatalf("duplicate token hash error exposes the database error: %v", err)
 	}
 
+	// Replacing is atomic: success swaps the rows; a failure (here, a new
+	// hash that already exists) leaves the old session in place.
+	oldHash, newHash := make([]byte, 32), make([]byte, 32)
+	oldHash[0], newHash[0] = 0x01, 0x02
+	if err := store.CreateSession(ctx, oldHash, id, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReplaceSession(ctx, oldHash, hash, id, now.Add(time.Hour)); err == nil || errors.As(err, &pgErr) {
+		t.Fatalf("replacing into an existing hash: %v", err)
+	}
+	countHash := func(h []byte) (n int) {
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM session WHERE token_hash = $1", h).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if countHash(oldHash) != 1 {
+		t.Fatal("failed replacement deleted the old session")
+	}
+	if err := store.ReplaceSession(ctx, oldHash, newHash, id, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if countHash(oldHash) != 0 || countHash(newHash) != 1 {
+		t.Fatal("replacement did not swap the sessions")
+	}
+
 	// Past the older session's expiry, clean-up removes only that one.
 	now = now.Add(auth.SessionLifetime - 30*time.Minute)
 	if err := sessions.DeleteExpired(ctx); err != nil {

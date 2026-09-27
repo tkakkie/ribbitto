@@ -50,6 +50,16 @@ func (f *fakeStore) DeleteSession(_ context.Context, hash []byte) error {
 	return f.err
 }
 
+func (f *fakeStore) ReplaceSession(_ context.Context, oldHash, newHash []byte, accountID domain.ID, expiresAt time.Time) error {
+	f.hashes = append(f.hashes, bytes.Clone(oldHash), bytes.Clone(newHash))
+	if f.err != nil {
+		return f.err
+	}
+	delete(f.sessions, string(oldHash))
+	f.sessions[string(newHash)] = fakeSession{accountID, expiresAt}
+	return nil
+}
+
 func (f *fakeStore) DeleteExpiredSessions(_ context.Context, before time.Time) error {
 	f.before = before
 	return f.err

@@ -145,19 +145,16 @@ from email or chat), and cross-origin POSTs are stopped separately (below).
    cookie, so an outage does not sign everyone out. Responses to signed-in
    requests carry `Cache-Control: no-store`.
 
-**Sign-in and sign-out** (`auth.SignIn`, pages in `internal/web/signin.go`).
-`POST /signin` normalises the email and looks the account up. An unknown
-email still runs one Argon2id verification against a dummy hash made with
-the current parameters, and gets the same page, status and message as a
-wrong password: the response does not tell which accounts exist, and the
-dummy verification makes timing-based discovery much harder (timing is not
-identical for a stored hash with other parameters). On success the session named by the incoming cookie, if
-any, is deleted and a new one is created — a token that existed before
-sign-in never becomes signed in (session fixation) — and the browser is
-redirected to `/` with 303. `POST /signout` deletes the session row, clears
-the cookie and redirects to `/signin`; there is no GET sign-out. A busy
-hasher answers 503. `cmd/ribbitto` creates the process's one `auth.Hasher`
-here and shares it with every authentication use case.
+**Sign-in and sign-out pages** (`internal/web/signin.go`). `GET /signin`
+shows the form (a signed-in request is redirected to `/`). `POST /signin`
+calls `auth.SignIn` (above) with the cookie the browser sent, so that
+session is the one replaced; on success it sets the new cookie and
+redirects to `/` with 303. An unknown email and a wrong password get the
+same page, status (422) and message; the typed email is kept and the
+password never echoed. A busy hasher answers 503. `POST /signout` deletes
+the session row, clears the cookie and redirects to `/signin`; there is no
+GET sign-out. `cmd/ribbitto` creates the process's one `auth.Hasher` here
+and shares it with every authentication use case.
 
 `serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
 a `database/sql` handle, which goose needs.

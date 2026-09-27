@@ -273,7 +273,7 @@ func newTestHandler(t *testing.T, dir string) (http.Handler, error) {
 			t.Errorf("unexpected message fallback: %s", logs.String())
 		}
 	})
-	return NewHandler(dir, catalogues, noSessions{})
+	return NewHandler(dir, catalogues, Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}})
 }
 
 func TestHelloLanguages(t *testing.T) {
@@ -352,6 +352,21 @@ func (c *countingResolver) Resolve(context.Context, string) (domain.Account, err
 	return domain.Account{}, errors.New("connection refused")
 }
 
+func TestNewHandlerRequiresServices(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, services := range map[string]Services{
+		"no sessions": {SignIn: &fakeSignIn{}},
+		"no sign-in":  {Sessions: noSessions{}},
+	} {
+		if _, err := NewHandler("", catalogues, services); err == nil {
+			t.Errorf("%s: NewHandler accepted incomplete services", name)
+		}
+	}
+}
+
 func TestSessionLookupOnlyOnRegisteredRoutes(t *testing.T) {
 	var logs bytes.Buffer
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&logs, nil)))
@@ -376,7 +391,7 @@ func TestSessionLookupOnlyOnRegisteredRoutes(t *testing.T) {
 	} {
 		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
 			resolver := &countingResolver{}
-			handler, err := NewHandler("", catalogues, resolver)
+			handler, err := NewHandler("", catalogues, Services{Sessions: resolver, SignIn: &fakeSignIn{}})
 			if err != nil {
 				t.Fatal(err)
 			}

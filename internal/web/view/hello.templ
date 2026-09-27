@@ -2,13 +2,38 @@ package view
 
 import "github.com/tkakkie/ribbitto/internal/web/i18n"
 
+// Viewer describes who is looking at a page.
+type Viewer struct {
+	SignedIn    bool
+	DisplayName string
+}
+
 // Hello renders the initial page inside the shared layout.
-templ Hello(stylesheetURL string) {
+templ Hello(stylesheetURL string, viewer Viewer) {
 	@layout(stylesheetURL) {
 		<main class="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-2 p-8">
 			<h1 class="text-display font-bold tracking-tight text-fg">{ i18n.T(ctx, "hello.title") }</h1>
 			<p class="text-title text-muted">{ i18n.T(ctx, "hello.tagline") }</p>
 			<div aria-hidden="true" class="mt-4 h-1 w-12 rounded-sm bg-accent"></div>
+			if viewer.SignedIn {
+				<div class="mt-6 flex flex-wrap items-center gap-3">
+					<p class="text-body text-muted">
+						{ i18n.T(ctx, "hello.signed_in_as") }
+						<span class="font-semibold text-fg">{ viewer.DisplayName }</span>
+					</p>
+					@SignOutButton()
+				</div>
+			} else {
+				<a href="/signin" class="mt-6 inline-flex min-h-11 items-center self-start text-body font-semibold text-brand underline">{ i18n.T(ctx, "hello.sign_in") }</a>
+			}
 		</main>
 	}
+}
+
+// SignOutButton is a form, because signing out changes state and so must be
+// a POST.
+templ SignOutButton() {
+	<form method="post" action="/signout">
+		<button type="submit" class="min-h-11 rounded-md border border-border-strong px-3 py-1 text-body text-fg">{ i18n.T(ctx, "signout.submit") }</button>
+	</form>
 }

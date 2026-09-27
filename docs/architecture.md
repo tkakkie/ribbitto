@@ -145,6 +145,17 @@ from email or chat), and cross-origin POSTs are stopped separately (below).
    cookie, so an outage does not sign everyone out. Responses to signed-in
    requests carry `Cache-Control: no-store`.
 
+**Sign-in and sign-out pages** (`internal/web/signin.go`). `GET /signin`
+shows the form (a signed-in request is redirected to `/`). `POST /signin`
+calls `auth.SignIn` (above) with the cookie the browser sent, so that
+session is the one replaced; on success it sets the new cookie and
+redirects to `/` with 303. An unknown email and a wrong password get the
+same page, status (422) and message; the typed email is kept and the
+password never echoed. A busy hasher answers 503. `POST /signout` deletes
+the session row, clears the cookie and redirects to `/signin`; there is no
+GET sign-out. `cmd/ribbitto` creates the process's one `auth.Hasher` here
+and shares it with every authentication use case.
+
 `serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
 a `database/sql` handle, which goose needs.
 

@@ -75,3 +75,12 @@ other = "Enter a valid email address."
 
 ["setup.error.password"]
 other = "Use a password of 15–128 characters."
+
+["signup.title"]
+other = "Sign up for ribbitto"
+
+["signup.submit"]
+other = "Create account and sign in"
+
+["signup.error.email_taken"]
+other = "This email address is already registered."

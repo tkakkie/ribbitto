@@ -75,3 +75,12 @@ other = "有効なメールアドレスを入力してください。"
 
 ["setup.error.password"]
 other = "パスワードは15〜128文字で入力してください。"
+
+["signup.title"]
+other = "ribbittoに登録"
+
+["signup.submit"]
+other = "アカウントを作成してサインイン"
+
+["signup.error.email_taken"]
+other = "このメールアドレスは既に登録されています。"

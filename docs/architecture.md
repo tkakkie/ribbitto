@@ -157,8 +157,8 @@ from email or chat), and cross-origin POSTs are stopped separately (below).
 3. On everything except `/static/` and `/healthz`: security headers
    (below), then i18n.
 4. On each **registered** HTML route (the `sessionMux` in `NewHandler`
-   wraps routes one by one; `/setup` is the one page registered without
-   it): `middleware.Session`. An unknown path or
+   wraps routes one by one; `/setup` and `/signup` are registered without
+   it, so their availability is decided first): `middleware.Session`. An unknown path or
    method gets its plain 404 or 405 without a session lookup, so it costs
    no query and stays 404 while the database is down. The middleware
    resolves the cookie and puts the account in the context

@@ -5,8 +5,9 @@ import "github.com/tkakkie/ribbitto/internal/web/i18n"
 // SignInForm is what the sign-in page shows again after a failed attempt.
 // It never carries the password.
 type SignInForm struct {
-	Email string
-	Error string // message ID, empty when there is no error
+	SignUpOpen bool
+	Email      string
+	Error      string // message ID, empty when there is no error
 }
 
 // SignIn renders the sign-in page.
@@ -28,6 +29,9 @@ templ SignIn(stylesheetURL string, form SignInForm) {
 				</label>
 				<button type="submit" class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand">{ i18n.T(ctx, "signin.submit") }</button>
 			</form>
+			if form.SignUpOpen {
+				<a href="/signup" class="flex min-h-11 items-center text-body text-brand">{ i18n.T(ctx, "signup.title") }</a>
+			}
 		</main>
 	}
 }

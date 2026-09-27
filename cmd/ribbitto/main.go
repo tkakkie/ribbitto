@@ -15,6 +15,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
+	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -55,6 +56,10 @@ func run() error {
 }
 
 func serve(ctx context.Context, databaseURL string) error {
+	enabled, err := signupEnabled(os.Getenv("RIBBITTO_SIGNUP"))
+	if err != nil {
+		return err
+	}
 	token, err := setupToken()
 	if err != nil {
 		return err
@@ -93,6 +98,7 @@ func serve(ctx context.Context, databaseURL string) error {
 		Sessions:      sessions,
 		SignIn:        auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
 		Setup:         setupService,
+		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, enabled),
 		SetupSessions: sessions,
 	})
 	if err != nil {
@@ -170,5 +176,16 @@ func deleteExpiredSessions(ctx context.Context, sessions *auth.Sessions) {
 			return
 		case <-ticker.C:
 		}
+	}
+}
+
+func signupEnabled(value string) (bool, error) {
+	switch value {
+	case "on":
+		return true, nil
+	case "off", "":
+		return false, nil
+	default:
+		return false, fmt.Errorf("RIBBITTO_SIGNUP must be on, off or empty")
 	}
 }

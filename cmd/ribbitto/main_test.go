@@ -63,3 +63,16 @@ func TestSessionCleanupStops(t *testing.T) {
 		t.Fatal("stop did not cancel a blocked clean-up")
 	}
 }
+
+func TestSignupEnabled(t *testing.T) {
+	for _, value := range []string{"on", "off", "", "ON", "true", " on"} {
+		enabled, err := signupEnabled(value)
+		if enabled != (value == "on") || (err != nil) != (value != "on" && value != "off" && value != "") {
+			t.Fatalf("%q: %t, %v", value, enabled, err)
+		}
+	}
+	t.Setenv("RIBBITTO_SIGNUP", "invalid")
+	if err := serve(t.Context(), ""); err == nil || !strings.Contains(err.Error(), "RIBBITTO_SIGNUP") {
+		t.Fatalf("invalid signup switch did not prevent startup: %v", err)
+	}
+}

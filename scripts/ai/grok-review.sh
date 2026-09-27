@@ -233,8 +233,9 @@ supervisor=""
 case $status in
   0) ;;
   124)
+    next=$(( timeout * 2 > 86400 ? 86400 : timeout * 2 ))
     echo "grok-review: Grok did not finish within ${timeout}s" >&2
-    printf 'grok-review: Rerun with a longer limit (for example, 7200 seconds): git fetch origin main && launcher=$(git show origin/main:scripts/ai/grok-review.sh) && RIBBITTO_GROK_TIMEOUT=7200 bash -c "$launcher" grok-review %s\n' "$pr" >&2
+    printf 'grok-review: Rerun with a longer limit (for example, %s seconds): git fetch origin main && launcher=$(git show origin/main:scripts/ai/grok-review.sh) && RIBBITTO_GROK_TIMEOUT=%s bash -c "$launcher" grok-review %s\n' "$next" "$next" "$pr" >&2
     exit 124 ;;
   *) echo "grok-review: Grok failed (exit $status)" >&2; exit "$status" ;;
 esac

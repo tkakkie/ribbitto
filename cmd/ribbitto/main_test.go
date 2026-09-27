@@ -2,12 +2,32 @@ package main
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
 )
+
+func TestSetupToken(t *testing.T) {
+	for _, value := range []string{"unset", "", strings.Repeat("x", 31), strings.Repeat("x", 32)} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("RIBBITTO_SETUP_TOKEN", value)
+			if value == "unset" {
+				if err := os.Unsetenv("RIBBITTO_SETUP_TOKEN"); err != nil {
+					t.Fatal(err)
+				}
+				value = ""
+			}
+			token, err := setupToken()
+			if (err != nil) != (len(value) == 31) || (err == nil && token != value) {
+				t.Fatalf("setupToken() = %q, %v", token, err)
+			}
+		})
+	}
+}
 
 // blockingStore's clean-up blocks until its context ends, like a query
 // waiting on a lock.

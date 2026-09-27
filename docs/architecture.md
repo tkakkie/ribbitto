@@ -85,7 +85,15 @@ existence of an organisation or channel is not revealed.
 before using the shared `auth.Hasher`. Its store interface requires atomic
 creation; `postgres.SetupStore` implements it with one transaction for the
 organisation, first sequence, owner account, membership and setup marker.
-The service exposes whether setup is open; the HTTP page and wiring are #42.
+`cmd/ribbitto` validates `RIBBITTO_SETUP_TOKEN` before opening the database:
+empty disables setup, and a non-empty value needs at least 32 characters.
+Both GET and POST `/setup` return 404 when disabled, without calling setup.
+Otherwise the handler checks `Open` before rendering or accepting a form.
+POST calls `Complete` (#31); closed setup (including a concurrent completion)
+returns 404, invalid fields or token return 422 without echoing secrets, and
+a busy hasher returns 503. Success creates a session for the owner through
+`auth.Sessions.Create`, sets the shared session cookie and redirects to `/`
+with 303. Setup and sign-in share the process's single password hasher.
 
 ## Sessions
 

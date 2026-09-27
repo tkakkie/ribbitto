@@ -11,8 +11,10 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -53,6 +55,10 @@ func run() error {
 }
 
 func serve(ctx context.Context, databaseURL string) error {
+	token, err := setupToken()
+	if err != nil {
+		return err
+	}
 	addr := os.Getenv("RIBBITTO_ADDR")
 	if addr == "" {
 		addr = ":8080"
@@ -70,6 +76,10 @@ func serve(ctx context.Context, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	var setupService web.SetupService
+	if token != "" {
+		setupService = setup.New(postgres.NewSetupStore(pool), hasher, token)
+	}
 	// Deferred after pool.Close, so it runs first: the clean-up must stop and
 	// return its connection on every exit path, or Close would wait for it.
 	stopCleanup := startSessionCleanup(ctx, sessions)
@@ -80,8 +90,10 @@ func serve(ctx context.Context, databaseURL string) error {
 		return err
 	}
 	handler, err := web.NewHandler(os.Getenv("RIBBITTO_DEV_ASSETS"), catalogues, web.Services{
-		Sessions: sessions,
-		SignIn:   auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
+		Sessions:      sessions,
+		SignIn:        auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
+		Setup:         setupService,
+		SetupSessions: sessions,
 	})
 	if err != nil {
 		return err
@@ -117,6 +129,14 @@ func serve(ctx context.Context, databaseURL string) error {
 		return err
 	}
 	return nil
+}
+
+func setupToken() (string, error) {
+	token := os.Getenv("RIBBITTO_SETUP_TOKEN")
+	if token != "" && utf8.RuneCountInString(token) < 32 {
+		return "", fmt.Errorf("RIBBITTO_SETUP_TOKEN must be empty or at least 32 characters")
+	}
+	return token, nil
 }
 
 // startSessionCleanup deletes expired sessions at once and then hourly. The

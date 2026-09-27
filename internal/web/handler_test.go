@@ -117,6 +117,8 @@ func TestHTMLSecurity(t *testing.T) {
 		{"embedded Japanese", "/", "ja", ""},
 		{"development English", "/", "en", "../../web/static"},
 		{"development Japanese", "/", "ja", "../../web/static"},
+		{"setup English", "/setup", "en", ""},
+		{"setup Japanese", "/setup", "ja", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			handler, err := newTestHandler(t, tt.assets)
@@ -273,7 +275,7 @@ func newTestHandler(t *testing.T, dir string) (http.Handler, error) {
 			t.Errorf("unexpected message fallback: %s", logs.String())
 		}
 	})
-	return NewHandler(dir, catalogues, Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}})
+	return NewHandler(dir, catalogues, Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: &fakeSetup{open: true}})
 }
 
 func TestHelloLanguages(t *testing.T) {

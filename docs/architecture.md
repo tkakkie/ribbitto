@@ -79,6 +79,14 @@ The organisation always comes from the URL, never from a request body. An
 account that is not a member of that organisation gets 404, not 403, so the
 existence of an organisation or channel is not revealed.
 
+## First-run setup
+
+`internal/app/setup` checks the configured token and validates all fields
+before using the shared `auth.Hasher`. Its store interface requires atomic
+creation; `postgres.SetupStore` implements it with one transaction for the
+organisation, first sequence, owner account, membership and setup marker.
+The service exposes whether setup is open; the HTTP page and wiring are #42.
+
 ## Sessions
 
 `internal/app/auth.Sessions` owns the session lifecycle; the cookie and the

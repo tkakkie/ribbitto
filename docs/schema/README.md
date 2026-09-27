@@ -9,6 +9,7 @@
 | [public.account](public.account.md) | 5 |  | BASE TABLE |
 | [public.session](public.session.md) | 5 |  | BASE TABLE |
 | [public.member](public.member.md) | 6 |  | BASE TABLE |
+| [public.setup](public.setup.md) | 3 |  | BASE TABLE |
 
 ## Relations
 
@@ -18,6 +19,7 @@ erDiagram
 "public.session" }o--|| "public.account" : "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE"
 "public.member" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.member" }o--|| "public.account" : "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE RESTRICT"
+"public.setup" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 
 "public.goose_db_version" {
   integer id
@@ -53,6 +55,11 @@ erDiagram
   text role
   bigint joined_event_seq
   timestamp_with_time_zone created_at
+}
+"public.setup" {
+  boolean id
+  uuid organization_id FK
+  timestamp_with_time_zone completed_at
 }
 ```
 

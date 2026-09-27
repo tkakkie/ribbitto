@@ -40,3 +40,9 @@ type Session struct {
 	CreatedAt pgtype.Timestamptz
 	ExpiresAt pgtype.Timestamptz
 }
+
+type Setup struct {
+	ID             bool
+	OrganizationID pgtype.UUID
+	CompletedAt    pgtype.Timestamptz
+}

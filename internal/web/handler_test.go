@@ -377,7 +377,7 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 	for name, services := range map[string]Services{
 		"no sessions":                       {SignIn: &fakeSignIn{}},
 		"no sign-in":                        {Sessions: noSessions{}},
-		"setup without a session creator":   {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: &fakeSetup{}},
+		"setup without a session creator":   {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Authz: noOrganisations{}, Setup: &fakeSetup{}},
 		"sign-up without a session creator": {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Authz: noOrganisations{}, SignUp: fakeSignUp{&fakeSetup{}}},
 	} {
 		if _, err := NewHandler("", catalogues, services); err == nil {

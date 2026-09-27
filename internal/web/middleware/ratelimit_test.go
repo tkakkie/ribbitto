@@ -92,7 +92,23 @@ func TestClientKey(t *testing.T) {
 			}
 		})
 	}
-	if _, err := ParseTrustedProxies("10.0.0.0/8,nonsense"); err == nil {
-		t.Fatal("invalid CIDR accepted")
+	for _, invalid := range []string{"10.0.0.0/8,nonsense", "::ffff:0:0/95"} {
+		if _, err := ParseTrustedProxies(invalid); err == nil {
+			t.Fatalf("invalid trusted proxies %q accepted", invalid)
+		}
+	}
+	// An IPv4-mapped CIDR means the same as its IPv4 form, for peers and
+	// for hops in the header, however either is spelled.
+	mapped, err := ParseTrustedProxies("::ffff:10.0.0.0/104")
+	if err != nil || len(mapped) != 1 || mapped[0] != netip.MustParsePrefix("10.0.0.0/8") {
+		t.Fatalf("mapped CIDR parsed as %v, %v", mapped, err)
+	}
+	for _, remote := range []string{"10.0.0.2:1234", "[::ffff:10.0.0.2]:1234"} {
+		r := httptest.NewRequest("POST", "/signin", nil)
+		r.RemoteAddr = remote
+		r.Header.Set("X-Forwarded-For", "203.0.113.9, ::ffff:10.9.9.9")
+		if got := ClientKey(r, mapped); got != netip.MustParsePrefix("203.0.113.9/32") {
+			t.Fatalf("peer %s with a mapped trusted CIDR: key %s", remote, got)
+		}
 	}
 }

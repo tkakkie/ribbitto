@@ -92,6 +92,14 @@ func ParseTrustedProxies(value string) ([]netip.Prefix, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parsing trusted proxy %q: %w", field, err)
 		}
+		// Addresses are compared unmapped (ClientKey), so an IPv4-mapped
+		// CIDR must become its IPv4 equivalent or it would never match.
+		if prefix.Addr().Is4In6() {
+			if prefix.Bits() < 96 {
+				return nil, fmt.Errorf("trusted proxy %q: an IPv4-mapped CIDR needs a prefix length of at least 96", field)
+			}
+			prefix = netip.PrefixFrom(prefix.Addr().Unmap(), prefix.Bits()-96)
+		}
 		prefixes = append(prefixes, prefix.Masked())
 	}
 	return prefixes, nil

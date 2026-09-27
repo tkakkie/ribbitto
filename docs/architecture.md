@@ -193,8 +193,31 @@ from `web/static` into the binary; the stylesheet URL carries the SHA-256
 of the embedded CSS, so assets can be cached as immutable. In development
 (`make dev`, `RIBBITTO_DEV_ASSETS=web/static`) assets are read from disk and
 the hash is recomputed per request, so rebuilt CSS appears without a
-restart. No inline scripts: a strict Content Security Policy can be added
-without rework.
+restart.
+
+**Content Security Policy.** HTML routes are registered on the `pages` mux
+in `internal/web.NewHandler`, behind `middleware.SecurityHeaders`. Each
+response gets a fresh 32-byte `crypto/rand` nonce, base64-encoded and passed
+to templ through `templ.WithNonce`; every script in the shared layout uses
+`templ.GetNonce(ctx)`. The policy is defined in one place in
+`internal/web/middleware/security.go`:
+
+```text
+default-src 'self'; script-src 'nonce-<nonce>'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+```
+
+There is no `'self'` in `script-src`: even same-origin external scripts
+require the response's nonce. This is defence in depth against HTML
+injection. HTML responses also send `X-Content-Type-Options: nosniff` and
+`Referrer-Policy: same-origin`; `/static/` and `/healthz` bypass this
+middleware. Caddy owns `Strict-Transport-Security` in deployment.
+
+The layout's `htmx-config` meta tag sets `allowEval: false`,
+`allowScriptTags: false` and `includeIndicatorStyles: false`. htmx cannot
+evaluate attribute scripts, execute scripts from swapped fragments, or
+inject its default inline indicator stylesheet. Do not use inline scripts,
+`hx-on`, or other attribute scripts; keep JavaScript and styles in external
+assets.
 
 **Languages.** `internal/web/i18n` embeds the English and Japanese TOML
 catalogues (go-i18n). `cmd/ribbitto` creates one catalogue service for the

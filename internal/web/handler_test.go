@@ -273,7 +273,7 @@ func newTestHandler(t *testing.T, dir string) (http.Handler, error) {
 			t.Errorf("unexpected message fallback: %s", logs.String())
 		}
 	})
-	return NewHandler(dir, catalogues, noSessions{})
+	return NewHandler(dir, catalogues, Services{Sessions: noSessions{}})
 }
 
 func TestHelloLanguages(t *testing.T) {
@@ -376,7 +376,7 @@ func TestSessionLookupOnlyOnRegisteredRoutes(t *testing.T) {
 	} {
 		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
 			resolver := &countingResolver{}
-			handler, err := NewHandler("", catalogues, resolver)
+			handler, err := NewHandler("", catalogues, Services{Sessions: resolver})
 			if err != nil {
 				t.Fatal(err)
 			}

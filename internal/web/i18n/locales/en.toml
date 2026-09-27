@@ -6,3 +6,30 @@ other = "Hello from ribbitto"
 
 ["hello.tagline"]
 other = "A small, self-hostable team chat with a frog on the logo."
+
+["hello.sign_in"]
+other = "Sign in"
+
+["hello.signed_in_as"]
+other = "Signed in as"
+
+["signout.submit"]
+other = "Sign out"
+
+["signin.title"]
+other = "Sign in to ribbitto"
+
+["signin.email"]
+other = "Email address"
+
+["signin.password"]
+other = "Password"
+
+["signin.submit"]
+other = "Sign in"
+
+["signin.error.required"]
+other = "Enter your email address and password."
+
+["signin.error.invalid"]
+other = "The email address or password is incorrect."

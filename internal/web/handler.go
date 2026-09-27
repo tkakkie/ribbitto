@@ -14,9 +14,15 @@ import (
 	"github.com/tkakkie/ribbitto/web/static"
 )
 
+// Services are the use cases the handlers call.
+type Services struct {
+	Sessions middleware.SessionResolver
+	SignIn   SignInService
+}
+
 // NewHandler constructs the application's HTTP routes. A non-empty devAssets
 // directory serves live assets from disk instead of the embedded production assets.
-func NewHandler(devAssets string, catalogues *i18n.Catalogues, sessions middleware.SessionResolver) (http.Handler, error) {
+func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services) (http.Handler, error) {
 	assets := static.FS()
 	if devAssets != "" {
 		assets = os.DirFS(devAssets)
@@ -25,22 +31,21 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, sessions middlewa
 	if err != nil {
 		return nil, err
 	}
-	var home http.Handler = templ.Handler(view.Hello(stylesheetURL))
+	pages := &pageRenderer{stylesheetURL: func() (string, error) { return stylesheetURL, nil }}
 	if devAssets != "" {
-		home = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			url, err := stylesheetURLForAssets(assets)
-			if err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-			templ.Handler(view.Hello(url)).ServeHTTP(w, r)
-		})
+		pages.stylesheetURL = func() (string, error) { return stylesheetURLForAssets(assets) }
 	}
 	// Register HTML routes here so new pages inherit the shared middleware.
-	pages := sessionMux{http.NewServeMux(), sessions}
-	pages.Handle("GET /{$}", home)
+	routes := sessionMux{http.NewServeMux(), services.Sessions}
+	routes.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		account, signedIn := middleware.Account(r.Context())
+		pages.render(w, r, http.StatusOK, func(url string) templ.Component {
+			return view.Hello(url, view.Viewer{SignedIn: signedIn, DisplayName: account.DisplayName})
+		})
+	})
+	registerSignIn(routes, pages, services.SignIn)
 	mux := http.NewServeMux()
-	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(pages)))
+	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})
@@ -69,6 +74,21 @@ func stylesheetURLForAssets(assets fs.FS) (string, error) {
 		return "", fmt.Errorf("reading stylesheet: %w", err)
 	}
 	return fmt.Sprintf("/static/css/app.css?v=%x", sha256.Sum256(css)), nil
+}
+
+// pageRenderer renders full pages; in development the stylesheet URL is
+// recomputed per request so rebuilt CSS shows up without a restart.
+type pageRenderer struct {
+	stylesheetURL func() (string, error)
+}
+
+func (p *pageRenderer) render(w http.ResponseWriter, r *http.Request, status int, page func(stylesheetURL string) templ.Component) {
+	url, err := p.stylesheetURL()
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	templ.Handler(page(url), templ.WithStatus(status)).ServeHTTP(w, r)
 }
 
 // sessionMux registers HTML routes behind the session middleware one by

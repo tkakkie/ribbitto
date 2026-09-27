@@ -64,6 +64,12 @@ func serve(ctx context.Context, databaseURL string) error {
 	}
 	defer pool.Close()
 	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
+	// One hasher for the whole process: its slots are the cap on concurrent
+	// Argon2id work (DECISIONS.md 10).
+	hasher, err := auth.NewHasher()
+	if err != nil {
+		return err
+	}
 	// Deferred after pool.Close, so it runs first: the clean-up must stop and
 	// return its connection on every exit path, or Close would wait for it.
 	stopCleanup := startSessionCleanup(ctx, sessions)
@@ -73,7 +79,10 @@ func serve(ctx context.Context, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	handler, err := web.NewHandler(os.Getenv("RIBBITTO_DEV_ASSETS"), catalogues, sessions)
+	handler, err := web.NewHandler(os.Getenv("RIBBITTO_DEV_ASSETS"), catalogues, web.Services{
+		Sessions: sessions,
+		SignIn:   auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
+	})
 	if err != nil {
 		return err
 	}

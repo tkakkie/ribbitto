@@ -6,3 +6,30 @@ other = "ribbittoからこんにちは"
 
 ["hello.tagline"]
 other = "カエルがロゴの、小さなセルフホスト型チームチャット。"
+
+["hello.sign_in"]
+other = "サインイン"
+
+["hello.signed_in_as"]
+other = "サインイン中:"
+
+["signout.submit"]
+other = "サインアウト"
+
+["signin.title"]
+other = "ribbittoにサインイン"
+
+["signin.email"]
+other = "メールアドレス"
+
+["signin.password"]
+other = "パスワード"
+
+["signin.submit"]
+other = "サインイン"
+
+["signin.error.required"]
+other = "メールアドレスとパスワードを入力してください。"
+
+["signin.error.invalid"]
+other = "メールアドレスまたはパスワードが正しくありません。"

@@ -3,13 +3,17 @@ package web
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"html"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -84,8 +88,9 @@ func TestHello(t *testing.T) {
 		}
 	}
 	previous := -1
+	nonce := responseNonce(t, w)
 	for _, file := range []string{"htmx-2.0.7.min.js", "htmx-ext-sse-2.2.4.min.js", "idiomorph-ext-0.7.4.min.js"} {
-		index := strings.Index(body, `<script defer src="/static/vendor/`+file+`"></script>`)
+		index := strings.Index(body, `<script defer src="/static/vendor/`+file+`" nonce="`+nonce+`"></script>`)
 		if index <= previous {
 			t.Errorf("script %s missing or out of order", file)
 		}
@@ -96,6 +101,89 @@ func TestHello(t *testing.T) {
 	if w.Code != http.StatusOK || w.Body.String() != string(css) {
 		t.Error("hashed stylesheet URL does not serve the embedded CSS")
 	}
+}
+
+func TestHTMLSecurity(t *testing.T) {
+	scripts := regexp.MustCompile(`<script\b[^>]*>`)
+	config := regexp.MustCompile(`<meta name="htmx-config" content='([^']*)'`)
+	// Keep this table complete as HTML pages are added.
+	for _, tt := range []struct{ name, path, lang, assets string }{
+		{"embedded English", "/", "en", ""},
+		{"embedded Japanese", "/", "ja", ""},
+		{"development English", "/", "en", "../../web/static"},
+		{"development Japanese", "/", "ja", "../../web/static"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, err := newTestHandler(t, tt.assets)
+			if err != nil {
+				t.Fatal(err)
+			}
+			previous := ""
+			for range 2 {
+				r := httptest.NewRequest(http.MethodGet, tt.path, nil)
+				r.Header.Set("Accept-Language", tt.lang)
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, r)
+				if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "text/html; charset=utf-8" {
+					t.Fatalf("expected HTML page, got status %d and headers %v", w.Code, w.Header())
+				}
+				nonce := responseNonce(t, w)
+				if nonce == previous {
+					t.Error("two responses reused a nonce")
+				}
+				previous = nonce
+				tags := scripts.FindAllString(w.Body.String(), -1)
+				if len(tags) != 3 {
+					t.Fatalf("got %d scripts, want 3", len(tags))
+				}
+				for _, tag := range tags {
+					if !strings.Contains(tag, ` nonce="`+nonce+`"`) {
+						t.Errorf("script lacks response nonce: %s", tag)
+					}
+				}
+				match := config.FindStringSubmatch(w.Body.String())
+				if len(match) != 2 {
+					t.Fatal("missing htmx-config meta tag")
+				}
+				var settings map[string]bool
+				if err := json.Unmarshal([]byte(html.UnescapeString(match[1])), &settings); err != nil {
+					t.Fatal(err)
+				}
+				for _, name := range []string{"allowEval", "allowScriptTags", "includeIndicatorStyles"} {
+					if value, exists := settings[name]; !exists || value {
+						t.Errorf("htmx %s must explicitly be false", name)
+					}
+				}
+				if strings.Index(w.Body.String(), match[0]) > strings.Index(w.Body.String(), tags[0]) {
+					t.Error("htmx configuration must precede scripts")
+				}
+			}
+		})
+	}
+}
+
+func responseNonce(t *testing.T, w *httptest.ResponseRecorder) string {
+	t.Helper()
+	policy := w.Header().Get("Content-Security-Policy")
+	_, rest, found := strings.Cut(policy, "script-src 'nonce-")
+	nonce, _, closed := strings.Cut(rest, "'")
+	if !found || !closed {
+		t.Fatalf("missing script nonce in CSP: %q", policy)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(nonce)
+	if err != nil || len(decoded) != 32 {
+		t.Fatalf("nonce must encode 32 random bytes: %q (%v)", nonce, err)
+	}
+	for name, want := range map[string]string{
+		"Content-Security-Policy": "default-src 'self'; script-src 'nonce-" + nonce + "'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+		"X-Content-Type-Options":  "nosniff",
+		"Referrer-Policy":         "same-origin",
+	} {
+		if got := w.Header().Get(name); got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
+	}
+	return nonce
 }
 
 func TestDevelopmentAssets(t *testing.T) {

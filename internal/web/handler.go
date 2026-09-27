@@ -9,6 +9,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"github.com/tkakkie/ribbitto/web/static"
 )
@@ -35,8 +36,11 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues) (http.Handler, er
 			templ.Handler(view.Hello(url)).ServeHTTP(w, r)
 		})
 	}
+	// Register HTML routes here so new pages inherit the shared middleware.
+	pages := http.NewServeMux()
+	pages.Handle("GET /{$}", home)
 	mux := http.NewServeMux()
-	mux.Handle("GET /{$}", catalogues.Middleware(home))
+	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(pages)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})

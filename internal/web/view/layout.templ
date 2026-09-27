@@ -8,11 +8,12 @@ templ layout(stylesheetURL string) {
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false}'/>
 			<title>{ i18n.T(ctx, "app.title") }</title>
 			<link rel="stylesheet" href={ stylesheetURL }/>
-			<script defer src="/static/vendor/htmx-2.0.7.min.js"></script>
-			<script defer src="/static/vendor/htmx-ext-sse-2.2.4.min.js"></script>
-			<script defer src="/static/vendor/idiomorph-ext-0.7.4.min.js"></script>
+			<script defer src="/static/vendor/htmx-2.0.7.min.js" nonce={ templ.GetNonce(ctx) }></script>
+			<script defer src="/static/vendor/htmx-ext-sse-2.2.4.min.js" nonce={ templ.GetNonce(ctx) }></script>
+			<script defer src="/static/vendor/idiomorph-ext-0.7.4.min.js" nonce={ templ.GetNonce(ctx) }></script>
 		</head>
 		<body>
 			{ children... }

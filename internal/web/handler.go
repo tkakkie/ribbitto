@@ -16,7 +16,7 @@ import (
 
 // NewHandler constructs the application's HTTP routes. A non-empty devAssets
 // directory serves live assets from disk instead of the embedded production assets.
-func NewHandler(devAssets string, catalogues *i18n.Catalogues) (http.Handler, error) {
+func NewHandler(devAssets string, catalogues *i18n.Catalogues, sessions middleware.SessionResolver) (http.Handler, error) {
 	assets := static.FS()
 	if devAssets != "" {
 		assets = os.DirFS(devAssets)
@@ -37,7 +37,7 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues) (http.Handler, er
 		})
 	}
 	// Register HTML routes here so new pages inherit the shared middleware.
-	pages := http.NewServeMux()
+	pages := sessionMux{http.NewServeMux(), sessions}
 	pages.Handle("GET /{$}", home)
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(pages)))
@@ -57,7 +57,10 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues) (http.Handler, er
 		}
 		http.FileServerFS(assets).ServeHTTP(w, r)
 	})))
-	return mux, nil
+	// Outermost: reject cross-origin state changes before anything else runs.
+	// It lets GET, HEAD and OPTIONS through, so every route that changes
+	// state must be a POST.
+	return http.NewCrossOriginProtection().Handler(middleware.LimitBody(mux)), nil
 }
 
 func stylesheetURLForAssets(assets fs.FS) (string, error) {
@@ -66,4 +69,23 @@ func stylesheetURLForAssets(assets fs.FS) (string, error) {
 		return "", fmt.Errorf("reading stylesheet: %w", err)
 	}
 	return fmt.Sprintf("/static/css/app.css?v=%x", sha256.Sum256(css)), nil
+}
+
+// sessionMux registers HTML routes behind the session middleware one by
+// one, rather than wrapping the whole mux: only a registered route looks the
+// session up, so an unknown path answers 404 without a database query (and
+// still 404, not 500, while the database is down).
+type sessionMux struct {
+	*http.ServeMux
+	sessions middleware.SessionResolver
+}
+
+// Handle registers handler for pattern behind the session middleware.
+func (m sessionMux) Handle(pattern string, handler http.Handler) {
+	m.ServeMux.Handle(pattern, middleware.Session(m.sessions, handler))
+}
+
+// HandleFunc registers f for pattern behind the session middleware.
+func (m sessionMux) HandleFunc(pattern string, f func(http.ResponseWriter, *http.Request)) {
+	m.Handle(pattern, http.HandlerFunc(f))
 }

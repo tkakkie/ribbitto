@@ -2,10 +2,13 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"html"
 	"io/fs"
 	"log/slog"
@@ -17,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/web/static"
 )
@@ -186,6 +191,36 @@ func responseNonce(t *testing.T, w *httptest.ResponseRecorder) string {
 	return nonce
 }
 
+func TestCrossOriginProtection(t *testing.T) {
+	handler, err := newTestHandler(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name    string
+		headers map[string]string
+		status  int
+	}{
+		{"cross-site fetch", map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusForbidden},
+		{"foreign origin without Sec-Fetch-Site", map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
+		// No POST route exists yet, so a request that passes the protection
+		// reaches the router and gets 405 for GET-only "/".
+		{"same origin", map[string]string{"Sec-Fetch-Site": "same-origin", "Origin": "http://example.com"}, http.StatusMethodNotAllowed},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "http://example.com/", strings.NewReader("a=b"))
+			for name, value := range tt.headers {
+				r.Header.Set(name, value)
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tt.status {
+				t.Fatalf("status = %d, want %d", w.Code, tt.status)
+			}
+		})
+	}
+}
+
 func TestDevelopmentAssets(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "css"), 0o755); err != nil {
@@ -238,7 +273,7 @@ func newTestHandler(t *testing.T, dir string) (http.Handler, error) {
 			t.Errorf("unexpected message fallback: %s", logs.String())
 		}
 	})
-	return NewHandler(dir, catalogues)
+	return NewHandler(dir, catalogues, noSessions{})
 }
 
 func TestHelloLanguages(t *testing.T) {
@@ -296,6 +331,61 @@ func TestHelloLanguages(t *testing.T) {
 			}
 			if len(w.Header().Values("Set-Cookie")) != 0 {
 				t.Error("language negotiation must not set a cookie")
+			}
+		})
+	}
+}
+
+// noSessions signs nobody in, for tests that do not need a session.
+type noSessions struct{}
+
+func (noSessions) Resolve(context.Context, string) (domain.Account, error) {
+	return domain.Account{}, auth.ErrNoSession
+}
+
+// countingResolver counts lookups and fails every one, like a database
+// outage.
+type countingResolver struct{ calls int }
+
+func (c *countingResolver) Resolve(context.Context, string) (domain.Account, error) {
+	c.calls++
+	return domain.Account{}, errors.New("connection refused")
+}
+
+func TestSessionLookupOnlyOnRegisteredRoutes(t *testing.T) {
+	var logs bytes.Buffer
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&logs, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		method, path string
+		status       int
+		lookups      int
+	}{
+		// Unknown paths and methods: plain 404/405, no lookup, even during
+		// an outage.
+		{http.MethodGet, "/missing", http.StatusNotFound, 0},
+		{http.MethodGet, "/nested/path", http.StatusNotFound, 0},
+		{http.MethodPost, "/", http.StatusMethodNotAllowed, 0},
+		// Routes outside the HTML middleware never look the session up.
+		{http.MethodGet, "/healthz", http.StatusOK, 0},
+		{http.MethodGet, "/static/css/app.css", http.StatusOK, 0},
+		// A registered page does, so the outage shows as 500 there.
+		{http.MethodGet, "/", http.StatusInternalServerError, 1},
+	} {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			resolver := &countingResolver{}
+			handler, err := NewHandler("", catalogues, resolver)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(tt.method, tt.path, nil)
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "some-token"})
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tt.status || resolver.calls != tt.lookups {
+				t.Fatalf("status %d with %d lookups; want %d with %d", w.Code, resolver.calls, tt.status, tt.lookups)
 			}
 		})
 	}

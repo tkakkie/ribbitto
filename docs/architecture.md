@@ -57,7 +57,7 @@ endpoint or a real-time path cannot quietly skip it; and because use cases
 return plain structs and only `web` renders HTML, a JSON API can be added
 next to the HTML handlers later without touching `app`.
 
-## Request flow *(planned from M1: the tables exist; session handling, member resolution and authorization are not wired yet)*
+## Request flow *(planned from M1: sessions are wired; member resolution and authorization are not yet)*
 
 ```mermaid
 sequenceDiagram
@@ -89,8 +89,8 @@ The service exposes whether setup is open; the HTTP page and wiring are #42.
 
 ## Sessions
 
-`internal/app/auth.Sessions` owns the session lifecycle; the cookie and the
-middleware that call it arrive in #38.
+`internal/app/auth.Sessions` owns the session lifecycle; `internal/web/middleware`
+connects it to HTTP.
 
 - **Create** (at sign-in or setup): 32 random bytes from `crypto/rand` are
   the token, returned once as unpadded base64url for the cookie. Only the
@@ -105,6 +105,34 @@ middleware that call it arrive in #38.
 - **Clean-up:** `ribbitto serve` deletes expired rows at start and then
   hourly until shutdown. Expired sessions are already rejected; this only
   keeps the table small.
+
+**Cookie.** The token travels in `__Host-session` with `Path=/`, no
+`Domain`, `HttpOnly`, `Secure`, `SameSite=Lax` and a `Max-Age` matching the
+session's expiry; `SetSessionCookie` and `ClearSessionCookie` are the only
+code that writes it. `Lax` keeps the cookie on top-level navigations (a link
+from email or chat), and cross-origin POSTs are stopped separately (below).
+
+**Middleware order** (outermost first):
+
+1. `http.CrossOriginProtection` on every route. It rejects cross-origin
+   requests using `Sec-Fetch-Site`, or `Origin` against `Host`, but lets GET,
+   HEAD and OPTIONS through — so **every route that changes state is a
+   POST**, and GET handlers never change state.
+2. `middleware.LimitBody`: every request body is capped at 64 KiB. Reading
+   past it fails with `*http.MaxBytesError`, which handlers answer with 413;
+   a route that answers without reading the body (a closed route's 404) is
+   unaffected.
+3. On everything except `/static/` and `/healthz`: security headers
+   (below), then i18n.
+4. On each **registered** HTML route (the `sessionMux` in `NewHandler`
+   wraps routes one by one): `middleware.Session`. An unknown path or
+   method gets its plain 404 or 405 without a session lookup, so it costs
+   no query and stays 404 while the database is down. The middleware
+   resolves the cookie and puts the account in the context
+   (`middleware.Account`). A token that signs nobody in means signed out
+   and the cookie is cleared; a store error answers 500 and keeps the
+   cookie, so an outage does not sign everyone out. Responses to signed-in
+   requests carry `Cache-Control: no-store`.
 
 `serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
 a `database/sql` handle, which goose needs.

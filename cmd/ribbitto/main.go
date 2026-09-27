@@ -73,7 +73,7 @@ func serve(ctx context.Context, databaseURL string) error {
 	if err != nil {
 		return err
 	}
-	handler, err := web.NewHandler(os.Getenv("RIBBITTO_DEV_ASSETS"), catalogues)
+	handler, err := web.NewHandler(os.Getenv("RIBBITTO_DEV_ASSETS"), catalogues, sessions)
 	if err != nil {
 		return err
 	}

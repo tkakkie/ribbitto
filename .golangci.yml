@@ -85,7 +85,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/realtime$
             - github.com/tkakkie/ribbitto/internal/realtime/
-          deny: &internal
+          deny:
             - pkg: github.com/tkakkie/ribbitto/internal/
               desc: Respect the dependency direction in AGENTS.md.
     revive:

@@ -46,19 +46,19 @@ $(TAILWIND):
 
 # Local caches under bin/ include third-party sources and invalid test fixtures.
 check:
-	@set -eu; missing=$$(find internal -type f -name '*.go' ! -name '*_test.go' \
+	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
+	if [ -n "$$unformatted" ]; then \
+		echo "These files need gofmt:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+	@set -eu; missing=$$(find internal -type f -name '*.go' ! -name '*_test.go' ! -path '*/testdata/*' \
 		| sed 's|/[^/]*$$||' | sort -u | while IFS= read -r dir; do \
 			if [ ! -f "$$dir/doc.go" ]; then printf '%s\n' "$$dir"; fi; \
 		done); \
 	if [ -n "$$missing" ]; then \
 		echo "These internal package directories are missing doc.go:"; \
 		echo "$$missing"; \
-		exit 1; \
-	fi
-	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
-	if [ -n "$$unformatted" ]; then \
-		echo "These files need gofmt:"; \
-		echo "$$unformatted"; \
 		exit 1; \
 	fi
 	go vet ./...

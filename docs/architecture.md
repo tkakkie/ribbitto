@@ -40,7 +40,7 @@ This section and `.golangci.yml` must agree; change them together.
 
 `make check` also requires a `doc.go` in every directory under `internal/`
 that contains non-test Go files, including generated packages, as specified
-in `AGENTS.md`.
+in `AGENTS.md`. Fixtures under `testdata/` are excluded.
 
 ```mermaid
 flowchart LR

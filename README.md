@@ -71,6 +71,11 @@ An unset or empty token disables setup; a non-empty token shorter than 32
 characters prevents startup. After setup, both GET and POST `/setup` return
 404 even if the token remains in the environment.
 
+Set `RIBBITTO_SIGNUP=on` to let people register at `/signup` after setup.
+They join the setup organisation as members and are signed in automatically.
+`off`, empty or unset disables sign-up (GET and POST return 404); any other
+value prevents startup. Sign-in links to registration only while it is open.
+
 ## Documentation
 
 - [Architecture](docs/architecture.md) — packages, allowed imports, request and real-time flow

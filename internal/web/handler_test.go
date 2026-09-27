@@ -117,6 +117,8 @@ func TestHTMLSecurity(t *testing.T) {
 		{"embedded Japanese", "/", "ja", ""},
 		{"development English", "/", "en", "../../web/static"},
 		{"development Japanese", "/", "ja", "../../web/static"},
+		{"signup English", "/signup", "en", ""},
+		{"signup Japanese", "/signup", "ja", ""},
 		{"setup English", "/setup", "en", ""},
 		{"setup Japanese", "/setup", "ja", ""},
 	} {
@@ -276,7 +278,7 @@ func newTestHandler(t *testing.T, dir string) (http.Handler, error) {
 		}
 	})
 	setup := &fakeSetup{open: true}
-	return NewHandler(dir, catalogues, Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: setup, SetupSessions: setup})
+	return NewHandler(dir, catalogues, Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: setup, SetupSessions: setup, SignUp: fakeSignUp{&fakeSetup{open: true}}})
 }
 
 func TestHelloLanguages(t *testing.T) {
@@ -361,9 +363,10 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, services := range map[string]Services{
-		"no sessions":                     {SignIn: &fakeSignIn{}},
-		"no sign-in":                      {Sessions: noSessions{}},
-		"setup without a session creator": {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: &fakeSetup{}},
+		"no sessions":                       {SignIn: &fakeSignIn{}},
+		"no sign-in":                        {Sessions: noSessions{}},
+		"setup without a session creator":   {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: &fakeSetup{}},
+		"sign-up without a session creator": {Sessions: noSessions{}, SignIn: &fakeSignIn{}, SignUp: fakeSignUp{&fakeSetup{}}},
 	} {
 		if _, err := NewHandler("", catalogues, services); err == nil {
 			t.Errorf("%s: NewHandler accepted incomplete services", name)

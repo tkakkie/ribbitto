@@ -19,6 +19,7 @@ import (
 type Services struct {
 	Sessions      middleware.SessionResolver
 	SignIn        SignInService
+	SignUp        SignUpService
 	Setup         SetupService // nil disables both setup routes
 	SetupSessions SessionCreator
 }
@@ -30,8 +31,8 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	if services.Sessions == nil || services.SignIn == nil {
 		return nil, errors.New("web: Services.Sessions and Services.SignIn are required")
 	}
-	if services.Setup != nil && services.SetupSessions == nil {
-		return nil, errors.New("web: Services.SetupSessions is required when Services.Setup is set")
+	if (services.Setup != nil || services.SignUp != nil) && services.SetupSessions == nil {
+		return nil, errors.New("web: Services.SetupSessions is required when Services.Setup or Services.SignUp is set")
 	}
 	assets := static.FS()
 	if devAssets != "" {
@@ -53,8 +54,9 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 			return view.Hello(url, view.Viewer{SignedIn: signedIn, DisplayName: account.DisplayName})
 		})
 	})
-	registerSignIn(routes, pages, services.SignIn)
+	registerSignIn(routes, pages, services.SignIn, services.SignUp)
 	registerSetup(routes, pages, services.Setup, services.SetupSessions)
+	registerSignUp(routes, pages, services.SignUp, services.SetupSessions)
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

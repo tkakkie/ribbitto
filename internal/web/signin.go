@@ -18,15 +18,24 @@ type SignInService interface {
 	SignOut(ctx context.Context, token string) error
 }
 
-func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInService) {
+func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInService, signup SignUpService) {
+	render := func(w http.ResponseWriter, r *http.Request, status int, form view.SignInForm) {
+		if signup != nil {
+			open, err := signup.Open(r.Context())
+			if err != nil {
+				serverError(w, r, "checking sign-up", err)
+				return
+			}
+			form.SignUpOpen = open
+		}
+		pages.render(w, r, status, func(url string) templ.Component { return view.SignIn(url, form) })
+	}
 	routes.HandleFunc("GET /signin", func(w http.ResponseWriter, r *http.Request) {
 		if _, signedIn := middleware.Account(r.Context()); signedIn {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
-		pages.render(w, r, http.StatusOK, func(url string) templ.Component {
-			return view.SignIn(url, view.SignInForm{})
-		})
+		render(w, r, http.StatusOK, view.SignInForm{})
 	})
 	routes.HandleFunc("POST /signin", func(w http.ResponseWriter, r *http.Request) {
 		if !parseForm(w, r) {
@@ -57,9 +66,7 @@ func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInServic
 			return
 		}
 		// Keep the typed email; never echo the password.
-		pages.render(w, r, http.StatusUnprocessableEntity, func(url string) templ.Component {
-			return view.SignIn(url, view.SignInForm{Email: email, Error: message})
-		})
+		render(w, r, http.StatusUnprocessableEntity, view.SignInForm{Email: email, Error: message})
 	})
 	routes.HandleFunc("POST /signout", func(w http.ResponseWriter, r *http.Request) {
 		if cookie, err := r.Cookie(middleware.SessionCookie); err == nil {

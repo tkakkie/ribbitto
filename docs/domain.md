@@ -177,9 +177,9 @@ A nonempty configured setup token authorizes setup: SHA-256 hashes of the
 configured and submitted tokens are compared in constant time. All fields
 are validated before password hashing. One transaction inserts the
 organisation, takes its next `event_seq` (1), creates the account
-(Argon2id hash), its owner membership at that sequence and the default
-channel, then the setup row. The singleton key rejects concurrent losers and their whole
-transactions roll back. Repeated setup returns 404.
+(Argon2id hash), its owner membership at that sequence, the default
+channel and the setup row. Concurrent losers hit the singleton key and roll back;
+repeating setup is 404.
 
 ## MVP scope
 

@@ -51,6 +51,8 @@ flowchart LR
   app[internal/app] --> domain[internal/domain]
 ```
 
+The diagram shows allowed imports; [`docs/dependencies.md`](../dependencies.md) lists the actual ones.
+
 Why this shape: the domain and the use cases stay testable without a
 database or HTTP; authorization lives in exactly one place, so a new
 endpoint or a real-time path cannot quietly skip it; and because use cases

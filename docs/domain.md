@@ -169,7 +169,7 @@ are validated before password hashing. One transaction inserts the
 organisation, takes its next `event_seq` (1), creates the account with an
 Argon2id hash and its owner membership at that sequence, then inserts the
 setup row. The singleton key rejects concurrent losers and their whole
-transactions roll back. Repeated setup reports "already completed".
+transactions roll back. Repeated setup returns 404.
 
 ## MVP scope
 

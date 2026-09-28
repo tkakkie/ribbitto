@@ -9,7 +9,7 @@ restart.
 
 ## Content Security Policy
 
-HTML routes are registered on the `pages` mux
+HTML routes are registered on the `routes` mux
 in `internal/web.NewHandler`, behind `middleware.SecurityHeaders`. Each
 response gets a fresh 32-byte `crypto/rand` nonce, base64-encoded and passed
 to templ through `templ.WithNonce`; every script in the shared layout uses

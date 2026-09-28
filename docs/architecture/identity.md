@@ -17,6 +17,9 @@ connects it to HTTP.
   hourly until shutdown. Expired sessions are already rejected; this only
   keeps the table small.
 
+Session token hashes must never be logged; PostgreSQL errors from session
+creation and replacement omit the detail, which could contain the hash.
+
 **Signing in** (`auth.SignIn`). The email is normalised and looked up.
 An unknown email still runs one Argon2id verification against a dummy hash
 made with the current parameters and gets the same `ErrInvalidCredentials`
@@ -48,7 +51,9 @@ calls `auth.SignIn` (above) with the cookie the browser sent, so that
 session is the one replaced; on success it sets the new cookie and
 redirects to `/` with 303. An unknown email and a wrong password get the
 same page, status (422) and message; the typed email is kept and the
-password never echoed. A busy hasher answers 503. `POST /signout` deletes
+password never echoed. An email rejected by `domain.ValidateEmail` or an
+empty password gets 422 with its own message, without revealing whether an
+account exists. A busy hasher answers 503. `POST /signout` deletes
 the session row, clears the cookie and redirects to `/signin`; there is no
 GET sign-out. `cmd/ribbitto` creates the process's one `auth.Hasher` here
 and shares it with every authentication use case.

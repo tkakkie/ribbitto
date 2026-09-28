@@ -30,7 +30,7 @@ disagree, fix the disagreement in a pull request.
 | Maintainer | Writes rough ideas, approves issues, decides every merge. |
 | Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
-| Copilot | Reviews every pull request automatically (drafts included) at **Lite**, the repository setting, guided by `.github/instructions/code-review.instructions.md`. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
+| Copilot | Reviews each pull request **once**, automatically, when it is marked ready for review, at **Lite**, guided by `.github/instructions/code-review.instructions.md`. Drafts and new pushes do not trigger it (the `main` ruleset); re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
 | Grok | Adversarial review of `high` pull requests (from M1), run with `scripts/ai/grok-review.sh`. Advisory. |
 | Antigravity | Optional: UI screenshot review, experiments, stand-in for Grok. |
 
@@ -66,13 +66,17 @@ idea (maintainer, one line) or finding (AI)
   → implementer AI works in its own worktree
     (maintainer setup: `../wt/<name>` next to the main checkout;
      branch claude/<topic> or codex/<topic>)
-  → draft pull request from the template, linked with "Closes #N"
-  → CI and Copilot run automatically
+  → draft pull request from the template, linked with "Closes #N";
+    CI runs on every push
   → the AI that did not implement it reviews        (see "Reviewing")
-  → implementer applies the review (and Copilot comments it agrees with)
+    (Claude ↔ Codex)
+  → implementer applies the review
   → at most two rounds; if round 2 leaves only mechanical fixes,
     closure verification; otherwise the maintainer decides
-  → reviewer approves → label `ai-reviewed` → mark ready for review
+  → reviewer approves → label `ai-reviewed`
+  → `high` risk: Grok's adversarial review, still as a draft
+  → mark ready for review → Copilot reviews once, automatically;
+    answer and resolve its comments like any other
   → Claude explains the PR to the maintainer in Japanese, in the chat
     (the PR itself stays in English)
   → maintainer reviews and decides to merge         ← gate 2
@@ -80,7 +84,8 @@ idea (maintainer, one line) or finding (AI)
 ```
 
 - `high` risk: the maintainer reads the whole diff; from M1, Grok also
-  runs an adversarial review before the maintainer is asked.
+  runs an adversarial review, while the pull request is still a draft and
+  before it is marked ready, so Copilot's one review comes last.
 - `normal` risk: the maintainer reads the summary and "Look here".
 - Every merge is decided by the maintainer, one pull request at a time.
   An AI never merges on its own judgement. Only the maintainer's own
@@ -151,7 +156,8 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    - ✅ | ❌ finding — how it was checked
    ```
 
-4. All pass → `ai-reviewed` and the normal merge decision. Any other change
+4. All pass → `ai-reviewed`, then the remaining steps (Grok for `high`
+   risk, ready for review, Copilot) and the normal merge decision. Any other change
    in the diff, a failed check, a new blocking finding or anything needing
    a decision → ask the maintainer.
 
@@ -163,7 +169,9 @@ than combine both sides, it needs a normal review.
 
 From M1 on, **every `high` pull request gets one adversarial review by Grok
 before the maintainer is asked.** Running it is mandatory; its findings are
-advisory. It does not count towards the two review rounds.
+advisory. It does not count towards the two review rounds. It runs after the
+cross-review, while the pull request is still a draft, and before it is
+marked ready for review.
 
 Run it from the maintainer's checkout, taking the launcher as it is on
 `main` — never a copy that a pull request could have changed:
@@ -378,7 +386,7 @@ everything the review needs, as the examples above do:
 
 | Label | Set by | Meaning |
 |---|---|---|
-| `ai-reviewed` | the orchestrating AI, after the reviewer approves | Ready for the maintainer to look at. |
+| `ai-reviewed` | the orchestrating AI, after the reviewer approves | The cross-review is done. For a pull request, Grok (if `high`) and Copilot's review still follow before the maintainer is asked. |
 | `ready` | maintainer only | Issue approved; implementation may start. |
 | `process` | template | Workflow improvement. |
 | `bug` | template | Something is broken. |

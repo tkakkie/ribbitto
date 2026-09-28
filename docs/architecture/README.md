@@ -76,7 +76,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `identity`: accounts, passwords, sessions, signing in, sign-up | `app/auth`, `app/signup`; `infra/postgres` `account.go`, `session.go`, `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
 | `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql` | `channel` |
-| `message`: plain-text posts and history | `domain/message.go`; `infra/postgres/message.go`; `db/queries/message.sql` | `message` |
+| `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`; `db/queries/message.sql` | `message` |
 | `realtime` | `internal/realtime` *(M3)* | none |
 
 The shared kernel, which any feature may use: the IDs and value types in
@@ -92,14 +92,17 @@ with a nullable upper sequence bound for the latest page, and no author
 joins. Author names come through `org` and `identity` in M2-5 (#78).
 Use cases and handlers follow in later M2 issues.
 
-**Known exceptions.** Two flows write another feature's tables in one
+**Known exceptions.** Three flows write another feature's tables in one
 transaction today:
 
 - setup (`org`) writes `organization`, `account`, `member`, `channel` and
   `setup`, so it creates `identity`'s first `account` and the `channel`
   feature's default channel (a completed setup must never lack one);
 - sign-up (`identity`) writes `account` and `member` and advances
-  `organization.event_seq`, which belong to `org`.
+  `organization.event_seq`, which belong to `org`;
+- posting (`message`) advances `organization.event_seq` before inserting
+  the message, because the sequence must be taken in the writing
+  transaction (`DECISIONS.md` 5).
 
 Their atomicity and `event_seq` ordering stay as they are. They are
 resolved at migration, by an orchestrating module or a shared transaction.

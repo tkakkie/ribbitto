@@ -3,6 +3,7 @@ package channel_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/app/authz"
@@ -70,7 +71,7 @@ func TestChannels(t *testing.T) {
 			{name: "normalised", input: "  雑談 ", want: "雑談"},
 			{name: "duplicate", input: "general", wantErr: channel.ErrNameTaken},
 			{name: "empty", input: "  ", wantErr: channel.ErrInvalidName},
-			{name: "too long", input: string(make([]rune, 81)), wantErr: channel.ErrInvalidName},
+			{name: "too long", input: strings.Repeat("界", 81), wantErr: channel.ErrInvalidName},
 			{name: "same name as another organisation's", input: "secret", want: "secret"},
 		} {
 			t.Run(tt.name, func(t *testing.T) {

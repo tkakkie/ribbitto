@@ -182,7 +182,7 @@ func markdownFiles(root string) ([]string, error) {
 // comments. The fragment is taken whole, Unicode included, so an unknown
 // anchor is reported rather than silently shortened; it stops at quotes,
 // brackets and backslashes (a "\n" in a shell string).
-var bareReference = regexp.MustCompile("(?:^|[\\s`(\"'=])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\\.md)(#[^\\s`\"')\\]\\\\]+)?")
+var bareReference = regexp.MustCompile("(?:^|[\\s`(\"'=:])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\\.md)(#[^\\s`\"')\\]\\\\]+)?")
 
 // bareReferences returns the path and anchor of each bare reference in
 // text. A match must end the file name: docs/x.md.backup is not docs/x.md,
@@ -248,12 +248,21 @@ func checkLinks(root string) ([]string, error) {
 	}
 	anchors := map[string]map[string]bool{}
 	var problems []string
+	repo, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = repo.Close() }()
 	resolve := func(from, target, anchor string, line int) {
 		a, ok := anchors[target]
 		if !ok {
-			source, err := os.ReadFile(filepath.Join(root, target))
-			if err == nil {
-				a = headingAnchors(parse(source))
+			// Only regular files inside the repository count: GitHub
+			// cannot follow a link out of it, and shows a symlink rather
+			// than the file it points to.
+			if info, err := repo.Lstat(target); filepath.IsLocal(target) && err == nil && info.Mode().IsRegular() {
+				if source, err := repo.ReadFile(target); err == nil {
+					a = headingAnchors(parse(source))
+				}
 			}
 			anchors[target] = a
 		}
@@ -265,10 +274,14 @@ func checkLinks(root string) ([]string, error) {
 		}
 	}
 	checkDestination := func(from, destination string, line int) {
-		if strings.Contains(destination, "://") || strings.HasPrefix(destination, "mailto:") {
+		file, anchor, _ := strings.Cut(html.UnescapeString(string(util.UnescapePunctuations([]byte(destination)))), "#")
+		// The query and a trailing slash do not change the file GitHub
+		// opens; only the path decides whether the link leaves the site.
+		file, _, _ = strings.Cut(file, "?")
+		file = strings.TrimSuffix(file, "/")
+		if strings.Contains(file, "://") || strings.HasPrefix(file, "mailto:") {
 			return
 		}
-		file, anchor, _ := strings.Cut(html.UnescapeString(string(util.UnescapePunctuations([]byte(destination)))), "#")
 		if f, err := url.PathUnescape(file); err == nil {
 			file = f
 		}
@@ -278,7 +291,7 @@ func checkLinks(root string) ([]string, error) {
 		switch {
 		case file == "":
 			resolve(from, from, anchor, line)
-		case strings.HasSuffix(file, ".md"):
+		case strings.HasSuffix(strings.TrimSpace(file), ".md"):
 			resolve(from, filepath.ToSlash(filepath.Join(filepath.Dir(from), file)), anchor, line)
 		}
 	}

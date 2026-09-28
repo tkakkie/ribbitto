@@ -114,6 +114,11 @@ func TestLinks(t *testing.T) {
 		{"escaped punctuation in a reference definition's broken fragment", map[string]string{
 			"docs/api(v2).md": "## a-b\n", "docs/a.md": "[r]: api\\(v2\\).md#a\\-c\n",
 		}, "has no heading #a-c"},
+		{"query string on a link", map[string]string{"docs/a.md": "[m](missing.md?plain=1)"}, "docs/missing.md does not exist"},
+		{"trailing slash on a link", map[string]string{"docs/a.md": "[m](missing.md/)"}, "docs/missing.md does not exist"},
+		{"encoded trailing space on a link", map[string]string{"docs/a.md": "[m](missing.md%20)"}, "does not exist"},
+		{"URL-like fragment on a relative link", map[string]string{"docs/a.md": "[m](missing.md#http://example.com)"}, "docs/missing.md does not exist"},
+		{"git pathspec in a script", map[string]string{"scripts/s.sh": "git show \"$ref:.github/prompts/gone.md\"\n"}, ".github/prompts/gone.md does not exist"},
 		{"shell assignment is a bare reference", map[string]string{"scripts/s.sh": "file=docs/gone.md\n"}, "docs/gone.md does not exist"},
 		{"a longer file name is not a reference", map[string]string{"scripts/s.sh": "cp docs/x.md.backup /tmp\n"}, ""},
 		{"sentence punctuation after a reference is allowed", map[string]string{"scripts/s.sh": "# See docs/gone.md.\n"}, "docs/gone.md does not exist"},
@@ -169,5 +174,27 @@ func TestHeadingAnchors(t *testing.T) {
 	}
 	if len(got) != 14 {
 		t.Errorf("%d anchors, want 14: %v", len(got), got)
+	}
+}
+
+// A link must stay inside the repository and point at a regular file:
+// GitHub cannot follow one out of it and shows a symlink, not its target.
+func TestLinksStayInsideTheRepository(t *testing.T) {
+	root := repo(t, map[string]string{
+		"docs/architecture.md": "## Reverse proxies\n",
+		"docs/a.md":            "[out](../../README.md) [alias](alias.md#reverse-proxies) [ok](architecture.md#reverse-proxies)",
+	})
+	if err := os.WriteFile(filepath.Join(filepath.Dir(root), "README.md"), []byte("# Outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("architecture.md", filepath.Join(root, "docs", "alias.md")); err != nil {
+		t.Fatal(err)
+	}
+	problems, err := checkLinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(problems) != 2 || !strings.Contains(problems[0], "../README.md does not exist") || !strings.Contains(problems[1], "docs/alias.md does not exist") {
+		t.Fatalf("problems %q", problems)
 	}
 }

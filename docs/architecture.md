@@ -157,6 +157,15 @@ session's expiry; `SetSessionCookie` and `ClearSessionCookie` are the only
 code that writes it. `Lax` keeps the cookie on top-level navigations (a link
 from email or chat), and cross-origin POSTs are stopped separately (below).
 
+**Server timeouts** (`newServer` in `cmd/ribbitto`):
+- 10 s to read the request line and headers.
+- 30 s to read a whole request, headers and body. Bodies are capped at 64 KiB.
+- 60 s for a keep-alive connection to wait for its next request.
+
+Without these limits, a client could hold a connection for as long as it liked: idle between requests, or with a body started and never finished. That includes an unread body that `net/http` discards after a 404 or 429.
+
+There is no global `WriteTimeout`; see *Resource limits* under real time. The read and idle limits do not end a response that is still being written. A future route that must read a long request body sets its own read deadline through `http.ResponseController`.
+
 **Middleware order** (outermost first):
 
 1. `http.CrossOriginProtection` on every route. It rejects cross-origin
@@ -350,7 +359,9 @@ sequenceDiagram
 - Each connection has a bounded send queue; a client that does not read is
   disconnected. Every write sets a deadline with
   `http.ResponseController.SetWriteDeadline`, and the server has no global
-  `WriteTimeout` (it would cut long-lived streams).
+  `WriteTimeout` (it would cut long-lived streams). The server's read and
+  idle timeouts stay: they bound reading the request and waiting between
+  requests, not a response being written.
 - Middleware that wraps `http.ResponseWriter` implements `Unwrap` so
   flushing works; compression is not applied to the SSE endpoint.
 - Heartbeats every 15–30 s keep proxies from closing idle streams. Presence

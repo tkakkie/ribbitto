@@ -71,6 +71,9 @@ check:
 	go test ./...
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
+	go -C tools vet ./docscheck
+	go -C tools test ./docscheck
+	go -C tools run ./docscheck ..
 	bash scripts/ai/grok-review_test.sh
 
 lint: $(GOLANGCI_LINT)

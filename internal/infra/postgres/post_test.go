@@ -23,7 +23,7 @@ func TestPostMessage(t *testing.T) {
 		var org, account, member domain.ID
 		requireAccountSchema(t, pool.QueryRow(ctx, "INSERT INTO organization (slug, name) VALUES ($1, $1) RETURNING id", slug).Scan(&org))
 		requireAccountSchema(t, pool.QueryRow(ctx, "INSERT INTO account (email, display_name, password_hash) VALUES ($1 || '@example.org', $1, '$argon2id$x') RETURNING id", slug).Scan(&account))
-		requireAccountSchema(t, pool.QueryRow(ctx, "INSERT INTO member (organization_id, account_id, role, joined_event_seq) VALUES ($1, $2, 'owner', 1) RETURNING id", org, account).Scan(&member))
+		requireAccountSchema(t, pool.QueryRow(ctx, "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $2, 'owner', 1, 'owner') RETURNING id", org, account).Scan(&member))
 		requireAccountSchema(t, pool.QueryRow(ctx, "UPDATE organization SET event_seq = 1 WHERE id = $1 RETURNING id", org).Scan(&org))
 		ch, err := postgres.NewChannelStore(pool).CreateChannel(ctx, org, appchannel.DefaultName, true)
 		requireAccountSchema(t, err)

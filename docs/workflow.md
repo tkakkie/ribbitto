@@ -76,8 +76,10 @@ idea (maintainer, one line) or finding (AI)
   → reviewer approves
   → `high` risk: Grok's adversarial review, still as a draft
   → label `ai-reviewed` → mark ready for review
-  → Copilot reviews once, automatically;
-    answer and resolve its comments like any other
+  → Copilot reviews once, automatically; wait until its review of
+    that head is submitted, then answer and resolve its comments
+    like any other; a change goes through the Copilot follow-up
+    check                                            (see "Reviewing")
   → Claude explains the PR to the maintainer in Japanese, in the chat
     (the PR itself stays in English)
   → maintainer reviews and decides to merge         ← gate 2
@@ -162,6 +164,29 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    decision. Any other change
    in the diff, a failed check, a new blocking finding or anything needing
    a decision → ask the maintainer.
+
+**Copilot follow-up check** (pull requests only; after Copilot's one
+review; not a review round). Copilot reviews after the other AI approved,
+so a change made to answer it would otherwise reach the maintainer
+unreviewed. If answering Copilot needs a change:
+
+1. Convert the pull request back to a draft and apply only the changes
+   that answer Copilot.
+2. The AI that approved the pull request checks that the whole diff since
+   the SHA it approved contains only those changes and that each one is
+   right, and reports:
+
+   ```
+   **Copilot follow-up check — <Claude|Codex>** (at <SHA>)
+   Compared: <approved SHA>..<SHA>
+   - ✅ | ❌ Copilot comment — how it was checked
+   ```
+
+3. All pass → mark it ready for review again and the normal merge
+   decision. Grok does not run again and Copilot is not re-requested; if
+   Copilot reviews again anyway, handle it the same way once, then ask the
+   maintainer. A change needing a design or specification decision, a
+   failed check or a new blocking finding → ask the maintainer.
 
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more

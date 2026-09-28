@@ -10,7 +10,9 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"html"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -179,7 +181,31 @@ func markdownFiles(root string) ([]string, error) {
 // comments. The fragment is taken whole, Unicode included, so an unknown
 // anchor is reported rather than silently shortened; it stops at quotes,
 // brackets and backslashes (a "\n" in a shell string).
-var bareReference = regexp.MustCompile("(?:^|[\\s`(\"'])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\\.md)(#[^\\s`\"')\\]\\\\]+)?")
+var bareReference = regexp.MustCompile("(?:^|[\\s`(\"'=])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\\.md)(#[^\\s`\"')\\]\\\\]+)?")
+
+// bareReferences returns the path and anchor of each bare reference in
+// text. A match must end the file name: docs/x.md.backup is not docs/x.md,
+// but sentence punctuation after it is allowed.
+func bareReferences(text string) [][2]string {
+	var out [][2]string
+	for _, m := range bareReference.FindAllStringSubmatchIndex(text, -1) {
+		rest := text[m[1]:]
+		if m[4] < 0 && rest != "" {
+			next, _ := utf8.DecodeRuneInString(rest)
+			after := strings.TrimLeft(rest, ".,;:!?")
+			if next == '_' || next == '-' || next == '/' || unicode.IsLetter(next) || unicode.IsDigit(next) ||
+				(next == '.' && after != "" && !unicode.IsSpace([]rune(after)[0])) {
+				continue
+			}
+		}
+		anchor := ""
+		if m[4] >= 0 {
+			anchor = strings.TrimRight(text[m[4]+1:m[5]], ".,;:!?")
+		}
+		out = append(out, [2]string{text[m[2]:m[3]], anchor})
+	}
+	return out
+}
 
 var markdown = goldmark.New(goldmark.WithExtensions(extension.GFM))
 
@@ -241,7 +267,13 @@ func checkLinks(root string) ([]string, error) {
 		if strings.Contains(destination, "://") || strings.HasPrefix(destination, "mailto:") {
 			return
 		}
-		file, anchor, _ := strings.Cut(destination, "#")
+		file, anchor, _ := strings.Cut(html.UnescapeString(destination), "#")
+		if f, err := url.PathUnescape(file); err == nil {
+			file = f
+		}
+		if a, err := url.PathUnescape(anchor); err == nil {
+			anchor = a
+		}
 		switch {
 		case file == "":
 			resolve(from, from, anchor, line)
@@ -287,9 +319,8 @@ func checkLinks(root string) ([]string, error) {
 			return nil, err
 		}
 		for _, l := range bareText(path, source) {
-			for _, m := range bareReference.FindAllStringSubmatch(l.text, -1) {
-				anchor := strings.TrimRight(strings.TrimPrefix(m[2], "#"), ".,;:!?")
-				resolve(path, m[1], anchor, l.number)
+			for _, ref := range bareReferences(l.text) {
+				resolve(path, ref[0], ref[1], l.number)
 			}
 		}
 	}
@@ -320,10 +351,25 @@ func bareText(path string, source []byte) []line {
 			return ast.WalkContinue, nil
 		}
 		switch n := n.(type) {
-		case *ast.Link, *ast.Image, *ast.AutoLink, *ast.FencedCodeBlock, *ast.CodeBlock, *ast.HTMLBlock:
+		case *ast.Link, *ast.Image, *ast.AutoLink, *ast.FencedCodeBlock, *ast.CodeBlock:
 			return ast.WalkSkipChildren, nil
 		case *ast.Text:
 			lines = append(lines, line{d.lineOf(n.Segment.Start), string(n.Segment.Value(d.source))})
+		case *ast.RawHTML:
+			// Inline HTML, such as a template's <!-- comment -->.
+			for i := 0; i < n.Segments.Len(); i++ {
+				seg := n.Segments.At(i)
+				lines = append(lines, line{d.lineOf(seg.Start), string(seg.Value(d.source))})
+			}
+		case *ast.HTMLBlock:
+			for i := 0; i < n.Lines().Len(); i++ {
+				seg := n.Lines().At(i)
+				lines = append(lines, line{d.lineOf(seg.Start), string(seg.Value(d.source))})
+			}
+			if n.HasClosure() {
+				seg := n.ClosureLine
+				lines = append(lines, line{d.lineOf(seg.Start), string(seg.Value(d.source))})
+			}
 		}
 		return ast.WalkContinue, nil
 	})
@@ -394,10 +440,20 @@ func renderedText(n ast.Node, source []byte) string {
 			return ast.WalkContinue, nil
 		}
 		switch c := c.(type) {
+		case *ast.CodeSpan:
+			// Code keeps its content literally, entities included.
+			for t := c.FirstChild(); t != nil; t = t.NextSibling() {
+				if t, ok := t.(*ast.Text); ok {
+					b.Write(t.Segment.Value(source))
+				}
+			}
+			return ast.WalkSkipChildren, nil
+		case *ast.AutoLink:
+			b.Write(c.Label(source))
 		case *ast.Text:
-			b.Write(c.Segment.Value(source))
+			b.WriteString(html.UnescapeString(string(c.Segment.Value(source))))
 		case *ast.String:
-			b.Write(c.Value)
+			b.WriteString(html.UnescapeString(string(c.Value)))
 		}
 		return ast.WalkContinue, nil
 	})
@@ -410,7 +466,9 @@ func slugify(heading string) string {
 		switch {
 		case r == ' ':
 			b.WriteRune('-')
-		case r == '-' || r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.Is(unicode.Mn, r):
+		// github-slugger keeps letters, marks and numbers of every script,
+		// hyphens and underscores, and drops other punctuation and symbols.
+		case r == '-' || r == '_' || unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsNumber(r):
 			b.WriteRune(r)
 		}
 	}

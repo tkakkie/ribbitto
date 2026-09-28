@@ -98,6 +98,16 @@ func TestLinks(t *testing.T) {
 		{"fence inside a blockquote is an example", map[string]string{"docs/a.md": "> ~~~\n> [x](missing.md)\n> ~~~\n\n[y](missing2.md)\n"}, "docs/missing2.md does not exist"},
 		{"fence inside a list item is an example", map[string]string{"docs/a.md": "- item\n\n  ```\n  [x](missing.md)\n  ```\n"}, ""},
 		{"used reference link to a missing file", map[string]string{"docs/a.md": "See [x][t].\n\n[t]: missing.md\n"}, "docs/missing.md does not exist"},
+		{"inline HTML comment in a template, missing file", map[string]string{".github/t.md": "Risk <!-- see docs/gone.md --> here"}, "docs/gone.md does not exist"},
+		{"block HTML comment in a template, broken anchor", map[string]string{"docs/b.md": target, ".github/t.md": "<!--\n  see docs/b.md#nope\n-->\n"}, "has no heading #nope"},
+		{"percent-encoded fragment and path resolve", map[string]string{
+			"docs/b.md": "## 見出し\n", "docs/my file.md": "# M",
+			"docs/a.md": "[x](b.md#%E8%A6%8B%E5%87%BA%E3%81%97) [y](my%20file.md)\n\n[r]: b.md#%E8%A6%8B%E5%87%BA%E3%81%97\n",
+		}, ""},
+		{"shell assignment is a bare reference", map[string]string{"scripts/s.sh": "file=docs/gone.md\n"}, "docs/gone.md does not exist"},
+		{"a longer file name is not a reference", map[string]string{"scripts/s.sh": "cp docs/x.md.backup /tmp\n"}, ""},
+		{"sentence punctuation after a reference is allowed", map[string]string{"scripts/s.sh": "# See docs/gone.md.\n"}, "docs/gone.md does not exist"},
+		{"fence in a template's blockquote is an example", map[string]string{".github/e.md": "> ```\n> docs/gone.md\n> ```\n"}, ""},
 		{"Go tests of other scripts are scanned", map[string]string{"scripts/y/y_test.go": "// see docs/gone.md\n"}, "docs/gone.md does not exist"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -130,19 +140,24 @@ func TestHeadingAnchors(t *testing.T) {
 		"## Fake long",
 		"````",
 		"## Posting a message *(planned, M2–M3)*",
+		"## A &amp; B",
+		"## <https://example.com>",
+		"## का",
+		"## Ⅳ",
+		"## `a &amp; b`",
 	}, "\n")
 	got := headingAnchors(parse([]byte(content)))
-	for _, want := range []string{"setup", "xy", "api", "the-snake_case-field", "same", "same-1", "same-1-1", "code-label", "posting-a-message-planned-m2m3"} {
+	for _, want := range []string{"setup", "xy", "api", "the-snake_case-field", "same", "same-1", "same-1-1", "code-label", "posting-a-message-planned-m2m3", "a--b", "httpsexamplecom", "का", "ⅳ", "a-amp-b"} {
 		if !got[want] {
 			t.Errorf("missing anchor %q in %v", want, got)
 		}
 	}
-	for _, unwanted := range []string{"_setup_", "fake-tilde", "fake-long", "apic"} {
+	for _, unwanted := range []string{"_setup_", "fake-tilde", "fake-long", "apic", "", "क"} {
 		if got[unwanted] {
 			t.Errorf("unexpected anchor %q", unwanted)
 		}
 	}
-	if len(got) != 9 {
-		t.Errorf("%d anchors, want 9: %v", len(got), got)
+	if len(got) != 14 {
+		t.Errorf("%d anchors, want 14: %v", len(got), got)
 	}
 }

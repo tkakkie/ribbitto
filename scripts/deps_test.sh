@@ -23,9 +23,12 @@ graph=$copy/docs/dependencies.md
 deps() { (cd "$copy" && bash scripts/deps.sh "$@"); }
 
 deps --check >/dev/null 2>&1 || fail "the committed graph is stale; run make deps"
-cp "$graph" "$work/before.md"
+# Determinism: two successive generations are byte-identical.
 deps
-cmp -s "$graph" "$work/before.md" || fail "regenerating twice is not stable"
+cp "$graph" "$work/first.md"
+deps
+cmp -s "$graph" "$work/first.md" || fail "two successive generations differ"
+cp "$graph" "$work/before.md"
 
 # A new edge: a package that does not import internal/domain yet does.
 source=internal/web/i18n

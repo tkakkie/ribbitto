@@ -73,9 +73,10 @@ idea (maintainer, one line) or finding (AI)
   → implementer applies the review
   → at most two rounds; if round 2 leaves only mechanical fixes,
     closure verification; otherwise the maintainer decides
-  → reviewer approves → label `ai-reviewed`
+  → reviewer approves
   → `high` risk: Grok's adversarial review, still as a draft
-  → mark ready for review → Copilot reviews once, automatically;
+  → label `ai-reviewed` → mark ready for review
+  → Copilot reviews once, automatically;
     answer and resolve its comments like any other
   → Claude explains the PR to the maintainer in Japanese, in the chat
     (the PR itself stays in English)
@@ -156,8 +157,9 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    - ✅ | ❌ finding — how it was checked
    ```
 
-4. All pass → `ai-reviewed`, then the remaining steps (Grok for `high`
-   risk, ready for review, Copilot) and the normal merge decision. Any other change
+4. All pass → the remaining steps (Grok for `high` risk, then
+   `ai-reviewed` and ready for review, then Copilot) and the normal merge
+   decision. Any other change
    in the diff, a failed check, a new blocking finding or anything needing
    a decision → ask the maintainer.
 
@@ -386,7 +388,7 @@ everything the review needs, as the examples above do:
 
 | Label | Set by | Meaning |
 |---|---|---|
-| `ai-reviewed` | the orchestrating AI, after the reviewer approves | The cross-review is done. For a pull request, Grok (if `high`) and Copilot's review still follow before the maintainer is asked. |
+| `ai-reviewed` | the orchestrating AI, after the reviewer approves (for a `high` pull request, after Grok has also run) | The cross-review is done. For a pull request, Copilot's review still follows before the maintainer is asked. |
 | `ready` | maintainer only | Issue approved; implementation may start. |
 | `process` | template | Workflow improvement. |
 | `bug` | template | Something is broken. |

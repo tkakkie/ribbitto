@@ -31,6 +31,8 @@ Follow [`docs/workflow.md`](docs/workflow.md). The rules you must not skip:
 - `make check` — checks formatting, vets, lints, builds and tests; must pass
   before you open a pull request.
 - `make lint` — runs golangci-lint.
+- `make deps` — regenerates `docs/dependencies.md`, the package-import
+  edges; commit it with any change that adds or removes one.
 
 ## Layout and dependency direction
 

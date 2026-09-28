@@ -33,6 +33,7 @@ make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
 make dev                   # watches templ and CSS; restarts the server
 make check                 # checks formatting, vets, lints, builds and tests
+make deps                  # regenerates docs/dependencies.md after an import change
 make db-down               # stops PostgreSQL; keeps the named data volume
 ```
 

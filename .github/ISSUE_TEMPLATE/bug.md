@@ -24,7 +24,7 @@ labels: ["bug"]
 ## Risk
 
 <!-- "high" if the fix will touch a high-risk path listed in
-     docs/workflow.md, otherwise "normal". -->
+     docs/workflow/reviewing.md, otherwise "normal". -->
 
 ## Implementer
 

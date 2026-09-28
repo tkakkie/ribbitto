@@ -104,6 +104,44 @@ information and are exempt; a control's boundary always uses
 - **Text first.** A message is readable before anything around it (avatars,
   images) has loaded.
 
+## Markup and accessibility
+
+The target is WCAG 2.2 AA. `TestPagesMarkup` (`internal/web/markup_test.go`)
+renders every HTML route in each state and both languages and fails on the
+rules marked ✓; a new route fails the test until it has a rendered case.
+
+- **Things that act are buttons or links.** ✓ A `<button>` always has a
+  `type` and a name (its text, or `aria-label` when it has none); a link is
+  an `<a href>`. Never a `div` or `span` with `role="button"` or a click
+  handler.
+- **Structure means something.** ✓ Every page has `lang` and exactly one
+  `<main>`; ✓ headings do not skip levels. Use `<nav>`, `<header>` and lists
+  (`<ul>`, `<ol>`) for what they are; `div` and `span` only group for
+  layout.
+- **Forms are labelled.** ✓ Every text input, `<select>` and `<textarea>` has
+  a label — a wrapping `<label>` or `for`/`id`; hidden inputs need none.
+  Errors are shown next to their field with `role="alert"`.
+- **Images** ✓ have `alt` (empty when decorative).
+- **Focus.** ✓ `tabindex` only as `-1` on a deliberate focus target (a
+  dialog's heading, an error summary) or `0` on a scrollable region with
+  `role="region"` and an `aria-label`. Focus is always visible (the focus
+  token); nothing removes the outline.
+- **Colour is never the only signal** (see *Direction*): a state also has
+  text, an icon or a shape.
+- **Styles** ✓ only through the token utilities: no `style` attributes and
+  no global CSS beyond `web/styles/app.css`.
+- **Scripts.** ✓ No inline handlers (`on*` attributes); application-written
+  JavaScript is external, in `web/static`, and defines no globals. Vendored
+  libraries (htmx, idiomorph) keep theirs. The nonce and external-script
+  rules are in [`architecture/rendering.md`](architecture/rendering.md).
+
+**Checking a UI change in a browser**, before the pull request says what
+was checked: use it with the keyboard only (Tab order, Enter and Space,
+Escape closes what opened); watch that focus is always visible; and look at
+it under a colour-vision simulation (Chrome DevTools, *Rendering → Emulate
+vision deficiencies*) to see that no information is lost. The automated
+checks find only part of accessibility problems, so these stay necessary.
+
 ## Planned directions (from the maintainer, #9)
 
 Recorded now, designed when each screen is built:

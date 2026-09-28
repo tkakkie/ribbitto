@@ -1,0 +1,321 @@
+package web
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/app/setup"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
+	"github.com/tkakkie/ribbitto/internal/web/view"
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
+)
+
+// checkMarkup reports what breaks the rules in docs/ui.md, *Markup and
+// accessibility*. Full pages get the document checks; fragments and
+// components only the element checks.
+func checkMarkup(doc *html.Node, fullPage bool) []string {
+	var problems []string
+	add := func(format string, args ...any) { problems = append(problems, fmt.Sprintf(format, args...)) }
+	labelled := map[string]bool{} // ids named by <label for>
+	for n := range doc.Descendants() {
+		if n.DataAtom == atom.Label && attr(n, "for") != "" {
+			labelled[attr(n, "for")] = true
+		}
+	}
+	mains, lastHeading := 0, 0
+	for n := range doc.Descendants() {
+		if n.Type != html.ElementNode {
+			continue
+		}
+		for _, a := range n.Attr {
+			if a.Key == "style" || strings.HasPrefix(a.Key, "on") {
+				add("<%s> has a %s attribute", n.Data, a.Key)
+			}
+		}
+		interactive := n.DataAtom == atom.Button || n.DataAtom == atom.A || n.DataAtom == atom.Input || n.DataAtom == atom.Select || n.DataAtom == atom.Textarea
+		if attr(n, "role") == "button" && !interactive {
+			add("<%s role=button> simulates a button", n.Data)
+		}
+		if tabindex, ok := attrOK(n, "tabindex"); ok && tabindex != "-1" && (tabindex != "0" || attr(n, "role") != "region" || attr(n, "aria-label") == "") {
+			add("<%s tabindex=%q> is neither a focus target (-1) nor a labelled scrollable region (0)", n.Data, tabindex)
+		}
+		switch n.DataAtom {
+		case atom.Main:
+			mains++
+		case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
+			level := int(n.Data[1] - '0')
+			if fullPage && level > lastHeading+1 {
+				add("<%s> skips a heading level after h%d", n.Data, lastHeading)
+			}
+			lastHeading = level
+		case atom.Button:
+			if attr(n, "type") == "" {
+				add("<button> without a type")
+			}
+			if strings.TrimSpace(text(n)) == "" && attr(n, "aria-label") == "" {
+				add("<button> without an accessible name")
+			}
+		case atom.Img:
+			if _, ok := attrOK(n, "alt"); !ok {
+				add("<img> without alt")
+			}
+		case atom.Input, atom.Select, atom.Textarea:
+			switch attr(n, "type") {
+			case "hidden", "submit", "button", "reset", "image":
+				continue
+			}
+			if !inside(n, atom.Label) && !labelled[attr(n, "id")] {
+				add("<%s name=%q> without a label", n.Data, attr(n, "name"))
+			}
+		}
+	}
+	if fullPage {
+		if root := find(doc, atom.Html); root == nil || attr(root, "lang") == "" {
+			add("<html> without lang")
+		}
+		if mains != 1 {
+			add("%d <main> elements, want 1", mains)
+		}
+	}
+	return problems
+}
+
+func attrOK(n *html.Node, key string) (string, bool) {
+	for _, a := range n.Attr {
+		if a.Key == key {
+			return a.Val, true
+		}
+	}
+	return "", false
+}
+
+func attr(n *html.Node, key string) string {
+	v, _ := attrOK(n, key)
+	return v
+}
+
+func text(n *html.Node) string {
+	var b strings.Builder
+	for d := range n.Descendants() {
+		if d.Type == html.TextNode {
+			b.WriteString(d.Data)
+		}
+	}
+	return b.String()
+}
+
+func inside(n *html.Node, a atom.Atom) bool {
+	for p := n.Parent; p != nil; p = p.Parent {
+		if p.DataAtom == a {
+			return true
+		}
+	}
+	return false
+}
+
+func find(doc *html.Node, a atom.Atom) *html.Node {
+	for n := range doc.Descendants() {
+		if n.DataAtom == a {
+			return n
+		}
+	}
+	return nil
+}
+
+// The checker itself: each rule catches what it should and nothing more.
+func TestCheckMarkup(t *testing.T) {
+	page := func(body string) string {
+		return `<!DOCTYPE html><html lang="en"><head><title>t</title></head><body>` + body + `</body></html>`
+	}
+	for _, tt := range []struct {
+		name, markup string
+		fullPage     bool
+		want         string // a substring of the only problem; empty for none
+	}{
+		{"valid page", page(`<main><h1>a</h1><h2>b</h2><form><label>Email <input type="email" name="email"></label><label for="p">Password</label><input id="p" type="password" name="p"><input type="hidden" name="t"><button type="submit">Go</button></form><img src="x" alt=""></main>`), true, ""},
+		{"no lang", `<!DOCTYPE html><html><body><main></main></body></html>`, true, "without lang"},
+		{"two mains", page(`<main></main><main></main>`), true, "2 <main>"},
+		{"skipped heading", page(`<main><h1>a</h1><h3>b</h3></main>`), true, "skips a heading level"},
+		{"unlabelled input", page(`<main><input type="text" name="q"></main>`), true, "without a label"},
+		{"button without type", page(`<main><button>Go</button></main>`), true, "without a type"},
+		{"button without name", page(`<main><button type="button"> </button></main>`), true, "accessible name"},
+		{"img without alt", page(`<main><img src="x"></main>`), true, "without alt"},
+		{"style attribute", page(`<main style="color:red"></main>`), true, "style attribute"},
+		{"inline handler", page(`<main><a href="/" onclick="x()">a</a></main>`), true, "onclick attribute"},
+		{"simulated button", page(`<main><div role="button">Go</div></main>`), true, "simulates a button"},
+		{"stray tabindex", page(`<main><div tabindex="0">x</div></main>`), true, "tabindex"},
+		{"focus target", page(`<main><h1 tabindex="-1">a</h1><div role="region" aria-label="Messages" tabindex="0">x</div></main>`), true, ""},
+		{"fragment skips document checks", `<form><button type="submit">Go</button></form>`, false, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			doc, err := html.Parse(strings.NewReader(tt.markup))
+			if err != nil {
+				t.Fatal(err)
+			}
+			problems := checkMarkup(doc, tt.fullPage)
+			if tt.want == "" && len(problems) != 0 || tt.want != "" && (len(problems) != 1 || !strings.Contains(problems[0], tt.want)) {
+				t.Fatalf("problems %q, want one containing %q", problems, tt.want)
+			}
+		})
+	}
+}
+
+// markupCase is one rendered state of an HTML route.
+type markupCase struct {
+	name     string
+	route    string // the registered pattern it exercises
+	services func() Services
+	method   string
+	path     string
+	form     url.Values
+	cookie   bool
+	repeat   int // send the request this many times and check the last
+	status   int // the expected status; 0 means 200
+}
+
+// Every page in every state, in both languages, passes checkMarkup, and
+// every registered HTML route is either rendered here or listed as not
+// rendering a page.
+func TestPagesMarkup(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fieldErrors := setup.ValidationErrors{}
+	for _, field := range []string{"organization_name", "slug", "display_name", "email", "password"} {
+		fieldErrors[field] = errors.New("invalid")
+	}
+	base := func() Services {
+		return Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Authz: noOrganisations{}}
+	}
+	withSetup := func(err error) func() Services {
+		return func() Services {
+			s := base()
+			f := &fakeSetup{open: true, err: err}
+			s.Setup, s.SetupSessions = f, f
+			return s
+		}
+	}
+	withSignUp := func(open bool, err error) func() Services {
+		return func() Services {
+			s := base()
+			f := &fakeSetup{open: open, err: err}
+			s.SignUp, s.SetupSessions = fakeSignUp{f}, f
+			return s
+		}
+	}
+	signedIn := func(authorizer Authorizer) func() Services {
+		return func() Services {
+			s := base()
+			s.Sessions, s.Authz = oneSession{}, authorizer
+			return s
+		}
+	}
+	limited := func() Services {
+		s := withSignUp(true, nil)()
+		now := func() time.Time { return time.Unix(0, 0) }
+		s.Limits = &middleware.AuthLimits{
+			SignIn: middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now),
+			SignUp: middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now),
+			Setup:  middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now),
+		}
+		return s
+	}
+	setupForm := url.Values{"token": {"t"}, "organization_name": {"Org"}, "slug": {"org"}, "display_name": {"Owner"}, "email": {"a@b"}, "password": {"p"}}
+	cases := []markupCase{
+		{name: "home signed out", route: "GET /{$}", services: base, method: "GET", path: "/"},
+		{name: "home signed out, sign-up open", route: "GET /{$}", services: withSignUp(true, nil), method: "GET", path: "/"},
+		{name: "home signed in", route: "GET /{$}", services: signedIn(noOrganisations{}), method: "GET", path: "/", cookie: true},
+		{name: "sign-in", route: "GET /signin", services: base, method: "GET", path: "/signin"},
+		{name: "sign-in, sign-up open", route: "GET /signin", services: withSignUp(true, nil), method: "GET", path: "/signin"},
+		{name: "sign-in failed", route: "POST /signin", services: func() Services { s := base(); s.SignIn = &fakeSignIn{err: auth.ErrInvalidCredentials}; return s }, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, status: http.StatusUnprocessableEntity},
+		{name: "sign-in rate-limited", route: "POST /signin", services: limited, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, repeat: 2, status: http.StatusTooManyRequests},
+		{name: "setup", route: "GET /setup", services: withSetup(nil), method: "GET", path: "/setup"},
+		{name: "setup, every field invalid", route: "POST /setup", services: withSetup(fieldErrors), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity},
+		{name: "setup, wrong token", route: "POST /setup", services: withSetup(setup.ErrToken), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity},
+		{name: "sign-up", route: "GET /signup", services: withSignUp(true, nil), method: "GET", path: "/signup"},
+		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity},
+		{name: "organisation page", route: "GET /o/{slug}/{$}", services: signedIn(oneOrganisation{}), method: "GET", path: "/o/acme/", cookie: true},
+	}
+	// Routes that answer with a redirect or an empty status, never a page.
+	noPage := []string{"POST /signout"}
+
+	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, withSetupPatterns, err := newHandler("", catalogues, withSetup(nil)())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pattern := range append(patterns, withSetupPatterns...) {
+		covered := slices.Contains(noPage, pattern) || slices.ContainsFunc(cases, func(c markupCase) bool { return c.route == pattern })
+		if !covered {
+			t.Errorf("HTML route %q has no rendered case in TestPagesMarkup and is not listed as rendering no page", pattern)
+		}
+	}
+
+	for _, c := range cases {
+		for _, lang := range []string{"en", "ja"} {
+			t.Run(c.name+"/"+lang, func(t *testing.T) {
+				handler, _, err := newHandler("", catalogues, c.services())
+				if err != nil {
+					t.Fatal(err)
+				}
+				var w *httptest.ResponseRecorder
+				for range max(c.repeat, 1) {
+					r := httptest.NewRequest(c.method, c.path, strings.NewReader(c.form.Encode()))
+					r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					r.Header.Set("Accept-Language", lang)
+					if c.cookie {
+						r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+					}
+					w = httptest.NewRecorder()
+					handler.ServeHTTP(w, r)
+				}
+				want := c.status
+				if want == 0 {
+					want = http.StatusOK
+				}
+				if w.Code != want || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
+					t.Fatalf("status %d (want %d), content type %q", w.Code, want, w.Header().Get("Content-Type"))
+				}
+				doc, err := html.Parse(w.Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, problem := range checkMarkup(doc, true) {
+					t.Error(problem)
+				}
+			})
+		}
+	}
+}
+
+// Shared components rendered on their own get the element checks.
+func TestComponentsMarkup(t *testing.T) {
+	var b strings.Builder
+	if err := view.SignOutButton().Render(context.Background(), &b); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := html.Parse(strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, problem := range checkMarkup(doc, false) {
+		t.Error(problem)
+	}
+}

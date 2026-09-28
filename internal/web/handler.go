@@ -22,7 +22,7 @@ type Services struct {
 	SignIn        SignInService
 	SignUp        SignUpService
 	Setup         SetupService // nil disables both setup routes
-	SetupSessions SessionCreator
+	SetupSessions SessionReplacer
 	Authz         Authorizer
 	Limits        *middleware.AuthLimits // nil: no rate limits (tests)
 }

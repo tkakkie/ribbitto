@@ -285,3 +285,48 @@ func TestSetupAcceptanceRace(t *testing.T) {
 		acceptanceCount(t, pool, 1, "SELECT count(*) FROM "+table)
 	}
 }
+
+// acceptanceSessionCount counts the session rows for a cookie's token.
+func acceptanceSessionCount(t *testing.T, pool *pgxpool.Pool, want int, cookie *http.Cookie) {
+	t.Helper()
+	raw, err := base64.RawURLEncoding.DecodeString(cookie.Value)
+	acceptanceOK(t, err)
+	hash := sha256.Sum256(raw)
+	acceptanceCount(t, pool, want, "SELECT count(*) FROM session WHERE token_hash = $1", hash[:])
+}
+
+// Every flow that issues a session replaces the browser's previous one.
+func TestSessionReplacedAcceptance(t *testing.T) {
+	pool := acceptanceDatabase(t)
+	server := acceptanceServer(t, pool, "on")
+	u, err := url.Parse(server.URL)
+	acceptanceOK(t, err)
+	browser := newAcceptanceBrowser(t, server, "192.0.2.10")
+
+	// Setup with a stale but well-formed cookie still signs the owner in.
+	stale := &http.Cookie{Name: middleware.SessionCookie, Value: base64.RawURLEncoding.EncodeToString(make([]byte, 32)), Path: "/"}
+	browser.client.Jar.SetCookies(u, []*http.Cookie{stale})
+	response, _ := browser.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
+	t1 := acceptanceCookie(t, pool, response)
+	browser.visit(t, "GET", "/o/owner/", nil, 200)
+
+	// A failed sign-up in the signed-in browser keeps T1.
+	browser.visit(t, "POST", "/signup", acceptanceForm("owner"), 422)
+	acceptanceSessionCount(t, pool, 1, t1)
+	browser.visit(t, "GET", "/o/owner/", nil, 200)
+
+	// Signing up as B in the same browser ends T1; T2 belongs to B.
+	response, _ = browser.visit(t, "POST", "/signup", acceptanceForm("member"), 303)
+	t2 := acceptanceCookie(t, pool, response)
+	acceptanceSessionCount(t, pool, 0, t1)
+	raw, err := base64.RawURLEncoding.DecodeString(t2.Value)
+	acceptanceOK(t, err)
+	hash := sha256.Sum256(raw)
+	acceptanceCount(t, pool, 1, `SELECT count(*) FROM session s JOIN account a ON a.id = s.account_id WHERE s.token_hash = $1 AND a.email = 'member@example.com'`, hash[:])
+	acceptanceCount(t, pool, 1, "SELECT count(*) FROM session")
+
+	// Replaying T1 finds no session.
+	replay := newAcceptanceBrowser(t, server, "192.0.2.11")
+	replay.client.Jar.SetCookies(u, []*http.Cookie{t1})
+	replay.visit(t, "GET", "/o/owner/", nil, 404)
+}

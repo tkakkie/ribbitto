@@ -110,23 +110,23 @@ the session cookie or the state of the session store.
 Otherwise the handler checks `Open` before rendering or accepting a form.
 POST calls `Complete` (#31); closed setup (including a concurrent completion)
 returns 404, invalid fields or token return 422 without echoing secrets, and
-a busy hasher returns 503. Success creates a session for the owner through
-`auth.Sessions.Create`, sets the shared session cookie and redirects to `/`
-with 303. Setup and sign-in share the process's single password hasher.
+a busy hasher returns 503. Success signs the owner in through
+`auth.Sessions.Replace` (below), sets the shared session cookie and redirects
+to `/` with 303. Setup and sign-in share the process's single password hasher.
 
 `internal/app/signup.Open` gates registration and the sign-in link on
 `RIBBITTO_SIGNUP=on` and completed setup. Its separate handler and form share
 the process hasher; one transaction reads the setup organisation, takes
 its next sequence first, then inserts the account and member. Duplicate
-email rolls back everything. Success creates a session and redirects to `/`
-with 303; invalid input returns 422 and a busy hasher returns 503.
+email rolls back everything. Success signs the new account in through
+`Sessions.Replace` and redirects to `/` with 303; invalid input returns 422 and a busy hasher returns 503.
 
 ## Sessions
 
 `internal/app/auth.Sessions` owns the session lifecycle; `internal/web/middleware`
 connects it to HTTP.
 
-- **Create** (at sign-in, sign-up or setup): 32 random bytes from `crypto/rand` are
+- **Create** (inside `Replace`, below): 32 random bytes from `crypto/rand` are
   the token, returned once as unpadded base64url for the cookie. Only the
   token's SHA-256 hash is stored, with an absolute expiry 30 days ahead;
   using the session never extends it.
@@ -150,6 +150,13 @@ any) and inserts the new one, so a token that existed before sign-in never
 becomes signed in (session fixation), and a failed sign-in changes nothing
 — the browser keeps the session it had. Signing out deletes the session
 row.
+
+**One rule for every flow that issues a session:** sign-in, sign-up and
+setup all pass the incoming session cookie to `Sessions.Replace`, so the new
+session ends the browser's previous one in the same transaction, and a
+failure leaves it untouched. `internal/web` sees sessions only through
+`SessionReplacer`, which has no plain `Create`, so a later flow (invitation
+acceptance, password reset) cannot forget this.
 
 **Cookie.** The token travels in `__Host-session` with `Path=/`, no
 `Domain`, `HttpOnly`, `Secure`, `SameSite=Lax` and a `Max-Age` matching the

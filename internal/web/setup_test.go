@@ -27,6 +27,7 @@ type fakeSetup struct {
 	token                    string
 	account                  domain.ID
 	completed, created       bool
+	previous                 string
 }
 
 func (f *fakeSetup) Open(context.Context) (bool, error) { return f.open, f.openErr }
@@ -34,8 +35,8 @@ func (f *fakeSetup) Complete(_ context.Context, token string, input setup.Input)
 	f.completed, f.token, f.input = true, token, input
 	return setup.Result{AccountID: domain.ID{42}}, f.err
 }
-func (f *fakeSetup) Create(_ context.Context, account domain.ID) (string, time.Time, error) {
-	f.created, f.account = true, account
+func (f *fakeSetup) Replace(_ context.Context, previous string, account domain.ID) (string, time.Time, error) {
+	f.created, f.previous, f.account = true, previous, account
 	return "owner-session", time.Now().Add(time.Hour), f.sessionErr
 }
 
@@ -78,6 +79,8 @@ func TestSetup(t *testing.T) {
 			for _, method := range []string{http.MethodGet, http.MethodPost} {
 				r := httptest.NewRequest(method, "/setup", strings.NewReader(form.Encode()))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				// The browser is already signed in: the new session must replace it.
+				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "previous-token"})
 				w := httptest.NewRecorder()
 				handler.ServeHTTP(w, r)
 				want := tt.status
@@ -128,6 +131,9 @@ func TestSetup(t *testing.T) {
 				}
 				if f.created && f.account != (domain.ID{42}) {
 					t.Fatal("session created for wrong account")
+				}
+				if f.created && f.previous != "previous-token" {
+					t.Fatalf("the browser's previous session was not replaced: %q", f.previous)
 				}
 			}
 		})

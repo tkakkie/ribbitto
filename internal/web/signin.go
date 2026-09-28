@@ -42,11 +42,7 @@ func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInServic
 			return
 		}
 		email := r.PostForm.Get("email")
-		previous := ""
-		if cookie, err := r.Cookie(middleware.SessionCookie); err == nil {
-			previous = cookie.Value
-		}
-		token, expiresAt, err := service.SignIn(r.Context(), email, r.PostForm.Get("password"), previous)
+		token, expiresAt, err := service.SignIn(r.Context(), email, r.PostForm.Get("password"), incomingSession(r))
 		var message string
 		switch {
 		case err == nil:

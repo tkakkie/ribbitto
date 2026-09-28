@@ -20,12 +20,16 @@ type SetupService interface {
 	Complete(context.Context, string, setup.Input) (setup.Result, error)
 }
 
-// SessionCreator signs the newly created owner in.
-type SessionCreator interface {
-	Create(context.Context, domain.ID) (string, time.Time, error)
+// SessionReplacer signs a newly created account in. Like sign-in, it ends
+// the browser's previous session (the incoming cookie, possibly empty or
+// stale) in the same transaction, so every flow that issues a session
+// replaces the one before it; a failure keeps the previous session. It
+// offers no plain Create, so a new flow cannot forget that.
+type SessionReplacer interface {
+	Replace(ctx context.Context, previousToken string, accountID domain.ID) (string, time.Time, error)
 }
 
-func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService, sessions SessionCreator, allow func(http.ResponseWriter, *http.Request) bool) {
+func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService, sessions SessionReplacer, allow func(http.ResponseWriter, *http.Request) bool) {
 	// Without a setup token the routes do not exist: /setup is then an
 	// unknown path, answered 404 by the router without a session lookup.
 	if service == nil {
@@ -57,7 +61,7 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 			var fields setup.ValidationErrors
 			switch {
 			case err == nil:
-				token, expiresAt, err := sessions.Create(r.Context(), result.AccountID)
+				token, expiresAt, err := sessions.Replace(r.Context(), incomingSession(r), result.AccountID)
 				if err != nil {
 					serverError(w, r, "creating setup session", err)
 					return

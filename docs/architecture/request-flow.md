@@ -41,10 +41,13 @@ In `newServer` (`cmd/ribbitto`):
 - 10 s to read the request line and headers.
 - 30 s to read a whole request, headers and body. Bodies are capped at 64 KiB.
 - 60 s for a keep-alive connection to wait for its next request.
+- 60 s to write a response (`WriteTimeout`). `net/http` starts it when the request headers have been read, so it also covers reading the body and running the handler; it is longer than the read limit so a slow but legitimate request still gets its answer.
 
-Without these limits, a client could hold a connection for as long as it liked: idle between requests, or with a body started and never finished. That includes an unread body that `net/http` discards after a 404 or 429.
+Without these limits, a client could hold a connection for as long as it liked: idle between requests, with a body started and never finished, or by never reading the response. That includes an unread body that `net/http` discards after a 404 or 429.
 
-There is no global `WriteTimeout`; see *Resource limits* in [`realtime.md`](realtime.md#resource-limits). The read and idle limits do not end a response that is still being written. A future route that must read a long request body sets its own read deadline through `http.ResponseController`.
+**The rule:** ordinary HTTP responses have a bounded write. A streaming endpoint has its own, explicit bounded-write policy instead of the server's: M3's SSE sets a finite deadline before each write (see *Resource limits* in [`realtime.md`](realtime.md#resource-limits)). A future route that must read a long request body sets its own read deadline through `http.ResponseController`.
+
+ribbitto keeps these limits itself and does not rely on a reverse proxy for them (`DECISIONS.md`, 15). A proxy in front (Caddy by default, or nginx, Traefik and others) adds defense in depth: TLS, keeping the backend unreachable from outside, and connection and slow-client limits.
 
 ## Middleware order
 

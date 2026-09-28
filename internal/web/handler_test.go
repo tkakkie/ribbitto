@@ -69,6 +69,43 @@ func TestHandler(t *testing.T) {
 	}
 }
 
+// TestStaticRanges: a single range is served as usual, but a request for
+// several ranges gets the whole asset, so many tiny ranges cannot multiply
+// the response with a multipart header per part.
+func TestStaticRanges(t *testing.T) {
+	handler, err := newTestHandler(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const path = "/static/vendor/htmx-2.0.7.min.js"
+	asset, err := fs.ReadFile(static.FS(), strings.TrimPrefix(path, "/static/"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name, rangeHeader string
+		code              int
+		body              []byte
+	}{
+		{"single range", "bytes=0-9", http.StatusPartialContent, asset[:10]},
+		{"several ranges", "bytes=0-0,2-2,4-4", http.StatusOK, asset},
+		{"several ranges with spaces", "bytes=0-0, 2-2", http.StatusOK, asset},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, path, nil)
+			r.Header.Set("Range", tt.rangeHeader)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tt.code {
+				t.Fatalf("status = %d, want %d", w.Code, tt.code)
+			}
+			if !bytes.Equal(w.Body.Bytes(), tt.body) {
+				t.Fatalf("body is %d bytes, want %d", w.Body.Len(), len(tt.body))
+			}
+		})
+	}
+}
+
 func TestHello(t *testing.T) {
 	handler, err := newTestHandler(t, "")
 	if err != nil {

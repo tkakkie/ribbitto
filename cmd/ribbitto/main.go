@@ -95,6 +95,7 @@ func serve(ctx context.Context, databaseURL string) error {
 
 	srv := newServer(addr, handler, serverTimeouts{
 		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout,
+		write: writeTimeout,
 	})
 
 	errc := make(chan error, 1)
@@ -136,19 +137,25 @@ const (
 	// idleTimeout bounds how long a keep-alive connection waits for its
 	// next request; browsers reconnect cheaply after it.
 	idleTimeout = 60 * time.Second
+	// writeTimeout bounds every ordinary response, so a client that stops
+	// reading releases its connection and handler. net/http starts it when
+	// the request headers have been read, so it also covers reading the
+	// body: it must exceed readTimeout, leaving 30 s or more for the handler
+	// and for a page or the largest static asset on a slow link.
+	writeTimeout = 60 * time.Second
 )
 
 type serverTimeouts struct {
-	readHeader, read, idle time.Duration
+	readHeader, read, idle, write time.Duration
 }
 
 // newServer returns the HTTP server with its timeouts; tests pass short
-// ones. There is no WriteTimeout: it would cut off M3's long-lived SSE
-// responses, which bound each write with
-// http.ResponseController.SetWriteDeadline instead. The read and idle
-// timeouts do not end a response that is still being written. A future
-// route that must read a long request body sets its own read deadline
-// through http.ResponseController.
+// ones. Every ordinary response gets the write timeout; ribbitto does not
+// rely on a reverse proxy to cut off a client that stops reading. A
+// streaming endpoint, such as M3's SSE, must not simply inherit it: it sets
+// its own finite deadline before each write with
+// http.ResponseController.SetWriteDeadline. A future route that must read a
+// long request body likewise sets its own read deadline.
 func newServer(addr string, handler http.Handler, timeouts serverTimeouts) *http.Server {
 	return &http.Server{
 		Addr:              addr,
@@ -156,6 +163,7 @@ func newServer(addr string, handler http.Handler, timeouts serverTimeouts) *http
 		ReadHeaderTimeout: timeouts.readHeader,
 		ReadTimeout:       timeouts.read,
 		IdleTimeout:       timeouts.idle,
+		WriteTimeout:      timeouts.write,
 	}
 }
 

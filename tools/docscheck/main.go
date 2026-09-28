@@ -27,6 +27,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 // The limits are in characters (Unicode code points, whitespace and
@@ -267,7 +268,7 @@ func checkLinks(root string) ([]string, error) {
 		if strings.Contains(destination, "://") || strings.HasPrefix(destination, "mailto:") {
 			return
 		}
-		file, anchor, _ := strings.Cut(html.UnescapeString(destination), "#")
+		file, anchor, _ := strings.Cut(html.UnescapeString(string(util.UnescapePunctuations([]byte(destination)))), "#")
 		if f, err := url.PathUnescape(file); err == nil {
 			file = f
 		}

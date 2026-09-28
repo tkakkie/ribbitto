@@ -104,6 +104,16 @@ func TestLinks(t *testing.T) {
 			"docs/b.md": "## 見出し\n", "docs/my file.md": "# M",
 			"docs/a.md": "[x](b.md#%E8%A6%8B%E5%87%BA%E3%81%97) [y](my%20file.md)\n\n[r]: b.md#%E8%A6%8B%E5%87%BA%E3%81%97\n",
 		}, ""},
+		{"escaped punctuation in destinations", map[string]string{
+			"docs/api(v2).md": "## a-b\n",
+			"docs/a.md":       "[x](api\\(v2\\).md#a\\-b)\n\n[r]: api\\(v2\\).md#a\\-b\n",
+		}, ""},
+		{"escaped punctuation in a broken fragment", map[string]string{
+			"docs/api(v2).md": "## a-b\n", "docs/a.md": "[x](api\\(v2\\).md#a\\-c)\n",
+		}, "has no heading #a-c"},
+		{"escaped punctuation in a reference definition's broken fragment", map[string]string{
+			"docs/api(v2).md": "## a-b\n", "docs/a.md": "[r]: api\\(v2\\).md#a\\-c\n",
+		}, "has no heading #a-c"},
 		{"shell assignment is a bare reference", map[string]string{"scripts/s.sh": "file=docs/gone.md\n"}, "docs/gone.md does not exist"},
 		{"a longer file name is not a reference", map[string]string{"scripts/s.sh": "cp docs/x.md.backup /tmp\n"}, ""},
 		{"sentence punctuation after a reference is allowed", map[string]string{"scripts/s.sh": "# See docs/gone.md.\n"}, "docs/gone.md does not exist"},

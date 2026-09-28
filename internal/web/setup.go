@@ -51,12 +51,12 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 			if !allow(w, r) || !parseForm(w, r) {
 				return
 			}
-			for _, name := range []string{"organization_name", "slug", "display_name", "email"} {
+			for _, name := range []string{"organization_name", "slug", "display_name", "handle", "email"} {
 				form.Values[name] = r.PostForm.Get(name)
 			}
 			result, err := service.Complete(r.Context(), r.PostForm.Get("token"), setup.Input{
 				OrganizationName: form.Values["organization_name"], Slug: form.Values["slug"],
-				DisplayName: form.Values["display_name"], Email: form.Values["email"], Password: r.PostForm.Get("password"),
+				DisplayName: form.Values["display_name"], Handle: form.Values["handle"], Email: form.Values["email"], Password: r.PostForm.Get("password"),
 			})
 			var fields setup.ValidationErrors
 			switch {
@@ -78,7 +78,7 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 			case errors.Is(err, setup.ErrToken):
 				form.Errors["token"] = "setup.error.token"
 			case errors.As(err, &fields):
-				for _, name := range []string{"organization_name", "slug", "display_name", "email", "password"} {
+				for _, name := range []string{"organization_name", "slug", "display_name", "handle", "email", "password"} {
 					if _, invalid := fields[name]; invalid {
 						form.Errors[name] = "setup.error." + name
 					}

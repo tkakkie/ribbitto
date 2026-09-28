@@ -41,8 +41,8 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 	}
 	if _, err := pool.Exec(ctx, `WITH ids AS (SELECT $1::uuid, $2::uuid, $3::uuid, $4::uuid)
-		INSERT INTO member (organization_id, account_id, role, joined_event_seq)
-		VALUES ($1, $3, 'owner', 1), ($2, $4, 'member', 1)`, acme, globex, alice, bob); err != nil {
+		INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle)
+		VALUES ($1, $3, 'owner', 1, 'alice'), ($2, $4, 'member', 1, 'bob')`, acme, globex, alice, bob); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, "INSERT INTO setup (organization_id) VALUES ($1)", acme); err != nil {

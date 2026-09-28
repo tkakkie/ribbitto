@@ -41,6 +41,7 @@ func (s *AuthzStore) Membership(ctx context.Context, accountID domain.ID, slug s
 			OrganizationID: row.OrganizationID.Bytes,
 			AccountID:      accountID,
 			Role:           domain.Role(row.Role),
+			Handle:         row.Handle,
 		},
 	}, nil
 }

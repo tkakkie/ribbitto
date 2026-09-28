@@ -33,8 +33,8 @@ func TestAuthzStore(t *testing.T) {
 	}
 	for _, sql := range []string{
 		"INSERT INTO setup (organization_id) VALUES ($1)",
-		"INSERT INTO member (organization_id, account_id, role, joined_event_seq) VALUES ($1, $3, 'owner', 1)",
-		"INSERT INTO member (organization_id, account_id, role, joined_event_seq) VALUES ($2, $4, 'member', 1)",
+		"INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $3, 'owner', 1, 'alice')",
+		"INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($2, $4, 'member', 1, 'bob')",
 	} {
 		if _, err := pool.Exec(ctx, "WITH ids AS (SELECT $1::uuid, $2::uuid, $3::uuid, $4::uuid) "+sql, acme, globex, alice, bob); err != nil {
 			t.Fatal(err)
@@ -43,7 +43,7 @@ func TestAuthzStore(t *testing.T) {
 	store := postgres.NewAuthzStore(pool)
 	m, err := store.Membership(ctx, alice, "acme")
 	if err != nil || m.Organization != (domain.Organization{ID: acme, Slug: "acme", Name: "Acme"}) ||
-		m.Member.OrganizationID != acme || m.Member.AccountID != alice || m.Member.Role != domain.RoleOwner {
+		m.Member.OrganizationID != acme || m.Member.AccountID != alice || m.Member.Role != domain.RoleOwner || m.Member.Handle != "alice" {
 		t.Fatalf("alice in acme: %+v, %v", m, err)
 	}
 	for _, tt := range []struct {

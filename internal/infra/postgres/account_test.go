@@ -61,7 +61,7 @@ func TestAccountSchema(t *testing.T) {
 	if err != nil || unchanged.EventSeq != 0 {
 		t.Fatalf("other organization changed: %+v, %v", unchanged, err)
 	}
-	member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: accounts[0].ID, Role: "owner", JoinedEventSeq: 1})
+	member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: accounts[0].ID, Role: "owner", JoinedEventSeq: 1, Handle: "owner"})
 	requireAccountSchema(t, err)
 	gotMember, err := q.GetMemberByOrganizationAndAccount(ctx, sqlcgen.GetMemberByOrganizationAndAccountParams{OrganizationID: org.ID, AccountID: accounts[0].ID})
 	if err != nil || gotMember != member {
@@ -90,9 +90,16 @@ func TestAccountSchema(t *testing.T) {
 		{"hash format", "UPDATE account SET password_hash = 'x$argon2id$' WHERE id = $2", "23514"},
 		{"role", "UPDATE member SET role = 'admin' WHERE organization_id = $1", "23514"},
 		{"join sequence", "UPDATE member SET joined_event_seq = 0 WHERE organization_id = $1", "23514"},
-		{"duplicate member", "INSERT INTO member (organization_id, account_id, role, joined_event_seq) SELECT organization_id, account_id, role, joined_event_seq FROM member WHERE organization_id = $1", "23505"},
-		{"missing organization", "INSERT INTO member (organization_id, account_id, role, joined_event_seq) VALUES (uuidv7(), $2, 'member', 1)", "23503"},
-		{"missing member account", "INSERT INTO member (organization_id, account_id, role, joined_event_seq) VALUES ($1, uuidv7(), 'member', 1)", "23503"},
+		{"duplicate member", "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) SELECT organization_id, account_id, role, joined_event_seq, 'other' FROM member WHERE organization_id = $1", "23505"},
+		{"missing organization", "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES (uuidv7(), $2, 'member', 1, 'other')", "23503"},
+		{"missing member account", "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, uuidv7(), 'member', 1, 'other')", "23503"},
+		{"upper-case handle", "UPDATE member SET handle = 'Owner' WHERE organization_id = $1", "23514"},
+		{"non-ASCII handle", "UPDATE member SET handle = 'ownér' WHERE organization_id = $1", "23514"},
+		{"short handle", "UPDATE member SET handle = 'o' WHERE organization_id = $1", "23514"},
+		{"long handle", "UPDATE member SET handle = repeat('o', 33) WHERE organization_id = $1", "23514"},
+		{"handle start", "UPDATE member SET handle = '0owner' WHERE organization_id = $1", "23514"},
+		{"handle end", "UPDATE member SET handle = 'owner.' WHERE organization_id = $1", "23514"},
+		{"reserved handle", "UPDATE member SET handle = 'everyone' WHERE organization_id = $1", "23514"},
 		{"missing session account", "UPDATE session SET account_id = uuidv7() WHERE account_id = $2", "23503"},
 		{"short token", "UPDATE session SET token_hash = decode(repeat('00', 31), 'hex') WHERE account_id = $2", "23514"},
 		{"duplicate token", "INSERT INTO session (token_hash, account_id, expires_at) SELECT token_hash, account_id, expires_at FROM session WHERE account_id = $2", "23505"},

@@ -12,8 +12,8 @@ import (
 )
 
 const createMember = `-- name: CreateMember :one
-INSERT INTO member (organization_id, account_id, role, joined_event_seq)
-VALUES ($1, $2, $3, $4) RETURNING id, organization_id, account_id, role, joined_event_seq, created_at
+INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle)
+VALUES ($1, $2, $3, $4, $5) RETURNING id, organization_id, account_id, role, joined_event_seq, created_at, handle
 `
 
 type CreateMemberParams struct {
@@ -21,6 +21,7 @@ type CreateMemberParams struct {
 	AccountID      pgtype.UUID
 	Role           string
 	JoinedEventSeq int64
+	Handle         string
 }
 
 func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error) {
@@ -29,6 +30,7 @@ func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Mem
 		arg.AccountID,
 		arg.Role,
 		arg.JoinedEventSeq,
+		arg.Handle,
 	)
 	var i Member
 	err := row.Scan(
@@ -38,6 +40,7 @@ func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Mem
 		&i.Role,
 		&i.JoinedEventSeq,
 		&i.CreatedAt,
+		&i.Handle,
 	)
 	return i, err
 }
@@ -58,7 +61,7 @@ func (q *Queries) GetHomeSlug(ctx context.Context, accountID pgtype.UUID) (strin
 }
 
 const getMemberByOrganizationAndAccount = `-- name: GetMemberByOrganizationAndAccount :one
-SELECT id, organization_id, account_id, role, joined_event_seq, created_at FROM member WHERE organization_id = $1 AND account_id = $2
+SELECT id, organization_id, account_id, role, joined_event_seq, created_at, handle FROM member WHERE organization_id = $1 AND account_id = $2
 `
 
 type GetMemberByOrganizationAndAccountParams struct {
@@ -76,12 +79,13 @@ func (q *Queries) GetMemberByOrganizationAndAccount(ctx context.Context, arg Get
 		&i.Role,
 		&i.JoinedEventSeq,
 		&i.CreatedAt,
+		&i.Handle,
 	)
 	return i, err
 }
 
 const getMembershipBySlug = `-- name: GetMembershipBySlug :one
-SELECT o.id AS organization_id, o.slug, o.name, m.id AS member_id, m.role
+SELECT o.id AS organization_id, o.slug, o.name, m.id AS member_id, m.role, m.handle
 FROM organization o
 JOIN member m ON m.organization_id = o.id
 WHERE o.slug = $1 AND m.account_id = $2
@@ -98,6 +102,7 @@ type GetMembershipBySlugRow struct {
 	Name           string
 	MemberID       pgtype.UUID
 	Role           string
+	Handle         string
 }
 
 func (q *Queries) GetMembershipBySlug(ctx context.Context, arg GetMembershipBySlugParams) (GetMembershipBySlugRow, error) {
@@ -109,6 +114,7 @@ func (q *Queries) GetMembershipBySlug(ctx context.Context, arg GetMembershipBySl
 		&i.Name,
 		&i.MemberID,
 		&i.Role,
+		&i.Handle,
 	)
 	return i, err
 }

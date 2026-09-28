@@ -54,6 +54,7 @@ erDiagram
   text role
   bigint joined_event_seq
   timestamp_with_time_zone created_at
+  text handle
 }
 "public.setup" {
   boolean id

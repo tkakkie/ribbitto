@@ -16,6 +16,7 @@ templ SignUp(stylesheetURL string, form SignUpForm) {
 			<form method="post" action="/signup" class="flex flex-col gap-4">
 				for _, field := range []struct{ name, kind, autocomplete string }{
 					{"display_name", "text", "nickname"},
+					{"handle", "text", "off"},
 					{"email", "email", "username"},
 					{"password", "password", "new-password"},
 				} {

@@ -69,6 +69,7 @@ func SignUp(stylesheetURL string, form SignUpForm) templ.Component {
 			}
 			for _, field := range []struct{ name, kind, autocomplete string }{
 				{"display_name", "text", "nickname"},
+				{"handle", "text", "off"},
 				{"email", "email", "username"},
 				{"password", "password", "new-password"},
 			} {
@@ -79,7 +80,7 @@ func SignUp(stylesheetURL string, form SignUpForm) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "setup."+field.name))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 23, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 24, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -92,7 +93,7 @@ func SignUp(stylesheetURL string, form SignUpForm) templ.Component {
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.kind)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 24, Col: 30}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 25, Col: 30}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 				if templ_7745c5c3_Err != nil {
@@ -105,7 +106,7 @@ func SignUp(stylesheetURL string, form SignUpForm) templ.Component {
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 24, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 25, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 				if templ_7745c5c3_Err != nil {
@@ -118,7 +119,7 @@ func SignUp(stylesheetURL string, form SignUpForm) templ.Component {
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(form.Values[field.name])
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 24, Col: 84}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 25, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 				if templ_7745c5c3_Err != nil {
@@ -131,7 +132,7 @@ func SignUp(stylesheetURL string, form SignUpForm) templ.Component {
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(field.autocomplete)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 24, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 25, Col: 120}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 				if templ_7745c5c3_Err != nil {
@@ -149,7 +150,7 @@ func SignUp(stylesheetURL string, form SignUpForm) templ.Component {
 					var templ_7745c5c3_Var9 string
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, message))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 26, Col: 78}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 27, Col: 78}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 					if templ_7745c5c3_Err != nil {
@@ -172,7 +173,7 @@ func SignUp(stylesheetURL string, form SignUpForm) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "signup.submit"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 30, Col: 141}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/signup.templ`, Line: 31, Col: 141}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {

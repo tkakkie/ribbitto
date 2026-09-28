@@ -10,6 +10,7 @@
 | role | text |  | false |  |  |  |
 | joined_event_seq | bigint |  | false |  |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
+| handle | text |  | false |  |  |  |
 
 ## Constraints
 
@@ -17,6 +18,9 @@
 | ---- | ---- | ---------- |
 | member_account_id_not_null | n | NOT NULL account_id |
 | member_created_at_not_null | n | NOT NULL created_at |
+| member_handle_format_check | CHECK | CHECK ((handle ~ '^[a-z][a-z0-9_.-]{0,30}[a-z0-9]$'::text)) |
+| member_handle_not_null | n | NOT NULL handle |
+| member_handle_reserved_check | CHECK | CHECK ((handle <> ALL (ARRAY['everyone'::text, 'here'::text, 'channel'::text, 'all'::text]))) |
 | member_id_not_null | n | NOT NULL id |
 | member_joined_event_seq_check | CHECK | CHECK ((joined_event_seq >= 1)) |
 | member_joined_event_seq_not_null | n | NOT NULL joined_event_seq |
@@ -28,6 +32,7 @@
 | member_pkey | PRIMARY KEY | PRIMARY KEY (id) |
 | member_organization_id_account_id_key | UNIQUE | UNIQUE (organization_id, account_id) |
 | member_organization_id_id_key | UNIQUE | UNIQUE (organization_id, id) |
+| member_organization_id_handle_key | UNIQUE | UNIQUE (organization_id, handle) |
 
 ## Indexes
 
@@ -36,6 +41,7 @@
 | member_pkey | CREATE UNIQUE INDEX member_pkey ON public.member USING btree (id) |
 | member_organization_id_account_id_key | CREATE UNIQUE INDEX member_organization_id_account_id_key ON public.member USING btree (organization_id, account_id) |
 | member_organization_id_id_key | CREATE UNIQUE INDEX member_organization_id_id_key ON public.member USING btree (organization_id, id) |
+| member_organization_id_handle_key | CREATE UNIQUE INDEX member_organization_id_handle_key ON public.member USING btree (organization_id, handle) |
 
 ## Relations
 
@@ -52,6 +58,7 @@ erDiagram
   text role
   bigint joined_event_seq
   timestamp_with_time_zone created_at
+  text handle
 }
 "public.organization" {
   uuid id

@@ -24,6 +24,12 @@ Roughly in this order: private channels → direct messages → invitations →
 reactions → editing and deleting → PostgreSQL row-level security →
 multiple organisations → file uploads → search.
 
+Email is not part of M1 to M3. Delivery arrives with self-hosting after M3
+or when invitations become concrete, whichever comes first, starting with a
+Mailer over SMTP (`DECISIONS.md`, 16). The default order is Mailer →
+password reset → email verification → invitations, adjusted to when
+invitations are scheduled (#128).
+
 Bulk onboarding of an organisation's people goes through invitations and
 provisioning, never through the public `/signup` form.
 

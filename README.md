@@ -39,10 +39,15 @@ make db-down               # stops PostgreSQL; keeps the named data volume
 The server listens at http://localhost:8080/healthz and never migrates on
 startup.
 
-Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the proxy's
-addresses as comma-separated CIDRs (for example `172.18.0.0/16` for Caddy
-on a Compose network) so that the sign-in, sign-up and setup rate limits
-see each client's address instead of the proxy's.
+Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the address of the
+proxy that connects to ribbitto, as a `/32` or `/128` CIDR (for example
+`10.0.0.2/32`; several are comma-separated), so that the sign-in, sign-up and
+setup rate limits see each client's address instead of the proxy's. List only
+proxies, never a network that also contains clients, and make the proxy append
+the peer it saw to `X-Forwarded-For` or overwrite the header. See the
+[reverse-proxy contract](docs/architecture.md#reverse-proxies) for the full rules
+and for setups with several proxies. Left empty (the default), ribbitto ignores
+`X-Forwarded-For`, and all clients behind the proxy share one limit.
 
 The session cookie is always `Secure` (there is no switch to turn that off:
 it would be too easy to leave off in production). Browsers that treat

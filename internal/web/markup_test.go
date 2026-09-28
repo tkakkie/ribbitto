@@ -287,7 +287,7 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "setup, wrong token", route: "POST /setup", services: withSetup(setup.ErrToken), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity},
 		{name: "sign-up", route: "GET /signup", services: withSignUp(true, nil), method: "GET", path: "/signup"},
 		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity},
-		{name: "organisation page", route: "GET /o/{slug}/{$}", services: signedIn(oneOrganisation{}), method: "GET", path: "/o/acme/", cookie: true},
+		{name: "organisation page", route: "GET /organizations/{slug}/{$}", services: signedIn(oneOrganisation{}), method: "GET", path: "/organizations/acme/", cookie: true},
 	}
 	// Routes that answer with a redirect or an empty status, never a page.
 	noPage := []string{"POST /signout"}

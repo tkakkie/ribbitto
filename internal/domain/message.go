@@ -40,5 +40,6 @@ func ValidateMessageBody(value string) (string, error) {
 // example a spoofed URL), and Unicode discourages them in new text. The
 // isolates LRI, RLI, FSI and PDI (U+2066–U+2069), and marks such as LRM,
 // RLM and ALM, are allowed on purpose: they are the recommended way to mix
-// directions in plain text, and views contain them with dir="auto" or <bdi>.
+// directions in plain text. Views must show each body with dir="auto" or in
+// a <bdi> so its direction stays inside it; the message list does so from #78.
 func isBidiEmbeddingOrOverride(r rune) bool { return r >= '\u202a' && r <= '\u202e' }

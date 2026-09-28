@@ -50,7 +50,8 @@ that the body does not start or end with ASCII white space; PostgreSQL
 
 ## Showing bodies
 
-A body is escaped by templ at render time (never `templ.Raw`) with its line
-breaks kept. Each body is shown with `dir="auto"` or inside `<bdi>`, so its
+*Planned, #78:* no view shows message bodies yet. When the message list does,
+it must escape each body with templ at render time (never `templ.Raw`),
+keep its line breaks, and show it with `dir="auto"` or inside `<bdi>`, so its
 direction — including any isolates it contains — cannot leak into the
 surrounding interface.

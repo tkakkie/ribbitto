@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -149,6 +150,53 @@ func TestLimitedFormsAreNotParsed(t *testing.T) {
 			handler.ServeHTTP(w, r)
 			if w.Code != http.StatusTooManyRequests || body.reads != 0 {
 				t.Fatalf("status %d, body read %d times", w.Code, body.reads)
+			}
+		})
+	}
+}
+
+// An exhausted IPv6 /48 bucket keeps the same order as a client bucket:
+// a closed route still answers 404, and an open one answers 429 without
+// reading the form or reaching the use case, even for a /64 in that /48
+// that has never been seen.
+func TestExhaustedNetworkLimit(t *testing.T) {
+	drainNetwork := func(limiter *middleware.RateLimiter) {
+		for i := range 64 {
+			for limiter.Allow(netip.MustParsePrefix(fmt.Sprintf("2001:db8:0:%x::/64", i))) {
+			}
+		}
+	}
+	post := func(handler http.Handler, path string, body io.Reader) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, path, body)
+		r.RemoteAddr = "[2001:db8:0:ffff::1]:1234"
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	for _, path := range []string{"/setup", "/signup"} {
+		t.Run("closed "+path, func(t *testing.T) {
+			setup := &fakeSetup{}
+			handler, limits := newLimitedHandler(t, Services{Setup: setup, SignUp: fakeSignUp{setup}, SetupSessions: setup})
+			drainNetwork(limits.Setup)
+			drainNetwork(limits.SignUp)
+			if w := post(handler, path, strings.NewReader("a=b")); w.Code != http.StatusNotFound {
+				t.Fatalf("status %d", w.Code)
+			}
+		})
+	}
+	for _, path := range []string{"/signin", "/setup", "/signup"} {
+		t.Run("open "+path, func(t *testing.T) {
+			signIn := &countingSignIn{}
+			setup := &fakeSetup{open: true}
+			handler, limits := newLimitedHandler(t, Services{SignIn: signIn, Setup: setup, SignUp: fakeSignUp{setup}, SetupSessions: setup})
+			drainNetwork(limits.SignIn)
+			drainNetwork(limits.Setup)
+			drainNetwork(limits.SignUp)
+			body := &readRecorder{}
+			w := post(handler, path, body)
+			if w.Code != http.StatusTooManyRequests || body.reads != 0 || signIn.calls != 0 || setup.completed {
+				t.Fatalf("status %d, body read %d times, sign-in calls %d, setup completed %v", w.Code, body.reads, signIn.calls, setup.completed)
 			}
 		})
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
@@ -28,7 +29,8 @@ func (s *SetupStore) Open(ctx context.Context) (bool, error) {
 	return open, nil
 }
 
-// Create commits the organization, owner and completion marker together.
+// Create commits the organization, owner, default channel and completion
+// marker together.
 func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, displayName, handle, passwordHash string) (setup.Result, error) {
 	var result setup.Result
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -46,6 +48,12 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 			return err
 		}
 		if _, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: account.ID, Role: "owner", JoinedEventSeq: seq, Handle: handle}); err != nil {
+			return err
+		}
+		// Listed exception (feature map): setup writes the channel feature's
+		// table so that a completed setup never exists without its default
+		// channel; a failure here rolls the organisation back too.
+		if _, err := NewChannelStore(tx).CreateChannel(ctx, org.ID.Bytes, channel.DefaultName, true); err != nil {
 			return err
 		}
 		if err := q.CompleteSetup(ctx, org.ID); err != nil {

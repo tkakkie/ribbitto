@@ -75,7 +75,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in, sign-up | `app/auth`, `app/signup`; `infra/postgres` `account.go`, `session.go`, `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
 | `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`), `member`, `setup` |
-| `channel`: public conversations | `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql` | `channel` |
+| `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql` | `channel` |
 | `message`: plain-text posts and history | `domain/message.go`; `infra/postgres/message.go`; `db/queries/message.sql` | `message` |
 | `realtime` | `internal/realtime` *(M3)* | none |
 
@@ -95,8 +95,9 @@ Use cases and handlers follow in later M2 issues.
 **Known exceptions.** Two flows write another feature's tables in one
 transaction today:
 
-- setup (`org`) writes `organization`, `account`, `member` and `setup`,
-  so it creates `identity`'s first `account`;
+- setup (`org`) writes `organization`, `account`, `member`, `channel` and
+  `setup`, so it creates `identity`'s first `account` and the `channel`
+  feature's default channel (a completed setup must never lack one);
 - sign-up (`identity`) writes `account` and `member` and advances
   `organization.event_seq`, which belong to `org`.
 

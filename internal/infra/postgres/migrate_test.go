@@ -37,7 +37,7 @@ func TestMigrations(t *testing.T) {
 		setup    bool
 		handle   bool
 		messages bool
-	}{{"up", true, "applied", true, true, true, true}, {"down", true, "applied", true, true, true, false}, {"down", true, "applied", true, true, false, false}, {"down", true, "applied", true, false, false, false}, {"down", true, "applied", false, false, false, false}, {"down", false, "pending", false, false, false, false}, {"up", true, "applied", true, true, true, true}} {
+	}{{"up", true, "applied", true, true, true, true}, {"down", true, "applied", true, true, true, true}, {"down", true, "applied", true, true, true, false}, {"down", true, "applied", true, true, false, false}, {"down", true, "applied", true, false, false, false}, {"down", true, "applied", false, false, false, false}, {"down", false, "pending", false, false, false, false}, {"up", true, "applied", true, true, true, true}} {
 		if err := postgres.Migrate(ctx, db, step.command, io.Discard); err != nil {
 			t.Fatal(err)
 		}

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -60,7 +60,7 @@ func TestChannelMessageSchema(t *testing.T) {
 		t.Fatalf("channel list leaked: %+v, %v", listed, err)
 	}
 	_, err = channels.GetChannel(ctx, other, channel.ID)
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if !errors.Is(err, appchannel.ErrNotFound) {
 		t.Fatalf("cross-organisation channel lookup: %v", err)
 	}
 	var posted []domain.Message

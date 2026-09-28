@@ -21,6 +21,11 @@ stop and ask the maintainer.
 - It does what the issue's *Done when* says, and nothing unrelated.
 - Correctness, error handling, organisation scoping, authorization.
 - Layering: no import that breaks the dependency direction in `AGENTS.md`.
+- Boundaries: code sits in the feature the issue names; it uses other
+  features only through their exported API and writes only its own
+  tables or a listed exception (feature map in
+  `docs/architecture/README.md`); every new edge in
+  `docs/dependencies.md` is explained in the PR.
 - Tests prove the behaviour (authorization: someone who must not see the
   data does not see it). No test was deleted, skipped or weakened.
 - Comments explain *why*; `docs/` is updated when terminology,

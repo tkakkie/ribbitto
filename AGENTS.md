@@ -52,6 +52,18 @@ It may import `web/static` for embedded assets. Do not add an import that breaks
 `db/migrations` is owned by `internal/infra/postgres` and may be imported
 only by it and `cmd/ribbitto`.
 
+Features: the code is heading for a modular monolith by feature
+(`DECISIONS.md`, 14); the feature map in
+[`docs/architecture/README.md`](docs/architecture/README.md#feature-map)
+lists each feature's packages and tables.
+
+- New code goes in feature packages inside the layers.
+- Read the `doc.go` of each feature package you touch first.
+- A feature uses another only through its exported API, never its store
+  internals or queries.
+- A feature writes only the tables it owns, except the flows the feature
+  map lists; a new exception needs its issue to say why.
+
 ## Where things are explained
 
 Read the relevant document before changing its area, and update it in the

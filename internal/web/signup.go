@@ -16,7 +16,7 @@ import (
 // SignUpService exposes registration availability to installation-wide pages.
 type SignUpService interface {
 	Open(context.Context) (bool, error)
-	SignUp(context.Context, string, string, string) (domain.ID, error)
+	SignUp(ctx context.Context, displayName, handle, email, password string) (domain.ID, error)
 }
 
 func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpService, sessions SessionReplacer, allow func(http.ResponseWriter, *http.Request) bool) {
@@ -42,10 +42,10 @@ func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpServic
 			if !allow(w, r) || !parseForm(w, r) {
 				return
 			}
-			for _, name := range []string{"display_name", "email"} {
+			for _, name := range []string{"display_name", "handle", "email"} {
 				form.Values[name] = r.PostForm.Get(name)
 			}
-			account, err := service.SignUp(r.Context(), form.Values["display_name"], form.Values["email"], r.PostForm.Get("password"))
+			account, err := service.SignUp(r.Context(), form.Values["display_name"], form.Values["handle"], form.Values["email"], r.PostForm.Get("password"))
 			var fields signup.ValidationErrors
 			switch {
 			case err == nil:
@@ -65,8 +65,10 @@ func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpServic
 				return
 			case errors.Is(err, signup.ErrEmailTaken):
 				form.Errors["email"] = "signup.error.email_taken"
+			case errors.Is(err, signup.ErrHandleTaken):
+				form.Errors["handle"] = "signup.error.handle_taken"
 			case errors.As(err, &fields):
-				for _, name := range []string{"display_name", "email", "password"} {
+				for _, name := range []string{"display_name", "handle", "email", "password"} {
 					if _, invalid := fields[name]; invalid {
 						form.Errors[name] = "setup.error." + name
 					}

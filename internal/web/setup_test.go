@@ -45,7 +45,7 @@ func TestSetup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	form := url.Values{"token": {"secret-token"}, "organization_name": {"Example"}, "slug": {"example"}, "display_name": {"Owner"}, "email": {"owner@example.com"}, "password": {"secret-password"}}
+	form := url.Values{"token": {"secret-token"}, "organization_name": {"Example"}, "slug": {"example"}, "display_name": {"Owner"}, "handle": {"owner"}, "email": {"owner@example.com"}, "password": {"secret-password"}}
 	for _, tt := range []struct {
 		name    string
 		service *fakeSetup
@@ -60,6 +60,7 @@ func TestSetup(t *testing.T) {
 		{"organisation", &fakeSetup{open: true, err: setup.ValidationErrors{"organization_name": errors.New("private detail")}}, 422, "Enter an organisation name of 1–100 printable characters."},
 		{"slug", &fakeSetup{open: true, err: setup.ValidationErrors{"slug": errors.New("private detail")}}, 422, "Use 1–63 lowercase letters, digits or hyphens, starting and ending with a letter or digit."},
 		{"name", &fakeSetup{open: true, err: setup.ValidationErrors{"display_name": errors.New("private detail")}}, 422, "Enter a display name of 1–50 printable characters."},
+		{"handle", &fakeSetup{open: true, err: setup.ValidationErrors{"handle": errors.New("private detail")}}, 422, "Use 2–32 characters: lowercase letters, digits, _, . or -"},
 		{"email", &fakeSetup{open: true, err: setup.ValidationErrors{"email": errors.New("private detail")}}, 422, "Enter a valid email address."},
 		{"password", &fakeSetup{open: true, err: setup.ValidationErrors{"password": errors.New("private detail")}}, 422, "Use a password of 15–128 characters."},
 		{"busy", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", auth.ErrBusy)}, 503, ""},
@@ -103,7 +104,7 @@ func TestSetup(t *testing.T) {
 					if !strings.Contains(body, tt.message) || !strings.Contains(body, `role="alert"`) {
 						t.Fatal("missing error")
 					}
-					for _, field := range []string{"organization_name", "slug", "display_name", "email"} {
+					for _, field := range []string{"organization_name", "slug", "display_name", "handle", "email"} {
 						if !strings.Contains(body, `value="`+form.Get(field)+`"`) {
 							t.Fatalf("lost %s", field)
 						}
@@ -126,7 +127,7 @@ func TestSetup(t *testing.T) {
 				if f.completed != (f.open && f.openErr == nil) || f.created != (tt.name == "success" || tt.name == "session failure") {
 					t.Fatal("unexpected service calls")
 				}
-				if f.completed && (f.token != form.Get("token") || f.input != (setup.Input{OrganizationName: "Example", Slug: "example", DisplayName: "Owner", Email: "owner@example.com", Password: "secret-password"})) {
+				if f.completed && (f.token != form.Get("token") || f.input != (setup.Input{OrganizationName: "Example", Slug: "example", DisplayName: "Owner", Handle: "owner", Email: "owner@example.com", Password: "secret-password"})) {
 					t.Fatal("incorrect submitted input")
 				}
 				if f.created && f.account != (domain.ID{42}) {

@@ -18,6 +18,7 @@ for the current tables, columns and constraints.
 | **session** | A signed-in browser of an account. |
 | **organization** | A workspace. Owns everything its members create. |
 | **member** | An account's membership in one organisation. All organisation-owned data refers to members, never directly to accounts. |
+| **handle** | A member's organisation-scoped name for people to tell members apart, shown as `Display name @handle`. |
 | **channel** | A named conversation inside an organisation. |
 | **channel member** | A member's per-channel state (read position). |
 | **message** | A post in a channel, written by a member. |
@@ -46,7 +47,7 @@ erDiagram
 | `account` | exists | normalised unique email, display name, Argon2id password hash |
 | `session` | exists | SHA-256 hash of the session token, expiry |
 | `setup` | exists | boolean key fixed to `true`, `organization_id`, `completed_at` |
-| `member` | exists | `organization_id`, `account_id`, role (`owner` or `member`), `joined_event_seq` |
+| `member` | exists | `organization_id`, `account_id`, role (`owner` or `member`), `joined_event_seq`, `handle` (unique per organisation) |
 | `channel` | planned (M2) | `organization_id`, name |
 | `channel_member` | planned (M2) | `organization_id`, `channel_id`, `member_id`, `last_read_event_seq` |
 | `message` | planned (M2) | `organization_id`, `channel_id`, `member_id`, body, `event_seq` |
@@ -74,11 +75,23 @@ name to be NFC.
 - **Password:** 15–128 characters, preserved as entered, no composition rules.
 - **Organisation name:** 1–100 characters after normalisation.
 - **Slug:** 1–63 characters from `a-z0-9-`, no leading or trailing `-`.
+- **Handle:** trimmed; non-ASCII is rejected *before* lower-casing (the
+  Kelvin sign U+212A must not become `k`), then lower-cased. 2–32
+  characters, `a-z` first, `a-z0-9` last, `a-z0-9_.-` between; not
+  `everyone`, `here`, `channel` or `all`. Stored in this form, so `Tomoya`
+  and `tomoya` collide; the database checks the same rules.
 
 Sessions store a unique 32-byte token hash and expire after their creation.
 Deleting an account cascades to sessions. Membership references restrict
 account and organisation deletion; membership is unique per organisation and
 account, and `joined_event_seq` starts at 1.
+
+**Names and identity.** The **display name** (`account`) is free text for
+people; the **handle** (`member`) tells members apart within an
+organisation; **`member_id`** is the only identifier the system trusts.
+Permissions, mentions and stored references use `member_id`, so a handle
+can change safely. Handles never sign in and are never derived from email.
+Members older than handles got `member-<n>`, numbered per organisation.
 
 ## Invariants
 

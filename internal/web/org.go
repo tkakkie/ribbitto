@@ -36,6 +36,7 @@ func orgRoutes(pages *pageRenderer) []orgRoute {
 				return view.OrgHome(url, view.OrgPage{
 					OrganizationName: m.Organization.Name,
 					DisplayName:      account.DisplayName,
+					Handle:           m.Member.Handle,
 					Role:             string(m.Member.Role),
 				})
 			})

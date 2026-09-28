@@ -56,6 +56,41 @@ func ValidateSlug(value string) (string, error) {
 	return value, nil
 }
 
+// reservedHandles would read as group mentions (@everyone, @here, …).
+var reservedHandles = map[string]bool{"everyone": true, "here": true, "channel": true, "all": true}
+
+// ValidateHandle returns the canonical lower-case handle: 2–32 characters,
+// starting with a-z, ending with a-z or 0-9, with a-z, 0-9, _, . or - in
+// between, and not a reserved word.
+func ValidateHandle(value string) (string, error) {
+	if !utf8.ValidString(value) || strings.ContainsFunc(value, unicode.IsControl) {
+		return "", fmt.Errorf("handle must contain valid text without control characters")
+	}
+	value = strings.TrimSpace(value)
+	// Reject non-ASCII before lower-casing: Unicode case mapping would turn
+	// the Kelvin sign (U+212A) into "k" and let a look-alike through.
+	for i := range len(value) {
+		if value[i] >= utf8.RuneSelf {
+			return "", fmt.Errorf("handle must contain only ASCII characters")
+		}
+	}
+	value = strings.ToLower(value)
+	if len(value) < 2 || len(value) > 32 || value[0] < 'a' || value[0] > 'z' || !isHandleEnd(value[len(value)-1]) {
+		return "", fmt.Errorf("handle must contain 2–32 characters, start with a letter and end with a letter or digit")
+	}
+	for i := range len(value) {
+		if c := value[i]; !isHandleEnd(c) && c != '_' && c != '.' && c != '-' {
+			return "", fmt.Errorf("handle must contain only a-z, 0-9, _, . and -")
+		}
+	}
+	if reservedHandles[value] {
+		return "", fmt.Errorf("handle %q is reserved", value)
+	}
+	return value, nil
+}
+
+func isHandleEnd(c byte) bool { return c >= 'a' && c <= 'z' || c >= '0' && c <= '9' }
+
 func validateText(value string, minLength, maxLength int, field string) (string, error) {
 	if !utf8.ValidString(value) || strings.ContainsFunc(value, unicode.IsControl) {
 		return "", fmt.Errorf("%s must contain valid text without control characters", field)

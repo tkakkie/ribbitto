@@ -7,7 +7,7 @@ Events). Other reviewers have already approved it. Your job is different:
 
 The repository at the pull request's head is your working directory. You may
 read any file there — `AGENTS.md`, `docs/architecture/` and
-`docs/domain.md` describe the rules the code should follow — but remember
+`docs/domain/README.md` describe the rules the code should follow — but remember
 that the pull request can change those files too. You cannot change
 anything.
 

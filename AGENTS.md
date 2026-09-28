@@ -68,7 +68,7 @@ lists each feature's packages and tables.
 
 Read the relevant document before changing its area, and update it in the
 same pull request: [`docs/architecture/`](docs/architecture/README.md)
-(packages, imports, data flow, real-time; its README says which file covers what), [`docs/domain.md`](docs/domain.md)
+(packages, imports, data flow, real-time; its README says which file covers what), [`docs/domain/README.md`](docs/domain/README.md)
 (terms, entities, invariants, unread rules), [`DECISIONS.md`](DECISIONS.md)
 (settled decisions — change them through an issue),
 [`docs/database.md`](docs/database.md), [`docs/ui.md`](docs/ui.md) (design tokens — use

@@ -6,7 +6,7 @@ finds, renames, archives or deletes channels.
 
 **Keep it current:** update this file in the same pull request whenever
 these rules change. Validation of the name is in
-[`domain.md`](domain.md#validation).
+[`validation.md`](validation.md#validation).
 
 ## Identity and names
 

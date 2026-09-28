@@ -7,7 +7,7 @@ for either name.
 **Keep it current:** update this file in the same pull request whenever the
 display-name or handle rules, or how names are shown, change. The general
 validation rules (UTF-8, controls, NFC, printable characters) are in
-[`domain.md`](domain.md#validation).
+[`validation.md`](validation.md#validation).
 
 ## Three jobs, three things
 
@@ -27,7 +27,7 @@ confusables in general are not detected or banned.
 
 ## Display names
 
-1–50 characters after the rules in [`domain.md`](domain.md#validation), and
+1–50 characters after the rules in [`validation.md`](validation.md#validation), and
 **not blank-looking**. A name is blank-looking when every character is one
 of:
 

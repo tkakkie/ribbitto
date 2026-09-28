@@ -17,7 +17,7 @@ Bodies are **plain text**, and the stored body is the source of truth. If
 Markdown or rich text comes later, an explicit format is added with it and
 every existing message stays `plain_text`; a stored message is never
 reinterpreted, and rendered HTML is at most a disposable cache
-([`DECISIONS.md`](../DECISIONS.md), 18).
+([`DECISIONS.md`](../../DECISIONS.md), 18).
 
 ## Accepted bodies
 

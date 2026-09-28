@@ -1,10 +1,26 @@
 # First-run setup and sign-up
 
+## First-run setup
+
+`setup` is installation-wide state, read without an organisation filter.
+Its `organization_id` only names the organisation setup created; it does
+not make the row organisation-owned. Its primary key is a boolean fixed to
+`true`, not a UUIDv7. Completion stays recorded even if other organisations
+are created later.
+
+A nonempty configured setup token authorizes setup: SHA-256 hashes of the
+configured and submitted tokens are compared in constant time. All fields
+are validated before password hashing. One transaction inserts the
+organisation, takes its next `event_seq` (1), creates the account
+(Argon2id hash), its owner membership at that sequence, the default
+channel and the setup row. Concurrent losers hit the singleton key and roll back;
+repeating setup is 404.
+
 `internal/app/setup` checks the configured token and validates all fields
 before using the shared `auth.Hasher`. Its store interface requires atomic
 creation; `postgres.SetupStore` implements it with one transaction for the
 organisation, first sequence, owner account, membership (with the owner's
-handle), default channel ([`channels.md`](../channels.md)) and setup marker.
+handle), default channel ([`channels.md`](../domain/channels.md)) and setup marker.
 `cmd/ribbitto` validates `RIBBITTO_SETUP_TOKEN` before opening the database:
 empty disables setup, and a non-empty value needs at least 32 characters.
 When disabled, `/setup` is not registered at all, so GET and POST are the
@@ -18,6 +34,8 @@ returns 404, invalid fields or token return 422 without echoing secrets, and
 a busy hasher returns 503. Success signs the owner in through
 `auth.Sessions.Replace` ([`identity.md`](identity.md)), sets the shared session cookie and redirects
 to `/` with 303. Setup and sign-in share the process's single password hasher.
+
+## Sign-up
 
 `internal/app/signup.Open` gates registration and the sign-in link on
 `RIBBITTO_SIGNUP=on` and completed setup. Its separate handler and form share

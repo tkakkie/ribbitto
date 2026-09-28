@@ -12,7 +12,7 @@
 # Checks out the PR head in a temporary git worktree, builds a prompt from the
 # trusted .github/prompts/adversarial.md on origin/main plus the PR title,
 # description and diff, runs Grok with read-only tools, prints the report and
-# removes everything it created. See docs/workflow.md#adversarial-review.
+# removes everything it created. See docs/workflow/adversarial-review.md.
 #
 # Environment:
 #   RIBBITTO_GROK_TIMEOUT     seconds before Grok is stopped (1–86400, default 3600)
@@ -237,7 +237,7 @@ case $status in
     if [[ -t 2 ]]; then printf '\033[0m' >&2; fi
     echo "grok-review: Grok did not finish within ${timeout}s" >&2
     if (( next > timeout )); then
-      printf 'grok-review: rerun with RIBBITTO_GROK_TIMEOUT=%s using the invocation in docs/workflow.md#adversarial-review\n' "$next" >&2
+      printf 'grok-review: rerun with RIBBITTO_GROK_TIMEOUT=%s using the invocation in docs/workflow/adversarial-review.md\n' "$next" >&2
     else
       echo 'grok-review: the 86400-second maximum is already in effect' >&2
     fi

@@ -12,7 +12,7 @@ comments, docs, commits, issues, pull requests — is written in English.
 
 ## Workflow
 
-Follow [`docs/workflow.md`](docs/workflow.md). The rules you must not skip:
+Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file covers what). The rules you must not skip:
 
 - **Start of a session:** read the pinned Status issue (`gh issue view 1`)
   and `docs/roadmap.md`.
@@ -20,7 +20,7 @@ Follow [`docs/workflow.md`](docs/workflow.md). The rules you must not skip:
   changes) is reviewed by the other AI (Claude ↔ Codex) before the
   maintainer is asked.** At most two review rounds; then either
   closure verification (PRs with only mechanical, verified fixes left —
-  see `docs/workflow.md#reviewing`) or ask the maintainer.
+  see `docs/workflow/reviewing.md`) or ask the maintainer.
 - Issues start from a template in `.github/ISSUE_TEMPLATE/`; keep its
   headings. No implementation without the `ready` label.
 - **End of a unit of work:** overwrite the Status issue body. When the
@@ -121,4 +121,4 @@ only the token utilities, never raw colours).
   later push makes the merge fail instead of slipping in.
 - When running `codex`, `grok` or `claude -p` headless, close stdin
   (`< /dev/null`) and set a time limit, or they can wait forever
-  (see `docs/workflow.md#running-the-other-ai`).
+  (see `docs/workflow/running-other-ai.md`).

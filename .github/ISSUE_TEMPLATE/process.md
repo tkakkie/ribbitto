@@ -22,7 +22,7 @@ labels: ["process"]
 
 ## Risk
 
-<!-- Usually "high": process changes touch AGENTS.md, docs/workflow.md
+<!-- Usually "high": process changes touch AGENTS.md, docs/workflow/
      or .github/. -->
 
 ## Implementer

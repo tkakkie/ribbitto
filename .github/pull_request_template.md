@@ -6,7 +6,7 @@ Closes #
 
 **Verified by:** <!-- tests, commands; for UI changes, how to see them and what was checked in a browser (screenshots when the look is the point) -->
 
-**Risk:** <!-- high | normal — see docs/workflow.md#risk --> · **Author:** · **Reviewer:** · **Adversarial:** <!-- Grok, or n/a -->
+**Risk:** <!-- high | normal — see docs/workflow/reviewing.md#risk --> · **Author:** · **Reviewer:** · **Adversarial:** <!-- Grok, or n/a -->
 
 <details><summary>Details</summary>
 

@@ -260,7 +260,7 @@ DRIVER
         timeout)
           contains "$CASE_DIR/out/stderr" 'timed out after 1 s'
           contains "$CASE_DIR/out/stderr" 'Grok did not finish within 1s'
-          contains "$CASE_DIR/out/stderr" 'rerun with RIBBITTO_GROK_TIMEOUT=2 using the invocation in docs/workflow.md#adversarial-review'
+          contains "$CASE_DIR/out/stderr" 'rerun with RIBBITTO_GROK_TIMEOUT=2 using the invocation in docs/workflow/adversarial-review.md'
           if grep -Fq 'bash -c' "$CASE_DIR/out/stderr"; then
             fail 'timeout hint contains a shell command'
           fi ;;

@@ -93,13 +93,13 @@ value prevents startup. Sign-in links to registration only while it is open.
 - [Domain](docs/domain.md) — glossary, entities, invariants, unread rules
 - [UI](docs/ui.md) — design direction, tokens, contrast
 - [Decisions](DECISIONS.md) — what was decided and why
-- [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow.md) · [Database development](docs/database.md)
+- [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow/README.md) · [Database development](docs/database.md)
 
 ## Contributing
 
 The project is maintained by one person and developed with AI coding tools;
 see [`AGENTS.md`](AGENTS.md) for the conventions that apply to every change
-and [`docs/workflow.md`](docs/workflow.md) for how work flows.
+and [`docs/workflow/`](docs/workflow/README.md) for how work flows.
 Issues and pull requests are welcome, in English.
 
 ## Licence

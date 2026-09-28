@@ -23,7 +23,7 @@ labels: []
 
 ## Risk
 
-<!-- "high" if it will touch a high-risk path listed in docs/workflow.md,
+<!-- "high" if it will touch a high-risk path listed in docs/workflow/reviewing.md,
      otherwise "normal". -->
 
 ## Implementer

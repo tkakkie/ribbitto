@@ -60,6 +60,39 @@ next to the HTML handlers later without touching `app`.
 `serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
 a `database/sql` handle, which goose needs.
 
+## Feature map
+
+The code is layered today, and the direction is a modular monolith by
+feature, migrated after M3 ([`DECISIONS.md`](../../DECISIONS.md), 14).
+Until then, new code goes into feature packages inside the layers, and each
+feature logically owns tables: only that feature writes them, apart from
+the known exceptions below. A feature may own no tables. Every
+package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
+
+| Feature | Packages and files | Owns |
+|---|---|---|
+| `identity`: accounts, passwords, sessions, signing in, sign-up | `app/auth`, `app/signup`; `infra/postgres` `account.go`, `session.go`, `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
+| `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/setup`; `infra/postgres` `authz.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`), `member`, `setup` |
+| `channel`, `message` | *(M2)* | *(M2)* |
+| `realtime` | `internal/realtime` *(M3)* | none |
+
+The shared kernel, which any feature may use: the IDs and value types in
+`internal/domain`, the per-organisation `event_seq`, and the authorisation
+entry point `app/authz`. Other files in `internal/web` (routing, forms,
+middleware, views) and `cmd/ribbitto` serve every feature.
+
+**Known exceptions.** Two flows write another feature's tables in one
+transaction today:
+
+- setup (`org`) writes `organization`, `account`, `member` and `setup`,
+  so it creates `identity`'s first `account`;
+- sign-up (`identity`) writes `account` and `member` and advances
+  `organization.event_seq`, which belong to `org`.
+
+Their atomicity and `event_seq` ordering stay as they are. They are
+resolved at migration, by an orchestrating module or a shared transaction.
+A new exception needs its issue to say why, and is added to this list.
+
 ## Index
 
 Read the file for the area you change:

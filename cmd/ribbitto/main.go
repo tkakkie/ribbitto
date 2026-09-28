@@ -125,7 +125,9 @@ func serve(ctx context.Context, databaseURL string) error {
 // file descriptor for as long as it liked: idle between requests, or with a
 // request body started and never finished.
 const (
-	// readHeaderTimeout bounds the request line and headers.
+	// readHeaderTimeout bounds the request line and headers. A browser sends
+	// them in one or two packets, so 10 s covers a slow or lossy link many
+	// times over, while a client trickling headers byte by byte is cut off.
 	readHeaderTimeout = 10 * time.Second
 	// readTimeout bounds reading a whole request, headers and body. Bodies
 	// are capped at 64 KiB (middleware.MaxBodyBytes), which even a slow

@@ -45,7 +45,10 @@ func checkMarkup(doc *html.Node, fullPage bool) []string {
 				add("<%s> has a %s attribute", n.Data, a.Key)
 			}
 		}
-		interactive := n.DataAtom == atom.Button || n.DataAtom == atom.A || n.DataAtom == atom.Input || n.DataAtom == atom.Select || n.DataAtom == atom.Textarea
+		// An <a> is interactive only with href: without it, it is not
+		// focusable and has no keyboard activation.
+		_, hasHref := attrOK(n, "href")
+		interactive := n.DataAtom == atom.Button || n.DataAtom == atom.A && hasHref || n.DataAtom == atom.Input || n.DataAtom == atom.Select || n.DataAtom == atom.Textarea
 		if attr(n, "role") == "button" && !interactive {
 			add("<%s role=button> simulates a button", n.Data)
 		}
@@ -65,7 +68,7 @@ func checkMarkup(doc *html.Node, fullPage bool) []string {
 			if attr(n, "type") == "" {
 				add("<button> without a type")
 			}
-			if strings.TrimSpace(text(n)) == "" && attr(n, "aria-label") == "" {
+			if strings.TrimSpace(text(n)) == "" && strings.TrimSpace(attr(n, "aria-label")) == "" {
 				add("<button> without an accessible name")
 			}
 		case atom.Img:
@@ -77,7 +80,7 @@ func checkMarkup(doc *html.Node, fullPage bool) []string {
 			case "hidden", "submit", "button", "reset", "image":
 				continue
 			}
-			if !inside(n, atom.Label) && !labelled[attr(n, "id")] {
+			if !labelled[attr(n, "id")] && !implicitlyLabelled(n) {
 				add("<%s name=%q> without a label", n.Data, attr(n, "name"))
 			}
 		}
@@ -107,21 +110,51 @@ func attr(n *html.Node, key string) string {
 	return v
 }
 
+// text is the text that can name an element: aria-hidden or hidden
+// subtrees are left out, as the accessible-name computation does.
 func text(n *html.Node) string {
 	var b strings.Builder
-	for d := range n.Descendants() {
-		if d.Type == html.TextNode {
-			b.WriteString(d.Data)
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			if _, hidden := attrOK(c, "hidden"); c.Type == html.ElementNode && (attr(c, "aria-hidden") == "true" || hidden) {
+				continue
+			}
+			if c.Type == html.TextNode {
+				b.WriteString(c.Data)
+			}
+			walk(c)
 		}
 	}
+	walk(n)
 	return b.String()
 }
 
-func inside(n *html.Node, a atom.Atom) bool {
+// implicitlyLabelled reports whether a wrapping <label> labels n: only a
+// label without for, and only for its first labelable descendant.
+func implicitlyLabelled(n *html.Node) bool {
 	for p := n.Parent; p != nil; p = p.Parent {
-		if p.DataAtom == a {
-			return true
+		if p.DataAtom != atom.Label {
+			continue
 		}
+		if _, ok := attrOK(p, "for"); ok {
+			return false
+		}
+		for d := range p.Descendants() {
+			if labelable(d) {
+				return d == n
+			}
+		}
+	}
+	return false
+}
+
+func labelable(n *html.Node) bool {
+	switch n.DataAtom {
+	case atom.Button, atom.Meter, atom.Output, atom.Progress, atom.Select, atom.Textarea:
+		return true
+	case atom.Input:
+		return attr(n, "type") != "hidden"
 	}
 	return false
 }
@@ -156,6 +189,12 @@ func TestCheckMarkup(t *testing.T) {
 		{"style attribute", page(`<main style="color:red"></main>`), true, "style attribute"},
 		{"inline handler", page(`<main><a href="/" onclick="x()">a</a></main>`), true, "onclick attribute"},
 		{"simulated button", page(`<main><div role="button">Go</div></main>`), true, "simulates a button"},
+		{"link without href as a button", page(`<main><a role="button" hx-post="/x">Go</a></main>`), true, "simulates a button"},
+		{"icon button named only by hidden text", page(`<main><button type="button"><span aria-hidden="true">×</span></button></main>`), true, "accessible name"},
+		{"blank aria-label", page(`<main><button type="button" aria-label=" "></button></main>`), true, "accessible name"},
+		{"icon button with a name", page(`<main><button type="button" aria-label="Close"><span aria-hidden="true">×</span></button></main>`), true, ""},
+		{"wrapping label pointing elsewhere", page(`<main><label for="missing">Email <input id="email" type="email" name="email"></label></main>`), true, "without a label"},
+		{"second control in one label", page(`<main><label>Name <input type="text" name="a"><input type="text" name="b"></label></main>`), true, "name=\"b\""},
 		{"stray tabindex", page(`<main><div tabindex="0">x</div></main>`), true, "tabindex"},
 		{"focus target", page(`<main><h1 tabindex="-1">a</h1><div role="region" aria-label="Messages" tabindex="0">x</div></main>`), true, ""},
 		{"fragment skips document checks", `<form><button type="submit">Go</button></form>`, false, ""},

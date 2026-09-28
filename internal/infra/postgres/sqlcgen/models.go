@@ -16,6 +16,14 @@ type Account struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type Channel struct {
+	ID             pgtype.UUID
+	OrganizationID pgtype.UUID
+	Name           string
+	IsDefault      bool
+	CreatedAt      pgtype.Timestamptz
+}
+
 type Member struct {
 	ID             pgtype.UUID
 	OrganizationID pgtype.UUID
@@ -24,6 +32,16 @@ type Member struct {
 	JoinedEventSeq int64
 	CreatedAt      pgtype.Timestamptz
 	Handle         string
+}
+
+type Message struct {
+	ID             pgtype.UUID
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	MemberID       pgtype.UUID
+	Body           string
+	EventSeq       int64
+	CreatedAt      pgtype.Timestamptz
 }
 
 type Organization struct {

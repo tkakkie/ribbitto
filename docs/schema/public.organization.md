@@ -4,7 +4,7 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false | [public.member](public.member.md) [public.setup](public.setup.md) |  |  |
+| id | uuid | uuidv7() | false | [public.member](public.member.md) [public.setup](public.setup.md) [public.channel](public.channel.md) |  |  |
 | slug | text |  | false |  |  |  |
 | name | text |  | false |  |  |  |
 | event_seq | bigint | 0 | false |  |  |  |
@@ -39,6 +39,7 @@ erDiagram
 
 "public.member" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.setup" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
+"public.channel" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 
 "public.organization" {
   uuid id
@@ -60,6 +61,13 @@ erDiagram
   boolean id
   uuid organization_id FK
   timestamp_with_time_zone completed_at
+}
+"public.channel" {
+  uuid id
+  uuid organization_id FK
+  text name
+  boolean is_default
+  timestamp_with_time_zone created_at
 }
 ```
 

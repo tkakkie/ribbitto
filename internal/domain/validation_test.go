@@ -18,7 +18,7 @@ func TestValidation(t *testing.T) {
 		{"password", domain.ValidatePassword, []string{strings.Repeat("界", 15), strings.Repeat("a", 128), strings.Repeat(" ", 15), strings.Repeat("\x00", 15)}, []string{"", strings.Repeat("界", 14), strings.Repeat("界", 129), strings.Repeat("\xff", 15)}},
 		{"organization", domain.ValidateOrganizationName, []string{"a", strings.Repeat("界", 100)}, []string{"", strings.Repeat("界", 101), "a\x00", "a\t", "\xff"}},
 		{"slug", domain.ValidateSlug, []string{"a", "0", "a-b", "a" + strings.Repeat("-", 61) + "0"}, []string{"", "-", "-a", "a-", "A", "a_b", "a.b", "a\n", "界", strings.Repeat("a", 64)}},
-		{"handle", domain.ValidateHandle, []string{"ab", "a0", "tomoya", "a_b.c-d", "a" + strings.Repeat("-", 30) + "z", "member-1", "everyones", "al"}, []string{"", "a", "0a", "_a", "a_", "a.", "a-", "a b", "a@b", "a\x00b", "a\nb", "\xff", "tomoyá", "Kelvin", "ｔｏｍｏｙａ", "a" + strings.Repeat("b", 32), "everyone", "here", "channel", "all", "ALL"}},
+		{"handle", domain.ValidateHandle, []string{"ab", "a0", "tomoya", "a_b.c-d", "a" + strings.Repeat("-", 30) + "z", "member-1", "everyones", "al"}, []string{"", "a", "0a", "_a", "a_", "a.", "a-", "a b", "a@b", "a\x00b", "a\nb", "\xff", "tomoyá", "Kelvin", "ｔｏｍｏｙａ", "a" + strings.Repeat("b", 32), "everyone", "here", "channel", "all", "ALL", "\ttomoya", "tomoya\n", "\u00a0\u200btomoya"}},
 	} {
 		t.Run(rule.name, func(t *testing.T) {
 			for _, value := range rule.valid {
@@ -48,6 +48,8 @@ func TestValidation(t *testing.T) {
 		{domain.ValidateDisplayName, "山田\u3000太郎", "山田\u3000太郎"},
 		{domain.ValidateHandle, "  Tomoya  ", "tomoya"},
 		{domain.ValidateHandle, "Kelvin", "kelvin"},
+		// Trimming comes before the ASCII check, so Unicode white space around a handle is removed, not rejected.
+		{domain.ValidateHandle, "\u3000Tomoya\u00a0", "tomoya"},
 	} {
 		if got, err := tc.validate(tc.input); err != nil || got != tc.want {
 			t.Errorf("normalizing %q: got %q, %v; want %q", tc.input, got, err, tc.want)

@@ -101,11 +101,12 @@ sequenceDiagram
 ### Resource limits
 
 - Each connection has a bounded send queue; a client that does not read is
-  disconnected. Every write sets a deadline with
-  `http.ResponseController.SetWriteDeadline`, and the server has no global
-  `WriteTimeout` (it would cut long-lived streams). The server's read and
-  idle timeouts stay: they bound reading the request and waiting between
-  requests, not a response being written.
+  disconnected. The server's `WriteTimeout` bounds ordinary responses and
+  would cut a long-lived stream, so the SSE handler does not inherit it: it
+  sets a finite deadline before every write with
+  `http.ResponseController.SetWriteDeadline`, which replaces the server's.
+  The server's read and idle timeouts stay: they bound reading the request
+  and waiting between requests.
 - Middleware that wraps `http.ResponseWriter` implements `Unwrap` so
   flushing works; compression is not applied to the SSE endpoint.
 - Heartbeats every 15–30 s keep proxies from closing idle streams. Presence

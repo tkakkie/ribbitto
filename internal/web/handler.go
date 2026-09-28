@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
@@ -106,6 +107,13 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		if devAssets != "" {
 			w.Header().Set("Cache-Control", "no-store")
+		}
+		// Serve a request for several ranges in full. Nothing here needs one,
+		// and each part carries its own multipart headers, so many tiny
+		// ranges would multiply the response. Defense in depth next to the
+		// server's write timeout, not a replacement for it.
+		if strings.Contains(r.Header.Get("Range"), ",") {
+			r.Header.Del("Range")
 		}
 		http.FileServerFS(assets).ServeHTTP(w, r)
 	})))

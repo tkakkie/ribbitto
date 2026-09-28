@@ -85,7 +85,8 @@ behaviour.
   together. That is kept as the default, because it is safer than believing
   an untrusted header.
 - Addresses and CIDRs are compared in their IPv4 form when they are
-  IPv4-mapped.
+  IPv4-mapped; an IPv4-mapped CIDR in `RIBBITTO_TRUSTED_PROXIES` needs a
+  prefix length of at least `/96`, or startup fails.
 
 The official self-hosting setup will use Caddy as one configuration that
 meets this contract. Caddy reads the client address from the left unless

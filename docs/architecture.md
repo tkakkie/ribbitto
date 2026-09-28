@@ -246,7 +246,8 @@ The /48 budget bounds how many client buckets one /48 keeps unevictable.
 Whoever holds that many addresses can still turn new clients away for a
 while; that is accepted. The /48 is this application's choice, not a standard: unrelated
 clients whose smaller prefixes share a /48 share its budget. Limits live in
-memory, per process.
+memory, per process. Throttling is network-only today; the future design of
+an identity-side layer is tracked in #99.
 
 The client is the peer's IPv4 address or IPv6 /64, or, behind a trusted
 proxy, the address it forwards (below).

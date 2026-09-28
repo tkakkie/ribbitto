@@ -29,7 +29,7 @@ func (s *SetupStore) Open(ctx context.Context) (bool, error) {
 }
 
 // Create commits the organization, owner and completion marker together.
-func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, displayName, passwordHash string) (setup.Result, error) {
+func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, displayName, handle, passwordHash string) (setup.Result, error) {
 	var result setup.Result
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := sqlcgen.New(tx)
@@ -45,7 +45,7 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 		if err != nil {
 			return err
 		}
-		if _, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: account.ID, Role: "owner", JoinedEventSeq: seq}); err != nil {
+		if _, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: account.ID, Role: "owner", JoinedEventSeq: seq, Handle: handle}); err != nil {
 			return err
 		}
 		if err := q.CompleteSetup(ctx, org.ID); err != nil {
@@ -70,6 +70,8 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 				return setup.Result{}, setup.ValidationErrors{"email": errors.New("email is unavailable or invalid")}
 			case strings.HasPrefix(name, "organization_slug_"):
 				return setup.Result{}, setup.ValidationErrors{"slug": errors.New("slug is unavailable or invalid")}
+			case strings.HasPrefix(name, "member_handle_"):
+				return setup.Result{}, setup.ValidationErrors{"handle": errors.New("handle is invalid")}
 			}
 		}
 		return setup.Result{}, fmt.Errorf("storing setup transaction: %w", err)

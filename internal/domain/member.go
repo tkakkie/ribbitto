@@ -23,4 +23,7 @@ type Member struct {
 	OrganizationID ID
 	AccountID      ID
 	Role           Role
+	// Handle helps people tell members apart within the organisation. It
+	// can change, so nothing stores or authorises by it: ID does that.
+	Handle string
 }

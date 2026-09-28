@@ -15,7 +15,7 @@ import (
 
 // SignUp takes the organisation sequence before inserting either account or member.
 // SetupStore also implements signup.Store because both use the installation setup row.
-func (s *SetupStore) SignUp(ctx context.Context, displayName, email, hash string) (domain.ID, error) {
+func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, hash string) (domain.ID, error) {
 	var id domain.ID
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := sqlcgen.New(tx)
@@ -34,7 +34,7 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, email, hash string
 		if err != nil {
 			return err
 		}
-		_, err = q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org, AccountID: account.ID, Role: "member", JoinedEventSeq: seq})
+		_, err = q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org, AccountID: account.ID, Role: "member", JoinedEventSeq: seq, Handle: handle})
 		id = account.ID.Bytes
 		return err
 	})
@@ -43,6 +43,14 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, email, hash string
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == "23505" && pgErr.ConstraintName == "account_email_key" {
 				return domain.ID{}, signup.ErrEmailTaken
+			}
+			// The database is the last line of defence for uniqueness: a
+			// concurrent sign-up may claim the handle after validation.
+			if pgErr.Code == "23505" && pgErr.ConstraintName == "member_organization_id_handle_key" {
+				return domain.ID{}, signup.ErrHandleTaken
+			}
+			if pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "member_handle_") {
+				return domain.ID{}, signup.ValidationErrors{"handle": err}
 			}
 			// account.email has two CHECKs; the second (NFC) is named
 			// account_email_check1, so match by column prefix as setup does.

@@ -37,7 +37,7 @@ func TestSetup(t *testing.T) {
 			ctx := t.Context()
 			store := postgres.NewSetupStore(pool)
 			s := setup.New(store, hasher, "secret")
-			input := setup.Input{OrganizationName: "Example", Slug: "example", Email: " Owner@Example.org ", DisplayName: " Owner ", Password: "long enough password"}
+			input := setup.Input{OrganizationName: "Example", Slug: "example", Email: " Owner@Example.org ", DisplayName: " Owner ", Handle: " Owner ", Password: "long enough password"}
 			counts := func(want int) {
 				t.Helper()
 				var orgs, accounts, members, setups int
@@ -51,8 +51,8 @@ func TestSetup(t *testing.T) {
 				t.Fatalf("rejected token: %v", err)
 			}
 			counts(0)
-			for _, tc := range []struct{ slug, email, field string }{{"example", "A@b", "email"}, {"example", "e\u0301@b", "email"}, {"Bad", "a@b", "slug"}} {
-				_, err := store.Create(ctx, "Example", tc.slug, tc.email, "Owner", "$argon2id$test")
+			for _, tc := range []struct{ slug, email, handle, field string }{{"example", "A@b", "owner", "email"}, {"example", "e\u0301@b", "owner", "email"}, {"Bad", "a@b", "owner", "slug"}, {"example", "a@b", "Owner", "handle"}, {"example", "a@b", "all", "handle"}} {
+				_, err := store.Create(ctx, "Example", tc.slug, tc.email, "Owner", tc.handle, "$argon2id$test")
 				var fields setup.ValidationErrors
 				if !errors.As(err, &fields) || fields[tc.field] == nil {
 					t.Fatalf("database validation for %s: %v", tc.field, err)
@@ -96,13 +96,13 @@ func TestSetup(t *testing.T) {
 			}
 			var organizationID, accountID pgtype.UUID
 			var seq, joined int64
-			var role string
+			var role, handle string
 			var completed bool
-			requireAccountSchema(t, pool.QueryRow(ctx, "SELECT s.organization_id, m.account_id, o.event_seq, m.joined_event_seq, m.role, s.completed_at IS NOT NULL FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = s.organization_id WHERE s.id").Scan(&organizationID, &accountID, &seq, &joined, &role, &completed))
+			requireAccountSchema(t, pool.QueryRow(ctx, "SELECT s.organization_id, m.account_id, o.event_seq, m.joined_event_seq, m.role, m.handle, s.completed_at IS NOT NULL FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = s.organization_id WHERE s.id").Scan(&organizationID, &accountID, &seq, &joined, &role, &handle, &completed))
 			account, err := sqlcgen.New(pool).GetAccountByID(ctx, accountID)
 			requireAccountSchema(t, err)
 			matches, err := hasher.Verify(ctx, input.Password, account.PasswordHash)
-			if err != nil || !matches || seq != 1 || joined != 1 || role != "owner" || !completed || account.DisplayName != "Owner" || account.Email != strings.ToLower(strings.TrimSpace(account.Email)) {
+			if err != nil || !matches || seq != 1 || joined != 1 || role != "owner" || handle != "owner" || !completed || account.DisplayName != "Owner" || account.Email != strings.ToLower(strings.TrimSpace(account.Email)) {
 				t.Fatalf("invalid owner/setup: seq=%d joined=%d role=%s hash match=%t error=%v", seq, joined, role, matches, err)
 			}
 		})

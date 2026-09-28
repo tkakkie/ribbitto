@@ -29,12 +29,13 @@ func TestRejectedSetup(t *testing.T) {
 		{name: "password", field: "password"},
 		{name: "organization name", field: "organization_name"},
 		{name: "slug", field: "slug"},
+		{name: "handle", field: "handle"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			input := setup.Input{OrganizationName: "Example", Slug: "example", Email: "a@b", DisplayName: "Owner", Password: "long enough password"}
+			input := setup.Input{OrganizationName: "Example", Slug: "example", Email: "a@b", DisplayName: "Owner", Handle: "owner", Password: "long enough password"}
 			if tc.field != "" {
 				tc.configured, tc.submitted = "secret", "secret"
-				fields := map[string]*string{"email": &input.Email, "display_name": &input.DisplayName, "password": &input.Password, "organization_name": &input.OrganizationName, "slug": &input.Slug}
+				fields := map[string]*string{"email": &input.Email, "display_name": &input.DisplayName, "password": &input.Password, "organization_name": &input.OrganizationName, "slug": &input.Slug, "handle": &input.Handle}
 				*fields[tc.field] = ""
 			}
 			// Nil hasher and embedded store panic if rejection reaches hashing or writes.

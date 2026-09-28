@@ -18,10 +18,10 @@ type store struct {
 }
 
 func (s store) Open(context.Context) (bool, error) { return s.pending, nil }
-func (s store) SignUp(_ context.Context, name, email, hash string) (domain.ID, error) {
+func (s store) SignUp(_ context.Context, name, handle, email, hash string) (domain.ID, error) {
 	s.t.Helper()
-	if name != "Alice" || email != "alice@example.org" || !strings.HasPrefix(hash, "$argon2id$") {
-		s.t.Fatalf("bad normalized account or hash: %s %s", name, email)
+	if name != "Alice" || handle != "alice" || email != "alice@example.org" || !strings.HasPrefix(hash, "$argon2id$") {
+		s.t.Fatalf("bad normalized account or hash: %s %s %s", name, handle, email)
 	}
 	return domain.ID{1}, s.err
 }
@@ -31,15 +31,18 @@ func TestSignUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		label, name, email, password, field string
-		off, pending                        bool
-		want                                error
+		label, name, handle, email, password, field string
+		off, pending                                bool
+		want                                        error
 	}{
-		{label: "normalized account", name: " Alice ", email: " Alice@Example.org ", password: "long enough password"},
-		{label: "duplicate email", name: "Alice", email: "alice@example.org", password: "long enough password", want: signup.ErrEmailTaken},
-		{label: "invalid name", field: "display_name", email: "a@b", password: "long enough password"},
-		{label: "invalid email", name: "Alice", field: "email", password: "long enough password"},
-		{label: "invalid password", name: "Alice", email: "a@b", field: "password"},
+		{label: "normalized account", name: " Alice ", handle: " Alice ", email: " Alice@Example.org ", password: "long enough password"},
+		{label: "duplicate email", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: signup.ErrEmailTaken},
+		{label: "duplicate handle", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: signup.ErrHandleTaken},
+		{label: "invalid name", field: "display_name", handle: "alice", email: "a@b", password: "long enough password"},
+		{label: "invalid handle", name: "Alice", field: "handle", email: "a@b", password: "long enough password"},
+		{label: "reserved handle", name: "Alice", handle: "everyone", field: "handle", email: "a@b", password: "long enough password"},
+		{label: "invalid email", name: "Alice", handle: "alice", field: "email", password: "long enough password"},
+		{label: "invalid password", name: "Alice", handle: "alice", email: "a@b", field: "password"},
 		{label: "disabled", off: true, want: signup.ErrClosed},
 		{label: "setup pending", pending: true, want: signup.ErrClosed},
 	} {
@@ -54,7 +57,7 @@ func TestSignUp(t *testing.T) {
 			if err != nil || open != (!tc.off && !tc.pending) {
 				t.Fatalf("Open: %t %v", open, err)
 			}
-			id, err := service.SignUp(t.Context(), tc.name, tc.email, tc.password)
+			id, err := service.SignUp(t.Context(), tc.name, tc.handle, tc.email, tc.password)
 			var fields signup.ValidationErrors
 			if tc.field != "" {
 				if !errors.As(err, &fields) || len(fields) != 1 || fields[tc.field] == nil {

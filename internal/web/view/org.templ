@@ -6,6 +6,7 @@ import "github.com/tkakkie/ribbitto/internal/web/i18n"
 type OrgPage struct {
 	OrganizationName string
 	DisplayName      string
+	Handle           string
 	Role             string // "owner" or "member"
 }
 
@@ -17,6 +18,7 @@ templ OrgHome(stylesheetURL string, page OrgPage) {
 			<p class="text-body text-muted">
 				{ i18n.T(ctx, "hello.signed_in_as") }
 				<span class="font-semibold text-fg">{ page.DisplayName }</span>
+				<span class="text-muted">{ "@" + page.Handle }</span>
 				· { i18n.T(ctx, "org.role." + page.Role) }
 			</p>
 			@SignOutButton()

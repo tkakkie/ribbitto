@@ -23,6 +23,7 @@ type Member struct {
 	Role           string
 	JoinedEventSeq int64
 	CreatedAt      pgtype.Timestamptz
+	Handle         string
 }
 
 type Organization struct {

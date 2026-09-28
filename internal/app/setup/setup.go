@@ -25,7 +25,7 @@ func (ValidationErrors) Error() string { return "invalid setup fields" }
 
 // Input contains the submitted fields, before normalization.
 type Input struct {
-	OrganizationName, Slug, Email, DisplayName, Password string
+	OrganizationName, Slug, Email, DisplayName, Handle, Password string
 }
 
 // Result identifies the organization and account created by setup.
@@ -36,7 +36,7 @@ type Result struct {
 // Store persists setup atomically; Create must return ErrCompleted for losers.
 type Store interface {
 	Open(context.Context) (bool, error)
-	Create(ctx context.Context, organizationName, slug, email, displayName, passwordHash string) (Result, error)
+	Create(ctx context.Context, organizationName, slug, email, displayName, handle, passwordHash string) (Result, error)
 }
 
 // Service controls first-run setup. Share the process's password hasher.
@@ -83,6 +83,7 @@ func (s *Service) Complete(ctx context.Context, token string, input Input) (Resu
 		{"slug", &input.Slug, domain.ValidateSlug},
 		{"email", &input.Email, domain.ValidateEmail},
 		{"display_name", &input.DisplayName, domain.ValidateDisplayName},
+		{"handle", &input.Handle, domain.ValidateHandle},
 		{"password", &input.Password, domain.ValidatePassword},
 	} {
 		value, err := field.validate(*field.value)
@@ -98,7 +99,7 @@ func (s *Service) Complete(ctx context.Context, token string, input Input) (Resu
 	if err != nil {
 		return Result{}, fmt.Errorf("hashing setup password: %w", err)
 	}
-	result, err := s.store.Create(ctx, input.OrganizationName, input.Slug, input.Email, input.DisplayName, hash)
+	result, err := s.store.Create(ctx, input.OrganizationName, input.Slug, input.Email, input.DisplayName, input.Handle, hash)
 	if err != nil {
 		return Result{}, fmt.Errorf("creating setup: %w", err)
 	}

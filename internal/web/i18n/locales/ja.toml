@@ -52,6 +52,9 @@ other = "組織URLのスラッグ"
 ["setup.display_name"]
 other = "表示名"
 
+["setup.handle"]
+other = "ハンドル"
+
 ["setup.email"]
 other = "メールアドレス"
 
@@ -70,6 +73,9 @@ other = "スラッグは半角英小文字・数字・ハイフンの1〜63文�
 ["setup.error.display_name"]
 other = "表示名は表示可能な1〜50文字で入力してください。"
 
+["setup.error.handle"]
+other = "ハンドルは2〜32文字で、半角英小文字・数字・_ . - が使えます。先頭は英字、末尾は英字か数字にしてください。everyone、here、channel、all は使えません。"
+
 ["setup.error.email"]
 other = "有効なメールアドレスを入力してください。"
 
@@ -84,6 +90,9 @@ other = "アカウントを作成してサインイン"
 
 ["signup.error.email_taken"]
 other = "このメールアドレスは既に登録されています。"
+
+["signup.error.handle_taken"]
+other = "このハンドルはこの組織で既に使われています。"
 
 ["org.role.owner"]
 other = "オーナー"

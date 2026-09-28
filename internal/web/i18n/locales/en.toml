@@ -52,6 +52,9 @@ other = "Organisation URL slug"
 ["setup.display_name"]
 other = "Display name"
 
+["setup.handle"]
+other = "Handle"
+
 ["setup.email"]
 other = "Email address"
 
@@ -70,6 +73,9 @@ other = "Use 1–63 lowercase letters, digits or hyphens, starting and ending wi
 ["setup.error.display_name"]
 other = "Enter a display name of 1–50 printable characters."
 
+["setup.error.handle"]
+other = "Use 2–32 characters: lowercase letters, digits, _, . or -, starting with a letter and ending with a letter or digit. everyone, here, channel and all are reserved."
+
 ["setup.error.email"]
 other = "Enter a valid email address."
 
@@ -84,6 +90,9 @@ other = "Create account and sign in"
 
 ["signup.error.email_taken"]
 other = "This email address is already registered."
+
+["signup.error.handle_taken"]
+other = "This handle is already taken in this organisation."
 
 ["org.role.owner"]
 other = "Owner"

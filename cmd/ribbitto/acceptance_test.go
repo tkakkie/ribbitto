@@ -25,7 +25,7 @@ const acceptanceToken = "acceptance-setup-token-at-least-32-characters"
 
 func acceptanceForm(name string) url.Values {
 	return url.Values{"token": {acceptanceToken}, "organization_name": {"Private " + name},
-		"slug": {name}, "display_name": {name}, "email": {name + "@example.com"},
+		"slug": {name}, "display_name": {name}, "handle": {name}, "email": {name + "@example.com"},
 		"password": {"acceptance password for " + name}}
 }
 
@@ -166,11 +166,11 @@ func TestAccountsAcceptance(t *testing.T) {
 	}
 	response, _ := owner.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
 	cookie := acceptanceCookie(t, pool, response)
-	acceptanceCount(t, pool, 1, `SELECT count(*) FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = o.id JOIN account a ON a.id = m.account_id WHERE o.slug = 'owner' AND o.name = 'Private owner' AND a.email = 'owner@example.com' AND a.display_name = 'owner' AND m.role = 'owner'`)
+	acceptanceCount(t, pool, 1, `SELECT count(*) FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = o.id JOIN account a ON a.id = m.account_id WHERE o.slug = 'owner' AND o.name = 'Private owner' AND a.email = 'owner@example.com' AND a.display_name = 'owner' AND m.role = 'owner' AND m.handle = 'owner'`)
 	owner.visit(t, "GET", "/", nil, 303)
 	_, body := owner.visit(t, "GET", "/o/owner/", nil, 200)
-	if !strings.Contains(body, "Private owner") {
-		t.Fatal("owner's organisation not rendered")
+	if !strings.Contains(body, "Private owner") || !strings.Contains(body, "@owner") {
+		t.Fatal("owner's organisation or handle not rendered")
 	}
 	owner.visit(t, "GET", "/setup", nil, 404)
 	owner.visit(t, "POST", "/setup", acceptanceForm("late"), 404)

@@ -1,0 +1,17 @@
+package view
+
+import "github.com/tkakkie/ribbitto/internal/domain"
+
+// MemberName shows a member as "Display name @handle". The name sits in its
+// own <bdi>, so right-to-left text cannot reorder what follows it. A name
+// that looks blank (domain.IsBlankLookingName) — including one stored
+// before that rule existed — shows only the handle, so nobody appears
+// nameless.
+templ MemberName(displayName, handle string) {
+	if domain.IsBlankLookingName(displayName) {
+		<bdi class="font-semibold text-fg">{ "@" + handle }</bdi>
+	} else {
+		<bdi class="font-semibold text-fg">{ displayName }</bdi>
+		<span class="text-muted">{ "@" + handle }</span>
+	}
+}

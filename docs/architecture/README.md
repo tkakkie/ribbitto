@@ -111,6 +111,7 @@ Read the file for the area you change:
 ## See also
 
 - [`docs/domain.md`](../domain.md) — entities, invariants, unread rules
+- [`docs/names.md`](../names.md) — display names, handles, how members are shown
 - [`docs/database.md`](../database.md) — local database, migrations, tests
 - [`docs/schema/README.md`](../schema/README.md) — generated reference for the current schema
 - [`DECISIONS.md`](../../DECISIONS.md) — why things are the way they are

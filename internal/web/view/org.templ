@@ -17,8 +17,7 @@ templ OrgHome(stylesheetURL string, page OrgPage) {
 			<h1 class="text-heading font-bold text-fg">{ page.OrganizationName }</h1>
 			<p class="text-body text-muted">
 				{ i18n.T(ctx, "hello.signed_in_as") }
-				<span class="font-semibold text-fg">{ page.DisplayName }</span>
-				<span class="text-muted">{ "@" + page.Handle }</span>
+				@MemberName(page.DisplayName, page.Handle)
 				· { i18n.T(ctx, "org.role." + page.Role) }
 			</p>
 			@SignOutButton()

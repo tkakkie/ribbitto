@@ -84,3 +84,41 @@ func TestValidationNonPrintableText(t *testing.T) {
 		})
 	}
 }
+
+// The accepted and rejected names mirror the examples in docs/names.md.
+func TestBlankLookingNames(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		blank bool
+	}{
+		{"", true},
+		{"ㅤ", true},   // Hangul filler
+		{"ﾠ", true},   // half-width Hangul filler
+		{"ᅟᅠ", true},  // Hangul choseong and jungseong fillers
+		{"⠀⠀", true},  // braille blank
+		{"́", true},   // combining acute accent with no base
+		{"⃝", true},   // enclosing mark with no base
+		{"ㅤ ㅤ", true}, // fillers around an ASCII space
+		{"⠀　́", true}, // braille blank, ideographic space, mark
+		{"Alice", false},
+		{"山田　太郎", false},
+		{"김민준", false},
+		{"가", false}, // Hangul written with conjoining jamo
+		{"é", false},
+		{"é", false}, // a base with its mark
+		{"ㅤa", false}, // one visible character is enough
+		{"😀", false},
+		{"مريم", false},
+	} {
+		if got := domain.IsBlankLookingName(tc.name); got != tc.blank {
+			t.Errorf("IsBlankLookingName(%q) = %t, want %t", tc.name, got, tc.blank)
+		}
+		// Every name that is valid otherwise is rejected exactly when blank-looking.
+		if tc.name == "" {
+			continue
+		}
+		if _, err := domain.ValidateDisplayName(tc.name); (err != nil) != tc.blank {
+			t.Errorf("ValidateDisplayName(%q): %v, want rejected = %t", tc.name, err, tc.blank)
+		}
+	}
+}

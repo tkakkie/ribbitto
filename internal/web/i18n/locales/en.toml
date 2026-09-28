@@ -71,7 +71,7 @@ other = "Enter an organisation name of 1–100 printable characters."
 other = "Use 1–63 lowercase letters, digits or hyphens, starting and ending with a letter or digit."
 
 ["setup.error.display_name"]
-other = "Enter a display name of 1–50 printable characters."
+other = "Enter a display name of 1–50 printable characters, at least one of them visible."
 
 ["setup.error.handle"]
 other = "Use 2–32 characters: lowercase letters, digits, _, . or -, starting with a letter and ending with a letter or digit. everyone, here, channel and all are reserved."

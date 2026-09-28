@@ -43,7 +43,7 @@ func TestSignUp(t *testing.T) {
 		{"disabled", nil, 404, ""},
 		{"completed", &fakeSetup{}, 404, ""},
 		{"completed concurrently", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", signup.ErrClosed)}, 404, ""},
-		{"name", &fakeSetup{open: true, err: setup.ValidationErrors{"display_name": errors.New("private detail")}}, 422, "Enter a display name of 1–50 printable characters."},
+		{"name", &fakeSetup{open: true, err: setup.ValidationErrors{"display_name": errors.New("private detail")}}, 422, "Enter a display name of 1–50 printable characters, at least one of them visible."},
 		{"email", &fakeSetup{open: true, err: setup.ValidationErrors{"email": errors.New("private detail")}}, 422, "Enter a valid email address."},
 		{"password", &fakeSetup{open: true, err: setup.ValidationErrors{"password": errors.New("private detail")}}, 422, "Use a password of 15–128 characters."},
 		{"handle", &fakeSetup{open: true, err: setup.ValidationErrors{"handle": errors.New("private detail")}}, 422, "Use 2–32 characters: lowercase letters, digits, _, . or -"},

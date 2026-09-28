@@ -74,7 +74,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | Feature | Packages and files | Owns |
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in, sign-up | `app/auth`, `app/signup`; `infra/postgres` `account.go`, `session.go`, `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
-| `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/setup`; `infra/postgres` `authz.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`), `member`, `setup` |
+| `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`), `member`, `setup` |
 | `channel`, `message` | *(M2)* | *(M2)* |
 | `realtime` | `internal/realtime` *(M3)* | none |
 

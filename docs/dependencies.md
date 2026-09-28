@@ -24,6 +24,8 @@ cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
 internal/app/auth -> internal/domain
 internal/app/authz -> internal/domain
+internal/app/member -> internal/app/authz
+internal/app/member -> internal/domain
 internal/app/setup -> internal/app/auth
 internal/app/setup -> internal/domain
 internal/app/signup -> internal/app/auth
@@ -32,6 +34,7 @@ internal/app/signup -> internal/domain
 internal/infra/postgres -> db/migrations
 internal/infra/postgres -> internal/app/auth
 internal/infra/postgres -> internal/app/authz
+internal/infra/postgres -> internal/app/member
 internal/infra/postgres -> internal/app/setup
 internal/infra/postgres -> internal/app/signup
 internal/infra/postgres -> internal/domain

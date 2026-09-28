@@ -17,3 +17,6 @@ FROM setup s
 JOIN organization o ON o.id = s.organization_id
 JOIN member m ON m.organization_id = o.id
 WHERE m.account_id = $1;
+
+-- name: UpdateMemberHandle :execrows
+UPDATE member SET handle = $3 WHERE organization_id = $1 AND id = $2;

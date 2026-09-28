@@ -90,7 +90,8 @@ account, and `joined_event_seq` starts at 1.
 people; the **handle** (`member`) tells members apart within an
 organisation; **`member_id`** is the only identifier the system trusts.
 Permissions, mentions and stored references use `member_id`, so a handle
-can change safely. Handles never sign in and are never derived from email.
+can change safely: a member changes only their own (`app/member`), and a
+released handle is free for anyone at once. Handles never sign in and are never derived from email.
 Members older than handles got `member-<n>`, numbered per organisation.
 
 ## Invariants

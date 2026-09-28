@@ -118,3 +118,21 @@ func (q *Queries) GetMembershipBySlug(ctx context.Context, arg GetMembershipBySl
 	)
 	return i, err
 }
+
+const updateMemberHandle = `-- name: UpdateMemberHandle :execrows
+UPDATE member SET handle = $3 WHERE organization_id = $1 AND id = $2
+`
+
+type UpdateMemberHandleParams struct {
+	OrganizationID pgtype.UUID
+	ID             pgtype.UUID
+	Handle         string
+}
+
+func (q *Queries) UpdateMemberHandle(ctx context.Context, arg UpdateMemberHandleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateMemberHandle, arg.OrganizationID, arg.ID, arg.Handle)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

@@ -24,7 +24,7 @@ func ValidateMessageBody(value string) (string, error) {
 	}
 	value = strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\n"), "\r", "\n")
 	if strings.ContainsFunc(value, func(r rune) bool {
-		return unicode.IsControl(r) && r != '\n' && r != '\t' || r == '\u2028' || r == '\u2029'
+		return unicode.IsControl(r) && r != '\n' && r != '\t' || r == '\u2028' || r == '\u2029' || isBidiEmbeddingOrOverride(r)
 	}) {
 		return "", fmt.Errorf("message body contains forbidden control characters or separators")
 	}
@@ -34,3 +34,11 @@ func ValidateMessageBody(value string) (string, error) {
 	}
 	return value, nil
 }
+
+// isBidiEmbeddingOrOverride reports LRE, RLE, PDF, LRO and RLO (U+202A–U+202E).
+// They can make stored text read differently from how it is stored (for
+// example a spoofed URL), and Unicode discourages them in new text. The
+// isolates LRI, RLI, FSI and PDI (U+2066–U+2069), and marks such as LRM,
+// RLM and ALM, are allowed on purpose: they are the recommended way to mix
+// directions in plain text, and views contain them with dir="auto" or <bdi>.
+func isBidiEmbeddingOrOverride(r rune) bool { return r >= '\u202a' && r <= '\u202e' }

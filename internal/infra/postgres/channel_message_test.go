@@ -33,7 +33,7 @@ func TestChannelMessageSchema(t *testing.T) {
 	for _, slug := range []string{"team", "other"} {
 		org, err := q.CreateOrganization(ctx, sqlcgen.CreateOrganizationParams{Name: slug, Slug: slug})
 		requireAccountSchema(t, err)
-		member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: account.ID, Role: "member", JoinedEventSeq: 1})
+		member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: account.ID, Role: "member", JoinedEventSeq: 1, Handle: "member"})
 		requireAccountSchema(t, err)
 		channel, err := channels.CreateChannel(ctx, org.ID.Bytes, "雑談", true)
 		requireAccountSchema(t, err)
@@ -64,7 +64,7 @@ func TestChannelMessageSchema(t *testing.T) {
 		t.Fatalf("cross-organisation channel lookup: %v", err)
 	}
 	var posted []domain.Message
-	for _, input := range []string{"a", "hello\t", "a\r\nb\rc\nd", "\u00a0\u2002hello\u2003\u3000", "\t\r\n　a \r\n \tb　\n", "a\u00a0b", "e\u0301", "👩\u200d💻", strings.Repeat("界", 4000), strings.Repeat("e\u0301", 2000)} {
+	for _, input := range []string{"a", "hello\t", "a\r\nb\rc\nd", "\u00a0\u2002hello\u2003\u3000", "\t\r\n　a \r\n \tb　\n", "a\u00a0b", "e\u0301", "👩\u200d💻", "see \u2067שלום\u2069 now", "a\u200eb\u200fc\u061cd", strings.Repeat("界", 4000), strings.Repeat("e\u0301", 2000)} {
 		body, err := domain.ValidateMessageBody(input)
 		requireAccountSchema(t, err)
 		message, err := messages.InsertMessage(ctx, org, channel.ID, members[0], body, int64(len(posted)+1))
@@ -130,7 +130,7 @@ func TestChannelMessageSchema(t *testing.T) {
 			}
 		})
 	}
-	for _, body := range []string{"", strings.Repeat("界", 4001), "a\rb", " hello", "hello ", "\thello", "hello\t", "\nhello", "hello\n", "a\x01b", "a\vb", "a\fb", "a\x1fb", "a\x7fb", "a\u0085b", "a\u009fb", "a\u2028b", "a\u2029b", "a\x00b"} {
+	for _, body := range []string{"", strings.Repeat("界", 4001), "a\rb", " hello", "hello ", "\thello", "hello\t", "\nhello", "hello\n", "a\x01b", "a\vb", "a\fb", "a\x1fb", "a\x7fb", "a\u0085b", "a\u009fb", "a\u2028b", "a\u2029b", "a\u202ab", "a\u202bb", "a\u202cb", "a\u202db", "https://evil.example/\u202eexample.com", "a\x00b"} {
 		_, err := messages.InsertMessage(ctx, org, channel.ID, members[0], body, 200)
 		var pgErr *pgconn.PgError
 		code := "23514"

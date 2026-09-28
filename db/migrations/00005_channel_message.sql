@@ -17,7 +17,9 @@ CREATE TABLE message (
   member_id       uuid        NOT NULL,
   body            text        NOT NULL CHECK (length(body) BETWEEN 1 AND 4000)
     -- PostgreSQL text already rejects NUL. Use explicit ranges, independent of locale.
-    CHECK (body !~ U&'[\0001-\0008\000B-\001F\007F-\009F\2028\2029]')
+    -- The bidi embeddings and overrides LRE, RLE, PDF, LRO and RLO are listed
+    -- one by one; the isolates (U+2066–U+2069) stay allowed (docs/messages.md).
+    CHECK (body !~ U&'[\0001-\0008\000B-\001F\007F-\009F\2028\2029\202A\202B\202C\202D\202E]')
     CHECK (body = btrim(body, U&'\0009\000A\000B\000C\000D\0020')),
   event_seq       bigint      NOT NULL CHECK (event_seq >= 1),
   created_at      timestamptz NOT NULL DEFAULT now(),

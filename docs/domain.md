@@ -104,6 +104,18 @@ account, and `joined_event_seq` starts at 1.
    `event_log.seq` and the entity's own `event_seq` (for messages).
 7. **Session tokens are never stored.** Only their SHA-256 hash is; passwords
    are stored only as Argon2id hashes.
+8. **An email address proves nothing about who owns an account.** M1 does
+   not verify email addresses, so anyone can create an account with someone
+   else's address. Therefore:
+   - an unverified address is never evidence of identity, neither for
+     linking an external identity (OIDC, SAML, SCIM) to an account nor for
+     granting a membership. Memberships come only from setup, sign-up and,
+     later, redeeming an invitation token;
+   - an external identity is never linked to an existing account because
+     the email addresses match.
+
+   Sign-up's duplicate-email response is an accepted trade-off
+   ([`DECISIONS.md`](../DECISIONS.md) 13).
 
 These are **requirements for all code and migrations**, not a description
 of what is implemented today: `organization`, `account`, `session`,

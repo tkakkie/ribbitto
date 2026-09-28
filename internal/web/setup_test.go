@@ -59,7 +59,7 @@ func TestSetup(t *testing.T) {
 		{"wrong token", &fakeSetup{open: true, err: setup.ErrToken}, 422, "The setup token is incorrect."},
 		{"organisation", &fakeSetup{open: true, err: setup.ValidationErrors{"organization_name": errors.New("private detail")}}, 422, "Enter an organisation name of 1–100 printable characters."},
 		{"slug", &fakeSetup{open: true, err: setup.ValidationErrors{"slug": errors.New("private detail")}}, 422, "Use 1–63 lowercase letters, digits or hyphens, starting and ending with a letter or digit."},
-		{"name", &fakeSetup{open: true, err: setup.ValidationErrors{"display_name": errors.New("private detail")}}, 422, "Enter a display name of 1–50 printable characters."},
+		{"name", &fakeSetup{open: true, err: setup.ValidationErrors{"display_name": errors.New("private detail")}}, 422, "Enter a display name of 1–50 printable characters, at least one of them visible."},
 		{"handle", &fakeSetup{open: true, err: setup.ValidationErrors{"handle": errors.New("private detail")}}, 422, "Use 2–32 characters: lowercase letters, digits, _, . or -"},
 		{"email", &fakeSetup{open: true, err: setup.ValidationErrors{"email": errors.New("private detail")}}, 422, "Enter a valid email address."},
 		{"password", &fakeSetup{open: true, err: setup.ValidationErrors{"password": errors.New("private detail")}}, 422, "Use a password of 15–128 characters."},

@@ -25,9 +25,33 @@ func ValidateEmail(value string) (string, error) {
 	return value, nil
 }
 
-// ValidateDisplayName returns a trimmed NFC name of 1–50 printable Unicode code points.
+// ValidateDisplayName returns a trimmed NFC name of 1–50 printable Unicode
+// code points that is not blank-looking (IsBlankLookingName).
 func ValidateDisplayName(value string) (string, error) {
-	return validateText(value, 1, 50, "display name")
+	value, err := validateText(value, 1, 50, "display name")
+	if err == nil && IsBlankLookingName(value) {
+		return "", fmt.Errorf("display name must contain a visible character")
+	}
+	return value, err
+}
+
+// IsBlankLookingName reports whether a name is made only of characters that
+// show as nothing or as white space: the ASCII and ideographic spaces, the
+// Hangul fillers U+3164, U+FFA0, U+115F and U+1160, the braille blank U+2800,
+// and combining marks (Unicode category M), which have no base character to
+// attach to when nothing else is there. It is a fixed list of code points
+// and one category, not a judgement of how a font renders the name
+// (docs/names.md). The empty name is blank-looking.
+func IsBlankLookingName(name string) bool {
+	for _, r := range name {
+		switch {
+		case r == ' ', r == '\u3000', r == '\u3164', r == '\uffa0', r == '\u115f', r == '\u1160', r == '\u2800':
+		case unicode.Is(unicode.M, r):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // ValidatePassword preserves the input and imposes only a 15–128 code point length.

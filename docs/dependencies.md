@@ -5,8 +5,8 @@
 The import edges from this module's packages under `internal/` and `cmd/`
 to other packages of this module. They come from non-test Go files only;
 test-only imports are left out. They are listed for `GOOS=linux`
-`GOARCH=amd64`, so the list is the same on every machine. `make check`
-fails when this file is stale.
+`GOARCH=amd64` with cgo enabled, the platform CI builds for, so the list is
+the same on every machine. `make check` fails when this file is stale.
 
 A new line here is a new package dependency: say why in the pull request.
 This list forbids nothing (depguard enforces the layering rules). It does

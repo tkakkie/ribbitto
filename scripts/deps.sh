@@ -17,8 +17,8 @@ render() {
 The import edges from this module's packages under `internal/` and `cmd/`
 to other packages of this module. They come from non-test Go files only;
 test-only imports are left out. They are listed for `GOOS=linux`
-`GOARCH=amd64`, so the list is the same on every machine. `make check`
-fails when this file is stale.
+`GOARCH=amd64` with cgo enabled, the platform CI builds for, so the list is
+the same on every machine. `make check` fails when this file is stale.
 
 A new line here is a new package dependency: say why in the pull request.
 This list forbids nothing (depguard enforces the layering rules). It does
@@ -29,8 +29,11 @@ package, or SQL access to tables.
 HEADER
   # .Imports holds the imports of non-test files only (tests are in
   # .TestImports and .XTestImports). Fixing the platform keeps
-  # build-constrained files from changing the list between machines.
-  GOOS=linux GOARCH=amd64 CGO_ENABLED=0 GOFLAGS= go list \
+  # build-constrained files from changing the list between machines. Cgo
+  # stays on, as in CI's default build: with it off, a file importing "C"
+  # would be dropped and its edges would silently vanish. Without cgo files
+  # go list needs no C compiler.
+  GOOS=linux GOARCH=amd64 CGO_ENABLED=1 GOFLAGS= go list \
     -f '{{$p := .ImportPath}}{{range .Imports}}{{$p}} {{.}}{{"\n"}}{{end}}' \
     ./internal/... ./cmd/... |
     awk -v prefix="$module/" '

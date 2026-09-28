@@ -33,6 +33,11 @@ Follow [`docs/workflow.md`](docs/workflow.md). The rules you must not skip:
 - `make lint` — runs golangci-lint.
 - `make deps` — regenerates `docs/dependencies.md`, the package-import
   edges; commit it with any change that adds or removes one.
+- `make check` also checks documents: every link and `#anchor` to a
+  Markdown file resolves, and each document stays under its size limit (one
+  topic per file). When a file goes over, open an issue to split it, add
+  `<path> #<issue>` to `docs/size-exceptions.txt`, and split it in a
+  separate pull request.
 
 ## Layout and dependency direction
 

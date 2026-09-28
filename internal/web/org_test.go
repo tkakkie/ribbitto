@@ -149,7 +149,7 @@ func (oneOrganisation) Member(_ context.Context, account *domain.Account, slug s
 	if account == nil || slug != "acme" {
 		return authz.Membership{}, authz.ErrNotFound
 	}
-	return authz.Membership{Organization: domain.Organization{Slug: "acme", Name: "Acme Corporation"}, Member: domain.Member{Role: domain.RoleOwner}}, nil
+	return authz.Membership{Organization: domain.Organization{Slug: "acme", Name: "Acme Corporation"}, Member: domain.Member{Role: domain.RoleOwner, Handle: "alice"}}, nil
 }
 
 func (oneOrganisation) HomeSlug(context.Context, *domain.Account) (string, error) {
@@ -191,8 +191,9 @@ func TestOrgHomeRendering(t *testing.T) {
 		t.Fatal(err)
 	}
 	for lang, texts := range map[string][]string{
-		"en": {"Acme Corporation", "Signed in as", "Alice", "Owner", "Sign out"},
-		"ja": {"Acme Corporation", "サインイン中:", "Alice", "オーナー", "サインアウト"},
+		// The spaces around the member's name are part of the checked text.
+		"en": {"Acme Corporation", `Signed in as <bdi class="font-semibold text-fg">Alice</bdi> <span class="text-muted">@alice</span> · Owner`, "Sign out"},
+		"ja": {"Acme Corporation", `サインイン中: <bdi class="font-semibold text-fg">Alice</bdi> <span class="text-muted">@alice</span> · オーナー`, "サインアウト"},
 	} {
 		r := httptest.NewRequest(http.MethodGet, "/organizations/acme/", nil)
 		r.Header.Set("Accept-Language", lang)

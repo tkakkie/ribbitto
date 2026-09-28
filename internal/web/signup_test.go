@@ -73,6 +73,8 @@ func TestSignUp(t *testing.T) {
 			for _, method := range []string{http.MethodGet, http.MethodPost} {
 				r := httptest.NewRequest(method, "/signup", strings.NewReader(form.Encode()))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				// The browser is already signed in: the new session must replace it.
+				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "previous-token"})
 				w := httptest.NewRecorder()
 				handler.ServeHTTP(w, r)
 				want := tt.status
@@ -123,6 +125,9 @@ func TestSignUp(t *testing.T) {
 				}
 				if f.created && f.account != (domain.ID{42}) {
 					t.Fatal("session created for wrong account")
+				}
+				if f.created && f.previous != "previous-token" {
+					t.Fatalf("the browser's previous session was not replaced: %q", f.previous)
 				}
 			}
 		})

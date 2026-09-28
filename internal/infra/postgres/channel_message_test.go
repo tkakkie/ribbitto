@@ -64,7 +64,7 @@ func TestChannelMessageSchema(t *testing.T) {
 		t.Fatalf("cross-organisation channel lookup: %v", err)
 	}
 	var posted []domain.Message
-	for _, input := range []string{"a", "hello\t", "a\r\nb\rc\nd", "\u00a0\u2002hello\u2003\u3000", "\t\r\n　a \r\n \tb　\n", "a\u00a0b", "e\u0301", "👩\u200d💻", "see \u2067שלום\u2069 now", "a\u200eb\u200fc\u061cd", strings.Repeat("界", 4000), strings.Repeat("e\u0301", 2000)} {
+	for _, input := range []string{"a", "hello\t", "a\r\nb\rc\nd", "\u00a0\u2002hello\u2003\u3000", "\t\r\n　a \r\n \tb　\n", "a\u00a0b", "e\u0301", "👩\u200d💻", "see \u2067שלום\u2069 now", "\u2066abc\u2069 \u2068x\u2069", "a\u200eb\u200fc\u061cd", strings.Repeat("界", 4000), strings.Repeat("e\u0301", 2000)} {
 		body, err := domain.ValidateMessageBody(input)
 		requireAccountSchema(t, err)
 		message, err := messages.InsertMessage(ctx, org, channel.ID, members[0], body, int64(len(posted)+1))

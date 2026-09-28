@@ -17,7 +17,7 @@
 | Name | Type | Definition |
 | ---- | ---- | ---------- |
 | message_body_check | CHECK | CHECK (((length(body) >= 1) AND (length(body) <= 4000))) |
-| message_body_check1 | CHECK | CHECK ((body !~ '[---  ]'::text)) |
+| message_body_check1 | CHECK | CHECK ((body !~ '[---  ‪‫‬‭‮]'::text)) |
 | message_body_check2 | CHECK | CHECK ((body = btrim(body, '	<br /><br /> '::text))) |
 | message_body_not_null | n | NOT NULL body |
 | message_channel_id_not_null | n | NOT NULL channel_id |
@@ -64,6 +64,7 @@ erDiagram
   text role
   bigint joined_event_seq
   timestamp_with_time_zone created_at
+  text handle
 }
 "public.channel" {
   uuid id

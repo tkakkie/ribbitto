@@ -93,14 +93,9 @@ func serve(ctx context.Context, databaseURL string) error {
 	stopCleanup := startSessionCleanup(ctx, sessions)
 	defer stopCleanup()
 
-	srv := &http.Server{
-		Addr:    addr,
-		Handler: handler,
-		// Bound header reading so a slow client cannot hold a connection
-		// open forever. No WriteTimeout: long-lived SSE responses will
-		// manage their own deadlines.
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	srv := newServer(addr, handler, serverTimeouts{
+		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout,
+	})
 
 	errc := make(chan error, 1)
 	go func() {
@@ -123,6 +118,45 @@ func serve(ctx context.Context, databaseURL string) error {
 		return err
 	}
 	return nil
+}
+
+// The server's timeouts. Without them net/http sets no deadline once the
+// headers are read, so a client could hold a connection, a goroutine and a
+// file descriptor for as long as it liked: idle between requests, or with a
+// request body started and never finished.
+const (
+	// readHeaderTimeout bounds the request line and headers. A browser sends
+	// them in one or two packets, so 10 s covers a slow or lossy link many
+	// times over, while a client trickling headers byte by byte is cut off.
+	readHeaderTimeout = 10 * time.Second
+	// readTimeout bounds reading a whole request, headers and body. Bodies
+	// are capped at 64 KiB (middleware.MaxBodyBytes), which even a slow
+	// mobile link sends in a few seconds.
+	readTimeout = 30 * time.Second
+	// idleTimeout bounds how long a keep-alive connection waits for its
+	// next request; browsers reconnect cheaply after it.
+	idleTimeout = 60 * time.Second
+)
+
+type serverTimeouts struct {
+	readHeader, read, idle time.Duration
+}
+
+// newServer returns the HTTP server with its timeouts; tests pass short
+// ones. There is no WriteTimeout: it would cut off M3's long-lived SSE
+// responses, which bound each write with
+// http.ResponseController.SetWriteDeadline instead. The read and idle
+// timeouts do not end a response that is still being written. A future
+// route that must read a long request body sets its own read deadline
+// through http.ResponseController.
+func newServer(addr string, handler http.Handler, timeouts serverTimeouts) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: timeouts.readHeader,
+		ReadTimeout:       timeouts.read,
+		IdleTimeout:       timeouts.idle,
+	}
 }
 
 type handlerConfig struct {

@@ -46,7 +46,7 @@ proxy that connects to ribbitto, as a `/32` or `/128` CIDR (for example
 setup rate limits see each client's address instead of the proxy's. List only
 proxies, never a network that also contains clients, and make the proxy append
 the peer it saw to `X-Forwarded-For` or overwrite the header. See the
-[reverse-proxy contract](docs/architecture.md#reverse-proxies) for the full rules
+[reverse-proxy contract](docs/architecture/rate-limits.md#reverse-proxies) for the full rules
 and for setups with several proxies. Left empty (the default), ribbitto ignores
 `X-Forwarded-For`, and all clients behind the proxy share one limit.
 
@@ -89,7 +89,7 @@ value prevents startup. Sign-in links to registration only while it is open.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — packages, allowed imports, request and real-time flow
+- [Architecture](docs/architecture/README.md) — packages, allowed imports, request and real-time flow
 - [Domain](docs/domain.md) — glossary, entities, invariants, unread rules
 - [UI](docs/ui.md) — design direction, tokens, contrast
 - [Decisions](DECISIONS.md) — what was decided and why

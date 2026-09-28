@@ -55,8 +55,8 @@ only by it and `cmd/ribbitto`.
 ## Where things are explained
 
 Read the relevant document before changing its area, and update it in the
-same pull request: [`docs/architecture.md`](docs/architecture.md)
-(packages, imports, data flow, real-time), [`docs/domain.md`](docs/domain.md)
+same pull request: [`docs/architecture/`](docs/architecture/README.md)
+(packages, imports, data flow, real-time; its README says which file covers what), [`docs/domain.md`](docs/domain.md)
 (terms, entities, invariants, unread rules), [`DECISIONS.md`](DECISIONS.md)
 (settled decisions — change them through an issue),
 [`docs/database.md`](docs/database.md), [`docs/ui.md`](docs/ui.md) (design tokens — use

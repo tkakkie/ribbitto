@@ -159,8 +159,8 @@ func ParseTrustedProxies(value string) ([]netip.Prefix, error) {
 // X-Forwarded-For address that is not a trusted proxy. The trusted argument
 // lists the proxy peers trusted to forward the client address
 // (RIBBITTO_TRUSTED_PROXIES), never ordinary clients, and each such proxy
-// must append the peer it saw or overwrite the header (docs/architecture.md,
-// Reverse proxies).
+// must append the peer it saw or overwrite the header
+// (docs/architecture/rate-limits.md, Reverse proxies).
 // Under that contract, reading from the right means a client cannot pick
 // its own key by adding entries on the left. A missing header, one listing only trusted proxies, or a malformed
 // entry at or right of the first untrusted address (one the trusted proxies

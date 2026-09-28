@@ -36,7 +36,8 @@ func TestMigrations(t *testing.T) {
 		accounts bool
 		setup    bool
 		handle   bool
-	}{{"up", true, "applied", true, true, true}, {"down", true, "applied", true, true, false}, {"down", true, "applied", true, false, false}, {"down", true, "applied", false, false, false}, {"down", false, "pending", false, false, false}, {"up", true, "applied", true, true, true}} {
+		messages bool
+	}{{"up", true, "applied", true, true, true, true}, {"down", true, "applied", true, true, true, false}, {"down", true, "applied", true, true, false, false}, {"down", true, "applied", true, false, false, false}, {"down", true, "applied", false, false, false, false}, {"down", false, "pending", false, false, false, false}, {"up", true, "applied", true, true, true, true}} {
 		if err := postgres.Migrate(ctx, db, step.command, io.Discard); err != nil {
 			t.Fatal(err)
 		}
@@ -59,6 +60,11 @@ func TestMigrations(t *testing.T) {
 			t.Fatalf("after %s: member.handle present = %t, want %t: %v", step.command, present, step.handle, err)
 		}
 		var status bytes.Buffer
+		for _, table := range []string{"channel", "message"} {
+			if err := db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", "public."+table).Scan(&present); err != nil || present != step.messages {
+				t.Fatalf("after %s: %s present = %t, want %t: %v", step.command, table, present, step.messages, err)
+			}
+		}
 		if err := postgres.Migrate(ctx, db, "status", &status); err != nil {
 			t.Fatal(err)
 		}

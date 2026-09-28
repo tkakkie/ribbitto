@@ -4,8 +4,8 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false |  |  |  |
-| organization_id | uuid |  | false |  | [public.organization](public.organization.md) |  |
+| id | uuid | uuidv7() | false | [public.message](public.message.md) |  |  |
+| organization_id | uuid |  | false | [public.message](public.message.md) | [public.organization](public.organization.md) |  |
 | account_id | uuid |  | false |  | [public.account](public.account.md) |  |
 | role | text |  | false |  |  |  |
 | joined_event_seq | bigint |  | false |  |  |  |
@@ -48,6 +48,7 @@
 ```mermaid
 erDiagram
 
+"public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.member" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.member" }o--|| "public.account" : "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE RESTRICT"
 
@@ -59,6 +60,15 @@ erDiagram
   bigint joined_event_seq
   timestamp_with_time_zone created_at
   text handle
+}
+"public.message" {
+  uuid id
+  uuid organization_id FK
+  uuid channel_id FK
+  uuid member_id FK
+  text body
+  bigint event_seq
+  timestamp_with_time_zone created_at
 }
 "public.organization" {
   uuid id

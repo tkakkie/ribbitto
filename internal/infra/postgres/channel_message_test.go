@@ -1,0 +1,144 @@
+package postgres_test
+
+import (
+	"errors"
+	"math"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+)
+
+func TestChannelMessageSchema(t *testing.T) {
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	q := sqlcgen.New(pool)
+	channels, messages := postgres.NewChannelStore(pool), postgres.NewMessageStore(pool)
+	var nullable int
+	requireAccountSchema(t, pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('channel', 'message') AND is_nullable = 'YES'").Scan(&nullable))
+	if nullable != 0 {
+		t.Fatalf("new tables have %d nullable columns", nullable)
+	}
+	account, err := q.CreateAccount(ctx, sqlcgen.CreateAccountParams{Email: "a@b", DisplayName: "Author", PasswordHash: "$argon2id$test"})
+	requireAccountSchema(t, err)
+	var orgs []domain.ID
+	var members []domain.ID
+	var defaults []domain.Channel
+	for _, slug := range []string{"team", "other"} {
+		org, err := q.CreateOrganization(ctx, sqlcgen.CreateOrganizationParams{Name: slug, Slug: slug})
+		requireAccountSchema(t, err)
+		member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: account.ID, Role: "member", JoinedEventSeq: 1})
+		requireAccountSchema(t, err)
+		channel, err := channels.CreateChannel(ctx, org.ID.Bytes, "雑談", true)
+		requireAccountSchema(t, err)
+		orgs, members, defaults = append(orgs, org.ID.Bytes), append(members, member.ID.Bytes), append(defaults, channel)
+		got, err := channels.GetDefaultChannel(ctx, org.ID.Bytes)
+		if err != nil || got != channel {
+			t.Fatalf("default: %+v, %v; want %+v", got, err, channel)
+		}
+	}
+	org, other := orgs[0], orgs[1]
+	channel, foreign := defaults[0], defaults[1]
+	for _, input := range []string{"a", "　 開発 会議　 ", "a　b", " e\u0301 ", strings.Repeat("e\u0301", 80), strings.Repeat("界", 80)} {
+		name, err := domain.ValidateChannelName(input)
+		requireAccountSchema(t, err)
+		created, err := channels.CreateChannel(ctx, org, name, false)
+		requireAccountSchema(t, err)
+		got, err := channels.GetChannel(ctx, org, created.ID)
+		if err != nil || got != created || got.Name != name || got.IsDefault || got.OrganizationID != org || got.ID[6]>>4 != 7 || got.CreatedAt.IsZero() {
+			t.Fatalf("channel round trip: %+v, %v", got, err)
+		}
+	}
+	listed, err := channels.ListChannels(ctx, other)
+	if err != nil || !slices.Equal(listed, []domain.Channel{foreign}) {
+		t.Fatalf("channel list leaked: %+v, %v", listed, err)
+	}
+	_, err = channels.GetChannel(ctx, other, channel.ID)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("cross-organisation channel lookup: %v", err)
+	}
+	var posted []domain.Message
+	for _, input := range []string{"a", "hello\t", "a\r\nb\rc\nd", "\u00a0\u2002hello\u2003\u3000", "\t\r\n　a \r\n \tb　\n", "a\u00a0b", "e\u0301", "👩\u200d💻", strings.Repeat("界", 4000), strings.Repeat("e\u0301", 2000)} {
+		body, err := domain.ValidateMessageBody(input)
+		requireAccountSchema(t, err)
+		message, err := messages.InsertMessage(ctx, org, channel.ID, members[0], body, int64(len(posted)+1))
+		requireAccountSchema(t, err)
+		if message.Body != body || message.OrganizationID != org || message.ChannelID != channel.ID || message.MemberID != members[0] || message.ID[6]>>4 != 7 || message.CreatedAt.IsZero() {
+			t.Fatalf("message round trip: %+v", message)
+		}
+		posted = append(posted, message)
+	}
+	// Equal sequences in different organisations are valid and must never leak.
+	_, err = messages.InsertMessage(ctx, other, foreign.ID, members[1], "other", 1)
+	requireAccountSchema(t, err)
+	// A newer message in a sibling channel must not appear in this channel's pages.
+	sibling, err := channels.CreateChannel(ctx, org, "sibling", false)
+	requireAccountSchema(t, err)
+	_, err = messages.InsertMessage(ctx, org, sibling.ID, members[0], "sibling", 100)
+	requireAccountSchema(t, err)
+	slices.Reverse(posted)
+	for _, tc := range []struct {
+		name   string
+		org    domain.ID
+		before int64
+		limit  int32
+		want   []domain.Message
+	}{
+		{"latest", org, 0, 3, posted[:3]},
+		{"max bigint", org, math.MaxInt64, 3, posted[:3]},
+		{"next page", org, posted[2].EventSeq, 20, posted[3:]},
+		{"oldest boundary", org, 1, 20, nil},
+		{"zero limit", org, 0, 0, nil},
+		{"other organisation", other, 0, 20, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var before *int64
+			if tc.before != 0 {
+				before = &tc.before
+			}
+			got, err := messages.ListMessagesBefore(ctx, tc.org, channel.ID, before, tc.limit)
+			if err != nil || !slices.Equal(got, tc.want) {
+				t.Fatalf("page: %+v, %v; want %+v", got, err, tc.want)
+			}
+		})
+	}
+	for _, tc := range []struct{ name, sql, code string }{
+		{"duplicate name", "INSERT INTO channel (organization_id, name) VALUES ($1, '雑談')", "23505"},
+		{"second default", "INSERT INTO channel (organization_id, name, is_default) VALUES ($1, 'second', true)", "23505"},
+		{"missing organisation", "INSERT INTO channel (organization_id, name) VALUES (uuidv7(), 'missing')", "23503"},
+		{"move referenced channel", "UPDATE channel SET organization_id = $2, name = 'moved', is_default = false WHERE organization_id = $1 AND id = $3", "23503"},
+		{"foreign channel", "UPDATE message SET channel_id = $4 WHERE organization_id = $1", "23503"},
+		{"foreign member", "UPDATE message SET member_id = $5 WHERE organization_id = $1", "23503"},
+		{"foreign organisation", "UPDATE message SET organization_id = $2, event_seq = event_seq + 1000 WHERE organization_id = $1", "23503"},
+		{"duplicate sequence", "INSERT INTO message (organization_id, channel_id, member_id, body, event_seq) SELECT organization_id, channel_id, member_id, body, event_seq FROM message WHERE organization_id = $1", "23505"},
+		{"zero sequence", "UPDATE message SET event_seq = 0 WHERE organization_id = $1", "23514"},
+		{"empty name", "UPDATE channel SET name = '' WHERE organization_id = $1", "23514"},
+		{"long name", "UPDATE channel SET name = repeat('界', 81) WHERE organization_id = $1", "23514"},
+		{"non-NFC name", "UPDATE channel SET name = 'e\u0301' WHERE organization_id = $1", "23514"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := pool.Exec(ctx, "WITH fixture AS (SELECT $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid) "+tc.sql, org, other, channel.ID, foreign.ID, members[1])
+			var pgErr *pgconn.PgError
+			if !errors.As(err, &pgErr) || pgErr.Code != tc.code {
+				t.Fatalf("want SQLSTATE %s, got %v", tc.code, err)
+			}
+		})
+	}
+	for _, body := range []string{"", strings.Repeat("界", 4001), "a\rb", " hello", "hello ", "\thello", "hello\t", "\nhello", "hello\n", "a\x01b", "a\vb", "a\fb", "a\x1fb", "a\x7fb", "a\u0085b", "a\u009fb", "a\u2028b", "a\u2029b", "a\x00b"} {
+		_, err := messages.InsertMessage(ctx, org, channel.ID, members[0], body, 200)
+		var pgErr *pgconn.PgError
+		code := "23514"
+		if strings.ContainsRune(body, 0) {
+			code = "22021" // PostgreSQL text rejects NUL before evaluating CHECKs.
+		}
+		if !errors.As(err, &pgErr) || pgErr.Code != code {
+			t.Fatalf("body %q: want SQLSTATE %s, got %v", body, code, err)
+		}
+	}
+}

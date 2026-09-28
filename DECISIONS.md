@@ -268,3 +268,17 @@ old `/o/` prefix is removed without redirects (#132).
 **Considered:** abbreviated `/o/` and `/c/` segments (less readable);
 display names or readable channel slugs (unnecessary naming and rename
 rules); redirects from the old prefix (nothing deployed needs them).
+
+## 18. Stored message formats never change meaning
+
+**Decided:** M2 message bodies are plain text, with no `format` column.
+Adding Markdown or rich text later must also add an explicit format (for
+example `plain_text`, `markdown`, `rich_text_v1`) and mark every existing
+message `plain_text`. A stored message is never reinterpreted in a new
+format. The stored body is the source of truth; rendered HTML may only be
+a derived, disposable cache.
+**Why:** new rendering features must not change what earlier authors wrote
+or turn their literal text into markup (#74).
+**Considered:** inferring a format or reinterpreting all history when a
+renderer changes (breaks compatibility); storing rendered HTML as the
+source (loses the original text).

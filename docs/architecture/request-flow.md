@@ -6,10 +6,10 @@ sequenceDiagram
   participant W as web (handler)
   participant A as app (use case)
   participant P as infra/postgres
-  B->>W: HTTP request (/o/{org}/…)
+  B->>W: HTTP request (/organizations/{slug}/…)
   W->>W: parse and validate input, resolve session → account
   W->>A: call use case with plain arguments
-  A->>A: resolve member of {org}, authorize
+  A->>A: resolve member of {slug}, authorize
   A->>P: repository calls inside one transaction
   P-->>A: domain values
   A-->>W: plain result struct
@@ -22,7 +22,7 @@ never from the request. An
 account that is not a member of that organisation gets 404, not 403, so the
 existence of an organisation or channel is not revealed.
 
-**Organisation routes.** Every page under `/o/{slug}/` is listed in
+**Organisation routes.** Every page under `/organizations/{slug}/` is listed in
 `orgRoutes` (`internal/web/org.go`) and registered by `registerOrgRoutes`,
 which calls `authz.Authorizer.Member` with the signed-in account and the
 slug before the page's handler runs and passes it the resolved membership;

@@ -85,7 +85,9 @@ func dial(t *testing.T, addr string) net.Conn {
 }
 
 func TestServerTimeouts(t *testing.T) {
-	timeouts := serverTimeouts{readHeader: 200 * time.Millisecond, read: 300 * time.Millisecond, idle: 300 * time.Millisecond, write: 500 * time.Millisecond}
+	// The write timeout is longer than the others: the reading client below
+	// must never be cut off by scheduling noise.
+	timeouts := serverTimeouts{readHeader: 200 * time.Millisecond, read: 300 * time.Millisecond, idle: 300 * time.Millisecond, write: 2 * time.Second}
 	addr := startServer(t, timeouts)
 	// Generous against scheduling noise, far below "never".
 	const limit = 3 * time.Second
@@ -170,17 +172,33 @@ func TestServerWriteDeadline(t *testing.T) {
 
 	conn := dial(t, listener.Addr().String())
 	send(t, conn, "GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+	// One deadline for both observations.
+	deadline := time.After(limit)
 	select {
 	case err := <-written:
 		if !errors.Is(err, os.ErrDeadlineExceeded) {
 			t.Fatalf("write error = %v, want a deadline error", err)
 		}
-	case <-time.After(limit):
+	case <-deadline:
 		t.Fatal("the handler was still writing to a client that never reads")
 	}
 	select {
 	case <-closed:
-	case <-time.After(limit):
+	case <-deadline:
 		t.Fatal("the connection to a client that never reads was never closed")
+	}
+}
+
+// TestServerReadHeaderTimeout stalls before the headers are complete. The
+// other limits are far longer than the observation window, so only
+// ReadHeaderTimeout can close the connection in time.
+func TestServerReadHeaderTimeout(t *testing.T) {
+	addr := startServer(t, serverTimeouts{
+		readHeader: 200 * time.Millisecond, read: time.Minute, idle: time.Minute, write: time.Minute,
+	})
+	conn := dial(t, addr)
+	send(t, conn, "GET /healthz HTTP/1.1\r\nHost: x\r\n")
+	if !closedWithin(t, conn, 3*time.Second) {
+		t.Fatal("a connection with incomplete headers was never closed")
 	}
 }

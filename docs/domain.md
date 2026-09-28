@@ -109,8 +109,8 @@ account, and `joined_event_seq` starts at 1.
    else's address. Therefore:
    - an unverified address is never evidence of identity, neither for
      linking an external identity (OIDC, SAML, SCIM) to an account nor for
-     granting a membership. Memberships come only from setup, sign-up and,
-     later, redeeming an invitation token;
+     granting a membership (in M1, memberships come only from setup and
+     sign-up);
    - an external identity is never linked to an existing account because
      the email addresses match.
 

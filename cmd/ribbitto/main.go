@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
+	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -198,6 +199,7 @@ func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth
 		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, config.signupEnabled),
 		SetupSessions: sessions,
 		Authz:         authz.New(postgres.NewAuthzStore(pool)),
+		Channels:      channel.New(postgres.NewChannelStore(pool)),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
 	})
 	if err != nil {

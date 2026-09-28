@@ -35,6 +35,19 @@ as soon as it is added. `GET /` redirects a member of the setup
 organisation to its page (`authz.Authorizer.HomeSlug`); everyone else sees
 the home page.
 
+The channel handlers in `internal/web/channel.go` call `channel.Service`
+with that membership; they never query the database directly:
+
+| Route | Result |
+|---|---|
+| `GET /organizations/{slug}/` | 303 to `Service.Default`, found by `is_default`; a missing default is logged and answers 500 |
+| `GET /organizations/{slug}/channels/{channel-id}` | Channel page and sidebar; malformed, unknown and other organisations' UUIDs answer 404 |
+| `POST /organizations/{slug}/channels` | Creates a channel and answers 303 to its UUID URL; invalid or duplicate names render a field error (422) alongside the default channel |
+
+The creation form inherits the shared CSRF protection and body limit.
+Its organisation comes only from the resolved membership. Names are escaped
+by templ and never become URL identifiers.
+
 ## Server timeouts
 
 In `newServer` (`cmd/ribbitto`):

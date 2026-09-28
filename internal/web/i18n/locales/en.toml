@@ -105,3 +105,27 @@ other = "Too many attempts"
 
 ["ratelimit.message"]
 other = "Please wait a while before trying again."
+
+["channel.organizations"]
+other = "Organisations"
+
+["channel.list"]
+other = "Channels"
+
+["channel.name"]
+other = "Channel name"
+
+["channel.name_help"]
+other = "1–80 printable characters."
+
+["channel.create"]
+other = "Create channel"
+
+["channel.empty"]
+other = "No messages yet."
+
+["channel.error.name"]
+other = "Enter a channel name of 1–80 printable characters."
+
+["channel.error.name_taken"]
+other = "A channel with this name already exists."

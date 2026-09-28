@@ -139,11 +139,10 @@ in [`.github/prompts/audit.md`](../../.github/prompts/audit.md) (#116).
   `git ls-tree -r <commit>` lists no symlink (mode `120000`); a symlink
   could make a read leave the checkout.
 - The maintainer runs `agy` interactively there. Allow a command once only
-  if it is one the prompt allows (`git ls-files`, `git show HEAD:<path>`,
-  `git grep <pattern> HEAD`, `git log`, `git diff` between two commits,
-  and the two workspace checks) without `--output`,
-  `-O` or `--open-files-in-pager`; refuse everything else, including
-  network access. Never choose "always allow".
+  if it matches one of the prompt's exact command forms (the two workspace
+  checks and the `git --no-pager` reads), with no option the form does not
+  list and no `-c` or environment setting; refuse everything else,
+  including network access. Never choose "always allow".
 - Claude checks every finding against the files, because the report can
   invent citations, and posts *valid* or *false positive* for each. Fixes
   go through a normal issue.

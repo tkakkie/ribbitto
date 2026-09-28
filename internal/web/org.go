@@ -18,16 +18,16 @@ type Authorizer interface {
 	HomeSlug(ctx context.Context, account *domain.Account) (string, error)
 }
 
-// orgRoute is a page under /o/{slug}. Its handler receives the membership
-// that authz resolved and never reads {slug} itself.
+// orgRoute is a page under /organizations/{slug}/. Its handler receives
+// the membership that authz resolved and never reads {slug} itself.
 type orgRoute struct {
-	method, path string // path below /o/{slug}
+	method, path string // path below /organizations/{slug}
 	handle       func(w http.ResponseWriter, r *http.Request, m authz.Membership)
 }
 
-// orgRoutes lists every organisation route. The same list registers the
-// routes and drives the tests that prove non-members get 404, so a route
-// cannot be added without those tests covering it.
+// orgRoutes lists every route under /organizations/{slug}/. The same list
+// registers the routes and drives the tests that prove non-members get
+// 404, so a route cannot be added without those tests covering it.
 func orgRoutes(pages *pageRenderer) []orgRoute {
 	return []orgRoute{
 		{http.MethodGet, "/{$}", func(w http.ResponseWriter, r *http.Request, m authz.Membership) {
@@ -43,12 +43,12 @@ func orgRoutes(pages *pageRenderer) []orgRoute {
 	}
 }
 
-// registerOrgRoutes puts every organisation route behind authz. A signed-out
-// request gets 404 too, not a redirect to sign-in: a redirect would reveal
-// which slugs exist.
+// registerOrgRoutes puts every route under /organizations/{slug}/ behind
+// authz. A signed-out request gets 404 too, not a redirect to sign-in:
+// a redirect would reveal which slugs exist.
 func registerOrgRoutes(routes sessionMux, authorizer Authorizer, table []orgRoute) {
 	for _, route := range table {
-		routes.HandleFunc(route.method+" /o/{slug}"+route.path, func(w http.ResponseWriter, r *http.Request) {
+		routes.HandleFunc(route.method+" /organizations/{slug}"+route.path, func(w http.ResponseWriter, r *http.Request) {
 			var account *domain.Account
 			if a, ok := middleware.Account(r.Context()); ok {
 				account = &a

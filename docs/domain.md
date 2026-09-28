@@ -89,8 +89,8 @@ account, and `joined_event_seq` starts at 1.
    include `organization_id`**, so a row can never point at another
    organisation's data even if an id is guessed.
 3. **Organisation-owned data refers to `member`, never to `account`.**
-4. **The organisation comes from the URL** (`/o/{slug}/…`), never from a
-   request body. Setup creates the organisation; installation-wide sign-up
+4. **The organisation comes from the URL** (`/organizations/{slug}/…`), never
+   from a request body. Setup creates the organisation; installation-wide sign-up
    and `/` resolve it from the setup row, never from the request. An account
    that is not a member gets **404**. Enforced by `registerOrgRoutes` in
    `internal/web/org.go`.

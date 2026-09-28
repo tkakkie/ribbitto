@@ -58,7 +58,7 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 			slug, err := services.Authz.HomeSlug(r.Context(), &account)
 			switch {
 			case err == nil:
-				http.Redirect(w, r, "/o/"+slug+"/", http.StatusSeeOther)
+				http.Redirect(w, r, "/organizations/"+slug+"/", http.StatusSeeOther)
 				return
 			case !errors.Is(err, authz.ErrNotFound):
 				serverError(w, r, "finding home organisation", err)

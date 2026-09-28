@@ -93,7 +93,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Fatal("no organisation routes")
 	}
 	for _, route := range routes {
-		path := "/o/acme" + strings.ReplaceAll(route.path, "{$}", "")
+		path := "/organizations/acme" + strings.ReplaceAll(route.path, "{$}", "")
 		for _, tt := range []struct {
 			name   string
 			cookie string
@@ -121,8 +121,15 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		})
 	}
 
+	t.Run("legacy path is unknown even for a member", func(t *testing.T) {
+		w := get(http.MethodGet, "/o/acme/", aliceToken, now)
+		if w.Code != http.StatusNotFound || w.Header().Get("Location") != "" || w.Body.String() != "404 page not found\n" {
+			t.Fatalf("status %d, location %q, body %q", w.Code, w.Header().Get("Location"), w.Body.String())
+		}
+	})
+
 	// "/" sends a member of the setup organisation there, and only them.
-	if w := get(http.MethodGet, "/", aliceToken, now); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/o/acme/" {
+	if w := get(http.MethodGet, "/", aliceToken, now); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/organizations/acme/" {
 		t.Fatalf("alice at /: %d %q", w.Code, w.Header().Get("Location"))
 	}
 	for name, cookie := range map[string]string{"member of the other organisation only": bobToken, "signed out": ""} {
@@ -187,7 +194,7 @@ func TestOrgHomeRendering(t *testing.T) {
 		"en": {"Acme Corporation", "Signed in as", "Alice", "Owner", "Sign out"},
 		"ja": {"Acme Corporation", "サインイン中:", "Alice", "オーナー", "サインアウト"},
 	} {
-		r := httptest.NewRequest(http.MethodGet, "/o/acme/", nil)
+		r := httptest.NewRequest(http.MethodGet, "/organizations/acme/", nil)
 		r.Header.Set("Accept-Language", lang)
 		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 		w := httptest.NewRecorder()

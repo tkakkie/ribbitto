@@ -84,13 +84,14 @@ The shared kernel, which any feature may use: the IDs and value types in
 entry point `app/authz`. Other files in `internal/web` (routing, forms,
 middleware, views) and `cmd/ribbitto` serve every feature.
 
-The channel and message stores accept a pool or a caller-owned transaction.
-Message references to channels and `org`'s members use composite foreign
-keys including `organization_id`; neither store writes another feature's
-tables. History uses one newest-first keyset query, `ListMessagesBefore`,
-with a nullable upper sequence bound for the latest page, and no author
-joins. Author names come through `org` and `identity` in M2-5 (#78).
-Use cases and handlers follow in later M2 issues.
+`ChannelStore` and `MessageStore` accept a pool or a caller-owned
+transaction; `PostingStore` owns the posting transaction (sequence first,
+then the message). Message references to channels and `org`'s members use
+composite foreign keys including `organization_id`. History uses one
+newest-first keyset query, `ListMessagesBefore`, with a nullable upper
+sequence bound for the latest page, and no author joins. The use cases
+(`app/channel`, `app/message`) exist; author names come through `org` and
+`identity` with the message list (#78).
 
 **Known exceptions.** Three flows write another feature's tables in one
 transaction today:

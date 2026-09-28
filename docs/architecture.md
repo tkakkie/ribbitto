@@ -232,20 +232,59 @@ while; that is accepted. The /48 is this application's choice, not a standard: u
 clients whose smaller prefixes share a /48 share its budget. Limits live in
 memory, per process.
 
-The client is the peer's IPv4 address or IPv6 /64. Behind a reverse proxy
-(Caddy in production) every request comes from the proxy, so
-`RIBBITTO_TRUSTED_PROXIES` (comma-separated CIDRs, empty by default) names
-the proxies whose `X-Forwarded-For` is believed. Its entries are read from
-the right, skipping trusted proxies, and the first other address is the
-client, so a client cannot choose its key by adding entries on the left.
-The request falls back to the peer when the header is missing, lists only
-trusted proxies, or has a malformed entry at or right of that address.
-Entries further left are the client's own and are never parsed. Addresses
-and CIDRs are compared in their IPv4 form when they are IPv4-mapped. The
-server refuses to start on an invalid CIDR.
+The client is the peer's IPv4 address or IPv6 /64, or, behind a trusted
+proxy, the address it forwards (below).
 
 `serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
 a `database/sql` handle, which goose needs.
+
+### Reverse proxies
+
+ribbitto works behind any reverse proxy (Caddy, nginx, HAProxy, Traefik…)
+that meets this contract. Its security does not depend on any one proxy's
+behaviour.
+
+- `RIBBITTO_TRUSTED_PROXIES` lists the **proxy peers trusted to forward the
+  client address to ribbitto**, not trusted networks. It is comma-separated
+  CIDRs, with `/32` or `/128` for a single address; a bare address fails at
+  startup, and so does an invalid CIDR.
+- Forwarded client addresses are not trusted by default. If the request's
+  immediate peer is not in the list, `X-Forwarded-For` is ignored and the
+  peer address is the key. Only when the peer is a trusted proxy is the
+  header read.
+- The header is read from the right, skipping trusted hops, and the first
+  untrusted address is the client. A client therefore cannot choose its key
+  by adding entries on the left. The request falls back to the peer when the
+  header is missing, lists only trusted proxies, or has a malformed entry at
+  or right of that address. Entries further left are the client's own and
+  are never parsed.
+- **What a trusted proxy must do:** append the address of the peer it
+  received the request from to `X-Forwarded-For`, or replace the header with
+  a client address it resolved through its own explicitly trusted chain. It
+  must never pass a client-supplied address on as authoritative. A proxy
+  that forwards the header unchanged lets any client choose its key, however
+  narrowly it is listed.
+- **What to list:** the proxies themselves, never ordinary clients. A stable
+  proxy is listed as its own `/32` or `/128`. A broader CIDR is fine only
+  when every peer that can reach ribbitto from it may be trusted as a
+  forwarding proxy. Otherwise a client inside it can write its own key.
+- **Several proxies:** the recommended setup is for the proxy directly in
+  front of ribbitto to resolve the client address and forward it, and for
+  ribbitto to trust only that proxy. If it merely appends the previous
+  proxy's address, every client behind that proxy shares one key. Trusting
+  several controlled hops explicitly is also allowed.
+- **Empty (the default):** `X-Forwarded-For` is never trusted. Behind a
+  proxy, all clients then share the proxy's key and may be rate-limited
+  together. That is kept as the default, because it is safer than believing
+  an untrusted header.
+- Addresses and CIDRs are compared in their IPv4 form when they are
+  IPv4-mapped.
+
+The official self-hosting setup will use Caddy as one configuration that
+meets this contract. Caddy reads the client address from the left unless
+`trusted_proxies_strict` is set, so the shipped configuration must set it or
+overwrite the header. Examples for other proxies can be added against the
+same contract.
 
 ## Posting a message *(planned, M2–M3)*
 

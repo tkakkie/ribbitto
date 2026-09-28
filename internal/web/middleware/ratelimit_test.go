@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http/httptest"
 	"net/netip"
 	"testing"
@@ -280,5 +281,45 @@ func TestNetworkTable(t *testing.T) {
 	// z(0)'s own bucket still has tokens: only the /48 can refuse it.
 	if !l.Allow(z(0)) || !l.Allow(z(1)) || l.Allow(z(0)) {
 		t.Fatal("the new /48 did not get exactly its own burst of 2")
+	}
+}
+
+// Behind a trusted /32 or /128 proxy that appends the peer it saw, the
+// client cannot change its key by writing entries to the left of that
+// address, so repeated attempts drain one bucket. A peer that is not a
+// trusted proxy cannot use the header at all.
+func TestTrustedProxyContract(t *testing.T) {
+	for _, tt := range []struct {
+		name, proxy, peer, client, want string
+	}{
+		{"IPv4 /32 proxy", "10.0.0.2/32", "10.0.0.2:1234", "203.0.113.9", "203.0.113.9/32"},
+		{"IPv6 /128 proxy", "2001:db8:ffff::2/128", "[2001:db8:ffff::2]:1234", "2001:db8:1:2::9", "2001:db8:1:2::/64"},
+		{"untrusted peer", "10.0.0.2/32", "198.51.100.7:1234", "203.0.113.9", "198.51.100.7/32"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			trusted, err := ParseTrustedProxies(tt.proxy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+			limits := NewAuthLimits(trusted, func() time.Time { return now })
+			allowed := 0
+			for i := range 10 {
+				r := httptest.NewRequest("POST", "/signin", nil)
+				r.RemoteAddr = tt.peer
+				// The client writes a different address on the left each
+				// time; the proxy appends the peer it saw.
+				r.Header.Set("X-Forwarded-For", fmt.Sprintf("192.0.2.%d, %s", i+1, tt.client))
+				if got := ClientKey(r, trusted); got != netip.MustParsePrefix(tt.want) {
+					t.Fatalf("attempt %d: key %s, want %s", i+1, got, tt.want)
+				}
+				if limits.Allow(limits.SignIn, r) {
+					allowed++
+				}
+			}
+			if allowed != signInBurst {
+				t.Fatalf("%d of 10 attempts admitted, want one bucket's burst of %d", allowed, signInBurst)
+			}
+		})
 	}
 }

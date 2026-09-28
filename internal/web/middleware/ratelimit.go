@@ -156,9 +156,12 @@ func ParseTrustedProxies(value string) ([]netip.Prefix, error) {
 
 // ClientKey identifies the client for rate limiting. It is the peer
 // address, unless the peer is a trusted proxy: then it is the rightmost
-// X-Forwarded-For address that is not a trusted proxy. Reading from the
-// right means a client cannot pick its own key by adding entries on the
-// left. A missing header, one listing only trusted proxies, or a malformed
+// X-Forwarded-For address that is not a trusted proxy. trusted lists proxy
+// peers trusted to forward the client address (RIBBITTO_TRUSTED_PROXIES),
+// never ordinary clients, and each such proxy must append the peer it saw
+// or overwrite the header (docs/architecture.md, reverse-proxy contract).
+// Under that contract, reading from the right means a client cannot pick
+// its own key by adding entries on the left. A missing header, one listing only trusted proxies, or a malformed
 // entry at or right of the first untrusted address (one the trusted proxies
 // appended) falls back to the peer. Entries further left are written by the
 // client and never parsed: if a malformed one forced the fallback, a client

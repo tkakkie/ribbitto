@@ -2,10 +2,10 @@ GOLANGCI_LINT_VERSION := v2.14.0
 .DEFAULT_GOAL := check
 GOLANGCI_LINT := ./bin/golangci-lint-$(GOLANGCI_LINT_VERSION)/golangci-lint
 TEMPL := ./bin/templ
-TAILWIND_VERSION := v4.1.13
+TAILWIND_VERSION := v4.3.3
 TAILWIND := ./bin/tailwindcss-$(TAILWIND_VERSION)
-TAILWIND_SHA_macos-arm64 := c47681e9948db20026a913a4aca4ee0269b4c0d4ef3f71343cb891dfdc1e97c9
-TAILWIND_SHA_linux-x64 := b9ed9f8f640d3323711f9f68608aa266dff3adbc42e867c38ea2d009b973be11
+TAILWIND_SHA_macos-arm64 := cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d
+TAILWIND_SHA_linux-x64 := dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a
 CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 
 .PHONY: check lint db-up db-down generate schema-docs deps css dev

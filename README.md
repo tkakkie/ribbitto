@@ -32,7 +32,8 @@ go run ./cmd/ribbitto       # serves http://localhost:8080/ (or: ... serve)
 make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
 make dev                   # watches templ and CSS; restarts the server
-make check                 # checks formatting, vets, lints, builds and tests
+make check                 # checks formatting, vets, lints, builds and tests (with -race)
+make vuln                  # govulncheck: known vulnerabilities reachable from our code
 make deps                  # regenerates docs/dependencies.md after an import change
 make db-down               # stops PostgreSQL; keeps the named data volume
 ```
@@ -71,6 +72,17 @@ The standalone Tailwind CLI is downloaded and SHA-256 checked by `make css`
 Generated Go, CSS and vendored scripts are committed, so `go build` needs
 neither templ nor Tailwind. CSS class detection is limited to `.templ` files
 so local notes and tools do not change the output.
+
+### Checks
+
+`make check` is what CI runs and what must pass before a pull request: it
+checks formatting, vets, lints, builds, runs the Go tests with the race
+detector, and checks the import graph and the documents. CI also runs
+`make vuln`, which runs the pinned `govulncheck` over the application module
+and fails when a known vulnerability is statically reachable from our code.
+It needs the network, so it is not part of `make check`. When it fails:
+bump the dependency in its own pull request, or upgrade Go for a
+standard-library finding; if no fix exists yet, the maintainer decides.
 
 ## First-run setup
 

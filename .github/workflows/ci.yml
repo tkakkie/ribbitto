@@ -69,3 +69,8 @@ jobs:
       # The Makefile pins golangci-lint for both local checks and CI.
       - name: check
         run: make check
+
+      # Fails when a known vulnerability is reachable from our code; see
+      # "Checks" in the README for what to do.
+      - name: govulncheck
+        run: make vuln

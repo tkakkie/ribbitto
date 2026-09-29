@@ -49,10 +49,20 @@ $(TAILWIND):
 	chmod +x "$$tmp"; mv "$$tmp" "$@"
 
 # Local caches under bin/ include third-party sources and invalid test fixtures.
-check:
+# The pinned templ has no check-only flag, so each file is compared with the
+# formatter's stdout; the working tree is never rewritten.
+check: $(TEMPL)
 	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
 	if [ -n "$$unformatted" ]; then \
 		echo "These files need gofmt:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.templ' -print | sort | while IFS= read -r file; do \
+			if ! $(TEMPL) fmt -stdout -stdin-filepath "$$file" < "$$file" | cmp -s - "$$file"; then printf '%s\n' "$$file"; fi; \
+		done); \
+	if [ -n "$$unformatted" ]; then \
+		echo "These files need templ fmt (run ./bin/templ fmt on them):"; \
 		echo "$$unformatted"; \
 		exit 1; \
 	fi

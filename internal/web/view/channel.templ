@@ -2,21 +2,21 @@ package view
 
 import (
 	"fmt"
- "time"
- "github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"time"
 )
 
 // ChannelPage holds the sidebar, conversation and channel creation form.
 type ChannelPage struct {
-	Organization      domain.Organization
+	Organization              domain.Organization
 	DisplayName, Handle, Role string
-	Current           domain.Channel
-	Channels          []domain.Channel
-	Name, Error       string
-	Body, BodyError string
-	Messages        []message.Entry
+	Current                   domain.Channel
+	Channels                  []domain.Channel
+	Name, Error               string
+	Body, BodyError           string
+	Messages                  []message.Entry
 	// Older reports that messages before Messages[0] exist.
 	Older bool
 	// Before is the event_seq bound of an older page; 0 shows the latest.
@@ -98,7 +98,9 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 							for _, entry := range page.Messages {
 								<li id={ fmt.Sprintf("message-%x", entry.ID) }>
 									<div class="flex flex-wrap items-baseline gap-2">
-										<span>@MemberName(entry.DisplayName, entry.Handle)</span>
+										<span>
+											@MemberName(entry.DisplayName, entry.Handle)
+										</span>
 										<time datetime={ entry.CreatedAt.UTC().Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
 									</div>
 									<p dir="auto" class="whitespace-pre-wrap break-words">{ entry.Body }</p>

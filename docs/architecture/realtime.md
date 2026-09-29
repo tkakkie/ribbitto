@@ -1,6 +1,6 @@
 # Messages and real time *(planned, M2–M3)*
 
-## Posting a message *(planned, M2–M3)*
+## Posting a message *(M2 part implemented; `event_log` and the hub are planned, M3)*
 
 ```mermaid
 sequenceDiagram
@@ -14,6 +14,12 @@ sequenceDiagram
   A->>DB: COMMIT
   A->>H: raise latest sequence of org to n (after commit)
 ```
+
+Since M2, `message.Service.Post` (validation) and `postgres.PostingStore`
+(the transaction) take the sequence and insert the message; the
+`event_log` insert and telling the hub are added in M3. A channel outside
+the caller's organisation fails on the message's composite foreign key and
+rolls the sequence back with it.
 
 - **Take the sequence number first.** The `UPDATE` (scoped to the
   organisation from the URL, `WHERE id = $1`) locks that organisation's row

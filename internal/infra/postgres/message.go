@@ -2,9 +2,15 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/app/authz"
+	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
@@ -50,4 +56,40 @@ func (s *MessageStore) ListMessagesBefore(ctx context.Context, organizationID, c
 
 func messageFromRow(row sqlcgen.Message) domain.Message {
 	return domain.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time}
+}
+
+// PostingStore implements message.Store: it owns the posting transaction.
+type PostingStore struct{ pool *pgxpool.Pool }
+
+// NewPostingStore returns a PostingStore on pool.
+func NewPostingStore(pool *pgxpool.Pool) *PostingStore { return &PostingStore{pool: pool} }
+
+// Post takes the next event_seq first — locking the organisation's row, so
+// sequence order is commit order — and then inserts the message with it.
+// Any failure rolls both back, so no sequence value is lost. Listed
+// exception: this advances organization.event_seq, which org owns.
+func (s *PostingStore) Post(ctx context.Context, organizationID, channelID, memberID domain.ID, body string) (domain.Message, error) {
+	var posted domain.Message
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		seq, err := sqlcgen.New(tx).NextEventSeq(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+		if err != nil {
+			return err
+		}
+		posted, err = NewMessageStore(tx).InsertMessage(ctx, organizationID, channelID, memberID, body, seq)
+		return err
+	})
+	var pgErr *pgconn.PgError
+	switch {
+	// The composite foreign keys, not a lookup first, keep a message inside
+	// its organisation: another organisation's channel or member fails here.
+	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_channel_id_fkey":
+		return domain.Message{}, channel.ErrNotFound
+	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_member_id_fkey":
+		return domain.Message{}, authz.ErrNotFound
+	case errors.Is(err, pgx.ErrNoRows):
+		return domain.Message{}, authz.ErrNotFound // the organisation itself is gone
+	case err != nil:
+		return domain.Message{}, fmt.Errorf("posting message: %w", err)
+	}
+	return posted, nil
 }

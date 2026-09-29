@@ -28,6 +28,8 @@ internal/app/channel -> internal/app/authz
 internal/app/channel -> internal/domain
 internal/app/member -> internal/app/authz
 internal/app/member -> internal/domain
+internal/app/message -> internal/app/authz
+internal/app/message -> internal/domain
 internal/app/setup -> internal/app/auth
 internal/app/setup -> internal/domain
 internal/app/signup -> internal/app/auth

@@ -22,6 +22,14 @@ cmd/ribbitto -> internal/infra/postgres
 cmd/ribbitto -> internal/web
 cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
+cmd/seed -> internal/app/auth
+cmd/seed -> internal/app/authz
+cmd/seed -> internal/app/channel
+cmd/seed -> internal/app/message
+cmd/seed -> internal/app/setup
+cmd/seed -> internal/app/signup
+cmd/seed -> internal/domain
+cmd/seed -> internal/infra/postgres
 internal/app/auth -> internal/domain
 internal/app/authz -> internal/domain
 internal/app/channel -> internal/app/authz

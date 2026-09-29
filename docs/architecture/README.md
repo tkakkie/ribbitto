@@ -10,9 +10,12 @@ are not implemented yet; move them out of *planned* when they land.
 
 ## Packages and allowed imports
 
-One Go binary. `cmd/ribbitto` is the composition root: it reads
-configuration, builds the concrete implementations and wires them together.
-It is the only package that knows every layer.
+`cmd/ribbitto` is the server composition root: it reads configuration,
+builds the concrete implementations and wires them together. `cmd/seed` is
+a second, development-only composition root: it wires PostgreSQL stores
+into setup, sign-up, authorization, channel and posting use cases to create
+[synthetic conversations](../database.md#development-seed-data). It never
+imports `db/migrations`; the database must already be migrated.
 
 | Package | Responsibility | May import from this module |
 |---|---|---|
@@ -45,6 +48,7 @@ in `AGENTS.md`. Fixtures under `testdata/` are excluded.
 ```mermaid
 flowchart LR
   cmd[cmd/ribbitto] --> web & app & postgres[infra/postgres] & realtime & migrations[db/migrations]
+  seed[cmd/seed] --> app & postgres & domain
   web[internal/web] --> app & domain & realtime & static[web/static]
   postgres --> app & domain & migrations
   realtime[internal/realtime] --> domain
@@ -82,7 +86,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 The shared kernel, which any feature may use: the IDs and value types in
 `internal/domain`, the per-organisation `event_seq`, and the authorisation
 entry point `app/authz`. Other files in `internal/web` (routing, forms,
-middleware, views) and `cmd/ribbitto` serve every feature.
+middleware, views) and the composition roots serve every feature.
 
 `ChannelStore` and `MessageStore` accept a pool or a caller-owned
 transaction; `PostingStore` owns the posting transaction (sequence first,

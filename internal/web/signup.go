@@ -81,6 +81,6 @@ func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpServic
 		}
 		pages.render(w, r, status, func(url string) templ.Component { return view.SignUp(url, form) })
 	}
-	routes.ServeMux.HandleFunc("GET /signup", handler)
-	routes.ServeMux.HandleFunc("POST /signup", handler)
+	routes.HandleFuncWithoutSession("GET /signup", handler)
+	routes.HandleFuncWithoutSession("POST /signup", handler)
 }

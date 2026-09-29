@@ -94,6 +94,6 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 	// Registered on the plain mux, not behind the session middleware: setup
 	// needs no signed-in account, so whether setup is open is decided first
 	// and a completed setup answers 404 whatever the session state.
-	routes.ServeMux.HandleFunc("GET /setup", handler)
-	routes.ServeMux.HandleFunc("POST /setup", handler)
+	routes.HandleFuncWithoutSession("GET /setup", handler)
+	routes.HandleFuncWithoutSession("POST /setup", handler)
 }

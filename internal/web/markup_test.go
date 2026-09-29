@@ -244,7 +244,7 @@ func TestPagesMarkup(t *testing.T) {
 		fieldErrors[field] = errors.New("invalid")
 	}
 	base := func() Services {
-		return Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Channels: &fakeChannels{}, Authz: noOrganisations{}}
+		return Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}}
 	}
 	withSetup := func(err error) func() Services {
 		return func() Services {
@@ -303,6 +303,7 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "sign-up", route: "GET /signup", services: withSignUp(true, nil), method: "GET", path: "/signup"},
 		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 4},
 		{name: "channel", route: "GET /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
+		{name: "channel with messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
 		{name: "channel invalid name", route: "POST /organizations/{slug}/channels", services: withChannelError(channel.ErrInvalidName), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {""}}, status: http.StatusUnprocessableEntity},
 		{name: "channel duplicate name", route: "POST /organizations/{slug}/channels", services: withChannelError(channel.ErrNameTaken), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"雑談"}}, status: http.StatusUnprocessableEntity},
 	}

@@ -199,6 +199,7 @@ func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth
 		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, config.signupEnabled),
 		SetupSessions: sessions,
 		Authz:         authz.New(postgres.NewAuthzStore(pool)),
+		Messages:      postgres.MessageReader{Pool: pool},
 		Channels:      channel.New(postgres.NewChannelStore(pool)),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
 	})

@@ -45,3 +45,24 @@ func (s *MemberStore) UpdateHandle(ctx context.Context, organizationID, memberID
 	}
 	return nil
 }
+
+// LookupMembers implements org's member.Directory, scoped to one organisation.
+func (s *MemberStore) LookupMembers(ctx context.Context, organizationID domain.ID, ids []domain.ID) (map[domain.ID]member.Identity, error) {
+	rows, err := s.queries.LookupMembers(ctx, sqlcgen.LookupMembersParams{OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, MemberIds: uuidArray(ids)})
+	if err != nil {
+		return nil, fmt.Errorf("looking up members: %w", err)
+	}
+	result := make(map[domain.ID]member.Identity, len(rows))
+	for _, row := range rows {
+		result[row.ID.Bytes] = member.Identity{AccountID: row.AccountID.Bytes, Handle: row.Handle}
+	}
+	return result, nil
+}
+
+func uuidArray(ids []domain.ID) []pgtype.UUID {
+	result := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		result[i] = pgtype.UUID{Bytes: id, Valid: true}
+	}
+	return result
+}

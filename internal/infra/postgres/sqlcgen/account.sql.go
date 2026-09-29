@@ -67,3 +67,32 @@ func (q *Queries) GetAccountByID(ctx context.Context, id pgtype.UUID) (Account, 
 	)
 	return i, err
 }
+
+const lookupDisplayNames = `-- name: LookupDisplayNames :many
+SELECT id, display_name FROM account WHERE id = ANY($1::uuid[])
+`
+
+type LookupDisplayNamesRow struct {
+	ID          pgtype.UUID
+	DisplayName string
+}
+
+func (q *Queries) LookupDisplayNames(ctx context.Context, accountIds []pgtype.UUID) ([]LookupDisplayNamesRow, error) {
+	rows, err := q.db.Query(ctx, lookupDisplayNames, accountIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LookupDisplayNamesRow
+	for rows.Next() {
+		var i LookupDisplayNamesRow
+		if err := rows.Scan(&i.ID, &i.DisplayName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

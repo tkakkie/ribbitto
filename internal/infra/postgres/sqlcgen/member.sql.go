@@ -119,6 +119,42 @@ func (q *Queries) GetMembershipBySlug(ctx context.Context, arg GetMembershipBySl
 	return i, err
 }
 
+const lookupMembers = `-- name: LookupMembers :many
+SELECT id, account_id, handle FROM member
+WHERE organization_id = $1 AND id = ANY($2::uuid[])
+`
+
+type LookupMembersParams struct {
+	OrganizationID pgtype.UUID
+	MemberIds      []pgtype.UUID
+}
+
+type LookupMembersRow struct {
+	ID        pgtype.UUID
+	AccountID pgtype.UUID
+	Handle    string
+}
+
+func (q *Queries) LookupMembers(ctx context.Context, arg LookupMembersParams) ([]LookupMembersRow, error) {
+	rows, err := q.db.Query(ctx, lookupMembers, arg.OrganizationID, arg.MemberIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LookupMembersRow
+	for rows.Next() {
+		var i LookupMembersRow
+		if err := rows.Scan(&i.ID, &i.AccountID, &i.Handle); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateMemberHandle = `-- name: UpdateMemberHandle :execrows
 UPDATE member SET handle = $3 WHERE organization_id = $1 AND id = $2
 `

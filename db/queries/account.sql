@@ -6,3 +6,6 @@ SELECT * FROM account WHERE email = $1;
 
 -- name: GetAccountByID :one
 SELECT * FROM account WHERE id = $1;
+
+-- name: LookupDisplayNames :many
+SELECT id, display_name FROM account WHERE id = ANY(sqlc.arg(account_ids)::uuid[]);

@@ -56,7 +56,7 @@ func newSignInHandler(t *testing.T, service *fakeSignIn) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Channels: &fakeChannels{}, Authz: noOrganisations{}, Sessions: oneSession{}, SignIn: service})
+	handler, err := NewHandler("", catalogues, Services{Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}, Sessions: oneSession{}, SignIn: service})
 	if err != nil {
 		t.Fatal(err)
 	}

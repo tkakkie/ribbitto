@@ -25,7 +25,7 @@ imports `db/migrations`; the database must already be migrated.
 | `internal/realtime` | *(planned, M3)* The SSE hub: connections, fan-out, presence. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
 | `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
-| `web/static` | Embedded CSS and vendored JavaScript. | — |
+| `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |
 
 Sub-packages of a layer may import each other. depguard in `.golangci.yml`
 enforces the part of this table that matters most, and a violating import
@@ -80,7 +80,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `identity`: accounts, passwords, sessions, signing in, sign-up | `app/auth`, `app/signup`; `infra/postgres` `account.go`, `session.go`, `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
 | `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go`, `web/view/channel.templ` | `channel` |
-| `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`; `db/queries/message.sql` | `message` |
+| `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/view/channel.templ` | `message` |
 | `realtime` | `internal/realtime` *(M3)* | none |
 
 The shared kernel, which any feature may use: the IDs and value types in
@@ -94,8 +94,13 @@ then the message). Message references to channels and `org`'s members use
 composite foreign keys including `organization_id`. History uses one
 newest-first keyset query, `ListMessagesBefore`, with a nullable upper
 sequence bound for the latest page, and no author joins. The use cases
-(`app/channel`, `app/message`) exist; author names come through `org` and
-`identity` with the message list (#78).
+(`app/channel`, `app/message`) exist. `message.Reader` resolves authors through
+org's exported `member.Directory.LookupMembers` (member IDs filtered by
+organisation, returning handles and account IDs), then identity's
+`auth.Directory.LookupDisplayNames` (only those account IDs). Their adapters
+own the queries in `member.sql` and `account.sql`; message never queries
+those tables. `MessageReader` shares one read-only repeatable-read transaction
+across history and both lookups; channel/sidebar reads still precede it.
 
 **Known exceptions.** Three flows write another feature's tables in one
 transaction today:

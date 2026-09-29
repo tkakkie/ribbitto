@@ -50,8 +50,9 @@ that the body does not start or end with ASCII white space; PostgreSQL
 
 ## Showing bodies
 
-*Planned, #78:* no view shows message bodies yet. When the message list does,
-it must escape each body with templ at render time (never `templ.Raw`),
-keep its line breaks, and show it with `dir="auto"` or inside `<bdi>`, so its
-direction — including any isolates it contains — cannot leak into the
-surrounding interface.
+The channel page shows the latest 50 messages, oldest first. templ escapes
+stored bodies at render time (never `templ.Raw`); `whitespace-pre-wrap`
+keeps line breaks and `dir="auto"` isolates each body's direction. DOM ids
+use `message.id`. Authors use `view.MemberName` with current display names
+and handles. Times have a UTC `<time datetime>` fallback; an external script
+shows browser-local time. The composer is the remaining part of #78.

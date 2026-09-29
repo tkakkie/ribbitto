@@ -10,6 +10,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -23,9 +24,15 @@ type ChannelService interface {
 	Create(context.Context, authz.Membership, string) (domain.Channel, error)
 }
 
+// MessageReader provides the recent conversation with author names.
+type MessageReader interface {
+	Latest(context.Context, authz.Membership, domain.ID) ([]message.Entry, error)
+}
+
 type channelPages struct {
-	pages   *pageRenderer
-	service ChannelService
+	messages MessageReader
+	pages    *pageRenderer
+	service  ChannelService
 }
 
 func (p channelPages) home(w http.ResponseWriter, r *http.Request, m authz.Membership) {
@@ -97,11 +104,16 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Mem
 		serverError(w, r, "listing channels", err)
 		return
 	}
+	entries, err := p.messages.Latest(r.Context(), m, c.ID)
+	if err != nil {
+		serverError(w, r, "listing messages", err)
+		return
+	}
 	account, _ := middleware.Account(r.Context())
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		return view.Channel(url, view.ChannelPage{
 			Organization: m.Organization, DisplayName: account.DisplayName, Handle: m.Member.Handle, Role: string(m.Member.Role),
-			Current: c, Channels: channels, Name: name, Error: message,
+			Current: c, Channels: channels, Name: name, Error: message, Messages: entries,
 		})
 	})
 }

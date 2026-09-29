@@ -129,3 +129,6 @@ other = "チャンネル名は表示可能な1〜80文字で入力してくだ�
 
 ["channel.error.name_taken"]
 other = "この名前のチャンネルは既に存在します。"
+
+[message.list]
+other = "メッセージ"

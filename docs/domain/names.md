@@ -59,7 +59,9 @@ The domain is the gate for new names.
 **Showing names.** Views show a member through `view.MemberName`, which puts
 the display name in its own `<bdi>` so right-to-left text cannot reorder the
 text around it. A blank-looking display name — including one stored before
-this rule — is shown as `@handle` alone.
+this rule — is shown as `@handle` alone. Channel message authors use the same component.
+The page resolves member IDs to handles and account IDs through org, then
+looks up display names through identity, in two batches.
 
 ## Handles
 

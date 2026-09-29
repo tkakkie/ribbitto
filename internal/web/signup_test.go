@@ -55,7 +55,7 @@ func TestSignUp(t *testing.T) {
 		{"session failure", &fakeSetup{open: true, sessionErr: errors.New("private detail")}, 500, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			services := Services{Channels: &fakeChannels{}, Authz: noOrganisations{}, Sessions: noSessions{}, SetupSessions: tt.service, SignIn: &fakeSignIn{err: auth.ErrInvalidInput}}
+			services := Services{Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}, Sessions: noSessions{}, SetupSessions: tt.service, SignIn: &fakeSignIn{err: auth.ErrInvalidInput}}
 			if tt.service != nil {
 				services.SignUp = fakeSignUp{tt.service}
 			}
@@ -156,7 +156,7 @@ func TestSignUpAvailabilityBeforeSession(t *testing.T) {
 				resolver := &countingResolver{}
 				handler, err := NewHandler("", catalogues, Services{
 					Authz:    noOrganisations{},
-					Channels: &fakeChannels{},
+					Messages: fakeMessages{}, Channels: &fakeChannels{},
 					Sessions: resolver, SignIn: &fakeSignIn{}, SignUp: tt.signUp, SetupSessions: &fakeSetup{},
 				})
 				if err != nil {

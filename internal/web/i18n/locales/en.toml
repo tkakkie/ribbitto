@@ -4,6 +4,9 @@ other = "ribbitto"
 ["hello.title"]
 other = "Hello from ribbitto"
 
+["hello.page_title"]
+other = "Home"
+
 ["hello.tagline"]
 other = "A small, self-hostable team chat with a frog on the logo."
 
@@ -18,6 +21,9 @@ other = "Sign out"
 
 ["signin.title"]
 other = "Sign in to ribbitto"
+
+["signin.page_title"]
+other = "Sign in"
 
 ["signin.email"]
 other = "Email address"
@@ -36,6 +42,9 @@ other = "The email address or password is incorrect."
 
 ["setup.title"]
 other = "Set up ribbitto"
+
+["setup.page_title"]
+other = "Set up"
 
 ["setup.submit"]
 other = "Create organisation and sign in"
@@ -84,6 +93,9 @@ other = "Use a password of 15–128 characters."
 
 ["signup.title"]
 other = "Sign up for ribbitto"
+
+["signup.page_title"]
+other = "Sign up"
 
 ["signup.submit"]
 other = "Create account and sign in"

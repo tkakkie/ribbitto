@@ -12,7 +12,7 @@ type SignInForm struct {
 
 // SignIn renders the sign-in page.
 templ SignIn(stylesheetURL string, form SignInForm) {
-	@layout(stylesheetURL) {
+	@layout(stylesheetURL, i18n.T(ctx, "signin.page_title")) {
 		<main class="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-8">
 			<h1 class="text-heading font-bold text-fg">{ i18n.T(ctx, "signin.title") }</h1>
 			if form.Error != "" {

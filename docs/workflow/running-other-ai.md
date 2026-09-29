@@ -103,6 +103,15 @@ The prompt carries the issue and its review comments, plus these rules:
 - **Handoff.** Codex does not commit, push or use GitHub. It leaves the
   changes in the working tree and writes a draft PR description to an
   untracked `PR_BODY.md`.
+- **Stay inside the handoff** ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)).
+  No other AI CLIs (claude, grok), no browser or Computer Use: reviews and
+  browser checks are the orchestrator's. Never re-sign, patch or replace a
+  tool binary to make it run; report the failure instead. Put scratch files
+  outside the worktree when the runner allows it; this profile does not, so
+  Codex may create them in the worktree but deletes them before running
+  checks such as `go test ./...` and before handing off. Git-ignored places
+  such as `bin/` are no exception: builds and tests still pick files up
+  there. The orchestrator follows the same rules for tools that will not run.
 
 The orchestrator then:
 

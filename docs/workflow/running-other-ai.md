@@ -102,7 +102,17 @@ The prompt carries the issue and its review comments, plus these rules:
   are done. If port 55433 is taken, pick another and change both commands.
 - **Handoff.** Codex does not commit, push or use GitHub. It leaves the
   changes in the working tree and writes a draft PR description to an
-  untracked `PR_BODY.md`.
+  untracked `PR_BODY.md`. It also stays inside the handoff on the machine
+  ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
+  no other AI CLIs (claude, grok), no browser or Computer Use, since reviews
+  and browser checks are the orchestrator's. It never re-signs, patches or
+  replaces a tool binary to make it run, and reports the failure instead. It
+  puts scratch files outside the worktree when the runner allows it; this
+  profile does not, so Codex may create them in the worktree but deletes
+  them before running checks such as `go test ./...` and before handing off.
+  Git-ignored places such as `bin/` are no exception: builds and tests still
+  pick files up there. The orchestrator likewise reports a tool that will not
+  run instead of modifying it.
 
 The orchestrator then:
 

@@ -1,0 +1,77 @@
+package view
+
+import (
+	"fmt"
+	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
+
+// ChannelPage holds the sidebar, conversation and channel creation form.
+type ChannelPage struct {
+	Organization      domain.Organization
+	DisplayName, Handle, Role string
+	Current           domain.Channel
+	Channels          []domain.Channel
+	Name, Error       string
+}
+
+// ChannelURL identifies a channel by its stable UUID, never its name.
+func ChannelURL(slug string, id domain.ID) string {
+	return fmt.Sprintf("/organizations/%s/channels/%x-%x-%x-%x-%x", slug, id[:4], id[4:6], id[6:8], id[8:10], id[10:])
+}
+
+// Channel renders the desktop chat layout.
+templ Channel(stylesheetURL string, page ChannelPage) {
+	@layout(stylesheetURL) {
+		<div class="flex min-h-screen text-body">
+			<nav aria-label={ i18n.T(ctx, "channel.organizations") } class="w-17 shrink-0 border-r border-border bg-rail p-3">
+				<ul>
+					<li><a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/") } aria-label={ page.Organization.Name } class="flex min-h-11 items-center justify-center rounded-md bg-brand px-2 font-semibold text-on-brand">{ string([]rune(page.Organization.Name)[:1]) }</a></li>
+				</ul>
+			</nav>
+			<aside class="flex w-68 shrink-0 flex-col border-r border-border bg-sidebar">
+				<header class="border-b border-border px-4 py-3">
+					<p class="break-words text-title font-semibold">{ page.Organization.Name }</p>
+				</header>
+				<nav aria-label={ i18n.T(ctx, "channel.list") } class="p-3">
+					<p class="px-3 pb-2 text-caption font-semibold text-muted">{ i18n.T(ctx, "channel.list") }</p>
+					<ul class="flex flex-col gap-1">
+						for _, c := range page.Channels {
+							<li>
+								if c.ID == page.Current.ID {
+									<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, c.ID)) } aria-current="page" class="block break-words rounded-sm border-l-3 border-brand bg-selected px-3 py-2 font-semibold text-on-selected">{ c.Name }</a>
+								} else {
+									<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, c.ID)) } class="block break-words rounded-sm border-l-3 border-transparent px-3 py-2 text-fg hover:bg-surface">{ c.Name }</a>
+								}
+							</li>
+						}
+					</ul>
+				</nav>
+				<form method="post" action={ "/organizations/" + page.Organization.Slug + "/channels" } class="flex flex-col gap-2 border-t border-border p-4">
+					<label for="channel-name" class="font-semibold">{ i18n.T(ctx, "channel.name") }</label>
+					<input id="channel-name" name="name" value={ page.Name } required aria-invalid={ fmt.Sprint(page.Error != "") } aria-describedby="channel-name-help" class="min-h-11 w-full rounded-md border border-border-strong bg-input px-3 py-2 text-fg"/>
+					if page.Error != "" {
+						<p id="channel-name-help" role="alert" class="text-danger">{ i18n.T(ctx, page.Error) }</p>
+					} else {
+						<p id="channel-name-help" class="text-caption text-muted">{ i18n.T(ctx, "channel.name_help") }</p>
+					}
+					<button type="submit" class="min-h-11 rounded-md bg-brand px-3 py-2 font-semibold text-on-brand">{ i18n.T(ctx, "channel.create") }</button>
+				</form>
+				<footer class="mt-auto flex flex-col gap-2 border-t border-border p-4">
+					<p class="break-words text-caption text-muted">
+						// templ drops the white space around a component call, so the
+						// spaces are part of the text.
+						{ i18n.T(ctx, "hello.signed_in_as") + " " }
+						@MemberName(page.DisplayName, page.Handle)
+						{ " · " + i18n.T(ctx, "org.role." + page.Role) }
+					</p>
+					@SignOutButton()
+				</footer>
+			</aside>
+			<main class="flex min-w-0 flex-1 flex-col bg-bg">
+				<header class="border-b border-border px-6 py-3"><h1 class="break-words text-title font-semibold">{ page.Current.Name }</h1></header>
+				<div class="flex flex-1 items-center justify-center p-8"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
+			</main>
+		</div>
+	}
+}

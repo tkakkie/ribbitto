@@ -105,3 +105,27 @@ other = "試行回数が多すぎます"
 
 ["ratelimit.message"]
 other = "しばらく待ってから、もう一度お試しください。"
+
+["channel.organizations"]
+other = "組織"
+
+["channel.list"]
+other = "チャンネル"
+
+["channel.name"]
+other = "チャンネル名"
+
+["channel.name_help"]
+other = "表示可能な1〜80文字。"
+
+["channel.create"]
+other = "チャンネルを作成"
+
+["channel.empty"]
+other = "まだメッセージはありません。"
+
+["channel.error.name"]
+other = "チャンネル名は表示可能な1〜80文字で入力してください。"
+
+["channel.error.name_taken"]
+other = "この名前のチャンネルは既に存在します。"

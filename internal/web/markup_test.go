@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
+	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -242,7 +244,7 @@ func TestPagesMarkup(t *testing.T) {
 		fieldErrors[field] = errors.New("invalid")
 	}
 	base := func() Services {
-		return Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Authz: noOrganisations{}}
+		return Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Channels: &fakeChannels{}, Authz: noOrganisations{}}
 	}
 	withSetup := func(err error) func() Services {
 		return func() Services {
@@ -264,6 +266,13 @@ func TestPagesMarkup(t *testing.T) {
 		return func() Services {
 			s := base()
 			s.Sessions, s.Authz = oneSession{}, authorizer
+			return s
+		}
+	}
+	withChannelError := func(err error) func() Services {
+		return func() Services {
+			s := signedIn(oneOrganisation{})()
+			s.Channels = &fakeChannels{createErr: err}
 			return s
 		}
 	}
@@ -293,10 +302,12 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "setup, wrong token", route: "POST /setup", services: withSetup(setup.ErrToken), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity},
 		{name: "sign-up", route: "GET /signup", services: withSignUp(true, nil), method: "GET", path: "/signup"},
 		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 4},
-		{name: "organisation page", route: "GET /organizations/{slug}/{$}", services: signedIn(oneOrganisation{}), method: "GET", path: "/organizations/acme/", cookie: true},
+		{name: "channel", route: "GET /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
+		{name: "channel invalid name", route: "POST /organizations/{slug}/channels", services: withChannelError(channel.ErrInvalidName), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {""}}, status: http.StatusUnprocessableEntity},
+		{name: "channel duplicate name", route: "POST /organizations/{slug}/channels", services: withChannelError(channel.ErrNameTaken), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"雑談"}}, status: http.StatusUnprocessableEntity},
 	}
 	// Routes that answer with a redirect or an empty status, never a page.
-	noPage := []string{"POST /signout"}
+	noPage := []string{"POST /signout", "GET /organizations/{slug}/{$}"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
 	if err != nil {

@@ -3,20 +3,26 @@ package web
 import (
 	"bytes"
 	"context"
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
+	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
+	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
 // TestOrgRoutesAgainstPostgreSQL runs the real session and authorisation
@@ -49,6 +55,13 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	channels := channel.New(postgres.NewChannelStore(pool))
+	var acmeChannel, globexChannel domain.ID
+	for org, dest := range map[domain.ID]*domain.ID{acme: &acmeChannel, globex: &globexChannel} {
+		if err := pool.QueryRow(ctx, "INSERT INTO channel (organization_id, name, is_default) VALUES ($1, '雑談', true) RETURNING id", org).Scan(dest); err != nil {
+			t.Fatal(err)
+		}
+	}
 	var now time.Time
 	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&now); err != nil {
 		t.Fatal(err)
@@ -73,13 +86,14 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Sessions: sessions, SignIn: &fakeSignIn{}, Authz: authz.New(postgres.NewAuthzStore(pool))})
+	handler, err := NewHandler("", catalogues, Services{Sessions: sessions, SignIn: &fakeSignIn{}, Channels: channels, Authz: authz.New(postgres.NewAuthzStore(pool))})
 	if err != nil {
 		t.Fatal(err)
 	}
 	get := func(method, path, cookie string, at time.Time) *httptest.ResponseRecorder {
 		clock = at
-		r := httptest.NewRequest(method, path, nil)
+		r := httptest.NewRequest(method, path, strings.NewReader(url.Values{"name": {"新しいチャンネル"}}.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		if cookie != "" {
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: cookie})
 		}
@@ -88,12 +102,15 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return w
 	}
 
-	routes := orgRoutes(&pageRenderer{})
+	routes := orgRoutes(&pageRenderer{}, channels)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
 	for _, route := range routes {
 		path := "/organizations/acme" + strings.ReplaceAll(route.path, "{$}", "")
+		if strings.Contains(path, "{channelID}") {
+			path = view.ChannelURL("acme", acmeChannel)
+		}
 		for _, tt := range []struct {
 			name   string
 			cookie string
@@ -115,10 +132,47 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 		t.Run(route.method+" "+path+" member", func(t *testing.T) {
 			w := get(route.method, path, aliceToken, now)
-			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") {
-				t.Fatalf("status %d, body %q", w.Code, w.Body.String())
+			switch route.method + " " + route.path {
+			case "GET /{$}":
+				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != view.ChannelURL("acme", acmeChannel) {
+					t.Fatalf("default: %d %s", w.Code, w.Header().Get("Location"))
+				}
+			case "GET /channels/{channelID}":
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") || !strings.Contains(w.Body.String(), "雑談") {
+					t.Fatalf("channel: %d %s", w.Code, w.Body.String())
+				}
+			case "POST /channels":
+				created, err := channels.List(ctx, authz.Membership{Organization: domain.Organization{ID: acme}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				var location string
+				for _, c := range created {
+					if c.Name == "新しいチャンネル" {
+						location = view.ChannelURL("acme", c.ID)
+					}
+				}
+				if location == "" || w.Code != http.StatusSeeOther || w.Header().Get("Location") != location {
+					t.Fatalf("create: %d %s", w.Code, w.Header().Get("Location"))
+				}
+			default:
+				t.Fatal("route lacks a success expectation")
 			}
 		})
+	}
+
+	t.Run("member cannot read another organisation's channel under own URL", func(t *testing.T) {
+		w := get(http.MethodGet, view.ChannelURL("acme", globexChannel), aliceToken, now)
+		if w.Code != http.StatusNotFound || w.Body.String() != "404 page not found\n" {
+			t.Fatalf("status %d, body %q", w.Code, w.Body.String())
+		}
+	})
+	for _, route := range routes {
+		path := "/organizations/missing" + strings.ReplaceAll(route.path, "{$}", "")
+		path = strings.ReplaceAll(path, "{channelID}", strings.TrimPrefix(view.ChannelURL("acme", acmeChannel), "/organizations/acme/channels/"))
+		if w := get(route.method, path, aliceToken, now); w.Code != http.StatusNotFound {
+			t.Fatalf("unknown organisation: %d", w.Code)
+		}
 	}
 
 	t.Run("legacy path is unknown even for a member", func(t *testing.T) {
@@ -163,9 +217,9 @@ func TestHomeSignUpLink(t *testing.T) {
 	}
 	for _, open := range []bool{true, false} {
 		handler, err := NewHandler("", catalogues, Services{
-			Sessions:      noSessions{},
-			SignIn:        &fakeSignIn{},
-			Authz:         noOrganisations{},
+			Sessions: noSessions{},
+			SignIn:   &fakeSignIn{},
+			Channels: &fakeChannels{}, Authz: noOrganisations{},
 			SignUp:        fakeSignUp{&fakeSetup{open: open}},
 			SetupSessions: &fakeSetup{},
 		})
@@ -181,12 +235,12 @@ func TestHomeSignUpLink(t *testing.T) {
 	}
 }
 
-func TestOrgHomeRendering(t *testing.T) {
+func TestChannelRendering(t *testing.T) {
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}})
+	handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Channels: &fakeChannels{}, Authz: oneOrganisation{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +249,7 @@ func TestOrgHomeRendering(t *testing.T) {
 		"en": {"Acme Corporation", `Signed in as <bdi class="font-semibold text-fg">Alice</bdi> <span class="text-muted">@alice</span> · Owner`, "Sign out"},
 		"ja": {"Acme Corporation", `サインイン中: <bdi class="font-semibold text-fg">Alice</bdi> <span class="text-muted">@alice</span> · オーナー`, "サインアウト"},
 	} {
-		r := httptest.NewRequest(http.MethodGet, "/organizations/acme/", nil)
+		r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", domain.ID{1}), nil)
 		r.Header.Set("Accept-Language", lang)
 		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 		w := httptest.NewRecorder()
@@ -210,6 +264,31 @@ func TestOrgHomeRendering(t *testing.T) {
 		if w.Code != http.StatusOK || !strings.Contains(body, `<form method="post" action="/signout">`) {
 			t.Fatalf("%s: status %d, body %s", lang, w.Code, body)
 		}
+		if !strings.Contains(body, "雑談 &lt;script&gt;alert(1)&lt;/script&gt;") || strings.Contains(body, "<script>alert(1)</script>") {
+			t.Fatal("channel name was not escaped")
+		}
+		doc, err := html.Parse(strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		selected := 0
+		for n := range doc.Descendants() {
+			if attr(n, "aria-current") == "page" {
+				selected++
+				if n.DataAtom != atom.A || attr(n, "href") != view.ChannelURL("acme", domain.ID{1}) {
+					t.Fatal("wrong current channel link")
+				}
+				for _, class := range []string{"text-on-selected", "border-l-3", "border-brand"} {
+					if !slices.Contains(strings.Fields(attr(n, "class")), class) {
+						t.Errorf("selected link lacks %s", class)
+					}
+				}
+			}
+		}
+		if selected != 1 {
+			t.Fatalf("%d selected channels", selected)
+		}
+
 		for _, text := range texts {
 			if !strings.Contains(body, text) {
 				t.Errorf("%s page lacks %q", lang, text)

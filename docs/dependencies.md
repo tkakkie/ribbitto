@@ -16,6 +16,7 @@ package, or SQL access to tables.
 ```text
 cmd/ribbitto -> internal/app/auth
 cmd/ribbitto -> internal/app/authz
+cmd/ribbitto -> internal/app/channel
 cmd/ribbitto -> internal/app/setup
 cmd/ribbitto -> internal/app/signup
 cmd/ribbitto -> internal/infra/postgres
@@ -48,6 +49,7 @@ internal/infra/postgres/pgtest -> db/migrations
 internal/infra/postgres/pgtest -> internal/infra/postgres
 internal/web -> internal/app/auth
 internal/web -> internal/app/authz
+internal/web -> internal/app/channel
 internal/web -> internal/app/setup
 internal/web -> internal/app/signup
 internal/web -> internal/domain

@@ -46,7 +46,7 @@ func TestMessageListHandler(t *testing.T) {
 		reader fakeMessages
 		status int
 	}{
-		{"populated", populatedMessages(), 200}, {"read failure", fakeMessages{err: errors.New("offline")}, 500},
+		{"populated", populatedMessages(), 200}, {"empty", fakeMessages{}, 200}, {"read failure", fakeMessages{err: errors.New("offline")}, 500},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}, Channels: &fakeChannels{}, Messages: tt.reader})
@@ -64,7 +64,14 @@ func TestMessageListHandler(t *testing.T) {
 				return
 			}
 			body := w.Body.String()
-			for _, want := range []string{fmt.Sprintf(`id="message-%x"`, domain.ID{8}), `dir="auto"`, `whitespace-pre-wrap`, "&lt;script&gt;bad()&lt;/script&gt;\nمرحبا\u2069", `datetime="2026-09-29T12:00:00Z"`, "2026-09-29 12:00:00 UTC", `>مريم</bdi>`, "@author", "@legacy", `src="/static/message-time-v1.js" nonce="` + responseNonce(t, w) + `"`} {
+			// An empty channel still loads it: messages swapped in later need it.
+			if script := `src="/static/message-time-v1.js" nonce="` + responseNonce(t, w) + `"`; !strings.Contains(body, script) {
+				t.Errorf("missing %q", script)
+			}
+			if len(tt.reader.entries) == 0 {
+				return
+			}
+			for _, want := range []string{fmt.Sprintf(`id="message-%x"`, domain.ID{8}), `dir="auto"`, `whitespace-pre-wrap`, "&lt;script&gt;bad()&lt;/script&gt;\nمرحبا\u2069", `datetime="2026-09-29T12:00:00Z"`, "2026-09-29 12:00:00 UTC", `>مريم</bdi>`, "@author", "@legacy"} {
 				if !strings.Contains(body, want) {
 					t.Errorf("missing %q", want)
 				}

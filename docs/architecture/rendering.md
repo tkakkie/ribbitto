@@ -34,8 +34,10 @@ inject its default inline indicator stylesheet. Do not use inline scripts,
 assets.
 
 Message timestamps use `message-time-v1.js`, loaded with the response nonce
-on populated channel pages. It formats `<time datetime>` values in browser
-local time, retaining the server's UTC fallback when JavaScript is disabled.
+on every channel page, empty or not, because htmx does not run scripts in
+swapped fragments. It formats `<time datetime>` values in browser local time
+on load and on each `htmx:load`, retaining the server's UTC fallback when
+JavaScript is disabled.
 Application script URLs are versioned because static assets are immutable.
 
 ## Languages

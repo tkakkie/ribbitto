@@ -87,8 +87,10 @@ templ Channel(stylesheetURL string, page ChannelPage) {
        </li>
       }
      </ol>
-     <script defer src="/static/message-time-v1.js" nonce={ templ.GetNonce(ctx) }></script>
     }
+    // Every channel page loads it: htmx will not run scripts in swapped
+    // fragments, and later messages can arrive in an empty channel.
+    <script defer src="/static/message-time-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 			</main>
 		</div>
 	}

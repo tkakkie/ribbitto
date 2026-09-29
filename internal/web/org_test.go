@@ -301,7 +301,7 @@ func TestChannelRendering(t *testing.T) {
 		// The signed-in organisation page gets the same security headers
 		// and script nonces as every other page (TestHTMLSecurity).
 		nonce := responseNonce(t, w)
-		if strings.Count(body, ` nonce="`+nonce+`"`) != 3 {
+		if scripts := strings.Count(body, "<script "); scripts < 4 || strings.Count(body, ` nonce="`+nonce+`"`) != scripts {
 			t.Errorf("%s: scripts lack the response nonce", lang)
 		}
 		if w.Code != http.StatusOK || !strings.Contains(body, `<form method="post" action="/signout">`) {

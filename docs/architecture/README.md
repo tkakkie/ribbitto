@@ -22,7 +22,7 @@ It is the only package that knows every layer.
 | `internal/realtime` | *(planned, M3)* The SSE hub: connections, fan-out, presence. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
 | `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
-| `web/static` | Embedded CSS and vendored JavaScript. | — |
+| `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |
 
 Sub-packages of a layer may import each other. depguard in `.golangci.yml`
 enforces the part of this table that matters most, and a violating import

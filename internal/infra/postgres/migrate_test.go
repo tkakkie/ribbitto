@@ -18,6 +18,7 @@ import (
 func TestMigrations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
+	// Raw SQL probes evolving schemas and slug constraints without current-schema fixtures.
 	pool := pgtest.NewEmpty(t)
 	var empty bool
 	if err := pool.QueryRow(ctx, "SELECT to_regclass('public.organization') IS NULL AND to_regclass('public.goose_db_version') IS NULL").Scan(&empty); err != nil || !empty {

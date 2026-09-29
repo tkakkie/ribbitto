@@ -18,22 +18,18 @@ func TestMessagePaging(t *testing.T) {
 	ctx := t.Context()
 	memberships := map[string]authz.Membership{}
 	for _, slug := range []string{"acme", "globex"} {
-		var org, account, member domain.ID
-		requireAccountSchema(t, pool.QueryRow(ctx, "INSERT INTO organization (slug, name) VALUES ($1, $1) RETURNING id", slug).Scan(&org))
-		requireAccountSchema(t, pool.QueryRow(ctx, "INSERT INTO account (email, display_name, password_hash) VALUES ($1 || '@example.org', $1, '$argon2id$x') RETURNING id", slug).Scan(&account))
-		requireAccountSchema(t, pool.QueryRow(ctx, "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $2, 'owner', 1, 'owner') RETURNING id", org, account).Scan(&member))
-		requireAccountSchema(t, pool.QueryRow(ctx, "UPDATE organization SET event_seq = 1 WHERE id = $1 RETURNING id", org).Scan(&org))
+		org := pgtest.Organization(t, ctx, pool, slug, slug, 1)
+		account := pgtest.Account(t, ctx, pool, slug+"@example.org", slug)
+		member := pgtest.Member(t, ctx, pool, org, account, domain.RoleOwner, "owner", 1)
 		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: org, Slug: slug}, Member: domain.Member{ID: member, OrganizationID: org}}
 	}
 	acme, globex := memberships["acme"], memberships["globex"]
 	channels := map[string]domain.ID{}
 	for i, name := range []string{"empty", "exact", "partial", "noise"} {
-		ch, err := postgres.NewChannelStore(pool).CreateChannel(ctx, acme.Organization.ID, name, i == 0)
-		requireAccountSchema(t, err)
+		ch := pgtest.Channel(t, ctx, pool, acme.Organization.ID, name, i == 0)
 		channels[name] = ch.ID
 	}
-	foreign, err := postgres.NewChannelStore(pool).CreateChannel(ctx, globex.Organization.ID, appchannel.DefaultName, true)
-	requireAccountSchema(t, err)
+	foreign := pgtest.Channel(t, ctx, pool, globex.Organization.ID, appchannel.DefaultName, true)
 
 	// Interleave posts so that every channel's event_seq values have gaps
 	// filled by another channel's, and globex reuses acme's numbers.
@@ -46,15 +42,15 @@ func TestMessagePaging(t *testing.T) {
 			if i < sizes[name] {
 				body := fmt.Sprintf("%s %d", name, i)
 				_, err := service.Post(ctx, acme, channels[name], body)
-				requireAccountSchema(t, err)
+				requireNoError(t, err)
 				posted[name] = append(posted[name], body)
 			}
 		}
 		if i%10 == 0 {
 			_, err := service.Post(ctx, acme, channels["noise"], "noise")
-			requireAccountSchema(t, err)
+			requireNoError(t, err)
 			m, err := service.Post(ctx, globex, foreign.ID, "foreign")
-			requireAccountSchema(t, err)
+			requireNoError(t, err)
 			foreignSeqs = append(foreignSeqs, m.EventSeq)
 		}
 	}
@@ -100,7 +96,7 @@ func TestMessagePaging(t *testing.T) {
 	// organisation still reads the URL channel within the member's
 	// organisation, and a foreign membership cannot read acme's channel.
 	noise, err := reader.Before(ctx, acme, channels["noise"], nil)
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	for _, before := range []int64{noise.Entries[len(noise.Entries)-1].EventSeq, foreignSeqs[len(foreignSeqs)-1]} {
 		page, err := reader.Before(ctx, acme, channels["exact"], &before)
 		if err != nil || len(page.Entries) == 0 {

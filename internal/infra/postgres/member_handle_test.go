@@ -31,6 +31,7 @@ func TestMemberHandleUpgrade(t *testing.T) {
 	if _, err := provider.UpTo(ctx, 3); err != nil {
 		t.Fatal(err)
 	}
+	// Raw SQL creates pre-handle members with adversarial IDs for the upgrade.
 	// Ids sharing a long prefix: a placeholder cut from the id would collide.
 	_, err = pool.Exec(ctx, `
 		INSERT INTO organization (id, slug, name) VALUES

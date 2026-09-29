@@ -20,15 +20,16 @@ import (
 func TestSetupDefaultChannelRollback(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
+	// Raw SQL installs an adversarial trigger to exercise setup rollback.
 	_, err := pool.Exec(ctx, `
 		CREATE FUNCTION refuse_channel() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'refused'; END $$;
 		CREATE TRIGGER refuse_channel BEFORE INSERT ON channel FOR EACH ROW EXECUTE FUNCTION refuse_channel()`)
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	if _, err := postgres.NewSetupStore(pool).Create(ctx, "Example", "example", "owner@example.org", "Owner", "owner", "$argon2id$test"); err == nil {
 		t.Fatal("setup succeeded without its default channel")
 	}
 	var rows int
-	requireAccountSchema(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM organization) + (SELECT count(*) FROM account) + (SELECT count(*) FROM member) + (SELECT count(*) FROM setup) + (SELECT count(*) FROM channel)").Scan(&rows))
+	requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM organization) + (SELECT count(*) FROM account) + (SELECT count(*) FROM member) + (SELECT count(*) FROM setup) + (SELECT count(*) FROM channel)").Scan(&rows))
 	if rows != 0 {
 		t.Fatalf("%d rows left behind", rows)
 	}
@@ -56,6 +57,7 @@ func TestDefaultChannelBackfill(t *testing.T) {
 	// channel); globex: a fixture without setup (setup is one-time);
 	// initech: a non-default "general" already exists; hooli: already has a
 	// default under another name.
+	// Raw SQL preserves pre-upgrade states that current-schema fixtures cannot express.
 	_, err = pool.Exec(ctx, `
 		INSERT INTO organization (slug, name) VALUES ('acme', 'Acme'), ('globex', 'Globex'), ('initech', 'Initech'), ('hooli', 'Hooli');
 		INSERT INTO setup (organization_id) SELECT id FROM organization WHERE slug = 'acme';
@@ -111,17 +113,15 @@ func TestDefaultChannelBackfill(t *testing.T) {
 func TestChannelService(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	var acme, globex domain.ID
-	requireAccountSchema(t, pool.QueryRow(ctx, "WITH o AS (INSERT INTO organization (slug, name) VALUES ('acme', 'Acme'), ('globex', 'Globex') RETURNING id, slug) SELECT (SELECT id FROM o WHERE slug = 'acme'), (SELECT id FROM o WHERE slug = 'globex')").Scan(&acme, &globex))
+	acme := pgtest.Organization(t, ctx, pool, "acme", "Acme", 0)
+	globex := pgtest.Organization(t, ctx, pool, "globex", "Globex", 0)
 	member := func(org domain.ID) authz.Membership {
 		return authz.Membership{Organization: domain.Organization{ID: org}, Member: domain.Member{OrganizationID: org}}
 	}
 	store := postgres.NewChannelStore(pool)
 	service := appchannel.New(store)
 	for _, org := range []domain.ID{acme, globex} {
-		if _, err := store.CreateChannel(ctx, org, appchannel.DefaultName, true); err != nil {
-			t.Fatal(err)
-		}
+		pgtest.Channel(t, ctx, pool, org, appchannel.DefaultName, true)
 	}
 	secret, err := service.Create(ctx, member(globex), " 開発 ")
 	if err != nil || secret.Name != "開発" || secret.IsDefault {

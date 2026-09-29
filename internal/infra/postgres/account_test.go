@@ -17,9 +17,10 @@ import (
 func TestAccountSchema(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
+	// Raw SQL and queries exercise schema constraints directly, including invalid rows.
 	q := sqlcgen.New(pool)
 	var nullable int
-	requireAccountSchema(t, pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('account', 'session', 'member') AND is_nullable = 'YES'").Scan(&nullable))
+	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('account', 'session', 'member') AND is_nullable = 'YES'").Scan(&nullable))
 	if nullable != 0 {
 		t.Fatalf("new tables have %d nullable columns", nullable)
 	}
@@ -28,11 +29,11 @@ func TestAccountSchema(t *testing.T) {
 	var organizations []sqlcgen.Organization
 	for i, size := range []int{1, 50} {
 		email, err := domain.ValidateEmail([]string{"a@b", strings.Repeat("界", 84) + "@b"}[i])
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		name, err := domain.ValidateDisplayName(strings.Repeat("界", size))
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		account, err := q.CreateAccount(ctx, sqlcgen.CreateAccountParams{Email: email, DisplayName: name, PasswordHash: "$argon2id$test"})
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		accounts = append(accounts, account)
 		for _, lookup := range []func() (sqlcgen.Account, error){func() (sqlcgen.Account, error) { return q.GetAccountByEmail(ctx, email) }, func() (sqlcgen.Account, error) { return q.GetAccountByID(ctx, account.ID) }} {
 			got, err := lookup()
@@ -41,13 +42,13 @@ func TestAccountSchema(t *testing.T) {
 			}
 		}
 		name, err = domain.ValidateOrganizationName(strings.Repeat("界", []int{1, 100}[i]))
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		slug, err := domain.ValidateSlug(strings.Repeat("a", []int{1, 63}[i]))
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		_, err = pool.Exec(ctx, "INSERT INTO organization (slug, name) VALUES ($1, $2)", slug, name)
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		org, err := q.GetOrganizationBySlug(ctx, slug)
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		organizations = append(organizations, org)
 	}
 	org, other := organizations[0], organizations[1]
@@ -62,7 +63,7 @@ func TestAccountSchema(t *testing.T) {
 		t.Fatalf("other organization changed: %+v, %v", unchanged, err)
 	}
 	member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: accounts[0].ID, Role: "owner", JoinedEventSeq: 1, Handle: "owner"})
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	gotMember, err := q.GetMemberByOrganizationAndAccount(ctx, sqlcgen.GetMemberByOrganizationAndAccountParams{OrganizationID: org.ID, AccountID: accounts[0].ID})
 	if err != nil || gotMember != member {
 		t.Fatalf("member lookup: %+v, %v", gotMember, err)
@@ -73,7 +74,7 @@ func TestAccountSchema(t *testing.T) {
 	}
 	expiry := pgtype.Timestamptz{Time: time.Now().UTC().Add(time.Hour).Truncate(time.Microsecond), Valid: true}
 	session, err := q.CreateSession(ctx, sqlcgen.CreateSessionParams{TokenHash: make([]byte, 32), AccountID: accounts[1].ID, ExpiresAt: expiry})
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	for _, id := range []pgtype.UUID{accounts[0].ID, session.ID, member.ID} {
 		if !id.Valid || id.Bytes[6]>>4 != 7 {
 			t.Fatalf("expected UUIDv7, got %v", id)
@@ -126,9 +127,9 @@ func TestAccountSchema(t *testing.T) {
 			t.Fatalf("expired session returned: %+v, %v", got, err)
 		}
 	}
-	requireAccountSchema(t, q.DeleteExpiredSessions(ctx, expiry))
+	requireNoError(t, q.DeleteExpiredSessions(ctx, expiry))
 	_, err = q.GetSessionByTokenHash(ctx, sqlcgen.GetSessionByTokenHashParams{TokenHash: session.TokenHash, Now: session.CreatedAt})
-	requireAccountSchema(t, err) // Expiring exactly at the cutoff is not before it.
+	requireNoError(t, err) // Expiring exactly at the cutoff is not before it.
 	for i, remove := range []func() error{
 		func() error {
 			return q.DeleteExpiredSessions(ctx, pgtype.Timestamptz{Time: expiry.Time.Add(time.Second), Valid: true})
@@ -139,20 +140,20 @@ func TestAccountSchema(t *testing.T) {
 			return err
 		},
 	} {
-		requireAccountSchema(t, remove())
+		requireNoError(t, remove())
 		var count int
-		requireAccountSchema(t, pool.QueryRow(ctx, "SELECT count(*) FROM session WHERE account_id = $1", accounts[1].ID).Scan(&count))
+		requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM session WHERE account_id = $1", accounts[1].ID).Scan(&count))
 		if count != 0 {
 			t.Fatalf("sessions remain after deletion: %d", count)
 		}
 		if i < 2 {
 			_, err = q.CreateSession(ctx, sqlcgen.CreateSessionParams{TokenHash: session.TokenHash, AccountID: accounts[1].ID, ExpiresAt: expiry})
-			requireAccountSchema(t, err)
+			requireNoError(t, err)
 		}
 	}
 }
 
-func requireAccountSchema(t *testing.T, err error) {
+func requireNoError(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)

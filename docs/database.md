@@ -42,6 +42,16 @@ RIBBITTO_REQUIRE_DB=1 go test -count=1 -v ./internal/infra/postgres/...
 env -u RIBBITTO_TEST_DATABASE_URL -u RIBBITTO_REQUIRE_DB go test -count=1 -v ./internal/infra/postgres/...
 ```
 
+`pgtest.Organization`, `Account`, `Member` and `Channel` are composable
+fixtures: combine them for an organisation with an account, a member with a
+handle and a default channel, or call them separately for partial setups.
+`Organization` sets the supplied `event_seq`; `Member` sets the supplied role,
+handle and `joined_event_seq` without advancing it. `Account` uses a placeholder
+password hash and creates no membership. `Channel` uses the store with an
+explicit name/default flag and leaves sequences unchanged. None creates a
+setup row. Schema, migration and adversarial tests keep direct SQL to express
+states these helpers should not hide.
+
 `make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`
 and `db/queries/`. Commit its pgx/v5 output in `internal/infra/postgres/sqlcgen/`;
 CI rejects generation changes to committed files. Never edit generated files.

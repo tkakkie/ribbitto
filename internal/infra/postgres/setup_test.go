@@ -30,7 +30,7 @@ func (s setupBarrier) Open(ctx context.Context) (bool, error) {
 
 func TestSetup(t *testing.T) {
 	hasher, err := auth.NewHasher()
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	for _, attempts := range []int{1, 10} {
 		t.Run(fmt.Sprint(attempts), func(t *testing.T) {
 			pool := pgtest.New(t)
@@ -41,7 +41,7 @@ func TestSetup(t *testing.T) {
 			counts := func(want int) {
 				t.Helper()
 				var orgs, accounts, members, setups, defaults int
-				requireAccountSchema(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM account), (SELECT count(*) FROM member), (SELECT count(*) FROM setup), (SELECT count(*) FROM channel WHERE is_default AND name = 'general')").Scan(&orgs, &accounts, &members, &setups, &defaults))
+				requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM account), (SELECT count(*) FROM member), (SELECT count(*) FROM setup), (SELECT count(*) FROM channel WHERE is_default AND name = 'general')").Scan(&orgs, &accounts, &members, &setups, &defaults))
 				// A completed setup always comes with exactly one default channel.
 				if orgs != want || accounts != want || members != want || setups != want || defaults != want {
 					t.Fatalf("row counts: %d %d %d %d %d; want %d each", orgs, accounts, members, setups, defaults, want)
@@ -99,9 +99,9 @@ func TestSetup(t *testing.T) {
 			var seq, joined int64
 			var role, handle string
 			var completed bool
-			requireAccountSchema(t, pool.QueryRow(ctx, "SELECT s.organization_id, m.account_id, o.event_seq, m.joined_event_seq, m.role, m.handle, s.completed_at IS NOT NULL FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = s.organization_id WHERE s.id").Scan(&organizationID, &accountID, &seq, &joined, &role, &handle, &completed))
+			requireNoError(t, pool.QueryRow(ctx, "SELECT s.organization_id, m.account_id, o.event_seq, m.joined_event_seq, m.role, m.handle, s.completed_at IS NOT NULL FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = s.organization_id WHERE s.id").Scan(&organizationID, &accountID, &seq, &joined, &role, &handle, &completed))
 			account, err := sqlcgen.New(pool).GetAccountByID(ctx, accountID)
-			requireAccountSchema(t, err)
+			requireNoError(t, err)
 			matches, err := hasher.Verify(ctx, input.Password, account.PasswordHash)
 			if err != nil || !matches || seq != 1 || joined != 1 || role != "owner" || handle != "owner" || !completed || account.DisplayName != "Owner" || account.Email != strings.ToLower(strings.TrimSpace(account.Email)) {
 				t.Fatalf("invalid owner/setup: seq=%d joined=%d role=%s hash match=%t error=%v", seq, joined, role, matches, err)

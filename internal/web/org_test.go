@@ -31,6 +31,9 @@ import (
 func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
+	// Raw SQL on purpose: setup and sign-up create one organisation and join
+	// everyone to it, so they cannot build a second organisation (globex, with
+	// Bob) or an account with no membership (Carol, until she joins later).
 	var acme, globex, alice, bob, carol domain.ID
 	for _, q := range []struct {
 		dest *domain.ID

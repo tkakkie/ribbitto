@@ -69,7 +69,7 @@ func TestSetup(t *testing.T) {
 		{"session failure", &fakeSetup{open: true, sessionErr: errors.New("private detail")}, 500, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			services := Services{Posting: testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}, Sessions: noSessions{}, SignIn: &fakeSignIn{}, SetupSessions: tt.service}
+			services := testServices(func(s *Services) { s.SetupSessions = tt.service })
 			if tt.service != nil {
 				services.Setup = tt.service
 			}
@@ -159,7 +159,7 @@ func TestSetupAvailabilityBeforeSession(t *testing.T) {
 			t.Run(tt.name+" "+method, func(t *testing.T) {
 				// Every session lookup fails, as during a database outage.
 				resolver := &countingResolver{}
-				services := Services{Sessions: resolver, SignIn: &fakeSignIn{}, Posting: testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}, Setup: tt.setup}
+				services := testServices(func(s *Services) { s.Sessions, s.Setup = resolver, tt.setup })
 				if tt.setup != nil {
 					services.SetupSessions = tt.setup.(*fakeSetup)
 				}

@@ -16,7 +16,6 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -56,7 +55,6 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	channels := channel.New(postgres.NewChannelStore(pool))
 	var acmeChannel, globexChannel domain.ID
 	for org, dest := range map[domain.ID]*domain.ID{acme: &acmeChannel, globex: &globexChannel} {
 		if err := pool.QueryRow(ctx, "INSERT INTO channel (organization_id, name, is_default) VALUES ($1, '雑談', true) RETURNING id", org).Scan(dest); err != nil {
@@ -87,7 +85,8 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Sessions: sessions, SignIn: &fakeSignIn{}, Posting: message.New(postgres.NewPostingStore(pool)), Messages: postgres.MessageReader{Pool: pool}, Channels: channels, Authz: authz.New(postgres.NewAuthzStore(pool))})
+	services := postgresServices(t, pool, sessions, "", false)
+	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +95,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, method, path, cookie, url.Values{"name": {"新しいチャンネル"}, "body": {"posted through the page"}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, channels, postgres.MessageReader{Pool: pool}, message.New(postgres.NewPostingStore(pool)))
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Messages, services.Posting)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -140,7 +139,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())
 				}
 			case "POST /channels":
-				created, err := channels.List(ctx, authz.Membership{Organization: domain.Organization{ID: acme}})
+				created, err := services.Channels.List(ctx, authz.Membership{Organization: domain.Organization{ID: acme}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -277,13 +276,9 @@ func TestHomeSignUpLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, open := range []bool{true, false} {
-		handler, err := NewHandler("", catalogues, Services{
-			Sessions: noSessions{},
-			SignIn:   &fakeSignIn{},
-			Posting:  testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{},
-			SignUp:        fakeSignUp{&fakeSetup{open: open}},
-			SetupSessions: &fakeSetup{},
-		})
+		handler, err := NewHandler("", catalogues, testServices(func(s *Services) {
+			s.SignUp, s.SetupSessions = fakeSignUp{&fakeSetup{open: open}}, &fakeSetup{}
+		}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -301,7 +296,7 @@ func TestChannelRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Posting: testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: oneOrganisation{}})
+	handler, err := NewHandler("", catalogues, testServices(asAlice))
 	if err != nil {
 		t.Fatal(err)
 	}

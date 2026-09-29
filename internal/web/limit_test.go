@@ -30,19 +30,15 @@ func (c *countingSignIn) SignIn(ctx context.Context, email, password, previous s
 	return c.fakeSignIn.SignIn(ctx, email, password, previous)
 }
 
-func newLimitedHandler(t *testing.T, services Services) (http.Handler, *middleware.AuthLimits) {
+func newLimitedHandler(t *testing.T, overrides ...func(*Services)) (http.Handler, *middleware.AuthLimits) {
 	t.Helper()
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
+	services := testServices(overrides...)
 	services.Limits = middleware.NewAuthLimits(nil, func() time.Time { return now })
-	services.Posting = testPoster()
-	services.Sessions, services.Authz, services.Channels, services.Messages = noSessions{}, noOrganisations{}, &fakeChannels{}, fakeMessages{}
-	if services.SignIn == nil {
-		services.SignIn = &fakeSignIn{}
-	}
 	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
 		t.Fatal(err)
@@ -59,6 +55,11 @@ func postForm(handler http.Handler, path, body string) *httptest.ResponseRecorde
 	return w
 }
 
+// setupFrom serves setup and sign-up from one fake.
+func setupFrom(setup *fakeSetup) func(*Services) {
+	return func(s *Services) { s.Setup, s.SignUp, s.SetupSessions = setup, fakeSignUp{setup}, setup }
+}
+
 // drain empties a limiter's bucket for the test client.
 func drain(limiter *middleware.RateLimiter) {
 	for limiter.Allow(netip.MustParsePrefix("192.0.2.1/32")) {
@@ -67,7 +68,7 @@ func drain(limiter *middleware.RateLimiter) {
 
 func TestSignInRateLimit(t *testing.T) {
 	service := &countingSignIn{fakeSignIn: fakeSignIn{err: auth.ErrInvalidCredentials}}
-	handler, _ := newLimitedHandler(t, Services{SignIn: service})
+	handler, _ := newLimitedHandler(t, func(s *Services) { s.SignIn = service })
 	form := url.Values{"email": {"a@example.com"}, "password": {"wrong password 123"}}.Encode()
 	for i := range 5 {
 		if w := postForm(handler, "/signin", form); w.Code != http.StatusUnprocessableEntity {
@@ -95,7 +96,7 @@ func TestClosedRoutesIgnoreLimits(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			setup := &fakeSetup{open: tt.open}
-			handler, limits := newLimitedHandler(t, Services{Setup: setup, SignUp: fakeSignUp{setup}, SetupSessions: setup})
+			handler, limits := newLimitedHandler(t, setupFrom(setup))
 			drain(limits.Setup)
 			drain(limits.SignUp)
 			for _, body := range []string{"a=b", huge} {
@@ -111,7 +112,7 @@ func TestOpenRoutesLimitedBeforeWork(t *testing.T) {
 	for _, path := range []string{"/setup", "/signup"} {
 		t.Run(path, func(t *testing.T) {
 			setup := &fakeSetup{open: true}
-			handler, limits := newLimitedHandler(t, Services{Setup: setup, SignUp: fakeSignUp{setup}, SetupSessions: setup})
+			handler, limits := newLimitedHandler(t, setupFrom(setup))
 			drain(limits.Setup)
 			drain(limits.SignUp)
 			w := postForm(handler, path, "email=a%40example.com&password=long+enough+password")
@@ -141,7 +142,7 @@ func TestLimitedFormsAreNotParsed(t *testing.T) {
 	} {
 		t.Run(tt.path, func(t *testing.T) {
 			setup := &fakeSetup{open: true}
-			handler, limits := newLimitedHandler(t, Services{SignIn: &fakeSignIn{}, Setup: setup, SignUp: fakeSignUp{setup}, SetupSessions: setup})
+			handler, limits := newLimitedHandler(t, setupFrom(setup))
 			tt.drain(limits)
 			body := &readRecorder{}
 			r := httptest.NewRequest(http.MethodPost, tt.path, body)
@@ -178,7 +179,7 @@ func TestExhaustedNetworkLimit(t *testing.T) {
 	for _, path := range []string{"/setup", "/signup"} {
 		t.Run("closed "+path, func(t *testing.T) {
 			setup := &fakeSetup{}
-			handler, limits := newLimitedHandler(t, Services{Setup: setup, SignUp: fakeSignUp{setup}, SetupSessions: setup})
+			handler, limits := newLimitedHandler(t, setupFrom(setup))
 			drainNetwork(limits.Setup)
 			drainNetwork(limits.SignUp)
 			if w := post(handler, path, strings.NewReader("a=b")); w.Code != http.StatusNotFound {
@@ -190,7 +191,7 @@ func TestExhaustedNetworkLimit(t *testing.T) {
 		t.Run("open "+path, func(t *testing.T) {
 			signIn := &countingSignIn{}
 			setup := &fakeSetup{open: true}
-			handler, limits := newLimitedHandler(t, Services{SignIn: signIn, Setup: setup, SignUp: fakeSignUp{setup}, SetupSessions: setup})
+			handler, limits := newLimitedHandler(t, setupFrom(setup), func(s *Services) { s.SignIn = signIn })
 			drainNetwork(limits.SignIn)
 			drainNetwork(limits.Setup)
 			drainNetwork(limits.SignUp)

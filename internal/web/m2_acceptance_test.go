@@ -15,11 +15,7 @@ import (
 	"golang.org/x/net/html/atom"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/setup"
-	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -32,10 +28,6 @@ import (
 func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	hasher, err := auth.NewHasher()
-	if err != nil {
-		t.Fatal(err)
-	}
 	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
 	var logs bytes.Buffer
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&logs, nil)))
@@ -43,17 +35,9 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	const setupToken = "m2-acceptance-setup-token-0123456789"
-	services := Services{
-		Sessions: sessions, SetupSessions: sessions,
-		SignIn:   auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
-		Setup:    setup.New(postgres.NewSetupStore(pool), hasher, setupToken),
-		SignUp:   signup.New(postgres.NewSetupStore(pool), hasher, true),
-		Authz:    authz.New(postgres.NewAuthzStore(pool)),
-		Channels: channel.New(postgres.NewChannelStore(pool)),
-		Messages: postgres.MessageReader{Pool: pool},
-		Posting:  message.New(postgres.NewPostingStore(pool)),
-		Limits:   middleware.NewAuthLimits(nil, time.Now),
-	}
+	services := postgresServices(t, pool, sessions, setupToken, true)
+	// The real limits, as in production: the flow stays within them.
+	services.Limits = middleware.NewAuthLimits(nil, time.Now)
 	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
 		t.Fatal(err)

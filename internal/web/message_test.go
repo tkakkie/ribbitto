@@ -65,7 +65,7 @@ func TestMessageListHandler(t *testing.T) {
 		{"populated", populatedMessages(), 200}, {"empty", fakeMessages{}, 200}, {"read failure", fakeMessages{err: errors.New("offline")}, 500},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}, Channels: &fakeChannels{}, Posting: testPoster(), Messages: tt.reader})
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages = tt.reader }))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -134,7 +134,7 @@ func TestMessagePostHandler(t *testing.T) {
 		for _, hx := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/htmx=%t", tt.name, hx), func(t *testing.T) {
 				store := &postingStore{err: tt.storeErr}
-				h, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}, Channels: &fakeChannels{}, Messages: populatedMessages(), Posting: message.New(store)})
+				h, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages, s.Posting = populatedMessages(), message.New(store) }))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -220,7 +220,7 @@ func TestMessagePagingHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64
 			reader := fakeMessages{entries: []message.Entry{{Message: domain.Message{ID: domain.ID{8}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
-			handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}, Channels: &fakeChannels{}, Messages: reader, Posting: testPoster()})
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages = reader }))
 			if err != nil {
 				t.Fatal(err)
 			}

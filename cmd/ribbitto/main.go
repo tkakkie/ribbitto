@@ -18,6 +18,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -200,6 +201,7 @@ func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth
 		SetupSessions: sessions,
 		Authz:         authz.New(postgres.NewAuthzStore(pool)),
 		Messages:      postgres.MessageReader{Pool: pool},
+		Posting:       message.New(postgres.NewPostingStore(pool)),
 		Channels:      channel.New(postgres.NewChannelStore(pool)),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
 	})

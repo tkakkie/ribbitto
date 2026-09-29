@@ -15,6 +15,7 @@ type ChannelPage struct {
 	Current           domain.Channel
 	Channels          []domain.Channel
 	Name, Error       string
+	Body, BodyError string
  Messages []message.Entry
 }
 
@@ -26,13 +27,13 @@ func ChannelURL(slug string, id domain.ID) string {
 // Channel renders the desktop chat layout.
 templ Channel(stylesheetURL string, page ChannelPage) {
 	@layout(stylesheetURL) {
-		<div class="flex min-h-screen text-body">
+		<div class="flex h-dvh text-body">
 			<nav aria-label={ i18n.T(ctx, "channel.organizations") } class="w-17 shrink-0 border-r border-border bg-rail p-3">
 				<ul>
 					<li><a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/") } aria-label={ page.Organization.Name } class="flex min-h-11 items-center justify-center rounded-md bg-brand px-2 font-semibold text-on-brand">{ string([]rune(page.Organization.Name)[:1]) }</a></li>
 				</ul>
 			</nav>
-			<aside class="flex w-68 shrink-0 flex-col border-r border-border bg-sidebar">
+			<aside class="flex w-68 shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar">
 				<header class="border-b border-border px-4 py-3">
 					<p class="break-words text-title font-semibold">{ page.Organization.Name }</p>
 				</header>
@@ -71,10 +72,11 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 					@SignOutButton()
 				</footer>
 			</aside>
-			<main class="flex min-w-0 flex-1 flex-col bg-bg">
-				<header class="border-b border-border px-6 py-3"><h1 class="break-words text-title font-semibold">{ page.Current.Name }</h1></header>
-				if len(page.Messages) == 0 {
-     <div class="flex flex-1 items-center justify-center p-8"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
+			<main id="conversation" class="flex min-w-0 flex-1 flex-col bg-bg">
+				<header class="shrink-0 border-b border-border px-6 py-3"><h1 class="break-words text-title font-semibold">{ page.Current.Name }</h1></header>
+				<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="min-h-0 flex-1 overflow-y-auto">
+    if len(page.Messages) == 0 {
+     <div class="flex min-h-full items-center justify-center p-8"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
     } else {
      <ol aria-label={ i18n.T(ctx, "message.list") } class="flex flex-col gap-4 px-6 py-4">
       for _, entry := range page.Messages {
@@ -88,10 +90,23 @@ templ Channel(stylesheetURL string, page ChannelPage) {
       }
      </ol>
     }
-    // Every channel page loads it: htmx will not run scripts in swapped
-    // fragments, and later messages can arrive in an empty channel.
-    <script defer src="/static/message-time-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+    </div>
+				<form id="message-composer" method="post" action={ ChannelURL(page.Organization.Slug, page.Current.ID) } hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) } hx-target="#conversation" hx-select="#conversation" hx-swap="outerHTML" hx-disabled-elt="find textarea, find button" hx-sync="this:drop" class="flex shrink-0 flex-col gap-2 border-t border-border p-4">
+					<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
+					// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
+					<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md border border-border-strong bg-input px-3 py-2 text-fg">{ "\n" + page.Body }</textarea>
+					if page.BodyError != "" {
+						<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, page.BodyError) }</p>
+					} else {
+						<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
+					}
+					<button type="submit" class="min-h-11 self-end rounded-md bg-brand px-4 py-2 font-semibold text-on-brand">{ i18n.T(ctx, "message.send") }</button>
+				</form>
 			</main>
 		</div>
+		// Every channel page loads both, outside #conversation: htmx will not
+		// run scripts in swapped fragments.
+		<script defer src="/static/message-time-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

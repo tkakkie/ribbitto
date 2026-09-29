@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/tkakkie/ribbitto/internal/app/authz"
+	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -26,11 +27,12 @@ type orgRoute struct {
 // orgRoutes lists every route under /organizations/{slug}/. The same list
 // registers the routes and drives the tests that prove non-members get
 // 404, so a route cannot be added without those tests covering it.
-func orgRoutes(pages *pageRenderer, service ChannelService, messages MessageReader) []orgRoute {
-	handlers := channelPages{pages: pages, service: service, messages: messages}
+func orgRoutes(pages *pageRenderer, service ChannelService, messages MessageReader, posting *message.Service) []orgRoute {
+	handlers := channelPages{pages: pages, service: service, messages: messages, posting: posting}
 	return []orgRoute{
 		{http.MethodGet, "/{$}", handlers.home},
 		{http.MethodGet, "/channels/{channelID}", handlers.show},
+		{http.MethodPost, "/channels/{channelID}", handlers.show},
 		{http.MethodPost, "/channels", handlers.create},
 	}
 }

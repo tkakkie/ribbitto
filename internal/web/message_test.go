@@ -5,9 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/app/channel"
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -49,7 +53,7 @@ func TestMessageListHandler(t *testing.T) {
 		{"populated", populatedMessages(), 200}, {"empty", fakeMessages{}, 200}, {"read failure", fakeMessages{err: errors.New("offline")}, 500},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}, Channels: &fakeChannels{}, Messages: tt.reader})
+			handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}, Channels: &fakeChannels{}, Posting: testPoster(), Messages: tt.reader})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -80,5 +84,96 @@ func TestMessageListHandler(t *testing.T) {
 				t.Fatal("unsafe body or blank-looking name")
 			}
 		})
+	}
+}
+
+type postingStore struct {
+	err                  error
+	body                 string
+	org, channel, member domain.ID
+}
+
+func (s *postingStore) Post(_ context.Context, org, ch, member domain.ID, body string) (domain.Message, error) {
+	s.org, s.channel, s.member, s.body = org, ch, member, body
+	return domain.Message{Body: body}, s.err
+}
+
+func testPoster() *message.Service { return message.New(&postingStore{}) }
+
+func TestMessagePostHandler(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name, body string
+		storeErr   error
+		status     int
+	}{
+		{"success", "  hello\r\nworld  ", nil, 303},
+		{"empty", " \n ", nil, 422},
+		{"leading newline", "\n\n", nil, 422},
+		{"long", strings.Repeat("界", 4001), nil, 422},
+		{"forbidden", "<script>\u202ebad</script>", nil, 422},
+		{"missing", "hello", channel.ErrNotFound, 404},
+		{"failure", "hello", errors.New("offline"), 500},
+	} {
+		for _, hx := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/htmx=%t", tt.name, hx), func(t *testing.T) {
+				store := &postingStore{err: tt.storeErr}
+				h, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}, Channels: &fakeChannels{}, Messages: populatedMessages(), Posting: message.New(store)})
+				if err != nil {
+					t.Fatal(err)
+				}
+				path := view.ChannelURL("acme", domain.ID{1})
+				r := httptest.NewRequest("POST", path+"?body=wrong", strings.NewReader(url.Values{"body": {tt.body}, "organization_id": {"other"}, "member_id": {"other"}}.Encode()))
+				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				if hx {
+					r.Header.Set("HX-Request", "true")
+				}
+				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+				w := httptest.NewRecorder()
+				h.ServeHTTP(w, r)
+				want := tt.status
+				if hx && want == 303 {
+					want = 200
+				}
+				if w.Code != want {
+					t.Fatalf("status %d: %s", w.Code, w.Body.String())
+				}
+				if tt.status == 303 {
+					if store.body != "hello\nworld" || store.org != (domain.ID{}) || store.member != (domain.ID{}) || store.channel != (domain.ID{1}) {
+						t.Fatalf("posting scope/body: %+v", store)
+					}
+					if !hx && w.Header().Get("Location") != path {
+						t.Fatal("wrong redirect")
+					}
+				}
+				if want != 422 && want != 200 {
+					return
+				}
+				doc, err := html.Parse(w.Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				field := find(doc, atom.Textarea)
+				if want == 422 {
+					if text(field) != tt.body || attr(field, "aria-invalid") != "true" || store.body != "" {
+						t.Fatal("invalid input lost or posted")
+					}
+					var alert *html.Node
+					for n := range doc.Descendants() {
+						if attr(n, "role") == "alert" {
+							alert = n
+						}
+					}
+					if alert == nil || attr(field, "aria-describedby") != attr(alert, "id") {
+						t.Fatal("missing associated field error")
+					}
+				} else if text(field) != "" || !strings.Contains(text(doc), "second") {
+					t.Fatal("composer not cleared or history missing")
+				}
+			})
+		}
 	}
 }

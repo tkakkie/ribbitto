@@ -17,6 +17,7 @@ package, or SQL access to tables.
 cmd/ribbitto -> internal/app/auth
 cmd/ribbitto -> internal/app/authz
 cmd/ribbitto -> internal/app/channel
+cmd/ribbitto -> internal/app/message
 cmd/ribbitto -> internal/app/setup
 cmd/ribbitto -> internal/app/signup
 cmd/ribbitto -> internal/infra/postgres

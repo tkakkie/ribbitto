@@ -77,7 +77,7 @@ func TestChannelHandlers(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}, Messages: fakeMessages{}, Channels: &tt.fake})
+			handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}, Posting: testPoster(), Messages: fakeMessages{}, Channels: &tt.fake})
 			if err != nil {
 				t.Fatal(err)
 			}

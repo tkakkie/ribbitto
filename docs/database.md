@@ -48,10 +48,12 @@ CI rejects generation changes to committed files. Never edit generated files.
 
 ## Development seed data
 
-`cmd/seed` is for an empty, local development database only. It refuses,
-before connecting, any `RIBBITTO_DATABASE_URL` whose host (fallback hosts
-included) is not `localhost`, `127.0.0.1` or `::1`, so it cannot create
-accounts on a shared or production database even if that database is empty.
+`cmd/seed` is for an empty, disposable development database only. As a
+guard, it refuses, before connecting, any `RIBBITTO_DATABASE_URL` whose host
+(fallback hosts included) is not `localhost`, `127.0.0.1` or `::1`. The
+allowlist checks the address, not what serves it: a loopback port can still
+lead to a local production database or a tunnel to a remote one, so point
+it only at a database you can throw away.
 With `RIBBITTO_DATABASE_URL` exported:
 
 ```sh

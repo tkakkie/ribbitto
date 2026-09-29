@@ -49,9 +49,10 @@ func main() {
 }
 
 // localHosts are the only database hosts the command writes to: it creates
-// accounts whose credentials it prints, so it must never reach a shared or
-// production database, even an empty one (the completed-setup check would
-// not stop that).
+// accounts whose credentials it prints, so it guards against being pointed
+// at a remote database, even an empty one (the completed-setup check would
+// not stop that). It checks the address only; a loopback port could still
+// be a tunnel, so the documentation says to use a disposable database.
 var localHosts = map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
 
 // requireLocal fails closed unless every host the URL may connect to,

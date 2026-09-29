@@ -3,15 +3,20 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
@@ -37,13 +42,51 @@ type script struct {
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx, os.Getenv("RIBBITTO_DATABASE_URL"), os.Args[1:]); err != nil && !errors.Is(err, flag.ErrHelp) {
+	if err := run(ctx, os.Getenv("RIBBITTO_DATABASE_URL"), os.Args[1:], os.Stdout); err != nil && !errors.Is(err, flag.ErrHelp) {
 		slog.Error("seed failed", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, databaseURL string, args []string) error {
+// localHosts are the only database hosts the command writes to: it creates
+// accounts whose credentials it prints, so it must never reach a shared or
+// production database, even an empty one (the completed-setup check would
+// not stop that).
+var localHosts = map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
+
+// requireLocal fails closed unless every host the URL may connect to,
+// fallbacks included, is a loopback name. It runs before any connection.
+func requireLocal(databaseURL string) error {
+	if databaseURL == "" {
+		return errors.New("RIBBITTO_DATABASE_URL is empty")
+	}
+	config, err := pgconn.ParseConfig(databaseURL)
+	if err != nil {
+		return fmt.Errorf("parsing RIBBITTO_DATABASE_URL: %w", err)
+	}
+	hosts := []string{config.Host}
+	for _, fallback := range config.Fallbacks {
+		hosts = append(hosts, fallback.Host)
+	}
+	for _, host := range hosts {
+		if !localHosts[host] {
+			return fmt.Errorf("seed writes only to a local development database (localhost, 127.0.0.1 or ::1), not %q", host)
+		}
+	}
+	return nil
+}
+
+// newPassword returns a fresh random secret for this run: 24 random bytes as
+// 32 URL-safe characters, well within the 15–128 character password rule.
+func newPassword() (string, error) {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generating password: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func run(ctx context.Context, databaseURL string, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("seed (development only)", flag.ContinueOnError)
 	count := flags.Int("messages", 100, "messages per channel; repeats each fictional conversation in order")
 	if err := flags.Parse(args); err != nil {
@@ -56,6 +99,17 @@ func run(ctx context.Context, databaseURL string, args []string) error {
 	if err := json.Unmarshal(conversations, &data); err != nil {
 		return fmt.Errorf("reading conversations: %w", err)
 	}
+	if err := requireLocal(databaseURL); err != nil {
+		return err
+	}
+	password, err := newPassword()
+	if err != nil {
+		return err
+	}
+	token, err := newPassword() // setup needs a token; nothing outside this run uses it
+	if err != nil {
+		return err
+	}
 	pool, err := postgres.OpenPool(ctx, databaseURL)
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
@@ -65,8 +119,6 @@ func run(ctx context.Context, databaseURL string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating password hasher: %w", err)
 	}
-	const token = "development-only-seed-setup-token"
-	const password = "development-only-password"
 	const slug = "paper-lantern"
 	store := postgres.NewSetupStore(pool)
 	owner := data.Members[0]
@@ -117,5 +169,6 @@ func run(ctx context.Context, databaseURL string, args []string) error {
 			}
 		}
 	}
-	return nil
+	_, err = fmt.Fprintf(out, "Seeded %s. Sign in as %s@example.test (owner) or any other member at example.test with this run's password:\n%s\n", slug, owner.Handle, password)
+	return err
 }

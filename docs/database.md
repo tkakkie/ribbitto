@@ -48,8 +48,11 @@ CI rejects generation changes to committed files. Never edit generated files.
 
 ## Development seed data
 
-Use `cmd/seed` only with an empty, local development database, never a
-production or shared database. With `RIBBITTO_DATABASE_URL` exported:
+`cmd/seed` is for an empty, local development database only. It refuses,
+before connecting, any `RIBBITTO_DATABASE_URL` whose host (fallback hosts
+included) is not `localhost`, `127.0.0.1` or `::1`, so it cannot create
+accounts on a shared or production database even if that database is empty.
+With `RIBBITTO_DATABASE_URL` exported:
 
 ```sh
 go run ./cmd/ribbitto migrate up
@@ -58,9 +61,11 @@ go run ./cmd/seed -messages 20000
 
 `-messages N` is the positive number of messages **per channel** (default
 100). The command creates Paper Lantern Studio (`paper-lantern`), five
-fictional members, and four channels including `general`. Sign in as
-`mira@example.test` (owner), or another script handle at `example.test`,
-with the development-only password `development-only-password`.
+fictional members, and four channels including `general`. Every run
+generates a new random password for all seeded members and prints it, with
+the owner's address, when it finishes: sign in as `mira@example.test`
+(owner), or another script handle at `example.test`, with that password.
+Nothing fixed or published signs in.
 
 The embedded `cmd/seed/conversations.json` contains English and Japanese
 exchanges, Unicode names, and message-layout edge cases. Have a person

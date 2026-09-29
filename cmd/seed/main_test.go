@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
+	"io"
 	"net/url"
 	"reflect"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -61,6 +64,11 @@ func readSnapshot(t *testing.T, pool *pgxpool.Pool) snapshot {
 func TestSeed(t *testing.T) {
 	const count = 23 // Exercises full exchanges, repetition, and partial final exchanges.
 	var previous snapshot
+	var previousPassword string
+	hasher, err := auth.NewHasher()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for runNumber := range 2 {
 		pool := pgtest.New(t)
 		// pgtest changes Database in the config; ConnString still names the admin database.
@@ -70,8 +78,23 @@ func TestSeed(t *testing.T) {
 		}
 		address.Path = "/" + pool.Config().ConnConfig.Database
 		databaseURL := address.String()
-		if err := run(t.Context(), databaseURL, []string{"-messages", "23"}); err != nil {
+		var out bytes.Buffer
+		if err := run(t.Context(), databaseURL, []string{"-messages", "23"}, &out); err != nil {
 			t.Fatal(err)
+		}
+		// The printed password signs the owner in, and each run has its own.
+		lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+		password := lines[len(lines)-1]
+		if !strings.Contains(out.String(), "mira@example.test") || password == previousPassword {
+			t.Fatalf("output %q: want the owner's email and a new password", out.String())
+		}
+		previousPassword = password
+		var hash string
+		if err := pool.QueryRow(t.Context(), "SELECT password_hash FROM account WHERE email = 'mira@example.test'").Scan(&hash); err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := hasher.Verify(t.Context(), password, hash); err != nil || !ok {
+			t.Fatalf("printed password does not sign the owner in: %v", err)
 		}
 		got := readSnapshot(t, pool)
 		if len(got.Members) != 5 || len(got.Channels) != 4 || len(got.Messages) != 4*count || got.Seq != 5+4*count {
@@ -101,7 +124,7 @@ func TestSeed(t *testing.T) {
 			t.Fatal("same flags produced different members, channels, bodies, authors or order")
 		}
 		previous = got
-		if err := run(t.Context(), databaseURL, []string{"-messages", "23"}); !errors.Is(err, setup.ErrCompleted) {
+		if err := run(t.Context(), databaseURL, []string{"-messages", "23"}, io.Discard); !errors.Is(err, setup.ErrCompleted) {
 			t.Fatalf("second run: want setup.ErrCompleted, got %v", err)
 		}
 		if !reflect.DeepEqual(got, readSnapshot(t, pool)) {
@@ -120,11 +143,57 @@ func TestArguments(t *testing.T) {
 		{[]string{"-messages", "invalid"}, "invalid value"},
 		{[]string{"unexpected"}, "usage:"},
 	} {
-		if err := run(t.Context(), "", tc.args); err == nil || !strings.Contains(err.Error(), tc.want) {
+		if err := run(t.Context(), "", tc.args, io.Discard); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("arguments %v: %v", tc.args, err)
 		}
 	}
-	if err := run(t.Context(), "", []string{"-h"}); !errors.Is(err, flag.ErrHelp) {
+	if err := run(t.Context(), "", []string{"-h"}, io.Discard); !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("help: %v", err)
+	}
+}
+
+// Only loopback hosts pass, fallbacks included; everything else fails
+// before any connection is attempted.
+func TestRequireLocal(t *testing.T) {
+	for _, tc := range []struct {
+		url   string
+		local bool
+	}{
+		{"postgres://u:p@localhost:5432/dev", true},
+		{"postgres://u:p@127.0.0.1:55433/dev?sslmode=disable", true},
+		{"postgres://u:p@[::1]:5432/dev", true},
+		{"postgres://u:p@localhost,127.0.0.1/dev", true},
+		{"postgres://u:p@db.example.test/prod", false},
+		{"postgres://u:p@10.0.0.5/shared", false},
+		{"postgres://u:p@localhost,db.example.test/dev", false},
+		{"postgres://u:p@127.0.0.2/dev", false},
+		{"postgres:///dev?host=/tmp", false},
+		{"", false},
+	} {
+		if err := requireLocal(tc.url); (err == nil) != tc.local {
+			t.Errorf("%q: %v, want local=%t", tc.url, err, tc.local)
+		}
+	}
+	// A remote URL is refused by run itself, before connecting (192.0.2.1 is
+	// a documentation address that would otherwise time out).
+	if err := run(t.Context(), "postgres://u:p@192.0.2.1:5432/prod?connect_timeout=1", nil, io.Discard); err == nil || !strings.Contains(err.Error(), "local development database") {
+		t.Fatalf("remote URL: %v", err)
+	}
+}
+
+func TestNewPassword(t *testing.T) {
+	first, err := newPassword()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := newPassword()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second || len(first) != 32 {
+		t.Fatalf("passwords %q and %q", first, second)
+	}
+	if _, err := domain.ValidatePassword(first); err != nil {
+		t.Fatal(err)
 	}
 }

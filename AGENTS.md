@@ -28,8 +28,9 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 
 ## Commands
 
-- `make check` — checks formatting, vets, lints, builds and tests (with the
-  race detector); must pass before you open a pull request.
+- `make check` — checks formatting (Go and templ), vets, lints, builds and
+  tests (with the race detector); must pass before you open a pull request.
+  Format templates with `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; CI runs it too. It needs the network, so
   it is not part of `make check`.
 - `make lint` — runs golangci-lint.

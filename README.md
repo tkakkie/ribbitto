@@ -76,8 +76,9 @@ so local notes and tools do not change the output.
 ### Checks
 
 `make check` is what CI runs and what must pass before a pull request: it
-checks formatting, vets, lints, builds, runs the Go tests with the race
-detector, and checks the import graph and the documents. CI also runs
+checks formatting (`gofmt` for Go, `templ fmt` for templates), vets, lints,
+builds, runs the Go tests with the race detector, and checks the import
+graph and the documents. CI also runs
 `make vuln`, which runs the pinned `govulncheck` over the application module
 and fails when a known vulnerability is statically reachable from our code.
 It needs the network, so it is not part of `make check`. When it fails:

@@ -145,7 +145,10 @@ checks find only part of accessibility problems, so these stay necessary.
 The channel conversation uses a chronological `<ol>`, with an isolated
 author name, a timestamp and a plain-text body per message. Bodies wrap and
 preserve line breaks; each has `dir="auto"`. The empty state remains until
-there are messages; composer placement is deferred to the rest of #78.
+there are messages. The message pane scrolls independently with a labelled,
+keyboard-focusable region; the composer stays at the bottom of the viewport.
+Its labelled textarea preserves invalid text and associates its error with
+`aria-describedby`. After an htmx submission, focus returns to the textarea.
 
 ## Planned directions (from the maintainer, #9)
 

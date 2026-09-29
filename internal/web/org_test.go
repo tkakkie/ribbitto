@@ -87,13 +87,13 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Sessions: sessions, SignIn: &fakeSignIn{}, Messages: postgres.MessageReader{Pool: pool}, Channels: channels, Authz: authz.New(postgres.NewAuthzStore(pool))})
+	handler, err := NewHandler("", catalogues, Services{Sessions: sessions, SignIn: &fakeSignIn{}, Posting: message.New(postgres.NewPostingStore(pool)), Messages: postgres.MessageReader{Pool: pool}, Channels: channels, Authz: authz.New(postgres.NewAuthzStore(pool))})
 	if err != nil {
 		t.Fatal(err)
 	}
 	get := func(method, path, cookie string, at time.Time) *httptest.ResponseRecorder {
 		clock = at
-		r := httptest.NewRequest(method, path, strings.NewReader(url.Values{"name": {"新しいチャンネル"}}.Encode()))
+		r := httptest.NewRequest(method, path, strings.NewReader(url.Values{"name": {"新しいチャンネル"}, "body": {"posted through the page"}}.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		if cookie != "" {
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: cookie})
@@ -103,7 +103,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return w
 	}
 
-	routes := orgRoutes(&pageRenderer{}, channels, postgres.MessageReader{Pool: pool})
+	routes := orgRoutes(&pageRenderer{}, channels, postgres.MessageReader{Pool: pool}, message.New(postgres.NewPostingStore(pool)))
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -141,6 +141,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			case "GET /channels/{channelID}":
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") || !strings.Contains(w.Body.String(), "雑談") {
 					t.Fatalf("channel: %d %s", w.Code, w.Body.String())
+				}
+			case "POST /channels/{channelID}":
+				if w.Code != 303 || w.Header().Get("Location") != view.ChannelURL("acme", acmeChannel) {
+					t.Fatalf("post: %d %s", w.Code, w.Body.String())
 				}
 			case "POST /channels":
 				created, err := channels.List(ctx, authz.Membership{Organization: domain.Organization{ID: acme}})
@@ -218,6 +222,16 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		if err != nil || len(names) != 1 || names[alice] != "Alice" {
 			t.Fatalf("names: %v, %v", names, err)
 		}
+		posted := get("POST", view.ChannelURL("acme", acmeChannel), aliceToken, now)
+		reloaded := get("GET", view.ChannelURL("acme", acmeChannel), carolToken, now)
+		if posted.Code != 303 || reloaded.Code != 200 || !strings.Contains(reloaded.Body.String(), "posted through the page") || !strings.Contains(reloaded.Body.String(), "@alice") {
+			t.Fatalf("page post/reload: %d / %d", posted.Code, reloaded.Code)
+		}
+		for _, path := range []string{view.ChannelURL("acme", acmeChannel), view.ChannelURL("globex", acmeChannel)} {
+			if w := get("POST", path, bobToken, now); w.Code != 404 || w.Body.String() != "404 page not found\n" {
+				t.Fatalf("foreign post: %d %s", w.Code, w.Body.String())
+			}
+		}
 		poster := message.New(postgres.NewPostingStore(pool))
 		for range 51 {
 			if _, err := poster.Post(ctx, a, acmeChannel, "hello after reload"); err != nil {
@@ -262,7 +276,7 @@ func TestHomeSignUpLink(t *testing.T) {
 		handler, err := NewHandler("", catalogues, Services{
 			Sessions: noSessions{},
 			SignIn:   &fakeSignIn{},
-			Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{},
+			Posting:  testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{},
 			SignUp:        fakeSignUp{&fakeSetup{open: open}},
 			SetupSessions: &fakeSetup{},
 		})
@@ -283,7 +297,7 @@ func TestChannelRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: oneOrganisation{}})
+	handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Posting: testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: oneOrganisation{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +315,7 @@ func TestChannelRendering(t *testing.T) {
 		// The signed-in organisation page gets the same security headers
 		// and script nonces as every other page (TestHTMLSecurity).
 		nonce := responseNonce(t, w)
-		if scripts := strings.Count(body, "<script "); scripts < 4 || strings.Count(body, ` nonce="`+nonce+`"`) != scripts {
+		if scripts := strings.Count(body, "<script "); scripts < 5 || strings.Count(body, ` nonce="`+nonce+`"`) != scripts {
 			t.Errorf("%s: scripts lack the response nonce", lang)
 		}
 		if w.Code != http.StatusOK || !strings.Contains(body, `<form method="post" action="/signout">`) {

@@ -55,4 +55,14 @@ stored bodies at render time (never `templ.Raw`); `whitespace-pre-wrap`
 keeps line breaks and `dir="auto"` isolates each body's direction. DOM ids
 use `message.id`. Authors use `view.MemberName` with current display names
 and handles. Times have a UTC `<time datetime>` fallback; an external script
-shows browser-local time. The composer is the remaining part of #78.
+shows browser-local time.
+
+## Posting from the channel page
+
+The bottom composer posts through `message.Service.Post`. htmx replaces the
+conversation with the latest messages and an empty field on success; an
+ordinary form submission gets a 303 back to the channel. Invalid bodies
+return 422 with the original text and an associated field error. The channel
+and organisation are resolved before posting; a non-member gets 404.
+Enter sends, Shift+Enter inserts a line break, and IME composition never
+sends. The page opens at the newest message and scrolls there after posting.

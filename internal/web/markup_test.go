@@ -228,6 +228,7 @@ type markupCase struct {
 	cookie   bool
 	repeat   int // send the request this many times and check the last
 	status   int // the expected status; 0 means 200
+	htmx     bool
 	alerts   int // when set, the number of role="alert" errors the page must show
 }
 
@@ -244,7 +245,7 @@ func TestPagesMarkup(t *testing.T) {
 		fieldErrors[field] = errors.New("invalid")
 	}
 	base := func() Services {
-		return Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}}
+		return Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Posting: testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}}
 	}
 	withSetup := func(err error) func() Services {
 		return func() Services {
@@ -307,6 +308,12 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "channel invalid name", route: "POST /organizations/{slug}/channels", services: withChannelError(channel.ErrInvalidName), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {""}}, status: http.StatusUnprocessableEntity},
 		{name: "channel duplicate name", route: "POST /organizations/{slug}/channels", services: withChannelError(channel.ErrNameTaken), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"雑談"}}, status: http.StatusUnprocessableEntity},
 	}
+	for _, body := range []string{"", strings.Repeat("界", 4001), "bad\u202e"} {
+		for _, hx := range []bool{false, true} {
+			cases = append(cases, markupCase{name: fmt.Sprintf("composer invalid %d/htmx=%t", len(body), hx), route: "POST /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", domain.ID{1}), cookie: true, form: url.Values{"body": {body}}, status: 422, alerts: 1, htmx: hx})
+		}
+	}
+	cases = append(cases, markupCase{name: "composer posted", route: "POST /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "POST", path: view.ChannelURL("acme", domain.ID{1}), cookie: true, form: url.Values{"body": {"sent"}}, htmx: true})
 	// Routes that answer with a redirect or an empty status, never a page.
 	noPage := []string{"POST /signout", "GET /organizations/{slug}/{$}"}
 
@@ -337,6 +344,9 @@ func TestPagesMarkup(t *testing.T) {
 					r := httptest.NewRequest(c.method, c.path, strings.NewReader(c.form.Encode()))
 					r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 					r.Header.Set("Accept-Language", lang)
+					if c.htmx {
+						r.Header.Set("HX-Request", "true")
+					}
 					if c.cookie {
 						r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 					}

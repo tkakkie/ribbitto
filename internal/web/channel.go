@@ -31,6 +31,7 @@ type MessageReader interface {
 
 type channelPages struct {
 	messages MessageReader
+	posting  *message.Service
 	pages    *pageRenderer
 	service  ChannelService
 }
@@ -66,7 +67,11 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m authz.Membe
 		serverError(w, r, "finding channel", err)
 		return
 	}
-	p.render(w, r, m, c, http.StatusOK, "", "")
+	if r.Method == http.MethodPost {
+		p.post(w, r, m, c)
+		return
+	}
+	p.render(w, r, m, c, http.StatusOK, view.ChannelPage{})
 }
 
 func (p channelPages) create(w http.ResponseWriter, r *http.Request, m authz.Membership) {
@@ -95,10 +100,10 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m authz.Mem
 		serverError(w, r, "finding default channel", err)
 		return
 	}
-	p.render(w, r, m, c, http.StatusUnprocessableEntity, name, message)
+	p.render(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message})
 }
 
-func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Membership, c domain.Channel, status int, name, message string) {
+func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Membership, c domain.Channel, status int, page view.ChannelPage) {
 	channels, err := p.service.List(r.Context(), m)
 	if err != nil {
 		serverError(w, r, "listing channels", err)
@@ -111,9 +116,30 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Mem
 	}
 	account, _ := middleware.Account(r.Context())
 	p.pages.render(w, r, status, func(url string) templ.Component {
-		return view.Channel(url, view.ChannelPage{
-			Organization: m.Organization, DisplayName: account.DisplayName, Handle: m.Member.Handle, Role: string(m.Member.Role),
-			Current: c, Channels: channels, Name: name, Error: message, Messages: entries,
-		})
+		page.Organization, page.DisplayName, page.Handle, page.Role = m.Organization, account.DisplayName, m.Member.Handle, string(m.Member.Role)
+		page.Current, page.Channels, page.Messages = c, channels, entries
+		return view.Channel(url, page)
 	})
+}
+
+func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membership, c domain.Channel) {
+	if !parseForm(w, r) {
+		return
+	}
+	body := r.PostForm.Get("body")
+	_, err := p.posting.Post(r.Context(), m, c.ID, body)
+	switch {
+	case errors.Is(err, message.ErrInvalidBody):
+		p.render(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
+	case errors.Is(err, channel.ErrNotFound), errors.Is(err, authz.ErrNotFound):
+		// The channel, membership or organisation went away after this
+		// request resolved them; answer as for a non-member.
+		http.NotFound(w, r)
+	case err != nil:
+		serverError(w, r, "posting message", err)
+	case r.Header.Get("HX-Request") == "true":
+		p.render(w, r, m, c, http.StatusOK, view.ChannelPage{})
+	default:
+		http.Redirect(w, r, view.ChannelURL(m.Organization.Slug, c.ID), http.StatusSeeOther)
+	}
 }

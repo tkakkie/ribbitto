@@ -132,3 +132,15 @@ other = "A channel with this name already exists."
 
 [message.list]
 other = "Messages"
+
+["message.body"]
+other = "Message"
+
+["message.help"]
+other = "Enter sends; Shift+Enter adds a line break."
+
+["message.send"]
+other = "Send"
+
+["message.error.body"]
+other = "Enter 1–4000 characters without control characters or directional embeddings and overrides."

@@ -40,6 +40,15 @@ on load and on each `htmx:load`, retaining the server's UTC fallback when
 JavaScript is disabled.
 Application script URLs are versioned because static assets are immutable.
 
+`message-composer-v1.js` also loads with the response nonce on channel pages.
+One key-to-command function maps Enter to `send` and Shift+Enter to `newline`,
+ignoring IME composition (`isComposing` or keyCode 229); one submit function
+uses the native form submission path through `requestSubmit`. The form uses
+htmx to select and replace `#conversation`, disabling its controls in flight.
+The script opts that target into 422 swaps for field errors and scrolls the
+message pane to the newest entry on load and after settling a swap. Scripts
+stay outside the replaced section; CSP and htmx evaluation remain unchanged.
+
 ## Languages
 
 `internal/web/i18n` embeds the English and Japanese TOML

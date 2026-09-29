@@ -17,6 +17,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -86,7 +87,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Sessions: sessions, SignIn: &fakeSignIn{}, Channels: channels, Authz: authz.New(postgres.NewAuthzStore(pool))})
+	handler, err := NewHandler("", catalogues, Services{Sessions: sessions, SignIn: &fakeSignIn{}, Messages: postgres.MessageReader{Pool: pool}, Channels: channels, Authz: authz.New(postgres.NewAuthzStore(pool))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return w
 	}
 
-	routes := orgRoutes(&pageRenderer{}, channels)
+	routes := orgRoutes(&pageRenderer{}, channels, postgres.MessageReader{Pool: pool})
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -191,6 +192,48 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			t.Fatalf("%s at /: %d", name, w.Code)
 		}
 	}
+	t.Run("author lookup isolation and reload", func(t *testing.T) {
+		authzService := authz.New(postgres.NewAuthzStore(pool))
+		a, err := authzService.Member(ctx, &domain.Account{ID: alice}, "acme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := authzService.Member(ctx, &domain.Account{ID: bob}, "globex")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Give Carol a membership only after the non-member assertions above.
+		if _, err := pool.Exec(ctx, "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $2, 'member', 2, 'carol')", acme, carol); err != nil {
+			t.Fatal(err)
+		}
+		members, err := postgres.NewMemberStore(pool).LookupMembers(ctx, acme, []domain.ID{a.Member.ID, b.Member.ID})
+		if err != nil || len(members) != 1 || members[a.Member.ID].AccountID != alice || members[a.Member.ID].Handle != "alice" {
+			t.Fatalf("members: %v, %v", members, err)
+		}
+		ids := []domain.ID{}
+		for _, m := range members {
+			ids = append(ids, m.AccountID)
+		}
+		names, err := postgres.NewAccountStore(pool).LookupDisplayNames(ctx, ids)
+		if err != nil || len(names) != 1 || names[alice] != "Alice" {
+			t.Fatalf("names: %v, %v", names, err)
+		}
+		poster := message.New(postgres.NewPostingStore(pool))
+		for range 51 {
+			if _, err := poster.Post(ctx, a, acmeChannel, "hello after reload"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		w := get("GET", view.ChannelURL("acme", acmeChannel), carolToken, now)
+		if w.Code != 200 || strings.Count(w.Body.String(), "hello after reload") != 50 || !strings.Contains(w.Body.String(), "@alice") {
+			t.Fatalf("reload: %d %s", w.Code, w.Body.String())
+		}
+		w = get("GET", view.ChannelURL("acme", acmeChannel), bobToken, now)
+		if w.Code != 404 || strings.Contains(w.Body.String(), "hello after reload") {
+			t.Fatal("foreign member saw history")
+		}
+	})
+
 	if logs.Len() != 0 {
 		t.Errorf("unexpected message fallback: %s", logs.String())
 	}
@@ -219,7 +262,7 @@ func TestHomeSignUpLink(t *testing.T) {
 		handler, err := NewHandler("", catalogues, Services{
 			Sessions: noSessions{},
 			SignIn:   &fakeSignIn{},
-			Channels: &fakeChannels{}, Authz: noOrganisations{},
+			Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{},
 			SignUp:        fakeSignUp{&fakeSetup{open: open}},
 			SetupSessions: &fakeSetup{},
 		})
@@ -240,7 +283,7 @@ func TestChannelRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Channels: &fakeChannels{}, Authz: oneOrganisation{}})
+	handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: oneOrganisation{}})
 	if err != nil {
 		t.Fatal(err)
 	}

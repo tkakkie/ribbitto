@@ -33,3 +33,16 @@ func (s *AccountStore) AccountCredentials(ctx context.Context, email string) (do
 	}
 	return domain.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName}, row.PasswordHash, nil
 }
+
+// LookupDisplayNames implements identity's auth.Directory without credentials.
+func (s *AccountStore) LookupDisplayNames(ctx context.Context, ids []domain.ID) (map[domain.ID]string, error) {
+	rows, err := s.queries.LookupDisplayNames(ctx, uuidArray(ids))
+	if err != nil {
+		return nil, fmt.Errorf("looking up display names: %w", err)
+	}
+	result := make(map[domain.ID]string, len(rows))
+	for _, row := range rows {
+		result[row.ID.Bytes] = row.DisplayName
+	}
+	return result, nil
+}

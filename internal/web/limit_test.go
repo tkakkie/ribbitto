@@ -38,7 +38,7 @@ func newLimitedHandler(t *testing.T, services Services) (http.Handler, *middlewa
 	}
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
 	services.Limits = middleware.NewAuthLimits(nil, func() time.Time { return now })
-	services.Sessions, services.Authz, services.Channels = noSessions{}, noOrganisations{}, &fakeChannels{}
+	services.Sessions, services.Authz, services.Channels, services.Messages = noSessions{}, noOrganisations{}, &fakeChannels{}, fakeMessages{}
 	if services.SignIn == nil {
 		services.SignIn = &fakeSignIn{}
 	}

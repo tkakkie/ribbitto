@@ -33,6 +33,11 @@ inject its default inline indicator stylesheet. Do not use inline scripts,
 `hx-on`, or other attribute scripts; keep JavaScript and styles in external
 assets.
 
+Message timestamps use `message-time-v1.js`, loaded with the response nonce
+on populated channel pages. It formats `<time datetime>` values in browser
+local time, retaining the server's UTC fallback when JavaScript is disabled.
+Application script URLs are versioned because static assets are immutable.
+
 ## Languages
 
 `internal/web/i18n` embeds the English and Japanese TOML

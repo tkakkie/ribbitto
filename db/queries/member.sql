@@ -20,3 +20,7 @@ WHERE m.account_id = $1;
 
 -- name: UpdateMemberHandle :execrows
 UPDATE member SET handle = $3 WHERE organization_id = $1 AND id = $2;
+
+-- name: LookupMembers :many
+SELECT id, account_id, handle FROM member
+WHERE organization_id = $1 AND id = ANY(sqlc.arg(member_ids)::uuid[]);

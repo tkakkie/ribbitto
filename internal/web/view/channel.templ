@@ -2,6 +2,8 @@ package view
 
 import (
 	"fmt"
+ "time"
+ "github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
@@ -13,6 +15,7 @@ type ChannelPage struct {
 	Current           domain.Channel
 	Channels          []domain.Channel
 	Name, Error       string
+ Messages []message.Entry
 }
 
 // ChannelURL identifies a channel by its stable UUID, never its name.
@@ -70,7 +73,22 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 			</aside>
 			<main class="flex min-w-0 flex-1 flex-col bg-bg">
 				<header class="border-b border-border px-6 py-3"><h1 class="break-words text-title font-semibold">{ page.Current.Name }</h1></header>
-				<div class="flex flex-1 items-center justify-center p-8"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
+				if len(page.Messages) == 0 {
+     <div class="flex flex-1 items-center justify-center p-8"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
+    } else {
+     <ol aria-label={ i18n.T(ctx, "message.list") } class="flex flex-col gap-4 px-6 py-4">
+      for _, entry := range page.Messages {
+       <li id={ fmt.Sprintf("message-%x", entry.ID) }>
+        <div class="flex flex-wrap items-baseline gap-2">
+         <span>@MemberName(entry.DisplayName, entry.Handle)</span>
+         <time datetime={ entry.CreatedAt.UTC().Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
+        </div>
+        <p dir="auto" class="whitespace-pre-wrap break-words">{ entry.Body }</p>
+       </li>
+      }
+     </ol>
+     <script defer src="/static/message-time-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+    }
 			</main>
 		</div>
 	}

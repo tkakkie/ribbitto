@@ -29,7 +29,9 @@ internal/app/channel -> internal/app/authz
 internal/app/channel -> internal/domain
 internal/app/member -> internal/app/authz
 internal/app/member -> internal/domain
+internal/app/message -> internal/app/auth
 internal/app/message -> internal/app/authz
+internal/app/message -> internal/app/member
 internal/app/message -> internal/domain
 internal/app/setup -> internal/app/auth
 internal/app/setup -> internal/domain
@@ -41,6 +43,7 @@ internal/infra/postgres -> internal/app/auth
 internal/infra/postgres -> internal/app/authz
 internal/infra/postgres -> internal/app/channel
 internal/infra/postgres -> internal/app/member
+internal/infra/postgres -> internal/app/message
 internal/infra/postgres -> internal/app/setup
 internal/infra/postgres -> internal/app/signup
 internal/infra/postgres -> internal/domain
@@ -50,6 +53,7 @@ internal/infra/postgres/pgtest -> internal/infra/postgres
 internal/web -> internal/app/auth
 internal/web -> internal/app/authz
 internal/web -> internal/app/channel
+internal/web -> internal/app/message
 internal/web -> internal/app/setup
 internal/web -> internal/app/signup
 internal/web -> internal/domain
@@ -59,6 +63,7 @@ internal/web -> internal/web/view
 internal/web -> web/static
 internal/web/middleware -> internal/app/auth
 internal/web/middleware -> internal/domain
+internal/web/view -> internal/app/message
 internal/web/view -> internal/domain
 internal/web/view -> internal/web/i18n
 ```

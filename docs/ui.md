@@ -142,6 +142,11 @@ it under a colour-vision simulation (Chrome DevTools, *Rendering → Emulate
 vision deficiencies*) to see that no information is lost. The automated
 checks find only part of accessibility problems, so these stay necessary.
 
+The channel conversation uses a chronological `<ol>`, with an isolated
+author name, a timestamp and a plain-text body per message. Bodies wrap and
+preserve line breaks; each has `dir="auto"`. The empty state remains until
+there are messages; composer placement is deferred to the rest of #78.
+
 ## Planned directions (from the maintainer, #9)
 
 Recorded now, designed when each screen is built:

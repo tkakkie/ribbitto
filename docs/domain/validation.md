@@ -28,4 +28,5 @@ account, and `joined_event_seq` starts at 1.
 
 **Names and identity.** Display names and handles are for people only;
 **`member_id`** is the only identifier the system trusts, for permissions,
-mentions and stored references. See [`names.md`](names.md).
+mentions and stored references. See [`names.md`](names.md). Message history resolves current author names
+in batches without storing names or HTML on messages.

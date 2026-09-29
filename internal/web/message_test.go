@@ -116,6 +116,7 @@ func TestMessagePostHandler(t *testing.T) {
 		{"long", strings.Repeat("界", 4001), nil, 422},
 		{"forbidden", "<script>\u202ebad</script>", nil, 422},
 		{"missing", "hello", channel.ErrNotFound, 404},
+		{"membership gone", "hello", authz.ErrNotFound, 404},
 		{"failure", "hello", errors.New("offline"), 500},
 	} {
 		for _, hx := range []bool{false, true} {

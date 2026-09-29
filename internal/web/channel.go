@@ -131,7 +131,9 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membe
 	switch {
 	case errors.Is(err, message.ErrInvalidBody):
 		p.render(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
-	case errors.Is(err, channel.ErrNotFound):
+	case errors.Is(err, channel.ErrNotFound), errors.Is(err, authz.ErrNotFound):
+		// The channel, membership or organisation went away after this
+		// request resolved them; answer as for a non-member.
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "posting message", err)

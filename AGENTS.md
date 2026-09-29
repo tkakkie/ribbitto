@@ -28,8 +28,10 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 
 ## Commands
 
-- `make check` — checks formatting, vets, lints, builds and tests; must pass
-  before you open a pull request.
+- `make check` — checks formatting, vets, lints, builds and tests (with the
+  race detector); must pass before you open a pull request.
+- `make vuln` — runs `govulncheck`; CI runs it too. It needs the network, so
+  it is not part of `make check`.
 - `make lint` — runs golangci-lint.
 - `make deps` — regenerates `docs/dependencies.md`, the package-import
   edges; commit it with any change that adds or removes one.

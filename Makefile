@@ -8,7 +8,7 @@ TAILWIND_SHA_macos-arm64 := cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f
 TAILWIND_SHA_linux-x64 := dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a
 CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 
-.PHONY: check lint db-up db-down generate schema-docs deps css dev
+.PHONY: check lint vuln db-up db-down generate schema-docs deps css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -68,13 +68,18 @@ check:
 	go vet ./...
 	$(MAKE) lint
 	go build ./...
-	go test ./...
+	go test -race ./...
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
 	go -C tools vet ./docscheck
-	go -C tools test ./docscheck
+	go -C tools test -race ./docscheck
 	go -C tools run ./docscheck ..
 	bash scripts/ai/grok-review_test.sh
+
+# Needs the Go vulnerability database over the network, so it runs in CI
+# next to make check rather than inside it. Scans the application module.
+vuln:
+	go tool -modfile=tools/go.mod govulncheck ./...
 
 lint: $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run ./...

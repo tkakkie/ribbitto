@@ -78,7 +78,10 @@ The prompt carries the issue and its review comments, plus these rules:
 - **Database.** Codex cannot use Docker, so the orchestrator starts
   PostgreSQL and waits until it is ready. The prompt then says to run
   `make check` with `RIBBITTO_TEST_DATABASE_URL=postgres://postgres:codex-dev-only@127.0.0.1:55433/postgres?sslmode=disable`
-  and `RIBBITTO_REQUIRE_DB=1`.
+  and `RIBBITTO_REQUIRE_DB=1`. Its Go tests run with the race detector,
+  which works in this profile. `make vuln` does not, because
+  `vuln.go.dev` is not on the allowlist; CI runs it
+  ([Checks](../../README.md#checks)).
 
   ```sh
   # Reuse the container if it is already running; either way, wait for it.

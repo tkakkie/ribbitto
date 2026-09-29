@@ -181,17 +181,17 @@ func TestRequireLocal(t *testing.T) {
 	}
 }
 
-func TestNewPassword(t *testing.T) {
-	first, err := newPassword()
+func TestNewSecret(t *testing.T) {
+	first, err := newSecret()
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := newPassword()
+	second, err := newSecret()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first == second || len(first) != 32 {
-		t.Fatalf("passwords %q and %q", first, second)
+		t.Fatalf("secrets %q and %q", first, second)
 	}
 	if _, err := domain.ValidatePassword(first); err != nil {
 		t.Fatal(err)

@@ -77,12 +77,13 @@ func requireLocal(databaseURL string) error {
 	return nil
 }
 
-// newPassword returns a fresh random secret for this run: 24 random bytes as
-// 32 URL-safe characters, well within the 15–128 character password rule.
-func newPassword() (string, error) {
+// newSecret returns a fresh random secret for this run: 24 random bytes as
+// 32 URL-safe characters, well within the 15–128 character password rule. The
+// run uses it for both the members' password and the setup token.
+func newSecret() (string, error) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generating password: %w", err)
+		return "", fmt.Errorf("generating secret: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
@@ -103,11 +104,11 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	if err := requireLocal(databaseURL); err != nil {
 		return err
 	}
-	password, err := newPassword()
+	password, err := newSecret()
 	if err != nil {
 		return err
 	}
-	token, err := newPassword() // setup needs a token; nothing outside this run uses it
+	token, err := newSecret() // setup needs a token; nothing outside this run uses it
 	if err != nil {
 		return err
 	}

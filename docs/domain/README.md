@@ -4,11 +4,26 @@ The words ribbitto uses, the things it stores and the rules that must always
 hold. Code identifiers use the terms in the glossary; the frog-themed product
 words (ribbit, pond, marsh, …) appear only in UI message files.
 
-**Keep it current:** update this file in the same pull request whenever a
-term, an entity, a relation, an invariant or the unread rules change.
+**Keep it current:** update the relevant file in this directory in the same
+pull request whenever a term, an entity, a relation, an invariant, a
+validation rule or the unread rules change: this README for terms,
+entities, relations and invariants, and the topic file in the index below
+for everything else.
 Entities marked *planned* do not have tables yet; `db/migrations/` is the
-source of truth for what exists. See the [generated schema reference](schema/README.md)
+source of truth for what exists. See the [generated schema reference](../schema/README.md)
 for the current tables, columns and constraints.
+
+## Index
+
+| File | Covers |
+|---|---|
+| `README.md` (this file) | glossary, entities and ER diagram, invariants, MVP scope |
+| [`validation.md`](validation.md) | input validation rules |
+| [`unread.md`](unread.md) | unread rules (planned, M2–M4) |
+| [`names.md`](names.md) | display names, handles, how members are shown |
+| [`channels.md`](channels.md) | channel identity, names and the default channel |
+| [`messages.md`](messages.md) | message identity, accepted bodies and rendering |
+| [`setup-and-signup.md`](../architecture/setup-and-signup.md) | first-run setup and sign-up |
 
 ## Glossary
 
@@ -64,35 +79,7 @@ it never drops to zero ([`channels.md`](channels.md)).
 
 ## Validation
 
-`internal/domain` validates UTF-8 text. Email, display, organisation and
-channel names are trimmed and normalised to NFC; email is lower-cased first.
-Lengths count code points after normalisation, except email (bytes) and slug
-(ASCII). Controls including NUL fail before trimming. These fields then
-require `unicode.IsPrint`, rejecting format characters (zero-width spaces,
-RTL overrides, BOMs, soft hyphens) and line/paragraph separators. Names allow
-only ASCII and ideographic (U+3000) spaces; email allows none. The database
-also requires account email and display name to be NFC.
-
-- **Email:** exactly one `@`, nonempty parts on both sides, at most 254 bytes
-  after normalisation.
-- **Display name:** 1–50 characters after normalisation, not blank-looking
-  ([`names.md`](names.md#display-names)).
-- **Password:** 15–128 characters, preserved as entered, no composition rules.
-- **Organisation name:** 1–100 characters after normalisation.
-- **Channel name:** as organisation names, but 1–80 characters.
-- **Message body:** plain text, 1–4000 code points ([`messages.md`](messages.md)).
-- **Slug:** 1–63 characters from `a-z0-9-`, no leading or trailing `-`.
-- **Handle:** 2–32 ASCII characters, unique per organisation ignoring case
-  ([`names.md`](names.md#handles)).
-
-Sessions store a unique 32-byte token hash and expire after their creation.
-Deleting an account cascades to sessions. Membership references restrict
-account and organisation deletion; membership is unique per organisation and
-account, and `joined_event_seq` starts at 1.
-
-**Names and identity.** Display names and handles are for people only;
-**`member_id`** is the only identifier the system trusts, for permissions,
-mentions and stored references. See [`names.md`](names.md).
+See [`validation.md`](validation.md).
 
 ## Invariants
 
@@ -129,7 +116,7 @@ mentions and stored references. See [`names.md`](names.md).
      the email addresses match.
 
    Sign-up's duplicate-email response is an accepted trade-off
-   ([`DECISIONS.md`](../DECISIONS.md) 13).
+   ([`DECISIONS.md`](../../DECISIONS.md) 13).
 
 These are **requirements for all code and migrations**, not a description
 of what is implemented today: `organization`, `account`, `session`,
@@ -142,48 +129,11 @@ second line of defence after the MVP.
 
 ## Unread rules *(planned, M2–M4)*
 
-- **Read position** of a member in a channel is
-  `channel_member.last_read_event_seq` if the row exists, otherwise
-  `member.joined_event_seq`. So messages from before a member joined are
-  never unread, and a channel the member has never opened needs no row.
-- **Unread count**:
-  ```sql
-  SELECT count(*) FROM message
-  WHERE organization_id = $1 AND channel_id = $2 AND event_seq > $3;  -- $3 = read position
-  ```
-  backed by an index on `message (organization_id, channel_id, event_seq)`.
-- **Joining an organisation is one transaction:** take the next
-  `event_seq`, insert the `member` with `joined_event_seq` = that value, and
-  insert the `event_log` row. Until M3 adds `event_log`, joining takes the
-  next `event_seq` but writes no `event_log` row.
-- **Opening a channel for the first time** creates the `channel_member` row
-  with `last_read_event_seq` = the **cursor of the snapshot that rendered the
-  page**, not the latest sequence at insert time — otherwise messages
-  posted after the page was read, and not yet shown, would be marked read.
-- **The read position never moves backwards.** Several tabs or reordered
-  requests must not lower it:
-  ```sql
-  INSERT INTO channel_member (organization_id, channel_id, member_id, last_read_event_seq)
-  VALUES ($1, $2, $3, $4)
-  ON CONFLICT (organization_id, channel_id, member_id) DO UPDATE
-    SET last_read_event_seq = GREATEST(channel_member.last_read_event_seq, EXCLUDED.last_read_event_seq);
-  ```
+See [`unread.md`](unread.md).
 
 ## First-run setup
 
-`setup` is installation-wide state, read without an organisation filter.
-Its `organization_id` only names the organisation setup created; it does
-not make the row organisation-owned. Its primary key is a boolean fixed to
-`true`, not a UUIDv7. Completion stays recorded even if other organisations
-are created later.
-
-A nonempty configured setup token authorizes setup: SHA-256 hashes of the
-configured and submitted tokens are compared in constant time. All fields
-are validated before password hashing. One transaction inserts the
-organisation, takes its next `event_seq` (1), creates the account
-(Argon2id hash), its owner membership at that sequence, the default
-channel and the setup row. Concurrent losers hit the singleton key and roll back;
-repeating setup is 404.
+See [`setup-and-signup.md`](../architecture/setup-and-signup.md#first-run-setup).
 
 ## MVP scope
 
@@ -195,4 +145,4 @@ Two roles: `owner` and `member`. Public channels only: every member can read and
 
 Later, in roughly this order: private channels, direct messages,
 invitations, reactions, editing and deleting, row-level security, several
-organisations (see [`docs/roadmap.md`](roadmap.md)).
+organisations (see [`docs/roadmap.md`](../roadmap.md)).

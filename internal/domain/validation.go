@@ -41,7 +41,7 @@ func ValidateDisplayName(value string) (string, error) {
 // and combining marks (Unicode category M), which have no base character to
 // attach to when nothing else is there. It is a fixed list of code points
 // and one category, not a judgement of how a font renders the name
-// (docs/names.md). The empty name is blank-looking.
+// (docs/domain/names.md). The empty name is blank-looking.
 func IsBlankLookingName(name string) bool {
 	for _, r := range name {
 		switch {

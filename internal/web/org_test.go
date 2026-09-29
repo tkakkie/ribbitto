@@ -93,14 +93,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}
 	get := func(method, path, cookie string, at time.Time) *httptest.ResponseRecorder {
 		clock = at
-		r := httptest.NewRequest(method, path, strings.NewReader(url.Values{"name": {"新しいチャンネル"}, "body": {"posted through the page"}}.Encode()))
-		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		if cookie != "" {
-			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: cookie})
-		}
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, r)
-		return w
+		return serveForm(handler, method, path, cookie, url.Values{"name": {"新しいチャンネル"}, "body": {"posted through the page"}})
 	}
 
 	routes := orgRoutes(&pageRenderer{}, channels, postgres.MessageReader{Pool: pool}, message.New(postgres.NewPostingStore(pool)))
@@ -251,6 +244,17 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	if logs.Len() != 0 {
 		t.Errorf("unexpected message fallback: %s", logs.String())
 	}
+}
+
+func serveForm(handler http.Handler, method, path, cookie string, form url.Values) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(method, path, strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if cookie != "" {
+		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: cookie})
+	}
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	return w
 }
 
 // oneOrganisation makes the "live" session's account the owner of acme.

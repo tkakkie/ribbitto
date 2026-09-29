@@ -113,15 +113,15 @@ func TestDefaultChannelBackfill(t *testing.T) {
 func TestChannelService(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	acme := pgtest.Organization(t, ctx, pool, "acme", "Acme", 0)
-	globex := pgtest.Organization(t, ctx, pool, "globex", "Globex", 0)
+	acme := pgtest.Organization(t, pool, "acme", "Acme", 0)
+	globex := pgtest.Organization(t, pool, "globex", "Globex", 0)
 	member := func(org domain.ID) authz.Membership {
 		return authz.Membership{Organization: domain.Organization{ID: org}, Member: domain.Member{OrganizationID: org}}
 	}
 	store := postgres.NewChannelStore(pool)
 	service := appchannel.New(store)
 	for _, org := range []domain.ID{acme, globex} {
-		pgtest.Channel(t, ctx, pool, org, appchannel.DefaultName, true)
+		pgtest.Channel(t, pool, org, appchannel.DefaultName, true)
 	}
 	secret, err := service.Create(ctx, member(globex), " 開発 ")
 	if err != nil || secret.Name != "開発" || secret.IsDefault {

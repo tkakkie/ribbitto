@@ -17,19 +17,23 @@ func TestMessagePaging(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	memberships := map[string]authz.Membership{}
+	defaults := map[string]domain.Channel{}
 	for _, slug := range []string{"acme", "globex"} {
-		org := pgtest.Organization(t, ctx, pool, slug, slug, 1)
-		account := pgtest.Account(t, ctx, pool, slug+"@example.org", slug)
-		member := pgtest.Member(t, ctx, pool, org, account, domain.RoleOwner, "owner", 1)
-		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: org, Slug: slug}, Member: domain.Member{ID: member, OrganizationID: org}}
+		name := appchannel.DefaultName
+		if slug == "acme" {
+			name = "empty"
+		}
+		fixture := pgtest.OrganizationWithOwner(t, pool, slug, name)
+		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
+		defaults[slug] = fixture.Channel
 	}
 	acme, globex := memberships["acme"], memberships["globex"]
-	channels := map[string]domain.ID{}
-	for i, name := range []string{"empty", "exact", "partial", "noise"} {
-		ch := pgtest.Channel(t, ctx, pool, acme.Organization.ID, name, i == 0)
+	channels := map[string]domain.ID{"empty": defaults["acme"].ID}
+	for _, name := range []string{"exact", "partial", "noise"} {
+		ch := pgtest.Channel(t, pool, acme.Organization.ID, name, false)
 		channels[name] = ch.ID
 	}
-	foreign := pgtest.Channel(t, ctx, pool, globex.Organization.ID, appchannel.DefaultName, true)
+	foreign := defaults["globex"]
 
 	// Interleave posts so that every channel's event_seq values have gaps
 	// filled by another channel's, and globex reuses acme's numbers.

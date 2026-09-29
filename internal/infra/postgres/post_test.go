@@ -20,12 +20,9 @@ func TestPostMessage(t *testing.T) {
 	memberships := map[string]authz.Membership{}
 	channels := map[string]domain.ID{}
 	for _, slug := range []string{"acme", "globex"} {
-		org := pgtest.Organization(t, ctx, pool, slug, slug, 1)
-		account := pgtest.Account(t, ctx, pool, slug+"@example.org", slug)
-		member := pgtest.Member(t, ctx, pool, org, account, domain.RoleOwner, "owner", 1)
-		ch := pgtest.Channel(t, ctx, pool, org, appchannel.DefaultName, true)
-		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: org, Slug: slug}, Member: domain.Member{ID: member, OrganizationID: org}}
-		channels[slug] = ch.ID
+		fixture := pgtest.OrganizationWithOwner(t, pool, slug, appchannel.DefaultName)
+		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
+		channels[slug] = fixture.Channel.ID
 	}
 	service := message.New(postgres.NewPostingStore(pool))
 	state := func(slug string) (seq int64, messages int) {

@@ -18,16 +18,16 @@ func TestChangeHandle(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// acme: alice, bob and six racers; globex: carol; dave has no membership.
-	acmeID := pgtest.Organization(t, ctx, pool, "acme", "Acme", 0)
-	globexID := pgtest.Organization(t, ctx, pool, "globex", "Globex", 0)
+	acmeID := pgtest.Organization(t, pool, "acme", "Acme", 0)
+	globexID := pgtest.Organization(t, pool, "globex", "Globex", 0)
 	for _, name := range []string{"alice", "bob", "carol", "dave", "racer1", "racer2", "racer3", "racer4", "racer5", "racer6"} {
-		account := pgtest.Account(t, ctx, pool, name+"@example.org", name)
+		account := pgtest.Account(t, pool, name+"@example.org", name)
 		org := acmeID
 		if name == "carol" {
 			org = globexID
 		}
 		if name != "dave" {
-			pgtest.Member(t, ctx, pool, org, account, domain.RoleMember, name, 1)
+			pgtest.Member(t, pool, org, account, domain.RoleMember, name, 1)
 		}
 	}
 	accounts := map[string]*domain.Account{}

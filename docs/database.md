@@ -42,6 +42,21 @@ RIBBITTO_REQUIRE_DB=1 go test -count=1 -v ./internal/infra/postgres/...
 env -u RIBBITTO_TEST_DATABASE_URL -u RIBBITTO_REQUIRE_DB go test -count=1 -v ./internal/infra/postgres/...
 ```
 
+`pgtest.OrganizationWithOwner(t, pool, slug, channelName)` creates an organisation
+at `event_seq` 1, an owner account at `<slug>@example.org`, an owner membership
+with handle `owner` and `joined_event_seq` 1, and exactly one default channel
+with the supplied name. The organisation and account display names equal the
+slug. It returns the organisation, account and member IDs plus the channel.
+
+`pgtest.Organization`, `Account`, `Member` and `Channel` remain composable
+building blocks for partial setups or fixtures with different values.
+`Organization` sets the supplied `event_seq`; `Member` sets the supplied role,
+handle and `joined_event_seq` without advancing it. `Account` uses a placeholder
+password hash and creates no membership. `Channel` uses the store with an
+explicit name/default flag and leaves sequences unchanged. All fixture helpers
+use `t.Context()` internally; none creates a setup row. Schema, migration and
+adversarial tests keep direct SQL to express states these helpers should not hide.
+
 `make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`
 and `db/queries/`. Commit its pgx/v5 output in `internal/infra/postgres/sqlcgen/`;
 CI rejects generation changes to committed files. Never edit generated files.

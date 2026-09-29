@@ -18,25 +18,26 @@ import (
 func TestChannelMessageSchema(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
+	// Raw SQL and queries exercise schema constraints directly, including invalid rows.
 	q := sqlcgen.New(pool)
 	channels, messages := postgres.NewChannelStore(pool), postgres.NewMessageStore(pool)
 	var nullable int
-	requireAccountSchema(t, pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('channel', 'message') AND is_nullable = 'YES'").Scan(&nullable))
+	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('channel', 'message') AND is_nullable = 'YES'").Scan(&nullable))
 	if nullable != 0 {
 		t.Fatalf("new tables have %d nullable columns", nullable)
 	}
 	account, err := q.CreateAccount(ctx, sqlcgen.CreateAccountParams{Email: "a@b", DisplayName: "Author", PasswordHash: "$argon2id$test"})
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	var orgs []domain.ID
 	var members []domain.ID
 	var defaults []domain.Channel
 	for _, slug := range []string{"team", "other"} {
 		org, err := q.CreateOrganization(ctx, sqlcgen.CreateOrganizationParams{Name: slug, Slug: slug})
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: account.ID, Role: "member", JoinedEventSeq: 1, Handle: "member"})
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		channel, err := channels.CreateChannel(ctx, org.ID.Bytes, "雑談", true)
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		orgs, members, defaults = append(orgs, org.ID.Bytes), append(members, member.ID.Bytes), append(defaults, channel)
 		got, err := channels.GetDefaultChannel(ctx, org.ID.Bytes)
 		if err != nil || got != channel {
@@ -47,9 +48,9 @@ func TestChannelMessageSchema(t *testing.T) {
 	channel, foreign := defaults[0], defaults[1]
 	for _, input := range []string{"a", "　 開発 会議　 ", "a　b", " e\u0301 ", strings.Repeat("e\u0301", 80), strings.Repeat("界", 80)} {
 		name, err := domain.ValidateChannelName(input)
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		created, err := channels.CreateChannel(ctx, org, name, false)
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		got, err := channels.GetChannel(ctx, org, created.ID)
 		if err != nil || got != created || got.Name != name || got.IsDefault || got.OrganizationID != org || got.ID[6]>>4 != 7 || got.CreatedAt.IsZero() {
 			t.Fatalf("channel round trip: %+v, %v", got, err)
@@ -66,9 +67,9 @@ func TestChannelMessageSchema(t *testing.T) {
 	var posted []domain.Message
 	for _, input := range []string{"a", "hello\t", "a\r\nb\rc\nd", "\u00a0\u2002hello\u2003\u3000", "\t\r\n　a \r\n \tb　\n", "a\u00a0b", "e\u0301", "👩\u200d💻", "see \u2067שלום\u2069 now", "\u2066abc\u2069 \u2068x\u2069", "a\u200eb\u200fc\u061cd", strings.Repeat("界", 4000), strings.Repeat("e\u0301", 2000)} {
 		body, err := domain.ValidateMessageBody(input)
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		message, err := messages.InsertMessage(ctx, org, channel.ID, members[0], body, int64(len(posted)+1))
-		requireAccountSchema(t, err)
+		requireNoError(t, err)
 		if message.Body != body || message.OrganizationID != org || message.ChannelID != channel.ID || message.MemberID != members[0] || message.ID[6]>>4 != 7 || message.CreatedAt.IsZero() {
 			t.Fatalf("message round trip: %+v", message)
 		}
@@ -76,12 +77,12 @@ func TestChannelMessageSchema(t *testing.T) {
 	}
 	// Equal sequences in different organisations are valid and must never leak.
 	_, err = messages.InsertMessage(ctx, other, foreign.ID, members[1], "other", 1)
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	// A newer message in a sibling channel must not appear in this channel's pages.
 	sibling, err := channels.CreateChannel(ctx, org, "sibling", false)
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	_, err = messages.InsertMessage(ctx, org, sibling.ID, members[0], "sibling", 100)
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	slices.Reverse(posted)
 	for _, tc := range []struct {
 		name   string

@@ -58,6 +58,7 @@ internal/infra/postgres -> internal/app/signup
 internal/infra/postgres -> internal/domain
 internal/infra/postgres -> internal/infra/postgres/sqlcgen
 internal/infra/postgres/pgtest -> db/migrations
+internal/infra/postgres/pgtest -> internal/domain
 internal/infra/postgres/pgtest -> internal/infra/postgres
 internal/web -> internal/app/auth
 internal/web -> internal/app/authz

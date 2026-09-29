@@ -20,20 +20,14 @@ func TestPostMessage(t *testing.T) {
 	memberships := map[string]authz.Membership{}
 	channels := map[string]domain.ID{}
 	for _, slug := range []string{"acme", "globex"} {
-		var org, account, member domain.ID
-		requireAccountSchema(t, pool.QueryRow(ctx, "INSERT INTO organization (slug, name) VALUES ($1, $1) RETURNING id", slug).Scan(&org))
-		requireAccountSchema(t, pool.QueryRow(ctx, "INSERT INTO account (email, display_name, password_hash) VALUES ($1 || '@example.org', $1, '$argon2id$x') RETURNING id", slug).Scan(&account))
-		requireAccountSchema(t, pool.QueryRow(ctx, "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $2, 'owner', 1, 'owner') RETURNING id", org, account).Scan(&member))
-		requireAccountSchema(t, pool.QueryRow(ctx, "UPDATE organization SET event_seq = 1 WHERE id = $1 RETURNING id", org).Scan(&org))
-		ch, err := postgres.NewChannelStore(pool).CreateChannel(ctx, org, appchannel.DefaultName, true)
-		requireAccountSchema(t, err)
-		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: org, Slug: slug}, Member: domain.Member{ID: member, OrganizationID: org}}
-		channels[slug] = ch.ID
+		fixture := pgtest.OrganizationWithOwner(t, pool, slug, appchannel.DefaultName)
+		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
+		channels[slug] = fixture.Channel.ID
 	}
 	service := message.New(postgres.NewPostingStore(pool))
 	state := func(slug string) (seq int64, messages int) {
 		t.Helper()
-		requireAccountSchema(t, pool.QueryRow(ctx, "SELECT o.event_seq, (SELECT count(*) FROM message m WHERE m.organization_id = o.id) FROM organization o WHERE slug = $1", slug).Scan(&seq, &messages))
+		requireNoError(t, pool.QueryRow(ctx, "SELECT o.event_seq, (SELECT count(*) FROM message m WHERE m.organization_id = o.id) FROM organization o WHERE slug = $1", slug).Scan(&seq, &messages))
 		return seq, messages
 	}
 

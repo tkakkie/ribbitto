@@ -18,25 +18,27 @@ func TestChangeHandle(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// acme: alice, bob and six racers; globex: carol; dave has no membership.
-	_, err := pool.Exec(ctx, `
-		INSERT INTO organization (slug, name) VALUES ('acme', 'Acme'), ('globex', 'Globex');
-		INSERT INTO account (email, display_name, password_hash)
-		SELECT name || '@example.org', name, '$argon2id$x'
-		FROM unnest(ARRAY['alice', 'bob', 'carol', 'dave', 'racer1', 'racer2', 'racer3', 'racer4', 'racer5', 'racer6']) AS name;
-		INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle)
-		SELECT o.id, a.id, 'member', 1, split_part(a.email, '@', 1)
-		FROM account a JOIN organization o ON o.slug = CASE WHEN a.email LIKE 'carol@%' THEN 'globex' ELSE 'acme' END
-		WHERE a.email NOT LIKE 'dave@%'`)
-	requireAccountSchema(t, err)
+	acmeID := pgtest.Organization(t, pool, "acme", "Acme", 0)
+	globexID := pgtest.Organization(t, pool, "globex", "Globex", 0)
+	for _, name := range []string{"alice", "bob", "carol", "dave", "racer1", "racer2", "racer3", "racer4", "racer5", "racer6"} {
+		account := pgtest.Account(t, pool, name+"@example.org", name)
+		org := acmeID
+		if name == "carol" {
+			org = globexID
+		}
+		if name != "dave" {
+			pgtest.Member(t, pool, org, account, domain.RoleMember, name, 1)
+		}
+	}
 	accounts := map[string]*domain.Account{}
 	rows, err := pool.Query(ctx, "SELECT id, display_name FROM account")
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	for rows.Next() {
 		var a domain.Account
-		requireAccountSchema(t, rows.Scan(&a.ID, &a.DisplayName))
+		requireNoError(t, rows.Scan(&a.ID, &a.DisplayName))
 		accounts[a.DisplayName] = &a
 	}
-	requireAccountSchema(t, rows.Err())
+	requireNoError(t, rows.Err())
 	service := member.New(authz.New(postgres.NewAuthzStore(pool)), postgres.NewMemberStore(pool))
 	change := func(name, slug, handle string) (string, error) {
 		return service.ChangeHandle(ctx, accounts[name], slug, handle)
@@ -69,7 +71,7 @@ func TestChangeHandle(t *testing.T) {
 	}
 	// The store is scoped too: another organisation's member id matches nothing.
 	var acme, carol domain.ID
-	requireAccountSchema(t, pool.QueryRow(ctx, "SELECT (SELECT id FROM organization WHERE slug = 'acme'), (SELECT m.id FROM member m JOIN account a ON a.id = m.account_id WHERE a.email = 'carol@example.org')").Scan(&acme, &carol))
+	requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT id FROM organization WHERE slug = 'acme'), (SELECT m.id FROM member m JOIN account a ON a.id = m.account_id WHERE a.email = 'carol@example.org')").Scan(&acme, &carol))
 	if err := postgres.NewMemberStore(pool).UpdateHandle(ctx, acme, carol, "hijack"); !errors.Is(err, authz.ErrNotFound) || handles(t, pool)["carol"] != "carol" {
 		t.Fatalf("cross-organisation update: %v", err)
 	}
@@ -119,14 +121,14 @@ func TestChangeHandle(t *testing.T) {
 func handles(t *testing.T, pool *pgxpool.Pool) map[string]string {
 	t.Helper()
 	rows, err := pool.Query(t.Context(), "SELECT a.display_name, m.handle FROM member m JOIN account a ON a.id = m.account_id")
-	requireAccountSchema(t, err)
+	requireNoError(t, err)
 	defer rows.Close()
 	got := map[string]string{}
 	for rows.Next() {
 		var name, handle string
-		requireAccountSchema(t, rows.Scan(&name, &handle))
+		requireNoError(t, rows.Scan(&name, &handle))
 		got[name] = handle
 	}
-	requireAccountSchema(t, rows.Err())
+	requireNoError(t, rows.Err())
 	return got
 }

@@ -1,0 +1,46 @@
+{
+  "members": [
+    {"name": "Mira Vale", "handle": "mira"},
+    {"name": "星野 こよみ", "handle": "koyomi"},
+    {"name": "Theo Reed", "handle": "theo"},
+    {"name": "نورا", "handle": "noura"},
+    {"name": "Elise Cafe\u0301", "handle": "elise"}
+  ],
+  "channels": [
+    {"name": "general", "messages": [
+      {"author": "mira", "body": "Morning, Paper Lantern crew! The Kite team has a tiny demo for the imaginary rooftop garden. Please try the watering schedule before lunch."},
+      {"author": "koyomi", "body": "おはようございます。Pebbleチームは日本語の案内を確認します。「毎日」と「平日だけ」が少し紛らわしいかも。"},
+      {"author": "theo", "body": "on it 👍"},
+      {"author": "noura", "body": "The preview is at https://garden.example.test/demo?lang=en — that is our fictional demo address, so the link will not load."},
+      {"author": "elise", "body": "Re the schedule above: can we say which timezone it uses? My pretend basil has missed breakfast twice."},
+      {"author": "mira", "body": "Good catch. Garden time, shown beside the date. I'll put that in the next draft; no actual basil was harmed 🌱"},
+      {"author": "koyomi", "body": "了解です！ Earlier noteの「平日だけ」も、その説明があれば分かりやすそう。"}
+    ]},
+    {"name": "dev", "messages": [
+      {"author": "theo", "body": "Found the schedlue bug. Yep, I also misspelled it in my notes."},
+      {"author": "noura", "body": "Does it happen only with an empty list, or after removing the last pot too?"},
+      {"author": "theo", "body": "Both. Small repro:\n```go\nfor _, pot := range pots {\n\twater(pot)\n}\n```\nThe loop is fine; the summary below it assumes pots[0] exists."},
+      {"author": "koyomi", "body": "さっきの empty list、こちらでも再現しました。表示は「0鉢」でよさそうです。\n確認メモ：\n\t空の庭 → 0鉢\n\t最後の鉢を削除 → 0鉢"},
+      {"author": "theo", "body": "fixed locally. thanks!"},
+      {"author": "elise", "body": "One more text sample for that summary: cafe\u0301 / café, は\u3099 / ば, and 👩🏽‍💻. The first versions use combining marks; please keep what I typed."},
+      {"author": "noura", "body": "Confirmed the empty state from your repro. My name should also stay separate from the time beside it: نورا. I'll check the long note next."},
+      {"author": "mira", "body": "Long handoff note for the Kite and Pebble teams. This is all about our fictional rooftop garden demo, but I want the next person to be able to pick it up without a call. The short version: keep the garden small, make every action understandable, and let an empty garden be a perfectly ordinary state. We do not need to fill the screen just because there is room.\n\nFirst, the morning walkthrough. Start with an empty garden and add one pot called Window Mint. Set its schedule to weekdays, then switch to every day. Read the summary aloud after each change. If the summary sounds like a promise that water has already been delivered, the wording is wrong: this screen describes a plan. Koyomi's earlier point about the two labels belongs here, alongside the timezone note Elise raised in general.\n\nSecond, try the last-pot case Theo described above. Remove Window Mint, return to the overview, and make sure it says zero pots without leaving an old schedule floating underneath. Then add a different pot. It should begin with its own settings, rather than inheriting the mint's history. I initially wrote that this was only a visual problem; that was too quick. A stale summary can make someone believe the next action will do something different.\n\nThird, our pretend preview address is https://garden.example.test/demo. It is a text sample, not a service anyone needs to visit. Keep the full address visible in the notes so we can see how a long line wraps on a narrow screen. We also need ordinary punctuation beside it: parentheses, a comma, and a question mark. None of those should make the surrounding sentence difficult to follow, even when a line breaks in an inconvenient place.\n\nFourth, leave room for people who write differently. A quick \"done\" is useful. So is a careful explanation in Japanese. The note from the Pebble team should remain next to the question it answers in the script, instead of being moved into a separate collection of translated sentences. We are testing a conversation between colleagues, including the small corrections and acknowledgements that tell someone their message was understood.\n\nFifth, the practice incident is deliberately unfinished work. We found that a spinner stopping did not mean a request had stopped. Please do not change the final message to say that everything is fixed just to give the story a tidy ending. The next person needs to know what remains to be checked. The pause is part of the handoff. Noura's explanation is the reference, and Theo's correction should remain visible right before it.\n\nFor the next walkthrough, I suggest three passes rather than one enormous checklist. In the first pass, read only the labels and describe what you expect each action to do. In the second, actually use the empty and single-pot states. In the third, compare your expectations with the result. If they differ, write down the exact words that led you there. A screenshot alone will not explain why a label felt misleading.\n\nA small reminder about the story: Paper Lantern Studio, its teams, its people, and the garden are invented for this dataset. There are no customers waiting for a response and no real incident hidden behind these messages. Please keep future additions equally fictional. The useful realism comes from people listening, asking specific questions, admitting a mistaken guess, and leaving enough context for the next shift.\n\nFinally, thank you for the careful reading. This note is intentionally much longer than our usual chat messages so we can inspect wrapping and scrolling near the message limit. It should still be readable as a handoff rather than a wall of repeated filler. If you only have a minute, return to the empty-garden case and the retry correction; those are the two things most likely to confuse the next person. After that, take a break. The imaginary mint can wait. Leave a short reply here if any step needs a clearer example before the next walkthrough."}
+    ]},
+    {"name": "random", "messages": [
+      {"author": "elise", "body": "Extremely serious poll: should the demo watering can be yellow or have tiny stars?"},
+      {"author": "koyomi", "body": "星に一票 ✨ でも、じょうろより鉢のほうが目立ってほしいです。"},
+      {"author": "theo", "body": "yellow with one star. compromise achieved, meeting cancelled"},
+      {"author": "noura", "body": "I came back to three messages and an entire design committee 😄"},
+      {"author": "mira", "body": "Following up on the very serious poll above: one star it is. Back to the tiny garden."}
+    ]},
+    {"name": "incident-garden", "messages": [
+      {"author": "noura", "body": "Practice incident, fictional garden only: the preview says every pot was watered twice. Pausing the demo while we check."},
+      {"author": "theo", "body": "I clicked retry after the spinner stopped. Looking at whether the old request was still running."},
+      {"author": "koyomi", "body": "こちらでは一回だけでした。Theoさんの最初の操作と retry の間は、どのくらいでしたか？"},
+      {"author": "theo", "body": "about 5 seconds. correction to my earlier guess: the spinner timed out, the request didn't."},
+      {"author": "mira", "body": "Let's keep the demo paused. Noura checks duplicate requests; I'll write a short explanation for the Kite and Pebble teams. No need for everyone to debug the same thing."},
+      {"author": "noura", "body": "Practice complete: reproduced with the retry above. The follow-up is to make a repeated request safe. Demo stays paused until that is checked."},
+      {"author": "koyomi", "body": "引き継ぎメモを読みました。次の練習では「失敗」と「まだ処理中」を分けて確認しましょう。おつかれさまでした！"}
+    ]}
+  ]
+}

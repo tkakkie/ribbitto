@@ -46,6 +46,42 @@ env -u RIBBITTO_TEST_DATABASE_URL -u RIBBITTO_REQUIRE_DB go test -count=1 -v ./i
 and `db/queries/`. Commit its pgx/v5 output in `internal/infra/postgres/sqlcgen/`;
 CI rejects generation changes to committed files. Never edit generated files.
 
+## Development seed data
+
+`cmd/seed` is for an empty, disposable development database only. As a
+guard, it refuses, before connecting, any `RIBBITTO_DATABASE_URL` whose host
+(fallback hosts included) is not `localhost`, `127.0.0.1` or `::1`. The
+allowlist checks the address, not what serves it: a loopback port can still
+lead to a local production database or a tunnel to a remote one, so point
+it only at a database you can throw away.
+With `RIBBITTO_DATABASE_URL` exported:
+
+```sh
+go run ./cmd/ribbitto migrate up
+go run ./cmd/seed -messages 20000
+```
+
+`-messages N` is the positive number of messages **per channel** (default
+100). The command creates Paper Lantern Studio (`paper-lantern`), five
+fictional members, and four channels including `general`. Every run
+generates a new random password for all seeded members and prints it, with
+the owner's address, when it finishes: sign in as `mira@example.test`
+(owner), or another script handle at `example.test`, with that password.
+Nothing fixed or published signs in.
+
+The embedded `cmd/seed/conversations.json` contains English and Japanese
+exchanges, Unicode names, and message-layout edge cases. Have a person
+review every script before committing it. Each channel's exchange repeats
+in file order, stopping at N posts; the final exchange may be partial.
+The same flags produce the same members, channels, bodies, authors and
+posting order. Generated IDs, timestamps and password hashes may differ.
+Messages are posted now, with no backdating, through the existing use cases.
+
+Completed setup makes the command refuse all writes, including on rerun.
+Each use case commits separately: after an interrupted seed, discard the
+disposable database and start with a fresh migrated one. Seeding enables
+sign-up only inside this command; it does not change the server's settings.
+
 ## Generated schema reference
 
 With the Compose database running and `RIBBITTO_DATABASE_URL` exported,

@@ -52,8 +52,10 @@ stay outside the replaced section; CSP and htmx evaluation remain unchanged.
 `message-history-v1.js` keeps the reader's place when "Load older messages"
 prepends a page: the link selects the older page's `<li>` elements into
 `#message-items` (`afterbegin`) and replaces `#load-older` out of band. The
-script restores the distance from the pane's bottom and moves focus to the
-next control, or to the pane once the oldest message is shown.
+script restores the distance from the pane's bottom after the swap and again
+after settling, since local timestamps (`htmx:load`) can change the new
+messages' height, then moves focus to the next control, or to the pane once
+the oldest message is shown.
 
 ## Languages
 

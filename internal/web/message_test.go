@@ -214,6 +214,8 @@ func TestMessagePagingHandler(t *testing.T) {
 		{"empty", "?before=", false, 400, -1, nil, nil},
 		{"repeated", "?before=5&before=6", false, 400, -1, nil, nil},
 		{"overflow", "?before=9223372036854775808", false, 400, -1, nil, nil},
+		{"malformed escape", "?before=%ZZ", false, 400, -1, nil, nil},
+		{"repeated with a malformed escape", "?before=5&before=%ZZ", false, 400, -1, nil, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64

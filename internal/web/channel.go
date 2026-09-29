@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -73,7 +74,14 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m authz.Membe
 		return
 	}
 	page := view.ChannelPage{}
-	if raw, ok := r.URL.Query()["before"]; ok {
+	// ParseQuery, unlike URL.Query, reports malformed pairs instead of
+	// dropping them, so a broken link cannot fall back to the latest page.
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	if raw, ok := query["before"]; ok {
 		// An event_seq is positive; anything else is a malformed link.
 		before, err := strconv.ParseInt(raw[0], 10, 64)
 		if len(raw) != 1 || err != nil || before < 1 {

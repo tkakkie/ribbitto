@@ -131,7 +131,7 @@ other = "チャンネル名は表示可能な1〜80文字で入力してくだ�
 other = "この名前のチャンネルは既に存在します。"
 
 [message.list]
-other = "メッセージ"
+other = "メッセージ一覧"
 
 ["message.body"]
 other = "メッセージ"

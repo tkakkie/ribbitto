@@ -193,6 +193,9 @@ func TestCheckMarkup(t *testing.T) {
 		{"icon button named only by hidden text", page(`<main><button type="button"><span aria-hidden="true">×</span></button></main>`), true, "accessible name"},
 		{"blank aria-label", page(`<main><button type="button" aria-label=" "></button></main>`), true, "accessible name"},
 		{"icon button with a name", page(`<main><button type="button" aria-label="Close"><span aria-hidden="true">×</span></button></main>`), true, ""},
+		// An empty for names no control, whether the label wraps it or not.
+		{"empty for beside the input", page(`<main><label for="">Email</label><input type="text" name="email"></main>`), true, "without a label"},
+		{"empty for on a wrapping label", page(`<main><label for="">Email <input type="text" name="email"></label></main>`), true, "without a label"},
 		{"wrapping label pointing elsewhere", page(`<main><label for="missing">Email <input id="email" type="email" name="email"></label></main>`), true, "without a label"},
 		{"second control in one label", page(`<main><label>Name <input type="text" name="a"><input type="text" name="b"></label></main>`), true, "name=\"b\""},
 		{"stray tabindex", page(`<main><div tabindex="0">x</div></main>`), true, "tabindex"},
@@ -223,6 +226,7 @@ type markupCase struct {
 	cookie   bool
 	repeat   int // send the request this many times and check the last
 	status   int // the expected status; 0 means 200
+	alerts   int // when set, the number of role="alert" errors the page must show
 }
 
 // Every page in every state, in both languages, passes checkMarkup, and
@@ -234,7 +238,7 @@ func TestPagesMarkup(t *testing.T) {
 		t.Fatal(err)
 	}
 	fieldErrors := setup.ValidationErrors{}
-	for _, field := range []string{"organization_name", "slug", "display_name", "email", "password"} {
+	for _, field := range []string{"organization_name", "slug", "display_name", "handle", "email", "password"} {
 		fieldErrors[field] = errors.New("invalid")
 	}
 	base := func() Services {
@@ -273,20 +277,22 @@ func TestPagesMarkup(t *testing.T) {
 		}
 		return s
 	}
-	setupForm := url.Values{"token": {"t"}, "organization_name": {"Org"}, "slug": {"org"}, "display_name": {"Owner"}, "email": {"a@b"}, "password": {"p"}}
+	setupForm := url.Values{"token": {"t"}, "organization_name": {"Org"}, "slug": {"org"}, "display_name": {"Owner"}, "handle": {"owner"}, "email": {"a@b"}, "password": {"p"}}
 	cases := []markupCase{
 		{name: "home signed out", route: "GET /{$}", services: base, method: "GET", path: "/"},
 		{name: "home signed out, sign-up open", route: "GET /{$}", services: withSignUp(true, nil), method: "GET", path: "/"},
+		{name: "home signed out, sign-up closed", route: "GET /{$}", services: withSignUp(false, nil), method: "GET", path: "/"},
 		{name: "home signed in", route: "GET /{$}", services: signedIn(noOrganisations{}), method: "GET", path: "/", cookie: true},
 		{name: "sign-in", route: "GET /signin", services: base, method: "GET", path: "/signin"},
 		{name: "sign-in, sign-up open", route: "GET /signin", services: withSignUp(true, nil), method: "GET", path: "/signin"},
+		{name: "sign-in, sign-up closed", route: "GET /signin", services: withSignUp(false, nil), method: "GET", path: "/signin"},
 		{name: "sign-in failed", route: "POST /signin", services: func() Services { s := base(); s.SignIn = &fakeSignIn{err: auth.ErrInvalidCredentials}; return s }, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, status: http.StatusUnprocessableEntity},
 		{name: "sign-in rate-limited", route: "POST /signin", services: limited, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, repeat: 2, status: http.StatusTooManyRequests},
 		{name: "setup", route: "GET /setup", services: withSetup(nil), method: "GET", path: "/setup"},
-		{name: "setup, every field invalid", route: "POST /setup", services: withSetup(fieldErrors), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity},
+		{name: "setup, every field invalid", route: "POST /setup", services: withSetup(fieldErrors), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 6},
 		{name: "setup, wrong token", route: "POST /setup", services: withSetup(setup.ErrToken), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity},
 		{name: "sign-up", route: "GET /signup", services: withSignUp(true, nil), method: "GET", path: "/signup"},
-		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity},
+		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 4},
 		{name: "organisation page", route: "GET /organizations/{slug}/{$}", services: signedIn(oneOrganisation{}), method: "GET", path: "/organizations/acme/", cookie: true},
 	}
 	// Routes that answer with a redirect or an empty status, never a page.
@@ -338,6 +344,18 @@ func TestPagesMarkup(t *testing.T) {
 				}
 				for _, problem := range checkMarkup(doc, true) {
 					t.Error(problem)
+				}
+				// Every invalid field's error is rendered, so each is checked too.
+				if c.alerts > 0 {
+					alerts := 0
+					for n := range doc.Descendants() {
+						if attr(n, "role") == "alert" {
+							alerts++
+						}
+					}
+					if alerts != c.alerts {
+						t.Errorf("%d field errors rendered, want %d", alerts, c.alerts)
+					}
 				}
 			})
 		}

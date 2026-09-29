@@ -28,13 +28,42 @@ type Reader struct {
 	Accounts auth.Directory
 }
 
-// Latest returns the latest 50 messages oldest first. The caller resolves
-// membership and the channel through authz and channel before reading.
-func (s Reader) Latest(ctx context.Context, m authz.Membership, channelID domain.ID) ([]Entry, error) {
-	messages, err := s.History.ListMessagesBefore(ctx, m.Organization.ID, channelID, nil, 50)
+// PageSize is how many messages one page of history holds.
+const PageSize = 50
+
+// Page is one page of a channel's history, oldest first.
+type Page struct {
+	Entries []Entry
+	// Older reports that messages before Entries[0] exist; the next page is
+	// read before Entries[0].EventSeq.
+	Older bool
+}
+
+// Before returns the page of messages older than event_seq before, or the
+// latest page when before is nil. The caller resolves membership and the
+// channel through authz and channel before reading. before is only an upper
+// bound: the query is scoped to the membership's organisation and the
+// channel, so a value taken from another channel cannot reach its messages.
+func (s Reader) Before(ctx context.Context, m authz.Membership, channelID domain.ID, before *int64) (Page, error) {
+	// One extra row says whether an older page exists without a count query.
+	messages, err := s.History.ListMessagesBefore(ctx, m.Organization.ID, channelID, before, PageSize+1)
 	if err != nil {
-		return nil, fmt.Errorf("reading history: %w", err)
+		return Page{}, fmt.Errorf("reading history: %w", err)
 	}
+	older := len(messages) > PageSize
+	if older {
+		messages = messages[:PageSize]
+	}
+	entries, err := s.entries(ctx, m, messages)
+	if err != nil {
+		return Page{}, err
+	}
+	return Page{Entries: entries, Older: older}, nil
+}
+
+// entries adds author names to newest-first messages and returns them oldest
+// first.
+func (s Reader) entries(ctx context.Context, m authz.Membership, messages []domain.Message) ([]Entry, error) {
 	ids := make([]domain.ID, 0, len(messages))
 	for _, msg := range messages {
 		ids = append(ids, msg.MemberID)

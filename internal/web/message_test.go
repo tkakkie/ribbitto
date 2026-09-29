@@ -26,11 +26,17 @@ import (
 
 type fakeMessages struct {
 	entries []message.Entry
+	older   bool
 	err     error
+	// before, when set, records the bound each read received.
+	before *[]*int64
 }
 
-func (f fakeMessages) Latest(context.Context, authz.Membership, domain.ID) ([]message.Entry, error) {
-	return f.entries, f.err
+func (f fakeMessages) Before(_ context.Context, _ authz.Membership, _ domain.ID, before *int64) (message.Page, error) {
+	if f.before != nil {
+		*f.before = append(*f.before, before)
+	}
+	return message.Page{Entries: f.entries, Older: f.older}, f.err
 }
 
 func populatedMessages() fakeMessages {
@@ -38,6 +44,12 @@ func populatedMessages() fakeMessages {
 		{Message: domain.Message{ID: domain.ID{8}, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author"},
 		{Message: domain.Message{ID: domain.ID{9}, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy"},
 	}}
+}
+
+func olderMessages() fakeMessages {
+	f := populatedMessages()
+	f.older = true
+	return f
 }
 
 func TestMessageListHandler(t *testing.T) {
@@ -176,5 +188,69 @@ func TestMessagePostHandler(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestMessagePagingHandler(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	channelURL := view.ChannelURL("acme", domain.ID{1})
+	for _, tt := range []struct {
+		name, query string
+		older       bool
+		status      int
+		before      int64 // 0: the latest page
+		want, avoid []string
+	}{
+		{"latest with older", "", true, 200, 0, []string{`href="` + channelURL + `?before=7"`, `hx-get="` + channelURL + `?before=7"`, `hx-select-oob="#load-older"`, `id="load-older"`}, []string{"Jump to the newest"}},
+		{"latest without older", "", false, 200, 0, []string{`<div id="load-older"></div>`}, []string{"?before=", "Jump to the newest"}},
+		{"older page", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil},
+		{"oldest page", "?before=8", false, 200, 8, []string{`>Jump to the newest messages</a>`}, []string{"?before="}},
+		{"zero", "?before=0", false, 400, -1, nil, nil},
+		{"negative", "?before=-3", false, 400, -1, nil, nil},
+		{"not a number", "?before=abc", false, 400, -1, nil, nil},
+		{"empty", "?before=", false, 400, -1, nil, nil},
+		{"repeated", "?before=5&before=6", false, 400, -1, nil, nil},
+		{"overflow", "?before=9223372036854775808", false, 400, -1, nil, nil},
+		{"malformed escape", "?before=%ZZ", false, 400, -1, nil, nil},
+		{"repeated with a malformed escape", "?before=5&before=%ZZ", false, 400, -1, nil, nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var seen []*int64
+			reader := fakeMessages{entries: []message.Entry{{Message: domain.Message{ID: domain.ID{8}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
+			handler, err := NewHandler("", catalogues, Services{Sessions: oneSession{}, SignIn: &fakeSignIn{}, Authz: oneOrganisation{}, Channels: &fakeChannels{}, Messages: reader, Posting: testPoster()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest("GET", channelURL+tt.query, nil)
+			req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			if w.Code != tt.status {
+				t.Fatalf("status %d", w.Code)
+			}
+			if tt.status != 200 {
+				if len(seen) != 0 {
+					t.Fatal("a malformed bound reached the reader")
+				}
+				return
+			}
+			if len(seen) != 1 || (tt.before == 0) != (seen[0] == nil) || (seen[0] != nil && *seen[0] != tt.before) {
+				t.Fatalf("reader bounds %v", seen)
+			}
+			body := w.Body.String()
+			for _, want := range tt.want {
+				if !strings.Contains(body, want) {
+					t.Errorf("missing %q", want)
+				}
+			}
+			for _, avoid := range tt.avoid {
+				if strings.Contains(body, avoid) {
+					t.Errorf("unexpected %q", avoid)
+				}
+			}
+		})
 	}
 }

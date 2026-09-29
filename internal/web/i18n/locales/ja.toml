@@ -144,3 +144,9 @@ other = "送信"
 
 ["message.error.body"]
 other = "制御文字や文字方向の埋め込み・上書き文字を含めず、1〜4000文字で入力してください。"
+
+["message.load_older"]
+other = "以前のメッセージを読み込む"
+
+["message.newest"]
+other = "最新のメッセージへ"

@@ -50,7 +50,9 @@ $(TAILWIND):
 
 # Local caches under bin/ include third-party sources and invalid test fixtures.
 # The pinned templ has no check-only flag, so each file is compared with the
-# formatter's stdout; the working tree is never rewritten.
+# formatter's stdout; the working tree is never rewritten. The exit status is
+# checked on its own: on a parse error the formatter prints nothing, which
+# would match an empty file.
 check: $(TEMPL)
 	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
 	if [ -n "$$unformatted" ]; then \
@@ -58,8 +60,10 @@ check: $(TEMPL)
 		echo "$$unformatted"; \
 		exit 1; \
 	fi
-	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.templ' -print | sort | while IFS= read -r file; do \
-			if ! $(TEMPL) fmt -stdout -stdin-filepath "$$file" < "$$file" | cmp -s - "$$file"; then printf '%s\n' "$$file"; fi; \
+	@set -eu; formatted=$$(mktemp); trap 'rm -f "$$formatted"' EXIT; \
+	unformatted=$$(find . -path ./bin -prune -o -type f -name '*.templ' -print | sort | while IFS= read -r file; do \
+			if ! $(TEMPL) fmt -stdout -stdin-filepath "$$file" < "$$file" > "$$formatted" \
+				|| ! cmp -s "$$formatted" "$$file"; then printf '%s\n' "$$file"; fi; \
 		done); \
 	if [ -n "$$unformatted" ]; then \
 		echo "These files need templ fmt (run ./bin/templ fmt on them):"; \

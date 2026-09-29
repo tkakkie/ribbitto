@@ -16,12 +16,21 @@ type ChannelPage struct {
 	Channels          []domain.Channel
 	Name, Error       string
 	Body, BodyError string
- Messages []message.Entry
+	Messages        []message.Entry
+	// Older reports that messages before Messages[0] exist.
+	Older bool
+	// Before is the event_seq bound of an older page; 0 shows the latest.
+	Before int64
 }
 
 // ChannelURL identifies a channel by its stable UUID, never its name.
 func ChannelURL(slug string, id domain.ID) string {
 	return fmt.Sprintf("/organizations/%s/channels/%x-%x-%x-%x-%x", slug, id[:4], id[4:6], id[6:8], id[8:10], id[10:])
+}
+
+// olderURL links to the page before the oldest message shown.
+func olderURL(page ChannelPage) string {
+	return fmt.Sprintf("%s?before=%d", ChannelURL(page.Organization.Slug, page.Current.ID), page.Messages[0].EventSeq)
 }
 
 // Channel renders the desktop chat layout.
@@ -75,22 +84,33 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 			<main id="conversation" class="flex min-w-0 flex-1 flex-col bg-bg">
 				<header class="shrink-0 border-b border-border px-6 py-3"><h1 class="break-words text-title font-semibold">{ page.Current.Name }</h1></header>
 				<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="min-h-0 flex-1 overflow-y-auto">
-    if len(page.Messages) == 0 {
-     <div class="flex min-h-full items-center justify-center p-8"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
-    } else {
-     <ol aria-label={ i18n.T(ctx, "message.list") } class="flex flex-col gap-4 px-6 py-4">
-      for _, entry := range page.Messages {
-       <li id={ fmt.Sprintf("message-%x", entry.ID) }>
-        <div class="flex flex-wrap items-baseline gap-2">
-         <span>@MemberName(entry.DisplayName, entry.Handle)</span>
-         <time datetime={ entry.CreatedAt.UTC().Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
-        </div>
-        <p dir="auto" class="whitespace-pre-wrap break-words">{ entry.Body }</p>
-       </li>
-      }
-     </ol>
-    }
-    </div>
+					// Always present, empty on the oldest page: loading older
+					// messages replaces it out of band with the next control.
+					<div id="load-older">
+						if page.Older {
+							<p class="flex justify-center px-6 pt-4"><a href={ templ.SafeURL(olderURL(page)) } hx-get={ olderURL(page) } hx-target="#message-items" hx-swap="afterbegin" hx-select="#message-items > li" hx-select-oob="#load-older" class="inline-flex min-h-11 items-center rounded-md border border-border-strong px-3 py-2 text-fg hover:bg-surface">{ i18n.T(ctx, "message.load_older") }</a></p>
+						}
+					</div>
+					if len(page.Messages) == 0 {
+						<div class="flex min-h-full items-center justify-center p-8"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
+					} else {
+						<ol id="message-items" class="flex flex-col gap-4 px-6 py-4">
+							for _, entry := range page.Messages {
+								<li id={ fmt.Sprintf("message-%x", entry.ID) }>
+									<div class="flex flex-wrap items-baseline gap-2">
+										<span>@MemberName(entry.DisplayName, entry.Handle)</span>
+										<time datetime={ entry.CreatedAt.UTC().Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
+									</div>
+									<p dir="auto" class="whitespace-pre-wrap break-words">{ entry.Body }</p>
+								</li>
+							}
+						</ol>
+					}
+					if page.Before > 0 {
+						// Only an older page reached without JavaScript shows this.
+						<p class="px-6 pb-4 text-center"><a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="text-brand underline">{ i18n.T(ctx, "message.newest") }</a></p>
+					}
+				</div>
 				<form id="message-composer" method="post" action={ ChannelURL(page.Organization.Slug, page.Current.ID) } hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) } hx-target="#conversation" hx-select="#conversation" hx-swap="outerHTML" hx-disabled-elt="find textarea, find button" hx-sync="this:drop" class="flex shrink-0 flex-col gap-2 border-t border-border p-4">
 					<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 					// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
@@ -104,9 +124,10 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 				</form>
 			</main>
 		</div>
-		// Every channel page loads both, outside #conversation: htmx will not
+		// Every channel page loads these, outside #conversation: htmx will not
 		// run scripts in swapped fragments.
 		<script defer src="/static/message-time-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-history-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

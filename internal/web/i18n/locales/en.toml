@@ -144,3 +144,9 @@ other = "Send"
 
 ["message.error.body"]
 other = "Enter 1–4000 characters without control characters or directional embeddings and overrides."
+
+["message.load_older"]
+other = "Load older messages"
+
+["message.newest"]
+other = "Jump to the newest messages"

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/a-h/templ"
@@ -24,9 +25,9 @@ type ChannelService interface {
 	Create(context.Context, authz.Membership, string) (domain.Channel, error)
 }
 
-// MessageReader provides the recent conversation with author names.
+// MessageReader provides a page of the conversation with author names.
 type MessageReader interface {
-	Latest(context.Context, authz.Membership, domain.ID) ([]message.Entry, error)
+	Before(context.Context, authz.Membership, domain.ID, *int64) (message.Page, error)
 }
 
 type channelPages struct {
@@ -71,7 +72,17 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m authz.Membe
 		p.post(w, r, m, c)
 		return
 	}
-	p.render(w, r, m, c, http.StatusOK, view.ChannelPage{})
+	page := view.ChannelPage{}
+	if raw, ok := r.URL.Query()["before"]; ok {
+		// An event_seq is positive; anything else is a malformed link.
+		before, err := strconv.ParseInt(raw[0], 10, 64)
+		if len(raw) != 1 || err != nil || before < 1 {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		page.Before = before
+	}
+	p.render(w, r, m, c, http.StatusOK, page)
 }
 
 func (p channelPages) create(w http.ResponseWriter, r *http.Request, m authz.Membership) {
@@ -109,7 +120,11 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Mem
 		serverError(w, r, "listing channels", err)
 		return
 	}
-	entries, err := p.messages.Latest(r.Context(), m, c.ID)
+	var before *int64
+	if page.Before > 0 {
+		before = &page.Before
+	}
+	history, err := p.messages.Before(r.Context(), m, c.ID, before)
 	if err != nil {
 		serverError(w, r, "listing messages", err)
 		return
@@ -117,7 +132,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Mem
 	account, _ := middleware.Account(r.Context())
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		page.Organization, page.DisplayName, page.Handle, page.Role = m.Organization, account.DisplayName, m.Member.Handle, string(m.Member.Role)
-		page.Current, page.Channels, page.Messages = c, channels, entries
+		page.Current, page.Channels, page.Messages, page.Older = c, channels, history.Entries, history.Older
 		return view.Channel(url, page)
 	})
 }

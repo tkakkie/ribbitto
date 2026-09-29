@@ -50,7 +50,7 @@ that the body does not start or end with ASCII white space; PostgreSQL
 
 ## Showing bodies
 
-The channel page shows the latest 50 messages, oldest first. templ escapes
+The channel page shows the latest page of 50 messages, oldest first. templ escapes
 stored bodies at render time (never `templ.Raw`); `whitespace-pre-wrap`
 keeps line breaks and `dir="auto"` isolates each body's direction. DOM ids
 use `message.id`. Authors use `view.MemberName` with current display names
@@ -66,3 +66,15 @@ return 422 with the original text and an associated field error. The channel
 and organisation are resolved before posting; a non-member gets 404.
 Enter sends, Shift+Enter inserts a line break, and IME composition never
 sends. The page opens at the newest message and scrolls there after posting.
+
+## Older pages
+
+Older history is read a page of 50 at a time with `ListMessagesBefore`,
+bounded by the oldest shown `event_seq` (`?before=` on the channel URL); no
+`OFFSET` and no count query — one extra row says whether an older page
+exists. The bound is only a number: the read is still scoped to the URL's
+organisation and channel, so a value taken from another channel returns
+this channel's older messages, never that channel's. "Load older messages"
+prepends the page with htmx and keeps the reader's place; without
+JavaScript it is a link to that page, which links back to the newest. The
+control is gone once the oldest message is shown.

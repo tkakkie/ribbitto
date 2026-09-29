@@ -149,6 +149,9 @@ there are messages. The message pane scrolls independently with a labelled,
 keyboard-focusable region; the composer stays at the bottom of the viewport.
 Its labelled textarea preserves invalid text and associates its error with
 `aria-describedby`. After an htmx submission, focus returns to the textarea.
+"Load older messages" is a link above the list (a plain link without
+JavaScript); after it prepends a page, the reading position stays put and
+focus moves to the next such link, or to the message pane at the start.
 
 ## Planned directions (from the maintainer, #9)
 

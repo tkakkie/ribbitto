@@ -41,7 +41,7 @@ with that membership; they never query the database directly:
 | Route | Result |
 |---|---|
 | `GET /organizations/{slug}/` | 303 to `Service.Default`, found by `is_default`; a missing default is logged and answers 500 |
-| `GET /organizations/{slug}/channels/{channel-id}` | Channel page and sidebar; malformed, unknown and other organisations' UUIDs answer 404 |
+| `GET /organizations/{slug}/channels/{channel-id}` | Channel page and sidebar; malformed, unknown and other organisations' UUIDs answer 404. `?before=<event_seq>` shows the older page; a bound that is not one positive integer answers 400 |
 | `POST /organizations/{slug}/channels/{channel-id}` | Calls `message.Service.Post`; htmx receives the updated conversation, otherwise 303 back to the channel; invalid bodies render a field error (422) |
 | `POST /organizations/{slug}/channels` | Creates a channel and answers 303 to its UUID URL; invalid or duplicate names render a field error (422) alongside the default channel |
 

@@ -85,7 +85,7 @@ func TestValidationNonPrintableText(t *testing.T) {
 	}
 }
 
-// The accepted and rejected names mirror the examples in docs/names.md.
+// The accepted and rejected names mirror the examples in docs/domain/names.md.
 func TestBlankLookingNames(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

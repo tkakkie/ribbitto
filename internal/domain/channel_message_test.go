@@ -37,7 +37,7 @@ func TestValidateMessageBody(t *testing.T) {
 		{"interior spaces", "a\u00a0b", "a\u00a0b"},
 		{"no NFC", "e\u0301", "e\u0301"},
 		{"emoji joiner", "👩\u200d💻", "👩\u200d💻"},
-		// Isolates and directional marks are allowed on purpose (docs/messages.md).
+		// Isolates and directional marks are allowed on purpose (docs/domain/messages.md).
 		{"bidi isolates", "see \u2067שלום\u2069 and \u2066abc\u2069 \u2068x\u2069", "see \u2067שלום\u2069 and \u2066abc\u2069 \u2068x\u2069"},
 		{"directional marks", "a\u200eb\u200fc\u061cd", "a\u200eb\u200fc\u061cd"},
 		{"empty", "", ""}, {"whitespace only", " \t\r\n　\u00a0", ""},

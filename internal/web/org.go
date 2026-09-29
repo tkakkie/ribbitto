@@ -5,11 +5,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
-	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
 // Authorizer decides organisation access (authz.Authorizer).
@@ -28,19 +26,12 @@ type orgRoute struct {
 // orgRoutes lists every route under /organizations/{slug}/. The same list
 // registers the routes and drives the tests that prove non-members get
 // 404, so a route cannot be added without those tests covering it.
-func orgRoutes(pages *pageRenderer) []orgRoute {
+func orgRoutes(pages *pageRenderer, service ChannelService) []orgRoute {
+	handlers := channelPages{pages: pages, service: service}
 	return []orgRoute{
-		{http.MethodGet, "/{$}", func(w http.ResponseWriter, r *http.Request, m authz.Membership) {
-			account, _ := middleware.Account(r.Context())
-			pages.render(w, r, http.StatusOK, func(url string) templ.Component {
-				return view.OrgHome(url, view.OrgPage{
-					OrganizationName: m.Organization.Name,
-					DisplayName:      account.DisplayName,
-					Handle:           m.Member.Handle,
-					Role:             string(m.Member.Role),
-				})
-			})
-		}},
+		{http.MethodGet, "/{$}", handlers.home},
+		{http.MethodGet, "/channels/{channelID}", handlers.show},
+		{http.MethodPost, "/channels", handlers.create},
 	}
 }
 

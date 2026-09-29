@@ -79,7 +79,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in, sign-up | `app/auth`, `app/signup`; `infra/postgres` `account.go`, `session.go`, `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
 | `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`), `member`, `setup` |
-| `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql` | `channel` |
+| `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go`, `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`; `db/queries/message.sql` | `message` |
 | `realtime` | `internal/realtime` *(M3)* | none |
 
@@ -128,8 +128,8 @@ Read the file for the area you change:
 
 ## See also
 
-- [`docs/domain.md`](../domain.md) — entities, invariants, unread rules
-- [`docs/names.md`](../names.md) — display names, handles, how members are shown
+- [`docs/domain/README.md`](../domain/README.md) — entities, invariants, unread rules
+- [`docs/domain/names.md`](../domain/names.md) — display names, handles, how members are shown
 - [`docs/database.md`](../database.md) — local database, migrations, tests
 - [`docs/schema/README.md`](../schema/README.md) — generated reference for the current schema
 - [`DECISIONS.md`](../../DECISIONS.md) — why things are the way they are

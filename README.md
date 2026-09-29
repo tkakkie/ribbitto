@@ -90,7 +90,7 @@ value prevents startup. Sign-in links to registration only while it is open.
 ## Documentation
 
 - [Architecture](docs/architecture/README.md) — packages, allowed imports, request and real-time flow
-- [Domain](docs/domain.md) — glossary, entities, invariants, unread rules
+- [Domain](docs/domain/README.md) — glossary, entities, invariants, unread rules
 - [UI](docs/ui.md) — design direction, tokens, contrast
 - [Decisions](DECISIONS.md) — what was decided and why
 - [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow/README.md) · [Database development](docs/database.md)

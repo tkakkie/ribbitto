@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -101,6 +102,13 @@ func acceptanceResponse(t *testing.T, response *http.Response, status int) strin
 			want = "/signin"
 		} else if response.Request.URL.Path == "/" {
 			want = "/organizations/owner/"
+		} else if path := response.Request.URL.Path; strings.HasPrefix(path, "/organizations/") && strings.HasSuffix(path, "/") {
+			want = response.Header.Get("Location")
+			matched, err := regexp.MatchString("^"+regexp.QuoteMeta(path)+`channels/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, want)
+			acceptanceOK(t, err)
+			if !matched {
+				t.Fatalf("organisation redirect is not a scoped channel UUID: %q", want)
+			}
 		}
 		if response.Header.Get("Location") != want {
 			t.Fatalf("redirect = %q, want %q", response.Header.Get("Location"), want)
@@ -168,7 +176,8 @@ func TestAccountsAcceptance(t *testing.T) {
 	cookie := acceptanceCookie(t, pool, response)
 	acceptanceCount(t, pool, 1, `SELECT count(*) FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = o.id JOIN account a ON a.id = m.account_id WHERE o.slug = 'owner' AND o.name = 'Private owner' AND a.email = 'owner@example.com' AND a.display_name = 'owner' AND m.role = 'owner' AND m.handle = 'owner'`)
 	owner.visit(t, "GET", "/", nil, 303)
-	_, body := owner.visit(t, "GET", "/organizations/owner/", nil, 200)
+	response, _ = owner.visit(t, "GET", "/organizations/owner/", nil, 303)
+	_, body := owner.visit(t, "GET", response.Header.Get("Location"), nil, 200)
 	if !strings.Contains(body, "Private owner") || !strings.Contains(body, "@owner") {
 		t.Fatal("owner's organisation or handle not rendered")
 	}
@@ -185,13 +194,13 @@ func TestAccountsAcceptance(t *testing.T) {
 	owner.visit(t, "GET", "/signin", nil, 200)
 	response, _ = owner.visit(t, "POST", "/signin", acceptanceForm("owner"), 303)
 	acceptanceCookie(t, pool, response)
-	owner.visit(t, "GET", "/organizations/owner/", nil, 200)
+	owner.visit(t, "GET", "/organizations/owner/", nil, 303)
 	cross := owner.request(t, "POST", "/signout", nil)
 	cross.Header.Set("Origin", "https://attacker.example")
 	response, err = owner.client.Do(cross)
 	acceptanceOK(t, err)
 	acceptanceResponse(t, response, 403)
-	owner.visit(t, "GET", "/organizations/owner/", nil, 200)
+	owner.visit(t, "GET", "/organizations/owner/", nil, 303)
 	_, err = pool.Exec(t.Context(), "UPDATE session SET created_at = now() - interval '2 days', expires_at = now() - interval '1 day'")
 	acceptanceOK(t, err)
 	owner.visit(t, "GET", "/organizations/owner/", nil, 404)
@@ -201,7 +210,7 @@ func TestAccountsAcceptance(t *testing.T) {
 	response, _ = member.visit(t, "POST", "/signup", acceptanceForm("member"), 303)
 	acceptanceCookie(t, pool, response)
 	acceptanceCount(t, pool, 1, `SELECT count(*) FROM account a JOIN member m ON m.account_id = a.id JOIN setup s ON s.organization_id = m.organization_id WHERE a.email = 'member@example.com' AND m.role = 'member'`)
-	member.visit(t, "GET", "/organizations/owner/", nil, 200)
+	member.visit(t, "GET", "/organizations/owner/", nil, 303)
 	off := newAcceptanceBrowser(t, acceptanceServer(t, pool, "off"), "192.0.2.4")
 	off.visit(t, "GET", "/signup", nil, 404)
 	off.visit(t, "POST", "/signup", acceptanceForm("refused"), 404)
@@ -224,10 +233,13 @@ func TestAccountsAcceptance(t *testing.T) {
 
 	_, err = pool.Exec(t.Context(), "INSERT INTO organization (slug, name) VALUES ('other', 'Hidden second organisation')")
 	acceptanceOK(t, err)
+	_, err = pool.Exec(t.Context(), "INSERT INTO channel (organization_id, name, is_default) SELECT id, 'general', true FROM organization WHERE slug = 'other'")
+	acceptanceOK(t, err)
 	// Move the registered member so both directions of isolation are exercised.
 	_, err = pool.Exec(t.Context(), `UPDATE member SET organization_id = (SELECT id FROM organization WHERE slug = 'other') WHERE account_id = (SELECT id FROM account WHERE email = 'member@example.com')`)
 	acceptanceOK(t, err)
-	_, body = member.visit(t, "GET", "/organizations/other/", nil, 200)
+	response, _ = member.visit(t, "GET", "/organizations/other/", nil, 303)
+	_, body = member.visit(t, "GET", response.Header.Get("Location"), nil, 200)
 	if !strings.Contains(body, "Hidden second organisation") || strings.Contains(body, "Private owner") {
 		t.Fatal("second organisation page has wrong data")
 	}
@@ -308,12 +320,12 @@ func TestSessionReplacedAcceptance(t *testing.T) {
 	browser.client.Jar.SetCookies(u, []*http.Cookie{stale})
 	response, _ := browser.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
 	t1 := acceptanceCookie(t, pool, response)
-	browser.visit(t, "GET", "/organizations/owner/", nil, 200)
+	browser.visit(t, "GET", "/organizations/owner/", nil, 303)
 
 	// A failed sign-up in the signed-in browser keeps T1.
 	browser.visit(t, "POST", "/signup", acceptanceForm("owner"), 422)
 	acceptanceSessionCount(t, pool, 1, t1)
-	browser.visit(t, "GET", "/organizations/owner/", nil, 200)
+	browser.visit(t, "GET", "/organizations/owner/", nil, 303)
 
 	// Signing up as B in the same browser ends T1; T2 belongs to B.
 	response, _ = browser.visit(t, "POST", "/signup", acceptanceForm("member"), 303)

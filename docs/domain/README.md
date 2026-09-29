@@ -4,8 +4,11 @@ The words ribbitto uses, the things it stores and the rules that must always
 hold. Code identifiers use the terms in the glossary; the frog-themed product
 words (ribbit, pond, marsh, …) appear only in UI message files.
 
-**Keep it current:** update this file in the same pull request whenever a
-term, an entity, a relation, an invariant or the unread rules change.
+**Keep it current:** update the relevant file in this directory in the same
+pull request whenever a term, an entity, a relation, an invariant, a
+validation rule or the unread rules change: this README for terms,
+entities, relations and invariants, and the topic file in the index below
+for everything else.
 Entities marked *planned* do not have tables yet; `db/migrations/` is the
 source of truth for what exists. See the [generated schema reference](../schema/README.md)
 for the current tables, columns and constraints.

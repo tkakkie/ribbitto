@@ -392,7 +392,11 @@ func TestPagesMarkup(t *testing.T) {
 					t.Error(problem)
 				}
 				if want, ok := titles[c.name+"/"+lang]; ok {
-					if got := text(find(doc, atom.Title)); got != want {
+					title := find(doc, atom.Title)
+					if title == nil {
+						t.Fatal("missing <title>")
+					}
+					if got := text(title); got != want {
 						t.Errorf("title %q, want %q", got, want)
 					}
 					// <title> is raw text to the parser, so only the bytes show

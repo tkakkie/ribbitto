@@ -80,6 +80,7 @@ func TestMessageListHandler(t *testing.T) {
 				return
 			}
 			body := w.Body.String()
+			assertFullConversationPage(t, body)
 			// An empty channel still loads it: messages swapped in later need it.
 			if script := `src="/static/message-time-v2.js" nonce="` + responseNonce(t, w) + `"`; !strings.Contains(body, script) {
 				t.Errorf("missing %q", script)
@@ -206,6 +207,7 @@ func TestMessagePostHandler(t *testing.T) {
 				if want != 422 && want != 200 {
 					return
 				}
+				assertFullConversationPage(t, w.Body.String())
 				doc, err := html.Parse(w.Body)
 				if err != nil {
 					t.Fatal(err)
@@ -236,19 +238,21 @@ func TestMessagePagingHandler(t *testing.T) {
 		status      int
 		before      int64 // 0: the latest page
 		want, avoid []string
+		htmx        bool
 	}{
-		{"latest with older", "", true, 200, 0, []string{`href="` + channelURL + `?before=7"`, `hx-get="` + channelURL + `?before=7"`, `hx-select-oob="#load-older"`, `id="load-older"`}, []string{"Jump to the newest"}},
-		{"latest without older", "", false, 200, 0, []string{`<div id="load-older"></div>`}, []string{"?before=", "Jump to the newest"}},
-		{"older page", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil},
-		{"oldest page", "?before=8", false, 200, 8, []string{`>Jump to the newest messages</a>`}, []string{"?before="}},
-		{"zero", "?before=0", false, 400, -1, nil, nil},
-		{"negative", "?before=-3", false, 400, -1, nil, nil},
-		{"not a number", "?before=abc", false, 400, -1, nil, nil},
-		{"empty", "?before=", false, 400, -1, nil, nil},
-		{"repeated", "?before=5&before=6", false, 400, -1, nil, nil},
-		{"overflow", "?before=9223372036854775808", false, 400, -1, nil, nil},
-		{"malformed escape", "?before=%ZZ", false, 400, -1, nil, nil},
-		{"repeated with a malformed escape", "?before=5&before=%ZZ", false, 400, -1, nil, nil},
+		{"latest with older", "", true, 200, 0, []string{`href="` + channelURL + `?before=7"`, `hx-get="` + channelURL + `?before=7"`, `hx-select-oob="#load-older"`, `id="load-older"`}, []string{"Jump to the newest"}, false},
+		{"latest without older", "", false, 200, 0, []string{`<div id="load-older"></div>`}, []string{"?before=", "Jump to the newest"}, false},
+		{"older page", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil, false},
+		{"older page with HX", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil, true},
+		{"oldest page", "?before=8", false, 200, 8, []string{`>Jump to the newest messages</a>`}, []string{"?before="}, false},
+		{"zero", "?before=0", false, 400, -1, nil, nil, false},
+		{"negative", "?before=-3", false, 400, -1, nil, nil, false},
+		{"not a number", "?before=abc", false, 400, -1, nil, nil, false},
+		{"empty", "?before=", false, 400, -1, nil, nil, false},
+		{"repeated", "?before=5&before=6", false, 400, -1, nil, nil, false},
+		{"overflow", "?before=9223372036854775808", false, 400, -1, nil, nil, false},
+		{"malformed escape", "?before=%ZZ", false, 400, -1, nil, nil, false},
+		{"repeated with a malformed escape", "?before=5&before=%ZZ", false, 400, -1, nil, nil, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64
@@ -258,6 +262,9 @@ func TestMessagePagingHandler(t *testing.T) {
 				t.Fatal(err)
 			}
 			req := httptest.NewRequest("GET", channelURL+tt.query, nil)
+			if tt.htmx {
+				req.Header.Set("HX-Request", "true")
+			}
 			req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
@@ -274,6 +281,7 @@ func TestMessagePagingHandler(t *testing.T) {
 				t.Fatalf("reader bounds %v", seen)
 			}
 			body := w.Body.String()
+			assertFullConversationPage(t, body)
 			for _, want := range tt.want {
 				if !strings.Contains(body, want) {
 					t.Errorf("missing %q", want)

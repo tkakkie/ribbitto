@@ -56,6 +56,7 @@ func TestChannelHandlers(t *testing.T) {
 		name, method, path, body, origin, location string
 		fake                                       fakeChannels
 		status                                     int
+		htmx                                       bool
 	}{
 		{name: "default by flag", method: "GET", path: "/organizations/acme/", status: 303, location: current},
 		{name: "missing default", method: "GET", path: "/organizations/acme/", fake: fakeChannels{defaultErr: channel.ErrNotFound}, status: 500},
@@ -68,6 +69,10 @@ func TestChannelHandlers(t *testing.T) {
 		{name: "create failure", method: "POST", path: "/organizations/acme/channels", body: "name=a", fake: fakeChannels{createErr: errors.New("offline")}, status: 500},
 		{name: "invalid name", method: "POST", path: "/organizations/acme/channels", body: "name=", fake: fakeChannels{createErr: channel.ErrInvalidName}, status: 422},
 		{name: "duplicate name", method: "POST", path: "/organizations/acme/channels", body: "name=taken", fake: fakeChannels{createErr: channel.ErrNameTaken}, status: 422},
+		// Channel creation is not enhanced: HX changes neither redirects nor validation responses.
+		{name: "create Japanese with HX", htmx: true, method: "POST", path: "/organizations/acme/channels?name=wrong", body: url.Values{"name": {"雑談"}, "organization_id": {"other"}}.Encode(), status: 303, location: view.ChannelURL("acme", domain.ID{3})},
+		{name: "invalid name with HX", htmx: true, method: "POST", path: "/organizations/acme/channels", body: "name=", fake: fakeChannels{createErr: channel.ErrInvalidName}, status: 422},
+		{name: "duplicate name with HX", htmx: true, method: "POST", path: "/organizations/acme/channels", body: "name=taken", fake: fakeChannels{createErr: channel.ErrNameTaken}, status: 422},
 		{name: "cross origin", method: "POST", path: "/organizations/acme/channels", body: "name=blocked", origin: "https://attacker.example", status: 403},
 		{name: "malformed form", method: "POST", path: "/organizations/acme/channels", body: "name=%zz", status: 400},
 		{name: "oversized form", method: "POST", path: "/organizations/acme/channels", body: "name=" + strings.Repeat("a", 65536), status: 413},
@@ -83,6 +88,9 @@ func TestChannelHandlers(t *testing.T) {
 			}
 			r := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if tt.htmx {
+				r.Header.Set("HX-Request", "true")
+			}
 			if tt.origin != "" {
 				r.Header.Set("Origin", tt.origin)
 			}
@@ -95,10 +103,11 @@ func TestChannelHandlers(t *testing.T) {
 			if tt.status == 403 && tt.fake.created != "" {
 				t.Fatal("CSRF reached creation")
 			}
-			if tt.name == "create Japanese" && tt.fake.created != "雑談" {
+			if strings.HasPrefix(tt.name, "create Japanese") && tt.fake.created != "雑談" {
 				t.Fatalf("created %q", tt.fake.created)
 			}
 			if tt.status == 422 {
+				assertFullConversationPage(t, w.Body.String())
 				doc, err := html.Parse(w.Body)
 				if err != nil {
 					t.Fatal(err)

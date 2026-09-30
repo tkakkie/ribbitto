@@ -103,11 +103,21 @@ are not swap selectors.
 both languages and applies the fragment markup rules. Handler and SSE
 fragments join that list when M3 adds them.
 
+`TestPagesMarkup` also checks every `hx-get`/`hx-post` element for a plain
+link or form with the same URL and HTTP method (`fallback_test.go`). URL
+comparison is structural; paging success uses positive cursors in
+`TestMessagePagingHandler`.
+
+`TestMessagePostHandler` covers ordinary/HX success (303/200) and validation
+errors (422). `TestMessagePagingHandler` covers Load older with and without
+HX (200 full pages). `TestChannelHandlers` verifies that HX changes nothing
+for unenhanced channel creation (303/422). Posting and history page responses
+assert the layout and `#conversation`, including validation errors.
+
 Planned:
 
 | Rule | Issue |
 |---|---|
-| Enhanced forms and links work without `HX-Request`, and HX responses keep their contracts | #196 |
 | Application scripts: no HTML writes, requests, IndexedDB, evaluation or globals; versioned names | #197 |
 
 Left to review, because a pattern check cannot prove them: that a stored

@@ -104,13 +104,14 @@ with one member and once with `_MEMBERS=distinct`):
 | cache, distinct members | 3,000 | 3,007 | 1.00 | 70 ms | 1.48 s | 2.66 s | fail: p95 over 1 s |
 
 Every step completed its 100 posts. With the caches a post costs about
-`N + 7` queries — one membership check per stream, plus the post's three, one
-shared event read and one shared message read with its two author lookups —
-and **the highest passing step rises from 300 to 2,000 streams**. Distinct
-members change nothing, so the sharing is per organisation, not per member.
-The cache stores only full event batches; the empty read after each
-delivery is shared only by the streams that make it at the same moment,
-which, as every stream wakes on the same Raise, is nearly all of them.
+`N + 8` queries — one membership check per stream, plus the post's three,
+the event read, one shared message read with its two author lookups, and
+about one more event read — and **the highest passing step rises from 300
+to 2,000 streams**. Distinct members change nothing, so the sharing is per
+organisation, not per member. The cache stores only full event batches: a
+short batch, such as the one holding a new post, is shared only by the
+streams whose reads are in flight together, and a stream that reads it later
+repeats it; as every stream wakes on the same Raise, that is rare.
 The remaining per-stream query is the membership check (#231); beyond about
 2,000 streams on this machine it saturates the pool.
 

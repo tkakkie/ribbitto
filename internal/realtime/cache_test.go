@@ -165,19 +165,29 @@ func TestCacheWaiterCancellationLeavesTheLoad(t *testing.T) {
 // and the key can be loaded again.
 func TestCacheLoadTimeoutReleasesWaiters(t *testing.T) {
 	c := NewCache[string, int](8, time.Minute, 50*time.Millisecond, nil, time.Now)
+	release := make(chan struct{})
+	var loads atomic.Int32
 	stuck := func(ctx context.Context) (int, error) {
+		loads.Add(1)
 		<-ctx.Done()
+		<-release // held until every caller has joined this one load
 		return 0, ctx.Err()
 	}
+	const callers = 5
 	var wg sync.WaitGroup
-	for range 5 {
+	for range callers {
 		wg.Go(func() {
 			if _, err := c.Get(t.Context(), "k", stuck); !errors.Is(err, context.DeadlineExceeded) {
 				t.Errorf("Get = %v, want the load's timeout", err)
 			}
 		})
 	}
+	waitForWaiters(t, c, "k", callers)
+	close(release)
 	wg.Wait()
+	if n := loads.Load(); n != 1 {
+		t.Fatalf("%d loads timed out for %d callers, want 1", n, callers)
+	}
 	if v, err := c.Get(t.Context(), "k", func(context.Context) (int, error) { return 3, nil }); err != nil || v != 3 {
 		t.Fatalf("retry after a timeout = %d, %v", v, err)
 	}

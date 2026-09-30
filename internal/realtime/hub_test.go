@@ -85,6 +85,16 @@ func TestRaiseWakesEveryWaiter(t *testing.T) {
 		results[i] = waitAsync(ctx, h, orgA, 0)
 	}
 	other := waitAsync(ctx, h, orgB, 0)
+	// Give the waiters time to reach their blocking select; none may have
+	// returned yet, so the raise below is what wakes them.
+	time.Sleep(blocked)
+	for i, done := range results {
+		select {
+		case err := <-done:
+			t.Fatalf("waiter %d returned %v before the raise", i, err)
+		default:
+		}
+	}
 	h.Raise(orgA, 1)
 	for i, done := range results {
 		if err := <-done; err != nil {
@@ -195,10 +205,11 @@ func TestUnregisterIsIdempotent(t *testing.T) {
 	}
 	wg.Wait()
 	unregister()
-	// After unregister returns, a Cancel call no longer reaches the
-	// connection: the cause stays the one unregister set.
 	h.CancelSession(session1)
 	h.CancelAccount(account1)
+	// The cause stays ErrUnregistered, though a context keeps its first
+	// cause anyway; the empty registry is what shows that Cancel calls can
+	// no longer find the connection.
 	if got := context.Cause(ctx); !errors.Is(got, ErrUnregistered) {
 		t.Fatalf("Cause = %v, want %v", got, ErrUnregistered)
 	}

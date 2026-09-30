@@ -261,3 +261,58 @@ func TestSSESenderStopsWhenCancelled(t *testing.T) {
 		}
 	})
 }
+
+// gatedWriter lets a test hold the cancellation callback's SetWriteDeadline
+// (a deadline at or before now) while the write and flush complete.
+type gatedWriter struct {
+	*httptest.ResponseRecorder
+	flushing, cancelled, gate, interrupted chan struct{}
+}
+
+func (w *gatedWriter) SetWriteDeadline(d time.Time) error {
+	if !d.IsZero() && !d.After(time.Now()) {
+		<-w.gate
+		close(w.interrupted)
+	}
+	return nil
+}
+
+func (w *gatedWriter) FlushError() error {
+	close(w.flushing)
+	<-w.cancelled // the stream is cancelled while the flush is in progress
+	return nil
+}
+
+// The write finishes while the cancellation callback is still running: Send
+// must not return (and so the handler must not return) before the callback
+// has finished touching the response.
+func TestSSESenderWaitsForItsCancellationCallback(t *testing.T) {
+	w := &gatedWriter{ResponseRecorder: httptest.NewRecorder(), flushing: make(chan struct{}), cancelled: make(chan struct{}), gate: make(chan struct{}), interrupted: make(chan struct{})}
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cause := errors.New("session ended")
+	s := &sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Hour}
+	done := make(chan error, 1)
+	go func() { done <- s.Send(ctx, realtime.Outgoing{ID: 1, Name: "message", Data: []byte("x")}) }()
+	<-w.flushing
+	cancel(cause) // starts the callback, which blocks at the gate
+	close(w.cancelled)
+	select {
+	case err := <-done:
+		t.Fatalf("Send returned %v while its cancellation callback was still running", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(w.gate)
+	select {
+	case err := <-done:
+		if !errors.Is(err, cause) {
+			t.Fatalf("Send = %v, want %v", err, cause)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Send never returned")
+	}
+	select {
+	case <-w.interrupted:
+	default:
+		t.Fatal("Send returned before the callback finished")
+	}
+}

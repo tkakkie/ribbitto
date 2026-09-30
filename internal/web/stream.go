@@ -211,7 +211,15 @@ func (s *sseSender) write(ctx context.Context, fn func() error) error {
 	if err := s.rc.SetWriteDeadline(time.Now().Add(s.timeout)); err != nil {
 		return fmt.Errorf("setting write deadline: %w", err)
 	}
-	stop := context.AfterFunc(ctx, func() { _ = s.rc.SetWriteDeadline(time.Now()) })
+	// The callback must never outlive this call: once the handler returns,
+	// net/http recycles the response (HTTP/2 pools its state), and a late
+	// SetWriteDeadline would touch it. So when stop reports that the
+	// callback has been started, wait for it to finish.
+	interrupted := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(interrupted)
+		_ = s.rc.SetWriteDeadline(time.Now())
+	})
 	err := fn()
 	if err == nil {
 		err = s.rc.Flush()
@@ -220,8 +228,9 @@ func (s *sseSender) write(ctx context.Context, fn func() error) error {
 		}
 	}
 	if !stop() {
+		<-interrupted
 		// Cancelled while writing: whatever the write returned, the stream
-		// ends, and the deadline was already moved to now.
+		// ends.
 		return context.Cause(ctx)
 	}
 	if err != nil {

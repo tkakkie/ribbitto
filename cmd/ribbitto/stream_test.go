@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -77,6 +78,13 @@ func openStream(t *testing.T, b acceptanceBrowser, channelURL, after string) (<-
 // as a browser does when it reconnects.
 func openStreamWith(t *testing.T, b acceptanceBrowser, channelURL, after, lastEventID string) (<-chan sseEvent, int) {
 	t.Helper()
+	events, status, _ := openStreamProto(t, b, channelURL, after, lastEventID)
+	return events, status
+}
+
+// openStreamProto also reports the HTTP major version the stream used.
+func openStreamProto(t *testing.T, b acceptanceBrowser, channelURL, after, lastEventID string) (<-chan sseEvent, int, int) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	r, err := http.NewRequestWithContext(ctx, "GET", b.server.URL+channelURL+"/events?after="+after, nil)
@@ -92,10 +100,7 @@ func openStreamWith(t *testing.T, b acceptanceBrowser, channelURL, after, lastEv
 	if response.StatusCode != http.StatusOK {
 		_ = response.Body.Close()
 		close(events)
-		return events, response.StatusCode
-	}
-	if response.ProtoMajor != 2 {
-		t.Fatalf("stream over %s, want HTTP/2", response.Proto)
+		return events, response.StatusCode, response.ProtoMajor
 	}
 	if got := response.Header.Get("Content-Type"); got != "text/event-stream; charset=utf-8" || response.Header.Get("Cache-Control") != "no-cache" {
 		t.Fatalf("stream headers: %v", response.Header)
@@ -127,7 +132,7 @@ func openStreamWith(t *testing.T, b acceptanceBrowser, channelURL, after, lastEv
 			}
 		}
 	}()
-	return events, http.StatusOK
+	return events, http.StatusOK, response.ProtoMajor
 }
 
 func nextEvent(t *testing.T, events <-chan sseEvent) sseEvent {
@@ -214,9 +219,9 @@ func TestEventStream(t *testing.T) {
 	// each carrying its sequence as the id and the page's message markup.
 	post(t, owner, channelURL, "first\nwith a second line")
 	post(t, owner, channelURL, "second")
-	events, status := openStream(t, on(owner, streams), channelURL, "0")
-	if status != http.StatusOK {
-		t.Fatalf("owner's stream: %d", status)
+	events, status, proto := openStreamProto(t, on(owner, streams), channelURL, "0", "")
+	if status != http.StatusOK || proto != 2 {
+		t.Fatalf("owner's stream: status %d over HTTP/%d, want 200 over HTTP/2", status, proto)
 	}
 	first, second := nextEvent(t, events), nextEvent(t, events)
 	if first.name != "message" || !strings.Contains(first.data, "first\nwith a second line") || !strings.Contains(first.data, `<li id="message-`) || second.id <= first.id || !strings.Contains(second.data, "second") {
@@ -336,4 +341,34 @@ func TestEventStream(t *testing.T) {
 			t.Fatalf("after=%s: %d, want 400", after, status)
 		}
 	}
+}
+
+// Over HTTP/1.1 too, signing out ends the session's open stream at once:
+// the interrupted write and its deadline belong to the connection there.
+func TestEventStreamEndsOnSignOutOverHTTP1(t *testing.T) {
+	pool := acceptanceDatabase(t)
+	server, streams := streamServers(t, pool)
+	owner := newAcceptanceBrowser(t, server, "192.0.2.20")
+	owner.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
+	response, _ := owner.visit(t, "GET", "/organizations/owner/", nil, 303)
+	channelURL := response.Header.Get("Location")
+
+	http1 := newAcceptanceBrowser(t, server, "192.0.2.21")
+	transport := http1.client.Transport.(*http.Transport).Clone()
+	transport.ForceAttemptHTTP2 = false
+	transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+	transport.TLSClientConfig.NextProtos = []string{"http/1.1"}
+	http1.client.Transport = transport
+	http1.visit(t, "POST", "/signin", acceptanceForm("owner"), 303)
+
+	events, status, proto := openStreamProto(t, on(http1, streams), channelURL, "0", "")
+	if status != http.StatusOK || proto != 1 {
+		t.Fatalf("stream: status %d over HTTP/%d, want 200 over HTTP/1.1", status, proto)
+	}
+	post(t, owner, channelURL, "over http/1.1")
+	if e := nextEvent(t, events); !strings.Contains(e.data, "over http/1.1") {
+		t.Fatalf("event: %+v", e)
+	}
+	http1.visit(t, "POST", "/signout", nil, 303)
+	streamEndsWithin(t, events, 2*time.Second)
 }

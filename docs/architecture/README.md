@@ -141,6 +141,7 @@ Read the file for the area you change:
 | [`realtime.md`](realtime.md) | posting a message and Server-Sent Events (planned) |
 | [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
+| [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
 | [`web-layers.md`](web-layers.md) | what handlers, templ, htmx and JavaScript are each responsible for, and how it is checked |
 
 ## See also

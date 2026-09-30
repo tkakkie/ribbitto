@@ -3,6 +3,7 @@ package realtime_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"slices"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -51,7 +53,17 @@ func TestStreamCost(t *testing.T) {
 	rate := envInts(t, "RIBBITTO_STREAM_COST_RATE", []int{10})[0]
 	duration := envDuration(t, "RIBBITTO_STREAM_COST_DURATION", 10*time.Second)
 
-	fixturePool := pgtest.New(t)
+	// NewEmpty creates a database from template0 and drops only that one
+	// afterwards (pgtest.New would also clear other runs' unfinished
+	// templates); the benchmark migrates it itself.
+	fixturePool := pgtest.NewEmpty(t)
+	db := stdlib.OpenDBFromPool(fixturePool)
+	if err := postgres.Migrate(t.Context(), db, "up", io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	fixture := pgtest.OrganizationWithOwner(t, fixturePool, "acme", "general")
 	// Config returns a copy, pointing at pgtest's database.
 	config := fixturePool.Config()
@@ -82,22 +94,25 @@ func TestStreamCost(t *testing.T) {
 
 	t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step",
 		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration)
-	t.Log("| streams | posts | deliveries | queries/post | tx statements/post | empty reads/post | queries/delivery | mean acquire wait | p50 | p95 | result |")
-	t.Log("|---|---|---|---|---|---|---|---|---|---|---|")
+	t.Log("| streams | posts scheduled/completed/missed | deliveries | queries/post | tx statements/post | empty reads/post | queries/delivery | tx statements/delivery | empty reads/delivery | mean empty-acquire wait | p50 | p95 | result |")
+	t.Log("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	highest := 0
 	for _, n := range steps {
 		r := measureStep(t, stream, posting, pool, queries, events, m, sub, n, rate, duration)
 		verdict := "pass"
 		switch {
+		case r.missed > 0 || r.completed < r.scheduled:
+			verdict = fmt.Sprintf("fail: underloaded, %d of %d posts completed", r.completed, r.scheduled)
 		case r.missing > 0:
 			verdict = fmt.Sprintf("fail: %d deliveries missing after the drain", r.missing)
 		case r.p95 > time.Second:
 			verdict = "fail: p95 over 1 s"
 		case r.meanWait > r.p95/2:
-			verdict = "fail: mean pool acquire wait over half of p95"
+			verdict = "fail: mean empty-acquire wait over half of p95"
 		}
-		t.Logf("| %d | %d | %d | %.1f | %.1f | %.1f | %.2f | %s | %s | %s | %s |", n, r.posts, r.deliveries,
-			per(r.queries, r.posts), per(r.txStatements, r.posts), per(r.emptyReads, r.posts), per(r.queries, r.deliveries),
+		t.Logf("| %d | %d/%d/%d | %d | %.1f | %.1f | %.1f | %.2f | %.2f | %.2f | %s | %s | %s | %s |", n, r.scheduled, r.completed, r.missed, r.deliveries,
+			per(r.queries, r.completed), per(r.txStatements, r.completed), per(r.emptyReads, r.completed),
+			per(r.queries, r.deliveries), per(r.txStatements, r.deliveries), per(r.emptyReads, r.deliveries),
 			r.meanWait.Round(time.Microsecond), r.p50.Round(time.Microsecond), r.p95.Round(time.Microsecond), verdict)
 		if verdict != "pass" {
 			t.Logf("highest passing step: %d streams; first failing step: %d streams (%s)", highest, n, verdict)
@@ -109,7 +124,8 @@ func TestStreamCost(t *testing.T) {
 }
 
 type stepResult struct {
-	posts, deliveries, missing        int
+	scheduled, completed, missed      int
+	deliveries, missing               int
 	queries, txStatements, emptyReads int64
 	meanWait, p50, p95                time.Duration
 }
@@ -148,17 +164,46 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service,
 	}
 
 	q0, s0, empty0 := queries.Counts(), pool.Stat(), events.empty.Load()
-	returned := map[int64]time.Time{}
-	tick := time.NewTicker(time.Second / time.Duration(rate))
-	for end := time.Now().Add(duration); time.Now().Before(end); <-tick.C {
-		posted, err := posting.Post(ctx, m, sub.Channel, "cost")
-		at := time.Now()
-		if err != nil {
-			t.Fatal(err)
+	// Posts are scheduled at the fixed rate whatever their latency (an open
+	// loop), with at most one second's worth in flight: a post that would
+	// exceed it is counted as missed, and the step as underloaded, rather
+	// than silently lowering the offered load.
+	var (
+		mu       sync.Mutex
+		returned = map[int64]time.Time{}
+		failed   error
+		posters  sync.WaitGroup
+	)
+	inFlight := make(chan struct{}, rate)
+	scheduled := int(duration.Seconds() * float64(rate))
+	interval := time.Second / time.Duration(rate)
+	missed := 0
+	start := time.Now()
+	for i := range scheduled {
+		time.Sleep(time.Until(start.Add(time.Duration(i) * interval)))
+		select {
+		case inFlight <- struct{}{}:
+		default:
+			missed++
+			continue
 		}
-		returned[posted.EventSeq] = at
+		posters.Go(func() {
+			defer func() { <-inFlight }()
+			posted, err := posting.Post(ctx, m, sub.Channel, "cost")
+			at := time.Now()
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				failed = err
+				return
+			}
+			returned[posted.EventSeq] = at
+		})
 	}
-	tick.Stop()
+	posters.Wait()
+	if failed != nil {
+		t.Fatal(failed)
+	}
 	want := n * len(returned)
 	for drain := time.Now().Add(30 * time.Second); sink.count() < want && time.Now().Before(drain); {
 		time.Sleep(10 * time.Millisecond)
@@ -167,13 +212,15 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service,
 	cancel()
 	wg.Wait()
 
-	r := stepResult{posts: len(returned), deliveries: sink.count()}
+	r := stepResult{scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count()}
 	r.missing = max(want-r.deliveries, 0)
 	r.queries = q1.Queries - q0.Queries
 	r.txStatements = (q1.Begins + q1.Commits + q1.Rollbacks) - (q0.Begins + q0.Commits + q0.Rollbacks)
 	r.emptyReads = empty1 - empty0
-	if acquired := s1.AcquireCount() - s0.AcquireCount(); acquired > 0 {
-		r.meanWait = (s1.AcquireDuration() - s0.AcquireDuration()) / time.Duration(acquired)
+	// Only acquisitions that found the pool empty had to wait; averaging
+	// over all of them would dilute the wait.
+	if waited := s1.EmptyAcquireCount() - s0.EmptyAcquireCount(); waited > 0 {
+		r.meanWait = (s1.EmptyAcquireWaitTime() - s0.EmptyAcquireWaitTime()) / time.Duration(waited)
 	}
 	// A delivery that lands before Post returns is a negative sample.
 	var latencies []time.Duration

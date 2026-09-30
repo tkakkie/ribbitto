@@ -120,8 +120,8 @@ sequenceDiagram
   *read*, including events this connection may not see, so a filtered event
   cannot keep the loop spinning.
 - **The hub** (`realtime.Hub`, #157) implements this: `Raise(org, seq)`
-  only raises the value, and `Wait(ctx, org, after)` returns once it is
-  above `after`, or with `context.Cause(ctx)`. It is also the connection
+  only raises the value, and `Wait(ctx, org, after)` returns the value
+  once it is above `after`, or `context.Cause(ctx)`. It is also the connection
   registry: `Register(parent, connection, limit)` refuses atomically once
   the account holds `limit` connections. Otherwise it returns a context
   derived from the request's context, which `CancelAccount` or

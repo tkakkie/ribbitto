@@ -83,22 +83,26 @@ func (h *Hub) Raise(org domain.ID, seq int64) {
 }
 
 // Wait blocks until the organisation's latest sequence is greater than
-// after, returning nil at once if it already is. If ctx ends first, it
-// returns context.Cause(ctx).
-func (h *Hub) Wait(ctx context.Context, org domain.ID, after int64) error {
+// after and returns that sequence, at once if it already is. If ctx has
+// ended or ends first, it returns context.Cause(ctx).
+func (h *Hub) Wait(ctx context.Context, org domain.ID, after int64) (int64, error) {
 	for {
+		if ctx.Err() != nil {
+			return 0, context.Cause(ctx)
+		}
 		h.mu.Lock()
 		s := h.sequence(org)
 		if s.latest > after {
+			latest := s.latest
 			h.mu.Unlock()
-			return nil
+			return latest, nil
 		}
 		changed := s.changed
 		h.mu.Unlock()
 		select {
 		case <-changed:
 		case <-ctx.Done():
-			return context.Cause(ctx)
+			return 0, context.Cause(ctx)
 		}
 	}
 }

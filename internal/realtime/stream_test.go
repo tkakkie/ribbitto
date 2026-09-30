@@ -277,3 +277,38 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 		})
 	}
 }
+
+// The hub may be ahead of the log where no row exists (a cursor below the
+// replay boundary). The loop must then block until the hub moves past the
+// value it saw, not read the same empty range in a tight loop.
+func TestStreamDoesNotSpinWhenTheHubIsAheadOfTheLog(t *testing.T) {
+	hub := NewHub()
+	hub.Raise(orgA, 50)
+	log := &fakeLog{}
+	ctx, cancel := context.WithCancel(t.Context())
+	send := newRecorder()
+	done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send)
+	time.Sleep(blocked)
+	log.mu.Lock()
+	reads := log.calls
+	log.mu.Unlock()
+	if reads > 2 {
+		t.Fatalf("reads = %d while nothing new was committed, want at most 2", reads)
+	}
+
+	log.append(posted(51, channelA))
+	hub.Raise(orgA, 51)
+	send.waitFor(t, 51)
+	cancel()
+	if got := <-done; got.cursor != 51 {
+		t.Fatalf("cursor = %d, want 51", got.cursor)
+	}
+}
+
+func TestStreamRefusesANegativeCursor(t *testing.T) {
+	log := &fakeLog{}
+	s := Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}
+	if _, err := s.Run(t.Context(), sub, -1, newRecorder()); err == nil || log.calls != 0 {
+		t.Fatalf("Run(-1) = %v after %d reads, want a refusal before reading", err, log.calls)
+	}
+}

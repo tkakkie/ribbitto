@@ -83,14 +83,23 @@ type Stream struct {
 // The loop reads until a read returns fewer events than the batch size and
 // only then waits on the hub: the hub's value may be older than the log (a
 // fresh process knows no sequence yet), and waiting before draining could
-// stall replay. Every event is authorized immediately before it is sent,
+// stall replay. The hub's value may also be ahead of the log where no row
+// exists (a cursor below the replay boundary), so once caught up the loop
+// waits for a sequence above both its cursor and the last value the hub
+// reported; otherwise it would read the same empty range again and again.
+// A negative cursor is refused. Every event is authorized immediately before it is sent,
 // including ones read in an earlier batch, since access may have been lost
 // in between.
 func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Sender) (int64, error) {
+	if cursor < 0 {
+		return cursor, fmt.Errorf("negative cursor %d", cursor)
+	}
 	batch := s.BatchSize
 	if batch <= 0 {
 		batch = DefaultBatchSize
 	}
+	// seen is the highest hub value this loop has already caught up with.
+	var seen int64
 	for {
 		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
 		if err != nil {
@@ -121,7 +130,8 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		if len(events) == batch {
 			continue
 		}
-		if err := s.Hub.Wait(ctx, sub.Organization, cursor); err != nil {
+		seen, err = s.Hub.Wait(ctx, sub.Organization, max(cursor, seen))
+		if err != nil {
 			return cursor, err
 		}
 	}

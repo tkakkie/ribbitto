@@ -29,6 +29,7 @@ func (s setupBarrier) Open(ctx context.Context) (bool, error) {
 }
 
 func TestSetup(t *testing.T) {
+	t.Parallel()
 	hasher, err := auth.NewHasher()
 	requireNoError(t, err)
 	for _, attempts := range []int{1, 10} {

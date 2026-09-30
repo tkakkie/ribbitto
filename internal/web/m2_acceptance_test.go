@@ -26,6 +26,7 @@ import (
 // TestM2AcceptanceAgainstPostgreSQL proves two people can talk after a reload,
 // from first-run setup through sign-up, channel creation and older history.
 func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)

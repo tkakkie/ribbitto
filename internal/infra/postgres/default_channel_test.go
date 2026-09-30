@@ -18,6 +18,7 @@ import (
 
 // A failure while creating the default channel rolls the whole setup back.
 func TestSetupDefaultChannelRollback(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// Raw SQL installs an adversarial trigger to exercise setup rollback.
@@ -37,6 +38,7 @@ func TestSetupDefaultChannelRollback(t *testing.T) {
 
 // Organisations from before default channels get exactly one each.
 func TestDefaultChannelBackfill(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	pool := pgtest.NewEmpty(t)
@@ -111,6 +113,7 @@ func TestDefaultChannelBackfill(t *testing.T) {
 
 // The use cases see only the member's organisation, even with a known id.
 func TestChannelService(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	acme := pgtest.Organization(t, pool, "acme", "Acme", 0)

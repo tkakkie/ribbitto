@@ -16,6 +16,7 @@ import (
 )
 
 func TestMigrations(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	// Raw SQL probes evolving schemas and slug constraints without current-schema fixtures.

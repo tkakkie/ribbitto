@@ -101,7 +101,7 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 										<span>
 											@MemberName(entry.DisplayName, entry.Handle)
 										</span>
-										<time datetime={ entry.CreatedAt.UTC().Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
+										<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
 									</div>
 									<p dir="auto" class="whitespace-pre-wrap break-words">{ entry.Body }</p>
 								</li>
@@ -128,7 +128,7 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 		</div>
 		// Every channel page loads these, outside #conversation: htmx will not
 		// run scripts in swapped fragments.
-		<script defer src="/static/message-time-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 	}

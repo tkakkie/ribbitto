@@ -512,9 +512,9 @@ func Channel(stylesheetURL string, page ChannelPage) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var30 string
-					templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(entry.CreatedAt.UTC().Format(time.RFC3339Nano))
+					templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 104, Col: 73}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 104, Col: 100}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 					if templ_7745c5c3_Err != nil {
@@ -527,7 +527,7 @@ func Channel(stylesheetURL string, page ChannelPage) templ.Component {
 					var templ_7745c5c3_Var31 string
 					templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 104, Col: 181}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 104, Col: 208}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 					if templ_7745c5c3_Err != nil {
@@ -707,7 +707,7 @@ func Channel(stylesheetURL string, page ChannelPage) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "</button></form></main></div>  <script defer src=\"/static/message-time-v1.js\" nonce=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "</button></form></main></div>  <script defer src=\"/static/message-time-v2.js\" nonce=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

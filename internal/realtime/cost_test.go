@@ -2,6 +2,7 @@ package realtime_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -236,10 +237,13 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service,
 		time.Sleep(10 * time.Millisecond)
 	}
 	q1, s1, empty1 := queries.Counts(), pool.Stat(), events.empty.Load()
+	// Read before cancel, which would also end stepCtx: only the deadline
+	// passing counts as timing out.
+	timedOut := errors.Is(stepCtx.Err(), context.DeadlineExceeded)
 	cancel()
 	wg.Wait()
 
-	r := stepResult{scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: stepCtx.Err() != nil}
+	r := stepResult{scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: timedOut}
 	r.missing = max(want-r.deliveries, 0)
 	r.queries = q1.Queries - q0.Queries
 	r.txStatements = (q1.Begins + q1.Commits + q1.Rollbacks) - (q0.Begins + q0.Commits + q0.Rollbacks)

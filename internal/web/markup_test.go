@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -21,6 +23,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
+	"github.com/tkakkie/ribbitto/web/static"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -35,11 +38,26 @@ func checkMarkup(doc *html.Node, fullPage bool) []string {
 	var problems []string
 	add := func(format string, args ...any) { problems = append(problems, fmt.Sprintf(format, args...)) }
 	labelled := map[string]bool{} // ids named by <label for>
+	ids := map[string]bool{}
+	// Collect targets first so references may point forward in the document.
 	for n := range doc.Descendants() {
+		if id, ok := attrOK(n, "id"); ok {
+			if ids[id] {
+				add("duplicate id %q", id)
+			}
+			ids[id] = true
+		}
 		if n.DataAtom == atom.Label && attr(n, "for") != "" {
 			labelled[attr(n, "for")] = true
 		}
 	}
+	// HTML permits a space separator, optional seconds and compact offsets;
+	// RFC3339 alone would both reject valid HTML and accept invalid fractions.
+	// https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#global-dates-and-times
+	dateTime := regexp.MustCompile(`^([0-9]{4,})(-[0-9]{2}-[0-9]{2})[T ]` +
+		`(?:[01][0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9](?:\.[0-9]{1,3})?)?` +
+		`(Z|[+-](?:[01][0-9]|2[0-3]):?[0-5][0-9])$`)
+	asciiSpace := func(r rune) bool { return strings.ContainsRune(" \t\n\r\f", r) }
 	mains, lastHeading := 0, 0
 	for n := range doc.Descendants() {
 		if n.Type != html.ElementNode {
@@ -48,6 +66,18 @@ func checkMarkup(doc *html.Node, fullPage bool) []string {
 		for _, a := range n.Attr {
 			if a.Key == "style" || strings.HasPrefix(a.Key, "on") {
 				add("<%s> has a %s attribute", n.Data, a.Key)
+			}
+			switch a.Key {
+			case "for", "aria-describedby", "aria-labelledby":
+				targets := []string{a.Val}
+				if a.Key != "for" || n.DataAtom == atom.Output {
+					targets = strings.FieldsFunc(a.Val, asciiSpace)
+				}
+				for _, id := range targets {
+					if id != "" && !ids[id] {
+						add("<%s %s=%q> references missing id %q", n.Data, a.Key, a.Val, id)
+					}
+				}
 			}
 		}
 		// An <a> is interactive only with href: without it, it is not
@@ -61,6 +91,21 @@ func checkMarkup(doc *html.Node, fullPage bool) []string {
 			add("<%s tabindex=%q> is neither a focus target (-1) nor a labelled scrollable region (0)", n.Data, tabindex)
 		}
 		switch n.DataAtom {
+		case atom.Time:
+			if value, ok := attrOK(n, "datetime"); ok {
+				parts := dateTime.FindStringSubmatch(value)
+				valid := false
+				if parts != nil && strings.Trim(parts[1], "0") != "" && parts[3] != "-00:00" && parts[3] != "-0000" {
+					// Go parses four-digit years. Gregorian leap years repeat
+					// every 400 years, so the last four digits suffice here.
+					year := parts[1]
+					_, err := time.Parse(time.DateOnly, year[len(year)-4:]+parts[2])
+					valid = err == nil
+				}
+				if !valid {
+					add("<time datetime=%q> is not a valid HTML global date and time", value)
+				}
+			}
 		case atom.Main:
 			mains++
 		case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
@@ -185,34 +230,72 @@ func TestCheckMarkup(t *testing.T) {
 	for _, tt := range []struct {
 		name, markup string
 		fullPage     bool
-		want         string // a substring of the only problem; empty for none
+		want         []string // one substring per problem; nil for none
 	}{
-		{"valid page", page(`<main><h1>a</h1><h2>b</h2><form><label>Email <input type="email" name="email"></label><label for="p">Password</label><input id="p" type="password" name="p"><input type="hidden" name="t"><button type="submit">Go</button></form><img src="x" alt=""></main>`), true, ""},
-		{"no lang", `<!DOCTYPE html><html><head><title>t</title></head><body><main></main></body></html>`, true, "without lang"},
-		{"no title", `<!DOCTYPE html><html lang="en"><body><main></main></body></html>`, true, "<title>"},
-		{"blank title", `<!DOCTYPE html><html lang="en"><head><title> </title></head><body><main></main></body></html>`, true, "<title>"},
-		{"title is only the app name", `<!DOCTYPE html><html lang="en"><head><title>ribbitto</title></head><body><main></main></body></html>`, true, "<title>"},
-		{"two mains", page(`<main></main><main></main>`), true, "2 <main>"},
-		{"skipped heading", page(`<main><h1>a</h1><h3>b</h3></main>`), true, "skips a heading level"},
-		{"unlabelled input", page(`<main><input type="text" name="q"></main>`), true, "without a label"},
-		{"button without type", page(`<main><button>Go</button></main>`), true, "without a type"},
-		{"button without name", page(`<main><button type="button"> </button></main>`), true, "accessible name"},
-		{"img without alt", page(`<main><img src="x"></main>`), true, "without alt"},
-		{"style attribute", page(`<main style="color:red"></main>`), true, "style attribute"},
-		{"inline handler", page(`<main><a href="/" onclick="x()">a</a></main>`), true, "onclick attribute"},
-		{"simulated button", page(`<main><div role="button">Go</div></main>`), true, "simulates a button"},
-		{"link without href as a button", page(`<main><a role="button" hx-post="/x">Go</a></main>`), true, "simulates a button"},
-		{"icon button named only by hidden text", page(`<main><button type="button"><span aria-hidden="true">×</span></button></main>`), true, "accessible name"},
-		{"blank aria-label", page(`<main><button type="button" aria-label=" "></button></main>`), true, "accessible name"},
-		{"icon button with a name", page(`<main><button type="button" aria-label="Close"><span aria-hidden="true">×</span></button></main>`), true, ""},
+		{"valid page", page(`<main><h1>a</h1><h2>b</h2><form><label>Email <input type="email" name="email"></label><label for="p">Password</label><input id="p" type="password" name="p"><input type="hidden" name="t"><button type="submit">Go</button></form><img src="x" alt=""></main>`), true, nil},
+		{"no lang", `<!DOCTYPE html><html><head><title>t</title></head><body><main></main></body></html>`, true, []string{"without lang"}},
+		{"no title", `<!DOCTYPE html><html lang="en"><body><main></main></body></html>`, true, []string{"<title>"}},
+		{"blank title", `<!DOCTYPE html><html lang="en"><head><title> </title></head><body><main></main></body></html>`, true, []string{"<title>"}},
+		{"title is only the app name", `<!DOCTYPE html><html lang="en"><head><title>ribbitto</title></head><body><main></main></body></html>`, true, []string{"<title>"}},
+		{"two mains", page(`<main></main><main></main>`), true, []string{"2 <main>"}},
+		{"skipped heading", page(`<main><h1>a</h1><h3>b</h3></main>`), true, []string{"skips a heading level"}},
+		{"unlabelled input", page(`<main><input type="text" name="q"></main>`), true, []string{"without a label"}},
+		{"button without type", page(`<main><button>Go</button></main>`), true, []string{"without a type"}},
+		{"button without name", page(`<main><button type="button"> </button></main>`), true, []string{"accessible name"}},
+		{"img without alt", page(`<main><img src="x"></main>`), true, []string{"without alt"}},
+		{"style attribute", page(`<main style="color:red"></main>`), true, []string{"style attribute"}},
+		{"inline handler", page(`<main><a href="/" onclick="x()">a</a></main>`), true, []string{"onclick attribute"}},
+		{"simulated button", page(`<main><div role="button">Go</div></main>`), true, []string{"simulates a button"}},
+		{"link without href as a button", page(`<main><a role="button" hx-post="/x">Go</a></main>`), true, []string{"simulates a button"}},
+		{"icon button named only by hidden text", page(`<main><button type="button"><span aria-hidden="true">×</span></button></main>`), true, []string{"accessible name"}},
+		{"blank aria-label", page(`<main><button type="button" aria-label=" "></button></main>`), true, []string{"accessible name"}},
+		{"icon button with a name", page(`<main><button type="button" aria-label="Close"><span aria-hidden="true">×</span></button></main>`), true, nil},
 		// An empty for names no control, whether the label wraps it or not.
-		{"empty for beside the input", page(`<main><label for="">Email</label><input type="text" name="email"></main>`), true, "without a label"},
-		{"empty for on a wrapping label", page(`<main><label for="">Email <input type="text" name="email"></label></main>`), true, "without a label"},
-		{"wrapping label pointing elsewhere", page(`<main><label for="missing">Email <input id="email" type="email" name="email"></label></main>`), true, "without a label"},
-		{"second control in one label", page(`<main><label>Name <input type="text" name="a"><input type="text" name="b"></label></main>`), true, "name=\"b\""},
-		{"stray tabindex", page(`<main><div tabindex="0">x</div></main>`), true, "tabindex"},
-		{"focus target", page(`<main><h1 tabindex="-1">a</h1><div role="region" aria-label="Messages" tabindex="0">x</div></main>`), true, ""},
-		{"fragment skips document checks", `<form><button type="submit">Go</button></form>`, false, ""},
+		{"empty for beside the input", page(`<main><label for="">Email</label><input type="text" name="email"></main>`), true, []string{"without a label"}},
+		{"empty for on a wrapping label", page(`<main><label for="">Email <input type="text" name="email"></label></main>`), true, []string{"without a label"}},
+		{"wrapping label pointing elsewhere", page(`<main><label for="missing">Email <input id="email" type="email" name="email"></label></main>`), true, []string{`references missing id "missing"`, "without a label"}},
+		{"second control in one label", page(`<main><label>Name <input type="text" name="a"><input type="text" name="b"></label></main>`), true, []string{"name=\"b\""}},
+		{"stray tabindex", page(`<main><div tabindex="0">x</div></main>`), true, []string{"tabindex"}},
+		{"focus target", page(`<main><h1 tabindex="-1">a</h1><div role="region" aria-label="Messages" tabindex="0">x</div></main>`), true, nil},
+		{"fragment skips document checks", `<form><button type="submit">Go</button></form>`, false, nil},
+		{"duplicate ids", `<p id="same"></p><span id="same"></span>`, false, []string{`duplicate id "same"`}},
+		{"unique ids", `<p id="one"></p><span id="two"></span>`, false, nil},
+		{"missing for target", `<label for="missing">Name</label>`, false, []string{`references missing id "missing"`}},
+		{"forward for target", `<label for="name">Name</label><input id="name">`, false, nil},
+		{"output for targets", `<output for="a b"></output><input id="a" type="hidden"><input id="b" type="hidden">`, false, nil},
+		{"missing description target", `<p aria-describedby="present missing"></p><p id="present"></p>`, false, []string{`aria-describedby="present missing"> references missing id "missing"`}},
+		{"missing naming target", `<p aria-labelledby="present missing"></p><p id="present"></p>`, false, []string{`aria-labelledby="present missing"> references missing id "missing"`}},
+		{"multiple forward ARIA targets", "<p aria-describedby=\"first\tsecond\nthird\" aria-labelledby=\"third second\"></p><p id=\"first\"></p><p id=\"second\"></p><p id=\"third\"></p>", false, nil},
+		{"backward ARIA targets", `<p id="a"></p><p id="b"></p><p aria-describedby="a b" aria-labelledby="b a"></p>`, false, nil},
+		{"UTC datetime", `<time datetime="2026-09-30T12:34:56Z"></time>`, false, nil},
+		{"fractional datetime", `<time datetime="2026-09-30T12:34:56.123Z"></time>`, false, nil},
+		{"tenths datetime", `<time datetime="2026-09-30T12:34:56.1Z"></time>`, false, nil},
+		{"hundredths datetime", `<time datetime="2026-09-30T12:34:56.12Z"></time>`, false, nil},
+		{"space and omitted seconds", `<time datetime="2026-09-30 12:34Z"></time>`, false, nil},
+		{"positive offset", `<time datetime="2026-09-30T12:34:56+09:00"></time>`, false, nil},
+		{"negative compact offset", `<time datetime="2026-09-30T12:34:56-0530"></time>`, false, nil},
+		{"zero offset", `<time datetime="2026-09-30T12:34:56+00:00"></time>`, false, nil},
+		{"leap day", `<time datetime="2000-02-29T00:00Z"></time>`, false, nil},
+		{"expanded year", `<time datetime="10000-02-29T00:00Z"></time>`, false, nil},
+		{"time without datetime is not checked", `<time>12:34</time>`, false, nil},
+		{"empty datetime", `<time datetime=""></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"Go timestamp", `<time datetime="2026-09-30 12:34:56 +0000 UTC"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"date only", `<time datetime="2026-09-30"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"missing timezone", `<time datetime="2026-09-30T12:34:56"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"invalid leap day", `<time datetime="1900-02-29T00:00Z"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"invalid month", `<time datetime="2026-13-01T00:00Z"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"invalid day", `<time datetime="2026-04-31T00:00Z"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"zero year", `<time datetime="0000-01-01T00:00Z"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"short year", `<time datetime="999-01-01T00:00Z"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"invalid hour", `<time datetime="2026-09-30T24:00Z"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"invalid minute", `<time datetime="2026-09-30T12:60Z"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"leap second", `<time datetime="2026-09-30T12:34:60Z"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"excess fractional precision", `<time datetime="2026-09-30T12:34:56.1234Z"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"comma fraction", `<time datetime="2026-09-30T12:34:56,123Z"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"invalid offset hour", `<time datetime="2026-09-30T12:34:56+24:00"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"invalid offset minute", `<time datetime="2026-09-30T12:34:56+00:60"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"negative zero offset", `<time datetime="2026-09-30T12:34:56-00:00"></time>`, false, []string{"not a valid HTML global date and time"}},
+		{"trailing whitespace", `<time datetime="2026-09-30T12:34:56Z "></time>`, false, []string{"not a valid HTML global date and time"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			doc, err := html.Parse(strings.NewReader(tt.markup))
@@ -220,8 +303,13 @@ func TestCheckMarkup(t *testing.T) {
 				t.Fatal(err)
 			}
 			problems := checkMarkup(doc, tt.fullPage)
-			if tt.want == "" && len(problems) != 0 || tt.want != "" && (len(problems) != 1 || !strings.Contains(problems[0], tt.want)) {
-				t.Fatalf("problems %q, want one containing %q", problems, tt.want)
+			if len(problems) != len(tt.want) {
+				t.Fatalf("problems %q, want %q", problems, tt.want)
+			}
+			for i, want := range tt.want {
+				if !strings.Contains(problems[i], want) {
+					t.Errorf("problem %d = %q, want substring %q", i, problems[i], want)
+				}
 			}
 		})
 	}
@@ -391,6 +479,33 @@ func TestPagesMarkup(t *testing.T) {
 				}
 				for _, problem := range checkMarkup(doc, true) {
 					t.Error(problem)
+				}
+				for n := range doc.Descendants() {
+					var assetURL string
+					switch n.DataAtom {
+					case atom.Script:
+						assetURL = attr(n, "src")
+					case atom.Link:
+						if slices.Contains(strings.Fields(strings.ToLower(attr(n, "rel"))), "stylesheet") {
+							assetURL = attr(n, "href")
+						}
+					}
+					if !strings.HasPrefix(assetURL, "/static/") {
+						continue
+					}
+					u, err := url.Parse(assetURL)
+					if err != nil {
+						t.Errorf("invalid asset URL %q: %v", assetURL, err)
+						continue
+					}
+					// Match the server: the stylesheet hash is a query, not
+					// part of the path looked up in the embedded filesystem.
+					info, err := fs.Stat(static.FS(), strings.TrimPrefix(u.Path, "/static/"))
+					if err != nil {
+						t.Errorf("asset %q: %v", assetURL, err)
+					} else if info.IsDir() {
+						t.Errorf("asset %q is a directory, want a file", assetURL)
+					}
 				}
 				if want, ok := titles[c.name+"/"+lang]; ok {
 					title := find(doc, atom.Title)

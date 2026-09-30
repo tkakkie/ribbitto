@@ -11,6 +11,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getMessage = `-- name: GetMessage :one
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at FROM message
+WHERE organization_id = $1 AND channel_id = $2 AND event_seq = $3
+`
+
+type GetMessageParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	EventSeq       int64
+}
+
+func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message, error) {
+	row := q.db.QueryRow(ctx, getMessage, arg.OrganizationID, arg.ChannelID, arg.EventSeq)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ChannelID,
+		&i.MemberID,
+		&i.Body,
+		&i.EventSeq,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const insertMessage = `-- name: InsertMessage :one
 INSERT INTO message (organization_id, channel_id, member_id, body, event_seq)
 VALUES ($1, $2, $3, $4, $5) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at

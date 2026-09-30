@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
@@ -31,6 +32,20 @@ func (s *MessageStore) InsertMessage(ctx context.Context, organizationID, channe
 	})
 	if err != nil {
 		return domain.Message{}, fmt.Errorf("inserting message: %w", err)
+	}
+	return messageFromRow(row), nil
+}
+
+// GetMessage returns the message at the scoped event sequence, or message.ErrNotFound.
+func (s *MessageStore) GetMessage(ctx context.Context, organizationID, channelID domain.ID, eventSeq int64) (domain.Message, error) {
+	row, err := s.queries.GetMessage(ctx, sqlcgen.GetMessageParams{
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, EventSeq: eventSeq,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Message{}, message.ErrNotFound
+	}
+	if err != nil {
+		return domain.Message{}, fmt.Errorf("finding message: %w", err)
 	}
 	return messageFromRow(row), nil
 }

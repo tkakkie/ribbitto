@@ -45,8 +45,11 @@ rolls the sequence back with it.
   each listener raises its local hub's value, and after reconnecting it
   reads `organization.event_seq` and raises the value to that.
 
-The M2 message list reads history and both author batches in one
-`REPEATABLE READ READ ONLY` transaction. The existing channel and sidebar
+`MessageReader.Before` reads history and both author batches in one
+`REPEATABLE READ READ ONLY` transaction. `MessageReader.One` uses the same
+snapshot pattern for an event's organisation, channel and `event_seq`,
+returning the message with current author names or `message.ErrNotFound`.
+The existing channel and sidebar
 reads remain outside it; M3 must include those and the cursor in the page
 snapshot before enabling SSE.
 

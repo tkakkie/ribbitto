@@ -25,6 +25,10 @@ func (f *directoryHistory) step(s string) error {
 	}
 	return nil
 }
+func (f *directoryHistory) GetMessage(context.Context, domain.ID, domain.ID, int64) (domain.Message, error) {
+	f.t.Fatal("unexpected single-message read")
+	return domain.Message{}, nil
+}
 func (f *directoryHistory) ListMessagesBefore(_ context.Context, org, ch domain.ID, before *int64, limit int32) ([]domain.Message, error) {
 	if org != (domain.ID{1}) || ch != (domain.ID{2}) || before == nil || *before != 9 || limit != message.PageSize+1 {
 		f.t.Fatal("wrong history scope or limit")
@@ -67,6 +71,10 @@ func TestBefore(t *testing.T) {
 
 // fullHistory returns n newest-first messages by one author, as many as asked.
 type fullHistory struct{ n int }
+
+func (fullHistory) GetMessage(context.Context, domain.ID, domain.ID, int64) (domain.Message, error) {
+	return domain.Message{}, errors.New("unexpected single-message read")
+}
 
 func (f fullHistory) ListMessagesBefore(_ context.Context, _, _ domain.ID, before *int64, limit int32) ([]domain.Message, error) {
 	var out []domain.Message

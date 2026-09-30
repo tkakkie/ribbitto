@@ -95,14 +95,17 @@ transaction; `PostingStore` owns the posting transaction (sequence first,
 then the message). Message references to channels and `org`'s members use
 composite foreign keys including `organization_id`. History uses one
 newest-first keyset query, `ListMessagesBefore`, with a nullable upper
-sequence bound for the latest page, and no author joins. The use cases
+sequence bound for the latest page, and no author joins. `Reader.One` reads
+one message by organisation, channel and `event_seq`, returning `ErrNotFound`
+for a missing or out-of-scope message. The use cases
 (`app/channel`, `app/message`) exist. `message.Reader` resolves authors through
 org's exported `member.Directory.LookupMembers` (member IDs filtered by
 organisation, returning handles and account IDs), then identity's
 `auth.Directory.LookupDisplayNames` (only those account IDs). Their adapters
 own the queries in `member.sql` and `account.sql`; message never queries
 those tables. `MessageReader` shares one read-only repeatable-read transaction
-across history and both lookups; channel/sidebar reads still precede it.
+across each message read (history or one message) and both lookups;
+channel/sidebar reads still precede the history snapshot.
 
 **Known exceptions.** Three flows write another feature's tables in one
 transaction today:

@@ -83,11 +83,12 @@ it is decided after M3, only if a real need appears.
 
 Checked by tools today: the layer imports (depguard), no `templ.Raw`
 (forbidigo), and the markup rules in `TestPagesMarkup` ([`ui.md`](../ui.md)).
+The depguard `view` rule forbids non-test files in `internal/web/view`
+from importing `internal/app` or `internal/infra`, including sub-packages.
 Planned:
 
 | Rule | Issue |
 |---|---|
-| `internal/web/view` imports no `internal/app` or `internal/infra` (depguard) | #194 |
 | `hx-target`, `hx-select` and `hx-select-oob` resolve; shared components pass the fragment rules | #195 |
 | Enhanced forms and links work without `HX-Request`, and HX responses keep their contracts | #196 |
 | Application scripts: no HTML writes, requests, IndexedDB, evaluation or globals; versioned names | #197 |
@@ -103,7 +104,7 @@ application script in `web/static` was read against these rules.
 
 | Where | Finding | Fixed by |
 |---|---|---|
-| `internal/web/view/channel.templ`: `ChannelPage.Messages []message.Entry` | templ receives an `internal/app` type | #194 |
+| `internal/web/view/channel.templ`: `ChannelPage.Messages` | Fixed: the handler converts app entries to `view.Message` values | #194; depguard `view` rule |
 | `web/static/message-composer-v1.js`: `htmx:beforeSwap` makes 422 responses swap | JavaScript decides what htmx swaps | #198 |
 
 Everything else conforms:

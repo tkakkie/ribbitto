@@ -138,9 +138,16 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Mem
 		return
 	}
 	account, _ := middleware.Account(r.Context())
+	page.Messages = make([]view.Message, len(history.Entries))
+	for i, entry := range history.Entries {
+		page.Messages[i] = view.Message{
+			ID: entry.ID, DisplayName: entry.DisplayName, Handle: entry.Handle,
+			CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
+		}
+	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		page.Organization, page.DisplayName, page.Handle, page.Role = m.Organization, account.DisplayName, m.Member.Handle, string(m.Member.Role)
-		page.Current, page.Channels, page.Messages, page.Older = c, channels, history.Entries, history.Older
+		page.Current, page.Channels, page.Older = c, channels, history.Older
 		return view.Channel(url, page)
 	})
 }

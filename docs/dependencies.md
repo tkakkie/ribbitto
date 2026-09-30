@@ -73,7 +73,6 @@ internal/web -> internal/web/view
 internal/web -> web/static
 internal/web/middleware -> internal/app/auth
 internal/web/middleware -> internal/domain
-internal/web/view -> internal/app/message
 internal/web/view -> internal/domain
 internal/web/view -> internal/web/i18n
 ```

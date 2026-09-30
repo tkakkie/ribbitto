@@ -52,6 +52,9 @@ func TestStreamCost(t *testing.T) {
 	steps := envInts(t, "RIBBITTO_STREAM_COST_STEPS", []int{1, 10, 100, 1000, 5000})
 	rate := envInts(t, "RIBBITTO_STREAM_COST_RATE", []int{10})[0]
 	duration := envDuration(t, "RIBBITTO_STREAM_COST_DURATION", 10*time.Second)
+	if scheduledPosts(rate, duration) < 1 {
+		t.Fatalf("RIBBITTO_STREAM_COST_RATE=%d for %s schedules no posts; a step must post at least once", rate, duration)
+	}
 
 	// NewEmpty creates a database from template0 and drops only that one
 	// afterwards (pgtest.New would also clear other runs' unfinished
@@ -102,7 +105,11 @@ func TestStreamCost(t *testing.T) {
 		verdict := "pass"
 		switch {
 		case r.missed > 0 || r.completed < r.scheduled:
-			verdict = fmt.Sprintf("fail: underloaded, %d of %d posts completed", r.completed, r.scheduled)
+			verdict = fmt.Sprintf("fail: underloaded or incomplete, %d of %d posts completed (%d missed)", r.completed, r.scheduled, r.missed)
+		case r.timedOut:
+			verdict = "fail: step deadline passed before every delivery arrived"
+		case r.deliveries == 0:
+			verdict = "fail: no deliveries to measure"
 		case r.missing > 0:
 			verdict = fmt.Sprintf("fail: %d deliveries missing after the drain", r.missing)
 		case r.p95 > time.Second:
@@ -123,8 +130,20 @@ func TestStreamCost(t *testing.T) {
 	t.Logf("every step passed: the ceiling is above %d streams (a lower bound)", highest)
 }
 
+// drainAllowance is how long a step may run past its posting window for
+// posts to complete and deliveries to arrive.
+const drainAllowance = 30 * time.Second
+
+// scheduledPosts is how many posts a step schedules at rate for duration.
+func scheduledPosts(rate int, duration time.Duration) int {
+	return int(duration.Seconds() * float64(rate))
+}
+
 type stepResult struct {
-	scheduled, completed, missed      int
+	scheduled, completed, missed int
+	// timedOut reports that the step's deadline passed before every post
+	// completed and every delivery arrived.
+	timedOut                          bool
 	deliveries, missing               int
 	queries, txStatements, emptyReads int64
 	meanWait, p50, p95                time.Duration
@@ -175,10 +194,16 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service,
 		posters  sync.WaitGroup
 	)
 	inFlight := make(chan struct{}, rate)
-	scheduled := int(duration.Seconds() * float64(rate))
+	scheduled := scheduledPosts(rate, duration)
 	interval := time.Second / time.Duration(rate)
 	missed := 0
 	start := time.Now()
+	// Everything in the step — posting and the drain — ends by this
+	// deadline: a stalled acquisition or statement is cancelled and its post
+	// counted as incomplete, instead of holding the benchmark until the
+	// test's own timeout.
+	stepCtx, stopStep := context.WithDeadline(ctx, start.Add(duration+drainAllowance))
+	defer stopStep()
 	for i := range scheduled {
 		time.Sleep(time.Until(start.Add(time.Duration(i) * interval)))
 		select {
@@ -189,12 +214,14 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service,
 		}
 		posters.Go(func() {
 			defer func() { <-inFlight }()
-			posted, err := posting.Post(ctx, m, sub.Channel, "cost")
+			posted, err := posting.Post(stepCtx, m, sub.Channel, "cost")
 			at := time.Now()
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				failed = err
+				if stepCtx.Err() == nil {
+					failed = err
+				}
 				return
 			}
 			returned[posted.EventSeq] = at
@@ -205,14 +232,14 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service,
 		t.Fatal(failed)
 	}
 	want := n * len(returned)
-	for drain := time.Now().Add(30 * time.Second); sink.count() < want && time.Now().Before(drain); {
+	for sink.count() < want && stepCtx.Err() == nil {
 		time.Sleep(10 * time.Millisecond)
 	}
 	q1, s1, empty1 := queries.Counts(), pool.Stat(), events.empty.Load()
 	cancel()
 	wg.Wait()
 
-	r := stepResult{scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count()}
+	r := stepResult{scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: stepCtx.Err() != nil}
 	r.missing = max(want-r.deliveries, 0)
 	r.queries = q1.Queries - q0.Queries
 	r.txStatements = (q1.Begins + q1.Commits + q1.Rollbacks) - (q0.Begins + q0.Commits + q0.Rollbacks)
@@ -363,4 +390,21 @@ func envDuration(t *testing.T, name string, fallback time.Duration) time.Duratio
 		t.Fatalf("%s=%q: want a positive duration", name, raw)
 	}
 	return d
+}
+
+func TestScheduledPosts(t *testing.T) {
+	for _, tt := range []struct {
+		rate     int
+		duration time.Duration
+		want     int
+	}{
+		{10, 10 * time.Second, 100},
+		{10, 100 * time.Millisecond, 1},
+		{10, 50 * time.Millisecond, 0}, // refused by TestStreamCost before any database work
+		{1, 999 * time.Millisecond, 0},
+	} {
+		if got := scheduledPosts(tt.rate, tt.duration); got != tt.want {
+			t.Errorf("scheduledPosts(%d, %s) = %d, want %d", tt.rate, tt.duration, got, tt.want)
+		}
+	}
 }

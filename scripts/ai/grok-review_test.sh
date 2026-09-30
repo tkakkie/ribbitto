@@ -7,28 +7,55 @@ export REAL_GIT=$(command -v git)
 original_path=$PATH
 failures=0
 CASE_DIR=
+case_started=0
 
 live() {
   local state
   kill -0 "$1" 2>/dev/null || return 1
   # An orphan can briefly remain a zombie until the OS reaps it; it is stopped.
-  state=$(ps -o stat= -p "$1") || return 1
+  # If ps fails, the pid counts as live unless it is gone by now: a failure to
+  # look must never pass as "stopped" (#183).
+  if ! state=$(ps -o stat= -p "$1"); then
+    kill -0 "$1" 2>/dev/null
+    return
+  fi
   [[ -n $state && $state != *Z* ]]
 }
 
 fallback_cleanup() {
   [[ -n $CASE_DIR ]] || return 0
-  if [[ -f $CASE_DIR/out/pids ]]; then
+  # Kill each recorded pid without asking ps whether it is live, so this works
+  # where ps does not (#183). Only while the case is recent: once this shell
+  # has been suspended, say, a recorded pid may belong to an unrelated process.
+  if [[ -f $CASE_DIR/out/pids ]] && ((SECONDS - case_started <= 30)); then
     while read -r pid; do
-      if live "$pid"; then kill -KILL "$pid" 2>/dev/null || true; fi
+      kill -KILL "$pid" 2>/dev/null || true
     done < "$CASE_DIR/out/pids"
   fi
+  # Removing the case directory stops every fake still running, including one
+  # not recorded or not killed above: each one exits once it is gone.
   rm -rf "$CASE_DIR"
   CASE_DIR=
 }
 trap fallback_cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+# The setup-signal cases find the supervisor's child with `ps -axo`, and the
+# leak check tells a zombie from a live process with `ps -o stat=`. Where ps
+# is not permitted (the Codex implementation sandbox), those cases cannot
+# work and would leave their fake Grok running (#183), so stop before any
+# case starts one.
+ps_usable() {
+  local listing
+  [[ -n $(ps -o stat= -p $$) ]] || return 1
+  listing=$(ps -axo pid=,ppid=,command=) || return 1
+  grep -Eq "^ *$$ " <<< "$listing"
+}
+if ! ps_usable; then
+  echo 'grok-review_test: ps is not usable here, and the setup-signal cases and the leak check need it; run this script where ps works (docs/workflow/running-other-ai.md)' >&2
+  exit 1
+fi
 
 fail() { printf '  %s\n' "$*" >&2; failed=1; }
 contains() { grep -Fq -- "$2" "$1" || fail "missing '$2' in ${1##*/}"; }
@@ -97,6 +124,9 @@ FAKE
 use strict; use warnings;
 use POSIX qw(_exit);
 my $out = "$ENV{CASE_DIR}/out";
+# Wait for a signal, or until the case directory is removed: fallback_cleanup
+# stops this way the fakes it cannot or must not kill by pid (#183).
+sub hold { select undef, undef, undef, 0.1 while -d $out; _exit(0) }
 sub mark { open my $f, '>', "$out/$_[0]" or die $!; print $f $_[1] // ''; close $f }
 sub record { open my $f, '>>', "$out/pids" or die $!; print $f "$$\n"; close $f }
 record();
@@ -114,7 +144,7 @@ if ($mode eq 'early-exit') {
   # The leader exits at once and leaves a descendant; record its pid first so
   # the cleanup assertion can find it.
   my $child = fork() // die $!;
-  if (!$child) { sleep 60 while 1 }
+  if (!$child) { hold() }
   open my $p, '>>', "$out/pids" or die $!; print $p "$child\n"; close $p;
   exit 42;
 }
@@ -127,18 +157,18 @@ if ($mode eq 'descendants' || $mode eq 'timeout' || $mode =~ /^(setup-)?(INT|TER
     my $grandchild;
     $SIG{TERM} = sub { waitpid($grandchild, 0); _exit(0) };
     $grandchild = fork() // die $!;
-    if ($grandchild) { sleep 60 while 1 }
+    if ($grandchild) { hold() }
     record();
     $SIG{TERM} = sub { _exit(0) };
     mark('ready');
-    sleep 60 while 1;
+    hold();
   }
   # The marker is written by the descendant after its handler is installed.
   if ($mode eq 'descendants') {
     my $deadline = time + 3;
     until (-e "$out/ready") { die "child not ready" if time >= $deadline; select undef, undef, undef, 0.01 }
   } else {
-    sleep 60 while 1;
+    hold();
   }
 }
 exit(($mode eq 'exit42' || $mode eq 'prune-failure') ? 42 : 0);
@@ -152,6 +182,7 @@ run_case() {
   local failed=0 status pid entries
   CASE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/grok-review-test.XXXXXX") || exit 1
   export CASE_DIR
+  case_started=$SECONDS
   # Keep captures separate from launcher-owned temporary files; never reuse them.
   rm -rf "$CASE_DIR/out" "$CASE_DIR/tmp"
   mkdir -p "$CASE_DIR/bin" "$CASE_DIR/out" "$CASE_DIR/tmp" "$CASE_DIR/repo"
@@ -336,4 +367,51 @@ run_case single-json-payload 0 payload 86400 49
 LAUNCHER_AS_COMMAND=1 run_case bash-c-symlink-before-prompt-diff-worktree 1 symlink default 49
 LAUNCHER_AS_COMMAND=1 run_case bash-c-single-json-payload 0 payload 86400 49
 run_case untrusted-launcher 1 mismatch default 49
+
+# A fallback cleanup long after its case (#183) must not kill by pid, since a
+# recorded pid may have been reused, but must still stop every fake. A sleep
+# stands in for the unrelated process that reused a recorded pid.
+delayed_cleanup_case() {
+  local failed=0 mode=timeout leader decoy pid alive fakes=() i
+  CASE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/grok-review-test.XXXXXX") || exit 1
+  export CASE_DIR
+  mkdir -p "$CASE_DIR/bin" "$CASE_DIR/out"
+  fixtures || exit 1
+  MODE=timeout perl "$CASE_DIR/bin/grok" --prompt-file "$CASE_DIR/instructions" \
+    </dev/null >/dev/null 2>&1 &
+  leader=$!
+  for ((i = 0; i < 300; i++)); do
+    [[ -e $CASE_DIR/out/ready ]] && break
+    perl -e 'select undef, undef, undef, 0.01'
+  done
+  [[ -e $CASE_DIR/out/ready ]] || fail 'fake Grok not ready'
+  while read -r pid; do fakes+=("$pid"); done < "$CASE_DIR/out/pids"
+  sleep 60 </dev/null >/dev/null 2>&1 &
+  decoy=$!
+  echo "$decoy" >> "$CASE_DIR/out/pids"
+  case_started=$((SECONDS - 3600))
+  fallback_cleanup
+  kill -0 "$decoy" 2>/dev/null || fail 'fallback cleanup killed a stale pid'
+  for ((i = 0; i < 300; i++)); do
+    alive=0
+    for pid in "${fakes[@]}"; do live "$pid" && alive=1; done
+    ((alive)) || break
+    perl -e 'select undef, undef, undef, 0.01'
+  done
+  for pid in "${fakes[@]}"; do
+    if live "$pid"; then
+      fail "fake Grok process $pid outlived its case directory"
+      kill -KILL "$pid" 2>/dev/null
+    fi
+  done
+  kill -KILL "$decoy" 2>/dev/null
+  wait "$leader" "$decoy" 2>/dev/null
+  if [[ $failed == 0 ]]; then
+    printf 'PASS %s\n' delayed-cleanup-spares-stale-pids
+  else
+    printf 'FAIL %s\n' delayed-cleanup-spares-stale-pids
+    failures=$((failures + 1))
+  fi
+}
+delayed_cleanup_case
 [[ $failures -eq 0 ]]

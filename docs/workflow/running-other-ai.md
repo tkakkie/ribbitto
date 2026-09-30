@@ -81,7 +81,12 @@ The prompt carries the issue and its review comments, plus these rules:
   and `RIBBITTO_REQUIRE_DB=1`. Its Go tests run with the race detector,
   which works in this profile. `make vuln` does not, because
   `vuln.go.dev` is not on the allowlist; CI runs it
-  ([Checks](../../README.md#checks)).
+  ([Checks](../../README.md#checks)). The last step of `make check`,
+  `bash scripts/ai/grok-review_test.sh`, stops at once with a message,
+  because the sandbox does not permit `ps` and the script needs it to find
+  and check its fake Grok processes
+  ([#183](https://github.com/tkakkie/ribbitto/issues/183)). Everything
+  before it has run by then, so that failure alone is expected.
 
   ```sh
   # Reuse the container if it is already running; either way, wait for it.
@@ -120,7 +125,8 @@ The prompt carries the issue and its review comments, plus these rules:
 The orchestrator then:
 
 1. reviews the diff;
-2. runs what Codex could not (for example `make db-up` or a live `make dev`);
+2. runs what Codex could not (for example `make db-up`, a live `make dev`,
+   or `bash scripts/ai/grok-review_test.sh` outside the sandbox);
 3. commits, pushes and opens the PR.
 
 **Reviews.** In `-s read-only` mode Codex cannot reach GitHub, so pipe in

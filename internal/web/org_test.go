@@ -100,14 +100,15 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, method, path, cookie, url.Values{"name": {"新しいチャンネル"}, "body": {"posted through the page"}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Messages, services.Posting)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Messages, services.Posting, services.Stream)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
 	for _, route := range routes {
 		path := "/organizations/acme" + strings.ReplaceAll(route.path, "{$}", "")
 		if strings.Contains(path, "{channelID}") {
-			path = view.ChannelURL("acme", acmeChannel)
+			// Keep what follows the channel, such as /events.
+			path = view.ChannelURL("acme", acmeChannel) + strings.TrimPrefix(route.path, "/channels/{channelID}")
 		}
 		for _, tt := range []struct {
 			name   string
@@ -142,6 +143,13 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			case "POST /channels/{channelID}":
 				if w.Code != 303 || w.Header().Get("Location") != view.ChannelURL("acme", acmeChannel) {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())
+				}
+			case "GET /channels/{channelID}/events":
+				// This suite runs without Services.Stream, so a member gets the
+				// stream-off 404 after authorisation; the stream itself is
+				// tested through the production wiring in cmd/ribbitto.
+				if w.Code != http.StatusNotFound {
+					t.Fatalf("events: %d %s", w.Code, w.Body.String())
 				}
 			case "POST /channels":
 				created, err := services.Channels.List(ctx, authz.Membership{Organization: domain.Organization{ID: acme}})

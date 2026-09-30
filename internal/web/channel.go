@@ -26,12 +26,15 @@ type ChannelService interface {
 	Create(context.Context, authz.Membership, string) (domain.Channel, error)
 }
 
-// MessageReader provides the channel page and cursor from one snapshot.
+// MessageReader provides the channel page and cursor from one snapshot, and
+// one message by its event sequence for the stream.
 type MessageReader interface {
 	Before(context.Context, authz.Membership, domain.ID, *int64) (message.ChannelPage, error)
+	One(context.Context, authz.Membership, domain.ID, int64) (message.Entry, error)
 }
 
 type channelPages struct {
+	stream   *Streaming
 	messages MessageReader
 	posting  *message.Service
 	pages    *pageRenderer
@@ -48,18 +51,11 @@ func (p channelPages) home(w http.ResponseWriter, r *http.Request, m authz.Membe
 }
 
 func (p channelPages) show(w http.ResponseWriter, r *http.Request, m authz.Membership) {
-	raw := r.PathValue("channelID")
-	var id domain.ID
-	if len(raw) != 36 || raw[8] != '-' || raw[13] != '-' || raw[18] != '-' || raw[23] != '-' {
+	id, ok := channelID(r)
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-	decoded, err := hex.DecodeString(strings.ReplaceAll(raw, "-", ""))
-	if err != nil || len(decoded) != len(id) {
-		http.NotFound(w, r)
-		return
-	}
-	copy(id[:], decoded)
 	if r.Method == http.MethodPost {
 		p.post(w, r, m, id)
 		return
@@ -144,10 +140,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Mem
 	account, _ := middleware.Account(r.Context())
 	page.Messages = make([]view.Message, len(history.Entries))
 	for i, entry := range history.Entries {
-		page.Messages[i] = view.Message{
-			ID: entry.ID, DisplayName: entry.DisplayName, Handle: entry.Handle,
-			CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
-		}
+		page.Messages[i] = viewMessage(entry)
 	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		page.Organization, page.DisplayName, page.Handle, page.Role = m.Organization, account.DisplayName, m.Member.Handle, string(m.Member.Role)
@@ -185,5 +178,30 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membe
 		p.render(w, r, m, c.ID, http.StatusOK, view.ChannelPage{})
 	default:
 		http.Redirect(w, r, view.ChannelURL(m.Organization.Slug, c.ID), http.StatusSeeOther)
+	}
+}
+
+// channelID parses the {channelID} path segment: the UUID in its canonical
+// form, the only one ChannelURL produces.
+func channelID(r *http.Request) (domain.ID, bool) {
+	raw := r.PathValue("channelID")
+	var id domain.ID
+	if len(raw) != 36 || raw[8] != '-' || raw[13] != '-' || raw[18] != '-' || raw[23] != '-' {
+		return id, false
+	}
+	decoded, err := hex.DecodeString(strings.ReplaceAll(raw, "-", ""))
+	if err != nil || len(decoded) != len(id) {
+		return id, false
+	}
+	copy(id[:], decoded)
+	return id, true
+}
+
+// viewMessage converts a history entry into what MessageItem renders, for
+// the page and the stream alike.
+func viewMessage(entry message.Entry) view.Message {
+	return view.Message{
+		ID: entry.ID, DisplayName: entry.DisplayName, Handle: entry.Handle,
+		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
 	}
 }

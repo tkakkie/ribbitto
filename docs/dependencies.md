@@ -69,6 +69,7 @@ internal/web -> internal/app/message
 internal/web -> internal/app/setup
 internal/web -> internal/app/signup
 internal/web -> internal/domain
+internal/web -> internal/realtime
 internal/web -> internal/web/i18n
 internal/web -> internal/web/middleware
 internal/web -> internal/web/view

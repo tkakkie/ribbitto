@@ -95,7 +95,7 @@ func serve(ctx context.Context, databaseURL string) error {
 	hub := realtime.NewHub()
 	handler, sessions, err := buildHandler(pool, handlerConfig{
 		setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
-		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), notifier: hub,
+		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), hub: hub,
 	})
 	if err != nil {
 		return err
@@ -202,7 +202,12 @@ type handlerConfig struct {
 	setupToken, devAssets string
 	signupEnabled         bool
 	trustedProxies        []netip.Prefix
-	notifier              message.Notifier
+	// hub, when set, is raised by posting and serves the event stream; nil
+	// leaves posting unnotified and the stream off.
+	hub *realtime.Hub
+	// streamWriteTimeout bounds each stream write; zero keeps the default.
+	// Tests shorten it.
+	streamWriteTimeout time.Duration
 }
 
 // buildHandler shares production wiring with the HTTPS acceptance test.
@@ -223,17 +228,25 @@ func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth
 	if err != nil {
 		return nil, nil, err
 	}
+	authorizer := authz.New(postgres.NewAuthzStore(pool))
+	posting := message.New(postgres.NewPostingStore(pool))
+	var stream *web.Streaming
+	if config.hub != nil {
+		posting = message.NewWithNotifier(postgres.NewPostingStore(pool), config.hub)
+		stream = &web.Streaming{Hub: config.hub, Events: postgres.NewEventReader(pool), Authorizer: authorizer, WriteTimeout: config.streamWriteTimeout}
+	}
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions:      sessions,
 		SignIn:        auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
 		Setup:         setupService,
 		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, config.signupEnabled),
 		SetupSessions: sessions,
-		Authz:         authz.New(postgres.NewAuthzStore(pool)),
+		Authz:         authorizer,
 		Messages:      postgres.MessageReader{Pool: pool},
-		Posting:       message.NewWithNotifier(postgres.NewPostingStore(pool), config.notifier),
+		Posting:       posting,
 		Channels:      channel.New(postgres.NewChannelStore(pool)),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
+		Stream:        stream,
 	})
 	if err != nil {
 		return nil, nil, err

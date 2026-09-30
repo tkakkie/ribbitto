@@ -21,6 +21,7 @@ type Cache[K comparable, V any] struct {
 	ttl         time.Duration
 	loadTimeout time.Duration
 	now         func() time.Time
+	keep        func(K, V) bool
 
 	mu      sync.Mutex
 	entries map[K]*list.Element // of *cacheEntry[K, V]; front is most recent
@@ -35,18 +36,21 @@ type cacheEntry[K comparable, V any] struct {
 }
 
 type cacheCall[V any] struct {
-	done  chan struct{}
-	value V
-	err   error
+	done    chan struct{}
+	value   V
+	err     error
+	waiters int
 }
 
 // NewCache returns a cache holding at most capacity entries, each for at
 // most ttl. A load runs for at most loadTimeout, detached from the caller
 // that started it: one stream going away must not fail the others waiting
-// on the same load. now is time.Now outside tests.
-func NewCache[K comparable, V any](capacity int, ttl, loadTimeout time.Duration, now func() time.Time) *Cache[K, V] {
+// on the same load. keep, if not nil, decides whether a loaded value is
+// stored; a value it rejects is still shared with the callers that waited
+// for it. now is time.Now outside tests.
+func NewCache[K comparable, V any](capacity int, ttl, loadTimeout time.Duration, keep func(K, V) bool, now func() time.Time) *Cache[K, V] {
 	return &Cache[K, V]{
-		capacity: max(capacity, 1), ttl: ttl, loadTimeout: loadTimeout, now: now,
+		capacity: max(capacity, 1), ttl: ttl, loadTimeout: loadTimeout, keep: keep, now: now,
 		entries: make(map[K]*list.Element), order: list.New(), loading: make(map[K]*cacheCall[V]),
 	}
 }
@@ -72,6 +76,7 @@ func (c *Cache[K, V]) Get(ctx context.Context, key K, load func(context.Context)
 		c.loading[key] = call
 		go c.load(context.WithoutCancel(ctx), key, call, load)
 	}
+	call.waiters++
 	c.mu.Unlock()
 
 	select {
@@ -90,7 +95,7 @@ func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load 
 
 	c.mu.Lock()
 	delete(c.loading, key)
-	if call.err == nil {
+	if call.err == nil && (c.keep == nil || c.keep(key, call.value)) {
 		c.entries[key] = c.order.PushFront(&cacheEntry[K, V]{key: key, value: call.value, expires: c.now().Add(c.ttl)})
 		for c.order.Len() > c.capacity {
 			oldest := c.order.Back()
@@ -107,4 +112,15 @@ func (c *Cache[K, V]) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.order.Len()
+}
+
+// Waiting reports how many callers have joined the load in flight for key
+// (0 if none), so tests can synchronise on it instead of sleeping.
+func (c *Cache[K, V]) Waiting(key K) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if call, ok := c.loading[key]; ok {
+		return call.waiters
+	}
+	return 0
 }

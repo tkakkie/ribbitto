@@ -10,13 +10,19 @@ import (
 // CachedEvents is an EventReader that shares reads between an
 // organisation's streams: streams at the same cursor read the log once.
 //
-// A read is keyed by the hub's level when it starts, as well as by the
-// organisation, the cursor and the limit. The hub is raised only after a
-// commit, so a read started at level L sees every event up to L; once the
-// hub moves past L, the key changes and the log is read again. Without the
-// level, a read made between an event's commit and its Raise could be
-// served after the Raise without that event, and a stream that has already
-// waited past that level would not read it again until the next post.
+// Only full batches are stored. A full batch is the first limit events
+// after the cursor, which never changes once committed. A short or empty
+// batch only says what the log held when it was read, and a stream takes it
+// as "caught up" and waits: served later from the cache, it could hide
+// events committed since — including ones no Raise announces (a crash
+// between commit and Raise, or a writer that does not notify). Short
+// batches are still shared by the streams reading at the same moment,
+// which is the steady-state case: every stream wakes on the same Raise.
+//
+// Reads in flight are also keyed by the hub's level when they start. The
+// hub is raised only after a commit, so a read started at level L sees
+// every event up to L; a stream that has seen a higher level does not join
+// an older read that may have missed its event.
 type CachedEvents struct {
 	events EventReader
 	hub    *Hub
@@ -32,7 +38,13 @@ type eventsKey struct {
 // NewCachedEvents wraps events. capacity and ttl bound the cache; events
 // never change once committed, so ttl only bounds memory.
 func NewCachedEvents(events EventReader, hub *Hub, capacity int, ttl time.Duration) *CachedEvents {
-	return &CachedEvents{events: events, hub: hub, cache: NewCache[eventsKey, []domain.Event](capacity, ttl, 10*time.Second, time.Now)}
+	return newCachedEvents(events, hub, capacity, ttl, 10*time.Second)
+}
+
+func newCachedEvents(events EventReader, hub *Hub, capacity int, ttl, loadTimeout time.Duration) *CachedEvents {
+	c := &CachedEvents{events: events, hub: hub}
+	c.cache = NewCache[eventsKey, []domain.Event](capacity, ttl, loadTimeout, fullBatch, time.Now)
+	return c
 }
 
 // EventsAfter implements EventReader.
@@ -41,4 +53,9 @@ func (c *CachedEvents) EventsAfter(ctx context.Context, organizationID domain.ID
 	return c.cache.Get(ctx, key, func(ctx context.Context) ([]domain.Event, error) {
 		return c.events.EventsAfter(ctx, organizationID, after, limit)
 	})
+}
+
+// fullBatch keeps only batches that fill their limit (see CachedEvents).
+func fullBatch(key eventsKey, events []domain.Event) bool {
+	return len(events) == key.limit
 }

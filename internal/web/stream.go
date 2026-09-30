@@ -141,7 +141,7 @@ const (
 )
 
 func newRenderCache() *realtime.Cache[renderKey, realtime.Outgoing] {
-	return realtime.NewCache[renderKey, realtime.Outgoing](renderCapacity, renderTTL, 10*time.Second, time.Now)
+	return realtime.NewCache[renderKey, realtime.Outgoing](renderCapacity, renderTTL, 10*time.Second, nil, time.Now)
 }
 
 func (r messageRenderer) Render(ctx context.Context, _ realtime.Subscription, event domain.Event) (realtime.Outgoing, error) {

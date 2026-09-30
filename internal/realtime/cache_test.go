@@ -29,8 +29,18 @@ func (c *fakeClock) advance(d time.Duration) {
 	c.now = c.now.Add(d)
 }
 
+// waitForWaiters blocks until n callers have joined key's load.
+func waitForWaiters[K comparable, V any](t *testing.T, c *Cache[K, V], key K, n int) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); c.Waiting(key) < n; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d of %d callers joined the load", c.Waiting(key), n)
+		}
+	}
+}
+
 func TestCacheCoalescesConcurrentMisses(t *testing.T) {
-	c := NewCache[string, int](8, time.Minute, time.Second, time.Now)
+	c := NewCache[string, int](8, time.Minute, time.Second, nil, time.Now)
 	release := make(chan struct{})
 	var loads atomic.Int32
 	load := func(context.Context) (int, error) {
@@ -40,28 +50,16 @@ func TestCacheCoalescesConcurrentMisses(t *testing.T) {
 	}
 	const callers = 50
 	var wg sync.WaitGroup
-	results := make(chan int, callers)
 	for range callers {
 		wg.Go(func() {
-			v, err := c.Get(t.Context(), "k", load)
-			if err != nil {
-				t.Error(err)
+			if v, err := c.Get(t.Context(), "k", load); err != nil || v != 42 {
+				t.Errorf("Get = %d, %v", v, err)
 			}
-			results <- v
 		})
 	}
-	// Let every caller reach the in-flight load before it finishes.
-	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForWaiters(t, c, "k", callers)
 	close(release)
 	wg.Wait()
-	close(results)
-	for v := range results {
-		if v != 42 {
-			t.Fatalf("value %d, want 42", v)
-		}
-	}
 	if n := loads.Load(); n != 1 {
 		t.Fatalf("%d loads for %d concurrent misses, want 1", n, callers)
 	}
@@ -69,7 +67,7 @@ func TestCacheCoalescesConcurrentMisses(t *testing.T) {
 
 func TestCacheCapacityAndTTL(t *testing.T) {
 	clock := &fakeClock{now: time.Unix(0, 0)}
-	c := NewCache[string, string](2, time.Minute, time.Second, clock.Now)
+	c := NewCache[string, string](2, time.Minute, time.Second, nil, clock.Now)
 	loads := map[string]int{}
 	get := func(key string) {
 		t.Helper()
@@ -95,13 +93,16 @@ func TestCacheCapacityAndTTL(t *testing.T) {
 	}
 }
 
+// A failed load reaches every caller that joined it and is not stored: the
+// next call loads again.
 func TestCacheDoesNotStoreErrors(t *testing.T) {
-	c := NewCache[string, int](8, time.Minute, time.Second, time.Now)
+	c := NewCache[string, int](8, time.Minute, time.Second, nil, time.Now)
 	failure := errors.New("database unavailable")
 	release := make(chan struct{})
 	var loads atomic.Int32
 	var wg sync.WaitGroup
-	for range 10 {
+	const callers = 10
+	for range callers {
 		wg.Go(func() {
 			_, err := c.Get(t.Context(), "k", func(context.Context) (int, error) {
 				loads.Add(1)
@@ -113,25 +114,24 @@ func TestCacheDoesNotStoreErrors(t *testing.T) {
 			}
 		})
 	}
-	time.Sleep(50 * time.Millisecond)
+	waitForWaiters(t, c, "k", callers)
 	close(release)
 	wg.Wait()
-	// The failure was not stored: the next call loads again and succeeds.
 	v, err := c.Get(t.Context(), "k", func(context.Context) (int, error) { loads.Add(1); return 7, nil })
 	if err != nil || v != 7 || loads.Load() != 2 {
 		t.Fatalf("retry = %d, %v after %d loads; want 7, nil, 2", v, err, loads.Load())
 	}
 }
 
-// A caller that goes away while waiting gets its cause; the load carries on
-// for the others and is not cancelled with it.
+// A caller that goes away while waiting gets its cause; the load, started by
+// that very caller, carries on for the others and is not cancelled with it.
 func TestCacheWaiterCancellationLeavesTheLoad(t *testing.T) {
-	c := NewCache[string, int](8, time.Minute, time.Second, time.Now)
+	c := NewCache[string, int](8, time.Minute, time.Second, nil, time.Now)
 	release := make(chan struct{})
-	var loadErr error
+	loadErr := make(chan error, 1)
 	load := func(ctx context.Context) (int, error) {
 		<-release
-		loadErr = ctx.Err()
+		loadErr <- ctx.Err()
 		return 1, nil
 	}
 	cause := errors.New("stream closed")
@@ -141,52 +141,162 @@ func TestCacheWaiterCancellationLeavesTheLoad(t *testing.T) {
 		_, err := c.Get(gone, "k", load)
 		first <- err
 	}()
-	time.Sleep(20 * time.Millisecond)
+	waitForWaiters(t, c, "k", 1) // the first caller started the load
 	second := make(chan int, 1)
 	go func() {
 		v, _ := c.Get(t.Context(), "k", load)
 		second <- v
 	}()
+	waitForWaiters(t, c, "k", 2)
 	cancel(cause)
 	if err := <-first; !errors.Is(err, cause) {
 		t.Fatalf("cancelled caller got %v, want %v", err, cause)
 	}
 	close(release)
-	if v := <-second; v != 1 || loadErr != nil {
-		t.Fatalf("other caller got %d, load context %v; want 1 and a live load", v, loadErr)
+	if v := <-second; v != 1 {
+		t.Fatalf("other caller got %d, want 1", v)
+	}
+	if err := <-loadErr; err != nil {
+		t.Fatalf("the load's context ended with its first caller: %v", err)
 	}
 }
 
-func TestCachedEventsKeysReadsByTheHubLevel(t *testing.T) {
-	hub := NewHub()
-	log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
-	events := NewCachedEvents(log, hub, 64, time.Minute)
-	read := func(after int64) []domain.Event {
-		t.Helper()
-		got, err := events.EventsAfter(t.Context(), orgA, after, 10)
+// A load that outlives its timeout releases every waiter with the timeout,
+// and the key can be loaded again.
+func TestCacheLoadTimeoutReleasesWaiters(t *testing.T) {
+	c := NewCache[string, int](8, time.Minute, 50*time.Millisecond, nil, time.Now)
+	stuck := func(ctx context.Context) (int, error) {
+		<-ctx.Done()
+		return 0, ctx.Err()
+	}
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Go(func() {
+			if _, err := c.Get(t.Context(), "k", stuck); !errors.Is(err, context.DeadlineExceeded) {
+				t.Errorf("Get = %v, want the load's timeout", err)
+			}
+		})
+	}
+	wg.Wait()
+	if v, err := c.Get(t.Context(), "k", func(context.Context) (int, error) { return 3, nil }); err != nil || v != 3 {
+		t.Fatalf("retry after a timeout = %d, %v", v, err)
+	}
+}
+
+// A value keep rejects is shared with the callers that waited for it but
+// not stored.
+func TestCacheKeepDecidesWhatIsStored(t *testing.T) {
+	c := NewCache[string, int](8, time.Minute, time.Second, func(_ string, v int) bool { return v > 0 }, time.Now)
+	var loads atomic.Int32
+	get := func(v int) int {
+		got, err := c.Get(t.Context(), "k", func(context.Context) (int, error) { loads.Add(1); return v, nil })
 		if err != nil {
 			t.Fatal(err)
 		}
 		return got
 	}
+	if get(0) != 0 || get(0) != 0 || loads.Load() != 2 {
+		t.Fatalf("a rejected value was stored: %d loads", loads.Load())
+	}
+	if get(5) != 5 || get(9) != 5 || loads.Load() != 3 {
+		t.Fatalf("a kept value was not served: %d loads", loads.Load())
+	}
+}
+
+// A short or empty batch says only what the log held when it was read, so it
+// is never served to a later read, even while the hub stays at the same
+// level (an event committed before its Raise must still be found). A full
+// batch never changes and is served from the cache.
+func TestCachedEventsStoreOnlyFullBatches(t *testing.T) {
+	hub := NewHub()
 	hub.Raise(orgA, 1)
-	if got := read(1); len(got) != 0 { // empty, cached at level 1
-		t.Fatalf("read after 1 = %v", got)
+	log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+	events := NewCachedEvents(log, hub, 64, time.Minute)
+	read := func(after int64, limit int) []domain.Event {
+		t.Helper()
+		got, err := events.EventsAfter(t.Context(), orgA, after, limit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
 	}
-	// Event 2 commits, but the hub has not been raised yet: a read at the
-	// same level may be served from the cache without it...
-	log.append(posted(2, channelA))
-	read(1)
+	if got := read(1, 2); len(got) != 0 {
+		t.Fatalf("read = %v", got)
+	}
+	log.append(posted(2, channelA)) // committed; the hub is not raised
+	if got := read(1, 2); len(got) != 1 || got[0].Seq != 2 {
+		t.Fatalf("after an unannounced commit after an empty batch: %v, want event 2", got)
+	}
+	log.append(posted(3, channelA)) // still no Raise; the last batch was short
+	if got := read(1, 2); len(got) != 2 || got[1].Seq != 3 {
+		t.Fatalf("after an unannounced commit after a short batch: %v, want events 2 and 3", got)
+	}
 	calls := log.calls
-	// ...and once the hub is raised, the key changes and the log is read
-	// again, so the event cannot stay hidden.
-	hub.Raise(orgA, 2)
-	if got := read(1); len(got) != 1 || got[0].Seq != 2 || log.calls != calls+1 {
-		t.Fatalf("read after the raise = %v with %d reads, want event 2 from a fresh read", got, log.calls-calls)
+	if got := read(1, 2); len(got) != 2 || log.calls != calls {
+		t.Fatalf("full batch: %v after %d more reads, want it from the cache", got, log.calls-calls)
 	}
-	// A short batch (fewer than the limit) is cached the same way.
-	if got := read(0); len(got) != 2 {
-		t.Fatalf("read after 0 = %v", got)
+	// A new level is a new key, so even a full batch is read again after a
+	// Raise; the level is in the key for the batches that are not full.
+	hub.Raise(orgA, 3)
+	if read(1, 2); log.calls != calls+1 {
+		t.Fatalf("%d reads after a Raise, want 1", log.calls-calls)
+	}
+}
+
+func TestCachedEventsKeepOrganisationsApart(t *testing.T) {
+	hub := NewHub()
+	log := &fakeLog{events: []domain.Event{
+		posted(1, channelA), posted(2, channelA),
+		{OrganizationID: orgB, Seq: 1, Kind: domain.EventMessagePosted, ChannelID: channelB},
+		{OrganizationID: orgB, Seq: 2, Kind: domain.EventMessagePosted, ChannelID: channelB},
+	}}
+	events := NewCachedEvents(log, hub, 64, time.Minute)
+	a, err := events.EventsAfter(t.Context(), orgA, 0, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := events.EventsAfter(t.Context(), orgB, 0, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a) != 2 || len(b) != 2 || a[0].OrganizationID != orgA || b[0].OrganizationID != orgB || log.calls != 2 {
+		t.Fatalf("orgA %v, orgB %v after %d reads; want each from its own read", a, b, log.calls)
+	}
+}
+
+// blockedLog holds every read until released, then fails it with err.
+type blockedLog struct {
+	release chan struct{}
+	calls   atomic.Int32
+	err     error
+}
+
+func (b *blockedLog) EventsAfter(context.Context, domain.ID, int64, int) ([]domain.Event, error) {
+	b.calls.Add(1)
+	<-b.release
+	return nil, b.err
+}
+
+func TestCachedEventsShareAFailureThenRetry(t *testing.T) {
+	hub := NewHub()
+	failure := errors.New("database unavailable")
+	log := &blockedLog{release: make(chan struct{}), err: failure}
+	events := NewCachedEvents(log, hub, 64, time.Minute)
+	var wg sync.WaitGroup
+	const callers = 10
+	for range callers {
+		wg.Go(func() {
+			if _, err := events.EventsAfter(t.Context(), orgA, 0, 5); !errors.Is(err, failure) {
+				t.Errorf("EventsAfter = %v, want %v", err, failure)
+			}
+		})
+	}
+	waitForWaiters(t, events.cache, eventsKey{organization: orgA, limit: 5}, callers)
+	close(log.release)
+	wg.Wait()
+	log.err = nil
+	if _, err := events.EventsAfter(t.Context(), orgA, 0, 5); err != nil || log.calls.Load() != 2 {
+		t.Fatalf("retry = %v after %d reads, want one fresh read", err, log.calls.Load())
 	}
 }
 
@@ -207,32 +317,50 @@ func TestCachedEventsLetAColdStreamDrain(t *testing.T) {
 	<-done
 }
 
-// Many streams at the same cursor share one read of each new event.
+// countingLog counts the reads that start after seq 0 and find an event.
+type countingLog struct {
+	EventReader
+	mu        sync.Mutex
+	fromStart int
+}
+
+func (c *countingLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+	events, err := c.EventReader.EventsAfter(ctx, org, after, limit)
+	if after == 0 && len(events) > 0 {
+		c.mu.Lock()
+		c.fromStart++
+		c.mu.Unlock()
+	}
+	return events, err
+}
+
+// Many streams at the same cursor share one read of a full batch. The empty
+// reads around it are not stored (see TestCachedEventsStoreOnlyFullBatches)
+// and are not counted. A stream may read the new event at the hub level from
+// before the Raise or after it, two different keys, so at most two reads
+// find it however the streams interleave.
 func TestCachedEventsShareReadsBetweenStreams(t *testing.T) {
 	hub := NewHub()
 	log := &fakeLog{}
-	events := NewCachedEvents(log, hub, 64, time.Minute)
+	counted := &countingLog{EventReader: log}
+	events := NewCachedEvents(counted, hub, 64, time.Minute)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	const streams = 50
 	senders := make([]*recorder, streams)
 	for i := range senders {
 		senders[i] = newRecorder()
-		runAsync(ctx, Stream{Hub: hub, Events: events, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 0, senders[i])
+		// A batch of one is full as soon as it holds the event.
+		runAsync(ctx, Stream{Hub: hub, Events: events, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), BatchSize: 1}, 0, senders[i])
 	}
-	time.Sleep(100 * time.Millisecond) // every stream has read once and waits
-	log.mu.Lock()
-	before := log.calls
-	log.mu.Unlock()
 	log.append(posted(1, channelA))
 	hub.Raise(orgA, 1)
 	for _, s := range senders {
 		s.waitFor(t, 1)
 	}
-	log.mu.Lock()
-	reads := log.calls - before
-	log.mu.Unlock()
-	if reads > 2 {
-		t.Fatalf("%d log reads for one event and %d streams, want at most 2", reads, streams)
+	counted.mu.Lock()
+	defer counted.mu.Unlock()
+	if counted.fromStart > 2 {
+		t.Fatalf("%d reads found the event for %d streams, want at most 2", counted.fromStart, streams)
 	}
 }

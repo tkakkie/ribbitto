@@ -110,7 +110,7 @@ func TestStreamCost(t *testing.T) {
 	renderer := readingRenderer{messages: postgres.MessageReader{Pool: pool}, membership: m}
 	if cached {
 		inner = realtime.NewCachedEvents(dbReads, hub, 1024, time.Minute)
-		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](4096, time.Minute, 10*time.Second, time.Now)
+		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](4096, time.Minute, 10*time.Second, nil, time.Now)
 	}
 	loopReads := &countingReader{inner: inner}
 	stream := realtime.Stream{Hub: hub, Events: loopReads, Authorizer: authz.New(postgres.NewAuthzStore(pool)), Renderer: renderer}

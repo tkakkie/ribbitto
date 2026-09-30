@@ -100,6 +100,41 @@ Left to review, because a pattern check cannot prove them: that a stored
 value is only a UX setting, that a script owns no application state, and
 that a component makes no authorisation decision.
 
+### JavaScript pattern check
+
+`TestApplicationJavaScript` in `web/static/javascript_test.go` checks every
+direct `web/static/*.js` file, regardless of its name or version; it does
+not descend into subdirectories such as `vendor/`. Names must end in
+`-vN.js`, where N is one or more decimal digits. This implements #197.
+
+The check matches source patterns on each line after masking `//` and
+`/* ... */` comments and single-, double- and backtick-quoted contents
+(including escapes). Quote delimiters remain visible for string timers.
+It rejects:
+
+- `innerHTML`/`outerHTML` assignments, including compound assignments such
+  as `+=`; calls to `insertAdjacentHTML`, `document.write`,
+  `document.writeln` and `createContextualFragment`. Reads and comparisons
+  of HTML properties pass.
+- `fetch`, `XMLHttpRequest` and `indexedDB` identifiers.
+- Calls to `eval`, `new Function`, and `setTimeout`/`setInterval` with a
+  directly quoted first argument. These evaluation restrictions restate
+  the existing CSP without `'unsafe-eval'` ([`rendering.md`](rendering.md)).
+- `var`/`let`/`const` and named `function` declarations at zero brace and
+  parenthesis depth, plus direct dot-property assignments and increments
+  or decrements on `window`/`globalThis`. No particular file structure is
+  required; multiple IIFEs and scoped event handlers pass.
+
+This is a bounded pattern check, not a JavaScript parser. It does not
+resolve aliases, computed properties, expressions split across lines or
+template interpolations. Regular-expression literals are not recognized;
+their contents can be mistaken for code, comments or delimiters. Delimiter
+depth is not scope analysis: block-level `var`, implicit globals and other
+indirect writes can escape it, while some named function expressions can
+look like declarations. Reviewers check these cases, all HTML writes and
+globals by hand. `localStorage` and `sessionStorage` pass mechanically; the
+check cannot prove that a stored value is only a non-sensitive UX setting.
+
 ## Audit, 2026-09-30
 
 Every HTML handler in `internal/web`, every templ component and every

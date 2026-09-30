@@ -52,6 +52,9 @@ it as `data-event-cursor` on the outer layout div, outside every htmx swap.
 Pages with `?before=` omit the cursor; loading older history or swapping the
 composer's conversation leaves the initial page cursor intact for #159.
 Snapshot composition remains in the adapter until #154 M11.
+`MessageReader.One` uses the same snapshot pattern for an event's
+organisation, channel and `event_seq`, returning the message with current
+author names or `message.ErrNotFound`.
 
 ## Server-Sent Events *(planned, M3)*
 

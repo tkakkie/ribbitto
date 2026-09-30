@@ -14,8 +14,22 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
 
-// MessageReader reads the channel page and its cursor from the same snapshot.
+// MessageReader reads the channel page and its cursor, or one message, each
+// with both author batches from one snapshot.
 type MessageReader struct{ Pool *pgxpool.Pool }
+
+// One reads one message and its author names in a read-only snapshot.
+func (s MessageReader) One(ctx context.Context, m authz.Membership, channelID domain.ID, eventSeq int64) (entry message.Entry, err error) {
+	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: NewAccountStore(tx)}
+		entry, err = reader.One(ctx, m, channelID, eventSeq)
+		return err
+	})
+	if err != nil {
+		return message.Entry{}, fmt.Errorf("reading message snapshot: %w", err)
+	}
+	return entry, nil
+}
 
 // Before reads a page for a resolved member, omitting the cursor on older pages.
 func (s MessageReader) Before(ctx context.Context, m authz.Membership, channelID domain.ID, before *int64) (page message.ChannelPage, err error) {

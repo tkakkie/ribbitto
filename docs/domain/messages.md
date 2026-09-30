@@ -10,8 +10,9 @@ these rules change.
 
 A message is identified by its `id` (UUIDv7) — in the DOM, and later in
 permalinks, reactions, editing and deleting. `event_seq` orders messages
-and drives paging and unread counts (unique per organisation) but is never
-used as an identifier.
+and drives paging and unread counts (unique per organisation). An event
+reads its message by organisation, channel and `event_seq`; the message's
+stable identifier for the DOM and links remains `id`.
 
 Bodies are **plain text**, and the stored body is the source of truth. If
 Markdown or rich text comes later, an explicit format is added with it and

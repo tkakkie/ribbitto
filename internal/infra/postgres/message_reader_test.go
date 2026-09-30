@@ -1,10 +1,15 @@
 package postgres_test
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
@@ -71,6 +76,9 @@ func TestMessagePaging(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if (page.EventCursor == nil) != (before != nil) {
+					t.Fatalf("cursor presence disagrees with history bound: %+v", page)
+				}
 				pages++
 				var bodies []string
 				for _, e := range page.Entries {
@@ -113,7 +121,77 @@ func TestMessagePaging(t *testing.T) {
 			}
 		}
 	}
-	if page, err := reader.Before(ctx, globex, channels["exact"], nil); err != nil || len(page.Entries) != 0 || page.Older {
+	if page, err := reader.Before(ctx, globex, channels["exact"], nil); !errors.Is(err, appchannel.ErrNotFound) || len(page.Entries) != 0 || page.Older {
 		t.Fatalf("globex read acme's channel: %+v, %v", page, err)
+	}
+}
+
+// queryHook interrupts a real read before a selected statement, without adding
+// test hooks to the production adapter or relying on scheduler timing.
+type queryHook func(context.Context, string)
+
+func (hook queryHook) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	hook(ctx, data.SQL)
+	return ctx
+}
+func (queryHook) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+func TestChannelPageSnapshot(t *testing.T) {
+	t.Parallel()
+	for _, statement := range []string{"GetChannel", "ListChannels", "ListMessagesBefore", "LookupMembers", "LookupDisplayNames", "GetEventSeq"} {
+		t.Run(statement, func(t *testing.T) {
+			pool := pgtest.New(t)
+			ctx := t.Context()
+			fixture := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+			m := authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID}, Member: domain.Member{ID: fixture.MemberID}}
+			posting := message.New(postgres.NewPostingStore(pool))
+			initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")
+			requireNoError(t, err)
+			var concurrent domain.Message
+			var began bool
+			config := pool.Config()
+			config.ConnConfig.Tracer = queryHook(func(ctx context.Context, sql string) {
+				if sql == "begin isolation level repeatable read read only" {
+					began = true
+				}
+				if !strings.HasPrefix(sql, "-- name: "+statement+" ") || concurrent.EventSeq != 0 {
+					return
+				}
+				// The writer uses another connection and commits before this
+				// snapshot's next statement, including its final cursor read.
+				concurrent, err = posting.Post(ctx, m, fixture.Channel.ID, "concurrent")
+				requireNoError(t, err)
+				_, err = pool.Exec(ctx, "UPDATE channel SET name = 'renamed' WHERE organization_id = $1 AND id = $2", fixture.OrganizationID, fixture.Channel.ID)
+				requireNoError(t, err)
+				_, err = pool.Exec(ctx, "UPDATE member SET handle = 'renamed' WHERE organization_id = $1 AND id = $2", fixture.OrganizationID, fixture.MemberID)
+				requireNoError(t, err)
+				_, err = pool.Exec(ctx, "UPDATE account SET display_name = 'renamed' WHERE id = $1", fixture.AccountID)
+				requireNoError(t, err)
+			})
+			reading, err := pgxpool.NewWithConfig(ctx, config)
+			requireNoError(t, err)
+			t.Cleanup(reading.Close)
+			page, err := (postgres.MessageReader{Pool: reading}).Before(ctx, m, fixture.Channel.ID, nil)
+			requireNoError(t, err)
+			if !began || concurrent.EventSeq == 0 || page.EventCursor == nil {
+				t.Fatalf("missing transaction, concurrent commit or cursor: %+v", page)
+			}
+			visible := slices.ContainsFunc(page.Entries, func(e message.Entry) bool { return e.ID == concurrent.ID })
+			if !visible && concurrent.EventSeq <= *page.EventCursor {
+				t.Fatal("concurrent message is neither on the page nor after its cursor")
+			}
+			cursor, count, name, handle, display := initial.EventSeq, 1, "general", "owner", "acme"
+			if statement == "GetChannel" {
+				cursor, count, name, handle, display = concurrent.EventSeq, 2, "renamed", "renamed", "renamed"
+			}
+			if *page.EventCursor != cursor || len(page.Entries) != count || page.Current.Name != name || len(page.Channels) != 1 || page.Channels[0].Name != name {
+				t.Fatalf("page mixed snapshots: %+v, cursor %d", page, *page.EventCursor)
+			}
+			for _, e := range page.Entries {
+				if e.Handle != handle || e.DisplayName != display {
+					t.Fatalf("author mixed snapshots: %+v", e)
+				}
+			}
+		})
 	}
 }

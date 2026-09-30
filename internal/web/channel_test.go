@@ -63,6 +63,7 @@ func TestChannelHandlers(t *testing.T) {
 		{name: "malformed id", method: "GET", path: "/organizations/acme/channels/bad", status: 404},
 		{name: "non-hex id", method: "GET", path: "/organizations/acme/channels/zz000000-0000-0000-0000-000000000000", status: 404},
 		{name: "unknown id", method: "GET", path: view.ChannelURL("acme", domain.ID{9}), status: 404},
+		{name: "unknown id with malformed bound", method: "GET", path: view.ChannelURL("acme", domain.ID{9}) + "?before=bad", status: 404},
 		{name: "get failure", method: "GET", path: current, fake: fakeChannels{getErr: errors.New("offline")}, status: 500},
 		{name: "list failure", method: "GET", path: current, fake: fakeChannels{listErr: errors.New("offline")}, status: 500},
 		{name: "create Japanese", method: "POST", path: "/organizations/acme/channels?name=wrong", body: url.Values{"name": {"雑談"}, "organization_id": {"other"}}.Encode(), status: 303, location: view.ChannelURL("acme", domain.ID{3})},
@@ -82,7 +83,7 @@ func TestChannelHandlers(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Channels = &tt.fake }))
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Channels, s.Messages = &tt.fake, fakeMessages{channels: &tt.fake} }))
 			if err != nil {
 				t.Fatal(err)
 			}

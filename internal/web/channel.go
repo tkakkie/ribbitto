@@ -26,9 +26,9 @@ type ChannelService interface {
 	Create(context.Context, authz.Membership, string) (domain.Channel, error)
 }
 
-// MessageReader provides a page of the conversation with author names.
+// MessageReader provides the channel page and cursor from one snapshot.
 type MessageReader interface {
-	Before(context.Context, authz.Membership, domain.ID, *int64) (message.Page, error)
+	Before(context.Context, authz.Membership, domain.ID, *int64) (message.ChannelPage, error)
 }
 
 type channelPages struct {
@@ -60,17 +60,8 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m authz.Membe
 		return
 	}
 	copy(id[:], decoded)
-	c, err := p.service.Get(r.Context(), m, id)
-	if errors.Is(err, channel.ErrNotFound) {
-		http.NotFound(w, r)
-		return
-	}
-	if err != nil {
-		serverError(w, r, "finding channel", err)
-		return
-	}
 	if r.Method == http.MethodPost {
-		p.post(w, r, m, c)
+		p.post(w, r, m, id)
 		return
 	}
 	page := view.ChannelPage{}
@@ -78,19 +69,33 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m authz.Membe
 	// dropping them, so a broken link cannot fall back to the latest page.
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		p.invalidQuery(w, r, m, id)
 		return
 	}
 	if raw, ok := query["before"]; ok {
 		// An event_seq is positive; anything else is a malformed link.
 		before, err := strconv.ParseInt(raw[0], 10, 64)
 		if len(raw) != 1 || err != nil || before < 1 {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
+			p.invalidQuery(w, r, m, id)
 			return
 		}
 		page.Before = before
 	}
-	p.render(w, r, m, c, http.StatusOK, page)
+	p.render(w, r, m, id, http.StatusOK, page)
+}
+
+// Preserve channel lookup errors ahead of malformed paging links, without a
+// separate channel read on successfully rendered pages.
+func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m authz.Membership, id domain.ID) {
+	_, err := p.service.Get(r.Context(), m, id)
+	switch {
+	case errors.Is(err, channel.ErrNotFound):
+		http.NotFound(w, r)
+	case err != nil:
+		serverError(w, r, "finding channel", err)
+	default:
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+	}
 }
 
 func (p channelPages) create(w http.ResponseWriter, r *http.Request, m authz.Membership) {
@@ -119,22 +124,21 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m authz.Mem
 		serverError(w, r, "finding default channel", err)
 		return
 	}
-	p.render(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message})
+	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message})
 }
 
-func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Membership, c domain.Channel, status int, page view.ChannelPage) {
-	channels, err := p.service.List(r.Context(), m)
-	if err != nil {
-		serverError(w, r, "listing channels", err)
-		return
-	}
+func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Membership, id domain.ID, status int, page view.ChannelPage) {
 	var before *int64
 	if page.Before > 0 {
 		before = &page.Before
 	}
-	history, err := p.messages.Before(r.Context(), m, c.ID, before)
+	history, err := p.messages.Before(r.Context(), m, id, before)
+	if errors.Is(err, channel.ErrNotFound) || errors.Is(err, authz.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
 	if err != nil {
-		serverError(w, r, "listing messages", err)
+		serverError(w, r, "reading channel page", err)
 		return
 	}
 	account, _ := middleware.Account(r.Context())
@@ -147,20 +151,30 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Mem
 	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		page.Organization, page.DisplayName, page.Handle, page.Role = m.Organization, account.DisplayName, m.Member.Handle, string(m.Member.Role)
-		page.Current, page.Channels, page.Older = c, channels, history.Older
+		page.Current, page.Channels, page.Older = history.Current, history.Channels, history.Older
+		page.EventCursor = history.EventCursor
 		return view.Channel(url, page)
 	})
 }
 
-func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membership, c domain.Channel) {
+func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membership, id domain.ID) {
+	c, err := p.service.Get(r.Context(), m, id)
+	if errors.Is(err, channel.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		serverError(w, r, "finding channel", err)
+		return
+	}
 	if !parseForm(w, r) {
 		return
 	}
 	body := r.PostForm.Get("body")
-	_, err := p.posting.Post(r.Context(), m, c.ID, body)
+	_, err = p.posting.Post(r.Context(), m, c.ID, body)
 	switch {
 	case errors.Is(err, message.ErrInvalidBody):
-		p.render(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
+		p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
 	case errors.Is(err, channel.ErrNotFound), errors.Is(err, authz.ErrNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member.
@@ -168,7 +182,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membe
 	case err != nil:
 		serverError(w, r, "posting message", err)
 	case r.Header.Get("HX-Request") == "true":
-		p.render(w, r, m, c, http.StatusOK, view.ChannelPage{})
+		p.render(w, r, m, c.ID, http.StatusOK, view.ChannelPage{})
 	default:
 		http.Redirect(w, r, view.ChannelURL(m.Organization.Slug, c.ID), http.StatusSeeOther)
 	}

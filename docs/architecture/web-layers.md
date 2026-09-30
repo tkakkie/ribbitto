@@ -51,6 +51,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `message-body`, plus `message-<32 lowercase hex digits>` from
   `MessageDOMID`. `#message-items` is always present, including when empty;
   Load older selects its direct `<li>` children.
+- The latest channel page carries `data-event-cursor` on its outer layout
+  div, outside `#conversation` and every swap target. Older pages omit it.
 - The layout's `htmx-config` meta tag holds htmx's security settings and
   `responseHandling` ([`rendering.md`](rendering.md)). It keeps the three
   defaults, inserting a 422 swap with `error: false` before `[45]..` because

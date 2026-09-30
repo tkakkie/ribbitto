@@ -653,6 +653,9 @@ func TestPagesMarkup(t *testing.T) {
 					t.Error(problem)
 				}
 				checkHTMXRequests(t, handler, doc, lang, c.cookie)
+				for _, problem := range checkFallbackURLs(doc) {
+					t.Error(problem)
+				}
 				for n := range doc.Descendants() {
 					var assetURL string
 					switch n.DataAtom {

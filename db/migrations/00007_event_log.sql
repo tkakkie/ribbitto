@@ -21,9 +21,15 @@ CREATE TABLE event_log (
 -- +goose StatementBegin
 CREATE FUNCTION organization_event_seq_logged() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF NEW.event_seq > OLD.event_seq AND NEW.event_seq > NEW.event_log_boundary_seq
-     AND NOT EXISTS (SELECT 1 FROM event_log WHERE organization_id = NEW.id AND seq = NEW.event_seq) THEN
-    RAISE EXCEPTION 'event_seq % of organization % has no event_log row', NEW.event_seq, NEW.id
+  -- Every sequence this update took above the boundary, not only the last:
+  -- an update may advance the counter by more than one.
+  IF NEW.event_seq > GREATEST(OLD.event_seq, NEW.event_log_boundary_seq)
+     AND (SELECT count(*) FROM event_log
+          WHERE organization_id = NEW.id
+            AND seq > GREATEST(OLD.event_seq, NEW.event_log_boundary_seq)
+            AND seq <= NEW.event_seq)
+         <> NEW.event_seq - GREATEST(OLD.event_seq, NEW.event_log_boundary_seq) THEN
+    RAISE EXCEPTION 'event_seq % of organization % has sequences without event_log rows', NEW.event_seq, NEW.id
       USING ERRCODE = 'check_violation';
   END IF;
   RETURN NULL;

@@ -69,9 +69,32 @@ func TestEventLogMigration(t *testing.T) {
 		t.Fatalf("commit without an event row: %v, want check_violation", err)
 	}
 	assertEventLog(t, pool, old.OrganizationID, 2)
+	// An update that takes two sequences must log both, not only the last.
+	for _, rows := range [][]int64{{4}, {3, 4}} {
+		jump, err := pool.Begin(ctx)
+		requireNoError(t, err)
+		_, err = jump.Exec(ctx, "UPDATE organization SET event_seq = event_seq + 2 WHERE id = $1", old.OrganizationID)
+		requireNoError(t, err)
+		for _, seq := range rows {
+			_, err = jump.Exec(ctx, "INSERT INTO event_log (organization_id, seq, kind, data) VALUES ($1, $2, 'test.jump', '{}')", old.OrganizationID, seq)
+			requireNoError(t, err)
+		}
+		err = jump.Commit(ctx)
+		if len(rows) == 1 && (!errors.As(err, &pgErr) || pgErr.Code != "23514") {
+			t.Fatalf("commit with sequence 3 unlogged: %v, want check_violation", err)
+		}
+		if len(rows) == 2 {
+			requireNoError(t, err)
+		}
+	}
+	// Drop the test rows as retention would, raising the boundary past them.
+	_, err = pool.Exec(ctx, "DELETE FROM event_log WHERE organization_id = $1 AND kind = 'test.jump'", old.OrganizationID)
+	requireNoError(t, err)
+	_, err = pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = 4 WHERE id = $1", old.OrganizationID)
+	requireNoError(t, err)
 	_, err = postgres.NewPostingStore(pool).Post(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "after logging")
 	requireNoError(t, err)
-	assertEventLog(t, pool, old.OrganizationID, 3)
+	assertEventLog(t, pool, old.OrganizationID, 5)
 	_, err = provider.Down(ctx)
 	requireNoError(t, err)
 	var removed bool

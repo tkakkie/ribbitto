@@ -26,7 +26,7 @@ organisation-wide. `data` holds only IDs ([payload shapes](architecture/realtime
 to each existing organisation's `event_seq` on upgrade: no event backfill.
 Retention will advance this replay boundary. A deferred constraint trigger on
 `organization` refuses, at commit, any raise of `event_seq` above the boundary
-without its `event_log` row, so a server still running an older binary during
+that leaves one of the sequences it took without an `event_log` row, so a server still running an older binary during
 `migrate up` fails its write instead of leaving a gap. Down drops the trigger,
 the log and the boundary.
 

@@ -1,15 +1,21 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
 func TestStreamCursor(t *testing.T) {
@@ -121,4 +127,57 @@ func TestSSESender(t *testing.T) {
 			t.Fatalf("Send = %v, want http.ErrNotSupported", err)
 		}
 	})
+}
+
+// laterSession answers the stream's second look at the session: gone, or a
+// different session, as if the cookie's session was deleted (or replaced)
+// between the middleware's lookup and the stream's registration.
+type laterSession struct {
+	session auth.Session
+	err     error
+}
+
+func (l laterSession) Resolve(context.Context, string) (domain.Account, auth.Session, error) {
+	return domain.Account{ID: domain.ID{1}}, l.session, l.err
+}
+
+// noEvents is an event log that is never read in these tests.
+type noEvents struct{}
+
+func (noEvents) EventsAfter(context.Context, domain.ID, int64, int) ([]domain.Event, error) {
+	return nil, errors.New("the stream must not start")
+}
+
+// The middleware resolves the session, then it is deleted before the stream
+// registers: nothing would cancel the stream, so the second look must stop it
+// before anything is sent, and the registration must not outlive it.
+func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		later laterSession
+	}{
+		{"session deleted", laterSession{err: auth.ErrNoSession}},
+		{"session replaced by another", laterSession{session: auth.Session{ID: domain.ID{0x77}, ExpiresAt: time.Now().Add(time.Hour)}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			hub := realtime.NewHub()
+			catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+				s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Authorizer: nil, Sessions: tt.later}
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", "live", nil)
+			if w.Code != http.StatusNotFound || w.Header().Get("Content-Type") == "text/event-stream; charset=utf-8" {
+				t.Fatalf("status %d, headers %v; want 404 and no stream", w.Code, w.Header())
+			}
+			if n := hub.Connections(); n != 0 {
+				t.Fatalf("%d connections still registered", n)
+			}
+		})
+	}
 }

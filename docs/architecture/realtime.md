@@ -157,8 +157,11 @@ sequenceDiagram
   sending**, including events already queued: access may have been lost in
   between. The check itself is `app`'s authorization, reached through the
   `Authorizer` interface that `realtime` defines.
-- Logging out or deleting a session cancels that account's connections in
-  the hub at once; a timer closes a connection when its session expires.
+- A stream registers with the hub under its session (#207), then looks the
+  session up again, so a sign-out in between still stops it. Deleting a
+  session (sign-out, or a sign-in replacing it) cancels that session's
+  streams at once; the stream's context ends when the session expires.
+  Other sessions of the account stay connected.
 
 ### Resource limits
 

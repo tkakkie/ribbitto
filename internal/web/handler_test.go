@@ -420,17 +420,17 @@ func (noOrganisations) HomeSlug(context.Context, *domain.Account) (string, error
 // noSessions signs nobody in, for tests that do not need a session.
 type noSessions struct{}
 
-func (noSessions) Resolve(context.Context, string) (domain.Account, error) {
-	return domain.Account{}, auth.ErrNoSession
+func (noSessions) Resolve(context.Context, string) (domain.Account, auth.Session, error) {
+	return domain.Account{}, auth.Session{}, auth.ErrNoSession
 }
 
 // countingResolver counts lookups and fails every one, like a database
 // outage.
 type countingResolver struct{ calls int }
 
-func (c *countingResolver) Resolve(context.Context, string) (domain.Account, error) {
+func (c *countingResolver) Resolve(context.Context, string) (domain.Account, auth.Session, error) {
 	c.calls++
-	return domain.Account{}, errors.New("connection refused")
+	return domain.Account{}, auth.Session{}, errors.New("connection refused")
 }
 
 func TestNewHandlerRequiresServices(t *testing.T) {

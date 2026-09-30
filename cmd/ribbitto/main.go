@@ -213,6 +213,11 @@ type handlerConfig struct {
 // buildHandler shares production wiring with the HTTPS acceptance test.
 func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth.Sessions, error) {
 	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
+	if config.hub != nil {
+		// Deleting a session (sign-out, or a sign-in replacing it) ends its
+		// open event streams at once.
+		sessions = auth.NewSessionsWithCanceller(postgres.NewSessionStore(pool), time.Now, config.hub)
+	}
 	// One hasher for the whole process: its slots are the cap on concurrent
 	// Argon2id work (DECISIONS.md 10).
 	hasher, err := auth.NewHasher()
@@ -233,7 +238,7 @@ func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth
 	var stream *web.Streaming
 	if config.hub != nil {
 		posting = message.NewWithNotifier(postgres.NewPostingStore(pool), config.hub)
-		stream = &web.Streaming{Hub: config.hub, Events: postgres.NewEventReader(pool), Authorizer: authorizer, WriteTimeout: config.streamWriteTimeout}
+		stream = &web.Streaming{Hub: config.hub, Events: postgres.NewEventReader(pool), Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions:      sessions,

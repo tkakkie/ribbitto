@@ -6,8 +6,8 @@ SELECT sqlc.embed(session), account.id, account.email, account.display_name
 FROM session JOIN account ON account.id = session.account_id
 WHERE session.token_hash = $1 AND session.expires_at > sqlc.arg(now);
 
--- name: DeleteSessionByTokenHash :exec
-DELETE FROM session WHERE token_hash = $1;
+-- name: DeleteSessionByTokenHash :many
+DELETE FROM session WHERE token_hash = $1 RETURNING id;
 
 -- name: DeleteExpiredSessions :exec
 DELETE FROM session WHERE expires_at < $1;

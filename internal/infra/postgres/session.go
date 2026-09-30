@@ -61,14 +61,18 @@ func NewSessionStore(db sessionDB) *SessionStore {
 }
 
 // ReplaceSession deletes the old session and stores the new one in one
-// transaction.
-func (s *SessionStore) ReplaceSession(ctx context.Context, oldHash, newHash []byte, accountID domain.ID, expiresAt time.Time) error {
-	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+// transaction, and reports the deleted session's id, if there was one.
+func (s *SessionStore) ReplaceSession(ctx context.Context, oldHash, newHash []byte, accountID domain.ID, expiresAt time.Time) (ended domain.ID, found bool, err error) {
+	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		q := sqlcgen.New(tx)
-		if err := q.DeleteSessionByTokenHash(ctx, oldHash); err != nil {
+		ids, err := q.DeleteSessionByTokenHash(ctx, oldHash)
+		if err != nil {
 			return err
 		}
-		_, err := q.CreateSession(ctx, sqlcgen.CreateSessionParams{
+		if len(ids) > 0 {
+			ended, found = ids[0].Bytes, true
+		}
+		_, err = q.CreateSession(ctx, sqlcgen.CreateSessionParams{
 			TokenHash: newHash,
 			AccountID: pgtype.UUID{Bytes: accountID, Valid: true},
 			ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
@@ -76,9 +80,9 @@ func (s *SessionStore) ReplaceSession(ctx context.Context, oldHash, newHash []by
 		return err
 	})
 	if err != nil {
-		return fmt.Errorf("replacing session: %w", withoutDetail(err))
+		return domain.ID{}, false, fmt.Errorf("replacing session: %w", withoutDetail(err))
 	}
-	return nil
+	return ended, found, nil
 }
 
 // CreateSession stores a session by its token hash.
@@ -105,27 +109,34 @@ func withoutDetail(err error) error {
 	return fmt.Errorf("%s (SQLSTATE %s, constraint %q)", pgErr.Message, pgErr.Code, pgErr.ConstraintName)
 }
 
-// SessionAccount returns the account of a session that expires after now.
-func (s *SessionStore) SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (domain.Account, error) {
+// SessionAccount returns the account of a session that expires after now,
+// with the session's id and expiry.
+func (s *SessionStore) SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (domain.Account, auth.Session, error) {
 	row, err := s.queries.GetSessionByTokenHash(ctx, sqlcgen.GetSessionByTokenHashParams{
 		TokenHash: tokenHash,
 		Now:       pgtype.Timestamptz{Time: now, Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Account{}, auth.ErrNoSession
+		return domain.Account{}, auth.Session{}, auth.ErrNoSession
 	}
 	if err != nil {
-		return domain.Account{}, fmt.Errorf("selecting session: %w", err)
+		return domain.Account{}, auth.Session{}, fmt.Errorf("selecting session: %w", err)
 	}
-	return domain.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName}, nil
+	return domain.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName},
+		auth.Session{ID: row.Session.ID.Bytes, ExpiresAt: row.Session.ExpiresAt.Time}, nil
 }
 
-// DeleteSession deletes the session with this token hash, if any.
-func (s *SessionStore) DeleteSession(ctx context.Context, tokenHash []byte) error {
-	if err := s.queries.DeleteSessionByTokenHash(ctx, tokenHash); err != nil {
-		return fmt.Errorf("deleting session: %w", err)
+// DeleteSession deletes the session with this token hash, if any, and
+// reports its id.
+func (s *SessionStore) DeleteSession(ctx context.Context, tokenHash []byte) (ended domain.ID, found bool, err error) {
+	ids, err := s.queries.DeleteSessionByTokenHash(ctx, tokenHash)
+	if err != nil {
+		return domain.ID{}, false, fmt.Errorf("deleting session: %w", err)
 	}
-	return nil
+	if len(ids) == 0 {
+		return domain.ID{}, false, nil
+	}
+	return ids[0].Bytes, true, nil
 }
 
 // DeleteExpiredSessions deletes sessions that expired before the given time.

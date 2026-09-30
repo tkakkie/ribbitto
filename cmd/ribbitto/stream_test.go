@@ -155,6 +155,39 @@ func noEvent(t *testing.T, events <-chan sseEvent, within time.Duration) {
 	}
 }
 
+// drain reads whatever the stream replays first, until it has been quiet
+// for a moment.
+func drain(t *testing.T, events <-chan sseEvent) {
+	t.Helper()
+	for {
+		select {
+		case _, ok := <-events:
+			if !ok {
+				t.Fatal("stream ended while draining")
+			}
+		case <-time.After(300 * time.Millisecond):
+			return
+		}
+	}
+}
+
+// streamEndsWithin waits for the server to end the stream, ignoring any events
+// still in flight.
+func streamEndsWithin(t *testing.T, events <-chan sseEvent, within time.Duration) {
+	t.Helper()
+	deadline := time.After(within)
+	for {
+		select {
+		case _, ok := <-events:
+			if !ok {
+				return
+			}
+		case <-deadline:
+			t.Fatalf("stream still open after %s", within)
+		}
+	}
+}
+
 // post sends the composer form without JavaScript (303 back to the channel).
 func post(t *testing.T, b acceptanceBrowser, channelURL, body string) {
 	t.Helper()
@@ -223,9 +256,43 @@ func TestEventStream(t *testing.T) {
 	}
 	nextEvent(t, events)
 
+	// Sessions end their streams (#207). The owner signs in on two more
+	// browsers; each has its own session and stream.
+	laptop, phone := newAcceptanceBrowser(t, server, "192.0.2.14"), newAcceptanceBrowser(t, server, "192.0.2.15")
+	for _, b := range []acceptanceBrowser{laptop, phone} {
+		b.visit(t, "POST", "/signin", acceptanceForm("owner"), 303)
+	}
+	laptopEvents, _ := openStream(t, on(laptop, streams), channelURL, "0")
+	phoneEvents, _ := openStream(t, on(phone, streams), channelURL, "0")
+	drain(t, laptopEvents)
+	drain(t, phoneEvents)
+	// Signing out on the laptop ends the laptop's stream at once; the
+	// phone's, another session of the same account, stays and still gets
+	// the next post.
+	laptop.visit(t, "POST", "/signout", nil, 303)
+	streamEndsWithin(t, laptopEvents, 2*time.Second)
+	post(t, owner, channelURL, "after the laptop signed out")
+	if e := nextEvent(t, phoneEvents); !strings.Contains(e.data, "after the laptop signed out") {
+		t.Fatalf("phone after the laptop's sign-out: %+v", e)
+	}
+	nextEvent(t, events)
+	nextEvent(t, memberEvents)
+	// Signing in again on the phone replaces its session: the old one's
+	// stream ends.
+	phone.visit(t, "POST", "/signin", acceptanceForm("owner"), 303)
+	streamEndsWithin(t, phoneEvents, 2*time.Second)
+	// A session that expires ends its stream when it expires.
+	_, err := pool.Exec(t.Context(), "UPDATE session SET expires_at = now() + interval '1 second' WHERE id = (SELECT id FROM session ORDER BY created_at DESC LIMIT 1)")
+	acceptanceOK(t, err)
+	expiring, status := openStream(t, on(phone, streams), channelURL, "0")
+	if status != http.StatusOK {
+		t.Fatalf("expiring session's stream: %d", status)
+	}
+	streamEndsWithin(t, expiring, 5*time.Second)
+
 	// Membership removed while the stream is open: the next event is
 	// withheld from that stream, while the owner's still gets it.
-	_, err := pool.Exec(t.Context(), "DELETE FROM member WHERE handle = 'member'")
+	_, err = pool.Exec(t.Context(), "DELETE FROM member WHERE handle = 'member'")
 	acceptanceOK(t, err)
 	post(t, owner, channelURL, "after removal")
 	if e := nextEvent(t, events); !strings.Contains(e.data, "after removal") {

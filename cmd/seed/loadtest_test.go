@@ -143,12 +143,12 @@ func TestLoadTestSeed(t *testing.T) {
 		}
 		seen[entry.Handle] = true
 		for _, token := range entry.Tokens {
-			account, err := sessions.Resolve(t.Context(), token)
+			account, _, err := sessions.Resolve(t.Context(), token)
 			if err != nil || account.Email != entry.Handle+"@example.test" || seen[token] || strings.Contains(out.String(), token) {
 				t.Fatal("token authentication, uniqueness, grouping or secrecy failed")
 			}
 			seen[token] = true
-			if _, err := expired.Resolve(t.Context(), token); !errors.Is(err, auth.ErrNoSession) {
+			if _, _, err := expired.Resolve(t.Context(), token); !errors.Is(err, auth.ErrNoSession) {
 				t.Fatal("token exceeded normal lifetime")
 			}
 		}

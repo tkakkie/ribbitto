@@ -66,6 +66,10 @@ func TestAccountSchema(t *testing.T) {
 		requireNoError(t, err)
 		requireNoError(t, tx.Commit(ctx))
 	}
+	// The rows only satisfied the trigger; remove them so the restrict checks
+	// below see member's foreign key alone.
+	_, err := pool.Exec(ctx, "DELETE FROM event_log WHERE organization_id = $1", org.ID)
+	requireNoError(t, err)
 	unchanged, err := q.GetOrganizationBySlug(ctx, other.Slug)
 	if err != nil || unchanged.EventSeq != 0 {
 		t.Fatalf("other organization changed: %+v, %v", unchanged, err)
@@ -122,6 +126,9 @@ func TestAccountSchema(t *testing.T) {
 			var pgErr *pgconn.PgError
 			if !errors.As(err, &pgErr) || pgErr.Code != tc.code {
 				t.Fatalf("want SQLSTATE %s, got %v", tc.code, err)
+			}
+			if tc.name == "restrict organization" && pgErr.ConstraintName != "member_organization_id_fkey" {
+				t.Fatalf("restricted by %q, want member_organization_id_fkey", pgErr.ConstraintName)
 			}
 		})
 	}

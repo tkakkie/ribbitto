@@ -1,15 +1,24 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/app/authz"
+	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
 
 func TestStreamCursor(t *testing.T) {
@@ -121,4 +130,78 @@ func TestSSESender(t *testing.T) {
 			t.Fatalf("Send = %v, want http.ErrNotSupported", err)
 		}
 	})
+}
+
+// countingMessages is a MessageReader whose One is counted, can block and
+// can fail.
+type countingMessages struct {
+	fakeMessages
+	calls   *atomic.Int32
+	release chan struct{}
+	err     error
+}
+
+func (c countingMessages) One(context.Context, authz.Membership, domain.ID, int64) (message.Entry, error) {
+	c.calls.Add(1)
+	if c.release != nil {
+		<-c.release
+	}
+	if c.err != nil {
+		return message.Entry{}, c.err
+	}
+	return message.Entry{Message: domain.Message{ID: domain.ID{7}, Body: "shared"}, DisplayName: "Alice", Handle: "alice"}, nil
+}
+
+// Streams of one organisation share each rendered message: concurrent
+// renders of one event read the message once; each language has its own
+// entry; a failed read is not kept, and the next render retries.
+func TestMessageRendererSharesRenders(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inLanguage := func(lang string) context.Context {
+		var ctx context.Context
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("Accept-Language", lang)
+		catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { ctx = r.Context() })).ServeHTTP(httptest.NewRecorder(), r)
+		return ctx
+	}
+	m := authz.Membership{Organization: domain.Organization{ID: domain.ID{1}}}
+	event := domain.Event{OrganizationID: m.Organization.ID, Seq: 9, Kind: domain.EventMessagePosted, ChannelID: domain.ID{2}}
+	calls := &atomic.Int32{}
+	release := make(chan struct{})
+	r := messageRenderer{messages: countingMessages{calls: calls, release: release}, membership: m, renders: newRenderCache()}
+
+	var wg sync.WaitGroup
+	en := inLanguage("en")
+	for range 20 {
+		wg.Go(func() {
+			out, err := r.Render(en, realtime.Subscription{}, event)
+			if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "shared") {
+				t.Errorf("Render = %+v, %v", out, err)
+			}
+		})
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("%d message reads for 20 concurrent renders, want 1", n)
+	}
+	if _, err := r.Render(inLanguage("ja"), realtime.Subscription{}, event); err != nil || calls.Load() != 2 {
+		t.Fatalf("another language: %v after %d reads, want its own read", err, calls.Load())
+	}
+
+	failure := errors.New("database unavailable")
+	failing := messageRenderer{messages: countingMessages{calls: calls, err: failure}, membership: m, renders: r.renders}
+	other := event
+	other.Seq = 10
+	if _, err := failing.Render(en, realtime.Subscription{}, other); !errors.Is(err, failure) {
+		t.Fatalf("Render = %v, want %v", err, failure)
+	}
+	before := calls.Load()
+	if _, err := r.Render(en, realtime.Subscription{}, other); err != nil || calls.Load() != before+1 {
+		t.Fatalf("retry after a failure: %v after %d reads, want a fresh read", err, calls.Load()-before)
+	}
 }

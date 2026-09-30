@@ -233,7 +233,10 @@ func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth
 	var stream *web.Streaming
 	if config.hub != nil {
 		posting = message.NewWithNotifier(postgres.NewPostingStore(pool), config.hub)
-		stream = &web.Streaming{Hub: config.hub, Events: postgres.NewEventReader(pool), Authorizer: authorizer, WriteTimeout: config.streamWriteTimeout}
+		// Streams at the same cursor share each event read (#227); events never
+		// change, so the TTL only bounds memory.
+		events := realtime.NewCachedEvents(postgres.NewEventReader(pool), config.hub, 1024, time.Minute)
+		stream = &web.Streaming{Hub: config.hub, Events: events, Authorizer: authorizer, WriteTimeout: config.streamWriteTimeout}
 	}
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions:      sessions,

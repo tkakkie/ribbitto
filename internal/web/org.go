@@ -28,7 +28,7 @@ type orgRoute struct {
 // registers the routes and drives the tests that prove non-members get
 // 404, so a route cannot be added without those tests covering it.
 func orgRoutes(pages *pageRenderer, service ChannelService, messages MessageReader, posting *message.Service, stream *Streaming) []orgRoute {
-	handlers := channelPages{pages: pages, service: service, messages: messages, posting: posting, stream: stream}
+	handlers := channelPages{pages: pages, service: service, messages: messages, posting: posting, stream: stream, renders: newRenderCache()}
 	return []orgRoute{
 		{http.MethodGet, "/{$}", handlers.home},
 		{http.MethodGet, "/channels/{channelID}", handlers.show},

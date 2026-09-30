@@ -35,10 +35,14 @@ import (
 //	RIBBITTO_STREAM_COST_RATE      posts per second, default 10
 //	RIBBITTO_STREAM_COST_DURATION  posting time per step, default 10s
 //	RIBBITTO_STREAM_COST_POOL      pool size, default pgxpool's max(4, CPUs)
+//	RIBBITTO_STREAM_COST_CACHE     1: share event reads and message reads
+//	                               through the caches of #227
+//	RIBBITTO_STREAM_COST_MEMBERS   distinct: one member per stream, instead
+//	                               of one member for every stream
 //
-// Every stream belongs to the same member of one organisation and follows
-// the same channel. The renderer reads the message with its authors (#206)
-// but renders no HTML: this measures database cost.
+// Every stream follows the same channel of one organisation. The renderer
+// reads the message with its authors (#206) but renders no HTML: this
+// measures database cost.
 func TestStreamCost(t *testing.T) {
 	if os.Getenv("RIBBITTO_STREAM_COST") != "1" {
 		t.Skip("set RIBBITTO_STREAM_COST=1 to measure the stream's cost")
@@ -69,6 +73,16 @@ func TestStreamCost(t *testing.T) {
 		t.Fatal(err)
 	}
 	fixture := pgtest.OrganizationWithOwner(t, fixturePool, "acme", "general")
+	cached := os.Getenv("RIBBITTO_STREAM_COST_CACHE") == "1"
+	distinct := os.Getenv("RIBBITTO_STREAM_COST_MEMBERS") == "distinct"
+	subs := []realtime.Subscription{{Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: fixture.AccountID, Channel: fixture.Channel.ID}}
+	if distinct {
+		for i := 1; i < slices.Max(steps); i++ {
+			account := pgtest.Account(t, fixturePool, fmt.Sprintf("m%05d@example.org", i), fmt.Sprintf("Member %d", i))
+			pgtest.Member(t, fixturePool, fixture.OrganizationID, account, domain.RoleMember, fmt.Sprintf("m%05d", i), 1)
+			subs = append(subs, realtime.Subscription{Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: account, Channel: fixture.Channel.ID})
+		}
+	}
 	// Config returns a copy, pointing at pgtest's database.
 	config := fixturePool.Config()
 	if size := os.Getenv("RIBBITTO_STREAM_COST_POOL"); size != "" {
@@ -89,20 +103,25 @@ func TestStreamCost(t *testing.T) {
 	m := authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: fixture.MemberID}}
 	hub := realtime.NewHub()
 	posting := message.NewWithNotifier(postgres.NewPostingStore(pool), hub)
-	events := &countingReader{inner: postgres.NewEventReader(pool)}
-	stream := realtime.Stream{
-		Hub: hub, Events: events, Authorizer: authz.New(postgres.NewAuthzStore(pool)),
-		Renderer: readingRenderer{messages: postgres.MessageReader{Pool: pool}, membership: m},
+	// dbReads counts reads that reach the database (empty ones included);
+	// loopReads counts the loops' reads, which the cache may answer.
+	dbReads := &countingReader{inner: postgres.NewEventReader(pool)}
+	var inner realtime.EventReader = dbReads
+	renderer := readingRenderer{messages: postgres.MessageReader{Pool: pool}, membership: m}
+	if cached {
+		inner = realtime.NewCachedEvents(dbReads, hub, 1024, time.Minute)
+		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](4096, time.Minute, 10*time.Second, time.Now)
 	}
-	sub := realtime.Subscription{Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: fixture.AccountID, Channel: fixture.Channel.ID}
+	loopReads := &countingReader{inner: inner}
+	stream := realtime.Stream{Hub: hub, Events: loopReads, Authorizer: authz.New(postgres.NewAuthzStore(pool)), Renderer: renderer}
 
-	t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step",
-		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration)
-	t.Log("| streams | posts scheduled/completed/missed | deliveries | queries/post | tx statements/post | empty reads/post | queries/delivery | tx statements/delivery | empty reads/delivery | mean empty-acquire wait | p50 | p95 | result |")
-	t.Log("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step; cache %t; distinct members %t",
+		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration, cached, distinct)
+	t.Log("| streams | posts scheduled/completed/missed | deliveries | queries/post | tx statements/post | empty reads/post | queries/delivery | tx statements/delivery | empty reads/delivery | mean empty-acquire wait | empty-acquire wait/delivery | p50 | p95 | result |")
+	t.Log("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	highest := 0
 	for _, n := range steps {
-		r := measureStep(t, stream, posting, pool, queries, events, m, sub, n, rate, duration)
+		r := measureStep(t, stream, posting, pool, queries, loopReads, dbReads, m, subs, n, rate, duration)
 		verdict := "pass"
 		switch {
 		case r.missed > 0 || r.completed < r.scheduled:
@@ -115,13 +134,11 @@ func TestStreamCost(t *testing.T) {
 			verdict = fmt.Sprintf("fail: %d deliveries missing after the drain", r.missing)
 		case r.p95 > time.Second:
 			verdict = "fail: p95 over 1 s"
-		case r.meanWait > r.p95/2:
-			verdict = "fail: mean empty-acquire wait over half of p95"
 		}
-		t.Logf("| %d | %d/%d/%d | %d | %.1f | %.1f | %.1f | %.2f | %.2f | %.2f | %s | %s | %s | %s |", n, r.scheduled, r.completed, r.missed, r.deliveries,
+		t.Logf("| %d | %d/%d/%d | %d | %.1f | %.1f | %.1f | %.2f | %.2f | %.2f | %s | %s | %s | %s | %s |", n, r.scheduled, r.completed, r.missed, r.deliveries,
 			per(r.queries, r.completed), per(r.txStatements, r.completed), per(r.emptyReads, r.completed),
 			per(r.queries, r.deliveries), per(r.txStatements, r.deliveries), per(r.emptyReads, r.deliveries),
-			r.meanWait.Round(time.Microsecond), r.p50.Round(time.Microsecond), r.p95.Round(time.Microsecond), verdict)
+			r.meanWait.Round(time.Microsecond), r.waitPerDelivery.Round(time.Microsecond), r.p50.Round(time.Microsecond), r.p95.Round(time.Microsecond), verdict)
 		if verdict != "pass" {
 			t.Logf("highest passing step: %d streams; first failing step: %d streams (%s)", highest, n, verdict)
 			return
@@ -147,7 +164,13 @@ type stepResult struct {
 	timedOut                          bool
 	deliveries, missing               int
 	queries, txStatements, emptyReads int64
-	meanWait, p50, p95                time.Duration
+	// meanWait is the wait per acquisition that found the pool empty;
+	// waitPerDelivery spreads the same total over the deliveries, which is
+	// what the pool adds to a delivery on average. Both explain latency and
+	// fail no step: rare waits (the caches make them rare) can have a large
+	// meanWait while adding little, and a pool that dominates a 30 ms p95 is
+	// not a ceiling. p95 and completeness decide the ceiling.
+	meanWait, waitPerDelivery, p50, p95 time.Duration
 }
 
 func per(n int64, d int) float64 {
@@ -161,8 +184,9 @@ func per(n int64, d int) float64 {
 // duration, waits for every delivery or a drain deadline, and closes them.
 // Counts cover the posting window and the drain, not the streams' start.
 func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service, pool *pgxpool.Pool, queries *postgres.QueryCounter,
-	events *countingReader, m authz.Membership, sub realtime.Subscription, n, rate int, duration time.Duration) stepResult {
+	events, dbReads *countingReader, m authz.Membership, subs []realtime.Subscription, n, rate int, duration time.Duration) stepResult {
 	t.Helper()
+	sub := subs[0]
 	var cursor int64
 	if err := pool.QueryRow(t.Context(), "SELECT event_seq FROM organization WHERE id = $1", sub.Organization).Scan(&cursor); err != nil {
 		t.Fatal(err)
@@ -172,8 +196,8 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service,
 	sink := &collector{}
 	readsBefore := events.calls.Load()
 	var wg sync.WaitGroup
-	for range n {
-		wg.Go(func() { _, _ = stream.Run(ctx, sub, cursor, sink) })
+	for i := range n {
+		wg.Go(func() { _, _ = stream.Run(ctx, subs[i%len(subs)], cursor, sink) })
 	}
 	// Every stream has read once (and found nothing) before posting starts.
 	for deadline := time.Now().Add(time.Minute); events.calls.Load()-readsBefore < int64(n); {
@@ -183,7 +207,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service,
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	q0, s0, empty0 := queries.Counts(), pool.Stat(), events.empty.Load()
+	q0, s0, empty0 := queries.Counts(), pool.Stat(), dbReads.empty.Load()
 	// Posts are scheduled at the fixed rate whatever their latency (an open
 	// loop), with at most one second's worth in flight: a post that would
 	// exceed it is counted as missed, and the step as underloaded, rather
@@ -236,7 +260,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service,
 	for sink.count() < want && stepCtx.Err() == nil {
 		time.Sleep(10 * time.Millisecond)
 	}
-	q1, s1, empty1 := queries.Counts(), pool.Stat(), events.empty.Load()
+	q1, s1, empty1 := queries.Counts(), pool.Stat(), dbReads.empty.Load()
 	// Read before cancel, which would also end stepCtx: only the deadline
 	// passing counts as timing out.
 	timedOut := errors.Is(stepCtx.Err(), context.DeadlineExceeded)
@@ -250,8 +274,12 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service,
 	r.emptyReads = empty1 - empty0
 	// Only acquisitions that found the pool empty had to wait; averaging
 	// over all of them would dilute the wait.
+	wait := s1.EmptyAcquireWaitTime() - s0.EmptyAcquireWaitTime()
 	if waited := s1.EmptyAcquireCount() - s0.EmptyAcquireCount(); waited > 0 {
-		r.meanWait = (s1.EmptyAcquireWaitTime() - s0.EmptyAcquireWaitTime()) / time.Duration(waited)
+		r.meanWait = wait / time.Duration(waited)
+	}
+	if r.deliveries > 0 {
+		r.waitPerDelivery = wait / time.Duration(r.deliveries)
 	}
 	// A delivery that lands before Post returns is a negative sample.
 	var latencies []time.Duration
@@ -283,17 +311,26 @@ func (c *countingReader) EventsAfter(ctx context.Context, org domain.ID, after i
 	return events, err
 }
 
-// readingRenderer reads the message as the web renderer does, without HTML.
+// readingRenderer reads the message as the web renderer does, without HTML,
+// through renders (keyed by sequence, as one organisation and channel are
+// measured) when the cache is on.
 type readingRenderer struct {
 	messages   postgres.MessageReader
 	membership authz.Membership
+	renders    *realtime.Cache[int64, realtime.Outgoing]
 }
 
 func (r readingRenderer) Render(ctx context.Context, _ realtime.Subscription, e domain.Event) (realtime.Outgoing, error) {
-	if _, err := r.messages.One(ctx, r.membership, e.ChannelID, e.Seq); err != nil {
-		return realtime.Outgoing{}, err
+	load := func(ctx context.Context) (realtime.Outgoing, error) {
+		if _, err := r.messages.One(ctx, r.membership, e.ChannelID, e.Seq); err != nil {
+			return realtime.Outgoing{}, err
+		}
+		return realtime.Outgoing{ID: e.Seq, Name: "message"}, nil
 	}
-	return realtime.Outgoing{ID: e.Seq, Name: "message"}, nil
+	if r.renders == nil {
+		return load(ctx)
+	}
+	return r.renders.Get(ctx, e.Seq, load)
 }
 
 type delivery struct {

@@ -24,8 +24,9 @@ RIBBITTO_STREAM_COST=1 RIBBITTO_STREAM_COST_POOL=10 RIBBITTO_STREAM_COST_STEPS=2
 
 `RIBBITTO_STREAM_COST_STEPS` (streams per step, default `1,10,100,1000,5000`;
 a run stops at its first failing step), `_RATE` (posts per second, default
-10), `_DURATION` (posting time per step, default `10s`) and `_POOL` (pool
-size, default pgx's) tune it. The server must be loopback, checked before
+10), `_DURATION` (posting time per step, default `10s`), `_POOL` (pool size,
+default pgx's), `_CACHE=1` (#227's shared reads) and `_MEMBERS=distinct`
+(one member per stream) tune it. The server must be loopback, checked before
 connecting, fallback hosts included. The benchmark works in a database it
 creates from `template0` (`pgtest.NewEmpty`), migrates itself and drops
 afterwards; it touches no other database. Loopback alone does not prove a
@@ -48,14 +49,18 @@ Posts go through `message.Service` with the hub as notifier.
   ROLLBACK) are counted apart from them. Empty reads (event reads that
   returned nothing) are a subset of the queries. Each is reported per
   completed post and per delivery.
-- **Mean empty-acquire wait** is `pgxpool`'s wait per acquisition that
-  found the pool empty (`EmptyAcquireWaitTime / EmptyAcquireCount`).
+- **Pool wait** is reported two ways: per acquisition that found the pool
+  empty (`EmptyAcquireWaitTime / EmptyAcquireCount`) and spread over the
+  deliveries (what the pool adds to a delivery on average). It explains
+  latency but fails no step (#227): with the caches, waits become rare and
+  their per-acquisition mean can exceed half of a 5 ms p95, and without them
+  the pool dominates a 30 ms p95 at 100 streams — neither is a ceiling.
 - **Latency** runs from `Post` returning after commit to the in-memory send
   (a delivery before `Post` returns counts as a negative sample). It is not a
   commit timestamp.
-- A step fails when it is underloaded, when p95 exceeds 1 s, when the mean
-  empty-acquire wait exceeds half of p95, or when a delivery is still
-  missing 30 s after posting stops.
+- A step fails when it is underloaded or incomplete, when p95 exceeds 1 s,
+  or when a delivery is still missing when the step's deadline (posting
+  time plus 30 s) passes.
 
 ## Results, 2026-10-01
 
@@ -81,11 +86,37 @@ post's own three queries. At 10 posts/s, 300 streams need about 15,000
 queries/s and pass; 500 need 25,000 and the pool saturates. Below five
 queries per delivery, reads batch several events when a stream lags.
 
+## With shared reads (#227), 2026-10-01
+
+Same machine and settings, run with and without `_CACHE=1` (steps
+`100,200,300,500` without it; `100,300,500,1000,2000,3000,5000` with it, once
+with one member and once with `_MEMBERS=distinct`):
+
+| Case | Streams | Queries/post | Queries/delivery | Pool wait/delivery | p50 | p95 | Result |
+|---|---|---|---|---|---|---|---|
+| no cache | 300 | 1,503 | 5.01 | 53 ms | 56 ms | 83 ms | pass |
+| no cache | 500 | 2,087 | 4.17 | 123 ms | 1.29 s | 2.55 s | fail: p95 over 1 s |
+| cache, one member | 1,000 | 1,007 | 1.01 | 21 ms | 40 ms | 44 ms | pass |
+| cache, one member | 2,000 | 2,007 | 1.00 | 43 ms | 84 ms | 266 ms | pass |
+| cache, one member | 3,000 | 3,006 | 1.00 | 68 ms | 1.36 s | 2.58 s | fail: p95 over 1 s |
+| cache, distinct members | 1,000 | 1,007 | 1.01 | 21 ms | 40 ms | 44 ms | pass |
+| cache, distinct members | 2,000 | 2,007 | 1.00 | 40 ms | 81 ms | 88 ms | pass |
+| cache, distinct members | 3,000 | 3,006 | 1.00 | 70 ms | 1.25 s | 2.70 s | fail: p95 over 1 s |
+
+Every step completed its 100 posts. With the caches a post costs about
+`N + 7` queries — one membership check per stream, plus the post's three, one
+shared event read and one shared message read with its two author lookups —
+and **the highest passing step rises from 300 to 2,000 streams**. Distinct
+members change nothing, so the sharing is per organisation, not per member.
+The remaining per-stream query is the membership check (#231); beyond about
+2,000 streams on this machine it saturates the pool.
+
 ## What it points to
 
 Under this load the pool saturates while the loop's goroutines mostly wait
 between posts: the evidence points at per-connection database work, though
-it does not prove Go adds nothing at higher counts. Reading each event and
-its message once per organisation, and rendering once, instead of once per
-connection, would remove most of it; authorization stays a query per
-connection until it has a freshness protocol of its own (#227).
+it does not prove Go adds nothing at higher counts. #227 reads each event
+and message once per organisation and renders once per language; what
+remains per connection is the membership check, until it has a freshness
+protocol of its own (#231). Whether a shared reader per organisation (#232)
+is worth building is decided on these numbers.

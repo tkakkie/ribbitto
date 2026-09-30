@@ -60,6 +60,7 @@ internal/infra/postgres -> internal/infra/postgres/sqlcgen
 internal/infra/postgres/pgtest -> db/migrations
 internal/infra/postgres/pgtest -> internal/domain
 internal/infra/postgres/pgtest -> internal/infra/postgres
+internal/realtime -> internal/domain
 internal/web -> internal/app/auth
 internal/web -> internal/app/authz
 internal/web -> internal/app/channel

@@ -98,6 +98,14 @@ sequenceDiagram
   signal that could be dropped. The cursor advances to the last sequence
   *read*, including events this connection may not see, so a filtered event
   cannot keep the loop spinning.
+- **The hub** (`realtime.Hub`, #157) implements this: `Raise(org, seq)`
+  only raises the value, and `Wait(ctx, org, after)` returns once it is
+  above `after`, or with `context.Cause(ctx)`. It is also the connection
+  registry: `Register(parent, connection, limit)` refuses atomically once
+  the account holds `limit` connections. Otherwise it returns a context
+  derived from the request's context, which `CancelAccount` or
+  `CancelSession` can end, and an `unregister` the handler defers. Only `unregister` frees the slot;
+  `context.Cause` tells why a connection ended.
 - Replay and live delivery go through the same per-connection loop, so they
   cannot interleave out of order. `Last-Event-ID` is preferred on reconnect;
   before htmx recreates the `EventSource`, the client puts its last cursor

@@ -41,8 +41,8 @@ func (f fakeMessages) Before(_ context.Context, _ authz.Membership, _ domain.ID,
 
 func populatedMessages() fakeMessages {
 	return fakeMessages{entries: []message.Entry{
-		{Message: domain.Message{ID: domain.ID{8}, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author"},
-		{Message: domain.Message{ID: domain.ID{9}, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy"},
+		{Message: domain.Message{ID: domain.ID{8}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author"},
+		{Message: domain.Message{ID: domain.ID{9}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy"},
 	}}
 }
 

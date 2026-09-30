@@ -88,11 +88,25 @@ Checked by tools today: the layer imports (depguard), no `templ.Raw`
 (forbidigo), and the markup rules in `TestPagesMarkup` ([`ui.md`](../ui.md)).
 The depguard `view` rule forbids non-test files in `internal/web/view`
 from importing `internal/app` or `internal/infra`, including sub-packages.
+`TestPagesMarkup` also follows every `hx-get` and `hx-post` in each case,
+in both languages, with `HX-Request: true`. It checks `hx-target` ids in
+the requesting page, `hx-select` matches in the response, and every
+`hx-select-oob` match in the response and its destination id in the page.
+Selection may use response-only ids. The selector helper supports `#id`
+and `#id > tag`, including comma-separated lists; new syntax needs explicit
+test support. Non-id targets `this`, `closest …` and `find …` are allowed;
+any ids they name are still checked in the page. The composer's
+`hx-disabled-elt="find textarea, find button"` and `hx-sync="this:drop"`
+are not swap selectors.
+
+`TestComponentsMarkup` renders `SignOutButton` and `MemberName` alone in
+both languages and applies the fragment markup rules. Handler and SSE
+fragments join that list when M3 adds them.
+
 Planned:
 
 | Rule | Issue |
 |---|---|
-| `hx-target`, `hx-select` and `hx-select-oob` resolve; shared components pass the fragment rules | #195 |
 | Enhanced forms and links work without `HX-Request`, and HX responses keep their contracts | #196 |
 | Application scripts: no HTML writes, requests, IndexedDB, evaluation or globals; versioned names | #197 |
 

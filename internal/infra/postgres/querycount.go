@@ -32,7 +32,12 @@ func NewQueryCounter() *QueryCounter { return &QueryCounter{} }
 // Counting happens before PostgreSQL answers: the counts are statements
 // attempted, so a COMMIT that fails still counts as a commit.
 func (c *QueryCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	word, _, _ := strings.Cut(strings.TrimSpace(data.SQL), " ")
+	// Fields splits on any whitespace, so BEGIN followed by a newline or a tab
+	// is still a transaction statement.
+	var word string
+	if fields := strings.Fields(data.SQL); len(fields) > 0 {
+		word = fields[0]
+	}
 	switch strings.ToLower(word) {
 	case "begin":
 		c.begins.Add(1)

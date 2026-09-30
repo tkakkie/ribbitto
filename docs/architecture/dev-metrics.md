@@ -5,7 +5,7 @@ used by #216). **For disposable machines only.**
 
 ## Turning it on
 
-Set `RIBBITTO_DEV_METRICS_ADDR` to a loopback IP address and port, such as
+Set `RIBBITTO_DEV_METRICS_ADDR` to a loopback IP address and a non-zero port, such as
 `127.0.0.1:9090`, and `ribbitto serve` also serves `GET /metrics` there.
 
 - **Off by default.** When the setting is empty, `serve` starts no metrics
@@ -13,7 +13,8 @@ Set `RIBBITTO_DEV_METRICS_ADDR` to a loopback IP address and port, such as
   runs exactly as without the feature (`TestDevMetricsOffByDefault`,
   `TestOpenPoolTracer`).
 - **Loopback only.** The address must be an IP literal in `127.0.0.0/8` or
-  `::1` with a port. Wildcards (`:9090`, `0.0.0.0`, `::`), host names such
+  `::1` with a fixed port from 1 to 65535; port 0 is refused, since the
+  kernel would pick a port the load test cannot know. Wildcards (`:9090`, `0.0.0.0`, `::`), host names such
   as `localhost` (their resolution could change) and other addresses are
   refused at start. A tunnel or proxy that forwards that port elsewhere is
   the operator's responsibility, as for databases

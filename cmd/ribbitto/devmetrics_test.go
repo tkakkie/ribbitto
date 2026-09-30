@@ -25,6 +25,12 @@ func TestDevMetricsSetup(t *testing.T) {
 		{"192.0.2.1:9090", false},
 		{"127.0.0.1", false},
 		{"127.0.0.1:", false},
+		{"127.0.0.1:0", false},
+		{"[::1]:0", false},
+		{"127.0.0.1:http", false},
+		{"127.0.0.1:65536", false},
+		{"127.0.0.1:99999999999", false},
+		{"127.0.0.1:65535", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.value, func(t *testing.T) {

@@ -12,11 +12,15 @@ import (
 
 func TestQueryCounterClassifies(t *testing.T) {
 	counter := postgres.NewQueryCounter()
-	for _, sql := range []string{"begin", "BEGIN ISOLATION LEVEL REPEATABLE READ", "  commit", "rollback", "-- name: GetOrganizationBySlug :one\nSELECT 1", "select 1", "committed_at"} {
+	for _, sql := range []string{
+		"begin", "BEGIN ISOLATION LEVEL REPEATABLE READ", "BEGIN\nISOLATION LEVEL READ COMMITTED",
+		"  commit", "COMMIT\tAND NO CHAIN", "rollback", "\n\tROLLBACK\n",
+		"-- name: GetOrganizationBySlug :one\nSELECT 1", "select 1", "committed_at", "",
+	} {
 		counter.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{SQL: sql})
 	}
 	got := counter.Counts()
-	if want := (postgres.QueryCounts{Queries: 3, Begins: 2, Commits: 1, Rollbacks: 1}); got != want {
+	if want := (postgres.QueryCounts{Queries: 4, Begins: 3, Commits: 2, Rollbacks: 2}); got != want {
 		t.Fatalf("Counts() = %+v, want %+v", got, want)
 	}
 }

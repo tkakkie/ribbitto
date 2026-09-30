@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"net/netip"
 	"runtime"
@@ -21,16 +20,16 @@ import (
 // devMetricsSetup reads RIBBITTO_DEV_METRICS_ADDR. Empty disables metrics:
 // it returns no address and no query counter, so serve starts no listener
 // and installs no tracer. Otherwise the address must be a loopback IP
-// literal with a port; a wildcard, a host name (its resolution could
-// change) or any other address is refused.
+// literal with a fixed port (1–65535); a wildcard, a host name (its
+// resolution could change), port 0 (the kernel would pick one the load test
+// cannot know) or any other address is refused before the database opens.
 func devMetricsSetup(value string) (addr string, queries *postgres.QueryCounter, err error) {
 	if value == "" {
 		return "", nil, nil
 	}
-	host, port, err := net.SplitHostPort(value)
-	ip, parseErr := netip.ParseAddr(host)
-	if err != nil || parseErr != nil || !ip.IsLoopback() || port == "" {
-		return "", nil, fmt.Errorf("RIBBITTO_DEV_METRICS_ADDR must be a loopback IP address and port, such as 127.0.0.1:9090")
+	ap, err := netip.ParseAddrPort(value)
+	if err != nil || !ap.Addr().IsLoopback() || ap.Port() == 0 {
+		return "", nil, fmt.Errorf("RIBBITTO_DEV_METRICS_ADDR must be a loopback IP address and a non-zero port, such as 127.0.0.1:9090")
 	}
 	return value, postgres.NewQueryCounter(), nil
 }

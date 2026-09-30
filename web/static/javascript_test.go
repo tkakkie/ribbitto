@@ -65,8 +65,10 @@ func checkJavaScript(name, source string) []javascriptFinding {
 		}
 		for _, loc := range tokens.FindAllStringIndex(line, -1) {
 			token := line[loc[0]:loc[1]]
-			// A keyword after "." is a property name (options.var), not a declaration.
-			if before := strings.TrimRight(line[:loc[0]], " \t"); strings.HasSuffix(before, ".") {
+			// A keyword after "." is a property name (options.var), not a
+			// declaration. Delimiters still count: callback?.() opens one.
+			keyword := token != "{" && token != "}" && token != "(" && token != ")"
+			if before := strings.TrimRight(line[:loc[0]], " \t"); keyword && strings.HasSuffix(before, ".") {
 				continue
 			}
 			switch token {
@@ -176,6 +178,7 @@ func TestJavaScriptPatterns(t *testing.T) {
 		{"const", `const example = 1;`, "top-level declaration"},
 		{"function", `function example() {}`, "top-level declaration"},
 		{"after iife", `(() => {})(); const example = 1;`, "top-level declaration"},
+		{"after optional call", `callback?.(); const example = 1;`, "top-level declaration"},
 		{"spaced write", `node /* comment */ . innerHTML /* comment */ += markup;`, "HTML generation"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

@@ -10,7 +10,7 @@ type SignUpForm struct {
 
 // SignUp renders the account registration form.
 templ SignUp(stylesheetURL string, form SignUpForm) {
-	@layout(stylesheetURL) {
+	@layout(stylesheetURL, i18n.T(ctx, "signup.page_title")) {
 		<main class="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-8">
 			<h1 class="text-heading font-bold text-fg">{ i18n.T(ctx, "signup.title") }</h1>
 			<form method="post" action="/signup" class="flex flex-col gap-4">

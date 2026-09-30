@@ -354,11 +354,11 @@ func TestHelloLanguages(t *testing.T) {
 			if w.Code != http.StatusOK {
 				t.Fatalf("status = %d", w.Code)
 			}
-			text := "Hello from ribbitto"
+			text, title := "Hello from ribbitto", "<title>Home · ribbitto</title>"
 			if tt.lang == "ja" {
-				text = "ribbittoからこんにちは"
+				text, title = "ribbittoからこんにちは", "<title>ホーム · ribbitto</title>"
 			}
-			for _, want := range []string{`<html lang="` + tt.lang + `">`, "<title>ribbitto</title>", text} {
+			for _, want := range []string{`<html lang="` + tt.lang + `">`, title, text} {
 				if !strings.Contains(w.Body.String(), want) {
 					t.Errorf("HTML missing %q", want)
 				}

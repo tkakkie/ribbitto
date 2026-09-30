@@ -11,7 +11,7 @@ type Viewer struct {
 
 // Hello renders the initial page inside the shared layout.
 templ Hello(stylesheetURL string, viewer Viewer) {
-	@layout(stylesheetURL) {
+	@layout(stylesheetURL, i18n.T(ctx, "hello.page_title")) {
 		<main class="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-2 p-8">
 			<h1 class="text-display font-bold tracking-tight text-fg">{ i18n.T(ctx, "hello.title") }</h1>
 			<p class="text-title text-muted">{ i18n.T(ctx, "hello.tagline") }</p>

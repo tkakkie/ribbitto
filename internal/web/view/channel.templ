@@ -35,7 +35,7 @@ func olderURL(page ChannelPage) string {
 
 // Channel renders the desktop chat layout.
 templ Channel(stylesheetURL string, page ChannelPage) {
-	@layout(stylesheetURL) {
+	@layout(stylesheetURL, page.Current.Name+" · "+page.Organization.Name) {
 		<div class="flex h-dvh text-body">
 			<nav aria-label={ i18n.T(ctx, "channel.organizations") } class="w-17 shrink-0 border-r border-border bg-rail p-3">
 				<ul>

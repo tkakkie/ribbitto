@@ -114,6 +114,10 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   `type` and a name (its text, or `aria-label` when it has none); a link is
   an `<a href>`. Never a `div` or `span` with `role="button"` or a click
   handler.
+- **Pages are titled.** ✓ Every page's `<title>` names the page first and
+  the app last, joined by ` · `: a localised purpose (`Sign in · ribbitto`),
+  or the channel and organisation (`general · Acme · ribbitto`). The app
+  name alone fails the check.
 - **Structure means something.** ✓ Every page has `lang` and exactly one
   `<main>`; ✓ headings do not skip levels. Use `<nav>`, `<header>` and lists
   (`<ul>`, `<ol>`) for what they are; `div` and `span` only group for

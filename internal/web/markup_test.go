@@ -28,6 +28,9 @@ import (
 // checkMarkup reports what breaks the rules in docs/ui.md, *Markup and
 // accessibility*. Full pages get the document checks; fragments and
 // components only the element checks.
+// appName is the English and Japanese app.title, which alone names no page.
+const appName = "ribbitto"
+
 func checkMarkup(doc *html.Node, fullPage bool) []string {
 	var problems []string
 	add := func(format string, args ...any) { problems = append(problems, fmt.Sprintf(format, args...)) }
@@ -93,6 +96,10 @@ func checkMarkup(doc *html.Node, fullPage bool) []string {
 		}
 		if mains != 1 {
 			add("%d <main> elements, want 1", mains)
+		}
+		// WCAG 2.4.2: tabs, history and screen readers tell pages apart by it.
+		if title := find(doc, atom.Title); title == nil || strings.TrimSpace(text(title)) == "" || strings.TrimSpace(text(title)) == appName {
+			add("<title> missing, empty or only the app name")
 		}
 	}
 	return problems
@@ -181,7 +188,10 @@ func TestCheckMarkup(t *testing.T) {
 		want         string // a substring of the only problem; empty for none
 	}{
 		{"valid page", page(`<main><h1>a</h1><h2>b</h2><form><label>Email <input type="email" name="email"></label><label for="p">Password</label><input id="p" type="password" name="p"><input type="hidden" name="t"><button type="submit">Go</button></form><img src="x" alt=""></main>`), true, ""},
-		{"no lang", `<!DOCTYPE html><html><body><main></main></body></html>`, true, "without lang"},
+		{"no lang", `<!DOCTYPE html><html><head><title>t</title></head><body><main></main></body></html>`, true, "without lang"},
+		{"no title", `<!DOCTYPE html><html lang="en"><body><main></main></body></html>`, true, "<title>"},
+		{"blank title", `<!DOCTYPE html><html lang="en"><head><title> </title></head><body><main></main></body></html>`, true, "<title>"},
+		{"title is only the app name", `<!DOCTYPE html><html lang="en"><head><title>ribbitto</title></head><body><main></main></body></html>`, true, "<title>"},
 		{"two mains", page(`<main></main><main></main>`), true, "2 <main>"},
 		{"skipped heading", page(`<main><h1>a</h1><h3>b</h3></main>`), true, "skips a heading level"},
 		{"unlabelled input", page(`<main><input type="text" name="q"></main>`), true, "without a label"},
@@ -334,6 +344,17 @@ func TestPagesMarkup(t *testing.T) {
 		}
 	}
 
+	// Representative exact titles; the channel's name is user input.
+	titles := map[string]string{
+		"home signed out/en": "Home · ribbitto",
+		"home signed out/ja": "ホーム · ribbitto",
+		"sign-in/en":         "Sign in · ribbitto",
+		"sign-in/ja":         "サインイン · ribbitto",
+		"setup/en":           "Set up · ribbitto",
+		"setup/ja":           "初期設定 · ribbitto",
+		"channel/en":         "雑談 <script>alert(1)</script> · Acme Corporation · ribbitto",
+		"channel/ja":         "雑談 <script>alert(1)</script> · Acme Corporation · ribbitto",
+	}
 	for _, c := range cases {
 		for _, lang := range []string{"en", "ja"} {
 			t.Run(c.name+"/"+lang, func(t *testing.T) {
@@ -362,12 +383,27 @@ func TestPagesMarkup(t *testing.T) {
 				if w.Code != want || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
 					t.Fatalf("status %d (want %d), content type %q", w.Code, want, w.Header().Get("Content-Type"))
 				}
+				raw := w.Body.String()
 				doc, err := html.Parse(w.Body)
 				if err != nil {
 					t.Fatal(err)
 				}
 				for _, problem := range checkMarkup(doc, true) {
 					t.Error(problem)
+				}
+				if want, ok := titles[c.name+"/"+lang]; ok {
+					title := find(doc, atom.Title)
+					if title == nil {
+						t.Fatal("missing <title>")
+					}
+					if got := text(title); got != want {
+						t.Errorf("title %q, want %q", got, want)
+					}
+					// <title> is raw text to the parser, so only the bytes show
+					// that a name like "</title>" could not end it early.
+					if !strings.Contains(raw, "<title>"+html.EscapeString(want)+"</title>") {
+						t.Errorf("title not escaped as %q", html.EscapeString(want))
+					}
 				}
 				// Every invalid field's error is rendered, so each is checked too.
 				if c.alerts > 0 {

@@ -4,6 +4,9 @@ other = "ribbitto"
 ["hello.title"]
 other = "ribbittoからこんにちは"
 
+["hello.page_title"]
+other = "ホーム"
+
 ["hello.tagline"]
 other = "カエルがロゴの、小さなセルフホスト型チームチャット。"
 
@@ -18,6 +21,9 @@ other = "サインアウト"
 
 ["signin.title"]
 other = "ribbittoにサインイン"
+
+["signin.page_title"]
+other = "サインイン"
 
 ["signin.email"]
 other = "メールアドレス"
@@ -36,6 +42,9 @@ other = "メールアドレスまたはパスワードが正しくありませ�
 
 ["setup.title"]
 other = "ribbittoの初期設定"
+
+["setup.page_title"]
+other = "初期設定"
 
 ["setup.submit"]
 other = "組織を作成してサインイン"
@@ -84,6 +93,9 @@ other = "パスワードは15〜128文字で入力してください。"
 
 ["signup.title"]
 other = "ribbittoに登録"
+
+["signup.page_title"]
+other = "登録"
 
 ["signup.submit"]
 other = "アカウントを作成してサインイン"

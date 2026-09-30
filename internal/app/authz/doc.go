@@ -4,7 +4,8 @@
 //
 // Feature: org (feature map in docs/architecture/README.md), which owns the
 // organization, member and setup tables; this package only reads them.
-// Exported API: Authorizer, Membership, the Store interface it needs and
-// ErrNotFound. It is also part of the shared kernel: every feature checks
+// Exported API: Authorizer (including MayReceive, which the real-time stream
+// calls before sending each event), Membership, the Store interface it needs
+// and ErrNotFound. It is also part of the shared kernel: every feature checks
 // access through it.
 package authz

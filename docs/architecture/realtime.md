@@ -120,13 +120,21 @@ sequenceDiagram
   *read*, including events this connection may not see, so a filtered event
   cannot keep the loop spinning.
 - **The hub** (`realtime.Hub`, #157) implements this: `Raise(org, seq)`
-  only raises the value, and `Wait(ctx, org, after)` returns once it is
-  above `after`, or with `context.Cause(ctx)`. It is also the connection
+  only raises the value, and `Wait(ctx, org, after)` returns the value
+  once it is above `after`, or `context.Cause(ctx)`. It is also the connection
   registry: `Register(parent, connection, limit)` refuses atomically once
   the account holds `limit` connections. Otherwise it returns a context
   derived from the request's context, which `CancelAccount` or
   `CancelSession` can end, and an `unregister` the handler defers. Only `unregister` frees the slot;
   `context.Cause` tells why a connection ended.
+- **The loop** is `realtime.Stream.Run` (#209). Another channel's event, a
+  kind it does not deliver and an explicit deny from `authz.MayReceive` are
+  skipped and the cursor moves past them. An error from the reader, the
+  authorization check itself, the renderer or the sender stops the loop
+  with the cursor before that event, so a reconnect resumes there; a failed
+  membership lookup is never a deny. Cancellation is checked before every
+  event, so an ended session sends nothing more. It drains every batch
+  before waiting.
 - Replay and live delivery go through the same per-connection loop, so they
   cannot interleave out of order. `Last-Event-ID` is preferred on reconnect;
   before htmx recreates the `EventSource`, the client puts its last cursor

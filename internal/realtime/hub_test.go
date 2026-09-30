@@ -26,7 +26,10 @@ const blocked = 20 * time.Millisecond
 // waitAsync starts Wait and returns a channel with its result.
 func waitAsync(ctx context.Context, h *Hub, org domain.ID, after int64) <-chan error {
 	done := make(chan error, 1)
-	go func() { done <- h.Wait(ctx, org, after) }()
+	go func() {
+		_, err := h.Wait(ctx, org, after)
+		done <- err
+	}()
 	return done
 }
 
@@ -51,7 +54,7 @@ func TestWaitReturnsOnlyAboveCursor(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(t.Context(), blocked)
 			defer cancel()
-			err := h.Wait(ctx, orgA, tt.after)
+			_, err := h.Wait(ctx, orgA, tt.after)
 			if tt.returns && err != nil {
 				t.Fatalf("Wait = %v, want nil", err)
 			}
@@ -70,8 +73,8 @@ func TestWaitAfterRaiseBetweenReadAndWait(t *testing.T) {
 	h.Raise(orgA, 101)   // event 101 commits before the connection waits
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
-	if err := h.Wait(ctx, orgA, cursor); err != nil {
-		t.Fatalf("Wait = %v, want nil", err)
+	if latest, err := h.Wait(ctx, orgA, cursor); err != nil || latest != 101 {
+		t.Fatalf("Wait = %d, %v; want 101, nil", latest, err)
 	}
 }
 
@@ -273,6 +276,17 @@ func TestRegisterLimitUnderConcurrency(t *testing.T) {
 				unregister()
 			}
 		})
+	}
+}
+
+func TestWaitHonoursAnEndedContextEvenWhenAhead(t *testing.T) {
+	h := NewHub()
+	h.Raise(orgA, 5)
+	cause := errors.New("closed")
+	ctx, cancel := context.WithCancelCause(t.Context())
+	cancel(cause)
+	if _, err := h.Wait(ctx, orgA, 1); !errors.Is(err, cause) {
+		t.Fatalf("Wait = %v, want %v", err, cause)
 	}
 }
 

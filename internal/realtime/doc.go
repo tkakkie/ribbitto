@@ -13,4 +13,9 @@
 // or CancelSession ends. Events themselves are never held here; they are
 // read from event_log, so a hub that loses a notification (or restarts)
 // only delays delivery until the next raise.
+//
+// Stream.Run is the per-connection delivery loop over the EventReader,
+// Authorizer and Renderer interfaces defined here; its doc comment states
+// which events are skipped and which failures stop it without advancing the
+// cursor.
 package realtime

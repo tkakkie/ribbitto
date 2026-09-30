@@ -12,4 +12,6 @@
 // outside the caller's organisation as channel.ErrNotFound. Listed
 // exception: posting advances organization.event_seq, which org owns,
 // and writes realtime's event_log, so the sequence and event commit together.
+// NewWithNotifier accepts a Notifier (Raise) called only after Store.Post
+// succeeds, meaning commit completed; New leaves notifications disabled.
 package message

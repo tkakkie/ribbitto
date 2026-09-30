@@ -90,9 +90,12 @@ func serve(ctx context.Context, databaseURL string) error {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
 	defer pool.Close()
+	// One hub per process: posting raises it, the metrics read its registry,
+	// and the stream (#158) will register its connections with it.
+	hub := realtime.NewHub()
 	handler, sessions, err := buildHandler(pool, handlerConfig{
 		setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
-		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"),
+		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), notifier: hub,
 	})
 	if err != nil {
 		return err
@@ -105,8 +108,6 @@ func serve(ctx context.Context, databaseURL string) error {
 		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout,
 		write: writeTimeout,
 	})
-	// The stream (#158) will register its connections here.
-	hub := realtime.NewHub()
 
 	var metrics *http.Server
 	if metricsAddr != "" {
@@ -201,6 +202,7 @@ type handlerConfig struct {
 	setupToken, devAssets string
 	signupEnabled         bool
 	trustedProxies        []netip.Prefix
+	notifier              message.Notifier
 }
 
 // buildHandler shares production wiring with the HTTPS acceptance test.
@@ -229,7 +231,7 @@ func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth
 		SetupSessions: sessions,
 		Authz:         authz.New(postgres.NewAuthzStore(pool)),
 		Messages:      postgres.MessageReader{Pool: pool},
-		Posting:       message.New(postgres.NewPostingStore(pool)),
+		Posting:       message.NewWithNotifier(postgres.NewPostingStore(pool), config.notifier),
 		Channels:      channel.New(postgres.NewChannelStore(pool)),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
 	})

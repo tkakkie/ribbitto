@@ -17,12 +17,47 @@ type store struct {
 	calls                int
 	org, channel, member domain.ID
 	body                 string
+	returned             bool
 }
 
 func (s *store) Post(_ context.Context, org, ch, member domain.ID, body string) (domain.Message, error) {
+	defer func() { s.returned = true }()
 	s.calls++
 	s.org, s.channel, s.member, s.body = org, ch, member, body
 	return domain.Message{OrganizationID: org, ChannelID: ch, MemberID: member, Body: body, EventSeq: 7}, s.err
+}
+
+type notifierFunc func(domain.ID, int64)
+
+func (n notifierFunc) Raise(org domain.ID, seq int64) { n(org, seq) }
+
+func TestPostNotification(t *testing.T) {
+	storeErr := errors.New("commit failed")
+	m := authz.Membership{Organization: domain.Organization{ID: domain.ID{1}}, Member: domain.Member{ID: domain.ID{2}}}
+	for _, tt := range []struct {
+		name, body        string
+		storeErr, wantErr error
+		wantCalls         int
+	}{
+		{name: "committed", body: "hello", wantCalls: 1},
+		{name: "invalid body", body: " ", wantErr: message.ErrInvalidBody},
+		{name: "store error", body: "hello", storeErr: storeErr, wantErr: storeErr},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &store{err: tt.storeErr}
+			calls := 0
+			n := notifierFunc(func(org domain.ID, seq int64) {
+				calls++
+				if !s.returned || s.calls != 1 || org != m.Organization.ID || seq != 7 {
+					t.Fatalf("notification (%v, %d), store: %+v", org, seq, s)
+				}
+			})
+			_, err := message.NewWithNotifier(s, n).Post(t.Context(), m, domain.ID{3}, tt.body)
+			if !errors.Is(err, tt.wantErr) || calls != tt.wantCalls {
+				t.Fatalf("Post: %v, notifications: %d; want %v, %d", err, calls, tt.wantErr, tt.wantCalls)
+			}
+		})
+	}
 }
 
 func TestPost(t *testing.T) {

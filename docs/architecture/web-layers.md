@@ -49,8 +49,10 @@ htmx does only requests and swaps; the server and templ own the HTML.
   updating every reference in the same pull request. Today's contract ids
   are `conversation`, `message-list`, `message-items`, `load-older` and
   `message-body`.
-- htmx configuration lives in the layout's `htmx-config` meta tag, not in
-  scripts (see [`rendering.md`](rendering.md) for its security settings).
+- Today the layout's `htmx-config` meta tag holds htmx's security
+  settings ([`rendering.md`](rendering.md)). The composer's 422 swap rule is
+  still decided in JavaScript, a deviation that #198 moves into that
+  config.
 
 ## JavaScript
 
@@ -66,9 +68,11 @@ keyboard, local time, and glue for SSE.
   never hold messages, unsent drafts, credentials, session tokens or other
   server-derived application data. IndexedDB is not used; a clear need,
   such as offline support, gets its own issue.
-- **Files:** each script is external in `web/static`, loaded with the
-  response nonce, defines no globals, and is versioned by file name
-  (`-vN`), since static assets are immutable ([`rendering.md`](rendering.md)).
+- **Files:** every script is external in `web/static` and loaded with the
+  response nonce. Application scripts also define no globals and are
+  versioned by file name (`-vN`), since static assets are immutable
+  ([`rendering.md`](rendering.md)). Vendored libraries (htmx, idiomorph)
+  keep their own globals and upstream file names ([`ui.md`](../ui.md)).
 - **htmx events:** an `htmx:load` handler works only on the inserted element
   and its descendants, never the whole document (#168).
 

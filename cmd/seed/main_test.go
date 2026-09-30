@@ -136,13 +136,22 @@ func TestSeed(t *testing.T) {
 func TestArguments(t *testing.T) {
 	for _, tc := range []struct {
 		args []string
-		want string
+		want []string
 	}{
-		{[]string{"-messages", "invalid"}, "invalid value"},
-		{[]string{"unexpected"}, "usage:"},
+		{[]string{"-messages", "invalid"}, []string{"invalid value"}},
+		{[]string{"unexpected"}, []string{
+			"usage:", "-messages", "-streams", "-streams-per-account", "-sessions-per-account", "-output",
+			"-streams and -output are required together",
+		}},
 	} {
-		if err := run(t.Context(), "", tc.args, io.Discard); err == nil || !strings.Contains(err.Error(), tc.want) {
-			t.Fatalf("arguments %v: %v", tc.args, err)
+		err := run(t.Context(), "", tc.args, io.Discard)
+		if err == nil {
+			t.Fatalf("arguments %v: want an error", tc.args)
+		}
+		for _, want := range tc.want {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("arguments %v: error %q does not contain %q", tc.args, err, want)
+			}
 		}
 	}
 	if err := run(t.Context(), "", []string{"-h"}, io.Discard); !errors.Is(err, flag.ErrHelp) {

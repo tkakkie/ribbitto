@@ -100,7 +100,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		return err
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("usage: go run ./cmd/seed [-messages N]; N must be positive")
+		return fmt.Errorf("usage: go run ./cmd/seed [-messages N] [-streams N -output PATH] [-streams-per-account N] [-sessions-per-account N]; N must be positive; -streams and -output are required together")
 	}
 	var data script
 	if err := json.Unmarshal(conversations, &data); err != nil {

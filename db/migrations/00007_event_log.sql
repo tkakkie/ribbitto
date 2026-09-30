@@ -14,6 +14,29 @@ CREATE TABLE event_log (
   FOREIGN KEY (organization_id, audience_member_id) REFERENCES member (organization_id, id) ON DELETE RESTRICT
 );
 
+-- Every sequence taken above the boundary must commit with its event row.
+-- Checked at commit, so a writer that predates this migration (a server
+-- still running the old binary while `migrate up` runs) fails and rolls its
+-- sequence back instead of leaving a permanent gap in the log.
+-- +goose StatementBegin
+CREATE FUNCTION organization_event_seq_logged() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.event_seq > OLD.event_seq AND NEW.event_seq > NEW.event_log_boundary_seq
+     AND NOT EXISTS (SELECT 1 FROM event_log WHERE organization_id = NEW.id AND seq = NEW.event_seq) THEN
+    RAISE EXCEPTION 'event_seq % of organization % has no event_log row', NEW.event_seq, NEW.id
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NULL;
+END
+$$;
+-- +goose StatementEnd
+CREATE CONSTRAINT TRIGGER organization_event_seq_logged
+  AFTER UPDATE OF event_seq ON organization
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION organization_event_seq_logged();
+
 -- +goose Down
+DROP TRIGGER organization_event_seq_logged ON organization;
+DROP FUNCTION organization_event_seq_logged();
 DROP TABLE event_log;
 ALTER TABLE organization DROP COLUMN event_log_boundary_seq;

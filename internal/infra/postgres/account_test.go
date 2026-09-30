@@ -53,11 +53,18 @@ func TestAccountSchema(t *testing.T) {
 		organizations = append(organizations, org)
 	}
 	org, other := organizations[0], organizations[1]
+	// Each sequence commits with its event row, as every writer must (the
+	// migration's deferred trigger refuses a sequence without one).
 	for want := int64(1); want <= 3; want++ {
-		got, err := q.NextEventSeq(ctx, org.ID)
+		tx, err := pool.Begin(ctx)
+		requireNoError(t, err)
+		got, err := sqlcgen.New(tx).NextEventSeq(ctx, org.ID)
 		if err != nil || got != want {
 			t.Fatalf("sequence: got %d, %v; want %d", got, err, want)
 		}
+		_, err = tx.Exec(ctx, "INSERT INTO event_log (organization_id, seq, kind, data) VALUES ($1, $2, 'test.sequence', '{}')", org.ID, got)
+		requireNoError(t, err)
+		requireNoError(t, tx.Commit(ctx))
 	}
 	unchanged, err := q.GetOrganizationBySlug(ctx, other.Slug)
 	if err != nil || unchanged.EventSeq != 0 {

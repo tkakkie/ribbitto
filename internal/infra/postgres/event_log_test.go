@@ -55,6 +55,20 @@ func TestEventLogMigration(t *testing.T) {
 	requireNoError(t, err)
 	assertEventLog(t, pool, old.OrganizationID, 2)
 	assertEventLog(t, pool, empty, 0)
+	// A server still running the previous binary takes a sequence and
+	// inserts a message without an event row; the commit must fail so the
+	// log keeps no gap.
+	stale, err := pool.Begin(ctx)
+	requireNoError(t, err)
+	var seq int64
+	requireNoError(t, stale.QueryRow(ctx, "UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq", old.OrganizationID).Scan(&seq))
+	_, err = postgres.NewMessageStore(stale).InsertMessage(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "old binary", seq)
+	requireNoError(t, err)
+	var pgErr *pgconn.PgError
+	if err := stale.Commit(ctx); !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+		t.Fatalf("commit without an event row: %v, want check_violation", err)
+	}
+	assertEventLog(t, pool, old.OrganizationID, 2)
 	_, err = postgres.NewPostingStore(pool).Post(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "after logging")
 	requireNoError(t, err)
 	assertEventLog(t, pool, old.OrganizationID, 3)
@@ -62,6 +76,7 @@ func TestEventLogMigration(t *testing.T) {
 	requireNoError(t, err)
 	var removed bool
 	requireNoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.event_log') IS NULL AND
+		to_regprocedure('organization_event_seq_logged()') IS NULL AND
 		NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'organization' AND column_name = 'event_log_boundary_seq')`).Scan(&removed))
 	if !removed {
 		t.Fatal("event log migration did not roll back")

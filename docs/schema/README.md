@@ -14,6 +14,12 @@
 | [public.message](public.message.md) | 7 |  | BASE TABLE |
 | [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
 
+## Stored procedures and functions
+
+| Name | ReturnType | Arguments | Type |
+| ---- | ------- | ------- | ---- |
+| public.organization_event_seq_logged | trigger |  | FUNCTION |
+
 ## Relations
 
 ```mermaid

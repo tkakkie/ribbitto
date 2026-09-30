@@ -24,7 +24,11 @@ The audience references `(organization_id, id)` in `member`; NULL means
 organisation-wide. `data` holds only IDs ([payload shapes](architecture/realtime.md#durable-event-log)).
 `organization.event_log_boundary_seq` is NOT NULL, defaults to 0, and is set
 to each existing organisation's `event_seq` on upgrade: no event backfill.
-Retention will advance this replay boundary. Down drops the log and boundary.
+Retention will advance this replay boundary. A deferred constraint trigger on
+`organization` refuses, at commit, any raise of `event_seq` above the boundary
+without its `event_log` row, so a server still running an older binary during
+`migrate up` fails its write instead of leaving a gap. Down drops the trigger,
+the log and the boundary.
 
 Integration tests use `RIBBITTO_TEST_DATABASE_URL`, an admin connection to
 the `postgres` database as the `postgres` superuser. `pgtest.New(t)` creates

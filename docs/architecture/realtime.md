@@ -69,7 +69,9 @@ kinds are an open list, and readers skip unknown kinds.
 `organization.event_log_boundary_seq` is the highest sequence no longer in
 the log. Migration sets it to each existing organisation's `event_seq`,
 without backfilling; new organisations start at 0. Rows above the boundary
-are gap-free through `event_seq`. Retention (#161) will raise the boundary;
+are gap-free through `event_seq`; a deferred constraint trigger enforces it at
+commit for every writer, including an older binary still running during
+`migrate up`. Retention (#161) will raise the boundary;
 a cursor is valid at or above it. Reading (#208) and delivery (#209) follow.
 
 ## Server-Sent Events *(planned, M3)*

@@ -107,15 +107,7 @@ func TestChannelHandlers(t *testing.T) {
 				if attr(input, "value") != tt.fake.created || attr(input, "aria-invalid") != "true" {
 					t.Fatal("invalid field lost value or state")
 				}
-				var alert *html.Node
-				for n := range doc.Descendants() {
-					if attr(n, "role") == "alert" {
-						alert = n
-					}
-				}
-				if alert == nil || attr(input, "aria-describedby") != attr(alert, "id") {
-					t.Fatal("missing associated field error")
-				}
+				checkFieldError(t, doc, input)
 			}
 		})
 	}

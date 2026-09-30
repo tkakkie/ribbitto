@@ -22,7 +22,7 @@ imports `db/migrations`; the database must already be migrated.
 | `internal/domain` | Entities, value types, invariants, domain errors and domain event types. No I/O. | nothing |
 | `internal/app` | Use cases and the **only** authorization logic. Decides what must be atomic; the PostgreSQL adapters open and commit the transactions (see [the feature map](#feature-map)). Defines the interfaces it needs (repositories, event publisher). | `domain` |
 | `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces, connections, migrations. | `domain`, `app`, `db/migrations` |
-| `internal/realtime` | *(planned, M3)* The SSE hub: connections, fan-out, presence. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
+| `internal/realtime` | The SSE hub (M3): latest sequences and the connection registry (#157); fan-out and presence are planned. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
 | `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |

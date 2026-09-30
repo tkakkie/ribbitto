@@ -112,7 +112,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	if err != nil {
 		return err
 	}
-	pool, err := postgres.OpenPool(ctx, databaseURL)
+	pool, err := postgres.OpenPool(ctx, databaseURL, nil)
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}

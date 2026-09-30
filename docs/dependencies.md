@@ -21,6 +21,7 @@ cmd/ribbitto -> internal/app/message
 cmd/ribbitto -> internal/app/setup
 cmd/ribbitto -> internal/app/signup
 cmd/ribbitto -> internal/infra/postgres
+cmd/ribbitto -> internal/realtime
 cmd/ribbitto -> internal/web
 cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware

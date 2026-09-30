@@ -12,8 +12,11 @@
   backed by an index on `message (organization_id, channel_id, event_seq)`.
 - **Joining an organisation is one transaction:** take the next
   `event_seq`, insert the `member` with `joined_event_seq` = that value, and
-  insert the `event_log` row. Until M3 adds `event_log`, joining takes the
-  next `event_seq` but writes no `event_log` row.
+  insert the `member.joined` event with `data = {"member_id":"<uuid>"}` and
+  `audience_member_id = NULL`. Setup's first member follows the same rule.
+  Posting similarly pairs `message.event_seq` with `message.posted`.
+  Logging starts after `organization.event_log_boundary_seq`; migration sets
+  it to the current counter without backfill. Unread positions survive log retention.
 - **Opening a channel for the first time** creates the `channel_member` row
   with `last_read_event_seq` = the **cursor of the snapshot that rendered the
   page**, not the latest sequence at insert time — otherwise messages

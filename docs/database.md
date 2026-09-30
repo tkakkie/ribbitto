@@ -18,6 +18,14 @@ It is owned by `internal/infra/postgres`; only that package and
 `database/sql` adapter without global goose configuration. The first
 migration creates `organization`; goose also maintains its version table.
 
+Migration 00007 adds realtime's `event_log`, keyed by `(organization_id, seq)`,
+with `kind`, nullable `audience_member_id`, JSONB `data` and `created_at`.
+The audience references `(organization_id, id)` in `member`; NULL means
+organisation-wide. `data` holds only IDs ([payload shapes](architecture/realtime.md#durable-event-log)).
+`organization.event_log_boundary_seq` is NOT NULL, defaults to 0, and is set
+to each existing organisation's `event_seq` on upgrade: no event backfill.
+Retention will advance this replay boundary. Down drops the log and boundary.
+
 Integration tests use `RIBBITTO_TEST_DATABASE_URL`, an admin connection to
 the `postgres` database as the `postgres` superuser. `pgtest.New(t)` creates
 a database per test, cloned from a migrated template named by the first

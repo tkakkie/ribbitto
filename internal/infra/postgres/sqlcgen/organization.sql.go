@@ -12,7 +12,7 @@ import (
 )
 
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
-SELECT id, slug, name, event_seq, created_at FROM organization WHERE slug = $1
+SELECT id, slug, name, event_seq, created_at, event_log_boundary_seq FROM organization WHERE slug = $1
 `
 
 func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error) {
@@ -24,6 +24,7 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organ
 		&i.Name,
 		&i.EventSeq,
 		&i.CreatedAt,
+		&i.EventLogBoundarySeq,
 	)
 	return i, err
 }

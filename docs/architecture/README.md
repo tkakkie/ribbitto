@@ -80,19 +80,19 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | Feature | Packages and files | Owns |
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in, sign-up | `app/auth`, `app/signup`; `infra/postgres` `account.go`, `session.go`, `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
-| `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`), `member`, `setup` |
+| `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/static/message-*.js` | `message` |
-| `realtime` | `internal/realtime` *(M3)* | none |
+| `realtime` | `internal/realtime` *(M3)*; `domain/event.go`; `db/queries/event_log.sql` | `event_log` |
 
 The shared kernel, which any feature may use: the IDs and value types in
-`internal/domain`, the per-organisation `event_seq`, and the authorisation
+`internal/domain`, the per-organisation `event_seq` and `event_log_boundary_seq`, and the authorisation
 entry point `app/authz`. Other files in `internal/web` (routing, forms,
 middleware, views) and the composition roots serve every feature.
 
 `ChannelStore` and `MessageStore` accept a pool or a caller-owned
 transaction; `PostingStore` owns the posting transaction (sequence first,
-then the message). Message references to channels and `org`'s members use
+then the message and event). Message references to channels and `org`'s members use
 composite foreign keys including `organization_id`. History uses one
 newest-first keyset query, `ListMessagesBefore`, with a nullable upper
 sequence bound for the latest page, and no author joins. The use cases
@@ -104,8 +104,7 @@ own the queries in `member.sql` and `account.sql`; message never queries
 those tables. `MessageReader` shares one read-only repeatable-read transaction
 across history and both lookups; channel/sidebar reads still precede it.
 
-**Known exceptions.** Three flows write another feature's tables in one
-transaction today:
+**Known exceptions.** Cross-feature writes that must commit atomically:
 
 - setup (`org`) writes `organization`, `account`, `member`, `channel` and
   `setup`, so it creates `identity`'s first `account` and the `channel`
@@ -114,7 +113,11 @@ transaction today:
   `organization.event_seq`, which belong to `org`;
 - posting (`message`) advances `organization.event_seq` before inserting
   the message, because the sequence must be taken in the writing
-  transaction (`DECISIONS.md` 5).
+  transaction (`DECISIONS.md` 5);
+- all three flows write realtime's `event_log` immediately after the message
+  or member, so the event commits with the entity and its sequence (#156);
+- realtime retention (#161, planned) writes org's `event_log_boundary_seq`,
+  because the boundary and events must be read in the same snapshot.
 
 Their atomicity and `event_seq` ordering stay as they are. They are
 resolved at migration, by an orchestrating module or a shared transaction.

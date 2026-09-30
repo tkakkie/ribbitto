@@ -24,6 +24,15 @@ type Channel struct {
 	CreatedAt      pgtype.Timestamptz
 }
 
+type EventLog struct {
+	OrganizationID   pgtype.UUID
+	Seq              int64
+	Kind             string
+	AudienceMemberID pgtype.UUID
+	Data             []byte
+	CreatedAt        pgtype.Timestamptz
+}
+
 type Member struct {
 	ID             pgtype.UUID
 	OrganizationID pgtype.UUID
@@ -45,11 +54,12 @@ type Message struct {
 }
 
 type Organization struct {
-	ID        pgtype.UUID
-	Slug      string
-	Name      string
-	EventSeq  int64
-	CreatedAt pgtype.Timestamptz
+	ID                  pgtype.UUID
+	Slug                string
+	Name                string
+	EventSeq            int64
+	CreatedAt           pgtype.Timestamptz
+	EventLogBoundarySeq int64
 }
 
 type Session struct {

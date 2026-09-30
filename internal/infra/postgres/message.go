@@ -65,9 +65,9 @@ type PostingStore struct{ pool *pgxpool.Pool }
 func NewPostingStore(pool *pgxpool.Pool) *PostingStore { return &PostingStore{pool: pool} }
 
 // Post takes the next event_seq first — locking the organisation's row, so
-// sequence order is commit order — and then inserts the message with it.
-// Any failure rolls both back, so no sequence value is lost. Listed
-// exception: this advances organization.event_seq, which org owns.
+// sequence order is commit order — then inserts the message and event.
+// Any failure rolls everything back, so no sequence value is lost. Listed
+// exceptions: advances org's event_seq and writes realtime's event_log.
 func (s *PostingStore) Post(ctx context.Context, organizationID, channelID, memberID domain.ID, body string) (domain.Message, error) {
 	var posted domain.Message
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -76,7 +76,13 @@ func (s *PostingStore) Post(ctx context.Context, organizationID, channelID, memb
 			return err
 		}
 		posted, err = NewMessageStore(tx).InsertMessage(ctx, organizationID, channelID, memberID, body, seq)
-		return err
+		if err != nil {
+			return err
+		}
+		return sqlcgen.New(tx).InsertMessageEvent(ctx, sqlcgen.InsertMessageEventParams{
+			OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(domain.EventMessagePosted),
+			ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, MessageID: pgtype.UUID{Bytes: posted.ID, Valid: true},
+		})
 	})
 	var pgErr *pgconn.PgError
 	switch {

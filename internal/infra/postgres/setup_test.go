@@ -101,6 +101,7 @@ func TestSetup(t *testing.T) {
 			var role, handle string
 			var completed bool
 			requireNoError(t, pool.QueryRow(ctx, "SELECT s.organization_id, m.account_id, o.event_seq, m.joined_event_seq, m.role, m.handle, s.completed_at IS NOT NULL FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = s.organization_id WHERE s.id").Scan(&organizationID, &accountID, &seq, &joined, &role, &handle, &completed))
+			assertEventLog(t, pool, organizationID.Bytes, 1)
 			account, err := sqlcgen.New(pool).GetAccountByID(ctx, accountID)
 			requireNoError(t, err)
 			matches, err := hasher.Verify(ctx, input.Password, account.PasswordHash)

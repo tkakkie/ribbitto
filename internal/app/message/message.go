@@ -13,7 +13,7 @@ import (
 var ErrInvalidBody = errors.New("invalid message body")
 
 // Store posts a message atomically: in one transaction it takes the
-// organisation's next event_seq first, then inserts the message with it. A
+// organisation's next event_seq first, then inserts the message and event with it. A
 // channel that is not in the organisation is channel.ErrNotFound, and the
 // sequence is not consumed.
 type Store interface {

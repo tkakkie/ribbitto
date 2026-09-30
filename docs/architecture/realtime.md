@@ -1,6 +1,6 @@
-# Messages and real time *(planned, M2–M3)*
+# Messages and real time
 
-## Posting a message *(M2 part implemented; `event_log` and the hub are planned, M3)*
+## Posting a message *(hub notification planned, M3)*
 
 ```mermaid
 sequenceDiagram
@@ -15,9 +15,9 @@ sequenceDiagram
   A->>H: raise latest sequence of org to n (after commit)
 ```
 
-Since M2, `message.Service.Post` (validation) and `postgres.PostingStore`
-(the transaction) take the sequence and insert the message; the
-`event_log` insert and telling the hub are added in M3. A channel outside
+`message.Service.Post` validates; `postgres.PostingStore` takes the sequence,
+inserts the message and inserts `event_log` in one transaction. Telling the
+hub remains planned. A channel outside
 the caller's organisation fails on the message's composite foreign key and
 rolls the sequence back with it.
 
@@ -49,6 +49,25 @@ The M2 message list reads history and both author batches in one
 `REPEATABLE READ READ ONLY` transaction. The existing channel and sidebar
 reads remain outside it; M3 must include those and the cursor in the page
 snapshot before enabling SSE.
+
+## Durable event log
+
+`event_log` is keyed by `(organization_id, seq)`, with `kind`, nullable
+`audience_member_id`, IDs-only JSONB `data` and `created_at`. A NULL audience
+is organisation-wide; a value restricts delivery to that member, enforced
+by the future connection authorizer. Its composite foreign key keeps the
+member in the same organisation. The audience never appears in `data`.
+`message.posted` carries `{"channel_id":"<uuid>","message_id":"<uuid>"}`;
+`member.joined` carries `{"member_id":"<uuid>"}`. Both use a NULL audience.
+Setup and sign-up insert the join event immediately after the member, with
+its `joined_event_seq`. `domain.Event` holds the envelope and referenced IDs;
+kinds are an open list, and readers skip unknown kinds.
+
+`organization.event_log_boundary_seq` is the highest sequence no longer in
+the log. Migration sets it to each existing organisation's `event_seq`,
+without backfilling; new organisations start at 0. Rows above the boundary
+are gap-free through `event_seq`. Retention (#161) will raise the boundary;
+a cursor is valid at or above it. Reading (#208) and delivery (#209) follow.
 
 ## Server-Sent Events *(planned, M3)*
 

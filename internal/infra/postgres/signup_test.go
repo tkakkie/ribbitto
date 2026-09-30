@@ -60,6 +60,7 @@ func TestSignUp(t *testing.T) {
 		if tc.want != nil && !errors.Is(err, tc.want) || tc.field != "" && (!errors.As(err, &fields) || fields[tc.field] == nil) {
 			t.Fatalf("handle %s, email %s: %v", tc.handle, tc.email, err)
 		}
+		assertEventLog(t, pool, result.OrganizationID, 2)
 		var accounts, members, otherMembers int
 		var seq, otherSeq int64
 		requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM account), (SELECT count(*) FROM member WHERE organization_id=$1), (SELECT event_seq FROM organization WHERE id=$1), (SELECT count(*) FROM member WHERE organization_id=$2), (SELECT event_seq FROM organization WHERE id=$2)", org, other).Scan(&accounts, &members, &seq, &otherMembers, &otherSeq))

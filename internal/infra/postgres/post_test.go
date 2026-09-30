@@ -22,6 +22,9 @@ func TestPostMessage(t *testing.T) {
 	channels := map[string]domain.ID{}
 	for _, slug := range []string{"acme", "globex"} {
 		fixture := pgtest.OrganizationWithOwner(t, pool, slug, appchannel.DefaultName)
+		// These fixture memberships predate logging, as on an upgraded database.
+		_, err := pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = event_seq WHERE id = $1", fixture.OrganizationID)
+		requireNoError(t, err)
 		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
 		channels[slug] = fixture.Channel.ID
 	}
@@ -29,6 +32,7 @@ func TestPostMessage(t *testing.T) {
 	state := func(slug string) (seq int64, messages int) {
 		t.Helper()
 		requireNoError(t, pool.QueryRow(ctx, "SELECT o.event_seq, (SELECT count(*) FROM message m WHERE m.organization_id = o.id) FROM organization o WHERE slug = $1", slug).Scan(&seq, &messages))
+		assertEventLog(t, pool, memberships[slug].Organization.ID, seq)
 		return seq, messages
 	}
 

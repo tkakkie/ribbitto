@@ -4,17 +4,19 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false | [public.member](public.member.md) [public.setup](public.setup.md) [public.channel](public.channel.md) |  |  |
+| id | uuid | uuidv7() | false | [public.member](public.member.md) [public.setup](public.setup.md) [public.channel](public.channel.md) [public.event_log](public.event_log.md) |  |  |
 | slug | text |  | false |  |  |  |
 | name | text |  | false |  |  |  |
 | event_seq | bigint | 0 | false |  |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
+| event_log_boundary_seq | bigint | 0 | false |  |  |  |
 
 ## Constraints
 
 | Name | Type | Definition |
 | ---- | ---- | ---------- |
 | organization_created_at_not_null | n | NOT NULL created_at |
+| organization_event_log_boundary_seq_not_null | n | NOT NULL event_log_boundary_seq |
 | organization_event_seq_check | CHECK | CHECK ((event_seq >= 0)) |
 | organization_event_seq_not_null | n | NOT NULL event_seq |
 | organization_id_not_null | n | NOT NULL id |
@@ -40,6 +42,7 @@ erDiagram
 "public.member" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.setup" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.channel" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
+"public.event_log" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 
 "public.organization" {
   uuid id
@@ -47,6 +50,7 @@ erDiagram
   text name
   bigint event_seq
   timestamp_with_time_zone created_at
+  bigint event_log_boundary_seq
 }
 "public.member" {
   uuid id
@@ -67,6 +71,14 @@ erDiagram
   uuid organization_id FK
   text name
   boolean is_default
+  timestamp_with_time_zone created_at
+}
+"public.event_log" {
+  uuid organization_id FK
+  bigint seq
+  text kind
+  uuid audience_member_id FK
+  jsonb data
   timestamp_with_time_zone created_at
 }
 ```

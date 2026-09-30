@@ -4,8 +4,8 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false | [public.message](public.message.md) |  |  |
-| organization_id | uuid |  | false | [public.message](public.message.md) | [public.organization](public.organization.md) |  |
+| id | uuid | uuidv7() | false | [public.message](public.message.md) [public.event_log](public.event_log.md) |  |  |
+| organization_id | uuid |  | false | [public.message](public.message.md) [public.event_log](public.event_log.md) | [public.organization](public.organization.md) |  |
 | account_id | uuid |  | false |  | [public.account](public.account.md) |  |
 | role | text |  | false |  |  |  |
 | joined_event_seq | bigint |  | false |  |  |  |
@@ -49,6 +49,7 @@
 erDiagram
 
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.event_log" }o--|| "public.member" : "FOREIGN KEY (organization_id, audience_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.member" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.member" }o--|| "public.account" : "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE RESTRICT"
 
@@ -70,12 +71,21 @@ erDiagram
   bigint event_seq
   timestamp_with_time_zone created_at
 }
+"public.event_log" {
+  uuid organization_id FK
+  bigint seq
+  text kind
+  uuid audience_member_id FK
+  jsonb data
+  timestamp_with_time_zone created_at
+}
 "public.organization" {
   uuid id
   text slug
   text name
   bigint event_seq
   timestamp_with_time_zone created_at
+  bigint event_log_boundary_seq
 }
 "public.account" {
   uuid id

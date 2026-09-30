@@ -5,13 +5,14 @@
 | Name | Columns | Comment | Type |
 | ---- | ------- | ------- | ---- |
 | [public.goose_db_version](public.goose_db_version.md) | 4 |  | BASE TABLE |
-| [public.organization](public.organization.md) | 5 |  | BASE TABLE |
+| [public.organization](public.organization.md) | 6 |  | BASE TABLE |
 | [public.account](public.account.md) | 5 |  | BASE TABLE |
 | [public.session](public.session.md) | 5 |  | BASE TABLE |
 | [public.member](public.member.md) | 7 |  | BASE TABLE |
 | [public.setup](public.setup.md) | 3 |  | BASE TABLE |
 | [public.channel](public.channel.md) | 5 |  | BASE TABLE |
 | [public.message](public.message.md) | 7 |  | BASE TABLE |
+| [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
 
 ## Relations
 
@@ -25,6 +26,8 @@ erDiagram
 "public.channel" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
+"public.event_log" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
+"public.event_log" }o--|| "public.member" : "FOREIGN KEY (organization_id, audience_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 
 "public.goose_db_version" {
   integer id
@@ -38,6 +41,7 @@ erDiagram
   text name
   bigint event_seq
   timestamp_with_time_zone created_at
+  bigint event_log_boundary_seq
 }
 "public.account" {
   uuid id
@@ -81,6 +85,14 @@ erDiagram
   uuid member_id FK
   text body
   bigint event_seq
+  timestamp_with_time_zone created_at
+}
+"public.event_log" {
+  uuid organization_id FK
+  bigint seq
+  text kind
+  uuid audience_member_id FK
+  jsonb data
   timestamp_with_time_zone created_at
 }
 ```

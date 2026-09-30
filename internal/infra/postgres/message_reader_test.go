@@ -18,6 +18,53 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 )
 
+func TestMessageOne(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	local := pgtest.OrganizationWithOwner(t, pool, "acme", appchannel.DefaultName)
+	foreign := pgtest.OrganizationWithOwner(t, pool, "globex", appchannel.DefaultName)
+	otherChannel := pgtest.Channel(t, pool, local.OrganizationID, "other", false)
+	membership := authz.Membership{Organization: domain.Organization{ID: local.OrganizationID}, Member: domain.Member{ID: local.MemberID}}
+	foreignMembership := authz.Membership{Organization: domain.Organization{ID: foreign.OrganizationID}, Member: domain.Member{ID: foreign.MemberID}}
+	service := message.New(postgres.NewPostingStore(pool))
+	posted, err := service.Post(ctx, membership, local.Channel.ID, "local body")
+	requireNoError(t, err)
+	foreignPost, err := service.Post(ctx, foreignMembership, foreign.Channel.ID, "foreign body")
+	requireNoError(t, err)
+	if posted.EventSeq != foreignPost.EventSeq {
+		t.Fatal("fixture must reuse the same sequence across organisations")
+	}
+	// Names are current directory values, not values captured when posting.
+	_, err = pool.Exec(ctx, `UPDATE account SET display_name = 'Current Name' WHERE id = $1`, local.AccountID)
+	requireNoError(t, err)
+	_, err = pool.Exec(ctx, `UPDATE member SET handle = 'current-handle' WHERE organization_id = $1 AND id = $2`, local.OrganizationID, local.MemberID)
+	requireNoError(t, err)
+	reader := postgres.MessageReader{Pool: pool}
+	for _, tt := range []struct {
+		name       string
+		membership authz.Membership
+		channel    domain.ID
+		seq        int64
+		want       message.Entry
+		wantErr    error
+	}{
+		{"hydrated", membership, local.Channel.ID, posted.EventSeq, message.Entry{Message: posted, DisplayName: "Current Name", Handle: "current-handle"}, nil},
+		{"missing", membership, local.Channel.ID, posted.EventSeq + 100, message.Entry{}, message.ErrNotFound},
+		{"wrong channel", membership, otherChannel.ID, posted.EventSeq, message.Entry{}, message.ErrNotFound},
+		{"foreign message", membership, foreign.Channel.ID, foreignPost.EventSeq, message.Entry{}, message.ErrNotFound},
+		{"foreign member", foreignMembership, local.Channel.ID, posted.EventSeq, message.Entry{}, message.ErrNotFound},
+		{"foreign hydrated", foreignMembership, foreign.Channel.ID, foreignPost.EventSeq, message.Entry{Message: foreignPost, DisplayName: "globex", Handle: "owner"}, nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := reader.One(ctx, tt.membership, tt.channel, tt.seq)
+			if !errors.Is(err, tt.wantErr) || got != tt.want {
+				t.Fatalf("entry = %+v, error = %v; want %+v, %v", got, err, tt.want, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestMessagePaging(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)

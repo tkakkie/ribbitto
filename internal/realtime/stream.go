@@ -74,6 +74,8 @@ type Stream struct {
 //     (including kinds it does not know), or explicitly denied by the
 //     Authorizer is skipped, and the cursor moves past it, so a filtered
 //     event cannot keep the loop spinning.
+//   - Cancellation of ctx is checked before every event, so nothing is sent
+//     after it, and returns context.Cause(ctx) without advancing the cursor.
 //   - An error from the EventReader, from the authorization check itself,
 //     from the Renderer or from the Sender stops the loop and returns that
 //     error with the cursor still before the event that could not be
@@ -106,6 +108,12 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			return cursor, fmt.Errorf("reading events after %d: %w", cursor, err)
 		}
 		for _, event := range events {
+			// A cancelled stream (for example a session that ended) sends
+			// nothing more, even if the rest of the batch is already read and
+			// the interfaces it calls would not notice the cancellation.
+			if ctx.Err() != nil {
+				return cursor, context.Cause(ctx)
+			}
 			if event.Kind != domain.EventMessagePosted || event.ChannelID != sub.Channel {
 				cursor = event.Seq
 				continue

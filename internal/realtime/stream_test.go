@@ -312,3 +312,31 @@ func TestStreamRefusesANegativeCursor(t *testing.T) {
 		t.Fatalf("Run(-1) = %v after %d reads, want a refusal before reading", err, log.calls)
 	}
 }
+
+// Cancellation between two events of the same batch stops the loop before
+// the second, even when the authorizer and renderer ignore the context.
+func TestStreamChecksCancellationBetweenEvents(t *testing.T) {
+	cause := errors.New("session ended")
+	ctx, cancel := context.WithCancelCause(t.Context())
+	log := &fakeLog{events: []domain.Event{posted(1, channelA), posted(2, channelA)}}
+	send := &cancellingSender{recorder: newRecorder(), cancel: func() { cancel(cause) }}
+	s := Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}
+	cursor, err := s.Run(ctx, sub, 0, send)
+	if !errors.Is(err, cause) || cursor != 1 || !slices.Equal(send.ids(), []int64{1}) {
+		t.Fatalf("Run = %d, %v, sent %v; want 1, %v, only event 1", cursor, err, send.ids(), cause)
+	}
+}
+
+// cancellingSender cancels the stream's context after its first send.
+type cancellingSender struct {
+	*recorder
+	cancel func()
+}
+
+func (c *cancellingSender) Send(ctx context.Context, out Outgoing) error {
+	if err := c.recorder.Send(ctx, out); err != nil {
+		return err
+	}
+	c.cancel()
+	return nil
+}

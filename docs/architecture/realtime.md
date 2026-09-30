@@ -132,7 +132,9 @@ sequenceDiagram
   skipped and the cursor moves past them. An error from the reader, the
   authorization check itself, the renderer or the sender stops the loop
   with the cursor before that event, so a reconnect resumes there; a failed
-  membership lookup is never a deny. It drains every batch before waiting.
+  membership lookup is never a deny. Cancellation is checked before every
+  event, so an ended session sends nothing more. It drains every batch
+  before waiting.
 - Replay and live delivery go through the same per-connection loop, so they
   cannot interleave out of order. `Last-Event-ID` is preferred on reconnect;
   before htmx recreates the `EventSource`, the client puts its last cursor

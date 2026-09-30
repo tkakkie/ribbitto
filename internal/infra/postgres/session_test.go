@@ -19,10 +19,7 @@ func TestSessionStore(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	var id domain.ID
-	if err := pool.QueryRow(ctx, "INSERT INTO account (email, display_name, password_hash) VALUES ('a@example.com', 'A', '$argon2id$x') RETURNING id").Scan(&id); err != nil {
-		t.Fatal(err)
-	}
+	id := pgtest.Account(t, pool, "a@example.com", "A")
 	// Start from the database clock: created_at comes from now() in SQL, and
 	// the table requires expires_at > created_at.
 	var now time.Time

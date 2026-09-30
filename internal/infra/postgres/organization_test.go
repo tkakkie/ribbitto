@@ -12,9 +12,7 @@ import (
 func TestGetOrganizationBySlug(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
-	if _, err := pool.Exec(t.Context(), "INSERT INTO organization (slug, name) VALUES ('example', 'Example')"); err != nil {
-		t.Fatal(err)
-	}
+	pgtest.Organization(t, pool, "example", "Example", 0)
 	queries := sqlcgen.New(pool)
 	organization, err := queries.GetOrganizationBySlug(t.Context(), "example")
 	if err != nil {

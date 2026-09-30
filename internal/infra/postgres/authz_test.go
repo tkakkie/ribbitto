@@ -16,30 +16,17 @@ func TestAuthzStore(t *testing.T) {
 	ctx := t.Context()
 	// acme is the setup organisation; globex is a second one, inserted
 	// directly as later multi-organisation work would.
-	var acme, globex, alice, bob, carol domain.ID
-	for _, q := range []struct {
-		dest *domain.ID
-		sql  string
-	}{
-		{&acme, "INSERT INTO organization (slug, name) VALUES ('acme', 'Acme') RETURNING id"},
-		{&globex, "INSERT INTO organization (slug, name) VALUES ('globex', 'Globex') RETURNING id"},
-		{&alice, "INSERT INTO account (email, display_name, password_hash) VALUES ('alice@example.com', 'Alice', '$argon2id$x') RETURNING id"},
-		{&bob, "INSERT INTO account (email, display_name, password_hash) VALUES ('bob@example.com', 'Bob', '$argon2id$x') RETURNING id"},
-		{&carol, "INSERT INTO account (email, display_name, password_hash) VALUES ('carol@example.com', 'Carol', '$argon2id$x') RETURNING id"},
-	} {
-		if err := pool.QueryRow(ctx, q.sql).Scan(q.dest); err != nil {
-			t.Fatal(err)
-		}
+	acme := pgtest.Organization(t, pool, "acme", "Acme", 0)
+	globex := pgtest.Organization(t, pool, "globex", "Globex", 0)
+	alice := pgtest.Account(t, pool, "alice@example.com", "Alice")
+	bob := pgtest.Account(t, pool, "bob@example.com", "Bob")
+	carol := pgtest.Account(t, pool, "carol@example.com", "Carol")
+	// Direct SQL selects the home organisation without adding full setup fixtures.
+	if _, err := pool.Exec(ctx, "INSERT INTO setup (organization_id) VALUES ($1)", acme); err != nil {
+		t.Fatal(err)
 	}
-	for _, sql := range []string{
-		"INSERT INTO setup (organization_id) VALUES ($1)",
-		"INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $3, 'owner', 1, 'alice')",
-		"INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($2, $4, 'member', 1, 'bob')",
-	} {
-		if _, err := pool.Exec(ctx, "WITH ids AS (SELECT $1::uuid, $2::uuid, $3::uuid, $4::uuid) "+sql, acme, globex, alice, bob); err != nil {
-			t.Fatal(err)
-		}
-	}
+	pgtest.Member(t, pool, acme, alice, domain.RoleOwner, "alice", 1)
+	pgtest.Member(t, pool, globex, bob, domain.RoleMember, "bob", 1)
 	store := postgres.NewAuthzStore(pool)
 	m, err := store.Membership(ctx, alice, "acme")
 	if err != nil || m.Organization != (domain.Organization{ID: acme, Slug: "acme", Name: "Acme"}) ||

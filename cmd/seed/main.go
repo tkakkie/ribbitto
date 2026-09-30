@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -91,10 +92,14 @@ func newSecret() (string, error) {
 func run(ctx context.Context, databaseURL string, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("seed (development only)", flag.ContinueOnError)
 	count := flags.Int("messages", 100, "messages per channel; repeats each fictional conversation in order")
+	streams := flags.Int("streams", 0, "target concurrent streams; enables load-test sessions")
+	perAccount := flags.Int("streams-per-account", 16, "load-test allocation cap; does not change production caps")
+	sessionCount := flags.Int("sessions-per-account", 1, "sessions per seeded account in load-test mode")
+	output := flags.String("output", "", "new JSON credential file outside any repository (required for load tests)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if flags.NArg() != 0 || *count < 1 {
+	if flags.NArg() != 0 {
 		return fmt.Errorf("usage: go run ./cmd/seed [-messages N]; N must be positive")
 	}
 	var data script
@@ -112,7 +117,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	if err != nil {
 		return err
 	}
-	pool, err := postgres.OpenPool(ctx, databaseURL)
+	pool, err := postgres.OpenPool(ctx, databaseURL, nil)
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
@@ -123,8 +128,37 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	}
 	const slug = "paper-lantern"
 	store := postgres.NewSetupStore(pool)
+	installer := setup.New(store, hasher, token)
+	// Preflight is read-only; Complete still arbitrates concurrent setup attempts.
+	open, err := installer.Open(ctx)
+	if err != nil {
+		return err
+	}
+	if !open {
+		return setup.ErrCompleted
+	}
+	loadTest := false
+	flags.Visit(func(f *flag.Flag) { loadTest = loadTest || f.Name != "messages" })
+	accounts, err := validateRun(*count, len(data.Channels), len(data.Members), *streams, *perAccount, *sessionCount, loadTest, *output)
+	if err != nil {
+		return err
+	}
+	var credentials *os.File
+	if loadTest {
+		credentials, err = createCredentials(*output)
+		if err != nil {
+			return fmt.Errorf("creating credential file: %w", err)
+		}
+		defer func() { _ = credentials.Close() }()
+	}
+	for len(data.Members) < accounts {
+		handle := fmt.Sprintf("loadtest-%d", len(data.Members)+1)
+		data.Members = append(data.Members, struct{ Name, Handle string }{handle, handle})
+	}
+	manifest := credentialFile{OrganizationSlug: slug}
+	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
 	owner := data.Members[0]
-	created, err := setup.New(store, hasher, token).Complete(ctx, token, setup.Input{
+	created, err := installer.Complete(ctx, token, setup.Input{
 		OrganizationName: "Paper Lantern Studio", Slug: slug,
 		Email: owner.Handle + "@example.test", DisplayName: owner.Name, Handle: owner.Handle, Password: password,
 	})
@@ -141,6 +175,17 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 			if err != nil {
 				return fmt.Errorf("signing up %s: %w", person.Handle, err)
 			}
+		}
+		if loadTest {
+			entry := accountTokens{Handle: person.Handle}
+			for range *sessionCount {
+				token, _, err := sessions.Create(ctx, id)
+				if err != nil {
+					return fmt.Errorf("creating load-test session: %w", err)
+				}
+				entry.Tokens = append(entry.Tokens, token)
+			}
+			manifest.Accounts = append(manifest.Accounts, entry)
 		}
 		members[person.Handle], err = authorizer.Member(ctx, &domain.Account{ID: id}, slug)
 		if err != nil {
@@ -159,6 +204,8 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		if err != nil {
 			return fmt.Errorf("preparing channel %s: %w", conversation.Name, err)
 		}
+		id := destination.ID
+		manifest.ChannelIDs = append(manifest.ChannelIDs, fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]))
 		// Repeat whole exchanges, preserving references and author order without randomness.
 		for i := 0; i < *count; i++ {
 			line := conversation.Messages[i%len(conversation.Messages)]
@@ -169,6 +216,14 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 			if _, err := posts.Post(ctx, member, destination.ID, line.Body); err != nil {
 				return fmt.Errorf("posting %s message %d: %w", conversation.Name, i+1, err)
 			}
+		}
+	}
+	if loadTest {
+		if err := json.NewEncoder(credentials).Encode(manifest); err != nil {
+			return fmt.Errorf("writing credential file: %w", err)
+		}
+		if err := credentials.Close(); err != nil {
+			return fmt.Errorf("closing credential file: %w", err)
 		}
 	}
 	_, err = fmt.Fprintf(out, "Seeded %s. Sign in as %s@example.test (owner) or any other member at example.test with this run's password:\n%s\n", slug, owner.Handle, password)

@@ -140,6 +140,7 @@ Read the file for the area you change:
 | [`rate-limits.md`](rate-limits.md) | authentication rate limits and the reverse-proxy contract |
 | [`realtime.md`](realtime.md) | posting a message and Server-Sent Events (planned) |
 | [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
+| [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
 | [`web-layers.md`](web-layers.md) | what handlers, templ, htmx and JavaScript are each responsible for, and how it is checked |
 
 ## See also

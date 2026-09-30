@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/netip"
 	"os"
@@ -79,8 +80,12 @@ func serve(ctx context.Context, databaseURL string) error {
 	if addr == "" {
 		addr = ":8080"
 	}
+	metricsAddr, queries, err := devMetricsSetup(os.Getenv("RIBBITTO_DEV_METRICS_ADDR"))
+	if err != nil {
+		return err
+	}
 
-	pool, err := postgres.OpenPool(ctx, databaseURL)
+	pool, err := postgres.OpenPool(ctx, databaseURL, queries)
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
@@ -101,6 +106,25 @@ func serve(ctx context.Context, databaseURL string) error {
 		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout,
 		write: writeTimeout,
 	})
+	// The stream (#158) will register its connections here.
+	hub := realtime.NewHub()
+
+	var metrics *http.Server
+	if metricsAddr != "" {
+		// Listen before serving, so a taken port fails the start.
+		ln, err := net.Listen("tcp", metricsAddr)
+		if err != nil {
+			return fmt.Errorf("RIBBITTO_DEV_METRICS_ADDR: %w", err)
+		}
+		metrics = newMetricsServer(metricsAddr, devMetrics{queries: queries, pool: pool, streams: hub})
+		defer func() { _ = metrics.Close() }()
+		slog.Warn("development metrics enabled; use only on a disposable machine", "addr", metricsAddr)
+		go func() {
+			if err := metrics.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("development metrics stopped", "err", err)
+			}
+		}()
+	}
 
 	errc := make(chan error, 1)
 	go func() {
@@ -116,6 +140,9 @@ func serve(ctx context.Context, databaseURL string) error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if metrics != nil {
+		_ = metrics.Shutdown(shutdownCtx)
+	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return err
 	}

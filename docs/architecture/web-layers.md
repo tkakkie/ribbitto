@@ -114,12 +114,6 @@ HX (200 full pages). `TestChannelHandlers` verifies that HX changes nothing
 for unenhanced channel creation (303/422). Posting and history page responses
 assert the layout and `#conversation`, including validation errors.
 
-Planned:
-
-| Rule | Issue |
-|---|---|
-| Application scripts: no HTML writes, requests, IndexedDB, evaluation or globals; versioned names | #197 |
-
 Left to review, because a pattern check cannot prove them: that a stored
 value is only a UX setting, that a script owns no application state, and
 that a component makes no authorisation decision.

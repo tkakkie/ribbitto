@@ -101,6 +101,33 @@ the owner's address, when it finishes: sign in as `mira@example.test`
 (owner), or another script handle at `example.test`, with that password.
 Nothing fixed or published signs in.
 
+For load tests on a disposable machine, add `-streams 300
+-streams-per-account 16 -sessions-per-account 2 -output /tmp/loadtest.json`
+(on one command line). The cap defaults to 16, matching #160's planned cap;
+this flag only sizes fixtures and changes no production caps or defaults.
+The command creates `max(5, ceil(streams / cap))` accounts in the same
+organisation, including the five fictional members: 300 / 16 needs 19,
+so it adds 14. Sessions per account default to 1; multiple sessions still
+share that account's stream cap. Without load-test flags, no sessions or
+credential file are created. All runs limit total messages across channels
+plus accounts × sessions to 100,000, checked without overflow before writes.
+
+The named JSON file is created exclusively with mode `0600`; existing files
+and paths inside Git repositories (including worktrees) are refused before
+database writes. Its format is
+`{"organization_slug":"paper-lantern","channel_ids":["<UUID>"],"accounts":[{"handle":"mira","tokens":["<token>"]}]}`.
+All channels and accounts are included. Tokens are fresh sessions with normal
+30-day expiry; only their hashes reach PostgreSQL. Plain tokens go only to
+this file, never to stdout or logs. Keep it outside repositories.
+
+Loopback alone does not prove a database is disposable. These credentials
+work against **any server using the seeded database**: keeping the database
+and every server using it on the disposable machine is an operating
+requirement. After a run (successful or interrupted), stop those servers,
+drop the disposable database and delete the credential file, which may be
+empty or incomplete on failure. Start again with a fresh migrated database;
+deleting the file alone does not invalidate sessions.
+
 The embedded `cmd/seed/conversations.json` contains English and Japanese
 exchanges, Unicode names, and message-layout edge cases. Have a person
 review every script before committing it. Each channel's exchange repeats

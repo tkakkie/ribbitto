@@ -8,16 +8,17 @@ benchmark.
 
 ## Running it
 
-It runs only when asked and never in CI. The two runs below used:
+It runs only when asked and never in CI. Export `RIBBITTO_TEST_DATABASE_URL`
+first, as for `make check` ([`database.md`](../database.md)): the admin URL of a
+disposable PostgreSQL on loopback, kept out of the command line. The two runs
+below then used:
 
 ```sh
 # Run A: the default steps
 RIBBITTO_STREAM_COST=1 RIBBITTO_STREAM_COST_POOL=10 \
-  RIBBITTO_TEST_DATABASE_URL=postgres://…@127.0.0.1:…/postgres \
   go test -count=1 -run 'TestStreamCost$' -v -timeout 30m ./internal/realtime/
 # Run B: between run A's last pass and first failure
 RIBBITTO_STREAM_COST=1 RIBBITTO_STREAM_COST_POOL=10 RIBBITTO_STREAM_COST_STEPS=200,300,500 \
-  RIBBITTO_TEST_DATABASE_URL=postgres://…@127.0.0.1:…/postgres \
   go test -count=1 -run 'TestStreamCost$' -v -timeout 30m ./internal/realtime/
 ```
 

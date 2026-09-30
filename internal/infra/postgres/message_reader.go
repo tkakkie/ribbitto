@@ -5,13 +5,17 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
+	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
 
-// MessageReader reads messages and both author batches from the same snapshot.
+// MessageReader reads the channel page and its cursor, or one message, each
+// with both author batches from one snapshot.
 type MessageReader struct{ Pool *pgxpool.Pool }
 
 // One reads one message and its author names in a read-only snapshot.
@@ -27,15 +31,34 @@ func (s MessageReader) One(ctx context.Context, m authz.Membership, channelID do
 	return entry, nil
 }
 
-// Before implements the channel page's history read in a read-only snapshot.
-func (s MessageReader) Before(ctx context.Context, m authz.Membership, channelID domain.ID, before *int64) (page message.Page, err error) {
+// Before reads a page for a resolved member, omitting the cursor on older pages.
+func (s MessageReader) Before(ctx context.Context, m authz.Membership, channelID domain.ID, before *int64) (page message.ChannelPage, err error) {
 	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		channels := channel.New(NewChannelStore(tx))
+		page.Current, err = channels.Get(ctx, m, channelID)
+		if err != nil {
+			return err
+		}
+		page.Channels, err = channels.List(ctx, m)
+		if err != nil {
+			return err
+		}
 		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: NewAccountStore(tx)}
-		page, err = reader.Before(ctx, m, channelID, before)
-		return err
+		page.Page, err = reader.Before(ctx, m, channelID, before)
+		if err != nil {
+			return err
+		}
+		if before == nil {
+			seq, err := sqlcgen.New(tx).GetEventSeq(ctx, pgtype.UUID{Bytes: m.Organization.ID, Valid: true})
+			if err != nil {
+				return fmt.Errorf("reading page cursor: %w", err)
+			}
+			page.EventCursor = &seq
+		}
+		return nil
 	})
 	if err != nil {
-		return message.Page{}, fmt.Errorf("reading message snapshot: %w", err)
+		return message.ChannelPage{}, fmt.Errorf("reading channel page snapshot: %w", err)
 	}
 	return page, nil
 }

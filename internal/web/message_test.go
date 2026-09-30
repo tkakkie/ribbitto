@@ -25,18 +25,36 @@ import (
 )
 
 type fakeMessages struct {
-	entries []message.Entry
-	older   bool
-	err     error
+	channels *fakeChannels
+	entries  []message.Entry
+	older    bool
+	err      error
 	// before, when set, records the bound each read received.
 	before *[]*int64
 }
 
-func (f fakeMessages) Before(_ context.Context, _ authz.Membership, _ domain.ID, before *int64) (message.Page, error) {
+func (f fakeMessages) Before(ctx context.Context, m authz.Membership, id domain.ID, before *int64) (message.ChannelPage, error) {
 	if f.before != nil {
 		*f.before = append(*f.before, before)
 	}
-	return message.Page{Entries: f.entries, Older: f.older}, f.err
+	channels := f.channels
+	if channels == nil {
+		channels = &fakeChannels{}
+	}
+	current, err := channels.Get(ctx, m, id)
+	if err != nil {
+		return message.ChannelPage{}, err
+	}
+	list, err := channels.List(ctx, m)
+	if err != nil {
+		return message.ChannelPage{}, err
+	}
+	page := message.ChannelPage{Page: message.Page{Entries: f.entries, Older: f.older}, Current: current, Channels: list}
+	if before == nil {
+		cursor := int64(42)
+		page.EventCursor = &cursor
+	}
+	return page, f.err
 }
 
 func populatedMessages() fakeMessages {
@@ -65,7 +83,10 @@ func TestMessageListHandler(t *testing.T) {
 		{"populated", populatedMessages(), 200}, {"empty", fakeMessages{}, 200}, {"read failure", fakeMessages{err: errors.New("offline")}, 500},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages = tt.reader }))
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+				s.Messages = tt.reader
+				s.Channels = &fakeChannels{getErr: errors.New("unexpected separate channel read"), listErr: errors.New("unexpected separate sidebar read")}
+			}))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -81,6 +102,13 @@ func TestMessageListHandler(t *testing.T) {
 			}
 			body := w.Body.String()
 			assertFullConversationPage(t, body)
+			doc, err := html.Parse(strings.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if outer := find(doc, atom.Div); attr(outer, "data-event-cursor") != "42" || outer.Parent.DataAtom != atom.Body {
+				t.Fatal("cursor must be on the outer layout, outside every swap target")
+			}
 			// An empty channel still loads it: messages swapped in later need it.
 			if script := `src="/static/message-time-v2.js" nonce="` + responseNonce(t, w) + `"`; !strings.Contains(body, script) {
 				t.Errorf("missing %q", script)
@@ -282,6 +310,12 @@ func TestMessagePagingHandler(t *testing.T) {
 			}
 			body := w.Body.String()
 			assertFullConversationPage(t, body)
+			if got := strings.Contains(body, `data-event-cursor="42"`); got != (tt.before == 0) {
+				t.Fatalf("page cursor present = %t, before = %d", got, tt.before)
+			}
+			if tt.before != 0 && strings.Contains(body, "data-event-cursor") {
+				t.Fatal("older page carries a cursor")
+			}
 			for _, want := range tt.want {
 				if !strings.Contains(body, want) {
 					t.Errorf("missing %q", want)

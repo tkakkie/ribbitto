@@ -82,7 +82,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `identity`: accounts, passwords, sessions, signing in, sign-up | `app/auth`, `app/signup`; `infra/postgres` `account.go`, `session.go`, `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
 | `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
-| `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/static/message-*.js` | `message` |
+| `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
 | `realtime` | `internal/realtime` *(M3)* | none |
 
 The shared kernel, which any feature may use: the IDs and value types in
@@ -104,8 +104,10 @@ organisation, returning handles and account IDs), then identity's
 `auth.Directory.LookupDisplayNames` (only those account IDs). Their adapters
 own the queries in `member.sql` and `account.sql`; message never queries
 those tables. `MessageReader` shares one read-only repeatable-read transaction
-across each message read (history or one message) and both lookups;
-channel/sidebar reads still precede the history snapshot.
+across the channel and sidebar (through `channel.Service`), history and both
+lookups, plus the shared-kernel `organization.event_seq` on the latest page.
+It returns `message.ChannelPage`; older pages have no event cursor.
+`MessageReader.One` reads one message and both lookups in its own snapshot.
 
 **Known exceptions.** Three flows write another feature's tables in one
 transaction today:

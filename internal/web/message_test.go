@@ -33,6 +33,11 @@ type fakeMessages struct {
 	before *[]*int64
 }
 
+// One is not used by handler tests; the stream is tested end to end.
+func (fakeMessages) One(context.Context, authz.Membership, domain.ID, int64) (message.Entry, error) {
+	return message.Entry{}, message.ErrNotFound
+}
+
 func (f fakeMessages) Before(ctx context.Context, m authz.Membership, id domain.ID, before *int64) (message.ChannelPage, error) {
 	if f.before != nil {
 		*f.before = append(*f.before, before)

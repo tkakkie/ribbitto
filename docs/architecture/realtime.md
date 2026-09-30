@@ -166,9 +166,11 @@ sequenceDiagram
   disconnected. The server's `WriteTimeout` bounds ordinary responses and
   would cut a long-lived stream, so the SSE handler does not inherit it: it
   sets a finite deadline before every write with
-  `http.ResponseController.SetWriteDeadline`, which replaces the server's.
-  The server's read and idle timeouts stay: they bound reading the request
-  and waiting between requests.
+  `http.ResponseController.SetWriteDeadline`, flushes, and clears the
+  deadline before waiting (#158) — under HTTP/2 an expired deadline resets
+  the stream even while idle. If it cannot flush, the stream ends. The
+  server's read timeout does not cut it: net/http clears the read deadline
+  once the request is read. `TestEventStream` idles past all of them.
 - Middleware that wraps `http.ResponseWriter` implements `Unwrap` so
   flushing works; compression is not applied to the SSE endpoint.
 - Heartbeats every 15–30 s keep proxies from closing idle streams. Presence

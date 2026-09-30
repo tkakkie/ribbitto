@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
@@ -315,6 +316,177 @@ func TestCheckMarkup(t *testing.T) {
 	}
 }
 
+// Match the CSS subset used by our DOM contract. Unknown syntax fails closed:
+// extend this helper and its tests when templates need another selector shape.
+func htmxMatches(doc *html.Node, selector string) ([]*html.Node, error) {
+	parts := regexp.MustCompile(`^#([A-Za-z][A-Za-z0-9_-]*)(?:\s*>\s*([a-z][a-z0-9-]*))?$`).FindStringSubmatch(strings.TrimSpace(selector))
+	if parts == nil {
+		return nil, fmt.Errorf("unsupported selector %q", selector)
+	}
+	var matches []*html.Node
+	for n := range doc.Descendants() {
+		if n.Type != html.ElementNode || attr(n, "id") != parts[1] {
+			continue
+		}
+		if parts[2] == "" {
+			matches = append(matches, n)
+			continue
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			if child.Type == html.ElementNode && child.Data == parts[2] {
+				matches = append(matches, child)
+			}
+		}
+	}
+	return matches, nil
+}
+
+func checkHTMXContract(page, element, response *html.Node) []string {
+	var problems []string
+	for _, key := range []string{"hx-target", "hx-select", "hx-select-oob"} {
+		value, exists := attrOK(element, key)
+		if !exists {
+			continue
+		}
+		for _, selector := range strings.Split(value, ",") {
+			selector = strings.TrimSpace(selector)
+			// Extended non-id targets are allowed: this, closest …, find ….
+			// They need no fixed destination id; any ids they name still exist.
+			if key == "hx-target" && (selector == "this" || strings.HasPrefix(selector, "closest ") || strings.HasPrefix(selector, "find ")) {
+				for _, id := range regexp.MustCompile(`#[A-Za-z][A-Za-z0-9_-]*`).FindAllString(selector, -1) {
+					matches, err := htmxMatches(page, id)
+					if err != nil || len(matches) == 0 {
+						problems = append(problems, fmt.Sprintf("hx-target %q: missing page id %s", selector, id))
+					}
+				}
+				continue
+			}
+			doc, side := response, "response"
+			if key == "hx-target" {
+				doc, side = page, "page"
+			}
+			matches, err := htmxMatches(doc, selector)
+			if err != nil {
+				problems = append(problems, fmt.Sprintf("%s: %v", key, err))
+			} else if len(matches) == 0 {
+				problems = append(problems, fmt.Sprintf("%s %q: no match in %s", key, selector, side))
+			}
+			if key == "hx-select-oob" {
+				for _, match := range matches {
+					id := attr(match, "id")
+					destinations, err := htmxMatches(page, "#"+id)
+					if err != nil || len(destinations) == 0 {
+						problems = append(problems, fmt.Sprintf("hx-select-oob %q: missing page destination id %q", selector, id))
+					}
+				}
+			}
+		}
+	}
+	return problems
+}
+
+func TestCheckHTMXContract(t *testing.T) {
+	for _, tt := range []struct {
+		name, attributes, page, response, want string
+	}{
+		{"response-only selection", `hx-target="#container" hx-select="#result"`, `<div id="container"></div>`, `<div id="result"></div>`, ""},
+		{"missing target", `hx-target="#missing"`, `<div id="container"></div>`, `<div id="missing"></div>`, "no match in page"},
+		{"missing selection", `hx-select="#result"`, `<div id="result"></div>`, `<div></div>`, "no match in response"},
+		{"direct children", `hx-select="#items > li"`, "", `<ol id="items"><li></li></ol>`, ""},
+		{"empty list", `hx-select="#items > li"`, "", `<ol id="items"></ol>`, "no match in response"},
+		{"nested child is not direct", `hx-select="#items > li"`, "", `<div id="items"><ol><li></li></ol></div>`, "no match in response"},
+		{"oob match", `hx-select-oob="#older"`, `<div id="older"></div>`, `<div id="older"></div>`, ""},
+		{"missing oob response", `hx-select-oob="#older"`, `<div id="older"></div>`, "", "no match in response"},
+		{"missing oob destination", `hx-select-oob="#older"`, "", `<div id="older"></div>`, "missing page destination"},
+		{"every selector", `hx-select-oob="#older, #missing"`, `<div id="older"></div>`, `<div id="older"></div>`, "no match in response"},
+		{"this", `hx-target="this"`, "", "", ""},
+		{"closest", `hx-target="closest form"`, "", "", ""},
+		{"find", `hx-target="find textarea"`, "", "", ""},
+		{"extended target id", `hx-target="closest #missing"`, "", "", "missing page id"},
+		{"unsupported syntax", `hx-select=".result"`, "", "", "unsupported selector"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			parse := func(markup string) *html.Node {
+				t.Helper()
+				doc, err := html.Parse(strings.NewReader(markup))
+				if err != nil {
+					t.Fatal(err)
+				}
+				return doc
+			}
+			element := find(parse(`<button `+tt.attributes+`></button>`), atom.Button)
+			problems := checkHTMXContract(parse(tt.page), element, parse(tt.response))
+			if tt.want == "" && len(problems) != 0 || tt.want != "" && (len(problems) != 1 || !strings.Contains(problems[0], tt.want)) {
+				t.Fatalf("problems %q, want %q", problems, tt.want)
+			}
+		})
+	}
+}
+
+// Exercise only explicit htmx requests. Plain links/forms belong to #196.
+func checkHTMXRequests(t *testing.T, handler http.Handler, page *html.Node, lang string, cookie bool) {
+	t.Helper()
+	for element := range page.Descendants() {
+		for _, method := range []string{"GET", "POST"} {
+			path, exists := attrOK(element, "hx-"+strings.ToLower(method))
+			if !exists {
+				continue
+			}
+			t.Run(method+" "+path, func(t *testing.T) {
+				form := url.Values{}
+				for n := range element.Descendants() {
+					name := attr(n, "name")
+					if name == "" {
+						continue
+					}
+					switch n.DataAtom {
+					case atom.Textarea:
+						form.Add(name, text(n))
+					case atom.Input:
+						form.Add(name, attr(n, "value"))
+					default:
+						t.Fatalf("add htmx form fixture support for <%s name=%q>", n.Data, name)
+					}
+				}
+				// Check the rendered draft (including validation errors), then a
+				// successful post: both responses must satisfy the same selectors.
+				for _, submit := range []bool{false, true} {
+					if submit {
+						if method != "POST" || !form.Has("body") {
+							continue
+						}
+						form.Set("body", "DOM contract test")
+					}
+					t.Run(fmt.Sprintf("submit=%t", submit), func(t *testing.T) {
+						r := httptest.NewRequest(method, path, strings.NewReader(form.Encode()))
+						r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+						r.Header.Set("Accept-Language", lang)
+						r.Header.Set("HX-Request", "true")
+						if cookie {
+							r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+						}
+						w := httptest.NewRecorder()
+						handler.ServeHTTP(w, r)
+						// Only the composer's unsubmitted draft POST may be invalid (422);
+						// paging GETs and valid posts must succeed.
+						draftPost := method == "POST" && !submit
+						if (w.Code != http.StatusOK && (!draftPost || w.Code != http.StatusUnprocessableEntity)) || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
+							t.Fatalf("HX response: status %d, content type %q", w.Code, w.Header().Get("Content-Type"))
+						}
+						response, err := html.Parse(w.Body)
+						if err != nil {
+							t.Fatal(err)
+						}
+						for _, problem := range checkHTMXContract(page, element, response) {
+							t.Error(problem)
+						}
+					})
+				}
+			})
+		}
+	}
+}
+
 // markupCase is one rendered state of an HTML route.
 type markupCase struct {
 	name          string
@@ -480,6 +652,7 @@ func TestPagesMarkup(t *testing.T) {
 				for _, problem := range checkMarkup(doc, true) {
 					t.Error(problem)
 				}
+				checkHTMXRequests(t, handler, doc, lang, c.cookie)
 				for n := range doc.Descendants() {
 					var assetURL string
 					switch n.DataAtom {
@@ -648,17 +821,39 @@ func checkTextFields(t *testing.T, ctx context.Context, doc *html.Node, c markup
 	}
 }
 
-// Shared components rendered on their own get the element checks.
+// Shared components rendered on their own get the fragment rules. Add fragments
+// rendered by handlers or SSE (M3) to this list when they exist.
 func TestComponentsMarkup(t *testing.T) {
-	var b strings.Builder
-	if err := view.SignOutButton().Render(context.Background(), &b); err != nil {
-		t.Fatal(err)
-	}
-	doc, err := html.Parse(strings.NewReader(b.String()))
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, problem := range checkMarkup(doc, false) {
-		t.Error(problem)
+	for _, component := range []struct {
+		name string
+		view templ.Component
+	}{
+		{"SignOutButton", view.SignOutButton()},
+		{"MemberName", view.MemberName("مريم", "author")},
+		{"MemberName blank fallback", view.MemberName("\u3164", "legacy")},
+	} {
+		for _, lang := range []string{"en", "ja"} {
+			t.Run(component.name+"/"+lang, func(t *testing.T) {
+				r := httptest.NewRequest("GET", "/", nil)
+				r.Header.Set("Accept-Language", lang)
+				catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+					var b strings.Builder
+					if err := component.view.Render(r.Context(), &b); err != nil {
+						t.Fatal(err)
+					}
+					doc, err := html.Parse(strings.NewReader(b.String()))
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, problem := range checkMarkup(doc, false) {
+						t.Error(problem)
+					}
+				})).ServeHTTP(httptest.NewRecorder(), r)
+			})
+		}
 	}
 }

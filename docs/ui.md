@@ -129,6 +129,10 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   after a submit. Setup and sign-up use the shared `textField` component:
   ✓ invalid inputs have `aria-invalid="true"` and an error description;
   valid inputs omit both attributes. Sign-in keeps one form-level alert.
+- **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and
+  `aria-labelledby` targets exist in the rendered document or fragment.
+- **Timestamps.** ✓ `<time datetime>` values are valid HTML global dates
+  and times, including a timezone and at most three fractional digits.
 - **Images** ✓ have `alt` (empty when decorative).
 - **Focus.** ✓ `tabindex` only as `-1` on a deliberate focus target (a
   dialog's heading, an error summary) or `0` on a scrollable region with
@@ -142,6 +146,8 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   JavaScript is external, in `web/static`, and defines no globals. Vendored
   libraries (htmx, idiomorph) keep theirs. The nonce and external-script
   rules are in [`architecture/rendering.md`](architecture/rendering.md).
+- **Assets exist.** ✓ Every `/static/` script and stylesheet URL resolves
+  to a file in the embedded assets, using its path without the query string.
 
 **Checking a UI change in a browser**, before the pull request says what
 was checked: use it with the keyboard only (Tab order, Enter and Space,
@@ -149,6 +155,8 @@ Escape closes what opened); watch that focus is always visible; and look at
 it under a colour-vision simulation (Chrome DevTools, *Rendering → Emulate
 vision deficiencies*) to see that no information is lost. The automated
 checks find only part of accessibility problems, so these stay necessary.
+They verify reference targets exist, not that they describe the right field;
+they do not execute JavaScript or check `hx-*` behaviour.
 
 The channel conversation uses a chronological `<ol>`, with an isolated
 author name, a timestamp and a plain-text body per message. Bodies wrap and

@@ -154,6 +154,18 @@ func (h *Hub) Register(parent context.Context, c Connection, limit int) (ctx con
 	return ctx, unregister, nil
 }
 
+// Connections returns how many connections are registered, for the
+// development-only metrics listener. It only reads the registry.
+func (h *Hub) Connections() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	n := 0
+	for _, set := range h.byAccount {
+		n += len(set)
+	}
+	return n
+}
+
 // CancelAccount ends the contexts of all the account's connections, for
 // example when the account signs out everywhere. The connections keep
 // their slots until they unregister.

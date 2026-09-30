@@ -39,6 +39,15 @@ type Page struct {
 	Older bool
 }
 
+// ChannelPage is a channel, its sidebar and history read in one snapshot.
+type ChannelPage struct {
+	Page
+	Current  domain.Channel
+	Channels []domain.Channel
+	// EventCursor is the snapshot's organisation sequence; nil on older pages.
+	EventCursor *int64
+}
+
 // Before returns the page of messages older than event_seq before, or the
 // latest page when before is nil. The caller resolves membership and the
 // channel through authz and channel before reading. before is only an upper

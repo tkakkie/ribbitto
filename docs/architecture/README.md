@@ -102,7 +102,9 @@ organisation, returning handles and account IDs), then identity's
 `auth.Directory.LookupDisplayNames` (only those account IDs). Their adapters
 own the queries in `member.sql` and `account.sql`; message never queries
 those tables. `MessageReader` shares one read-only repeatable-read transaction
-across history and both lookups; channel/sidebar reads still precede it.
+across the channel and sidebar (through `channel.Service`), history and both
+lookups, plus the shared-kernel `organization.event_seq` on the latest page.
+It returns `message.ChannelPage`; older pages have no event cursor.
 
 **Known exceptions.** Cross-feature writes that must commit atomically:
 

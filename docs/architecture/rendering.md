@@ -33,11 +33,16 @@ inject its default inline indicator stylesheet. Do not use inline scripts,
 `hx-on`, or other attribute scripts; keep JavaScript and styles in external
 assets.
 
-Message timestamps use `message-time-v1.js`, loaded with the response nonce
+Message timestamps use `message-time-v2.js`, loaded with the response nonce
 on every channel page, empty or not, because htmx does not run scripts in
-swapped fragments. It formats `<time datetime>` values in browser local time
-on load and on each `htmx:load`, retaining the server's UTC fallback when
-JavaScript is disabled.
+swapped fragments. The server renders `<time datetime>` in UTC, truncating
+only the attribute to millisecond precision; stored timestamps and the
+visible UTC fallback text are unchanged. The script localises the initial
+page once, then only the element reported by each `htmx:load` and its
+descendants. It reuses one `Intl.DateTimeFormat` for the page language and
+tracks localised elements in a `WeakSet` so overlapping load events do not
+rewrite them. Invalid dates retain their fallback, as do all timestamps
+when JavaScript is disabled.
 Application script URLs are versioned because static assets are immutable.
 
 `message-composer-v1.js` also loads with the response nonce on channel pages.

@@ -81,7 +81,7 @@ func TestMessageListHandler(t *testing.T) {
 			}
 			body := w.Body.String()
 			// An empty channel still loads it: messages swapped in later need it.
-			if script := `src="/static/message-time-v1.js" nonce="` + responseNonce(t, w) + `"`; !strings.Contains(body, script) {
+			if script := `src="/static/message-time-v2.js" nonce="` + responseNonce(t, w) + `"`; !strings.Contains(body, script) {
 				t.Errorf("missing %q", script)
 			}
 			if len(tt.reader.entries) == 0 {
@@ -94,6 +94,47 @@ func TestMessageListHandler(t *testing.T) {
 			}
 			if strings.Contains(body, "\u3164") || strings.Contains(body, "<script>bad()") {
 				t.Fatal("unsafe body or blank-looking name")
+			}
+		})
+	}
+}
+
+func TestMessageTimestampView(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		created  time.Time
+		datetime string
+	}{
+		{"whole second", time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC), "2026-09-29T12:00:00Z"},
+		{"microseconds", time.Date(2026, 9, 29, 12, 0, 0, 123456000, time.UTC), "2026-09-29T12:00:00.123Z"},
+		{"no rounding", time.Date(2026, 9, 29, 12, 0, 0, 999999000, time.UTC), "2026-09-29T12:00:00.999Z"},
+		{"offset to UTC", time.Date(2026, 9, 29, 21, 0, 0, 123456000, time.FixedZone("JST", 9*60*60)), "2026-09-29T12:00:00.123Z"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			page := view.ChannelPage{
+				Organization: domain.Organization{Name: "Acme", Slug: "acme"},
+				Messages:     []message.Entry{{Message: domain.Message{CreatedAt: tt.created}}},
+			}
+			var b strings.Builder
+			if err := view.Channel("", page).Render(context.Background(), &b); err != nil {
+				t.Fatal(err)
+			}
+			doc, err := html.Parse(strings.NewReader(b.String()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			element := find(doc, atom.Time)
+			if element == nil {
+				t.Fatal("missing timestamp")
+			}
+			if got := attr(element, "datetime"); got != tt.datetime {
+				t.Errorf("datetime = %q, want %q", got, tt.datetime)
+			}
+			if got := text(element); got != "2026-09-29 12:00:00 UTC" {
+				t.Errorf("UTC fallback = %q", got)
+			}
+			if page.Messages[0].CreatedAt != tt.created {
+				t.Error("rendering changed the message timestamp")
 			}
 		})
 	}

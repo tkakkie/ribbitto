@@ -160,9 +160,11 @@ they do not execute JavaScript or check `hx-*` behaviour.
 
 The channel conversation uses a chronological `<ol>`, with an isolated
 author name, a timestamp and a plain-text body per message. Bodies wrap and
-preserve line breaks; each has `dir="auto"`. The empty state remains until
-there are messages. The message pane scrolls independently with a labelled,
-keyboard-focusable region; the composer stays at the bottom of the viewport.
+preserve line breaks; each has `dir="auto"`. The list always exists;
+`hidden peer-empty:flex` hides its empty state from sight and assistive
+technology once populated. The message pane scrolls
+independently with a labelled, keyboard-focusable region; the composer stays
+at the bottom of the viewport.
 Its labelled textarea preserves invalid text and associates its error with
 `aria-describedby`. After an htmx submission, focus returns to the textarea.
 "Load older messages" is a link above the list (a plain link without

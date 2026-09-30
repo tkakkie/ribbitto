@@ -42,13 +42,15 @@ htmx does only requests and swaps; the server and templ own the HTML.
   full page with `hx-select` is allowed; the composer and Load older do this
   today.
 - A unit that M3's SSE needs becomes an explicit templ fragment or
-  component, rendered by the same code as the full page (#154 M1: a
-  `MessageItem` fragment and a DOM-id helper).
+  component, rendered by the same code as the full page. `MessageItem`
+  takes a `view.Message` and renders one `<li>` on its own or in the page.
 - **DOM ids are a contract.** Templates define every id that `hx-target`,
   `hx-select`, `hx-select-oob` or a script refers to. Renaming one means
   updating every reference in the same pull request. Today's contract ids
   are `conversation`, `message-list`, `message-items`, `load-older` and
-  `message-body`.
+  `message-body`, plus `message-<32 lowercase hex digits>` from
+  `MessageDOMID`. `#message-items` is always present, including when empty;
+  Load older selects its direct `<li>` children.
 - The latest channel page carries `data-event-cursor` on its outer layout
   div, outside `#conversation` and every swap target. Older pages omit it.
 - The layout's `htmx-config` meta tag holds htmx's security settings and
@@ -101,9 +103,9 @@ any ids they name are still checked in the page. The composer's
 `hx-disabled-elt="find textarea, find button"` and `hx-sync="this:drop"`
 are not swap selectors.
 
-`TestComponentsMarkup` renders `SignOutButton` and `MemberName` alone in
-both languages and applies the fragment markup rules. Handler and SSE
-fragments join that list when M3 adds them.
+`TestComponentsMarkup` renders `SignOutButton`, `MemberName` and
+`MessageItem` alone in both languages and applies the fragment markup rules.
+Handler and SSE fragments join that list when M3 adds them.
 
 `TestPagesMarkup` also checks every `hx-get`/`hx-post` element for a plain
 link or form with the same URL and HTTP method (`fallback_test.go`). URL

@@ -4,17 +4,7 @@ import (
 	"fmt"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
-	"time"
 )
-
-// Message holds the conversation fields rendered by a channel page.
-type Message struct {
-	ID                  domain.ID
-	DisplayName, Handle string
-	CreatedAt           time.Time
-	Body                string
-	EventSeq            int64
-}
 
 // ChannelPage holds the sidebar, conversation and channel creation form.
 type ChannelPage struct {
@@ -106,23 +96,12 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 							<p class="flex justify-center px-6 pt-4"><a href={ templ.SafeURL(olderURL(page)) } hx-get={ olderURL(page) } hx-target="#message-items" hx-swap="afterbegin" hx-select="#message-items > li" hx-select-oob="#load-older" class="inline-flex min-h-11 items-center rounded-md border border-border-strong px-3 py-2 text-fg hover:bg-surface">{ i18n.T(ctx, "message.load_older") }</a></p>
 						}
 					</div>
-					if len(page.Messages) == 0 {
-						<div class="flex min-h-full items-center justify-center p-8"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
-					} else {
-						<ol id="message-items" class="flex flex-col gap-4 px-6 py-4">
-							for _, entry := range page.Messages {
-								<li id={ fmt.Sprintf("message-%x", entry.ID) }>
-									<div class="flex flex-wrap items-baseline gap-2">
-										<span>
-											@MemberName(entry.DisplayName, entry.Handle)
-										</span>
-										<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
-									</div>
-									<p dir="auto" class="whitespace-pre-wrap break-words">{ entry.Body }</p>
-								</li>
-							}
-						</ol>
-					}
+					<ol id="message-items" class="peer flex flex-col gap-4 px-6 py-4 empty:hidden">
+						for _, entry := range page.Messages {
+							@MessageItem(entry)
+						}
+					</ol>
+					<div class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
 					if page.Before > 0 {
 						// Only an older page reached without JavaScript shows this.
 						<p class="px-6 pb-4 text-center"><a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="text-brand underline">{ i18n.T(ctx, "message.newest") }</a></p>

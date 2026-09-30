@@ -12,15 +12,27 @@ live() {
   local state
   kill -0 "$1" 2>/dev/null || return 1
   # An orphan can briefly remain a zombie until the OS reaps it; it is stopped.
-  state=$(ps -o stat= -p "$1") || return 1
+  # If ps fails, the pid counts as live unless it is gone by now: a failure to
+  # look must never pass as "stopped" (#183).
+  if ! state=$(ps -o stat= -p "$1"); then
+    kill -0 "$1" 2>/dev/null
+    return
+  fi
   [[ -n $state && $state != *Z* ]]
 }
 
 fallback_cleanup() {
   [[ -n $CASE_DIR ]] || return 0
   if [[ -f $CASE_DIR/out/pids ]]; then
+    # Kill without asking ps whether a pid is live, so this works where ps
+    # does not (#183). The fake Grok leads its own process group, so killing
+    # the group also catches a descendant forked before it recorded itself;
+    # for any other pid no such group exists and the kill fails harmlessly.
+    # Every pid was recorded seconds ago and pids are allocated in sequence,
+    # so none has been reused by an unrelated process.
     while read -r pid; do
-      if live "$pid"; then kill -KILL "$pid" 2>/dev/null || true; fi
+      kill -KILL -- "-$pid" 2>/dev/null || true
+      kill -KILL "$pid" 2>/dev/null || true
     done < "$CASE_DIR/out/pids"
   fi
   rm -rf "$CASE_DIR"
@@ -29,6 +41,22 @@ fallback_cleanup() {
 trap fallback_cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+# The setup-signal cases find the supervisor's child with `ps -axo`, and the
+# leak check tells a zombie from a live process with `ps -o stat=`. Where ps
+# is not permitted (the Codex implementation sandbox), those cases cannot
+# work and would leave their fake Grok running (#183), so stop before any
+# case starts one.
+ps_usable() {
+  local listing
+  [[ -n $(ps -o stat= -p $$) ]] || return 1
+  listing=$(ps -axo pid=,ppid=,command=) || return 1
+  grep -Eq "^ *$$ " <<< "$listing"
+}
+if ! ps_usable; then
+  echo 'grok-review_test: ps is not usable here, and the setup-signal cases and the leak check need it; run this script where ps works (docs/workflow/running-other-ai.md)' >&2
+  exit 1
+fi
 
 fail() { printf '  %s\n' "$*" >&2; failed=1; }
 contains() { grep -Fq -- "$2" "$1" || fail "missing '$2' in ${1##*/}"; }

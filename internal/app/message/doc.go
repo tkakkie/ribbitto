@@ -11,5 +11,5 @@
 // It uses org through authz.Membership; posting reports a channel
 // outside the caller's organisation as channel.ErrNotFound. Listed
 // exception: posting advances organization.event_seq, which org owns,
-// because the sequence must be taken in the writing transaction.
+// and writes realtime's event_log, so the sequence and event commit together.
 package message

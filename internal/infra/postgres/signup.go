@@ -34,9 +34,15 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, has
 		if err != nil {
 			return err
 		}
-		_, err = q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org, AccountID: account.ID, Role: "member", JoinedEventSeq: seq, Handle: handle})
+		member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org, AccountID: account.ID, Role: "member", JoinedEventSeq: seq, Handle: handle})
+		if err != nil {
+			return err
+		}
+		if err := q.InsertMemberEvent(ctx, sqlcgen.InsertMemberEventParams{OrganizationID: org, Seq: seq, Kind: string(domain.EventMemberJoined), MemberID: member.ID}); err != nil {
+			return err
+		}
 		id = account.ID.Bytes
-		return err
+		return nil
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError

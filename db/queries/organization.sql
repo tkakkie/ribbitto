@@ -1,5 +1,5 @@
 -- name: GetOrganizationBySlug :one
-SELECT id, slug, name, event_seq, created_at FROM organization WHERE slug = $1;
+SELECT id, slug, name, event_seq, created_at, event_log_boundary_seq FROM organization WHERE slug = $1;
 
 -- name: GetEventSeq :one
 SELECT event_seq FROM organization WHERE id = $1;

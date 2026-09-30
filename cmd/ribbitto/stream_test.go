@@ -29,23 +29,38 @@ const (
 	testServerWrite = 300 * time.Millisecond
 )
 
-// streamServer serves the production handler with the event stream on,
-// under the production server's timeouts shortened.
-func streamServer(t *testing.T, pool *pgxpool.Pool) *httptest.Server {
+// streamServers serves one production handler, with the event stream on,
+// from two servers sharing its hub: api with the production timeouts for
+// setup, sign-up and posting (password hashing under the race detector can
+// outlast a shortened timeout), and streams with every timeout shortened,
+// where only the event streams are opened.
+func streamServers(t *testing.T, pool *pgxpool.Pool) (api, streams *httptest.Server) {
 	t.Helper()
 	handler, _, err := buildHandler(pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
 		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
 		hub:            realtime.NewHub(), streamWriteTimeout: testStreamWrite})
 	acceptanceOK(t, err)
-	server := httptest.NewUnstartedServer(handler)
-	server.Config = newServer("", handler, serverTimeouts{readHeader: testServerRead, read: testServerRead, idle: time.Second, write: testServerWrite})
-	// HTTP/2, as production serves it through Caddy: an HTTP/2 stream is
-	// reset as soon as its write deadline passes, even while idle, which is
-	// why the stream clears its deadline after every write.
-	server.EnableHTTP2 = true
-	server.StartTLS()
-	t.Cleanup(server.Close)
-	return server
+	start := func(timeouts serverTimeouts) *httptest.Server {
+		server := httptest.NewUnstartedServer(handler)
+		server.Config = newServer("", handler, timeouts)
+		// HTTP/2, as production serves it through Caddy: an HTTP/2 stream
+		// is reset as soon as its write deadline passes, even while idle,
+		// which is why the stream clears its deadline after every write.
+		server.EnableHTTP2 = true
+		server.StartTLS()
+		t.Cleanup(server.Close)
+		return server
+	}
+	api = start(serverTimeouts{readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout, write: writeTimeout})
+	streams = start(serverTimeouts{readHeader: testServerRead, read: testServerRead, idle: time.Second, write: testServerWrite})
+	return api, streams
+}
+
+// on returns the browser pointed at server, keeping its cookies: the jar
+// matches the host, not the port.
+func on(b acceptanceBrowser, server *httptest.Server) acceptanceBrowser {
+	b.server = server
+	return b
 }
 
 // sseEvent is one received event.
@@ -154,7 +169,7 @@ func post(t *testing.T, b acceptanceBrowser, channelURL, body string) {
 
 func TestEventStream(t *testing.T) {
 	pool := acceptanceDatabase(t)
-	server := streamServer(t, pool)
+	server, streams := streamServers(t, pool)
 	owner := newAcceptanceBrowser(t, server, "192.0.2.10")
 	owner.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
 	response, _ := owner.visit(t, "GET", "/organizations/owner/", nil, 303)
@@ -166,7 +181,7 @@ func TestEventStream(t *testing.T) {
 	// each carrying its sequence as the id and the page's message markup.
 	post(t, owner, channelURL, "first\nwith a second line")
 	post(t, owner, channelURL, "second")
-	events, status := openStream(t, owner, channelURL, "0")
+	events, status := openStream(t, on(owner, streams), channelURL, "0")
 	if status != http.StatusOK {
 		t.Fatalf("owner's stream: %d", status)
 	}
@@ -178,17 +193,17 @@ func TestEventStream(t *testing.T) {
 	// Last-Event-ID wins over ?after: from the first event's id, replay starts
 	// at the second even though ?after asks for everything. A malformed
 	// header is refused rather than falling back to ?after.
-	resumed, status := openStreamWith(t, owner, channelURL, "0", first.id)
+	resumed, status := openStreamWith(t, on(owner, streams), channelURL, "0", first.id)
 	if e := nextEvent(t, resumed); status != http.StatusOK || e.id != second.id {
 		t.Fatalf("resumed from Last-Event-ID %s: status %d, first event %+v", first.id, status, e)
 	}
-	if _, status := openStreamWith(t, owner, channelURL, "0", "x"); status != http.StatusBadRequest {
+	if _, status := openStreamWith(t, on(owner, streams), channelURL, "0", "x"); status != http.StatusBadRequest {
 		t.Fatalf("malformed Last-Event-ID: %d, want 400", status)
 	}
 
 	// The member's stream, opened from the owner's last id, sees only what
 	// follows; each event is readable before the next is posted.
-	memberEvents, status := openStream(t, member, channelURL, second.id)
+	memberEvents, status := openStream(t, on(member, streams), channelURL, second.id)
 	if status != http.StatusOK {
 		t.Fatalf("member's stream: %d", status)
 	}
@@ -222,7 +237,7 @@ func TestEventStream(t *testing.T) {
 	// the removed member (the organisation is not found for them now).
 	anonymous := newAcceptanceBrowser(t, server, "192.0.2.12")
 	for _, b := range []acceptanceBrowser{anonymous, member} {
-		if _, status := openStream(t, b, channelURL, "0"); status != http.StatusNotFound {
+		if _, status := openStream(t, on(b, streams), channelURL, "0"); status != http.StatusNotFound {
 			t.Fatalf("stream for a non-member: %d, want 404", status)
 		}
 	}
@@ -243,14 +258,14 @@ func TestEventStream(t *testing.T) {
 		"/organizations/globex/channels/" + foreignID: http.StatusNotFound,
 		ownChannel: http.StatusOK,
 	} {
-		if _, status := openStream(t, outsider, path, "0"); status != want {
+		if _, status := openStream(t, on(outsider, streams), path, "0"); status != want {
 			t.Fatalf("outsider's stream %s: %d, want %d", path, status, want)
 		}
 	}
 
 	// A malformed cursor is refused before streaming.
 	for _, after := range []string{"-1", "x"} {
-		if _, status := openStream(t, owner, channelURL, after); status != http.StatusBadRequest {
+		if _, status := openStream(t, on(owner, streams), channelURL, after); status != http.StatusBadRequest {
 			t.Fatalf("after=%s: %d, want 400", after, status)
 		}
 	}

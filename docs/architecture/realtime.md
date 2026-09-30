@@ -143,6 +143,8 @@ sequenceDiagram
   membership lookup is never a deny. Cancellation is checked before every
   event, so an ended session sends nothing more. It drains every batch
   before waiting.
+- Its cost per post grows with the number of open streams; measured in
+  [`stream-cost.md`](stream-cost.md).
 - Replay and live delivery go through the same per-connection loop, so they
   cannot interleave out of order. `Last-Event-ID` is preferred on reconnect;
   before htmx recreates the `EventSource`, the client puts its last cursor

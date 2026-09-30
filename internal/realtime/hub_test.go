@@ -275,3 +275,22 @@ func TestRegisterLimitUnderConcurrency(t *testing.T) {
 		})
 	}
 }
+
+func TestConnectionsCountsTheRegistry(t *testing.T) {
+	h := NewHub()
+	_, first, _ := h.Register(t.Context(), Connection{Organization: orgA, Account: account1, Session: session1}, 4)
+	_, second, _ := h.Register(t.Context(), Connection{Organization: orgB, Account: account2, Session: session2}, 4)
+	if n := h.Connections(); n != 2 {
+		t.Fatalf("Connections() = %d, want 2", n)
+	}
+	// A cancelled connection still counts until it unregisters, like its slot.
+	h.CancelSession(session1)
+	if n := h.Connections(); n != 2 {
+		t.Fatalf("Connections() after cancel = %d, want 2", n)
+	}
+	first()
+	second()
+	if n := h.Connections(); n != 0 {
+		t.Fatalf("Connections() after unregister = %d, want 0", n)
+	}
+}

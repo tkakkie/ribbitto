@@ -16,12 +16,20 @@ import (
 )
 
 // OpenPool connects the pgx pool that the sqlc queries use. Migrations keep
-// using Open's database/sql handle, which goose needs.
-func OpenPool(ctx context.Context, url string) (*pgxpool.Pool, error) {
+// using Open's database/sql handle, which goose needs. A nil counter installs
+// no tracer at all, so the pool runs exactly as without metrics.
+func OpenPool(ctx context.Context, url string, counter *QueryCounter) (*pgxpool.Pool, error) {
 	if url == "" {
 		return nil, fmt.Errorf("database URL is empty")
 	}
-	pool, err := pgxpool.New(ctx, url)
+	config, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, fmt.Errorf("parsing database configuration: %w", err)
+	}
+	if counter != nil {
+		config.ConnConfig.Tracer = counter
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("creating database pool: %w", err)
 	}

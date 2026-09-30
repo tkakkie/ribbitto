@@ -70,3 +70,26 @@ func (a *Authorizer) HomeSlug(ctx context.Context, account *domain.Account) (str
 	}
 	return slug, err
 }
+
+// MayReceive reports whether the account may still receive a durable event,
+// checked again immediately before a stream sends it. It satisfies
+// realtime.Authorizer without importing it. A lost membership, an event of
+// another organisation, or an audience that names another member is a deny
+// (false, nil). A failed lookup is an error, never a deny: the stream must
+// stop and retry, not skip an event the member may be allowed to see.
+func (a *Authorizer) MayReceive(ctx context.Context, accountID domain.ID, organizationSlug string, event domain.Event) (bool, error) {
+	m, err := a.Member(ctx, &domain.Account{ID: accountID}, organizationSlug)
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if m.Organization.ID != event.OrganizationID {
+		return false, nil
+	}
+	if event.AudienceMemberID != nil && *event.AudienceMemberID != m.Member.ID {
+		return false, nil
+	}
+	return true, nil
+}

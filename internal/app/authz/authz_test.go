@@ -81,3 +81,42 @@ func TestAuthorizer(t *testing.T) {
 		})
 	}
 }
+
+func TestMayReceive(t *testing.T) {
+	aliceMember, otherMember := domain.ID{20}, domain.ID{21}
+	acme := authz.Membership{Organization: domain.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: domain.Member{ID: aliceMember}}
+	store := fakeStore{memberships: map[domain.ID]map[string]authz.Membership{{1}: {"acme": acme}}}
+	event := domain.Event{OrganizationID: acme.Organization.ID, Seq: 5, Kind: domain.EventMessagePosted}
+	withAudience := func(member domain.ID) domain.Event {
+		e := event
+		e.AudienceMemberID = &member
+		return e
+	}
+	otherOrganisation := event
+	otherOrganisation.OrganizationID = domain.ID{11}
+	broken := errors.New("connection refused")
+	for _, tt := range []struct {
+		name    string
+		store   fakeStore
+		account domain.ID
+		event   domain.Event
+		want    bool
+		wantErr error
+	}{
+		{"member, organisation-wide", store, domain.ID{1}, event, true, nil},
+		{"member, own audience", store, domain.ID{1}, withAudience(aliceMember), true, nil},
+		{"member, another member's audience", store, domain.ID{1}, withAudience(otherMember), false, nil},
+		{"membership lost", store, domain.ID{2}, event, false, nil},
+		{"event of another organisation", store, domain.ID{1}, otherOrganisation, false, nil},
+		// A failed lookup must not look like a deny, or the stream would skip
+		// the event for good.
+		{"lookup fails", fakeStore{err: broken}, domain.ID{1}, event, false, broken},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := authz.New(tt.store).MayReceive(t.Context(), tt.account, "acme", tt.event)
+			if got != tt.want || !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
+				t.Fatalf("MayReceive = %v, %v; want %v, %v", got, err, tt.want, tt.wantErr)
+			}
+		})
+	}
+}

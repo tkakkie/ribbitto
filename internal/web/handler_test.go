@@ -316,7 +316,9 @@ func newTestHandler(t *testing.T, dir string) (http.Handler, error) {
 		}
 	})
 	setup := &fakeSetup{open: true}
-	return NewHandler(dir, catalogues, Services{Posting: testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}, Sessions: noSessions{}, SignIn: &fakeSignIn{}, Setup: setup, SetupSessions: setup, SignUp: fakeSignUp{&fakeSetup{open: true}}})
+	return NewHandler(dir, catalogues, testServices(func(s *Services) {
+		s.Setup, s.SetupSessions, s.SignUp = setup, setup, fakeSignUp{&fakeSetup{open: true}}
+	}))
 }
 
 func TestHelloLanguages(t *testing.T) {
@@ -411,16 +413,22 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, services := range map[string]Services{
-		"no channels":                       {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Authz: noOrganisations{}, Posting: testPoster(), Messages: fakeMessages{}},
-		"no messages":                       {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Authz: noOrganisations{}, Channels: &fakeChannels{}, Posting: testPoster()},
-		"no posting":                        {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Authz: noOrganisations{}, Channels: &fakeChannels{}, Messages: fakeMessages{}},
-		"no sessions":                       {SignIn: &fakeSignIn{}},
-		"no sign-in":                        {Sessions: noSessions{}},
-		"setup without a session creator":   {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Posting: testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}, Setup: &fakeSetup{}},
-		"sign-up without a session creator": {Sessions: noSessions{}, SignIn: &fakeSignIn{}, Posting: testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}, SignUp: fakeSignUp{&fakeSetup{}}},
+	// The defaults are complete, and each case lacks only the named service,
+	// so it still fails for that reason alone when another becomes required.
+	if _, err := NewHandler("", catalogues, testServices()); err != nil {
+		t.Fatalf("NewHandler rejected the default services: %v", err)
+	}
+	for name, missing := range map[string]func(*Services){
+		"no authorizer":                     func(s *Services) { s.Authz = nil },
+		"no channels":                       func(s *Services) { s.Channels = nil },
+		"no messages":                       func(s *Services) { s.Messages = nil },
+		"no posting":                        func(s *Services) { s.Posting = nil },
+		"no sessions":                       func(s *Services) { s.Sessions = nil },
+		"no sign-in":                        func(s *Services) { s.SignIn = nil },
+		"setup without a session creator":   func(s *Services) { s.Setup = &fakeSetup{} },
+		"sign-up without a session creator": func(s *Services) { s.SignUp = fakeSignUp{&fakeSetup{}} },
 	} {
-		if _, err := NewHandler("", catalogues, services); err == nil {
+		if _, err := NewHandler("", catalogues, testServices(missing)); err == nil {
 			t.Errorf("%s: NewHandler accepted incomplete services", name)
 		}
 	}
@@ -450,7 +458,7 @@ func TestSessionLookupOnlyOnRegisteredRoutes(t *testing.T) {
 	} {
 		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
 			resolver := &countingResolver{}
-			handler, err := NewHandler("", catalogues, Services{Sessions: resolver, SignIn: &fakeSignIn{}, Posting: testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}})
+			handler, err := NewHandler("", catalogues, testServices(func(s *Services) { s.Sessions = resolver }))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -245,7 +245,7 @@ func TestPagesMarkup(t *testing.T) {
 		fieldErrors[field] = errors.New("invalid")
 	}
 	base := func() Services {
-		return Services{Sessions: noSessions{}, SignIn: &fakeSignIn{}, Posting: testPoster(), Messages: fakeMessages{}, Channels: &fakeChannels{}, Authz: noOrganisations{}}
+		return testServices()
 	}
 	withSetup := func(err error) func() Services {
 		return func() Services {

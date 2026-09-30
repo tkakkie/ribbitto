@@ -121,7 +121,8 @@ It rejects:
   directly quoted first argument. These evaluation restrictions restate
   the existing CSP without `'unsafe-eval'` ([`rendering.md`](rendering.md)).
 - `var`/`let`/`const` and named `function` declarations at zero brace and
-  parenthesis depth, plus direct dot-property assignments and increments
+  parenthesis depth (a keyword after `.`, such as `options.var`, is a
+  property name and passes), plus direct dot-property assignments and increments
   or decrements on `window`/`globalThis`. No particular file structure is
   required; multiple IIFEs and scoped event handlers pass.
 

@@ -63,7 +63,12 @@ func checkJavaScript(name, source string) []javascriptFinding {
 				findings = append(findings, javascriptFinding{i + 1, rule.name})
 			}
 		}
-		for _, token := range tokens.FindAllString(line, -1) {
+		for _, loc := range tokens.FindAllStringIndex(line, -1) {
+			token := line[loc[0]:loc[1]]
+			// A keyword after "." is a property name (options.var), not a declaration.
+			if before := strings.TrimRight(line[:loc[0]], " \t"); strings.HasSuffix(before, ".") {
+				continue
+			}
 			switch token {
 			case "{":
 				braces++
@@ -206,6 +211,7 @@ func TestJavaScriptAllowedPatterns(t *testing.T) {
 		`(() => { const local = 1; function run() {} })(); (() => { let local; })();`,
 		"document.addEventListener('click', function handler() {\nvar local;\n});",
 		`{ let local; const other = 1; }`,
+		`options.var = 1; use(x.let, obj.const); api . function (name);`,
 		`void 'fetch("/"); indexedDB; eval(code);';`,
 		"void `innerHTML = markup;\nwindow.example = 1;`;",
 		`void "escaped \" quote; fetch(url);"; void 'escaped \' quote; eval(code);';`,

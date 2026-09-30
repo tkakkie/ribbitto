@@ -15,19 +15,31 @@ var ErrInvalidBody = errors.New("invalid message body")
 // Store posts a message atomically: in one transaction it takes the
 // organisation's next event_seq first, then inserts the message and event with it. A
 // channel that is not in the organisation is channel.ErrNotFound, and the
-// sequence is not consumed.
+// sequence is not consumed. Success means the transaction has committed.
 type Store interface {
 	Post(ctx context.Context, organizationID, channelID, memberID domain.ID, body string) (domain.Message, error)
 }
 
-// Service runs the message use cases for a member resolved by authz.
-type Service struct {
-	store Store
+// Notifier records the latest committed event sequence for an organisation.
+type Notifier interface {
+	Raise(organizationID domain.ID, seq int64)
 }
 
-// New returns a Service.
+// Service runs the message use cases for a member resolved by authz.
+type Service struct {
+	store    Store
+	notifier Notifier
+}
+
+// New returns a Service without commit notifications, for example for seeding.
 func New(store Store) *Service {
 	return &Service{store: store}
+}
+
+// NewWithNotifier returns a Service that notifies after each committed post.
+// A nil notifier disables notifications, as with New.
+func NewWithNotifier(store Store, notifier Notifier) *Service {
+	return &Service{store: store, notifier: notifier}
 }
 
 // Post writes body to the channel as the member. The organisation and the
@@ -41,6 +53,9 @@ func (s *Service) Post(ctx context.Context, m authz.Membership, channelID domain
 	posted, err := s.store.Post(ctx, m.Organization.ID, channelID, m.Member.ID, body)
 	if err != nil {
 		return domain.Message{}, fmt.Errorf("posting message: %w", err)
+	}
+	if s.notifier != nil {
+		s.notifier.Raise(m.Organization.ID, posted.EventSeq)
 	}
 	return posted, nil
 }

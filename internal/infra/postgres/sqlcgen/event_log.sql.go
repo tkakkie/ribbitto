@@ -11,6 +11,54 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const eventsAfter = `-- name: EventsAfter :many
+SELECT organization_id, seq, kind, audience_member_id, data
+FROM event_log
+WHERE organization_id = $1 AND seq > $2
+ORDER BY seq
+LIMIT $3::bigint
+`
+
+type EventsAfterParams struct {
+	OrganizationID pgtype.UUID
+	AfterSeq       int64
+	BatchLimit     int64
+}
+
+type EventsAfterRow struct {
+	OrganizationID   pgtype.UUID
+	Seq              int64
+	Kind             string
+	AudienceMemberID pgtype.UUID
+	Data             []byte
+}
+
+func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]EventsAfterRow, error) {
+	rows, err := q.db.Query(ctx, eventsAfter, arg.OrganizationID, arg.AfterSeq, arg.BatchLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EventsAfterRow
+	for rows.Next() {
+		var i EventsAfterRow
+		if err := rows.Scan(
+			&i.OrganizationID,
+			&i.Seq,
+			&i.Kind,
+			&i.AudienceMemberID,
+			&i.Data,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertMemberEvent = `-- name: InsertMemberEvent :exec
 INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
 VALUES ($1, $2, $3, NULL, jsonb_build_object('member_id', $4::uuid))

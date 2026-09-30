@@ -14,10 +14,7 @@ func TestAccountStore(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	var id domain.ID
-	if err := pool.QueryRow(ctx, "INSERT INTO account (email, display_name, password_hash) VALUES ('a@example.com', 'A', '$argon2id$x') RETURNING id").Scan(&id); err != nil {
-		t.Fatal(err)
-	}
+	id := pgtest.Account(t, pool, "a@example.com", "A")
 	store := postgres.NewAccountStore(pool)
 	account, hash, err := store.AccountCredentials(ctx, "a@example.com")
 	if err != nil || account != (domain.Account{ID: id, Email: "a@example.com", DisplayName: "A"}) || hash != "$argon2id$x" {

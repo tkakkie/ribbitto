@@ -29,6 +29,8 @@ type ChannelPage struct {
 	Older bool
 	// Before is the event_seq bound of an older page; 0 shows the latest.
 	Before int64
+	// EventCursor starts replay after the latest page snapshot; nil on older pages.
+	EventCursor *int64
 }
 
 // ChannelURL identifies a channel by its stable UUID, never its name.
@@ -44,7 +46,12 @@ func olderURL(page ChannelPage) string {
 // Channel renders the desktop chat layout.
 templ Channel(stylesheetURL string, page ChannelPage) {
 	@layout(stylesheetURL, page.Current.Name+" · "+page.Organization.Name) {
-		<div class="flex h-dvh text-body">
+		<div
+			if page.EventCursor != nil && page.Before == 0 {
+				data-event-cursor={ fmt.Sprint(*page.EventCursor) }
+			}
+			class="flex h-dvh text-body"
+		>
 			<nav aria-label={ i18n.T(ctx, "channel.organizations") } class="w-17 shrink-0 border-r border-border bg-rail p-3">
 				<ul>
 					<li><a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/") } aria-label={ page.Organization.Name } class="flex min-h-11 items-center justify-center rounded-md bg-brand px-2 font-semibold text-on-brand">{ string([]rune(page.Organization.Name)[:1]) }</a></li>

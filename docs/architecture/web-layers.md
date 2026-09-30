@@ -49,6 +49,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
   updating every reference in the same pull request. Today's contract ids
   are `conversation`, `message-list`, `message-items`, `load-older` and
   `message-body`.
+- The latest channel page carries `data-event-cursor` on its outer layout
+  div, outside `#conversation` and every swap target. Older pages omit it.
 - The layout's `htmx-config` meta tag holds htmx's security settings and
   `responseHandling` ([`rendering.md`](rendering.md)). It keeps the three
   defaults, inserting a 422 swap with `error: false` before `[45]..` because

@@ -2,11 +2,19 @@ package view
 
 import (
 	"fmt"
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"time"
 )
+
+// Message holds the conversation fields rendered by a channel page.
+type Message struct {
+	ID                  domain.ID
+	DisplayName, Handle string
+	CreatedAt           time.Time
+	Body                string
+	EventSeq            int64
+}
 
 // ChannelPage holds the sidebar, conversation and channel creation form.
 type ChannelPage struct {
@@ -16,7 +24,7 @@ type ChannelPage struct {
 	Channels                  []domain.Channel
 	Name, Error               string
 	Body, BodyError           string
-	Messages                  []message.Entry
+	Messages                  []Message
 	// Older reports that messages before Messages[0] exist.
 	Older bool
 	// Before is the event_seq bound of an older page; 0 shows the latest.

@@ -13,7 +13,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
+	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
 // Short enough that a test outlasts them, so a stream that inherited any of
@@ -50,10 +55,20 @@ type sseEvent struct{ id, name, data string }
 // its events as they arrive. The stream ends with the test.
 func openStream(t *testing.T, b acceptanceBrowser, channelURL, after string) (<-chan sseEvent, int) {
 	t.Helper()
+	return openStreamWith(t, b, channelURL, after, "")
+}
+
+// openStreamWith also sends lastEventID as Last-Event-ID when it is not empty,
+// as a browser does when it reconnects.
+func openStreamWith(t *testing.T, b acceptanceBrowser, channelURL, after, lastEventID string) (<-chan sseEvent, int) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	r, err := http.NewRequestWithContext(ctx, "GET", b.server.URL+channelURL+"/events?after="+after, nil)
 	acceptanceOK(t, err)
+	if lastEventID != "" {
+		r.Header.Set("Last-Event-ID", lastEventID)
+	}
 	client := *b.client
 	client.Timeout = 0 // the stream is long-lived; the context ends it
 	response, err := client.Do(r)
@@ -160,6 +175,17 @@ func TestEventStream(t *testing.T) {
 		t.Fatalf("replayed %+v then %+v", first, second)
 	}
 
+	// Last-Event-ID wins over ?after: from the first event's id, replay starts
+	// at the second even though ?after asks for everything. A malformed
+	// header is refused rather than falling back to ?after.
+	resumed, status := openStreamWith(t, owner, channelURL, "0", first.id)
+	if e := nextEvent(t, resumed); status != http.StatusOK || e.id != second.id {
+		t.Fatalf("resumed from Last-Event-ID %s: status %d, first event %+v", first.id, status, e)
+	}
+	if _, status := openStreamWith(t, owner, channelURL, "0", "x"); status != http.StatusBadRequest {
+		t.Fatalf("malformed Last-Event-ID: %d, want 400", status)
+	}
+
 	// The member's stream, opened from the owner's last id, sees only what
 	// follows; each event is readable before the next is posted.
 	memberEvents, status := openStream(t, member, channelURL, second.id)
@@ -200,6 +226,28 @@ func TestEventStream(t *testing.T) {
 			t.Fatalf("stream for a non-member: %d, want 404", status)
 		}
 	}
+	// Another organisation's member, with the stream on: 404 for this
+	// organisation's channel, and 404 for this channel's id under their own
+	// organisation's URL; their own channel streams, as a control.
+	other := pgtest.OrganizationWithOwner(t, pool, "globex", "general")
+	token, _, err := auth.NewSessions(postgres.NewSessionStore(pool), time.Now).Create(t.Context(), other.AccountID)
+	acceptanceOK(t, err)
+	outsider := newAcceptanceBrowser(t, server, "192.0.2.13")
+	u, err := url.Parse(server.URL)
+	acceptanceOK(t, err)
+	outsider.client.Jar.SetCookies(u, []*http.Cookie{{Name: middleware.SessionCookie, Value: token, Path: "/", Secure: true}})
+	ownChannel := view.ChannelURL("globex", other.Channel.ID)
+	foreignID := strings.TrimPrefix(channelURL, "/organizations/owner/channels/")
+	for path, want := range map[string]int{
+		channelURL: http.StatusNotFound,
+		"/organizations/globex/channels/" + foreignID: http.StatusNotFound,
+		ownChannel: http.StatusOK,
+	} {
+		if _, status := openStream(t, outsider, path, "0"); status != want {
+			t.Fatalf("outsider's stream %s: %d, want %d", path, status, want)
+		}
+	}
+
 	// A malformed cursor is refused before streaming.
 	for _, after := range []string{"-1", "x"} {
 		if _, status := openStream(t, owner, channelURL, after); status != http.StatusBadRequest {

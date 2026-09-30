@@ -229,17 +229,18 @@ func TestCheckMarkup(t *testing.T) {
 
 // markupCase is one rendered state of an HTML route.
 type markupCase struct {
-	name     string
-	route    string // the registered pattern it exercises
-	services func() Services
-	method   string
-	path     string
-	form     url.Values
-	cookie   bool
-	repeat   int // send the request this many times and check the last
-	status   int // the expected status; 0 means 200
-	htmx     bool
-	alerts   int // when set, the number of role="alert" errors the page must show
+	name          string
+	route         string // the registered pattern it exercises
+	services      func() Services
+	method        string
+	path          string
+	form          url.Values
+	cookie        bool
+	repeat        int // send the request this many times and check the last
+	status        int // the expected status; 0 means 200
+	htmx          bool
+	alerts        int      // when set, the number of role="alert" errors the page must show
+	invalidFields []string // setup/sign-up inputs with submit errors
 }
 
 // Every page in every state, in both languages, passes checkMarkup, and
@@ -309,10 +310,10 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "sign-in failed", route: "POST /signin", services: func() Services { s := base(); s.SignIn = &fakeSignIn{err: auth.ErrInvalidCredentials}; return s }, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, status: http.StatusUnprocessableEntity},
 		{name: "sign-in rate-limited", route: "POST /signin", services: limited, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, repeat: 2, status: http.StatusTooManyRequests},
 		{name: "setup", route: "GET /setup", services: withSetup(nil), method: "GET", path: "/setup"},
-		{name: "setup, every field invalid", route: "POST /setup", services: withSetup(fieldErrors), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 6},
-		{name: "setup, wrong token", route: "POST /setup", services: withSetup(setup.ErrToken), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity},
+		{name: "setup, every field invalid", route: "POST /setup", services: withSetup(fieldErrors), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 6, invalidFields: []string{"organization_name", "slug", "display_name", "handle", "email", "password"}},
+		{name: "setup, wrong token", route: "POST /setup", services: withSetup(setup.ErrToken), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 1, invalidFields: []string{"token"}},
 		{name: "sign-up", route: "GET /signup", services: withSignUp(true, nil), method: "GET", path: "/signup"},
-		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 4},
+		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 4, invalidFields: []string{"display_name", "handle", "email", "password"}},
 		{name: "channel", route: "GET /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
 		{name: "channel with messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
 		{name: "channel with older messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
@@ -405,6 +406,13 @@ func TestPagesMarkup(t *testing.T) {
 						t.Errorf("title not escaped as %q", html.EscapeString(want))
 					}
 				}
+				if c.path == "/setup" || c.path == "/signup" {
+					r := httptest.NewRequest(c.method, c.path, nil)
+					r.Header.Set("Accept-Language", lang)
+					catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+						checkTextFields(t, r.Context(), doc, c)
+					})).ServeHTTP(httptest.NewRecorder(), r)
+				}
 				// Every invalid field's error is rendered, so each is checked too.
 				if c.alerts > 0 {
 					alerts := 0
@@ -418,6 +426,90 @@ func TestPagesMarkup(t *testing.T) {
 					}
 				}
 			})
+		}
+	}
+}
+
+// Check the explicit naming and description sources used by these forms;
+// this is not a general implementation of accessible-name computation.
+func checkTextFields(t *testing.T, ctx context.Context, doc *html.Node, c markupCase) {
+	t.Helper()
+	fields := []string{"display_name", "handle", "email", "password"}
+	if c.path == "/setup" {
+		fields = append([]string{"token", "organization_name", "slug"}, fields...)
+	}
+	ids := map[string]*html.Node{}
+	inputs := map[string]*html.Node{}
+	labels := map[string][]*html.Node{}
+	for n := range doc.Descendants() {
+		if id := attr(n, "id"); id != "" {
+			if ids[id] != nil {
+				t.Errorf("duplicate id %q", id)
+			}
+			ids[id] = n
+		}
+		if n.DataAtom == atom.Input && attr(n, "type") != "hidden" {
+			name := attr(n, "name")
+			if inputs[name] != nil {
+				t.Errorf("duplicate input %q", name)
+			}
+			inputs[name] = n
+		}
+		if n.DataAtom == atom.Label {
+			labels[attr(n, "for")] = append(labels[attr(n, "for")], n)
+		}
+	}
+	if len(inputs) != len(fields) {
+		t.Errorf("%d inputs, want %d", len(inputs), len(fields))
+	}
+	for _, name := range fields {
+		input := inputs[name]
+		if input == nil {
+			t.Errorf("missing input %q", name)
+			continue
+		}
+		label := labels[attr(input, "id")]
+		wantLabel := i18n.T(ctx, "setup."+name)
+		if attr(input, "id") == "" || len(label) != 1 || strings.TrimSpace(text(label[0])) != wantLabel {
+			t.Errorf("%s: want one explicit label containing only %q", name, wantLabel)
+		}
+		for _, key := range []string{"aria-label", "aria-labelledby"} {
+			if _, ok := attrOK(input, key); ok {
+				t.Errorf("%s: %s overrides the field label", name, key)
+			}
+		}
+		for p := input.Parent; p != nil; p = p.Parent {
+			if p.DataAtom == atom.Label {
+				t.Errorf("%s: label must contain only the field name", name)
+			}
+		}
+		if slices.Contains(c.invalidFields, name) {
+			if attr(input, "aria-invalid") != "true" {
+				t.Errorf("%s: missing invalid state", name)
+			}
+			description := ids[attr(input, "aria-describedby")]
+			if description == nil || attr(description, "role") != "alert" || strings.TrimSpace(text(description)) != i18n.T(ctx, "setup.error."+name) {
+				t.Errorf("%s: description must reference its submit error", name)
+			} else {
+				for p := description.Parent; p != nil; p = p.Parent {
+					if p.DataAtom == atom.Label {
+						t.Errorf("%s: error is inside a label", name)
+					}
+				}
+			}
+		} else {
+			for _, key := range []string{"aria-invalid", "aria-describedby"} {
+				if _, ok := attrOK(input, key); ok {
+					t.Errorf("%s: valid input has %s", name, key)
+				}
+			}
+		}
+		wantValue := c.form.Get(name)
+		if name == "password" || name == "token" {
+			wantValue = ""
+		}
+		if attr(input, "value") != wantValue {
+			t.Errorf("%s: value was not retained or a secret was echoed", name)
 		}
 	}
 }

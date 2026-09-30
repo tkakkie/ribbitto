@@ -124,7 +124,11 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   layout.
 - **Forms are labelled.** ✓ Every text input, `<select>` and `<textarea>` has
   a label — a wrapping `<label>` or `for`/`id`; hidden inputs need none.
-  Errors are shown next to their field with `role="alert"`.
+  Field labels contain only the field name; errors sit outside the label,
+  linked from the input with `aria-describedby`, and use `role="alert"`
+  after a submit. Setup and sign-up use the shared `textField` component:
+  ✓ invalid inputs have `aria-invalid="true"` and an error description;
+  valid inputs omit both attributes. Sign-in keeps one form-level alert.
 - **Images** ✓ have `alt` (empty when decorative).
 - **Focus.** ✓ `tabindex` only as `-1` on a deliberate focus target (a
   dialog's heading, an error summary) or `0` on a scrollable region with

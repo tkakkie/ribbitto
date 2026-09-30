@@ -29,6 +29,7 @@ import (
 // stores: whoever may not see an organisation gets a 404 that carries none
 // of its data, on every route in orgRoutes.
 func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// Raw SQL on purpose: setup and sign-up create one organisation and join
@@ -68,6 +69,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&now); err != nil {
 		t.Fatal(err)
 	}
+	// Subtests stay sequential: they share this clock and add Carol's membership later.
 	clock := now
 	sessions := auth.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return clock })
 	token := func(account domain.ID) string {

@@ -15,6 +15,7 @@ import (
 // Members that exist before handles get member-<n>, numbered per
 // organisation in id order, and nothing else about them changes.
 func TestMemberHandleUpgrade(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	pool := pgtest.NewEmpty(t)

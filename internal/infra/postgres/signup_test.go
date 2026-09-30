@@ -15,6 +15,7 @@ import (
 )
 
 func TestSignUp(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	store := postgres.NewSetupStore(pool)
@@ -71,6 +72,7 @@ func TestSignUp(t *testing.T) {
 // The service normalises a handle before the store sees it, so case variants
 // collide; concurrent claims leave exactly one winner and a typed conflict.
 func TestSignUpHandleConflicts(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	hasher, err := auth.NewHasher()

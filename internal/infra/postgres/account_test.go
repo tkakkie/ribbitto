@@ -15,6 +15,7 @@ import (
 )
 
 func TestAccountSchema(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// Raw SQL and queries exercise schema constraints directly, including invalid rows.

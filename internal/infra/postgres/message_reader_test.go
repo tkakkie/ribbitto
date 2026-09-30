@@ -14,6 +14,7 @@ import (
 )
 
 func TestMessagePaging(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	memberships := map[string]authz.Membership{}

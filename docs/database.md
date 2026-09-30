@@ -42,6 +42,11 @@ RIBBITTO_REQUIRE_DB=1 go test -count=1 -v ./internal/infra/postgres/...
 env -u RIBBITTO_TEST_DATABASE_URL -u RIBBITTO_REQUIRE_DB go test -count=1 -v ./internal/infra/postgres/...
 ```
 
+Top-level PostgreSQL-backed tests in `internal/infra/postgres` and
+`internal/web` run in parallel with isolated databases and test-local state.
+Their subtests remain sequential, preserving shared fixtures, clocks and
+order-dependent assertions.
+
 `pgtest.OrganizationWithOwner(t, pool, slug, channelName)` creates an organisation
 at `event_seq` 1, an owner account at `<slug>@example.org`, an owner membership
 with handle `owner` and `joined_event_seq` 1, and exactly one default channel

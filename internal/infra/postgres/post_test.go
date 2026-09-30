@@ -14,6 +14,7 @@ import (
 )
 
 func TestPostMessage(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// Two organisations, each with one member and a default channel.

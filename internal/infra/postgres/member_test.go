@@ -15,6 +15,7 @@ import (
 )
 
 func TestChangeHandle(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// acme: alice, bob and six racers; globex: carol; dave has no membership.

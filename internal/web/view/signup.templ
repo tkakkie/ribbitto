@@ -20,13 +20,7 @@ templ SignUp(stylesheetURL string, form SignUpForm) {
 					{"email", "email", "username"},
 					{"password", "password", "new-password"},
 				} {
-					<label class="flex flex-col gap-1 text-body text-fg">
-						{ i18n.T(ctx, "setup." + field.name) }
-						<input type={ field.kind } name={ field.name } value={ form.Values[field.name] } autocomplete={ field.autocomplete } required class="min-h-11 rounded-md border border-border-strong bg-input px-3 py-2 text-body text-fg"/>
-						if message := form.Errors[field.name]; message != "" {
-							<span role="alert" class="text-body text-danger">{ i18n.T(ctx, message) }</span>
-						}
-					</label>
+					@textField(field.name, field.kind, field.autocomplete, form.Values[field.name], "setup."+field.name, form.Errors[field.name])
 				}
 				<button type="submit" class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand">{ i18n.T(ctx, "signup.submit") }</button>
 			</form>

@@ -192,13 +192,38 @@ func TestHTMLSecurity(t *testing.T) {
 				if len(match) != 2 {
 					t.Fatal("missing htmx-config meta tag")
 				}
-				var settings map[string]bool
+				var settings map[string]json.RawMessage
 				if err := json.Unmarshal([]byte(html.UnescapeString(match[1])), &settings); err != nil {
 					t.Fatal(err)
 				}
 				for _, name := range []string{"allowEval", "allowScriptTags", "includeIndicatorStyles"} {
-					if value, exists := settings[name]; !exists || value {
+					if value := settings[name]; string(bytes.TrimSpace(value)) != "false" {
 						t.Errorf("htmx %s must explicitly be false", name)
+					}
+				}
+				var handling []map[string]any
+				if err := json.Unmarshal(settings["responseHandling"], &handling); err != nil {
+					t.Fatal(err)
+				}
+				// htmx uses the first match: retain its defaults, with 422
+				// before the catch-all error rule so field errors can swap.
+				wantHandling := []map[string]any{
+					{"code": "204", "swap": false},
+					{"code": "[23]..", "swap": true},
+					{"code": "422", "swap": true, "error": false},
+					{"code": "[45]..", "swap": false, "error": true},
+				}
+				if len(handling) != len(wantHandling) {
+					t.Fatalf("htmx responseHandling = %v, want %v", handling, wantHandling)
+				}
+				for i, want := range wantHandling {
+					if len(handling[i]) != len(want) {
+						t.Errorf("htmx responseHandling[%d] = %v, want %v", i, handling[i], want)
+					}
+					for key, value := range want {
+						if handling[i][key] != value {
+							t.Errorf("htmx responseHandling[%d].%s = %v, want %v", i, key, handling[i][key], value)
+						}
 					}
 				}
 				if strings.Index(w.Body.String(), match[0]) > strings.Index(w.Body.String(), tags[0]) {

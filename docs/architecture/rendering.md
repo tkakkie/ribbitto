@@ -33,6 +33,13 @@ inject its default inline indicator stylesheet. Do not use inline scripts,
 `hx-on`, or other attribute scripts; keep JavaScript and styles in external
 assets.
 
+The same meta tag sets `responseHandling` to htmx's defaults (`204`: no
+swap; `[23]..`: swap; `[45]..`: no swap, error), with
+`{"code":"422","swap":true,"error":false}` before `[45]..`. The first matching
+entry wins, so composer field errors replace `#conversation` through htmx.
+This is global: any new htmx request returning 422 inherits the rule
+([`web-layers.md`](web-layers.md)). Other status codes retain their defaults.
+
 Message timestamps use `message-time-v2.js`, loaded with the response nonce
 on every channel page, empty or not, because htmx does not run scripts in
 swapped fragments. The server renders `<time datetime>` in UTC, truncating
@@ -45,13 +52,13 @@ rewrite them. Invalid dates retain their fallback, as do all timestamps
 when JavaScript is disabled.
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v1.js` also loads with the response nonce on channel pages.
+`message-composer-v2.js` also loads with the response nonce on channel pages.
 One key-to-command function maps Enter to `send` and Shift+Enter to `newline`,
 ignoring IME composition (`isComposing` or keyCode 229); one submit function
 uses the native form submission path through `requestSubmit`. The form uses
 htmx to select and replace `#conversation`, disabling its controls in flight.
-The script opts that target into 422 swaps for field errors and scrolls the
-message pane to the newest entry on load and after settling a swap. Scripts
+The script scrolls the message pane to the newest entry on load and after
+settling a swap, then focuses the composer. Scripts
 stay outside the replaced section; CSP and htmx evaluation remain unchanged.
 
 `message-history-v1.js` keeps the reader's place when "Load older messages"

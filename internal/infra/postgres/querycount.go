@@ -15,9 +15,9 @@ type QueryCounter struct {
 	queries, begins, commits, rollbacks atomic.Int64
 }
 
-// QueryCounts is a QueryCounter snapshot. Every value is cumulative since
-// the counter was created and never resets, so a caller compares two
-// snapshots.
+// QueryCounts is a QueryCounter snapshot of statements attempted. Every
+// value is cumulative since the counter was created and never resets, so a
+// caller compares two snapshots.
 type QueryCounts struct {
 	// Queries counts every statement other than the three below.
 	Queries                    int64
@@ -29,6 +29,8 @@ func NewQueryCounter() *QueryCounter { return &QueryCounter{} }
 
 // TraceQueryStart implements pgx.QueryTracer. pgx sends BEGIN, COMMIT and
 // ROLLBACK as ordinary statements, so they are told apart by their first word.
+// Counting happens before PostgreSQL answers: the counts are statements
+// attempted, so a COMMIT that fails still counts as a commit.
 func (c *QueryCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	word, _, _ := strings.Cut(strings.TrimSpace(data.SQL), " ")
 	switch strings.ToLower(word) {

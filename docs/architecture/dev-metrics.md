@@ -23,10 +23,20 @@ Set `RIBBITTO_DEV_METRICS_ADDR` to a loopback IP address and port, such as
 
 ## The snapshot
 
-JSON with counters only — never SQL text, arguments, tokens, IDs, names
-or message content. Counters are cumulative since the process started and
-never reset; take one snapshot before and one after each load step and
-compare them. A restart starts them again.
+JSON with numbers only — never SQL text, arguments, tokens, IDs, names
+or message content. Two kinds of field:
+
+- **Counters** (`database.*`, `pool.acquire_count`, `pool.acquire_duration_ns`,
+  `pool.empty_acquire_count`, `pool.empty_acquire_wait_ns`,
+  `pool.canceled_acquire_count`) are cumulative since the process started
+  and never reset: take a snapshot before and after each load step and use
+  the difference. A restart starts them again.
+- **Gauges** (`pool.idle_conns`, `pool.total_conns`, `pool.max_conns`,
+  `runtime.*`, `streams.open`) are current values: read them as they are.
+
+The `database` fields count statements **sent**, before PostgreSQL answers:
+a failed statement still counts, and `transactions_committed` includes a
+COMMIT that failed.
 
 | Section | Fields |
 |---|---|

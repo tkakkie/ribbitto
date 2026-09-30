@@ -90,6 +90,8 @@ func serve(ctx context.Context, databaseURL string) error {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
 	defer pool.Close()
+	// One hub per process: posting raises it, the metrics read its registry,
+	// and the stream (#158) will register its connections with it.
 	hub := realtime.NewHub()
 	handler, sessions, err := buildHandler(pool, handlerConfig{
 		setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
@@ -106,8 +108,6 @@ func serve(ctx context.Context, databaseURL string) error {
 		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout,
 		write: writeTimeout,
 	})
-	// The stream (#158) will register its connections here.
-	hub := realtime.NewHub()
 
 	var metrics *http.Server
 	if metricsAddr != "" {

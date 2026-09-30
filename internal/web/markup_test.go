@@ -467,8 +467,10 @@ func checkHTMXRequests(t *testing.T, handler http.Handler, page *html.Node, lang
 						}
 						w := httptest.NewRecorder()
 						handler.ServeHTTP(w, r)
-						// An invalid draft is still a swappable response from the composer.
-						if (w.Code != http.StatusOK && (submit || w.Code != http.StatusUnprocessableEntity)) || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
+						// Only the composer's unsubmitted draft POST may be invalid (422);
+						// paging GETs and valid posts must succeed.
+						draftPost := method == "POST" && !submit
+						if (w.Code != http.StatusOK && (!draftPost || w.Code != http.StatusUnprocessableEntity)) || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
 							t.Fatalf("HX response: status %d, content type %q", w.Code, w.Header().Get("Content-Type"))
 						}
 						response, err := html.Parse(w.Body)

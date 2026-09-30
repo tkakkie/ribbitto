@@ -1,0 +1,35 @@
+package view
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/tkakkie/ribbitto/internal/domain"
+)
+
+// Message holds the conversation fields rendered by a message item.
+type Message struct {
+	ID                  domain.ID
+	DisplayName, Handle string
+	CreatedAt           time.Time
+	Body                string
+	EventSeq            int64
+}
+
+// MessageDOMID is the stable DOM id shared by page and stream message items.
+func MessageDOMID(id domain.ID) string {
+	return fmt.Sprintf("message-%x", id)
+}
+
+// MessageItem renders one chronological list item, including when sent alone.
+templ MessageItem(entry Message) {
+	<li id={ MessageDOMID(entry.ID) }>
+		<div class="flex flex-wrap items-baseline gap-2">
+			<span>
+				@MemberName(entry.DisplayName, entry.Handle)
+			</span>
+			<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
+		</div>
+		<p dir="auto" class="whitespace-pre-wrap break-words">{ entry.Body }</p>
+	</li>
+}

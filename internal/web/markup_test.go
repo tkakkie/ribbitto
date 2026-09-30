@@ -652,6 +652,26 @@ func TestPagesMarkup(t *testing.T) {
 				for _, problem := range checkMarkup(doc, true) {
 					t.Error(problem)
 				}
+				if c.name == "channel" || c.name == "channel with messages" {
+					items := find(doc, atom.Ol)
+					if items == nil || attr(items, "id") != "message-items" {
+						t.Fatal("channel must always render #message-items as an ordered list")
+					}
+					count := 0
+					for child := items.FirstChild; child != nil; child = child.NextSibling {
+						if child.DataAtom != atom.Li {
+							t.Fatal("message list contains a non-item node that prevents :empty matching")
+						}
+						count++
+					}
+					wantCount := 0
+					if c.name == "channel with messages" {
+						wantCount = 2
+					}
+					if count != wantCount {
+						t.Errorf("message items = %d, want %d", count, wantCount)
+					}
+				}
 				checkHTMXRequests(t, handler, doc, lang, c.cookie)
 				for _, problem := range checkFallbackURLs(doc) {
 					t.Error(problem)
@@ -835,6 +855,11 @@ func TestComponentsMarkup(t *testing.T) {
 		name string
 		view templ.Component
 	}{
+		{"MessageItem", view.MessageItem(view.Message{
+			ID: domain.ID{0xab, 0xcd}, DisplayName: "مريم", Handle: "author",
+			CreatedAt: time.Date(2026, 9, 29, 21, 0, 0, 123456789, time.FixedZone("JST", 9*60*60)),
+			Body:      "<script>bad()</script>\nمرحبا",
+		})},
 		{"SignOutButton", view.SignOutButton()},
 		{"MemberName", view.MemberName("مريم", "author")},
 		{"MemberName blank fallback", view.MemberName("\u3164", "legacy")},
@@ -851,6 +876,22 @@ func TestComponentsMarkup(t *testing.T) {
 					doc, err := html.Parse(strings.NewReader(b.String()))
 					if err != nil {
 						t.Fatal(err)
+					}
+					if component.name == "MessageItem" {
+						item := find(doc, atom.Li)
+						if item == nil || attr(item, "id") != "message-abcd0000000000000000000000000000" {
+							t.Fatal("standalone message lost its list item or stable DOM id")
+						}
+						stamp, body := find(item, atom.Time), find(item, atom.P)
+						if stamp == nil || body == nil {
+							t.Fatal("standalone message lost its timestamp or body")
+						}
+						if _, ok := attrOK(stamp, "data-local-time"); !ok {
+							t.Error("timestamp lost its local-time hook")
+						}
+						if attr(body, "dir") != "auto" || text(body) != "<script>bad()</script>\nمرحبا" || find(item, atom.Script) != nil {
+							t.Error("standalone message body lost its direction, plain text or line breaks")
+						}
 					}
 					for _, problem := range checkMarkup(doc, false) {
 						t.Error(problem)

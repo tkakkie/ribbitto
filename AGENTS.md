@@ -93,6 +93,8 @@ only the token utilities, never raw colours).
   non-member gets 404. Setup creates the organisation; installation-wide
   sign-up and `/` resolve it from the setup row, never from the request.
 - Never use `templ.Raw` or build HTML by string concatenation.
+- Handlers, templ, htmx and JavaScript follow
+  [`docs/architecture/web-layers.md`](docs/architecture/web-layers.md).
 - Product vocabulary (ribbit, pond, marsh…) appears only in UI message
   files, never in identifiers.
 - UI strings go in `internal/web/i18n/locales/{en,ja}.toml`; use dotted,

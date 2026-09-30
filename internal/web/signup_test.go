@@ -33,12 +33,7 @@ func TestSignUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	form := url.Values{"token": {"secret-token"}, "organization_name": {"Example"}, "slug": {"example"}, "display_name": {"Owner"}, "handle": {"owner"}, "email": {"owner@example.com"}, "password": {"secret-password"}}
-	for _, tt := range []struct {
-		name    string
-		service *fakeSetup
-		status  int
-		message string
-	}{
+	for _, tt := range []registrationCase{
 		{"success", &fakeSetup{open: true}, 303, ""},
 		{"disabled", nil, 404, ""},
 		{"completed", &fakeSetup{}, 404, ""},
@@ -72,66 +67,9 @@ func TestSignUp(t *testing.T) {
 					}
 				}
 			}
-			for _, method := range []string{http.MethodGet, http.MethodPost} {
-				r := httptest.NewRequest(method, "/signup", strings.NewReader(form.Encode()))
-				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-				// The browser is already signed in: the new session must replace it.
-				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "previous-token"})
-				w := httptest.NewRecorder()
-				handler.ServeHTTP(w, r)
-				want := tt.status
-				if method == http.MethodGet && tt.service != nil && tt.service.open {
-					want = 200
-				}
-				body := w.Body.String()
-				if w.Code != want {
-					t.Fatalf("%s: status %d, want %d", method, w.Code, want)
-				}
-				for _, secret := range []string{"secret-token", "secret-password", "private detail"} {
-					if strings.Contains(body, secret) {
-						t.Fatalf("%s: echoed %s", method, secret)
-					}
-				}
-				if want == 200 && !strings.Contains(body, `action="/signup"`) {
-					t.Fatal("missing form")
-				}
-				if want == 422 {
-					if !strings.Contains(body, tt.message) || !strings.Contains(body, `role="alert"`) {
-						t.Fatal("missing error")
-					}
-					for _, field := range []string{"display_name", "handle", "email"} {
-						if !strings.Contains(body, `value="`+form.Get(field)+`"`) {
-							t.Fatalf("lost %s", field)
-						}
-					}
-				}
-				cookies := w.Result().Cookies()
-				if want == 303 {
-					if w.Header().Get("Location") != "/" || len(cookies) != 1 {
-						t.Fatal("missing redirect or cookie")
-					}
-					c := cookies[0]
-					if c.Name != middleware.SessionCookie || c.Value != "owner-session" || !c.Secure || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" || c.Domain != "" || c.MaxAge <= 0 {
-						t.Fatalf("cookie: %+v", c)
-					}
-				} else if len(cookies) != 0 {
-					t.Fatal("unexpected session cookie")
-				}
-			}
-			if f := tt.service; f != nil {
-				if f.completed != (f.open && f.openErr == nil) || f.created != (tt.name == "success" || tt.name == "session failure") {
-					t.Fatal("unexpected service calls")
-				}
-				if f.completed && (f.token != "" || f.input != (setup.Input{DisplayName: "Owner", Handle: "owner", Email: "owner@example.com", Password: "secret-password"})) {
-					t.Fatal("incorrect signup input")
-				}
-				if f.created && f.account != (domain.ID{42}) {
-					t.Fatal("session created for wrong account")
-				}
-				if f.created && f.previous != "previous-token" {
-					t.Fatalf("the browser's previous session was not replaced: %q", f.previous)
-				}
-			}
+			checkRegistration(t, handler, tt, "/signup", form,
+				[]string{"display_name", "handle", "email"}, "",
+				setup.Input{DisplayName: "Owner", Handle: "owner", Email: "owner@example.com", Password: "secret-password"})
 		})
 	}
 }

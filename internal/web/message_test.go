@@ -215,15 +215,7 @@ func TestMessagePostHandler(t *testing.T) {
 					if text(field) != tt.body || attr(field, "aria-invalid") != "true" || store.body != "" {
 						t.Fatal("invalid input lost or posted")
 					}
-					var alert *html.Node
-					for n := range doc.Descendants() {
-						if attr(n, "role") == "alert" {
-							alert = n
-						}
-					}
-					if alert == nil || attr(field, "aria-describedby") != attr(alert, "id") {
-						t.Fatal("missing associated field error")
-					}
+					checkFieldError(t, doc, field)
 				} else if text(field) != "" || !strings.Contains(text(doc), "second") {
 					t.Fatal("composer not cleared or history missing")
 				}

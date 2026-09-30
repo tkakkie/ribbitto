@@ -545,6 +545,25 @@ func TestPagesMarkup(t *testing.T) {
 	}
 }
 
+// Follow this field's reference so other fields' alerts cannot satisfy the check.
+func checkFieldError(t *testing.T, doc, field *html.Node) *html.Node {
+	t.Helper()
+	id := attr(field, "aria-describedby")
+	if id != "" {
+		for n := range doc.Descendants() {
+			if attr(n, "id") == id {
+				if attr(n, "role") != "alert" {
+					t.Errorf("%s: description %q is not an alert", attr(field, "name"), id)
+					return nil
+				}
+				return n
+			}
+		}
+	}
+	t.Errorf("%s: missing associated field error %q", attr(field, "name"), id)
+	return nil
+}
+
 // Check the explicit naming and description sources used by these forms;
 // this is not a general implementation of accessible-name computation.
 func checkTextFields(t *testing.T, ctx context.Context, doc *html.Node, c markupCase) {
@@ -602,8 +621,8 @@ func checkTextFields(t *testing.T, ctx context.Context, doc *html.Node, c markup
 			if attr(input, "aria-invalid") != "true" {
 				t.Errorf("%s: missing invalid state", name)
 			}
-			description := ids[attr(input, "aria-describedby")]
-			if description == nil || attr(description, "role") != "alert" || strings.TrimSpace(text(description)) != i18n.T(ctx, "setup.error."+name) {
+			description := checkFieldError(t, doc, input)
+			if description == nil || strings.TrimSpace(text(description)) != i18n.T(ctx, "setup.error."+name) {
 				t.Errorf("%s: description must reference its submit error", name)
 			} else {
 				for p := description.Parent; p != nil; p = p.Parent {

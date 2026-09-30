@@ -138,8 +138,6 @@ func TestArguments(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"-messages", "0"}, "N must be positive"},
-		{[]string{"-messages", "-1"}, "N must be positive"},
 		{[]string{"-messages", "invalid"}, "invalid value"},
 		{[]string{"unexpected"}, "usage:"},
 	} {

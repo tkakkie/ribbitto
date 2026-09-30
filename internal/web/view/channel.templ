@@ -137,7 +137,7 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 		// Every channel page loads these, outside #conversation: htmx will not
 		// run scripts in swapped fragments.
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

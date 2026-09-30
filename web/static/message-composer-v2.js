@@ -9,13 +9,6 @@
     event.preventDefault();
     if (!event.repeat && !event.target.disabled) submit(event.target.form);
   });
-  // htmx does not swap 422 responses by default; only this form opts in.
-  document.addEventListener("htmx:beforeSwap", (event) => {
-    if (event.detail.target.id === "conversation" && event.detail.xhr.status === 422) {
-      event.detail.shouldSwap = true;
-      event.detail.isError = false;
-    }
-  });
   const newest = () => {
     const list = document.getElementById("message-list");
     if (list) list.scrollTop = list.scrollHeight;

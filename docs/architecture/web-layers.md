@@ -49,10 +49,13 @@ htmx does only requests and swaps; the server and templ own the HTML.
   updating every reference in the same pull request. Today's contract ids
   are `conversation`, `message-list`, `message-items`, `load-older` and
   `message-body`.
-- Today the layout's `htmx-config` meta tag holds htmx's security
-  settings ([`rendering.md`](rendering.md)). The composer's 422 swap rule is
-  still decided in JavaScript, a deviation that #198 moves into that
-  config.
+- The layout's `htmx-config` meta tag holds htmx's security settings and
+  `responseHandling` ([`rendering.md`](rendering.md)). It keeps the three
+  defaults, inserting a 422 swap with `error: false` before `[45]..` because
+  the first matching entry wins. This rule is global: a new 422-returning
+  htmx request inherits it. Today only the composer's `#conversation`
+  request can return 422; channel creation uses a plain form, and Load
+  older retains default handling for success and errors.
 
 ## JavaScript
 
@@ -105,7 +108,7 @@ application script in `web/static` was read against these rules.
 | Where | Finding | Fixed by |
 |---|---|---|
 | `internal/web/view/channel.templ`: `ChannelPage.Messages` | Fixed: the handler converts app entries to `view.Message` values | #194; depguard `view` rule |
-| `web/static/message-composer-v1.js`: `htmx:beforeSwap` makes 422 responses swap | JavaScript decides what htmx swaps | #198 |
+| Composer script's `htmx:beforeSwap` made 422 responses swap | JavaScript decided what htmx swaps | #198: moved into the layout's htmx config; listener removed in `message-composer-v2.js` |
 
 Everything else conforms:
 

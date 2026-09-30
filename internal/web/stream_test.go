@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -129,15 +130,23 @@ func TestSSESender(t *testing.T) {
 	})
 }
 
-// laterSession answers the stream's second look at the session: gone, or a
-// different session, as if the cookie's session was deleted (or replaced)
-// between the middleware's lookup and the stream's registration.
+// laterSession answers the stream's second look at the session. It records
+// how many connections the hub held at that moment (the stream must already
+// be registered), and can end the session right then, as a sign-out landing
+// just after registration would.
 type laterSession struct {
-	session auth.Session
-	err     error
+	hub       *realtime.Hub
+	session   auth.Session
+	err       error
+	cancelNow bool
+	seen      *int
 }
 
 func (l laterSession) Resolve(context.Context, string) (domain.Account, auth.Session, error) {
+	*l.seen = l.hub.Connections()
+	if l.cancelNow {
+		l.hub.CancelSession(l.session.ID)
+	}
 	return domain.Account{ID: domain.ID{1}}, l.session, l.err
 }
 
@@ -152,15 +161,21 @@ func (noEvents) EventsAfter(context.Context, domain.ID, int64, int) ([]domain.Ev
 // registers: nothing would cancel the stream, so the second look must stop it
 // before anything is sent, and the registration must not outlive it.
 func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
+	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name  string
 		later laterSession
 	}{
 		{"session deleted", laterSession{err: auth.ErrNoSession}},
 		{"session replaced by another", laterSession{session: auth.Session{ID: domain.ID{0x77}, ExpiresAt: time.Now().Add(time.Hour)}}},
+		// The session is still valid at the second look but ends at that
+		// instant: only a registration made before it can be cancelled.
+		{"signed out right after registering", laterSession{session: live, cancelNow: true}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			hub := realtime.NewHub()
+			seen := -1
+			tt.later.hub, tt.later.seen = hub, &seen
 			catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 			if err != nil {
 				t.Fatal(err)
@@ -172,12 +187,77 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 				t.Fatal(err)
 			}
 			w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", "live", nil)
-			if w.Code != http.StatusNotFound || w.Header().Get("Content-Type") == "text/event-stream; charset=utf-8" {
-				t.Fatalf("status %d, headers %v; want 404 and no stream", w.Code, w.Header())
+			if seen != 1 {
+				t.Fatalf("the second look saw %d registered connections, want 1: register before re-checking", seen)
+			}
+			if strings.Contains(w.Body.String(), "event:") || strings.Contains(w.Body.String(), "data:") {
+				t.Fatalf("status %d, body %q; want nothing streamed", w.Code, w.Body.String())
+			}
+			if tt.later.cancelNow == false && w.Code != http.StatusNotFound {
+				t.Fatalf("status %d, want 404", w.Code)
 			}
 			if n := hub.Connections(); n != 0 {
 				t.Fatalf("%d connections still registered", n)
 			}
 		})
 	}
+}
+
+// blockingWriter's Write blocks until a deadline at or before now is set,
+// like a connection whose client stopped reading.
+type blockingWriter struct {
+	*httptest.ResponseRecorder
+	started, unblocked chan struct{}
+}
+
+func (w *blockingWriter) SetWriteDeadline(d time.Time) error {
+	if !d.IsZero() && !d.After(time.Now()) {
+		select {
+		case <-w.unblocked:
+		default:
+			close(w.unblocked)
+		}
+	}
+	return nil
+}
+
+func (w *blockingWriter) Write([]byte) (int, error) {
+	close(w.started)
+	<-w.unblocked
+	return 0, errors.New("i/o timeout")
+}
+
+func (*blockingWriter) FlushError() error { return nil }
+
+func TestSSESenderStopsWhenCancelled(t *testing.T) {
+	cause := errors.New("session ended")
+	out := realtime.Outgoing{ID: 1, Name: "message", Data: []byte("x")}
+
+	t.Run("before sending", func(t *testing.T) {
+		w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+		ctx, cancel := context.WithCancelCause(context.Background())
+		cancel(cause)
+		s := &sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+		if err := s.Send(ctx, out); !errors.Is(err, cause) || len(w.calls) != 0 {
+			t.Fatalf("Send = %v after %v; want %v and no calls", err, w.calls, cause)
+		}
+	})
+
+	t.Run("during a blocked write", func(t *testing.T) {
+		w := &blockingWriter{ResponseRecorder: httptest.NewRecorder(), started: make(chan struct{}), unblocked: make(chan struct{})}
+		ctx, cancel := context.WithCancelCause(context.Background())
+		s := &sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Hour}
+		done := make(chan error, 1)
+		go func() { done <- s.Send(ctx, out) }()
+		<-w.started
+		cancel(cause)
+		select {
+		case err := <-done:
+			if !errors.Is(err, cause) {
+				t.Fatalf("Send = %v, want %v", err, cause)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("a cancelled stream stayed blocked in its write")
+		}
+	})
 }

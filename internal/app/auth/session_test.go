@@ -12,6 +12,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 type fakeSession struct {
@@ -189,6 +190,14 @@ func TestSessionsCancelOnlyDeletedSessions(t *testing.T) {
 			store.err = nil
 			return nil
 		}, 0},
+		{"failed sign-out", func(s *auth.Sessions, store *fakeStore, token string) error {
+			store.err = broken
+			if err := s.Delete(t.Context(), token); !errors.Is(err, broken) {
+				return fmt.Errorf("Delete = %v, want %v", err, broken)
+			}
+			store.err = nil
+			return nil
+		}, 0},
 		{"replacement without a previous session", func(s *auth.Sessions, _ *fakeStore, _ string) error {
 			_, _, err := s.Replace(t.Context(), "", domain.ID{1})
 			return err
@@ -217,5 +226,41 @@ func TestSessionsCancelOnlyDeletedSessions(t *testing.T) {
 				t.Fatalf("cancelled %x, want the session %x", ended.ended[0], session.ID)
 			}
 		})
+	}
+}
+
+// With the real hub as canceller: a stream of the session stays usable after
+// a failed replacement, and ends after a successful one.
+func TestReplacementEndsStreamsOnlyWhenItSucceeds(t *testing.T) {
+	store := &fakeStore{sessions: map[string]fakeSession{}}
+	hub := realtime.NewHub()
+	sessions := auth.NewSessionsWithCanceller(store, time.Now, hub)
+	token, _, err := sessions.Create(t.Context(), domain.ID{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, session, err := sessions.Resolve(t.Context(), token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, unregister, err := hub.Register(t.Context(), realtime.Connection{Account: domain.ID{1}, Session: session.ID}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unregister()
+
+	store.err = errors.New("transaction failed")
+	if _, _, err := sessions.Replace(t.Context(), token, domain.ID{1}); err == nil {
+		t.Fatal("Replace succeeded with a broken store")
+	}
+	if stream.Err() != nil {
+		t.Fatalf("a failed replacement ended the stream: %v", context.Cause(stream))
+	}
+	store.err = nil
+	if _, _, err := sessions.Replace(t.Context(), token, domain.ID{1}); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(context.Cause(stream), realtime.ErrSessionEnded) {
+		t.Fatalf("stream after a successful replacement: %v, want %v", context.Cause(stream), realtime.ErrSessionEnded)
 	}
 }

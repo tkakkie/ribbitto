@@ -132,7 +132,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 	header := w.Header()
 	header.Set("Content-Type", "text/event-stream; charset=utf-8")
 	header.Set("Cache-Control", "no-cache")
-	if err := send.write(func() error { w.WriteHeader(http.StatusOK); return nil }); err != nil {
+	if err := send.write(ctx, func() error { w.WriteHeader(http.StatusOK); return nil }); err != nil {
 		slog.WarnContext(r.Context(), "starting event stream", "err", err)
 		return
 	}
@@ -199,15 +199,33 @@ type sseSender struct {
 
 // write runs fn under a fresh deadline and flushes. Any failure, including
 // a writer that cannot flush, ends the stream rather than buffering.
-func (s *sseSender) write(fn func() error) error {
+//
+// A cancelled ctx (the session ended, or the client went away) stops it
+// before anything is written, and interrupts a write or flush already
+// blocked by moving the deadline to now, so a stream whose session ended
+// does not keep a blocked write for the rest of the write timeout.
+func (s *sseSender) write(ctx context.Context, fn func() error) error {
+	if ctx.Err() != nil {
+		return context.Cause(ctx)
+	}
 	if err := s.rc.SetWriteDeadline(time.Now().Add(s.timeout)); err != nil {
 		return fmt.Errorf("setting write deadline: %w", err)
 	}
-	if err := fn(); err != nil {
-		return err
+	stop := context.AfterFunc(ctx, func() { _ = s.rc.SetWriteDeadline(time.Now()) })
+	err := fn()
+	if err == nil {
+		err = s.rc.Flush()
+		if err != nil {
+			err = fmt.Errorf("flushing: %w", err)
+		}
 	}
-	if err := s.rc.Flush(); err != nil {
-		return fmt.Errorf("flushing: %w", err)
+	if !stop() {
+		// Cancelled while writing: whatever the write returned, the stream
+		// ends, and the deadline was already moved to now.
+		return context.Cause(ctx)
+	}
+	if err != nil {
+		return err
 	}
 	if err := s.rc.SetWriteDeadline(time.Time{}); err != nil {
 		return fmt.Errorf("clearing write deadline: %w", err)
@@ -217,7 +235,7 @@ func (s *sseSender) write(fn func() error) error {
 
 // Send writes one event. Each line of the data gets its own "data:" field;
 // the browser joins them with newlines, so a multi-line body survives.
-func (s *sseSender) Send(_ context.Context, out realtime.Outgoing) error {
+func (s *sseSender) Send(ctx context.Context, out realtime.Outgoing) error {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "id: %d\nevent: %s\n", out.ID, out.Name)
 	data := strings.ReplaceAll(strings.ReplaceAll(string(out.Data), "\r\n", "\n"), "\r", "\n")
@@ -227,7 +245,7 @@ func (s *sseSender) Send(_ context.Context, out realtime.Outgoing) error {
 		b.WriteByte('\n')
 	}
 	b.WriteByte('\n')
-	return s.write(func() error {
+	return s.write(ctx, func() error {
 		_, err := s.w.Write(b.Bytes())
 		return err
 	})

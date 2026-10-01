@@ -173,8 +173,8 @@ func streamCursor(r *http.Request) (int64, bool) {
 	return cursor, err == nil && cursor >= 0
 }
 
-// messageRenderer renders a message event with the page's own component, so
-// a live message is the same markup as one loaded with the page. It reads
+// messageRenderer shares the page's message markup, adding announcement
+// text only for live delivery. It reads
 // with the membership resolved when the stream opened; whether the member
 // may still see the event is the Authorizer's decision, made just before.
 type messageRenderer struct {
@@ -188,7 +188,7 @@ func (r messageRenderer) Render(ctx context.Context, _ realtime.Subscription, ev
 		return realtime.Outgoing{}, err
 	}
 	var html bytes.Buffer
-	if err := view.MessageItem(viewMessage(entry)).Render(ctx, &html); err != nil {
+	if err := view.LiveMessageItem(viewMessage(entry)).Render(ctx, &html); err != nil {
 		return realtime.Outgoing{}, fmt.Errorf("rendering message: %w", err)
 	}
 	return realtime.Outgoing{ID: event.Seq, Name: "message", Data: html.Bytes()}, nil

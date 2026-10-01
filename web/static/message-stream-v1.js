@@ -16,12 +16,14 @@
     }, {
       afterSettleCallback: () => {
         if (atBottom) pane.scrollTop = pane.scrollHeight;
-        // Retain additions so a replay burst cannot overwrite an announcement
-        // before assistive technology has observed it.
+        // Retain recent additions for replay bursts without growing forever.
+        // aria-relevant="additions" keeps removal of older entries silent.
         if (!existing) {
-          document.getElementById("message-status").append(
+          const status = document.getElementById("message-status");
+          status.append(
             document.createTextNode(incoming.dataset.announcement + "\n"),
           );
+          while (status.childNodes.length > 10) status.firstChild.remove();
         }
       },
     });

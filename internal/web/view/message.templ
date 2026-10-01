@@ -24,7 +24,21 @@ func MessageDOMID(id domain.ID) string {
 
 // MessageItem renders one chronological list item, including when sent alone.
 templ MessageItem(entry Message) {
-	<li id={ MessageDOMID(entry.ID) } data-announcement={ i18n.T(ctx, "message.new") + " @" + entry.Handle + ": " + entry.Body }>
+	@messageItem(entry, "")
+}
+
+// LiveMessageItem adds announcement text only for delivery over the stream.
+templ LiveMessageItem(entry Message) {
+	@messageItem(entry, i18n.T(ctx, "message.new")+" @"+entry.Handle+": "+entry.Body)
+}
+
+templ messageItem(entry Message, announcement string) {
+	<li
+		id={ MessageDOMID(entry.ID) }
+		if announcement != "" {
+			data-announcement={ announcement }
+		}
+	>
 		<div class="flex flex-wrap items-baseline gap-2">
 			<span>
 				@MemberName(entry.DisplayName, entry.Handle)

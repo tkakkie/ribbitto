@@ -106,6 +106,9 @@ func TestMessageListHandler(t *testing.T) {
 				return
 			}
 			body := w.Body.String()
+			if strings.Contains(body, "data-announcement") {
+				t.Fatal("history and Load older responses must not carry announcement text")
+			}
 			assertFullConversationPage(t, body)
 			doc, err := html.Parse(strings.NewReader(body))
 			if err != nil {
@@ -328,6 +331,9 @@ func TestMessagePagingHandler(t *testing.T) {
 				t.Fatalf("reader bounds %v", seen)
 			}
 			body := w.Body.String()
+			if strings.Contains(body, "data-announcement") {
+				t.Fatal("history and Load older responses must not carry announcement text")
+			}
 			assertFullConversationPage(t, body)
 			if got := strings.Contains(body, `data-event-cursor="42"`); got != (tt.before == 0) {
 				t.Fatalf("page cursor present = %t, before = %d", got, tt.before)

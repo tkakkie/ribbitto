@@ -677,9 +677,12 @@ func TestPagesMarkup(t *testing.T) {
 				if find(doc, atom.Ol) != nil {
 					statusCount := 0
 					for n := range doc.Descendants() {
+						if _, ok := attrOK(n, "data-announcement"); ok {
+							t.Error("history must not carry announcement text")
+						}
 						if attr(n, "role") == "status" {
 							statusCount++
-							if attr(n, "id") != "message-status" || attr(n, "aria-live") != "polite" || text(n) != "" {
+							if attr(n, "id") != "message-status" || attr(n, "aria-live") != "polite" || attr(n, "aria-relevant") != "additions" || attr(n, "aria-atomic") != "false" || text(n) != "" {
 								t.Error("live status must start empty and polite")
 							}
 						}
@@ -883,6 +886,11 @@ func TestComponentsMarkup(t *testing.T) {
 			CreatedAt: time.Date(2026, 9, 29, 21, 0, 0, 123456789, time.FixedZone("JST", 9*60*60)),
 			Body:      "<script>bad()</script>\nمرحبا",
 		})},
+		{"LiveMessageItem", view.LiveMessageItem(view.Message{
+			ID: domain.ID{0xab, 0xcd}, DisplayName: "مريم", Handle: "author",
+			CreatedAt: time.Date(2026, 9, 29, 21, 0, 0, 123456789, time.FixedZone("JST", 9*60*60)),
+			Body:      "<script>bad()</script>\nمرحبا",
+		})},
 		{"SignOutButton", view.SignOutButton()},
 		{"MemberName", view.MemberName("مريم", "author")},
 		{"MemberName blank fallback", view.MemberName("\u3164", "legacy")},
@@ -900,13 +908,17 @@ func TestComponentsMarkup(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if component.name == "MessageItem" {
+					if component.name == "MessageItem" || component.name == "LiveMessageItem" {
 						item := find(doc, atom.Li)
 						if item == nil || attr(item, "id") != "message-abcd0000000000000000000000000000" {
 							t.Fatal("standalone message lost its list item or stable DOM id")
 						}
 						wantAnnouncement := map[string]string{"en": "New message", "ja": "新しいメッセージ"}[lang] + " @author: <script>bad()</script>\nمرحبا"
-						if attr(item, "data-announcement") != wantAnnouncement {
+						if component.name == "MessageItem" {
+							if _, ok := attrOK(item, "data-announcement"); ok {
+								t.Error("history item must not carry announcement text")
+							}
+						} else if attr(item, "data-announcement") != wantAnnouncement {
 							t.Error("announcement must contain localized, escaped plain text")
 						}
 						stamp, body := find(item, atom.Time), find(item, atom.P)

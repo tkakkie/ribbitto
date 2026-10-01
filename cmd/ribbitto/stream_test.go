@@ -227,6 +227,10 @@ func TestEventStream(t *testing.T) {
 	if first.name != "message" || !strings.Contains(first.data, "first\nwith a second line") || !strings.Contains(first.data, `<li id="message-`) || second.id <= first.id || !strings.Contains(second.data, "second") {
 		t.Fatalf("replayed %+v then %+v", first, second)
 	}
+	if !strings.Contains(first.data, "data-announcement=\"New message @owner: first\nwith a second line\"") ||
+		!strings.Contains(second.data, `data-announcement="New message @owner: second"`) {
+		t.Fatal("stream payloads must carry announcement text")
+	}
 
 	// Last-Event-ID wins over ?after: from the first event's id, replay starts
 	// at the second even though ?after asks for everything. A malformed

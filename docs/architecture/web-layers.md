@@ -56,8 +56,11 @@ htmx does only requests and swaps; the server and templ own the HTML.
   div, outside `#conversation` and every swap target, with `hx-ext="sse"`
   and `sse-connect="…/events?after=<cursor>"`. Older pages omit all three.
   `#message-items` receives `message` events; same-id duplicates replace the
-  existing item. `MessageItem` carries templ-rendered `data-announcement` text
-  for `#message-status`; history itself is never a live region.
+  existing item. `LiveMessageItem` shares `MessageItem` markup, adding
+  templ-rendered `data-announcement` text only to stream payloads. History
+  pages, including Load older and cached renders, omit that attribute.
+  `#message-status` retains only the latest 10 announcements; history itself
+  is never a live region.
 - The layout's `htmx-config` meta tag holds htmx's security settings and
   `responseHandling` ([`rendering.md`](rendering.md)). It keeps the three
   defaults, inserting a 422 swap with `error: false` before `[45]..` because
@@ -108,8 +111,9 @@ any ids they name are still checked in the page. The composer's
 `hx-disabled-elt="find textarea, find button"` and `hx-sync="this:drop"`
 are not swap selectors.
 
-`TestComponentsMarkup` renders `SignOutButton`, `MemberName` and
-`MessageItem` alone in both languages and applies the fragment markup rules.
+`TestComponentsMarkup` renders `SignOutButton`, `MemberName`, `MessageItem`
+and `LiveMessageItem` alone in both languages and applies the fragment
+markup rules.
 `TestPagesMarkup` also checks the composer fragments returned by handlers.
 
 `TestPagesMarkup` also checks every `hx-get`/`hx-post` element for a plain

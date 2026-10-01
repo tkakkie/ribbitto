@@ -69,7 +69,7 @@ func TestSignIn(t *testing.T) {
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("SignIn error = %v, want %v", err, tt.want)
 			}
-			_, previousErr := sessions.Resolve(t.Context(), previous)
+			_, _, previousErr := sessions.Resolve(t.Context(), previous)
 			if tt.want != nil {
 				// A failed sign-in changes nothing.
 				if previousErr != nil {
@@ -77,7 +77,7 @@ func TestSignIn(t *testing.T) {
 				}
 				return
 			}
-			if account, err := sessions.Resolve(t.Context(), token); err != nil || account.ID != alice.ID {
+			if account, _, err := sessions.Resolve(t.Context(), token); err != nil || account.ID != alice.ID {
 				t.Fatalf("new session: %+v, %v", account, err)
 			}
 			// Session fixation: the token the browser sent before must not
@@ -88,7 +88,7 @@ func TestSignIn(t *testing.T) {
 			if err := signIn.SignOut(t.Context(), token); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := sessions.Resolve(t.Context(), token); !errors.Is(err, auth.ErrNoSession) {
+			if _, _, err := sessions.Resolve(t.Context(), token); !errors.Is(err, auth.ErrNoSession) {
 				t.Fatalf("token resolves after sign-out: %v", err)
 			}
 		})
@@ -98,8 +98,8 @@ func TestSignIn(t *testing.T) {
 // failingReplace is a store whose atomic replacement fails.
 type failingReplace struct{ *fakeStore }
 
-func (failingReplace) ReplaceSession(context.Context, []byte, []byte, domain.ID, time.Time) error {
-	return errors.New("transaction failed")
+func (failingReplace) ReplaceSession(context.Context, []byte, []byte, domain.ID, time.Time) (domain.ID, bool, error) {
+	return domain.ID{}, false, errors.New("transaction failed")
 }
 
 func TestSignInReplacementFailure(t *testing.T) {
@@ -123,7 +123,7 @@ func TestSignInReplacementFailure(t *testing.T) {
 		t.Fatal("sign-in succeeded despite the store failure")
 	}
 	// A failed replacement changes nothing: the browser keeps its session.
-	if _, err := auth.NewSessions(base, time.Now).Resolve(t.Context(), previous); err != nil || len(base.sessions) != 1 {
+	if _, _, err := auth.NewSessions(base, time.Now).Resolve(t.Context(), previous); err != nil || len(base.sessions) != 1 {
 		t.Fatalf("previous session: %v; %d sessions, want 1", err, len(base.sessions))
 	}
 }

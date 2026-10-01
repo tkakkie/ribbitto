@@ -149,7 +149,10 @@ func TestAccountSchema(t *testing.T) {
 		func() error {
 			return q.DeleteExpiredSessions(ctx, pgtype.Timestamptz{Time: expiry.Time.Add(time.Second), Valid: true})
 		},
-		func() error { return q.DeleteSessionByTokenHash(ctx, session.TokenHash) },
+		func() error {
+			_, err := q.DeleteSessionByTokenHash(ctx, session.TokenHash)
+			return err
+		},
 		func() error {
 			_, err := pool.Exec(ctx, "DELETE FROM account WHERE id = $1", accounts[1].ID)
 			return err

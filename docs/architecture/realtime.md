@@ -63,7 +63,7 @@ author names or `message.ErrNotFound`.
 `event_log` is keyed by `(organization_id, seq)`, with `kind`, nullable
 `audience_member_id`, IDs-only JSONB `data` and `created_at`. A NULL audience
 is organisation-wide; a value restricts delivery to that member, enforced
-by the future connection authorizer. Its composite foreign key keeps the
+by the stream's per-event authorization (`authz.MayReceive`). Its composite foreign key keeps the
 member in the same organisation. The audience never appears in `data`.
 `message.posted` carries `{"channel_id":"<uuid>","message_id":"<uuid>"}`;
 `member.joined` carries `{"member_id":"<uuid>"}`. Both use a NULL audience.

@@ -22,7 +22,7 @@ imports `db/migrations`; the database must already be migrated.
 | `internal/domain` | Entities, value types, invariants, domain errors and domain event types. No I/O. | nothing |
 | `internal/app` | Use cases and the **only** authorization logic. Decides what must be atomic; the PostgreSQL adapters open and commit the transactions (see [the feature map](#feature-map)). Defines the interfaces it needs (repositories, event publisher). | `domain` |
 | `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces, connections, migrations. | `domain`, `app`, `db/migrations` |
-| `internal/realtime` | The SSE hub (M3): latest sequences and the connection registry (#157); fan-out and presence are planned. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
+| `internal/realtime` | Real-time delivery (M3): the hub's latest sequences and connection registry, the per-connection delivery loop, shared reads, the watermark check and event retention; presence is planned. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
 | `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |
@@ -139,7 +139,7 @@ Read the file for the area you change:
 | [`identity.md`](identity.md) | sessions, signing in and out, the session cookie |
 | [`rate-limits.md`](rate-limits.md) | authentication rate limits and the reverse-proxy contract |
 | [`realtime.md`](realtime.md) | posting a message and the durable event log |
-| [`streaming.md`](streaming.md) | Server-Sent Events (planned): ordering and replay, the hub and the loop, authorization and revocation, resource limits |
+| [`streaming.md`](streaming.md) | Server-Sent Events: ordering and replay, the hub and the loop, authorization and revocation, resource limits |
 | [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |

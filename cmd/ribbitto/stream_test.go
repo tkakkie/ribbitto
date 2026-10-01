@@ -87,6 +87,13 @@ func openStreamProto(t *testing.T, b acceptanceBrowser, channelURL, after, lastE
 	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
+	return openStreamIn(ctx, t, b, channelURL, after, lastEventID)
+}
+
+// openStreamIn opens the stream until ctx ends, so a test can drop the
+// connection as a browser losing it would.
+func openStreamIn(ctx context.Context, t *testing.T, b acceptanceBrowser, channelURL, after, lastEventID string) (<-chan sseEvent, int, int) {
+	t.Helper()
 	r, err := http.NewRequestWithContext(ctx, "GET", b.server.URL+channelURL+"/events?after="+after, nil)
 	acceptanceOK(t, err)
 	if lastEventID != "" {

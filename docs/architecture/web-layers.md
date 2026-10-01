@@ -169,24 +169,21 @@ look like declarations. Reviewers check these cases, all HTML writes and
 globals by hand. `localStorage` and `sessionStorage` pass mechanically; the
 check cannot prove that a stored value is only a non-sensitive UX setting.
 
-## Audit, 2026-09-30
+## Audit, 2026-10-01 (M3)
 
 Every HTML handler in `internal/web`, every templ component and every
-application script in `web/static` was read against these rules.
+application script in `web/static` was read against these rules after M3;
+#163 repeats the 2026-09-30 audit (#194, #198).
 
-| Where | Finding | Fixed by |
-|---|---|---|
-| `internal/web/view/channel.templ`: `ChannelPage.Messages` | Fixed: the handler converts app entries to `view.Message` values | #194; depguard `view` rule |
-| Composer script's `htmx:beforeSwap` made 422 responses swap | JavaScript decided what htmx swaps | #198: moved into the layout's htmx config; listener removed in `message-composer-v2.js` |
-
-Everything else conforms:
-
-- **Handlers.** Setup, sign-up, sign-in, the home page, channels and
-  posting all fill a view model and render through templ.
-- **Templates.** They do no I/O and make no authorisation decisions.
-- **Core flows.** Every core flow is a plain form or link.
-- **Selection.** Load older selects from full pages; the composer now uses a fragment.
-- **Scripts.** The scripts do keyboard, focus, scroll and local time only,
-  with no requests and no storage; M3 adds SSE glue.
-
-The audit is repeated as part of M3's acceptance check (Status #1).
+- **Handlers.** All pages, the composer fragment and the event stream fill
+  view models and render through templ; the stream writes templ output as
+  SSE data.
+- **Templates.** No I/O or authorisation; `LiveMessageItem`'s announcement is
+  attribute text, escaped by templ.
+- **Core flows.** Plain forms and links still work without JavaScript; live
+  updates are enhancement only.
+- **Scripts.** Focus, scroll, keyboard, local time and SSE glue; no requests,
+  storage or globals. `message-stream-v2.js` swaps through `htmx.swap`,
+  choosing `outerHTML` for a message id already present, because the SSE
+  extension can only append. That is deliberate SSE glue, and the HTML stays
+  server-rendered.

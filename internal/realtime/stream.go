@@ -26,8 +26,9 @@ type Authorizer interface {
 	MayReceive(ctx context.Context, accountID domain.ID, organizationSlug string, event domain.Event) (bool, error)
 }
 
-// Renderer turns an event the account may receive into what the stream
-// sends. web implements it.
+// Renderer turns an event of the subscription into what the stream sends.
+// It runs before the Authorizer's check, so its result is discarded when the
+// check denies the event. web implements it.
 type Renderer interface {
 	Render(ctx context.Context, sub Subscription, event domain.Event) (Outgoing, error)
 }
@@ -104,9 +105,9 @@ var errHeartbeatDue = errors.New("realtime: heartbeat due")
 // exists (a cursor below the replay boundary), so once caught up the loop
 // waits for a sequence above both its cursor and the last value the hub
 // reported; otherwise it would read the same empty range again and again.
-// A negative cursor is refused. Every event is authorized immediately before it is sent,
-// including ones read in an earlier batch, since access may have been lost
-// in between.
+// A negative cursor is refused. Every event is authorized after it is
+// rendered and immediately before it is sent, including ones read in an
+// earlier batch, since access may have been lost in between.
 func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Sender) (int64, error) {
 	if cursor < 0 {
 		return cursor, fmt.Errorf("negative cursor %d", cursor)
@@ -143,6 +144,16 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 				cursor = event.Seq
 				continue
 			}
+			// Render first, then authorize: a render can wait on the database,
+			// and access lost meanwhile must still stop this event. Renders
+			// are shared, so rendering one that is then denied costs little,
+			// and the check stays one query per event. A render error stops
+			// the loop even for an event that would have been denied, so
+			// nothing is ever skipped without a decision.
+			out, err := s.Renderer.Render(ctx, sub, event)
+			if err != nil {
+				return cursor, fmt.Errorf("rendering event %d: %w", event.Seq, err)
+			}
 			allowed, err := s.Authorizer.MayReceive(ctx, sub.Account, sub.OrganizationSlug, event)
 			if err != nil {
 				return cursor, fmt.Errorf("authorizing event %d: %w", event.Seq, err)
@@ -150,10 +161,6 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			if !allowed {
 				cursor = event.Seq
 				continue
-			}
-			out, err := s.Renderer.Render(ctx, sub, event)
-			if err != nil {
-				return cursor, fmt.Errorf("rendering event %d: %w", event.Seq, err)
 			}
 			if err := send.Send(ctx, out); err != nil {
 				return cursor, fmt.Errorf("sending event %d: %w", event.Seq, err)

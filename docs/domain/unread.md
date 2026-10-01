@@ -46,3 +46,12 @@ both tests:
 
 Until then, a topic's unread count is the channel's unread messages in that
 topic.
+
+## Replies
+
+Opening or paging through a [reply chain](replies.md) leaves the read
+position unchanged. A chain omits other messages in the channel, so
+advancing the channel position would mark unseen messages read. Replies
+are ordinary messages under the same unread rules, with no separate
+unread count. This holds for the per-channel position above and for
+whatever unread model M4 chooses for [topics](#topics).

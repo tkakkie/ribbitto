@@ -16,16 +16,15 @@ glossary current too. The decision is recorded in
 | `organization` | marsh | exists | A workspace that owns what its members create. |
 | `section` | pond | planned | A group of channels in the sidebar. |
 | `channel` | lilypad | exists | A named conversation inside an organisation. |
-| `topic` | ripple | planned | A conversation topic within a channel. |
-| default topic of a channel | chorus | planned | A channel's default topic, with behaviour still to be decided. |
+| `topic` | ripple | planned | A named conversation inside a channel ([`topics.md`](topics.md)). |
+| default topic of a channel | chorus | planned | The one topic every channel has, where a message goes when no topic is chosen. |
 | `message` | ribbit | exists | A post in a channel, written by a member. |
 
 Status describes the concept, not whether the UI uses its label yet.
 Today's UI still says "channel" and "message"; applying these labels is a
-separate change, best done with the design pass. The *planned* rows reserve
-labels only. Whether channels get topics, how the default topic behaves,
-moving messages between topics and a reply view belong to a separate
-conversation-model issue and decision.
+separate change, best done with the design pass. The conversation model behind
+*ripple* and *chorus* is in [`topics.md`](topics.md) (`DECISIONS.md` 21);
+the *section* row reserves a label only.
 
 ## Ordinary words
 

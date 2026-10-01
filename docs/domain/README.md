@@ -23,6 +23,7 @@ for the current tables, columns and constraints.
 | [`unread.md`](unread.md) | unread rules (planned, M2–M4) |
 | [`names.md`](names.md) | display names, handles, how members are shown |
 | [`channels.md`](channels.md) | channel identity, names and the default channel |
+| [`topics.md`](topics.md) | topics, the default topic, the feed and branching (planned) |
 | [`messages.md`](messages.md) | message identity, accepted bodies and rendering |
 | [`setup-and-signup.md`](../architecture/setup-and-signup.md) | first-run setup and sign-up |
 
@@ -37,10 +38,12 @@ for the current tables, columns and constraints.
 | **handle** | A member's organisation-scoped name for people to tell members apart, shown as `Display name @handle`. |
 | **section** *(planned)* | A group of channels in the sidebar; only its label is reserved so far. |
 | **channel** | A named conversation inside an organisation. |
-| **topic** *(planned)* | A conversation topic within a channel; only its label is reserved so far. |
-| **default topic** *(planned)* | A channel's default topic; its behaviour is not yet decided. |
 | **channel member** | A member's per-channel state (read position). |
 | **message** | A post in a channel, written by a member. |
+| **topic** *(planned)* | A named conversation inside a channel; every channel message is in exactly one. |
+| **default topic** *(planned)* | The one topic every channel has, where a message goes when no topic is chosen. Not the default channel. |
+| **feed** *(planned)* | A channel's messages from all its topics, interleaved by time and labelled with their topic. |
+| **branching** *(planned)* | Moving selected messages to another topic of the same channel, keeping their ids and sequences. |
 | **event** | A durable change that live clients must see (a message posted, a member joined), recorded in `event_log`. |
 | **event sequence** (`event_seq`) | The organisation's single, gap-free, increasing counter. Every durable event gets the next value. |
 | **cursor** | The last event sequence a client has seen. |
@@ -55,6 +58,8 @@ erDiagram
   organization ||--o{ channel : "has"
   organization ||--o{ event_log : "records"
   channel ||--o{ message : "contains"
+  channel ||--o{ topic : "groups into (planned)"
+  topic ||--o{ message : "holds (planned)"
   member ||--o{ message : "writes"
   channel ||--o{ channel_member : "tracks"
   member ||--o{ channel_member : "tracks"
@@ -67,9 +72,10 @@ erDiagram
 | `session` | exists | SHA-256 hash of the session token, expiry |
 | `setup` | exists | boolean key fixed to `true`, `organization_id`, `completed_at` |
 | `member` | exists | `organization_id`, `account_id`, role (`owner` or `member`), `joined_event_seq`, `handle` (unique per organisation) |
-| `channel` | exists | `id`, `organization_id`, `name`, `is_default`, `created_at` |
+| `channel` | exists | `id`, `organization_id`, `name`, `is_default`, `created_at`; planned: `default_topic_id`, `default_topic_is_default` |
+| `topic` | planned | `id`, `organization_id`, `channel_id`, `name` (NULL for the default topic), `is_default`, `created_at` ([`topics.md`](topics.md)) |
 | `channel_member` | planned (M4) | `organization_id`, `channel_id`, `member_id`, `last_read_event_seq` |
-| `message` | exists | `id`, `organization_id`, `channel_id`, `member_id`, `body`, `event_seq`, `created_at` |
+| `message` | exists | `id`, `organization_id`, `channel_id`, `member_id`, `body`, `event_seq`, `created_at`; planned: `topic_id` |
 | `event_log` | exists | `organization_id`, `seq` (composite key), `kind`, nullable `audience_member_id`, IDs-only `data`, `created_at` |
 
 An event's NULL audience means organisation-wide; a non-NULL audience names
@@ -134,6 +140,11 @@ See [`validation.md`](validation.md).
 
    Sign-up's duplicate-email response is an accepted trade-off
    ([`DECISIONS.md`](../../DECISIONS.md) 13).
+9. *(planned)* **Every channel message is in exactly one topic of its own
+   channel, and every channel has exactly one default topic.** Composite
+   foreign keys keep both in the same organisation and channel; branching
+   moves messages, never copies them, and keeps their `id` and `event_seq`
+   ([`topics.md`](topics.md)).
 
 These are **requirements for all code and migrations**, not a description
 of what is implemented today: `organization`, `account`, `session`,

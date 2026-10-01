@@ -43,13 +43,28 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt pgtype.Ti
 	return err
 }
 
-const deleteSessionByTokenHash = `-- name: DeleteSessionByTokenHash :exec
-DELETE FROM session WHERE token_hash = $1
+const deleteSessionByTokenHash = `-- name: DeleteSessionByTokenHash :many
+DELETE FROM session WHERE token_hash = $1 RETURNING id
 `
 
-func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash []byte) error {
-	_, err := q.db.Exec(ctx, deleteSessionByTokenHash, tokenHash)
-	return err
+func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash []byte) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, deleteSessionByTokenHash, tokenHash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one

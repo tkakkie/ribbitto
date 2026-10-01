@@ -87,15 +87,18 @@ type fakeResolver map[string]error
 
 var alice = domain.Account{ID: domain.ID{1}, Email: "alice@example.com", DisplayName: "Alice"}
 
-func (f fakeResolver) Resolve(_ context.Context, token string) (domain.Account, error) {
+// aliceSession is the session fakeResolver signs Alice in with.
+var aliceSession = auth.Session{ID: domain.ID{9}, ExpiresAt: time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
+
+func (f fakeResolver) Resolve(_ context.Context, token string) (domain.Account, auth.Session, error) {
 	err, ok := f[token]
 	if !ok {
-		return domain.Account{}, auth.ErrNoSession
+		return domain.Account{}, auth.Session{}, auth.ErrNoSession
 	}
 	if err != nil {
-		return domain.Account{}, err
+		return domain.Account{}, auth.Session{}, err
 	}
-	return alice, nil
+	return alice, aliceSession, nil
 }
 
 func TestSession(t *testing.T) {

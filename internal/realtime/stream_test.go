@@ -182,17 +182,25 @@ func TestStreamRechecksAccessBeforeEachSend(t *testing.T) {
 	log := &fakeLog{events: []domain.Event{posted(1, channelA), posted(2, channelA)}}
 	var mu sync.Mutex
 	member := true
-	authorize := func(domain.Event) (bool, error) {
+	denied := make(chan struct{})
+	authorize := func(e domain.Event) (bool, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		allowed := member
 		member = false // the membership is removed after the first send
+		if e.Seq == 2 {
+			close(denied)
+		}
 		return allowed, nil
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
 	done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render)}, 0, send)
 	send.waitFor(t, 1)
+	// Cancel only once event 2 has been checked: the loop checks
+	// cancellation before every event, so cancelling earlier would stop it
+	// before event 2 and leave the cursor at 1.
+	<-denied
 	cancel()
 	got := <-done
 	if got.cursor != 2 || !slices.Equal(send.ids(), []int64{1}) {

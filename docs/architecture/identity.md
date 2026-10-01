@@ -13,6 +13,11 @@ connects it to HTTP.
   `auth.ErrNoSession`, meaning signed out; a store error stays an error, so
   a database outage is not mistaken for a sign-out.
 - **Delete** (sign-out): the row goes, so the token stops working at once.
+- **Open streams** (#207): `Resolve` also returns the session's id and
+  expiry, which the session middleware puts on the request. After a delete
+  or a successful `Replace`, `auth.Sessions` tells its `SessionCanceller`
+  (the realtime hub, wired in `cmd/ribbitto`) the ended session's id, and
+  that session's event streams end; a failed `Replace` ends nothing.
 - **Clean-up:** `ribbitto serve` deletes expired rows at start and then
   hourly until shutdown. Expired sessions are already rejected; this only
   keeps the table small.

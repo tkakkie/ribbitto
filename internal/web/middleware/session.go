@@ -17,13 +17,15 @@ import (
 // sibling subdomain cannot set or overwrite it.
 const SessionCookie = "__Host-session"
 
-// SessionResolver turns a session token into its account. It returns
-// auth.ErrNoSession for every token that does not sign anyone in.
+// SessionResolver turns a session token into its account and session. It
+// returns auth.ErrNoSession for every token that does not sign anyone in.
 type SessionResolver interface {
-	Resolve(ctx context.Context, token string) (domain.Account, error)
+	Resolve(ctx context.Context, token string) (domain.Account, auth.Session, error)
 }
 
 type accountKey struct{}
+
+type sessionKey struct{}
 
 // SetSessionCookie stores a session token in the browser until expiresAt.
 func SetSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
@@ -63,7 +65,7 @@ func Session(sessions SessionResolver, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		account, err := sessions.Resolve(r.Context(), cookie.Value)
+		account, session, err := sessions.Resolve(r.Context(), cookie.Value)
 		switch {
 		case errors.Is(err, auth.ErrNoSession):
 			ClearSessionCookie(w)
@@ -76,7 +78,8 @@ func Session(sessions SessionResolver, next http.Handler) http.Handler {
 			// Pages for a signed-in account must not be stored by browsers or
 			// shared caches.
 			w.Header().Set("Cache-Control", "no-store")
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), accountKey{}, account)))
+			ctx := context.WithValue(r.Context(), accountKey{}, account)
+			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, sessionKey{}, session)))
 		}
 	})
 }
@@ -85,6 +88,13 @@ func Session(sessions SessionResolver, next http.Handler) http.Handler {
 func Account(ctx context.Context) (domain.Account, bool) {
 	account, ok := ctx.Value(accountKey{}).(domain.Account)
 	return account, ok
+}
+
+// CurrentSession returns the session that signed the request in, with its
+// id and expiry, if there is one. Event streams register and end with it.
+func CurrentSession(ctx context.Context) (auth.Session, bool) {
+	session, ok := ctx.Value(sessionKey{}).(auth.Session)
+	return session, ok
 }
 
 // MaxBodyBytes bounds every request body. It is far above any form ribbitto

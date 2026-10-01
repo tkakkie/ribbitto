@@ -30,7 +30,7 @@ type Streaming struct {
 	Events     realtime.EventReader
 	Authorizer realtime.Authorizer
 	// Sessions re-resolves the request's session after the stream has
-	// registered (see events).
+	// registered (see openStream).
 	Sessions middleware.SessionResolver
 	// MaxPerAccount caps an account's open streams; zero means
 	// DefaultMaxStreamsPerAccount.
@@ -96,55 +96,11 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 		http.NotFound(w, r)
 		return
 	}
-	limit := p.stream.MaxPerAccount
-	if limit <= 0 {
-		limit = DefaultMaxStreamsPerAccount
-	}
-	// Register first: from now on, deleting the session (sign-out, or a new
-	// sign-in replacing it) cancels this stream through the hub.
-	ctx, unregister, err := p.stream.Hub.Register(r.Context(), realtime.Connection{Organization: m.Organization.ID, Account: account.ID, Session: session.ID}, limit)
-	if errors.Is(err, realtime.ErrTooManyConnections) {
-		http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+	ctx, cleanup, ok := p.openStream(w, r, m.Organization.ID, account.ID, session)
+	if !ok {
 		return
 	}
-	if errors.Is(err, realtime.ErrShutdown) {
-		// The browser retries, and reaches the next process.
-		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	if err != nil {
-		serverError(w, r, "registering event stream", err)
-		return
-	}
-	defer unregister()
-	// Then look again: a session deleted between the middleware's lookup and
-	// the registration cancelled nothing, so it must be caught here, before
-	// anything is sent.
-	cookie, err := r.Cookie(middleware.SessionCookie)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	_, again, err := p.stream.Sessions.Resolve(ctx, cookie.Value)
-	if errors.Is(err, auth.ErrNoSession) || (err == nil && again.ID != session.ID) {
-		http.NotFound(w, r)
-		return
-	}
-	if err != nil && ctx.Err() != nil {
-		// The session ended (or the client left) while it was being looked
-		// up again: the store reports the cancellation as an error, but it
-		// is the expected end of this stream, not a server failure.
-		http.NotFound(w, r)
-		return
-	}
-	if err != nil {
-		serverError(w, r, "re-checking the stream's session", err)
-		return
-	}
-	// The session's expiry ends the stream too; nothing deletes an expired
-	// session's row in time to cancel it.
-	ctx, cancel := context.WithDeadlineCause(ctx, session.ExpiresAt, errSessionExpired)
-	defer cancel()
+	defer cleanup()
 
 	// The server's read timeout does not cut the stream: net/http clears the
 	// read deadline when it starts the background read that watches for the
@@ -180,6 +136,68 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 		// cursor or less.
 		slog.WarnContext(r.Context(), "event stream stopped", "cursor", cursor, "err", err)
 	}
+}
+
+// openStream keeps the register-then-re-check order that closes the race
+// with sign-out. On success the caller must
+// defer cleanup; on failure it has written the response and freed the slot.
+func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID domain.ID, session auth.Session) (ctx context.Context, cleanup func(), ok bool) {
+	limit := p.stream.MaxPerAccount
+	if limit <= 0 {
+		limit = DefaultMaxStreamsPerAccount
+	}
+	// Register first: from now on, deleting the session (sign-out, or a new
+	// sign-in replacing it) cancels this stream through the hub.
+	ctx, unregister, err := p.stream.Hub.Register(r.Context(), realtime.Connection{Organization: organizationID, Account: accountID, Session: session.ID}, limit)
+	if errors.Is(err, realtime.ErrTooManyConnections) {
+		http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+		return nil, nil, false
+	}
+	if errors.Is(err, realtime.ErrShutdown) {
+		// The browser retries, and reaches the next process.
+		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+		return nil, nil, false
+	}
+	if err != nil {
+		serverError(w, r, "registering event stream", err)
+		return nil, nil, false
+	}
+	defer func() {
+		if !ok {
+			unregister()
+		}
+	}()
+	// Then look again: a session deleted between the middleware's lookup and
+	// the registration cancelled nothing, so it must be caught here, before
+	// anything is sent.
+	cookie, err := r.Cookie(middleware.SessionCookie)
+	if err != nil {
+		http.NotFound(w, r)
+		return nil, nil, false
+	}
+	_, again, err := p.stream.Sessions.Resolve(ctx, cookie.Value)
+	if errors.Is(err, auth.ErrNoSession) || (err == nil && again.ID != session.ID) {
+		http.NotFound(w, r)
+		return nil, nil, false
+	}
+	if err != nil && ctx.Err() != nil {
+		// The session ended (or the client left) while it was being looked
+		// up again: the store reports the cancellation as an error, but it
+		// is the expected end of this stream, not a server failure.
+		http.NotFound(w, r)
+		return nil, nil, false
+	}
+	if err != nil {
+		serverError(w, r, "re-checking the stream's session", err)
+		return nil, nil, false
+	}
+	// The session's expiry ends the stream too; nothing deletes an expired
+	// session's row in time to cancel it.
+	ctx, cancel := context.WithDeadlineCause(ctx, session.ExpiresAt, errSessionExpired)
+	return ctx, func() {
+		cancel()
+		unregister()
+	}, true
 }
 
 // streamCursor reads the cursor: Last-Event-ID, else the single ?after value.

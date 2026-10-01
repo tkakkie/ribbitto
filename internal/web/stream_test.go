@@ -22,6 +22,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
@@ -368,6 +369,59 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 			}
 			if (!tt.later.cancelNow || tt.later.err != nil) && w.Code != http.StatusNotFound {
 				t.Fatalf("status %d, want 404", w.Code)
+			}
+			if n := hub.Connections(); n != 0 {
+				t.Fatalf("%d connections still registered", n)
+			}
+		})
+	}
+}
+
+func TestOpenStreamCleanup(t *testing.T) {
+	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
+	for _, tt := range []struct {
+		name       string
+		cookie     bool
+		resolveErr error
+		wantStatus int
+	}{
+		{name: "opened", cookie: true},
+		{name: "missing cookie", wantStatus: http.StatusNotFound},
+		{name: "session lookup failed", cookie: true, resolveErr: errors.New("store unavailable"), wantStatus: http.StatusInternalServerError},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			hub := realtime.NewHub()
+			seen := -1
+			p := channelPages{stream: &Streaming{Hub: hub, Sessions: laterSession{hub: hub, session: live, err: tt.resolveErr, seen: &seen}}}
+			r := httptest.NewRequest(http.MethodGet, "/events", nil)
+			if tt.cookie {
+				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			}
+			w := httptest.NewRecorder()
+			ctx, cleanup, ok := p.openStream(w, r, domain.ID{9}, domain.ID{1}, live)
+			if cleanup != nil {
+				t.Cleanup(cleanup)
+			}
+			if tt.wantStatus != 0 {
+				if ok || ctx != nil || cleanup != nil || w.Code != tt.wantStatus {
+					t.Fatalf("openStream: ok=%t, context=%v, cleanup present=%t, status=%d; want failure with status %d", ok, ctx, cleanup != nil, w.Code, tt.wantStatus)
+				}
+			} else {
+				if !ok || ctx == nil || cleanup == nil {
+					t.Fatal("openStream did not return a context and cleanup")
+				}
+				if deadline, set := ctx.Deadline(); !set || !deadline.Equal(live.ExpiresAt) {
+					t.Fatalf("deadline = %v, set=%t; want session expiry %v", deadline, set, live.ExpiresAt)
+				}
+				if ctx.Err() != nil || hub.Connections() != 1 {
+					t.Fatal("successful open did not keep the stream alive and registered")
+				}
+				cleanup()
+				// Cancelling the expiry context first preserves the old defer
+				// order; unregister alone would leave ErrUnregistered as cause.
+				if !errors.Is(context.Cause(ctx), context.Canceled) {
+					t.Fatalf("cleanup cause = %v, want context.Canceled", context.Cause(ctx))
+				}
 			}
 			if n := hub.Connections(); n != 0 {
 				t.Fatalf("%d connections still registered", n)

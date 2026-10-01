@@ -154,6 +154,14 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			cursor = event.Seq
 		}
 		if len(events) == batch {
+			// Draining a backlog that is all other channels' events writes
+			// nothing either; the heartbeat is still due on time.
+			if s.Heartbeat > 0 && time.Since(written) >= s.Heartbeat {
+				if err := send.Heartbeat(ctx); err != nil {
+					return cursor, fmt.Errorf("sending heartbeat: %w", err)
+				}
+				written = time.Now()
+			}
 			continue
 		}
 		seen, err = s.wait(ctx, sub.Organization, max(cursor, seen), send, &written)

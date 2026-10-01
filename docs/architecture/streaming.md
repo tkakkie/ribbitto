@@ -108,7 +108,8 @@ sequenceDiagram
   flushing works; compression is not applied to the SSE endpoint.
 - An idle stream writes an SSE comment (`: heartbeat`) once
   `DefaultStreamHeartbeat` (20 s; #160) has passed since its last write,
-  however often another channel's events wake it: proxies keep it open, and a client
+  however often another channel's events wake it and while it drains a
+  backlog of them: proxies keep it open, and a client
   that stopped reading is found out at that write's deadline. The loop
   sends it while waiting on the hub (`Stream.Heartbeat`); a failed one ends
   the stream without moving the cursor. Presence (M4) will wait about 30 s

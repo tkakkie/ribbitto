@@ -464,3 +464,33 @@ func TestHeartbeatDue(t *testing.T) {
 		})
 	}
 }
+
+// slowFilteredLog returns full batches of another channel's events, slowly,
+// as a long backlog would, and never runs out.
+type slowFilteredLog struct{ delay time.Duration }
+
+func (l slowFilteredLog) EventsAfter(_ context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+	time.Sleep(l.delay)
+	events := make([]domain.Event, limit)
+	for i := range events {
+		events[i] = domain.Event{OrganizationID: org, Seq: after + int64(i) + 1, Kind: domain.EventMessagePosted, ChannelID: channelB}
+	}
+	return events, nil
+}
+
+// Draining full batches that are all filtered out still sends heartbeats
+// on time, before the stream ever catches up.
+func TestStreamHeartbeatsWhileDrainingFilteredBatches(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	send := newRecorder()
+	runAsync(ctx, Stream{Hub: NewHub(), Events: slowFilteredLog{delay: 2 * time.Millisecond}, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), BatchSize: 10, Heartbeat: 30 * time.Millisecond}, 0, send)
+	for deadline := time.Now().Add(5 * time.Second); send.heartbeatCount() < 2; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d heartbeats while draining, want at least 2", send.heartbeatCount())
+		}
+	}
+	if ids := send.ids(); len(ids) != 0 {
+		t.Fatalf("sent %v, want only heartbeats", ids)
+	}
+}

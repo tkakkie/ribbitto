@@ -16,7 +16,9 @@ sequenceDiagram
 ```
 
 `message.Service.Post` validates; `postgres.PostingStore` takes the sequence,
-inserts the message and inserts `event_log` in one transaction.
+inserts the message and calls `postgres.NewEventLog(tx).AppendMessagePosted`
+in one transaction. Realtime's `EventLog` writer owns the event insert queries;
+it uses the caller's transaction and already-allocated sequence.
 `message.NewWithNotifier` accepts `message.Notifier` (`Raise(organizationID domain.ID, seq int64)`);
 `Post` calls it only after the store succeeds. `serve` wires `realtime.Hub`
 to it; `message.New` leaves notifications disabled. A channel outside
@@ -67,9 +69,9 @@ by the stream's per-event authorization (`authz.MayReceive`). Its composite fore
 member in the same organisation. The audience never appears in `data`.
 `message.posted` carries `{"channel_id":"<uuid>","message_id":"<uuid>"}`;
 `member.joined` carries `{"member_id":"<uuid>"}`. Both use a NULL audience.
-Setup and sign-up insert the join event immediately after the member, with
-its `joined_event_seq`. `domain.Event` holds the envelope and referenced IDs;
-kinds are an open list. `postgres.NewEventReader(db)` provides
+Setup and sign-up call `NewEventLog(tx).AppendMemberJoined` immediately after
+the member, with its `joined_event_seq`. `domain.Event` holds the envelope and
+referenced IDs; kinds are an open list. `postgres.NewEventReader(db)` provides
 `EventsAfter(ctx, organizationID, after, limit) ([]domain.Event, error)`:
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.
 It decodes known kinds' IDs, failing the batch for malformed or missing IDs;

@@ -94,10 +94,7 @@ func (s *PostingStore) Post(ctx context.Context, organizationID, channelID, memb
 		if err != nil {
 			return err
 		}
-		return sqlcgen.New(tx).InsertMessageEvent(ctx, sqlcgen.InsertMessageEventParams{
-			OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(domain.EventMessagePosted),
-			ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, MessageID: pgtype.UUID{Bytes: posted.ID, Valid: true},
-		})
+		return NewEventLog(tx).AppendMessagePosted(ctx, organizationID, channelID, posted.ID, seq)
 	})
 	var pgErr *pgconn.PgError
 	switch {

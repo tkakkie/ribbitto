@@ -38,7 +38,7 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, has
 		if err != nil {
 			return err
 		}
-		if err := q.InsertMemberEvent(ctx, sqlcgen.InsertMemberEventParams{OrganizationID: org, Seq: seq, Kind: string(domain.EventMemberJoined), MemberID: member.ID}); err != nil {
+		if err := NewEventLog(tx).AppendMemberJoined(ctx, org.Bytes, member.ID.Bytes, seq); err != nil {
 			return err
 		}
 		id = account.ID.Bytes

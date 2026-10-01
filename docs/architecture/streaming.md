@@ -91,6 +91,16 @@ sequenceDiagram
   The versioned message-stream script listens for `reset` on htmx's source,
   closes it and reloads the page; this is SSE glue with no separate request.
 
+### Retention
+
+`realtime.Retention` expires replay history once at start and then hourly.
+The worker starts asynchronously before serving, so its first run can overlap
+requests. It takes the same organisation lock as posting; separate transactions
+of at most 1,000 expired rows and a one-minute run timeout limit contention.
+Failed runs retry on the next tick, keeping committed progress. Shutdown cancels
+and waits for the worker, including a blocked first run, before closing the pool.
+The retention period defaults to seven days; see [database configuration](../database.md).
+
 ### Authorization and revocation
 
 - Every event is authorized for the connection's member **after it is

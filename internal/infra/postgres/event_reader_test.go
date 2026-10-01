@@ -93,3 +93,33 @@ func TestEventsAfterMalformedData(t *testing.T) {
 		})
 	}
 }
+
+func TestCommittedSequences(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	f := pgtest.OrganizationWithOwner(t, pool, "watermark", "general")
+	other := pgtest.OrganizationWithOwner(t, pool, "watermark-other", "general")
+	posted, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
+	requireNoError(t, err)
+	reader := postgres.NewEventReader(pool)
+	unknown := domain.ID{0xee}
+	got, err := reader.CommittedSequences(ctx, []domain.ID{f.OrganizationID, other.OrganizationID, unknown})
+	requireNoError(t, err)
+	var otherSeq int64
+	requireNoError(t, pool.QueryRow(ctx, "SELECT event_seq FROM organization WHERE id = $1", other.OrganizationID).Scan(&otherSeq))
+	want := map[domain.ID]int64{f.OrganizationID: posted.EventSeq, other.OrganizationID: otherSeq}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("CommittedSequences = %v, want %v (an unknown organisation is left out)", got, want)
+	}
+	got, err = reader.CommittedSequences(ctx, []domain.ID{f.OrganizationID})
+	requireNoError(t, err)
+	if want := map[domain.ID]int64{f.OrganizationID: posted.EventSeq}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("CommittedSequences(f) = %v, want %v (an existing organisation not asked for is left out)", got, want)
+	}
+	got, err = reader.CommittedSequences(ctx, nil)
+	requireNoError(t, err)
+	if len(got) != 0 {
+		t.Fatalf("CommittedSequences(nil) = %v, want empty", got)
+	}
+}

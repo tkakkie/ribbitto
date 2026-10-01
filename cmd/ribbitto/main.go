@@ -103,6 +103,8 @@ func serve(ctx context.Context, databaseURL string) error {
 	// Stop cleanup before closing its pool, including on listener failure.
 	stopCleanup := startSessionCleanup(ctx, sessions)
 	defer stopCleanup()
+	stopWatermark := startWatermark(ctx, realtime.Watermark{Hub: hub, Sequences: postgres.NewEventReader(pool)}, realtime.WatermarkInterval)
+	defer stopWatermark()
 
 	srv := newServer(addr, handler, serverTimeouts{
 		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout,
@@ -284,6 +286,23 @@ func startSessionCleanup(ctx context.Context, sessions *auth.Sessions) (stop fun
 	return func() {
 		cancel()
 		<-done
+	}
+}
+
+// startWatermark runs the watermark check every interval until stop, which
+// waits for it, so it never outlives the pool.
+func startWatermark(ctx context.Context, w realtime.Watermark, interval time.Duration) (stop func()) {
+	ctx, cancel := context.WithCancel(ctx)
+	ticker := time.NewTicker(interval)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		w.Run(ctx, ticker.C)
+	}()
+	return func() {
+		cancel()
+		<-done
+		ticker.Stop()
 	}
 }
 

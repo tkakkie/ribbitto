@@ -11,6 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const committedSequences = `-- name: CommittedSequences :many
+SELECT id, event_seq FROM organization WHERE id = ANY($1::uuid[])
+`
+
+type CommittedSequencesRow struct {
+	ID       pgtype.UUID
+	EventSeq int64
+}
+
+func (q *Queries) CommittedSequences(ctx context.Context, organizationIds []pgtype.UUID) ([]CommittedSequencesRow, error) {
+	rows, err := q.db.Query(ctx, committedSequences, organizationIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CommittedSequencesRow
+	for rows.Next() {
+		var i CommittedSequencesRow
+		if err := rows.Scan(&i.ID, &i.EventSeq); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const eventsAfter = `-- name: EventsAfter :many
 SELECT organization_id, seq, kind, audience_member_id, data
 FROM event_log

@@ -92,7 +92,7 @@ func TestWatermarkStops(t *testing.T) {
 	defer unregister()
 	sequences := blockingSequences{started: make(chan struct{}), once: &sync.Once{}}
 	// A long timeout, so only stop can end the blocked read.
-	stop := startWatermark(context.Background(), realtime.Watermark{Hub: hub, Sequences: sequences, Timeout: time.Hour}, time.Millisecond)
+	stop := startRealtimeWorker(context.Background(), realtime.Watermark{Hub: hub, Sequences: sequences, Timeout: time.Hour}, time.Millisecond)
 	select {
 	case <-sequences.started:
 	case <-time.After(5 * time.Second):

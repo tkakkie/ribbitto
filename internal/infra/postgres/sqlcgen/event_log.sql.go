@@ -41,29 +41,36 @@ func (q *Queries) CommittedSequences(ctx context.Context, organizationIds []pgty
 }
 
 const eventsAfter = `-- name: EventsAfter :many
-SELECT organization_id, seq, kind, audience_member_id, data
-FROM event_log
-WHERE organization_id = $1 AND seq > $2
-ORDER BY seq
-LIMIT $3::bigint
+SELECT o.id AS organization_id, o.event_log_boundary_seq,
+       coalesce(e.seq, 0)::bigint AS seq, coalesce(e.kind, '')::text AS kind,
+       e.audience_member_id, e.data
+FROM organization o
+LEFT JOIN LATERAL (
+    SELECT seq, kind, audience_member_id, data FROM event_log
+    WHERE organization_id = o.id AND seq > $1
+    ORDER BY seq LIMIT $2::bigint
+) e ON true
+WHERE o.id = $3
+ORDER BY e.seq
 `
 
 type EventsAfterParams struct {
-	OrganizationID pgtype.UUID
 	AfterSeq       int64
 	BatchLimit     int64
+	OrganizationID pgtype.UUID
 }
 
 type EventsAfterRow struct {
-	OrganizationID   pgtype.UUID
-	Seq              int64
-	Kind             string
-	AudienceMemberID pgtype.UUID
-	Data             []byte
+	OrganizationID      pgtype.UUID
+	EventLogBoundarySeq int64
+	Seq                 int64
+	Kind                string
+	AudienceMemberID    pgtype.UUID
+	Data                []byte
 }
 
 func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]EventsAfterRow, error) {
-	rows, err := q.db.Query(ctx, eventsAfter, arg.OrganizationID, arg.AfterSeq, arg.BatchLimit)
+	rows, err := q.db.Query(ctx, eventsAfter, arg.AfterSeq, arg.BatchLimit, arg.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +80,7 @@ func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]Eve
 		var i EventsAfterRow
 		if err := rows.Scan(
 			&i.OrganizationID,
+			&i.EventLogBoundarySeq,
 			&i.Seq,
 			&i.Kind,
 			&i.AudienceMemberID,
@@ -86,6 +94,30 @@ func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]Eve
 		return nil, err
 	}
 	return items, nil
+}
+
+const expireEvents = `-- name: ExpireEvents :exec
+WITH locked AS MATERIALIZED (
+    SELECT id FROM organization o
+    WHERE EXISTS (SELECT 1 FROM event_log e
+                  WHERE e.organization_id = o.id AND e.created_at < $1)
+    ORDER BY id FOR UPDATE
+), deleted AS (
+    DELETE FROM event_log e USING locked o
+    WHERE e.organization_id = o.id AND e.created_at < $1
+    RETURNING e.organization_id, e.seq
+)
+UPDATE organization o
+SET event_log_boundary_seq = greatest(o.event_log_boundary_seq, d.seq)
+FROM (SELECT organization_id, max(seq) AS seq FROM deleted GROUP BY organization_id) d
+WHERE o.id = d.organization_id
+`
+
+// Lock organisations before events, as posting does. Deletion and the
+// boundary advance share one transaction, including concurrent cleaners.
+func (q *Queries) ExpireEvents(ctx context.Context, cutoff pgtype.Timestamptz) error {
+	_, err := q.db.Exec(ctx, expireEvents, cutoff)
+	return err
 }
 
 const insertMemberEvent = `-- name: InsertMemberEvent :exec

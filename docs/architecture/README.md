@@ -121,7 +121,7 @@ It returns `message.ChannelPage`; older pages have no event cursor.
   transaction (`DECISIONS.md` 5);
 - all three flows write realtime's `event_log` immediately after the message
   or member, so the event commits with the entity and its sequence (#156);
-- realtime retention (#161, planned) writes org's `event_log_boundary_seq`,
+- realtime retention (#161) writes org's `event_log_boundary_seq`,
   because the boundary and events must be read in the same snapshot.
 
 Their atomicity and `event_seq` ordering stay as they are. They are

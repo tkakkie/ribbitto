@@ -64,6 +64,14 @@ func run() error {
 }
 
 func serve(ctx context.Context, databaseURL string) error {
+	retention := realtime.DefaultRetention
+	if value := os.Getenv("RIBBITTO_EVENT_RETENTION"); value != "" {
+		var err error
+		retention, err = time.ParseDuration(value)
+		if err != nil || retention <= 0 {
+			return fmt.Errorf("RIBBITTO_EVENT_RETENTION must be a positive duration")
+		}
+	}
 	enabled, err := signupEnabled(os.Getenv("RIBBITTO_SIGNUP"))
 	if err != nil {
 		return err
@@ -103,8 +111,10 @@ func serve(ctx context.Context, databaseURL string) error {
 	// Stop cleanup before closing its pool, including on listener failure.
 	stopCleanup := startSessionCleanup(ctx, sessions)
 	defer stopCleanup()
-	stopWatermark := startWatermark(ctx, realtime.Watermark{Hub: hub, Sequences: postgres.NewEventReader(pool)}, realtime.WatermarkInterval)
+	stopWatermark := startRealtimeWorker(ctx, realtime.Watermark{Hub: hub, Sequences: postgres.NewEventReader(pool)}, realtime.WatermarkInterval)
 	defer stopWatermark()
+	stopRetention := startRealtimeWorker(ctx, realtime.Retention{Events: postgres.NewEventReader(pool), Period: retention}, time.Hour)
+	defer stopRetention()
 
 	srv := newServer(addr, handler, serverTimeouts{
 		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout,
@@ -298,9 +308,11 @@ func startSessionCleanup(ctx context.Context, sessions *auth.Sessions) (stop fun
 	}
 }
 
-// startWatermark runs the watermark check every interval until stop, which
+// startRealtimeWorker runs periodic realtime maintenance until stop, which
 // waits for it, so it never outlives the pool.
-func startWatermark(ctx context.Context, w realtime.Watermark, interval time.Duration) (stop func()) {
+func startRealtimeWorker(ctx context.Context, w interface {
+	Run(context.Context, <-chan time.Time)
+}, interval time.Duration) (stop func()) {
 	ctx, cancel := context.WithCancel(ctx)
 	ticker := time.NewTicker(interval)
 	done := make(chan struct{})

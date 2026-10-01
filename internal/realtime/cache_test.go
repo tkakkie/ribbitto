@@ -320,8 +320,8 @@ func TestCachedEventsStoreOnlyFullBatches(t *testing.T) {
 		t.Fatalf("after an unannounced commit after a short batch: %v, want events 2 and 3", got)
 	}
 	calls := log.calls
-	if got := read(1, 2); len(got) != 2 || log.calls != calls {
-		t.Fatalf("full batch: %v after %d more reads, want it from the cache", got, log.calls-calls)
+	if got := read(1, 2); len(got) != 2 || log.calls != calls+1 {
+		t.Fatalf("full batch: %v after %d more reads, want cached rows and one boundary check", got, log.calls-calls)
 	}
 	// A limit of 0 is never full, though its result is as long as the limit.
 	calls = log.calls
@@ -334,8 +334,8 @@ func TestCachedEventsStoreOnlyFullBatches(t *testing.T) {
 	// A new level is a new key, so even a full batch is read again after a
 	// Raise; the level is in the key for the batches that are not full.
 	hub.Raise(orgA, 3)
-	if read(1, 2); log.calls != calls+1 {
-		t.Fatalf("%d reads after a Raise, want 1", log.calls-calls)
+	if read(1, 2); log.calls != calls+2 {
+		t.Fatalf("%d reads after a Raise, want 2", log.calls-calls)
 	}
 }
 
@@ -355,7 +355,7 @@ func TestCachedEventsKeepOrganisationsApart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(a) != 2 || len(b) != 2 || a[0].OrganizationID != orgA || b[0].OrganizationID != orgB || log.calls != 2 {
+	if len(a) != 2 || len(b) != 2 || a[0].OrganizationID != orgA || b[0].OrganizationID != orgB || log.calls != 4 {
 		t.Fatalf("orgA %v, orgB %v after %d reads; want each from its own read", a, b, log.calls)
 	}
 }

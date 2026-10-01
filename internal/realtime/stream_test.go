@@ -329,10 +329,10 @@ func TestStreamDoesNotSpinWhenTheHubIsAheadOfTheLog(t *testing.T) {
 
 	log.append(posted(51, channelA))
 	hub.Raise(orgA, 51)
-	send.waitFor(t, 51)
+	send.waitFor(t, 10) // A gap now resets instead of silently advancing.
 	cancel()
-	if got := <-done; got.cursor != 51 {
-		t.Fatalf("cursor = %d, want 51", got.cursor)
+	if got := <-done; got.cursor != 10 {
+		t.Fatalf("cursor = %d, want 10", got.cursor)
 	}
 }
 

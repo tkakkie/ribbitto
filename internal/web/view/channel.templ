@@ -124,7 +124,7 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 		// run scripts in swapped fragments.
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

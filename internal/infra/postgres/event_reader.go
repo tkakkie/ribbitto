@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -32,6 +33,12 @@ func (r *EventReader) EventsAfter(ctx context.Context, organizationID domain.ID,
 	}
 	events := make([]domain.Event, 0, len(rows))
 	for _, row := range rows {
+		if after < row.EventLogBoundarySeq {
+			return nil, domain.ErrCursorExpired
+		}
+		if row.Seq == 0 {
+			continue // The boundary must be returned even when the log is empty.
+		}
 		event, err := eventFromRow(row)
 		if err != nil {
 			return nil, fmt.Errorf("reading event %d: %w", row.Seq, err)
@@ -39,6 +46,14 @@ func (r *EventReader) EventsAfter(ctx context.Context, organizationID domain.ID,
 		events = append(events, event)
 	}
 	return events, nil
+}
+
+// ExpireEvents deletes old log rows and advances their organisations' boundaries atomically.
+func (r *EventReader) ExpireEvents(ctx context.Context, cutoff time.Time) error {
+	if err := r.queries.ExpireEvents(ctx, pgtype.Timestamptz{Time: cutoff, Valid: true}); err != nil {
+		return fmt.Errorf("expiring events: %w", err)
+	}
+	return nil
 }
 
 // CommittedSequences returns the committed event_seq of each given

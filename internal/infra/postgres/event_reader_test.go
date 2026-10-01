@@ -1,8 +1,10 @@
 package postgres_test
 
 import (
+	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -121,5 +123,44 @@ func TestCommittedSequences(t *testing.T) {
 	requireNoError(t, err)
 	if len(got) != 0 {
 		t.Fatalf("CommittedSequences(nil) = %v, want empty", got)
+	}
+}
+
+func TestEventRetentionTransaction(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	f := pgtest.OrganizationWithOwner(t, pool, "retention", "general")
+	for range 2 {
+		_, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept")
+		requireNoError(t, err)
+	}
+	_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = CASE WHEN seq = 2 THEN '2000-01-01'::timestamptz ELSE '2100-01-01'::timestamptz END WHERE organization_id = $1", f.OrganizationID)
+	requireNoError(t, err)
+	cutoff := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	tx, err := pool.Begin(ctx)
+	requireNoError(t, err)
+	defer func() { _ = tx.Rollback(ctx) }()
+	requireNoError(t, postgres.NewEventReader(tx).ExpireEvents(ctx, cutoff))
+	// Until commit, a reader sees both the old boundary and every old row.
+	reader := postgres.NewEventReader(pool)
+	rows, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 10)
+	requireNoError(t, err)
+	if len(rows) != 2 {
+		t.Fatalf("uncommitted cleanup hid rows: %v", rows)
+	}
+	requireNoError(t, tx.Commit(ctx))
+	var remaining int
+	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM event_log WHERE organization_id = $1 AND seq <= 2", f.OrganizationID).Scan(&remaining))
+	if remaining != 0 {
+		t.Fatalf("expired rows remain: %d", remaining)
+	}
+	rows, err = reader.EventsAfter(ctx, f.OrganizationID, 2, 10)
+	requireNoError(t, err)
+	if len(rows) != 1 || rows[0].Seq != 3 {
+		t.Fatalf("boundary cursor lost recent event: %v", rows)
+	}
+	if _, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 10); !errors.Is(err, domain.ErrCursorExpired) {
+		t.Fatalf("below boundary: %v", err)
 	}
 }

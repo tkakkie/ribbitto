@@ -17,5 +17,6 @@
 // Stream.Run is the per-connection delivery loop over the EventReader,
 // Authorizer and Renderer interfaces defined here; its doc comment states
 // which events are skipped and which failures stop it without advancing the
-// cursor.
+// cursor. Cache and CachedEvents let an organisation's streams share reads
+// and renders (#227); docs/architecture/stream-cost.md measures the effect.
 package realtime

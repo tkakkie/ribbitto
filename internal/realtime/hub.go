@@ -82,6 +82,17 @@ func (h *Hub) Raise(org domain.ID, seq int64) {
 	s.changed = make(chan struct{})
 }
 
+// Latest returns the organisation's latest sequence the hub has been told
+// about; 0 if none.
+func (h *Hub) Latest(org domain.ID) int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if s, ok := h.orgs[org]; ok {
+		return s.latest
+	}
+	return 0
+}
+
 // Wait blocks until the organisation's latest sequence is greater than
 // after and returns that sequence, at once if it already is. If ctx has
 // ended or ends first, it returns context.Cause(ctx).

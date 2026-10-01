@@ -96,28 +96,35 @@ func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]Eve
 	return items, nil
 }
 
-const expireEvents = `-- name: ExpireEvents :exec
-WITH locked AS MATERIALIZED (
-    SELECT id FROM organization o
-    WHERE EXISTS (SELECT 1 FROM event_log e
-                  WHERE e.organization_id = o.id AND e.created_at < $1)
-    ORDER BY id FOR UPDATE
-), deleted AS (
-    DELETE FROM event_log e USING locked o
-    WHERE e.organization_id = o.id AND e.created_at < $1
-    RETURNING e.organization_id, e.seq
+const expireEventBatch = `-- name: ExpireEventBatch :one
+WITH deleted AS (
+    DELETE FROM event_log e
+    WHERE e.organization_id = $1 AND e.seq IN (
+        SELECT candidate.seq FROM event_log candidate
+        WHERE candidate.organization_id = $1 AND candidate.created_at < $2
+        ORDER BY candidate.seq LIMIT 1000
+    )
+    RETURNING e.seq
+), advanced AS (
+    UPDATE organization
+    SET event_log_boundary_seq = greatest(event_log_boundary_seq, (SELECT max(seq) FROM deleted))
+    WHERE id = $1 AND EXISTS (SELECT 1 FROM deleted)
 )
-UPDATE organization o
-SET event_log_boundary_seq = greatest(o.event_log_boundary_seq, d.seq)
-FROM (SELECT organization_id, max(seq) AS seq FROM deleted GROUP BY organization_id) d
-WHERE o.id = d.organization_id
+SELECT count(*) FROM deleted
 `
 
-// Lock organisations before events, as posting does. Deletion and the
-// boundary advance share one transaction, including concurrent cleaners.
-func (q *Queries) ExpireEvents(ctx context.Context, cutoff pgtype.Timestamptz) error {
-	_, err := q.db.Exec(ctx, expireEvents, cutoff)
-	return err
+type ExpireEventBatchParams struct {
+	OrganizationID pgtype.UUID
+	Cutoff         pgtype.Timestamptz
+}
+
+// The caller already holds this organisation's row lock. Use a fresh
+// snapshot after locking so concurrent cleaners see earlier commits.
+func (q *Queries) ExpireEventBatch(ctx context.Context, arg ExpireEventBatchParams) (int64, error) {
+	row := q.db.QueryRow(ctx, expireEventBatch, arg.OrganizationID, arg.Cutoff)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const insertMemberEvent = `-- name: InsertMemberEvent :exec
@@ -164,4 +171,40 @@ func (q *Queries) InsertMessageEvent(ctx context.Context, arg InsertMessageEvent
 		arg.MessageID,
 	)
 	return err
+}
+
+const lockEventRetentionOrganization = `-- name: LockEventRetentionOrganization :exec
+SELECT id FROM organization WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockEventRetentionOrganization(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, lockEventRetentionOrganization, id)
+	return err
+}
+
+const organizationsWithExpiredEvents = `-- name: OrganizationsWithExpiredEvents :many
+SELECT id FROM organization o
+WHERE EXISTS (SELECT 1 FROM event_log e
+              WHERE e.organization_id = o.id AND e.created_at < $1)
+ORDER BY id
+`
+
+func (q *Queries) OrganizationsWithExpiredEvents(ctx context.Context, cutoff pgtype.Timestamptz) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, organizationsWithExpiredEvents, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

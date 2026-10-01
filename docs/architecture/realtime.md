@@ -83,8 +83,14 @@ without backfilling; new organisations start at 0. Rows above the boundary
 are gap-free through `event_seq`; a deferred constraint trigger enforces it at
 commit for every writer, including an older binary still running during
 `migrate up`. Retention raises the boundary in the same transaction as deletion,
-locking organisations before events as posting does. It deletes only rows older
-than the cutoff; messages, their sequences and unread positions are untouched.
+locking one organisation before its events as posting does. The cleaner lists
+organisations with expired rows in ID order without write locks, then commits
+batches of at most 1,000 expired rows in sequence order until none remain for
+each organisation. Each batch reads after acquiring the organisation lock,
+so concurrent cleaners see committed progress. Only that organisation's writers
+wait; errors or the one-minute run timeout preserve all committed batches for
+the next hourly tick. It deletes only rows older than the cutoff; messages,
+their sequences and unread positions are untouched.
 A cursor at or above the boundary remains valid even with an empty log.
 `EventsAfter` reads the boundary and rows in one SQL snapshot, returning
 `domain.ErrCursorExpired` below it, including with a zero limit. Every full

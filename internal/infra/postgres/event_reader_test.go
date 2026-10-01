@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
 
 func TestEventsAfter(t *testing.T) {
@@ -141,7 +143,14 @@ func TestEventRetentionTransaction(t *testing.T) {
 	tx, err := pool.Begin(ctx)
 	requireNoError(t, err)
 	defer func() { _ = tx.Rollback(ctx) }()
-	requireNoError(t, postgres.NewEventReader(tx).ExpireEvents(ctx, cutoff))
+	q := sqlcgen.New(tx)
+	id := pgtype.UUID{Bytes: f.OrganizationID, Valid: true}
+	requireNoError(t, q.LockEventRetentionOrganization(ctx, id))
+	count, err := q.ExpireEventBatch(ctx, sqlcgen.ExpireEventBatchParams{OrganizationID: id, Cutoff: pgtype.Timestamptz{Time: cutoff, Valid: true}})
+	requireNoError(t, err)
+	if count != 1 {
+		t.Fatalf("deleted %d rows, want 1", count)
+	}
 	// Until commit, a reader sees both the old boundary and every old row.
 	reader := postgres.NewEventReader(pool)
 	rows, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 10)

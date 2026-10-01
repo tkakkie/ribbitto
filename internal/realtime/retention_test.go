@@ -57,7 +57,9 @@ func TestRetentionReplay(t *testing.T) {
 			_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
 			must(err)
 			reader := postgres.NewEventReader(pool)
-			expire := func() { must(reader.ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))) }
+			expire := func() {
+				must(postgres.NewEventCleaner(pool).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
+			}
 			var events EventReader = reader
 			cursor, wantCursor := int64(1), int64(1)
 			want := []string{"reset"}

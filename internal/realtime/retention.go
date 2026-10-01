@@ -9,7 +9,7 @@ import (
 // DefaultRetention keeps seven days of replay history.
 const DefaultRetention = 7 * 24 * time.Hour
 
-// EventCleaner atomically deletes expired rows and raises replay boundaries.
+// EventCleaner deletes expired rows and raises replay boundaries in atomic batches.
 type EventCleaner interface {
 	ExpireEvents(context.Context, time.Time) error
 }

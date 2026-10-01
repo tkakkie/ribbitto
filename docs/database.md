@@ -32,8 +32,15 @@ the log and the boundary.
 
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events hourly, with a
-one-minute timeout per cleanup, and retries failures at the next tick.
-Messages and unread inputs are never deleted. No schema change is needed.
+one-minute timeout per run. It lists organisations with expired rows in ID
+order without write locks, then processes one organisation at a time in
+transactions of at most 1,000 expired rows, selected in sequence order using
+the existing `(organization_id, seq)` index. Each transaction locks only that
+organisation before deleting events and advancing its replay boundary, then
+commits before the next batch. Errors and timeouts keep committed progress;
+the next tick retries remaining work. The listing uses an organisation-scoped
+`EXISTS` scan on the same index; no additional index or migration is needed.
+Messages and unread inputs are never deleted.
 
 Integration tests use `RIBBITTO_TEST_DATABASE_URL`, an admin connection to
 the `postgres` database as the `postgres` superuser. `pgtest.New(t)` creates

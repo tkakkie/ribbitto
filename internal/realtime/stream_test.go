@@ -234,6 +234,43 @@ func TestStreamRechecksAccessBeforeEachSend(t *testing.T) {
 	}
 }
 
+// A render can wait on the database. Access lost while it waits must still
+// stop that event: the check comes after the render, right before the send
+// (#262).
+func TestStreamDeniesAccessLostWhileRendering(t *testing.T) {
+	log := &fakeLog{events: []domain.Event{posted(1, channelA), posted(2, channelA), posted(3, channelA)}}
+	var mu sync.Mutex
+	member := true
+	authorize := func(e domain.Event) (bool, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return e.Seq != 2 || member, nil
+	}
+	rendering, release := make(chan struct{}), make(chan struct{})
+	renderSlowly := func(e domain.Event) (Outgoing, error) {
+		if e.Seq == 2 {
+			close(rendering)
+			<-release
+		}
+		return render(e)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	send := newRecorder()
+	done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(renderSlowly)}, 0, send)
+	<-rendering
+	mu.Lock()
+	member = false // the membership is removed while event 2 renders
+	mu.Unlock()
+	close(release)
+	send.waitFor(t, 1, 3)
+
+	cancel()
+	got := <-done
+	if got.cursor != 3 || !slices.Equal(send.ids(), []int64{1, 3}) {
+		t.Fatalf("Run = %d, sent %v; want cursor 3 and events 1 and 3", got.cursor, send.ids())
+	}
+}
+
 func TestStreamStopsOnCancelWhileWaiting(t *testing.T) {
 	cause := errors.New("session ended")
 	ctx, cancel := context.WithCancelCause(t.Context())
@@ -284,6 +321,21 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 				return render(e)
 			},
 		},
+		{
+			// The render comes before the check, so its error stops the loop
+			// even for an event the check would deny; nothing is skipped
+			// without a decision.
+			name: "renderer, on an event that would be denied",
+			authorize: func(e domain.Event) (bool, error) {
+				return e.Seq != 2, nil
+			},
+			render: func(e domain.Event) (Outgoing, error) {
+				if e.Seq == 2 {
+					return Outgoing{}, failure
+				}
+				return render(e)
+			},
+		},
 		{name: "sender", authorize: allowAll, render: render, failSend: true},
 	}
 	for _, tt := range tests {
@@ -298,7 +350,11 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 				send.failOn, send.err = 2, failure
 			}
 			s := Stream{Hub: NewHub(), Events: log, Authorizer: tt.authorize, Renderer: tt.render, BatchSize: 1}
-			cursor, err := s.Run(t.Context(), sub, 0, send)
+			// Bounded, so a loop that skips instead of failing ends the test
+			// rather than waiting on the hub forever.
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			cursor, err := s.Run(ctx, sub, 0, send)
 			if !errors.Is(err, failure) {
 				t.Fatalf("Run error = %v, want %v", err, failure)
 			}

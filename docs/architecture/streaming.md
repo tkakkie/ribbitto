@@ -23,7 +23,7 @@ sequenceDiagram
   W->>C: start
   loop
     C->>DB: one snapshot: replay boundary + events after cursor
-    C->>C: authorize, render, send each event; cursor = last seq read
+    C->>C: render, authorize, send each event; cursor = last seq read
     C->>C: wait until hub's latest sequence of org > cursor (no wait if already)
   end
 ```
@@ -57,9 +57,10 @@ sequenceDiagram
   skipped and the cursor moves past them. An error from the reader, the
   authorization check itself, the renderer or the sender stops the loop
   with the cursor before that event, so a reconnect resumes there; a failed
-  membership lookup is never a deny. Cancellation is checked before every
-  event, so an ended session sends nothing more. It drains every batch
-  before waiting.
+  membership lookup is never a deny. A render error stops the loop even for
+  an event the check would have denied, since the check comes after it.
+  Cancellation is checked before every event, so an ended session sends
+  nothing more. It drains every batch before waiting.
 - **Missed raises** (#237). Posting raises the hub right after its commit,
   but a writer without a notifier (`cmd/seed`, sign-up's `member.joined`)
   or, later, another process commits without one, and a stream that has
@@ -87,9 +88,13 @@ sequenceDiagram
 
 ### Authorization and revocation
 
-- Every event is authorized for the connection's member **immediately before
-  sending**, including events already queued: access may have been lost in
-  between. The check itself is `app`'s authorization, reached through the
+- Every event is authorized for the connection's member **after it is
+  rendered and immediately before sending**, including events already
+  queued: access may have been lost in between, also while a render waits on
+  the database (#262). The check stays one membership query per event; a
+  render that is then denied is discarded, and renders are shared and cached
+  anyway. Only the write itself remains between the check and the
+  connection. The check itself is `app`'s authorization, reached through the
   `Authorizer` interface that `realtime` defines.
 - A stream registers with the hub under its session (#207), then looks the
   session up again, so a sign-out in between still stops it. Deleting a

@@ -15,8 +15,7 @@
   };
   newest();
   document.addEventListener("htmx:afterSettle", (event) => {
-    if (event.detail.target.id !== "conversation") return;
-    newest();
+    if (event.detail.target?.id !== "message-composer") return;
     document.getElementById("message-body").focus({ preventScroll: true });
   });
 })();

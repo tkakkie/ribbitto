@@ -111,8 +111,11 @@ func TestMessageListHandler(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if outer := find(doc, atom.Div); attr(outer, "data-event-cursor") != "42" || outer.Parent.DataAtom != atom.Body {
+			if outer := find(doc, atom.Div); attr(outer, "data-event-cursor") != "42" || attr(outer, "sse-connect") != view.ChannelURL("acme", domain.ID{1})+"/events?after=42" || attr(outer, "hx-ext") != "sse" || outer.Parent.DataAtom != atom.Body {
 				t.Fatal("cursor must be on the outer layout, outside every swap target")
+			}
+			if items := find(doc, atom.Ol); attr(items, "sse-swap") != "message" {
+				t.Fatal("latest message list must receive message events")
 			}
 			// An empty channel still loads it: messages swapped in later need it.
 			if script := `src="/static/message-time-v2.js" nonce="` + responseNonce(t, w) + `"`; !strings.Contains(body, script) {
@@ -209,7 +212,12 @@ func TestMessagePostHandler(t *testing.T) {
 		for _, hx := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/htmx=%t", tt.name, hx), func(t *testing.T) {
 				store := &postingStore{err: tt.storeErr}
-				h, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages, s.Posting = populatedMessages(), message.New(store) }))
+				var reads []*int64
+				h, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+					reader := populatedMessages()
+					reader.before = &reads
+					s.Messages, s.Posting = reader, message.New(store)
+				}))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -240,7 +248,13 @@ func TestMessagePostHandler(t *testing.T) {
 				if want != 422 && want != 200 {
 					return
 				}
-				assertFullConversationPage(t, w.Body.String())
+				if hx {
+					if len(reads) != 0 || strings.Contains(w.Body.String(), `id="conversation"`) || !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) {
+						t.Fatal("enhanced post must render only the composer without reading history")
+					}
+				} else {
+					assertFullConversationPage(t, w.Body.String())
+				}
 				doc, err := html.Parse(w.Body)
 				if err != nil {
 					t.Fatal(err)
@@ -251,8 +265,8 @@ func TestMessagePostHandler(t *testing.T) {
 						t.Fatal("invalid input lost or posted")
 					}
 					checkFieldError(t, doc, field)
-				} else if text(field) != "" || !strings.Contains(text(doc), "second") {
-					t.Fatal("composer not cleared or history missing")
+				} else if text(field) != "" {
+					t.Fatal("composer not cleared")
 				}
 			})
 		}
@@ -318,8 +332,28 @@ func TestMessagePagingHandler(t *testing.T) {
 			if got := strings.Contains(body, `data-event-cursor="42"`); got != (tt.before == 0) {
 				t.Fatalf("page cursor present = %t, before = %d", got, tt.before)
 			}
-			if tt.before != 0 && strings.Contains(body, "data-event-cursor") {
-				t.Fatal("older page carries a cursor")
+			if tt.before != 0 && (strings.Contains(body, "data-event-cursor") || strings.Contains(body, "sse-connect") || strings.Contains(body, "hx-post")) {
+				t.Fatal("older page has a cursor, stream or enhanced composer")
+			}
+			if tt.before > 0 {
+				doc, err := html.Parse(strings.NewReader(body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				for n := range doc.Descendants() {
+					if attr(n, "id") != "message-composer" {
+						continue
+					}
+					posted := serveForm(handler, "POST", attr(n, "action"), "live", url.Values{"body": {"from older page"}})
+					if posted.Code != 303 || posted.Header().Get("Location") != channelURL {
+						t.Fatal("older-page form must redirect to the latest page")
+					}
+					invalid := serveForm(handler, "POST", attr(n, "action"), "live", url.Values{"body": {"\n\n"}})
+					if invalid.Code != 422 || !strings.Contains(invalid.Body.String(), "\n\n\n</textarea>") {
+						t.Fatal("older-page form must retain an invalid draft")
+					}
+					assertFullConversationPage(t, invalid.Body.String())
+				}
 			}
 			for _, want := range tt.want {
 				if !strings.Contains(body, want) {

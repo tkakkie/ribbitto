@@ -60,13 +60,17 @@ shows browser-local time.
 
 ## Posting from the channel page
 
-The bottom composer posts through `message.Service.Post`. htmx replaces the
-conversation with the latest messages and an empty field on success; an
-ordinary form submission gets a 303 back to the channel. Invalid bodies
-return 422 with the original text and an associated field error. The channel
+The bottom composer posts through `message.Service.Post`. On the latest
+page, htmx replaces only the composer with an empty form; the message arrives
+through the stream (on reconnect if disconnected). A 422 replaces only the
+composer, keeping the draft and its field error. Older pages use a plain form:
+success gets a 303 to the latest page; errors render a full latest page with
+the draft. Posting without JavaScript uses the same 303/422 flow. The channel
 and organisation are resolved before posting; a non-member gets 404.
 Enter sends, Shift+Enter inserts a line break, and IME composition never
-sends. The page opens at the newest message and scrolls there after posting.
+sends. The page opens at the newest message; live delivery keeps it in view only
+when the reader is already at the bottom. Live appends are announced politely;
+replay duplicates replace the same message id without another announcement.
 
 ## Older pages
 

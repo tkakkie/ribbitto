@@ -244,7 +244,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			}
 		}
 		w := get("GET", view.ChannelURL("acme", acmeChannel), carolToken, now)
-		if w.Code != 200 || strings.Count(w.Body.String(), "hello after reload") != 50 || !strings.Contains(w.Body.String(), "@alice") {
+		if w.Code != 200 || strings.Count(w.Body.String(), ">hello after reload</p>") != 50 || !strings.Contains(w.Body.String(), "@alice") {
 			t.Fatalf("reload: %d %s", w.Code, w.Body.String())
 		}
 		w = get("GET", view.ChannelURL("acme", acmeChannel), bobToken, now)

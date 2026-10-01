@@ -162,3 +162,6 @@ other = "以前のメッセージを読み込む"
 
 ["message.newest"]
 other = "最新のメッセージへ"
+
+["message.new"]
+other = "新しいメッセージ"

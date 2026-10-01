@@ -39,6 +39,8 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 		<div
 			if page.EventCursor != nil && page.Before == 0 {
 				data-event-cursor={ fmt.Sprint(*page.EventCursor) }
+				hx-ext="sse"
+				sse-connect={ fmt.Sprintf("%s/events?after=%d", ChannelURL(page.Organization.Slug, page.Current.ID), *page.EventCursor) }
 			}
 			class="flex h-dvh text-body"
 		>
@@ -96,7 +98,14 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 							<p class="flex justify-center px-6 pt-4"><a href={ templ.SafeURL(olderURL(page)) } hx-get={ olderURL(page) } hx-target="#message-items" hx-swap="afterbegin" hx-select="#message-items > li" hx-select-oob="#load-older" class="inline-flex min-h-11 items-center rounded-md border border-border-strong px-3 py-2 text-fg hover:bg-surface">{ i18n.T(ctx, "message.load_older") }</a></p>
 						}
 					</div>
-					<ol id="message-items" class="peer flex flex-col gap-4 px-6 py-4 empty:hidden">
+					<ol
+						id="message-items"
+						if page.EventCursor != nil && page.Before == 0 {
+							sse-swap="message"
+							hx-swap="beforeend"
+						}
+						class="peer flex flex-col gap-4 px-6 py-4 empty:hidden"
+					>
 						for _, entry := range page.Messages {
 							@MessageItem(entry)
 						}
@@ -107,23 +116,42 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 						<p class="px-6 pb-4 text-center"><a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="text-brand underline">{ i18n.T(ctx, "message.newest") }</a></p>
 					}
 				</div>
-				<form id="message-composer" method="post" action={ ChannelURL(page.Organization.Slug, page.Current.ID) } hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) } hx-target="#conversation" hx-select="#conversation" hx-swap="outerHTML" hx-disabled-elt="find textarea, find button" hx-sync="this:drop" class="flex shrink-0 flex-col gap-2 border-t border-border p-4">
-					<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
-					// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
-					<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md border border-border-strong bg-input px-3 py-2 text-fg">{ "\n" + page.Body }</textarea>
-					if page.BodyError != "" {
-						<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, page.BodyError) }</p>
-					} else {
-						<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
-					}
-					<button type="submit" class="min-h-11 self-end rounded-md bg-brand px-4 py-2 font-semibold text-on-brand">{ i18n.T(ctx, "message.send") }</button>
-				</form>
+				<div id="message-status" role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
+				@MessageComposer(page)
 			</main>
 		</div>
 		// Every channel page loads these, outside #conversation: htmx will not
 		// run scripts in swapped fragments.
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-history-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
+}
+
+// MessageComposer renders the posting form, alone for enhanced submissions.
+templ MessageComposer(page ChannelPage) {
+	<form
+		id="message-composer"
+		method="post"
+		action={ ChannelURL(page.Organization.Slug, page.Current.ID) }
+		if page.Before == 0 {
+			hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) }
+			hx-target="#message-composer"
+			hx-swap="outerHTML"
+			hx-disabled-elt="find textarea, find button"
+			hx-sync="this:drop"
+		}
+		class="flex shrink-0 flex-col gap-2 border-t border-border p-4"
+	>
+		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
+		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
+		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md border border-border-strong bg-input px-3 py-2 text-fg">{ "\n" + page.Body }</textarea>
+		if page.BodyError != "" {
+			<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, page.BodyError) }</p>
+		} else {
+			<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
+		}
+		<button type="submit" class="min-h-11 self-end rounded-md bg-brand px-4 py-2 font-semibold text-on-brand">{ i18n.T(ctx, "message.send") }</button>
+	</form>
 }

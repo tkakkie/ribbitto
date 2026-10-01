@@ -6,7 +6,7 @@
   const restore = () => {
     pane().scrollTop = pane().scrollHeight - fromBottom;
   };
-  const olderPage = (event) => event.detail.target.id === "message-items";
+  const olderPage = (event) => event.detail.target?.id === "message-items";
   document.addEventListener("htmx:beforeSwap", (event) => {
     if (olderPage(event)) fromBottom = pane().scrollHeight - pane().scrollTop;
   });

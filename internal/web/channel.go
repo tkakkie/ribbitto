@@ -167,7 +167,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membe
 	_, err = p.posting.Post(r.Context(), m, c.ID, body)
 	switch {
 	case errors.Is(err, message.ErrInvalidBody):
-		p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
+		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
 	case errors.Is(err, channel.ErrNotFound), errors.Is(err, authz.ErrNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member.
@@ -175,10 +175,20 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membe
 	case err != nil:
 		serverError(w, r, "posting message", err)
 	case r.Header.Get("HX-Request") == "true":
-		p.render(w, r, m, c.ID, http.StatusOK, view.ChannelPage{})
+		p.renderComposer(w, r, m, c, http.StatusOK, view.ChannelPage{})
 	default:
 		http.Redirect(w, r, view.ChannelURL(m.Organization.Slug, c.ID), http.StatusSeeOther)
 	}
+}
+
+// Enhanced posts never replace history or the connection's snapshot cursor.
+func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m authz.Membership, c domain.Channel, status int, page view.ChannelPage) {
+	if r.Header.Get("HX-Request") == "true" {
+		page.Organization, page.Current = m.Organization, c
+		templ.Handler(view.MessageComposer(page), templ.WithStatus(status)).ServeHTTP(w, r)
+		return
+	}
+	p.render(w, r, m, c.ID, status, page)
 }
 
 // channelID parses the {channelID} path segment: the UUID in its canonical

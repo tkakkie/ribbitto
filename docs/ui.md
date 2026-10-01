@@ -158,18 +158,18 @@ checks find only part of accessibility problems, so these stay necessary.
 They verify reference targets exist, not that they describe the right field;
 they do not execute JavaScript or check `hx-*` behaviour.
 
-The channel conversation uses a chronological `<ol>`, with an isolated
-author name, a timestamp and a plain-text body per message. Bodies wrap and
-preserve line breaks; each has `dir="auto"`. The list always exists;
-`hidden peer-empty:flex` hides its empty state from sight and assistive
-technology once populated. The message pane scrolls
-independently with a labelled, keyboard-focusable region; the composer stays
-at the bottom of the viewport.
-Its labelled textarea preserves invalid text and associates its error with
-`aria-describedby`. After an htmx submission, focus returns to the textarea.
-"Load older messages" is a link above the list (a plain link without
-JavaScript); after it prepends a page, the reading position stays put and
-focus moves to the next such link, or to the message pane at the start.
+The chronological `<ol>` has isolated authors, timestamps and plain-text
+bodies (`dir="auto"`, preserved line breaks).
+The list always exists; `hidden peer-empty:flex` hides its empty state when
+populated. Its labelled, keyboard-focusable pane scrolls independently.
+A separate, initially empty `#message-status` has `role="status"` and
+`aria-live="polite"`. ✓ History and paging controls are never inside a live
+region. Only live appends add templ-rendered announcement text; initial
+history, prepends and duplicate replacements stay silent.
+The textarea keeps invalid drafts and links errors with `aria-describedby`;
+htmx submissions return focus to it. "Load older messages"
+is a plain link without JavaScript; after a prepend, the reading position
+stays put; focus moves to the next link, or the pane at the start.
 
 ## Planned directions (from the maintainer, #9)
 

@@ -650,7 +650,8 @@ func TestPagesMarkup(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, problem := range checkMarkup(doc, true) {
+				fragment := c.htmx && c.route == "POST /organizations/{slug}/channels/{channelID}"
+				for _, problem := range checkMarkup(doc, !fragment) {
 					t.Error(problem)
 				}
 				if c.name == "channel" || c.name == "channel with messages" {
@@ -671,6 +672,27 @@ func TestPagesMarkup(t *testing.T) {
 					}
 					if count != wantCount {
 						t.Errorf("message items = %d, want %d", count, wantCount)
+					}
+				}
+				if find(doc, atom.Ol) != nil {
+					statusCount := 0
+					for n := range doc.Descendants() {
+						if attr(n, "role") == "status" {
+							statusCount++
+							if attr(n, "id") != "message-status" || attr(n, "aria-live") != "polite" || text(n) != "" {
+								t.Error("live status must start empty and polite")
+							}
+						}
+						if attr(n, "id") == "message-items" || attr(n, "id") == "load-older" {
+							for p := n; p != nil; p = p.Parent {
+								if attr(p, "aria-live") != "" || slices.Contains([]string{"status", "log", "alert"}, attr(p, "role")) {
+									t.Error("history must never be inside a live region")
+								}
+							}
+						}
+					}
+					if statusCount != 1 {
+						t.Error("channel must have exactly one live status region")
 					}
 				}
 				checkHTMXRequests(t, handler, doc, lang, c.cookie)
@@ -882,6 +904,10 @@ func TestComponentsMarkup(t *testing.T) {
 						item := find(doc, atom.Li)
 						if item == nil || attr(item, "id") != "message-abcd0000000000000000000000000000" {
 							t.Fatal("standalone message lost its list item or stable DOM id")
+						}
+						wantAnnouncement := map[string]string{"en": "New message", "ja": "新しいメッセージ"}[lang] + " @author: <script>bad()</script>\nمرحبا"
+						if attr(item, "data-announcement") != wantAnnouncement {
+							t.Error("announcement must contain localized, escaped plain text")
 						}
 						stamp, body := find(item, atom.Time), find(item, atom.P)
 						if stamp == nil || body == nil {

@@ -15,6 +15,8 @@ type ChannelPage struct {
 	Name, Error               string
 	Body, BodyError           string
 	Messages                  []Message
+	// PostedMessageID correlates a successful enhanced post with stream delivery.
+	PostedMessageID *domain.ID
 	// Older reports that messages before Messages[0] exist.
 	Older bool
 	// Before is the event_seq bound of an older page; 0 shows the latest.
@@ -124,7 +126,7 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 		// run scripts in swapped fragments.
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v2.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
@@ -133,6 +135,9 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 templ MessageComposer(page ChannelPage) {
 	<form
 		id="message-composer"
+		if page.PostedMessageID != nil {
+			data-posted-message={ MessageDOMID(*page.PostedMessageID) }
+		}
 		method="post"
 		action={ ChannelURL(page.Organization.Slug, page.Current.ID) }
 		if page.Before == 0 {

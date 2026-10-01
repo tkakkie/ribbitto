@@ -40,7 +40,10 @@ htmx does only requests and swaps; the server and templ own the HTML.
 
 - A normal request gets a full page. Selecting part of a server-rendered
   full page with `hx-select` is allowed; Load older does this today.
-  Enhanced posts return only the `MessageComposer` fragment.
+  Enhanced posts return only the `MessageComposer` fragment. On success its
+  `data-posted-message` carries the posted message's DOM id; errors omit it.
+  The stream script consumes that id to scroll once the item is present,
+  regardless of response/delivery order or a reconnect.
 - A unit that M3's SSE needs becomes an explicit templ fragment or
   component, rendered by the same code as the full page. `MessageItem`
   takes a `view.Message` and renders one `<li>` on its own or in the page.

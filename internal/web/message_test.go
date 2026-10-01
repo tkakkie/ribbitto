@@ -181,6 +181,7 @@ func TestMessageTimestampView(t *testing.T) {
 }
 
 type postingStore struct {
+	id                   domain.ID
 	err                  error
 	body                 string
 	org, channel, member domain.ID
@@ -188,7 +189,7 @@ type postingStore struct {
 
 func (s *postingStore) Post(_ context.Context, org, ch, member domain.ID, body string) (domain.Message, error) {
 	s.org, s.channel, s.member, s.body = org, ch, member, body
-	return domain.Message{Body: body}, s.err
+	return domain.Message{ID: s.id, Body: body}, s.err
 }
 
 func testPoster() *message.Service { return message.New(&postingStore{}) }
@@ -214,7 +215,7 @@ func TestMessagePostHandler(t *testing.T) {
 	} {
 		for _, hx := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/htmx=%t", tt.name, hx), func(t *testing.T) {
-				store := &postingStore{err: tt.storeErr}
+				store := &postingStore{id: domain.ID{37}, err: tt.storeErr}
 				var reads []*int64
 				h, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
 					reader := populatedMessages()
@@ -247,6 +248,14 @@ func TestMessagePostHandler(t *testing.T) {
 					if !hx && w.Header().Get("Location") != path {
 						t.Fatal("wrong redirect")
 					}
+				}
+				marker := `data-posted-message="` + view.MessageDOMID(store.id) + `"`
+				if hx && want == 200 {
+					if !strings.Contains(w.Body.String(), marker) {
+						t.Fatal("success must identify the posted message for stream correlation")
+					}
+				} else if strings.Contains(w.Body.String(), "data-posted-message") {
+					t.Fatal("only enhanced success may carry a posted message ID")
 				}
 				if want != 422 && want != 200 {
 					return

@@ -69,7 +69,12 @@ the draft. Posting without JavaScript uses the same 303/422 flow. The channel
 and organisation are resolved before posting; a non-member gets 404.
 Enter sends, Shift+Enter inserts a line break, and IME composition never
 sends. The page opens at the newest message; live delivery keeps it in view only
-when the reader is already at the bottom. Live appends are announced politely;
+when the reader is already at the bottom, except for their own successful post:
+the composer's success fragment identifies its message, and the sender scrolls
+to that item even when scrolled up. This works whether the stream arrives before
+or after the response, including delivery after reconnect. Each successful
+post's scroll intent is consumed once; failed posts create none. Focus stays in
+the composer. Live appends are announced politely;
 replay duplicates replace the same message id without another announcement.
 
 ## Older pages

@@ -1,4 +1,29 @@
 (() => {
+  // Successful posts may arrive through the stream only after a reconnect.
+  // Keep their scroll intent independently of later composer replacements.
+  const pending = new Set();
+  const scrollPosted = (id) => {
+    if (!pending.has(id)) return false;
+    const item = document.getElementById(id);
+    if (!item) return false;
+    pending.delete(id);
+    item.scrollIntoView({ block: "nearest" });
+    // Include the list's bottom padding so later live messages still follow.
+    if (item === document.getElementById("message-items").lastElementChild) {
+      const pane = document.getElementById("message-list");
+      pane.scrollTop = pane.scrollHeight;
+    }
+    return true;
+  };
+  document.addEventListener("htmx:afterSettle", (event) => {
+    const form = event.target;
+    if (form.id !== "message-composer" || !form.dataset.postedMessage) return;
+    const id = form.dataset.postedMessage;
+    delete form.dataset.postedMessage;
+    pending.add(id);
+    // Delivery can precede the POST response; the item is then already here.
+    scrollPosted(id);
+  });
   const reset = (event) => {
     event.target.close();
     location.reload();
@@ -22,7 +47,7 @@
       swapStyle: existing ? "outerHTML" : "beforeend", settleDelay: 0,
     }, {
       afterSettleCallback: () => {
-        if (atBottom) pane.scrollTop = pane.scrollHeight;
+        if (!scrollPosted(incoming.id) && atBottom) pane.scrollTop = pane.scrollHeight;
         // Retain recent additions for replay bursts without growing forever.
         // aria-relevant="additions" keeps removal of older entries silent.
         if (!existing) {

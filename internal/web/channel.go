@@ -166,7 +166,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membe
 		return
 	}
 	body := r.PostForm.Get("body")
-	_, err = p.posting.Post(r.Context(), m, c.ID, body)
+	posted, err := p.posting.Post(r.Context(), m, c.ID, body)
 	switch {
 	case errors.Is(err, message.ErrInvalidBody):
 		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
@@ -177,7 +177,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membe
 	case err != nil:
 		serverError(w, r, "posting message", err)
 	case r.Header.Get("HX-Request") == "true":
-		p.renderComposer(w, r, m, c, http.StatusOK, view.ChannelPage{})
+		p.renderComposer(w, r, m, c, http.StatusOK, view.ChannelPage{PostedMessageID: &posted.ID})
 	default:
 		http.Redirect(w, r, view.ChannelURL(m.Organization.Slug, c.ID), http.StatusSeeOther)
 	}

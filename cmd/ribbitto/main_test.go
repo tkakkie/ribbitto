@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
@@ -108,6 +109,60 @@ func TestWatermarkStops(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("stop did not cancel a blocked watermark check")
 	}
+}
+
+type blockingEventCleaner struct {
+	started, canceled, release chan struct{}
+}
+
+func (c blockingEventCleaner) ExpireEvents(ctx context.Context, _ time.Time) error {
+	close(c.started)
+	<-ctx.Done()
+	close(c.canceled)
+	<-c.release
+	return ctx.Err()
+}
+
+func TestRetentionStops(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cleaner := blockingEventCleaner{make(chan struct{}), make(chan struct{}), make(chan struct{})}
+		// The parent stays alive, as when serve returns a listener error.
+		stop := startRealtimeWorker(context.Background(), realtime.Retention{Events: cleaner}, time.Hour)
+		defer func() {
+			close(cleaner.release)
+			stop()
+		}()
+		synctest.Wait()
+		select {
+		case <-cleaner.started:
+		default:
+			t.Fatal("retention did not start before the first tick")
+		}
+		stopped := make(chan struct{})
+		go func() {
+			stop()
+			close(stopped)
+		}()
+		synctest.Wait()
+		select {
+		case <-cleaner.canceled:
+		default:
+			t.Fatal("stop did not cancel a blocked clean-up")
+		}
+		select {
+		case <-stopped:
+			t.Fatal("stop returned before clean-up finished")
+		default:
+		}
+		// Let clean-up return before stop can let serve close the pool.
+		cleaner.release <- struct{}{}
+		synctest.Wait()
+		select {
+		case <-stopped:
+		default:
+			t.Fatal("stop did not wait for clean-up to return")
+		}
+	})
 }
 
 func TestSignupEnabled(t *testing.T) {

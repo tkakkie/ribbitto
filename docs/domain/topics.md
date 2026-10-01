@@ -14,7 +14,8 @@ source of truth for what exists.
 
 - Every channel message is in **exactly one topic**, a named conversation
   inside its channel.
-- Every channel has **exactly one default topic** (UI label *chorus*). It
+- Every channel has **exactly one default topic** (UI label *chorus*,
+  [`vocabulary.md`](vocabulary.md)). It
   is created in the same transaction as its channel, is never deleted, and
   no other topic can become the default. It has no user-defined name: the
   UI shows its label from the message files. A message posted without a

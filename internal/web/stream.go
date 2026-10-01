@@ -111,6 +111,13 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 		http.NotFound(w, r)
 		return
 	}
+	if err != nil && ctx.Err() != nil {
+		// The session ended (or the client left) while it was being looked
+		// up again: the store reports the cancellation as an error, but it
+		// is the expected end of this stream, not a server failure.
+		http.NotFound(w, r)
+		return
+	}
 	if err != nil {
 		serverError(w, r, "re-checking the stream's session", err)
 		return

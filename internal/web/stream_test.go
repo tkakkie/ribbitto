@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -171,6 +172,10 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 		// The session is still valid at the second look but ends at that
 		// instant: only a registration made before it can be cancelled.
 		{"signed out right after registering", laterSession{session: live, cancelNow: true}},
+		// The sign-out lands while the second look is still querying: the
+		// store wraps the cancelled context as an error, which must end the
+		// stream like a deleted session, not as a server error.
+		{"signed out during the second look", laterSession{session: live, cancelNow: true, err: fmt.Errorf("resolving session: %w", context.Canceled)}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			hub := realtime.NewHub()
@@ -193,7 +198,7 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 			if strings.Contains(w.Body.String(), "event:") || strings.Contains(w.Body.String(), "data:") {
 				t.Fatalf("status %d, body %q; want nothing streamed", w.Code, w.Body.String())
 			}
-			if tt.later.cancelNow == false && w.Code != http.StatusNotFound {
+			if (!tt.later.cancelNow || tt.later.err != nil) && w.Code != http.StatusNotFound {
 				t.Fatalf("status %d, want 404", w.Code)
 			}
 			if n := hub.Connections(); n != 0 {

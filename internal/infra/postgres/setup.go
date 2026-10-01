@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
 
@@ -52,7 +51,7 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 		if err != nil {
 			return err
 		}
-		if err := q.InsertMemberEvent(ctx, sqlcgen.InsertMemberEventParams{OrganizationID: org.ID, Seq: seq, Kind: string(domain.EventMemberJoined), MemberID: member.ID}); err != nil {
+		if err := NewEventLog(tx).AppendMemberJoined(ctx, org.ID.Bytes, member.ID.Bytes, seq); err != nil {
 			return err
 		}
 		// Listed exception (feature map): setup writes the channel feature's

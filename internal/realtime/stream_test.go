@@ -135,14 +135,17 @@ func TestStreamReplaysThenDeliversLive(t *testing.T) {
 	done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 0, send)
 	send.waitFor(t, 1, 2)
 
-	log.append(posted(3, channelA), posted(4, channelB))
-	hub.Raise(orgA, 4)
-	send.waitFor(t, 1, 2, 3)
+	// Event 4 is another channel's: it is skipped, and the cursor moves past
+	// it. Event 5 is delivered after it, so once 5 is received the loop has
+	// finished with 4; cancelling right after 3 could land before that.
+	log.append(posted(3, channelA), posted(4, channelB), posted(5, channelA))
+	hub.Raise(orgA, 5)
+	send.waitFor(t, 1, 2, 3, 5)
 
 	cancel()
 	got := <-done
-	if got.cursor != 4 || !errors.Is(got.err, context.Canceled) {
-		t.Fatalf("Run = %d, %v; want 4, context.Canceled", got.cursor, got.err)
+	if got.cursor != 5 || !errors.Is(got.err, context.Canceled) {
+		t.Fatalf("Run = %d, %v; want 5, context.Canceled", got.cursor, got.err)
 	}
 }
 

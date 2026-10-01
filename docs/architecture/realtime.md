@@ -42,10 +42,10 @@ rolls the sequence back with it.
   a one-shot signal (see [*No lost wakeups*](streaming.md#ordering-and-replay)) — and only ever raises it.
   Events themselves are always read from `event_log`. A crash between
   commit and telling the hub loses nothing: readers catch up from the table.
-  With more than one server, the value travels as PostgreSQL `NOTIFY`
+  *Future work:* with more than one server, the value would travel as PostgreSQL `NOTIFY`
   (payload: organisation and sequence) sent inside the writing transaction;
-  each listener raises its local hub's value, and after reconnecting it
-  reads `organization.event_seq` and raises the value to that.
+  each listener would raise its local hub's value, and after reconnecting
+  read `organization.event_seq` and raise the value to that (#236).
 
 The channel page reads its channel, sidebar, history and both author batches
 in one `REPEATABLE READ READ ONLY` transaction through `postgres.MessageReader`.

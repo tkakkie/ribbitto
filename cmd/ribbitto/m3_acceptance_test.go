@@ -73,7 +73,6 @@ func TestM3Acceptance(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("outsider's own stream: %d", status)
 	}
-	drain(t, outsiderEvents)
 
 	// The member's connection drops; two posts land meanwhile. The browser
 	// reconnects with the last id it received and gets exactly those two,

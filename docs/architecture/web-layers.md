@@ -172,18 +172,20 @@ check cannot prove that a stored value is only a non-sensitive UX setting.
 ## Audit, 2026-10-01 (M3)
 
 Every HTML handler in `internal/web`, every templ component and every
-application script in `web/static` was read against these rules after M3;
-#163 repeats the 2026-09-30 audit (#194, #198).
+application script in `web/static` was read against these rules, first on
+2026-09-30 and again after M3 (#163).
 
-- **Handlers.** All pages, the composer fragment and the event stream fill
-  view models and render through templ; the stream writes templ output as
-  SSE data.
-- **Templates.** No I/O or authorisation; `LiveMessageItem`'s announcement is
-  attribute text, escaped by templ.
-- **Core flows.** Plain forms and links still work without JavaScript; live
-  updates are enhancement only.
+| Where | Finding | Fixed by |
+|---|---|---|
+| `view/channel.templ`: `ChannelPage.Messages` | The handler now converts app entries to `view.Message` values | #194; depguard `view` rule |
+| Composer script's `htmx:beforeSwap` made 422 responses swap | JavaScript decided what htmx swaps | #198: layout's htmx config |
+| `message-stream-v2.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
+
+Everything else conforms:
+
+- **Handlers.** Pages, the composer fragment and the event stream render
+  view models through templ.
+- **Templates.** No I/O or authorisation; the announcement is escaped.
+- **Core flows.** Plain forms and links work without JavaScript.
 - **Scripts.** Focus, scroll, keyboard, local time and SSE glue; no requests,
-  storage or globals. `message-stream-v2.js` swaps through `htmx.swap`,
-  choosing `outerHTML` for a message id already present, because the SSE
-  extension can only append. That is deliberate SSE glue, and the HTML stays
-  server-rendered.
+  storage or globals.

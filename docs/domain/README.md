@@ -18,6 +18,7 @@ for the current tables, columns and constraints.
 | File | Covers |
 |---|---|
 | `README.md` (this file) | glossary, entities and ER diagram, invariants, MVP scope |
+| [`vocabulary.md`](vocabulary.md) | product labels, ordinary words and Japanese UI vocabulary |
 | [`validation.md`](validation.md) | input validation rules |
 | [`unread.md`](unread.md) | unread rules (planned, M2–M4) |
 | [`names.md`](names.md) | display names, handles, how members are shown |
@@ -34,7 +35,10 @@ for the current tables, columns and constraints.
 | **organization** | A workspace. Owns everything its members create. |
 | **member** | An account's membership in one organisation. All organisation-owned data refers to members, never directly to accounts. |
 | **handle** | A member's organisation-scoped name for people to tell members apart, shown as `Display name @handle`. |
+| **section** *(planned)* | A group of channels in the sidebar; only its label is reserved so far. |
 | **channel** | A named conversation inside an organisation. |
+| **topic** *(planned)* | A conversation topic within a channel; only its label is reserved so far. |
+| **default topic** *(planned)* | A channel's default topic; its behaviour is not yet decided. |
 | **channel member** | A member's per-channel state (read position). |
 | **message** | A post in a channel, written by a member. |
 | **event** | A durable change that live clients must see (a message posted, a member joined), recorded in `event_log`. |

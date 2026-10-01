@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -22,14 +23,18 @@ func posted(seq int64, channel domain.ID) domain.Event {
 }
 
 // fakeLog is an event log that can grow while a stream runs. failOn makes
-// the read of that call number (1-based) fail.
+// the read of that call number (1-based) fail. maxReads, if set, fails every
+// read after that many, so a loop that spins stops instead of hanging.
 type fakeLog struct {
-	mu     sync.Mutex
-	events []domain.Event
-	calls  int
-	failOn int
-	err    error
+	mu       sync.Mutex
+	events   []domain.Event
+	calls    int
+	failOn   int
+	err      error
+	maxReads int
 }
+
+var errTooManyReads = errors.New("fakeLog: too many reads")
 
 func (l *fakeLog) EventsAfter(_ context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
 	l.mu.Lock()
@@ -38,6 +43,9 @@ func (l *fakeLog) EventsAfter(_ context.Context, org domain.ID, after int64, lim
 	if l.calls == l.failOn {
 		return nil, l.err
 	}
+	if l.maxReads > 0 && l.calls > l.maxReads {
+		return nil, errTooManyReads
+	}
 	var out []domain.Event
 	for _, e := range l.events {
 		if e.OrganizationID == org && e.Seq > after && len(out) < limit {
@@ -45,6 +53,12 @@ func (l *fakeLog) EventsAfter(_ context.Context, org domain.ID, after int64, lim
 		}
 	}
 	return out, nil
+}
+
+func (l *fakeLog) readCount() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.calls
 }
 
 func (l *fakeLog) append(events ...domain.Event) {
@@ -368,31 +382,38 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 	}
 }
 
-// The hub may be ahead of the log where no row exists (a cursor below the
-// replay boundary). The loop must then block until the hub moves past the
-// value it saw, not read the same empty range in a tight loop.
+// The hub may be ahead of what a read returns (for example when the
+// organisation's row is gone and reads come back empty). The loop must then
+// block until the hub moves past the value it saw, not read the same empty
+// range in a tight loop. synctest.Wait returns once the loop is durably
+// blocked in the hub, so no sleep stands in for "blocked".
 func TestStreamDoesNotSpinWhenTheHubIsAheadOfTheLog(t *testing.T) {
-	hub := NewHub()
-	hub.Raise(orgA, 50)
-	log := &fakeLog{}
-	ctx, cancel := context.WithCancel(t.Context())
-	send := newRecorder()
-	done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send)
-	time.Sleep(blocked)
-	log.mu.Lock()
-	reads := log.calls
-	log.mu.Unlock()
-	if reads > 2 {
-		t.Fatalf("reads = %d while nothing new was committed, want at most 2", reads)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		hub := NewHub()
+		hub.Raise(orgA, 50)
+		log := &fakeLog{events: []domain.Event{posted(10, channelA)}, maxReads: 100}
+		ctx, cancel := context.WithCancel(t.Context())
+		send := newRecorder()
+		done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send)
+		synctest.Wait()
+		// One read finds nothing after 10; the hub already reports 50, so
+		// the loop reads once more and then waits for a value above 50.
+		if reads := log.readCount(); reads != 2 {
+			t.Fatalf("reads = %d while nothing new was committed, want exactly 2", reads)
+		}
 
-	log.append(posted(51, channelA))
-	hub.Raise(orgA, 51)
-	send.waitFor(t, 10) // A gap now resets instead of silently advancing.
-	cancel()
-	if got := <-done; got.cursor != 10 {
-		t.Fatalf("cursor = %d, want 10", got.cursor)
-	}
+		log.append(posted(11, channelA))
+		hub.Raise(orgA, 51)
+		send.waitFor(t, 11)
+		synctest.Wait()
+		if reads := log.readCount(); reads != 3 {
+			t.Fatalf("reads = %d after one raise, want 3", reads)
+		}
+		cancel()
+		if got := <-done; got.cursor != 11 {
+			t.Fatalf("cursor = %d, want 11", got.cursor)
+		}
+	})
 }
 
 func TestStreamRefusesANegativeCursor(t *testing.T) {
@@ -554,20 +575,30 @@ func TestStreamHeartbeatsWhileDrainingFilteredBatches(t *testing.T) {
 	}
 }
 
-// A gap inside a batch, not only before its first event, resets the stream
-// before anything of that batch is delivered.
-func TestStreamResetsOnAGapInsideABatch(t *testing.T) {
-	log := &fakeLog{events: []domain.Event{posted(11, channelA), posted(13, channelA)}}
-	send := newRecorder()
-	// Bounded, so a regression that delivers past the gap and then waits
-	// fails instead of hanging.
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	got := <-runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send)
-	if got.err != nil || got.cursor != 10 {
-		t.Fatalf("Run = %d, %v; want 10 and the reset sent", got.cursor, got.err)
-	}
-	if ids := send.ids(); !slices.Equal(ids, []int64{10}) {
-		t.Fatalf("sent %v, want only the reset (id 10): event 11 must not be delivered past the gap", ids)
+// A gap resets the stream before anything of that batch is delivered,
+// whether it comes before the batch's first event or inside the batch.
+func TestStreamResetsOnAGap(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		events []domain.Event
+	}{
+		{"before the first event", []domain.Event{posted(12, channelA)}},
+		{"inside a batch", []domain.Event{posted(11, channelA), posted(13, channelA)}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			log := &fakeLog{events: tt.events}
+			send := newRecorder()
+			// Bounded, so a regression that delivers past the gap and then
+			// waits fails instead of hanging.
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			got := <-runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send)
+			if got.err != nil || got.cursor != 10 {
+				t.Fatalf("Run = %d, %v; want 10 and the reset sent", got.cursor, got.err)
+			}
+			if ids := send.ids(); !slices.Equal(ids, []int64{10}) {
+				t.Fatalf("sent %v, want only the reset (id 10): nothing may be delivered past the gap", ids)
+			}
+		})
 	}
 }

@@ -7,7 +7,7 @@ INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
 VALUES ($1, $2, $3, NULL, jsonb_build_object('member_id', sqlc.arg(member_id)::uuid));
 
 -- name: EventsAfter :many
-SELECT o.id AS organization_id, o.event_log_boundary_seq,
+SELECT o.id AS organization_id, o.event_log_boundary_seq, o.event_seq,
        coalesce(e.seq, 0)::bigint AS seq, coalesce(e.kind, '')::text AS kind,
        e.audience_member_id, e.data
 FROM organization o

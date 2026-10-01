@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
@@ -33,6 +34,46 @@ type retentionSender struct {
 }
 
 func (s *retentionSender) Send(_ context.Context, out Outgoing) error { return s.send(out) }
+
+func TestCachedEventsCursorAboveLog(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := pgtest.OrganizationWithOwner(t, pool, "restored", "general")
+	for range 2 {
+		_, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
+		must(err)
+	}
+	cached := NewCachedEvents(postgres.NewEventReader(pool), NewHub(), 8, time.Minute)
+	got, err := cached.EventsAfter(ctx, f.OrganizationID, 2, 1)
+	must(err)
+	if len(got) != 1 || got[0].Seq != 3 || cached.cache.Len() != 1 {
+		t.Fatalf("cache not primed with event 3: %v", got)
+	}
+	// Roll the log back to sequence 1 while a full batch survives. A real
+	// restore happens with ribbitto stopped, so caches start empty; this only
+	// pins that the zero-limit re-check applies the upper bound to a hit.
+	tx, err := pool.Begin(ctx)
+	must(err)
+	defer func() { _ = tx.Rollback(ctx) }()
+	_, err = tx.Exec(ctx, "DELETE FROM message WHERE organization_id = $1 AND event_seq > 1", f.OrganizationID)
+	must(err)
+	_, err = tx.Exec(ctx, "DELETE FROM event_log WHERE organization_id = $1 AND seq > 1", f.OrganizationID)
+	must(err)
+	_, err = tx.Exec(ctx, "UPDATE organization SET event_seq = 1 WHERE id = $1", f.OrganizationID)
+	must(err)
+	must(tx.Commit(ctx))
+	got, err = cached.EventsAfter(ctx, f.OrganizationID, 2, 1)
+	if !errors.Is(err, domain.ErrCursorExpired) || len(got) != 0 {
+		t.Fatalf("cached batch above restored log: %v, %v; want no events and ErrCursorExpired", got, err)
+	}
+}
 
 func TestRetentionReplay(t *testing.T) {
 	t.Parallel()

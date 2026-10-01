@@ -100,6 +100,15 @@ They join the setup organisation as members and are signed in automatically.
 `off`, empty or unset disables sign-up (GET and POST return 404); any other
 value prevents startup. Sign-in links to registration only while it is open.
 
+## Restoring a backup
+
+Restore the database only with ribbitto stopped: stop ribbitto, restore the
+database, then start ribbitto. The process keeps sequence state in memory (the
+real-time hub and its caches), so rolling the database back under a running
+process is not supported. After the restart, a browser that reconnects with a
+cursor above the restored log gets `reset` and reloads the page
+([streaming](docs/architecture/streaming.md#ordering-and-replay)).
+
 ## Documentation
 
 - [Architecture](docs/architecture/README.md) — packages, allowed imports, request and real-time flow

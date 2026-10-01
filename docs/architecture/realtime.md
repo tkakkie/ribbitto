@@ -91,9 +91,12 @@ so concurrent cleaners see committed progress. Only that organisation's writers
 wait; errors or the one-minute run timeout preserve all committed batches for
 the next hourly tick. It deletes only rows older than the cutoff; messages,
 their sequences and unread positions are untouched.
-A cursor at or above the boundary remains valid even with an empty log.
-`EventsAfter` reads the boundary and rows in one SQL snapshot, returning
-`domain.ErrCursorExpired` below it, including with a zero limit. Every full
+A cursor is valid from the boundary through the committed `event_seq`,
+inclusive, even with an empty log; at `event_seq` it waits for new events.
+`EventsAfter` reads both bounds and rows in one SQL statement snapshot, returning
+`domain.ErrCursorExpired` outside those bounds, including with a zero limit. Every full
 `CachedEvents` result gets a fresh zero-limit check: immutable cached rows and
-that boundary describe a valid batch at the check's snapshot, or require reset.
-Short batches already carry their read's boundary check.
+both bounds describe a valid batch at the check's snapshot, or require reset.
+Short batches already carry their read's checks of both bounds. Cached rows
+are assumed immutable: a restore happens with ribbitto stopped, so caches and
+the hub start empty ([Restoring a backup](../../README.md#restoring-a-backup)).

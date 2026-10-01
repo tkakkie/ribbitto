@@ -59,8 +59,8 @@ func (c *CachedEvents) EventsAfter(ctx context.Context, organizationID domain.ID
 		return c.events.EventsAfter(ctx, organizationID, after, limit)
 	})
 	if err == nil && fullBatch(key, events) {
-		// Immutable rows can be reused, but retention may have invalidated
-		// their cursor. A zero-limit read checks the boundary without rows.
+		// Retention may have invalidated the cursor since the rows were
+		// read. A zero-limit read checks both cursor bounds without rows.
 		_, err = c.events.EventsAfter(ctx, organizationID, after, 0)
 	}
 	if err != nil {

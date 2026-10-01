@@ -101,10 +101,11 @@ var errHeartbeatDue = errors.New("realtime: heartbeat due")
 // The loop reads until a read returns fewer events than the batch size and
 // only then waits on the hub: the hub's value may be older than the log (a
 // fresh process knows no sequence yet), and waiting before draining could
-// stall replay. The hub's value may also be ahead of the log where no row
-// exists (a cursor below the replay boundary), so once caught up the loop
-// waits for a sequence above both its cursor and the last value the hub
-// reported; otherwise it would read the same empty range again and again.
+// stall replay. The hub's value may also be ahead of what a read returns,
+// for example when the organisation's row is gone and reads come back empty,
+// so once caught up the loop waits for a sequence above both its cursor and
+// the last value the hub reported; otherwise it would read the same empty
+// range again and again.
 // A negative cursor is refused. Every event is authorized after it is
 // rendered and immediately before it is sent, including ones read in an
 // earlier batch, since access may have been lost in between.
@@ -134,48 +135,23 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			return cursor, fmt.Errorf("reading events after %d: %w", cursor, err)
 		}
 		for _, event := range events {
-			// A cancelled stream (for example a session that ended) sends
-			// nothing more, even if the rest of the batch is already read and
-			// the interfaces it calls would not notice the cancellation.
-			if ctx.Err() != nil {
-				return cursor, context.Cause(ctx)
-			}
-			if event.Kind != domain.EventMessagePosted || event.ChannelID != sub.Channel {
-				cursor = event.Seq
-				continue
-			}
-			// Render first, then authorize: a render can wait on the database,
-			// and access lost meanwhile must still stop this event. Renders
-			// are shared, so rendering one that is then denied costs little,
-			// and the check stays one query per event. A render error stops
-			// the loop even for an event that would have been denied, so
-			// nothing is ever skipped without a decision.
-			out, err := s.Renderer.Render(ctx, sub, event)
+			sent, err := s.deliver(ctx, sub, event, send)
 			if err != nil {
-				return cursor, fmt.Errorf("rendering event %d: %w", event.Seq, err)
+				return cursor, err
 			}
-			allowed, err := s.Authorizer.MayReceive(ctx, sub.Account, sub.OrganizationSlug, event)
-			if err != nil {
-				return cursor, fmt.Errorf("authorizing event %d: %w", event.Seq, err)
+			// Skipped events move the cursor but not the last write.
+			if sent {
+				written = time.Now()
 			}
-			if !allowed {
-				cursor = event.Seq
-				continue
-			}
-			if err := send.Send(ctx, out); err != nil {
-				return cursor, fmt.Errorf("sending event %d: %w", event.Seq, err)
-			}
-			written = time.Now()
 			cursor = event.Seq
 		}
 		if len(events) == batch {
 			// Draining a backlog that is all other channels' events writes
 			// nothing either; the heartbeat is still due on time.
 			if s.Heartbeat > 0 && time.Since(written) >= s.Heartbeat {
-				if err := send.Heartbeat(ctx); err != nil {
-					return cursor, fmt.Errorf("sending heartbeat: %w", err)
+				if err := heartbeat(ctx, send, &written); err != nil {
+					return cursor, err
 				}
-				written = time.Now()
 			}
 			continue
 		}
@@ -184,6 +160,52 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			return cursor, err
 		}
 	}
+}
+
+// deliver sends one event if this connection wants it and may receive it.
+// It reports whether the event was sent; false is a skip, which still moves
+// the cursor. An error means the event was neither sent nor skipped, so Run
+// returns it with the cursor before the event.
+func (s Stream) deliver(ctx context.Context, sub Subscription, event domain.Event, send Sender) (bool, error) {
+	// A cancelled stream (for example a session that ended) sends nothing
+	// more, even if the rest of the batch is already read and the interfaces
+	// it calls would not notice the cancellation.
+	if ctx.Err() != nil {
+		return false, context.Cause(ctx)
+	}
+	if event.Kind != domain.EventMessagePosted || event.ChannelID != sub.Channel {
+		return false, nil
+	}
+	// Render first, then authorize: a render can wait on the database, and
+	// access lost meanwhile must still stop this event. Renders are shared,
+	// so rendering one that is then denied costs little, and the check stays
+	// one query per event. A render error stops the loop even for an event
+	// that would have been denied, so nothing is ever skipped without a
+	// decision.
+	out, err := s.Renderer.Render(ctx, sub, event)
+	if err != nil {
+		return false, fmt.Errorf("rendering event %d: %w", event.Seq, err)
+	}
+	allowed, err := s.Authorizer.MayReceive(ctx, sub.Account, sub.OrganizationSlug, event)
+	if err != nil {
+		return false, fmt.Errorf("authorizing event %d: %w", event.Seq, err)
+	}
+	if !allowed {
+		return false, nil
+	}
+	if err := send.Send(ctx, out); err != nil {
+		return false, fmt.Errorf("sending event %d: %w", event.Seq, err)
+	}
+	return true, nil
+}
+
+// heartbeat sends a heartbeat and records it as the last write.
+func heartbeat(ctx context.Context, send Sender, written *time.Time) error {
+	if err := send.Heartbeat(ctx); err != nil {
+		return fmt.Errorf("sending heartbeat: %w", err)
+	}
+	*written = time.Now()
+	return nil
 }
 
 // wait is Hub.Wait, sending a heartbeat whenever Heartbeat has passed since
@@ -196,13 +218,12 @@ func (s Stream) wait(ctx context.Context, org domain.ID, after int64, send Sende
 		waitCtx, cancel := context.WithDeadlineCause(ctx, written.Add(s.Heartbeat), errHeartbeatDue)
 		seq, err := s.Hub.Wait(waitCtx, org, after)
 		cancel()
-		if heartbeat, err := heartbeatDue(ctx, err); !heartbeat {
+		if due, err := heartbeatDue(ctx, err); !due {
 			return seq, err
 		}
-		if err := send.Heartbeat(ctx); err != nil {
-			return 0, fmt.Errorf("sending heartbeat: %w", err)
+		if err := heartbeat(ctx, send, written); err != nil {
+			return 0, err
 		}
-		*written = time.Now()
 	}
 }
 

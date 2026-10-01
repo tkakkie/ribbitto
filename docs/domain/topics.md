@@ -28,21 +28,30 @@ source of truth for what exists.
 
 | Entity | Key columns |
 |---|---|
-| `topic` | `id` (UUIDv7), `organization_id`, `channel_id`, `name` (NULL only for the default topic), `created_at` |
-| `channel` | adds `default_topic_id`, not null |
+| `topic` | `id` (UUIDv7), `organization_id`, `channel_id`, `name` (NULL only for the default topic), `is_default`, `created_at` |
+| `channel` | adds `default_topic_id`, not null, and `default_topic_is_default`, always true |
 | `message` | adds `topic_id`, not null |
 
 - **Names** are unique per channel, ignoring case, among named topics: a unique
   index on `(organization_id, channel_id, lower(name))`. Validation of the
   name follows channel names ([`validation.md`](validation.md)) unless the
   implementing issue says otherwise.
-- **Same channel, enforced by the database.** `message (organization_id,
-  channel_id, topic_id)` and `channel (organization_id, id,
-  default_topic_id)` are composite foreign keys to `topic (organization_id,
-  channel_id, id)`, so a message can never be in another channel's topic
-  and a channel's default topic is always its own. The foreign key from
-  `channel` also makes the default topic undeletable. Channel and topic
-  refer to each other, so one of the two keys is deferred to commit.
+- **One default topic per channel, enforced by the database.** `is_default`
+  is true exactly when `name` is NULL (a `CHECK`), and a partial unique
+  index on `(organization_id, channel_id) WHERE is_default` allows one per
+  channel — a plain unique index would not, since NULL names never collide.
+- **Same channel, enforced by the database.** `topic` has a unique key on
+  `(organization_id, channel_id, id)`, the target composite foreign keys need
+  (as `channel (organization_id, id)` is for messages today).
+  `message (organization_id, channel_id, topic_id)` references it, so a
+  message can never be in another channel's topic. `channel
+  (organization_id, id, default_topic_id, default_topic_is_default)`
+  references a second unique key, `topic (organization_id, channel_id, id,
+  is_default)`, where `default_topic_is_default` is a column fixed to true by
+  a `CHECK`: so the pointer can only name the channel's own default topic,
+  never a named one. The foreign key from `channel` also makes the default
+  topic undeletable. Channel and topic refer to each other, so one of the
+  two keys is deferred to commit.
 - **Migration:** every existing channel gets a default topic, and every
   existing message moves into its channel's default topic, in the same
   migration that makes `topic_id` and `default_topic_id` not null.

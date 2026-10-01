@@ -110,6 +110,7 @@ func serve(ctx context.Context, databaseURL string) error {
 		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout,
 		write: writeTimeout,
 	})
+	endStreamsOnShutdown(srv, hub)
 
 	var metrics *http.Server
 	if metricsAddr != "" {
@@ -180,6 +181,14 @@ const (
 
 type serverTimeouts struct {
 	readHeader, read, idle, write time.Duration
+}
+
+// endStreamsOnShutdown makes srv end every open event stream when it starts
+// shutting down. An open stream never goes idle, so Shutdown would wait for
+// it until its deadline; ending them first lets it finish, and browsers
+// reconnect to the next process.
+func endStreamsOnShutdown(srv *http.Server, hub *realtime.Hub) {
+	srv.RegisterOnShutdown(hub.CancelAll)
 }
 
 // newServer returns the HTTP server with its timeouts; tests pass short

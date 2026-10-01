@@ -344,6 +344,8 @@ type collector struct {
 	deliveries []delivery
 }
 
+func (c *collector) Heartbeat(context.Context) error { return nil }
+
 func (c *collector) Send(_ context.Context, out realtime.Outgoing) error {
 	at := time.Now()
 	c.mu.Lock()

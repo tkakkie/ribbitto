@@ -79,9 +79,32 @@ type recorder struct {
 	failOn int64
 	err    error
 	change chan struct{}
+	// heartbeats counts heartbeats; heartbeatErr, if set, fails them.
+	heartbeats   int
+	heartbeatErr error
 }
 
 func newRecorder() *recorder { return &recorder{change: make(chan struct{}, 100)} }
+
+func (r *recorder) Heartbeat(context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.heartbeatErr != nil {
+		return r.heartbeatErr
+	}
+	r.heartbeats++
+	select {
+	case r.change <- struct{}{}:
+	default: // a test that counts heartbeats polls heartbeatCount
+	}
+	return nil
+}
+
+func (r *recorder) heartbeatCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.heartbeats
+}
 
 func (r *recorder) Send(_ context.Context, out Outgoing) error {
 	r.mu.Lock()
@@ -347,4 +370,127 @@ func (c *cancellingSender) Send(ctx context.Context, out Outgoing) error {
 	}
 	c.cancel()
 	return nil
+}
+
+// While idle the loop sends a heartbeat each time Heartbeat passes, and an
+// event still arrives at once.
+func TestStreamSendsHeartbeatsWhileIdle(t *testing.T) {
+	hub := NewHub()
+	log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+	ctx, cancel := context.WithCancel(t.Context())
+	send := newRecorder()
+	done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), Heartbeat: 5 * time.Millisecond}, 0, send)
+	send.waitFor(t, 1)
+	for deadline := time.Now().Add(5 * time.Second); send.heartbeatCount() < 2; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d heartbeats while idle, want at least 2", send.heartbeatCount())
+		}
+	}
+	log.append(posted(2, channelA))
+	hub.Raise(orgA, 2)
+	send.waitFor(t, 1, 2)
+	cancel()
+	if got := <-done; got.cursor != 2 || !errors.Is(got.err, context.Canceled) {
+		t.Fatalf("Run = %d, %v; want 2, context.Canceled", got.cursor, got.err)
+	}
+}
+
+// A heartbeat that cannot be written (a client that stopped reading) stops
+// the loop without moving the cursor.
+func TestStreamStopsOnAFailedHeartbeat(t *testing.T) {
+	hub := NewHub()
+	log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+	send := newRecorder()
+	failure := errors.New("i/o timeout")
+	send.heartbeatErr = failure
+	got := <-runAsync(t.Context(), Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), Heartbeat: 5 * time.Millisecond}, 0, send)
+	if got.cursor != 1 || !errors.Is(got.err, failure) {
+		t.Fatalf("Run = %d, %v; want 1 and the heartbeat's error", got.cursor, got.err)
+	}
+}
+
+// Wakeups that write nothing, such as another channel's events, do not put
+// the heartbeat off: it counts from the stream's last write.
+func TestStreamHeartbeatsThroughOtherChannelsTraffic(t *testing.T) {
+	hub := NewHub()
+	log := &fakeLog{}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	send := newRecorder()
+	runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), Heartbeat: 50 * time.Millisecond}, 0, send)
+	// Another channel's event every 5 ms, far more often than the heartbeat.
+	go func() {
+		for seq := int64(1); ctx.Err() == nil; seq++ {
+			log.append(posted(seq, channelB))
+			hub.Raise(orgA, seq)
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+	for deadline := time.Now().Add(5 * time.Second); send.heartbeatCount() < 2; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d heartbeats under another channel's traffic, want at least 2", send.heartbeatCount())
+		}
+	}
+	if ids := send.ids(); len(ids) != 0 {
+		t.Fatalf("sent %v, want only heartbeats: every event was another channel's", ids)
+	}
+}
+
+// When the stream's own context has ended, its cause wins, even if the
+// heartbeat deadline ended the wait just before.
+func TestHeartbeatDue(t *testing.T) {
+	ended, cancel := context.WithCancelCause(t.Context())
+	cause := errors.New("session ended")
+	cancel(cause)
+	other := errors.New("hub failed")
+	for _, tt := range []struct {
+		name    string
+		ctx     context.Context
+		err     error
+		wantDue bool
+		wantErr error
+	}{
+		{"deadline only", t.Context(), errHeartbeatDue, true, nil},
+		{"deadline, and the stream ended too", ended, errHeartbeatDue, false, cause},
+		{"the stream ended", ended, cause, false, cause},
+		{"woken", t.Context(), nil, false, nil},
+		{"another error", t.Context(), other, false, other},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			due, err := heartbeatDue(tt.ctx, tt.err)
+			if due != tt.wantDue || !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
+				t.Fatalf("heartbeatDue = %t, %v; want %t, %v", due, err, tt.wantDue, tt.wantErr)
+			}
+		})
+	}
+}
+
+// slowFilteredLog returns full batches of another channel's events, slowly,
+// as a long backlog would, and never runs out.
+type slowFilteredLog struct{ delay time.Duration }
+
+func (l slowFilteredLog) EventsAfter(_ context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+	time.Sleep(l.delay)
+	events := make([]domain.Event, limit)
+	for i := range events {
+		events[i] = domain.Event{OrganizationID: org, Seq: after + int64(i) + 1, Kind: domain.EventMessagePosted, ChannelID: channelB}
+	}
+	return events, nil
+}
+
+// Draining full batches that are all filtered out still sends heartbeats
+// on time, before the stream ever catches up.
+func TestStreamHeartbeatsWhileDrainingFilteredBatches(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	send := newRecorder()
+	runAsync(ctx, Stream{Hub: NewHub(), Events: slowFilteredLog{delay: 2 * time.Millisecond}, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), BatchSize: 10, Heartbeat: 30 * time.Millisecond}, 0, send)
+	for deadline := time.Now().Add(5 * time.Second); send.heartbeatCount() < 2; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d heartbeats while draining, want at least 2", send.heartbeatCount())
+		}
+	}
+	if ids := send.ids(); len(ids) != 0 {
+		t.Fatalf("sent %v, want only heartbeats", ids)
+	}
 }

@@ -308,3 +308,38 @@ func TestConnectionsCountsTheRegistry(t *testing.T) {
 		t.Fatalf("Connections() after unregister = %d, want 0", n)
 	}
 }
+
+func TestCancelAllEndsEveryConnection(t *testing.T) {
+	h := NewHub()
+	first, unregisterFirst, _ := h.Register(t.Context(), Connection{Organization: orgA, Account: account1, Session: session1}, 4)
+	second, unregisterSecond, _ := h.Register(t.Context(), Connection{Organization: orgB, Account: account2, Session: session2}, 4)
+	h.CancelAll()
+	for _, ctx := range []context.Context{first, second} {
+		if !errors.Is(context.Cause(ctx), ErrShutdown) {
+			t.Fatalf("cause %v, want ErrShutdown", context.Cause(ctx))
+		}
+	}
+	// Like the other cancellations, the slots stay until unregister.
+	if n := h.Connections(); n != 2 {
+		t.Fatalf("Connections() = %d after CancelAll, want 2", n)
+	}
+	unregisterFirst()
+	unregisterSecond()
+	if n := h.Connections(); n != 0 {
+		t.Fatalf("Connections() = %d after unregister, want 0", n)
+	}
+}
+
+// A request accepted before shutdown may reach Register after CancelAll ran:
+// it is refused, so nothing keeps the server from finishing.
+func TestRegisterAfterCancelAllIsRefused(t *testing.T) {
+	h := NewHub()
+	h.CancelAll()
+	ctx, unregister, err := h.Register(t.Context(), Connection{Organization: orgA, Account: account1, Session: session1}, 4)
+	if !errors.Is(err, ErrShutdown) || ctx != nil || unregister != nil {
+		t.Fatalf("Register after CancelAll = %v, %v; want ErrShutdown and nothing to unregister", ctx, err)
+	}
+	if n := h.Connections(); n != 0 {
+		t.Fatalf("Connections() = %d, want 0", n)
+	}
+}

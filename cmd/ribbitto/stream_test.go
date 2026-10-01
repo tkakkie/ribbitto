@@ -376,3 +376,37 @@ func TestEventStreamEndsOnSignOutOverHTTP1(t *testing.T) {
 	http1.visit(t, "POST", "/signout", nil, 303)
 	streamEndsWithin(t, events, 2*time.Second)
 }
+
+// Shutdown ends open streams first, so it returns at once instead of
+// waiting for them until its deadline.
+func TestShutdownEndsOpenStreams(t *testing.T) {
+	pool := acceptanceDatabase(t)
+	hub := realtime.NewHub()
+	handler, _, err := buildHandler(pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
+		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, hub: hub})
+	acceptanceOK(t, err)
+	server := httptest.NewUnstartedServer(handler)
+	server.Config = newServer("", handler, serverTimeouts{readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout, write: writeTimeout})
+	endStreamsOnShutdown(server.Config, hub)
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	t.Cleanup(server.Close)
+
+	owner := newAcceptanceBrowser(t, server, "192.0.2.30")
+	owner.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
+	response, _ := owner.visit(t, "GET", "/organizations/owner/", nil, 303)
+	events, status := openStream(t, owner, response.Header.Get("Location"), "0")
+	if status != http.StatusOK {
+		t.Fatalf("stream: status %d", status)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	started := time.Now()
+	if err := server.Config.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown with an open stream: %v after %v", err, time.Since(started))
+	}
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Fatalf("Shutdown took %v with an open stream, want it ended first", elapsed)
+	}
+	streamEndsWithin(t, events, 2*time.Second)
+}

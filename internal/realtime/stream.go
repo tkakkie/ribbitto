@@ -2,7 +2,9 @@ package realtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/tkakkie/ribbitto/internal/domain"
 )
@@ -28,9 +30,11 @@ type Renderer interface {
 	Render(ctx context.Context, sub Subscription, event domain.Event) (Outgoing, error)
 }
 
-// Sender writes one outgoing event to the connection. web implements it.
+// Sender writes to the connection: an outgoing event, or a heartbeat that
+// carries no event. web implements it.
 type Sender interface {
 	Send(ctx context.Context, out Outgoing) error
+	Heartbeat(ctx context.Context) error
 }
 
 // Subscription is what one connection asked for: an organisation's channel,
@@ -63,7 +67,15 @@ type Stream struct {
 	Renderer   Renderer
 	// BatchSize bounds each read; zero means DefaultBatchSize.
 	BatchSize int
+	// Heartbeat is how long the loop waits on the hub before it sends a
+	// heartbeat and waits again; zero sends none. An idle stream otherwise
+	// writes nothing, so a proxy may close it and a client that stopped
+	// reading is never found out.
+	Heartbeat time.Duration
 }
+
+// errHeartbeatDue ends one wait on the hub when a heartbeat is due.
+var errHeartbeatDue = errors.New("realtime: heartbeat due")
 
 // Run delivers the subscription's events with a sequence above cursor until
 // ctx ends or delivery fails, and returns the last sequence it delivered or
@@ -80,7 +92,8 @@ type Stream struct {
 //     from the Renderer or from the Sender stops the loop and returns that
 //     error with the cursor still before the event that could not be
 //     delivered, so a reconnect resumes there. Treating a failed check as a
-//     deny would lose the event for good.
+//     deny would lose the event for good. A failed heartbeat stops the loop
+//     the same way; it never moves the cursor.
 //
 // The loop reads until a read returns fewer events than the batch size and
 // only then waits on the hub: the hub's value may be older than the log (a
@@ -102,6 +115,10 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	}
 	// seen is the highest hub value this loop has already caught up with.
 	var seen int64
+	// written is when the stream last wrote, which the next heartbeat counts
+	// from: wakeups that write nothing, such as another channel's events,
+	// must not put it off.
+	written := time.Now()
 	for {
 		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
 		if err != nil {
@@ -133,14 +150,57 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			if err := send.Send(ctx, out); err != nil {
 				return cursor, fmt.Errorf("sending event %d: %w", event.Seq, err)
 			}
+			written = time.Now()
 			cursor = event.Seq
 		}
 		if len(events) == batch {
+			// Draining a backlog that is all other channels' events writes
+			// nothing either; the heartbeat is still due on time.
+			if s.Heartbeat > 0 && time.Since(written) >= s.Heartbeat {
+				if err := send.Heartbeat(ctx); err != nil {
+					return cursor, fmt.Errorf("sending heartbeat: %w", err)
+				}
+				written = time.Now()
+			}
 			continue
 		}
-		seen, err = s.Hub.Wait(ctx, sub.Organization, max(cursor, seen))
+		seen, err = s.wait(ctx, sub.Organization, max(cursor, seen), send, &written)
 		if err != nil {
 			return cursor, err
 		}
 	}
+}
+
+// wait is Hub.Wait, sending a heartbeat whenever Heartbeat has passed since
+// *written first; it moves *written on every heartbeat.
+func (s Stream) wait(ctx context.Context, org domain.ID, after int64, send Sender, written *time.Time) (int64, error) {
+	if s.Heartbeat <= 0 {
+		return s.Hub.Wait(ctx, org, after)
+	}
+	for {
+		waitCtx, cancel := context.WithDeadlineCause(ctx, written.Add(s.Heartbeat), errHeartbeatDue)
+		seq, err := s.Hub.Wait(waitCtx, org, after)
+		cancel()
+		if heartbeat, err := heartbeatDue(ctx, err); !heartbeat {
+			return seq, err
+		}
+		if err := send.Heartbeat(ctx); err != nil {
+			return 0, fmt.Errorf("sending heartbeat: %w", err)
+		}
+		*written = time.Now()
+	}
+}
+
+// heartbeatDue reads how a wait with a heartbeat deadline ended: due when
+// only the deadline ended it, otherwise the error to return. The stream's
+// own context is checked first: if it ended too, its cause (a session that
+// ended, a shutdown) wins over the deadline that may have fired just before.
+func heartbeatDue(ctx context.Context, err error) (bool, error) {
+	if ctx.Err() != nil {
+		return false, context.Cause(ctx)
+	}
+	if errors.Is(err, errHeartbeatDue) {
+		return true, nil
+	}
+	return false, err
 }

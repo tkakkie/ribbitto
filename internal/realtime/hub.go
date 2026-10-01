@@ -33,6 +33,7 @@ type Hub struct {
 	orgs      map[domain.ID]*orgSequence
 	byAccount map[domain.ID]map[*registration]struct{}
 	bySession map[domain.ID]map[*registration]struct{}
+	byOrg     map[domain.ID]map[*registration]struct{}
 }
 
 // orgSequence is one organisation's latest sequence. changed is closed and
@@ -44,6 +45,7 @@ type orgSequence struct {
 }
 
 type registration struct {
+	organization     domain.ID
 	account, session domain.ID
 	cancel           context.CancelCauseFunc
 }
@@ -54,6 +56,7 @@ func NewHub() *Hub {
 		orgs:      make(map[domain.ID]*orgSequence),
 		byAccount: make(map[domain.ID]map[*registration]struct{}),
 		bySession: make(map[domain.ID]map[*registration]struct{}),
+		byOrg:     make(map[domain.ID]map[*registration]struct{}),
 	}
 }
 
@@ -149,15 +152,17 @@ func (h *Hub) Register(parent context.Context, c Connection, limit int) (ctx con
 		return nil, nil, ErrTooManyConnections
 	}
 	ctx, cancel := context.WithCancelCause(parent)
-	r := &registration{account: c.Account, session: c.Session, cancel: cancel}
+	r := &registration{organization: c.Organization, account: c.Account, session: c.Session, cancel: cancel}
 	add(h.byAccount, c.Account, r)
 	add(h.bySession, c.Session, r)
+	add(h.byOrg, c.Organization, r)
 	var once sync.Once
 	unregister = func() {
 		once.Do(func() {
 			h.mu.Lock()
 			remove(h.byAccount, r.account, r)
 			remove(h.bySession, r.session, r)
+			remove(h.byOrg, r.organization, r)
 			h.mu.Unlock()
 			cancel(ErrUnregistered)
 		})
@@ -175,6 +180,21 @@ func (h *Hub) Connections() int {
 		n += len(set)
 	}
 	return n
+}
+
+// ActiveOrganizations returns the organisations with at least one
+// registered connection, in no particular order. Unlike the sequences,
+// which the hub keeps for every organisation it was ever told about, this
+// follows the registry, so an organisation drops out when its last
+// connection unregisters.
+func (h *Hub) ActiveOrganizations() []domain.ID {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	orgs := make([]domain.ID, 0, len(h.byOrg))
+	for org := range h.byOrg {
+		orgs = append(orgs, org)
+	}
+	return orgs
 }
 
 // CancelAccount ends the contexts of all the account's connections, for

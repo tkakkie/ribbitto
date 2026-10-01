@@ -12,3 +12,6 @@ FROM event_log
 WHERE organization_id = $1 AND seq > sqlc.arg(after_seq)
 ORDER BY seq
 LIMIT sqlc.arg(batch_limit)::bigint;
+
+-- name: CommittedSequences :many
+SELECT id, event_seq FROM organization WHERE id = ANY(sqlc.arg(organization_ids)::uuid[]);

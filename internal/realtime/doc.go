@@ -12,7 +12,9 @@
 // connections per account and gives each one a context that CancelAccount
 // or CancelSession ends. Events themselves are never held here; they are
 // read from event_log, so a hub that loses a notification (or restarts)
-// only delays delivery until the next raise.
+// only delays delivery until the next raise. Watermark bounds that delay:
+// it periodically raises the hub to the committed sequences of the
+// organisations with connections, for commits nothing announced.
 //
 // Stream.Run is the per-connection delivery loop over the EventReader,
 // Authorizer and Renderer interfaces defined here; its doc comment states

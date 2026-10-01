@@ -58,6 +58,15 @@ sequenceDiagram
   membership lookup is never a deny. Cancellation is checked before every
   event, so an ended session sends nothing more. It drains every batch
   before waiting.
+- **Missed raises** (#237). Posting raises the hub right after its commit,
+  but a writer without a notifier (`cmd/seed`, sign-up's `member.joined`)
+  or, later, another process commits without one, and a stream that has
+  caught up would wait until the next post. `realtime.Watermark` reads, every
+  `WatermarkInterval` (5 s) and in one query, the committed `event_seq` of
+  the organisations with registered connections (`Hub.ActiveOrganizations`)
+  and raises the hub to it. It only wakes streams; they read from their
+  cursor, so `event_log` stays the only truth. A failed check is logged and
+  retried on the next tick; without connections it reads nothing.
 - Its cost per post grows with the number of open streams; measured in
   [`stream-cost.md`](stream-cost.md).
 - Replay and live delivery go through the same per-connection loop, so they

@@ -36,7 +36,7 @@ assets.
 The same meta tag sets `responseHandling` to htmx's defaults (`204`: no
 swap; `[23]..`: swap; `[45]..`: no swap, error), with
 `{"code":"422","swap":true,"error":false}` before `[45]..`. The first matching
-entry wins, so composer field errors replace `#conversation` through htmx.
+entry wins, so composer field errors replace `#message-composer` through htmx.
 This is global: any new htmx request returning 422 inherits the rule
 ([`web-layers.md`](web-layers.md)). Other status codes retain their defaults.
 
@@ -52,22 +52,31 @@ rewrite them. Invalid dates retain their fallback, as do all timestamps
 when JavaScript is disabled.
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v2.js` also loads with the response nonce on channel pages.
+`message-composer-v3.js` also loads with the response nonce on channel pages.
 One key-to-command function maps Enter to `send` and Shift+Enter to `newline`,
 ignoring IME composition (`isComposing` or keyCode 229); one submit function
-uses the native form submission path through `requestSubmit`. The form uses
-htmx to select and replace `#conversation`, disabling its controls in flight.
-The script scrolls the message pane to the newest entry on load and after
-settling a swap, then focuses the composer. Scripts
+uses the native form submission path through `requestSubmit`. The latest-page form uses
+htmx to replace only `#message-composer`, disabling its controls in flight.
+Older pages use a plain form. The script scrolls to the newest entry on load
+and focuses the composer after its replacement. Scripts
 stay outside the replaced section; CSP and htmx evaluation remain unchanged.
 
-`message-history-v1.js` keeps the reader's place when "Load older messages"
+`message-history-v2.js` keeps the reader's place when "Load older messages"
 prepends a page: the link selects the older page's `<li>` elements into
 `#message-items` (`afterbegin`) and replaces `#load-older` out of band. The
 script restores the distance from the pane's bottom after the swap and again
 after settling, since local timestamps (`htmx:load`) can change the new
 messages' height, then moves focus to the next control, or to the pane once
 the oldest message is shown.
+
+`message-stream-v1.js` listens to the vendored SSE extension's
+`htmx:sseBeforeMessage`. It passes the server's HTML to htmx for an append or
+same-id replacement, settling synchronously so replay stays ordered and local
+timestamps are ready before scrolling. Only appends update the separate polite
+status with templ-rendered text; scrolling follows only when already at the
+bottom. It updates `sse-connect`'s `after` after each delivery so replacement
+EventSources resume from the received id; native reconnects use Last-Event-ID.
+SSE swaps have no request target, so composer/history focus handlers ignore them.
 
 ## Languages
 

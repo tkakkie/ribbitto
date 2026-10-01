@@ -39,25 +39,33 @@ ID) belongs in them.
 htmx does only requests and swaps; the server and templ own the HTML.
 
 - A normal request gets a full page. Selecting part of a server-rendered
-  full page with `hx-select` is allowed; the composer and Load older do this
-  today.
+  full page with `hx-select` is allowed; Load older does this today.
+  Enhanced posts return only the `MessageComposer` fragment.
 - A unit that M3's SSE needs becomes an explicit templ fragment or
   component, rendered by the same code as the full page. `MessageItem`
   takes a `view.Message` and renders one `<li>` on its own or in the page.
 - **DOM ids are a contract.** Templates define every id that `hx-target`,
   `hx-select`, `hx-select-oob` or a script refers to. Renaming one means
   updating every reference in the same pull request. Today's contract ids
-  are `conversation`, `message-list`, `message-items`, `load-older` and
-  `message-body`, plus `message-<32 lowercase hex digits>` from
+  are `conversation`, `message-list`, `message-items`, `load-older`,
+  `message-body`, `message-composer`, `message-help` and `message-status`,
+  plus `message-<32 lowercase hex digits>` from
   `MessageDOMID`. `#message-items` is always present, including when empty;
   Load older selects its direct `<li>` children.
 - The latest channel page carries `data-event-cursor` on its outer layout
-  div, outside `#conversation` and every swap target. Older pages omit it.
+  div, outside `#conversation` and every swap target, with `hx-ext="sse"`
+  and `sse-connect="…/events?after=<cursor>"`. Older pages omit all three.
+  `#message-items` receives `message` events; same-id duplicates replace the
+  existing item. `LiveMessageItem` shares `MessageItem` markup, adding
+  templ-rendered `data-announcement` text only to stream payloads. History
+  pages, including Load older and cached renders, omit that attribute.
+  `#message-status` retains only the latest 10 announcements; history itself
+  is never a live region.
 - The layout's `htmx-config` meta tag holds htmx's security settings and
   `responseHandling` ([`rendering.md`](rendering.md)). It keeps the three
   defaults, inserting a 422 swap with `error: false` before `[45]..` because
   the first matching entry wins. This rule is global: a new 422-returning
-  htmx request inherits it. Today only the composer's `#conversation`
+  htmx request inherits it. Today only the composer's `#message-composer`
   request can return 422; channel creation uses a plain form, and Load
   older retains default handling for success and errors.
 
@@ -103,9 +111,10 @@ any ids they name are still checked in the page. The composer's
 `hx-disabled-elt="find textarea, find button"` and `hx-sync="this:drop"`
 are not swap selectors.
 
-`TestComponentsMarkup` renders `SignOutButton`, `MemberName` and
-`MessageItem` alone in both languages and applies the fragment markup rules.
-Handler and SSE fragments join that list when M3 adds them.
+`TestComponentsMarkup` renders `SignOutButton`, `MemberName`, `MessageItem`
+and `LiveMessageItem` alone in both languages and applies the fragment
+markup rules.
+`TestPagesMarkup` also checks the composer fragments returned by handlers.
 
 `TestPagesMarkup` also checks every `hx-get`/`hx-post` element for a plain
 link or form with the same URL and HTTP method (`fallback_test.go`). URL
@@ -115,8 +124,9 @@ comparison is structural; paging success uses positive cursors in
 `TestMessagePostHandler` covers ordinary/HX success (303/200) and validation
 errors (422). `TestMessagePagingHandler` covers Load older with and without
 HX (200 full pages). `TestChannelHandlers` verifies that HX changes nothing
-for unenhanced channel creation (303/422). Posting and history page responses
-assert the layout and `#conversation`, including validation errors.
+for unenhanced channel creation (303/422). Plain posting errors and history
+responses assert the full layout; enhanced posting responses assert the
+composer alone, without another history read.
 
 Left to review, because a pattern check cannot prove them: that a stored
 value is only a UX setting, that a script owns no application state, and
@@ -174,8 +184,8 @@ Everything else conforms:
   posting all fill a view model and render through templ.
 - **Templates.** They do no I/O and make no authorisation decisions.
 - **Core flows.** Every core flow is a plain form or link.
-- **Selection.** The composer and Load older select from full pages.
+- **Selection.** Load older selects from full pages; the composer now uses a fragment.
 - **Scripts.** The scripts do keyboard, focus, scroll and local time only,
-  with no requests and no storage.
+  with no requests and no storage; M3 adds SSE glue.
 
 The audit is repeated as part of M3's acceptance check (Status #1).

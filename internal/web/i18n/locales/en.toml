@@ -162,3 +162,6 @@ other = "Load older messages"
 
 ["message.newest"]
 other = "Jump to the newest messages"
+
+["message.new"]
+other = "New message"

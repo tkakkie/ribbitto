@@ -9,7 +9,7 @@ import (
 
 // CachedEvents is an EventReader that shares reads between an
 // organisation's streams: streams at the same cursor share a full batch's
-// read, and at most two reads of a short one.
+// read; for a short one, the read's joiners share one more private read.
 //
 // Only full batches are stored. A full batch is the first limit events
 // after the cursor, which never changes once committed. A short or empty

@@ -480,3 +480,63 @@ func TestCachedEventsShareReadsBetweenStreams(t *testing.T) {
 		t.Fatalf("%d reads found the event for %d streams, want 1", counted.fromStart, streams)
 	}
 }
+
+// gatedLog takes its snapshot of the log when a read starts and, for the
+// first read only, holds the answer until released, like a query whose
+// snapshot predates a commit that lands while it runs.
+type gatedLog struct {
+	*fakeLog
+	started, release chan struct{}
+	calls            atomic.Int32
+}
+
+func (g *gatedLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+	events, err := g.fakeLog.EventsAfter(ctx, org, after, limit)
+	if g.calls.Add(1) == 1 {
+		close(g.started)
+		<-g.release
+	}
+	return events, err
+}
+
+// A read that joins one already in flight must not get that read's older
+// snapshot when the result is not stored: an event committed after the
+// first read started, with no Raise yet, would be hidden from a read that
+// started after the commit.
+func TestCachedEventsJoinerSeesCommitsBeforeItJoined(t *testing.T) {
+	hub := NewHub()
+	hub.Raise(orgA, 1)
+	log := &gatedLog{fakeLog: &fakeLog{events: []domain.Event{posted(1, channelA)}}, started: make(chan struct{}), release: make(chan struct{})}
+	released := false
+	release := func() {
+		if !released {
+			released = true
+			close(log.release)
+		}
+	}
+	t.Cleanup(release) // a regression fails instead of hanging
+	events := NewCachedEvents(log, hub, 64, time.Minute)
+	read := func() chan []domain.Event {
+		out := make(chan []domain.Event, 1)
+		go func() {
+			got, err := events.EventsAfter(t.Context(), orgA, 1, 10)
+			if err != nil {
+				t.Error(err)
+			}
+			out <- got
+		}()
+		return out
+	}
+	first := read()
+	receive(t, log.started)         // the first read has its snapshot: nothing after 1
+	log.append(posted(2, channelA)) // committed; the hub is not raised
+	second := read()
+	waitForWaiters(t, events.cache, eventsKey{organization: orgA, after: 1, level: 1, limit: 10}, 2)
+	release()
+	if got := receive(t, first); len(got) != 0 {
+		t.Fatalf("first read = %v, want its own snapshot (empty)", got)
+	}
+	if got := receive(t, second); len(got) != 1 || got[0].Seq != 2 {
+		t.Fatalf("second read = %v, want event 2, committed before it started", got)
+	}
+}

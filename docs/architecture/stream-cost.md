@@ -96,22 +96,23 @@ with one member and once with `_MEMBERS=distinct`):
 |---|---|---|---|---|---|---|---|
 | no cache | 300 | 1,503 | 5.01 | 53 ms | 56 ms | 83 ms | pass |
 | no cache | 500 | 2,087 | 4.17 | 123 ms | 1.29 s | 2.55 s | fail: p95 over 1 s |
-| cache, one member | 1,000 | 1,008 | 1.01 | 22 ms | 38 ms | 46 ms | pass |
-| cache, one member | 2,000 | 2,008 | 1.00 | 42 ms | 83 ms | 90 ms | pass |
-| cache, one member | 3,000 | 3,007 | 1.00 | 71 ms | 1.56 s | 2.69 s | fail: p95 over 1 s |
-| cache, distinct members | 1,000 | 1,008 | 1.01 | 22 ms | 41 ms | 48 ms | pass |
-| cache, distinct members | 2,000 | 2,008 | 1.00 | 41 ms | 82 ms | 91 ms | pass |
-| cache, distinct members | 3,000 | 3,007 | 1.00 | 70 ms | 1.48 s | 2.66 s | fail: p95 over 1 s |
+| cache, one member | 1,000 | 1,010 | 1.01 | 21 ms | 39 ms | 48 ms | pass |
+| cache, one member | 2,000 | 2,010 | 1.01 | 40 ms | 81 ms | 89 ms | pass |
+| cache, one member | 3,000 | 3,007 | 1.00 | 73 ms | 1.56 s | 2.93 s | fail: p95 over 1 s |
+| cache, distinct members | 1,000 | 1,010 | 1.01 | 22 ms | 40 ms | 52 ms | pass |
+| cache, distinct members | 2,000 | 2,010 | 1.01 | 41 ms | 81 ms | 90 ms | pass |
+| cache, distinct members | 3,000 | 3,007 | 1.00 | 69 ms | 1.40 s | 2.44 s | fail: p95 over 1 s |
 
 Every step completed its 100 posts. With the caches a post costs about
-`N + 8` queries — one membership check per stream, plus the post's three,
-the event read, one shared message read with its two author lookups, and
-about one more event read — and **the highest passing step rises from 300
+`N + 10` queries — one membership check per stream, plus the post's three,
+one shared message read with its two author lookups, and about four event
+reads — and **the highest passing step rises from 300
 to 2,000 streams**. Distinct members change nothing, so the sharing is per
 organisation, not per member. The cache stores only full event batches: a
-short batch, such as the one holding a new post, is shared only by the
-streams whose reads are in flight together, and a stream that reads it later
-repeats it; as every stream wakes on the same Raise, that is rare.
+short batch, such as the one holding a new post, is never stored, and the
+streams that joined a read in flight get a second read started after it
+finished, so none gets a snapshot older than its own call; a stream that
+reads later repeats it.
 The remaining per-stream query is the membership check (#231); beyond about
 2,000 streams on this machine it saturates the pool.
 

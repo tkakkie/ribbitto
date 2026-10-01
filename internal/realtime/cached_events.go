@@ -15,9 +15,13 @@ import (
 // batch only says what the log held when it was read, and a stream takes it
 // as "caught up" and waits: served later from the cache, it could hide
 // events committed since — including ones no Raise announces (a crash
-// between commit and Raise, or a writer that does not notify). Short
-// batches are still shared by the streams reading at the same moment,
-// which is the steady-state case: every stream wakes on the same Raise.
+// between commit and Raise, or a writer that does not notify). For the
+// same reason, a stream that joins a read already in flight never gets
+// that read's short batch, whose snapshot may predate the stream's own
+// call: the streams that joined share a second read, started after the
+// first finished (see NewCache). Short batches are therefore still shared,
+// at the cost of one more read per batch: every stream wakes on the same
+// Raise, which is the steady-state case.
 //
 // Reads in flight are also keyed by the hub's level when they start. The
 // hub is raised only after a commit, so a read started at level L sees

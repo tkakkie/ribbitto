@@ -64,9 +64,11 @@ sequenceDiagram
   caught up would wait until the next post. `realtime.Watermark` reads, every
   `WatermarkInterval` (5 s) and in one query, the committed `event_seq` of
   the organisations with registered connections (`Hub.ActiveOrganizations`)
-  and raises the hub to it. It only wakes streams; they read from their
-  cursor, so `event_log` stays the only truth. A failed check is logged and
-  retried on the next tick; without connections it reads nothing.
+  and raises the hub for those still active (`RaiseIfActive`, under the
+  hub's lock). It only wakes streams; they read from their cursor, so
+  `event_log` stays the only truth, and such an event arrives after the next
+  successful check. Each check's query has a 2 s timeout; a failed check is
+  logged and retried on the next tick; without connections it reads nothing.
 - Its cost per post grows with the number of open streams; measured in
   [`stream-cost.md`](stream-cost.md).
 - Replay and live delivery go through the same per-connection loop, so they

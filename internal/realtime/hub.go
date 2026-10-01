@@ -76,6 +76,22 @@ func (h *Hub) sequence(org domain.ID) *orgSequence {
 func (h *Hub) Raise(org domain.ID, seq int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.raise(org, seq)
+}
+
+// RaiseIfActive is Raise for an organisation that still has a registered
+// connection, checked under the same lock, so a value read while its last
+// connection went away does not raise it.
+func (h *Hub) RaiseIfActive(org domain.ID, seq int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.byOrg[org]) > 0 {
+		h.raise(org, seq)
+	}
+}
+
+// raise is Raise's body; the caller holds mu.
+func (h *Hub) raise(org domain.ID, seq int64) {
 	s := h.sequence(org)
 	if seq <= s.latest {
 		return

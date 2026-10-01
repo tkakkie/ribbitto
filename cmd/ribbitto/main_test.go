@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -67,11 +68,15 @@ func TestSessionCleanupStops(t *testing.T) {
 	}
 }
 
-// blockingSequences blocks its read until the context ends.
-type blockingSequences struct{ started chan struct{} }
+// blockingSequences blocks its reads until their context ends and reports
+// the first one.
+type blockingSequences struct {
+	started chan struct{}
+	once    *sync.Once
+}
 
 func (s blockingSequences) CommittedSequences(ctx context.Context, _ []domain.ID) (map[domain.ID]int64, error) {
-	close(s.started)
+	s.once.Do(func() { close(s.started) })
 	<-ctx.Done()
 	return nil, ctx.Err()
 }
@@ -85,9 +90,14 @@ func TestWatermarkStops(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer unregister()
-	sequences := blockingSequences{started: make(chan struct{})}
-	stop := startWatermark(context.Background(), realtime.Watermark{Hub: hub, Sequences: sequences}, time.Millisecond)
-	<-sequences.started
+	sequences := blockingSequences{started: make(chan struct{}), once: &sync.Once{}}
+	// A long timeout, so only stop can end the blocked read.
+	stop := startWatermark(context.Background(), realtime.Watermark{Hub: hub, Sequences: sequences, Timeout: time.Hour}, time.Millisecond)
+	select {
+	case <-sequences.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watermark never read")
+	}
 	stopped := make(chan struct{})
 	go func() {
 		stop()

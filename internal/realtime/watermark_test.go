@@ -19,16 +19,32 @@ type fakeSequences struct {
 	err   error
 	calls [][]domain.ID
 	done  chan struct{} // receives after every call
+	// during, if set, runs inside the read, before it answers; block makes
+	// the read wait for its context instead of answering.
+	during func()
+	block  bool
 }
 
 func newFakeSequences() *fakeSequences {
 	return &fakeSequences{seqs: map[domain.ID]int64{}, done: make(chan struct{}, 16)}
 }
 
-func (f *fakeSequences) CommittedSequences(_ context.Context, orgs []domain.ID) (map[domain.ID]int64, error) {
+func (f *fakeSequences) CommittedSequences(ctx context.Context, orgs []domain.ID) (map[domain.ID]int64, error) {
+	f.mu.Lock()
+	during, block := f.during, f.block
+	f.mu.Unlock()
+	if during != nil {
+		during()
+	}
+	if block {
+		<-ctx.Done()
+	}
 	f.mu.Lock()
 	defer func() { f.mu.Unlock(); f.done <- struct{}{} }()
 	f.calls = append(f.calls, slices.Clone(orgs))
+	if block {
+		return nil, ctx.Err()
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -111,6 +127,63 @@ func TestWatermarkCheck(t *testing.T) {
 	calls := seqs.callCount()
 	if err := w.Check(t.Context()); err != nil || seqs.callCount() != calls {
 		t.Fatalf("Check after the last unregister read %d times, want none", seqs.callCount()-calls)
+	}
+}
+
+// Several active organisations are read in one query.
+func TestWatermarkReadsActiveOrganisationsTogether(t *testing.T) {
+	h := NewHub()
+	seqs := newFakeSequences()
+	seqs.set(orgA, 4, nil)
+	seqs.set(orgB, 6, nil)
+	_, a, _ := h.Register(t.Context(), Connection{Organization: orgA, Account: account1, Session: session1}, 4)
+	defer a()
+	_, b, _ := h.Register(t.Context(), Connection{Organization: orgB, Account: account2, Session: session2}, 4)
+	defer b()
+	if err := (Watermark{Hub: h, Sequences: seqs}).Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if n := seqs.callCount(); n != 1 || len(seqs.calls[0]) != 2 {
+		t.Fatalf("%d reads of %v, want one read of both organisations", n, seqs.calls)
+	}
+	if h.Latest(orgA) != 4 || h.Latest(orgB) != 6 {
+		t.Fatalf("hub at %d and %d, want 4 and 6", h.Latest(orgA), h.Latest(orgB))
+	}
+}
+
+// An organisation whose last connection goes away while its sequence is
+// being read is not raised.
+func TestWatermarkSkipsAnOrganisationThatWentInactive(t *testing.T) {
+	h := NewHub()
+	seqs := newFakeSequences()
+	seqs.set(orgA, 9, nil)
+	_, unregister, _ := h.Register(t.Context(), Connection{Organization: orgA, Account: account1, Session: session1}, 4)
+	seqs.during = unregister // the last connection leaves during the read
+	if err := (Watermark{Hub: h, Sequences: seqs}).Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.Latest(orgA); got != 0 {
+		t.Fatalf("hub at %d, want 0: the organisation went inactive during the read", got)
+	}
+}
+
+// A stalled read ends at the check's timeout, and the next check works.
+func TestWatermarkCheckTimesOut(t *testing.T) {
+	h := NewHub()
+	seqs := newFakeSequences()
+	seqs.set(orgA, 3, nil)
+	seqs.block = true
+	_, unregister, _ := h.Register(t.Context(), Connection{Organization: orgA, Account: account1, Session: session1}, 4)
+	defer unregister()
+	w := Watermark{Hub: h, Sequences: seqs, Timeout: 20 * time.Millisecond}
+	if err := w.Check(t.Context()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("stalled Check = %v, want its timeout", err)
+	}
+	seqs.mu.Lock()
+	seqs.block = false
+	seqs.mu.Unlock()
+	if err := w.Check(t.Context()); err != nil || h.Latest(orgA) != 3 {
+		t.Fatalf("Check after a timeout: %v, hub at %d; want 3", err, h.Latest(orgA))
 	}
 }
 

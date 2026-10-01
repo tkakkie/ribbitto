@@ -112,6 +112,11 @@ func TestCommittedSequences(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("CommittedSequences = %v, want %v (an unknown organisation is left out)", got, want)
 	}
+	got, err = reader.CommittedSequences(ctx, []domain.ID{f.OrganizationID})
+	requireNoError(t, err)
+	if want := map[domain.ID]int64{f.OrganizationID: posted.EventSeq}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("CommittedSequences(f) = %v, want %v (an existing organisation not asked for is left out)", got, want)
+	}
 	got, err = reader.CommittedSequences(ctx, nil)
 	requireNoError(t, err)
 	if len(got) != 0 {

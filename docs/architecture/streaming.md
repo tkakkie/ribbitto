@@ -20,7 +20,7 @@ sequenceDiagram
   B->>W: GET /events?after=cursor
   W->>C: start
   loop
-    C->>DB: event_log WHERE organization_id = org AND seq > cursor ORDER BY seq
+    C->>DB: one snapshot: replay boundary + events after cursor
     C->>C: authorize, render, send each event; cursor = last seq read
     C->>C: wait until hub's latest sequence of org > cursor (no wait if already)
   end
@@ -76,8 +76,12 @@ sequenceDiagram
   before htmx recreates the `EventSource`, the client puts its last cursor
   into `after`. DOM updates are idempotent (elements are replaced by id), so
   a duplicate delivery is harmless.
-- A cursor older than the retained `event_log` gets a `reset` event, and the
-  client reloads the view.
+- A cursor below `organization.event_log_boundary_seq` gets one `reset` and
+  the loop returns without advancing it or sending later events. Each batch,
+  including on open streams and cache hits, checks the boundary; a sequence
+  gap anywhere in a batch also resets, before any of it is delivered. At the boundary the cursor is valid, even with an empty log.
+  The versioned message-stream script listens for `reset` on htmx's source,
+  closes it and reloads the page; this is SSE glue with no separate request.
 
 ### Authorization and revocation
 

@@ -41,29 +41,36 @@ func (q *Queries) CommittedSequences(ctx context.Context, organizationIds []pgty
 }
 
 const eventsAfter = `-- name: EventsAfter :many
-SELECT organization_id, seq, kind, audience_member_id, data
-FROM event_log
-WHERE organization_id = $1 AND seq > $2
-ORDER BY seq
-LIMIT $3::bigint
+SELECT o.id AS organization_id, o.event_log_boundary_seq,
+       coalesce(e.seq, 0)::bigint AS seq, coalesce(e.kind, '')::text AS kind,
+       e.audience_member_id, e.data
+FROM organization o
+LEFT JOIN LATERAL (
+    SELECT seq, kind, audience_member_id, data FROM event_log
+    WHERE organization_id = o.id AND seq > $1
+    ORDER BY seq LIMIT $2::bigint
+) e ON true
+WHERE o.id = $3
+ORDER BY e.seq
 `
 
 type EventsAfterParams struct {
-	OrganizationID pgtype.UUID
 	AfterSeq       int64
 	BatchLimit     int64
+	OrganizationID pgtype.UUID
 }
 
 type EventsAfterRow struct {
-	OrganizationID   pgtype.UUID
-	Seq              int64
-	Kind             string
-	AudienceMemberID pgtype.UUID
-	Data             []byte
+	OrganizationID      pgtype.UUID
+	EventLogBoundarySeq int64
+	Seq                 int64
+	Kind                string
+	AudienceMemberID    pgtype.UUID
+	Data                []byte
 }
 
 func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]EventsAfterRow, error) {
-	rows, err := q.db.Query(ctx, eventsAfter, arg.OrganizationID, arg.AfterSeq, arg.BatchLimit)
+	rows, err := q.db.Query(ctx, eventsAfter, arg.AfterSeq, arg.BatchLimit, arg.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +80,7 @@ func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]Eve
 		var i EventsAfterRow
 		if err := rows.Scan(
 			&i.OrganizationID,
+			&i.EventLogBoundarySeq,
 			&i.Seq,
 			&i.Kind,
 			&i.AudienceMemberID,
@@ -86,6 +94,37 @@ func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]Eve
 		return nil, err
 	}
 	return items, nil
+}
+
+const expireEventBatch = `-- name: ExpireEventBatch :one
+WITH deleted AS (
+    DELETE FROM event_log e
+    WHERE e.organization_id = $1 AND e.seq IN (
+        SELECT candidate.seq FROM event_log candidate
+        WHERE candidate.organization_id = $1 AND candidate.created_at < $2
+        ORDER BY candidate.seq LIMIT 1000
+    )
+    RETURNING e.seq
+), advanced AS (
+    UPDATE organization
+    SET event_log_boundary_seq = greatest(event_log_boundary_seq, (SELECT max(seq) FROM deleted))
+    WHERE id = $1 AND EXISTS (SELECT 1 FROM deleted)
+)
+SELECT count(*) FROM deleted
+`
+
+type ExpireEventBatchParams struct {
+	OrganizationID pgtype.UUID
+	Cutoff         pgtype.Timestamptz
+}
+
+// The caller already holds this organisation's row lock. Use a fresh
+// snapshot after locking so concurrent cleaners see earlier commits.
+func (q *Queries) ExpireEventBatch(ctx context.Context, arg ExpireEventBatchParams) (int64, error) {
+	row := q.db.QueryRow(ctx, expireEventBatch, arg.OrganizationID, arg.Cutoff)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const insertMemberEvent = `-- name: InsertMemberEvent :exec
@@ -132,4 +171,40 @@ func (q *Queries) InsertMessageEvent(ctx context.Context, arg InsertMessageEvent
 		arg.MessageID,
 	)
 	return err
+}
+
+const lockEventRetentionOrganization = `-- name: LockEventRetentionOrganization :exec
+SELECT id FROM organization WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockEventRetentionOrganization(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, lockEventRetentionOrganization, id)
+	return err
+}
+
+const organizationsWithExpiredEvents = `-- name: OrganizationsWithExpiredEvents :many
+SELECT id FROM organization o
+WHERE EXISTS (SELECT 1 FROM event_log e
+              WHERE e.organization_id = o.id AND e.created_at < $1)
+ORDER BY id
+`
+
+func (q *Queries) OrganizationsWithExpiredEvents(ctx context.Context, cutoff pgtype.Timestamptz) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, organizationsWithExpiredEvents, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

@@ -332,10 +332,10 @@ func TestStreamDoesNotSpinWhenTheHubIsAheadOfTheLog(t *testing.T) {
 
 	log.append(posted(51, channelA))
 	hub.Raise(orgA, 51)
-	send.waitFor(t, 51)
+	send.waitFor(t, 10) // A gap now resets instead of silently advancing.
 	cancel()
-	if got := <-done; got.cursor != 51 {
-		t.Fatalf("cursor = %d, want 51", got.cursor)
+	if got := <-done; got.cursor != 10 {
+		t.Fatalf("cursor = %d, want 10", got.cursor)
 	}
 }
 
@@ -495,5 +495,23 @@ func TestStreamHeartbeatsWhileDrainingFilteredBatches(t *testing.T) {
 	}
 	if ids := send.ids(); len(ids) != 0 {
 		t.Fatalf("sent %v, want only heartbeats", ids)
+	}
+}
+
+// A gap inside a batch, not only before its first event, resets the stream
+// before anything of that batch is delivered.
+func TestStreamResetsOnAGapInsideABatch(t *testing.T) {
+	log := &fakeLog{events: []domain.Event{posted(11, channelA), posted(13, channelA)}}
+	send := newRecorder()
+	// Bounded, so a regression that delivers past the gap and then waits
+	// fails instead of hanging.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	got := <-runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send)
+	if got.err != nil || got.cursor != 10 {
+		t.Fatalf("Run = %d, %v; want 10 and the reset sent", got.cursor, got.err)
+	}
+	if ids := send.ids(); !slices.Equal(ids, []int64{10}) {
+		t.Fatalf("sent %v, want only the reset (id 10): event 11 must not be delivered past the gap", ids)
 	}
 }

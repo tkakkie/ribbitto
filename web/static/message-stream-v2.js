@@ -1,4 +1,11 @@
 (() => {
+  const reset = (event) => {
+    event.target.close();
+    location.reload();
+  };
+  document.addEventListener("htmx:sseOpen", (event) => {
+    event.detail.source.addEventListener("reset", reset, { once: true });
+  });
   document.addEventListener("htmx:sseBeforeMessage", (event) => {
     const items = event.target;
     if (items.id !== "message-items") return;

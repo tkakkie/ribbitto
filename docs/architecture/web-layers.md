@@ -75,6 +75,7 @@ JavaScript never generates HTML and never owns application state. It is
 limited to UX help that HTML and htmx handle poorly: focus, scroll,
 keyboard, local time, and glue for SSE.
 
+- SSE `reset` closes htmx's event source and reloads the page to obtain a fresh snapshot.
 - **No requests of its own:** no `fetch` or `XMLHttpRequest`. Requests go
   through HTML forms, links and htmx.
 - **Storage:** `localStorage` and `sessionStorage` may hold only

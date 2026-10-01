@@ -12,6 +12,8 @@ import (
 // EventReader reads an organisation's durable events with a sequence above
 // after, in sequence order, at most limit of them. infra/postgres implements
 // it without importing this package, so it uses domain types only.
+// Each batch checks the replay boundary in the same snapshot and returns
+// domain.ErrCursorExpired below it, including for a zero-limit read.
 type EventReader interface {
 	EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]domain.Event, error)
 }
@@ -121,6 +123,12 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	written := time.Now()
 	for {
 		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
+		if errors.Is(err, domain.ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
+			if ctx.Err() != nil {
+				return cursor, context.Cause(ctx)
+			}
+			return cursor, send.Send(ctx, Outgoing{ID: cursor, Name: "reset"})
+		}
 		if err != nil {
 			return cursor, fmt.Errorf("reading events after %d: %w", cursor, err)
 		}
@@ -203,4 +211,19 @@ func heartbeatDue(ctx context.Context, err error) (bool, error) {
 		return true, nil
 	}
 	return false, err
+}
+
+// contiguous reports whether events continue the cursor without a gap. The
+// log above the boundary has no gaps (#213's trigger), so a gap anywhere in
+// a batch means rows the cursor still needed are gone: the whole batch is
+// refused before any of it is delivered.
+func contiguous(cursor int64, events []domain.Event) bool {
+	next := cursor + 1
+	for _, event := range events {
+		if event.Seq != next {
+			return false
+		}
+		next++
+	}
+	return true
 }

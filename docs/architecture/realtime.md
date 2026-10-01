@@ -74,7 +74,7 @@ kinds are an open list. `postgres.NewEventReader(db)` provides
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.
 It decodes known kinds' IDs, failing the batch for malformed or missing IDs;
 unknown kinds retain their envelope with zero IDs for the delivery loop to skip.
-The reader satisfies the planned delivery interface structurally, without
+The reader satisfies the delivery interface structurally, without
 importing `realtime`; authorization remains the connection loop's job.
 
 `organization.event_log_boundary_seq` is the highest sequence no longer in
@@ -82,5 +82,18 @@ the log. Migration sets it to each existing organisation's `event_seq`,
 without backfilling; new organisations start at 0. Rows above the boundary
 are gap-free through `event_seq`; a deferred constraint trigger enforces it at
 commit for every writer, including an older binary still running during
-`migrate up`. Retention (#161) will raise the boundary;
-a cursor is valid at or above it. Delivery (#209) remains planned.
+`migrate up`. Retention raises the boundary in the same transaction as deletion,
+locking one organisation before its events as posting does. The cleaner lists
+organisations with expired rows in ID order without write locks, then commits
+batches of at most 1,000 expired rows in sequence order until none remain for
+each organisation. Each batch reads after acquiring the organisation lock,
+so concurrent cleaners see committed progress. Only that organisation's writers
+wait; errors or the one-minute run timeout preserve all committed batches for
+the next hourly tick. It deletes only rows older than the cutoff; messages,
+their sequences and unread positions are untouched.
+A cursor at or above the boundary remains valid even with an empty log.
+`EventsAfter` reads the boundary and rows in one SQL snapshot, returning
+`domain.ErrCursorExpired` below it, including with a zero limit. Every full
+`CachedEvents` result gets a fresh zero-limit check: immutable cached rows and
+that boundary describe a valid batch at the check's snapshot, or require reset.
+Short batches already carry their read's boundary check.

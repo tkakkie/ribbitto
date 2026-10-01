@@ -24,11 +24,23 @@ The audience references `(organization_id, id)` in `member`; NULL means
 organisation-wide. `data` holds only IDs ([payload shapes](architecture/realtime.md#durable-event-log)).
 `organization.event_log_boundary_seq` is NOT NULL, defaults to 0, and is set
 to each existing organisation's `event_seq` on upgrade: no event backfill.
-Retention will advance this replay boundary. A deferred constraint trigger on
+Retention advances this replay boundary atomically with deletion. A deferred constraint trigger on
 `organization` refuses, at commit, any raise of `event_seq` above the boundary
 that leaves one of the sequences it took without an `event_log` row, so a server still running an older binary during
 `migrate up` fails its write instead of leaving a gap. Down drops the trigger,
 the log and the boundary.
+
+`RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
+days; for example `24h`). The server cleans expired events hourly, with a
+one-minute timeout per run. It lists organisations with expired rows in ID
+order without write locks, then processes one organisation at a time in
+transactions of at most 1,000 expired rows, selected in sequence order using
+the existing `(organization_id, seq)` index. Each transaction locks only that
+organisation before deleting events and advancing its replay boundary, then
+commits before the next batch. Errors and timeouts keep committed progress;
+the next tick retries remaining work. The listing uses an organisation-scoped
+`EXISTS` scan on the same index; no additional index or migration is needed.
+Messages and unread inputs are never deleted.
 
 Integration tests use `RIBBITTO_TEST_DATABASE_URL`, an admin connection to
 the `postgres` database as the `postgres` superuser. `pgtest.New(t)` creates

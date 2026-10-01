@@ -32,6 +32,12 @@ func (r *EventReader) EventsAfter(ctx context.Context, organizationID domain.ID,
 	}
 	events := make([]domain.Event, 0, len(rows))
 	for _, row := range rows {
+		if after < row.EventLogBoundarySeq {
+			return nil, domain.ErrCursorExpired
+		}
+		if row.Seq == 0 {
+			continue // The boundary must be returned even when the log is empty.
+		}
 		event, err := eventFromRow(row)
 		if err != nil {
 			return nil, fmt.Errorf("reading event %d: %w", row.Seq, err)

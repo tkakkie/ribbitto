@@ -55,9 +55,18 @@ func newCachedEvents(events EventReader, hub *Hub, capacity int, ttl, loadTimeou
 // EventsAfter implements EventReader.
 func (c *CachedEvents) EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]domain.Event, error) {
 	key := eventsKey{organization: organizationID, after: after, level: c.hub.Latest(organizationID), limit: limit}
-	return c.cache.Get(ctx, key, func(ctx context.Context) ([]domain.Event, error) {
+	events, err := c.cache.Get(ctx, key, func(ctx context.Context) ([]domain.Event, error) {
 		return c.events.EventsAfter(ctx, organizationID, after, limit)
 	})
+	if err == nil && fullBatch(key, events) {
+		// Immutable rows can be reused, but retention may have invalidated
+		// their cursor. A zero-limit read checks the boundary without rows.
+		_, err = c.events.EventsAfter(ctx, organizationID, after, 0)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return events, nil
 }
 
 // fullBatch keeps only batches that fill their limit (see CachedEvents). A

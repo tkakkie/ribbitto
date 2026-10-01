@@ -83,7 +83,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
-| `realtime` | `internal/realtime` *(M3)*; `domain/event.go`; `infra/postgres/event_reader.go`; `db/queries/event_log.sql` | `event_log` |
+| `realtime` | `internal/realtime` *(M3)*; `domain/event.go`; `infra/postgres/event_reader.go`, `event_cleaner.go`; `db/queries/event_log.sql` | `event_log` |
 
 The shared kernel, which any feature may use: the IDs and value types in
 `internal/domain`, the per-organisation `event_seq` and `event_log_boundary_seq`, and the authorisation
@@ -121,7 +121,7 @@ It returns `message.ChannelPage`; older pages have no event cursor.
   transaction (`DECISIONS.md` 5);
 - all three flows write realtime's `event_log` immediately after the message
   or member, so the event commits with the entity and its sequence (#156);
-- realtime retention (#161, planned) writes org's `event_log_boundary_seq`,
+- realtime retention (#161) writes org's `event_log_boundary_seq`,
   because the boundary and events must be read in the same snapshot.
 
 Their atomicity and `event_seq` ordering stay as they are. They are

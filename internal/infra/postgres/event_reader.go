@@ -23,6 +23,9 @@ func NewEventReader(db sqlcgen.DBTX) *EventReader {
 // EventsAfter returns at most limit events for the organisation, in sequence
 // order strictly after after. Unknown kinds retain only their envelope;
 // malformed data for known kinds fails the batch. Limit must be nonnegative.
+// The replay boundary, committed event_seq and rows share one snapshot;
+// a cursor outside those inclusive bounds returns domain.ErrCursorExpired,
+// including when limit is zero.
 func (r *EventReader) EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]domain.Event, error) {
 	rows, err := r.queries.EventsAfter(ctx, sqlcgen.EventsAfterParams{
 		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, AfterSeq: after, BatchLimit: int64(limit),
@@ -32,11 +35,11 @@ func (r *EventReader) EventsAfter(ctx context.Context, organizationID domain.ID,
 	}
 	events := make([]domain.Event, 0, len(rows))
 	for _, row := range rows {
-		if after < row.EventLogBoundarySeq {
+		if after < row.EventLogBoundarySeq || after > row.EventSeq {
 			return nil, domain.ErrCursorExpired
 		}
 		if row.Seq == 0 {
-			continue // The boundary must be returned even when the log is empty.
+			continue // Both cursor bounds must be returned even when the log is empty.
 		}
 		event, err := eventFromRow(row)
 		if err != nil {

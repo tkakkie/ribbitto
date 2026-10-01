@@ -112,7 +112,10 @@ See [`validation.md`](validation.md).
    `joined_event_seq` (for members). Log rows are gap-free above
    `event_log_boundary_seq`, the highest sequence no longer in the log.
    Existing organisations start logging after their migration-time `event_seq`;
-   new ones start at boundary 0. Retention raises it; cursors at or above it are valid.
+   new ones start at boundary 0. Retention raises it. Valid cursors range from
+   this boundary through the committed `event_seq`, inclusive. A cursor outside
+   these bounds requires `reset`, including one above `event_seq` after a database
+   restore; a cursor equal to `event_seq` waits for new events.
 7. **Session tokens are never stored.** Only their SHA-256 hash is; passwords
    are stored only as Argon2id hashes.
 8. **An email address proves nothing about who owns an account.** M1 does

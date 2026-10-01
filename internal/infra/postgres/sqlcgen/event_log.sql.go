@@ -41,7 +41,7 @@ func (q *Queries) CommittedSequences(ctx context.Context, organizationIds []pgty
 }
 
 const eventsAfter = `-- name: EventsAfter :many
-SELECT o.id AS organization_id, o.event_log_boundary_seq,
+SELECT o.id AS organization_id, o.event_log_boundary_seq, o.event_seq,
        coalesce(e.seq, 0)::bigint AS seq, coalesce(e.kind, '')::text AS kind,
        e.audience_member_id, e.data
 FROM organization o
@@ -63,6 +63,7 @@ type EventsAfterParams struct {
 type EventsAfterRow struct {
 	OrganizationID      pgtype.UUID
 	EventLogBoundarySeq int64
+	EventSeq            int64
 	Seq                 int64
 	Kind                string
 	AudienceMemberID    pgtype.UUID
@@ -81,6 +82,7 @@ func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]Eve
 		if err := rows.Scan(
 			&i.OrganizationID,
 			&i.EventLogBoundarySeq,
+			&i.EventSeq,
 			&i.Seq,
 			&i.Kind,
 			&i.AudienceMemberID,

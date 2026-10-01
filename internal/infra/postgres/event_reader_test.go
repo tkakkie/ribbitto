@@ -98,6 +98,40 @@ func TestEventsAfterMalformedData(t *testing.T) {
 	}
 }
 
+func TestEventsAfterCursorAboveLog(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	f := pgtest.OrganizationWithOwner(t, pool, "cursor", "general")
+	posted, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
+	requireNoError(t, err)
+	empty := pgtest.Organization(t, pool, "empty", "Empty", 0)
+	reader := postgres.NewEventReader(pool)
+	for _, tt := range []struct {
+		name string
+		org  domain.ID
+		seq  int64
+	}{
+		{"populated log", f.OrganizationID, posted.EventSeq},
+		{"empty log", empty, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, limit := range []int{0, 10} {
+				for _, after := range []int64{tt.seq + 1, tt.seq + 10, 1<<63 - 1} {
+					got, err := reader.EventsAfter(ctx, tt.org, after, limit)
+					if !errors.Is(err, domain.ErrCursorExpired) || len(got) != 0 {
+						t.Errorf("after=%d limit=%d: %v, %v; want no events and ErrCursorExpired", after, limit, got, err)
+					}
+				}
+				got, err := reader.EventsAfter(ctx, tt.org, tt.seq, limit)
+				if err != nil || len(got) != 0 {
+					t.Errorf("at event_seq=%d limit=%d: %v, %v; want empty batch without error", tt.seq, limit, got, err)
+				}
+			}
+		})
+	}
+}
+
 func TestCommittedSequences(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)

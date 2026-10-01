@@ -3,6 +3,7 @@ package domain
 import "errors"
 
 // ErrCursorExpired means replay cannot cover every sequence after the cursor.
+// The cursor is below the replay boundary or above the committed event_seq.
 var ErrCursorExpired = errors.New("event cursor expired")
 
 // EventKind identifies a durable change. Readers skip unknown kinds.

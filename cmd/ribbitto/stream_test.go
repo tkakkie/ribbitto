@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -209,6 +210,55 @@ func post(t *testing.T, b acceptanceBrowser, channelURL, body string) {
 	acceptanceOK(t, response.Body.Close())
 	if response.StatusCode != http.StatusSeeOther {
 		t.Fatalf("post: status %d", response.StatusCode)
+	}
+}
+
+func TestEventStreamCursorAboveLog(t *testing.T) {
+	pool := acceptanceDatabase(t)
+	server, streams := streamServers(t, pool)
+	owner := newAcceptanceBrowser(t, server, "192.0.2.10")
+	owner.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
+	response, _ := owner.visit(t, "GET", "/organizations/owner/", nil, 303)
+	channelURL := response.Header.Get("Location")
+	_, page := owner.visit(t, "GET", channelURL, nil, 200)
+	match := pageCursor.FindStringSubmatch(page)
+	if len(match) != 2 {
+		t.Fatal("page has no event cursor")
+	}
+	seq, err := strconv.ParseInt(match[1], 10, 64)
+	acceptanceOK(t, err)
+	above := strconv.FormatInt(seq+10, 10)
+	for _, tt := range []struct{ name, after, header string }{
+		{"query", above, ""},
+		{"header", match[1], above},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			events, status := openStreamWith(t, on(owner, streams), channelURL, tt.after, tt.header)
+			if status != http.StatusOK {
+				t.Fatalf("stream status %d, want 200", status)
+			}
+			if e := nextEvent(t, events); e.name != "reset" || e.id != above || e.data != "" {
+				t.Fatalf("above-log cursor: %+v, want reset with unchanged id %s", e, above)
+			}
+			select {
+			case e, ok := <-events:
+				if ok {
+					t.Fatalf("event after reset: %+v", e)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("stream stayed open after reset")
+			}
+		})
+	}
+	// Equality is valid: the stream stays open and delivers the next commit.
+	events, status := openStream(t, on(owner, streams), channelURL, match[1])
+	if status != http.StatusOK {
+		t.Fatalf("caught-up stream status %d, want 200", status)
+	}
+	noEvent(t, events, 50*time.Millisecond)
+	post(t, owner, channelURL, "after waiting")
+	if e := nextEvent(t, events); e.name != "message" || e.id != strconv.FormatInt(seq+1, 10) || !strings.Contains(e.data, "after waiting") {
+		t.Fatalf("caught-up stream did not deliver the next commit: %+v", e)
 	}
 }
 

@@ -12,8 +12,9 @@ import (
 // EventReader reads an organisation's durable events with a sequence above
 // after, in sequence order, at most limit of them. infra/postgres implements
 // it without importing this package, so it uses domain types only.
-// Each batch checks the replay boundary in the same snapshot and returns
-// domain.ErrCursorExpired below it, including for a zero-limit read.
+// Each batch checks the replay boundary and committed event_seq in the same
+// snapshot as its rows. A cursor below the boundary or above event_seq returns
+// domain.ErrCursorExpired, including for a zero-limit read; equality is valid.
 type EventReader interface {
 	EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]domain.Event, error)
 }

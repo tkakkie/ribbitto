@@ -46,8 +46,8 @@ type SessionStore interface {
 	DeleteExpiredSessions(ctx context.Context, before time.Time) error
 }
 
-// SessionCanceller ends what still runs on a session once it is deleted,
-// such as open event streams. realtime.Hub satisfies it.
+// SessionCanceller ends what still runs on a session that is deleted or may
+// have been deleted, such as open event streams. realtime.Hub satisfies it.
 type SessionCanceller interface {
 	CancelSession(sessionID domain.ID)
 }
@@ -64,13 +64,13 @@ func NewSessions(store SessionStore, now func() time.Time) *Sessions {
 	return &Sessions{store: store, now: now}
 }
 
-// NewSessionsWithCanceller also tells cancel about every session it deletes
-// (sign-out, or a successful Replace), after the deletion has succeeded.
+// NewSessionsWithCanceller also ends streams after deletion or replacement,
+// including when the store reports an error and the outcome is unknown.
 func NewSessionsWithCanceller(store SessionStore, now func() time.Time, cancel SessionCanceller) *Sessions {
 	return &Sessions{store: store, now: now, cancel: cancel}
 }
 
-// ended tells the canceller, if any, that a session is gone.
+// ended tells the canceller, if any, to stop a session's streams.
 func (s *Sessions) ended(id domain.ID, found bool) {
 	if found && s.cancel != nil {
 		s.cancel.CancelSession(id)
@@ -92,12 +92,16 @@ func (s *Sessions) Create(ctx context.Context, accountID domain.ID) (string, tim
 
 // Replace starts a session for the account and, in the same transaction,
 // ends the session named by previousToken (the browser's cookie, possibly
-// empty or stale). A failure changes nothing, so the browser keeps the
-// session it had.
+// empty or stale). A mutation error ends the previous session's streams
+// anyway: the transaction may have committed before reporting the error.
 func (s *Sessions) Replace(ctx context.Context, previousToken string, accountID domain.ID) (string, time.Time, error) {
 	old, ok := hashToken(previousToken)
 	if !ok {
 		return s.Create(ctx, accountID)
+	}
+	_, previous, resolveErr := s.Resolve(ctx, previousToken)
+	if resolveErr != nil && !errors.Is(resolveErr, ErrNoSession) {
+		return "", time.Time{}, resolveErr
 	}
 	token, hash, expiresAt, err := s.newToken()
 	if err != nil {
@@ -105,7 +109,8 @@ func (s *Sessions) Replace(ctx context.Context, previousToken string, accountID 
 	}
 	ended, found, err := s.store.ReplaceSession(ctx, old, hash, accountID, expiresAt)
 	if err != nil {
-		// Nothing changed, so the old session and its streams live on.
+		// The store may return no ID even if the deletion committed.
+		s.ended(previous.ID, resolveErr == nil)
 		return "", time.Time{}, fmt.Errorf("replacing session: %w", err)
 	}
 	s.ended(ended, found)
@@ -136,14 +141,20 @@ func (s *Sessions) Resolve(ctx context.Context, token string) (domain.Account, S
 	return account, session, err
 }
 
-// Delete ends the session with this token, if there is one.
+// Delete ends the session with this token, if there is one. A mutation error
+// still ends its streams, since the deletion may have committed.
 func (s *Sessions) Delete(ctx context.Context, token string) error {
 	hash, ok := hashToken(token)
 	if !ok {
 		return nil
 	}
+	_, previous, resolveErr := s.Resolve(ctx, token)
+	if resolveErr != nil && !errors.Is(resolveErr, ErrNoSession) {
+		return resolveErr
+	}
 	ended, found, err := s.store.DeleteSession(ctx, hash)
 	if err != nil {
+		s.ended(previous.ID, resolveErr == nil)
 		return fmt.Errorf("deleting session: %w", err)
 	}
 	s.ended(ended, found)

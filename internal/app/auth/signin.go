@@ -70,7 +70,7 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 		return "", time.Time{}, ErrInvalidCredentials
 	}
 	// One transaction creates the new session and ends the one the browser
-	// sent, so a failed sign-in changes nothing.
+	// sent; an uncertain outcome still ends the previous session's streams.
 	return s.sessions.Replace(ctx, previousToken, account.ID)
 }
 

@@ -23,7 +23,7 @@ type SetupService interface {
 // SessionReplacer signs a newly created account in. Like sign-in, it ends
 // the browser's previous session (the incoming cookie, possibly empty or
 // stale) in the same transaction, so every flow that issues a session
-// replaces the one before it; a failure keeps the previous session. It
+// replaces the one before it. An uncertain outcome ends its streams. It
 // offers no plain Create, so a new flow cannot forget that.
 type SessionReplacer interface {
 	Replace(ctx context.Context, previousToken string, accountID domain.ID) (string, time.Time, error)

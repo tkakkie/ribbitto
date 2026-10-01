@@ -56,7 +56,9 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 	if len(got) != 1 || got[0].Seq != 3 || cached.cache.Len() != 1 {
 		t.Fatalf("cache not primed with event 3: %v", got)
 	}
-	// Simulate restoring the log to sequence 1 while a full batch survives.
+	// Roll the log back to sequence 1 while a full batch survives. A real
+	// restore happens with ribbitto stopped, so caches start empty; this only
+	// pins that the zero-limit re-check applies the upper bound to a hit.
 	tx, err := pool.Begin(ctx)
 	must(err)
 	defer func() { _ = tx.Rollback(ctx) }()

@@ -97,5 +97,6 @@ inclusive, even with an empty log; at `event_seq` it waits for new events.
 `domain.ErrCursorExpired` outside those bounds, including with a zero limit. Every full
 `CachedEvents` result gets a fresh zero-limit check: immutable cached rows and
 both bounds describe a valid batch at the check's snapshot, or require reset.
-This also rejects a cached batch whose cursor is above the log after a database
-restore. Short batches already carry their read's checks of both bounds.
+Short batches already carry their read's checks of both bounds. Cached rows
+are assumed immutable: a restore happens with ribbitto stopped, so caches and
+the hub start empty ([Restoring a backup](../../README.md#restoring-a-backup)).

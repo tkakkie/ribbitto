@@ -20,6 +20,10 @@ every existing message stays `plain_text`; a stored message is never
 reinterpreted, and rendered HTML is at most a disposable cache
 ([`DECISIONS.md`](../../DECISIONS.md), 18).
 
+Every channel message will be in exactly one topic of its channel, and can
+move to another topic without changing its `id` or `event_seq`
+([`topics.md`](topics.md), *planned*).
+
 ## Accepted bodies
 
 `domain.ValidateMessageBody`, in this order:

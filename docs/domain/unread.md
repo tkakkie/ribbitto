@@ -29,3 +29,20 @@
   ON CONFLICT (organization_id, channel_id, member_id) DO UPDATE
     SET last_read_event_seq = GREATEST(channel_member.last_read_event_seq, EXCLUDED.last_read_event_seq);
   ```
+
+## Topics
+
+Once topics exist ([`topics.md`](topics.md)), the unread design is chosen
+in M4's unread issue, before a topic view affects read state, and must pass
+both tests:
+
+1. **Branching never changes whether a message is read.** The per-channel
+   read position above passes, because branching keeps `event_seq`.
+2. **Reading one topic never marks another topic's unseen messages read.**
+   Topic A has messages 10 and 12, topic B has 11; reading A in the topic
+   view must leave 11 unread. Advancing the per-channel position to 12
+   fails this. A per-topic position alone fails test 1: a read message
+   moved into a topic whose position is lower becomes unread again.
+
+Until then, a topic's unread count is the channel's unread messages in that
+topic.

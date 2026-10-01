@@ -45,3 +45,9 @@ default at commit: in one transaction, lock the organisation's row (as
 taking `event_seq` does) so concurrent changes are serialised, clear the old
 default, then set the new one. Setting the new one first would violate the
 unique index at once.
+
+## Topics
+
+Every channel will have topics, including exactly one default topic, which
+is unrelated to the default channel above: see [`topics.md`](topics.md)
+*(planned)*.

@@ -15,7 +15,8 @@ day-to-day progress.
 | **M1 Accounts** ✓ done | First-run setup, sign-up, sign-in, sign-out, server-side sessions | Security checklist met: CSRF, cookie attributes, hashed session tokens, rate limits, one-time setup |
 | **M2 Channels and messages** ✓ done | Public channels, posting, history with paging | Two people can talk (after a reload) |
 | **M3 Real time** ✓ done | Server-Sent Events hub with per-connection authorization and replay | Messages arrive instantly; nothing is lost on reconnect; nothing reaches a connection that may not read it |
-| **M4 Awareness** ← next | Unread counts, presence, typing indicator | |
+| **Topics** ← next | Topics inside channels: the default topic, the feed and topic view, branching (`DECISIONS.md` 21) | A conversation started in the default topic can be branched into its own topic, and both views show it |
+| **M4 Awareness** | Unread counts, presence, typing indicator | |
 | **M5 Polish** | Dark mode, mobile layout, motion | |
 
 ## After the MVP

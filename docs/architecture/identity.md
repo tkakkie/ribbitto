@@ -14,10 +14,18 @@ connects it to HTTP.
   a database outage is not mistaken for a sign-out.
 - **Delete** (sign-out): the row goes, so the token stops working at once.
 - **Open streams** (#207): `Resolve` also returns the session's id and
-  expiry, which the session middleware puts on the request. After a delete
-  or a successful `Replace`, `auth.Sessions` tells its `SessionCanceller`
-  (the realtime hub, wired in `cmd/ribbitto`) the ended session's id, and
-  that session's event streams end; a failed `Replace` ends nothing.
+  expiry, which the session middleware puts on the request. `Delete` and
+  `Replace` resolve the incoming token before changing sessions. After success,
+  they tell the `SessionCanceller` (the realtime hub, wired in `cmd/ribbitto`)
+  the deleted session's id. On a mutation error they cancel the resolved id
+  anyway: the deletion may have committed even if the store returned no id.
+  This fails closed; after a rollback the streams reconnect and re-check the
+  still-valid session. Other sessions stay connected. `auth.ErrNoSession`
+  (empty, malformed, unknown, deleted or expired token) preserves idempotent
+  sign-out and replacement creation; an operational lookup error aborts
+  without changing sessions or cancelling streams. This extra lookup happens
+  only when ending or replacing a session, including setup and sign-up,
+  whose availability-first routing stays unchanged.
 - **Clean-up:** `ribbitto serve` deletes expired rows at start and then
   hourly until shutdown. Expired sessions are already rejected; this only
   keeps the table small.
@@ -32,14 +40,14 @@ as a wrong password, which makes timing-based discovery of accounts much
 harder. On success the session is **replaced** (`Sessions.Replace`): one
 transaction deletes the session named by the token the browser sent (if
 any) and inserts the new one, so a token that existed before sign-in never
-becomes signed in (session fixation), and a failed sign-in changes nothing
-— the browser keeps the session it had. Signing out deletes the session
-row.
+becomes signed in (session fixation). Rejected credentials change nothing;
+a replacement error ends the previous session's streams as described above.
+Signing out deletes the session row.
 
 **One rule for every flow that issues a session:** sign-in, sign-up and
 setup all pass the incoming session cookie to `Sessions.Replace`, so the new
-session ends the browser's previous one in the same transaction, and a
-failure leaves it untouched. `internal/web` sees sessions only through
+session ends the browser's previous one in the same transaction.
+`internal/web` sees sessions only through
 `SessionReplacer`, which has no plain `Create`, so a later flow (invitation
 acceptance, password reset) cannot forget this.
 

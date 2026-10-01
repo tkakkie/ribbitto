@@ -138,7 +138,8 @@ Read the file for the area you change:
 | [`setup-and-signup.md`](setup-and-signup.md) | first-run setup and sign-up |
 | [`identity.md`](identity.md) | sessions, signing in and out, the session cookie |
 | [`rate-limits.md`](rate-limits.md) | authentication rate limits and the reverse-proxy contract |
-| [`realtime.md`](realtime.md) | posting a message and Server-Sent Events (planned) |
+| [`realtime.md`](realtime.md) | posting a message and the durable event log |
+| [`streaming.md`](streaming.md) | Server-Sent Events (planned): ordering and replay, the hub and the loop, authorization and revocation, resource limits |
 | [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |

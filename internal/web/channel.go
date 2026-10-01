@@ -14,6 +14,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -35,6 +36,7 @@ type MessageReader interface {
 
 type channelPages struct {
 	stream   *Streaming
+	renders  *realtime.Cache[renderKey, realtime.Outgoing]
 	messages MessageReader
 	posting  *message.Service
 	pages    *pageRenderer

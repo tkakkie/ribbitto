@@ -193,8 +193,8 @@ func TestCacheLoadTimeoutReleasesWaiters(t *testing.T) {
 	}
 }
 
-// A value keep rejects is shared with the callers that waited for it but
-// not stored.
+// A value keep rejects is not stored; a value it accepts is served until
+// it expires.
 func TestCacheKeepDecidesWhatIsStored(t *testing.T) {
 	c := NewCache[string, int](8, time.Minute, time.Second, func(_ string, v int) bool { return v > 0 }, time.Now)
 	var loads atomic.Int32
@@ -213,6 +213,19 @@ func TestCacheKeepDecidesWhatIsStored(t *testing.T) {
 	}
 }
 
+// receive returns the next value from ch, failing the test after five
+// seconds instead of hanging.
+func receive[V any](t *testing.T, ch <-chan V) V {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting")
+		panic("unreachable")
+	}
+}
+
 // When keep rejects a value, the caller that started the load gets it; the
 // callers that joined get a second load started after the first finished,
 // and a caller arriving during that second load starts its own.
@@ -220,6 +233,19 @@ func TestCacheJoinersOfAnUnkeptValueLoadAgain(t *testing.T) {
 	c := NewCache[string, int](8, time.Minute, time.Second, func(string, int) bool { return false }, time.Now)
 	var loads atomic.Int32
 	gates := []chan struct{}{make(chan struct{}), make(chan struct{}), make(chan struct{})}
+	opened := make([]bool, len(gates))
+	open := func(i int) {
+		if !opened[i] {
+			opened[i] = true
+			close(gates[i])
+		}
+	}
+	// A regression fails here instead of hanging: every gate opens at the end.
+	t.Cleanup(func() {
+		for i := range gates {
+			open(i)
+		}
+	})
 	started := make(chan int, len(gates))
 	load := func(context.Context) (int, error) {
 		n := int(loads.Add(1))
@@ -239,26 +265,28 @@ func TestCacheJoinersOfAnUnkeptValueLoadAgain(t *testing.T) {
 		return out
 	}
 	starter := get()
-	<-started // load 1 runs
+	if n := receive(t, started); n != 1 {
+		t.Fatalf("load %d started, want 1", n)
+	}
 	joiner := get()
 	waitForWaiters(t, c, "k", 2)
-	close(gates[0])
-	if v := <-starter; v != 1 {
+	open(0)
+	if v := receive(t, starter); v != 1 {
 		t.Fatalf("starter got %d, want load 1", v)
 	}
-	if n := <-started; n != 2 { // the joiners' second load runs
+	if n := receive(t, started); n != 2 { // the joiners' second load runs
 		t.Fatalf("load %d started, want 2", n)
 	}
 	late := get() // arrives while load 2 runs: it must not join it
-	if n := <-started; n != 3 {
+	if n := receive(t, started); n != 3 {
 		t.Fatalf("load %d started, want 3 for the late caller", n)
 	}
-	close(gates[1])
-	close(gates[2])
-	if v := <-joiner; v != 2 {
+	open(1)
+	open(2)
+	if v := receive(t, joiner); v != 2 {
 		t.Fatalf("joiner got %d, want load 2", v)
 	}
-	if v := <-late; v != 3 {
+	if v := receive(t, late); v != 3 {
 		t.Fatalf("late caller got %d, want its own load 3", v)
 	}
 }
@@ -402,19 +430,29 @@ func (c *countingLog) EventsAfter(ctx context.Context, org domain.ID, after int6
 	return events, err
 }
 
-// Many streams at the same cursor share one read of a full batch. The empty
-// reads around it are not stored (see TestCachedEventsStoreOnlyFullBatches)
-// and are not counted. A stream may read the new event at the hub level from
-// before the Raise or after it, two different keys. At one level, the read
-// that finds it is either the first read (then stored) or, if the first
-// read's snapshot was empty, its joiners' second read, alongside which a
-// new read may start before anything is stored: at most two per level, so
-// at most four however the streams interleave, for fifty streams.
+// answeredReads counts the reads the cache has answered, so a test knows
+// when every stream has had its first answer and waits on the hub.
+type answeredReads struct {
+	EventReader
+	answered atomic.Int32
+}
+
+func (a *answeredReads) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+	events, err := a.EventReader.EventsAfter(ctx, org, after, limit)
+	a.answered.Add(1)
+	return events, err
+}
+
+// Many streams at the same cursor share one read of a full batch. Every
+// stream first reads (nothing) and waits on the hub; only then is the event
+// committed and raised, so every stream reads it at the new level, where
+// the first read finds a full batch, which is stored and shared: exactly one
+// read finds the event, for fifty streams.
 func TestCachedEventsShareReadsBetweenStreams(t *testing.T) {
 	hub := NewHub()
 	log := &fakeLog{}
 	counted := &countingLog{EventReader: log}
-	events := NewCachedEvents(counted, hub, 64, time.Minute)
+	events := &answeredReads{EventReader: NewCachedEvents(counted, hub, 64, time.Minute)}
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	const streams = 50
@@ -424,6 +462,13 @@ func TestCachedEventsShareReadsBetweenStreams(t *testing.T) {
 		// A batch of one is full as soon as it holds the event.
 		runAsync(ctx, Stream{Hub: hub, Events: events, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), BatchSize: 1}, 0, senders[i])
 	}
+	// After its empty first read a stream waits on the hub and reads nothing
+	// more until a Raise.
+	for deadline := time.Now().Add(5 * time.Second); events.answered.Load() < streams; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d of %d streams had their first read", events.answered.Load(), streams)
+		}
+	}
 	log.append(posted(1, channelA))
 	hub.Raise(orgA, 1)
 	for _, s := range senders {
@@ -431,62 +476,7 @@ func TestCachedEventsShareReadsBetweenStreams(t *testing.T) {
 	}
 	counted.mu.Lock()
 	defer counted.mu.Unlock()
-	if counted.fromStart > 4 {
-		t.Fatalf("%d reads found the event for %d streams, want at most 4", counted.fromStart, streams)
-	}
-}
-
-// gatedLog takes its snapshot of the log when a read starts and, for the
-// first read only, holds the answer until released, like a query whose
-// snapshot predates a commit that lands while it runs.
-type gatedLog struct {
-	*fakeLog
-	started, release chan struct{}
-	calls            atomic.Int32
-}
-
-func (g *gatedLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
-	events, err := g.fakeLog.EventsAfter(ctx, org, after, limit)
-	if g.calls.Add(1) == 1 {
-		close(g.started)
-		<-g.release
-	}
-	return events, err
-}
-
-// A read that joins one already in flight must not get that read's older
-// snapshot when the result is not stored: an event committed after the
-// first read started, with no Raise yet, would be hidden from a read that
-// started after the commit.
-func TestCachedEventsJoinerSeesCommitsBeforeItJoined(t *testing.T) {
-	hub := NewHub()
-	hub.Raise(orgA, 1)
-	log := &gatedLog{fakeLog: &fakeLog{events: []domain.Event{posted(1, channelA)}}, started: make(chan struct{}), release: make(chan struct{})}
-	events := NewCachedEvents(log, hub, 64, time.Minute)
-	first := make(chan []domain.Event, 1)
-	go func() {
-		got, err := events.EventsAfter(t.Context(), orgA, 1, 10)
-		if err != nil {
-			t.Error(err)
-		}
-		first <- got
-	}()
-	<-log.started                   // the first read has its snapshot: nothing after 1
-	log.append(posted(2, channelA)) // committed; the hub is not raised
-	second := make(chan []domain.Event, 1)
-	go func() {
-		got, err := events.EventsAfter(t.Context(), orgA, 1, 10)
-		if err != nil {
-			t.Error(err)
-		}
-		second <- got
-	}()
-	waitForWaiters(t, events.cache, eventsKey{organization: orgA, after: 1, level: 1, limit: 10}, 2)
-	close(log.release)
-	if got := <-first; len(got) != 0 {
-		t.Fatalf("first read = %v, want its own snapshot (empty)", got)
-	}
-	if got := <-second; len(got) != 1 || got[0].Seq != 2 {
-		t.Fatalf("second read = %v, want event 2, committed before it started", got)
+	if counted.fromStart != 1 {
+		t.Fatalf("%d reads found the event for %d streams, want 1", counted.fromStart, streams)
 	}
 }

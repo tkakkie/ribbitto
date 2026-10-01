@@ -10,7 +10,8 @@ import (
 // Cache is a bounded, expiring in-memory cache shared by an organisation's
 // streams. Concurrent misses for one key run a single load and share its
 // result (singleflight), so N streams asking for the same event cause one
-// database read, not N. Errors are never stored: every caller waiting on a
+// database read, or two when the value is not kept (see NewCache), not N.
+// Errors are never stored: every caller waiting on a
 // failed load gets the error, and the next call loads again. It is safe for
 // concurrent use; the zero value is not usable, so call NewCache.
 //

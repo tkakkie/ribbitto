@@ -120,8 +120,9 @@ The remaining per-stream query is the membership check (#231); beyond about
 
 Under this load the pool saturates while the loop's goroutines mostly wait
 between posts: the evidence points at per-connection database work, though
-it does not prove Go adds nothing at higher counts. #227 reads each event
-and message once per organisation and renders once per language; what
+it does not prove Go adds nothing at higher counts. #227 shares each event read
+(two reads for a short batch) and message read per organisation and renders
+once per language; what
 remains per connection is the membership check, until it has a freshness
 protocol of its own (#231). Whether a shared reader per organisation (#232)
 is worth building is decided on these numbers.

@@ -1,10 +1,12 @@
 # Streaming
 
-## Server-Sent Events *(planned, M3)*
+## Server-Sent Events
 
-One SSE connection per page, carrying named events (`message`, `presence`,
-`typing`, `unread`, `reset`). The browser sends everything else as ordinary
-POST requests.
+One SSE connection per latest channel page (M3), carrying named events:
+`message` and `reset` today; `presence`, `typing` and `unread` are planned
+(M4). The browser sends everything else as ordinary POST requests. One
+process serves every stream; several server processes are future work (the
+hub, the per-account cap and the watermark are per process).
 
 ### Ordering and replay
 

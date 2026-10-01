@@ -123,7 +123,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	written := time.Now()
 	for {
 		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
-		if errors.Is(err, domain.ErrCursorExpired) || (err == nil && len(events) > 0 && events[0].Seq > cursor+1) {
+		if errors.Is(err, domain.ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
 			if ctx.Err() != nil {
 				return cursor, context.Cause(ctx)
 			}
@@ -211,4 +211,19 @@ func heartbeatDue(ctx context.Context, err error) (bool, error) {
 		return true, nil
 	}
 	return false, err
+}
+
+// contiguous reports whether events continue the cursor without a gap. The
+// log above the boundary has no gaps (#213's trigger), so a gap anywhere in
+// a batch means rows the cursor still needed are gone: the whole batch is
+// refused before any of it is delivered.
+func contiguous(cursor int64, events []domain.Event) bool {
+	next := cursor + 1
+	for _, event := range events {
+		if event.Seq != next {
+			return false
+		}
+		next++
+	}
+	return true
 }

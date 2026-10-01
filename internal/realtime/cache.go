@@ -88,10 +88,28 @@ func (c *Cache[K, V]) Get(ctx context.Context, key K, load func(context.Context)
 	}
 }
 
+// load runs one load for key. The timeout is enforced here, not left to
+// load: a loader that ignores its context must not hold every waiter, or
+// the key, beyond loadTimeout. Its late result is dropped; only its own
+// goroutine is left running until it returns.
 func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load func(context.Context) (V, error)) {
 	ctx, cancel := context.WithTimeout(ctx, c.loadTimeout)
 	defer cancel()
-	call.value, call.err = load(ctx)
+	type result struct {
+		value V
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		value, err := load(ctx)
+		done <- result{value, err}
+	}()
+	select {
+	case r := <-done:
+		call.value, call.err = r.value, r.err
+	case <-ctx.Done():
+		call.err = context.Cause(ctx)
+	}
 
 	c.mu.Lock()
 	delete(c.loading, key)

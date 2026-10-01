@@ -162,28 +162,28 @@ func TestCacheWaiterCancellationLeavesTheLoad(t *testing.T) {
 }
 
 // A load that outlives its timeout releases every waiter with the timeout,
-// and the key can be loaded again.
+// even when the loader ignores its context, and the key can be loaded again
+// while that loader is still running.
 func TestCacheLoadTimeoutReleasesWaiters(t *testing.T) {
-	c := NewCache[string, int](8, time.Minute, 50*time.Millisecond, nil, time.Now)
+	c := NewCache[string, int](8, time.Minute, 300*time.Millisecond, nil, time.Now)
 	release := make(chan struct{})
+	defer close(release)
 	var loads atomic.Int32
-	stuck := func(ctx context.Context) (int, error) {
+	ignoresContext := func(context.Context) (int, error) {
 		loads.Add(1)
-		<-ctx.Done()
-		<-release // held until every caller has joined this one load
-		return 0, ctx.Err()
+		<-release
+		return 1, nil
 	}
 	const callers = 5
 	var wg sync.WaitGroup
 	for range callers {
 		wg.Go(func() {
-			if _, err := c.Get(t.Context(), "k", stuck); !errors.Is(err, context.DeadlineExceeded) {
+			if _, err := c.Get(t.Context(), "k", ignoresContext); !errors.Is(err, context.DeadlineExceeded) {
 				t.Errorf("Get = %v, want the load's timeout", err)
 			}
 		})
 	}
 	waitForWaiters(t, c, "k", callers)
-	close(release)
 	wg.Wait()
 	if n := loads.Load(); n != 1 {
 		t.Fatalf("%d loads timed out for %d callers, want 1", n, callers)
@@ -245,6 +245,14 @@ func TestCachedEventsStoreOnlyFullBatches(t *testing.T) {
 	if got := read(1, 2); len(got) != 2 || log.calls != calls {
 		t.Fatalf("full batch: %v after %d more reads, want it from the cache", got, log.calls-calls)
 	}
+	// A limit of 0 is never full, though its result is as long as the limit.
+	calls = log.calls
+	read(1, 0)
+	read(1, 0)
+	if log.calls != calls+2 {
+		t.Fatalf("%d reads for two zero-limit reads, want 2: an empty result was stored", log.calls-calls)
+	}
+	calls = log.calls
 	// A new level is a new key, so even a full batch is read again after a
 	// Raise; the level is in the key for the batches that are not full.
 	hub.Raise(orgA, 3)

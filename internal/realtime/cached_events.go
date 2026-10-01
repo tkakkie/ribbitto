@@ -55,7 +55,8 @@ func (c *CachedEvents) EventsAfter(ctx context.Context, organizationID domain.ID
 	})
 }
 
-// fullBatch keeps only batches that fill their limit (see CachedEvents).
+// fullBatch keeps only batches that fill their limit (see CachedEvents). A
+// limit of 0 or less is never full: its empty result says nothing lasting.
 func fullBatch(key eventsKey, events []domain.Event) bool {
-	return len(events) == key.limit
+	return key.limit > 0 && len(events) == key.limit
 }

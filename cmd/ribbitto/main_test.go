@@ -4,11 +4,13 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 func TestSetupToken(t *testing.T) {
@@ -63,6 +65,48 @@ func TestSessionCleanupStops(t *testing.T) {
 	case <-stopped:
 	case <-time.After(5 * time.Second):
 		t.Fatal("stop did not cancel a blocked clean-up")
+	}
+}
+
+// blockingSequences blocks its reads until their context ends and reports
+// the first one.
+type blockingSequences struct {
+	started chan struct{}
+	once    *sync.Once
+}
+
+func (s blockingSequences) CommittedSequences(ctx context.Context, _ []domain.ID) (map[domain.ID]int64, error) {
+	s.once.Do(func() { close(s.started) })
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// stop must end a watermark check blocked in its read, so the check never
+// outlives the pool that serve closes next.
+func TestWatermarkStops(t *testing.T) {
+	hub := realtime.NewHub()
+	_, unregister, err := hub.Register(context.Background(), realtime.Connection{Organization: domain.ID{1}, Account: domain.ID{2}, Session: domain.ID{3}}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unregister()
+	sequences := blockingSequences{started: make(chan struct{}), once: &sync.Once{}}
+	// A long timeout, so only stop can end the blocked read.
+	stop := startWatermark(context.Background(), realtime.Watermark{Hub: hub, Sequences: sequences, Timeout: time.Hour}, time.Millisecond)
+	select {
+	case <-sequences.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watermark never read")
+	}
+	stopped := make(chan struct{})
+	go func() {
+		stop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("stop did not cancel a blocked watermark check")
 	}
 }
 

@@ -10,7 +10,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
 
-// EventReader reads realtime's durable event log, without delivery authorization.
+// EventReader reads realtime's durable event log, without delivery
+// authorization, and the committed sequences the watermark check raises
+// the hub to.
 type EventReader struct{ queries *sqlcgen.Queries }
 
 // NewEventReader returns a reader using db.
@@ -37,6 +39,25 @@ func (r *EventReader) EventsAfter(ctx context.Context, organizationID domain.ID,
 		events = append(events, event)
 	}
 	return events, nil
+}
+
+// CommittedSequences returns the committed event_seq of each given
+// organisation that exists, in one query; it reads org's shared-kernel
+// watermark and writes nothing.
+func (r *EventReader) CommittedSequences(ctx context.Context, organizations []domain.ID) (map[domain.ID]int64, error) {
+	ids := make([]pgtype.UUID, len(organizations))
+	for i, org := range organizations {
+		ids[i] = pgtype.UUID{Bytes: org, Valid: true}
+	}
+	rows, err := r.queries.CommittedSequences(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("reading committed sequences: %w", err)
+	}
+	seqs := make(map[domain.ID]int64, len(rows))
+	for _, row := range rows {
+		seqs[row.ID.Bytes] = row.EventSeq
+	}
+	return seqs, nil
 }
 
 func eventFromRow(row sqlcgen.EventsAfterRow) (domain.Event, error) {

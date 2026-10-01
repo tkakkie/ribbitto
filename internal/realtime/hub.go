@@ -35,6 +35,7 @@ type Hub struct {
 	orgs      map[domain.ID]*orgSequence
 	byAccount map[domain.ID]map[*registration]struct{}
 	bySession map[domain.ID]map[*registration]struct{}
+	byOrg     map[domain.ID]map[*registration]struct{}
 }
 
 // orgSequence is one organisation's latest sequence. changed is closed and
@@ -46,6 +47,7 @@ type orgSequence struct {
 }
 
 type registration struct {
+	organization     domain.ID
 	account, session domain.ID
 	cancel           context.CancelCauseFunc
 }
@@ -56,6 +58,7 @@ func NewHub() *Hub {
 		orgs:      make(map[domain.ID]*orgSequence),
 		byAccount: make(map[domain.ID]map[*registration]struct{}),
 		bySession: make(map[domain.ID]map[*registration]struct{}),
+		byOrg:     make(map[domain.ID]map[*registration]struct{}),
 	}
 }
 
@@ -75,6 +78,22 @@ func (h *Hub) sequence(org domain.ID) *orgSequence {
 func (h *Hub) Raise(org domain.ID, seq int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.raise(org, seq)
+}
+
+// RaiseIfActive is Raise for an organisation that still has a registered
+// connection, checked under the same lock, so a value read while its last
+// connection went away does not raise it.
+func (h *Hub) RaiseIfActive(org domain.ID, seq int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.byOrg[org]) > 0 {
+		h.raise(org, seq)
+	}
+}
+
+// raise is Raise's body; the caller holds mu.
+func (h *Hub) raise(org domain.ID, seq int64) {
 	s := h.sequence(org)
 	if seq <= s.latest {
 		return
@@ -151,15 +170,17 @@ func (h *Hub) Register(parent context.Context, c Connection, limit int) (ctx con
 		return nil, nil, ErrTooManyConnections
 	}
 	ctx, cancel := context.WithCancelCause(parent)
-	r := &registration{account: c.Account, session: c.Session, cancel: cancel}
+	r := &registration{organization: c.Organization, account: c.Account, session: c.Session, cancel: cancel}
 	add(h.byAccount, c.Account, r)
 	add(h.bySession, c.Session, r)
+	add(h.byOrg, c.Organization, r)
 	var once sync.Once
 	unregister = func() {
 		once.Do(func() {
 			h.mu.Lock()
 			remove(h.byAccount, r.account, r)
 			remove(h.bySession, r.session, r)
+			remove(h.byOrg, r.organization, r)
 			h.mu.Unlock()
 			cancel(ErrUnregistered)
 		})
@@ -177,6 +198,21 @@ func (h *Hub) Connections() int {
 		n += len(set)
 	}
 	return n
+}
+
+// ActiveOrganizations returns the organisations with at least one
+// registered connection, in no particular order. Unlike the sequences,
+// which the hub keeps for every organisation it was ever told about, this
+// follows the registry, so an organisation drops out when its last
+// connection unregisters.
+func (h *Hub) ActiveOrganizations() []domain.ID {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	orgs := make([]domain.ID, 0, len(h.byOrg))
+	for org := range h.byOrg {
+		orgs = append(orgs, org)
+	}
+	return orgs
 }
 
 // CancelAccount ends the contexts of all the account's connections, for

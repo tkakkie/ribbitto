@@ -79,9 +79,32 @@ type recorder struct {
 	failOn int64
 	err    error
 	change chan struct{}
+	// heartbeats counts heartbeats; heartbeatErr, if set, fails them.
+	heartbeats   int
+	heartbeatErr error
 }
 
 func newRecorder() *recorder { return &recorder{change: make(chan struct{}, 100)} }
+
+func (r *recorder) Heartbeat(context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.heartbeatErr != nil {
+		return r.heartbeatErr
+	}
+	r.heartbeats++
+	select {
+	case r.change <- struct{}{}:
+	default: // a test that counts heartbeats polls heartbeatCount
+	}
+	return nil
+}
+
+func (r *recorder) heartbeatCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.heartbeats
+}
 
 func (r *recorder) Send(_ context.Context, out Outgoing) error {
 	r.mu.Lock()
@@ -347,4 +370,41 @@ func (c *cancellingSender) Send(ctx context.Context, out Outgoing) error {
 	}
 	c.cancel()
 	return nil
+}
+
+// While idle the loop sends a heartbeat each time Heartbeat passes, and an
+// event still arrives at once.
+func TestStreamSendsHeartbeatsWhileIdle(t *testing.T) {
+	hub := NewHub()
+	log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+	ctx, cancel := context.WithCancel(t.Context())
+	send := newRecorder()
+	done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), Heartbeat: 5 * time.Millisecond}, 0, send)
+	send.waitFor(t, 1)
+	for deadline := time.Now().Add(5 * time.Second); send.heartbeatCount() < 2; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d heartbeats while idle, want at least 2", send.heartbeatCount())
+		}
+	}
+	log.append(posted(2, channelA))
+	hub.Raise(orgA, 2)
+	send.waitFor(t, 1, 2)
+	cancel()
+	if got := <-done; got.cursor != 2 || !errors.Is(got.err, context.Canceled) {
+		t.Fatalf("Run = %d, %v; want 2, context.Canceled", got.cursor, got.err)
+	}
+}
+
+// A heartbeat that cannot be written (a client that stopped reading) stops
+// the loop without moving the cursor.
+func TestStreamStopsOnAFailedHeartbeat(t *testing.T) {
+	hub := NewHub()
+	log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+	send := newRecorder()
+	failure := errors.New("i/o timeout")
+	send.heartbeatErr = failure
+	got := <-runAsync(t.Context(), Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), Heartbeat: 5 * time.Millisecond}, 0, send)
+	if got.cursor != 1 || !errors.Is(got.err, failure) {
+		t.Fatalf("Run = %d, %v; want 1 and the heartbeat's error", got.cursor, got.err)
+	}
 }

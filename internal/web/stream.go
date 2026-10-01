@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,12 +32,15 @@ type Streaming struct {
 	// Sessions re-resolves the request's session after the stream has
 	// registered (see events).
 	Sessions middleware.SessionResolver
-	// MaxPerAccount caps an account's open streams; zero means no cap until
-	// #160 sets one.
+	// MaxPerAccount caps an account's open streams; zero means
+	// DefaultMaxStreamsPerAccount.
 	MaxPerAccount int
 	// WriteTimeout bounds each write to the stream; zero means
 	// DefaultStreamWriteTimeout. Tests shorten it.
 	WriteTimeout time.Duration
+	// Heartbeat is how long an idle stream waits before a heartbeat; zero
+	// means DefaultStreamHeartbeat. Tests shorten it.
+	Heartbeat time.Duration
 }
 
 // errSessionExpired ends a stream when its session expires.
@@ -47,6 +49,17 @@ var errSessionExpired = errors.New("session expired")
 // DefaultStreamWriteTimeout bounds one event write. A client that cannot
 // take a small event within it is not reading.
 const DefaultStreamWriteTimeout = 10 * time.Second
+
+// DefaultMaxStreamsPerAccount caps one account's open streams: several tabs
+// on several devices fit, a runaway client does not. A stream over it is
+// refused with 429 before it starts, rather than closing the oldest, which
+// would make that tab reconnect and close the next, forever.
+const DefaultMaxStreamsPerAccount = 16
+
+// DefaultStreamHeartbeat is how often an idle stream writes a comment, so
+// proxies keep it open and a client that stopped reading is found out at
+// the write deadline.
+const DefaultStreamHeartbeat = 20 * time.Second
 
 // events serves GET …/channels/{channelID}/events: the channel's events after
 // the client's cursor, as Server-Sent Events, until the client goes away or
@@ -85,7 +98,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 	}
 	limit := p.stream.MaxPerAccount
 	if limit <= 0 {
-		limit = math.MaxInt
+		limit = DefaultMaxStreamsPerAccount
 	}
 	// Register first: from now on, deleting the session (sign-out, or a new
 	// sign-in replacing it) cancels this stream through the hub.
@@ -145,9 +158,14 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 		return
 	}
 
+	heartbeat := p.stream.Heartbeat
+	if heartbeat <= 0 {
+		heartbeat = DefaultStreamHeartbeat
+	}
 	stream := realtime.Stream{
 		Hub: p.stream.Hub, Events: p.stream.Events, Authorizer: p.stream.Authorizer,
-		Renderer: messageRenderer{messages: p.messages, membership: m, renders: p.renders},
+		Renderer:  messageRenderer{messages: p.messages, membership: m, renders: p.renders},
+		Heartbeat: heartbeat,
 	}
 	sub := realtime.Subscription{Organization: m.Organization.ID, OrganizationSlug: m.Organization.Slug, Account: account.ID, Channel: c.ID}
 	cursor, err := stream.Run(ctx, sub, after, send)
@@ -276,6 +294,14 @@ func (s *sseSender) write(ctx context.Context, fn func() error) error {
 		return fmt.Errorf("clearing write deadline: %w", err)
 	}
 	return nil
+}
+
+// Heartbeat writes an SSE comment, which the browser ignores.
+func (s *sseSender) Heartbeat(ctx context.Context) error {
+	return s.write(ctx, func() error {
+		_, err := s.w.Write([]byte(": heartbeat\n\n"))
+		return err
+	})
 }
 
 // Send writes one event. Each line of the data gets its own "data:" field;

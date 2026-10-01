@@ -19,6 +19,8 @@ var (
 	ErrSessionEnded = errors.New("realtime: session ended")
 	// ErrUnregistered ends a connection whose unregister function ran.
 	ErrUnregistered = errors.New("realtime: connection unregistered")
+	// ErrShutdown ends every connection when the server shuts down.
+	ErrShutdown = errors.New("realtime: server shutting down")
 )
 
 // Hub holds, per organisation, the highest committed event sequence it has
@@ -185,6 +187,20 @@ func (h *Hub) CancelAccount(account domain.ID) {
 	defer h.mu.Unlock()
 	for r := range h.byAccount[account] {
 		r.cancel(ErrAccountCancelled)
+	}
+}
+
+// CancelAll ends the contexts of every registered connection, for a
+// server shutting down: an open stream never goes idle, so the server
+// would otherwise wait for it until its shutdown deadline. The connections
+// keep their slots until they unregister.
+func (h *Hub) CancelAll() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, set := range h.byAccount {
+		for r := range set {
+			r.cancel(ErrShutdown)
+		}
 	}
 }
 

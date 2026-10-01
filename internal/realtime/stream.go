@@ -2,7 +2,9 @@ package realtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/tkakkie/ribbitto/internal/domain"
 )
@@ -28,9 +30,11 @@ type Renderer interface {
 	Render(ctx context.Context, sub Subscription, event domain.Event) (Outgoing, error)
 }
 
-// Sender writes one outgoing event to the connection. web implements it.
+// Sender writes to the connection: an outgoing event, or a heartbeat that
+// carries no event. web implements it.
 type Sender interface {
 	Send(ctx context.Context, out Outgoing) error
+	Heartbeat(ctx context.Context) error
 }
 
 // Subscription is what one connection asked for: an organisation's channel,
@@ -63,7 +67,15 @@ type Stream struct {
 	Renderer   Renderer
 	// BatchSize bounds each read; zero means DefaultBatchSize.
 	BatchSize int
+	// Heartbeat is how long the loop waits on the hub before it sends a
+	// heartbeat and waits again; zero sends none. An idle stream otherwise
+	// writes nothing, so a proxy may close it and a client that stopped
+	// reading is never found out.
+	Heartbeat time.Duration
 }
+
+// errHeartbeatDue ends one wait on the hub when a heartbeat is due.
+var errHeartbeatDue = errors.New("realtime: heartbeat due")
 
 // Run delivers the subscription's events with a sequence above cursor until
 // ctx ends or delivery fails, and returns the last sequence it delivered or
@@ -80,7 +92,8 @@ type Stream struct {
 //     from the Renderer or from the Sender stops the loop and returns that
 //     error with the cursor still before the event that could not be
 //     delivered, so a reconnect resumes there. Treating a failed check as a
-//     deny would lose the event for good.
+//     deny would lose the event for good. A failed heartbeat stops the loop
+//     the same way; it never moves the cursor.
 //
 // The loop reads until a read returns fewer events than the batch size and
 // only then waits on the hub: the hub's value may be older than the log (a
@@ -138,9 +151,27 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		if len(events) == batch {
 			continue
 		}
-		seen, err = s.Hub.Wait(ctx, sub.Organization, max(cursor, seen))
+		seen, err = s.wait(ctx, sub.Organization, max(cursor, seen), send)
 		if err != nil {
 			return cursor, err
+		}
+	}
+}
+
+// wait is Hub.Wait, sending a heartbeat each time Heartbeat passes first.
+func (s Stream) wait(ctx context.Context, org domain.ID, after int64, send Sender) (int64, error) {
+	if s.Heartbeat <= 0 {
+		return s.Hub.Wait(ctx, org, after)
+	}
+	for {
+		waitCtx, cancel := context.WithTimeoutCause(ctx, s.Heartbeat, errHeartbeatDue)
+		seq, err := s.Hub.Wait(waitCtx, org, after)
+		cancel()
+		if err == nil || ctx.Err() != nil || !errors.Is(err, errHeartbeatDue) {
+			return seq, err
+		}
+		if err := send.Heartbeat(ctx); err != nil {
+			return 0, fmt.Errorf("sending heartbeat: %w", err)
 		}
 	}
 }

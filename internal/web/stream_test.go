@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -125,6 +126,20 @@ func TestSSESender(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("heartbeat", func(t *testing.T) {
+		w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+		s := &sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+		if err := s.Heartbeat(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if got := w.Body.String(); got != ": heartbeat\n\n" {
+			t.Fatalf("heartbeat %q, want an SSE comment", got)
+		}
+		if want := []string{"set", "write", "flush", "clear"}; !slices.Equal(w.calls, want) {
+			t.Fatalf("calls = %v, want %v: a heartbeat is written like an event", w.calls, want)
+		}
+	})
 
 	t.Run("writer that cannot flush", func(t *testing.T) {
 		w := noFlushWriter{httptest.NewRecorder()}
@@ -472,5 +487,109 @@ func TestSSESenderWaitsForItsCancellationCallback(t *testing.T) {
 	case <-w.interrupted:
 	default:
 		t.Fatal("Send returned before the callback finished")
+	}
+}
+
+// stalledWriter is a connection whose client stopped reading: a write
+// blocks until the write deadline passes, then fails as net/http would.
+type stalledWriter struct {
+	*httptest.ResponseRecorder
+	mu       sync.Mutex
+	deadline time.Time
+}
+
+func (w *stalledWriter) SetWriteDeadline(d time.Time) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.deadline = d
+	return nil
+}
+
+func (w *stalledWriter) Write([]byte) (int, error) {
+	for {
+		w.mu.Lock()
+		d := w.deadline
+		w.mu.Unlock()
+		if !d.IsZero() && !time.Now().Before(d) {
+			return 0, os.ErrDeadlineExceeded
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func (*stalledWriter) FlushError() error { return nil }
+
+// A heartbeat to a client that stopped reading fails at the write deadline,
+// which ends the stream.
+func TestSSESenderHeartbeatFindsAStalledClient(t *testing.T) {
+	w := &stalledWriter{ResponseRecorder: httptest.NewRecorder()}
+	s := &sseSender{w: w, rc: http.NewResponseController(w), timeout: 50 * time.Millisecond}
+	started := time.Now()
+	err := s.Heartbeat(context.Background())
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("Heartbeat = %v, want the write deadline", err)
+	}
+	if elapsed := time.Since(started); elapsed > 5*time.Second {
+		t.Fatalf("Heartbeat took %v, want about the write timeout", elapsed)
+	}
+}
+
+// An account at its cap is refused with 429 before anything is streamed;
+// once a slot is freed, the next stream starts.
+func TestStreamCapPerAccount(t *testing.T) {
+	hub := realtime.NewHub()
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	seen := -1
+	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+		s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, session: live, seen: &seen}, MaxPerAccount: 1}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := view.ChannelURL("acme", domain.ID{1}) + "/events?after=0"
+	// Alice (oneSession's account 1) already holds her one stream.
+	_, unregister, err := hub.Register(t.Context(), realtime.Connection{Organization: domain.ID{9}, Account: domain.ID{1}, Session: domain.ID{0x52}}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := serveForm(handler, http.MethodGet, url, "live", nil)
+	if w.Code != http.StatusTooManyRequests || strings.Contains(w.Body.String(), "data:") || w.Header().Get("Content-Type") == "text/event-stream; charset=utf-8" {
+		t.Fatalf("over the cap: status %d, type %q; want 429 before streaming", w.Code, w.Header().Get("Content-Type"))
+	}
+	unregister()
+	w = serveForm(handler, http.MethodGet, url, "live", nil)
+	if w.Code != http.StatusOK || seen != 1 {
+		t.Fatalf("after the slot was freed: status %d, %d registered at the re-check; want 200 and 1", w.Code, seen)
+	}
+	if n := hub.Connections(); n != 0 {
+		t.Fatalf("%d connections registered after the stream ended, want 0", n)
+	}
+}
+
+// Without a configured cap, DefaultMaxStreamsPerAccount applies.
+func TestStreamDefaultCap(t *testing.T) {
+	hub := realtime.NewHub()
+	for i := range DefaultMaxStreamsPerAccount {
+		if _, _, err := hub.Register(t.Context(), realtime.Connection{Account: domain.ID{1}, Session: domain.ID{byte(i)}}, DefaultMaxStreamsPerAccount); err != nil {
+			t.Fatal(err)
+		}
+	}
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := -1
+	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+		s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, seen: &seen}}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", "live", nil); w.Code != http.StatusTooManyRequests {
+		t.Fatalf("status %d with %d streams open, want 429", w.Code, DefaultMaxStreamsPerAccount)
 	}
 }

@@ -106,8 +106,9 @@ sequenceDiagram
   once the request is read. `TestEventStream` idles past all of them.
 - Middleware that wraps `http.ResponseWriter` implements `Unwrap` so
   flushing works; compression is not applied to the SSE endpoint.
-- An idle stream writes an SSE comment (`: heartbeat`) every
-  `DefaultStreamHeartbeat` (20 s; #160): proxies keep it open, and a client
+- An idle stream writes an SSE comment (`: heartbeat`) once
+  `DefaultStreamHeartbeat` (20 s; #160) has passed since its last write,
+  however often another channel's events wake it: proxies keep it open, and a client
   that stopped reading is found out at that write's deadline. The loop
   sends it while waiting on the hub (`Stream.Heartbeat`); a failed one ends
   the stream without moving the cursor. Presence (M4) will wait about 30 s
@@ -122,7 +123,9 @@ sequenceDiagram
   limits per address or installation-wide.
 - On shutdown, the server ends every stream first (`RegisterOnShutdown`
   with `Hub.CancelAll`, cause `ErrShutdown`): an open stream never goes
-  idle, so `Shutdown` would otherwise wait for it until its deadline.
+  idle, so `Shutdown` would otherwise wait for it until its deadline. The
+  hub then refuses every registration, so a request accepted just before
+  gets 503 instead of a stream.
   Browsers reconnect to the next process and replay from their cursor.
   Production serves HTTP/2 through Caddy, because browsers allow only six
   HTTP/1.1 connections per origin.

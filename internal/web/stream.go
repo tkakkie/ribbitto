@@ -107,6 +107,11 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 		http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 		return
 	}
+	if errors.Is(err, realtime.ErrShutdown) {
+		// The browser retries, and reaches the next process.
+		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		serverError(w, r, "registering event stream", err)
 		return

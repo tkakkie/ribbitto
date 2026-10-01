@@ -408,3 +408,59 @@ func TestStreamStopsOnAFailedHeartbeat(t *testing.T) {
 		t.Fatalf("Run = %d, %v; want 1 and the heartbeat's error", got.cursor, got.err)
 	}
 }
+
+// Wakeups that write nothing, such as another channel's events, do not put
+// the heartbeat off: it counts from the stream's last write.
+func TestStreamHeartbeatsThroughOtherChannelsTraffic(t *testing.T) {
+	hub := NewHub()
+	log := &fakeLog{}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	send := newRecorder()
+	runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), Heartbeat: 50 * time.Millisecond}, 0, send)
+	// Another channel's event every 5 ms, far more often than the heartbeat.
+	go func() {
+		for seq := int64(1); ctx.Err() == nil; seq++ {
+			log.append(posted(seq, channelB))
+			hub.Raise(orgA, seq)
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+	for deadline := time.Now().Add(5 * time.Second); send.heartbeatCount() < 2; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d heartbeats under another channel's traffic, want at least 2", send.heartbeatCount())
+		}
+	}
+	if ids := send.ids(); len(ids) != 0 {
+		t.Fatalf("sent %v, want only heartbeats: every event was another channel's", ids)
+	}
+}
+
+// When the stream's own context has ended, its cause wins, even if the
+// heartbeat deadline ended the wait just before.
+func TestHeartbeatDue(t *testing.T) {
+	ended, cancel := context.WithCancelCause(t.Context())
+	cause := errors.New("session ended")
+	cancel(cause)
+	other := errors.New("hub failed")
+	for _, tt := range []struct {
+		name    string
+		ctx     context.Context
+		err     error
+		wantDue bool
+		wantErr error
+	}{
+		{"deadline only", t.Context(), errHeartbeatDue, true, nil},
+		{"deadline, and the stream ended too", ended, errHeartbeatDue, false, cause},
+		{"the stream ended", ended, cause, false, cause},
+		{"woken", t.Context(), nil, false, nil},
+		{"another error", t.Context(), other, false, other},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			due, err := heartbeatDue(tt.ctx, tt.err)
+			if due != tt.wantDue || !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
+				t.Fatalf("heartbeatDue = %t, %v; want %t, %v", due, err, tt.wantDue, tt.wantErr)
+			}
+		})
+	}
+}

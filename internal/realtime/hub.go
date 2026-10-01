@@ -36,6 +36,8 @@ type Hub struct {
 	byAccount map[domain.ID]map[*registration]struct{}
 	bySession map[domain.ID]map[*registration]struct{}
 	byOrg     map[domain.ID]map[*registration]struct{}
+	// shutdown, once CancelAll has run, refuses every registration.
+	shutdown bool
 }
 
 // orgSequence is one organisation's latest sequence. changed is closed and
@@ -147,7 +149,7 @@ type Connection struct {
 
 // Register adds a connection unless its account already holds limit
 // connections, in which case it returns ErrTooManyConnections and nothing
-// to unregister. The count and the addition happen under one lock, so
+// to unregister, or the hub is shutting down (ErrShutdown). The count and the addition happen under one lock, so
 // simultaneous registrations cannot overshoot the limit; a limit below 1
 // refuses every registration.
 //
@@ -166,6 +168,9 @@ type Connection struct {
 func (h *Hub) Register(parent context.Context, c Connection, limit int) (ctx context.Context, unregister func(), err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.shutdown {
+		return nil, nil, ErrShutdown
+	}
 	if len(h.byAccount[c.Account]) >= limit {
 		return nil, nil, ErrTooManyConnections
 	}
@@ -226,13 +231,16 @@ func (h *Hub) CancelAccount(account domain.ID) {
 	}
 }
 
-// CancelAll ends the contexts of every registered connection, for a
-// server shutting down: an open stream never goes idle, so the server
-// would otherwise wait for it until its shutdown deadline. The connections
-// keep their slots until they unregister.
+// CancelAll ends the contexts of every registered connection and refuses
+// every later registration with ErrShutdown, for a server shutting down: an
+// open stream never goes idle, so the server would otherwise wait for it
+// until its shutdown deadline, and a request already accepted could still
+// register after this ran. The connections keep their slots until they
+// unregister.
 func (h *Hub) CancelAll() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.shutdown = true
 	for _, set := range h.byAccount {
 		for r := range set {
 			r.cancel(ErrShutdown)

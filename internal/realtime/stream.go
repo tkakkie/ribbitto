@@ -115,6 +115,10 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	}
 	// seen is the highest hub value this loop has already caught up with.
 	var seen int64
+	// written is when the stream last wrote, which the next heartbeat counts
+	// from: wakeups that write nothing, such as another channel's events,
+	// must not put it off.
+	written := time.Now()
 	for {
 		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
 		if err != nil {
@@ -146,32 +150,49 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			if err := send.Send(ctx, out); err != nil {
 				return cursor, fmt.Errorf("sending event %d: %w", event.Seq, err)
 			}
+			written = time.Now()
 			cursor = event.Seq
 		}
 		if len(events) == batch {
 			continue
 		}
-		seen, err = s.wait(ctx, sub.Organization, max(cursor, seen), send)
+		seen, err = s.wait(ctx, sub.Organization, max(cursor, seen), send, &written)
 		if err != nil {
 			return cursor, err
 		}
 	}
 }
 
-// wait is Hub.Wait, sending a heartbeat each time Heartbeat passes first.
-func (s Stream) wait(ctx context.Context, org domain.ID, after int64, send Sender) (int64, error) {
+// wait is Hub.Wait, sending a heartbeat whenever Heartbeat has passed since
+// *written first; it moves *written on every heartbeat.
+func (s Stream) wait(ctx context.Context, org domain.ID, after int64, send Sender, written *time.Time) (int64, error) {
 	if s.Heartbeat <= 0 {
 		return s.Hub.Wait(ctx, org, after)
 	}
 	for {
-		waitCtx, cancel := context.WithTimeoutCause(ctx, s.Heartbeat, errHeartbeatDue)
+		waitCtx, cancel := context.WithDeadlineCause(ctx, written.Add(s.Heartbeat), errHeartbeatDue)
 		seq, err := s.Hub.Wait(waitCtx, org, after)
 		cancel()
-		if err == nil || ctx.Err() != nil || !errors.Is(err, errHeartbeatDue) {
+		if heartbeat, err := heartbeatDue(ctx, err); !heartbeat {
 			return seq, err
 		}
 		if err := send.Heartbeat(ctx); err != nil {
 			return 0, fmt.Errorf("sending heartbeat: %w", err)
 		}
+		*written = time.Now()
 	}
+}
+
+// heartbeatDue reads how a wait with a heartbeat deadline ended: due when
+// only the deadline ended it, otherwise the error to return. The stream's
+// own context is checked first: if it ended too, its cause (a session that
+// ended, a shutdown) wins over the deadline that may have fired just before.
+func heartbeatDue(ctx context.Context, err error) (bool, error) {
+	if ctx.Err() != nil {
+		return false, context.Cause(ctx)
+	}
+	if errors.Is(err, errHeartbeatDue) {
+		return true, nil
+	}
+	return false, err
 }

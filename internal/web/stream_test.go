@@ -593,3 +593,25 @@ func TestStreamDefaultCap(t *testing.T) {
 		t.Fatalf("status %d with %d streams open, want 429", w.Code, DefaultMaxStreamsPerAccount)
 	}
 }
+
+// A stream that reaches registration after shutdown began gets 503, so the
+// browser retries against the next process.
+func TestStreamRefusedDuringShutdown(t *testing.T) {
+	hub := realtime.NewHub()
+	hub.CancelAll()
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := -1
+	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+		s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, seen: &seen}}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", "live", nil)
+	if w.Code != http.StatusServiceUnavailable || seen != -1 {
+		t.Fatalf("status %d (re-check ran: %t), want 503 before anything else", w.Code, seen != -1)
+	}
+}

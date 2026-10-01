@@ -1,0 +1,101 @@
+# Streaming
+
+## Server-Sent Events *(planned, M3)*
+
+One SSE connection per page, carrying named events (`message`, `presence`,
+`typing`, `unread`, `reset`). The browser sends everything else as ordinary
+POST requests.
+
+### Ordering and replay
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant W as web
+  participant DB as PostgreSQL
+  participant C as connection goroutine
+  B->>W: GET page
+  W->>DB: REPEATABLE READ, READ ONLY: page data + event_seq of this organisation
+  W-->>B: HTML with cursor = event_seq
+  B->>W: GET /events?after=cursor
+  W->>C: start
+  loop
+    C->>DB: event_log WHERE organization_id = org AND seq > cursor ORDER BY seq
+    C->>C: authorize, render, send each event; cursor = last seq read
+    C->>C: wait until hub's latest sequence of org > cursor (no wait if already)
+  end
+```
+
+- The initial HTML and the cursor are read in **one `REPEATABLE READ READ
+  ONLY` transaction**. Under PostgreSQL's default `READ COMMITTED`, each
+  statement sees a new snapshot, so a message committed between reading the
+  messages and reading `event_seq` would be missing from the page *and*
+  skipped by the stream.
+- **No lost wakeups.** Waiting means "block until the hub's latest
+  sequence for this organisation is greater than my cursor", and that
+  condition is checked under the hub's lock *before* blocking. The hub's
+  value is level-triggered: if event 101 is committed after the connection
+  read `seq > 100` and found nothing, but before it starts waiting, the hub
+  already holds 101, so the wait returns at once and the next read delivers
+  it. Wakeups are broadcast (a condition variable, or a channel that is
+  closed and replaced on every raise), never a buffered per-connection
+  signal that could be dropped. The cursor advances to the last sequence
+  *read*, including events this connection may not see, so a filtered event
+  cannot keep the loop spinning.
+- **The hub** (`realtime.Hub`, #157) implements this: `Raise(org, seq)`
+  only raises the value, and `Wait(ctx, org, after)` returns the value
+  once it is above `after`, or `context.Cause(ctx)`. It is also the connection
+  registry: `Register(parent, connection, limit)` refuses atomically once
+  the account holds `limit` connections. Otherwise it returns a context
+  derived from the request's context, which `CancelAccount` or
+  `CancelSession` can end, and an `unregister` the handler defers. Only `unregister` frees the slot;
+  `context.Cause` tells why a connection ended.
+- **The loop** is `realtime.Stream.Run` (#209). Another channel's event, a
+  kind it does not deliver and an explicit deny from `authz.MayReceive` are
+  skipped and the cursor moves past them. An error from the reader, the
+  authorization check itself, the renderer or the sender stops the loop
+  with the cursor before that event, so a reconnect resumes there; a failed
+  membership lookup is never a deny. Cancellation is checked before every
+  event, so an ended session sends nothing more. It drains every batch
+  before waiting.
+- Its cost per post grows with the number of open streams; measured in
+  [`stream-cost.md`](stream-cost.md).
+- Replay and live delivery go through the same per-connection loop, so they
+  cannot interleave out of order. `Last-Event-ID` is preferred on reconnect;
+  before htmx recreates the `EventSource`, the client puts its last cursor
+  into `after`. DOM updates are idempotent (elements are replaced by id), so
+  a duplicate delivery is harmless.
+- A cursor older than the retained `event_log` gets a `reset` event, and the
+  client reloads the view.
+
+### Authorization and revocation
+
+- Every event is authorized for the connection's member **immediately before
+  sending**, including events already queued: access may have been lost in
+  between. The check itself is `app`'s authorization, reached through the
+  `Authorizer` interface that `realtime` defines.
+- A stream registers with the hub under its session (#207), then looks the
+  session up again, so a sign-out in between still stops it. Deleting a
+  session (sign-out, or a sign-in replacing it) cancels that session's
+  streams at once; the stream's context ends when the session expires.
+  Other sessions of the account stay connected.
+
+### Resource limits
+
+- Each connection has a bounded send queue; a client that does not read is
+  disconnected. The server's `WriteTimeout` bounds ordinary responses and
+  would cut a long-lived stream, so the SSE handler does not inherit it: it
+  sets a finite deadline before every write with
+  `http.ResponseController.SetWriteDeadline`, flushes, and clears the
+  deadline before waiting (#158) — under HTTP/2 an expired deadline resets
+  the stream even while idle. If it cannot flush, the stream ends. The
+  server's read timeout does not cut it: net/http clears the read deadline
+  once the request is read. `TestEventStream` idles past all of them.
+- Middleware that wraps `http.ResponseWriter` implements `Unwrap` so
+  flushing works; compression is not applied to the SSE endpoint.
+- Heartbeats every 15–30 s keep proxies from closing idle streams. Presence
+  waits about 30 s after a disconnect before showing a member as offline, so
+  a reload does not flicker.
+- On shutdown, SSE connections are closed first (`RegisterOnShutdown`).
+  Production serves HTTP/2 through Caddy, because browsers allow only six
+  HTTP/1.1 connections per origin.

@@ -153,7 +153,7 @@ func (q *Queries) InsertMemberEvent(ctx context.Context, arg InsertMemberEventPa
 
 const insertMessageEvent = `-- name: InsertMessageEvent :exec
 INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
-VALUES ($1, $2, $3, NULL, jsonb_build_object('channel_id', $4::uuid, 'message_id', $5::uuid))
+VALUES ($1, $2, $3, NULL, jsonb_build_object('channel_id', $4::uuid, 'message_id', $5::uuid, 'topic_id', $6::uuid))
 `
 
 type InsertMessageEventParams struct {
@@ -162,6 +162,7 @@ type InsertMessageEventParams struct {
 	Kind           string
 	ChannelID      pgtype.UUID
 	MessageID      pgtype.UUID
+	TopicID        pgtype.UUID
 }
 
 func (q *Queries) InsertMessageEvent(ctx context.Context, arg InsertMessageEventParams) error {
@@ -171,6 +172,7 @@ func (q *Queries) InsertMessageEvent(ctx context.Context, arg InsertMessageEvent
 		arg.Kind,
 		arg.ChannelID,
 		arg.MessageID,
+		arg.TopicID,
 	)
 	return err
 }

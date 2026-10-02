@@ -10,7 +10,7 @@ var ErrCursorExpired = errors.New("event cursor expired")
 type EventKind string
 
 const (
-	// EventMessagePosted names a message and its channel.
+	// EventMessagePosted names a message, its channel and posting-time topic.
 	EventMessagePosted EventKind = "message.posted"
 	// EventMemberJoined names the member joining an organisation.
 	EventMemberJoined EventKind = "member.joined"
@@ -21,7 +21,7 @@ const (
 
 // Event is a durable change ordered within an organisation. A nil
 // AudienceMemberID means organisation-wide; otherwise only that member may
-// receive it. Posted events name ChannelID and MessageID; move events name
+// receive it. Posted events name ChannelID, MessageID and TopicID; moves name
 // ChannelID, FromTopicID, ToTopicID and MessageIDs; join events name MemberID.
 // IDs unused by the kind are zero. No content or HTML is carried.
 type Event struct {
@@ -31,9 +31,12 @@ type Event struct {
 	AudienceMemberID *ID
 	ChannelID        ID
 	MessageID        ID
-	MemberID         ID
-	FromTopicID      ID
-	ToTopicID        ID
+	// TopicID is the posting-time topic, immutable after reading. Nil means
+	// a legacy message.posted payload without topic_id.
+	TopicID     *ID
+	MemberID    ID
+	FromTopicID ID
+	ToTopicID   ID
 	// MessageIDs is immutable after reading, since event batches are shared.
 	MessageIDs []ID
 }

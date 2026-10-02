@@ -21,11 +21,12 @@ func NewEventLog(tx pgx.Tx) *EventLog {
 }
 
 // AppendMessagePosted records an organisation-wide message event at the
-// sequence already allocated for the message.
-func (l *EventLog) AppendMessagePosted(ctx context.Context, organizationID, channelID, messageID domain.ID, seq int64) error {
+// sequence already allocated for the message, with its posting-time topic.
+func (l *EventLog) AppendMessagePosted(ctx context.Context, organizationID, channelID, messageID, topicID domain.ID, seq int64) error {
 	err := l.queries.InsertMessageEvent(ctx, sqlcgen.InsertMessageEventParams{
 		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(domain.EventMessagePosted),
 		ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, MessageID: pgtype.UUID{Bytes: messageID, Valid: true},
+		TopicID: pgtype.UUID{Bytes: topicID, Valid: true},
 	})
 	if err != nil {
 		return fmt.Errorf("appending message event: %w", err)

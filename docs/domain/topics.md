@@ -118,7 +118,10 @@ Settled in #305:
   after. The move is `messages.moved`, carrying
   `{"channel_id","from_topic_id","to_topic_id","message_ids":[…]}` (IDs only).
   The notice is an ordinary message by the member who branched, in their
-  language, logged as `message.posted`.
+  language, logged as `message.posted`. New posting events, notices included,
+  record `topic_id` in the same transaction. This is the topic at posting
+  time, never rewritten by a later branch; subscription interest uses it
+  before rendering. Old events without it use the shared-render topic.
 - **Endpoint:** `POST …/channels/{channelID}/branch` with `message`
   (repeated), `from`, and `to` or `name`. Success is 303 to the destination's
   topic view; a stale selection is 409, an unusable request 422, and an

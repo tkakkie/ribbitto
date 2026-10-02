@@ -23,7 +23,7 @@ func assertEventLog(t *testing.T, pool *pgxpool.Pool, org domain.ID, wantSeq int
 		  AND e.audience_member_id IS NULL AND e.created_at IS NOT NULL AND (
 		   (e.kind = 'message.posted' AND EXISTS (SELECT FROM message m
 		    WHERE m.organization_id = o.id AND m.event_seq = e.seq
-		    AND e.data = jsonb_build_object('channel_id', m.channel_id, 'message_id', m.id))) OR
+		    AND e.data = jsonb_build_object('channel_id', m.channel_id, 'message_id', m.id, 'topic_id', m.topic_id))) OR
 		   (e.kind = 'member.joined' AND EXISTS (SELECT FROM member m
 		    WHERE m.organization_id = o.id AND m.joined_event_seq = e.seq
 		    AND e.data = jsonb_build_object('member_id', m.id)))))

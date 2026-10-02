@@ -80,12 +80,13 @@ func eventFromRow(row sqlcgen.EventsAfterRow) (domain.Event, error) {
 		return event, nil
 	}
 	var data struct {
-		ChannelID   string   `json:"channel_id"`
-		MessageID   string   `json:"message_id"`
-		MemberID    string   `json:"member_id"`
-		FromTopicID string   `json:"from_topic_id"`
-		ToTopicID   string   `json:"to_topic_id"`
-		MessageIDs  []string `json:"message_ids"`
+		TopicID     json.RawMessage `json:"topic_id"`
+		ChannelID   string          `json:"channel_id"`
+		MessageID   string          `json:"message_id"`
+		MemberID    string          `json:"member_id"`
+		FromTopicID string          `json:"from_topic_id"`
+		ToTopicID   string          `json:"to_topic_id"`
+		MessageIDs  []string        `json:"message_ids"`
 	}
 	if err := json.Unmarshal(row.Data, &data); err != nil {
 		return domain.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)
@@ -96,6 +97,16 @@ func eventFromRow(row sqlcgen.EventsAfterRow) (domain.Event, error) {
 		event.ChannelID, err = eventDataID(data.ChannelID)
 		if err == nil {
 			event.MessageID, err = eventDataID(data.MessageID)
+		}
+		// Only an absent field is legacy; a present malformed topic must
+		// fail replay rather than silently change its routing semantics.
+		if err == nil && len(data.TopicID) != 0 {
+			var value string
+			if err = json.Unmarshal(data.TopicID, &value); err == nil {
+				var id domain.ID
+				id, err = eventDataID(value)
+				event.TopicID = &id
+			}
 		}
 	case domain.EventMemberJoined:
 		event.MemberID, err = eventDataID(data.MemberID)

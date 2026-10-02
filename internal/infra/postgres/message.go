@@ -124,7 +124,7 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 		if err != nil {
 			return err
 		}
-		return NewEventLog(tx).AppendMessagePosted(ctx, organizationID, channelID, posted.ID, seq)
+		return NewEventLog(tx).AppendMessagePosted(ctx, organizationID, channelID, posted.ID, posted.TopicID, seq)
 	})
 	var pgErr *pgconn.PgError
 	switch {

@@ -1,6 +1,7 @@
 package postgres_test
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
@@ -12,6 +13,46 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
+
+func TestPostedEventTopic(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	f := pgtest.OrganizationWithOwner(t, pool, "posted-topic", "general")
+	named, err := postgres.NewTopicStore(pool).CreateTopic(ctx, f.OrganizationID, f.Channel.ID, "design")
+	requireNoError(t, err)
+	posted, err := postgres.NewPostingStore(pool).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, &named.ID, "hello")
+	requireNoError(t, err)
+	reader := postgres.NewEventReader(pool)
+	events, err := reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 1)
+	requireNoError(t, err)
+	if len(events) != 1 || events[0].TopicID == nil || *events[0].TopicID != named.ID {
+		t.Fatalf("named-topic post: %+v", events)
+	}
+	// A missing field is readable legacy data. Every present invalid value
+	// must fail the whole batch, including the valid event preceding it.
+	_, err = postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "second")
+	requireNoError(t, err)
+	for _, value := range []string{"", `null`, `false`, `42`, `[]`, `{}`, `""`, `"bad"`, `"00000000x0000x0000x0000x000000000001"`} {
+		t.Run("topic="+value, func(t *testing.T) {
+			_, err := pool.Exec(ctx, "UPDATE event_log SET data = data - 'topic_id' WHERE organization_id = $1 AND seq = $2", f.OrganizationID, posted.EventSeq+1)
+			requireNoError(t, err)
+			if value != "" {
+				_, err = pool.Exec(ctx, "UPDATE event_log SET data = jsonb_set(data, '{topic_id}', $3::jsonb) WHERE organization_id = $1 AND seq = $2", f.OrganizationID, posted.EventSeq+1, json.RawMessage(value))
+				requireNoError(t, err)
+			}
+			events, err := reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 2)
+			if value == "" {
+				requireNoError(t, err)
+				if len(events) != 2 || events[1].TopicID != nil {
+					t.Fatalf("legacy post: %+v", events)
+				}
+			} else if err == nil || len(events) != 0 {
+				t.Fatalf("malformed topic: %+v, %v; want error without events", events, err)
+			}
+		})
+	}
+}
 
 func TestEventsAfter(t *testing.T) {
 	t.Parallel()
@@ -34,7 +75,7 @@ func TestEventsAfter(t *testing.T) {
 	requireNoError(t, err)
 	want := []domain.Event{
 		{OrganizationID: f.OrganizationID, Seq: 1, Kind: domain.EventMemberJoined, MemberID: f.MemberID},
-		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: domain.EventMessagePosted, ChannelID: f.Channel.ID, MessageID: posted.ID},
+		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: domain.EventMessagePosted, ChannelID: f.Channel.ID, MessageID: posted.ID, TopicID: &posted.TopicID},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
 	}
 	reader := postgres.NewEventReader(pool)

@@ -10,17 +10,11 @@ import (
 func TestDecisions(t *testing.T) {
 	const index = "# Decisions\n\n- [1. First](docs/decisions/01-first.md)\n"
 	const heading = "# 1. First\n"
-	current, err := os.ReadFile("../../DECISIONS.md")
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, tt := range []struct {
 		name  string
 		files map[string]string
 		want  string
 	}{
-		{"decision checks disabled without decisions directory", map[string]string{"DECISIONS.md": string(current)}, ""},
-		{"size limit disabled without decisions directory", map[string]string{"DECISIONS.md": strings.Repeat("a", docLimit+1)}, ""},
 		{"valid split with gaps", map[string]string{
 			"DECISIONS.md":               index + "- [14. Later](docs/decisions/14-later.md)\n",
 			"docs/decisions/01-first.md": heading,
@@ -114,7 +108,24 @@ func TestDecisions(t *testing.T) {
 	}
 }
 
-func TestEmptyDecisionsDirectoryEnablesIndexLimit(t *testing.T) {
+func TestDecisionsDirectoryRequired(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		files map[string]string
+	}{
+		{"missing", map[string]string{"DECISIONS.md": "# Decisions\n"}},
+		{"not a directory", map[string]string{"DECISIONS.md": "# Decisions\n", decisionsDir: "file"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := checkDecisions(repo(t, tt.files))
+			if err == nil || !strings.Contains(err.Error(), "reading decisions directory:") {
+				t.Fatalf("error %v, want a decisions directory read error", err)
+			}
+		})
+	}
+}
+
+func TestIndexLimitWithEmptyDecisionsDirectory(t *testing.T) {
 	root := repo(t, map[string]string{"DECISIONS.md": strings.Repeat("a", docLimit+1)})
 	if err := os.MkdirAll(filepath.Join(root, decisionsDir), 0o755); err != nil {
 		t.Fatal(err)

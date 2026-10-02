@@ -7,7 +7,7 @@ never in identifiers, table names or URL segments.
 **Keep it current:** update this file in the same pull request whenever a
 product label or vocabulary rule changes; keep domain terms in the
 glossary current too. The decision is recorded in
-[`DECISIONS.md`](../../DECISIONS.md#20-product-labels-and-ordinary-words).
+[decision 20](../decisions/20-product-labels-and-ordinary-words.md).
 
 ## Product labels
 

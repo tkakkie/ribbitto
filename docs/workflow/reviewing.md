@@ -14,7 +14,8 @@ stop and ask the maintainer.
 - The *why* is clear and the scope fits one pull request.
 - Every *Done when* item is observable and testable; 2–5 of them.
 - *Risk* is right (see below) and *Implementer* is set.
-- Nothing contradicts `AGENTS.md`, `docs/`, or an earlier decision.
+- Nothing contradicts `AGENTS.md`, `docs/`, or an earlier decision in
+  `docs/decisions/` (indexed by [`DECISIONS.md`](../../DECISIONS.md)).
 - Security or data-boundary concerns are called out if relevant.
 
 **What to check on a pull request:**

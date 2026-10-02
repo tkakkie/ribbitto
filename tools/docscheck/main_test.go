@@ -36,9 +36,10 @@ func TestSizes(t *testing.T) {
 		{"code points, not bytes", map[string]string{"docs/x.md": strings.Repeat("あ", docLimit)}, ""},
 		{"newlines count", map[string]string{"docs/x.md": strings.Repeat("\n", docLimit+1)}, "over its limit"},
 		{"README.md is checked", map[string]string{"README.md": strings.Repeat("a", docLimit+1)}, "README.md"},
-		{"generated and DECISIONS.md are not", map[string]string{
+		{"index at limit without decisions directory", map[string]string{"DECISIONS.md": strings.Repeat("a", docLimit)}, ""},
+		{"index over limit without decisions directory", map[string]string{"DECISIONS.md": strings.Repeat("a", docLimit+1)}, "DECISIONS.md: 11001 characters"},
+		{"generated files are not checked", map[string]string{
 			"docs/schema/t.md": strings.Repeat("a", docLimit+1), "docs/dependencies.md": strings.Repeat("a", docLimit+1),
-			"DECISIONS.md": strings.Repeat("a", docLimit+1),
 		}, ""},
 		{"listed exception passes", map[string]string{"docs/x.md": strings.Repeat("a", docLimit+1), exceptionsFile: "# comment\ndocs/x.md #12\n"}, ""},
 		{"stale exception fails", map[string]string{"docs/x.md": "short", exceptionsFile: "docs/x.md #12\n"}, "still listed"},

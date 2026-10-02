@@ -200,7 +200,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 		}
 		outsiders = append(outsiders, struct{ name, cookie string }{name, token})
 	}
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Messages, services.Posting, services.Stream)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Stream)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -209,6 +209,14 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 		for _, channelURL := range append([]string{defaultURL, createdURL}, historyURLs...) {
 			path := "/organizations/acceptance" + strings.ReplaceAll(route.path, "{$}", "")
 			path = strings.ReplaceAll(path, "{channelID}", strings.TrimPrefix(channelURL, "/organizations/acceptance/channels/"))
+			if strings.Contains(path, "{topicID}") {
+				var id string
+				channelID := strings.TrimPrefix(strings.Split(channelURL, "?")[0], "/organizations/acceptance/channels/")
+				if err := pool.QueryRow(ctx, "SELECT c.default_topic_id::text FROM channel c JOIN organization o ON o.id = c.organization_id WHERE o.slug = 'acceptance' AND c.id = $1", channelID).Scan(&id); err != nil {
+					t.Fatal(err)
+				}
+				path = strings.ReplaceAll(path, "{topicID}", id)
+			}
 			if strings.ContainsAny(path, "{}") {
 				t.Fatalf("route needs a concrete acceptance fixture: %s", path)
 			}

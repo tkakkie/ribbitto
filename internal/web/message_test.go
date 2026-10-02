@@ -38,7 +38,7 @@ func (fakeMessages) One(context.Context, authz.Membership, domain.ID, int64) (me
 	return message.Entry{}, message.ErrNotFound
 }
 
-func (f fakeMessages) Before(ctx context.Context, m authz.Membership, id domain.ID, before *int64) (message.ChannelPage, error) {
+func (f fakeMessages) Page(ctx context.Context, m authz.Membership, id domain.ID, topicID *domain.ID, before *int64) (message.ChannelPage, error) {
 	if f.before != nil {
 		*f.before = append(*f.before, before)
 	}
@@ -55,7 +55,10 @@ func (f fakeMessages) Before(ctx context.Context, m authz.Membership, id domain.
 		return message.ChannelPage{}, err
 	}
 	page := message.ChannelPage{Page: message.Page{Entries: f.entries, Older: f.older}, Current: current, Channels: list}
-	if before == nil {
+	if topicID != nil {
+		page.Topic = &domain.Topic{ID: *topicID, Name: "Planning"}
+	}
+	if before == nil && topicID == nil {
 		cursor := int64(42)
 		page.EventCursor = &cursor
 	}
@@ -64,8 +67,8 @@ func (f fakeMessages) Before(ctx context.Context, m authz.Membership, id domain.
 
 func populatedMessages() fakeMessages {
 	return fakeMessages{entries: []message.Entry{
-		{Message: domain.Message{ID: domain.ID{8}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author", TopicName: "<design>مرحبا"},
-		{Message: domain.Message{ID: domain.ID{9}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy", DefaultTopic: true},
+		{Message: domain.Message{ID: domain.ID{8}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x31}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author", TopicName: "<design>مرحبا"},
+		{Message: domain.Message{ID: domain.ID{9}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x32}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy", DefaultTopic: true},
 	}}
 }
 
@@ -187,7 +190,7 @@ type postingStore struct {
 	org, channel, member domain.ID
 }
 
-func (s *postingStore) Post(_ context.Context, org, ch, member domain.ID, body string) (domain.Message, error) {
+func (s *postingStore) PostToTopic(_ context.Context, org, ch, member domain.ID, _ *domain.ID, body string) (domain.Message, error) {
 	s.org, s.channel, s.member, s.body = org, ch, member, body
 	return domain.Message{ID: s.id, Body: body}, s.err
 }
@@ -405,10 +408,16 @@ func TestFeedTopicLabels(t *testing.T) {
 				if w.Code != 200 || !strings.Contains(body, `<bdi class="text-caption text-muted">&lt;design&gt;مرحبا</bdi>`) || !strings.Contains(body, `<bdi class="text-caption text-muted">chorus</bdi>`) {
 					t.Fatalf("feed labels: %d, %s", w.Code, body)
 				}
+				// Each label links to its topic view (#303).
+				for _, entry := range populatedMessages().entries {
+					if link := labelLink(entry); !strings.Contains(body, link) {
+						t.Fatalf("feed label link %s missing: %s", link, body)
+					}
+				}
 				catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 					for _, entry := range populatedMessages().entries {
 						var live bytes.Buffer
-						if err := view.LiveMessageItem(viewMessage(entry)).Render(r.Context(), &live); err != nil {
+						if err := view.LiveMessageItem(viewMessage("acme", entry)).Render(r.Context(), &live); err != nil {
 							t.Fatal(err)
 						}
 						want := "&lt;design&gt;مرحبا"
@@ -418,9 +427,22 @@ func TestFeedTopicLabels(t *testing.T) {
 						if !strings.Contains(live.String(), `<bdi class="text-caption text-muted">`+want+`</bdi>`) {
 							t.Fatalf("live label: %s", live.String())
 						}
+						if link := labelLink(entry); !strings.Contains(live.String(), link) {
+							t.Fatalf("live label link %s missing: %s", link, live.String())
+						}
 					}
 				})).ServeHTTP(httptest.NewRecorder(), req)
 			})
 		}
 	}
+}
+
+// labelLink is the markup of entry's topic label linking to its own topic
+// view in organisation acme: each label must point at its message's topic.
+func labelLink(entry message.Entry) string {
+	label := "&lt;design&gt;مرحبا"
+	if entry.DefaultTopic {
+		label = "chorus"
+	}
+	return `<a href="` + view.ConversationURL("acme", entry.ChannelID, &entry.TopicID) + `" class="text-muted underline"><bdi class="text-caption text-muted">` + label + `</bdi></a>`
 }

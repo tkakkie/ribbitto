@@ -589,6 +589,13 @@ func TestPagesMarkup(t *testing.T) {
 	cases = append(cases, markupCase{name: "composer posted", route: "POST /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "POST", path: view.ChannelURL("acme", domain.ID{1}), cookie: true, form: url.Values{"body": {"sent"}}, htmx: true})
 	// Routes that answer with a redirect, an empty status or an event
 	// stream, never a page.
+	for _, method := range []string{"GET", "POST"} {
+		status, alerts := 200, 0
+		if method == "POST" {
+			status, alerts = 422, 1
+		}
+		cases = append(cases, markupCase{name: "topic " + method, route: method + " /organizations/{slug}/channels/{channelID}/topics/{topicID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: method, path: view.ConversationURL("acme", domain.ID{1}, &domain.ID{2}), cookie: true, form: url.Values{"body": {""}}, status: status, alerts: alerts})
+	}
 	noPage := []string{"POST /signout", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/channels/{channelID}/events"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())

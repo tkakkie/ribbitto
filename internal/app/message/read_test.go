@@ -21,7 +21,7 @@ type singleMessage struct {
 	calls                       []string
 }
 
-func (f *singleMessage) ListMessagesBefore(context.Context, domain.ID, domain.ID, *int64, int32) ([]domain.Message, error) {
+func (f *singleMessage) ListMessagesBefore(context.Context, domain.ID, domain.ID, *domain.ID, *int64, int32) ([]domain.Message, error) {
 	f.t.Fatal("unexpected history page read")
 	return nil, nil
 }

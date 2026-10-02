@@ -16,13 +16,15 @@ type store struct {
 	err                  error
 	calls                int
 	org, channel, member domain.ID
+	topicID              *domain.ID
 	body                 string
 	returned             bool
 }
 
-func (s *store) Post(_ context.Context, org, ch, member domain.ID, body string) (domain.Message, error) {
+func (s *store) PostToTopic(_ context.Context, org, ch, member domain.ID, topicID *domain.ID, body string) (domain.Message, error) {
 	defer func() { s.returned = true }()
 	s.calls++
+	s.topicID = topicID
 	s.org, s.channel, s.member, s.body = org, ch, member, body
 	return domain.Message{OrganizationID: org, ChannelID: ch, MemberID: member, Body: body, EventSeq: 7}, s.err
 }
@@ -72,18 +74,26 @@ func TestPost(t *testing.T) {
 		{name: "control character", body: "a\x00b", wantErr: message.ErrInvalidBody},
 		{name: "channel outside the organisation", body: "hi", storeErr: channel.ErrNotFound, wantErr: channel.ErrNotFound},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &store{err: tt.storeErr}
-			got, err := message.New(s).Post(t.Context(), m, domain.ID{3}, tt.body)
-			if !errors.Is(err, tt.wantErr) || err == nil && got.Body != tt.want {
-				t.Fatalf("got %+v, %v; want %q, %v", got, err, tt.want, tt.wantErr)
-			}
-			// An invalid body never reaches the store (and takes no sequence);
-			// the organisation and author always come from the membership.
-			reached := !errors.Is(tt.wantErr, message.ErrInvalidBody)
-			if reached != (s.calls == 1) || reached && (s.org != m.Organization.ID || s.member != m.Member.ID || s.channel != (domain.ID{3})) {
-				t.Fatalf("store: %+v", s)
-			}
-		})
+		for _, topicID := range []*domain.ID{nil, {4}} {
+			t.Run(tt.name, func(t *testing.T) {
+				s := &store{err: tt.storeErr}
+				var got domain.Message
+				var err error
+				if topicID == nil {
+					got, err = message.New(s).Post(t.Context(), m, domain.ID{3}, tt.body)
+				} else {
+					got, err = message.New(s).PostToTopic(t.Context(), m, domain.ID{3}, topicID, tt.body)
+				}
+				if !errors.Is(err, tt.wantErr) || err == nil && got.Body != tt.want {
+					t.Fatalf("got %+v, %v; want %q, %v", got, err, tt.want, tt.wantErr)
+				}
+				// An invalid body never reaches the store (and takes no sequence);
+				// the organisation and author always come from the membership.
+				reached := !errors.Is(tt.wantErr, message.ErrInvalidBody)
+				if reached != (s.calls == 1) || reached && (s.org != m.Organization.ID || s.member != m.Member.ID || s.channel != (domain.ID{3}) || s.topicID != topicID) {
+					t.Fatalf("store: %+v", s)
+				}
+			})
+		}
 	}
 }

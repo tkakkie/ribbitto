@@ -71,6 +71,7 @@ internal/web -> internal/app/channel
 internal/web -> internal/app/message
 internal/web -> internal/app/setup
 internal/web -> internal/app/signup
+internal/web -> internal/app/topic
 internal/web -> internal/domain
 internal/web -> internal/realtime
 internal/web -> internal/web/i18n

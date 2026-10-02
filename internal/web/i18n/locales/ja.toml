@@ -168,3 +168,6 @@ other = "新しいメッセージ"
 
 ["topic.default"]
 other = "chorus"
+
+["topic.list"]
+other = "トピック（名前順・先頭50件）"

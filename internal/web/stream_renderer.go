@@ -55,7 +55,7 @@ func (r messageRenderer) Render(ctx context.Context, _ realtime.Subscription, ev
 		// The load's context keeps the caller's values (the language) but
 		// not its cancellation: templ stops on a cancelled context, and one
 		// stream going away must not fail the render others wait for.
-		if err := view.LiveMessageItem(viewMessage(entry)).Render(loadCtx, &html); err != nil {
+		if err := view.LiveMessageItem(viewMessage(r.membership.Organization.Slug, entry)).Render(loadCtx, &html); err != nil {
 			return realtime.Outgoing{}, fmt.Errorf("rendering message: %w", err)
 		}
 		return realtime.Outgoing{ID: event.Seq, Name: "message", Data: html.Bytes()}, nil

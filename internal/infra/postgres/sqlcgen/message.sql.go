@@ -78,14 +78,16 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 const listMessagesBefore = `-- name: ListMessagesBefore :many
 SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id FROM message
 WHERE organization_id = $1 AND channel_id = $2
-  AND ($3::bigint IS NULL OR event_seq < $3::bigint)
+  AND ($3::uuid IS NULL OR topic_id = $3::uuid)
+  AND ($4::bigint IS NULL OR event_seq < $4::bigint)
 ORDER BY event_seq DESC
-LIMIT $4
+LIMIT $5
 `
 
 type ListMessagesBeforeParams struct {
 	OrganizationID pgtype.UUID
 	ChannelID      pgtype.UUID
+	TopicID        pgtype.UUID
 	BeforeEventSeq pgtype.Int8
 	Limit          int32
 }
@@ -94,6 +96,7 @@ func (q *Queries) ListMessagesBefore(ctx context.Context, arg ListMessagesBefore
 	rows, err := q.db.Query(ctx, listMessagesBefore,
 		arg.OrganizationID,
 		arg.ChannelID,
+		arg.TopicID,
 		arg.BeforeEventSeq,
 		arg.Limit,
 	)

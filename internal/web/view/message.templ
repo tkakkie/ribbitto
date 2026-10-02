@@ -17,6 +17,9 @@ type Message struct {
 	EventSeq            int64
 	TopicName           string
 	DefaultTopic        bool
+	// TopicURL is the topic view the label links to. It names the
+	// organisation, channel and topic only, so live renders stay shared.
+	TopicURL string
 }
 
 // MessageDOMID is the stable DOM id shared by page and stream message items.
@@ -45,13 +48,15 @@ templ messageItem(entry Message, announcement string) {
 			<span>
 				@MemberName(entry.DisplayName, entry.Handle)
 			</span>
-			<bdi class="text-caption text-muted">
-				if entry.DefaultTopic {
-					{ i18n.T(ctx, "topic.default") }
-				} else {
-					{ entry.TopicName }
-				}
-			</bdi>
+			<a href={ templ.SafeURL(entry.TopicURL) } class="text-muted underline">
+				<bdi class="text-caption text-muted">
+					if entry.DefaultTopic {
+						{ i18n.T(ctx, "topic.default") }
+					} else {
+						{ entry.TopicName }
+					}
+				</bdi>
+			</a>
 			<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
 		</div>
 		<p dir="auto" class="whitespace-pre-wrap break-words">{ entry.Body }</p>

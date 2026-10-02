@@ -274,6 +274,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, config.signupEnabled),
 		SetupSessions: sessions,
 		Authz:         authorizer,
+		Topics:        postgres.NewTopicStore(pool),
 		Messages:      postgres.MessageReader{Pool: pool},
 		Posting:       posting,
 		Channels:      channel.New(postgres.NewChannelStore(pool)),

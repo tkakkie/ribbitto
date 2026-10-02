@@ -150,8 +150,9 @@ The orchestrator builds the context the way the Grok launcher does: the
 prompt from `.github/prompts/adversarial.md` on `origin/main`, then one
 `UNTRUSTED_PAYLOAD_JSON` object with the pull request's title, description
 and diff, all at one resolved head commit (never `FETCH_HEAD`, which a
-concurrent fetch can overwrite). Every step is chained with `&&`, so if any
-of them fails, Muse Code does not start. Like the launcher, it refuses a pull
+concurrent fetch can overwrite). Every step is chained with `&&` and every
+read is a checked assignment, so if any of them fails, Muse Code does not
+start. Like the launcher, it refuses a pull
 request that contains a symlink, which could expose files outside the
 workspace.
 
@@ -159,17 +160,17 @@ workspace.
 P=123 && tmp=$(mktemp -d) &&
   gh pr view "$P" --json title,body,baseRefOid,headRefOid > "$tmp/pr.json" &&
   base=$(jq -er .baseRefOid "$tmp/pr.json") && head=$(jq -er .headRefOid "$tmp/pr.json") &&
+  title=$(jq -er .title "$tmp/pr.json") && body=$(jq -r '.body // ""' "$tmp/pr.json") &&
   git fetch --quiet origin main "refs/pull/$P/head" &&
-  [[ -z $(git ls-tree -r "$head" | awk '$1 == "120000"') ]] &&
+  tree=$(git ls-tree -r "$head") && [[ -z $(awk '$1 == "120000"' <<<"$tree") ]] &&
   git worktree add --quiet --detach "$tmp/worktree" "$head" &&
   git show origin/main:.github/prompts/adversarial.md > "$tmp/prompt.md" &&
   git diff "$base...$head" > "$tmp/pr.diff" &&
-  jq -cn --argjson number "$P" --arg base "$base" --arg head "$head" \
-    --arg title "$(jq -r .title "$tmp/pr.json")" --arg description "$(jq -r '.body // ""' "$tmp/pr.json")" \
-    --rawfile diff "$tmp/pr.diff" \
+  payload=$(jq -cn --argjson number "$P" --arg base "$base" --arg head "$head" \
+    --arg title "$title" --arg description "$body" --rawfile diff "$tmp/pr.diff" \
     '{pull_request: $number, base_commit: $base, head_commit: $head,
-      title: $title, description: $description, diff: $diff}' > "$tmp/payload.json" &&
-  printf '\nUNTRUSTED_PAYLOAD_JSON: %s\n' "$(cat "$tmp/payload.json")" >> "$tmp/prompt.md" &&
+      title: $title, description: $description, diff: $diff}') &&
+  printf '\nUNTRUSTED_PAYLOAD_JSON: %s\n' "$payload" >> "$tmp/prompt.md" &&
   limit 1200 muse exec --model muse-spark-1.3 --workspace "$tmp/worktree" \
     --disable-write --disable-shell --disable-web-tools --sandbox-network restricted \
     --no-session-log --no-foreign-personal-context --max-model-steps 30 \

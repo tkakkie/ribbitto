@@ -56,7 +56,9 @@ global caching. Cleanup closes the pool before dropping the database with
 The `cmd/ribbitto` acceptance tests also start from `pgtest.NewEmpty`, apply
 `postgres.Migrate` as the CLI does, and serve the shared production handler
 on HTTPS with cookie jars. They verify the account flow, request protections,
-organisation isolation and a ten-client setup race.
+organisation isolation and a ten-client setup race, and, over HTTP/2, event
+streams end to end (`TestEventStream`, `TestM3Acceptance`,
+`TestShutdownEndsOpenStreams`).
 Do not point this variable at a production server.
 Tests skip only when the variable is unset; an empty or broken value fails.
 `RIBBITTO_REQUIRE_DB=1` also makes an unset URL fail, as required in CI.
@@ -115,7 +117,7 @@ Nothing fixed or published signs in.
 
 For load tests on a disposable machine, add `-streams 300
 -streams-per-account 16 -sessions-per-account 2 -output /tmp/loadtest.json`
-(on one command line). The cap defaults to 16, matching #160's planned cap;
+(on one command line). The cap defaults to 16, matching the production per-account stream cap (#160);
 this flag only sizes fixtures and changes no production caps or defaults.
 The command creates `max(5, ceil(streams / cap))` accounts in the same
 organisation, including the five fictional members: 300 / 16 needs 19,

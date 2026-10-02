@@ -42,7 +42,8 @@ with that membership; they never query the database directly:
 |---|---|
 | `GET /organizations/{slug}/` | 303 to `Service.Default`, found by `is_default`; a missing default is logged and answers 500 |
 | `GET /organizations/{slug}/channels/{channel-id}` | Channel page and sidebar; malformed, unknown and other organisations' UUIDs answer 404. `?before=<event_seq>` shows the older page; a bound that is not one positive integer, or a malformed query, answers 400 |
-| `POST /organizations/{slug}/channels/{channel-id}` | Calls `message.Service.Post`; htmx receives the updated conversation, otherwise 303 back to the channel; invalid bodies render a field error (422) |
+| `POST /organizations/{slug}/channels/{channel-id}` | Calls `message.Service.Post`; htmx receives only the reset composer (the message itself arrives over the event stream), otherwise 303 back to the channel; invalid bodies render a field error (422) |
+| `GET /organizations/{slug}/channels/{channel-id}/events` | The channel's event stream (SSE); a malformed cursor answers 400, a non-member or ended session 404, an account at its stream cap 429, a server shutting down 503 ([streaming](streaming.md)) |
 | `POST /organizations/{slug}/channels` | Creates a channel and answers 303 to its UUID URL; invalid or duplicate names render a field error (422) alongside the default channel |
 
 The creation form inherits the shared CSRF protection and body limit.
@@ -82,8 +83,9 @@ Outermost first:
    it, so their availability is decided first): `middleware.Session`. An unknown path or
    method gets its plain 404 or 405 without a session lookup, so it costs
    no query and stays 404 while the database is down. The middleware
-   resolves the cookie and puts the account in the context
-   (`middleware.Account`). A token that signs nobody in means signed out
+   resolves the cookie and puts the account and the session in the context
+   (`middleware.Account`, `middleware.CurrentSession`; streams register
+   under the session). A token that signs nobody in means signed out
    and the cookie is cleared; a store error answers 500 and keeps the
    cookie, so an outage does not sign everyone out. Responses to signed-in
    requests carry `Cache-Control: no-store`.

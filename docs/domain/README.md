@@ -20,7 +20,7 @@ for the current tables, columns and constraints.
 | `README.md` (this file) | glossary, entities and ER diagram, invariants, MVP scope |
 | [`vocabulary.md`](vocabulary.md) | product labels, ordinary words and Japanese UI vocabulary |
 | [`validation.md`](validation.md) | input validation rules |
-| [`unread.md`](unread.md) | unread rules (planned, M2–M4) |
+| [`unread.md`](unread.md) | unread rules (planned, M4; inputs since M3) |
 | [`names.md`](names.md) | display names, handles, how members are shown |
 | [`channels.md`](channels.md) | channel identity, names and the default channel |
 | [`topics.md`](topics.md) | topics, the default topic, the feed and branching (planned) |
@@ -116,7 +116,8 @@ See [`validation.md`](validation.md).
    that is not a member gets **404**. Enforced by `registerOrgRoutes` in
    `internal/web/org.go`.
 5. **Authorization is decided only in `internal/app`.** Handlers and the
-   real-time hub call it; they never re-implement it. The entry point is
+   real-time loop (`realtime.Stream.Run`) call it; they never
+   re-implement it. The entry point is
    `internal/app/authz`: `Authorizer.Member` turns the signed-in account and
    the slug from the URL into a membership, with one not-found error for an
    unknown slug, a non-member and a signed-out caller.

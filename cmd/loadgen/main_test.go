@@ -25,7 +25,7 @@ func TestSafety(t *testing.T) {
 			t.Errorf("dial guard: %s", address)
 		}
 	}
-	for _, args := range [][]string{{"-duration=0"}, {"-duration=11m"}, {"-streams=0"}, {"-streams=10001"}, {"-rate=-1"}, {"-rate=101"}} {
+	for _, args := range [][]string{{"-duration=0"}, {"-duration=11m"}, {"-streams=0"}, {"-streams=100001"}, {"-rate=-1"}, {"-rate=101"}} {
 		if err := run(args, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "finite limits") {
 			t.Errorf("bounds: %v: %v", args, err)
 		}
@@ -77,6 +77,9 @@ func TestStreamsAndPosting(t *testing.T) {
 					if r.FormValue("body") != "load test" || r.Header.Get("Origin") == "" || r.Header.Get("Sec-Fetch-Site") != "same-origin" {
 						t.Error("invalid post")
 					}
+					// Outlive the run's deadline: the end of the run must
+					// let it finish, not count it as failed.
+					time.Sleep(60 * time.Millisecond)
 					return
 				}
 				if r.Header.Get("Last-Event-ID") != "7" || !strings.HasSuffix(r.URL.Path, "/events") {
@@ -96,7 +99,7 @@ func TestStreamsAndPosting(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := map[int]string{200: "established=1 refused_429=0 refused_503=0 reset=1 failed=0", 429: "refused_429=1", 503: "refused_503=1", 400: "failed=1"}[status]
-			if !strings.Contains(out.String(), want) || strings.Contains(out.String(), "secret") || strings.Contains(out.String(), " posts=0 ") {
+			if !strings.Contains(out.String(), want) || strings.Contains(out.String(), "secret") || strings.Contains(out.String(), " posts=0 ") || !strings.Contains(out.String(), " post_failed=0") {
 				t.Fatal(out.String())
 			}
 		})

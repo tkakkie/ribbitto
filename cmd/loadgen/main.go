@@ -27,6 +27,10 @@ type fixture struct {
 	Accounts []struct{ Tokens []string } `json:"accounts"`
 }
 
+// maxStreams covers #216's idle steps (10k, 20k …) with room to spare and
+// keeps the run finite.
+const maxStreams = 100_000
+
 type counts struct{ established, limited, shutdown, reset, failed, posts, postFailed, tcp atomic.Uint64 }
 
 type transport struct {
@@ -154,13 +158,13 @@ func run(args []string, out io.Writer) error {
 	file := flags.String("tokens", "", "seed credential file (never printed)")
 	ca := flags.String("ca", "", "Caddy local CA PEM; required for HTTPS")
 	duration := flags.Duration("duration", 10*time.Second, "run duration (0, 10m]")
-	streams := flags.Int("streams", 1, "stream attempts [1, 10000]")
+	streams := flags.Int("streams", 1, "stream attempts [1, 100000]")
 	rate := flags.Int("rate", 0, "total posts per second [0, 100]")
 	cursor := flags.String("cursor", "0", "Last-Event-ID; empty omits it (server returns 400)")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("invalid flags")
 	}
-	if flags.NArg() != 0 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > 10000 || *rate < 0 || *rate > 100 {
+	if flags.NArg() != 0 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > maxStreams || *rate < 0 || *rate > 100 {
 		return fmt.Errorf("duration, streams or rate outside finite limits")
 	}
 	c := &counts{}
@@ -189,8 +193,13 @@ func run(args []string, out io.Writer) error {
 		}
 	}
 	client := &http.Client{Transport: t}
+	// The run ends in order: posting stops at the deadline, the last POST
+	// finishes on its own timeout, and only then are the streams closed. So
+	// the harness's own end never shows up as a failed post or stream.
 	ctx, cancel := context.WithTimeout(context.Background(), *duration)
 	defer cancel()
+	streamCtx, stopStreams := context.WithCancel(context.Background())
+	defer stopStreams()
 	endpoint := t.origin.Scheme + "://" + t.origin.Host + "/organizations/" + url.PathEscape(data.Slug) + "/channels/" + url.PathEscape(data.Channels[0])
 	tokenAt := func(i int) string {
 		a := data.Accounts[i%len(data.Accounts)]
@@ -198,7 +207,7 @@ func run(args []string, out io.Writer) error {
 	}
 	var wg sync.WaitGroup
 	for i := range *streams {
-		wg.Go(func() { stream(ctx, client, endpoint+"/events", tokenAt(i), *cursor, c) })
+		wg.Go(func() { stream(streamCtx, client, endpoint+"/events", tokenAt(i), *cursor, c) })
 	}
 	if *rate > 0 {
 		ticker := time.NewTicker(time.Second / time.Duration(*rate))
@@ -207,7 +216,10 @@ func run(args []string, out io.Writer) error {
 			select {
 			case <-ctx.Done():
 			case <-ticker.C:
-				postCtx, stop := context.WithTimeout(ctx, 10*time.Second)
+				if ctx.Err() != nil {
+					continue // a tick that raced the deadline sends nothing
+				}
+				postCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
 				r, err := request(postCtx, client, http.MethodPost, endpoint, tokenAt(i), "")
 				if err == nil {
 					_, err = io.Copy(io.Discard, io.LimitReader(r.Body, 1<<20))
@@ -222,6 +234,8 @@ func run(args []string, out io.Writer) error {
 			}
 		}
 	}
+	<-ctx.Done()
+	stopStreams()
 	wg.Wait()
 	_, err = fmt.Fprintf(out, "streams=%d established=%d refused_429=%d refused_503=%d reset=%d failed=%d tcp_connections=%d posts=%d post_failed=%d\n", *streams, c.established.Load(), c.limited.Load(), c.shutdown.Load(), c.reset.Load(), c.failed.Load(), c.tcp.Load(), c.posts.Load(), c.postFailed.Load())
 	return err

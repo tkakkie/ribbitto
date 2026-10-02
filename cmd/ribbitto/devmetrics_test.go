@@ -54,7 +54,7 @@ func TestDevMetricsOffByDefault(t *testing.T) {
 	}
 	// The application's handler never serves metrics.
 	pool := lazyPool(t)
-	handler, _, err := buildHandler(pool, handlerConfig{})
+	handler, _, err := buildHandler(t.Context(), pool, handlerConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}

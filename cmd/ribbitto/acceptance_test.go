@@ -43,7 +43,7 @@ func acceptanceServer(t *testing.T, pool *pgxpool.Pool, signup string) *httptest
 	t.Helper()
 	enabled, err := signupEnabled(signup)
 	acceptanceOK(t, err)
-	handler, _, err := buildHandler(pool, handlerConfig{setupToken: acceptanceToken,
+	handler, _, err := buildHandler(t.Context(), pool, handlerConfig{setupToken: acceptanceToken,
 		signupEnabled: enabled, trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}})
 	acceptanceOK(t, err)
 	server := httptest.NewTLSServer(handler)

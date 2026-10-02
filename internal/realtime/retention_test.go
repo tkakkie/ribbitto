@@ -50,7 +50,7 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 		_, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 		must(err)
 	}
-	cached := NewCachedEvents(postgres.NewEventReader(pool), NewHub(), 8, time.Minute)
+	cached := NewCachedEvents(t.Context(), postgres.NewEventReader(pool), NewHub(), 8, time.Minute)
 	got, err := cached.EventsAfter(ctx, f.OrganizationID, 2, 1)
 	must(err)
 	if len(got) != 1 || got[0].Seq != 3 || cached.cache.Len() != 1 {
@@ -106,7 +106,7 @@ func TestRetentionReplay(t *testing.T) {
 			want := []string{"reset"}
 			switch mode {
 			case "cached":
-				cached := NewCachedEvents(reader, NewHub(), 8, time.Minute)
+				cached := NewCachedEvents(t.Context(), reader, NewHub(), 8, time.Minute)
 				_, err := cached.EventsAfter(ctx, f.OrganizationID, 1, 1)
 				must(err)
 				events = cached

@@ -41,14 +41,15 @@ type eventsKey struct {
 }
 
 // NewCachedEvents wraps events. capacity and ttl bound the cache; events
-// never change once committed, so ttl only bounds memory.
-func NewCachedEvents(events EventReader, hub *Hub, capacity int, ttl time.Duration) *CachedEvents {
-	return newCachedEvents(events, hub, capacity, ttl, 10*time.Second)
+// never change once committed, so ttl only bounds memory. parent is the
+// process lifetime; DefaultCacheLoads bounds concurrent cache loaders.
+func NewCachedEvents(parent context.Context, events EventReader, hub *Hub, capacity int, ttl time.Duration) *CachedEvents {
+	return newCachedEvents(parent, events, hub, capacity, ttl, 10*time.Second)
 }
 
-func newCachedEvents(events EventReader, hub *Hub, capacity int, ttl, loadTimeout time.Duration) *CachedEvents {
+func newCachedEvents(parent context.Context, events EventReader, hub *Hub, capacity int, ttl, loadTimeout time.Duration) *CachedEvents {
 	c := &CachedEvents{events: events, hub: hub}
-	c.cache = NewCache[eventsKey, []domain.Event](capacity, ttl, loadTimeout, fullBatch, time.Now)
+	c.cache = NewCache[eventsKey, []domain.Event](parent, capacity, DefaultCacheLoads, ttl, loadTimeout, fullBatch, time.Now)
 	return c
 }
 

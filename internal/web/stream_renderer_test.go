@@ -80,7 +80,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	t.Run("concurrent renders read once", func(t *testing.T) {
 		calls := &atomic.Int32{}
 		release := make(chan struct{})
-		r := messageRenderer{messages: countingMessages{calls: calls, release: release}, membership: memberOf(orgA), renders: newRenderCache()}
+		r := messageRenderer{messages: countingMessages{calls: calls, release: release}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
 		const renders = 20
 		var wg sync.WaitGroup
 		for range renders {
@@ -101,7 +101,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 
 	t.Run("each part of the key is its own entry", func(t *testing.T) {
 		calls := &atomic.Int32{}
-		shared := newRenderCache()
+		shared := newRenderCache(t.Context())
 		render := func(ctx context.Context, org domain.ID, e domain.Event) string {
 			t.Helper()
 			e.OrganizationID = org
@@ -149,7 +149,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		calls := &atomic.Int32{}
 		release := make(chan struct{})
 		failure := errors.New("database unavailable")
-		shared := newRenderCache()
+		shared := newRenderCache(t.Context())
 		failing := messageRenderer{messages: countingMessages{calls: calls, release: release, err: failure}, membership: memberOf(orgA), renders: shared}
 		const renders = 10
 		var wg sync.WaitGroup

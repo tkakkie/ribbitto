@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/app/authz"
+	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -125,7 +127,7 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 			}
 			var reads atomic.Int32
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-				s.Stream = &Streaming{Hub: hub, Events: firstRead{&reads}, Authorizer: nil, Sessions: tt.later}
+				s.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Authorizer: nil, Sessions: tt.later}
 			}))
 			if err != nil {
 				t.Fatal(err)
@@ -195,7 +197,7 @@ func TestStreamCancelledBeforeTheFirstWrite(t *testing.T) {
 			}
 			var reads atomic.Int32
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-				s.Stream = &Streaming{Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
+				s.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
 			}))
 			if err != nil {
 				t.Fatal(err)
@@ -268,7 +270,7 @@ func testCancelledStreamOverHTTP(t *testing.T, live auth.Session, cancel func(*r
 		t.Fatal(err)
 	}
 	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-		s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
+		s.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -329,7 +331,7 @@ func TestStreamFetchSite(t *testing.T) {
 			seen := -1
 			var reads atomic.Int32
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-				s.Stream = &Streaming{Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
+				s.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
 			}))
 			if err != nil {
 				t.Fatal(err)
@@ -370,7 +372,7 @@ func TestOpenStreamCleanup(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			hub := realtime.NewHub()
 			seen := -1
-			p := channelPages{stream: &Streaming{Hub: hub, Sessions: laterSession{hub: hub, session: live, err: tt.resolveErr, seen: &seen}}}
+			p := channelPages{stream: &Streaming{Lifetime: t.Context(), Hub: hub, Sessions: laterSession{hub: hub, session: live, err: tt.resolveErr, seen: &seen}}}
 			r := httptest.NewRequest(http.MethodGet, "/events", nil)
 			if tt.cookie {
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
@@ -420,7 +422,7 @@ func TestStreamCapPerAccount(t *testing.T) {
 	seen := -1
 	var reads atomic.Int32
 	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-		s.Stream = &Streaming{Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}, MaxPerAccount: 1}
+		s.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}, MaxPerAccount: 1}
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -465,7 +467,7 @@ func TestStreamDefaultCap(t *testing.T) {
 	}
 	seen := -1
 	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-		s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, seen: &seen}}
+		s.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, seen: &seen}}
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -486,7 +488,7 @@ func TestStreamRefusedDuringShutdown(t *testing.T) {
 	}
 	seen := -1
 	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-		s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, seen: &seen}}
+		s.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, seen: &seen}}
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -494,5 +496,79 @@ func TestStreamRefusedDuringShutdown(t *testing.T) {
 	w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", "live", nil)
 	if w.Code != http.StatusServiceUnavailable || seen != -1 {
 		t.Fatalf("status %d (re-check ran: %t), want 503 before anything else", w.Code, seen != -1)
+	}
+}
+
+type lifetimeReads struct {
+	fakeMessages
+	started  chan context.Context
+	returned chan struct{}
+	render   bool
+}
+
+func (r lifetimeReads) One(ctx context.Context, _ authz.Membership, _ domain.ID, _ int64) (message.Entry, error) {
+	r.started <- ctx
+	<-ctx.Done()
+	r.returned <- struct{}{}
+	return message.Entry{}, ctx.Err()
+}
+
+func (r lifetimeReads) EventsAfter(ctx context.Context, org domain.ID, _ int64, _ int) ([]domain.Event, error) {
+	if r.render {
+		return []domain.Event{{OrganizationID: org, ChannelID: domain.ID{1}, Seq: 1, Kind: domain.EventMessagePosted}}, nil
+	}
+	_, err := r.One(ctx, authz.Membership{}, domain.ID{}, 0)
+	return nil, err
+}
+
+func TestStreamCachesEndWithLifetime(t *testing.T) {
+	for _, render := range []bool{false, true} {
+		t.Run(fmt.Sprintf("render=%t", render), func(t *testing.T) {
+			parent, stop := context.WithCancel(t.Context())
+			defer stop()
+			reads := lifetimeReads{started: make(chan context.Context, 1), returned: make(chan struct{}, 1), render: render}
+			hub := realtime.NewHub()
+			seen := 0
+			catalogues, err := i18n.New(slog.Default())
+			if err != nil {
+				t.Fatal(err)
+			}
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+				s.Messages = reads
+				s.Stream = &Streaming{Lifetime: parent, Hub: hub, Events: realtime.NewCachedEvents(parent, reads, hub, 8, time.Minute),
+					Sessions: laterSession{hub: hub, session: auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, seen: &seen}}
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			done := make(chan struct{}, 1)
+			go func() {
+				handler.ServeHTTP(&deadlineWriter{ResponseRecorder: httptest.NewRecorder()}, r)
+				done <- struct{}{}
+			}()
+			select {
+			case ctx := <-reads.started:
+				stop()
+				select {
+				case <-ctx.Done():
+				case <-time.After(time.Second):
+					t.Fatal("load context survived shutdown")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("load never started")
+			}
+			for _, ended := range []chan struct{}{reads.returned, done} {
+				select {
+				case <-ended:
+				case <-time.After(time.Second):
+					t.Fatal("loader or handler survived shutdown")
+				}
+			}
+			if r.Context().Err() != nil {
+				t.Fatal("request cancellation masked lifetime cancellation")
+			}
+		})
 	}
 }

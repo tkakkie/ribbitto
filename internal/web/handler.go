@@ -50,6 +50,9 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	if (services.Setup != nil || services.SignUp != nil) && services.SetupSessions == nil {
 		return nil, nil, errors.New("web: Services.SetupSessions is required when Services.Setup or Services.SignUp is set")
 	}
+	if services.Stream != nil && services.Stream.Lifetime == nil {
+		return nil, nil, errors.New("web: Streaming.Lifetime is required")
+	}
 	assets := static.FS()
 	if devAssets != "" {
 		assets = os.DirFS(devAssets)

@@ -153,6 +153,70 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 	}
 }
 
+// cancellingWriter cancels the stream at the first write deadline the
+// sender sets: inside sseSender.write, after its own ctx check and before
+// the callback commits the status.
+type cancellingWriter struct {
+	*deadlineWriter
+	cancel func()
+	fired  bool
+}
+
+func (w *cancellingWriter) SetWriteDeadline(d time.Time) error {
+	if !d.IsZero() && !w.fired {
+		w.fired = true
+		w.cancel()
+	}
+	return w.deadlineWriter.SetWriteDeadline(d)
+}
+
+// The session re-check passed, and the stream is cancelled between it and
+// the first write committing a status: the client still gets 404 (session
+// ended) or 503 (shutdown), never an empty 200.
+func TestStreamCancelledBeforeTheFirstWrite(t *testing.T) {
+	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	for _, tt := range []struct {
+		name   string
+		cancel func(*realtime.Hub)
+		want   int
+	}{
+		{"signed out", func(hub *realtime.Hub) { hub.CancelSession(live.ID) }, http.StatusNotFound},
+		{"shutdown", func(hub *realtime.Hub) { hub.CancelAll() }, http.StatusServiceUnavailable},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			hub := realtime.NewHub()
+			seen := -1
+			catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var reads atomic.Int32
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+				s.Stream = &Streaming{Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			w := &cancellingWriter{deadlineWriter: &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}, cancel: func() { tt.cancel(hub) }}
+			handler.ServeHTTP(w, r)
+			if !w.fired || seen != 1 {
+				t.Fatalf("cancelled %t, re-check saw %d connections; want the cancellation after a passed re-check", w.fired, seen)
+			}
+			if w.Code != tt.want || w.Body.Len() == 0 || w.Header().Get("Content-Type") != "text/plain; charset=utf-8" {
+				t.Fatalf("status %d, type %q, body %q; want a plain-text %d", w.Code, w.Header().Get("Content-Type"), w.Body.String(), tt.want)
+			}
+			if reads.Load() != 0 {
+				t.Fatal("cancelled stream read events")
+			}
+			if n := hub.Connections(); n != 0 {
+				t.Fatalf("%d connections still registered", n)
+			}
+		})
+	}
+}
+
 func TestStreamFetchSite(t *testing.T) {
 	for _, tt := range []struct {
 		name   string

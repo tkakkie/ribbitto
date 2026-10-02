@@ -114,6 +114,12 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 	send := &sseSender{w: w, rc: rc, timeout: timeout}
 	started := false
 	if err := send.write(ctx, func() error {
+		// WriteHeader commits the status, so look once more right before
+		// it: a cancellation that won after write's own check (or after the
+		// session re-check) still gets its 404 or 503.
+		if err := context.Cause(ctx); err != nil {
+			return err
+		}
 		header := w.Header()
 		header.Set("Content-Type", "text/event-stream; charset=utf-8")
 		header.Set("Cache-Control", "no-cache")

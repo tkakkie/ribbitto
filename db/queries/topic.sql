@@ -17,3 +17,11 @@ LIMIT $3;
 -- name: LookupTopics :many
 SELECT * FROM topic
 WHERE organization_id = $1 AND channel_id = $2 AND id = ANY(sqlc.arg(topic_ids)::uuid[]);
+
+-- name: MoveMessages :execrows
+-- Listed exception (feature map): branching writes message.topic_id. Only
+-- messages still in the expected topic move; the caller compares the count
+-- with the selection and rolls back on a mismatch (409).
+UPDATE message SET topic_id = sqlc.arg(to_topic_id)
+WHERE organization_id = sqlc.arg(organization_id) AND channel_id = sqlc.arg(channel_id)
+  AND topic_id = sqlc.arg(from_topic_id) AND id = ANY(sqlc.arg(message_ids)::uuid[]);

@@ -596,7 +596,7 @@ func TestPagesMarkup(t *testing.T) {
 		}
 		cases = append(cases, markupCase{name: "topic " + method, route: method + " /organizations/{slug}/channels/{channelID}/topics/{topicID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: method, path: view.ConversationURL("acme", domain.ID{1}, &domain.ID{2}), cookie: true, form: url.Values{"body": {""}}, status: status, alerts: alerts})
 	}
-	noPage := []string{"POST /signout", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/channels/{channelID}/events", "GET /organizations/{slug}/channels/{channelID}/topics/{topicID}/events"}
+	noPage := []string{"POST /signout", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/channels/{channelID}/events", "GET /organizations/{slug}/channels/{channelID}/topics/{topicID}/events", "POST /organizations/{slug}/channels/{channelID}/branch"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
 	if err != nil {

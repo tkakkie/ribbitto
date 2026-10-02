@@ -20,7 +20,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
-| `topic`: conversations inside a channel, the default topic, branching *(decision 21; schema, stores, feed labels and topic views)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list) | `topic` |
+| `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go` | `topic` |
 | `realtime` | `internal/realtime` *(M3)*; `domain/event.go`; `infra/postgres/event_log.go`, `event_reader.go`, `event_cleaner.go`; `db/queries/event_log.sql`; `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
 
 The shared kernel, which any feature may use: the IDs and value types in
@@ -62,14 +62,18 @@ topic posts rely on the lookup inside the posting transaction.
   feature's default channel (a completed setup must never lack one);
 - creating a channel (`channel`) writes its default `topic` in the same
   statement, so a channel never exists without one (decision 21, #307);
+- branching (`topic`) advances `organization.event_seq`, moves messages by
+  writing `message.topic_id` and posts its notice into `message`, in one
+  transaction with both events (decision 21, #305);
 - sign-up (`identity`) writes `account` and `member` and advances
   `organization.event_seq`, which belong to `org`;
 - posting (`message`) advances `organization.event_seq` before inserting
   the message, because the sequence must be taken in the writing
   transaction ([decision 5](../decisions/05-one-event-sequence-per-organisation.md));
-- all three flows call realtime's transaction-bound `NewEventLog(tx)` writer
-  (`AppendMessagePosted` or `AppendMemberJoined`) immediately after the message
-  or member, so `event_log` commits with the entity and its sequence (#156, #257);
+- these flows call realtime's transaction-bound `NewEventLog(tx)` writer
+  (`AppendMessagePosted`, `AppendMemberJoined` or `AppendMessagesMoved`)
+  immediately after the message, member or move, so `event_log` commits with
+  the entity and its sequence (#156, #257, #305);
 - realtime retention (#161) writes org's `event_log_boundary_seq`,
   because the boundary and events must be read in the same snapshot.
 

@@ -14,6 +14,9 @@ const (
 	EventMessagePosted EventKind = "message.posted"
 	// EventMemberJoined names the member joining an organisation.
 	EventMemberJoined EventKind = "member.joined"
+	// EventMessagesMoved names the messages branching moved, their channel,
+	// and the topics they left and joined (docs/domain/topics.md).
+	EventMessagesMoved EventKind = "messages.moved"
 )
 
 // Event is a durable change ordered within an organisation. A nil

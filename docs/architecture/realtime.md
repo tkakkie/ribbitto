@@ -68,7 +68,9 @@ is organisation-wide; a value restricts delivery to that member, enforced
 by the stream's per-event authorization (`authz.MayReceive`). Its composite foreign key keeps the
 member in the same organisation. The audience never appears in `data`.
 `message.posted` carries `{"channel_id":"<uuid>","message_id":"<uuid>"}`;
-`member.joined` carries `{"member_id":"<uuid>"}`. Both use a NULL audience.
+`member.joined` carries `{"member_id":"<uuid>"}`; `messages.moved` (branching,
+[topics](../domain/topics.md#branching)) carries the channel, the two topics
+and the moved message IDs. All use a NULL audience.
 Setup and sign-up call `NewEventLog(tx).AppendMemberJoined` immediately after
 the member, with its `joined_event_seq`. `domain.Event` holds the envelope and
 referenced IDs; kinds are an open list. `postgres.NewEventReader(db)` provides

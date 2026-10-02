@@ -33,6 +33,20 @@ func (l *EventLog) AppendMessagePosted(ctx context.Context, organizationID, chan
 	return nil
 }
 
+// AppendMessagesMoved records an organisation-wide move of messageIDs from
+// one topic of the channel to another, at the sequence allocated for it.
+func (l *EventLog) AppendMessagesMoved(ctx context.Context, organizationID, channelID, fromTopicID, toTopicID domain.ID, messageIDs []domain.ID, seq int64) error {
+	err := l.queries.InsertMessagesMovedEvent(ctx, sqlcgen.InsertMessagesMovedEventParams{
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(domain.EventMessagesMoved),
+		ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, FromTopicID: pgtype.UUID{Bytes: fromTopicID, Valid: true},
+		ToTopicID: pgtype.UUID{Bytes: toTopicID, Valid: true}, MessageIds: uuidArray(messageIDs),
+	})
+	if err != nil {
+		return fmt.Errorf("appending move event: %w", err)
+	}
+	return nil
+}
+
 // AppendMemberJoined records an organisation-wide join event at the
 // sequence already allocated for the membership.
 func (l *EventLog) AppendMemberJoined(ctx context.Context, organizationID, memberID domain.ID, seq int64) error {

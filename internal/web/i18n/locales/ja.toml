@@ -171,3 +171,6 @@ other = "chorus"
 
 ["topic.list"]
 other = "トピック（名前順・先頭50件）"
+
+["topic.branch_notice"]
+other = "{count} 件を「{topic}」に移動しました"

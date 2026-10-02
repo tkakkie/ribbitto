@@ -108,7 +108,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, method, path, cookie, url.Values{"name": {"新しいチャンネル"}, "body": {"posted through the page"}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Stream)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -159,6 +159,12 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				// tested through the production wiring in cmd/ribbitto.
 				if w.Code != http.StatusNotFound {
 					t.Fatalf("events: %d %s", w.Code, w.Body.String())
+				}
+			case "POST /channels/{channelID}/branch":
+				// The route reaches a member; an empty selection is refused.
+				// Branching itself is tested in cmd/ribbitto and postgres.
+				if w.Code != http.StatusUnprocessableEntity {
+					t.Fatalf("branch: %d %s", w.Code, w.Body.String())
 				}
 			case "POST /channels":
 				created, err := services.Channels.List(ctx, authz.Membership{Organization: domain.Organization{ID: acme}})

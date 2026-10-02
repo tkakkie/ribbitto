@@ -41,14 +41,15 @@ type TopicReader interface {
 }
 
 type channelPages struct {
-	topics   TopicReader
-	topicID  *domain.ID // Set only on the request-local copy in show.
-	stream   *Streaming
-	renders  *realtime.Cache[renderKey, realtime.Outgoing]
-	messages MessageReader
-	posting  *message.Service
-	pages    *pageRenderer
-	service  ChannelService
+	branching Branching
+	topics    TopicReader
+	topicID   *domain.ID // Set only on the request-local copy in show.
+	stream    *Streaming
+	renders   *realtime.Cache[renderKey, realtime.Outgoing]
+	messages  MessageReader
+	posting   *message.Service
+	pages     *pageRenderer
+	service   ChannelService
 }
 
 func (p channelPages) home(w http.ResponseWriter, r *http.Request, m authz.Membership) {

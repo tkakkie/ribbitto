@@ -23,7 +23,7 @@ index below for everything else.
 | [`unread.md`](unread.md) | unread rules (planned, M4; inputs since M3) |
 | [`names.md`](names.md) | display names, handles, how members are shown |
 | [`channels.md`](channels.md) | channel identity, names and the default channel |
-| [`topics.md`](topics.md) | topics, the default topic, the feed and branching (branching planned) |
+| [`topics.md`](topics.md) | topics, the default topic, the feed and branching |
 | [`messages.md`](messages.md) | message identity, accepted bodies and rendering |
 | [`replies.md`](replies.md) | reply references and the reply-chain view (planned) |
 | [`setup-and-signup.md`](../architecture/setup-and-signup.md) | first-run setup and sign-up |
@@ -46,7 +46,7 @@ index below for everything else.
 | **topic** | A named conversation inside a channel; every channel message is in exactly one. |
 | **default topic** | The one topic every channel has, where a message goes when no topic is chosen. Not the default channel. |
 | **feed** | A channel's messages from all its topics, interleaved by time and labelled with their topic. |
-| **branching** *(planned)* | Moving selected messages to another topic of the same channel, keeping their ids and sequences. |
+| **branching** | Moving selected messages to another topic of the same channel, keeping their ids and sequences. |
 | **event** | A durable change that live clients must see (a message posted, a member joined), recorded in `event_log`. |
 | **event sequence** (`event_seq`) | The organisation's single, gap-free, increasing counter. Every durable event gets the next value. |
 | **cursor** | The last event sequence a client has seen. |

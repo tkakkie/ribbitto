@@ -10,8 +10,9 @@ that counts messages per topic. It was settled in
 these rules change. The *Model* and *Tables* below exist (#301, #307):
 every channel has its default topic and every message a topic, and posting
 goes to the default topic, and a topic view posts into its topic. Feed
-labels, topic views with live updates (#304), posting into a topic and a
-bounded topic list exist; branching (#305) follows. `db/migrations/` is the
+labels, topic views with live updates (#304), posting into a topic, a
+bounded topic list and the branching endpoint (#305) exist; the branch
+selection UI (#308) and live delivery of branching (#306) follow. `db/migrations/` is the
 schema source of truth.
 
 ## Model
@@ -83,7 +84,7 @@ schema source of truth.
 
 ## Branching
 
-*Planned (#305).* A member selects one or more messages in any topic of a channel, the
+A member selects one or more messages in any topic of a channel, the
 default topic included, and moves them to another topic of the same
 channel, a new one or an existing one. In **one transaction**:
 
@@ -105,6 +106,25 @@ Because moved messages keep their `event_seq`, the feed shows them where
 they were, now labelled with the destination topic; the destination's
 topic view shows them in their original order among its own messages.
 
+Settled in #305:
+
+- **Who may branch:** any member, including other members' messages. In
+  the MVP every member reads and writes every public channel; roles and
+  private channels may narrow this later.
+- **Bound:** one branch moves 1–100 distinct messages
+  (`topic.MaxBranchMessages`). A new destination's name follows channel
+  names; the source cannot be the destination.
+- **Events:** the move takes the next sequence, then the notice the one
+  after. The move is `messages.moved`, carrying
+  `{"channel_id","from_topic_id","to_topic_id","message_ids":[…]}` (IDs only).
+  The notice is an ordinary message by the member who branched, in their
+  language, logged as `message.posted`.
+- **Endpoint:** `POST …/channels/{channelID}/branch` with `message`
+  (repeated), `from`, and `to` or `name`. Success is 303 to the destination's
+  topic view; a stale selection is 409, an unusable request 422, and an
+  unknown or out-of-scope topic 404. The selection UI is #308's; live
+  delivery of the move is #306's.
+
 ## Unread
 
 Topics change no unread rule by themselves; see
@@ -113,7 +133,5 @@ pass once topics exist.
 
 ## Settled later
 
-Each in the issue that implements it: who may branch other members'
-messages; renaming and merging topics; following and muting a topic;
-moving messages to another channel; the event kinds and payloads of a
-move and a branch notice.
+Each in the issue that implements it: renaming and merging topics;
+following and muting a topic; moving messages to another channel.

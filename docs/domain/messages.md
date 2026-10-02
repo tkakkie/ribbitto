@@ -24,6 +24,10 @@ Every channel message will be in exactly one topic of its channel, and can
 move to another topic without changing its `id` or `event_seq`
 ([`topics.md`](topics.md), *planned*).
 
+A reply will remain an ordinary message in the stream, linked to the
+message it answers; the link opens a paged reply-chain view
+([`replies.md`](replies.md), *planned*).
+
 ## Accepted bodies
 
 `domain.ValidateMessageBody`, in this order:

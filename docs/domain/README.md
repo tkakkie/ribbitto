@@ -25,6 +25,7 @@ for the current tables, columns and constraints.
 | [`channels.md`](channels.md) | channel identity, names and the default channel |
 | [`topics.md`](topics.md) | topics, the default topic, the feed and branching (planned) |
 | [`messages.md`](messages.md) | message identity, accepted bodies and rendering |
+| [`replies.md`](replies.md) | reply references and the reply-chain view (planned) |
 | [`setup-and-signup.md`](../architecture/setup-and-signup.md) | first-run setup and sign-up |
 
 ## Glossary
@@ -40,6 +41,8 @@ for the current tables, columns and constraints.
 | **channel** | A named conversation inside an organisation. |
 | **channel member** | A member's per-channel state (read position). |
 | **message** | A post in a channel, written by a member. |
+| **reply** *(planned)* | A message linked to an earlier message it answers in the same channel. |
+| **reply chain** *(planned)* | A selected message's ancestor path and all its descendants, in `event_seq` order. |
 | **topic** *(planned)* | A named conversation inside a channel; every channel message is in exactly one. |
 | **default topic** *(planned)* | The one topic every channel has, where a message goes when no topic is chosen. Not the default channel. |
 | **feed** *(planned)* | A channel's messages from all its topics, interleaved by time and labelled with their topic. |
@@ -58,6 +61,7 @@ erDiagram
   organization ||--o{ channel : "has"
   organization ||--o{ event_log : "records"
   channel ||--o{ message : "contains"
+  message |o--o{ message : "is answered by (planned)"
   channel ||--o{ topic : "groups into (planned)"
   topic ||--o{ message : "holds (planned)"
   member ||--o{ message : "writes"
@@ -75,7 +79,7 @@ erDiagram
 | `channel` | exists | `id`, `organization_id`, `name`, `is_default`, `created_at`; planned: `default_topic_id`, `default_topic_is_default` |
 | `topic` | planned | `id`, `organization_id`, `channel_id`, `name` (NULL for the default topic), `is_default`, `created_at` ([`topics.md`](topics.md)) |
 | `channel_member` | planned (M4) | `organization_id`, `channel_id`, `member_id`, `last_read_event_seq` |
-| `message` | exists | `id`, `organization_id`, `channel_id`, `member_id`, `body`, `event_seq`, `created_at`; planned: `topic_id` |
+| `message` | exists | `id`, `organization_id`, `channel_id`, `member_id`, `body`, `event_seq`, `created_at`; planned: `topic_id`, nullable `reply_to_message_id` ([`replies.md`](replies.md)) |
 | `event_log` | exists | `organization_id`, `seq` (composite key), `kind`, nullable `audience_member_id`, IDs-only `data`, `created_at` |
 
 An event's NULL audience means organisation-wide; a non-NULL audience names
@@ -145,6 +149,11 @@ See [`validation.md`](validation.md).
    foreign keys keep both in the same organisation and channel; branching
    moves messages, never copies them, and keeps their `id` and `event_seq`
    ([`topics.md`](topics.md)).
+10. *(planned)* **Replies reference existing messages in the same
+    organisation and channel with lower `event_seq`.** A composite foreign
+    key enforces scope; immutable references prevent cycles. Chain reads
+    require channel authorization and leave read positions unchanged
+    ([`replies.md`](replies.md)).
 
 These are **requirements for all code and migrations**, not a description
 of what is implemented today: `organization`, `account`, `session`,

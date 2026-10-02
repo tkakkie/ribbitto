@@ -142,8 +142,9 @@ The optional second adversarial reviewer
 ([`adversarial-review.md`](adversarial-review.md#muse-code-optional)),
 with the invocation tested in
 [#246's preflight](https://github.com/tkakkie/ribbitto/issues/246#issuecomment-5932976563).
-It must name a Standard model (`muse-spark-1.3`), never a `-contributor`
-one, whose prompts may be used for training. It reads only the workspace:
+It must name a Standard model (`muse-spark-1.3`): Meta states that
+Standard-tier prompts and completions are not used to train its models,
+while a `-contributor` model grants that permission, so never use one. It reads only the workspace:
 writing, the shell, web tools and the network are off.
 
 The orchestrator builds the context the way the Grok launcher does: the
@@ -183,7 +184,10 @@ P=123 && tmp=$(mktemp -d) &&
     --disable-write --disable-shell --disable-web-tools --sandbox-network restricted \
     --no-session-log --no-foreign-personal-context --max-model-steps 30 \
     --prompt-file "$tmp/prompt.md" < /dev/null > "muse-$P.md"
-git worktree remove --force "$tmp/worktree"; rm -rf "$tmp"
+status=$?
+git worktree remove --force "$tmp/worktree" 2>/dev/null; rm -rf "$tmp"
+[[ $status -eq 0 ]] || echo "muse-review: failed (exit $status); record it in the PR" >&2
+(exit "$status")
 ```
 
 The same handoff rules as for the other CLIs apply: it starts no other AI

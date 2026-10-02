@@ -12,7 +12,7 @@ disagree, fix the disagreement in a pull request.
 | `README.md` (this file) | Principles, roles, the lifecycles of an issue and a pull request, keeping state, the occasional audit, labels |
 | [`reviewing.md`](reviewing.md) | Reviewing, closure verification, the Copilot follow-up check, risk |
 | [`adversarial-review.md`](adversarial-review.md) | Grok's adversarial review of `high` pull requests; Muse Code as an optional second |
-| [`running-other-ai.md`](running-other-ai.md) | Running Codex or Claude headless, and how the maintainer's sessions run Codex |
+| [`running-other-ai.md`](running-other-ai.md) | Running Codex, Claude or Muse Code headless, and how the maintainer's sessions run Codex |
 
 ## Principles
 

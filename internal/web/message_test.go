@@ -307,7 +307,7 @@ func TestMessagePagingHandler(t *testing.T) {
 		htmx        bool
 	}{
 		{"latest with older", "", true, 200, 0, []string{`href="` + channelURL + `?before=7"`, `hx-get="` + channelURL + `?before=7"`, `hx-select-oob="#load-older"`, `id="load-older"`}, []string{"Jump to the newest"}, false},
-		{"latest without older", "", false, 200, 0, []string{`<div id="load-older"></div>`}, []string{"?before=", "Jump to the newest"}, false},
+		{"latest without older", "", false, 200, 0, []string{`<div id="load-older" data-oldest-seq="7"></div>`}, []string{"?before=", "Jump to the newest"}, false},
 		{"older page", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil, false},
 		{"older page with HX", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil, true},
 		{"oldest page", "?before=8", false, 200, 8, []string{`>Jump to the newest messages</a>`}, []string{"?before="}, false},

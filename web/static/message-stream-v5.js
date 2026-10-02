@@ -35,7 +35,8 @@
     const items = event.target;
     if (items.id !== "message-items") return;
     const connection = items.closest("[sse-connect]");
-    const incoming = new DOMParser().parseFromString(event.detail.data, "text/html").querySelector("li");
+    const payload = new DOMParser().parseFromString(event.detail.data, "text/html");
+    const incoming = payload.querySelector("li");
     if (!connection || !incoming) return;
     const resume = () => {
       // A native reconnect sends Last-Event-ID. The extension recreates CLOSED
@@ -47,10 +48,23 @@
     };
     if (event.detail.type === "messages-moved") {
       event.preventDefault();
-      const moved = new DOMParser().parseFromString(event.detail.data, "text/html").querySelectorAll("li");
+      const moved = payload.querySelectorAll("li");
+      const routing = payload.querySelector("ul").dataset;
+      const topic = items.dataset.topic;
+      // This boundary changes only with Load older's server-rendered control.
+      const oldest = BigInt(document.getElementById("load-older").dataset.oldestSeq);
       for (const item of moved) {
         const target = document.getElementById(item.id);
-        if (target) htmx.swap(target, event.detail.data, { swapStyle: "outerHTML", settleDelay: 0 }, { select: "#" + item.id });
+        if (topic === routing.fromTopic) {
+          target?.remove();
+          continue;
+        }
+        if (target) {
+          htmx.swap(target, event.detail.data, { swapStyle: "outerHTML", settleDelay: 0 }, { select: "#" + item.id });
+        } else if (topic === routing.toTopic && BigInt(item.dataset.eventSeq) >= oldest) {
+          const next = Array.from(items.children).find((child) => BigInt(child.dataset.eventSeq) > BigInt(item.dataset.eventSeq));
+          htmx.swap(next || items, event.detail.data, { swapStyle: next ? "beforebegin" : "beforeend", settleDelay: 0 }, { select: "#" + item.id });
+        }
       }
       // Replacement clears selection; refresh single-source constraints too.
       document.getElementById("branch-to")?.dispatchEvent(new Event("change", { bubbles: true }));

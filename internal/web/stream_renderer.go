@@ -57,7 +57,7 @@ func (r messageRenderer) Render(ctx context.Context, _ realtime.Subscription, ev
 				items = append(items, viewMessage(r.membership.Organization.Slug, entry))
 			}
 			var html bytes.Buffer
-			if err := view.MovedMessageItems(items).Render(loadCtx, &html); err != nil {
+			if err := view.MovedMessageItems(items, event.FromTopicID, event.ToTopicID).Render(loadCtx, &html); err != nil {
 				return realtime.Outgoing{}, fmt.Errorf("rendering moved messages: %w", err)
 			}
 			return realtime.Outgoing{ID: event.Seq, Name: "messages-moved", Data: html.Bytes()}, nil

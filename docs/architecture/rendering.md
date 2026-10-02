@@ -69,7 +69,7 @@ after settling, since local timestamps (`htmx:load`) can change the new
 messages' height, then moves focus to the next control, or to the pane once
 the oldest message is shown.
 
-`message-stream-v4.js` listens to the vendored SSE extension's
+`message-stream-v5.js` listens to the vendored SSE extension's
 `htmx:sseBeforeMessage`. It passes the server's HTML to htmx for an append or
 same-id replacement, settling synchronously so replay stays ordered and local
 timestamps are ready before scrolling. Only appends update the separate polite
@@ -81,8 +81,9 @@ whether it arrived before the response, after it, or after a reconnect. Each
 pending scroll is used once; failed posts create none. It updates `sse-connect`'s `after` after each delivery so replacement
 EventSources resume from the received id; native reconnects use Last-Event-ID.
 `messages-moved` carries a templ-rendered list of replacements. The script
-selects each loaded stable ID for an htmx replacement, leaving unloaded items,
-announcements and the paging control alone. Replacements clear checked state
+replaces feed IDs, removes source-topic IDs or inserts destination IDs in
+sequence order within the loaded range. The history control's oldest sequence
+changes only on Load older; moves leave announcements and paging alone. Replacements clear checked state
 and refresh the branch form's source constraints. SSE swaps have no request
 target, so composer/history focus handlers ignore them.
 

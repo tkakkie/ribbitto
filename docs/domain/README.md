@@ -143,7 +143,7 @@ See [`validation.md`](validation.md).
      the email addresses match.
 
    Sign-up's duplicate-email response is an accepted trade-off
-   ([`DECISIONS.md`](../../DECISIONS.md) 13).
+   ([decision 13](../decisions/13-sign-up-may-reveal-that-an-email-address-is-registered.md)).
 9. *(planned)* **Every channel message is in exactly one topic of its own
    channel, and every channel has exactly one default topic.** Composite
    foreign keys keep both in the same organisation and channel; branching

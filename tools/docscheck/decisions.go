@@ -14,23 +14,7 @@ import (
 
 const decisionsDir = "docs/decisions"
 
-// decisionsSplit reports whether docs/decisions/ exists, enabling both the
-// decision checks and the index's size limit. Until then DECISIONS.md is exempt.
-func decisionsSplit(root string) (bool, error) {
-	info, err := os.Stat(filepath.Join(root, decisionsDir))
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("checking decisions directory: %w", err)
-	}
-	if !info.IsDir() {
-		return false, fmt.Errorf("%s: must be a directory", decisionsDir)
-	}
-	return true, nil
-}
-
-// checkDecisions validates decisions once docs/decisions/ exists. The directory
+// checkDecisions validates the decision index and docs/decisions/. The directory
 // contains only regular files named NN-slug.md (01–99; lowercase ASCII words or
 // digits separated by hyphens), with # N. Title on the first line. Decision 100
 // will require widening the two-digit pattern in a later change.
@@ -43,10 +27,6 @@ func decisionsSplit(root string) (bool, error) {
 // the file and heading. Gaps are allowed; titles and slugs are not compared.
 // Nested entries are checked; fenced examples do not count as entries.
 func checkDecisions(root string) ([]string, error) {
-	split, err := decisionsSplit(root)
-	if err != nil || !split {
-		return nil, err
-	}
 	entries, err := os.ReadDir(filepath.Join(root, decisionsDir))
 	if err != nil {
 		return nil, fmt.Errorf("reading decisions directory: %w", err)

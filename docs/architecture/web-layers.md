@@ -1,7 +1,7 @@
 # Web layers: handlers, templ, htmx and JavaScript
 
 What each browser-facing layer is responsible for, decided by the
-maintainer on 2026-09-30 ([`DECISIONS.md`](../../DECISIONS.md), 19). Follow
+maintainer on 2026-09-30 ([decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)). Follow
 it for every page, fragment and script; M3's SSE work builds on it.
 
 ## Progressive enhancement

@@ -240,7 +240,7 @@ func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth
 		sessions = auth.NewSessionsWithCanceller(postgres.NewSessionStore(pool), time.Now, config.hub)
 	}
 	// One hasher for the whole process: its slots are the cap on concurrent
-	// Argon2id work (DECISIONS.md 10).
+	// Argon2id work (decision 10 in docs/decisions).
 	hasher, err := auth.NewHasher()
 	if err != nil {
 		return nil, nil, err

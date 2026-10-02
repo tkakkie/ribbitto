@@ -73,13 +73,12 @@ func main() {
 }
 
 // limitFor returns the size limit for a repository path, or 0 when the
-// file is not checked: generated files and the unsplit DECISIONS.md.
-// checkSizes applies the normal limit to DECISIONS.md once the split exists.
+// file is not checked (including generated files).
 func limitFor(path string) int {
 	switch {
 	case path == "AGENTS.md":
 		return agentsLimit
-	case path == "README.md":
+	case path == "README.md", path == "DECISIONS.md":
 		return docLimit
 	case path == "docs/dependencies.md", strings.HasPrefix(path, "docs/schema/"):
 		return 0
@@ -90,10 +89,6 @@ func limitFor(path string) int {
 }
 
 func checkSizes(root string) ([]string, error) {
-	split, err := decisionsSplit(root)
-	if err != nil {
-		return nil, err
-	}
 	exceptions, problems, err := readExceptions(root)
 	if err != nil {
 		return nil, err
@@ -104,9 +99,6 @@ func checkSizes(root string) ([]string, error) {
 	}
 	for _, path := range files {
 		limit := limitFor(path)
-		if path == "DECISIONS.md" && split {
-			limit = docLimit
-		}
 		if limit == 0 {
 			continue
 		}

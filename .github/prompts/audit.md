@@ -29,7 +29,7 @@ Rules:
 - Do not guess; "no findings" is a valid answer.
 
 Task A — contradictions. Find places where two of these disagree:
-- the documents: AGENTS.md, DECISIONS.md, README.md, docs/**, .github/** templates and prompts;
+- the documents: AGENTS.md, DECISIONS.md (the index of decisions in docs/decisions/), README.md, docs/**, .github/** templates and prompts;
 - the configuration: Makefile, .golangci.yml, .github/workflows/**, sqlc.yaml, compose.yml, go.mod;
 - the code: cmd/, internal/, db/.
 For each finding give: both sides with file:line and a short quote; what contradicts; a severity (high / medium / low); and your confidence.

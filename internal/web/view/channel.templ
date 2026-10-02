@@ -105,7 +105,13 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 					<p class="px-3 pb-2 text-caption font-semibold text-muted">{ i18n.T(ctx, "topic.list") }</p>
 					<ul>
 						for _, topic := range page.Topics {
-							<li><a href={ templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)) } class="block min-h-11 break-words px-3 py-2 text-brand underline">{ topicName(ctx, topic) }</a></li>
+							<li>
+								if page.Topic != nil && page.Topic.ID == topic.ID {
+									<a href={ templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)) } aria-current="page" class="block min-h-11 break-words rounded-sm border-l-3 border-brand bg-selected px-3 py-2 font-semibold text-on-selected">{ topicName(ctx, topic) }</a>
+								} else {
+									<a href={ templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)) } class="block min-h-11 break-words px-3 py-2 text-brand underline">{ topicName(ctx, topic) }</a>
+								}
+							</li>
 						}
 					</ul>
 				</nav>

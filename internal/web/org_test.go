@@ -219,6 +219,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		if latest.Code != 200 || strings.Count(body, `<li id="message-`) != 50 || strings.Contains(body, "topic-message-00") || !strings.Contains(body, "topic-message-50") || strings.Contains(body, "posted through the page") || strings.Contains(body, "sse-connect=") || strings.Contains(body, "hx-post=") || !strings.Contains(body, `action="`+topicURL+`"`) {
 			t.Fatalf("latest topic: %d %s", latest.Code, body)
 		}
+		// The open topic, and only it, is the current link (Copilot on #320).
+		if strings.Count(body, `aria-current="page"`) != 1 || !strings.Contains(body, `href="`+topicURL+`" aria-current="page"`) {
+			t.Fatalf("current topic link: %s", body)
+		}
 		var before int64
 		if err := pool.QueryRow(ctx, "SELECT event_seq FROM message WHERE organization_id = $1 AND topic_id = $2 AND body = 'topic-message-01'", acme, named.ID).Scan(&before); err != nil {
 			t.Fatal(err)
@@ -236,6 +240,9 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			t.Fatalf("invalid body: %d", invalid.Code)
 		}
 		feed := get("GET", view.ChannelURL("acme", acmeChannel), aliceToken, now)
+		if strings.Contains(feed.Body.String(), `href="`+topicURL+`" aria-current`) {
+			t.Fatal("the feed marks a topic as current")
+		}
 		if feed.Code != 200 || !strings.Contains(feed.Body.String(), `href="`+topicURL+`"`) {
 			t.Fatal("topic missing from channel list")
 		}

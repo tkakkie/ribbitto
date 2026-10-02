@@ -48,6 +48,7 @@ internal/app/setup -> internal/domain
 internal/app/signup -> internal/app/auth
 internal/app/signup -> internal/app/setup
 internal/app/signup -> internal/domain
+internal/app/topic -> internal/domain
 internal/infra/postgres -> db/migrations
 internal/infra/postgres -> internal/app/auth
 internal/infra/postgres -> internal/app/authz
@@ -56,6 +57,7 @@ internal/infra/postgres -> internal/app/member
 internal/infra/postgres -> internal/app/message
 internal/infra/postgres -> internal/app/setup
 internal/infra/postgres -> internal/app/signup
+internal/infra/postgres -> internal/app/topic
 internal/infra/postgres -> internal/domain
 internal/infra/postgres -> internal/infra/postgres/sqlcgen
 internal/infra/postgres/pgtest -> db/migrations

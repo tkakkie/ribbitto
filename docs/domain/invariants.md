@@ -61,7 +61,7 @@ invariant changes. Keep the numbers stable: other documents cite them.
 
 These are **requirements for all code and migrations**, not a description
 of what is implemented today: `organization`, `account`, `session`,
-`member`, `setup`, `channel`, `message` and `event_log` have tables; setup authorization is implemented, and
+`member`, `setup`, `channel`, `message`, `event_log` and `topic` have tables; setup authorization is implemented, and
 organisation routes go through `internal/app/authz`. Every migration that adds an
 organisation-owned table must include `organization_id` and
 composite foreign keys (1–3), and every use case must be covered by tests

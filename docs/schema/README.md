@@ -13,6 +13,7 @@
 | [public.channel](public.channel.md) | 5 |  | BASE TABLE |
 | [public.message](public.message.md) | 7 |  | BASE TABLE |
 | [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
+| [public.topic](public.topic.md) | 6 |  | BASE TABLE |
 
 ## Stored procedures and functions
 
@@ -34,6 +35,7 @@ erDiagram
 "public.message" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 "public.event_log" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.event_log" }o--|| "public.member" : "FOREIGN KEY (organization_id, audience_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.topic" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 
 "public.goose_db_version" {
   integer id
@@ -99,6 +101,14 @@ erDiagram
   text kind
   uuid audience_member_id FK
   jsonb data
+  timestamp_with_time_zone created_at
+}
+"public.topic" {
+  uuid id
+  uuid organization_id FK
+  uuid channel_id FK
+  text name
+  boolean is_default
   timestamp_with_time_zone created_at
 }
 ```

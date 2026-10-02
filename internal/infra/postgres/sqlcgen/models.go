@@ -75,3 +75,12 @@ type Setup struct {
 	OrganizationID pgtype.UUID
 	CompletedAt    pgtype.Timestamptz
 }
+
+type Topic struct {
+	ID             pgtype.UUID
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	Name           pgtype.Text
+	IsDefault      bool
+	CreatedAt      pgtype.Timestamptz
+}

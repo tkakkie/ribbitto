@@ -15,7 +15,7 @@
 # removes everything it created. See docs/workflow/adversarial-review.md.
 #
 # Environment:
-#   RIBBITTO_GROK_TIMEOUT     seconds before Grok is stopped (1–86400, default 3600)
+#   RIBBITTO_GROK_TIMEOUT     seconds before Grok is stopped (1–86400, default 2400)
 #   RIBBITTO_GROK_MODEL       model id passed to `grok -m` (default: the CLI default; see `grok models`)
 #   RIBBITTO_GROK_TRUSTED_REF git ref the launcher and prompt must come from (default
 #                             origin/main); change it only to test a PR that edits them
@@ -35,7 +35,7 @@ pr=$1
 for cmd in grok gh git jq perl; do
   command -v "$cmd" >/dev/null || die "$cmd is not installed or not on PATH"
 done
-timeout=${RIBBITTO_GROK_TIMEOUT:-3600}
+timeout=${RIBBITTO_GROK_TIMEOUT:-2400}
 # Bounded so Perl's alarm() can represent it (a huge value would wrap to 0,
 # which disables the deadline).
 if ! [[ $timeout =~ ^[1-9][0-9]{0,4}$ ]] || ((timeout > 86400)); then
@@ -158,6 +158,12 @@ if [[ -n ${RIBBITTO_GROK_MODEL:-} ]]; then
   grok_args+=(-m "$RIBBITTO_GROK_MODEL")
 fi
 
+grok_cmd=(grok "${grok_args[@]}")
+# Keep the sleep inhibitor in the same group, so every exit cleans it up too.
+if command -v caffeinate >/dev/null; then
+  grok_cmd=(caffeinate -i "${grok_cmd[@]}")
+fi
+
 # macOS has no `timeout`, and `perl -e 'alarm…; exec…'` would only signal
 # Grok itself. This supervisor runs Grok in its own process group and signals
 # the whole group (TERM, then KILL after a grace period) on expiry, on INT or
@@ -168,7 +174,7 @@ fi
 # Stdin is closed: headless CLIs can otherwise wait for input forever (#2).
 perl -e '
   use strict; use warnings;
-  use POSIX qw(:signal_h setpgid _exit);
+  use POSIX qw(:signal_h :sys_wait_h setpgid _exit);
   my ($limit, $setup_delay, @cmd) = @ARGV;
   my $block = POSIX::SigSet->new(SIGINT, SIGTERM, SIGALRM);
   my $old = POSIX::SigSet->new;
@@ -202,6 +208,7 @@ perl -e '
     print STDERR "grok-review: could not create a process group for Grok\n";
     exit 126;
   }
+  my $deadline = time + $limit;
   my $reap_group = sub {
     return unless kill 0, -$pid;
     kill "TERM", -$pid;
@@ -215,17 +222,26 @@ perl -e '
     waitpid($pid, 0);
     exit $code;
   };
-  $SIG{ALRM} = sub { $stop->(124, "timed out after $limit s; stopped Grok") };
-  $SIG{INT}  = sub { $stop->(130, "interrupted; stopped Grok") };
-  $SIG{TERM} = sub { $stop->(143, "terminated; stopped Grok") };
+  # Reap before acting on a signal: Grok may have exited during the last poll
+  # interval. Signals during group cleanup must not replace its status either.
+  my $stop_request;
+  $SIG{ALRM} = sub { $stop_request //= [124, "timed out after $limit s; stopped Grok"] };
+  $SIG{INT}  = sub { $stop_request //= [130, "interrupted; stopped Grok"] };
+  $SIG{TERM} = sub { $stop_request //= [143, "terminated; stopped Grok"] };
   alarm $limit;
   sigprocmask(SIG_SETMASK, $old);
-  waitpid($pid, 0);
+  while (waitpid($pid, WNOHANG) != $pid) {
+    $stop->(@$stop_request) if $stop_request;
+    # alarm is still a backstop; wall time also catches a deadline that passed
+    # during machine sleep, even if the alarm did not advance with it.
+    $stop->(124, "timed out after $limit s; stopped Grok") if time >= $deadline;
+    select undef, undef, undef, 2;
+  }
   my $status = $? & 127 ? 128 + ($? & 127) : $? >> 8;
   alarm 0;
   $reap_group->();
   exit $status;
-' "$timeout" "$setup_delay" grok "${grok_args[@]}" </dev/null &
+' "$timeout" "$setup_delay" "${grok_cmd[@]}" </dev/null &
 supervisor=$!
 status=0
 wait "$supervisor" || status=$?

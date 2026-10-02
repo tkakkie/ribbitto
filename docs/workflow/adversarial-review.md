@@ -37,8 +37,14 @@ exits 0.)
   symlink (mode `120000`) is refused before the prompt is built or anything
   is checked out: a symlink could otherwise let Grok read files outside the
   worktree.
+- Where available (macOS), `caffeinate -i` prevents idle sleep while Grok
+  runs; it is skipped elsewhere. It runs inside Grok's process group and
+  is stopped with that group on every exit. The supervisor checks a
+  wall-clock deadline every two seconds, so a deadline passed during sleep
+  is caught on wake even if the alarm did not advance. The alarm remains
+  as a backstop.
 - It stops Grok and everything Grok started after `RIBBITTO_GROK_TIMEOUT`
-  seconds (1–86400, default 3600 / 60 minutes; exit 124), and removes the
+  seconds (1–86400, default 2400 / 40 minutes; exit 124), and removes the
   worktree and temporary files on success, failure, timeout, Ctrl-C (130)
   and `TERM` (143), reporting any cleanup failure. When Grok itself fails,
   the script exits with Grok's status. If Grok's process group cannot be

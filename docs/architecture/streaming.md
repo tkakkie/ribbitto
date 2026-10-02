@@ -137,7 +137,8 @@ The retention period defaults to seven days; see [database configuration](../dat
 
 - Each cache (events, renders) runs at most 16 loaders at once, second
   loads included; a slot is held until its loader returns, even after a
-  timeout. The last waiter to leave cancels a load, the last joiner its
+  timeout. Waiting for a slot shares the 10 s load timeout, and a caller
+  can leave sooner through its own context. The last waiter to leave cancels a load, the last joiner its
   second load, and shutdown every load (`cmd/ribbitto` passes the process
   context, through `Streaming` for renders).
 

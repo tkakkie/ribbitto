@@ -77,9 +77,6 @@ func TestStreamsAndPosting(t *testing.T) {
 					if r.FormValue("body") != "load test" || r.Header.Get("Origin") == "" || r.Header.Get("Sec-Fetch-Site") != "same-origin" {
 						t.Error("invalid post")
 					}
-					// Outlive the run's deadline: the end of the run must
-					// let it finish, not count it as failed.
-					time.Sleep(60 * time.Millisecond)
 					return
 				}
 				if r.Header.Get("Last-Event-ID") != "7" || !strings.HasSuffix(r.URL.Path, "/events") {
@@ -99,7 +96,7 @@ func TestStreamsAndPosting(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := map[int]string{200: "established=1 refused_429=0 refused_503=0 reset=1 failed=0", 429: "refused_429=1", 503: "refused_503=1", 400: "failed=1"}[status]
-			if !strings.Contains(out.String(), want) || strings.Contains(out.String(), "secret") || strings.Contains(out.String(), " posts=0 ") || !strings.Contains(out.String(), " post_failed=0") {
+			if !strings.Contains(out.String(), want) || strings.Contains(out.String(), "secret") || strings.Contains(out.String(), " posts=0 ") {
 				t.Fatal(out.String())
 			}
 		})
@@ -160,5 +157,50 @@ func TestHTTP2AndTrust(t *testing.T) {
 	if r, err := (&http.Client{Transport: untrusted}).Get(server.URL); err == nil {
 		_ = r.Body.Close()
 		t.Fatal("trusted an unconfigured CA")
+	}
+}
+
+// The end of a run is the harness's doing: a POST in flight at the deadline
+// finishes and counts, and streams still connecting or open are closed
+// without counting as failures.
+func TestRunEndIsNotAFailure(t *testing.T) {
+	deadline := 100 * time.Millisecond
+	for _, tc := range []struct {
+		name, args, want string
+	}{
+		{"post across the deadline", "-rate=20", " posts=1 post_failed=0"},
+		{"stream before its headers", "-rate=0", "established=0 refused_429=0 refused_503=0 reset=0 failed=0"},
+		{"established stream", "-rate=0", "established=1 refused_429=0 refused_503=0 reset=0 failed=0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The POST is held until after the deadline, so it is in flight
+			// when the run ends.
+			held := make(chan struct{})
+			time.AfterFunc(deadline+50*time.Millisecond, func() { close(held) })
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					<-held
+					return
+				}
+				if tc.name == "established stream" {
+					w.Header().Set("Content-Type", "text/event-stream")
+					w.WriteHeader(http.StatusOK)
+					w.(http.Flusher).Flush()
+				}
+				<-r.Context().Done()
+			}))
+			defer server.Close()
+			path := t.TempDir() + "/tokens.json"
+			if err := os.WriteFile(path, []byte(`{"organization_slug":"test","channel_ids":["one"],"accounts":[{"tokens":["secret"]}]}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var out bytes.Buffer
+			if err := run([]string{"-target", server.URL, "-tokens", path, "-duration=" + deadline.String(), tc.args}, &out); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out.String(), tc.want) {
+				t.Fatalf("%s: want %q", out.String(), tc.want)
+			}
+		})
 	}
 }

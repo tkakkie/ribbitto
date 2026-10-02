@@ -127,7 +127,10 @@ func readReset(body io.Reader) bool {
 func stream(ctx context.Context, client *http.Client, endpoint, token, cursor string, c *counts) {
 	r, err := request(ctx, client, http.MethodGet, endpoint, token, cursor)
 	if err != nil {
-		c.failed.Add(1)
+		// The harness closing the run is not a failed stream.
+		if ctx.Err() == nil {
+			c.failed.Add(1)
+		}
 		return
 	}
 	defer func() { _ = r.Body.Close() }()

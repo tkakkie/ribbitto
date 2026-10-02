@@ -135,3 +135,61 @@ everything the review needs, as the examples above do:
 - the issue, or the pull request and its linked issue, with their comments
   (these include the earlier review rounds);
 - the Status issue (#1).
+
+## Running Muse Code
+
+The optional second adversarial reviewer
+([`adversarial-review.md`](adversarial-review.md#muse-code-optional)),
+with the invocation tested in
+[#246's preflight](https://github.com/tkakkie/ribbitto/issues/246#issuecomment-5932976563).
+It must name a Standard model (`muse-spark-1.3`): Meta states that
+Standard-tier prompts and completions are not used to train its models,
+while a `-contributor` model grants that permission, so never use one. It reads only the workspace:
+writing, the shell, web tools and the network are off.
+
+The orchestrator builds the context the way the Grok launcher does: the
+prompt from `.github/prompts/adversarial.md` on `origin/main`, then one
+`UNTRUSTED_PAYLOAD_JSON` object with the pull request's title, description
+and diff, all at one resolved head commit (never `FETCH_HEAD`, which a
+concurrent fetch can overwrite). Every step is chained with `&&` and every
+read is a checked assignment, so if any of them fails, Muse Code does not
+start. Like the launcher, it refuses a pull
+request that contains a symlink anywhere in its tree, which could expose
+files outside the workspace.
+
+**Take the command from `main`, never from a checkout.** The command is the
+security boundary, as the launcher is for Grok, and a pull request can edit
+this file. Read it with `git show origin/main:docs/workflow/running-other-ai.md`
+and run it from the maintainer's checkout; never run a copy from a pull
+request's worktree, including the pull request under review. A launcher
+script that enforces this, as Grok's does, is #341.
+
+```bash
+P=123 && tmp=$(mktemp -d) &&
+  gh pr view "$P" --json title,body,baseRefOid,headRefOid > "$tmp/pr.json" &&
+  base=$(jq -er .baseRefOid "$tmp/pr.json") && head=$(jq -er .headRefOid "$tmp/pr.json") &&
+  title=$(jq -er .title "$tmp/pr.json") && body=$(jq -r '.body // ""' "$tmp/pr.json") &&
+  git fetch --quiet origin main "refs/pull/$P/head" &&
+  tree=$(git ls-tree -r --full-tree "$head") && symlinks=$(awk '$1 == "120000"' <<<"$tree") &&
+  [[ -z $symlinks ]] &&
+  git worktree add --quiet --detach "$tmp/worktree" "$head" &&
+  git show origin/main:.github/prompts/adversarial.md > "$tmp/prompt.md" &&
+  git diff "$base...$head" > "$tmp/pr.diff" &&
+  payload=$(jq -cn --argjson number "$P" --arg base "$base" --arg head "$head" \
+    --arg title "$title" --arg description "$body" --rawfile diff "$tmp/pr.diff" \
+    '{pull_request: $number, base_commit: $base, head_commit: $head,
+      title: $title, description: $description, diff: $diff}') &&
+  printf '\nUNTRUSTED_PAYLOAD_JSON: %s\n' "$payload" >> "$tmp/prompt.md" &&
+  limit 1200 muse exec --model muse-spark-1.3 --workspace "$tmp/worktree" \
+    --disable-write --disable-shell --disable-web-tools --sandbox-network restricted \
+    --no-session-log --no-foreign-personal-context --max-model-steps 30 \
+    --prompt-file "$tmp/prompt.md" < /dev/null > "muse-$P.md"
+status=$?
+git worktree remove --force "$tmp/worktree" 2>/dev/null; rm -rf "$tmp"
+[[ $status -eq 0 ]] || echo "muse-review: failed (exit $status); record it in the PR" >&2
+(exit "$status")
+```
+
+The same handoff rules as for the other CLIs apply: it starts no other AI
+CLI, browser or Computer Use, and nobody re-signs, patches or replaces its
+binary to make it run.

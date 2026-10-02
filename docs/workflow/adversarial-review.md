@@ -68,3 +68,19 @@ exits 0.)
   `**Adversarial review — Grok** (at <SHA>)` and adds, for each finding,
   *valid* (fixed in the PR or tracked as an issue) or *false positive* with
   the reason.
+
+## Muse Code, optional
+
+Muse Code may review a `high` pull request as a second adversarial
+reviewer (#330, from the trial in #246). Grok stays mandatory. Muse Code
+is optional and advisory: its report never satisfies or waives a
+requirement (Grok's review, the Claude ↔ Codex rounds, Copilot's
+follow-up, the maintainer's decisions).
+
+- It reviews the same head commit with the same context as Grok, run as in
+  [*Running Muse Code*](running-other-ai.md#running-muse-code).
+- Claude posts the report as `**Adversarial review — Muse Code** (at <SHA>)`.
+  A valid finding gets a disposition like any other: fixed, a follow-up
+  issue, or declined with the reason.
+- If it fails (a provider outage, the time limit), record that in the pull
+  request and carry on. A failed optional run never blocks.

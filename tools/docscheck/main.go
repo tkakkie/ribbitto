@@ -56,20 +56,25 @@ func main() {
 		fmt.Fprintln(os.Stderr, "docscheck:", err)
 		os.Exit(2)
 	}
-	for _, p := range append(sizes, links...) {
+	decisions, err := checkDecisions(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "docscheck:", err)
+		os.Exit(2)
+	}
+	for _, p := range append(append(sizes, links...), decisions...) {
 		fmt.Fprintln(os.Stderr, p)
 	}
 	if len(sizes) > 0 {
 		fmt.Fprintln(os.Stderr, "\nA file over its limit keeps its pull request small: open an issue to split it, add \"<path> #<issue>\" to "+exceptionsFile+", and split it in a separate pull request.")
 	}
-	if len(sizes)+len(links) > 0 {
+	if len(sizes)+len(links)+len(decisions) > 0 {
 		os.Exit(1)
 	}
 }
 
 // limitFor returns the size limit for a repository path, or 0 when the
-// file is not checked: generated files and DECISIONS.md, whose entries are
-// short and which moves to one file per decision when it grows.
+// file is not checked: generated files and the unsplit DECISIONS.md.
+// checkSizes applies the normal limit to DECISIONS.md once the split exists.
 func limitFor(path string) int {
 	switch {
 	case path == "AGENTS.md":
@@ -85,6 +90,10 @@ func limitFor(path string) int {
 }
 
 func checkSizes(root string) ([]string, error) {
+	split, err := decisionsSplit(root)
+	if err != nil {
+		return nil, err
+	}
 	exceptions, problems, err := readExceptions(root)
 	if err != nil {
 		return nil, err
@@ -95,6 +104,9 @@ func checkSizes(root string) ([]string, error) {
 	}
 	for _, path := range files {
 		limit := limitFor(path)
+		if path == "DECISIONS.md" && split {
+			limit = docLimit
+		}
 		if limit == 0 {
 			continue
 		}

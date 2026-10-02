@@ -60,8 +60,7 @@ type Outgoing struct {
 	Name string
 	Data []byte
 	// Topic is the message's topic as the shared render read it. It is
-	// never sent; a topic subscription skips events of other topics by it,
-	// so filtering costs no read per stream (#304).
+	// never sent; legacy posting events without a topic use it for filtering.
 	Topic domain.ID
 }
 
@@ -92,7 +91,7 @@ var errHeartbeatDue = errors.New("realtime: heartbeat due")
 // skipped, with the reason it stopped.
 //
 // Cursor rules:
-//   - An event of another channel, of a kind this stream does not deliver
+//   - An event outside the subscription, of a kind this stream does not deliver
 //     (including kinds it does not know), or explicitly denied by the
 //     Authorizer is skipped, and the cursor moves past it, so a filtered
 //     event cannot keep the loop spinning.
@@ -180,7 +179,7 @@ func (s Stream) deliver(ctx context.Context, sub Subscription, event domain.Even
 	if ctx.Err() != nil {
 		return false, context.Cause(ctx)
 	}
-	if event.Kind != domain.EventMessagePosted || event.ChannelID != sub.Channel {
+	if !sub.wants(event) {
 		return false, nil
 	}
 	// Render first, then authorize: a render can wait on the database, and
@@ -193,10 +192,7 @@ func (s Stream) deliver(ctx context.Context, sub Subscription, event domain.Even
 	if err != nil {
 		return false, fmt.Errorf("rendering event %d: %w", event.Seq, err)
 	}
-	// The posting event carries IDs only, so the topic comes from the shared
-	// render. A message moved since may still render with its old topic;
-	// branching's move events correct topic views (#306), as for labels.
-	if sub.Topic != nil && out.Topic != *sub.Topic {
+	if !sub.wantsRendered(event, out) {
 		return false, nil
 	}
 	allowed, err := s.Authorizer.MayReceive(ctx, sub.Account, sub.OrganizationSlug, event)

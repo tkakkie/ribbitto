@@ -72,7 +72,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 		if err != nil {
 			return err
 		}
-		return log.AppendMessagePosted(ctx, organizationID, channelID, posted.ID, noticeSeq)
+		return log.AppendMessagePosted(ctx, organizationID, channelID, posted.ID, posted.TopicID, noticeSeq)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Topic{}, 0, authz.ErrNotFound // the organisation itself is gone

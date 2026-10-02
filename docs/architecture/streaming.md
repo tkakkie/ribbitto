@@ -24,7 +24,7 @@ sequenceDiagram
   W->>C: start
   loop
     C->>DB: one snapshot: replay boundary + event_seq + events after cursor
-    C->>C: render, authorize, send each event; cursor = last seq read
+    C->>C: check interest, render, authorize, send; cursor = last seq read
     C->>C: wait until hub's latest sequence of org > cursor (no wait if already)
   end
 ```
@@ -53,15 +53,19 @@ sequenceDiagram
   derived from the request's context, which `CancelAccount` or
   `CancelSession` can end, and an `unregister` the handler defers. Only `unregister` frees the slot;
   `context.Cause` tells why a connection ended.
-- **The loop** is `realtime.Stream.Run` (#209). Another channel's event, a
-  kind it does not deliver and an explicit deny from `authz.MayReceive` are
-  skipped and the cursor moves past them.
+- **The loop** is `realtime.Stream.Run` (#209). `Subscription` owns the
+  interest checks: other channels, unsupported kinds and other posting-time
+  topics are skipped before rendering or authorization (#261 B6). Explicit
+  denies from `authz.MayReceive` are skipped after rendering. All skips advance
+  the cursor. `messages.moved` is decoded but still skipped pending #306's
+  view corrections; its notice is delivered as `message.posted`.
 - **A topic page** subscribes to one topic of the channel
   (`…/topics/{topicID}/events`; an unknown topic, or another channel's, is
-  404 before the stream opens). A message of another topic is skipped, by
-  the topic the shared render read, so the filter adds no read per stream
-  per event; a message moved since may still arrive under its old topic,
-  and branching's move events correct the view (#306). The cursor, replay
+  404 before the stream opens). New posting events route by their persisted
+  posting-time topic, even when the render reads a later topic. Legacy events
+  without `topic_id` fall back to the topic from the shared render, before
+  authorization, with no extra read per stream. Branching's move corrections
+  remain pending (#306). The cursor, replay
   and `reset` rules are the channel page's. An error from the reader, the
   authorization check itself, the renderer or the sender stops the loop
   with the cursor before that event, so a reconnect resumes there; a failed

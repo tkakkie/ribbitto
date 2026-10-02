@@ -67,7 +67,11 @@ author names or `message.ErrNotFound`.
 is organisation-wide; a value restricts delivery to that member, enforced
 by the stream's per-event authorization (`authz.MayReceive`). Its composite foreign key keeps the
 member in the same organisation. The audience never appears in `data`.
-`message.posted` carries `{"channel_id":"<uuid>","message_id":"<uuid>"}`;
+`message.posted` carries `{"channel_id","message_id","topic_id"}` (UUIDs);
+the topic is captured at posting time, in the message's transaction, including
+branch notices. The reader exposes it as `TopicID`; old rows without the field
+have nil, while a present malformed value fails the batch. A later move never
+rewrites this routing data: replay applies the posting and move in order.
 `member.joined` carries `{"member_id":"<uuid>"}`; `messages.moved` (branching,
 [topics](../domain/topics.md#branching)) carries the channel, the two topics
 and the moved message IDs. All use a NULL audience.

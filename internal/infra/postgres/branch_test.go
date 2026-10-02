@@ -74,6 +74,14 @@ func TestBranchStore(t *testing.T) {
 	// Replay must preserve both durable events and their routing IDs, even
 	// when the batch boundary falls between the move and its notice.
 	reader := postgres.NewEventReader(pool)
+	// Branching changes the message, never its posting-time routing data.
+	for _, m := range posted {
+		events, err := reader.EventsAfter(ctx, acme.OrganizationID, m.EventSeq-1, 1)
+		requireNoError(t, err)
+		if len(events) != 1 || events[0].TopicID == nil || *events[0].TopicID != source {
+			t.Fatalf("posting-time topic after branch: %+v", events)
+		}
+	}
 	for _, limit := range []int{1, 2} {
 		events, err := reader.EventsAfter(ctx, acme.OrganizationID, before, limit)
 		requireNoError(t, err)
@@ -89,7 +97,8 @@ func TestBranchStore(t *testing.T) {
 		next, err := reader.EventsAfter(ctx, acme.OrganizationID, move.Seq, 1)
 		requireNoError(t, err)
 		if len(next) != 1 || next[0].Kind != domain.EventMessagePosted || next[0].Seq != before+2 ||
-			next[0].ChannelID != acme.Channel.ID || next[0].MessageID != got[3].id || next[0].AudienceMemberID != nil {
+			next[0].ChannelID != acme.Channel.ID || next[0].MessageID != got[3].id || next[0].AudienceMemberID != nil ||
+			next[0].TopicID == nil || *next[0].TopicID != source {
 			t.Fatalf("notice after move: %+v", next)
 		}
 	}

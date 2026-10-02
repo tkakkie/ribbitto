@@ -263,80 +263,121 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	}
 }
 
-func TestOlderMoveThenLoadOlder(t *testing.T) {
-	t.Parallel()
-	ctx := t.Context()
-	pool := pgtest.New(t)
-	f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-	m := authz.Membership{Organization: domain.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: f.MemberID}}
-	destination, err := postgres.NewTopicStore(pool).CreateTopic(ctx, f.OrganizationID, f.Channel.ID, "Destination")
-	if err != nil {
-		t.Fatal(err)
-	}
-	reader := postgres.MessageReader{Pool: pool}
-	var moved []domain.ID
-	var source domain.ID
-	for i := range message.PageSize + 4 {
-		selected := &destination.ID
-		if i == 0 || i == 25 || i == message.PageSize+3 {
-			selected = nil // Below the boundary, inside it and above the newest item.
-		}
-		posted, err := postgres.NewPostingStore(pool).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, selected, "body")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if selected == nil {
-			moved = append(moved, posted.ID)
-			source = posted.TopicID
-		}
-	}
-	page, err := reader.Page(ctx, m, f.Channel.ID, &destination.ID, nil)
-	if err != nil || !page.Older {
-		t.Fatalf("partial destination: %+v, %v", page, err)
+func topicPageBoundary(t *testing.T, destination domain.Topic, page message.ChannelPage, before int64) int64 {
+	t.Helper()
+	model := view.ChannelPage{Organization: domain.Organization{Name: "Acme", Slug: "acme"}, Topic: &destination, Older: page.Older, Before: before}
+	for _, entry := range page.Entries {
+		model.Messages = append(model.Messages, viewMessage("acme", entry))
 	}
 	var markup bytes.Buffer
-	if err := view.Channel("", view.ChannelPage{Topic: &destination, Messages: []view.Message{viewMessage("acme", page.Entries[0])}, Older: true}).Render(ctx, &markup); err != nil {
+	if err := view.Channel("", model).Render(t.Context(), &markup); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(markup.Bytes(), []byte(fmt.Sprintf(`data-oldest-seq="%d"`, page.Entries[0].EventSeq))) || !bytes.Contains(markup.Bytes(), []byte(`data-topic="`)) {
-		t.Fatal("topic page omitted its move routing or history boundary")
-	}
-	boundary := page.Entries[0].EventSeq
-	items := renderedPage(t, page.Entries)
-	_, through, err := postgres.NewBranchStore(pool).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
-		topic.Branch{From: source, To: &destination.ID, Messages: moved}, func(domain.Topic) string { return "notice" })
+	doc, err := html.Parse(&markup)
 	if err != nil {
 		t.Fatal(err)
 	}
-	renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
-	stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{postgres.NewEventReader(pool), through}, Renderer: renderer, Authorizer: authz.New(postgres.NewAuthzStore(pool)), BatchSize: 1}
-	delivered := &moveDeliveries{}
-	_, err = stream.Run(ctx, realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID, Topic: &destination.ID}, *page.EventCursor, delivered)
-	if !errors.Is(err, io.EOF) || len(delivered.events) != 1 {
-		t.Fatalf("destination move: %v, %+v", err, delivered.events)
+	controls, err := htmxMatches(doc, "#load-older")
+	if err != nil || len(controls) != 1 {
+		t.Fatalf("history control: %v, %v", controls, err)
 	}
-	for range 2 {
-		items = applyTopic(t, items, delivered.events[0], destination.ID, boundary)
-	}
-	if len(items) != message.PageSize+2 {
-		t.Fatal("move must insert only the two items within the loaded range")
-	}
-	older, err := reader.Page(ctx, m, f.Channel.ID, &destination.ID, &boundary)
-	if err != nil || older.Older {
-		t.Fatalf("older destination: %+v, %v", older, err)
-	}
-	items = append(renderedPage(t, older.Entries), items...)
-	feed, err := reader.Page(ctx, m, f.Channel.ID, nil, &through)
+	boundary, err := strconv.ParseInt(attr(controls[0], "data-oldest-seq"), 10, 64)
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := feed.Entries[0].EventSeq
-	earliest, err := reader.Page(ctx, m, f.Channel.ID, nil, &before)
-	if err != nil {
-		t.Fatal(err)
+	if attr(find(doc, atom.Ol), "data-topic") == "" {
+		t.Fatal("topic page omitted its move routing")
 	}
-	want := renderedPage(t, append(earliest.Entries, feed.Entries...))
-	if !reflect.DeepEqual(items, want) {
-		t.Fatal("move then Load older duplicated, lost or misordered history")
+	return boundary
+}
+
+func TestOlderMoveThenLoadOlder(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name  string
+		count int
+		older bool
+	}{
+		{"empty", 3, false},
+		{"fully loaded", 6, false},
+		{"partially loaded", message.PageSize + 4, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			pool := pgtest.New(t)
+			f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+			m := authz.Membership{Organization: domain.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: f.MemberID}}
+			destination, err := postgres.NewTopicStore(pool).CreateTopic(ctx, f.OrganizationID, f.Channel.ID, "Destination")
+			if err != nil {
+				t.Fatal(err)
+			}
+			reader := postgres.MessageReader{Pool: pool}
+			var moved []domain.ID
+			var source domain.ID
+			for i := range tt.count {
+				selected := &destination.ID
+				if i == 0 || i == tt.count/2 || i == tt.count-1 {
+					selected = nil // Before, within and after the destination's messages.
+				}
+				posted, err := postgres.NewPostingStore(pool).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, selected, "body")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if selected == nil {
+					moved = append(moved, posted.ID)
+					source = posted.TopicID
+				}
+			}
+			page, err := reader.Page(ctx, m, f.Channel.ID, &destination.ID, nil)
+			if err != nil || page.Older != tt.older {
+				t.Fatalf("destination: %+v, %v", page, err)
+			}
+			boundary := topicPageBoundary(t, destination, page, 0)
+			items := renderedPage(t, page.Entries)
+			_, through, err := postgres.NewBranchStore(pool).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
+				topic.Branch{From: source, To: &destination.ID, Messages: moved}, func(domain.Topic) string { return "notice" })
+			if err != nil {
+				t.Fatal(err)
+			}
+			renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
+			stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{postgres.NewEventReader(pool), through}, Renderer: renderer, Authorizer: authz.New(postgres.NewAuthzStore(pool)), BatchSize: 1}
+			delivered := &moveDeliveries{}
+			_, err = stream.Run(ctx, realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID, Topic: &destination.ID}, *page.EventCursor, delivered)
+			if !errors.Is(err, io.EOF) || len(delivered.events) != 1 {
+				t.Fatalf("destination move: %v, %+v", err, delivered.events)
+			}
+			for range 2 {
+				items = applyTopic(t, items, delivered.events[0], destination.ID, boundary)
+			}
+			if tt.older {
+				if len(items) != message.PageSize+2 {
+					t.Fatal("move must insert only the two items within the loaded range")
+				}
+				older, err := reader.Page(ctx, m, f.Channel.ID, &destination.ID, &boundary)
+				if err != nil || older.Older {
+					t.Fatalf("older destination: %+v, %v", older, err)
+				}
+				items = append(renderedPage(t, older.Entries), items...)
+				// Load older replaces the control out of band, admitting all history.
+				boundary = topicPageBoundary(t, destination, older, boundary)
+				if boundary != 0 {
+					t.Fatalf("exhausted history boundary = %d, want 0", boundary)
+				}
+				items = applyTopic(t, items, delivered.events[0], destination.ID, boundary)
+			}
+			feed, err := reader.Page(ctx, m, f.Channel.ID, nil, &through)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := feed.Entries[0].EventSeq
+			earliest, err := reader.Page(ctx, m, f.Channel.ID, nil, &before)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := renderedPage(t, append(earliest.Entries, feed.Entries...))
+			if !reflect.DeepEqual(items, want) {
+				t.Fatal("move and loaded history differ from reload")
+			}
+		})
 	}
 }

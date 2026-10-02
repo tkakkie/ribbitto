@@ -79,7 +79,8 @@ bounded topic list, the branching endpoint (#305) and its selection UI
   the draft (422). Its latest page updates live through a stream of that
   topic only ([streaming](../architecture/streaming.md)); older pages do not.
   Moves remove loaded source items and insert destination items by `event_seq`,
-  only at or above the loaded range's oldest sequence (zero for an empty page).
+  only at or above the loaded range's oldest sequence. The bound is zero when
+  no older history remains, including an empty page, admitting every moved item.
   The history control preserves that bound across live inserts and removals;
   only Load older replaces it. Older moved items wait for that history read.
   Replays and duplicates use stable IDs; replay matches a reload within this

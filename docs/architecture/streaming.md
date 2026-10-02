@@ -62,7 +62,8 @@ sequenceDiagram
   authorization. Other topics skip before either. Feeds replace loaded IDs;
   source topics remove them, destinations insert by `event_seq` within the
   loaded range. The server-rendered history control holds the oldest sequence
-  (zero when empty); live changes never move it or its `before=` link. Only
+  (zero when no older history remains, including an empty page); live changes
+  never move it or its `before=` link. Only
   Load older replaces it, so older moved items cannot duplicate or skip history.
   Moves are silent; the notice arrives separately as `message.posted`.
 - **A topic page** subscribes to one topic of the channel

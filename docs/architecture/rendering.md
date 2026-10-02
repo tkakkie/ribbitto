@@ -82,8 +82,10 @@ pending scroll is used once; failed posts create none. It updates `sse-connect`'
 EventSources resume from the received id; native reconnects use Last-Event-ID.
 `messages-moved` carries a templ-rendered list of replacements. The script
 replaces feed IDs, removes source-topic IDs or inserts destination IDs in
-sequence order within the loaded range. The history control's oldest sequence
-changes only on Load older; moves leave announcements and paging alone. Replacements clear checked state
+sequence order within the loaded range. The history control's bound is zero
+when no older history remains, including an empty page, admitting every moved
+item; otherwise it is the oldest loaded sequence. It changes only on Load older;
+moves leave announcements and paging alone. Replacements clear checked state
 and refresh the branch form's source constraints. SSE swaps have no request
 target, so composer/history focus handlers ignore them.
 

@@ -52,6 +52,7 @@
       const routing = payload.querySelector("ul").dataset;
       const topic = items.dataset.topic;
       // This boundary changes only with Load older's server-rendered control.
+      // Zero means everything older is loaded, so every moved item is admitted.
       const oldest = BigInt(document.getElementById("load-older").dataset.oldestSeq);
       for (const item of moved) {
         const target = document.getElementById(item.id);

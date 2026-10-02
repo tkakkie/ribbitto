@@ -62,7 +62,7 @@ func topicName(ctx context.Context, topic domain.Topic) string {
 
 // The history control owns the loaded range, even if live moves empty the list.
 func oldestSequence(page ChannelPage) int64 {
-	if len(page.Messages) == 0 {
+	if !page.Older || len(page.Messages) == 0 {
 		return 0
 	}
 	return page.Messages[0].EventSeq

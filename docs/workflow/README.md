@@ -11,7 +11,7 @@ disagree, fix the disagreement in a pull request.
 |---|---|
 | `README.md` (this file) | Principles, roles, the lifecycles of an issue and a pull request, keeping state, the occasional audit, labels |
 | [`reviewing.md`](reviewing.md) | Reviewing, closure verification, the Copilot follow-up check, risk |
-| [`adversarial-review.md`](adversarial-review.md) | Grok's adversarial review of `high` pull requests |
+| [`adversarial-review.md`](adversarial-review.md) | Grok's adversarial review of `high` pull requests; Muse Code as an optional second |
 | [`running-other-ai.md`](running-other-ai.md) | Running Codex or Claude headless, and how the maintainer's sessions run Codex |
 
 ## Principles
@@ -41,6 +41,7 @@ disagree, fix the disagreement in a pull request.
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
 | Copilot | Reviews each pull request **once**, automatically, when it is marked ready for review, at **Lite**, guided by `.github/instructions/code-review.instructions.md`. Drafts and new pushes do not trigger it (the `main` ruleset); re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
 | Grok | Adversarial review of `high` pull requests (from M1), run with `scripts/ai/grok-review.sh`. Advisory. |
+| Muse Code | Optional second adversarial review of `high` pull requests (#330). Advisory; never replaces Grok's. |
 | Antigravity | Optional: the occasional documentation audit (below), UI screenshot review, experiments, stand-in for Grok. |
 
 Claude and Codex should end up with roughly equal shares of implementation.

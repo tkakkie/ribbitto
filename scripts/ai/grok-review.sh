@@ -76,6 +76,8 @@ supervisor=""
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
+  # Printing can block; another interrupt must not abort resource cleanup.
+  trap '' INT TERM
   if [[ -n $supervisor ]] && kill -0 "$supervisor" 2>/dev/null; then
     kill -TERM "$supervisor" 2>/dev/null || true
     wait "$supervisor" 2>/dev/null || true
@@ -241,6 +243,8 @@ perl -e '
   # interval. Signals during group cleanup must not replace its status either.
   my $stop_request;
   my $last_update = Time::HiRes::time();
+  my $last_poll = $last_update;
+  my $progress = 0;
   my ($buffer, $readable) = ("", "");
   vec($readable, fileno($stream), 1) = 1;
   $| = 1;
@@ -265,7 +269,7 @@ perl -e '
       my $kind = $event->{type};
       next unless defined $kind && !ref($kind) && length $kind;
       next if $kind eq "end";
-      $last_update = Time::HiRes::time();
+      $progress = 1;
       if ($kind eq "text" && defined $event->{data} && !ref($event->{data})) {
         print encode_utf8($event->{data});
       }
@@ -290,7 +294,19 @@ perl -e '
     # alarm is still a backstop; wall time also catches a deadline that passed
     # during machine sleep, even if the alarm did not advance with it.
     $stop->(124, "timed out after $limit s; stopped Grok") if time >= $deadline;
-    my $remaining = $stall - (Time::HiRes::time() - $last_update);
+    my $now = Time::HiRes::time();
+    my $gap = $now - $last_poll;
+    # A poll normally waits at most two seconds. Exclude suspension or a
+    # clock step from inactivity, without moving the wall-clock deadline.
+    if ($gap > 30 || $gap < 0) {
+      $last_update += $gap;
+    }
+    $last_poll = $now;
+    # Timestamp received events after accounting for a gap, so a clock step
+    # cannot shift a fresh update into the future or past.
+    $last_update = $now if $progress;
+    $progress = 0;
+    my $remaining = $stall - ($now - $last_update);
     $stop->(125, "no progress for $stall s; stopped Grok (stalled)") if $remaining <= 0;
     $read_stream->($remaining < 2 ? $remaining : 2);
   }

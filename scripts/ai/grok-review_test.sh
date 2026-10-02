@@ -6,6 +6,8 @@ launcher=$(cd "$(dirname "$launcher")" && pwd)/$(basename "$launcher")
 export REAL_GIT=$(command -v git)
 REAL_PERL=$(command -v perl)
 export REAL_PERL
+REAL_CAT=$(command -v cat)
+export REAL_CAT
 original_path=$PATH
 failures=0
 CASE_DIR=
@@ -139,6 +141,42 @@ if (!$child) {
 open my $p, '>>', "$ENV{CASE_DIR}/out/pids" or die $!; print $p "$child\n"; close $p;
 exec @ARGV; die "exec: $!";
 FAKE
+  if [[ $mode == cleanup-* ]]; then
+    # Hold the report printer until the driver has signalled its parent.
+    cat > "$CASE_DIR/bin/cat" <<'FAKE'
+#!/usr/bin/env perl
+use strict; use warnings;
+if (@ARGV == 1 && $ARGV[0] =~ m{/report$}) {
+  my $out = "$ENV{CASE_DIR}/out";
+  open my $f, '>', "$out/report-printing" or die $!; close $f;
+  select undef, undef, undef, 0.01 while -d $out && !-e "$out/release-report";
+}
+exec $ENV{REAL_CAT}, @ARGV; die "exec: $!";
+FAKE
+    chmod +x "$CASE_DIR/bin/cat"
+  fi
+  if [[ $mode == stream-clock-* ]]; then
+    # Change only the supervisor clock, between its initial timestamp and
+    # first poll. The fake keeps producing progress on the real clock.
+    cat > "$CASE_DIR/bin/perl" <<'FAKE'
+#!/usr/bin/env bash
+if [[ ${1:-} == -e ]]; then
+  exec "$REAL_PERL" - "$@" <<'PERL'
+use strict; use warnings;
+my $jump = $ENV{MODE} eq 'stream-clock-backward' ? -60 : 60;
+$ARGV[1] =~ s/Time::HiRes::time\(\)/supervisor_time()/g
+  or die "clock fixture could not replace timestamps";
+$ARGV[1] =~ s/use Time::HiRes \(\);/use Time::HiRes (); my \$offset = 0; sub supervisor_time { Time::HiRes::time() + \$offset }/ == 1
+  or die "clock fixture could not install its clock";
+$ARGV[1] =~ s/^(  sigprocmask\(SIG_SETMASK, \$old\);)$/$1\n  \$offset = $jump;/m == 1
+  or die "clock fixture could not jump between polls";
+exec $ENV{REAL_PERL}, @ARGV; die "exec: $!";
+PERL
+fi
+exec "$REAL_PERL" "$@"
+FAKE
+    chmod +x "$CASE_DIR/bin/perl"
+  fi
   if [[ $mode == wall-clock ]]; then
     # Simulate elapsed wall time with an alarm that cannot fire. Change only
     # the supervisor, never the clock or the driver deadline.
@@ -184,10 +222,10 @@ if ($mode eq 'INT' || $mode eq 'TERM') {
   $| = 1;
   print "{\"type\":\"text\",\"data\":\"Before signal.\\n\"}\n";
 }
-if ($mode =~ /^stream-/ || $mode eq 'active-timeout') {
+if ($mode =~ /^(stream-|cleanup-)/ || $mode eq 'active-timeout') {
   $args{'--output-format'} eq 'streaming-json' or die "expected streaming-json";
   $| = 1;
-  if ($mode eq 'stream-success') {
+  if ($mode eq 'stream-success' || $mode =~ /^cleanup-/) {
     print <<'STREAM';
 {"type":"available_commands","commands":[]}
 {"type":"thought","data":"not report text"}
@@ -202,7 +240,7 @@ STREAM
     print "ta\":\"\\u65e5\\u672c\\u8a9e\\n\"}\n";
     print "{\"type\":\"usage\",\"input_tokens\":1}\n";
     print "{\"type\":\"end\",\"stopReason\":\"end_turn\"}\n";
-    exit 0;
+    exit($mode =~ /^cleanup-/ ? 42 : 0);
   }
   print "{\"type\":\"text\",\"data\":\"Opening.\\n\"}\n";
   my $until = Time::HiRes::time() + 2.5;
@@ -213,6 +251,7 @@ STREAM
   $SIG{TERM} = sub { mark('stopped-at', Time::HiRes::time()); exit 0 };
   mark('last-update', Time::HiRes::time());
   print "{\"type\":\"text\",\"data\":\"Still here.\\n\"}\n";
+  exit 0 if $mode =~ /^stream-clock-/;
   hold();
 }
 if ($mode eq 'exit-before-deadline' || $mode eq 'exit-before-stall') {
@@ -312,6 +351,10 @@ if ($ENV{MODE} =~ /^(INT|TERM)$/) { ($signal, $at) = ($1, 'ready') }
 elsif ($ENV{MODE} =~ /^early-(INT|TERM)$/) { ($signal, $at) = ($1, 'gh') }
 elsif ($ENV{MODE} =~ /^setup-(INT|TERM)$/) { ($signal, $at) = ($1, 'setup') }
 elsif ($ENV{MODE} eq 'setup-eof') { ($signal, $at) = ('KILL', 'setup') }
+elsif ($ENV{MODE} =~ /^cleanup-(INT|TERM)$/) {
+  ($signal, $at) = ($1, 'report-printing');
+  $ready_deadline = $deadline;
+}
 # The supervisor is the launcher's `perl -e` child; before it execs Grok, its
 # own child is still `perl -e` too.
 sub setup_child {
@@ -333,6 +376,7 @@ while (1) {
     my $target;
     if ($at eq 'ready') { $target = $pid if -e "$out/ready" }
     elsif ($at eq 'gh') { $target = $pid if -e "$out/gh" }
+    elsif ($at eq 'report-printing') { $target = $pid if -e "$out/report-printing" }
     elsif (defined(my $child = setup_child())) {
       # Record the setup child too: if it is stopped before exec, the fake
       # Grok never records it, and the leak check would not see it.
@@ -341,6 +385,10 @@ while (1) {
     }
     if (defined $target) {
       kill $signal, $target or die $!;
+      if ($at eq 'report-printing') {
+        select undef, undef, undef, 0.1;
+        open my $f, '>', "$out/release-report" or die $!; close $f;
+      }
       $signal = '';
     }
   }
@@ -392,9 +440,18 @@ DRIVER
           if grep -Eq 'timed out|did not finish|stalled|rerun once' "$CASE_DIR/out/stderr"; then
             fail 'completed Grok reported as a timeout or stall'
           fi ;;
-        stream-success)
+        stream-success|cleanup-*)
+          if [[ $mode == cleanup-* ]]; then
+            [[ -f $CASE_DIR/out/release-report ]] || fail 'cleanup signal not delivered'
+          fi
           printf 'Review: "ok" \\ path\n日本語\n' > "$CASE_DIR/out/expected"
           cmp -s "$CASE_DIR/out/expected" "$CASE_DIR/out/stdout" || fail 'report text changed' ;;
+        stream-clock-*)
+          printf 'Opening.\nStill here.\n' > "$CASE_DIR/out/expected"
+          cmp -s "$CASE_DIR/out/expected" "$CASE_DIR/out/stdout" || fail 'clock jump lost report text'
+          if grep -Eq 'timed out|stalled' "$CASE_DIR/out/stderr"; then
+            fail 'active Grok stopped after a clock jump'
+          fi ;;
         silent-stall|stream-stall)
           contains "$CASE_DIR/out/stderr" 'no progress for 1 s; stopped Grok (stalled)'
           contains "$CASE_DIR/out/stderr" 'rerun once using the invocation in docs/workflow/adversarial-review.md'
@@ -475,6 +532,10 @@ for value in 0 -1 01 1.5 abc 86401 999999999999999999999; do
   STALL_LIMIT=$value run_case "stall-$value" 1 stall-validation default 49
 done
 run_case stream-report-exact 0 stream-success default 49
+STALL_LIMIT=1 run_case progress-across-forward-clock-jump 0 stream-clock-forward default 49
+STALL_LIMIT=1 run_case progress-across-backward-clock-jump 0 stream-clock-backward default 49
+run_case cleanup-SIGINT-keeps-42 42 cleanup-INT default 49
+run_case cleanup-SIGTERM-keeps-42 42 cleanup-TERM default 49
 STALL_LIMIT=1 run_case silent-stall-125 125 silent-stall default 49
 STALL_LIMIT=1 run_case updates-then-stall-125 125 stream-stall default 49
 STALL_LIMIT=1 run_case active-timeout-124 124 active-timeout 4 49

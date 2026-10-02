@@ -239,7 +239,7 @@ func viewMessage(slug string, entry message.Entry) view.Message {
 	return view.Message{
 		ID: entry.ID, DisplayName: entry.DisplayName, Handle: entry.Handle,
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
-		TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
+		TopicID: entry.TopicID, TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
 		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID),
 	}
 }

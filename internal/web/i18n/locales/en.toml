@@ -174,3 +174,33 @@ other = "Topics (first 50 by name)"
 
 ["topic.branch_notice"]
 other = "Moved {count} to “{topic}”"
+
+["topic.branch_select"]
+other = "Select"
+
+["topic.branch_to"]
+other = "Destination (first 50 topics)"
+
+["topic.branch_new"]
+other = "New topic name"
+
+["topic.branch_submit"]
+other = "Move selected messages"
+
+["topic.branch_help"]
+other = "Select 1–100 messages from one topic. Choose an existing destination or enter a new name; leave the name empty for an existing topic."
+
+["topic.branch_mixed"]
+other = "Select messages from only one source topic. Nothing was moved."
+
+["topic.branch_conflict"]
+other = "A selected message has already moved or is outside the expected source topic. Nothing was moved. Reload and select again."
+
+["topic.branch_invalid"]
+other = "Select 1–100 distinct messages from one topic and a different destination: an existing topic or a new name, not both. Nothing was moved."
+
+["topic.branch_name_taken"]
+other = "A topic with this name already exists. Choose it as the destination or use another name."
+
+["topic.branch_name_invalid"]
+other = "Enter a topic name of 1–80 printable characters."

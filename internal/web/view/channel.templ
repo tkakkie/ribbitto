@@ -17,6 +17,7 @@ type ChannelPage struct {
 	Channels                  []domain.Channel
 	Name, Error               string
 	Body, BodyError           string
+	BranchError, BranchName   string
 	Messages                  []Message
 	// PostedMessageID correlates a successful enhanced post with stream delivery.
 	PostedMessageID *domain.ID
@@ -174,11 +175,13 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 					}
 				</div>
 				<div id="message-status" role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
+				@branchForm(page)
 				@MessageComposer(page)
 			</main>
 		</div>
 		// Every channel page loads these, outside #conversation: htmx will not
 		// run scripts in swapped fragments.
+		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v3.js" nonce={ templ.GetNonce(ctx) }></script>

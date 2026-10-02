@@ -29,6 +29,7 @@ func testServices(overrides ...func(*Services)) Services {
 		Messages: fakeMessages{},
 		Posting:  testPoster(),
 	}
+	s.Branching = topic.NewBrancher(&fakeBranchStore{}, nil)
 	for _, override := range overrides {
 		override(&s)
 	}

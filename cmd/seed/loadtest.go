@@ -19,6 +19,7 @@ type accountTokens struct {
 
 func validateRun(messages, channels, members, streams, perAccount, sessions int, loadTest bool, output string) (int, error) {
 	const maxWork = 100000 // One budget for all sessions and messages, including fixture accounts.
+	budget := maxWork
 	accounts := members
 	if messages < 1 {
 		return 0, fmt.Errorf("messages N must be positive")
@@ -30,9 +31,10 @@ func validateRun(messages, channels, members, streams, perAccount, sessions int,
 		accounts = max(members, 1+(streams-1)/perAccount)
 	} else {
 		sessions = 0
+		budget -= topicFixtureMessages
 	}
 	// Divide before multiplying so even maximum-int flags cannot overflow.
-	if messages > maxWork/channels || (sessions > 0 && accounts > (maxWork-messages*channels)/sessions) {
+	if messages > budget/channels || (sessions > 0 && accounts > (budget-messages*channels)/sessions) {
 		return 0, fmt.Errorf("seed exceeds the %d total sessions and messages limit", maxWork)
 	}
 	return accounts, nil

@@ -32,6 +32,7 @@ cmd/seed -> internal/app/channel
 cmd/seed -> internal/app/message
 cmd/seed -> internal/app/setup
 cmd/seed -> internal/app/signup
+cmd/seed -> internal/app/topic
 cmd/seed -> internal/domain
 cmd/seed -> internal/infra/postgres
 internal/app/auth -> internal/domain

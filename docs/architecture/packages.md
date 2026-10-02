@@ -10,8 +10,8 @@ package's responsibility or an allowed import changes.
 `cmd/ribbitto` is the server composition root: it reads configuration,
 builds the concrete implementations and wires them together. `cmd/seed` is
 a second, development-only composition root: it wires PostgreSQL stores
-into setup, sign-up, authorization, channel and posting use cases to create
-[synthetic conversations](../database.md#development-seed-data). It never
+into setup, sign-up, authorization, channel, posting and topic branching
+use cases to create [synthetic conversations](../database.md#development-seed-data). It never
 imports `db/migrations`; the database must already be migrated.
 `cmd/loadgen` is a development-only HTTP client; it imports no application
 packages. See [load client](load-client.md) for limits and usage.

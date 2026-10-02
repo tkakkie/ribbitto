@@ -121,6 +121,14 @@ func TestLoadTestSeed(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := readSnapshot(t, pool)
+	if len(got.Topics) != 4 {
+		t.Fatalf("load-test topics: %v", got.Topics)
+	}
+	for _, topic := range got.Topics {
+		if topic.Name != "" {
+			t.Fatalf("load-test mode added a named topic: %v", topic)
+		}
+	}
 	if file.OrganizationSlug != "paper-lantern" || len(file.Accounts) != 19 || len(got.Members) != 19 || len(file.ChannelIDs) != 4 || len(got.Messages) != 4 {
 		t.Fatal("unexpected manifest or database counts")
 	}

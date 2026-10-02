@@ -94,12 +94,10 @@ CI rejects generation changes to committed files. Never edit generated files.
 
 ## Development seed data
 
-`cmd/seed` is for an empty, disposable development database only. As a
-guard, it refuses, before connecting, any `RIBBITTO_DATABASE_URL` whose host
-(fallback hosts included) is not `localhost`, `127.0.0.1` or `::1`. The
-allowlist checks the address, not what serves it: a loopback port can still
-lead to a local production database or a tunnel to a remote one, so point
-it only at a database you can throw away.
+`cmd/seed` requires an empty, disposable development database. Before
+connecting, it refuses `RIBBITTO_DATABASE_URL` hosts (including fallbacks)
+other than `localhost`, `127.0.0.1` or `::1`. Loopback can still reach a
+local production database or a remote tunnel; use only a disposable one.
 With `RIBBITTO_DATABASE_URL` exported:
 
 ```sh
@@ -107,13 +105,26 @@ go run ./cmd/ribbitto migrate up
 go run ./cmd/seed -messages 20000
 ```
 
-`-messages N` is the positive number of messages **per channel** (default
-100). The command creates Paper Lantern Studio (`paper-lantern`), five
-fictional members, and four channels including `general`. Every run
-generates a new random password for all seeded members and prints it, with
-the owner's address, when it finishes: sign in as `mira@example.test`
-(owner), or another script handle at `example.test`, with that password.
-Nothing fixed or published signs in.
+`-messages N` is the positive number of scripted messages **per channel**
+before topic fixtures (default 100). The command creates Paper Lantern
+Studio (`paper-lantern`), five fictional members and four channels including
+`general`. Each run prints a fresh random password shared by its members:
+sign in as `mira@example.test` (owner), or another script handle at
+`example.test`. Nothing fixed or published signs in.
+
+Development mode then adds `rooftop-garden` and `garden-time` in `general`.
+`topic.Brancher.Branch` moves one extra script message into each, leaving
+notices and durable `messages.moved` events for replay.
+`message.Service.PostToTopic` adds `message.PageSize + 10` (60) more posts
+to `rooftop-garden`: 64 extra messages including notices, also with
+`-messages 1`. The original N posts remain in each default topic.
+
+After seeding, run `make dev`, sign in at `http://localhost:8080/` and open
+`general` to see the notices and topic labels. Select `rooftop-garden`
+from the sidebar to see **Load older** (61 messages; 11 on the older page),
+or `garden-time` for one branched message. Topic URLs are
+`/organizations/paper-lantern/channels/<channelID>/topics/<topicID>`;
+IDs vary per run.
 
 For load tests on a disposable machine, add `-streams 300
 -streams-per-account 16 -sessions-per-account 2 -output /tmp/loadtest.json`
@@ -123,8 +134,11 @@ The command creates `max(5, ceil(streams / cap))` accounts in the same
 organisation, including the five fictional members: 300 / 16 needs 19,
 so it adds 14. Sessions per account default to 1; multiple sessions still
 share that account's stream cap. Without load-test flags, no sessions or
-credential file are created. All runs limit total messages across channels
-plus accounts × sessions to 100,000, checked without overflow before writes.
+credential file are created. Load-test mode adds no named topics or topic
+fixtures; each channel still gets its default topic. All runs limit total
+messages (including development fixtures and notices) plus accounts ×
+sessions to 100,000, checked without overflow before writes. With four
+channels, development mode therefore accepts at most `-messages 24984`.
 
 The named JSON file is created exclusively with mode `0600`; existing files
 and paths inside Git repositories (including worktrees) are refused before
@@ -142,13 +156,12 @@ drop the disposable database and delete the credential file, which may be
 empty or incomplete on failure. Start again with a fresh migrated database;
 deleting the file alone does not invalidate sessions.
 
-The embedded `cmd/seed/conversations.json` contains English and Japanese
-exchanges, Unicode names, and message-layout edge cases. Have a person
-review every script before committing it. Each channel's exchange repeats
-in file order, stopping at N posts; the final exchange may be partial.
-The same flags produce the same members, channels, bodies, authors and
-posting order. Generated IDs, timestamps and password hashes may differ.
-Messages are posted now, with no backdating, through the existing use cases.
+`cmd/seed/conversations.json` contains English and Japanese exchanges,
+Unicode names and layout edge cases. Have a person review scripts before
+committing. Exchanges repeat in file order until N posts, possibly ending
+partway through. Identical flags reproduce members, channels, bodies,
+authors and order; IDs, timestamps and hashes vary. Existing use cases
+post messages now, without backdating.
 
 Completed setup makes the command refuse all writes, including on rerun.
 Each use case commits separately: after an interrupted seed, discard the

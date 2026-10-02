@@ -33,6 +33,19 @@ func waitAsync(ctx context.Context, h *Hub, org domain.ID, after int64) <-chan e
 	return done
 }
 
+// waitForHubWaiters blocks until n calls of Wait for org are blocked, each
+// holding the channel the next raise closes.
+func waitForHubWaiters(t *testing.T, h *Hub, org domain.ID, n int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for h.Waiting(org) != n {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d waiters blocked, want %d", h.Waiting(org), n)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestWaitReturnsOnlyAboveCursor(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -88,26 +101,26 @@ func TestRaiseWakesEveryWaiter(t *testing.T) {
 		results[i] = waitAsync(ctx, h, orgA, 0)
 	}
 	other := waitAsync(ctx, h, orgB, 0)
-	// Give the waiters time to reach their blocking select; none may have
-	// returned yet, so the raise below is what wakes them.
-	time.Sleep(blocked)
-	for i, done := range results {
-		select {
-		case err := <-done:
-			t.Fatalf("waiter %d returned %v before the raise", i, err)
-		default:
-		}
-	}
+	// Every waiter is blocked holding the channel the raise closes, so the
+	// raise below is what wakes them, not Wait's immediate return.
+	waitForHubWaiters(t, h, orgA, waiters)
+	waitForHubWaiters(t, h, orgB, 1)
 	h.Raise(orgA, 1)
 	for i, done := range results {
 		if err := <-done; err != nil {
 			t.Fatalf("waiter %d: Wait = %v, want nil", i, err)
 		}
 	}
-	select {
-	case err := <-other:
-		t.Fatalf("waiter of another organisation returned %v", err)
-	case <-time.After(blocked):
+	if n := h.Waiting(orgA); n != 0 {
+		t.Fatalf("%d waiters of orgA still blocked after the raise", n)
+	}
+	// The other organisation's waiter is still blocked: it never returned.
+	if n := h.Waiting(orgB); n != 1 {
+		t.Fatalf("%d waiters of orgB blocked, want 1", n)
+	}
+	cancel()
+	if err := <-other; !errors.Is(err, context.Canceled) {
+		t.Fatalf("waiter of another organisation: Wait = %v, want it to block until cancelled", err)
 	}
 }
 

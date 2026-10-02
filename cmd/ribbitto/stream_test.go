@@ -168,22 +168,6 @@ func noEvent(t *testing.T, events <-chan sseEvent, within time.Duration) {
 	}
 }
 
-// drain reads whatever the stream replays first, until it has been quiet
-// for a moment.
-func drain(t *testing.T, events <-chan sseEvent) {
-	t.Helper()
-	for {
-		select {
-		case _, ok := <-events:
-			if !ok {
-				t.Fatal("stream ended while draining")
-			}
-		case <-time.After(300 * time.Millisecond):
-			return
-		}
-	}
-}
-
 // streamEndsWithin waits for the server to end the stream, ignoring any events
 // still in flight.
 func streamEndsWithin(t *testing.T, events <-chan sseEvent, within time.Duration) {
@@ -320,7 +304,7 @@ func TestEventStream(t *testing.T) {
 	if e := nextEvent(t, memberEvents); !strings.Contains(e.data, "after idle") {
 		t.Fatalf("after idle: %+v", e)
 	}
-	nextEvent(t, events)
+	last := nextEvent(t, events)
 
 	// Sessions end their streams (#207). The owner signs in on two more
 	// browsers; each has its own session and stream.
@@ -328,10 +312,16 @@ func TestEventStream(t *testing.T) {
 	for _, b := range []acceptanceBrowser{laptop, phone} {
 		b.visit(t, "POST", "/signin", acceptanceForm("owner"), 303)
 	}
-	laptopEvents, _ := openStream(t, on(laptop, streams), channelURL, "0")
-	phoneEvents, _ := openStream(t, on(phone, streams), channelURL, "0")
-	drain(t, laptopEvents)
-	drain(t, phoneEvents)
+	// Both open from the last id already delivered, so nothing is replayed
+	// and the next event each gets is the next post.
+	laptopEvents, status := openStream(t, on(laptop, streams), channelURL, last.id)
+	if status != http.StatusOK {
+		t.Fatalf("laptop's stream: %d", status)
+	}
+	phoneEvents, status := openStream(t, on(phone, streams), channelURL, last.id)
+	if status != http.StatusOK {
+		t.Fatalf("phone's stream: %d", status)
+	}
 	// Signing out on the laptop ends the laptop's stream at once; the
 	// phone's, another session of the same account, stays and still gets
 	// the next post.

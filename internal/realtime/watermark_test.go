@@ -203,8 +203,16 @@ func TestWatermarkDeliversAnUnannouncedCommit(t *testing.T) {
 	}
 	defer unregister()
 	send := newRecorder()
-	runAsync(streamCtx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 0, send)
-	send.waitFor(t, 1) // caught up; the stream now waits on the hub
+	done := runAsync(streamCtx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 0, send)
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	send.waitFor(t, 1)
+	// Caught up and blocked in the hub: only a raise can wake the stream now,
+	// so the delivery below proves the watermark's raise, not a read the
+	// stream made before it waited.
+	waitForHubWaiters(t, hub, orgA, 1)
 
 	ticks := make(chan time.Time)
 	go Watermark{Hub: hub, Sequences: seqs}.Run(ctx, ticks)

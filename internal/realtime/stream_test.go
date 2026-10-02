@@ -32,6 +32,9 @@ type fakeLog struct {
 	failOn   int
 	err      error
 	maxReads int
+	// boundary is the replay boundary: a read after a lower cursor returns
+	// domain.ErrCursorExpired, as the PostgreSQL reader does.
+	boundary int64
 }
 
 var errTooManyReads = errors.New("fakeLog: too many reads")
@@ -46,6 +49,9 @@ func (l *fakeLog) EventsAfter(_ context.Context, org domain.ID, after int64, lim
 	if l.maxReads > 0 && l.calls > l.maxReads {
 		return nil, errTooManyReads
 	}
+	if after < l.boundary {
+		return nil, domain.ErrCursorExpired
+	}
 	var out []domain.Event
 	for _, e := range l.events {
 		if e.OrganizationID == org && e.Seq > after && len(out) < limit {
@@ -59,6 +65,12 @@ func (l *fakeLog) readCount() int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.calls
+}
+
+func (l *fakeLog) expire(boundary int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.boundary = boundary
 }
 
 func (l *fakeLog) append(events ...domain.Event) {
@@ -601,4 +613,76 @@ func TestStreamResetsOnAGap(t *testing.T) {
 			}
 		})
 	}
+}
+
+// cancelOnRead cancels the stream's context during the read, as an ended
+// session would, before the read reports its result.
+type cancelOnRead struct {
+	log    *fakeLog
+	cancel context.CancelCauseFunc
+	cause  error
+}
+
+func (c cancelOnRead) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+	c.cancel(c.cause)
+	return c.log.EventsAfter(ctx, org, after, limit)
+}
+
+// A cursor below the replay boundary gets one reset with the cursor
+// unchanged and nothing delivered (#161), without a database: at the
+// boundary the cursor is still valid, and an open stream whose next read
+// falls below a boundary raised meanwhile resets too. A stream whose
+// context ended while the reset was due sends nothing.
+func TestStreamResetsBelowTheBoundary(t *testing.T) {
+	t.Run("at the boundary", func(t *testing.T) {
+		log := &fakeLog{boundary: 5, events: []domain.Event{posted(6, channelA)}}
+		ctx, cancel := context.WithCancel(t.Context())
+		send := newRecorder()
+		done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 5, send)
+		send.waitFor(t, 6)
+		cancel()
+		if got := <-done; got.cursor != 6 || !errors.Is(got.err, context.Canceled) {
+			t.Fatalf("Run = %d, %v; want 6, context.Canceled", got.cursor, got.err)
+		}
+	})
+	t.Run("below the boundary", func(t *testing.T) {
+		log := &fakeLog{boundary: 5, events: []domain.Event{posted(6, channelA)}}
+		send := newRecorder()
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		got := <-runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 4, send)
+		if got.err != nil || got.cursor != 4 || !slices.Equal(send.ids(), []int64{4}) {
+			t.Fatalf("Run = %d, %v, sent %v; want 4, nil and only the reset (id 4)", got.cursor, got.err, send.ids())
+		}
+	})
+	t.Run("an open stream's next read falls below", func(t *testing.T) {
+		hub := NewHub()
+		log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+		send := newRecorder()
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 0, send)
+		send.waitFor(t, 1)
+		waitForHubWaiters(t, hub, orgA, 1)
+		// Retention expires the log past the stream's cursor, then a new
+		// event wakes it.
+		log.expire(5)
+		log.append(posted(2, channelA), posted(3, channelA), posted(4, channelA), posted(5, channelA), posted(6, channelA))
+		hub.Raise(orgA, 6)
+		got := <-done
+		if got.err != nil || got.cursor != 1 || !slices.Equal(send.ids(), []int64{1, 1}) {
+			t.Fatalf("Run = %d, %v, sent %v; want 1, nil and event 1 then a reset with id 1", got.cursor, got.err, send.ids())
+		}
+	})
+	t.Run("the context ends while the reset is due", func(t *testing.T) {
+		cause := errors.New("session ended")
+		ctx, cancel := context.WithCancelCause(t.Context())
+		defer cancel(nil)
+		log := cancelOnRead{log: &fakeLog{boundary: 5}, cancel: cancel, cause: cause}
+		send := newRecorder()
+		cursor, err := Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}.Run(ctx, sub, 4, send)
+		if cursor != 4 || !errors.Is(err, cause) || len(send.ids()) != 0 {
+			t.Fatalf("Run = %d, %v, sent %v; want 4, %v and nothing sent", cursor, err, send.ids(), cause)
+		}
+	})
 }

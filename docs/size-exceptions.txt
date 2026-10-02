@@ -1,3 +1,4 @@
 # Documents over their size limit, each with the issue that will split it.
 # Format: <path> #<issue>. docscheck (make check) fails when a listed file is
 # back under its limit, so remove the line with the split.
+docs/architecture/streaming.md #322

@@ -695,3 +695,40 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 		}
 	})
 }
+
+// A topic subscription delivers only its topic's messages, read from the
+// shared render; other topics' events are skipped without authorization
+// and still move the cursor (#304).
+func TestStreamTopicSubscriptionSkipsOtherTopics(t *testing.T) {
+	topicA, topicB := domain.ID{0x7a}, domain.ID{0x7b}
+	topics := map[int64]domain.ID{1: topicA, 2: topicB, 3: topicA}
+	renderTopic := func(e domain.Event) (Outgoing, error) {
+		out, err := render(e)
+		out.Topic = topics[e.Seq]
+		return out, err
+	}
+	var authorized []int64
+	authorize := func(e domain.Event) (bool, error) {
+		authorized = append(authorized, e.Seq)
+		return true, nil
+	}
+	log := &fakeLog{events: []domain.Event{posted(1, channelA), posted(2, channelA), posted(3, channelA)}}
+	topicSub := sub
+	topicSub.Topic = &topicA
+	ctx, cancel := context.WithCancel(t.Context())
+	send := newRecorder()
+	done := make(chan result, 1)
+	go func() {
+		c, err := Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(renderTopic)}.Run(ctx, topicSub, 0, send)
+		done <- result{c, err}
+	}()
+	send.waitFor(t, 1, 3)
+	cancel()
+	got := <-done
+	if got.cursor != 3 || !errors.Is(got.err, context.Canceled) {
+		t.Fatalf("Run = %d, %v; want 3, context.Canceled", got.cursor, got.err)
+	}
+	if !slices.Equal(authorized, []int64{1, 3}) {
+		t.Fatalf("authorized %v, want only the topic's events", authorized)
+	}
+}

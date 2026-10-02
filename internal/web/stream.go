@@ -11,6 +11,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -58,9 +59,9 @@ const DefaultMaxStreamsPerAccount = 16
 // the write deadline.
 const DefaultStreamHeartbeat = 20 * time.Second
 
-// events serves GET …/channels/{channelID}/events: the channel's events after
-// the client's cursor, as Server-Sent Events, until the client goes away or
-// delivery fails. The organisation and account come from the URL and the
+// events serves GET …/channels/{channelID}/events, and …/topics/{topicID}/events
+// for one topic of the channel: its events after the client's cursor, as
+// Server-Sent Events, until the client goes away or delivery fails. The organisation and account come from the URL and the
 // session; the cursor is Last-Event-ID if the browser sends one (it does on
 // its own reconnects), otherwise ?after.
 func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Membership) {
@@ -87,6 +88,26 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 	if err != nil {
 		serverError(w, r, "finding channel", err)
 		return
+	}
+	// A topic stream checks its topic before anything is sent: an unknown
+	// topic, or one of another channel, is 404 like a non-member.
+	var topicID *domain.ID
+	if raw := r.PathValue("topicID"); raw != "" {
+		selected, ok := pathID(raw)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		_, err := p.topics.GetTopic(r.Context(), m.Organization.ID, c.ID, selected)
+		if errors.Is(err, topic.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			serverError(w, r, "finding topic", err)
+			return
+		}
+		topicID = &selected
 	}
 	after, ok := streamCursor(r)
 	if !ok {
@@ -142,7 +163,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 		Renderer:  messageRenderer{messages: p.messages, membership: m, renders: p.renders},
 		Heartbeat: heartbeat,
 	}
-	sub := realtime.Subscription{Organization: m.Organization.ID, OrganizationSlug: m.Organization.Slug, Account: account.ID, Channel: c.ID}
+	sub := realtime.Subscription{Organization: m.Organization.ID, OrganizationSlug: m.Organization.Slug, Account: account.ID, Channel: c.ID, Topic: topicID}
 	cursor, err := stream.Run(ctx, sub, after, send)
 	if err != nil && ctx.Err() == nil {
 		// Neither the client nor the session went away: delivery failed.

@@ -42,13 +42,15 @@ type Sender interface {
 }
 
 // Subscription is what one connection asked for: an organisation's channel,
-// on behalf of an account. The organisation and account come from the URL
-// and the session, never from the client's request body.
+// or one topic in it, on behalf of an account. The organisation and account
+// come from the URL and the session, never from the client's request body.
 type Subscription struct {
 	Organization     domain.ID
 	OrganizationSlug string
 	Account          domain.ID
 	Channel          domain.ID
+	// Topic, when set, narrows the channel to one topic (a topic view).
+	Topic *domain.ID
 }
 
 // Outgoing is one event ready to send. ID is the event's sequence, which the
@@ -57,6 +59,10 @@ type Outgoing struct {
 	ID   int64
 	Name string
 	Data []byte
+	// Topic is the message's topic as the shared render read it. It is
+	// never sent; a topic subscription skips events of other topics by it,
+	// so filtering costs no read per stream (#304).
+	Topic domain.ID
 }
 
 // DefaultBatchSize bounds how many events one read returns.
@@ -186,6 +192,12 @@ func (s Stream) deliver(ctx context.Context, sub Subscription, event domain.Even
 	out, err := s.Renderer.Render(ctx, sub, event)
 	if err != nil {
 		return false, fmt.Errorf("rendering event %d: %w", event.Seq, err)
+	}
+	// The posting event carries IDs only, so the topic comes from the shared
+	// render. A message moved since may still render with its old topic;
+	// branching's move events correct topic views (#306), as for labels.
+	if sub.Topic != nil && out.Topic != *sub.Topic {
+		return false, nil
 	}
 	allowed, err := s.Authorizer.MayReceive(ctx, sub.Account, sub.OrganizationSlug, event)
 	if err != nil {

@@ -2,7 +2,8 @@
 
 ## Server-Sent Events
 
-One SSE connection per latest channel page (M3), carrying named events:
+One SSE connection per latest channel page (M3) or topic page (#304),
+carrying named events:
 `message` and `reset` today; `presence`, `typing` and `unread` are planned
 (M4). The browser sends everything else as ordinary POST requests. One
 process serves every stream; several server processes are future work (the
@@ -54,7 +55,14 @@ sequenceDiagram
   `context.Cause` tells why a connection ended.
 - **The loop** is `realtime.Stream.Run` (#209). Another channel's event, a
   kind it does not deliver and an explicit deny from `authz.MayReceive` are
-  skipped and the cursor moves past them. An error from the reader, the
+  skipped and the cursor moves past them.
+- **A topic page** subscribes to one topic of the channel
+  (`…/topics/{topicID}/events`; an unknown topic, or another channel's, is
+  404 before the stream opens). A message of another topic is skipped, by
+  the topic the shared render read, so the filter adds no read per stream
+  per event; a message moved since may still arrive under its old topic,
+  and branching's move events correct the view (#306). The cursor, replay
+  and `reset` rules are the channel page's. An error from the reader, the
   authorization check itself, the renderer or the sender stops the loop
   with the cursor before that event, so a reconnect resumes there; a failed
   membership lookup is never a deny. A render error stops the loop even for

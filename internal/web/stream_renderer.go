@@ -58,6 +58,6 @@ func (r messageRenderer) Render(ctx context.Context, _ realtime.Subscription, ev
 		if err := view.LiveMessageItem(viewMessage(r.membership.Organization.Slug, entry)).Render(loadCtx, &html); err != nil {
 			return realtime.Outgoing{}, fmt.Errorf("rendering message: %w", err)
 		}
-		return realtime.Outgoing{ID: event.Seq, Name: "message", Data: html.Bytes()}, nil
+		return realtime.Outgoing{ID: event.Seq, Name: "message", Data: html.Bytes(), Topic: entry.TopicID}, nil
 	})
 }

@@ -153,7 +153,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				if w.Code != 303 || w.Header().Get("Location") != path {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())
 				}
-			case "GET /channels/{channelID}/events":
+			case "GET /channels/{channelID}/events", "GET /channels/{channelID}/topics/{topicID}/events":
 				// This suite runs without Services.Stream, so a member gets the
 				// stream-off 404 after authorisation; the stream itself is
 				// tested through the production wiring in cmd/ribbitto.
@@ -216,7 +216,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 		latest := get("GET", topicURL, aliceToken, now)
 		body := latest.Body.String()
-		if latest.Code != 200 || strings.Count(body, `<li id="message-`) != 50 || strings.Contains(body, "topic-message-00") || !strings.Contains(body, "topic-message-50") || strings.Contains(body, "posted through the page") || strings.Contains(body, "sse-connect=") || strings.Contains(body, "hx-post=") || !strings.Contains(body, `action="`+topicURL+`"`) {
+		if latest.Code != 200 || strings.Count(body, `<li id="message-`) != 50 || strings.Contains(body, "topic-message-00") || !strings.Contains(body, "topic-message-50") || strings.Contains(body, "posted through the page") || !strings.Contains(body, `sse-connect="`+topicURL+`/events?after=`) || strings.Contains(body, "hx-post=") || !strings.Contains(body, `action="`+topicURL+`"`) {
 			t.Fatalf("latest topic: %d %s", latest.Code, body)
 		}
 		// The open topic, and only it, is the current link (Copilot on #320).

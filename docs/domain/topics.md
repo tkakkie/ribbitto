@@ -10,8 +10,8 @@ that counts messages per topic. It was settled in
 these rules change. The *Model* and *Tables* below exist (#301, #307):
 every channel has its default topic and every message a topic, and posting
 goes to the default topic, and a topic view posts into its topic. Feed
-labels, topic views, posting into a topic and a bounded topic list exist;
-live topic updates (#304) and branching (#305) follow. `db/migrations/` is the
+labels, topic views with live updates (#304), posting into a topic and a
+bounded topic list exist; branching (#305) follows. `db/migrations/` is the
 schema source of truth.
 
 ## Model
@@ -74,7 +74,8 @@ schema source of truth.
 - **Topic view** — one topic's messages, paged by `event_seq` the same way
   as channel history ([`messages.md`](messages.md#older-pages)). Its plain
   composer posts into that topic and redirects back; invalid bodies preserve
-  the draft (422). Live updates are planned (#304).
+  the draft (422). Its latest page updates live through a stream of that
+  topic only ([streaming](../architecture/streaming.md)); older pages do not.
 - The channel sidebar links to at most 50 topics: default first, then
   case-insensitive name order with ID as a tie-breaker.
 - A topic in a URL is scoped by the organisation and channel in the same

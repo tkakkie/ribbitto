@@ -24,7 +24,8 @@ type ChannelPage struct {
 	Older bool
 	// Before is the event_seq bound of an older page; 0 shows the latest.
 	Before int64
-	// EventCursor starts replay after the latest feed snapshot; nil on older or topic pages.
+	// EventCursor starts replay after the latest page's snapshot, the feed's or
+	// a topic's; nil on older pages.
 	EventCursor *int64
 }
 
@@ -74,7 +75,7 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 			if page.EventCursor != nil && page.Before == 0 {
 				data-event-cursor={ fmt.Sprint(*page.EventCursor) }
 				hx-ext="sse"
-				sse-connect={ fmt.Sprintf("%s/events?after=%d", ChannelURL(page.Organization.Slug, page.Current.ID), *page.EventCursor) }
+				sse-connect={ fmt.Sprintf("%s/events?after=%d", conversationURL(page), *page.EventCursor) }
 			}
 			class="flex h-dvh text-body"
 		>

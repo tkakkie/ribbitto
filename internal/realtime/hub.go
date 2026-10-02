@@ -149,9 +149,11 @@ func (h *Hub) Wait(ctx context.Context, org domain.ID, after int64) (int64, erro
 	}
 }
 
-// Waiting reports how many calls of Wait for the organisation are blocked,
-// each holding the channel the next raise closes, so tests can synchronise
-// on it instead of sleeping.
+// Waiting reports how many calls of Wait for the organisation are counted
+// as blocked, so tests can synchronise on it instead of sleeping. A call is
+// counted once it holds the channel the next raise closes; after a raise it
+// stays counted until it runs its decrement, so read the count only while
+// no raise is in flight.
 func (h *Hub) Waiting(org domain.ID) int {
 	h.mu.Lock()
 	defer h.mu.Unlock()

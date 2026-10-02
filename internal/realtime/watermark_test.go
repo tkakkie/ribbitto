@@ -215,7 +215,12 @@ func TestWatermarkDeliversAnUnannouncedCommit(t *testing.T) {
 	waitForHubWaiters(t, hub, orgA, 1)
 
 	ticks := make(chan time.Time)
-	go Watermark{Hub: hub, Sequences: seqs}.Run(ctx, ticks)
+	var worker sync.WaitGroup
+	worker.Go(func() { Watermark{Hub: hub, Sequences: seqs}.Run(ctx, ticks) })
+	t.Cleanup(func() {
+		cancel()
+		worker.Wait()
+	})
 	tick := func() {
 		t.Helper()
 		select {

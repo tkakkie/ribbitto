@@ -94,13 +94,27 @@ func TestWaitAfterRaiseBetweenReadAndWait(t *testing.T) {
 func TestRaiseWakesEveryWaiter(t *testing.T) {
 	h := NewHub()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
+	// Every waiter is joined however the test ends, without reading the
+	// results the test itself reads.
+	var wg sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
+	wait := func(org domain.ID) <-chan error {
+		done := make(chan error, 1)
+		wg.Go(func() {
+			_, err := h.Wait(ctx, org, 0)
+			done <- err
+		})
+		return done
+	}
 	const waiters = 50
 	results := make([]<-chan error, waiters)
 	for i := range results {
-		results[i] = waitAsync(ctx, h, orgA, 0)
+		results[i] = wait(orgA)
 	}
-	other := waitAsync(ctx, h, orgB, 0)
+	other := wait(orgB)
 	// Every waiter is blocked holding the channel the raise closes, so the
 	// raise below is what wakes them, not Wait's immediate return.
 	waitForHubWaiters(t, h, orgA, waiters)

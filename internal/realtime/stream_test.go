@@ -102,6 +102,7 @@ func render(e domain.Event) (Outgoing, error) {
 type recorder struct {
 	mu     sync.Mutex
 	sent   []int64
+	names  []string
 	failOn int64
 	err    error
 	change chan struct{}
@@ -139,8 +140,16 @@ func (r *recorder) Send(_ context.Context, out Outgoing) error {
 		return r.err
 	}
 	r.sent = append(r.sent, out.ID)
+	r.names = append(r.names, out.Name)
 	r.change <- struct{}{}
 	return nil
+}
+
+// eventNames returns the SSE event name of each send, in order.
+func (r *recorder) eventNames() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.names)
 }
 
 func (r *recorder) ids() []int64 {
@@ -651,8 +660,8 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
 		got := <-runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 4, send)
-		if got.err != nil || got.cursor != 4 || !slices.Equal(send.ids(), []int64{4}) {
-			t.Fatalf("Run = %d, %v, sent %v; want 4, nil and only the reset (id 4)", got.cursor, got.err, send.ids())
+		if got.err != nil || got.cursor != 4 || !slices.Equal(send.ids(), []int64{4}) || !slices.Equal(send.eventNames(), []string{"reset"}) {
+			t.Fatalf("Run = %d, %v, sent %v %v; want 4, nil and only a reset with id 4", got.cursor, got.err, send.eventNames(), send.ids())
 		}
 	})
 	t.Run("an open stream's next read falls below", func(t *testing.T) {
@@ -670,8 +679,8 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 		log.append(posted(2, channelA), posted(3, channelA), posted(4, channelA), posted(5, channelA), posted(6, channelA))
 		hub.Raise(orgA, 6)
 		got := <-done
-		if got.err != nil || got.cursor != 1 || !slices.Equal(send.ids(), []int64{1, 1}) {
-			t.Fatalf("Run = %d, %v, sent %v; want 1, nil and event 1 then a reset with id 1", got.cursor, got.err, send.ids())
+		if got.err != nil || got.cursor != 1 || !slices.Equal(send.ids(), []int64{1, 1}) || !slices.Equal(send.eventNames(), []string{"message", "reset"}) {
+			t.Fatalf("Run = %d, %v, sent %v %v; want 1, nil and message 1 then a reset with id 1", got.cursor, got.err, send.eventNames(), send.ids())
 		}
 	})
 	t.Run("the context ends while the reset is due", func(t *testing.T) {

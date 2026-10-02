@@ -48,7 +48,7 @@ invariant changes. Keep the numbers stable: other documents cite them.
 
    Sign-up's duplicate-email response is an accepted trade-off
    ([decision 13](../decisions/13-sign-up-may-reveal-that-an-email-address-is-registered.md)).
-9. *(planned)* **Every channel message is in exactly one topic of its own
+9. **Every channel message is in exactly one topic of its own
    channel, and every channel has exactly one default topic.** Composite
    foreign keys keep both in the same organisation and channel; branching
    moves messages, never copies them, and keeps their `id` and `event_seq`

@@ -233,7 +233,9 @@ func TestAccountsAcceptance(t *testing.T) {
 
 	_, err = pool.Exec(t.Context(), "INSERT INTO organization (slug, name) VALUES ('other', 'Hidden second organisation')")
 	acceptanceOK(t, err)
-	_, err = pool.Exec(t.Context(), "INSERT INTO channel (organization_id, name, is_default) SELECT id, 'general', true FROM organization WHERE slug = 'other'")
+	// A channel needs its default topic in the same statement (decision 21).
+	_, err = pool.Exec(t.Context(), `WITH c AS (INSERT INTO channel (organization_id, name, is_default) SELECT id, 'general', true FROM organization WHERE slug = 'other' RETURNING *)
+		INSERT INTO topic (id, organization_id, channel_id, is_default) SELECT default_topic_id, organization_id, id, true FROM c`)
 	acceptanceOK(t, err)
 	// Move the registered member so both directions of isolation are exercised.
 	_, err = pool.Exec(t.Context(), `UPDATE member SET organization_id = (SELECT id FROM organization WHERE slug = 'other') WHERE account_id = (SELECT id FROM account WHERE email = 'member@example.com')`)

@@ -45,14 +45,18 @@ func TestEventLogMigration(t *testing.T) {
 	requireNoError(t, err)
 	_, err = provider.UpTo(ctx, 6)
 	requireNoError(t, err)
-	old := pgtest.OrganizationWithOwner(t, pool, "old", "general")
-	_, err = postgres.NewMessageStore(pool).InsertMessage(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "before logging", 2)
+	// Raw SQL writes what the binary of migration 6 wrote: today's stores
+	// need tables and columns that do not exist yet.
+	old := pgtest.OrganizationFixture{OrganizationID: pgtest.Organization(t, pool, "old", "old", 1)}
+	old.AccountID = pgtest.Account(t, pool, "old@example.org", "old")
+	old.MemberID = pgtest.Member(t, pool, old.OrganizationID, old.AccountID, domain.RoleOwner, "owner", 1)
+	requireNoError(t, pool.QueryRow(ctx, "INSERT INTO channel (organization_id, name, is_default) VALUES ($1, 'general', true) RETURNING id", old.OrganizationID).Scan(&old.Channel.ID))
+	_, err = pool.Exec(ctx, "INSERT INTO message (organization_id, channel_id, member_id, body, event_seq) VALUES ($1, $2, $3, 'before logging', 2)", old.OrganizationID, old.Channel.ID, old.MemberID)
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE organization SET event_seq = 2 WHERE id = $1", old.OrganizationID)
 	requireNoError(t, err)
 	empty := pgtest.Organization(t, pool, "empty", "Empty", 0)
-	// Stop at the event log so the single Down below undoes exactly it.
-	_, err = provider.UpTo(ctx, 7)
+	_, err = provider.Up(ctx)
 	requireNoError(t, err)
 	assertEventLog(t, pool, old.OrganizationID, 2)
 	assertEventLog(t, pool, empty, 0)
@@ -63,7 +67,7 @@ func TestEventLogMigration(t *testing.T) {
 	requireNoError(t, err)
 	var seq int64
 	requireNoError(t, stale.QueryRow(ctx, "UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq", old.OrganizationID).Scan(&seq))
-	_, err = postgres.NewMessageStore(stale).InsertMessage(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "old binary", seq)
+	_, err = stale.Exec(ctx, "INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq) SELECT organization_id, id, default_topic_id, $2, 'old binary', $3 FROM channel WHERE id = $1", old.Channel.ID, old.MemberID, seq)
 	requireNoError(t, err)
 	var pgErr *pgconn.PgError
 	if err := stale.Commit(ctx); !errors.As(err, &pgErr) || pgErr.Code != "23514" {
@@ -96,7 +100,8 @@ func TestEventLogMigration(t *testing.T) {
 	_, err = postgres.NewPostingStore(pool).Post(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "after logging")
 	requireNoError(t, err)
 	assertEventLog(t, pool, old.OrganizationID, 5)
-	_, err = provider.Down(ctx)
+	// Undo every migration after 6, the event log's included.
+	_, err = provider.DownTo(ctx, 6)
 	requireNoError(t, err)
 	var removed bool
 	requireNoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.event_log') IS NULL AND

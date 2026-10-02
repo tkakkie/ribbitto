@@ -43,8 +43,8 @@ index below for everything else.
 | **message** | A post in a channel, written by a member. |
 | **reply** *(planned)* | A message linked to an earlier message it answers in the same channel. |
 | **reply chain** *(planned)* | A selected message's ancestor path and all its descendants, in `event_seq` order. |
-| **topic** *(planned)* | A named conversation inside a channel; every channel message is in exactly one. |
-| **default topic** *(planned)* | The one topic every channel has, where a message goes when no topic is chosen. Not the default channel. |
+| **topic** | A named conversation inside a channel; every channel message is in exactly one. |
+| **default topic** | The one topic every channel has, where a message goes when no topic is chosen. Not the default channel. |
 | **feed** *(planned)* | A channel's messages from all its topics, interleaved by time and labelled with their topic. |
 | **branching** *(planned)* | Moving selected messages to another topic of the same channel, keeping their ids and sequences. |
 | **event** | A durable change that live clients must see (a message posted, a member joined), recorded in `event_log`. |

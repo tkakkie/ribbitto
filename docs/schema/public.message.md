@@ -5,12 +5,13 @@
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
 | id | uuid | uuidv7() | false |  |  |  |
-| organization_id | uuid |  | false |  | [public.member](public.member.md) [public.channel](public.channel.md) |  |
-| channel_id | uuid |  | false |  | [public.channel](public.channel.md) |  |
+| organization_id | uuid |  | false |  | [public.member](public.member.md) [public.channel](public.channel.md) [public.topic](public.topic.md) |  |
+| channel_id | uuid |  | false |  | [public.channel](public.channel.md) [public.topic](public.topic.md) |  |
 | member_id | uuid |  | false |  | [public.member](public.member.md) |  |
 | body | text |  | false |  |  |  |
 | event_seq | bigint |  | false |  |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
+| topic_id | uuid |  | false |  | [public.topic](public.topic.md) |  |
 
 ## Constraints
 
@@ -27,10 +28,12 @@
 | message_id_not_null | n | NOT NULL id |
 | message_member_id_not_null | n | NOT NULL member_id |
 | message_organization_id_not_null | n | NOT NULL organization_id |
+| message_topic_id_not_null | n | NOT NULL topic_id |
 | message_organization_id_member_id_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT |
 | message_organization_id_channel_id_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT |
 | message_pkey | PRIMARY KEY | PRIMARY KEY (id) |
 | message_organization_id_event_seq_key | UNIQUE | UNIQUE (organization_id, event_seq) |
+| message_topic_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT |
 
 ## Indexes
 
@@ -39,6 +42,7 @@
 | message_pkey | CREATE UNIQUE INDEX message_pkey ON public.message USING btree (id) |
 | message_organization_id_event_seq_key | CREATE UNIQUE INDEX message_organization_id_event_seq_key ON public.message USING btree (organization_id, event_seq) |
 | message_channel_event_seq_idx | CREATE INDEX message_channel_event_seq_idx ON public.message USING btree (organization_id, channel_id, event_seq) |
+| message_topic_event_seq_idx | CREATE INDEX message_topic_event_seq_idx ON public.message USING btree (organization_id, topic_id, event_seq) |
 
 ## Relations
 
@@ -47,6 +51,7 @@ erDiagram
 
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
+"public.message" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
 
 "public.message" {
   uuid id
@@ -56,6 +61,7 @@ erDiagram
   text body
   bigint event_seq
   timestamp_with_time_zone created_at
+  uuid topic_id FK
 }
 "public.member" {
   uuid id
@@ -67,8 +73,18 @@ erDiagram
   text handle
 }
 "public.channel" {
+  uuid id FK
+  uuid organization_id FK
+  text name
+  boolean is_default
+  timestamp_with_time_zone created_at
+  uuid default_topic_id FK
+  boolean default_topic_is_default FK
+}
+"public.topic" {
   uuid id
   uuid organization_id FK
+  uuid channel_id FK
   text name
   boolean is_default
   timestamp_with_time_zone created_at

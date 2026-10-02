@@ -69,6 +69,21 @@ func (s *TopicStore) GetTopic(ctx context.Context, organizationID, channelID, id
 	return topicFromRow(row), nil
 }
 
+// GetDefaultTopic returns the channel's default topic.
+func (s *TopicStore) GetDefaultTopic(ctx context.Context, organizationID, channelID domain.ID) (domain.Topic, error) {
+	row, err := s.queries.GetDefaultTopic(ctx, sqlcgen.GetDefaultTopicParams{
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true},
+		ChannelID:      pgtype.UUID{Bytes: channelID, Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Topic{}, topic.ErrNotFound
+	}
+	if err != nil {
+		return domain.Topic{}, fmt.Errorf("getting default topic: %w", err)
+	}
+	return topicFromRow(row), nil
+}
+
 // ListTopics returns at most limit topics of the channel, the default first,
 // then in creation order (UUIDv7 ids sort by creation time).
 func (s *TopicStore) ListTopics(ctx context.Context, organizationID, channelID domain.ID, limit int) ([]domain.Topic, error) {

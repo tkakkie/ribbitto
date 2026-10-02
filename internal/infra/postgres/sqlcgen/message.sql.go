@@ -12,7 +12,7 @@ import (
 )
 
 const getMessage = `-- name: GetMessage :one
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND event_seq = $3
 `
 
@@ -33,18 +33,20 @@ func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message
 		&i.Body,
 		&i.EventSeq,
 		&i.CreatedAt,
+		&i.TopicID,
 	)
 	return i, err
 }
 
 const insertMessage = `-- name: InsertMessage :one
-INSERT INTO message (organization_id, channel_id, member_id, body, event_seq)
-VALUES ($1, $2, $3, $4, $5) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at
+INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id
 `
 
 type InsertMessageParams struct {
 	OrganizationID pgtype.UUID
 	ChannelID      pgtype.UUID
+	TopicID        pgtype.UUID
 	MemberID       pgtype.UUID
 	Body           string
 	EventSeq       int64
@@ -54,6 +56,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 	row := q.db.QueryRow(ctx, insertMessage,
 		arg.OrganizationID,
 		arg.ChannelID,
+		arg.TopicID,
 		arg.MemberID,
 		arg.Body,
 		arg.EventSeq,
@@ -67,12 +70,13 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 		&i.Body,
 		&i.EventSeq,
 		&i.CreatedAt,
+		&i.TopicID,
 	)
 	return i, err
 }
 
 const listMessagesBefore = `-- name: ListMessagesBefore :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id FROM message
 WHERE organization_id = $1 AND channel_id = $2
   AND ($3::bigint IS NULL OR event_seq < $3::bigint)
 ORDER BY event_seq DESC
@@ -108,6 +112,7 @@ func (q *Queries) ListMessagesBefore(ctx context.Context, arg ListMessagesBefore
 			&i.Body,
 			&i.EventSeq,
 			&i.CreatedAt,
+			&i.TopicID,
 		); err != nil {
 			return nil, err
 		}

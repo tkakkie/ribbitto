@@ -35,7 +35,7 @@ func (s *ChannelStore) CreateChannel(ctx context.Context, organizationID domain.
 	case err != nil:
 		return domain.Channel{}, fmt.Errorf("creating channel: %w", err)
 	}
-	return channelFromRow(row), nil
+	return channelFromRow(sqlcgen.Channel(row)), nil
 }
 
 // ListChannels returns the organisation's channels ordered by name and ID.
@@ -76,5 +76,5 @@ func (s *ChannelStore) GetDefaultChannel(ctx context.Context, organizationID dom
 }
 
 func channelFromRow(row sqlcgen.Channel) domain.Channel {
-	return domain.Channel{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, Name: row.Name, IsDefault: row.IsDefault, CreatedAt: row.CreatedAt.Time}
+	return domain.Channel{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, DefaultTopicID: row.DefaultTopicID.Bytes, Name: row.Name, IsDefault: row.IsDefault, CreatedAt: row.CreatedAt.Time}
 }

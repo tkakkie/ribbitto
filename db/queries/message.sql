@@ -1,6 +1,6 @@
 -- name: InsertMessage :one
-INSERT INTO message (organization_id, channel_id, member_id, body, event_seq)
-VALUES ($1, $2, $3, $4, $5) RETURNING *;
+INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
 
 -- name: GetMessage :one
 SELECT * FROM message

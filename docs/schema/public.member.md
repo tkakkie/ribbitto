@@ -70,6 +70,7 @@ erDiagram
   text body
   bigint event_seq
   timestamp_with_time_zone created_at
+  uuid topic_id FK
 }
 "public.event_log" {
   uuid organization_id FK

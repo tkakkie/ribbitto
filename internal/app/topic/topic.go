@@ -26,5 +26,6 @@ type Store interface {
 	CreateTopic(ctx context.Context, organizationID, channelID domain.ID, name string) (domain.Topic, error)
 	CreateDefaultTopic(ctx context.Context, organizationID, channelID domain.ID) (domain.Topic, error)
 	GetTopic(ctx context.Context, organizationID, channelID, id domain.ID) (domain.Topic, error)
+	GetDefaultTopic(ctx context.Context, organizationID, channelID domain.ID) (domain.Topic, error)
 	ListTopics(ctx context.Context, organizationID, channelID domain.ID, limit int) ([]domain.Topic, error)
 }

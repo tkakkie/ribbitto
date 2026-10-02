@@ -61,7 +61,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 
 	var acmeChannel, globexChannel domain.ID
 	for org, dest := range map[domain.ID]*domain.ID{acme: &acmeChannel, globex: &globexChannel} {
-		if err := pool.QueryRow(ctx, "INSERT INTO channel (organization_id, name, is_default) VALUES ($1, '雑談', true) RETURNING id", org).Scan(dest); err != nil {
+		// A channel needs its default topic in the same statement (decision 21).
+		if err := pool.QueryRow(ctx, `WITH c AS (INSERT INTO channel (organization_id, name, is_default) VALUES ($1, '雑談', true) RETURNING *),
+			t AS (INSERT INTO topic (id, organization_id, channel_id, is_default) SELECT default_topic_id, organization_id, id, true FROM c)
+			SELECT id FROM c`, org).Scan(dest); err != nil {
 			t.Fatal(err)
 		}
 	}

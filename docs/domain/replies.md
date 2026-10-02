@@ -2,7 +2,7 @@
 
 How an answer links to a message and how its conversation can be read on
 its own. Read this before designing or changing replies or the reply-chain
-view. The decision is [`DECISIONS.md`](../../DECISIONS.md) 22 (#275);
+view. It was settled in [decision 22](../decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md) (#275);
 implementation follows [topics](topics.md) and belongs to the message feature.
 
 **Keep it current:** update this file in the same pull request whenever
@@ -56,7 +56,7 @@ earlier and later parts of the chain. Depth and branching never require
 the whole chain in one response; paging reaches messages beyond the first
 page. Exact limits are left to implementation. Without JavaScript the
 chain is an ordinary page and the same links work; URLs follow
-[`DECISIONS.md`](../../DECISIONS.md) 17 and the enhancement rule in 19.
+[decision 17](../decisions/17-full-english-words-and-stable-identifiers-in-page-urls.md) and the enhancement rule in [decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md).
 
 Opening or paging through the chain leaves the read position unchanged
 ([`unread.md`](unread.md#replies)), including under M4's future topic rules.

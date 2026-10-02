@@ -71,7 +71,7 @@ a `database/sql` handle, which goose needs.
 ## Feature map
 
 The code is layered today, and the direction is a modular monolith by
-feature, migrated after M3 ([`DECISIONS.md`](../../DECISIONS.md), 14).
+feature, migrated after M3 ([decision 14](../decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)).
 Until then, new code goes into feature packages inside the layers, and each
 feature logically owns tables: only that feature writes them, apart from
 the known exceptions below. A feature may own no tables. Every
@@ -118,7 +118,7 @@ It returns `message.ChannelPage`; older pages have no event cursor.
   `organization.event_seq`, which belong to `org`;
 - posting (`message`) advances `organization.event_seq` before inserting
   the message, because the sequence must be taken in the writing
-  transaction (`DECISIONS.md` 5);
+  transaction ([decision 5](../decisions/05-one-event-sequence-per-organisation.md));
 - all three flows call realtime's transaction-bound `NewEventLog(tx)` writer
   (`AppendMessagePosted` or `AppendMemberJoined`) immediately after the message
   or member, so `event_log` commits with the entity and its sequence (#156, #257);
@@ -152,4 +152,4 @@ Read the file for the area you change:
 - [`docs/domain/names.md`](../domain/names.md) — display names, handles, how members are shown
 - [`docs/database.md`](../database.md) — local database, migrations, tests
 - [`docs/schema/README.md`](../schema/README.md) — generated reference for the current schema
-- [`DECISIONS.md`](../../DECISIONS.md) — why things are the way they are
+- [`DECISIONS.md`](../../DECISIONS.md) — why things are the way they are: the index of [`decisions/`](../decisions/)

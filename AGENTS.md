@@ -56,7 +56,7 @@ It may import `web/static` for embedded assets. Do not add an import that breaks
 only by it and `cmd/ribbitto`.
 
 Features: the code is heading for a modular monolith by feature
-(`DECISIONS.md`, 14); the feature map in
+([decision 14](docs/decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)); the feature map in
 [`docs/architecture/README.md`](docs/architecture/README.md#feature-map)
 lists each feature's packages and tables.
 

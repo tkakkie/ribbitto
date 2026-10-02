@@ -3,8 +3,8 @@
 How messages inside a channel are grouped into topics, what the default
 topic is, and how messages move between topics. Read this before
 designing or changing topics, the channel page, branching, or anything
-that counts messages per topic. The decision is
-[`DECISIONS.md`](../../DECISIONS.md) 21 (#274).
+that counts messages per topic. It was settled in
+[decision 21](../decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md) (#274).
 
 **Keep it current:** update this file in the same pull request whenever
 these rules change. Nothing here is implemented yet; `db/migrations/` is the
@@ -79,7 +79,7 @@ channel, a new one or an existing one. In **one transaction**:
    destination and the number of messages moved. It is an ordinary new
    message, so it appears at the time of branching;
 4. the move and the notice are recorded as new durable events
-   ([`DECISIONS.md`](../../DECISIONS.md) 5), so live clients see them in
+   ([decision 5](../decisions/05-one-event-sequence-per-organisation.md)), so live clients see them in
    order and a reconnecting client replays them.
 
 If any selected message is no longer in the topic the request expected —

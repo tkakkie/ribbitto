@@ -15,7 +15,7 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Default Argon2id parameters for new hashes (DECISIONS.md 10).
+// Default Argon2id parameters for new hashes (decision 10 in docs/decisions).
 const (
 	defaultMemoryKiB = 19 * 1024
 	defaultTime      = 2

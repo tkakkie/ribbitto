@@ -23,7 +23,7 @@ glossary current too. The decision is recorded in
 Status describes the concept, not whether the UI uses its label yet.
 Today's UI still says "channel" and "message"; applying these labels is a
 separate change, best done with the design pass. The conversation model behind
-*ripple* and *chorus* is in [`topics.md`](topics.md) (`DECISIONS.md` 21);
+*ripple* and *chorus* is in [`topics.md`](topics.md) ([decision 21](../decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md));
 the *section* row reserves a label only.
 
 ## Ordinary words

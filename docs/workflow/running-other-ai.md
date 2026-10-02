@@ -153,8 +153,15 @@ and diff, all at one resolved head commit (never `FETCH_HEAD`, which a
 concurrent fetch can overwrite). Every step is chained with `&&` and every
 read is a checked assignment, so if any of them fails, Muse Code does not
 start. Like the launcher, it refuses a pull
-request that contains a symlink, which could expose files outside the
-workspace.
+request that contains a symlink anywhere in its tree, which could expose
+files outside the workspace.
+
+**Take the command from `main`, never from a checkout.** The command is the
+security boundary, as the launcher is for Grok, and a pull request can edit
+this file. Read it with `git show origin/main:docs/workflow/running-other-ai.md`
+and run it from the maintainer's checkout; never run a copy from a pull
+request's worktree, including the pull request under review. A launcher
+script that enforces this, as Grok's does, is #341.
 
 ```bash
 P=123 && tmp=$(mktemp -d) &&

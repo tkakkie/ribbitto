@@ -8,9 +8,9 @@ pull request is still a draft, and before it is marked ready for review.
 
 ## When Grok runs
 
-Grok's valid findings have come from long-lived state and concurrency, and
-never from documentation, tests or plain schema work (#339). So Grok is
-**required** when a change alters:
+In the small sample recorded in #339, Grok's valid findings came from
+long-lived state and concurrency. So Grok is **required** when a change
+alters:
 
 1. authentication, authorisation or sessions (`internal/app/authz/**`,
    `internal/app/auth/**`, `internal/web/middleware/**`);

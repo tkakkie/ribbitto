@@ -67,8 +67,8 @@ func (f fakeMessages) Page(ctx context.Context, m authz.Membership, id domain.ID
 
 func populatedMessages() fakeMessages {
 	return fakeMessages{entries: []message.Entry{
-		{Message: domain.Message{ID: domain.ID{8}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author", TopicName: "<design>مرحبا"},
-		{Message: domain.Message{ID: domain.ID{9}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy", DefaultTopic: true},
+		{Message: domain.Message{ID: domain.ID{8}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x31}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author", TopicName: "<design>مرحبا"},
+		{Message: domain.Message{ID: domain.ID{9}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x32}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy", DefaultTopic: true},
 	}}
 }
 
@@ -410,8 +410,8 @@ func TestFeedTopicLabels(t *testing.T) {
 				}
 				// Each label links to its topic view (#303).
 				for _, entry := range populatedMessages().entries {
-					if href := `<a href="` + view.ConversationURL("acme", entry.ChannelID, &entry.TopicID) + `" class="text-muted underline">`; !strings.Contains(body, href) {
-						t.Fatalf("feed label link %s missing: %s", href, body)
+					if link := labelLink(entry); !strings.Contains(body, link) {
+						t.Fatalf("feed label link %s missing: %s", link, body)
 					}
 				}
 				catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -427,12 +427,22 @@ func TestFeedTopicLabels(t *testing.T) {
 						if !strings.Contains(live.String(), `<bdi class="text-caption text-muted">`+want+`</bdi>`) {
 							t.Fatalf("live label: %s", live.String())
 						}
-						if href := `<a href="` + view.ConversationURL("acme", entry.ChannelID, &entry.TopicID) + `"`; !strings.Contains(live.String(), href) {
-							t.Fatalf("live label link %s missing: %s", href, live.String())
+						if link := labelLink(entry); !strings.Contains(live.String(), link) {
+							t.Fatalf("live label link %s missing: %s", link, live.String())
 						}
 					}
 				})).ServeHTTP(httptest.NewRecorder(), req)
 			})
 		}
 	}
+}
+
+// labelLink is the markup of entry's topic label linking to its own topic
+// view in organisation acme: each label must point at its message's topic.
+func labelLink(entry message.Entry) string {
+	label := "&lt;design&gt;مرحبا"
+	if entry.DefaultTopic {
+		label = "chorus"
+	}
+	return `<a href="` + view.ConversationURL("acme", entry.ChannelID, &entry.TopicID) + `" class="text-muted underline"><bdi class="text-caption text-muted">` + label + `</bdi></a>`
 }

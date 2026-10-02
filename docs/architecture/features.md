@@ -43,11 +43,18 @@ organisation, returning handles and account IDs), then identity's
 `auth.Directory.LookupDisplayNames` (only those account IDs). Their adapters
 own the queries in `member.sql` and `account.sql`; message never queries
 those tables. `MessageReader` shares one read-only repeatable-read transaction
-across the channel and sidebar (through `channel.Service`), history, both author
+across the channel and sidebar (through `channel.Service`), the selected topic
+and the bounded topic list (through `topic.Store`), history, both author
 lookups and the topic batch through `topic.Directory.LookupTopics`, plus the
-shared-kernel `organization.event_seq` on the latest page.
-It returns `message.ChannelPage`; older pages have no event cursor.
-| `topic`: conversations inside a channel, the default topic, branching *(decision 21; schema, stores, feed labels and topic views)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list) | `topic` |
+shared-kernel `organization.event_seq` on the latest channel page.
+It returns `message.ChannelPage`; older pages and topic pages have no event
+cursor.
+`MessageReader.One` reads one message, its authors and topic in its own snapshot.
+Live labels come from that shared load through the existing render cache, keyed
+by organisation, channel, sequence and language, with no extra read per stream
+per event. A moved message's label is corrected by #306's move event.
+Malformed topic paging links use a scoped topic lookup without history;
+topic posts rely on the lookup inside the posting transaction.
 
 **Known exceptions.** Cross-feature writes that must commit atomically:
 

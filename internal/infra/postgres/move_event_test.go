@@ -42,7 +42,6 @@ func TestMoveEventPayload(t *testing.T) {
 		{"missing messages", "message_ids", nil},
 		{"null messages", "message_ids", json.RawMessage(`null`)},
 		{"empty messages", "message_ids", []string{}},
-		{"too many messages", "message_ids", make([]string, topic.MaxBranchMessages+1)},
 		{"repeated message", "message_ids", []string{uuid(4), uuid(4)}},
 		{"malformed message", "message_ids", []string{uuid(4), "invalid"}},
 		{"noncanonical message", "message_ids", []string{"00000000x0000x0000x0000x000000000004"}},
@@ -71,7 +70,8 @@ func TestMoveEventPayload(t *testing.T) {
 		})
 	}
 	data := payload()
-	ids := make([]string, topic.MaxBranchMessages)
+	// A lower write-side limit must not make already-committed moves unreadable.
+	ids := make([]string, topic.MaxBranchMessages+1)
 	for i := range ids {
 		ids[i] = uuid(i + 4)
 	}
@@ -82,9 +82,9 @@ func TestMoveEventPayload(t *testing.T) {
 	requireNoError(t, err)
 	events, err := reader.EventsAfter(t.Context(), f.OrganizationID, 1, 1)
 	requireNoError(t, err)
-	if len(events) != 1 || events[0].Kind != domain.EventMessagesMoved || len(events[0].MessageIDs) != topic.MaxBranchMessages ||
+	if len(events) != 1 || events[0].Kind != domain.EventMessagesMoved || len(events[0].MessageIDs) != len(ids) ||
 		events[0].AudienceMemberID == nil || *events[0].AudienceMemberID != f.MemberID {
-		t.Fatalf("maximum-size targeted move: %+v", events)
+		t.Fatalf("targeted move larger than the write-side limit: %+v", events)
 	}
 	for i, id := range events[0].MessageIDs {
 		if got := fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]); got != ids[i] {

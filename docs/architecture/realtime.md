@@ -74,8 +74,9 @@ and the moved message IDs. All use a NULL audience.
 The reader decodes moves into `FromTopicID`, `ToTopicID` and immutable
 `MessageIDs`, retaining the channel and envelope for routing and authorization.
 It rejects missing or malformed IDs, identical source and destination,
-and lists outside 1–100 distinct messages (`topic.MaxBranchMessages`), failing
-the whole batch rather than returning a partial replay. Live move rendering
+and empty lists or repeated messages, failing the whole batch rather than
+returning a partial replay. The size limit applies only on write, so lowering
+it cannot make committed moves unreadable. Live move rendering
 and delivery remain pending in #306.
 Setup and sign-up call `NewEventLog(tx).AppendMemberJoined` immediately after
 the member, with its `joined_event_seq`. `domain.Event` holds the envelope and

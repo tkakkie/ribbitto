@@ -9,12 +9,6 @@ carrying named events:
 process serves every stream; several server processes are future work (the
 hub, the per-account cap and the watermark are per process).
 
-The log reader decodes `messages.moved`, but the stream still skips that kind
-until #306's rendering and DOM handling land. Its following branch notice is
-an ordinary `message.posted`, delivered by the existing path. Move delivery
-must use the same per-connection authorization after render, immediately
-before send; decoding its routing IDs grants no access.
-
 ### Ordering and replay
 
 ```mermaid

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
@@ -123,8 +122,8 @@ func decodeMove(event *domain.Event, channel, from, to string, messages []string
 	if event.FromTopicID == event.ToTopicID {
 		return fmt.Errorf("move destination is the source")
 	}
-	if len(messages) == 0 || len(messages) > topic.MaxBranchMessages {
-		return fmt.Errorf("move has %d messages, want 1–%d", len(messages), topic.MaxBranchMessages)
+	if len(messages) == 0 {
+		return fmt.Errorf("move has no messages")
 	}
 	seen := make(map[domain.ID]bool, len(messages))
 	for _, value := range messages {

@@ -1,6 +1,6 @@
 // Package message holds posting and message reads with current author names.
 //
-// Feature: message (feature map in docs/architecture/README.md), which owns
+// Feature: message (feature map in docs/architecture/features.md), which owns
 // the message table. Exported API: Service, the Store interface it needs and
 // ErrInvalidBody, and Reader with History: Before reads a Page below an
 // event_seq bound; One reads an Entry by organisation, channel and event_seq,

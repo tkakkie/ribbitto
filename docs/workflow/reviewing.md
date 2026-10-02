@@ -25,7 +25,7 @@ stop and ask the maintainer.
 - Boundaries: code sits in the feature the issue names; it uses other
   features only through their exported API and writes only its own
   tables or a listed exception (feature map in
-  `docs/architecture/README.md`); every new edge in
+  `docs/architecture/features.md`); every new edge in
   `docs/dependencies.md` is explained in the PR.
 - Tests prove the behaviour (authorization: someone who must not see the
   data does not see it). No test was deleted, skipped or weakened.

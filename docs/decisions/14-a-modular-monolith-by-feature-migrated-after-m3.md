@@ -10,7 +10,7 @@ one module at a time, adding Go `internal` directories and per-module
 depguard rules then. Until then, the current layering, the placement of
 authorisation in `internal/app` and the depguard rules stay as they are;
 new code goes into feature packages inside the layers and follows the
-feature map in `docs/architecture/README.md`. Recurring shared-file
+feature map in `docs/architecture/features.md`. Recurring shared-file
 conflicts, AIs needing unrelated features to do a task, or repeated
 boundary findings in review are triggers to reassess this plan in a
 separate issue, not permission to migrate early.

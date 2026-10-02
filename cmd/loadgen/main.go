@@ -35,7 +35,8 @@ type transport struct {
 }
 
 func (t transport) RoundTrip(r *http.Request) (*http.Response, error) {
-	if r.URL.Scheme != t.origin.Scheme || r.URL.Host != t.origin.Host || r.URL.User != nil || r.Host != r.URL.Host {
+	// The client leaves Host empty on a redirect; it then means URL.Host.
+	if r.URL.Scheme != t.origin.Scheme || r.URL.Host != t.origin.Host || r.URL.User != nil || (r.Host != "" && r.Host != r.URL.Host) {
 		return nil, fmt.Errorf("request leaves target origin")
 	}
 	return t.Transport.RoundTrip(r)

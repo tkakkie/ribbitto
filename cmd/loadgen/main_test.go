@@ -30,7 +30,11 @@ func TestSafety(t *testing.T) {
 			t.Errorf("bounds: %v: %v", args, err)
 		}
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, r.URL.Query().Get("to"), 302) }))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if to := r.URL.Query().Get("to"); to != "" {
+			http.Redirect(w, r, to, 302)
+		}
+	}))
 	defer server.Close()
 	tr, err := newTransport(server.URL, "", &counts{})
 	if err != nil {
@@ -45,6 +49,12 @@ func TestSafety(t *testing.T) {
 		t.Fatal("dial allowed non-loopback")
 	}
 	client := &http.Client{Transport: tr}
+	// A redirect that stays on the origin is followed.
+	if r, err := client.Get(server.URL + "?to=/done"); err != nil || r.StatusCode != http.StatusOK {
+		t.Fatalf("same-origin redirect: %v", err)
+	} else {
+		_ = r.Body.Close()
+	}
 	for _, target := range []string{strings.Replace(server.URL, "http:", "https:", 1), strings.Replace(server.URL, "127.0.0.1", "localhost", 1), "http://127.0.0.1:1"} {
 		for _, endpoint := range []string{target, server.URL + "?to=" + target} {
 			if r, err := client.Get(endpoint); err == nil {

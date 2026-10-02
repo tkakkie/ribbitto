@@ -144,7 +144,7 @@ printf '\nUNTRUSTED_PAYLOAD_JSON: %s\n' "$payload" >>"$tmp/prompt.md"
 
 # Keep the preflight's Standard model and read-only sandbox flags explicit.
 muse_args=(
-  exec --model muse-spark-1.3 --workspace "$worktree"
+  exec --model muse-spark-1.3 --workspace "$worktree" --json
   --disable-write --disable-shell --disable-web-tools
   --sandbox-network restricted --no-session-log --no-foreign-personal-context
   --max-model-steps 30 --prompt-file "$tmp/prompt.md"
@@ -227,7 +227,7 @@ perl -e '
   alarm 0;
   $reap_group->();
   exit $status;
-' "$timeout" "$setup_delay" muse "${muse_args[@]}" </dev/null &
+' "$timeout" "$setup_delay" muse "${muse_args[@]}" </dev/null >"$tmp/muse.jsonl" &
 supervisor=$!
 status=0
 wait "$supervisor" || status=$?
@@ -246,3 +246,22 @@ case $status in
     exit 124 ;;
   *) echo "muse-review: Muse Code failed (exit $status)" >&2; exit "$status" ;;
 esac
+
+# Validate the entire stream before emitting any report: even a later model
+# change or malformed event must prevent a successful review.
+jq -R -s -j '
+  split("\n") | if last == "" then .[:-1] else . end
+  | map(fromjson)
+  | if any(.[]; type != "object") then error("JSONL events must be objects") else . end
+  | [.[] | select(.payload_type == "run.model.configured")] as $models
+  | if ($models | length) == 0 then error("missing run.model.configured events")
+    elif any($models[]; .payload.model_id != "muse-spark-1.3") then
+      error("every configured model must be muse-spark-1.3")
+    else . end
+  | [.[] | select(.payload_type == "run.output.delta")]
+  | if any(.[]; (.payload.text | type) != "string" or (.sequence | type) != "number") then
+      error("invalid run.output.delta text or sequence")
+    else . end
+  | sort_by(.sequence) | map(.payload.text) | join("")
+  | if length == 0 then error("no run.output.delta text") else . end
+' "$tmp/muse.jsonl" || die "could not validate Muse Code JSONL report"

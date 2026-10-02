@@ -169,10 +169,15 @@ Any failed context read stops the run. Symlinks anywhere in the head's
 tree are refused before the prompt, diff or worktree is created, since a
 link could expose files outside the workspace.
 
-Muse runs with `--model muse-spark-1.3 --workspace <worktree>` and
+Muse runs with `--model muse-spark-1.3 --workspace <worktree> --json` and
 `--disable-write --disable-shell --disable-web-tools --sandbox-network
 restricted --no-session-log --no-foreign-personal-context --max-model-steps
-30 --prompt-file <prompt>`, with stdin closed and the report on stdout.
+30 --prompt-file <prompt>`, with stdin closed. The launcher captures JSONL
+stdout in its temporary directory and passes stderr through. After a successful
+run, it checks that `run.model.configured` events exist and all name
+`muse-spark-1.3`, then prints the concatenated `run.output.delta` text in
+`sequence` order on stdout. Invalid JSONL, a missing or different model, or
+missing delta text fails the review.
 `RIBBITTO_MUSE_TIMEOUT` sets the limit in seconds (1–86400, default 1200).
 The supervisor stops Muse and its process group on success, failure,
 timeout (exit 124), INT (130) and TERM (143); the launcher removes the

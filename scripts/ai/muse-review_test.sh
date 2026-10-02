@@ -140,13 +140,13 @@ if (!$ENV{FIXTURE_ONLY}) {
   my %args;
   while (@ARGV) {
     my $key = shift @ARGV;
-    $args{$key} = $key =~ /^--(?:disable-write|disable-shell|disable-web-tools|no-session-log|no-foreign-personal-context)$/ ? 1 : shift @ARGV;
+    $args{$key} = $key =~ /^--(?:json|disable-write|disable-shell|disable-web-tools|no-session-log|no-foreign-personal-context)$/ ? 1 : shift @ARGV;
   }
   open my $f, '<', $args{'--prompt-file'} or die $!;
   mark('prompt', do { local $/; <$f> });
   close $f;
   my @expected = ('--model', 'muse-spark-1.3', '--workspace',
-    "", '--disable-write', '--disable-shell', '--disable-web-tools',
+    "", '--json', '--disable-write', '--disable-shell', '--disable-web-tools',
     '--sandbox-network', 'restricted', '--no-session-log', '--no-foreign-personal-context',
     '--max-model-steps', '30', '--prompt-file', $args{'--prompt-file'});
   open my $w, '<', "$out/worktree-active" or die $!;
@@ -158,7 +158,28 @@ if (!$ENV{FIXTURE_ONLY}) {
   my $input = <STDIN>;
   die "stdin was not closed" if defined $input;
   mark('muse');
-  print "Fake Muse report\n";
+  my $mode = $ENV{MODE};
+  print STDERR "Fake Muse diagnostic\n";
+  unless ($mode eq 'missing-model') {
+    my $model = $mode eq 'wrong-model' ? 'muse-spark-1.3-contributor' : 'muse-spark-1.3';
+    print qq({"sequence":1,"payload_type":"run.model.configured","payload":{"model_id":"$model"}}\n);
+  }
+  unless ($mode eq 'no-deltas' || $mode eq 'empty-deltas') {
+    # Deliberately out of order; stdout must preserve the final newline exactly.
+    print <<'JSONL';
+{"sequence":20,"payload_type":"run.output.delta","payload":{"text":"report\n"}}
+{"sequence":3,"payload_type":"run.output.delta","payload":{"text":"Fake "}}
+{"sequence":10,"payload_type":"run.output.delta","payload":{"text":"Muse "}}
+{"sequence":21,"payload_type":"run.output.completed","payload":{"text":"not a delta"}}
+JSONL
+  }
+  if ($mode eq 'empty-deltas') {
+    print qq({"sequence":2,"payload_type":"run.output.delta","payload":{"text":""}}\n);
+  }
+  if ($mode eq 'late-wrong-model') {
+    print qq({"sequence":22,"payload_type":"run.model.configured","payload":{"model_id":"other"}}\n);
+  }
+  print "invalid JSONL\n" if $mode eq 'invalid-jsonl';
 }
 my $mode = $ENV{MODE};
 if ($mode eq 'stubborn-timeout') {
@@ -336,10 +357,20 @@ DRIVER
             fail 'timeout hint contains a shell command'
           fi ;;
         prune-*) contains "$CASE_DIR/out/stderr" "'git worktree prune' failed" ;;
+        wrong-model|late-wrong-model|missing-model|invalid-jsonl|no-deltas|empty-deltas)
+          contains "$CASE_DIR/out/stderr" 'could not validate Muse Code JSONL report'
+          [[ ! -s $CASE_DIR/out/stdout ]] || fail 'invalid report reached stdout'
+          case $mode in
+            wrong-model|late-wrong-model) contains "$CASE_DIR/out/stderr" 'every configured model must be muse-spark-1.3' ;;
+            missing-model) contains "$CASE_DIR/out/stderr" 'missing run.model.configured events' ;;
+            no-deltas|empty-deltas) contains "$CASE_DIR/out/stderr" 'no run.output.delta text' ;;
+          esac ;;
       esac ;;
   esac
   if [[ $mode == payload ]]; then
-    contains "$CASE_DIR/out/stdout" 'Fake Muse report'
+    printf 'Fake Muse report\n' > "$CASE_DIR/out/expected-report"
+    cmp -s "$CASE_DIR/out/stdout" "$CASE_DIR/out/expected-report" || fail 'report text differs'
+    contains "$CASE_DIR/out/stderr" 'Fake Muse diagnostic'
     contains "$CASE_DIR/out/git.log" 'ls-tree -r --full-tree bbbb'
     contains "$CASE_DIR/out/git.log" 'diff aaaa...bbbb'
     # Compare the whole prefix and decoded values, not just a matching substring.
@@ -428,6 +459,9 @@ if ! ps_usable; then
 fi
 
 run_case exit-status-42 42 exit42 default 49
+for mode in wrong-model late-wrong-model missing-model invalid-jsonl no-deltas empty-deltas; do
+  run_case "$mode" 1 "$mode" default 49
+done
 run_case descendants-after-success 0 descendants default 49
 run_case timeout-124 124 timeout 1 49
 run_case timeout-kills-term-resistant-descendants 124 stubborn-timeout 1 49

@@ -125,7 +125,9 @@ Settled in #305:
   unknown or out-of-scope topic 404. The UI pairs each `message` value with
   its expected source UUID (`message/source`); the handler derives `from`
   and rejects mixed sources before calling the use case. Legacy UUID-only
-  values with explicit `from` still work. Live delivery is #306's.
+  values with explicit `from` still work. The event reader decodes the move's
+  routing and message IDs and validates its bounded payload; live delivery
+  remains pending in #306.
 - **Selection:** feed and topic views have ordinary branch forms; JavaScript
   disables other sources and the source destination after selection. The
   destination list uses the existing bounded topic list. Plain errors render

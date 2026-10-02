@@ -71,6 +71,28 @@ func TestBranchStore(t *testing.T) {
 	if moveKind != string(domain.EventMessagesMoved) || from != source || to != dest.ID || !slices.Equal(movedIDs, []domain.ID{posted[0].ID, posted[2].ID}) || noticeKind != string(domain.EventMessagePosted) {
 		t.Fatalf("events: %s %x→%x %v, then %s", moveKind, from, to, movedIDs, noticeKind)
 	}
+	// Replay must preserve both durable events and their routing IDs, even
+	// when the batch boundary falls between the move and its notice.
+	reader := postgres.NewEventReader(pool)
+	for _, limit := range []int{1, 2} {
+		events, err := reader.EventsAfter(ctx, acme.OrganizationID, before, limit)
+		requireNoError(t, err)
+		if len(events) != limit {
+			t.Fatalf("replay returned %d events, want %d", len(events), limit)
+		}
+		move := events[0]
+		if move.OrganizationID != acme.OrganizationID || move.Seq != before+1 || move.Kind != domain.EventMessagesMoved ||
+			move.ChannelID != acme.Channel.ID || move.FromTopicID != source || move.ToTopicID != dest.ID ||
+			move.AudienceMemberID != nil || !slices.Equal(move.MessageIDs, movedIDs) {
+			t.Fatalf("decoded move: %+v", move)
+		}
+		next, err := reader.EventsAfter(ctx, acme.OrganizationID, move.Seq, 1)
+		requireNoError(t, err)
+		if len(next) != 1 || next[0].Kind != domain.EventMessagePosted || next[0].Seq != before+2 ||
+			next[0].ChannelID != acme.Channel.ID || next[0].MessageID != got[3].id || next[0].AudienceMemberID != nil {
+			t.Fatalf("notice after move: %+v", next)
+		}
+	}
 
 	// Into an existing topic works the same way.
 	if _, _, err := store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, topic.Branch{Messages: []domain.ID{posted[1].ID}, From: source, To: &dest.ID}, notice); err != nil {

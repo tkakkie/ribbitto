@@ -71,6 +71,12 @@ member in the same organisation. The audience never appears in `data`.
 `member.joined` carries `{"member_id":"<uuid>"}`; `messages.moved` (branching,
 [topics](../domain/topics.md#branching)) carries the channel, the two topics
 and the moved message IDs. All use a NULL audience.
+The reader decodes moves into `FromTopicID`, `ToTopicID` and immutable
+`MessageIDs`, retaining the channel and envelope for routing and authorization.
+It rejects missing or malformed IDs, identical source and destination,
+and lists outside 1–100 distinct messages (`topic.MaxBranchMessages`), failing
+the whole batch rather than returning a partial replay. Live move rendering
+and delivery remain pending in #306.
 Setup and sign-up call `NewEventLog(tx).AppendMemberJoined` immediately after
 the member, with its `joined_event_seq`. `domain.Event` holds the envelope and
 referenced IDs; kinds are an open list. `postgres.NewEventReader(db)` provides

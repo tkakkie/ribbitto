@@ -113,9 +113,13 @@ func TestMayReceive(t *testing.T) {
 		{"lookup fails", fakeStore{err: broken}, domain.ID{1}, event, false, broken},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := authz.New(tt.store).MayReceive(t.Context(), tt.account, "acme", tt.event)
-			if got != tt.want || !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
-				t.Fatalf("MayReceive = %v, %v; want %v, %v", got, err, tt.want, tt.wantErr)
+			for _, kind := range []domain.EventKind{domain.EventMessagePosted, domain.EventMessagesMoved} {
+				event := tt.event
+				event.Kind = kind
+				got, err := authz.New(tt.store).MayReceive(t.Context(), tt.account, "acme", event)
+				if got != tt.want || !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
+					t.Fatalf("MayReceive(%s) = %v, %v; want %v, %v", kind, got, err, tt.want, tt.wantErr)
+				}
 			}
 		})
 	}

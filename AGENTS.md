@@ -57,7 +57,7 @@ only by it and `cmd/ribbitto`.
 
 Features: the code is heading for a modular monolith by feature
 ([decision 14](docs/decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)); the feature map in
-[`docs/architecture/README.md`](docs/architecture/README.md#feature-map)
+[`docs/architecture/features.md`](docs/architecture/features.md)
 lists each feature's packages and tables.
 
 - New code goes in feature packages inside the layers.

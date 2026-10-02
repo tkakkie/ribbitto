@@ -2,7 +2,7 @@
 // authorization, rendering, event-reading and sending interfaces; the SSE
 // framing itself is web's.
 //
-// Feature: realtime (feature map in docs/architecture/README.md). It
+// Feature: realtime (feature map in docs/architecture/features.md). It
 // imports only domain; the stream's authorization, rendering and event
 // reading come in as interfaces it defines, implemented by app, web and
 // infra/postgres and wired in cmd/ribbitto.

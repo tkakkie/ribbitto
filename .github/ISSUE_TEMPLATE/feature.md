@@ -24,7 +24,7 @@ labels: []
 ## Boundaries
 
 <!-- One line: the feature this belongs to (feature map in
-     docs/architecture/README.md), the features it uses, and any new
+     docs/architecture/features.md), the features it uses, and any new
      cross-feature dependency or write to another feature's tables, with
      the reason. "n/a" if no feature boundaries or table access change. -->
 

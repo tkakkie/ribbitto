@@ -444,6 +444,7 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 		t.Fatalf("NewHandler rejected the default services: %v", err)
 	}
 	for name, missing := range map[string]func(*Services){
+		"stream without lifetime":           func(s *Services) { s.Stream = &Streaming{} },
 		"no authorizer":                     func(s *Services) { s.Authz = nil },
 		"no channels":                       func(s *Services) { s.Channels = nil },
 		"no messages":                       func(s *Services) { s.Messages = nil },

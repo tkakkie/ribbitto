@@ -98,10 +98,13 @@ func serve(ctx context.Context, databaseURL string) error {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
 	defer pool.Close()
+	// Cancel cache loads before closing the pool on every exit path.
+	ctx, cancelLoads := context.WithCancel(ctx)
+	defer cancelLoads()
 	// One hub per process: posting raises it, streams register their
 	// connections with it, and the metrics read its registry.
 	hub := realtime.NewHub()
-	handler, sessions, err := buildHandler(pool, handlerConfig{
+	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{
 		setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
 		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), hub: hub,
 	})
@@ -232,7 +235,7 @@ type handlerConfig struct {
 }
 
 // buildHandler shares production wiring with the HTTPS acceptance test.
-func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth.Sessions, error) {
+func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth.Sessions, error) {
 	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
 	if config.hub != nil {
 		// Deleting a session (sign-out, or a sign-in replacing it) ends its
@@ -261,8 +264,8 @@ func buildHandler(pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth
 		posting = message.NewWithNotifier(postgres.NewPostingStore(pool), config.hub)
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
-		events := realtime.NewCachedEvents(postgres.NewEventReader(pool), config.hub, 1024, time.Minute)
-		stream = &web.Streaming{Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
+		events := realtime.NewCachedEvents(ctx, postgres.NewEventReader(pool), config.hub, 1024, time.Minute)
+		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions:      sessions,

@@ -19,6 +19,8 @@ import (
 // It is generic because the event log's reads (here) and the rendered
 // messages (in web) need the same bounded, coalescing behaviour.
 type Cache[K comparable, V any] struct {
+	parent      context.Context
+	slots       chan struct{}
 	capacity    int
 	ttl         time.Duration
 	loadTimeout time.Duration
@@ -42,23 +44,30 @@ type cacheCall[V any] struct {
 	value   V
 	err     error
 	waiters int
+	joiners int
+	cancel  context.CancelCauseFunc
 	// again, set before done closes, is the load the joiners get instead
 	// when value is not kept (see NewCache).
 	again *cacheCall[V]
 }
 
+// DefaultCacheLoads bounds concurrent loaders in each production cache.
+const DefaultCacheLoads = 16
+
 // NewCache returns a cache holding at most capacity entries, each for at
-// most ttl. A load runs for at most loadTimeout, detached from the caller
-// that started it: one stream going away must not fail the others waiting
-// on the same load. keep, if not nil, decides whether a loaded value is
+// most ttl, with at most maxLoads loaders running until they actually return.
+// Waiting for a slot and loading share loadTimeout. Load contexts retain caller
+// values but end with parent or their last waiter, not any individual caller.
+// keep, if not nil, decides whether a loaded value is
 // stored. A value it rejects may already be out of date, so only the caller
 // that started the load gets it; the callers that joined the load while it
 // ran share a second load, started once the first has finished and so
 // after each of them joined, and open to no one else. Without that, a
 // joiner could get a snapshot older than its own call. now is time.Now
 // outside tests.
-func NewCache[K comparable, V any](capacity int, ttl, loadTimeout time.Duration, keep func(K, V) bool, now func() time.Time) *Cache[K, V] {
+func NewCache[K comparable, V any](parent context.Context, capacity, maxLoads int, ttl, loadTimeout time.Duration, keep func(K, V) bool, now func() time.Time) *Cache[K, V] {
 	return &Cache[K, V]{
+		parent: parent, slots: make(chan struct{}, max(maxLoads, 1)),
 		capacity: max(capacity, 1), ttl: ttl, loadTimeout: loadTimeout, keep: keep, now: now,
 		entries: make(map[K]*list.Element), order: list.New(), loading: make(map[K]*cacheCall[V]),
 	}
@@ -68,6 +77,12 @@ func NewCache[K comparable, V any](capacity int, ttl, loadTimeout time.Duration,
 // the entry expired. A caller whose ctx ends while waiting gets
 // context.Cause(ctx); the load itself carries on for the others.
 func (c *Cache[K, V]) Get(ctx context.Context, key K, load func(context.Context) (V, error)) (V, error) {
+	for _, check := range []context.Context{ctx, c.parent} {
+		if err := context.Cause(check); err != nil {
+			var zero V
+			return zero, err
+		}
+	}
 	c.mu.Lock()
 	if elem, ok := c.entries[key]; ok {
 		entry := elem.Value.(*cacheEntry[K, V])
@@ -81,12 +96,16 @@ func (c *Cache[K, V]) Get(ctx context.Context, key K, load func(context.Context)
 	}
 	call, joined := c.loading[key]
 	if !joined {
-		call = &cacheCall[V]{done: make(chan struct{})}
+		loadCtx, cancel := context.WithCancelCause(context.WithoutCancel(ctx))
+		call = &cacheCall[V]{done: make(chan struct{}), cancel: cancel}
 		c.loading[key] = call
-		go c.load(context.WithoutCancel(ctx), key, call, load)
+		go c.load(loadCtx, key, call, load)
+	} else {
+		call.joiners++
 	}
 	call.waiters++
 	c.mu.Unlock()
+	defer c.leave(key, call, joined)
 
 	if err := wait(ctx, call); err != nil {
 		var zero V
@@ -100,6 +119,23 @@ func (c *Cache[K, V]) Get(ctx context.Context, key K, load func(context.Context)
 		}
 	}
 	return call.value, call.err
+}
+
+func (c *Cache[K, V]) leave(key K, call *cacheCall[V], joined bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	call.waiters--
+	if joined {
+		call.joiners--
+	}
+	if call.waiters == 0 {
+		call.cancel(context.Canceled)
+		// A new caller must not join an abandoned load. Its late result must
+		// not delete or replace a newer load for this key either.
+		if c.loading[key] == call {
+			delete(c.loading, key)
+		}
+	}
 }
 
 // wait blocks until call is done or ctx ends, returning context.Cause(ctx)
@@ -116,11 +152,17 @@ func wait[V any](ctx context.Context, call *cacheCall[V]) error {
 // load runs one load for key, stores its value if kept, and runs the
 // joiners' second load when it is not.
 func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load func(context.Context) (V, error)) {
+	stop := context.AfterFunc(c.parent, func() { call.cancel(context.Cause(c.parent)) })
+	defer stop()
+	defer call.cancel(context.Canceled)
 	c.run(ctx, call, load)
 
 	c.mu.Lock()
-	delete(c.loading, key)
-	kept := call.err == nil && (c.keep == nil || c.keep(key, call.value))
+	current := c.loading[key] == call
+	if current {
+		delete(c.loading, key)
+	}
+	kept := current && ctx.Err() == nil && call.err == nil && (c.keep == nil || c.keep(key, call.value))
 	if kept {
 		c.entries[key] = c.order.PushFront(&cacheEntry[K, V]{key: key, value: call.value, expires: c.now().Add(c.ttl)})
 		for c.order.Len() > c.capacity {
@@ -129,9 +171,9 @@ func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load 
 			delete(c.entries, oldest.Value.(*cacheEntry[K, V]).key)
 		}
 	}
-	// No one can join call any more, so waiters is final. An error is
-	// shared as it is: it says nothing about the data.
-	if call.err == nil && !kept && call.waiters > 1 {
+	// Only remaining joiners need a fresh snapshot. They keep their wait
+	// registered on the original call until this private second load ends.
+	if ctx.Err() == nil && call.err == nil && !kept && call.joiners > 0 {
 		call.again = &cacheCall[V]{done: make(chan struct{})}
 	}
 	c.mu.Unlock()
@@ -149,12 +191,25 @@ func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load 
 func (c *Cache[K, V]) run(ctx context.Context, call *cacheCall[V], load func(context.Context) (V, error)) {
 	ctx, cancel := context.WithTimeout(ctx, c.loadTimeout)
 	defer cancel()
+	select {
+	case c.slots <- struct{}{}:
+	case <-ctx.Done():
+		call.err = context.Cause(ctx)
+		return
+	}
+	if err := context.Cause(ctx); err != nil {
+		<-c.slots
+		call.err = err
+		return
+	}
 	type result struct {
 		value V
 		err   error
 	}
 	done := make(chan result, 1)
 	go func() {
+		// Timeout/cancellation releases waiters, never a running loader's slot.
+		defer func() { <-c.slots }()
 		value, err := load(ctx)
 		done <- result{value, err}
 	}()

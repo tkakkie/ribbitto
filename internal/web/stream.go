@@ -21,6 +21,8 @@ import (
 // authorization. A nil *Streaming turns the stream off (its route answers
 // 404), which handler tests that do not exercise it rely on.
 type Streaming struct {
+	// Lifetime is the process context; shutdown cancels shared render loads.
+	Lifetime   context.Context
 	Hub        *realtime.Hub
 	Events     realtime.EventReader
 	Authorizer realtime.Authorizer

@@ -38,7 +38,7 @@ const (
 // where only the event streams are opened.
 func streamServers(t *testing.T, pool *pgxpool.Pool) (api, streams *httptest.Server) {
 	t.Helper()
-	handler, _, err := buildHandler(pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
+	handler, _, err := buildHandler(t.Context(), pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
 		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
 		hub:            realtime.NewHub(), streamWriteTimeout: testStreamWrite})
 	acceptanceOK(t, err)
@@ -429,7 +429,7 @@ func TestEventStreamEndsOnSignOutOverHTTP1(t *testing.T) {
 func TestShutdownEndsOpenStreams(t *testing.T) {
 	pool := acceptanceDatabase(t)
 	hub := realtime.NewHub()
-	handler, _, err := buildHandler(pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
+	handler, _, err := buildHandler(t.Context(), pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
 		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, hub: hub})
 	acceptanceOK(t, err)
 	server := httptest.NewUnstartedServer(handler)

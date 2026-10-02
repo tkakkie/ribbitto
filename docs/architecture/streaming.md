@@ -135,14 +135,11 @@ The retention period defaults to seven days; see [database configuration](../dat
 
 ### Resource limits
 
-- Event and render caches each allow at most 16 concurrent loaders, including
-  joiners' second reads. Slots remain occupied until loaders return, even
-  after timeout or cancellation. Waiting for a slot shares the 10 s load
-  timeout; callers can leave sooner through their own contexts. The last
-  departing waiter cancels its load, and the last joiner cancels the
-  joiners' second load even before the starter has its result. Both caches receive the process lifetime
-  context from `cmd/ribbitto` (renders through `Streaming` and `orgRoutes`),
-  so shutdown cancels every load; cooperative loaders release their resources.
+- Each cache (events, renders) runs at most 16 loaders at once, second
+  loads included; a slot is held until its loader returns, even after a
+  timeout. The last waiter to leave cancels a load, the last joiner its
+  second load, and shutdown every load (`cmd/ribbitto` passes the process
+  context, through `Streaming` for renders).
 
 - Each connection reads the log itself (#209), so nothing queues for a slow
   client: its cursor just lags. A client that stops reading is

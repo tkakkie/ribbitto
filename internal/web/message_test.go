@@ -64,8 +64,8 @@ func (f fakeMessages) Before(ctx context.Context, m authz.Membership, id domain.
 
 func populatedMessages() fakeMessages {
 	return fakeMessages{entries: []message.Entry{
-		{Message: domain.Message{ID: domain.ID{8}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author"},
-		{Message: domain.Message{ID: domain.ID{9}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy"},
+		{Message: domain.Message{ID: domain.ID{8}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author", TopicName: "<design>مرحبا"},
+		{Message: domain.Message{ID: domain.ID{9}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy", DefaultTopic: true},
 	}}
 }
 
@@ -381,5 +381,46 @@ func TestMessagePagingHandler(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFeedTopicLabels(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages = populatedMessages() }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lang := range []string{"en", "ja"} {
+		for _, suffix := range []string{"", "?before=9"} {
+			t.Run(lang+suffix, func(t *testing.T) {
+				req := httptest.NewRequest("GET", view.ChannelURL("acme", domain.ID{1})+suffix, nil)
+				req.Header.Set("Accept-Language", lang)
+				req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, req)
+				body := w.Body.String()
+				if w.Code != 200 || !strings.Contains(body, `<bdi class="text-caption text-muted">&lt;design&gt;مرحبا</bdi>`) || !strings.Contains(body, `<bdi class="text-caption text-muted">chorus</bdi>`) {
+					t.Fatalf("feed labels: %d, %s", w.Code, body)
+				}
+				catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+					for _, entry := range populatedMessages().entries {
+						var live bytes.Buffer
+						if err := view.LiveMessageItem(viewMessage(entry)).Render(r.Context(), &live); err != nil {
+							t.Fatal(err)
+						}
+						want := "&lt;design&gt;مرحبا"
+						if entry.DefaultTopic {
+							want = "chorus"
+						}
+						if !strings.Contains(live.String(), `<bdi class="text-caption text-muted">`+want+`</bdi>`) {
+							t.Fatalf("live label: %s", live.String())
+						}
+					}
+				})).ServeHTTP(httptest.NewRecorder(), req)
+			})
+		}
 	}
 }

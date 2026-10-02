@@ -42,6 +42,7 @@ internal/app/member -> internal/domain
 internal/app/message -> internal/app/auth
 internal/app/message -> internal/app/authz
 internal/app/message -> internal/app/member
+internal/app/message -> internal/app/topic
 internal/app/message -> internal/domain
 internal/app/setup -> internal/app/auth
 internal/app/setup -> internal/domain

@@ -16,8 +16,8 @@ glossary current too. The decision is recorded in
 | `organization` | marsh | exists | A workspace that owns what its members create. |
 | `section` | pond | planned | A group of channels in the sidebar. |
 | `channel` | lilypad | exists | A named conversation inside an organisation. |
-| `topic` | ripple | planned | A named conversation inside a channel ([`topics.md`](topics.md)). |
-| default topic of a channel | chorus | planned | The one topic every channel has, where a message goes when no topic is chosen. |
+| `topic` | ripple | exists | A named conversation inside a channel ([`topics.md`](topics.md)). |
+| default topic of a channel | chorus | exists | The one topic every channel has, where a message goes when no topic is chosen. |
 | `message` | ribbit | exists | A post in a channel, written by a member. |
 
 Status describes the concept, not whether the UI uses its label yet.

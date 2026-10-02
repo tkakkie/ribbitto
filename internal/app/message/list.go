@@ -7,13 +7,16 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/member"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 )
 
-// Entry is a stored message with its current author names, ready for a view.
+// Entry is a stored message with its current author names and topic label.
 type Entry struct {
 	domain.Message
 	DisplayName, Handle string
+	TopicName           string
+	DefaultTopic        bool
 }
 
 // History reads messages within one organisation and channel. Lists are
@@ -23,11 +26,12 @@ type History interface {
 	GetMessage(context.Context, domain.ID, domain.ID, int64) (domain.Message, error)
 }
 
-// Reader composes history with org and identity's exported directory APIs.
+// Reader composes history with org, identity and topic's exported directory APIs.
 type Reader struct {
 	History  History
 	Members  member.Directory
 	Accounts auth.Directory
+	Topics   topic.Directory
 }
 
 // PageSize is how many messages one page of history holds.
@@ -65,16 +69,15 @@ func (s Reader) Before(ctx context.Context, m authz.Membership, channelID domain
 	if older {
 		messages = messages[:PageSize]
 	}
-	entries, err := s.entries(ctx, m, messages)
+	entries, err := s.entries(ctx, m, channelID, messages)
 	if err != nil {
 		return Page{}, err
 	}
 	return Page{Entries: entries, Older: older}, nil
 }
 
-// entries adds author names to newest-first messages and returns them oldest
-// first.
-func (s Reader) entries(ctx context.Context, m authz.Membership, messages []domain.Message) ([]Entry, error) {
+// entries adds topic labels and author names, returning messages oldest first.
+func (s Reader) entries(ctx context.Context, m authz.Membership, channelID domain.ID, messages []domain.Message) ([]Entry, error) {
 	ids := make([]domain.ID, 0, len(messages))
 	for _, msg := range messages {
 		ids = append(ids, msg.MemberID)
@@ -91,6 +94,14 @@ func (s Reader) entries(ctx context.Context, m authz.Membership, messages []doma
 	if err != nil {
 		return nil, fmt.Errorf("reading author names: %w", err)
 	}
+	ids = ids[:0]
+	for _, msg := range messages {
+		ids = append(ids, msg.TopicID)
+	}
+	topics, err := s.Topics.LookupTopics(ctx, m.Organization.ID, channelID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("reading topics: %w", err)
+	}
 	entries := make([]Entry, 0, len(messages))
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
@@ -99,7 +110,11 @@ func (s Reader) entries(ctx context.Context, m authz.Membership, messages []doma
 		if !ok || !named {
 			return nil, fmt.Errorf("missing author for message %x", msg.ID)
 		}
-		entries = append(entries, Entry{Message: msg, DisplayName: name, Handle: author.Handle})
+		topic, ok := topics[msg.TopicID]
+		if !ok {
+			return nil, fmt.Errorf("missing topic for message %x", msg.ID)
+		}
+		entries = append(entries, Entry{Message: msg, DisplayName: name, Handle: author.Handle, TopicName: topic.Name, DefaultTopic: topic.IsDefault})
 	}
 	return entries, nil
 }

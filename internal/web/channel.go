@@ -215,5 +215,6 @@ func viewMessage(entry message.Entry) view.Message {
 	return view.Message{
 		ID: entry.ID, DisplayName: entry.DisplayName, Handle: entry.Handle,
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
+		TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
 	}
 }

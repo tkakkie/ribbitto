@@ -13,3 +13,7 @@ SELECT * FROM topic
 WHERE organization_id = $1 AND channel_id = $2
 ORDER BY is_default DESC, id
 LIMIT $3;
+
+-- name: LookupTopics :many
+SELECT * FROM topic
+WHERE organization_id = $1 AND channel_id = $2 AND id = ANY(sqlc.arg(topic_ids)::uuid[]);

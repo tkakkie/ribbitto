@@ -49,12 +49,12 @@ func TestMessageOne(t *testing.T) {
 		want       message.Entry
 		wantErr    error
 	}{
-		{"hydrated", membership, local.Channel.ID, posted.EventSeq, message.Entry{Message: posted, DisplayName: "Current Name", Handle: "current-handle"}, nil},
+		{"hydrated", membership, local.Channel.ID, posted.EventSeq, message.Entry{Message: posted, DisplayName: "Current Name", Handle: "current-handle", DefaultTopic: true}, nil},
 		{"missing", membership, local.Channel.ID, posted.EventSeq + 100, message.Entry{}, message.ErrNotFound},
 		{"wrong channel", membership, otherChannel.ID, posted.EventSeq, message.Entry{}, message.ErrNotFound},
 		{"foreign message", membership, foreign.Channel.ID, foreignPost.EventSeq, message.Entry{}, message.ErrNotFound},
 		{"foreign member", foreignMembership, local.Channel.ID, posted.EventSeq, message.Entry{}, message.ErrNotFound},
-		{"foreign hydrated", foreignMembership, foreign.Channel.ID, foreignPost.EventSeq, message.Entry{Message: foreignPost, DisplayName: "globex", Handle: "owner"}, nil},
+		{"foreign hydrated", foreignMembership, foreign.Channel.ID, foreignPost.EventSeq, message.Entry{Message: foreignPost, DisplayName: "globex", Handle: "owner", DefaultTopic: true}, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := reader.One(ctx, tt.membership, tt.channel, tt.seq)
@@ -112,13 +112,33 @@ func TestMessagePaging(t *testing.T) {
 		}
 	}
 
-	reader := postgres.MessageReader{Pool: pool}
+	for _, name := range []string{"exact", "partial"} {
+		topic, err := postgres.NewTopicStore(pool).CreateTopic(ctx, acme.Organization.ID, channels[name], name)
+		requireNoError(t, err)
+		_, err = pool.Exec(ctx, "UPDATE message SET topic_id = $3 WHERE organization_id = $1 AND channel_id = $2 AND event_seq % 2 = 0", acme.Organization.ID, channels[name], topic.ID)
+		requireNoError(t, err)
+	}
+	queries, topicQueries := 0, 0
+	config := pool.Config()
+	config.ConnConfig.Tracer = queryHook(func(_ context.Context, sql string) {
+		if strings.HasPrefix(sql, "-- name:") {
+			queries++
+		}
+		if strings.HasPrefix(sql, "-- name: LookupTopics ") {
+			topicQueries++
+		}
+	})
+	reading, err := pgxpool.NewWithConfig(ctx, config)
+	requireNoError(t, err)
+	t.Cleanup(reading.Close)
+	reader := postgres.MessageReader{Pool: reading}
 	for _, name := range []string{"empty", "exact", "partial"} {
 		t.Run(name, func(t *testing.T) {
 			var got []string
 			var before *int64
 			pages := 0
 			for {
+				queries, topicQueries = 0, 0
 				page, err := reader.Before(ctx, acme, channels[name], before)
 				if err != nil {
 					t.Fatal(err)
@@ -126,11 +146,25 @@ func TestMessagePaging(t *testing.T) {
 				if (page.EventCursor == nil) != (before != nil) {
 					t.Fatalf("cursor presence disagrees with history bound: %+v", page)
 				}
+				wantQueries := 6
+				if before == nil {
+					wantQueries++
+				}
+				if queries != wantQueries || topicQueries != 1 {
+					t.Fatalf("page queries = %d (%d topic), want %d (1 topic)", queries, topicQueries, wantQueries)
+				}
 				pages++
 				var bodies []string
 				for _, e := range page.Entries {
 					if e.ChannelID != channels[name] || e.OrganizationID != acme.Organization.ID || e.Handle != "owner" || e.DisplayName != "acme" {
 						t.Fatalf("entry from the wrong scope or without its author: %+v", e)
+					}
+					if e.EventSeq%2 == 0 {
+						if e.TopicName != name || e.DefaultTopic {
+							t.Fatalf("named label: %+v", e)
+						}
+					} else if !e.DefaultTopic || e.TopicName != "" {
+						t.Fatalf("default label: %+v", e)
 					}
 					bodies = append(bodies, e.Body)
 				}
@@ -185,7 +219,7 @@ func (queryHook) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData
 
 func TestChannelPageSnapshot(t *testing.T) {
 	t.Parallel()
-	for _, statement := range []string{"GetChannel", "ListChannels", "ListMessagesBefore", "LookupMembers", "LookupDisplayNames", "GetEventSeq"} {
+	for _, statement := range []string{"GetChannel", "ListChannels", "ListMessagesBefore", "LookupMembers", "LookupDisplayNames", "LookupTopics", "GetEventSeq"} {
 		t.Run(statement, func(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()

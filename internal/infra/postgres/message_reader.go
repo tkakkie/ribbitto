@@ -81,3 +81,16 @@ func (s MessageReader) Page(ctx context.Context, m authz.Membership, channelID d
 	}
 	return page, nil
 }
+
+// Many reads a move's bounded message batch and directories in one snapshot.
+func (s MessageReader) Many(ctx context.Context, m authz.Membership, channelID domain.ID, ids []domain.ID) (entries []message.Entry, err error) {
+	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: NewAccountStore(tx), Topics: NewTopicStore(tx)}
+		entries, err = reader.Many(ctx, m, channelID, ids)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("reading messages snapshot: %w", err)
+	}
+	return entries, nil
+}

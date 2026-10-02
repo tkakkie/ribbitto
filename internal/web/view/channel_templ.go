@@ -650,7 +650,7 @@ func Channel(stylesheetURL string, page ChannelPage) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if page.EventCursor != nil && page.Before == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, " sse-swap=\"message\" hx-swap=\"beforeend\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, " sse-swap=\"message,messages-moved\" hx-swap=\"beforeend\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -765,7 +765,7 @@ func Channel(stylesheetURL string, page ChannelPage) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "\"></script> <script defer src=\"/static/message-stream-v3.js\" nonce=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "\"></script> <script defer src=\"/static/message-stream-v4.js\" nonce=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

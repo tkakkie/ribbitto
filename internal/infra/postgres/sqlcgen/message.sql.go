@@ -38,6 +38,47 @@ func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message
 	return i, err
 }
 
+const getMessages = `-- name: GetMessages :many
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id FROM message
+WHERE organization_id = $1 AND channel_id = $2 AND id = ANY($3::uuid[])
+ORDER BY event_seq DESC
+`
+
+type GetMessagesParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	MessageIds     []pgtype.UUID
+}
+
+func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, getMessages, arg.OrganizationID, arg.ChannelID, arg.MessageIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.ChannelID,
+			&i.MemberID,
+			&i.Body,
+			&i.EventSeq,
+			&i.CreatedAt,
+			&i.TopicID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertMessage = `-- name: InsertMessage :one
 INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq)
 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id

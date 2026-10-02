@@ -4,8 +4,8 @@
 
 One SSE connection per latest channel page (M3) or topic page (#304),
 carrying named events:
-`message` and `reset` today; `presence`, `typing` and `unread` are planned
-(M4). The browser sends everything else as ordinary POST requests. One
+`message`, `messages-moved` (feeds) and `reset` today; `presence`, `typing`
+and `unread` are planned (M4). The browser sends everything else as ordinary POST requests. One
 process serves every stream; several server processes are future work (the
 hub, the per-account cap and the watermark are per process).
 
@@ -57,8 +57,11 @@ sequenceDiagram
   interest checks: other channels, unsupported kinds and other posting-time
   topics are skipped before rendering or authorization (#261 B6). Explicit
   denies from `authz.MayReceive` are skipped after rendering. All skips advance
-  the cursor. `messages.moved` is decoded but still skipped pending #306's
-  view corrections; its notice is delivered as `message.posted`.
+  the cursor. `messages.moved` reaches channel feeds as `messages-moved`,
+  with one shared batch render and per-connection authorization. The client
+  replaces only loaded items by stable ID, without announcements or paging
+  changes; its notice is delivered as `message.posted`. Topic subscriptions
+  still skip moves pending #306's topic-page corrections.
 - **A topic page** subscribes to one topic of the channel
   (`…/topics/{topicID}/events`; an unknown topic, or another channel's, is
   404 before the stream opens). New posting events route by their persisted

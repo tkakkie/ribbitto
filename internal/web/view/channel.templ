@@ -159,7 +159,7 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 					<ol
 						id="message-items"
 						if page.EventCursor != nil && page.Before == 0 {
-							sse-swap="message"
+							sse-swap="message,messages-moved"
 							hx-swap="beforeend"
 						}
 						class="peer flex flex-col gap-4 px-6 py-4 empty:hidden"
@@ -184,7 +184,7 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v3.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v4.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

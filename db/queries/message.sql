@@ -13,3 +13,8 @@ WHERE organization_id = sqlc.arg(organization_id) AND channel_id = sqlc.arg(chan
   AND (sqlc.narg(before_event_seq)::bigint IS NULL OR event_seq < sqlc.narg(before_event_seq)::bigint)
 ORDER BY event_seq DESC
 LIMIT sqlc.arg('limit');
+
+-- name: GetMessages :many
+SELECT * FROM message
+WHERE organization_id = $1 AND channel_id = $2 AND id = ANY(sqlc.arg(message_ids)::uuid[])
+ORDER BY event_seq DESC;

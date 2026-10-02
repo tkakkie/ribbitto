@@ -21,8 +21,10 @@ type Entry struct {
 
 // History reads messages within one organisation and channel. Lists are
 // newest first, optionally filtered by topic; GetMessage returns ErrNotFound
-// when the scoped key is absent.
+// when the scoped key is absent. GetMessages returns the requested IDs only,
+// newest first; missing or out-of-scope IDs are omitted.
 type History interface {
+	GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]domain.Message, error)
 	ListMessagesBefore(context.Context, domain.ID, domain.ID, *domain.ID, *int64, int32) ([]domain.Message, error)
 	GetMessage(context.Context, domain.ID, domain.ID, int64) (domain.Message, error)
 }

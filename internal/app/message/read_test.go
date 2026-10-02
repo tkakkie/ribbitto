@@ -107,3 +107,7 @@ func TestOne(t *testing.T) {
 		})
 	}
 }
+
+func (singleMessage) GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]domain.Message, error) {
+	return nil, errors.New("unexpected batch read")
+}

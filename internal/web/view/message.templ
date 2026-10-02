@@ -68,3 +68,12 @@ templ messageItem(entry Message, announcement string) {
 		<p id={ "body-" + MessageDOMID(entry.ID) } dir="auto" class="whitespace-pre-wrap break-words">{ entry.Body }</p>
 	</li>
 }
+
+// MovedMessageItems carries replacement items without new-post announcements.
+templ MovedMessageItems(entries []Message) {
+	<ul>
+		for _, entry := range entries {
+			@MessageItem(entry)
+		}
+	</ul>
+}

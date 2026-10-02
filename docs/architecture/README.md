@@ -85,7 +85,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
-| `topic`: conversations inside a channel, the default topic, branching *(decision 21; table and store so far)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`; `db/queries/topic.sql` | `topic` |
+| `topic`: conversations inside a channel, the default topic, branching *(decision 21; schema and stores so far)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`; `db/queries/topic.sql` | `topic` |
 | `realtime` | `internal/realtime` *(M3)*; `domain/event.go`; `infra/postgres/event_log.go`, `event_reader.go`, `event_cleaner.go`; `db/queries/event_log.sql`; `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
 
 The shared kernel, which any feature may use: the IDs and value types in
@@ -117,6 +117,8 @@ It returns `message.ChannelPage`; older pages have no event cursor.
 - setup (`org`) writes `organization`, `account`, `member`, `channel` and
   `setup`, so it creates `identity`'s first `account` and the `channel`
   feature's default channel (a completed setup must never lack one);
+- creating a channel (`channel`) writes its default `topic` in the same
+  statement, so a channel never exists without one (decision 21, #307);
 - sign-up (`identity`) writes `account` and `member` and advances
   `organization.event_seq`, which belong to `org`;
 - posting (`message`) advances `organization.event_seq` before inserting

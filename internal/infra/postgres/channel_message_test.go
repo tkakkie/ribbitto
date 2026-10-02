@@ -69,20 +69,20 @@ func TestChannelMessageSchema(t *testing.T) {
 	for _, input := range []string{"a", "hello\t", "a\r\nb\rc\nd", "\u00a0\u2002hello\u2003\u3000", "\t\r\n　a \r\n \tb　\n", "a\u00a0b", "e\u0301", "👩\u200d💻", "see \u2067שלום\u2069 now", "\u2066abc\u2069 \u2068x\u2069", "a\u200eb\u200fc\u061cd", strings.Repeat("界", 4000), strings.Repeat("e\u0301", 2000)} {
 		body, err := domain.ValidateMessageBody(input)
 		requireNoError(t, err)
-		message, err := messages.InsertMessage(ctx, org, channel.ID, members[0], body, int64(len(posted)+1))
+		message, err := messages.InsertMessage(ctx, org, channel.ID, channel.DefaultTopicID, members[0], body, int64(len(posted)+1))
 		requireNoError(t, err)
-		if message.Body != body || message.OrganizationID != org || message.ChannelID != channel.ID || message.MemberID != members[0] || message.ID[6]>>4 != 7 || message.CreatedAt.IsZero() {
+		if message.Body != body || message.OrganizationID != org || message.ChannelID != channel.ID || message.TopicID != channel.DefaultTopicID || message.MemberID != members[0] || message.ID[6]>>4 != 7 || message.CreatedAt.IsZero() {
 			t.Fatalf("message round trip: %+v", message)
 		}
 		posted = append(posted, message)
 	}
 	// Equal sequences in different organisations are valid and must never leak.
-	_, err = messages.InsertMessage(ctx, other, foreign.ID, members[1], "other", 1)
+	_, err = messages.InsertMessage(ctx, other, foreign.ID, foreign.DefaultTopicID, members[1], "other", 1)
 	requireNoError(t, err)
 	// A newer message in a sibling channel must not appear in this channel's pages.
 	sibling, err := channels.CreateChannel(ctx, org, "sibling", false)
 	requireNoError(t, err)
-	_, err = messages.InsertMessage(ctx, org, sibling.ID, members[0], "sibling", 100)
+	_, err = messages.InsertMessage(ctx, org, sibling.ID, sibling.DefaultTopicID, members[0], "sibling", 100)
 	requireNoError(t, err)
 	slices.Reverse(posted)
 	for _, tc := range []struct {
@@ -118,7 +118,7 @@ func TestChannelMessageSchema(t *testing.T) {
 		{"foreign channel", "UPDATE message SET channel_id = $4 WHERE organization_id = $1", "23503"},
 		{"foreign member", "UPDATE message SET member_id = $5 WHERE organization_id = $1", "23503"},
 		{"foreign organisation", "UPDATE message SET organization_id = $2, event_seq = event_seq + 1000 WHERE organization_id = $1", "23503"},
-		{"duplicate sequence", "INSERT INTO message (organization_id, channel_id, member_id, body, event_seq) SELECT organization_id, channel_id, member_id, body, event_seq FROM message WHERE organization_id = $1", "23505"},
+		{"duplicate sequence", "INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq) SELECT organization_id, channel_id, topic_id, member_id, body, event_seq FROM message WHERE organization_id = $1", "23505"},
 		{"zero sequence", "UPDATE message SET event_seq = 0 WHERE organization_id = $1", "23514"},
 		{"empty name", "UPDATE channel SET name = '' WHERE organization_id = $1", "23514"},
 		{"long name", "UPDATE channel SET name = repeat('界', 81) WHERE organization_id = $1", "23514"},
@@ -133,7 +133,7 @@ func TestChannelMessageSchema(t *testing.T) {
 		})
 	}
 	for _, body := range []string{"", strings.Repeat("界", 4001), "a\rb", " hello", "hello ", "\thello", "hello\t", "\nhello", "hello\n", "a\x01b", "a\vb", "a\fb", "a\x1fb", "a\x7fb", "a\u0085b", "a\u009fb", "a\u2028b", "a\u2029b", "a\u202ab", "a\u202bb", "a\u202cb", "a\u202db", "https://evil.example/\u202eexample.com", "a\x00b"} {
-		_, err := messages.InsertMessage(ctx, org, channel.ID, members[0], body, 200)
+		_, err := messages.InsertMessage(ctx, org, channel.ID, channel.DefaultTopicID, members[0], body, 200)
 		var pgErr *pgconn.PgError
 		code := "23514"
 		if strings.ContainsRune(body, 0) {

@@ -17,11 +17,13 @@ type Account struct {
 }
 
 type Channel struct {
-	ID             pgtype.UUID
-	OrganizationID pgtype.UUID
-	Name           string
-	IsDefault      bool
-	CreatedAt      pgtype.Timestamptz
+	ID                    pgtype.UUID
+	OrganizationID        pgtype.UUID
+	Name                  string
+	IsDefault             bool
+	CreatedAt             pgtype.Timestamptz
+	DefaultTopicID        pgtype.UUID
+	DefaultTopicIsDefault bool
 }
 
 type EventLog struct {
@@ -51,6 +53,7 @@ type Message struct {
 	Body           string
 	EventSeq       int64
 	CreatedAt      pgtype.Timestamptz
+	TopicID        pgtype.UUID
 }
 
 type Organization struct {

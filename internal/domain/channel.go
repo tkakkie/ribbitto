@@ -3,11 +3,12 @@ package domain
 import "time"
 
 // Channel is a conversation identified by ID; Name is only its display name.
+// DefaultTopicID is its default topic, created with it (decision 21).
 type Channel struct {
-	ID, OrganizationID ID
-	Name               string
-	IsDefault          bool
-	CreatedAt          time.Time
+	ID, OrganizationID, DefaultTopicID ID
+	Name                               string
+	IsDefault                          bool
+	CreatedAt                          time.Time
 }
 
 // ValidateChannelName returns a trimmed NFC name of 1–80 printable Unicode code points.

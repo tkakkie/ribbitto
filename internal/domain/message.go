@@ -10,10 +10,10 @@ import (
 
 // Message is a plain-text post identified by ID. EventSeq orders it within its organisation.
 type Message struct {
-	ID, OrganizationID, ChannelID, MemberID ID
-	Body                                    string
-	EventSeq                                int64
-	CreatedAt                               time.Time
+	ID, OrganizationID, ChannelID, TopicID, MemberID ID
+	Body                                             string
+	EventSeq                                         int64
+	CreatedAt                                        time.Time
 }
 
 // ValidateMessageBody normalizes line endings and trims the whole plain-text body.

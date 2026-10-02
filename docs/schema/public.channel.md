@@ -4,17 +4,22 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false | [public.message](public.message.md) [public.topic](public.topic.md) |  |  |
-| organization_id | uuid |  | false | [public.message](public.message.md) [public.topic](public.topic.md) | [public.organization](public.organization.md) |  |
+| id | uuid | uuidv7() | false | [public.message](public.message.md) [public.topic](public.topic.md) | [public.topic](public.topic.md) |  |
+| organization_id | uuid |  | false | [public.message](public.message.md) [public.topic](public.topic.md) | [public.organization](public.organization.md) [public.topic](public.topic.md) |  |
 | name | text |  | false |  |  |  |
 | is_default | boolean | false | false |  |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
+| default_topic_id | uuid | uuidv7() | false |  | [public.topic](public.topic.md) |  |
+| default_topic_is_default | boolean | true | false |  | [public.topic](public.topic.md) |  |
 
 ## Constraints
 
 | Name | Type | Definition |
 | ---- | ---- | ---------- |
 | channel_created_at_not_null | n | NOT NULL created_at |
+| channel_default_topic_id_not_null | n | NOT NULL default_topic_id |
+| channel_default_topic_is_default_check | CHECK | CHECK (default_topic_is_default) |
+| channel_default_topic_is_default_not_null | n | NOT NULL default_topic_is_default |
 | channel_id_not_null | n | NOT NULL id |
 | channel_is_default_not_null | n | NOT NULL is_default |
 | channel_name_check | CHECK | CHECK (((length(name) >= 1) AND (length(name) <= 80))) |
@@ -25,6 +30,7 @@
 | channel_pkey | PRIMARY KEY | PRIMARY KEY (id) |
 | channel_organization_id_name_key | UNIQUE | UNIQUE (organization_id, name) |
 | channel_organization_id_id_key | UNIQUE | UNIQUE (organization_id, id) |
+| channel_default_topic_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, id, default_topic_id, default_topic_is_default) REFERENCES topic(organization_id, channel_id, id, is_default) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED |
 
 ## Indexes
 
@@ -40,13 +46,24 @@
 ```mermaid
 erDiagram
 
+"public.channel" }o--|| "public.topic" : "FOREIGN KEY (organization_id, id, default_topic_id, default_topic_is_default) REFERENCES topic(organization_id, channel_id, id, is_default) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED"
 "public.message" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 "public.topic" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 "public.channel" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 
 "public.channel" {
+  uuid id FK
+  uuid organization_id FK
+  text name
+  boolean is_default
+  timestamp_with_time_zone created_at
+  uuid default_topic_id FK
+  boolean default_topic_is_default FK
+}
+"public.topic" {
   uuid id
   uuid organization_id FK
+  uuid channel_id FK
   text name
   boolean is_default
   timestamp_with_time_zone created_at
@@ -59,14 +76,7 @@ erDiagram
   text body
   bigint event_seq
   timestamp_with_time_zone created_at
-}
-"public.topic" {
-  uuid id
-  uuid organization_id FK
-  uuid channel_id FK
-  text name
-  boolean is_default
-  timestamp_with_time_zone created_at
+  uuid topic_id FK
 }
 "public.organization" {
   uuid id

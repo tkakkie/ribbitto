@@ -7,9 +7,10 @@ that counts messages per topic. It was settled in
 [decision 21](../decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md) (#274).
 
 **Keep it current:** update this file in the same pull request whenever
-these rules change. So far only the `topic` table and its store exist
-(#301): channels and messages do not refer to it until #307, and nothing
-shows topics yet. `db/migrations/` is the source of truth for what exists.
+these rules change. The *Model* and *Tables* below exist (#301, #307):
+every channel has its default topic and every message a topic, and posting
+goes to the default topic. Nothing shows topics yet. `db/migrations/` is the
+source of truth for what exists.
 
 ## Model
 

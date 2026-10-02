@@ -42,6 +42,29 @@ func (q *Queries) CreateTopic(ctx context.Context, arg CreateTopicParams) (Topic
 	return i, err
 }
 
+const getDefaultTopic = `-- name: GetDefaultTopic :one
+SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic WHERE organization_id = $1 AND channel_id = $2 AND is_default
+`
+
+type GetDefaultTopicParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+}
+
+func (q *Queries) GetDefaultTopic(ctx context.Context, arg GetDefaultTopicParams) (Topic, error) {
+	row := q.db.QueryRow(ctx, getDefaultTopic, arg.OrganizationID, arg.ChannelID)
+	var i Topic
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ChannelID,
+		&i.Name,
+		&i.IsDefault,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTopic = `-- name: GetTopic :one
 SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic WHERE organization_id = $1 AND channel_id = $2 AND id = $3
 `

@@ -12,8 +12,14 @@ import (
 )
 
 const createChannel = `-- name: CreateChannel :one
-INSERT INTO channel (organization_id, name, is_default)
-VALUES ($1, $2, $3) RETURNING id, organization_id, name, is_default, created_at
+WITH created AS (
+  INSERT INTO channel (organization_id, name, is_default)
+  VALUES ($1, $2, $3) RETURNING id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default
+), default_topic AS (
+  INSERT INTO topic (id, organization_id, channel_id, is_default)
+  SELECT default_topic_id, organization_id, id, true FROM created
+)
+SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default FROM created
 `
 
 type CreateChannelParams struct {
@@ -22,21 +28,37 @@ type CreateChannelParams struct {
 	IsDefault      bool
 }
 
-func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error) {
+type CreateChannelRow struct {
+	ID                    pgtype.UUID
+	OrganizationID        pgtype.UUID
+	Name                  string
+	IsDefault             bool
+	CreatedAt             pgtype.Timestamptz
+	DefaultTopicID        pgtype.UUID
+	DefaultTopicIsDefault bool
+}
+
+// Listed exception (feature map): channel creation writes topic's table, so a
+// channel never exists without its default topic (decision 21). One
+// statement keeps both in one transaction even on a pool; the channel's
+// foreign key to the topic is deferred to commit.
+func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (CreateChannelRow, error) {
 	row := q.db.QueryRow(ctx, createChannel, arg.OrganizationID, arg.Name, arg.IsDefault)
-	var i Channel
+	var i CreateChannelRow
 	err := row.Scan(
 		&i.ID,
 		&i.OrganizationID,
 		&i.Name,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.DefaultTopicID,
+		&i.DefaultTopicIsDefault,
 	)
 	return i, err
 }
 
 const getChannel = `-- name: GetChannel :one
-SELECT id, organization_id, name, is_default, created_at FROM channel WHERE organization_id = $1 AND id = $2
+SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default FROM channel WHERE organization_id = $1 AND id = $2
 `
 
 type GetChannelParams struct {
@@ -53,12 +75,14 @@ func (q *Queries) GetChannel(ctx context.Context, arg GetChannelParams) (Channel
 		&i.Name,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.DefaultTopicID,
+		&i.DefaultTopicIsDefault,
 	)
 	return i, err
 }
 
 const getDefaultChannel = `-- name: GetDefaultChannel :one
-SELECT id, organization_id, name, is_default, created_at FROM channel WHERE organization_id = $1 AND is_default
+SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default FROM channel WHERE organization_id = $1 AND is_default
 `
 
 func (q *Queries) GetDefaultChannel(ctx context.Context, organizationID pgtype.UUID) (Channel, error) {
@@ -70,12 +94,14 @@ func (q *Queries) GetDefaultChannel(ctx context.Context, organizationID pgtype.U
 		&i.Name,
 		&i.IsDefault,
 		&i.CreatedAt,
+		&i.DefaultTopicID,
+		&i.DefaultTopicIsDefault,
 	)
 	return i, err
 }
 
 const listChannels = `-- name: ListChannels :many
-SELECT id, organization_id, name, is_default, created_at FROM channel WHERE organization_id = $1 ORDER BY name, id
+SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default FROM channel WHERE organization_id = $1 ORDER BY name, id
 `
 
 func (q *Queries) ListChannels(ctx context.Context, organizationID pgtype.UUID) ([]Channel, error) {
@@ -93,6 +119,8 @@ func (q *Queries) ListChannels(ctx context.Context, organizationID pgtype.UUID) 
 			&i.Name,
 			&i.IsDefault,
 			&i.CreatedAt,
+			&i.DefaultTopicID,
+			&i.DefaultTopicIsDefault,
 		); err != nil {
 			return nil, err
 		}

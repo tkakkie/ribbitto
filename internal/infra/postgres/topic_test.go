@@ -1,12 +1,17 @@
 package postgres_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
+	"github.com/tkakkie/ribbitto/db/migrations"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -26,15 +31,13 @@ func TestTopicSchema(t *testing.T) {
 	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
 	general := acme.Channel.ID
 
-	def, err := store.CreateDefaultTopic(ctx, acme.OrganizationID, general)
-	if err != nil || !def.IsDefault || def.Name != "" || def.ChannelID != general || def.OrganizationID != acme.OrganizationID || def.ID[6]>>4 != 7 || def.CreatedAt.IsZero() {
+	// Every channel is created with its default topic (#307).
+	def, err := store.GetDefaultTopic(ctx, acme.OrganizationID, general)
+	if err != nil || def.ID != acme.Channel.DefaultTopicID || !def.IsDefault || def.Name != "" || def.ChannelID != general || def.OrganizationID != acme.OrganizationID || def.ID[6]>>4 != 7 || def.CreatedAt.IsZero() {
 		t.Fatalf("default topic: %+v, %v", def, err)
 	}
 	if _, err := store.CreateDefaultTopic(ctx, acme.OrganizationID, general); !isConstraint(err, "23505", "topic_default_idx") {
 		t.Fatalf("second default topic: %v", err)
-	}
-	if _, err := store.CreateDefaultTopic(ctx, acme.OrganizationID, random.ID); err != nil {
-		t.Fatalf("default topic of another channel: %v", err)
 	}
 
 	for _, input := range []string{"a", "　 設計 会議　 ", " é ", strings.Repeat("界", 80)} {
@@ -99,7 +102,7 @@ func TestTopicStoreScope(t *testing.T) {
 	globex := pgtest.OrganizationWithOwner(t, pool, "globex", "general")
 	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
 
-	def, err := store.CreateDefaultTopic(ctx, acme.OrganizationID, acme.Channel.ID)
+	def, err := store.GetDefaultTopic(ctx, acme.OrganizationID, acme.Channel.ID)
 	requireNoError(t, err)
 	var named []domain.Topic
 	for _, name := range []string{"design", "release", "hiring"} {
@@ -130,8 +133,8 @@ func TestTopicStoreScope(t *testing.T) {
 	if first, err := store.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 2); err != nil || !slices.Equal(first, all[:2]) {
 		t.Fatalf("bounded list: %+v, %v", first, err)
 	}
-	if none, err := store.ListTopics(ctx, acme.OrganizationID, random.ID, 10); err != nil || len(none) != 0 {
-		t.Fatalf("another channel's list: %+v, %v", none, err)
+	if other, err := store.ListTopics(ctx, acme.OrganizationID, random.ID, 10); err != nil || len(other) != 1 || other[0].ID != random.DefaultTopicID {
+		t.Fatalf("another channel's list: %+v, %v", other, err)
 	}
 	if leaked, err := store.ListTopics(ctx, globex.OrganizationID, acme.Channel.ID, 10); err != nil || len(leaked) != 0 {
 		t.Fatalf("list across organisations: %+v, %v", leaked, err)
@@ -146,4 +149,111 @@ func TestTopicStoreScope(t *testing.T) {
 func isConstraint(err error, code, constraint string) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == code && (constraint == "" || pgErr.ConstraintName == constraint)
+}
+
+// Channels and messages can only point at topics of their own channel, and a
+// channel only at its own default topic.
+func TestTopicReferences(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	topics := postgres.NewTopicStore(pool)
+	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
+
+	// Creating a channel creates its default topic, and posting without a
+	// topic goes there.
+	for _, c := range []domain.Channel{acme.Channel, random} {
+		got, err := topics.GetDefaultTopic(ctx, acme.OrganizationID, c.ID)
+		if err != nil || got.ID != c.DefaultTopicID || !got.IsDefault || got.ChannelID != c.ID {
+			t.Fatalf("default topic of %s: %+v, %v", c.Name, got, err)
+		}
+	}
+	posted, err := postgres.NewPostingStore(pool).Post(ctx, acme.OrganizationID, random.ID, acme.MemberID, "hello")
+	if err != nil || posted.TopicID != random.DefaultTopicID {
+		t.Fatalf("post: %+v, %v", posted, err)
+	}
+	named, err := topics.CreateTopic(ctx, acme.OrganizationID, acme.Channel.ID, "design")
+	requireNoError(t, err)
+
+	// Raw SQL writes the references the stores never write.
+	for _, tc := range []struct{ name, sql, code, constraint string }{
+		{"message in another channel's topic", "UPDATE message SET topic_id = $2 WHERE id = $1", "23503", "message_topic_fkey"},
+		{"default flag cleared", "UPDATE channel SET default_topic_is_default = false WHERE id = $3", "23514", "channel_default_topic_is_default_check"},
+		{"default topic deleted", "DELETE FROM topic WHERE id = $4", "23001", "channel_default_topic_fkey"},
+	} {
+		_, err := pool.Exec(ctx, "WITH fixture AS (SELECT $1::uuid, $2::uuid, $3::uuid, $4::uuid) "+tc.sql, posted.ID, acme.Channel.DefaultTopicID, random.ID, random.DefaultTopicID)
+		if !isConstraint(err, tc.code, tc.constraint) {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+	}
+	// The channel's key is deferred, so these fail at commit.
+	for _, tc := range []struct{ name, sql string }{
+		{"default pointing at a named topic", "UPDATE channel SET default_topic_id = $1 WHERE id = $2"},
+		{"channel without its default topic", "INSERT INTO channel (organization_id, name) SELECT organization_id, 'orphan' FROM channel WHERE id = $2 AND $1::uuid IS NOT NULL"},
+	} {
+		tx, err := pool.Begin(ctx)
+		requireNoError(t, err)
+		_, err = tx.Exec(ctx, tc.sql, named.ID, acme.Channel.ID)
+		requireNoError(t, err)
+		if err := tx.Commit(ctx); !isConstraint(err, "23503", "channel_default_topic_fkey") {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+	}
+}
+
+// Migration 9 gives every existing channel a default topic and moves every
+// existing message into its channel's.
+func TestTopicBackfill(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	pool := pgtest.NewEmpty(t)
+	db := stdlib.OpenDBFromPool(pool)
+	t.Cleanup(func() { requireNoError(t, db.Close()) })
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	requireNoError(t, err)
+	_, err = provider.UpTo(ctx, 8)
+	requireNoError(t, err)
+	// Raw SQL writes what the binary of migration 8 wrote.
+	for _, slug := range []string{"acme", "globex"} {
+		org := pgtest.Organization(t, pool, slug, slug, 0)
+		member := pgtest.Member(t, pool, org, pgtest.Account(t, pool, slug+"@example.org", slug), domain.RoleOwner, "owner", 1)
+		_, err := pool.Exec(ctx, `
+			WITH c AS (INSERT INTO channel (organization_id, name, is_default) VALUES ($1, 'general', true), ($1, 'random', false), ($1, 'empty', false) RETURNING id, name)
+			INSERT INTO message (organization_id, channel_id, member_id, body, event_seq)
+			SELECT $1, c.id, $2, 'm' || n, n + CASE c.name WHEN 'general' THEN 0 ELSE 10 END
+			FROM c, generate_series(1, 3) n WHERE c.name <> 'empty'`, org, member)
+		requireNoError(t, err)
+	}
+	_, err = provider.UpTo(ctx, 9)
+	requireNoError(t, err)
+	var channels, topicsFound, wrong, messages, misplaced int
+	requireNoError(t, pool.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM channel),
+		(SELECT count(*) FROM topic WHERE is_default AND name IS NULL),
+		(SELECT count(*) FROM channel c LEFT JOIN topic t ON t.id = c.default_topic_id AND t.organization_id = c.organization_id AND t.channel_id = c.id AND t.is_default WHERE t.id IS NULL),
+		(SELECT count(*) FROM message),
+		(SELECT count(*) FROM message m JOIN channel c ON c.organization_id = m.organization_id AND c.id = m.channel_id WHERE m.topic_id <> c.default_topic_id)`).
+		Scan(&channels, &topicsFound, &wrong, &messages, &misplaced))
+	if channels != 6 || topicsFound != 6 || wrong != 0 || messages != 12 || misplaced != 0 {
+		t.Fatalf("channels=%d default topics=%d without one=%d messages=%d misplaced=%d", channels, topicsFound, wrong, messages, misplaced)
+	}
+	// Down keeps named topics and removes only the defaults; up again
+	// leaves the same shape, without a second default.
+	_, err = pool.Exec(ctx, "INSERT INTO topic (organization_id, channel_id, name) SELECT organization_id, id, 'design' FROM channel WHERE name = 'general'")
+	requireNoError(t, err)
+	_, err = provider.Down(ctx)
+	requireNoError(t, err)
+	var named, defaults int
+	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FILTER (WHERE name = 'design'), count(*) FILTER (WHERE is_default) FROM topic").Scan(&named, &defaults))
+	if named != 2 || defaults != 0 {
+		t.Fatalf("after down: %d named topics, %d defaults; want 2 and 0", named, defaults)
+	}
+	_, err = provider.UpTo(ctx, 9)
+	requireNoError(t, err)
+	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FILTER (WHERE name = 'design'), count(*) FILTER (WHERE is_default) FROM topic").Scan(&named, &defaults))
+	if named != 2 || defaults != 6 {
+		t.Fatalf("after down and up: %d named topics, %d defaults; want 2 and 6", named, defaults)
+	}
 }

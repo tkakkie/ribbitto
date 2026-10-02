@@ -74,11 +74,13 @@ erDiagram
   timestamp_with_time_zone completed_at
 }
 "public.channel" {
-  uuid id
+  uuid id FK
   uuid organization_id FK
   text name
   boolean is_default
   timestamp_with_time_zone created_at
+  uuid default_topic_id FK
+  boolean default_topic_is_default FK
 }
 "public.event_log" {
   uuid organization_id FK

@@ -12,6 +12,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
@@ -24,10 +25,11 @@ func NewMessageStore(db sqlcgen.DBTX) *MessageStore {
 	return &MessageStore{queries: sqlcgen.New(db)}
 }
 
-// InsertMessage stores a validated body at a sequence allocated by the caller's transaction.
-func (s *MessageStore) InsertMessage(ctx context.Context, organizationID, channelID, memberID domain.ID, body string, eventSeq int64) (domain.Message, error) {
+// InsertMessage stores a validated body in a topic of the channel at a
+// sequence allocated by the caller's transaction.
+func (s *MessageStore) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID domain.ID, body string, eventSeq int64) (domain.Message, error) {
 	row, err := s.queries.InsertMessage(ctx, sqlcgen.InsertMessageParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true},
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, TopicID: pgtype.UUID{Bytes: topicID, Valid: true},
 		MemberID: pgtype.UUID{Bytes: memberID, Valid: true}, Body: body, EventSeq: eventSeq,
 	})
 	if err != nil {
@@ -70,7 +72,7 @@ func (s *MessageStore) ListMessagesBefore(ctx context.Context, organizationID, c
 }
 
 func messageFromRow(row sqlcgen.Message) domain.Message {
-	return domain.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time}
+	return domain.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time}
 }
 
 // PostingStore implements message.Store: it owns the posting transaction.
@@ -90,7 +92,17 @@ func (s *PostingStore) Post(ctx context.Context, organizationID, channelID, memb
 		if err != nil {
 			return err
 		}
-		posted, err = NewMessageStore(tx).InsertMessage(ctx, organizationID, channelID, memberID, body, seq)
+		// A message posted without a topic goes to the channel's default
+		// topic (decision 21), read through topic's API. A channel always
+		// has one, so none means the channel is not in this organisation.
+		defaultTopic, err := NewTopicStore(tx).GetDefaultTopic(ctx, organizationID, channelID)
+		if errors.Is(err, topic.ErrNotFound) {
+			return channel.ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		posted, err = NewMessageStore(tx).InsertMessage(ctx, organizationID, channelID, defaultTopic.ID, memberID, body, seq)
 		if err != nil {
 			return err
 		}
@@ -98,6 +110,8 @@ func (s *PostingStore) Post(ctx context.Context, organizationID, channelID, memb
 	})
 	var pgErr *pgconn.PgError
 	switch {
+	case errors.Is(err, channel.ErrNotFound):
+		return domain.Message{}, channel.ErrNotFound
 	// The composite foreign keys, not a lookup first, keep a message inside
 	// its organisation: another organisation's channel or member fails here.
 	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_channel_id_fkey":

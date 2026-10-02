@@ -66,6 +66,12 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 		http.NotFound(w, r)
 		return
 	}
+	// CrossOriginProtection exempts GET, but a foreign page must not hold
+	// the account's stream slots. Older clients may omit Fetch Metadata.
+	if sites := r.Header.Values("Sec-Fetch-Site"); len(sites) != 0 && (len(sites) != 1 || sites[0] != "same-origin") {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	id, ok := channelID(r)
 	if !ok {
 		http.NotFound(w, r)
@@ -106,10 +112,21 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 		timeout = DefaultStreamWriteTimeout
 	}
 	send := &sseSender{w: w, rc: rc, timeout: timeout}
+	// The status is committed without sseSender.write: on cancellation its
+	// AfterFunc expires the write deadline, and over HTTP/2 that resets the
+	// stream, so a 404 or 503 written afterwards would never arrive. Until
+	// WriteHeader nothing has been sent, so a cancellation that wins first
+	// (after the session re-check, too) still gets its status. One after
+	// WriteHeader ends a stream that has started (accepted on #315).
 	header := w.Header()
 	header.Set("Content-Type", "text/event-stream; charset=utf-8")
 	header.Set("Cache-Control", "no-cache")
-	if err := send.write(ctx, func() error { w.WriteHeader(http.StatusOK); return nil }); err != nil {
+	if context.Cause(ctx) != nil {
+		streamCancelled(w, r, ctx) // http.Error replaces the content type
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	if err := send.write(ctx, func() error { return nil }); err != nil {
 		slog.WarnContext(r.Context(), "starting event stream", "err", err)
 		return
 	}
@@ -179,7 +196,7 @@ func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organiz
 		// The session ended (or the client left) while it was being looked
 		// up again: the store reports the cancellation as an error, but it
 		// is the expected end of this stream, not a server failure.
-		http.NotFound(w, r)
+		streamCancelled(w, r, ctx)
 		return nil, nil, false
 	}
 	if err != nil {
@@ -193,6 +210,14 @@ func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organiz
 		cancel()
 		unregister()
 	}, true
+}
+
+func streamCancelled(w http.ResponseWriter, r *http.Request, ctx context.Context) {
+	if errors.Is(context.Cause(ctx), realtime.ErrShutdown) {
+		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	http.NotFound(w, r)
 }
 
 // streamCursor reads the cursor: Last-Event-ID, else the single ?after value.

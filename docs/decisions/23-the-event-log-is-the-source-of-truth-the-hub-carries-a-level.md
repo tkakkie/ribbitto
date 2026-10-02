@@ -1,9 +1,10 @@
 # 23. The event log is the source of truth; the hub carries a level
 
-**Decided:** real-time delivery reads events only from `event_log`. The
-in-memory hub carries, per organisation, only the highest committed sequence
-it has been told about, and wakes waiting connections when it rises; it never
-holds or forwards events. Losing a raise, or restarting the process, can only
+**Decided:** real-time delivery reads durable events only from `event_log`
+(ephemeral signals such as presence and typing are not logged and are out of
+this rule). The in-memory hub carries, per organisation, only the highest
+committed sequence it has been told about, and wakes waiting connections when
+it rises; it never holds or forwards events. Losing a raise, or restarting the process, can only
 delay delivery, which the periodic watermark check bounds. In M3 each
 connection runs its own read loop; that is the current design, not part of
 this decision, and the planned shared reader per organisation (#232, #236)

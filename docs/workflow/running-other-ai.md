@@ -162,7 +162,8 @@ P=123 && tmp=$(mktemp -d) &&
   base=$(jq -er .baseRefOid "$tmp/pr.json") && head=$(jq -er .headRefOid "$tmp/pr.json") &&
   title=$(jq -er .title "$tmp/pr.json") && body=$(jq -r '.body // ""' "$tmp/pr.json") &&
   git fetch --quiet origin main "refs/pull/$P/head" &&
-  tree=$(git ls-tree -r "$head") && [[ -z $(awk '$1 == "120000"' <<<"$tree") ]] &&
+  tree=$(git ls-tree -r "$head") && symlinks=$(awk '$1 == "120000"' <<<"$tree") &&
+  [[ -z $symlinks ]] &&
   git worktree add --quiet --detach "$tmp/worktree" "$head" &&
   git show origin/main:.github/prompts/adversarial.md > "$tmp/prompt.md" &&
   git diff "$base...$head" > "$tmp/pr.diff" &&

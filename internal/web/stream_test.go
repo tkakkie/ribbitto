@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -212,6 +214,78 @@ func TestStreamCancelledBeforeTheFirstWrite(t *testing.T) {
 			}
 			if n := hub.Connections(); n != 0 {
 				t.Fatalf("%d connections still registered", n)
+			}
+		})
+	}
+}
+
+// cancellingConn is cancellingWriter for a real server: it cancels at the
+// sender's first write deadline and then sets the deadline on the real
+// connection, so an expired deadline really stops writes.
+type cancellingConn struct {
+	http.ResponseWriter
+	cancel func()
+	once   sync.Once
+}
+
+func (w *cancellingConn) SetWriteDeadline(d time.Time) error {
+	if !d.IsZero() {
+		w.once.Do(w.cancel)
+	}
+	return http.NewResponseController(w.ResponseWriter).SetWriteDeadline(d)
+}
+
+func (w *cancellingConn) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// Over a real connection, the 404 or 503 for a stream cancelled before its
+// first write reaches the client: the deadline the cancellation expired is
+// reset before the error is written.
+func TestStreamCancelledBeforeTheFirstWriteOverHTTP(t *testing.T) {
+	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	for _, tt := range []struct {
+		name   string
+		cancel func(*realtime.Hub)
+		want   int
+	}{
+		{"signed out", func(hub *realtime.Hub) { hub.CancelSession(live.ID) }, http.StatusNotFound},
+		{"shutdown", func(hub *realtime.Hub) { hub.CancelAll() }, http.StatusServiceUnavailable},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			hub := realtime.NewHub()
+			seen := -1
+			catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+				s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handler.ServeHTTP(&cancellingConn{ResponseWriter: w, cancel: func() { tt.cancel(hub) }}, r)
+			}))
+			defer server.Close()
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			resp, err := server.Client().Do(req)
+			if err != nil {
+				t.Fatalf("no response reached the client: %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("reading the body: %v", err)
+			}
+			if resp.StatusCode != tt.want || len(body) == 0 || resp.Header.Get("Content-Type") != "text/plain; charset=utf-8" {
+				t.Fatalf("status %d, type %q, body %q; want a plain-text %d", resp.StatusCode, resp.Header.Get("Content-Type"), body, tt.want)
+			}
+			if seen != 1 {
+				t.Fatalf("re-check saw %d connections; want the cancellation after a passed re-check", seen)
 			}
 		})
 	}

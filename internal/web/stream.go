@@ -130,6 +130,11 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 		// Cancellation can win after the session re-check. Only an
 		// uncommitted response can still carry its HTTP failure status.
 		if !started && ctx.Err() != nil {
+			// write's AfterFunc expired the write deadline on cancellation;
+			// give the error response its own, or it cannot be sent.
+			if err := rc.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
+				slog.WarnContext(r.Context(), "resetting write deadline", "err", err)
+			}
 			streamCancelled(w, r, ctx)
 			return
 		}

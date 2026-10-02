@@ -18,21 +18,30 @@ import (
 // each fail; it records the calls http.ResponseController makes.
 type deadlineWriter struct {
 	*httptest.ResponseRecorder
+	// mu guards calls: sseSender.write's AfterFunc sets a deadline from
+	// another goroutine when the stream is cancelled mid-write.
+	mu                                   sync.Mutex
 	calls                                []string
 	setErr, clearErr, writeErr, flushErr error
 }
 
+func (w *deadlineWriter) record(call string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.calls = append(w.calls, call)
+}
+
 func (w *deadlineWriter) SetWriteDeadline(d time.Time) error {
 	if d.IsZero() {
-		w.calls = append(w.calls, "clear")
+		w.record("clear")
 		return w.clearErr
 	}
-	w.calls = append(w.calls, "set")
+	w.record("set")
 	return w.setErr
 }
 
 func (w *deadlineWriter) Write(b []byte) (int, error) {
-	w.calls = append(w.calls, "write")
+	w.record("write")
 	if w.writeErr != nil {
 		return 0, w.writeErr
 	}
@@ -40,7 +49,7 @@ func (w *deadlineWriter) Write(b []byte) (int, error) {
 }
 
 func (w *deadlineWriter) FlushError() error {
-	w.calls = append(w.calls, "flush")
+	w.record("flush")
 	return w.flushErr
 }
 

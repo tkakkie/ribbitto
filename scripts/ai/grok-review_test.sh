@@ -179,6 +179,12 @@ mark('prompt', do { local $/; <$f> });
 close $f;
 mark('grok');
 my $mode = $ENV{MODE};
+if ($mode eq 'exit-before-deadline') {
+  # Exit within the last two-second poll interval, before the one-second
+  # alarm wakes the supervisor: it must reap us before reporting a timeout.
+  select undef, undef, undef, 0.25;
+  exit 0;
+}
 if ($mode eq 'early-exit') {
   # The leader exits at once and leaves a descendant; record its pid first so
   # the cleanup assertion can find it.
@@ -341,6 +347,10 @@ DRIVER
         [[ -f $CASE_DIR/out/caffeinate ]] || fail 'caffeinate -i not invoked'
       fi
       case $mode in
+        exit-before-deadline)
+          if grep -Eq 'timed out|did not finish' "$CASE_DIR/out/stderr"; then
+            fail 'completed Grok reported as a timeout'
+          fi ;;
         wall-clock)
           contains "$CASE_DIR/out/stderr" 'timed out after 3 s'
           contains "$CASE_DIR/out/stderr" 'Grok did not finish within 3s' ;;
@@ -405,6 +415,7 @@ run_case exit-status-42 42 exit42 default 49
 run_case without-caffeinate 0 no-caffeinate default 49
 run_case descendants-after-success 0 descendants default 49
 run_case timeout-124 124 timeout 1 49
+run_case exit-before-deadline-keeps-0 0 exit-before-deadline 1 49
 run_case wall-clock-before-alarm-124 124 wall-clock 3 49
 run_case SIGINT-130 130 INT default 49
 run_case SIGTERM-143 143 TERM default 49

@@ -222,12 +222,16 @@ perl -e '
     waitpid($pid, 0);
     exit $code;
   };
-  $SIG{ALRM} = sub { $stop->(124, "timed out after $limit s; stopped Grok") };
-  $SIG{INT}  = sub { $stop->(130, "interrupted; stopped Grok") };
-  $SIG{TERM} = sub { $stop->(143, "terminated; stopped Grok") };
+  # Reap before acting on a signal: Grok may have exited during the last poll
+  # interval. Signals during group cleanup must not replace its status either.
+  my $stop_request;
+  $SIG{ALRM} = sub { $stop_request //= [124, "timed out after $limit s; stopped Grok"] };
+  $SIG{INT}  = sub { $stop_request //= [130, "interrupted; stopped Grok"] };
+  $SIG{TERM} = sub { $stop_request //= [143, "terminated; stopped Grok"] };
   alarm $limit;
   sigprocmask(SIG_SETMASK, $old);
   while (waitpid($pid, WNOHANG) != $pid) {
+    $stop->(@$stop_request) if $stop_request;
     # alarm is still a backstop; wall time also catches a deadline that passed
     # during machine sleep, even if the alarm did not advance with it.
     $stop->(124, "timed out after $limit s; stopped Grok") if time >= $deadline;

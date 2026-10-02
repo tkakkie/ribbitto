@@ -146,7 +146,7 @@ func TestMessagePaging(t *testing.T) {
 				if (page.EventCursor == nil) != (before != nil) {
 					t.Fatalf("cursor presence disagrees with history bound: %+v", page)
 				}
-				wantQueries := 6
+				wantQueries := 7 // including the sidebar's bounded topic list (#303)
 				if before == nil {
 					wantQueries++
 				}

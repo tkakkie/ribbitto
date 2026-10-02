@@ -10,8 +10,9 @@ that counts messages per topic. It was settled in
 these rules change. The *Model* and *Tables* below exist (#301, #307):
 every channel has its default topic and every message a topic, and posting
 goes to the default topic, and a topic view posts into its topic. Feed
-labels, topic views with live updates (#304), posting into a topic and a
-bounded topic list exist; branching (#305) follows. `db/migrations/` is the
+labels, topic views with live updates (#304), posting into a topic, a
+bounded topic list and the branching endpoint (#305) exist; the branch
+selection UI (#308) and live delivery of branching (#306) follow. `db/migrations/` is the
 schema source of truth.
 
 ## Model

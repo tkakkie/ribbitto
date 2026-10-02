@@ -54,9 +54,10 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m authz.Mem
 			return
 		}
 		b.To = &to
-	} else {
-		b.NewName = r.PostForm.Get("name")
 	}
+	// Read both: a request naming two destinations is refused (422), never
+	// resolved by dropping one.
+	b.NewName = r.PostForm.Get("name")
 	count := len(b.Messages)
 	// The notice is an ordinary message in the brancher's language; its
 	// text names the destination as it is at the time of branching.

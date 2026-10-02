@@ -52,6 +52,15 @@ func TestBranching(t *testing.T) {
 		t.Fatal("the feed does not label the moved messages with their new topic")
 	}
 
+	// Two destinations are refused before anything changes.
+	destination := strings.TrimPrefix(topicURL, channelURL+"/topics/")
+	branch(t, owner, channelURL, url.Values{"message": {ids["stays here"]}, "from": {source}, "to": {destination}, "name": {"both"}}, http.StatusUnprocessableEntity)
+	var stays string
+	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT topic_id::text FROM message WHERE id = $1", ids["stays here"]).Scan(&stays))
+	if stays != source {
+		t.Fatal("a request with two destinations moved a message")
+	}
+
 	// Branching the same messages again from the default topic is stale.
 	branch(t, owner, channelURL, url.Values{"message": {ids["moves away"]}, "from": {source}, "name": {"late"}}, http.StatusConflict)
 	var topics int

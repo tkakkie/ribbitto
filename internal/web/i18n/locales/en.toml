@@ -165,3 +165,6 @@ other = "Jump to the newest messages"
 
 ["message.new"]
 other = "New message"
+
+["topic.default"]
+other = "chorus"

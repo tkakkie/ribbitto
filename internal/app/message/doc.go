@@ -5,7 +5,8 @@
 // ErrInvalidBody, and Reader with History: Before reads a Page below an
 // event_seq bound; One reads an Entry by organisation, channel and event_seq,
 // returning ErrNotFound for a missing or out-of-scope message; ChannelPage is
-// the page snapshot's result.
+// the page snapshot's result. topic.Directory resolves topic labels in one
+// batch per page.
 // Author names use member.Directory (org)
 // followed by auth.Directory (identity); message queries neither feature.
 // It uses org through authz.Membership; posting reports a channel

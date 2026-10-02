@@ -108,3 +108,19 @@ func (s *TopicStore) ListTopics(ctx context.Context, organizationID, channelID d
 func topicFromRow(row sqlcgen.Topic) domain.Topic {
 	return domain.Topic{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, Name: row.Name.String, IsDefault: row.IsDefault, CreatedAt: row.CreatedAt.Time}
 }
+
+// LookupTopics implements topic.Directory without per-message queries.
+func (s *TopicStore) LookupTopics(ctx context.Context, organizationID, channelID domain.ID, ids []domain.ID) (map[domain.ID]domain.Topic, error) {
+	rows, err := s.queries.LookupTopics(ctx, sqlcgen.LookupTopicsParams{
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true},
+		ChannelID:      pgtype.UUID{Bytes: channelID, Valid: true}, TopicIds: uuidArray(ids),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("looking up topics: %w", err)
+	}
+	result := make(map[domain.ID]domain.Topic, len(rows))
+	for _, row := range rows {
+		result[row.ID.Bytes] = topicFromRow(row)
+	}
+	return result, nil
+}

@@ -62,6 +62,10 @@ func (f *singleMessage) LookupDisplayNames(_ context.Context, ids []domain.ID) (
 	return map[domain.ID]string{{6}: "Current Name"}, f.nameErr
 }
 
+func (f *singleMessage) LookupTopics(context.Context, domain.ID, domain.ID, []domain.ID) (map[domain.ID]domain.Topic, error) {
+	return map[domain.ID]domain.Topic{f.msg.TopicID: {}}, nil
+}
+
 func TestOne(t *testing.T) {
 	failure := errors.New("directory or store failed")
 	for _, tt := range []struct {
@@ -82,7 +86,7 @@ func TestOne(t *testing.T) {
 			msg := domain.Message{ID: domain.ID{4}, OrganizationID: domain.ID{1}, ChannelID: domain.ID{2}, MemberID: domain.ID{3}, Body: "body", EventSeq: 9}
 			f := &singleMessage{t: t, msg: msg, readErr: tt.readErr, memberErr: tt.memberErr, nameErr: tt.nameErr, missingMember: tt.missingMember, missingName: tt.missingName}
 			membership := authz.Membership{Organization: domain.Organization{ID: msg.OrganizationID}}
-			got, err := (message.Reader{History: f, Members: f, Accounts: f}).One(t.Context(), membership, msg.ChannelID, msg.EventSeq)
+			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).One(t.Context(), membership, msg.ChannelID, msg.EventSeq)
 			if !reflect.DeepEqual(f.calls, tt.wantCalls) {
 				t.Fatalf("calls = %v, want %v", f.calls, tt.wantCalls)
 			}

@@ -128,3 +128,41 @@ func (q *Queries) ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic
 	}
 	return items, nil
 }
+
+const lookupTopics = `-- name: LookupTopics :many
+SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic
+WHERE organization_id = $1 AND channel_id = $2 AND id = ANY($3::uuid[])
+`
+
+type LookupTopicsParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	TopicIds       []pgtype.UUID
+}
+
+func (q *Queries) LookupTopics(ctx context.Context, arg LookupTopicsParams) ([]Topic, error) {
+	rows, err := q.db.Query(ctx, lookupTopics, arg.OrganizationID, arg.ChannelID, arg.TopicIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Topic
+	for rows.Next() {
+		var i Topic
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.ChannelID,
+			&i.Name,
+			&i.IsDefault,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

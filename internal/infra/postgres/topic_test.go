@@ -121,6 +121,9 @@ func TestTopicStoreScope(t *testing.T) {
 		{acme.OrganizationID, random.ID, def.ID, "another channel's topic"},
 		{globex.OrganizationID, acme.Channel.ID, def.ID, "a channel of another organisation"},
 	} {
+		if got, err := store.LookupTopics(ctx, lookup.org, lookup.channel, []domain.ID{lookup.id}); err != nil || len(got) != 0 {
+			t.Fatalf("batch leaked %s: %+v, %v", lookup.what, got, err)
+		}
 		if _, err := store.GetTopic(ctx, lookup.org, lookup.channel, lookup.id); !errors.Is(err, topic.ErrNotFound) {
 			t.Fatalf("%s: %v", lookup.what, err)
 		}

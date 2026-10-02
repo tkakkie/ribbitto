@@ -53,16 +53,25 @@ func (f *directoryHistory) LookupDisplayNames(_ context.Context, ids []domain.ID
 	}
 	return map[domain.ID]string{{6}: "Author"}, f.step("names")
 }
+func (f *directoryHistory) LookupTopics(_ context.Context, org, ch domain.ID, ids []domain.ID) (map[domain.ID]domain.Topic, error) {
+	if org != (domain.ID{1}) || ch != (domain.ID{2}) || !reflect.DeepEqual(ids, []domain.ID{{}, {}}) {
+		f.t.Fatal("wrong topic scope")
+	}
+	if f.fail == "missing topic" {
+		return nil, nil
+	}
+	return map[domain.ID]domain.Topic{{}: {Name: "Design"}}, f.step("topics")
+}
 func TestBefore(t *testing.T) {
-	for _, failure := range []string{"", "history", "members", "names", "missing member", "missing account"} {
+	for _, failure := range []string{"", "history", "members", "names", "topics", "missing topic", "missing member", "missing account"} {
 		t.Run("failure="+failure, func(t *testing.T) {
 			f := &directoryHistory{t: t, fail: failure}
 			before := int64(9)
-			got, err := (message.Reader{History: f, Members: f, Accounts: f}).Before(t.Context(), authz.Membership{Organization: domain.Organization{ID: domain.ID{1}}}, domain.ID{2}, &before)
+			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).Before(t.Context(), authz.Membership{Organization: domain.Organization{ID: domain.ID{1}}}, domain.ID{2}, &before)
 			if (err != nil) != (failure != "") {
 				t.Fatalf("error: %v", err)
 			}
-			if failure == "" && (len(got.Entries) != 2 || got.Older || got.Entries[0].ID != (domain.ID{5}) || got.Entries[1].ID != (domain.ID{4}) || got.Entries[0].DisplayName != "Author" || got.Entries[0].Handle != "author" || !reflect.DeepEqual(f.calls, []string{"history", "members", "names"})) {
+			if failure == "" && (len(got.Entries) != 2 || got.Older || got.Entries[0].ID != (domain.ID{5}) || got.Entries[1].ID != (domain.ID{4}) || got.Entries[0].DisplayName != "Author" || got.Entries[0].Handle != "author" || got.Entries[0].TopicName != "Design" || !reflect.DeepEqual(f.calls, []string{"history", "members", "names", "topics"})) {
 				t.Fatalf("page: %+v, calls: %v", got, f.calls)
 			}
 		})
@@ -92,6 +101,10 @@ func (fullHistory) LookupDisplayNames(context.Context, []domain.ID) (map[domain.
 	return map[domain.ID]string{{6}: "Author"}, nil
 }
 
+func (fullHistory) LookupTopics(context.Context, domain.ID, domain.ID, []domain.ID) (map[domain.ID]domain.Topic, error) {
+	return map[domain.ID]domain.Topic{{}: {}}, nil
+}
+
 func TestBeforePages(t *testing.T) {
 	for _, tt := range []struct {
 		messages int
@@ -104,7 +117,7 @@ func TestBeforePages(t *testing.T) {
 		{2 * message.PageSize, []int{message.PageSize, message.PageSize}},
 	} {
 		f := fullHistory{tt.messages}
-		reader := message.Reader{History: f, Members: f, Accounts: f}
+		reader := message.Reader{History: f, Members: f, Accounts: f, Topics: f}
 		var before *int64
 		var sizes []int
 		for {

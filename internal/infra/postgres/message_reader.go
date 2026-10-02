@@ -15,13 +15,13 @@ import (
 )
 
 // MessageReader reads the channel page and its cursor, or one message, each
-// with both author batches from one snapshot.
+// with both author batches and topic labels from one snapshot.
 type MessageReader struct{ Pool *pgxpool.Pool }
 
-// One reads one message and its author names in a read-only snapshot.
+// One reads one message, its author names and topic in a read-only snapshot.
 func (s MessageReader) One(ctx context.Context, m authz.Membership, channelID domain.ID, eventSeq int64) (entry message.Entry, err error) {
 	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: NewAccountStore(tx)}
+		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: NewAccountStore(tx), Topics: NewTopicStore(tx)}
 		entry, err = reader.One(ctx, m, channelID, eventSeq)
 		return err
 	})
@@ -43,7 +43,7 @@ func (s MessageReader) Before(ctx context.Context, m authz.Membership, channelID
 		if err != nil {
 			return err
 		}
-		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: NewAccountStore(tx)}
+		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: NewAccountStore(tx), Topics: NewTopicStore(tx)}
 		page.Page, err = reader.Before(ctx, m, channelID, before)
 		if err != nil {
 			return err

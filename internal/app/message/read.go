@@ -20,7 +20,7 @@ func (s Reader) One(ctx context.Context, m authz.Membership, channelID domain.ID
 	if err != nil {
 		return Entry{}, fmt.Errorf("reading message: %w", err)
 	}
-	entries, err := s.entries(ctx, m, []domain.Message{msg})
+	entries, err := s.entries(ctx, m, channelID, []domain.Message{msg})
 	if err != nil {
 		return Entry{}, err
 	}

@@ -3,7 +3,7 @@
 // (decision 21, docs/domain/topics.md).
 //
 // Feature: topic (feature map in docs/architecture/features.md), which owns
-// the topic table. Exported API: the Store interface and ErrNotFound,
+// the topic table. Exported API: Store, Directory (batch label lookup), ErrNotFound,
 // ErrInvalidName and ErrNameTaken. Use cases arrive with the views that
 // need them (#303, #305); every lookup is scoped by organisation and
 // channel, so a topic of another channel is not found.

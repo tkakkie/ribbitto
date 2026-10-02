@@ -165,3 +165,6 @@ other = "最新のメッセージへ"
 
 ["message.new"]
 other = "新しいメッセージ"
+
+["topic.default"]
+other = "chorus"

@@ -1,4 +1,4 @@
-# Topics *(planned)*
+# Topics
 
 How messages inside a channel are grouped into topics, what the default
 topic is, and how messages move between topics. Read this before
@@ -9,8 +9,8 @@ that counts messages per topic. It was settled in
 **Keep it current:** update this file in the same pull request whenever
 these rules change. The *Model* and *Tables* below exist (#301, #307):
 every channel has its default topic and every message a topic, and posting
-goes to the default topic. Nothing shows topics yet. `db/migrations/` is the
-source of truth for what exists.
+goes to the default topic. The feed labels messages (#302); the topic view
+and branching remain planned. `db/migrations/` is the schema source of truth.
 
 ## Model
 
@@ -62,13 +62,21 @@ source of truth for what exists.
 
 - **Feed** — the channel page: every topic's messages interleaved by
   `event_seq`, each labelled with its topic. It is what the channel page
-  shows today, plus the labels.
-- **Topic view** — one topic's messages, paged by `event_seq` the same way
+  shows today. Labels are plain text until #303, escaped and isolated with
+  `<bdi>`; the default label comes from both language catalogues. Topic names
+  are resolved through `topic.Directory` in one batch per page, in the same
+  snapshot as the messages and authors. Live labels come from the shared
+  `MessageReader.One` load through the existing render cache, keyed by
+  organisation, channel, sequence and language, with no extra read per stream
+  per event. A moved message's label is corrected by #306's move event.
+- **Topic view** *(planned)* — one topic's messages, paged by `event_seq` the same way
   as channel history ([`messages.md`](messages.md#older-pages)).
 - A topic in a URL is scoped by the organisation and channel in the same
   URL; a topic of another channel is 404, like a non-member.
 
 ## Branching
+
+*Planned.*
 
 A member selects one or more messages in any topic of a channel, the
 default topic included, and moves them to another topic of the same

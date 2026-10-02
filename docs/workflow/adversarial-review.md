@@ -1,10 +1,50 @@
 # Adversarial review
 
-From M1 on, **every `high` pull request gets one adversarial review by Grok
-before the maintainer is asked.** Running it is mandatory; its findings are
-advisory. It does not count towards the two review rounds. It runs after the
-cross-review, while the pull request is still a draft, and before it is
-marked ready for review.
+**A pull request that alters one of the areas below gets one adversarial
+review by Grok before the maintainer is asked**, whatever its risk class.
+Running it is then mandatory; its findings are advisory. It does not count
+towards the two review rounds. It runs after the cross-review, while the
+pull request is still a draft, and before it is marked ready for review.
+
+## When Grok runs
+
+In the small sample recorded in #339, Grok's valid findings came from
+long-lived state and concurrency. So Grok is **required** when a change
+alters any of the following, **wherever the code lives** (handlers, use
+cases, stores, `db/queries/**`, `db/migrations/**`, scripts):
+
+1. authentication, authorisation, sessions or organisation scoping: who is
+   signed in, who is a member, what a member may see or do, and how a
+   session expires (for example `internal/app/authz/**`,
+   `internal/app/auth/**`, `internal/web/middleware/**`, `internal/web/org.go`,
+   the setup, sign-up and sign-in handlers, and the stores and queries for
+   accounts, members and sessions);
+2. real-time delivery, on the server (`internal/realtime/**`, the stream
+   handlers and renderers in `internal/web`, the event log's queries and
+   readers) or in the browser (the SSE scripts in `web/static`);
+3. concurrency, caches or background work (goroutines, locks, TTLs,
+   clean-up jobs);
+4. the rules that guard these areas or the AI and CI tooling: the AI
+   launchers in `scripts/ai/**`; the trusted prompts and review
+   instructions in `.github/prompts/**` and `.github/instructions/**`;
+   `.github/workflows/**`; the files that define the review gates
+   (`docs/workflow/README.md`, `reviewing.md`, `running-other-ai.md`, this
+   whole file, and `.github/pull_request_template.md`); and the security
+   and scoping rules in `AGENTS.md` and `docs/domain/invariants.md`. Being
+   documentation does not exempt a change from this item;
+5. the checks themselves: a change to `Makefile`, `tools/**` or a linter,
+   vet or code-generation setting (`.golangci.yml`, `sqlc.yaml`) that
+   removes, skips or loosens a check `make check` or CI runs.
+
+Otherwise Grok is not required. A `high` pull request without it says why
+in the template, `Adversarial: skipped (<reason>)`: for example
+documentation only, tests only, a dependency bump, or a build or lint
+setting that keeps every check. These examples never apply when any item
+above matches. **When
+in doubt, Grok runs.** The other AI checks the requirement or the skip
+against what the change does, not only the paths it touches.
+
+## Running Grok
 
 Run it from the maintainer's checkout, taking the launcher as it is on
 `main` — never a copy that a pull request could have changed:
@@ -77,13 +117,14 @@ exits 0.)
 
 ## Muse Code, optional
 
-Muse Code may review a `high` pull request as a second adversarial
-reviewer (#330, from the trial in #246). Grok stays mandatory. Muse Code
+Muse Code may review a pull request as a second adversarial reviewer
+(#330, from the trial in #246), including one where Grok was skipped.
+Grok stays required wherever [*When Grok runs*](#when-grok-runs) says so. Muse Code
 is optional and advisory: its report never satisfies or waives a
 requirement (Grok's review, the Claude ↔ Codex rounds, Copilot's
 follow-up, the maintainer's decisions).
 
-- It reviews the same head commit with the same context as Grok, run as in
+- It reviews the same head commit with the same context Grok gets, run as in
   [*Running Muse Code*](running-other-ai.md#running-muse-code).
 - Claude posts the report as `**Adversarial review — Muse Code** (at <SHA>)`.
   A valid finding gets a disposition like any other: fixed, a follow-up

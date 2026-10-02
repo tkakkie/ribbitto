@@ -63,7 +63,8 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    - ✅ | ❌ finding — how it was checked
    ```
 
-4. All pass → the remaining steps (Grok for `high` risk, then
+4. All pass → the remaining steps (Grok when
+   [required](adversarial-review.md#when-grok-runs), then
    `ai-reviewed` and ready for review, then Copilot) and the normal merge
    decision. Any other change
    in the diff, a failed check, a new blocking finding or anything needing
@@ -104,4 +105,6 @@ A change is **high** risk if it touches any of: `internal/app/authz/**`,
 `.github/**`, `scripts/**`, `tools/**`, `Makefile`, `.golangci.yml`,
 `sqlc.yaml`, `go.mod`, `go.sum`, `docs/workflow/**`, or any `AGENTS.md`
 or `CLAUDE.md`. Everything else is **normal**. The author states the risk
-in the template; the reviewer checks it.
+in the template; the reviewer checks it. Whether Grok runs is decided
+separately, by what the change alters
+([`adversarial-review.md`](adversarial-review.md#when-grok-runs)).

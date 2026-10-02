@@ -48,6 +48,5 @@ unique index at once.
 
 ## Topics
 
-Every channel will have topics, including exactly one default topic, which
-is unrelated to the default channel above: see [`topics.md`](topics.md)
-*(planned)*.
+Every channel has topics, including exactly one default topic, which is
+unrelated to the default channel above: see [`topics.md`](topics.md).

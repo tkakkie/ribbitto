@@ -17,8 +17,7 @@ enhancement, not full parity.
   keyboard shortcuts (Enter to send), and local-time display. Without
   JavaScript a page may lack these, but nothing core breaks.
 
-Topic views use plain composer submissions; their latest page receives
-that topic's messages over SSE (#304).
+Topic views use plain composer submissions.
 
 ## Go handlers
 
@@ -58,9 +57,11 @@ htmx does only requests and swaps; the server and templ own the HTML.
   plus `message-<32 lowercase hex digits>` from
   `MessageDOMID`. `#message-items` is always present, including when empty;
   Load older selects its direct `<li>` children.
-- The latest channel page carries `data-event-cursor` on its outer layout
-  div, outside `#conversation` and every swap target, with `hx-ext="sse"`
-  and `sse-connect="…/events?after=<cursor>"`. Older pages omit all three.
+- The latest channel or topic page carries `data-event-cursor` on its outer
+  layout div, outside `#conversation` and every swap target, with
+  `hx-ext="sse"` and `sse-connect="<page URL>/events?after=<cursor>"`; a
+  topic's stream sends only that topic's messages (#304). Older pages omit
+  all three.
   `#message-items` receives `message` events; same-id duplicates replace the
   existing item. `LiveMessageItem` shares `MessageItem` markup, adding
   templ-rendered `data-announcement` text only to stream payloads; the

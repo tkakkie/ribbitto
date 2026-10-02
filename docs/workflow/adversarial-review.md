@@ -38,21 +38,18 @@ exits 0.)
   is checked out: a symlink could otherwise let Grok read files outside the
   worktree.
 - Where available (macOS), `caffeinate -i` prevents idle sleep while Grok
-  runs; it is skipped elsewhere. The supervisor also checks a wall-clock
-  deadline every 0.2 seconds, so a deadline passed during sleep is caught
-  on wake even if the alarm did not advance.
+  runs; it is skipped elsewhere. It runs inside Grok's process group and
+  is stopped with that group on every exit. The supervisor checks a
+  wall-clock deadline every two seconds, so a deadline passed during sleep
+  is caught on wake even if the alarm did not advance. The alarm remains
+  as a backstop.
 - It stops Grok and everything Grok started after `RIBBITTO_GROK_TIMEOUT`
-  seconds (1–86400, default 2400 / 40 minutes; exit 124), or after
-  `RIBBITTO_GROK_STALL` seconds without stdout or stderr (1–86400, default
-  900 / 15 minutes; exit 125). Any output, including a partial line, resets
-  the stall timer; output is still printed to its original stream.
-  It removes the worktree and temporary files on success, failure, timeout,
-  stall, Ctrl-C (130) and `TERM` (143), reporting any cleanup failure. When
-  Grok itself fails, the script exits with Grok's status. If its process group cannot be
+  seconds (1–86400, default 2400 / 40 minutes; exit 124), and removes the
+  worktree and temporary files on success, failure, timeout, Ctrl-C (130)
+  and `TERM` (143), reporting any cleanup failure. When Grok itself fails,
+  the script exits with Grok's status. If Grok's process group cannot be
   created, it prints `could not create a process group for Grok` and exits
   126 without starting Grok.
-- After a stall, rerun once using the invocation above. If it stalls again,
-  record both stalls in the PR and ask the maintainer how to proceed.
 - The timeout is a backstop against a stuck CLI, not an estimate of review
   time. Raise `RIBBITTO_GROK_TIMEOUT` when a larger PR needs more time or a
   review times out. On timeout, the launcher suggests a value for

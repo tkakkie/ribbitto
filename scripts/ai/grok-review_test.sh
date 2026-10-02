@@ -128,6 +128,7 @@ FAKE
 use strict; use warnings;
 use POSIX qw(_exit);
 shift @ARGV eq '-i' or die "expected caffeinate -i";
+getpgrp(0) == $$ or die "caffeinate is not in Grok's process group";
 open my $f, '>', "$ENV{CASE_DIR}/out/caffeinate" or die $!; close $f;
 my $child = fork() // die $!;
 if (!$child) {
@@ -161,7 +162,6 @@ FAKE
 #!/usr/bin/env perl
 use strict; use warnings;
 use POSIX qw(_exit);
-use Time::HiRes qw(time sleep);
 my $out = "$ENV{CASE_DIR}/out";
 # Wait for a signal, or until the case directory is removed: fallback_cleanup
 # stops this way the fakes it cannot or must not kill by pid (#183).
@@ -187,9 +187,9 @@ if ($mode eq 'early-exit') {
   open my $p, '>>', "$out/pids" or die $!; print $p "$child\n"; close $p;
   exit 42;
 }
-if ($mode eq 'descendants' || $mode eq 'timeout' || $mode eq 'wall-clock' || $mode =~ /^stall-/ || $mode =~ /^(setup-)?(INT|TERM)$/) {
+if ($mode eq 'descendants' || $mode eq 'timeout' || $mode eq 'wall-clock' || $mode =~ /^(setup-)?(INT|TERM)$/) {
   my $child;
-  $SIG{TERM} = sub { mark('stopped', time); waitpid($child, 0); exit 0 };
+  $SIG{TERM} = sub { waitpid($child, 0); exit 0 };
   $child = fork() // die $!;
   if (!$child) {
     record();
@@ -207,14 +207,6 @@ if ($mode eq 'descendants' || $mode eq 'timeout' || $mode eq 'wall-clock' || $mo
     my $deadline = time + 3;
     until (-e "$out/ready") { die "child not ready" if time >= $deadline; select undef, undef, undef, 0.01 }
   } else {
-    if ($mode eq 'stall-stdout' || $mode eq 'stall-stderr') {
-      my $stream = $mode eq 'stall-stdout' ? \*STDOUT : \*STDERR;
-      # No newline: line buffering must not defeat activity detection. Each
-      # stream alone keeps the run alive beyond the two-second stall limit.
-      my $last;
-      for (1 .. 5) { $last = time; syswrite($stream, "pulse-$_ "); sleep 0.6 }
-      mark('silent', $last);
-    }
     hold();
   }
 }
@@ -236,9 +228,8 @@ run_case() {
   fixtures || exit 1
   (
     export PATH="$CASE_DIR/bin:$original_path" TMPDIR="$CASE_DIR/tmp" MODE="$mode"
-    unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT RIBBITTO_GROK_STALL RIBBITTO_GROK_TEST_SETUP_DELAY
+    unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT RIBBITTO_GROK_TEST_SETUP_DELAY
     [[ -z ${SETUP_DELAY:-} ]] || export RIBBITTO_GROK_TEST_SETUP_DELAY="$SETUP_DELAY"
-    [[ -z ${STALL_LIMIT:-} ]] || export RIBBITTO_GROK_STALL="$STALL_LIMIT"
     [[ $limit == default ]] || export RIBBITTO_GROK_TIMEOUT="$limit"
     if [[ $mode == no-caffeinate ]]; then
       # Invoked by the child Bash through the exported function.
@@ -323,7 +314,6 @@ DRIVER
   case $mode in
     argument) contains "$CASE_DIR/out/stderr" 'usage:'; absent gh; absent grok ;;
     validation) contains "$CASE_DIR/out/stderr" 'must be an integer from 1 to 86400'; absent gh; absent grok ;;
-    stall-validation) contains "$CASE_DIR/out/stderr" 'RIBBITTO_GROK_STALL must be an integer from 1 to 86400'; absent gh; absent grok ;;
     mismatch) contains "$CASE_DIR/out/stderr" 'differs from origin/main'; absent gh; absent grok ;;
     gh-failure) contains "$CASE_DIR/out/stderr" 'could not read PR #49'; absent grok; absent prompt-read ;;
     symlink)
@@ -354,22 +344,6 @@ DRIVER
         wall-clock)
           contains "$CASE_DIR/out/stderr" 'timed out after 3 s'
           contains "$CASE_DIR/out/stderr" 'Grok did not finish within 3s' ;;
-        stall-*)
-          contains "$CASE_DIR/out/stderr" "no stdout or stderr for $STALL_LIMIT s; stopped Grok"
-          contains "$CASE_DIR/out/stderr" 'Grok stalled; rerun once'
-          contains "$CASE_DIR/out/stderr" 'if it stalls again, record it in the PR and ask the maintainer'
-          [[ $(wc -l < "$CASE_DIR/out/pids") -ge 4 ]] || fail 'stall did not exercise descendants'
-          if [[ $mode != stall-silent ]]; then
-            contains "$CASE_DIR/out/${mode#stall-}" 'pulse-1 pulse-2 pulse-3 pulse-4 pulse-5 '
-            # Perl, not shell expansion.
-            # shellcheck disable=SC2016
-            "$REAL_PERL" -e '
-              my ($out, $stall) = @ARGV;
-              open my $s, "<", "$out/silent" or die $!;
-              open my $t, "<", "$out/stopped" or die $!;
-              exit((<$t> - <$s>) >= $stall ? 0 : 1);
-            ' "$CASE_DIR/out" "$STALL_LIMIT" || fail 'stall fired before a full silent interval'
-          fi ;;
         timeout)
           contains "$CASE_DIR/out/stderr" 'timed out after 1 s'
           contains "$CASE_DIR/out/stderr" 'Grok did not finish within 1s'
@@ -425,16 +399,12 @@ for value in 0 -1 01 abc '1;echo unsafe'; do
 done
 for value in 0 -1 01 1.5 abc 86401 999999999999999999999; do
   run_case "timeout-$value" 1 validation "$value" 49
-  STALL_LIMIT=$value run_case "stall-$value" 1 stall-validation default 49
 done
 run_case gh-failure 1 gh-failure default 49
 run_case exit-status-42 42 exit42 default 49
 run_case without-caffeinate 0 no-caffeinate default 49
 run_case descendants-after-success 0 descendants default 49
 run_case timeout-124 124 timeout 1 49
-STALL_LIMIT=1 run_case stall-silent-125 125 stall-silent 8 49
-STALL_LIMIT=2 run_case stall-stdout-resets-125 125 stall-stdout 8 49
-STALL_LIMIT=2 run_case stall-stderr-resets-125 125 stall-stderr 8 49
 run_case wall-clock-before-alarm-124 124 wall-clock 3 49
 run_case SIGINT-130 130 INT default 49
 run_case SIGTERM-143 143 TERM default 49

@@ -37,7 +37,8 @@ func (s MessageReader) Before(ctx context.Context, m authz.Membership, channelID
 	return s.Page(ctx, m, channelID, nil, before)
 }
 
-// Page reads channel or topic history; topic pages have no live cursor.
+// Page reads channel or topic history; the latest page of either carries the
+// snapshot's event cursor for its stream, older pages none.
 func (s MessageReader) Page(ctx context.Context, m authz.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (page message.ChannelPage, err error) {
 	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		channels := channel.New(NewChannelStore(tx))

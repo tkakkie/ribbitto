@@ -502,6 +502,19 @@ func TestTopicEventStream(t *testing.T) {
 	}
 	noEvent(t, events, 100*time.Millisecond)
 
+	// An account that is not a member gets 404 for a real topic, with the
+	// stream enabled, before anything is streamed.
+	outsider := newAcceptanceBrowser(t, server, "192.0.2.12")
+	outsider.visit(t, "POST", "/signup", acceptanceForm("outsider"), 303)
+	_, err := pool.Exec(t.Context(), `WITH o AS (INSERT INTO organization (slug, name) VALUES ('elsewhere', 'Elsewhere') RETURNING id)
+		UPDATE member SET organization_id = (SELECT id FROM o) WHERE account_id = (SELECT id FROM account WHERE email = 'outsider@example.com')`)
+	acceptanceOK(t, err)
+	if events, status := openStream(t, on(outsider, streams), topicURL, "0"); status != http.StatusNotFound {
+		t.Fatalf("non-member's topic stream: %d, want 404", status)
+	} else if _, ok := <-events; ok {
+		t.Fatal("a non-member's refused stream emitted an event")
+	}
+
 	for _, url := range []string{channelURL + "/topics/00000000-0000-7000-8000-000000000000", foreignURL} {
 		if events, status := openStream(t, on(owner, streams), url, "0"); status != http.StatusNotFound {
 			t.Fatalf("%s: stream status %d, want 404", url, status)

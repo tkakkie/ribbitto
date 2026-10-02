@@ -46,9 +46,8 @@ those tables. `MessageReader` shares one read-only repeatable-read transaction
 across the channel and sidebar (through `channel.Service`), the selected topic
 and the bounded topic list (through `topic.Store`), history, both author
 lookups and the topic batch through `topic.Directory.LookupTopics`, plus the
-shared-kernel `organization.event_seq` on the latest channel page.
-It returns `message.ChannelPage`; older pages and topic pages have no event
-cursor.
+shared-kernel `organization.event_seq` on the latest channel or topic page.
+It returns `message.ChannelPage`; older pages have no event cursor.
 `MessageReader.One` reads one message, its authors and topic in its own snapshot.
 Live labels come from that shared load through the existing render cache, keyed
 by organisation, channel, sequence and language, with no extra read per stream

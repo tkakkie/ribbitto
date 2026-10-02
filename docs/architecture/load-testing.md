@@ -28,15 +28,23 @@ numbers are named when #216 tunes them (#261 B13).
 ## What the runs record for these
 
 - **A4:** at the end of each step, `runtime.heap_inuse_bytes` from
-  [development metrics](dev-metrics.md), and an estimate of the render
-  cache's bytes: the distinct (channel, sequence, language) renders the step
-  delivered within the last minute (the cache's TTL), at most 4096 shared by
-  all languages, times the size of the `data:` payload the client received
-  for each, which is the cached HTML. The step's body length and content are
-  recorded with it. A worst-case step posts 4,000-character bodies of
-  characters HTML escapes; its heap compared with a short-body step at the
-  same stream count bounds the cache's share. A heap profile is optional:
-  the server exposes none, and adding one is separate work (#216).
+  [development metrics](dev-metrics.md), and approximate indicators of the
+  render cache's share, not a bound on it:
+  - **observed renders:** the distinct (channel, sequence, language)
+    messages the step delivered, and the size of each one's `data:` payload
+    (the cached HTML; a lower bound per entry, since a buffer's capacity can
+    exceed its length);
+  - **retained entries, estimated:** expired entries are dropped only when
+    looked up again or evicted at capacity, so the cache may hold every
+    distinct render since the process started, up to 4096 shared by all
+    languages, whatever the last minute delivered.
+
+  The step's body length and content are recorded with them. A worst-case
+  step posts 4,000-character bodies of characters HTML escapes; comparing
+  its heap with a short-body step at the same stream count indicates the
+  cache's weight, while other allocations and garbage collection also move
+  the heap. A heap profile is optional: the server exposes none, and adding
+  one is separate work (#216).
 - **A5:** attempted versus established streams (the load client and
   `streams.open`) and the server's open file descriptors, read from the
   operating system on the disposable Linux machine (`/proc/<pid>/fd`), at

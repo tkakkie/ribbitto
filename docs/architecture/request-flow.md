@@ -43,7 +43,7 @@ with that membership; they never query the database directly:
 | `GET /organizations/{slug}/` | 303 to `Service.Default`, found by `is_default`; a missing default is logged and answers 500 |
 | `GET /organizations/{slug}/channels/{channel-id}` | Channel page and sidebar; malformed, unknown and other organisations' UUIDs answer 404. `?before=<event_seq>` shows the older page; a bound that is not one positive integer, or a malformed query, answers 400 |
 | `POST /organizations/{slug}/channels/{channel-id}` | Calls `message.Service.Post`; htmx receives only the reset composer (the message itself arrives over the event stream), otherwise 303 back to the channel; invalid bodies render a field error (422) |
-| `GET /organizations/{slug}/channels/{channel-id}/events` | The channel's event stream (SSE); a malformed cursor answers 400, a present `Sec-Fetch-Site` other than a single `same-origin` value 403 (before registration; absent is allowed), a non-member or ended session 404, an account at its stream cap 429, a server shutting down 503. Cancellation before the first write also answers 404 (session ended) or 503 (shutdown) ([streaming](streaming.md)) |
+| `GET /organizations/{slug}/channels/{channel-id}/events` | The channel's event stream (SSE); a malformed cursor answers 400, a present `Sec-Fetch-Site` other than a single `same-origin` value 403 (before registration; absent is allowed), a non-member or ended session 404, an account at its stream cap 429, a server shutting down 503. Cancellation before the first write also answers 404 (session ended) or 503 (shutdown) ([streaming](streaming.md); the cap and shutdown: [stream limits](stream-limits.md)) |
 | `GET /organizations/{slug}/channels/{channel-id}/topics/{topic-id}/events` | The topic's event stream: the same answers, plus 404 before registration for an unknown topic or another channel's; it sends only that topic's messages |
 | `POST /organizations/{slug}/channels` | Creates a channel and answers 303 to its UUID URL; invalid or duplicate names render a field error (422) alongside the default channel |
 
@@ -61,7 +61,7 @@ In `newServer` (`cmd/ribbitto`):
 
 Without these limits, a client could hold a connection for as long as it liked: idle between requests, with a body started and never finished, or by never reading the response. That includes an unread body that `net/http` discards after a 404 or 429.
 
-**The rule:** ordinary HTTP responses have a bounded write. A streaming endpoint has its own, explicit bounded-write policy instead of the server's: M3's SSE sets a finite deadline before each write (see *Resource limits* in [`streaming.md`](streaming.md#resource-limits)). A future route that must read a long request body sets its own read deadline through `http.ResponseController`.
+**The rule:** ordinary HTTP responses have a bounded write. A streaming endpoint has its own, explicit bounded-write policy instead of the server's: M3's SSE sets a finite deadline before each write (see [`stream-limits.md`](stream-limits.md)). A future route that must read a long request body sets its own read deadline through `http.ResponseController`.
 
 ribbitto keeps these limits itself and does not rely on a reverse proxy for them ([decision 15](../decisions/15-every-ordinary-response-has-a-bounded-write-ribbitto-does-not-rely-on-a-proxy-for-it.md)). A proxy in front (Caddy by default, or nginx, Traefik and others) adds defense in depth: TLS, keeping the backend unreachable from outside, and connection and slow-client limits.
 

@@ -25,7 +25,7 @@ func TestApplicationJavaScript(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, finding := range checkJavaScript(name, string(source)) {
-				t.Errorf("%s:%d: %s (see docs/architecture/web-layers.md#javascript-pattern-check)", name, finding.line, finding.rule)
+				t.Errorf("%s:%d: %s (see docs/architecture/web-layers-checks.md#javascript-pattern-check)", name, finding.line, finding.rule)
 			}
 		})
 	}

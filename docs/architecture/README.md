@@ -27,7 +27,8 @@ Read the file for the area you change:
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
-| [`web-layers.md`](web-layers.md) | what handlers, templ, htmx and JavaScript are each responsible for, and how it is checked |
+| [`web-layers.md`](web-layers.md) | what handlers, templ, htmx and JavaScript are each responsible for |
+| [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 
 ## See also
 

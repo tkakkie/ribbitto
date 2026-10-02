@@ -19,7 +19,7 @@ erDiagram
   organization ||--o{ event_log : "records"
   channel ||--o{ message : "contains"
   message |o--o{ message : "is answered by (planned)"
-  channel ||--o{ topic : "groups into (planned)"
+  channel ||--o{ topic : "groups into"
   topic ||--o{ message : "holds (planned)"
   member ||--o{ message : "writes"
   channel ||--o{ channel_member : "tracks"
@@ -34,7 +34,7 @@ erDiagram
 | `setup` | exists | boolean key fixed to `true`, `organization_id`, `completed_at` |
 | `member` | exists | `organization_id`, `account_id`, role (`owner` or `member`), `joined_event_seq`, `handle` (unique per organisation) |
 | `channel` | exists | `id`, `organization_id`, `name`, `is_default`, `created_at`; planned: `default_topic_id`, `default_topic_is_default` |
-| `topic` | planned | `id`, `organization_id`, `channel_id`, `name` (NULL for the default topic), `is_default`, `created_at` ([`topics.md`](topics.md)) |
+| `topic` | exists | `id`, `organization_id`, `channel_id`, `name` (NULL for the default topic), `is_default`, `created_at` ([`topics.md`](topics.md)) |
 | `channel_member` | planned (M4) | `organization_id`, `channel_id`, `member_id`, `last_read_event_seq` |
 | `message` | exists | `id`, `organization_id`, `channel_id`, `member_id`, `body`, `event_seq`, `created_at`; planned: `topic_id`, nullable `reply_to_message_id` ([`replies.md`](replies.md)) |
 | `event_log` | exists | `organization_id`, `seq` (composite key), `kind`, nullable `audience_member_id`, IDs-only `data`, `created_at` |

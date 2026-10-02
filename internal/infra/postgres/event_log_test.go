@@ -51,7 +51,8 @@ func TestEventLogMigration(t *testing.T) {
 	_, err = pool.Exec(ctx, "UPDATE organization SET event_seq = 2 WHERE id = $1", old.OrganizationID)
 	requireNoError(t, err)
 	empty := pgtest.Organization(t, pool, "empty", "Empty", 0)
-	_, err = provider.Up(ctx)
+	// Stop at the event log so the single Down below undoes exactly it.
+	_, err = provider.UpTo(ctx, 7)
 	requireNoError(t, err)
 	assertEventLog(t, pool, old.OrganizationID, 2)
 	assertEventLog(t, pool, empty, 0)

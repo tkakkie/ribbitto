@@ -75,7 +75,8 @@ same pull request: [`docs/architecture/`](docs/architecture/README.md)
 (terms, entities, invariants, unread rules), [`DECISIONS.md`](DECISIONS.md)
 (index of settled decisions in `docs/decisions/` — change them through an issue),
 [`docs/database.md`](docs/database.md), [`docs/ui.md`](docs/ui.md) (design tokens — use
-only the token utilities, never raw colours).
+only the token utilities, never raw colours), [`docs/accessibility.md`](docs/accessibility.md)
+(markup and accessibility rules).
 
 ## Writing code
 

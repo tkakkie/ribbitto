@@ -95,7 +95,7 @@ keyboard, local time, single-source selection constraints, and glue for SSE.
   response nonce. Application scripts also define no globals and are
   versioned by file name (`-vN`), since static assets are immutable
   ([`rendering.md`](rendering.md)). Vendored libraries (htmx, idiomorph)
-  keep their own globals and upstream file names ([`ui.md`](../ui.md)).
+  keep their own globals and upstream file names ([a11y]).
 - **htmx events:** an `htmx:load` handler works only on the inserted element
   and its descendants, never the whole document (#168).
 
@@ -104,7 +104,7 @@ A headless-browser test dependency awaits a concrete need after M3.
 ## How the rules are checked
 
 Checked by tools today: the layer imports (depguard), no `templ.Raw`
-(forbidigo), and the markup rules in `TestPagesMarkup` ([`ui.md`](../ui.md)).
+(forbidigo), and the markup rules in `TestPagesMarkup` ([a11y]).
 The depguard `view` rule forbids non-test files in `internal/web/view`
 from importing `internal/app` or `internal/infra`, including sub-packages.
 `TestPagesMarkup` also follows every `hx-get` and `hx-post` in each case,
@@ -195,3 +195,5 @@ Everything else conforms:
 - **Core flows.** Plain forms and links work without JavaScript.
 - **Scripts.** Focus, scroll, keyboard, local time and SSE glue; no requests,
   storage or globals.
+
+[a11y]: ../accessibility.md

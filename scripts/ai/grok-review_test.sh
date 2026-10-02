@@ -162,6 +162,7 @@ FAKE
 #!/usr/bin/env perl
 use strict; use warnings;
 use POSIX qw(_exit);
+use Time::HiRes ();
 my $out = "$ENV{CASE_DIR}/out";
 # Wait for a signal, or until the case directory is removed: fallback_cleanup
 # stops this way the fakes it cannot or must not kill by pid (#183).
@@ -179,11 +180,46 @@ mark('prompt', do { local $/; <$f> });
 close $f;
 mark('grok');
 my $mode = $ENV{MODE};
-if ($mode eq 'exit-before-deadline') {
-  # Exit within the last two-second poll interval, before the one-second
-  # alarm wakes the supervisor: it must reap us before reporting a timeout.
+if ($mode eq 'INT' || $mode eq 'TERM') {
+  $| = 1;
+  print "{\"type\":\"text\",\"data\":\"Before signal.\\n\"}\n";
+}
+if ($mode =~ /^stream-/ || $mode eq 'active-timeout') {
+  $args{'--output-format'} eq 'streaming-json' or die "expected streaming-json";
+  $| = 1;
+  if ($mode eq 'stream-success') {
+    print <<'STREAM';
+{"type":"available_commands","commands":[]}
+{"type":"thought","data":"not report text"}
+{"type":"text","data":"Review: \"ok\" \\ path\n"}
+{"type":"tool_call","toolCallId":"call-1","content":[]}
+{"type":"tool_call_update","toolCallId":"call-1","status":"completed"}
+STREAM
+    # Split a JSON line across writes; the final burst also tests draining
+    # buffered report text after the leader exits.
+    print '{"type":"text","da';
+    select undef, undef, undef, 0.05;
+    print "ta\":\"\\u65e5\\u672c\\u8a9e\\n\"}\n";
+    print "{\"type\":\"usage\",\"input_tokens\":1}\n";
+    print "{\"type\":\"end\",\"stopReason\":\"end_turn\"}\n";
+    exit 0;
+  }
+  print "{\"type\":\"text\",\"data\":\"Opening.\\n\"}\n";
+  my $until = Time::HiRes::time() + 2.5;
+  while (-d $out && ($mode eq 'active-timeout' || Time::HiRes::time() < $until)) {
+    print "{\"type\":\"thought\",\"data\":\"working\"}\n";
+    select undef, undef, undef, 0.1;
+  }
+  $SIG{TERM} = sub { mark('stopped-at', Time::HiRes::time()); exit 0 };
+  mark('last-update', Time::HiRes::time());
+  print "{\"type\":\"text\",\"data\":\"Still here.\\n\"}\n";
+  hold();
+}
+if ($mode eq 'exit-before-deadline' || $mode eq 'exit-before-stall') {
+  # Exit before the next timeout/stall check: the supervisor must reap us
+  # before deciding to stop, and keep our status.
   select undef, undef, undef, 0.25;
-  exit 0;
+  exit($mode eq 'exit-before-stall' ? 42 : 0);
 }
 if ($mode eq 'early-exit') {
   # The leader exits at once and leaves a descendant; record its pid first so
@@ -193,7 +229,7 @@ if ($mode eq 'early-exit') {
   open my $p, '>>', "$out/pids" or die $!; print $p "$child\n"; close $p;
   exit 42;
 }
-if ($mode eq 'descendants' || $mode eq 'timeout' || $mode eq 'wall-clock' || $mode =~ /^(setup-)?(INT|TERM)$/) {
+if ($mode eq 'descendants' || $mode eq 'timeout' || $mode eq 'silent-stall' || $mode eq 'wall-clock' || $mode =~ /^(setup-)?(INT|TERM)$/) {
   my $child;
   $SIG{TERM} = sub { waitpid($child, 0); exit 0 };
   $child = fork() // die $!;
@@ -234,8 +270,9 @@ run_case() {
   fixtures || exit 1
   (
     export PATH="$CASE_DIR/bin:$original_path" TMPDIR="$CASE_DIR/tmp" MODE="$mode"
-    unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT RIBBITTO_GROK_TEST_SETUP_DELAY
+    unset RIBBITTO_GROK_MODEL RIBBITTO_GROK_TRUSTED_REF RIBBITTO_GROK_TIMEOUT RIBBITTO_GROK_STALL RIBBITTO_GROK_TEST_SETUP_DELAY
     [[ -z ${SETUP_DELAY:-} ]] || export RIBBITTO_GROK_TEST_SETUP_DELAY="$SETUP_DELAY"
+    [[ -z ${STALL_LIMIT:-} ]] || export RIBBITTO_GROK_STALL="$STALL_LIMIT"
     [[ $limit == default ]] || export RIBBITTO_GROK_TIMEOUT="$limit"
     if [[ $mode == no-caffeinate ]]; then
       # Invoked by the child Bash through the exported function.
@@ -320,6 +357,7 @@ DRIVER
   case $mode in
     argument) contains "$CASE_DIR/out/stderr" 'usage:'; absent gh; absent grok ;;
     validation) contains "$CASE_DIR/out/stderr" 'must be an integer from 1 to 86400'; absent gh; absent grok ;;
+    stall-validation) contains "$CASE_DIR/out/stderr" 'RIBBITTO_GROK_STALL must be an integer from 1 to 86400'; absent gh; absent grok ;;
     mismatch) contains "$CASE_DIR/out/stderr" 'differs from origin/main'; absent gh; absent grok ;;
     gh-failure) contains "$CASE_DIR/out/stderr" 'could not read PR #49'; absent grok; absent prompt-read ;;
     symlink)
@@ -347,10 +385,35 @@ DRIVER
         [[ -f $CASE_DIR/out/caffeinate ]] || fail 'caffeinate -i not invoked'
       fi
       case $mode in
-        exit-before-deadline)
-          if grep -Eq 'timed out|did not finish' "$CASE_DIR/out/stderr"; then
-            fail 'completed Grok reported as a timeout'
+        INT|TERM)
+          printf 'Before signal.\n' > "$CASE_DIR/out/expected"
+          cmp -s "$CASE_DIR/out/expected" "$CASE_DIR/out/stdout" || fail 'signal lost report text' ;;
+        exit-before-deadline|exit-before-stall)
+          if grep -Eq 'timed out|did not finish|stalled|rerun once' "$CASE_DIR/out/stderr"; then
+            fail 'completed Grok reported as a timeout or stall'
           fi ;;
+        stream-success)
+          printf 'Review: "ok" \\ path\n日本語\n' > "$CASE_DIR/out/expected"
+          cmp -s "$CASE_DIR/out/expected" "$CASE_DIR/out/stdout" || fail 'report text changed' ;;
+        silent-stall|stream-stall)
+          contains "$CASE_DIR/out/stderr" 'no progress for 1 s; stopped Grok (stalled)'
+          contains "$CASE_DIR/out/stderr" 'rerun once using the invocation in docs/workflow/adversarial-review.md'
+          contains "$CASE_DIR/out/stderr" 'if it stalls again, record it in the PR and ask the maintainer'
+          if [[ $mode == stream-stall ]]; then
+            printf 'Opening.\nStill here.\n' > "$CASE_DIR/out/expected"
+            cmp -s "$CASE_DIR/out/expected" "$CASE_DIR/out/stdout" || fail 'earlier output lost'
+            perl -e '
+              sub stamp { open my $f, "<", shift or die $!; return 0 + <$f> }
+              my $gap = stamp($ARGV[1]) - stamp($ARGV[0]);
+              exit($gap >= 0.95 && $gap < 3 ? 0 : 1);
+            ' "$CASE_DIR/out/last-update" "$CASE_DIR/out/stopped-at" || fail 'stall did not follow the last update'
+          else
+            [[ ! -s $CASE_DIR/out/stdout ]] || fail 'silent Grok printed a report'
+          fi ;;
+        active-timeout)
+          contains "$CASE_DIR/out/stderr" 'timed out after 4 s'
+          printf 'Opening.\n' > "$CASE_DIR/out/expected"
+          cmp -s "$CASE_DIR/out/expected" "$CASE_DIR/out/stdout" || fail 'timeout lost report text' ;;
         wall-clock)
           contains "$CASE_DIR/out/stderr" 'timed out after 3 s'
           contains "$CASE_DIR/out/stderr" 'Grok did not finish within 3s' ;;
@@ -409,7 +472,13 @@ for value in 0 -1 01 abc '1;echo unsafe'; do
 done
 for value in 0 -1 01 1.5 abc 86401 999999999999999999999; do
   run_case "timeout-$value" 1 validation "$value" 49
+  STALL_LIMIT=$value run_case "stall-$value" 1 stall-validation default 49
 done
+run_case stream-report-exact 0 stream-success default 49
+STALL_LIMIT=1 run_case silent-stall-125 125 silent-stall default 49
+STALL_LIMIT=1 run_case updates-then-stall-125 125 stream-stall default 49
+STALL_LIMIT=1 run_case active-timeout-124 124 active-timeout 4 49
+STALL_LIMIT=1 run_case exit-before-stall-keeps-42 42 exit-before-stall default 49
 run_case gh-failure 1 gh-failure default 49
 run_case exit-status-42 42 exit42 default 49
 run_case without-caffeinate 0 no-caffeinate default 49

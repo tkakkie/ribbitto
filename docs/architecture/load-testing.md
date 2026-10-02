@@ -16,7 +16,7 @@ what a run measures. Each has a disposition, agreed by the maintainer on
 
 | | What | Disposition |
 |---|---|---|
-| A4 | The live render cache is bounded by entries (4096, `renderCapacity` in `web/stream_renderer.go`), not by bytes. An entry holds one rendered message; a 4,000-character body escapes and appears twice, so one entry can approach tens of kilobytes. | **Test with explicit limits.** Each step records the process's heap (`runtime/metrics`, or `pprof` where available) next to #218's counters, so the cache's share is visible. A byte budget is added only if the numbers show the entry bound is not enough. |
+| A4 | The live render cache is bounded by entries (4096, `renderCapacity` in `web/stream_renderer.go`), not by bytes. An entry holds one rendered message; a 4,000-character body escapes and appears twice, so one entry can approach tens of kilobytes. | **Test with explicit limits.** Each step records total heap and, separately, the bytes the render cache retains: a `pprof` heap profile (`inuse_space`) attributed to the rendered output allocated in `messageRenderer.Render`. A byte budget is added only if those numbers show the entry bound is not enough. |
 | A5 | There is no process-wide or per-address cap on open streams, only `DefaultMaxStreamsPerAccount` (16) per account ([streaming](streaming.md#resource-limits)). | **Test without a cap**, so the ceiling #216 looks for is not hidden by one. After #216, a process-wide cap is sized from its first failing step and answered like the per-account cap: 429 before the stream starts. |
 | A7 | Detached cache loads (`realtime.Cache`) are neither bounded nor cancelled when every waiter leaves, and can delay exit after shutdown. | **Implement first:** #297 bounds and cancels them before either run, so neither measures a pile-up of abandoned loads and #219's SIGTERM-to-exit time measures the fixed behaviour. |
 
@@ -27,9 +27,12 @@ numbers are named when #216 tunes them (#261 B13).
 
 ## What the runs record for these
 
-- **A4:** heap in use and the render cache's entry count at the end of
-  each step. The count is the capacity once a step posts more than 4096
-  distinct messages per language.
+- **A4:** at the end of each step, total heap in use, the render cache's
+  retained bytes from the heap profile, and its entry count (the capacity
+  once a step posts more than 4096 distinct messages per language), with
+  the message body length and content the step posted. A worst-case step
+  posts 4,000-character bodies of characters HTML escapes, to bound an
+  entry's size.
 - **A5:** attempted versus established streams and open file descriptors
   at the highest passing step. The first failing step's limit (file
   descriptors, memory, or the database pool) sizes the cap.

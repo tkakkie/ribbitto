@@ -21,8 +21,8 @@ reinterpreted, and rendered HTML is at most a disposable cache
 ([decision 18](../decisions/18-stored-message-formats-never-change-meaning.md)).
 
 Every channel message is in exactly one topic of its channel
-([`topics.md`](topics.md)). Branching *(planned)* will move it to another
-topic without changing its `id` or `event_seq`.
+([`topics.md`](topics.md)). Branching moves it to another topic without
+changing its `id` or `event_seq`.
 
 A reply will remain an ordinary message in the stream, linked to the
 message it answers; the link opens a paged reply-chain view

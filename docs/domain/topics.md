@@ -83,6 +83,10 @@ bounded topic list, the branching endpoint (#305) and its selection UI
   no older history remains, including an empty page, admitting every moved item.
   The history control preserves that bound across live inserts and removals;
   only Load older replaces it. Older moved items wait for that history read.
+  Moves received during the read are reapplied after its items and bound swap,
+  so a snapshot taken before the move cannot restore source items or omit
+  destination items now in range. Retained payloads are discarded after the
+  swap, or when the request ends without one.
   Replays and duplicates use stable IDs; replay matches a reload within this
   loaded range, including labels and checkbox sources.
 - The channel sidebar links to at most 50 topics: default first, then

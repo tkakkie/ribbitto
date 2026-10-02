@@ -69,7 +69,7 @@ after settling, since local timestamps (`htmx:load`) can change the new
 messages' height, then moves focus to the next control, or to the pane once
 the oldest message is shown.
 
-`message-stream-v5.js` listens to the vendored SSE extension's
+`message-stream-v6.js` listens to the vendored SSE extension's
 `htmx:sseBeforeMessage`. It passes the server's HTML to htmx for an append or
 same-id replacement, settling synchronously so replay stays ordered and local
 timestamps are ready before scrolling. Only appends update the separate polite
@@ -85,7 +85,12 @@ replaces feed IDs, removes source-topic IDs or inserts destination IDs in
 sequence order within the loaded range. The history control's bound is zero
 when no older history remains, including an empty page, admitting every moved
 item; otherwise it is the oldest loaded sequence. It changes only on Load older;
-moves leave announcements and paging alone. Replacements clear checked state
+moves leave announcements and paging alone. While a Load older request is in
+flight, the script retains move payloads in delivery order. After both the
+history items and control are swapped, it reapplies those moves against the
+new bound, removing stale source items and inserting missing destination items.
+It then drops the payloads; failed, aborted or unswapped responses drop them too.
+Replacements clear checked state
 and refresh the branch form's source constraints. SSE swaps have no request
 target, so composer/history focus handlers ignore them.
 

@@ -114,6 +114,34 @@ func applyTopic(t *testing.T, items []string, out realtime.Outgoing, selected do
 	return items
 }
 
+// Model the stream script's request-scoped retention and post-history replay.
+type topicMovePage struct {
+	selected domain.ID
+	oldest   int64
+	items    []string
+	loading  bool
+	moves    []realtime.Outgoing
+}
+
+func (p *topicMovePage) deliver(t *testing.T, out realtime.Outgoing) {
+	t.Helper()
+	if p.loading && out.Name == "messages-moved" {
+		p.moves = append(p.moves, out)
+	}
+	p.items = applyTopic(t, p.items, out, p.selected, p.oldest)
+}
+
+func (p *topicMovePage) loadOlder(t *testing.T, selected domain.Topic, older message.ChannelPage) {
+	t.Helper()
+	p.items = append(renderedPage(t, older.Entries), p.items...)
+	p.oldest = topicPageBoundary(t, selected, older, p.oldest)
+	for _, out := range p.moves {
+		p.items = applyTopic(t, p.items, out, p.selected, p.oldest)
+	}
+	p.loading = false
+	p.moves = nil
+}
+
 func itemAttribute(t *testing.T, item, key string) string {
 	t.Helper()
 	doc, err := html.Parse(bytes.NewBufferString(item))
@@ -379,5 +407,114 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 				t.Fatal("move and loaded history differ from reload")
 			}
 		})
+	}
+}
+
+func TestMoveCrossesLoadOlder(t *testing.T) {
+	t.Parallel()
+	for _, count := range []int{message.PageSize + 4, 2*message.PageSize + 4} {
+		for _, stale := range []bool{true, false} {
+			t.Run(fmt.Sprintf("count=%d/stale=%t", count, stale), func(t *testing.T) {
+				ctx := t.Context()
+				pool := pgtest.New(t)
+				f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+				m := authz.Membership{Organization: domain.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: f.MemberID}}
+				destination, err := postgres.NewTopicStore(pool).CreateTopic(ctx, f.OrganizationID, f.Channel.ID, "Destination")
+				if err != nil {
+					t.Fatal(err)
+				}
+				reader := postgres.MessageReader{Pool: pool}
+				var source domain.Topic
+				var moved []domain.ID
+				for i := range count {
+					for _, selected := range []*domain.ID{nil, &destination.ID} {
+						posted, err := postgres.NewPostingStore(pool).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, selected, "body")
+						if err != nil {
+							t.Fatal(err)
+						}
+						if selected == nil {
+							source.ID = posted.TopicID
+							// One below the next page, one in it, one already loaded.
+							if i == 0 || i == count-message.PageSize-2 || i == count-1 {
+								moved = append(moved, posted.ID)
+							}
+						}
+					}
+				}
+				topics := []domain.Topic{source, destination}
+				pages := make([]topicMovePage, len(topics))
+				responses := make([]message.ChannelPage, len(topics))
+				var cursor int64
+				for i, selected := range topics {
+					page, err := reader.Page(ctx, m, f.Channel.ID, &selected.ID, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					cursor = *page.EventCursor
+					pages[i] = topicMovePage{selected: selected.ID, oldest: topicPageBoundary(t, selected, page, 0), items: renderedPage(t, page.Entries), loading: true}
+					if stale {
+						responses[i], err = reader.Page(ctx, m, f.Channel.ID, &selected.ID, &pages[i].oldest)
+						if err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				_, through, err := postgres.NewBranchStore(pool).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
+					topic.Branch{From: source.ID, To: &destination.ID, Messages: moved}, func(domain.Topic) string { return "notice" })
+				if err != nil {
+					t.Fatal(err)
+				}
+				renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
+				stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{postgres.NewEventReader(pool), through}, Renderer: renderer, Authorizer: authz.New(postgres.NewAuthzStore(pool)), BatchSize: 1}
+				for i, selected := range topics {
+					t.Run([]string{"source", "destination"}[i], func(t *testing.T) {
+						page := &pages[i]
+						delivered := &moveDeliveries{}
+						_, err := stream.Run(ctx, realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID, Topic: &selected.ID}, cursor, delivered)
+						if !errors.Is(err, io.EOF) {
+							t.Fatal(err)
+						}
+						for range 2 { // Reconnect duplicates must not duplicate history items.
+							for _, out := range delivered.events {
+								page.deliver(t, out)
+							}
+						}
+						if len(page.moves) != 2 {
+							t.Fatalf("retained %d moves, want 2", len(page.moves))
+						}
+						if !stale {
+							responses[i], err = reader.Page(ctx, m, f.Channel.ID, &selected.ID, &page.oldest)
+							if err != nil {
+								t.Fatal(err)
+							}
+						}
+						page.loadOlder(t, selected, responses[i])
+						if len(page.moves) != 0 || page.loading {
+							t.Fatal("completed history retained moves")
+						}
+						if (page.oldest == 0) != (count == message.PageSize+4) {
+							t.Fatalf("unexpected history bound %d", page.oldest)
+						}
+						var entries []message.Entry
+						var before *int64
+						for {
+							reloaded, err := reader.Page(ctx, m, f.Channel.ID, &selected.ID, before)
+							if err != nil {
+								t.Fatal(err)
+							}
+							entries = append(reloaded.Entries, entries...)
+							if !reloaded.Older {
+								break
+							}
+							before = &reloaded.Entries[0].EventSeq
+						}
+						entries = slices.DeleteFunc(entries, func(e message.Entry) bool { return e.EventSeq < page.oldest })
+						if !reflect.DeepEqual(page.items, renderedPage(t, entries)) {
+							t.Fatal("move crossing history differs from reload within the new bound")
+						}
+					})
+				}
+			})
+		}
 	}
 }

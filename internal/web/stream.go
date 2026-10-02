@@ -112,32 +112,21 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 		timeout = DefaultStreamWriteTimeout
 	}
 	send := &sseSender{w: w, rc: rc, timeout: timeout}
-	started := false
-	if err := send.write(ctx, func() error {
-		// WriteHeader commits the status, so look once more right before
-		// it: a cancellation that won after write's own check (or after the
-		// session re-check) still gets its 404 or 503.
-		if err := context.Cause(ctx); err != nil {
-			return err
-		}
-		header := w.Header()
-		header.Set("Content-Type", "text/event-stream; charset=utf-8")
-		header.Set("Cache-Control", "no-cache")
-		w.WriteHeader(http.StatusOK)
-		started = true
-		return nil
-	}); err != nil {
-		// Cancellation can win after the session re-check. Only an
-		// uncommitted response can still carry its HTTP failure status.
-		if !started && ctx.Err() != nil {
-			// write's AfterFunc expired the write deadline on cancellation;
-			// give the error response its own, or it cannot be sent.
-			if err := rc.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
-				slog.WarnContext(r.Context(), "resetting write deadline", "err", err)
-			}
-			streamCancelled(w, r, ctx)
-			return
-		}
+	// The status is committed without sseSender.write: on cancellation its
+	// AfterFunc expires the write deadline, and over HTTP/2 that resets the
+	// stream, so a 404 or 503 written afterwards would never arrive. Until
+	// WriteHeader nothing has been sent, so a cancellation that wins first
+	// (after the session re-check, too) still gets its status. One after
+	// WriteHeader ends a stream that has started (accepted on #315).
+	header := w.Header()
+	header.Set("Content-Type", "text/event-stream; charset=utf-8")
+	header.Set("Cache-Control", "no-cache")
+	if context.Cause(ctx) != nil {
+		streamCancelled(w, r, ctx) // http.Error replaces the content type
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	if err := send.write(ctx, func() error { return nil }); err != nil {
 		slog.WarnContext(r.Context(), "starting event stream", "err", err)
 		return
 	}

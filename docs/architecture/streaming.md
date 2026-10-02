@@ -125,12 +125,13 @@ The retention period defaults to seven days; see [database configuration](../dat
   It frees failed registrations; on success, the handler defers one cleanup
   function that cancels the expiry context and unregisters the stream.
   Cancellation before the first write answers 404 for an ended session or
-  503 for shutdown, without committing SSE headers; the write deadline the
-  cancellation expired is reset first, so the answer reaches the client.
-  The status is committed by `WriteHeader`, checked against the context
-  immediately before: a cancellation after that point (a window no lock can
-  close) ends a stream that has started, without trying to change its HTTP
-  status (maintainer's decision on #315).
+  503 for shutdown, without committing SSE headers. The status is
+  committed by `WriteHeader` outside the sender, after one more look at the
+  context: the sender expires the write deadline on cancellation, which
+  over HTTP/2 resets the stream, so the answer would never arrive. A
+  cancellation after `WriteHeader` (a window no lock can close) ends a
+  stream that has started, without trying to change its HTTP status
+  (maintainer's decision on #315).
 
 ### Resource limits
 

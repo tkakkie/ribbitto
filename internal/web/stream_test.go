@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -155,21 +154,23 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 	}
 }
 
-// cancellingWriter cancels the stream at the first write deadline the
-// sender sets: inside sseSender.write, after its own ctx check and before
-// the callback commits the status.
+// cancellingWriter cancels the stream the first time the handler touches
+// the headers while the stream is registered: after the session re-check
+// passed and before the status is committed. The middleware's earlier
+// header writes happen before registration and do not count.
 type cancellingWriter struct {
 	*deadlineWriter
+	hub    *realtime.Hub
 	cancel func()
 	fired  bool
 }
 
-func (w *cancellingWriter) SetWriteDeadline(d time.Time) error {
-	if !d.IsZero() && !w.fired {
+func (w *cancellingWriter) Header() http.Header {
+	if !w.fired && w.hub.Connections() == 1 {
 		w.fired = true
 		w.cancel()
 	}
-	return w.deadlineWriter.SetWriteDeadline(d)
+	return w.deadlineWriter.Header()
 }
 
 // The session re-check passed, and the stream is cancelled between it and
@@ -201,7 +202,7 @@ func TestStreamCancelledBeforeTheFirstWrite(t *testing.T) {
 			}
 			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
-			w := &cancellingWriter{deadlineWriter: &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}, cancel: func() { tt.cancel(hub) }}
+			w := &cancellingWriter{deadlineWriter: &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}, hub: hub, cancel: func() { tt.cancel(hub) }}
 			handler.ServeHTTP(w, r)
 			if !w.fired || seen != 1 {
 				t.Fatalf("cancelled %t, re-check saw %d connections; want the cancellation after a passed re-check", w.fired, seen)
@@ -219,27 +220,27 @@ func TestStreamCancelledBeforeTheFirstWrite(t *testing.T) {
 	}
 }
 
-// cancellingConn is cancellingWriter for a real server: it cancels at the
-// sender's first write deadline and then sets the deadline on the real
-// connection, so an expired deadline really stops writes.
+// cancellingConn is cancellingWriter for a real server.
 type cancellingConn struct {
 	http.ResponseWriter
+	hub    *realtime.Hub
 	cancel func()
-	once   sync.Once
+	fired  atomic.Bool
 }
 
-func (w *cancellingConn) SetWriteDeadline(d time.Time) error {
-	if !d.IsZero() {
-		w.once.Do(w.cancel)
+func (w *cancellingConn) Header() http.Header {
+	if w.hub.Connections() == 1 && w.fired.CompareAndSwap(false, true) {
+		w.cancel()
 	}
-	return http.NewResponseController(w.ResponseWriter).SetWriteDeadline(d)
+	return w.ResponseWriter.Header()
 }
 
 func (w *cancellingConn) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
-// Over a real connection, the 404 or 503 for a stream cancelled before its
-// first write reaches the client: the deadline the cancellation expired is
-// reset before the error is written.
+// Over real connections, HTTP/1.1 and HTTP/2, the 404 or 503 for a stream
+// cancelled before its status is committed reaches the client. Over HTTP/2
+// an expired write deadline resets the stream, so nothing may expire it
+// before the error is written.
 func TestStreamCancelledBeforeTheFirstWriteOverHTTP(t *testing.T) {
 	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
@@ -250,44 +251,56 @@ func TestStreamCancelledBeforeTheFirstWriteOverHTTP(t *testing.T) {
 		{"signed out", func(hub *realtime.Hub) { hub.CancelSession(live.ID) }, http.StatusNotFound},
 		{"shutdown", func(hub *realtime.Hub) { hub.CancelAll() }, http.StatusServiceUnavailable},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			hub := realtime.NewHub()
-			seen := -1
-			catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
-			if err != nil {
-				t.Fatal(err)
-			}
-			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-				s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
-			}))
-			if err != nil {
-				t.Fatal(err)
-			}
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				handler.ServeHTTP(&cancellingConn{ResponseWriter: w, cancel: func() { tt.cancel(hub) }}, r)
-			}))
-			defer server.Close()
-			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
-			resp, err := server.Client().Do(req)
-			if err != nil {
-				t.Fatalf("no response reached the client: %v", err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				t.Fatalf("reading the body: %v", err)
-			}
-			if resp.StatusCode != tt.want || len(body) == 0 || resp.Header.Get("Content-Type") != "text/plain; charset=utf-8" {
-				t.Fatalf("status %d, type %q, body %q; want a plain-text %d", resp.StatusCode, resp.Header.Get("Content-Type"), body, tt.want)
-			}
-			if seen != 1 {
-				t.Fatalf("re-check saw %d connections; want the cancellation after a passed re-check", seen)
-			}
-		})
+		for _, proto := range []int{1, 2} {
+			t.Run(fmt.Sprintf("%s/HTTP%d", tt.name, proto), func(t *testing.T) {
+				testCancelledStreamOverHTTP(t, live, tt.cancel, tt.want, proto)
+			})
+		}
+	}
+}
+
+func testCancelledStreamOverHTTP(t *testing.T, live auth.Session, cancel func(*realtime.Hub), want, proto int) {
+	t.Helper()
+	hub := realtime.NewHub()
+	seen := -1
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+		s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(&cancellingConn{ResponseWriter: w, hub: hub, cancel: func() { cancel(hub) }}, r)
+	}))
+	server.EnableHTTP2 = proto == 2
+	server.StartTLS()
+	defer server.Close()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("no response reached the client: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading the body: %v", err)
+	}
+	if resp.ProtoMajor != proto {
+		t.Fatalf("negotiated HTTP/%d, want HTTP/%d", resp.ProtoMajor, proto)
+	}
+	if resp.StatusCode != want || len(body) == 0 || resp.Header.Get("Content-Type") != "text/plain; charset=utf-8" {
+		t.Fatalf("status %d, type %q, body %q; want a plain-text %d", resp.StatusCode, resp.Header.Get("Content-Type"), body, want)
+	}
+	if seen != 1 {
+		t.Fatalf("re-check saw %d connections; want the cancellation after a passed re-check", seen)
 	}
 }
 

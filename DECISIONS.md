@@ -42,3 +42,6 @@ coverage and the normal document size limit for both the index and entries.
 - [20. Product labels and ordinary words](docs/decisions/20-product-labels-and-ordinary-words.md)
 - [21. Topics inside channels, a default topic, and branching instead of threads](docs/decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)
 - [22. Replies stay in the stream, with a reply-chain panel](docs/decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md)
+- [23. The event log is the source of truth; the hub carries a level](docs/decisions/23-the-event-log-is-the-source-of-truth-the-hub-carries-a-level.md)
+- [24. A cursor that cannot be served gets `reset`, never a partial replay](docs/decisions/24-a-cursor-that-cannot-be-served-gets-reset.md)
+- [25. Production serves event streams over HTTP/2](docs/decisions/25-production-serves-streams-over-http2.md)

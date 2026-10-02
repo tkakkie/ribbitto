@@ -1,27 +1,31 @@
-# Unread rules *(planned, M2–M4)*
+# Unread rules
 
-- **Read position** of a member in a channel is
+The inputs are in place since M3: the join transaction, `joined_event_seq`,
+the pairing of each message with its `message.posted` event, and the log
+boundary. Read positions and unread counts are *planned* for M4.
+
+- *(planned, M4)* **Read position** of a member in a channel is
   `channel_member.last_read_event_seq` if the row exists, otherwise
   `member.joined_event_seq`. So messages from before a member joined are
   never unread, and a channel the member has never opened needs no row.
-- **Unread count**:
+- *(planned, M4)* **Unread count**:
   ```sql
   SELECT count(*) FROM message
   WHERE organization_id = $1 AND channel_id = $2 AND event_seq > $3;  -- $3 = read position
   ```
   backed by an index on `message (organization_id, channel_id, event_seq)`.
-- **Joining an organisation is one transaction:** take the next
+- *(since M3)* **Joining an organisation is one transaction:** take the next
   `event_seq`, insert the `member` with `joined_event_seq` = that value, and
   insert the `member.joined` event with `data = {"member_id":"<uuid>"}` and
   `audience_member_id = NULL`. Setup's first member follows the same rule.
   Posting similarly pairs `message.event_seq` with `message.posted`.
   Logging starts after `organization.event_log_boundary_seq`; migration sets
   it to the current counter without backfill. Unread positions survive log retention.
-- **Opening a channel for the first time** creates the `channel_member` row
+- *(planned, M4)* **Opening a channel for the first time** creates the `channel_member` row
   with `last_read_event_seq` = the **cursor of the snapshot that rendered the
   page**, not the latest sequence at insert time — otherwise messages
   posted after the page was read, and not yet shown, would be marked read.
-- **The read position never moves backwards.** Several tabs or reordered
+- *(planned, M4)* **The read position never moves backwards.** Several tabs or reordered
   requests must not lower it:
   ```sql
   INSERT INTO channel_member (organization_id, channel_id, member_id, last_read_event_seq)

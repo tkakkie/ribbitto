@@ -60,8 +60,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   and `sse-connect="…/events?after=<cursor>"`. Older pages omit all three.
   `#message-items` receives `message` events; same-id duplicates replace the
   existing item. `LiveMessageItem` shares `MessageItem` markup, adding
-  templ-rendered `data-announcement` text only to stream payloads. History
-  pages, including Load older and cached renders, omit that attribute.
+  templ-rendered `data-announcement` text only to stream payloads; the
+  render cache stores those live items, attribute included. History pages,
+  including Load older, omit it.
   `#message-status` retains only the latest 10 announcements; history itself
   is never a live region.
 - The layout's `htmx-config` meta tag holds htmx's security settings and

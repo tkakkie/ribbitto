@@ -1,10 +1,39 @@
 # Adversarial review
 
-From M1 on, **every `high` pull request gets one adversarial review by Grok
-before the maintainer is asked.** Running it is mandatory; its findings are
-advisory. It does not count towards the two review rounds. It runs after the
-cross-review, while the pull request is still a draft, and before it is
-marked ready for review.
+**A pull request that alters one of the areas below gets one adversarial
+review by Grok before the maintainer is asked**, whatever its risk class.
+Running it is then mandatory; its findings are advisory. It does not count
+towards the two review rounds. It runs after the cross-review, while the
+pull request is still a draft, and before it is marked ready for review.
+
+## When Grok runs
+
+Grok's valid findings have come from long-lived state and concurrency, and
+never from documentation, tests or plain schema work (#339). So Grok is
+**required** when a change alters:
+
+1. authentication, authorisation or sessions (`internal/app/authz/**`,
+   `internal/app/auth/**`, `internal/web/middleware/**`);
+2. real-time delivery, on the server (`internal/realtime/**`, the stream
+   handlers and renderers in `internal/web`) or in the browser (the SSE
+   scripts in `web/static`);
+3. concurrency, caches or background work (goroutines, locks, TTLs,
+   clean-up jobs), wherever it lives;
+4. a security boundary of the AI or CI tooling: the AI launchers in
+   `scripts/ai/**`, the trusted prompts in `.github/prompts/**`, CI workflow
+   permissions or secrets, and the documented execution and safety
+   requirements for AI tools (such as `running-other-ai.md` and the
+   security parts of this file). Being documentation does not exempt a
+   change from this item.
+
+Otherwise Grok is not required. A `high` pull request without it says why
+in the template, `Adversarial: skipped (<reason>)`: for example
+documentation only, tests only, a dependency bump, lint or Makefile
+settings, or a schema or query change without concurrency. **When in doubt,
+Grok runs.** The other AI checks the requirement or the skip as it checks
+the risk.
+
+## Running Grok
 
 Run it from the maintainer's checkout, taking the launcher as it is on
 `main` — never a copy that a pull request could have changed:

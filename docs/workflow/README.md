@@ -11,7 +11,7 @@ disagree, fix the disagreement in a pull request.
 |---|---|
 | `README.md` (this file) | Principles, roles, the lifecycles of an issue and a pull request, keeping state, the occasional audit, labels |
 | [`reviewing.md`](reviewing.md) | Reviewing, closure verification, the Copilot follow-up check, risk |
-| [`adversarial-review.md`](adversarial-review.md) | Grok's adversarial review of `high` pull requests; Muse Code as an optional second |
+| [`adversarial-review.md`](adversarial-review.md) | when Grok's adversarial review is required, how to run it, and Muse Code as an optional second |
 | [`running-other-ai.md`](running-other-ai.md) | Running Codex, Claude or Muse Code headless, and how the maintainer's sessions run Codex |
 
 ## Principles
@@ -40,8 +40,8 @@ disagree, fix the disagreement in a pull request.
 | Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
 | Copilot | Reviews each pull request **once**, automatically, when it is marked ready for review, at **Lite**, guided by `.github/instructions/code-review.instructions.md`. Drafts and new pushes do not trigger it (the `main` ruleset); re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
-| Grok | Adversarial review of `high` pull requests (from M1), run with `scripts/ai/grok-review.sh`. Advisory. |
-| Muse Code | Optional second adversarial review of `high` pull requests (#330). Advisory; never replaces Grok's. |
+| Grok | Adversarial review of pull requests in its required areas (#339), run with `scripts/ai/grok-review.sh`. Advisory. |
+| Muse Code | Optional second adversarial review (#330). Advisory; never replaces Grok's. |
 | Antigravity | Optional: the occasional documentation audit (below), UI screenshot review, experiments, stand-in for Grok. |
 
 Claude and Codex should end up with roughly equal shares of implementation.
@@ -85,7 +85,8 @@ idea (maintainer, one line) or finding (AI)
   → at most two rounds; if round 2 leaves only mechanical fixes,
     closure verification; otherwise the maintainer decides
   → reviewer approves
-  → `high` risk: Grok's adversarial review, still as a draft
+  → Grok's adversarial review when the change requires it
+    (see adversarial-review.md), still as a draft
   → label `ai-reviewed` → mark ready for review
   → Copilot reviews once, automatically; wait until its review of
     that head is submitted, then answer and resolve its comments
@@ -97,9 +98,11 @@ idea (maintainer, one line) or finding (AI)
     (merges, or tells an AI to merge that PR)
 ```
 
-- `high` risk: the maintainer reads the whole diff; from M1, Grok also
-  runs an adversarial review, while the pull request is still a draft and
-  before it is marked ready, so Copilot's one review comes last.
+- `high` risk: the maintainer reads the whole diff.
+- Grok runs an adversarial review when the change alters one of the areas
+  in [`adversarial-review.md`](adversarial-review.md#when-grok-runs),
+  whatever its risk, while the pull request is still a draft and before it
+  is marked ready, so Copilot's one review comes last.
 - `normal` risk: the maintainer reads the summary and "Look here".
 - Every merge is decided by the maintainer, one pull request at a time.
   An AI never merges on its own judgement. Only the maintainer's own
@@ -124,7 +127,9 @@ idea (maintainer, one line) or finding (AI)
   log comments. An AI groups the comments since the last `Retrospective:`
   comment, proposes the smallest fixes (mechanical first, removal before
   addition), the maintainer picks, accepted ones become `process` issues,
-  and a `Retrospective:` summary comment closes the round.
+  and a `Retrospective:` summary comment closes the round. The M4
+  retrospective also checks whether a pull request without a Grok review
+  later had a defect in Grok's required areas, and revisits that rule (#339).
 - **Roadmap:** `docs/roadmap.md`, updated when a milestone ends or the
   plan changes.
 
@@ -153,7 +158,7 @@ in [`.github/prompts/audit.md`](../../.github/prompts/audit.md) (#116).
 
 | Label | Set by | Meaning |
 |---|---|---|
-| `ai-reviewed` | the orchestrating AI, after the reviewer approves (for a `high` pull request, after Grok has also run) | The cross-review is done. For a pull request, Copilot's review still follows before the maintainer is asked. |
+| `ai-reviewed` | the orchestrating AI, after the reviewer approves (after Grok has also run, when the change requires it) | The cross-review is done. For a pull request, Copilot's review still follows before the maintainer is asked. |
 | `ready` | maintainer only | Issue approved; implementation may start. |
 | `process` | template | Workflow improvement. |
 | `bug` | template | Something is broken. |

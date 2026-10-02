@@ -1,8 +1,5 @@
 # Markup and accessibility
 
-How templates are written so pages stay accessible. The visual system (tokens,
-contrast, layout) is in [`ui.md`](ui.md).
-
 The target is WCAG 2.2 AA. `TestPagesMarkup` (`internal/web/markup_test.go`)
 renders every HTML route in each state and both languages and fails on the
 rules marked ✓; a new route fails the test until it has a rendered case.

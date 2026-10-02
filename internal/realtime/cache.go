@@ -27,6 +27,11 @@ type Cache[K comparable, V any] struct {
 	now         func() time.Time
 	keep        func(K, V) bool
 
+	// beforeSecondLoad, nil outside tests, runs once a joiners' second load
+	// is set up and before the first load's waiters are released, so tests
+	// can make the last joiner leave at that point.
+	beforeSecondLoad func(context.Context)
+
 	mu      sync.Mutex
 	entries map[K]*list.Element // of *cacheEntry[K, V]; front is most recent
 	order   *list.List
@@ -128,8 +133,12 @@ func (c *Cache[K, V]) leave(key K, call *cacheCall[V], joined bool) {
 	if joined {
 		call.joiners--
 	}
-	if call.waiters == 0 {
+	// Only the joiners need a second load: once the last of them leaves, it
+	// is cancelled even while the starter has not collected its result yet.
+	if call.waiters == 0 || (call.again != nil && call.joiners == 0) {
 		call.cancel(context.Canceled)
+	}
+	if call.waiters == 0 {
 		// A new caller must not join an abandoned load. Its late result must
 		// not delete or replace a newer load for this key either.
 		if c.loading[key] == call {
@@ -177,6 +186,9 @@ func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load 
 		call.again = &cacheCall[V]{done: make(chan struct{})}
 	}
 	c.mu.Unlock()
+	if call.again != nil && c.beforeSecondLoad != nil {
+		c.beforeSecondLoad(ctx)
+	}
 	close(call.done)
 	if call.again != nil {
 		c.run(ctx, call.again, load)

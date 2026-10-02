@@ -658,3 +658,53 @@ func TestCacheTimeoutsCannotBypassLoadLimit(t *testing.T) {
 		})
 	}
 }
+
+// The joiners' second load is cancelled as soon as its last joiner leaves,
+// even while the starter is still waiting for the first result: only the
+// joiners need it (maintainer review on #316).
+func TestCacheSecondLoadEndsWithItsLastJoiner(t *testing.T) {
+	c := NewCache[string, int](t.Context(), 8, 1, time.Minute, time.Second, func(string, int) bool { return false }, time.Now)
+	gate := make(chan struct{})
+	var calls atomic.Int32
+	load := func(ctx context.Context) (int, error) {
+		if calls.Add(1) == 1 {
+			<-gate
+			return 1, nil
+		}
+		<-ctx.Done()
+		return 0, ctx.Err()
+	}
+	joinerCtx, leave := context.WithCancel(t.Context())
+	defer leave()
+	joined := make(chan error, 1)
+	// Set before any Get, so the load goroutine reads it after this write.
+	secondLoad := make(chan error, 1)
+	c.beforeSecondLoad = func(ctx context.Context) {
+		// The second load is set up and the starter still waits: the last
+		// joiner leaves now.
+		leave()
+		<-joined
+		secondLoad <- ctx.Err()
+	}
+	started := make(chan error, 1)
+	go func() {
+		v, err := c.Get(t.Context(), "k", load)
+		if err == nil && v != 1 {
+			err = fmt.Errorf("starter got %d, want 1", v)
+		}
+		started <- err
+	}()
+	waitForWaiters(t, c, "k", 1)
+	go func() { _, err := c.Get(joinerCtx, "k", load); joined <- err }()
+	waitForWaiters(t, c, "k", 2)
+	close(gate)
+	if err := receive(t, secondLoad); !errors.Is(err, context.Canceled) {
+		t.Fatalf("second load context after the last joiner left: %v, want canceled", err)
+	}
+	if err := receive(t, started); err != nil {
+		t.Fatalf("starter: %v", err)
+	}
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("%d loads ran, want only the first", n)
+	}
+}

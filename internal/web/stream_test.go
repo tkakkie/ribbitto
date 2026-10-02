@@ -263,9 +263,9 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			if n := calls.Load(); int(n) != i+1 {
 				t.Fatalf("%s: %d reads after %d renders, want its own read", c.name, n, i+1)
 			}
-			// A message item may hold no translated text, so another
-			// language needs only its own entry, not different HTML.
-			if other, ok := seen[got]; ok && c.name != "language" {
+			// A live item carries translated announcement text, so every
+			// dimension, the language included, renders different HTML.
+			if other, ok := seen[got]; ok {
 				t.Fatalf("%s rendered the same HTML as %s", c.name, other)
 			}
 			seen[got] = c.name
@@ -318,6 +318,14 @@ func (l laterSession) Resolve(context.Context, string) (domain.Account, auth.Ses
 		l.hub.CancelSession(l.session.ID)
 	}
 	return domain.Account{ID: domain.ID{1}}, l.session, l.err
+}
+
+// firstRead counts reads and fails each one, which ends a started stream.
+type firstRead struct{ reads *atomic.Int32 }
+
+func (f firstRead) EventsAfter(context.Context, domain.ID, int64, int) ([]domain.Event, error) {
+	f.reads.Add(1)
+	return nil, errors.New("stream started; stop after the first read")
 }
 
 // noEvents is an event log that is never read in these tests.
@@ -598,8 +606,9 @@ func TestStreamCapPerAccount(t *testing.T) {
 	}
 	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	seen := -1
+	var reads atomic.Int32
 	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-		s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Sessions: laterSession{hub: hub, session: live, seen: &seen}, MaxPerAccount: 1}
+		s.Stream = &Streaming{Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}, MaxPerAccount: 1}
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -615,9 +624,15 @@ func TestStreamCapPerAccount(t *testing.T) {
 		t.Fatalf("over the cap: status %d, type %q; want 429 before streaming", w.Code, w.Header().Get("Content-Type"))
 	}
 	unregister()
-	w = serveForm(handler, http.MethodGet, url, "live", nil)
-	if w.Code != http.StatusOK || seen != 1 {
-		t.Fatalf("after the slot was freed: status %d, %d registered at the re-check; want 200 and 1", w.Code, seen)
+	// A writer that supports deadlines and flushing, so the freed slot
+	// really starts a stream: the header goes out and the loop reads once.
+	// The read then fails, which ends the stream.
+	started := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+	r := httptest.NewRequest(http.MethodGet, url, nil)
+	r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+	handler.ServeHTTP(started, r)
+	if started.Code != http.StatusOK || started.Header().Get("Content-Type") != "text/event-stream; charset=utf-8" || seen != 1 || reads.Load() != 1 {
+		t.Fatalf("after the slot was freed: status %d, type %q, %d registered at the re-check, %d reads; want a started stream", started.Code, started.Header().Get("Content-Type"), seen, reads.Load())
 	}
 	if n := hub.Connections(); n != 0 {
 		t.Fatalf("%d connections registered after the stream ended, want 0", n)

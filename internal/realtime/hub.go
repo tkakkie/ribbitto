@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	"github.com/tkakkie/ribbitto/internal/domain"
 )
@@ -46,6 +47,8 @@ type Hub struct {
 type orgSequence struct {
 	latest  int64
 	changed chan struct{}
+	// waiters counts calls of Wait holding changed; see Waiting.
+	waiters atomic.Int64
 }
 
 type registration struct {
@@ -132,13 +135,32 @@ func (h *Hub) Wait(ctx context.Context, org domain.ID, after int64) (int64, erro
 			return latest, nil
 		}
 		changed := s.changed
+		// Counted under mu with changed in hand: from here, any raise wakes
+		// this call. Decremented without mu, to keep wakeups off the lock.
+		s.waiters.Add(1)
 		h.mu.Unlock()
 		select {
 		case <-changed:
+			s.waiters.Add(-1)
 		case <-ctx.Done():
+			s.waiters.Add(-1)
 			return 0, context.Cause(ctx)
 		}
 	}
+}
+
+// Waiting reports how many calls of Wait for the organisation are counted
+// as blocked, so tests can synchronise on it instead of sleeping. A call is
+// counted once it holds the channel the next raise closes; after a raise it
+// stays counted until it runs its decrement, so read the count only while
+// no raise is in flight.
+func (h *Hub) Waiting(org domain.ID) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if s, ok := h.orgs[org]; ok {
+		return int(s.waiters.Load())
+	}
+	return 0
 }
 
 // Connection names who holds a stream: the organisation from the URL, and

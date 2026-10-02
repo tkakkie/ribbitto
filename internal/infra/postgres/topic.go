@@ -85,7 +85,7 @@ func (s *TopicStore) GetDefaultTopic(ctx context.Context, organizationID, channe
 }
 
 // ListTopics returns at most limit topics of the channel, the default first,
-// then in creation order (UUIDv7 ids sort by creation time).
+// then by name (case-insensitive), with ID as a tie-breaker.
 func (s *TopicStore) ListTopics(ctx context.Context, organizationID, channelID domain.ID, limit int) ([]domain.Topic, error) {
 	if limit < 1 || limit > math.MaxInt32 {
 		return nil, fmt.Errorf("listing topics: limit %d out of range", limit)

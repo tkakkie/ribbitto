@@ -15,9 +15,10 @@ var ErrInvalidBody = errors.New("invalid message body")
 // Store posts a message atomically: in one transaction it takes the
 // organisation's next event_seq first, then inserts the message and event with it. A
 // channel that is not in the organisation is channel.ErrNotFound, and the
-// sequence is not consumed. Success means the transaction has committed.
+// sequence is not consumed. A mismatched topic is topic.ErrNotFound.
+// Success means the transaction has committed; nil topicID selects the default.
 type Store interface {
-	Post(ctx context.Context, organizationID, channelID, memberID domain.ID, body string) (domain.Message, error)
+	PostToTopic(ctx context.Context, organizationID, channelID, memberID domain.ID, topicID *domain.ID, body string) (domain.Message, error)
 }
 
 // Notifier records the latest committed event sequence for an organisation.
@@ -46,11 +47,16 @@ func NewWithNotifier(store Store, notifier Notifier) *Service {
 // author come from the membership, never from the request; the channel id
 // does, and is checked against that organisation.
 func (s *Service) Post(ctx context.Context, m authz.Membership, channelID domain.ID, body string) (domain.Message, error) {
+	return s.PostToTopic(ctx, m, channelID, nil, body)
+}
+
+// PostToTopic posts to a topic of the channel; nil selects its default topic.
+func (s *Service) PostToTopic(ctx context.Context, m authz.Membership, channelID domain.ID, topicID *domain.ID, body string) (domain.Message, error) {
 	body, err := domain.ValidateMessageBody(body)
 	if err != nil {
 		return domain.Message{}, fmt.Errorf("%w: %w", ErrInvalidBody, err)
 	}
-	posted, err := s.store.Post(ctx, m.Organization.ID, channelID, m.Member.ID, body)
+	posted, err := s.store.PostToTopic(ctx, m.Organization.ID, channelID, m.Member.ID, topicID, body)
 	if err != nil {
 		return domain.Message{}, fmt.Errorf("posting message: %w", err)
 	}

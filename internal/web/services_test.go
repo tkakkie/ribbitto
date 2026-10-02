@@ -24,6 +24,7 @@ func testServices(overrides ...func(*Services)) Services {
 		SignIn:   &fakeSignIn{},
 		Authz:    noOrganisations{},
 		Channels: &fakeChannels{},
+		Topics:   fakeTopics{},
 		Messages: fakeMessages{},
 		Posting:  testPoster(),
 	}
@@ -55,6 +56,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *auth.Sessions,
 		SignIn:   auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
 		Authz:    authz.New(postgres.NewAuthzStore(pool)),
 		Channels: channel.New(postgres.NewChannelStore(pool)),
+		Topics:   postgres.NewTopicStore(pool),
 		Messages: postgres.MessageReader{Pool: pool},
 		Posting:  message.New(postgres.NewPostingStore(pool)),
 	}

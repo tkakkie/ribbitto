@@ -168,3 +168,6 @@ other = "New message"
 
 ["topic.default"]
 other = "chorus"
+
+["topic.list"]
+other = "Topics (first 50 by name)"

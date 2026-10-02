@@ -129,6 +129,7 @@ func TestTopicStoreScope(t *testing.T) {
 		}
 	}
 
+	slices.SortFunc(named, func(a, b domain.Topic) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
 	all, err := store.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 10)
 	if want := append([]domain.Topic{def}, named...); err != nil || !slices.Equal(all, want) {
 		t.Fatalf("list: %+v, %v; want %+v", all, err, want)

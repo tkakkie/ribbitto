@@ -10,6 +10,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
@@ -32,7 +33,12 @@ func (s MessageReader) One(ctx context.Context, m authz.Membership, channelID do
 }
 
 // Before reads a page for a resolved member, omitting the cursor on older pages.
-func (s MessageReader) Before(ctx context.Context, m authz.Membership, channelID domain.ID, before *int64) (page message.ChannelPage, err error) {
+func (s MessageReader) Before(ctx context.Context, m authz.Membership, channelID domain.ID, before *int64) (message.ChannelPage, error) {
+	return s.Page(ctx, m, channelID, nil, before)
+}
+
+// Page reads channel or topic history; topic pages have no live cursor.
+func (s MessageReader) Page(ctx context.Context, m authz.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (page message.ChannelPage, err error) {
 	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		channels := channel.New(NewChannelStore(tx))
 		page.Current, err = channels.Get(ctx, m, channelID)
@@ -43,12 +49,24 @@ func (s MessageReader) Before(ctx context.Context, m authz.Membership, channelID
 		if err != nil {
 			return err
 		}
-		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: NewAccountStore(tx), Topics: NewTopicStore(tx)}
-		page.Page, err = reader.Before(ctx, m, channelID, before)
+		var topics topic.Store = NewTopicStore(tx)
+		if topicID != nil {
+			selected, err := topics.GetTopic(ctx, m.Organization.ID, channelID, *topicID)
+			if err != nil {
+				return err
+			}
+			page.Topic = &selected
+		}
+		page.Topics, err = topics.ListTopics(ctx, m.Organization.ID, channelID, 50)
 		if err != nil {
 			return err
 		}
-		if before == nil {
+		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: NewAccountStore(tx), Topics: NewTopicStore(tx)}
+		page.Page, err = reader.Before(ctx, m, channelID, topicID, before)
+		if err != nil {
+			return err
+		}
+		if before == nil && topicID == nil {
 			seq, err := sqlcgen.New(tx).GetEventSeq(ctx, pgtype.UUID{Bytes: m.Organization.ID, Valid: true})
 			if err != nil {
 				return fmt.Errorf("reading page cursor: %w", err)

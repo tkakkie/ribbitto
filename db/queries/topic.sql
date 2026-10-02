@@ -11,7 +11,7 @@ SELECT * FROM topic WHERE organization_id = $1 AND channel_id = $2 AND is_defaul
 -- name: ListTopics :many
 SELECT * FROM topic
 WHERE organization_id = $1 AND channel_id = $2
-ORDER BY is_default DESC, id
+ORDER BY is_default DESC, lower(name), id
 LIMIT $3;
 
 -- name: LookupTopics :many

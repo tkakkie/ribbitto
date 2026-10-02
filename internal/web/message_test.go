@@ -38,7 +38,7 @@ func (fakeMessages) One(context.Context, authz.Membership, domain.ID, int64) (me
 	return message.Entry{}, message.ErrNotFound
 }
 
-func (f fakeMessages) Before(ctx context.Context, m authz.Membership, id domain.ID, before *int64) (message.ChannelPage, error) {
+func (f fakeMessages) Page(ctx context.Context, m authz.Membership, id domain.ID, topicID *domain.ID, before *int64) (message.ChannelPage, error) {
 	if f.before != nil {
 		*f.before = append(*f.before, before)
 	}
@@ -55,7 +55,10 @@ func (f fakeMessages) Before(ctx context.Context, m authz.Membership, id domain.
 		return message.ChannelPage{}, err
 	}
 	page := message.ChannelPage{Page: message.Page{Entries: f.entries, Older: f.older}, Current: current, Channels: list}
-	if before == nil {
+	if topicID != nil {
+		page.Topic = &domain.Topic{ID: *topicID, Name: "Planning"}
+	}
+	if before == nil && topicID == nil {
 		cursor := int64(42)
 		page.EventCursor = &cursor
 	}
@@ -187,7 +190,7 @@ type postingStore struct {
 	org, channel, member domain.ID
 }
 
-func (s *postingStore) Post(_ context.Context, org, ch, member domain.ID, body string) (domain.Message, error) {
+func (s *postingStore) PostToTopic(_ context.Context, org, ch, member domain.ID, _ *domain.ID, body string) (domain.Message, error) {
 	s.org, s.channel, s.member, s.body = org, ch, member, body
 	return domain.Message{ID: s.id, Body: body}, s.err
 }
@@ -405,10 +408,16 @@ func TestFeedTopicLabels(t *testing.T) {
 				if w.Code != 200 || !strings.Contains(body, `<bdi class="text-caption text-muted">&lt;design&gt;مرحبا</bdi>`) || !strings.Contains(body, `<bdi class="text-caption text-muted">chorus</bdi>`) {
 					t.Fatalf("feed labels: %d, %s", w.Code, body)
 				}
+				// Each label links to its topic view (#303).
+				for _, entry := range populatedMessages().entries {
+					if href := `<a href="` + view.ConversationURL("acme", entry.ChannelID, &entry.TopicID) + `" class="text-muted underline">`; !strings.Contains(body, href) {
+						t.Fatalf("feed label link %s missing: %s", href, body)
+					}
+				}
 				catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 					for _, entry := range populatedMessages().entries {
 						var live bytes.Buffer
-						if err := view.LiveMessageItem(viewMessage(entry)).Render(r.Context(), &live); err != nil {
+						if err := view.LiveMessageItem(viewMessage("acme", entry)).Render(r.Context(), &live); err != nil {
 							t.Fatal(err)
 						}
 						want := "&lt;design&gt;مرحبا"
@@ -417,6 +426,9 @@ func TestFeedTopicLabels(t *testing.T) {
 						}
 						if !strings.Contains(live.String(), `<bdi class="text-caption text-muted">`+want+`</bdi>`) {
 							t.Fatalf("live label: %s", live.String())
+						}
+						if href := `<a href="` + view.ConversationURL("acme", entry.ChannelID, &entry.TopicID) + `"`; !strings.Contains(live.String(), href) {
+							t.Fatalf("live label link %s missing: %s", href, live.String())
 						}
 					}
 				})).ServeHTTP(httptest.NewRecorder(), req)

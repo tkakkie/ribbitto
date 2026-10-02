@@ -447,6 +447,7 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 		"stream without lifetime":           func(s *Services) { s.Stream = &Streaming{} },
 		"no authorizer":                     func(s *Services) { s.Authz = nil },
 		"no channels":                       func(s *Services) { s.Channels = nil },
+		"no topics":                         func(s *Services) { s.Topics = nil },
 		"no messages":                       func(s *Services) { s.Messages = nil },
 		"no posting":                        func(s *Services) { s.Posting = nil },
 		"no sessions":                       func(s *Services) { s.Sessions = nil },

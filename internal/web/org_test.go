@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	"log/slog"
@@ -68,6 +69,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	defaultTopic, err := postgres.NewTopicStore(pool).GetDefaultTopic(ctx, acme, acmeChannel)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var now time.Time
 	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&now); err != nil {
 		t.Fatal(err)
@@ -103,7 +108,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, method, path, cookie, url.Values{"name": {"新しいチャンネル"}, "body": {"posted through the page"}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Messages, services.Posting, services.Stream)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Stream)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -113,6 +118,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			// Keep what follows the channel, such as /events.
 			path = view.ChannelURL("acme", acmeChannel) + strings.TrimPrefix(route.path, "/channels/{channelID}")
 		}
+		path = strings.ReplaceAll(path, "{topicID}", strings.TrimPrefix(view.ConversationURL("acme", acmeChannel, &defaultTopic.ID), view.ChannelURL("acme", acmeChannel)+"/topics/"))
 		for _, tt := range []struct {
 			name   string
 			cookie string
@@ -139,12 +145,12 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != view.ChannelURL("acme", acmeChannel) {
 					t.Fatalf("default: %d %s", w.Code, w.Header().Get("Location"))
 				}
-			case "GET /channels/{channelID}":
+			case "GET /channels/{channelID}", "GET /channels/{channelID}/topics/{topicID}":
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") || !strings.Contains(w.Body.String(), "雑談") {
 					t.Fatalf("channel: %d %s", w.Code, w.Body.String())
 				}
-			case "POST /channels/{channelID}":
-				if w.Code != 303 || w.Header().Get("Location") != view.ChannelURL("acme", acmeChannel) {
+			case "POST /channels/{channelID}", "POST /channels/{channelID}/topics/{topicID}":
+				if w.Code != 303 || w.Header().Get("Location") != path {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())
 				}
 			case "GET /channels/{channelID}/events":
@@ -173,6 +179,67 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("topic history and posting", func(t *testing.T) {
+		clock = now
+		named, err := postgres.NewTopicStore(pool).CreateTopic(ctx, acme, acmeChannel, "Planning")
+		if err != nil {
+			t.Fatal(err)
+		}
+		other := pgtest.Channel(t, pool, acme, "other", false)
+		var initialCount int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id = $1", acme).Scan(&initialCount); err != nil {
+			t.Fatal(err)
+		}
+		for _, ids := range [][2]domain.ID{{acmeChannel, {}}, {acmeChannel, other.DefaultTopicID}, {{}, named.ID}, {globexChannel, named.ID}} {
+			path := view.ConversationURL("acme", ids[0], &ids[1])
+			for _, method := range []string{"GET", "POST"} {
+				w := get(method, path, aliceToken, now)
+				if w.Code != 404 {
+					t.Fatalf("%s %v: %d", method, ids, w.Code)
+				}
+			}
+			if w := get("GET", path+"?before=bad", aliceToken, now); w.Code != 404 {
+				t.Fatalf("invalid paging with out-of-scope topic: %d", w.Code)
+			}
+		}
+		var count int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id = $1", acme).Scan(&count); err != nil || count != initialCount {
+			t.Fatalf("invalid topic posts: %d, %v", count, err)
+		}
+		topicURL := view.ConversationURL("acme", acmeChannel, &named.ID)
+		for i := 0; i < 51; i++ {
+			w := serveForm(handler, "POST", topicURL, aliceToken, url.Values{"body": {fmt.Sprintf("topic-message-%02d", i)}})
+			if w.Code != 303 || w.Header().Get("Location") != topicURL {
+				t.Fatalf("post: %d %s", w.Code, w.Body.String())
+			}
+		}
+		latest := get("GET", topicURL, aliceToken, now)
+		body := latest.Body.String()
+		if latest.Code != 200 || strings.Count(body, `<li id="message-`) != 50 || strings.Contains(body, "topic-message-00") || !strings.Contains(body, "topic-message-50") || strings.Contains(body, "posted through the page") || strings.Contains(body, "sse-connect=") || strings.Contains(body, "hx-post=") || !strings.Contains(body, `action="`+topicURL+`"`) {
+			t.Fatalf("latest topic: %d %s", latest.Code, body)
+		}
+		var before int64
+		if err := pool.QueryRow(ctx, "SELECT event_seq FROM message WHERE organization_id = $1 AND topic_id = $2 AND body = 'topic-message-01'", acme, named.ID).Scan(&before); err != nil {
+			t.Fatal(err)
+		}
+		olderURL := fmt.Sprintf("%s?before=%d", topicURL, before)
+		if !strings.Contains(body, `href="`+olderURL+`"`) {
+			t.Fatal("paging link lost topic")
+		}
+		older := get("GET", olderURL, aliceToken, now)
+		if older.Code != 200 || !strings.Contains(older.Body.String(), "topic-message-00") || strings.Contains(older.Body.String(), "topic-message-01") || !strings.Contains(older.Body.String(), `href="`+topicURL+`"`) {
+			t.Fatalf("older: %d %s", older.Code, older.Body.String())
+		}
+		invalid := serveForm(handler, "POST", topicURL, aliceToken, url.Values{"body": {""}})
+		if invalid.Code != 422 || !strings.Contains(invalid.Body.String(), `action="`+topicURL+`"`) {
+			t.Fatalf("invalid body: %d", invalid.Code)
+		}
+		feed := get("GET", view.ChannelURL("acme", acmeChannel), aliceToken, now)
+		if feed.Code != 200 || !strings.Contains(feed.Body.String(), `href="`+topicURL+`"`) {
+			t.Fatal("topic missing from channel list")
+		}
+	})
 
 	t.Run("member cannot read another organisation's channel under own URL", func(t *testing.T) {
 		w := get(http.MethodGet, view.ChannelURL("acme", globexChannel), aliceToken, now)

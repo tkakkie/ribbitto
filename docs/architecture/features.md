@@ -20,7 +20,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
-| `topic`: conversations inside a channel, the default topic, branching *(decision 21; schema, stores and feed labels so far)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`; `db/queries/topic.sql` | `topic` |
+| `topic`: conversations inside a channel, the default topic, branching *(decision 21; schema, stores, feed labels and topic views)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list) | `topic` |
 | `realtime` | `internal/realtime` *(M3)*; `domain/event.go`; `infra/postgres/event_log.go`, `event_reader.go`, `event_cleaner.go`; `db/queries/event_log.sql`; `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
 
 The shared kernel, which any feature may use: the IDs and value types in
@@ -33,7 +33,8 @@ transaction; `PostingStore` owns the posting transaction (sequence first,
 then the message and event). Message references to channels and `org`'s members use
 composite foreign keys including `organization_id`. History uses one
 newest-first keyset query, `ListMessagesBefore`, with a nullable upper
-sequence bound for the latest page, and no author joins. `Reader.One` reads
+sequence bound for the latest page, an optional scoped topic filter passed
+explicitly through `Reader.Before` and `History`, and no author joins. `Reader.One` reads
 one message by organisation, channel and `event_seq`, returning `ErrNotFound`
 for a missing or out-of-scope message. The use cases
 (`app/channel`, `app/message`) exist. `message.Reader` resolves authors through
@@ -46,10 +47,7 @@ across the channel and sidebar (through `channel.Service`), history, both author
 lookups and the topic batch through `topic.Directory.LookupTopics`, plus the
 shared-kernel `organization.event_seq` on the latest page.
 It returns `message.ChannelPage`; older pages have no event cursor.
-`MessageReader.One` reads one message, its authors and topic in its own snapshot.
-Live labels come from that shared load through the existing render cache, keyed
-by organisation, channel, sequence and language, with no extra read per stream
-per event. A moved message's label is corrected by #306's move event.
+| `topic`: conversations inside a channel, the default topic, branching *(decision 21; schema, stores, feed labels and topic views)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list) | `topic` |
 
 **Known exceptions.** Cross-feature writes that must commit atomically:
 

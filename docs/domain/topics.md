@@ -9,8 +9,10 @@ that counts messages per topic. It was settled in
 **Keep it current:** update this file in the same pull request whenever
 these rules change. The *Model* and *Tables* below exist (#301, #307):
 every channel has its default topic and every message a topic, and posting
-goes to the default topic. The feed labels messages (#302); the topic view
-and branching remain planned. `db/migrations/` is the schema source of truth.
+goes to the default topic, and a topic view posts into its topic. Feed
+labels, topic views, posting into a topic and a bounded topic list exist;
+live topic updates (#304) and branching (#305) follow. `db/migrations/` is the
+schema source of truth.
 
 ## Model
 
@@ -62,23 +64,25 @@ and branching remain planned. `db/migrations/` is the schema source of truth.
 
 - **Feed** — the channel page: every topic's messages interleaved by
   `event_seq`, each labelled with its topic. It is what the channel page
-  shows today. Labels are plain text until #303, escaped and isolated with
-  `<bdi>`; the default label comes from both language catalogues. Topic names
+  shows today. Labels are escaped and isolated with `<bdi>` and link to the
+  topic view; the default label comes from both language catalogues. Topic names
   are resolved through `topic.Directory` in one batch per page, in the same
   snapshot as the messages and authors. Live labels come from the shared
   `MessageReader.One` load through the existing render cache, keyed by
   organisation, channel, sequence and language, with no extra read per stream
   per event. A moved message's label is corrected by #306's move event.
-- **Topic view** *(planned)* — one topic's messages, paged by `event_seq` the same way
-  as channel history ([`messages.md`](messages.md#older-pages)).
+- **Topic view** — one topic's messages, paged by `event_seq` the same way
+  as channel history ([`messages.md`](messages.md#older-pages)). Its plain
+  composer posts into that topic and redirects back; invalid bodies preserve
+  the draft (422). Live updates are planned (#304).
+- The channel sidebar links to at most 50 topics: default first, then
+  case-insensitive name order with ID as a tie-breaker.
 - A topic in a URL is scoped by the organisation and channel in the same
   URL; a topic of another channel is 404, like a non-member.
 
 ## Branching
 
-*Planned.*
-
-A member selects one or more messages in any topic of a channel, the
+*Planned (#305).* A member selects one or more messages in any topic of a channel, the
 default topic included, and moves them to another topic of the same
 channel, a new one or an existing one. In **one transaction**:
 

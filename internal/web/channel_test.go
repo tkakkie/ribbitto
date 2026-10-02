@@ -13,6 +13,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -20,6 +21,56 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
+
+type fakeTopics struct {
+	err     error
+	lookups *[][3]domain.ID
+}
+
+func (f fakeTopics) GetTopic(_ context.Context, org, channel, id domain.ID) (domain.Topic, error) {
+	if f.lookups != nil {
+		*f.lookups = append(*f.lookups, [3]domain.ID{org, channel, id})
+	}
+	return domain.Topic{OrganizationID: org, ChannelID: channel, ID: id}, f.err
+}
+
+func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
+	for _, tt := range []struct {
+		name, method, query string
+		lookupErr           error
+		status              int
+	}{
+		{"post", "POST", "", nil, 303},
+		{"invalid bound", "GET", "?before=bad", nil, 400},
+		{"malformed query", "GET", "?before=%zz", nil, 400},
+		{"unknown topic", "GET", "?before=bad", topic.ErrNotFound, 404},
+		{"lookup failure", "GET", "?before=bad", errors.New("offline"), 500},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			selected := domain.ID{3}
+			var lookups [][3]domain.ID
+			p := channelPages{service: &fakeChannels{}, posting: testPoster(), topics: fakeTopics{err: tt.lookupErr, lookups: &lookups}}
+			// A nil message reader makes any unnecessary history read fail.
+			path := view.ConversationURL("acme", domain.ID{1}, &selected)
+			r := httptest.NewRequest(tt.method, path+tt.query, strings.NewReader("body=hello"))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			r.SetPathValue("channelID", "01000000-0000-0000-0000-000000000000")
+			r.SetPathValue("topicID", "03000000-0000-0000-0000-000000000000")
+			w := httptest.NewRecorder()
+			p.show(w, r, authz.Membership{Organization: domain.Organization{ID: domain.ID{9}, Slug: "acme"}})
+			if w.Code != tt.status {
+				t.Fatalf("status %d, body %s", w.Code, w.Body.String())
+			}
+			if tt.method == "POST" {
+				if len(lookups) != 0 || w.Header().Get("Location") != path {
+					t.Fatal("post must redirect without a separate topic lookup")
+				}
+			} else if len(lookups) != 1 || lookups[0] != ([3]domain.ID{{9}, {1}, {3}}) {
+				t.Fatalf("topic lookup scope: %v", lookups)
+			}
+		})
+	}
+}
 
 type fakeChannels struct {
 	createErr, defaultErr, getErr, listErr error

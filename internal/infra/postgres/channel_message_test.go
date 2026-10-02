@@ -104,7 +104,7 @@ func TestChannelMessageSchema(t *testing.T) {
 			if tc.before != 0 {
 				before = &tc.before
 			}
-			got, err := messages.ListMessagesBefore(ctx, tc.org, channel.ID, before, tc.limit)
+			got, err := messages.ListMessagesBefore(ctx, tc.org, channel.ID, nil, before, tc.limit)
 			if err != nil || !slices.Equal(got, tc.want) {
 				t.Fatalf("page: %+v, %v; want %+v", got, err, tc.want)
 			}

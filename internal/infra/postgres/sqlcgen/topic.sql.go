@@ -92,7 +92,7 @@ func (q *Queries) GetTopic(ctx context.Context, arg GetTopicParams) (Topic, erro
 const listTopics = `-- name: ListTopics :many
 SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic
 WHERE organization_id = $1 AND channel_id = $2
-ORDER BY is_default DESC, id
+ORDER BY is_default DESC, lower(name), id
 LIMIT $3
 `
 

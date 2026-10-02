@@ -20,9 +20,10 @@ type Entry struct {
 }
 
 // History reads messages within one organisation and channel. Lists are
-// newest first; GetMessage returns ErrNotFound when the scoped key is absent.
+// newest first, optionally filtered by topic; GetMessage returns ErrNotFound
+// when the scoped key is absent.
 type History interface {
-	ListMessagesBefore(context.Context, domain.ID, domain.ID, *int64, int32) ([]domain.Message, error)
+	ListMessagesBefore(context.Context, domain.ID, domain.ID, *domain.ID, *int64, int32) ([]domain.Message, error)
 	GetMessage(context.Context, domain.ID, domain.ID, int64) (domain.Message, error)
 }
 
@@ -48,20 +49,23 @@ type Page struct {
 // ChannelPage is a channel, its sidebar and history read in one snapshot.
 type ChannelPage struct {
 	Page
+	Topic    *domain.Topic
+	Topics   []domain.Topic
 	Current  domain.Channel
 	Channels []domain.Channel
-	// EventCursor is the snapshot's organisation sequence; nil on older pages.
+	// EventCursor is the snapshot's organisation sequence; nil on older or topic pages.
 	EventCursor *int64
 }
 
 // Before returns the page of messages older than event_seq before, or the
-// latest page when before is nil. The caller resolves membership and the
+// latest page when before is nil. A nil topicID includes every topic.
+// The caller resolves membership and the
 // channel through authz and channel before reading. before is only an upper
 // bound: the query is scoped to the membership's organisation and the
 // channel, so a value taken from another channel cannot reach its messages.
-func (s Reader) Before(ctx context.Context, m authz.Membership, channelID domain.ID, before *int64) (Page, error) {
+func (s Reader) Before(ctx context.Context, m authz.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (Page, error) {
 	// One extra row says whether an older page exists without a count query.
-	messages, err := s.History.ListMessagesBefore(ctx, m.Organization.ID, channelID, before, PageSize+1)
+	messages, err := s.History.ListMessagesBefore(ctx, m.Organization.ID, channelID, topicID, before, PageSize+1)
 	if err != nil {
 		return Page{}, fmt.Errorf("reading history: %w", err)
 	}

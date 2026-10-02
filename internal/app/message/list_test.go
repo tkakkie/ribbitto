@@ -29,8 +29,8 @@ func (f *directoryHistory) GetMessage(context.Context, domain.ID, domain.ID, int
 	f.t.Fatal("unexpected single-message read")
 	return domain.Message{}, nil
 }
-func (f *directoryHistory) ListMessagesBefore(_ context.Context, org, ch domain.ID, before *int64, limit int32) ([]domain.Message, error) {
-	if org != (domain.ID{1}) || ch != (domain.ID{2}) || before == nil || *before != 9 || limit != message.PageSize+1 {
+func (f *directoryHistory) ListMessagesBefore(_ context.Context, org, ch domain.ID, topicID *domain.ID, before *int64, limit int32) ([]domain.Message, error) {
+	if org != (domain.ID{1}) || ch != (domain.ID{2}) || topicID == nil || *topicID != (domain.ID{7}) || before == nil || *before != 9 || limit != message.PageSize+1 {
 		f.t.Fatal("wrong history scope or limit")
 	}
 	return []domain.Message{{ID: domain.ID{4}, MemberID: domain.ID{3}}, {ID: domain.ID{5}, MemberID: domain.ID{3}}}, f.step("history")
@@ -67,7 +67,7 @@ func TestBefore(t *testing.T) {
 		t.Run("failure="+failure, func(t *testing.T) {
 			f := &directoryHistory{t: t, fail: failure}
 			before := int64(9)
-			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).Before(t.Context(), authz.Membership{Organization: domain.Organization{ID: domain.ID{1}}}, domain.ID{2}, &before)
+			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).Before(t.Context(), authz.Membership{Organization: domain.Organization{ID: domain.ID{1}}}, domain.ID{2}, &domain.ID{7}, &before)
 			if (err != nil) != (failure != "") {
 				t.Fatalf("error: %v", err)
 			}
@@ -85,7 +85,7 @@ func (fullHistory) GetMessage(context.Context, domain.ID, domain.ID, int64) (dom
 	return domain.Message{}, errors.New("unexpected single-message read")
 }
 
-func (f fullHistory) ListMessagesBefore(_ context.Context, _, _ domain.ID, before *int64, limit int32) ([]domain.Message, error) {
+func (f fullHistory) ListMessagesBefore(_ context.Context, _, _ domain.ID, _ *domain.ID, before *int64, limit int32) ([]domain.Message, error) {
 	var out []domain.Message
 	for seq := int64(f.n); seq >= 1 && len(out) < int(limit); seq-- {
 		if before == nil || seq < *before {
@@ -121,7 +121,7 @@ func TestBeforePages(t *testing.T) {
 		var before *int64
 		var sizes []int
 		for {
-			page, err := reader.Before(t.Context(), authz.Membership{}, domain.ID{2}, before)
+			page, err := reader.Before(t.Context(), authz.Membership{}, domain.ID{2}, nil, before)
 			if err != nil {
 				t.Fatal(err)
 			}

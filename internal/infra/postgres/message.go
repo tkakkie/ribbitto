@@ -18,7 +18,9 @@ import (
 )
 
 // MessageStore persists messages using a pool or a caller-owned transaction.
-type MessageStore struct{ queries *sqlcgen.Queries }
+type MessageStore struct {
+	queries *sqlcgen.Queries
+}
 
 // NewMessageStore returns a store using db.
 func NewMessageStore(db sqlcgen.DBTX) *MessageStore {
@@ -53,13 +55,18 @@ func (s *MessageStore) GetMessage(ctx context.Context, organizationID, channelID
 }
 
 // ListMessagesBefore returns newest first; nil beforeEventSeq reads the latest page.
-func (s *MessageStore) ListMessagesBefore(ctx context.Context, organizationID, channelID domain.ID, beforeEventSeq *int64, limit int32) ([]domain.Message, error) {
+// A nil topicID includes every topic in the channel.
+func (s *MessageStore) ListMessagesBefore(ctx context.Context, organizationID, channelID domain.ID, topicID *domain.ID, beforeEventSeq *int64, limit int32) ([]domain.Message, error) {
+	var selectedTopic pgtype.UUID
+	if topicID != nil {
+		selectedTopic = pgtype.UUID{Bytes: *topicID, Valid: true}
+	}
 	var before pgtype.Int8
 	if beforeEventSeq != nil {
 		before = pgtype.Int8{Int64: *beforeEventSeq, Valid: true}
 	}
 	rows, err := s.queries.ListMessagesBefore(ctx, sqlcgen.ListMessagesBeforeParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, BeforeEventSeq: before, Limit: limit,
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, BeforeEventSeq: before, Limit: limit, TopicID: selectedTopic,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("listing messages: %w", err)
@@ -86,6 +93,11 @@ func NewPostingStore(pool *pgxpool.Pool) *PostingStore { return &PostingStore{po
 // Any failure rolls everything back, so no sequence value is lost. Listed
 // exceptions: advances org's event_seq and writes realtime's event_log.
 func (s *PostingStore) Post(ctx context.Context, organizationID, channelID, memberID domain.ID, body string) (domain.Message, error) {
+	return s.PostToTopic(ctx, organizationID, channelID, memberID, nil, body)
+}
+
+// PostToTopic posts into the scoped topic, or the default when topicID is nil.
+func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelID, memberID domain.ID, topicID *domain.ID, body string) (domain.Message, error) {
 	var posted domain.Message
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		seq, err := sqlcgen.New(tx).NextEventSeq(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
@@ -101,6 +113,12 @@ func (s *PostingStore) Post(ctx context.Context, organizationID, channelID, memb
 		}
 		if err != nil {
 			return err
+		}
+		if topicID != nil {
+			defaultTopic, err = NewTopicStore(tx).GetTopic(ctx, organizationID, channelID, *topicID)
+			if err != nil {
+				return err
+			}
 		}
 		posted, err = NewMessageStore(tx).InsertMessage(ctx, organizationID, channelID, defaultTopic.ID, memberID, body, seq)
 		if err != nil {

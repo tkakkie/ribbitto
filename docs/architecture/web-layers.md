@@ -10,12 +10,14 @@ Core functionality works without JavaScript. JavaScript is progressive
 enhancement, not full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
-  a channel and its history (including older pages), posting a message,
+  a channel or topic and its history (including older pages), posting a message,
   and creating a channel. Each is a plain HTML form or link that works on
   its own; htmx and scripts only improve it.
 - **Enhancement only:** real-time updates, focus and scroll handling,
   keyboard shortcuts (Enter to send), and local-time display. Without
   JavaScript a page may lack these, but nothing core breaks.
+
+Topic views use plain composer submissions and omit SSE until #304.
 
 ## Go handlers
 

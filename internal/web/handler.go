@@ -26,6 +26,7 @@ type Services struct {
 	Setup         SetupService // nil disables both setup routes
 	SetupSessions SessionReplacer
 	Authz         Authorizer
+	Topics        TopicReader
 	Messages      MessageReader
 	Posting       *message.Service
 	Channels      ChannelService
@@ -44,8 +45,8 @@ func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 // registered, so the markup tests can prove each page has a rendered case.
 func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services) (http.Handler, []string, error) {
 	// Fail at start-up rather than panic on the first request.
-	if services.Sessions == nil || services.SignIn == nil || services.Authz == nil || services.Channels == nil || services.Messages == nil || services.Posting == nil {
-		return nil, nil, errors.New("web: Services.Sessions, Services.SignIn, Services.Authz, Services.Channels, Services.Messages and Services.Posting are required")
+	if services.Sessions == nil || services.SignIn == nil || services.Authz == nil || services.Channels == nil || services.Topics == nil || services.Messages == nil || services.Posting == nil {
+		return nil, nil, errors.New("web: Services.Sessions, Services.SignIn, Services.Authz, Services.Channels, Services.Topics, Services.Messages and Services.Posting are required")
 	}
 	if (services.Setup != nil || services.SignUp != nil) && services.SetupSessions == nil {
 		return nil, nil, errors.New("web: Services.SetupSessions is required when Services.Setup or Services.SignUp is set")
@@ -106,7 +107,7 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	registerSignIn(routes, pages, services.SignIn, services.SignUp, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignIn }))
 	registerSetup(routes, pages, services.Setup, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.Setup }))
 	registerSignUp(routes, pages, services.SignUp, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignUp }))
-	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services.Channels, services.Messages, services.Posting, services.Stream))
+	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services.Channels, services.Topics, services.Messages, services.Posting, services.Stream))
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

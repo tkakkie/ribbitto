@@ -106,13 +106,14 @@ exits 0.)
 
 ## Muse Code, optional
 
-Muse Code may review a `high` pull request as a second adversarial
-reviewer (#330, from the trial in #246). Grok stays mandatory. Muse Code
+Muse Code may review a pull request as a second adversarial reviewer
+(#330, from the trial in #246), including one where Grok was skipped.
+Grok stays required wherever [*When Grok runs*](#when-grok-runs) says so. Muse Code
 is optional and advisory: its report never satisfies or waives a
 requirement (Grok's review, the Claude ↔ Codex rounds, Copilot's
 follow-up, the maintainer's decisions).
 
-- It reviews the same head commit with the same context as Grok, run as in
+- It reviews the same head commit with the same context Grok gets, run as in
   [*Running Muse Code*](running-other-ai.md#running-muse-code).
 - Claude posts the report as `**Adversarial review — Muse Code** (at <SHA>)`.
   A valid finding gets a disposition like any other: fixed, a follow-up

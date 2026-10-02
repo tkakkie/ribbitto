@@ -4,7 +4,7 @@
 
 One SSE connection per latest channel page (M3) or topic page (#304),
 carrying named events:
-`message`, `messages-moved` (feeds) and `reset` today; `presence`, `typing`
+`message`, `messages-moved` and `reset` today; `presence`, `typing`
 and `unread` are planned (M4). The browser sends everything else as ordinary POST requests. One
 process serves every stream; several server processes are future work (the
 hub, the per-account cap and the watermark are per process).
@@ -57,18 +57,23 @@ sequenceDiagram
   interest checks: other channels, unsupported kinds and other posting-time
   topics are skipped before rendering or authorization (#261 B6). Explicit
   denies from `authz.MayReceive` are skipped after rendering. All skips advance
-  the cursor. `messages.moved` reaches channel feeds as `messages-moved`,
-  with one shared batch render and per-connection authorization. The client
-  replaces only loaded items by stable ID, without announcements or paging
-  changes; its notice is delivered as `message.posted`. Topic subscriptions
-  still skip moves pending #306's topic-page corrections.
+  the cursor. `messages.moved` reaches feeds and its source/destination topics
+  as `messages-moved`, with one shared batch render and per-connection
+  authorization. Other topics skip before either. Feeds replace loaded IDs;
+  source topics remove them, destinations insert by `event_seq` within the
+  loaded range. The server-rendered history control holds the oldest sequence
+  (zero when no older history remains, including an empty page); live changes
+  never move it or its `before=` link. Only
+  Load older replaces it, so older moved items cannot duplicate or skip history.
+  Moves are silent; the notice arrives separately as `message.posted`.
 - **A topic page** subscribes to one topic of the channel
   (`…/topics/{topicID}/events`; an unknown topic, or another channel's, is
   404 before the stream opens). New posting events route by their persisted
   posting-time topic, even when the render reads a later topic. Legacy events
   without `topic_id` fall back to the topic from the shared render, before
-  authorization, with no extra read per stream. Branching's move corrections
-  remain pending (#306). The cursor, replay
+  authorization, with no extra read per stream. Move routing uses the event's
+  source and destination, independently of the rendered item's current topic.
+  The cursor, replay
   and `reset` rules are the channel page's. An error from the reader, the
   authorization check itself, the renderer or the sender stops the loop
   with the cursor before that event, so a reconnect resumes there; a failed

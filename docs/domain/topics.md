@@ -12,8 +12,7 @@ every channel has its default topic and every message a topic, and posting
 goes to the default topic, and a topic view posts into its topic. Feed
 labels, topic views with live updates (#304), posting into a topic, a
 bounded topic list, the branching endpoint (#305) and its selection UI
-(#308) and live feed relabelling (#306) exist. Topic-page move delivery
-follows. `db/migrations/` is the schema source of truth.
+(#308) and live feed and topic move delivery (#306) exist. `db/migrations/` is the schema source of truth.
 
 ## Model
 
@@ -79,6 +78,17 @@ follows. `db/migrations/` is the schema source of truth.
   composer posts into that topic and redirects back; invalid bodies preserve
   the draft (422). Its latest page updates live through a stream of that
   topic only ([streaming](../architecture/streaming.md)); older pages do not.
+  Moves remove loaded source items and insert destination items by `event_seq`,
+  only at or above the loaded range's oldest sequence. The bound is zero when
+  no older history remains, including an empty page, admitting every moved item.
+  The history control preserves that bound across live inserts and removals;
+  only Load older replaces it. Older moved items wait for that history read.
+  Moves received during the read are reapplied after its items and bound swap,
+  so a snapshot taken before the move cannot restore source items or omit
+  destination items now in range. Retained payloads are discarded after the
+  swap, or when the request ends without one.
+  Replays and duplicates use stable IDs; replay matches a reload within this
+  loaded range, including labels and checkbox sources.
 - The channel sidebar links to at most 50 topics: default first, then
   case-insensitive name order with ID as a tie-breaker.
 - A topic in a URL is scoped by the organisation and channel in the same
@@ -132,7 +142,7 @@ Settled in #305:
   and rejects mixed sources before calling the use case. Legacy UUID-only
   values with explicit `from` still work. The event reader decodes the move's
   routing and message IDs and validates its payload. The feed delivers moves
-  through the render cache; topic-page corrections remain pending in #306.
+  through the render cache shared with topic pages.
 - **Selection:** feed and topic views have ordinary branch forms; JavaScript
   disables other sources and the source destination after selection. The
   destination list uses the existing bounded topic list. Plain errors render

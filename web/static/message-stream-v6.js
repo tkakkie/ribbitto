@@ -31,11 +31,57 @@
   document.addEventListener("htmx:sseOpen", (event) => {
     event.detail.source.addEventListener("reset", reset, { once: true });
   });
+  const applyMove = (items, data, payload) => {
+    const moved = payload.querySelectorAll("li");
+    const routing = payload.querySelector("ul").dataset;
+    const topic = items.dataset.topic;
+    // This boundary changes only with Load older's server-rendered control.
+    // Zero means everything older is loaded, so every moved item is admitted.
+    const oldest = BigInt(document.getElementById("load-older").dataset.oldestSeq);
+    for (const item of moved) {
+      const target = document.getElementById(item.id);
+      if (topic === routing.fromTopic) {
+        target?.remove();
+        continue;
+      }
+      if (target) {
+        htmx.swap(target, data, { swapStyle: "outerHTML", settleDelay: 0 }, { select: "#" + item.id });
+      } else if (topic === routing.toTopic && BigInt(item.dataset.eventSeq) >= oldest) {
+        const next = Array.from(items.children).find((child) => BigInt(child.dataset.eventSeq) > BigInt(item.dataset.eventSeq));
+        htmx.swap(next || items, data, { swapStyle: next ? "beforebegin" : "beforeend", settleDelay: 0 }, { select: "#" + item.id });
+      }
+    }
+    // Replacement clears selection; refresh single-source constraints too.
+    document.getElementById("branch-to")?.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  // History may have taken its snapshot before a move. Retain only deliveries
+  // that cross an in-flight request, including moves applied to loaded items.
+  const historyMoves = new Map();
+  document.addEventListener("htmx:beforeSend", (event) => {
+    if (event.detail.target?.id === "message-items" && event.detail.elt.closest("#load-older")) {
+      historyMoves.set(event.detail.xhr, []);
+    }
+  });
+  document.addEventListener("htmx:afterSwap", (event) => {
+    const moves = historyMoves.get(event.detail.xhr);
+    if (!moves || event.detail.target?.id !== "message-items") return;
+    // Both the out-of-band control and the prepended items are now swapped.
+    // Delete first: the htmx swaps below emit their own afterSwap events.
+    historyMoves.delete(event.detail.xhr);
+    for (const data of moves) {
+      applyMove(event.detail.target, data, new DOMParser().parseFromString(data, "text/html"));
+    }
+  });
+  document.addEventListener("htmx:afterRequest", (event) => {
+    // Load older swaps synchronously; also release failed/aborted/no-swap reads.
+    historyMoves.delete(event.detail.xhr);
+  });
   document.addEventListener("htmx:sseBeforeMessage", (event) => {
     const items = event.target;
     if (items.id !== "message-items") return;
     const connection = items.closest("[sse-connect]");
-    const incoming = new DOMParser().parseFromString(event.detail.data, "text/html").querySelector("li");
+    const payload = new DOMParser().parseFromString(event.detail.data, "text/html");
+    const incoming = payload.querySelector("li");
     if (!connection || !incoming) return;
     const resume = () => {
       // A native reconnect sends Last-Event-ID. The extension recreates CLOSED
@@ -47,13 +93,8 @@
     };
     if (event.detail.type === "messages-moved") {
       event.preventDefault();
-      const moved = new DOMParser().parseFromString(event.detail.data, "text/html").querySelectorAll("li");
-      for (const item of moved) {
-        const target = document.getElementById(item.id);
-        if (target) htmx.swap(target, event.detail.data, { swapStyle: "outerHTML", settleDelay: 0 }, { select: "#" + item.id });
-      }
-      // Replacement clears selection; refresh single-source constraints too.
-      document.getElementById("branch-to")?.dispatchEvent(new Event("change", { bubbles: true }));
+      for (const moves of historyMoves.values()) moves.push(event.detail.data);
+      applyMove(items, event.detail.data, payload);
       resume();
       return;
     }

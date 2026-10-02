@@ -60,6 +60,14 @@ func topicName(ctx context.Context, topic domain.Topic) string {
 	return topic.Name
 }
 
+// The history control owns the loaded range, even if live moves empty the list.
+func oldestSequence(page ChannelPage) int64 {
+	if !page.Older || len(page.Messages) == 0 {
+		return 0
+	}
+	return page.Messages[0].EventSeq
+}
+
 // olderURL links to the page before the oldest message shown.
 func olderURL(page ChannelPage) string {
 	return fmt.Sprintf("%s?before=%d", conversationURL(page), page.Messages[0].EventSeq)
@@ -151,13 +159,16 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 				<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="min-h-0 flex-1 overflow-y-auto">
 					// Always present, empty on the oldest page: loading older
 					// messages replaces it out of band with the next control.
-					<div id="load-older">
+					<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
 						if page.Older {
 							<p class="flex justify-center px-6 pt-4"><a href={ templ.SafeURL(olderURL(page)) } hx-get={ olderURL(page) } hx-target="#message-items" hx-swap="afterbegin" hx-select="#message-items > li" hx-select-oob="#load-older" class="inline-flex min-h-11 items-center rounded-md border border-border-strong px-3 py-2 text-fg hover:bg-surface">{ i18n.T(ctx, "message.load_older") }</a></p>
 						}
 					</div>
 					<ol
 						id="message-items"
+						if page.Topic != nil {
+							data-topic={ idValue(page.Topic.ID) }
+						}
 						if page.EventCursor != nil && page.Before == 0 {
 							sse-swap="message,messages-moved"
 							hx-swap="beforeend"
@@ -184,7 +195,7 @@ templ Channel(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v4.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

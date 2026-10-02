@@ -57,13 +57,13 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox (32 lowercase hex digits). `#message-items` is always present,
   including when empty; Load older selects its direct `<li>` children.
-- The latest channel or topic page carries `data-event-cursor` on its outer
+- The latest channel/topic page carries `data-event-cursor` on its outer
   layout div, outside `#conversation` and every swap target, with
   `hx-ext="sse"` and `sse-connect="<page URL>/events?after=<cursor>"`; a
   topic's stream sends only that topic's messages (#304). Older pages omit
   all three.
-  `#message-items` receives `message` and feed `messages-moved` events; moves
-  replace only loaded stable IDs. Replacements clear selection and refresh
+  `#message-items` receives `message` and `messages-moved` events; moves
+  replace feed IDs or remove/insert topic IDs within the loaded range. Replacements clear selection and refresh
   branch constraints. `LiveMessageItem` shares `MessageItem` markup, adding
   templ-rendered `data-announcement` text only to stream payloads; the
   render cache stores those live items, attribute included. History pages,
@@ -144,7 +144,7 @@ that a component makes no authorisation decision.
 `TestApplicationJavaScript` in `web/static/javascript_test.go` checks every
 direct `web/static/*.js` file, regardless of its name or version; it does
 not descend into subdirectories such as `vendor/`. Names must end in
-`-vN.js`, where N is one or more decimal digits. This implements #197.
+`-vN.js`, where N is one or more decimal digits.
 
 The check matches source patterns on each line after masking `//` and
 `/* ... */` comments and single-, double- and backtick-quoted contents
@@ -185,7 +185,7 @@ application script in `web/static` was read against these rules, first on
 |---|---|---|
 | `view/channel.templ`: `ChannelPage.Messages` | The handler now converts app entries to `view.Message` values | #194; depguard `view` rule |
 | Composer script's `htmx:beforeSwap` made 422 responses swap | JavaScript decided what htmx swaps | #198: layout's htmx config |
-| `message-stream-v4.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
+| `message-stream-v6.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
 
 Everything else conforms:
 

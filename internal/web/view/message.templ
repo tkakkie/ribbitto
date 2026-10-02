@@ -41,6 +41,7 @@ templ LiveMessageItem(entry Message) {
 templ messageItem(entry Message, announcement string) {
 	<li
 		id={ MessageDOMID(entry.ID) }
+		data-event-seq={ fmt.Sprint(entry.EventSeq) }
 		if announcement != "" {
 			data-announcement={ announcement }
 		}
@@ -70,8 +71,8 @@ templ messageItem(entry Message, announcement string) {
 }
 
 // MovedMessageItems carries replacement items without new-post announcements.
-templ MovedMessageItems(entries []Message) {
-	<ul>
+templ MovedMessageItems(entries []Message, from, to domain.ID) {
+	<ul data-from-topic={ idValue(from) } data-to-topic={ idValue(to) }>
 		for _, entry := range entries {
 			@MessageItem(entry)
 		}

@@ -99,9 +99,14 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			r := messageRenderer{messages: countingMessages{calls: calls, release: release}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
 			const renders = 20
 			var wg sync.WaitGroup
-			for range renders {
+			for i := range renders {
 				wg.Go(func() {
-					out, err := r.Render(en, realtime.Subscription{}, event)
+					sub := realtime.Subscription{}
+					if i%3 != 0 {
+						selected := domain.ID{byte(i % 3)}
+						sub.Topic = &selected
+					}
+					out, err := r.Render(en, sub, event)
 					if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "seq 9") || (kind == domain.EventMessagesMoved && strings.Count(string(out.Data), "<li ") != 100) {
 						t.Errorf("Render = %+v, %v", out, err)
 					}

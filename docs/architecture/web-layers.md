@@ -21,9 +21,8 @@ Topic views use plain composer submissions.
 
 ## Go handlers
 
-Handlers in `internal/web` parse and validate the request, call the use
-case, convert its result into a view model, and choose the status, the
-component, and a full page or a fragment. They never build HTML strings
+Handlers in `internal/web` validate requests, call use cases, convert results
+to view models, and choose the status, component and full page or fragment. They never build HTML strings
 (`AGENTS.md`); plain-text responses such as `/healthz` are not HTML.
 
 ## templ
@@ -63,8 +62,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `hx-ext="sse"` and `sse-connect="<page URL>/events?after=<cursor>"`; a
   topic's stream sends only that topic's messages (#304). Older pages omit
   all three.
-  `#message-items` receives `message` events; same-id duplicates replace the
-  existing item. `LiveMessageItem` shares `MessageItem` markup, adding
+  `#message-items` receives `message` and feed `messages-moved` events; moves
+  replace only loaded stable IDs. Replacements clear selection and refresh
+  branch constraints. `LiveMessageItem` shares `MessageItem` markup, adding
   templ-rendered `data-announcement` text only to stream payloads; the
   render cache stores those live items, attribute included. History pages,
   including Load older, omit it.
@@ -99,8 +99,7 @@ keyboard, local time, single-source selection constraints, and glue for SSE.
 - **htmx events:** an `htmx:load` handler works only on the inserted element
   and its descendants, never the whole document (#168).
 
-A headless-browser test dependency (for example go-rod) is not used now;
-it is decided after M3, only if a real need appears.
+A headless-browser test dependency awaits a concrete need after M3.
 
 ## How the rules are checked
 
@@ -186,7 +185,7 @@ application script in `web/static` was read against these rules, first on
 |---|---|---|
 | `view/channel.templ`: `ChannelPage.Messages` | The handler now converts app entries to `view.Message` values | #194; depguard `view` rule |
 | Composer script's `htmx:beforeSwap` made 422 responses swap | JavaScript decided what htmx swaps | #198: layout's htmx config |
-| `message-stream-v2.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
+| `message-stream-v4.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
 
 Everything else conforms:
 

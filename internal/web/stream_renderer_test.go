@@ -42,6 +42,16 @@ func (c countingMessages) One(_ context.Context, m authz.Membership, channel dom
 	return message.Entry{Message: domain.Message{ID: domain.ID{7}, Body: body}, DisplayName: "Alice", Handle: "alice"}, nil
 }
 
+func (c countingMessages) Many(ctx context.Context, m authz.Membership, channel domain.ID, ids []domain.ID) ([]message.Entry, error) {
+	entry, err := c.One(ctx, m, channel, 9)
+	entries := make([]message.Entry, 0, len(ids))
+	for _, id := range ids {
+		entry.ID = id
+		entries = append(entries, entry)
+	}
+	return entries, err
+}
+
 // waitForRenderWaiters blocks until n renders have joined key's load.
 func waitForRenderWaiters(t *testing.T, renders *realtime.Cache[renderKey, realtime.Outgoing], key renderKey, n int) {
 	t.Helper()
@@ -77,28 +87,34 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		return renderKey{organization: org, channel: e.ChannelID, seq: e.Seq, language: i18n.Language(en)}
 	}
 
-	t.Run("concurrent renders read once", func(t *testing.T) {
-		calls := &atomic.Int32{}
-		release := make(chan struct{})
-		r := messageRenderer{messages: countingMessages{calls: calls, release: release}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
-		const renders = 20
-		var wg sync.WaitGroup
-		for range renders {
-			wg.Go(func() {
-				out, err := r.Render(en, realtime.Subscription{}, event)
-				if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "seq 9") {
-					t.Errorf("Render = %+v, %v", out, err)
-				}
-			})
-		}
-		waitForRenderWaiters(t, r.renders, keyOf(orgA, event), renders)
-		close(release)
-		wg.Wait()
-		if n := calls.Load(); n != 1 {
-			t.Fatalf("%d message reads for %d concurrent renders, want 1", n, renders)
-		}
-	})
-
+	for _, kind := range []domain.EventKind{domain.EventMessagePosted, domain.EventMessagesMoved} {
+		t.Run("concurrent renders read once/"+string(kind), func(t *testing.T) {
+			event := event
+			event.Kind = kind
+			for i := range 100 {
+				event.MessageIDs = append(event.MessageIDs, domain.ID{byte(i)})
+			}
+			calls := &atomic.Int32{}
+			release := make(chan struct{})
+			r := messageRenderer{messages: countingMessages{calls: calls, release: release}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
+			const renders = 20
+			var wg sync.WaitGroup
+			for range renders {
+				wg.Go(func() {
+					out, err := r.Render(en, realtime.Subscription{}, event)
+					if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "seq 9") || (kind == domain.EventMessagesMoved && strings.Count(string(out.Data), "<li ") != 100) {
+						t.Errorf("Render = %+v, %v", out, err)
+					}
+				})
+			}
+			waitForRenderWaiters(t, r.renders, keyOf(orgA, event), renders)
+			close(release)
+			wg.Wait()
+			if n := calls.Load(); n != 1 {
+				t.Fatalf("%d message reads for %d concurrent renders, want 1", n, renders)
+			}
+		})
+	}
 	t.Run("each part of the key is its own entry", func(t *testing.T) {
 		calls := &atomic.Int32{}
 		shared := newRenderCache(t.Context())

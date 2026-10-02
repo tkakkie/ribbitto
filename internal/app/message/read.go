@@ -26,3 +26,16 @@ func (s Reader) One(ctx context.Context, m authz.Membership, channelID domain.ID
 	}
 	return entries[0], nil
 }
+
+// Many reads exactly the requested messages with current labels and authors,
+// oldest first. The ID list bounds the read; an incomplete batch fails replay.
+func (s Reader) Many(ctx context.Context, m authz.Membership, channelID domain.ID, ids []domain.ID) ([]Entry, error) {
+	messages, err := s.History.GetMessages(ctx, m.Organization.ID, channelID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("reading messages: %w", err)
+	}
+	if len(messages) != len(ids) {
+		return nil, ErrNotFound
+	}
+	return s.entries(ctx, m, channelID, messages)
+}

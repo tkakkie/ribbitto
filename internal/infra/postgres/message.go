@@ -143,3 +143,18 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 	}
 	return posted, nil
 }
+
+// GetMessages reads only the requested IDs in the organisation and channel.
+func (s *MessageStore) GetMessages(ctx context.Context, organizationID, channelID domain.ID, ids []domain.ID) ([]domain.Message, error) {
+	rows, err := s.queries.GetMessages(ctx, sqlcgen.GetMessagesParams{
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, MessageIds: uuidArray(ids),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("finding messages: %w", err)
+	}
+	messages := make([]domain.Message, 0, len(rows))
+	for _, row := range rows {
+		messages = append(messages, messageFromRow(row))
+	}
+	return messages, nil
+}

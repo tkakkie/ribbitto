@@ -141,3 +141,11 @@ func TestBeforePages(t *testing.T) {
 		}
 	}
 }
+
+func (directoryHistory) GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]domain.Message, error) {
+	return nil, errors.New("unexpected batch read")
+}
+
+func (fullHistory) GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]domain.Message, error) {
+	return nil, errors.New("unexpected batch read")
+}

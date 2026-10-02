@@ -80,8 +80,13 @@ The reader decodes moves into `FromTopicID`, `ToTopicID` and immutable
 It rejects missing or malformed IDs, identical source and destination,
 and empty lists or repeated messages, failing the whole batch rather than
 returning a partial replay. The size limit applies only on write, so lowering
-it cannot make committed moves unreadable. Live move rendering
-and delivery remain pending in #306.
+it cannot make committed moves unreadable. Feed moves read the requested IDs,
+authors and current topics in one shared `MessageReader.Many` snapshot, bounded
+by the event's ID list (currently at most 100 on write). One cached render per
+organisation, channel, move sequence and language replaces loaded items by ID;
+posting-cache entries cannot mask the correction. Authorization stays per
+connection, after rendering and immediately before send. Topic-page move
+delivery remains pending in #306.
 Setup and sign-up call `NewEventLog(tx).AppendMemberJoined` immediately after
 the member, with its `joined_event_seq`. `domain.Event` holds the envelope and
 referenced IDs; kinds are an open list. `postgres.NewEventReader(db)` provides

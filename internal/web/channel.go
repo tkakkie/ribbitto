@@ -29,8 +29,9 @@ type ChannelService interface {
 }
 
 // MessageReader provides the channel page and cursor from one snapshot, and
-// one message by its event sequence for the stream.
+// one message by sequence or a bounded batch by ID for the stream.
 type MessageReader interface {
+	Many(context.Context, authz.Membership, domain.ID, []domain.ID) ([]message.Entry, error)
 	Page(context.Context, authz.Membership, domain.ID, *domain.ID, *int64) (message.ChannelPage, error)
 	One(context.Context, authz.Membership, domain.ID, int64) (message.Entry, error)
 }

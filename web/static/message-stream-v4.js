@@ -37,6 +37,26 @@
     const connection = items.closest("[sse-connect]");
     const incoming = new DOMParser().parseFromString(event.detail.data, "text/html").querySelector("li");
     if (!connection || !incoming) return;
+    const resume = () => {
+      // A native reconnect sends Last-Event-ID. The extension recreates CLOSED
+      // sources from this attribute, so that path also resumes after delivery.
+      connection.dataset.eventCursor = event.detail.lastEventId;
+      const url = new URL(connection.getAttribute("sse-connect"), location.href);
+      url.searchParams.set("after", event.detail.lastEventId);
+      connection.setAttribute("sse-connect", url.pathname + url.search);
+    };
+    if (event.detail.type === "messages-moved") {
+      event.preventDefault();
+      const moved = new DOMParser().parseFromString(event.detail.data, "text/html").querySelectorAll("li");
+      for (const item of moved) {
+        const target = document.getElementById(item.id);
+        if (target) htmx.swap(target, event.detail.data, { swapStyle: "outerHTML", settleDelay: 0 }, { select: "#" + item.id });
+      }
+      // Replacement clears selection; refresh single-source constraints too.
+      document.getElementById("branch-to")?.dispatchEvent(new Event("change", { bubbles: true }));
+      resume();
+      return;
+    }
     const existing = document.getElementById(incoming.id);
     const pane = document.getElementById("message-list");
     const atBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
@@ -48,6 +68,7 @@
     }, {
       afterSettleCallback: () => {
         if (!scrollPosted(incoming.id) && atBottom) pane.scrollTop = pane.scrollHeight;
+        if (existing) document.getElementById("branch-to")?.dispatchEvent(new Event("change", { bubbles: true }));
         // Retain recent additions for replay bursts without growing forever.
         // aria-relevant="additions" keeps removal of older entries silent.
         if (!existing) {
@@ -59,11 +80,6 @@
         }
       },
     });
-    // A native reconnect sends Last-Event-ID. The extension recreates CLOSED
-    // sources from this attribute, so that path also resumes after delivery.
-    connection.dataset.eventCursor = event.detail.lastEventId;
-    const url = new URL(connection.getAttribute("sse-connect"), location.href);
-    url.searchParams.set("after", event.detail.lastEventId);
-    connection.setAttribute("sse-connect", url.pathname + url.search);
+    resume();
   });
 })();

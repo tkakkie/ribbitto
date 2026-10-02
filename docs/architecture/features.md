@@ -51,7 +51,9 @@ It returns `message.ChannelPage`; older pages have no event cursor.
 `MessageReader.One` reads one message, its authors and topic in its own snapshot.
 Live labels come from that shared load through the existing render cache, keyed
 by organisation, channel, sequence and language, with no extra read per stream
-per event. A moved message's label is corrected by #306's move event.
+per event. `MessageReader.Many` reads only a move's message IDs with the same snapshot
+and directory batches; its shared render corrects feed labels and checkbox
+sources. Topic-page move delivery remains pending in #306.
 Malformed topic paging links use a scoped topic lookup without history;
 topic posts rely on the lookup inside the posting transaction.
 

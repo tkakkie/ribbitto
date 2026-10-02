@@ -5,7 +5,8 @@
 // ErrInvalidBody, and Reader with History: Before reads a Page below an
 // event_seq bound with an optional topic filter; One reads an Entry by
 // organisation, channel and event_seq,
-// returning ErrNotFound for a missing or out-of-scope message; ChannelPage is
+// returning ErrNotFound for a missing or out-of-scope message; Many reads a
+// bounded ID batch with the same scoping and hydration; ChannelPage is
 // the page snapshot's result. topic.Directory resolves topic labels in one
 // batch per page.
 // Author names use member.Directory (org)

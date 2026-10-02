@@ -34,6 +34,10 @@ type fakeMessages struct {
 }
 
 // One is not used by handler tests; the stream is tested end to end.
+func (fakeMessages) Many(context.Context, authz.Membership, domain.ID, []domain.ID) ([]message.Entry, error) {
+	return nil, message.ErrNotFound
+}
+
 func (fakeMessages) One(context.Context, authz.Membership, domain.ID, int64) (message.Entry, error) {
 	return message.Entry{}, message.ErrNotFound
 }
@@ -120,7 +124,7 @@ func TestMessageListHandler(t *testing.T) {
 			if outer := find(doc, atom.Div); attr(outer, "data-event-cursor") != "42" || attr(outer, "sse-connect") != view.ChannelURL("acme", domain.ID{1})+"/events?after=42" || attr(outer, "hx-ext") != "sse" || outer.Parent.DataAtom != atom.Body {
 				t.Fatal("cursor must be on the outer layout, outside every swap target")
 			}
-			if items := find(doc, atom.Ol); attr(items, "sse-swap") != "message" {
+			if items := find(doc, atom.Ol); attr(items, "sse-swap") != "message,messages-moved" {
 				t.Fatal("latest message list must receive message events")
 			}
 			// An empty channel still loads it: messages swapped in later need it.

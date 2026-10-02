@@ -12,8 +12,8 @@ every channel has its default topic and every message a topic, and posting
 goes to the default topic, and a topic view posts into its topic. Feed
 labels, topic views with live updates (#304), posting into a topic, a
 bounded topic list, the branching endpoint (#305) and its selection UI
-(#308) exist; live delivery of branching (#306) follows. `db/migrations/` is the
-schema source of truth.
+(#308) and live feed relabelling (#306) exist. Topic-page move delivery
+follows. `db/migrations/` is the schema source of truth.
 
 ## Model
 
@@ -71,7 +71,9 @@ schema source of truth.
   snapshot as the messages and authors. Live labels come from the shared
   `MessageReader.One` load through the existing render cache, keyed by
   organisation, channel, sequence and language, with no extra read per stream
-  per event. A moved message's label is corrected by #306's move event.
+  per event. A move reads its IDs in one shared snapshot and replaces loaded
+  items by stable ID, correcting labels and checkbox sources. It neither
+  inserts unloaded history nor changes the paging boundary.
 - **Topic view** — one topic's messages, paged by `event_seq` the same way
   as channel history ([`messages.md`](messages.md#older-pages)). Its plain
   composer posts into that topic and redirects back; invalid bodies preserve
@@ -129,14 +131,16 @@ Settled in #305:
   its expected source UUID (`message/source`); the handler derives `from`
   and rejects mixed sources before calling the use case. Legacy UUID-only
   values with explicit `from` still work. The event reader decodes the move's
-  routing and message IDs and validates its bounded payload; live delivery
-  remains pending in #306.
+  routing and message IDs and validates its payload. The feed delivers moves
+  through the render cache; topic-page corrections remain pending in #306.
 - **Selection:** feed and topic views have ordinary branch forms; JavaScript
   disables other sources and the source destination after selection. The
   destination list uses the existing bounded topic list. Plain errors render
   the conversation again (including its topic and paging bound); enhanced
   errors replace only feedback. Success navigates to the destination topic
-  (303 plain, `HX-Redirect` enhanced).
+  (303 plain, `HX-Redirect` enhanced). Live replacements clear the replaced
+  checkbox's selection and refresh single-source constraints, including on
+  duplicate replay; other items keep their selections.
 
 ## Unread
 

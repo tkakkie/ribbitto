@@ -128,8 +128,9 @@ idea (maintainer, one line) or finding (AI)
   comment, proposes the smallest fixes (mechanical first, removal before
   addition), the maintainer picks, accepted ones become `process` issues,
   and a `Retrospective:` summary comment closes the round. The M4
-  retrospective also checks whether a pull request without a Grok review
-  later had a defect in Grok's required areas, and revisits that rule (#339).
+  retrospective also checks whether any `high` pull request that skipped
+  Grok later turned out to have a defect, wherever it was, and revisits
+  that rule (#339).
 - **Roadmap:** `docs/roadmap.md`, updated when a milestone ends or the
   plan changes.
 

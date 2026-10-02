@@ -25,17 +25,22 @@ cases, stores, `db/queries/**`, `db/migrations/**`, scripts):
 3. concurrency, caches or background work (goroutines, locks, TTLs,
    clean-up jobs);
 4. the rules that guard these areas or the AI and CI tooling: the AI
-   launchers in `scripts/ai/**`, the trusted prompts in `.github/prompts/**`,
-   CI workflow permissions or secrets, the documented execution and safety
-   requirements for AI tools (such as `running-other-ai.md` and this file,
-   including this section), and the security and scoping rules in
-   `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does not
-   exempt a change from this item.
+   launchers in `scripts/ai/**`; the trusted prompts and review
+   instructions in `.github/prompts/**` and `.github/instructions/**`;
+   `.github/workflows/**`; the files that define the review gates
+   (`docs/workflow/README.md`, `reviewing.md`, `running-other-ai.md`, this
+   whole file, and `.github/pull_request_template.md`); and the security
+   and scoping rules in `AGENTS.md` and `docs/domain/invariants.md`. Being
+   documentation does not exempt a change from this item;
+5. the checks themselves: a change to `Makefile`, `tools/**` or a linter,
+   vet or code-generation setting (`.golangci.yml`, `sqlc.yaml`) that
+   removes, skips or loosens a check `make check` or CI runs.
 
 Otherwise Grok is not required. A `high` pull request without it says why
 in the template, `Adversarial: skipped (<reason>)`: for example
-documentation only, tests only, a dependency bump, or lint or Makefile
-settings. These examples never apply when any item above matches. **When
+documentation only, tests only, a dependency bump, or a build or lint
+setting that keeps every check. These examples never apply when any item
+above matches. **When
 in doubt, Grok runs.** The other AI checks the requirement or the skip
 against what the change does, not only the paths it touches.
 

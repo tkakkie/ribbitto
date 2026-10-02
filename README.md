@@ -112,7 +112,7 @@ cursor above the restored log gets `reset` and reloads the page
 ## Documentation
 
 - [Architecture](docs/architecture/README.md) — packages, allowed imports, request and real-time flow
-- [Domain](docs/domain/README.md) — glossary, entities, invariants, unread rules
+- [Domain](docs/domain/README.md) — glossary and index; [entities](docs/domain/entities.md), [invariants](docs/domain/invariants.md), [unread rules](docs/domain/unread.md)
 - [UI](docs/ui.md) — design direction, tokens, contrast
 - [Decisions](DECISIONS.md) — what was decided and why
 - [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow/README.md) · [Database development](docs/database.md)

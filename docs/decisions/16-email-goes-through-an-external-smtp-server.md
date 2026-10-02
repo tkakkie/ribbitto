@@ -7,7 +7,7 @@ starts and works without SMTP configured. Enabling a feature that needs
 delivery (password reset, email verification, invitation mail) makes the
 SMTP settings required, and startup fails without them. A non-sending
 Mailer serves development and tests. Until delivery exists, the identity
-rules in `docs/domain/README.md` (invariant 8) stand: email addresses are not
+rules in `docs/domain/invariants.md` (invariant 8) stand: email addresses are not
 verified and prove nothing. The plan and its order are in #128.
 **Why:** running a mail server well (deliverability, reputation, abuse
 handling) is a product of its own; every self-hoster already has, or can

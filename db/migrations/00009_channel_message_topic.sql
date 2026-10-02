@@ -41,6 +41,6 @@ CREATE INDEX message_topic_event_seq_idx ON message (organization_id, topic_id, 
 -- +goose Down
 ALTER TABLE message DROP COLUMN topic_id;
 ALTER TABLE channel DROP COLUMN default_topic_is_default, DROP COLUMN default_topic_id;
--- Without these columns no topic is reachable, and a second up would
--- collide with the default topics left behind.
-DELETE FROM topic;
+-- The default topics belong to these columns: a second up would collide
+-- with them. Named topics are topic's own data and stay.
+DELETE FROM topic WHERE is_default;

@@ -239,13 +239,21 @@ func TestTopicBackfill(t *testing.T) {
 	if channels != 6 || topicsFound != 6 || wrong != 0 || messages != 12 || misplaced != 0 {
 		t.Fatalf("channels=%d default topics=%d without one=%d messages=%d misplaced=%d", channels, topicsFound, wrong, messages, misplaced)
 	}
-	// Down and up again leaves the same shape, without a second default.
+	// Down keeps named topics and removes only the defaults; up again
+	// leaves the same shape, without a second default.
+	_, err = pool.Exec(ctx, "INSERT INTO topic (organization_id, channel_id, name) SELECT organization_id, id, 'design' FROM channel WHERE name = 'general'")
+	requireNoError(t, err)
 	_, err = provider.Down(ctx)
 	requireNoError(t, err)
+	var named, defaults int
+	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FILTER (WHERE name = 'design'), count(*) FILTER (WHERE is_default) FROM topic").Scan(&named, &defaults))
+	if named != 2 || defaults != 0 {
+		t.Fatalf("after down: %d named topics, %d defaults; want 2 and 0", named, defaults)
+	}
 	_, err = provider.UpTo(ctx, 9)
 	requireNoError(t, err)
-	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM topic").Scan(&topicsFound))
-	if topicsFound != 6 {
-		t.Fatalf("after down and up: %d topics", topicsFound)
+	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FILTER (WHERE name = 'design'), count(*) FILTER (WHERE is_default) FROM topic").Scan(&named, &defaults))
+	if named != 2 || defaults != 6 {
+		t.Fatalf("after down and up: %d named topics, %d defaults; want 2 and 6", named, defaults)
 	}
 }

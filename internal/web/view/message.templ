@@ -46,7 +46,7 @@ templ messageItem(entry Message, announcement string) {
 		}
 	>
 		<div class="flex flex-wrap items-baseline gap-2">
-			// The body describes the checkbox: every visible label reads the same.
+			// Every checkbox shows the same label, so its message's body describes it.
 			<label class="inline-flex min-h-11 min-w-11 items-center gap-2 text-caption text-muted">
 				<input type="checkbox" id={ "select-" + MessageDOMID(entry.ID) } form="branch-form" name="message" value={ idValue(entry.ID) + "/" + idValue(entry.TopicID) } data-source={ idValue(entry.TopicID) } aria-describedby={ "body-" + MessageDOMID(entry.ID) }/>
 				{ i18n.T(ctx, "topic.branch_select") }

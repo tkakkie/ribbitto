@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -173,13 +174,14 @@ func TestRunEndIsNotAFailure(t *testing.T) {
 		{"established stream", "-rate=0", "established=1 refused_429=0 refused_503=0 reset=0 failed=0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// The POST is held until after the deadline, so it is in flight
-			// when the run ends.
-			held := make(chan struct{})
-			time.AfterFunc(deadline+50*time.Millisecond, func() { close(held) })
+			// A POST is held from its arrival for longer than the whole run.
+			// It arrives after the run started, so it is still in flight
+			// when the run's deadline passes, whatever the setup took.
+			var finished atomic.Int64
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodPost {
-					<-held
+					time.Sleep(deadline + 50*time.Millisecond)
+					finished.Store(time.Now().UnixNano())
 					return
 				}
 				if tc.name == "established stream" {
@@ -195,11 +197,15 @@ func TestRunEndIsNotAFailure(t *testing.T) {
 				t.Fatal(err)
 			}
 			var out bytes.Buffer
+			start := time.Now()
 			if err := run([]string{"-target", server.URL, "-tokens", path, "-duration=" + deadline.String(), tc.args}, &out); err != nil {
 				t.Fatal(err)
 			}
 			if !strings.Contains(out.String(), tc.want) {
 				t.Fatalf("%s: want %q", out.String(), tc.want)
+			}
+			if tc.name == "post across the deadline" && time.Duration(finished.Load()-start.UnixNano()) <= deadline {
+				t.Fatal("the POST finished before the run's deadline")
 			}
 		})
 	}

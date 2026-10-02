@@ -76,13 +76,16 @@ func eventFromRow(row sqlcgen.EventsAfterRow) (domain.Event, error) {
 		event.AudienceMemberID = &id
 	}
 	// Future kinds may have different payload shapes; the delivery loop skips them.
-	if event.Kind != domain.EventMessagePosted && event.Kind != domain.EventMemberJoined {
+	if event.Kind != domain.EventMessagePosted && event.Kind != domain.EventMemberJoined && event.Kind != domain.EventMessagesMoved {
 		return event, nil
 	}
 	var data struct {
-		ChannelID string `json:"channel_id"`
-		MessageID string `json:"message_id"`
-		MemberID  string `json:"member_id"`
+		ChannelID   string   `json:"channel_id"`
+		MessageID   string   `json:"message_id"`
+		MemberID    string   `json:"member_id"`
+		FromTopicID string   `json:"from_topic_id"`
+		ToTopicID   string   `json:"to_topic_id"`
+		MessageIDs  []string `json:"message_ids"`
 	}
 	if err := json.Unmarshal(row.Data, &data); err != nil {
 		return domain.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)
@@ -96,11 +99,45 @@ func eventFromRow(row sqlcgen.EventsAfterRow) (domain.Event, error) {
 		}
 	case domain.EventMemberJoined:
 		event.MemberID, err = eventDataID(data.MemberID)
+	case domain.EventMessagesMoved:
+		err = decodeMove(&event, data.ChannelID, data.FromTopicID, data.ToTopicID, data.MessageIDs)
 	}
 	if err != nil {
 		return domain.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)
 	}
 	return event, nil
+}
+
+func decodeMove(event *domain.Event, channel, from, to string, messages []string) error {
+	var err error
+	for _, field := range []struct {
+		value string
+		id    *domain.ID
+	}{{channel, &event.ChannelID}, {from, &event.FromTopicID}, {to, &event.ToTopicID}} {
+		*field.id, err = eventDataID(field.value)
+		if err != nil {
+			return err
+		}
+	}
+	if event.FromTopicID == event.ToTopicID {
+		return fmt.Errorf("move destination is the source")
+	}
+	if len(messages) == 0 {
+		return fmt.Errorf("move has no messages")
+	}
+	seen := make(map[domain.ID]bool, len(messages))
+	for _, value := range messages {
+		id, err := eventDataID(value)
+		if err != nil {
+			return err
+		}
+		if seen[id] {
+			return fmt.Errorf("move repeats a message ID")
+		}
+		seen[id] = true
+		event.MessageIDs = append(event.MessageIDs, id)
+	}
+	return nil
 }
 
 func eventDataID(value string) (domain.ID, error) {

@@ -21,8 +21,9 @@ const (
 
 // Event is a durable change ordered within an organisation. A nil
 // AudienceMemberID means organisation-wide; otherwise only that member may
-// receive it. Message events name ChannelID and MessageID; join events name
-// MemberID. IDs unused by the kind are zero. No content or HTML is carried.
+// receive it. Posted events name ChannelID and MessageID; move events name
+// ChannelID, FromTopicID, ToTopicID and MessageIDs; join events name MemberID.
+// IDs unused by the kind are zero. No content or HTML is carried.
 type Event struct {
 	OrganizationID   ID
 	Seq              int64
@@ -31,4 +32,8 @@ type Event struct {
 	ChannelID        ID
 	MessageID        ID
 	MemberID         ID
+	FromTopicID      ID
+	ToTopicID        ID
+	// MessageIDs is immutable after reading, since event batches are shared.
+	MessageIDs []ID
 }

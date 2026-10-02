@@ -174,3 +174,33 @@ other = "トピック（名前順・先頭50件）"
 
 ["topic.branch_notice"]
 other = "{count} 件を「{topic}」に移動しました"
+
+["topic.branch_select"]
+other = "選択"
+
+["topic.branch_to"]
+other = "移動先（先頭50トピック）"
+
+["topic.branch_new"]
+other = "新しいトピック名"
+
+["topic.branch_submit"]
+other = "選択したメッセージを移動"
+
+["topic.branch_help"]
+other = "同じトピックから1〜100件を選択してください。既存の移動先を選ぶか、新しい名前を入力してください。既存のトピックの場合は名前を空欄にします。"
+
+["topic.branch_mixed"]
+other = "同じトピックのメッセージだけを選択してください。移動は行われませんでした。"
+
+["topic.branch_conflict"]
+other = "選択したメッセージはすでに移動されたか、指定した移動元のトピックにありません。移動は行われませんでした。再読み込みして選び直してください。"
+
+["topic.branch_invalid"]
+other = "同じトピックから重複なく1〜100件を選び、別の移動先を指定してください。既存のトピックか新しい名前のどちらか一方を指定します。移動は行われませんでした。"
+
+["topic.branch_name_taken"]
+other = "この名前のトピックはすでに存在します。移動先として選択するか、別の名前を入力してください。"
+
+["topic.branch_name_invalid"]
+other = "トピック名は表示可能な1〜80文字で入力してください。"

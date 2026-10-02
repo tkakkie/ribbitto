@@ -35,9 +35,9 @@ assets.
 
 The same meta tag sets `responseHandling` to htmx's defaults (`204`: no
 swap; `[23]..`: swap; `[45]..`: no swap, error), with
-`{"code":"422","swap":true,"error":false}` before `[45]..`. The first matching
-entry wins, so composer field errors replace `#message-composer` through htmx.
-This is global: any new htmx request returning 422 inherits the rule
+409 and 422 entries with `swap: true, error: false` before `[45]..`. The first
+matching entry wins: composer errors replace `#message-composer`, branch
+errors replace `#branch-feedback`. New htmx requests inherit both rules
 ([`web-layers.md`](web-layers.md)). Other status codes retain their defaults.
 
 Message timestamps use `message-time-v2.js`, loaded with the response nonce

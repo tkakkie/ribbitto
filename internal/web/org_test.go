@@ -222,7 +222,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 		latest := get("GET", topicURL, aliceToken, now)
 		body := latest.Body.String()
-		if latest.Code != 200 || strings.Count(body, `<li id="message-`) != 50 || strings.Contains(body, "topic-message-00") || !strings.Contains(body, "topic-message-50") || strings.Contains(body, "posted through the page") || !strings.Contains(body, `sse-connect="`+topicURL+`/events?after=`) || strings.Contains(body, "hx-post=") || !strings.Contains(body, `action="`+topicURL+`"`) {
+		if latest.Code != 200 || strings.Count(body, `<li id="message-`) != 50 || strings.Contains(body, "topic-message-00") || !strings.Contains(body, "topic-message-50") || strings.Contains(body, "posted through the page") || !strings.Contains(body, `sse-connect="`+topicURL+`/events?after=`) || strings.Contains(body, `hx-post="`+topicURL+`"`) || !strings.Contains(body, `action="`+topicURL+`"`) {
 			t.Fatalf("latest topic: %d %s", latest.Code, body)
 		}
 		// The open topic, and only it, is the current link (Copilot on #320).

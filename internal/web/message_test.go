@@ -350,7 +350,7 @@ func TestMessagePagingHandler(t *testing.T) {
 			if got := strings.Contains(body, `data-event-cursor="42"`); got != (tt.before == 0) {
 				t.Fatalf("page cursor present = %t, before = %d", got, tt.before)
 			}
-			if tt.before != 0 && (strings.Contains(body, "data-event-cursor") || strings.Contains(body, "sse-connect") || strings.Contains(body, "hx-post")) {
+			if tt.before != 0 && (strings.Contains(body, "data-event-cursor") || strings.Contains(body, "sse-connect") || strings.Contains(body, `hx-post="`+view.ChannelURL("acme", domain.ID{1})+`"`)) {
 				t.Fatal("older page has a cursor, stream or enhanced composer")
 			}
 			if tt.before > 0 {

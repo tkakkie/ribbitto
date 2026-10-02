@@ -440,6 +440,8 @@ func checkHTMXRequests(t *testing.T, handler http.Handler, page *html.Node, lang
 						continue
 					}
 					switch n.DataAtom {
+					case atom.Select:
+						form.Add(name, "")
 					case atom.Textarea:
 						form.Add(name, text(n))
 					case atom.Input:
@@ -596,7 +598,8 @@ func TestPagesMarkup(t *testing.T) {
 		}
 		cases = append(cases, markupCase{name: "topic " + method, route: method + " /organizations/{slug}/channels/{channelID}/topics/{topicID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: method, path: view.ConversationURL("acme", domain.ID{1}, &domain.ID{2}), cookie: true, form: url.Values{"body": {""}}, status: status, alerts: alerts})
 	}
-	noPage := []string{"POST /signout", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/channels/{channelID}/events", "GET /organizations/{slug}/channels/{channelID}/topics/{topicID}/events", "POST /organizations/{slug}/channels/{channelID}/branch"}
+	cases = append(cases, markupCase{name: "branch invalid", route: "POST /organizations/{slug}/channels/{channelID}/branch", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", domain.ID{1}) + "/branch", cookie: true, status: 422, alerts: 1})
+	noPage := []string{"POST /signout", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/channels/{channelID}/events", "GET /organizations/{slug}/channels/{channelID}/topics/{topicID}/events"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
 	if err != nil {

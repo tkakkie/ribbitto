@@ -11,8 +11,8 @@ enhancement, not full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
   a channel or topic and its history (including older pages), posting a message,
-  and creating a channel. Each is a plain HTML form or link that works on
-  its own; htmx and scripts only improve it.
+  branching and creating channels. Plain forms and links work alone;
+  htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
   keyboard shortcuts (Enter to send), and local-time display. Without
   JavaScript a page may lack these, but nothing core breaks.
@@ -53,10 +53,11 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `hx-select`, `hx-select-oob` or a script refers to. Renaming one means
   updating every reference in the same pull request. Today's contract ids
   are `conversation`, `message-list`, `message-items`, `load-older`,
-  `message-body`, `message-composer`, `message-help` and `message-status`,
-  plus `message-<32 lowercase hex digits>` from
-  `MessageDOMID`. `#message-items` is always present, including when empty;
-  Load older selects its direct `<li>` children.
+  `message-body`, `message-composer`, `message-help`, `message-status`,
+  `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
+  `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
+  checkbox (32 lowercase hex digits). `#message-items` is always present,
+  including when empty; Load older selects its direct `<li>` children.
 - The latest channel or topic page carries `data-event-cursor` on its outer
   layout div, outside `#conversation` and every swap target, with
   `hx-ext="sse"` and `sse-connect="<page URL>/events?after=<cursor>"`; a
@@ -71,17 +72,15 @@ htmx does only requests and swaps; the server and templ own the HTML.
   is never a live region.
 - The layout's `htmx-config` meta tag holds htmx's security settings and
   `responseHandling` ([`rendering.md`](rendering.md)). It keeps the three
-  defaults, inserting a 422 swap with `error: false` before `[45]..` because
-  the first matching entry wins. This rule is global: a new 422-returning
-  htmx request inherits it. Today only the composer's `#message-composer`
-  request can return 422; channel creation uses a plain form, and Load
-  older retains default handling for success and errors.
+  defaults, adding global 409/422 swaps (`error: false`) before `[45]..`.
+  Composer errors replace `#message-composer`; branch errors replace only
+  `#branch-feedback`, so selections and drafts survive.
 
 ## JavaScript
 
 JavaScript never generates HTML and never owns application state. It is
 limited to UX help that HTML and htmx handle poorly: focus, scroll,
-keyboard, local time, and glue for SSE.
+keyboard, local time, single-source selection constraints, and glue for SSE.
 
 - SSE `reset` closes htmx's event source and reloads the page to obtain a fresh snapshot.
 - **No requests of its own:** no `fetch` or `XMLHttpRequest`. Requests go

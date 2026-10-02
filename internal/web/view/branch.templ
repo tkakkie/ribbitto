@@ -1,0 +1,44 @@
+package view
+
+import (
+	"fmt"
+	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
+
+func idValue(id domain.ID) string {
+	return fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:])
+}
+
+templ branchForm(page ChannelPage) {
+	<form id="branch-form" method="post" action={ ChannelURL(page.Organization.Slug, page.Current.ID) + "/branch" } hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) + "/branch" } hx-target="#branch-feedback" hx-swap="outerHTML" hx-sync="this:drop" class="flex shrink-0 flex-wrap items-center gap-2 border-t border-border p-4">
+		if page.Topic != nil {
+			<input type="hidden" name="return_topic" value={ idValue(page.Topic.ID) }/>
+		}
+		<input type="hidden" name="before" value={ fmt.Sprint(page.Before) }/>
+		<label for="branch-to">{ i18n.T(ctx, "topic.branch_to") }</label>
+		<select id="branch-to" name="to" class="min-h-11 max-w-full rounded-md border border-border-strong bg-input px-3 text-fg">
+			<option value="">{ i18n.T(ctx, "topic.branch_new") }</option>
+			for _, topic := range page.Topics {
+				if page.Topic == nil || page.Topic.ID != topic.ID {
+					<option value={ idValue(topic.ID) }>{ topicName(ctx, topic) }</option>
+				}
+			}
+		</select>
+		<label for="branch-name">{ i18n.T(ctx, "topic.branch_new") }</label>
+		<input id="branch-name" name="name" value={ page.BranchName } class="min-h-11 min-w-0 rounded-md border border-border-strong bg-input px-3 text-fg"/>
+		<button type="submit" class="min-h-11 rounded-md bg-brand px-3 py-2 font-semibold text-on-brand">{ i18n.T(ctx, "topic.branch_submit") }</button>
+		@BranchFeedback(page.BranchError)
+	</form>
+}
+
+// BranchFeedback replaces only the feedback, preserving enhanced selections and drafts.
+templ BranchFeedback(key string) {
+	<div id="branch-feedback" class="w-full text-caption">
+		if key != "" {
+			<p role="alert" class="text-danger">{ i18n.T(ctx, key) }</p>
+		} else {
+			<p class="text-muted">{ i18n.T(ctx, "topic.branch_help") }</p>
+		}
+	</div>
+}

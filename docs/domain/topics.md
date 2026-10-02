@@ -11,8 +11,8 @@ these rules change. The *Model* and *Tables* below exist (#301, #307):
 every channel has its default topic and every message a topic, and posting
 goes to the default topic, and a topic view posts into its topic. Feed
 labels, topic views with live updates (#304), posting into a topic, a
-bounded topic list and the branching endpoint (#305) exist; the branch
-selection UI (#308) and live delivery of branching (#306) follow. `db/migrations/` is the
+bounded topic list, the branching endpoint (#305) and its selection UI
+(#308) exist; live delivery of branching (#306) follows. `db/migrations/` is the
 schema source of truth.
 
 ## Model
@@ -122,8 +122,16 @@ Settled in #305:
 - **Endpoint:** `POST …/channels/{channelID}/branch` with `message`
   (repeated), `from`, and `to` or `name`. Success is 303 to the destination's
   topic view; a stale selection is 409, an unusable request 422, and an
-  unknown or out-of-scope topic 404. The selection UI is #308's; live
-  delivery of the move is #306's.
+  unknown or out-of-scope topic 404. The UI pairs each `message` value with
+  its expected source UUID (`message/source`); the handler derives `from`
+  and rejects mixed sources before calling the use case. Legacy UUID-only
+  values with explicit `from` still work. Live delivery is #306's.
+- **Selection:** feed and topic views have ordinary branch forms; JavaScript
+  disables other sources and the source destination after selection. The
+  destination list uses the existing bounded topic list. Plain errors render
+  the conversation again (including its topic and paging bound); enhanced
+  errors replace only feedback. Success navigates to the destination topic
+  (303 plain, `HX-Redirect` enhanced).
 
 ## Unread
 

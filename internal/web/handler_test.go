@@ -205,11 +205,12 @@ func TestHTMLSecurity(t *testing.T) {
 				if err := json.Unmarshal(settings["responseHandling"], &handling); err != nil {
 					t.Fatal(err)
 				}
-				// htmx uses the first match: retain its defaults, with 422
+				// htmx uses the first match: retain defaults, with 409 and 422
 				// before the catch-all error rule so field errors can swap.
 				wantHandling := []map[string]any{
 					{"code": "204", "swap": false},
 					{"code": "[23]..", "swap": true},
+					{"code": "409", "swap": true, "error": false},
 					{"code": "422", "swap": true, "error": false},
 					{"code": "[45]..", "swap": false, "error": true},
 				}

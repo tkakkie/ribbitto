@@ -126,7 +126,7 @@ The orchestrator then:
 
 1. reviews the diff;
 2. runs what Codex could not (for example `make db-up`, a live `make dev`,
-   or `bash scripts/ai/grok-review_test.sh` outside the sandbox);
+   or the Grok and Muse launcher test scripts outside the sandbox);
 3. commits, pushes and opens the PR.
 
 **Reviews.** In `-s read-only` mode Codex cannot reach GitHub, so pipe in
@@ -147,48 +147,46 @@ Standard-tier prompts and completions are not used to train its models,
 while a `-contributor` model grants that permission, so never use one. It reads only the workspace:
 writing, the shell, web tools and the network are off.
 
-The orchestrator builds the context the way the Grok launcher does: the
-prompt from `.github/prompts/adversarial.md` on `origin/main`, then one
-`UNTRUSTED_PAYLOAD_JSON` object with the pull request's title, description
-and diff, all at one resolved head commit (never `FETCH_HEAD`, which a
-concurrent fetch can overwrite). Every step is chained with `&&` and every
-read is a checked assignment, so if any of them fails, Muse Code does not
-start. Like the launcher, it refuses a pull
-request that contains a symlink anywhere in its tree, which could expose
-files outside the workspace.
+Run the launcher from the maintainer's checkout, taking it from `main`:
 
-**Take the command from `main`, never from a checkout.** The command is the
-security boundary, as the launcher is for Grok, and a pull request can edit
-this file. Read it with `git show origin/main:docs/workflow/running-other-ai.md`
-and run it from the maintainer's checkout; never run a copy from a pull
-request's worktree, including the pull request under review. A launcher
-script that enforces this, as Grok's does, is #341.
-
-```bash
-P=123 && tmp=$(mktemp -d) &&
-  gh pr view "$P" --json title,body,baseRefOid,headRefOid > "$tmp/pr.json" &&
-  base=$(jq -er .baseRefOid "$tmp/pr.json") && head=$(jq -er .headRefOid "$tmp/pr.json") &&
-  title=$(jq -er .title "$tmp/pr.json") && body=$(jq -r '.body // ""' "$tmp/pr.json") &&
-  git fetch --quiet origin main "refs/pull/$P/head" &&
-  tree=$(git ls-tree -r --full-tree "$head") && symlinks=$(awk '$1 == "120000"' <<<"$tree") &&
-  [[ -z $symlinks ]] &&
-  git worktree add --quiet --detach "$tmp/worktree" "$head" &&
-  git show origin/main:.github/prompts/adversarial.md > "$tmp/prompt.md" &&
-  git diff "$base...$head" > "$tmp/pr.diff" &&
-  payload=$(jq -cn --argjson number "$P" --arg base "$base" --arg head "$head" \
-    --arg title "$title" --arg description "$body" --rawfile diff "$tmp/pr.diff" \
-    '{pull_request: $number, base_commit: $base, head_commit: $head,
-      title: $title, description: $description, diff: $diff}') &&
-  printf '\nUNTRUSTED_PAYLOAD_JSON: %s\n' "$payload" >> "$tmp/prompt.md" &&
-  limit 1200 muse exec --model muse-spark-1.3 --workspace "$tmp/worktree" \
-    --disable-write --disable-shell --disable-web-tools --sandbox-network restricted \
-    --no-session-log --no-foreign-personal-context --max-model-steps 30 \
-    --prompt-file "$tmp/prompt.md" < /dev/null > "muse-$P.md"
-status=$?
-git worktree remove --force "$tmp/worktree" 2>/dev/null; rm -rf "$tmp"
-[[ $status -eq 0 ]] || echo "muse-review: failed (exit $status); record it in the PR" >&2
-(exit "$status")
+```sh
+git fetch origin main &&
+  launcher=$(git show origin/main:scripts/ai/muse-review.sh) &&
+  bash -c "$launcher" muse-review <pr-number>
 ```
+
+**This invocation is the security boundary.** Never run a PR's copy of
+`scripts/ai/muse-review.sh`. A file that differs from `origin/main` is
+refused, but that self-check catches only accidental edits: a malicious
+copy could remove it. The `&&` chain stops on a failed read; do not use
+`bash <(git show …)`, which can run an empty script and report success.
+
+The launcher takes the prompt from `.github/prompts/adversarial.md` on
+`origin/main` and appends one `UNTRUSTED_PAYLOAD_JSON` object. One
+`gh pr view` supplies the title, description, base and head commits; the
+local diff and temporary worktree use those commits, never `FETCH_HEAD`.
+Any failed context read stops the run. Symlinks anywhere in the head's
+tree are refused before the prompt, diff or worktree is created, since a
+link could expose files outside the workspace.
+
+Muse runs with `--model muse-spark-1.3 --workspace <worktree>` and
+`--disable-write --disable-shell --disable-web-tools --sandbox-network
+restricted --no-session-log --no-foreign-personal-context --max-model-steps
+30 --prompt-file <prompt>`, with stdin closed and the report on stdout.
+`RIBBITTO_MUSE_TIMEOUT` sets the limit in seconds (1–86400, default 1200).
+The supervisor stops Muse and its process group on success, failure,
+timeout (exit 124), INT (130) and TERM (143); the launcher removes the
+worktree and temporary files and reports cleanup failures. Muse failures
+keep their exit status; failure to create its process group exits 126.
+The same early Bash SIGINT limitation as [Grok's launcher](adversarial-review.md)
+applies. A failed optional review is recorded in the PR, never as success.
+
+`RIBBITTO_MUSE_TRUSTED_REF` overrides the launcher and prompt ref only for
+testing changes to them; `RIBBITTO_MUSE_TEST_SETUP_DELAY` is only for
+`scripts/ai/muse-review_test.sh`. `make check` runs that suite as well as
+Grok's. Pre-launch Muse tests run without `ps`; process tests require it
+and fail with a diagnostic in the Codex sandbox, so the orchestrator runs
+the full suite outside it.
 
 The same handoff rules as for the other CLIs apply: it starts no other AI
 CLI, browser or Computer Use, and nobody re-signs, patches or replaces its

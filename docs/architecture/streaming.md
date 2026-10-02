@@ -103,6 +103,11 @@ The retention period defaults to seven days; see [database configuration](../dat
 
 ### Authorization and revocation
 
+- Before registration, the handler rejects a present `Sec-Fetch-Site` other
+  than a single `same-origin` value with 403, including `same-site`,
+  `cross-site` and `none`; it takes no stream slot. An absent header remains
+  allowed for older clients and tools. This supplements
+  `http.CrossOriginProtection`, which exempts GET requests.
 - Every event is authorized for the connection's member **after it is
   rendered and immediately before sending**, including events already
   queued: access may have been lost in between, also while a render waits on
@@ -119,6 +124,9 @@ The retention period defaults to seven days; see [database configuration](../dat
   `openStream` helper owns registration, the re-check and the expiry deadline.
   It frees failed registrations; on success, the handler defers one cleanup
   function that cancels the expiry context and unregisters the stream.
+  Cancellation before the first write answers 404 for an ended session or
+  503 for shutdown, without committing SSE headers. Once the stream has
+  started, cancellation ends it without trying to change its HTTP status.
 
 ### Resource limits
 

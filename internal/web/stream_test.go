@@ -63,6 +63,7 @@ type laterSession struct {
 	session   auth.Session
 	err       error
 	cancelNow bool
+	shutdown  bool
 	seen      *int
 }
 
@@ -70,6 +71,9 @@ func (l laterSession) Resolve(context.Context, string) (domain.Account, auth.Ses
 	*l.seen = l.hub.Connections()
 	if l.cancelNow {
 		l.hub.CancelSession(l.session.ID)
+	}
+	if l.shutdown {
+		l.hub.CancelAll()
 	}
 	return domain.Account{ID: domain.ID{1}}, l.session, l.err
 }
@@ -107,6 +111,8 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 		// store wraps the cancelled context as an error, which must end the
 		// stream like a deleted session, not as a server error.
 		{"signed out during the second look", laterSession{session: live, cancelNow: true, err: fmt.Errorf("resolving session: %w", context.Canceled)}},
+		{"shutdown after registering", laterSession{session: live, shutdown: true}},
+		{"shutdown during the second look", laterSession{session: live, shutdown: true, err: fmt.Errorf("resolving session: %w", context.Canceled)}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			hub := realtime.NewHub()
@@ -116,8 +122,9 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			var reads atomic.Int32
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
-				s.Stream = &Streaming{Hub: hub, Events: noEvents{}, Authorizer: nil, Sessions: tt.later}
+				s.Stream = &Streaming{Hub: hub, Events: firstRead{&reads}, Authorizer: nil, Sessions: tt.later}
 			}))
 			if err != nil {
 				t.Fatal(err)
@@ -129,8 +136,66 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 			if strings.Contains(w.Body.String(), "event:") || strings.Contains(w.Body.String(), "data:") {
 				t.Fatalf("status %d, body %q; want nothing streamed", w.Code, w.Body.String())
 			}
-			if (!tt.later.cancelNow || tt.later.err != nil) && w.Code != http.StatusNotFound {
-				t.Fatalf("status %d, want 404", w.Code)
+			want := http.StatusNotFound
+			if tt.later.shutdown {
+				want = http.StatusServiceUnavailable
+			}
+			if w.Code != want || w.Body.Len() == 0 || w.Header().Get("Content-Type") != "text/plain; charset=utf-8" {
+				t.Fatalf("status %d, type %q, body %q; want a plain-text %d", w.Code, w.Header().Get("Content-Type"), w.Body.String(), want)
+			}
+			if reads.Load() != 0 {
+				t.Fatal("cancelled stream read events")
+			}
+			if n := hub.Connections(); n != 0 {
+				t.Fatalf("%d connections still registered", n)
+			}
+		})
+	}
+}
+
+func TestStreamFetchSite(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		values []string
+		allow  bool
+	}{
+		{name: "absent", allow: true},
+		{name: "same origin", values: []string{"same-origin"}, allow: true},
+		{name: "same site", values: []string{"same-site"}},
+		{name: "cross site", values: []string{"cross-site"}},
+		{name: "none", values: []string{"none"}},
+		{name: "empty", values: []string{""}},
+		{name: "unknown", values: []string{"unknown"}},
+		{name: "duplicate", values: []string{"same-origin", "cross-site"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			hub := realtime.NewHub()
+			catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
+			seen := -1
+			var reads atomic.Int32
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+				s.Stream = &Streaming{Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			for _, value := range tt.values {
+				r.Header.Add("Sec-Fetch-Site", value)
+			}
+			w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+			handler.ServeHTTP(w, r)
+			if tt.allow {
+				if w.Code != http.StatusOK || seen != 1 || reads.Load() != 1 || w.Header().Get("Content-Type") != "text/event-stream; charset=utf-8" {
+					t.Fatalf("status %d, registered %d, reads %d, type %q; want a started stream", w.Code, seen, reads.Load(), w.Header().Get("Content-Type"))
+				}
+			} else if w.Code != http.StatusForbidden || seen != -1 || reads.Load() != 0 || w.Header().Get("Content-Type") != "text/plain; charset=utf-8" {
+				t.Fatalf("status %d, registered %d, reads %d, type %q; want 403 before registration or streaming", w.Code, seen, reads.Load(), w.Header().Get("Content-Type"))
 			}
 			if n := hub.Connections(); n != 0 {
 				t.Fatalf("%d connections still registered", n)

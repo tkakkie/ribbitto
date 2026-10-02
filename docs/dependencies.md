@@ -20,6 +20,7 @@ cmd/ribbitto -> internal/app/channel
 cmd/ribbitto -> internal/app/message
 cmd/ribbitto -> internal/app/setup
 cmd/ribbitto -> internal/app/signup
+cmd/ribbitto -> internal/app/topic
 cmd/ribbitto -> internal/infra/postgres
 cmd/ribbitto -> internal/realtime
 cmd/ribbitto -> internal/web
@@ -49,6 +50,7 @@ internal/app/setup -> internal/domain
 internal/app/signup -> internal/app/auth
 internal/app/signup -> internal/app/setup
 internal/app/signup -> internal/domain
+internal/app/topic -> internal/app/authz
 internal/app/topic -> internal/domain
 internal/infra/postgres -> db/migrations
 internal/infra/postgres -> internal/app/auth

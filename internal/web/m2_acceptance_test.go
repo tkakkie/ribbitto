@@ -200,7 +200,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 		}
 		outsiders = append(outsiders, struct{ name, cookie string }{name, token})
 	}
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Stream)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}

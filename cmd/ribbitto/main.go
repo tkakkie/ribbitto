@@ -22,6 +22,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web"
@@ -259,9 +260,12 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	}
 	authorizer := authz.New(postgres.NewAuthzStore(pool))
 	posting := message.New(postgres.NewPostingStore(pool))
+	// A nil hub must stay a nil Notifier, not a typed nil in the interface.
+	branching := topic.NewBrancher(postgres.NewBranchStore(pool), nil)
 	var stream *web.Streaming
 	if config.hub != nil {
 		posting = message.NewWithNotifier(postgres.NewPostingStore(pool), config.hub)
+		branching = topic.NewBrancher(postgres.NewBranchStore(pool), config.hub)
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
 		events := realtime.NewCachedEvents(ctx, postgres.NewEventReader(pool), config.hub, 1024, time.Minute)
@@ -277,6 +281,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Topics:        postgres.NewTopicStore(pool),
 		Messages:      postgres.MessageReader{Pool: pool},
 		Posting:       posting,
+		Branching:     branching,
 		Channels:      channel.New(postgres.NewChannelStore(pool)),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
 		Stream:        stream,

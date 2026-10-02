@@ -10,6 +10,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 )
 
@@ -52,13 +53,14 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *auth.Sessions,
 		t.Fatal(err)
 	}
 	s := Services{
-		Sessions: sessions,
-		SignIn:   auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
-		Authz:    authz.New(postgres.NewAuthzStore(pool)),
-		Channels: channel.New(postgres.NewChannelStore(pool)),
-		Topics:   postgres.NewTopicStore(pool),
-		Messages: postgres.MessageReader{Pool: pool},
-		Posting:  message.New(postgres.NewPostingStore(pool)),
+		Sessions:  sessions,
+		SignIn:    auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
+		Authz:     authz.New(postgres.NewAuthzStore(pool)),
+		Channels:  channel.New(postgres.NewChannelStore(pool)),
+		Topics:    postgres.NewTopicStore(pool),
+		Messages:  postgres.MessageReader{Pool: pool},
+		Posting:   message.New(postgres.NewPostingStore(pool)),
+		Branching: topic.NewBrancher(postgres.NewBranchStore(pool), nil),
 	}
 	if setupToken != "" {
 		s.Setup, s.SetupSessions = setup.New(postgres.NewSetupStore(pool), hasher, setupToken), sessions

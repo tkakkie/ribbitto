@@ -175,6 +175,38 @@ func (q *Queries) InsertMessageEvent(ctx context.Context, arg InsertMessageEvent
 	return err
 }
 
+const insertMessagesMovedEvent = `-- name: InsertMessagesMovedEvent :exec
+INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
+VALUES ($1, $2, $3, NULL, jsonb_build_object(
+  'channel_id', $4::uuid,
+  'from_topic_id', $5::uuid,
+  'to_topic_id', $6::uuid,
+  'message_ids', to_jsonb($7::uuid[])))
+`
+
+type InsertMessagesMovedEventParams struct {
+	OrganizationID pgtype.UUID
+	Seq            int64
+	Kind           string
+	ChannelID      pgtype.UUID
+	FromTopicID    pgtype.UUID
+	ToTopicID      pgtype.UUID
+	MessageIds     []pgtype.UUID
+}
+
+func (q *Queries) InsertMessagesMovedEvent(ctx context.Context, arg InsertMessagesMovedEventParams) error {
+	_, err := q.db.Exec(ctx, insertMessagesMovedEvent,
+		arg.OrganizationID,
+		arg.Seq,
+		arg.Kind,
+		arg.ChannelID,
+		arg.FromTopicID,
+		arg.ToTopicID,
+		arg.MessageIds,
+	)
+	return err
+}
+
 const lockEventRetentionOrganization = `-- name: LockEventRetentionOrganization :exec
 SELECT id FROM organization WHERE id = $1 FOR UPDATE
 `

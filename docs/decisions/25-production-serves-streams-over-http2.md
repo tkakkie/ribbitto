@@ -6,7 +6,7 @@ default, as in [decision 7](07-rental-vps-and-containers.md)).
 every open latest channel page holds an event stream, so a few open tabs
 would block every other request; HTTP/2 carries all streams of an
 origin on one connection. Details:
-[streaming](../architecture/streaming.md#resource-limits).
+[stream limits](../architecture/stream-limits.md).
 **Considered:** sharing one stream between tabs in the browser (more client
 code, deferred); WebSockets ([decision 3](03-server-sent-events-plus-post-not-websockets.md)
 keeps Server-Sent Events).

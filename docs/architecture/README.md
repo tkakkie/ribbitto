@@ -16,6 +16,8 @@ a second, development-only composition root: it wires PostgreSQL stores
 into setup, sign-up, authorization, channel and posting use cases to create
 [synthetic conversations](../database.md#development-seed-data). It never
 imports `db/migrations`; the database must already be migrated.
+`cmd/loadgen` is a development-only HTTP client; it imports no application
+packages. See [load client](load-client.md) for limits and usage.
 
 | Package | Responsibility | May import from this module |
 |---|---|---|

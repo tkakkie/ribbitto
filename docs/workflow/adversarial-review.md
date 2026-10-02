@@ -10,28 +10,34 @@ pull request is still a draft, and before it is marked ready for review.
 
 In the small sample recorded in #339, Grok's valid findings came from
 long-lived state and concurrency. So Grok is **required** when a change
-alters:
+alters any of the following, **wherever the code lives** (handlers, use
+cases, stores, `db/queries/**`, `db/migrations/**`, scripts):
 
-1. authentication, authorisation or sessions (`internal/app/authz/**`,
-   `internal/app/auth/**`, `internal/web/middleware/**`);
+1. authentication, authorisation, sessions or organisation scoping: who is
+   signed in, who is a member, what a member may see or do, and how a
+   session expires (for example `internal/app/authz/**`,
+   `internal/app/auth/**`, `internal/web/middleware/**`, `internal/web/org.go`,
+   the setup, sign-up and sign-in handlers, and the stores and queries for
+   accounts, members and sessions);
 2. real-time delivery, on the server (`internal/realtime/**`, the stream
-   handlers and renderers in `internal/web`) or in the browser (the SSE
-   scripts in `web/static`);
+   handlers and renderers in `internal/web`, the event log's queries and
+   readers) or in the browser (the SSE scripts in `web/static`);
 3. concurrency, caches or background work (goroutines, locks, TTLs,
-   clean-up jobs), wherever it lives;
-4. a security boundary of the AI or CI tooling: the AI launchers in
-   `scripts/ai/**`, the trusted prompts in `.github/prompts/**`, CI workflow
-   permissions or secrets, and the documented execution and safety
-   requirements for AI tools (such as `running-other-ai.md` and the
-   security parts of this file). Being documentation does not exempt a
-   change from this item.
+   clean-up jobs);
+4. the rules that guard these areas or the AI and CI tooling: the AI
+   launchers in `scripts/ai/**`, the trusted prompts in `.github/prompts/**`,
+   CI workflow permissions or secrets, the documented execution and safety
+   requirements for AI tools (such as `running-other-ai.md` and this file,
+   including this section), and the security and scoping rules in
+   `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does not
+   exempt a change from this item.
 
 Otherwise Grok is not required. A `high` pull request without it says why
 in the template, `Adversarial: skipped (<reason>)`: for example
-documentation only, tests only, a dependency bump, lint or Makefile
-settings, or a schema or query change without concurrency. **When in doubt,
-Grok runs.** The other AI checks the requirement or the skip as it checks
-the risk.
+documentation only, tests only, a dependency bump, or lint or Makefile
+settings. These examples never apply when any item above matches. **When
+in doubt, Grok runs.** The other AI checks the requirement or the skip
+against what the change does, not only the paths it touches.
 
 ## Running Grok
 

@@ -457,3 +457,56 @@ func TestShutdownEndsOpenStreams(t *testing.T) {
 	}
 	streamEndsWithin(t, events, 2*time.Second)
 }
+
+// A topic view's latest page opens a stream of that topic only: a message
+// posted to another topic of the channel never reaches it, and an unknown
+// topic or another channel's topic is 404 before the stream opens (#304).
+func TestTopicEventStream(t *testing.T) {
+	pool := acceptanceDatabase(t)
+	server, streams := streamServers(t, pool)
+	owner := newAcceptanceBrowser(t, server, "192.0.2.10")
+	owner.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
+	response, _ := owner.visit(t, "GET", "/organizations/owner/", nil, 303)
+	channelURL := response.Header.Get("Location")
+	// Branching is #305's; until then topics are made through the store.
+	var org, channel, other string
+	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT organization_id::text, id::text FROM channel WHERE is_default").Scan(&org, &channel))
+	topics := func(channelID, name string) string {
+		var id string
+		acceptanceOK(t, pool.QueryRow(t.Context(), "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, $3) RETURNING id::text", org, channelID, name).Scan(&id))
+		return id
+	}
+	topicURL := channelURL + "/topics/" + topics(channel, "design")
+	acceptanceOK(t, pool.QueryRow(t.Context(), `WITH c AS (INSERT INTO channel (organization_id, name) VALUES ($1, 'random') RETURNING *),
+		d AS (INSERT INTO topic (id, organization_id, channel_id, is_default) SELECT default_topic_id, organization_id, id, true FROM c)
+		SELECT id::text FROM c`, org).Scan(&other))
+	foreignURL := channelURL + "/topics/" + topics(other, "elsewhere")
+
+	_, page := owner.visit(t, "GET", topicURL, nil, 200)
+	match := pageCursor.FindStringSubmatch(page)
+	if len(match) != 2 || !strings.Contains(page, `sse-connect="`+topicURL+`/events?after=`+match[1]+`"`) {
+		t.Fatalf("topic page does not stream its topic: %s", page)
+	}
+	if _, older := owner.visit(t, "GET", topicURL+"?before=1", nil, 200); strings.Contains(older, "sse-connect=") {
+		t.Fatal("an older topic page opened a stream")
+	}
+
+	events, status := openStream(t, on(owner, streams), topicURL, match[1])
+	if status != http.StatusOK {
+		t.Fatalf("topic stream: %d", status)
+	}
+	post(t, owner, channelURL, "in the default topic")
+	post(t, owner, topicURL, "in design")
+	if e := nextEvent(t, events); e.name != "message" || !strings.Contains(e.data, "in design") {
+		t.Fatalf("topic stream delivered %+v, want only the topic's message", e)
+	}
+	noEvent(t, events, 100*time.Millisecond)
+
+	for _, url := range []string{channelURL + "/topics/00000000-0000-7000-8000-000000000000", foreignURL} {
+		if events, status := openStream(t, on(owner, streams), url, "0"); status != http.StatusNotFound {
+			t.Fatalf("%s: stream status %d, want 404", url, status)
+		} else if _, ok := <-events; ok {
+			t.Fatalf("%s: a refused stream emitted an event", url)
+		}
+	}
+}

@@ -66,7 +66,7 @@ func (s MessageReader) Page(ctx context.Context, m authz.Membership, channelID d
 		if err != nil {
 			return err
 		}
-		if before == nil && topicID == nil {
+		if before == nil {
 			seq, err := sqlcgen.New(tx).GetEventSeq(ctx, pgtype.UUID{Bytes: m.Organization.ID, Valid: true})
 			if err != nil {
 				return fmt.Errorf("reading page cursor: %w", err)

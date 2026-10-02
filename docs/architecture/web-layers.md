@@ -17,7 +17,8 @@ enhancement, not full parity.
   keyboard shortcuts (Enter to send), and local-time display. Without
   JavaScript a page may lack these, but nothing core breaks.
 
-Topic views use plain composer submissions and omit SSE until #304.
+Topic views use plain composer submissions; their latest page receives
+that topic's messages over SSE (#304).
 
 ## Go handlers
 

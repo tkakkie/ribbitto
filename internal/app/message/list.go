@@ -53,7 +53,7 @@ type ChannelPage struct {
 	Topics   []domain.Topic
 	Current  domain.Channel
 	Channels []domain.Channel
-	// EventCursor is the snapshot's organisation sequence; nil on older or topic pages.
+	// EventCursor is the snapshot's organisation sequence; nil on older pages.
 	EventCursor *int64
 }
 

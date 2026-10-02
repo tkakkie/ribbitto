@@ -111,6 +111,10 @@ func TestBranchSelection(t *testing.T) {
 					if !hx && (!strings.Contains(body, `id="branch-form"`) || !strings.Contains(body, `value="design"`) || !strings.Contains(body, `name="return_topic" value="`+source+`"`) || !strings.Contains(body, `name="before" value="9"`)) {
 						t.Fatal("plain error lost usable form or return context")
 					}
+					// checkMarkup resolves the reference; each checkbox names its message.
+					if !hx && !strings.Contains(body, `aria-describedby="body-message-`) {
+						t.Fatal("branch checkboxes are not described by their messages")
+					}
 				})
 			}
 		}

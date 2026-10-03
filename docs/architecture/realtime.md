@@ -70,8 +70,9 @@ member in the same organisation. The audience never appears in `data`.
 Each kind's publisher owns its payload (decision 26): `app/message`
 (`EncodePosted`, `DecodePosted`), `app/topic` (`EncodeMoved`, `DecodeMoved`)
 and `app/member` (`EncodeJoined`, `DecodeJoined`) encode and decode it until
-their modules move; the writer stores what they return and the reader
-decodes through them. IDs are canonical UUID text
+their modules move; the writer stores what they return, the reader only
+routes through their `Router`s, and consumers decode the payload (the
+renderer decodes moves). IDs are canonical UUID text
 (`realtime.FormatPayloadID`, `ParsePayloadID`), the JSON value SQL's
 `jsonb_build_object` wrote before (#398), so old and new rows decode alike.
 `message.posted` carries `{"channel_id","message_id","topic_id"}` (UUIDs);

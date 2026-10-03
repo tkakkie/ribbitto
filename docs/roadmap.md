@@ -25,6 +25,10 @@ Roughly in this order: private channels → direct messages → invitations →
 reactions → editing and deleting → PostgreSQL row-level security →
 multiple organisations → file uploads → search.
 
+Deleting messages, and moving them to another channel, first need the
+stream's rule for [vanished messages](architecture/streaming.md#vanished-messages)
+(#352).
+
 Email delivery and email verification are not part of M1 to M3 (accounts
 still sign in with an email address). Delivery arrives with self-hosting after M3
 or when invitations become concrete, whichever comes first, starting with a

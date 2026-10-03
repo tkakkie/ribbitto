@@ -65,3 +65,13 @@ func DecodePosted(data []byte) (Posted, error) {
 	}
 	return p, nil
 }
+
+// RoutePosted is message.posted's realtime.Router: the channel and, unless
+// the payload is legacy, the posting-time topic.
+func RoutePosted(payload []byte) (domain.ID, []domain.ID, error) {
+	p, err := DecodePosted(payload)
+	if err != nil || p.TopicID == nil {
+		return p.ChannelID, nil, err
+	}
+	return p.ChannelID, []domain.ID{*p.TopicID}, nil
+}

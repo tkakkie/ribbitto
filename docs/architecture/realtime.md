@@ -97,8 +97,13 @@ source and destination IDs and each item's original sequence: feeds replace
 loaded IDs; topics remove source items or insert destination items in order
 within the loaded range. Live changes never alter the history paging bound.
 Setup and sign-up call `NewEventLog(tx).AppendMemberJoined` immediately after
-the member, with its `joined_event_seq`. `realtime.Event` holds the envelope and
-referenced IDs; kinds are an open list. `postgres.NewEventReader(db)` provides
+the member, with its `joined_event_seq`. `realtime.Event` holds the envelope (with the
+routing `Topics` and the stored `Payload`) and, until #417, the referenced IDs;
+kinds are an open list. Wiring registers each kind's publisher `Router`
+(`message.RoutePosted`, `topic.RouteMoved`, `member.RouteJoined`) in
+`realtime.Kinds`, which gives the channel and routing topics; until the
+modules register their own, `postgres.EventKinds()` lists them.
+`postgres.NewEventReader(db, kinds)` provides
 `EventsAfter(ctx, organizationID, after, limit) ([]realtime.Event, error)`:
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.
 It decodes known kinds through their publishers' decoders, failing the batch for malformed or missing IDs;

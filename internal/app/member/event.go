@@ -38,3 +38,10 @@ func DecodeJoined(data []byte) (Joined, error) {
 	}
 	return Joined{MemberID: id}, nil
 }
+
+// RouteJoined is member.joined's realtime.Router. A join belongs to no
+// channel, so streams never deliver it; the payload is still validated.
+func RouteJoined(payload []byte) (domain.ID, []domain.ID, error) {
+	_, err := DecodeJoined(payload)
+	return domain.ID{}, nil, err
+}

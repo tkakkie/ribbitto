@@ -43,4 +43,19 @@ type Event struct {
 	ToTopicID   domain.ID
 	// MessageIDs is immutable after reading, since event batches are shared.
 	MessageIDs []domain.ID
+	// Topics are the routing topics its kind's Router gave; nil when it
+	// names none (a legacy post, or a kind without topics). Payload is the
+	// stored data, which only the kind's publisher decodes. Both are
+	// read-only once read, since event batches are shared between streams.
+	Topics  []domain.ID
+	Payload []byte
 }
+
+// Router reads an event's routing from its stored payload: its channel
+// (zero when the kind is not channel-scoped) and its routing topics. It
+// fails on malformed data. Each kind's publisher provides one (decision 26).
+type Router func(payload []byte) (channel domain.ID, topics []domain.ID, err error)
+
+// Kinds registers the Router of each kind a reader fills in; wiring builds
+// it. A kind it lacks keeps only its envelope, and streams skip it.
+type Kinds map[EventKind]Router

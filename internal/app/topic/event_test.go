@@ -22,6 +22,9 @@ func TestMovedPayload(t *testing.T) {
 	if got, err := topic.DecodeMoved(data); err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("round trip = %+v, %v; want %+v", got, err, want)
 	}
+	if channel, topics, err := topic.RouteMoved(data); err != nil || channel != want.ChannelID || !reflect.DeepEqual(topics, []domain.ID{want.FromTopicID, want.ToTopicID}) {
+		t.Fatalf("RouteMoved = %v, %v, %v; want the channel and both topics", channel, topics, err)
+	}
 	uuid := func(n int) string { return fmt.Sprintf("00000000-0000-0000-0000-%012x", n) }
 	for _, tt := range []struct {
 		name  string

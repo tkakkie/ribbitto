@@ -3,6 +3,7 @@
 // framing itself is web's.
 //
 // Feature: realtime (feature map in docs/architecture/features.md). It
+// declares the durable event types (Event, EventKind, ErrCursorExpired) and
 // imports only domain; the stream's authorization, rendering and event
 // reading come in as interfaces it defines, implemented by app, web and
 // infra/postgres and wired in cmd/ribbitto.

@@ -191,7 +191,7 @@ func TestWatermarkCheckTimesOut(t *testing.T) {
 // after the next successful tick, and a failed tick is retried on the next.
 func TestWatermarkDeliversAnUnannouncedCommit(t *testing.T) {
 	hub := NewHub()
-	log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+	log := &fakeLog{events: []Event{posted(1, channelA)}}
 	seqs := newFakeSequences()
 	seqs.set(orgA, 1, nil)
 	hub.Raise(orgA, 1)

@@ -84,7 +84,7 @@ func (l laterSession) Resolve(context.Context, string) (identity.Account, identi
 // firstRead counts reads and fails each one, which ends a started stream.
 type firstRead struct{ reads *atomic.Int32 }
 
-func (f firstRead) EventsAfter(context.Context, domain.ID, int64, int) ([]domain.Event, error) {
+func (f firstRead) EventsAfter(context.Context, domain.ID, int64, int) ([]realtime.Event, error) {
 	f.reads.Add(1)
 	return nil, errors.New("stream started; stop after the first read")
 }
@@ -92,7 +92,7 @@ func (f firstRead) EventsAfter(context.Context, domain.ID, int64, int) ([]domain
 // noEvents is an event log that is never read in these tests.
 type noEvents struct{}
 
-func (noEvents) EventsAfter(context.Context, domain.ID, int64, int) ([]domain.Event, error) {
+func (noEvents) EventsAfter(context.Context, domain.ID, int64, int) ([]realtime.Event, error) {
 	return nil, errors.New("the stream must not start")
 }
 
@@ -513,9 +513,9 @@ func (r lifetimeReads) One(ctx context.Context, _ authz.Membership, _ domain.ID,
 	return message.Entry{}, ctx.Err()
 }
 
-func (r lifetimeReads) EventsAfter(ctx context.Context, org domain.ID, _ int64, _ int) ([]domain.Event, error) {
+func (r lifetimeReads) EventsAfter(ctx context.Context, org domain.ID, _ int64, _ int) ([]realtime.Event, error) {
 	if r.render {
-		return []domain.Event{{OrganizationID: org, ChannelID: domain.ID{1}, Seq: 1, Kind: domain.EventMessagePosted}}, nil
+		return []realtime.Event{{OrganizationID: org, ChannelID: domain.ID{1}, Seq: 1, Kind: realtime.EventMessagePosted}}, nil
 	}
 	_, err := r.One(ctx, authz.Membership{}, domain.ID{}, 0)
 	return nil, err

@@ -304,7 +304,7 @@ type countingReader struct {
 	calls, empty atomic.Int64
 }
 
-func (c *countingReader) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+func (c *countingReader) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]realtime.Event, error) {
 	events, err := c.inner.EventsAfter(ctx, org, after, limit)
 	c.calls.Add(1)
 	if err == nil && len(events) == 0 {
@@ -322,7 +322,7 @@ type readingRenderer struct {
 	renders    *realtime.Cache[int64, realtime.Outgoing]
 }
 
-func (r readingRenderer) Render(ctx context.Context, _ realtime.Subscription, e domain.Event) (realtime.Outgoing, error) {
+func (r readingRenderer) Render(ctx context.Context, _ realtime.Subscription, e realtime.Event) (realtime.Outgoing, error) {
 	load := func(ctx context.Context) (realtime.Outgoing, error) {
 		if _, err := r.messages.One(ctx, r.membership, e.ChannelID, e.Seq); err != nil {
 			return realtime.Outgoing{}, err

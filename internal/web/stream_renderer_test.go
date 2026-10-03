@@ -84,12 +84,12 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	memberOf := func(org domain.ID) authz.Membership {
 		return authz.Membership{Organization: domain.Organization{ID: org}}
 	}
-	event := domain.Event{OrganizationID: orgA, Seq: 9, Kind: domain.EventMessagePosted, ChannelID: domain.ID{2}}
-	keyOf := func(org domain.ID, e domain.Event) renderKey {
+	event := realtime.Event{OrganizationID: orgA, Seq: 9, Kind: realtime.EventMessagePosted, ChannelID: domain.ID{2}}
+	keyOf := func(org domain.ID, e realtime.Event) renderKey {
 		return renderKey{organization: org, channel: e.ChannelID, seq: e.Seq, language: i18n.Language(en)}
 	}
 
-	for _, kind := range []domain.EventKind{domain.EventMessagePosted, domain.EventMessagesMoved} {
+	for _, kind := range []realtime.EventKind{realtime.EventMessagePosted, realtime.EventMessagesMoved} {
 		t.Run("concurrent renders read once/"+string(kind), func(t *testing.T) {
 			event := event
 			event.Kind = kind
@@ -109,7 +109,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 						sub.Topic = &selected
 					}
 					out, err := r.Render(en, sub, event)
-					if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "seq 9") || (kind == domain.EventMessagesMoved && strings.Count(string(out.Data), "<li ") != 100) {
+					if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "seq 9") || (kind == realtime.EventMessagesMoved && strings.Count(string(out.Data), "<li ") != 100) {
 						t.Errorf("Render = %+v, %v", out, err)
 					}
 				})
@@ -125,7 +125,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	t.Run("each part of the key is its own entry", func(t *testing.T) {
 		calls := &atomic.Int32{}
 		shared := newRenderCache(t.Context())
-		render := func(ctx context.Context, org domain.ID, e domain.Event) string {
+		render := func(ctx context.Context, org domain.ID, e realtime.Event) string {
 			t.Helper()
 			e.OrganizationID = org
 			r := messageRenderer{messages: countingMessages{calls: calls}, membership: memberOf(org), renders: shared}
@@ -142,7 +142,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			name string
 			ctx  context.Context
 			org  domain.ID
-			e    domain.Event
+			e    realtime.Event
 		}{
 			{"base", en, orgA, event},
 			{"organisation", en, orgB, event},
@@ -172,11 +172,11 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	t.Run("payloads carry the contract's data attributes", func(t *testing.T) {
 		r := messageRenderer{messages: countingMessages{calls: &atomic.Int32{}}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
 		const topicSix = "06000000-0000-0000-0000-000000000000"
-		for _, kind := range []domain.EventKind{domain.EventMessagePosted, domain.EventMessagesMoved} {
+		for _, kind := range []realtime.EventKind{realtime.EventMessagePosted, realtime.EventMessagesMoved} {
 			e := event
 			e.Kind, e.MessageIDs = kind, []domain.ID{{7}, {8}}
 			e.FromTopicID, e.ToTopicID = domain.ID{5}, domain.ID{6}
-			if kind == domain.EventMessagesMoved {
+			if kind == realtime.EventMessagesMoved {
 				e.Seq = 11 // its own render, not the posted one's
 			}
 			out, err := r.Render(en, realtime.Subscription{}, e)
@@ -187,7 +187,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if kind == domain.EventMessagesMoved {
+			if kind == realtime.EventMessagesMoved {
 				list := find(doc, atom.Ul)
 				if list == nil || attr(list, "data-from-topic") != "05000000-0000-0000-0000-000000000000" || attr(list, "data-to-topic") != topicSix {
 					t.Errorf("%s: the payload's list lost its move routing", kind)
@@ -205,7 +205,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 					t.Errorf("%s: data-source = %q; want the message's topic", kind, attr(n, "data-source"))
 				}
 			}
-			if want := len(e.MessageIDs); kind == domain.EventMessagePosted && items != 1 || kind == domain.EventMessagesMoved && items != want {
+			if want := len(e.MessageIDs); kind == realtime.EventMessagePosted && items != 1 || kind == realtime.EventMessagesMoved && items != want {
 				t.Errorf("%s: %d items", kind, items)
 			}
 		}

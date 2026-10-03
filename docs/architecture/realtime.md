@@ -90,14 +90,15 @@ source and destination IDs and each item's original sequence: feeds replace
 loaded IDs; topics remove source items or insert destination items in order
 within the loaded range. Live changes never alter the history paging bound.
 Setup and sign-up call `NewEventLog(tx).AppendMemberJoined` immediately after
-the member, with its `joined_event_seq`. `domain.Event` holds the envelope and
+the member, with its `joined_event_seq`. `realtime.Event` holds the envelope and
 referenced IDs; kinds are an open list. `postgres.NewEventReader(db)` provides
-`EventsAfter(ctx, organizationID, after, limit) ([]domain.Event, error)`:
+`EventsAfter(ctx, organizationID, after, limit) ([]realtime.Event, error)`:
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.
 It decodes known kinds' IDs, failing the batch for malformed or missing IDs;
 unknown kinds retain their envelope with zero IDs for the delivery loop to skip.
-The reader satisfies the delivery interface structurally, without
-importing `realtime`; authorization remains the connection loop's job.
+The reader implements the delivery interface and imports `realtime`'s root
+for the event types until it moves into the module; authorization remains
+the connection loop's job.
 
 `organization.event_log_boundary_seq` is the highest sequence no longer in
 the log. Migration sets it to each existing organisation's `event_seq`,
@@ -116,7 +117,7 @@ their sequences and unread positions are untouched.
 A cursor is valid from the boundary through the committed `event_seq`,
 inclusive, even with an empty log; at `event_seq` it waits for new events.
 `EventsAfter` reads both bounds and rows in one SQL statement snapshot, returning
-`domain.ErrCursorExpired` outside those bounds, including with a zero limit. Every full
+`realtime.ErrCursorExpired` outside those bounds, including with a zero limit. Every full
 `CachedEvents` result gets a fresh zero-limit check: immutable cached rows and
 both bounds describe a valid batch at the check's snapshot, or require reset.
 Short batches already carry their read's checks of both bounds. Cached rows

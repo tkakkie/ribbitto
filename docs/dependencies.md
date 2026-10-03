@@ -41,6 +41,7 @@ cmd/seed -> internal/infra/postgres
 cmd/seed -> internal/platform/postgres
 internal/app/authz -> internal/domain
 internal/app/authz -> internal/identity
+internal/app/authz -> internal/realtime
 internal/app/channel -> internal/app/authz
 internal/app/channel -> internal/domain
 internal/app/member -> internal/app/authz
@@ -80,6 +81,7 @@ internal/infra/postgres -> internal/identity
 internal/infra/postgres -> internal/infra/postgres/sqlcgen
 internal/infra/postgres -> internal/platform/postgres
 internal/infra/postgres -> internal/platform/postgres/pgxbridge
+internal/infra/postgres -> internal/realtime
 internal/infra/postgres/pgtest -> internal/domain
 internal/infra/postgres/pgtest -> internal/infra/postgres
 internal/infra/postgres/pgtest -> internal/platform/postgres/pgtest

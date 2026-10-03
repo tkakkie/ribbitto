@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // EventLog owns realtime's event inserts within a caller-owned transaction.
@@ -24,7 +25,7 @@ func NewEventLog(tx pgx.Tx) *EventLog {
 // sequence already allocated for the message, with its posting-time topic.
 func (l *EventLog) AppendMessagePosted(ctx context.Context, organizationID, channelID, messageID, topicID domain.ID, seq int64) error {
 	err := l.queries.InsertMessageEvent(ctx, sqlcgen.InsertMessageEventParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(domain.EventMessagePosted),
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(realtime.EventMessagePosted),
 		ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, MessageID: pgtype.UUID{Bytes: messageID, Valid: true},
 		TopicID: pgtype.UUID{Bytes: topicID, Valid: true},
 	})
@@ -38,7 +39,7 @@ func (l *EventLog) AppendMessagePosted(ctx context.Context, organizationID, chan
 // one topic of the channel to another, at the sequence allocated for it.
 func (l *EventLog) AppendMessagesMoved(ctx context.Context, organizationID, channelID, fromTopicID, toTopicID domain.ID, messageIDs []domain.ID, seq int64) error {
 	err := l.queries.InsertMessagesMovedEvent(ctx, sqlcgen.InsertMessagesMovedEventParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(domain.EventMessagesMoved),
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(realtime.EventMessagesMoved),
 		ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, FromTopicID: pgtype.UUID{Bytes: fromTopicID, Valid: true},
 		ToTopicID: pgtype.UUID{Bytes: toTopicID, Valid: true}, MessageIds: uuidArray(messageIDs),
 	})
@@ -52,7 +53,7 @@ func (l *EventLog) AppendMessagesMoved(ctx context.Context, organizationID, chan
 // sequence already allocated for the membership.
 func (l *EventLog) AppendMemberJoined(ctx context.Context, organizationID, memberID domain.ID, seq int64) error {
 	err := l.queries.InsertMemberEvent(ctx, sqlcgen.InsertMemberEventParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(domain.EventMemberJoined),
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(realtime.EventMemberJoined),
 		MemberID: pgtype.UUID{Bytes: memberID, Valid: true},
 	})
 	if err != nil {

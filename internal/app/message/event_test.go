@@ -18,4 +18,28 @@ func TestPostedPayload(t *testing.T) {
 	if want := (message.Posted{ChannelID: channel, MessageID: posted, TopicID: &topic}); err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("round trip = %+v, %v; want %+v", got, err, want)
 	}
+	// Only an absent topic_id is legacy; every present invalid value fails.
+	const ids = `"channel_id":"00000000-0000-0000-0000-000000000001","message_id":"00000000-0000-0000-0000-000000000002"`
+	got, err = message.DecodePosted([]byte(`{` + ids + `}`))
+	if err != nil || got.TopicID != nil || got.MessageID != (domain.ID{15: 2}) {
+		t.Fatalf("legacy post = %+v, %v", got, err)
+	}
+	for _, data := range []string{
+		`{"channel_id":"invalid","message_id":"invalid"}`,
+		`{"channel_id":"00000000-0000-0000-0000-000000000001","message_id":false}`,
+		`{"channel_id":"00000000-0000-0000-0000-000000000001"}`,
+		`{"channel_id":null,"message_id":null}`,
+		`{` + ids + `,"topic_id":null}`,
+		`{` + ids + `,"topic_id":false}`,
+		`{` + ids + `,"topic_id":42}`,
+		`{` + ids + `,"topic_id":[]}`,
+		`{` + ids + `,"topic_id":{}}`,
+		`{` + ids + `,"topic_id":""}`,
+		`{` + ids + `,"topic_id":"bad"}`,
+		`{` + ids + `,"topic_id":"00000000x0000x0000x0000x000000000001"}`,
+	} {
+		if got, err := message.DecodePosted([]byte(data)); err == nil {
+			t.Errorf("DecodePosted(%s) = %+v; want an error", data, got)
+		}
+	}
 }

@@ -1,7 +1,6 @@
 package postgres_test
 
 import (
-	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
@@ -30,28 +29,16 @@ func TestPostedEventTopic(t *testing.T) {
 	if len(events) != 1 || events[0].TopicID == nil || *events[0].TopicID != named.ID {
 		t.Fatalf("named-topic post: %+v", events)
 	}
-	// A missing field is readable legacy data. Every present invalid value
-	// must fail the whole batch, including the valid event preceding it.
+	// An absent topic_id is readable legacy data (message.DecodePosted's
+	// tests cover the malformed values).
 	_, err = postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "second")
 	requireNoError(t, err)
-	for _, value := range []string{"", `null`, `false`, `42`, `[]`, `{}`, `""`, `"bad"`, `"00000000x0000x0000x0000x000000000001"`} {
-		t.Run("topic="+value, func(t *testing.T) {
-			_, err := pool.Exec(ctx, "UPDATE event_log SET data = data - 'topic_id' WHERE organization_id = $1 AND seq = $2", f.OrganizationID, posted.EventSeq+1)
-			requireNoError(t, err)
-			if value != "" {
-				_, err = pool.Exec(ctx, "UPDATE event_log SET data = jsonb_set(data, '{topic_id}', $3::jsonb) WHERE organization_id = $1 AND seq = $2", f.OrganizationID, posted.EventSeq+1, json.RawMessage(value))
-				requireNoError(t, err)
-			}
-			events, err := reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 2)
-			if value == "" {
-				requireNoError(t, err)
-				if len(events) != 2 || events[1].TopicID != nil {
-					t.Fatalf("legacy post: %+v", events)
-				}
-			} else if err == nil || len(events) != 0 {
-				t.Fatalf("malformed topic: %+v, %v; want error without events", events, err)
-			}
-		})
+	_, err = pool.Exec(ctx, "UPDATE event_log SET data = data - 'topic_id' WHERE organization_id = $1 AND seq = $2", f.OrganizationID, posted.EventSeq+1)
+	requireNoError(t, err)
+	events, err = reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 2)
+	requireNoError(t, err)
+	if len(events) != 2 || events[1].TopicID != nil {
+		t.Fatalf("legacy post: %+v", events)
 	}
 }
 
@@ -112,29 +99,24 @@ func TestEventsAfter(t *testing.T) {
 	}
 }
 
+// Malformed data of a known kind fails the whole batch, including the valid
+// event before it: no partial batch reaches a stream. The codecs' own tests
+// cover which payloads are malformed.
 func TestEventsAfterMalformedData(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
-	org := pgtest.Organization(t, pool, "malformed", "Malformed", 1)
+	org := pgtest.Organization(t, pool, "malformed", "Malformed", 2)
 	reader := postgres.NewEventReader(pool)
-	for _, tt := range []struct{ kind, data string }{
-		{"message.posted", `{"channel_id":"invalid","message_id":"invalid"}`},
-		{"message.posted", `{"channel_id":"00000000-0000-0000-0000-000000000001","message_id":false}`},
-		{"message.posted", `{"channel_id":"00000000-0000-0000-0000-000000000001"}`},
-		{"message.posted", `{"channel_id":null,"message_id":null}`},
-		{"member.joined", `{"member_id":"invalid"}`},
-		{"member.joined", `{"member_id":11111111111111111111111111111111111111}`},
-		{"member.joined", `{"member_id":"00000000x0000x0000x0000x000000000001"}`},
-		{"member.joined", `{}`},
-		{"member.joined", `null`},
-		{"member.joined", `[]`},
-	} {
-		t.Run(tt.kind+"/"+tt.data, func(t *testing.T) {
+	_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
+		VALUES ($1, 1, 'member.joined', '{"member_id":"00000000-0000-0000-0000-000000000001"}')`, org)
+	requireNoError(t, err)
+	for _, kind := range []string{"message.posted", "member.joined", "messages.moved"} {
+		t.Run(kind, func(t *testing.T) {
 			_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
-				VALUES ($1, 1, $2, $3) ON CONFLICT (organization_id, seq) DO UPDATE SET kind = EXCLUDED.kind, data = EXCLUDED.data`, org, tt.kind, tt.data)
+				VALUES ($1, 2, $2, '{}') ON CONFLICT (organization_id, seq) DO UPDATE SET kind = EXCLUDED.kind, data = EXCLUDED.data`, org, kind)
 			requireNoError(t, err)
 			if events, err := reader.EventsAfter(t.Context(), org, 0, 10); err == nil || len(events) != 0 {
-				t.Fatalf("malformed event: %+v, %v; want error without events", events, err)
+				t.Fatalf("malformed event after a valid one: %+v, %v; want error without events", events, err)
 			}
 		})
 	}

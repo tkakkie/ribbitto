@@ -111,6 +111,31 @@ sequenceDiagram
   The versioned message-stream script listens for `reset` on htmx's source,
   closes it and reloads the page; this is SSE glue with no separate request.
 
+### Vanished messages
+
+Nothing deletes a message or moves it to another channel yet (#352). Once
+something does, replay can reach an event whose message is gone: the read
+reports `ErrNotFound`, the render fails and the loop stops before the event,
+so every reconnect repeats it. The first feature that makes this reachable
+implements this rule:
+
+- A `message.posted` whose message has vanished is an obsolete target, not a
+  failure: it is skipped and the cursor advances.
+- A `messages.moved` with some messages vanished still delivers the
+  surviving ones, rendered and routed as usual; one missing ID never drops
+  the whole event. With every message vanished, it is skipped and the
+  cursor advances.
+- Any other read, render, authorization or send error stops the loop as
+  above, without advancing past the event.
+
+That feature decides how, and in which layer, a vanished target becomes a
+normal skip, but not by teaching `realtime.Stream` the message feature's
+`ErrNotFound`. It also decides whether `message.Reader.Many` (an incomplete
+batch is `ErrNotFound`) changes, so that ordinary data inconsistency is not
+taken for disappearance. Its tests replay a vanished `message.posted` and a
+`messages.moved` with missing and surviving IDs, and check that the
+surviving messages end in the right state and later events still arrive.
+
 ### Retention
 
 `realtime.Retention` expires replay history once at start and then hourly.

@@ -15,6 +15,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -188,7 +189,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	pool := pgtest.New(t)
 	f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 	m := authz.Membership{Organization: domain.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: f.MemberID}}
-	reader := postgres.MessageReader{Pool: pool}
+	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
 	renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 	log := postgres.NewEventReader(pool)
 	var ids []domain.ID
@@ -357,7 +358,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			reader := postgres.MessageReader{Pool: pool}
+			reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
 			var moved []domain.ID
 			var source domain.ID
 			for i := range tt.count {
@@ -440,7 +441,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				reader := postgres.MessageReader{Pool: pool}
+				reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
 				var source domain.Topic
 				var moved []domain.ID
 				for i := range count {

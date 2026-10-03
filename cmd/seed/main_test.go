@@ -20,6 +20,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 )
@@ -179,7 +180,7 @@ func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader := postgres.MessageReader{Pool: pool}
+	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
 	for i, name := range []string{"rooftop-garden", "garden-time"} {
 		var channelID, topicID domain.ID
 		var total int

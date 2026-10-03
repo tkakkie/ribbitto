@@ -15,8 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -377,7 +376,7 @@ func TestEventStream(t *testing.T) {
 	// organisation's channel, and 404 for this channel's id under their own
 	// organisation's URL; their own channel streams, as a control.
 	other := pgtest.OrganizationWithOwner(t, pool, "globex", "general")
-	token, _, err := identity.NewSessions(postgres.NewSessionStore(pool), time.Now).Create(t.Context(), other.AccountID)
+	token, _, err := identitypg.NewSessions(pool, time.Now, nil).Create(t.Context(), other.AccountID)
 	acceptanceOK(t, err)
 	outsider := newAcceptanceBrowser(t, server, "192.0.2.13")
 	u, err := url.Parse(server.URL)

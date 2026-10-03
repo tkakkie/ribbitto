@@ -16,7 +16,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 
 | Feature | Packages and files | Owns |
 |---|---|---|
-| `identity`: accounts, passwords, sessions, signing in, sign-up | `identity` (module root, step 1a), `app/signup`; `infra/postgres` `account.go`, `session.go`, `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
+| `identity`: accounts, passwords, sessions, signing in, sign-up | the `identity` module (root, store, `identitypg`; `db/queries/identity/`), `app/signup`; `infra/postgres` `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
 | `org`: organisations, memberships, authorisation, first-run setup | `app/authz`, `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
@@ -41,7 +41,7 @@ for a missing or out-of-scope message. The use cases
 org's exported `member.Directory.LookupMembers` (member IDs filtered by
 organisation, returning handles and account IDs), then identity's
 `identity.Directory.LookupDisplayNames` (only those account IDs). Their adapters
-own the queries in `member.sql` and `account.sql`; message never queries
+own the queries in `member.sql` and `identity/account.sql`; message never queries
 those tables. `MessageReader` shares one read-only repeatable-read transaction
 across the channel and sidebar (through `channel.Service`), the selected topic
 and the bounded topic list (through `topic.Store`), history, both author
@@ -120,9 +120,8 @@ the temporary implementation behind it.
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
 | four `infra` target-version tests | `db/migrations` (temporary allowance) | 0 | their module's step, or 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
-| account and session stores (`infra`) | `identity`'s store interfaces | 1 | 1b |
 | `app/setup`, `app/signup`, `app/authz`, `app/member` | `identity.Hasher`, `identity.Account` | 1 | 3 |
-| `app/message`; page snapshot, `One`, `Many` (`infra`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
+| `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
 | setup, sign-up (`infra`) | `identity` account writes | 3 (until then, a `legacy_account.sql` copy of `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry, from step 1) | 3 |
 | posting, setup, sign-up, branching (`infra`) | `realtime` event appends | 2 | each flow's own step: 3, 4 |
 | `realtime` reader and retention | `org` sequence bounds, boundary write | 2 | 3 |

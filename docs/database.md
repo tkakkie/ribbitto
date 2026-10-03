@@ -89,9 +89,12 @@ explicit name/default flag and leaves sequences unchanged. All fixture helpers
 use `t.Context()` internally; none creates a setup row. Schema, migration and
 adversarial tests keep direct SQL to express states these helpers should not hide.
 
-`make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`
-and `db/queries/`. Commit its pgx/v5 output in `internal/infra/postgres/sqlcgen/`;
-CI rejects generation changes to committed files. Never edit generated files.
+`make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`.
+`sqlc.yaml` has one entry per query set: the files directly in `db/queries/`
+generate `internal/infra/postgres/sqlcgen/`, and each module's directory
+(`db/queries/identity/`) generates its store's `sqlcgen`. Commit the pgx/v5
+output; CI rejects generation changes to committed files. Never edit
+generated files.
 
 ## Development seed data
 

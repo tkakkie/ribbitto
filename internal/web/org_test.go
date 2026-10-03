@@ -19,8 +19,10 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -79,7 +81,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}
 	// Subtests stay sequential: they share this clock and add Carol's membership later.
 	clock := now
-	sessions := identity.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return clock })
+	sessions := identitypg.NewSessions(pool, func() time.Time { return clock }, nil)
 	token := func(account domain.ID) string {
 		t.Helper()
 		value, _, err := sessions.Create(ctx, account)
@@ -324,7 +326,11 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		for _, m := range members {
 			ids = append(ids, m.AccountID)
 		}
-		names, err := postgres.NewAccountStore(pool).LookupDisplayNames(ctx, ids)
+		var names map[domain.ID]string
+		err = platform.InSnapshot(ctx, pool, func(snapshot platform.Snapshot) (err error) {
+			names, err = identitypg.AccountsIn(snapshot).LookupDisplayNames(ctx, ids)
+			return err
+		})
 		if err != nil || len(names) != 1 || names[alice] != "Alice" {
 			t.Fatalf("names: %v, %v", names, err)
 		}

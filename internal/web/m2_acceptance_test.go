@@ -16,8 +16,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -29,7 +28,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	sessions := identity.NewSessions(postgres.NewSessionStore(pool), time.Now)
+	sessions := identitypg.NewSessions(pool, time.Now, nil)
 	var logs bytes.Buffer
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&logs, nil)))
 	if err != nil {

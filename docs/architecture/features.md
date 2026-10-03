@@ -92,7 +92,7 @@ Where the migration goes ([decision 26](../decisions/26-modules-by-feature-layou
 - `internal/<module>/internal/postgres`: its store and `sqlcgen`;
 - `internal/<module>/<module>pg`: wiring.
 
-`<module>pg.New(pool)` returns the module's use cases. Its `Tx`- or `Snapshot`-taking factories return implementations of other modules' consumer interfaces; their result types are declared by the consumer.
+`<module>pg`'s constructors take the pool and the use cases' other dependencies (a clock, the shared hasher, a canceller) and return the use cases. Its `Tx`- or `Snapshot`-taking factories implement other modules' consumer interfaces, whose result types the consumer declares. A wiring package may import its own module's root and store, and the roots of modules whose interfaces it implements. It may not import other wiring or stores; only `cmd/*` and tests import it. Roots and stores follow the table's import column.
 
 `internal/kernel` holds `ID`. `internal/platform/postgres` holds the pool, migrations, lifecycle test helpers, and the opaque `Tx` and `Snapshot` with their open, commit and rollback operations. Its bridge package (handle to pgx) may be imported only by stores. Feature fixtures stay with their module's tests.
 
@@ -119,11 +119,11 @@ the temporary implementation behind it.
 | Flow or caller | Needs from | Interface from step | Temporary implementation until step |
 |---|---|---|---|
 | page snapshot, `One`, `Many` (`infra`) | `identity` accounts | 1 | 6 (the use case replaces the caller) |
-| setup, sign-up (`infra`) | `identity` account writes | 1 (own queries) | 3 |
+| setup, sign-up (`infra`) | `identity` account writes | 3 (own queries, a temporary direct exception, until then) | 3 |
 | posting, setup, sign-up, branching (`infra`) | `realtime` event appends | 2 | each flow's own step: 3, 5, 6 |
 | `realtime` reader and retention | `org` sequence bounds, boundary write | 2 | 3 |
-| posting, branching, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 5, 6 |
+| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 5, 6 |
 | setup (`org`) | `channel` default channel | 3 | 4 |
 | channel creation (`channel`) | `topic` default topic (same ID, deferred foreign key) | 4 | 5 |
-| posting, page snapshot (`infra`) | `channel`, `topic` reads | 4, 5 | 6 |
+| posting, page snapshot, `One`, `Many` (`infra`) | `channel`, `topic` reads | 4, 5 | 6 |
 | branching (`topic`) | `message` moves and notice | 5 | 6 |

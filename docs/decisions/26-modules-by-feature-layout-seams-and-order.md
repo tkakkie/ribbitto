@@ -7,10 +7,13 @@
     interfaces it needs;
   - `internal/<module>/internal/postgres`, its store and generated queries,
     which may import the root;
-  - a wiring package `internal/<module>/<module>pg`, the only importer of
-    the store. It exports `New(pool)`, which returns the module's use
-    cases, and `Tx`- or `Snapshot`-taking factories for the operations that
-    other modules' flows need. The composition roots call it.
+  - a wiring package `internal/<module>/<module>pg`, the only production
+    importer of the store. It is composition code: construction, interface
+    adaptation and `Tx`/`Snapshot` binding, and no business logic. Its
+    constructors take the pool and whatever the use cases need, such as a
+    clock or the shared hasher. Its `Tx`- or `Snapshot`-taking factories
+    implement other modules' consumer interfaces. Only `cmd/*` and tests
+    import it.
 
   The modules are `identity` (accounts, passwords, sessions, sign-in), `org`
   (organisations, members, authorisation, setup and sign-up), `channel`,
@@ -67,7 +70,13 @@
   The page snapshot (#154 M7) becomes a use case that passes one
   `Snapshot` to each module's reader.
 - **Enforcement.** Go `internal` directories, plus per-module depguard:
-  - a module imports only `kernel`, `platform` and lower modules' roots;
+  - a module's root and `internal/postgres` import only `kernel`,
+    `platform` and the roots the graph allows;
+  - a wiring package is outside the graph. It may import its own module's
+    root and store, and the roots of the modules whose consumer interfaces
+    it implements. It may not import another module's wiring package or
+    `internal/postgres`. So `orgpg` → `message` → `org` is allowed, and
+    with no `org` → `orgpg` there is no cycle;
   - wiring packages are imported only by `cmd/*` and tests, apart from a
     temporary exception that names its removal step.
 - **Graph** (each module may import those after its arrow; the graph is

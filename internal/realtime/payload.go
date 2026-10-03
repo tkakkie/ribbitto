@@ -21,9 +21,12 @@ func FormatPayloadID(id domain.ID) string {
 	return string(b[:])
 }
 
-// ParsePayloadID parses a payload ID. Only canonical UUID text is accepted:
-// PostgreSQL also reads other spellings, but stored payloads never use them,
-// so another spelling means the payload is malformed.
+// ParsePayloadID parses a payload ID in the canonical 8-4-4-4-12 layout.
+// PostgreSQL also reads other layouts (no dashes, braces), but stored
+// payloads never use them, so another layout means the payload is malformed.
+// Hex digits of either case are accepted, as the reader did before the
+// publishers owned decoding (#413); only FormatPayloadID's lowercase is
+// ever written.
 func ParsePayloadID(value string) (domain.ID, error) {
 	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
 		return domain.ID{}, errors.New("required ID is not a canonical UUID")

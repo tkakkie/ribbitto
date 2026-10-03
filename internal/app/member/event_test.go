@@ -16,4 +16,8 @@ func TestJoinedPayload(t *testing.T) {
 	if got, err := member.DecodeJoined(data); err != nil || got.MemberID != joined {
 		t.Fatalf("round trip = %+v, %v; want %v", got, err, joined)
 	}
+	// Upper-case hex is read as before; only the layout is canonical.
+	if got, err := member.DecodeJoined([]byte(`{"member_id":"00000000-0000-0000-0000-00000000000A"}`)); err != nil || got.MemberID != (domain.ID{15: 10}) {
+		t.Fatalf("upper-case member ID = %+v, %v", got, err)
+	}
 }

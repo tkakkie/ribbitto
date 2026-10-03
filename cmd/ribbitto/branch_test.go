@@ -129,10 +129,11 @@ func TestBranchingWakesOpenStreams(t *testing.T) {
 		}
 	}
 
-	// One shared deadline bounds delivery to all three streams after the POST.
+	branch(t, owner, channelURL, url.Values{"message": {message}, "from": {source}, "to": {destination}}, http.StatusSeeOther)
+	// One shared deadline bounds delivery to all three streams after the POST
+	// returns. Events arriving during the POST wait in openStream's buffered channel.
 	deadline := time.NewTimer(2 * time.Second)
 	defer deadline.Stop()
-	branch(t, owner, channelURL, url.Values{"message": {message}, "from": {source}, "to": {destination}}, http.StatusSeeOther)
 	for _, sub := range subs {
 		for i, name := range sub.want {
 			select {

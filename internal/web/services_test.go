@@ -11,6 +11,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 )
 
@@ -55,11 +56,11 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 	}
 	s := Services{
 		Sessions:  sessions,
-		SignIn:    identity.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
+		SignIn:    identitypg.NewSignIn(pool, hasher, sessions),
 		Authz:     authz.New(postgres.NewAuthzStore(pool)),
 		Channels:  channel.New(postgres.NewChannelStore(pool)),
 		Topics:    postgres.NewTopicStore(pool),
-		Messages:  postgres.MessageReader{Pool: pool},
+		Messages:  postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn},
 		Posting:   message.New(postgres.NewPostingStore(pool)),
 		Branching: topic.NewBrancher(postgres.NewBranchStore(pool), nil),
 	}

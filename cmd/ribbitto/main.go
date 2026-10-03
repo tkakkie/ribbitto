@@ -23,6 +23,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -238,12 +239,14 @@ type handlerConfig struct {
 
 // buildHandler shares production wiring with the HTTPS acceptance test.
 func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig) (http.Handler, *identity.Sessions, error) {
-	sessions := identity.NewSessions(postgres.NewSessionStore(pool), time.Now)
+	// A nil hub must stay a nil canceller, not a typed nil in the interface.
+	var canceller identity.SessionCanceller
 	if config.hub != nil {
 		// Deleting a session (sign-out, or a sign-in replacing it) ends its
 		// open event streams at once.
-		sessions = identity.NewSessionsWithCanceller(postgres.NewSessionStore(pool), time.Now, config.hub)
+		canceller = config.hub
 	}
+	sessions := identitypg.NewSessions(pool, time.Now, canceller)
 	// One hasher for the whole process: its slots are the cap on concurrent
 	// Argon2id work (decision 10 in docs/decisions).
 	hasher, err := identity.NewHasher()
@@ -274,13 +277,13 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	}
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions:      sessions,
-		SignIn:        identity.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
+		SignIn:        identitypg.NewSignIn(pool, hasher, sessions),
 		Setup:         setupService,
 		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, config.signupEnabled),
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        postgres.NewTopicStore(pool),
-		Messages:      postgres.MessageReader{Pool: pool},
+		Messages:      postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn},
 		Posting:       posting,
 		Branching:     branching,
 		Channels:      channel.New(postgres.NewChannelStore(pool)),

@@ -86,6 +86,22 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform/
             - github.com/tkakkie/ribbitto/internal/domain$
           deny: *non_html
+        # A module's wiring is composition code (decision 26): only cmd/* and
+        # tests import it. Its store is imported only by its wiring and the
+        # store's own tests; Go's internal rule alone would also let the
+        # module's root import it.
+        identitypg:
+          list-mode: lax
+          files: ["$all", "!$test", "!**/cmd/*/*.go", "!**/cmd/*/**/*.go"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/internal/identity/identitypg
+              desc: Only cmd/* and tests import a module's wiring; see decision 26.
+        identitystore:
+          list-mode: lax
+          files: ["$all", "!**/internal/identity/identitypg/*.go", "!**/internal/identity/internal/postgres/*.go", "!**/internal/identity/internal/postgres/**/*.go"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/internal/identity/internal/postgres
+              desc: Only identitypg and the store's own tests import identity's store; see decision 26.
         app:
           list-mode: lax
           files: ["**/internal/app/*.go", "**/internal/app/**/*.go", "!$test"]

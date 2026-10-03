@@ -21,6 +21,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -108,7 +109,7 @@ func TestStreamCost(t *testing.T) {
 	// loopReads counts the loops' reads, which the cache may answer.
 	dbReads := &countingReader{inner: postgres.NewEventReader(pool)}
 	var inner realtime.EventReader = dbReads
-	renderer := readingRenderer{messages: postgres.MessageReader{Pool: pool}, membership: m}
+	renderer := readingRenderer{messages: postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}, membership: m}
 	if cached {
 		inner = realtime.NewCachedEvents(t.Context(), dbReads, hub, 1024, time.Minute)
 		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](t.Context(), 4096, realtime.DefaultCacheLoads, time.Minute, 10*time.Second, nil, time.Now)

@@ -21,6 +21,7 @@ cmd/ribbitto -> internal/app/setup
 cmd/ribbitto -> internal/app/signup
 cmd/ribbitto -> internal/app/topic
 cmd/ribbitto -> internal/identity
+cmd/ribbitto -> internal/identity/identitypg
 cmd/ribbitto -> internal/infra/postgres
 cmd/ribbitto -> internal/platform/postgres
 cmd/ribbitto -> internal/realtime
@@ -35,6 +36,7 @@ cmd/seed -> internal/app/signup
 cmd/seed -> internal/app/topic
 cmd/seed -> internal/domain
 cmd/seed -> internal/identity
+cmd/seed -> internal/identity/identitypg
 cmd/seed -> internal/infra/postgres
 cmd/seed -> internal/platform/postgres
 internal/app/authz -> internal/domain
@@ -58,6 +60,14 @@ internal/app/topic -> internal/app/authz
 internal/app/topic -> internal/domain
 internal/domain -> internal/kernel
 internal/identity -> internal/domain
+internal/identity/identitypg -> internal/identity
+internal/identity/identitypg -> internal/identity/internal/postgres
+internal/identity/identitypg -> internal/platform/postgres
+internal/identity/internal/postgres -> internal/domain
+internal/identity/internal/postgres -> internal/identity
+internal/identity/internal/postgres -> internal/identity/internal/postgres/sqlcgen
+internal/identity/internal/postgres -> internal/platform/postgres
+internal/identity/internal/postgres -> internal/platform/postgres/pgxbridge
 internal/infra/postgres -> internal/app/authz
 internal/infra/postgres -> internal/app/channel
 internal/infra/postgres -> internal/app/member
@@ -68,6 +78,8 @@ internal/infra/postgres -> internal/app/topic
 internal/infra/postgres -> internal/domain
 internal/infra/postgres -> internal/identity
 internal/infra/postgres -> internal/infra/postgres/sqlcgen
+internal/infra/postgres -> internal/platform/postgres
+internal/infra/postgres -> internal/platform/postgres/pgxbridge
 internal/infra/postgres/pgtest -> internal/domain
 internal/infra/postgres/pgtest -> internal/infra/postgres
 internal/infra/postgres/pgtest -> internal/platform/postgres/pgtest

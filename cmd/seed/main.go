@@ -27,6 +27,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -160,7 +161,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		data.Members = append(data.Members, struct{ Name, Handle string }{handle, handle})
 	}
 	manifest := credentialFile{OrganizationSlug: slug}
-	sessions := identity.NewSessions(postgres.NewSessionStore(pool), time.Now)
+	sessions := identitypg.NewSessions(pool, time.Now, nil)
 	owner := data.Members[0]
 	created, err := installer.Complete(ctx, token, setup.Input{
 		OrganizationName: "Paper Lantern Studio", Slug: slug,

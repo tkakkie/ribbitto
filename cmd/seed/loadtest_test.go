@@ -17,7 +17,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 )
 
@@ -143,8 +143,8 @@ func TestLoadTestSeed(t *testing.T) {
 		}
 	}
 	seen := map[string]bool{}
-	sessions := identity.NewSessions(postgres.NewSessionStore(pool), time.Now)
-	expired := identity.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return time.Now().Add(identity.SessionLifetime) })
+	sessions := identitypg.NewSessions(pool, time.Now, nil)
+	expired := identitypg.NewSessions(pool, func() time.Time { return time.Now().Add(identity.SessionLifetime) }, nil)
 	for _, entry := range file.Accounts {
 		if len(entry.Tokens) != 2 || seen[entry.Handle] {
 			t.Fatal("incorrect account grouping")

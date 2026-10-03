@@ -18,7 +18,7 @@ Set `RIBBITTO_DEV_METRICS_ADDR` to a loopback IP address and a non-zero port, su
   as `localhost` (their resolution could change) and other addresses are
   refused at start. A tunnel or proxy that forwards that port elsewhere is
   the operator's responsibility, as for databases
-  ([`database.md`](../database.md)).
+  ([`seed-data.md`](../seed-data.md)).
 - **Its own listener.** The metrics server has its own mux and timeouts;
   the application's handler never serves `/metrics`.
 

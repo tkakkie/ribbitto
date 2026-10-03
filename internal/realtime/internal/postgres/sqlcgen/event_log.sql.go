@@ -11,6 +11,38 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteExpiredEvents = `-- name: DeleteExpiredEvents :one
+WITH deleted AS (
+    DELETE FROM event_log e
+    WHERE e.organization_id = $1 AND e.seq IN (
+        SELECT candidate.seq FROM event_log candidate
+        WHERE candidate.organization_id = $1 AND candidate.created_at < $2
+        ORDER BY candidate.seq LIMIT 1000
+    )
+    RETURNING e.seq
+)
+SELECT count(*)::bigint AS deleted, coalesce(max(seq), 0)::bigint AS through FROM deleted
+`
+
+type DeleteExpiredEventsParams struct {
+	OrganizationID pgtype.UUID
+	Cutoff         pgtype.Timestamptz
+}
+
+type DeleteExpiredEventsRow struct {
+	Deleted int64
+	Through int64
+}
+
+// The caller already holds this organisation's lock. A fresh statement after
+// locking sees committed progress by concurrent cleaners.
+func (q *Queries) DeleteExpiredEvents(ctx context.Context, arg DeleteExpiredEventsParams) (DeleteExpiredEventsRow, error) {
+	row := q.db.QueryRow(ctx, deleteExpiredEvents, arg.OrganizationID, arg.Cutoff)
+	var i DeleteExpiredEventsRow
+	err := row.Scan(&i.Deleted, &i.Through)
+	return i, err
+}
+
 const eventsAfter = `-- name: EventsAfter :many
 SELECT seq, kind, audience_member_id, data FROM event_log
 WHERE organization_id = $1 AND seq > $2
@@ -79,4 +111,28 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error 
 		arg.Data,
 	)
 	return err
+}
+
+const organizationsWithExpiredEvents = `-- name: OrganizationsWithExpiredEvents :many
+SELECT DISTINCT organization_id FROM event_log WHERE created_at < $1 ORDER BY organization_id
+`
+
+func (q *Queries) OrganizationsWithExpiredEvents(ctx context.Context, cutoff pgtype.Timestamptz) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, organizationsWithExpiredEvents, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var organization_id pgtype.UUID
+		if err := rows.Scan(&organization_id); err != nil {
+			return nil, err
+		}
+		items = append(items, organization_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

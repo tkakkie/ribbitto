@@ -13,6 +13,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 // Observe completed COMMITs through a separate connection, before the next
@@ -70,7 +71,7 @@ func TestEventRetentionBlockedOrganization(t *testing.T) {
 	requireNoError(t, err)
 	defer cleaning.Close()
 	cutoff := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	err = postgres.NewEventCleaner(cleaning).ExpireEvents(ctx, cutoff)
+	err = realtimepg.NewCleaner(cleaning, postgres.RetentionBoundaryIn).ExpireEvents(ctx, cutoff)
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != "55P03" {
 		t.Fatalf("cleanup = %v, want B's lock timeout", err)
@@ -84,7 +85,7 @@ func TestEventRetentionBlockedOrganization(t *testing.T) {
 	_, err = postgres.NewPostingStore(pool, appendEvents).Post(ctx, a.OrganizationID, a.Channel.ID, a.MemberID, "A can still post")
 	requireNoError(t, err)
 	requireNoError(t, locked.Rollback(ctx))
-	requireNoError(t, postgres.NewEventCleaner(cleaning).ExpireEvents(ctx, cutoff))
+	requireNoError(t, realtimepg.NewCleaner(cleaning, postgres.RetentionBoundaryIn).ExpireEvents(ctx, cutoff))
 	if got := retentionState(t, pool, b.OrganizationID); got != [2]int64{2, 0} {
 		t.Fatalf("retry did not finish B: %v", got)
 	}
@@ -114,7 +115,7 @@ func TestEventRetentionBatches(t *testing.T) {
 			cleaning, err := pgxpool.NewWithConfig(ctx, config)
 			requireNoError(t, err)
 			defer cleaning.Close()
-			err = postgres.NewEventCleaner(cleaning).ExpireEvents(ctx, cutoff)
+			err = realtimepg.NewCleaner(cleaning, postgres.RetentionBoundaryIn).ExpireEvents(ctx, cutoff)
 			want := [][2]int64{{1000, 1502}, {2000, 502}, {2501, 1}, {2501, 1}}
 			if interrupt {
 				if !errors.Is(err, context.Canceled) {
@@ -128,7 +129,7 @@ func TestEventRetentionBatches(t *testing.T) {
 				t.Fatalf("committed (boundary, rows) = %v, want %v", states, want)
 			}
 			// A new run resumes partial work and never expires the cutoff itself.
-			requireNoError(t, postgres.NewEventCleaner(pool).ExpireEvents(t.Context(), cutoff))
+			requireNoError(t, realtimepg.NewCleaner(pool, postgres.RetentionBoundaryIn).ExpireEvents(t.Context(), cutoff))
 			if got := retentionState(t, pool, org); got != [2]int64{2501, 1} {
 				t.Fatalf("final state = %v", got)
 			}

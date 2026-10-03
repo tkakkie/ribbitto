@@ -120,7 +120,7 @@ func serve(ctx context.Context, databaseURL string) error {
 	defer stopCleanup()
 	stopWatermark := startRealtimeWorker(ctx, realtime.Watermark{Hub: hub, Sequences: postgres.NewEventSequences(pool)}, realtime.WatermarkInterval)
 	defer stopWatermark()
-	stopRetention := startRealtimeWorker(ctx, realtime.Retention{Events: postgres.NewEventCleaner(pool), Period: retention}, time.Hour)
+	stopRetention := startRealtimeWorker(ctx, realtime.Retention{Events: realtimepg.NewCleaner(pool, postgres.RetentionBoundaryIn), Period: retention}, time.Hour)
 	defer stopRetention()
 
 	srv := newServer(addr, handler, serverTimeouts{

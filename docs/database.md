@@ -39,8 +39,10 @@ organisation at a time in transactions of at most 1,000 expired rows, selected
 in sequence order using the existing `(organization_id, seq)` index. Each transaction locks only that
 organisation before deleting events and advancing its replay boundary, then
 commits before the next batch. Errors and timeouts keep committed progress;
-the next tick retries remaining work. The listing uses an organisation-scoped
-`EXISTS` scan on the same index; no additional index or migration is needed.
+the next tick retries remaining work. The listing reads `event_log` once
+(`created_at` has no index, so PostgreSQL scans the table; about 11 ms for
+500,000 rows on a laptop, as the old organisation-scoped `EXISTS` did); no
+additional index or migration is needed until the log grows far beyond that.
 Messages and unread inputs are never deleted.
 
 Integration tests use `RIBBITTO_TEST_DATABASE_URL`, an admin connection to

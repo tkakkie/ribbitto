@@ -18,3 +18,10 @@ func NewReader(pool *pgxpool.Pool, bounds realtime.BoundsIn, kinds realtime.Kind
 // transaction. Consumers declare the interface they need and adapt to it
 // with a closure (decision 26).
 func AppenderIn(tx platform.Tx) *postgres.Appender { return postgres.AppenderIn(tx) }
+
+// NewCleaner returns realtime's retention cleaner on pool. boundary locks an
+// organisation and raises its replay boundary in the cleaner's transaction
+// (infra/postgres's RetentionBoundaryIn until step 3).
+func NewCleaner(pool *pgxpool.Pool, boundary realtime.RetentionBoundaryIn) realtime.EventCleaner {
+	return postgres.NewCleaner(pool, boundary)
+}

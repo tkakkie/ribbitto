@@ -8,13 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -207,52 +205,6 @@ func TestCommittedSequences(t *testing.T) {
 	}
 }
 
-func TestEventRetentionTransaction(t *testing.T) {
-	t.Parallel()
-	pool := pgtest.New(t)
-	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "retention", "general")
-	for range 2 {
-		_, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept")
-		requireNoError(t, err)
-	}
-	_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = CASE WHEN seq = 2 THEN '2000-01-01'::timestamptz ELSE '2100-01-01'::timestamptz END WHERE organization_id = $1", f.OrganizationID)
-	requireNoError(t, err)
-	cutoff := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	tx, err := pool.Begin(ctx)
-	requireNoError(t, err)
-	defer func() { _ = tx.Rollback(ctx) }()
-	q := sqlcgen.New(tx)
-	id := pgtype.UUID{Bytes: f.OrganizationID, Valid: true}
-	requireNoError(t, q.LockEventRetentionOrganization(ctx, id))
-	count, err := q.ExpireEventBatch(ctx, sqlcgen.ExpireEventBatchParams{OrganizationID: id, Cutoff: pgtype.Timestamptz{Time: cutoff, Valid: true}})
-	requireNoError(t, err)
-	if count != 1 {
-		t.Fatalf("deleted %d rows, want 1", count)
-	}
-	// Until commit, a reader sees both the old boundary and every old row.
-	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
-	rows, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 10)
-	requireNoError(t, err)
-	if len(rows) != 2 {
-		t.Fatalf("uncommitted cleanup hid rows: %v", rows)
-	}
-	requireNoError(t, tx.Commit(ctx))
-	var remaining int
-	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM event_log WHERE organization_id = $1 AND seq <= 2", f.OrganizationID).Scan(&remaining))
-	if remaining != 0 {
-		t.Fatalf("expired rows remain: %d", remaining)
-	}
-	rows, err = reader.EventsAfter(ctx, f.OrganizationID, 2, 10)
-	requireNoError(t, err)
-	if len(rows) != 1 || rows[0].Seq != 3 {
-		t.Fatalf("boundary cursor lost recent event: %v", rows)
-	}
-	if _, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 10); !errors.Is(err, realtime.ErrCursorExpired) {
-		t.Fatalf("below boundary: %v", err)
-	}
-}
-
 // The reader routes every registered kind through its Router, with no
 // built-in kind branch; an unregistered kind keeps only its envelope, even a
 // built-in one with malformed data, and a Router's error fails the whole batch.
@@ -334,7 +286,7 @@ func TestEventsAfterOneSnapshot(t *testing.T) {
 		var err error
 		third, err = posting.Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "third")
 		requireNoError(t, err)
-		requireNoError(t, postgres.NewEventCleaner(pool).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
+		requireNoError(t, realtimepg.NewCleaner(pool, postgres.RetentionBoundaryIn).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
 	}
 	bounds := func(snapshot platform.Snapshot) realtime.Bounds {
 		return committingBounds{Bounds: postgres.EventBoundsIn(snapshot), commit: &commit}

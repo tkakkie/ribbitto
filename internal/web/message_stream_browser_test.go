@@ -25,7 +25,9 @@ func TestMessageStreamBrowser(t *testing.T) {
 	if !found {
 		browserUnavailable(t, "no installed browser")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	// This bounds only the launch. In CI a browser has missed a 10-second
+	// limit before the scenarios ran (#415); one that misses this still fails.
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Context(ctx)
 	url, err := launch.Launch()

@@ -1,4 +1,4 @@
-package realtime
+package realtime_test
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 type retentionDB struct {
@@ -28,12 +29,24 @@ func (d *retentionDB) Query(ctx context.Context, sql string, args ...any) (pgx.R
 	return rows, err
 }
 
-type retentionSender struct {
-	recorder
-	send func(Outgoing) error
+type retentionSender struct{ send func(realtime.Outgoing) error }
+
+func (s *retentionSender) Send(_ context.Context, out realtime.Outgoing) error { return s.send(out) }
+
+func (s *retentionSender) Heartbeat(context.Context) error { return nil }
+
+// The external tests cannot use stream_test.go's in-package helpers.
+type allowAll struct{}
+
+func (allowAll) MayReceive(context.Context, domain.ID, string, domain.Event) (bool, error) {
+	return true, nil
 }
 
-func (s *retentionSender) Send(_ context.Context, out Outgoing) error { return s.send(out) }
+type renderMessages struct{}
+
+func (renderMessages) Render(_ context.Context, _ realtime.Subscription, e domain.Event) (realtime.Outgoing, error) {
+	return realtime.Outgoing{ID: e.Seq, Name: "message"}, nil
+}
 
 func TestCachedEventsCursorAboveLog(t *testing.T) {
 	t.Parallel()
@@ -50,10 +63,10 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 		_, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 		must(err)
 	}
-	cached := NewCachedEvents(t.Context(), postgres.NewEventReader(pool), NewHub(), 8, time.Minute)
+	cached := realtime.NewCachedEvents(t.Context(), postgres.NewEventReader(pool), realtime.NewHub(), 8, time.Minute)
 	got, err := cached.EventsAfter(ctx, f.OrganizationID, 2, 1)
 	must(err)
-	if len(got) != 1 || got[0].Seq != 3 || cached.cache.Len() != 1 {
+	if len(got) != 1 || got[0].Seq != 3 || realtime.CachedLen(cached) != 1 {
 		t.Fatalf("cache not primed with event 3: %v", got)
 	}
 	// Roll the log back to sequence 1 while a full batch survives. A real
@@ -101,12 +114,12 @@ func TestRetentionReplay(t *testing.T) {
 			expire := func() {
 				must(postgres.NewEventCleaner(pool).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
 			}
-			var events EventReader = reader
+			var events realtime.EventReader = reader
 			cursor, wantCursor := int64(1), int64(1)
 			want := []string{"reset"}
 			switch mode {
 			case "cached":
-				cached := NewCachedEvents(t.Context(), reader, NewHub(), 8, time.Minute)
+				cached := realtime.NewCachedEvents(t.Context(), reader, realtime.NewHub(), 8, time.Minute)
 				_, err := cached.EventsAfter(ctx, f.OrganizationID, 1, 1)
 				must(err)
 				events = cached
@@ -129,10 +142,10 @@ func TestRetentionReplay(t *testing.T) {
 				cursor, wantCursor = 2, 2
 				expire()
 			}
-			hub := NewHub()
+			hub := realtime.NewHub()
 			hub.Raise(f.OrganizationID, 4) // Also wakes the idle read after its snapshot.
 			sent := 0
-			sender := retentionSender{send: func(out Outgoing) error {
+			sender := retentionSender{send: func(out realtime.Outgoing) error {
 				if sent >= len(want) || out.Name != want[sent] {
 					t.Fatalf("send %d: %+v, want %v", sent, out, want)
 				}
@@ -145,8 +158,8 @@ func TestRetentionReplay(t *testing.T) {
 				}
 				return nil
 			}}
-			s := Stream{Hub: hub, Events: events, BatchSize: 1, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}
-			got, err := s.Run(ctx, Subscription{Organization: f.OrganizationID, Channel: f.Channel.ID}, cursor, &sender)
+			s := realtime.Stream{Hub: hub, Events: events, BatchSize: 1, Authorizer: allowAll{}, Renderer: renderMessages{}}
+			got, err := s.Run(ctx, realtime.Subscription{Organization: f.OrganizationID, Channel: f.Channel.ID}, cursor, &sender)
 			if got != wantCursor || sent != len(want) || (err != nil && !errors.Is(err, context.Canceled)) {
 				t.Fatalf("Run = %d, %v; sent %d; want cursor %d, %v", got, err, sent, wantCursor, want)
 			}
@@ -159,35 +172,4 @@ func TestRetentionReplay(t *testing.T) {
 			}
 		})
 	}
-}
-
-// A failed cleanup is retried with the next cutoff; cancellation stops the loop.
-type retentionCleanerFunc func(context.Context, time.Time) error
-
-func (f retentionCleanerFunc) ExpireEvents(ctx context.Context, cutoff time.Time) error {
-	return f(ctx, cutoff)
-}
-
-func TestRetentionTicks(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	ticks, calls, done := make(chan time.Time), make(chan time.Time, 1), make(chan struct{})
-	r := Retention{Period: time.Hour, Events: retentionCleanerFunc(func(ctx context.Context, cutoff time.Time) error {
-		calls <- cutoff
-		return errors.New("retry")
-	})}
-	before := time.Now().Add(-time.Hour)
-	go func() { r.Run(ctx, ticks); close(done) }()
-	// No tick has been sent: even a process that restarts hourly must clean up.
-	if got := receive(t, calls); got.Before(before) || got.After(time.Now().Add(-time.Hour)) {
-		t.Fatalf("startup cutoff = %v, want current time minus retention", got)
-	}
-	for _, now := range []time.Time{time.Unix(10000, 0), time.Unix(20000, 0)} {
-		ticks <- now
-		if got := receive(t, calls); !got.Equal(now.Add(-time.Hour)) {
-			t.Fatalf("cutoff = %v", got)
-		}
-	}
-	cancel()
-	receive(t, done)
 }

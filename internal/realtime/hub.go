@@ -177,9 +177,9 @@ type Connection struct {
 //
 // The returned context is derived from parent, normally the request's
 // context. It ends at the first of: parent ending, CancelAccount or
-// CancelSession matching the connection, or unregister running.
+// CancelSession matching the connection, CancelAll, or unregister running.
 // context.Cause reports which (ErrAccountCancelled, ErrSessionEnded,
-// ErrUnregistered, or parent's cause).
+// ErrUnregistered, ErrShutdown, or parent's cause).
 //
 // The caller defers unregister right after a successful Register. Only
 // unregister frees the slot and removes the connection: a context that has

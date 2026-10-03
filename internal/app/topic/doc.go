@@ -5,7 +5,8 @@
 // Feature: topic (feature map in docs/architecture/features.md), which owns
 // the topic table. Exported API: Store, Directory (batch label lookup),
 // Brancher with its BranchStore, Branch and Notifier, MaxBranchMessages,
-// Moved with EncodeMoved and DecodeMoved (the messages.moved payload), and
+// Moved with EncodeMoved, DecodeMoved and RouteMoved (the messages.moved
+// payload and its routing), and
 // ErrNotFound, ErrInvalidName, ErrNameTaken, ErrConflict and
 // ErrInvalidBranch. Every lookup is scoped by organisation and channel, so
 // a topic of another channel is not found.

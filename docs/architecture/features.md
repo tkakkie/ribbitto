@@ -86,11 +86,15 @@ A new exception needs its issue to say why, and is added to this list.
 ## Target
 
 Where the migration goes ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)); the code above is today's.
-Each module is `internal/<module>` (API, use cases, consumer interfaces),
-`internal/<module>/internal/postgres` (store, `sqlcgen`) and a wiring
-package `internal/<module>/<module>pg`, whose constructors only `cmd/*` and
-tests call. `internal/kernel` holds `ID`; `internal/platform/postgres` the
-pool, migrations, `pgtest`, and opaque `Tx` and `Snapshot` capabilities.
+
+**Construction.** Each module consists of three parts:
+- `internal/<module>`: types, errors, use cases and consumer interfaces;
+- `internal/<module>/internal/postgres`: its store and `sqlcgen`;
+- `internal/<module>/<module>pg`: wiring.
+
+`<module>pg.New(pool)` returns the module's use cases. Its `Tx`- or `Snapshot`-taking factories return implementations of other modules' consumer interfaces; their result types are declared by the consumer.
+
+`internal/kernel` holds `ID`. `internal/platform/postgres` holds the pool, migrations, lifecycle test helpers, and the opaque `Tx` and `Snapshot` with their open, commit and rollback operations. Its bridge package (handle to pgx) may be imported only by stores. Feature fixtures stay with their module's tests.
 
 | Module | Owns | May import (roots) | Step |
 |---|---|---|---|
@@ -99,27 +103,27 @@ pool, migrations, `pgtest`, and opaque `Tx` and `Snapshot` capabilities.
 | `org`: organisations, members, authorisation (`Membership`), setup, sign-up | `organization`, `member`, `setup` | `identity`, `realtime` | 3 |
 | `channel` | `channel` | `org` | 4 |
 | `topic`: topics, branching | `topic` | `org`, `realtime` | 5 |
-| `message`: posting, history, the page snapshot use case | `message` | `identity`, `org`, `topic`, `realtime` | 6 |
+| `message`: posting, history, the page snapshot use case | `message` | `identity`, `org`, `channel`, `topic`, `realtime` | 6 |
 
 `internal/web` stays the UI shell and imports module roots. Its per-kind
 stream renderers are adapters for the payloads that `message` and `topic`
 register with `realtime`. Step 0 creates `kernel` and `platform`; step 7
 removes `internal/domain`, `internal/app` and `internal/infra/postgres`.
 
-**Known exceptions at the target.** Each keeps its transaction. The
-orchestrator declares an interface, the owner's wiring package implements
-it on the `Tx`, and the composition root injects it; this holds for every
-cross-module write, in either import direction.
+**Known exceptions and temporary paths.** Every flow keeps its transaction
+or snapshot. Each operation it needs from another module is one of the
+injected factories described under *Construction*. The table below gives
+the step that introduces the injected interface and the step that removes
+the temporary implementation behind it.
 
-| Flow (orchestrator) | Writes of other modules | Resolved in step |
-|---|---|---|
-| setup (`org`) | `identity` account, `channel` default channel | 3 |
-| sign-up (`org`, moved from `identity`) | `identity` account | 3 |
-| channel creation (`channel`) | `topic` default topic: a second statement in the same `Tx`; the deferred foreign key keeps it valid | 4 |
-| branching (`topic`) | `org` sequence, `message` moves and notice | 6 (until then through `topic`'s existing store) |
-| posting (`message`) | `org` sequence | 6 |
-| event appends (each publisher) | `realtime`'s event log, through an injected factory taking the `Tx` | 2 |
-| retention (`realtime`) | `org` `event_log_boundary_seq` | 3 (until then through today's store) |
-
-A step that leaves a flow on a temporary path names it and the step that
-removes it.
+| Flow or caller | Needs from | Interface from step | Temporary implementation until step |
+|---|---|---|---|
+| page snapshot, `One`, `Many` (`infra`) | `identity` accounts | 1 | 6 (the use case replaces the caller) |
+| setup, sign-up (`infra`) | `identity` account writes | 1 (own queries) | 3 |
+| posting, setup, sign-up, branching (`infra`) | `realtime` event appends | 2 | each flow's own step: 3, 5, 6 |
+| `realtime` reader and retention | `org` sequence bounds, boundary write | 2 | 3 |
+| posting, branching, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 5, 6 |
+| setup (`org`) | `channel` default channel | 3 | 4 |
+| channel creation (`channel`) | `topic` default topic (same ID, deferred foreign key) | 4 | 5 |
+| posting, page snapshot (`infra`) | `channel`, `topic` reads | 4, 5 | 6 |
+| branching (`topic`) | `message` moves and notice | 5 | 6 |

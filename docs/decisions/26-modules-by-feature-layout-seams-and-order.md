@@ -8,8 +8,9 @@
   - `internal/<module>/internal/postgres`, its store and generated queries,
     which may import the root;
   - a wiring package `internal/<module>/<module>pg`, the only importer of
-    the store, whose constructors (`messagepg.New(pool)`) the composition
-    roots call.
+    the store. It exports `New(pool)`, which returns the module's use
+    cases, and `Tx`- or `Snapshot`-taking factories for the operations that
+    other modules' flows need. The composition roots call it.
 
   The modules are `identity` (accounts, passwords, sessions, sign-in), `org`
   (organisations, members, authorisation, setup and sign-up), `channel`,
@@ -24,15 +25,20 @@
   `org`; the other modules import `org`'s root. Nothing moves there because
   several modules use it.
 - **Platform.** `internal/platform/postgres` holds the pool, the migration
-  runner, `pgtest`, and transaction and snapshot *capabilities*. Module APIs
-  and use cases see only opaque `Tx` and `Snapshot` handles; pgx types and
-  SQL stay inside each module's `internal/postgres`. It shares capabilities,
-  not query helpers.
-- **Cross-module writes** use consumer-owned interfaces, whatever the
-  direction. The orchestrating use case owns the transaction and declares
-  what it needs, such as a factory taking the `Tx`; the owning module's
-  wiring package implements it; the composition root injects it. Importing
-  a lower module's root is for its types and read APIs only. Preserved:
+  runner, database-lifecycle test helpers, and transaction and snapshot
+  *capabilities*: opening, committing and rolling back a `Tx`, and opening
+  a read-only repeatable-read `Snapshot`. Module APIs and use cases see
+  only these opaque handles. A separate bridge package unwraps them to pgx,
+  and depguard lets only stores under `**/internal/postgres/**` import it.
+  So pgx types and SQL stay inside each module. It shares capabilities, not
+  query helpers.
+- **Cross-module operations bound to a `Tx` or `Snapshot`**, writes and
+  reads alike, use consumer-owned interfaces, whatever the import
+  direction. The orchestrating use case owns the transaction or snapshot
+  and declares what it needs as a factory that takes the handle. The
+  owning module's wiring package implements it, and the composition root
+  injects it. A lower module's root is imported for its types and its use
+  cases only. Preserved:
   - organisation-first locking;
   - `event_seq` order, including branching's move before its notice;
   - rollback of every write and increment;
@@ -44,6 +50,9 @@
   publishing module owns its kinds' payload schema, encoding and decoding,
   registered at wiring. HTML renderers stay in `internal/web` as per-kind
   adapters. Preserved:
+  - one snapshot for a batch's events and the organisation's sequence
+    bounds. The bounds are `org`'s columns, read through an injected
+    `Snapshot`-bound reader;
   - the legacy rendered-topic fallback for `message.posted` rows without a
     topic;
   - posting-time routing;
@@ -67,13 +76,17 @@
   - `org` → `identity`, `realtime`;
   - `channel` → `org`;
   - `topic` → `org`, `realtime`;
-  - `message` → `identity`, `org`, `topic`, `realtime`;
+  - `message` → `identity`, `org`, `channel`, `topic`, `realtime`;
   - `web` → every module root;
   - `cmd/*` → roots and wiring packages.
 
-  Some injected writes go against the import direction, such as setup's
-  default channel, a channel's default topic, branching's moves and notice,
-  and retention's boundary. Injection is what keeps them acyclic.
+  Some injected operations go against the import direction, and injection
+  keeps them acyclic:
+  - setup's default channel;
+  - a channel's default topic;
+  - branching's moves and notice;
+  - retention's boundary;
+  - realtime's sequence bounds.
 - **Order.**
   0. kernel and platform;
   1. `identity` (the pilot);
@@ -84,11 +97,16 @@
   6. `message`;
   7. removal of the remaining layers and temporary exceptions.
 
-  Each step is one or more issues of about 400 lines (#362's hand-off
-  issues). Feature work pauses meanwhile.
+  Until its flows move, `internal/infra/postgres` gets each moved store as
+  an injected `Tx`- or `Snapshot`-taking factory, never by importing a
+  wiring package. The flows are posting, branching, setup, sign-up and the
+  page snapshot. `features.md` lists each temporary path with the step that
+  introduces it and the step that removes it. Each step's issues, about 400
+  lines a pull request, are written from `main` just before the step
+  starts (#362). Feature work pauses meanwhile.
 
-**Why:** the compiler, not only lint, then keeps a module's tables behind
-its API, and the shared files that caused M1's conflicts (#106) split by
+**Why:** the compiler, not only lint, then keeps a module's store package
+private; table ownership stays a separate, reviewed rule. In addition, the shared files that caused M1's conflicts (#106) split by
 module. Consumer interfaces keep one transaction per flow without cycles.
 A small kernel and capability-only platform stop two new shared layers
 growing in place of the old ones. `realtime` moves second, not last as

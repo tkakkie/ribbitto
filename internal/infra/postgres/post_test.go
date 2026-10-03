@@ -28,7 +28,7 @@ func TestPostMessage(t *testing.T) {
 		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
 		channels[slug] = fixture.Channel.ID
 	}
-	service := message.New(postgres.NewPostingStore(pool))
+	service := message.New(postgres.NewPostingStore(pool, postgres.EventLogIn))
 	state := func(slug string) (seq int64, messages int) {
 		t.Helper()
 		requireNoError(t, pool.QueryRow(ctx, "SELECT o.event_seq, (SELECT count(*) FROM message m WHERE m.organization_id = o.id) FROM organization o WHERE slug = $1", slug).Scan(&seq, &messages))
@@ -47,7 +47,7 @@ func TestPostMessage(t *testing.T) {
 		t.Fatalf("cross-organisation post: %v", err)
 	}
 	// A failed insert (a body the database refuses) rolls the sequence back.
-	if _, err := postgres.NewPostingStore(pool).Post(ctx, memberships["acme"].Organization.ID, channels["acme"], memberships["acme"].Member.ID, " untrimmed"); err == nil {
+	if _, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, memberships["acme"].Organization.ID, channels["acme"], memberships["acme"].Member.ID, " untrimmed"); err == nil {
 		t.Fatal("the database accepted an untrimmed body")
 	}
 	if seq, n := state("acme"); seq != 2 || n != 1 {

@@ -61,14 +61,14 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Channels:  channel.New(postgres.NewChannelStore(pool)),
 		Topics:    postgres.NewTopicStore(pool),
 		Messages:  postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn},
-		Posting:   message.New(postgres.NewPostingStore(pool)),
-		Branching: topic.NewBrancher(postgres.NewBranchStore(pool), nil),
+		Posting:   message.New(postgres.NewPostingStore(pool, postgres.EventLogIn)),
+		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, postgres.EventLogIn), nil),
 	}
 	if setupToken != "" {
-		s.Setup, s.SetupSessions = setup.New(postgres.NewSetupStore(pool), hasher, setupToken), sessions
+		s.Setup, s.SetupSessions = setup.New(postgres.NewSetupStore(pool, postgres.EventLogIn), hasher, setupToken), sessions
 	}
 	if signUp {
-		s.SignUp, s.SetupSessions = signup.New(postgres.NewSetupStore(pool), hasher, true), sessions
+		s.SignUp, s.SetupSessions = signup.New(postgres.NewSetupStore(pool, postgres.EventLogIn), hasher, true), sessions
 	}
 	return s
 }

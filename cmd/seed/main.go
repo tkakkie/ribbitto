@@ -132,7 +132,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		return fmt.Errorf("creating password hasher: %w", err)
 	}
 	const slug = "paper-lantern"
-	store := postgres.NewSetupStore(pool)
+	store := postgres.NewSetupStore(pool, postgres.EventLogIn)
 	installer := setup.New(store, hasher, token)
 	// Preflight is read-only; Complete still arbitrates concurrent setup attempts.
 	open, err := installer.Open(ctx)
@@ -198,7 +198,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	channels := channel.New(postgres.NewChannelStore(pool))
-	posts := message.New(postgres.NewPostingStore(pool))
+	posts := message.New(postgres.NewPostingStore(pool, postgres.EventLogIn))
 	var general domain.Channel
 	var generalMessages []scriptMessage
 	for _, conversation := range data.Channels {
@@ -229,7 +229,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	if !loadTest {
-		branches := topic.NewBrancher(postgres.NewBranchStore(pool), nil)
+		branches := topic.NewBrancher(postgres.NewBranchStore(pool, postgres.EventLogIn), nil)
 		if err := seedTopics(ctx, posts, branches, members, general, generalMessages); err != nil {
 			return fmt.Errorf("seeding topics: %w", err)
 		}

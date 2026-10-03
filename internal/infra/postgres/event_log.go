@@ -11,8 +11,26 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
+
+// EventAppender is what the event-writing flows (posting, branching, setup
+// and sign-up) need from realtime's event log inside their transaction.
+// infra declares it as their consumer until the flows move (org in step 3,
+// conversation in step 4); wiring injects the implementation (decision 26).
+type EventAppender interface {
+	AppendMessagePosted(ctx context.Context, organizationID, channelID, messageID, topicID domain.ID, seq int64) error
+	AppendMessagesMoved(ctx context.Context, organizationID, channelID, fromTopicID, toTopicID domain.ID, messageIDs []domain.ID, seq int64) error
+	AppendMemberJoined(ctx context.Context, organizationID, memberID domain.ID, seq int64) error
+}
+
+// EventAppenders binds an EventAppender to a flow's transaction.
+type EventAppenders func(platform.Tx) EventAppender
+
+// EventLogIn binds EventLog, today's EventAppender, to tx.
+func EventLogIn(tx platform.Tx) EventAppender { return NewEventLog(pgxbridge.Tx(tx)) }
 
 // EventLog owns realtime's event inserts within a caller-owned transaction.
 type EventLog struct{ queries *sqlcgen.Queries }

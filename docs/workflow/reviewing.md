@@ -29,6 +29,11 @@ stop and ask the maintainer.
   `docs/dependencies.md` is explained in the PR.
 - Tests prove the behaviour (authorization: someone who must not see the
   data does not see it). No test was deleted, skipped or weakened.
+- A test-only pull request meant to catch a regression records, in
+  *Verified by*, one deliberate defect in the code under test that breaks
+  the behaviour the test guards and fails its assertion (not a crash or a
+  compile error), and that the test passes again once it is reverted
+  (#360).
 - Comments explain *why*; `docs/` is updated when terminology,
   invariants, data flow or dependencies change.
 

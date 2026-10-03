@@ -12,11 +12,16 @@ import (
 )
 
 const deleteExpiredEvents = `-- name: DeleteExpiredEvents :one
-WITH deleted AS (
+WITH first_kept AS (
+    SELECT kept.seq FROM event_log kept
+    WHERE kept.organization_id = $1 AND kept.created_at >= $2
+    ORDER BY kept.seq LIMIT 1
+), deleted AS (
     DELETE FROM event_log e
     WHERE e.organization_id = $1 AND e.seq IN (
         SELECT candidate.seq FROM event_log candidate
         WHERE candidate.organization_id = $1 AND candidate.created_at < $2
+          AND NOT EXISTS (SELECT 1 FROM first_kept WHERE candidate.seq > first_kept.seq)
         ORDER BY candidate.seq LIMIT 1000
     )
     RETURNING e.seq
@@ -35,7 +40,10 @@ type DeleteExpiredEventsRow struct {
 }
 
 // The caller already holds this organisation's lock. A fresh statement after
-// locking sees committed progress by concurrent cleaners.
+// locking sees committed progress by concurrent cleaners. Only the expired
+// prefix in seq order goes: created_at is the writing transaction's start,
+// which need not follow seq, and the boundary must never pass a row still in
+// the log (#430).
 func (q *Queries) DeleteExpiredEvents(ctx context.Context, arg DeleteExpiredEventsParams) (DeleteExpiredEventsRow, error) {
 	row := q.db.QueryRow(ctx, deleteExpiredEvents, arg.OrganizationID, arg.Cutoff)
 	var i DeleteExpiredEventsRow

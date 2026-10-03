@@ -14,12 +14,20 @@ SELECT DISTINCT organization_id FROM event_log WHERE created_at < sqlc.arg(cutof
 
 -- name: DeleteExpiredEvents :one
 -- The caller already holds this organisation's lock. A fresh statement after
--- locking sees committed progress by concurrent cleaners.
-WITH deleted AS (
+-- locking sees committed progress by concurrent cleaners. Only the expired
+-- prefix in seq order goes: created_at is the writing transaction's start,
+-- which need not follow seq, and the boundary must never pass a row still in
+-- the log (#430).
+WITH first_kept AS (
+    SELECT kept.seq FROM event_log kept
+    WHERE kept.organization_id = sqlc.arg(organization_id) AND kept.created_at >= sqlc.arg(cutoff)
+    ORDER BY kept.seq LIMIT 1
+), deleted AS (
     DELETE FROM event_log e
     WHERE e.organization_id = sqlc.arg(organization_id) AND e.seq IN (
         SELECT candidate.seq FROM event_log candidate
         WHERE candidate.organization_id = sqlc.arg(organization_id) AND candidate.created_at < sqlc.arg(cutoff)
+          AND NOT EXISTS (SELECT 1 FROM first_kept WHERE candidate.seq > first_kept.seq)
         ORDER BY candidate.seq LIMIT 1000
     )
     RETURNING e.seq

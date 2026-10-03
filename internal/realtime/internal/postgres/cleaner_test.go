@@ -306,3 +306,45 @@ func waitForLockWaiter(t *testing.T, pool *pgxpool.Pool) {
 	}
 	t.Fatal("the cleaner never waited for the organisation lock")
 }
+
+// Retention deletes only the expired prefix in sequence order, so the
+// boundary never passes a row still in the log: created_at is the writing
+// transaction's start, which need not follow seq (#430).
+func TestEventRetentionExpiredPrefix(t *testing.T) {
+	t.Parallel()
+	old, recent := "2000-01-01", "2010-01-01"
+	cutoff := time.Date(2005, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, tt := range []struct {
+		name      string
+		createdAt []string // by seq, from 1
+		want      [2]int64 // boundary, rows left
+		replay    []int64  // EventsAfter(the boundary)
+	}{
+		{"out of order", []string{recent, old}, [2]int64{0, 2}, []int64{1, 2}},
+		{"expired, recent, expired", []string{old, recent, old}, [2]int64{1, 2}, []int64{2, 3}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := pgtest.New(t)
+			ctx := t.Context()
+			org := pgtest.Organization(t, pool, "prefix", "Prefix", int64(len(tt.createdAt)))
+			for i, at := range tt.createdAt {
+				_, err := pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, data, created_at)
+					VALUES ($1, $2, 'future.event', '{}', $3::timestamptz)`, org, i+1, at)
+				requireNoError(t, err)
+			}
+			requireNoError(t, newCleaner(pool).ExpireEvents(ctx, cutoff))
+			if got := retentionState(t, pool, org); got != tt.want {
+				t.Fatalf("(boundary, rows) = %v, want %v", got, tt.want)
+			}
+			events, err := realtimepg.NewReader(pool, infra.EventBoundsIn, infra.EventKinds()).EventsAfter(ctx, org, tt.want[0], 10)
+			requireNoError(t, err)
+			var seqs []int64
+			for _, e := range events {
+				seqs = append(seqs, e.Seq)
+			}
+			if !reflect.DeepEqual(seqs, tt.replay) {
+				t.Fatalf("EventsAfter(%d) = %v, want %v", tt.want[0], seqs, tt.replay)
+			}
+		})
+	}
+}

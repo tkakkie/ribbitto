@@ -30,7 +30,8 @@ invariant changes. Keep the numbers stable: other documents cite them.
    `joined_event_seq` (for members). Log rows are gap-free above
    `event_log_boundary_seq`, the highest sequence no longer in the log.
    Existing organisations start logging after their migration-time `event_seq`;
-   new ones start at boundary 0. Retention raises it. Valid cursors range from
+   new ones start at boundary 0. Retention raises it, only past a contiguous
+   prefix it deleted: never past a sequence still in the log. Valid cursors range from
    this boundary through the committed `event_seq`, inclusive. A cursor outside
    these bounds requires `reset`, including one above `event_seq` after a database
    restore made with ribbitto stopped; a cursor equal to `event_seq` waits for new events.

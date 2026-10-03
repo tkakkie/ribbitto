@@ -129,7 +129,10 @@ batches of at most 1,000 expired rows in sequence order until none remain for
 each organisation. Each batch reads after acquiring the organisation lock,
 so concurrent cleaners see committed progress. Only that organisation's writers
 wait; errors or the one-minute run timeout preserve all committed batches for
-the next hourly tick. It deletes only rows older than the cutoff; messages,
+the next hourly tick. It deletes only the expired prefix in sequence order: rows
+older than the cutoff below the organisation's lowest-sequence row that is not,
+since `created_at` (the writing transaction's start) need not follow `seq`
+(#430); messages,
 their sequences and unread positions are untouched.
 A cursor is valid from the boundary through the committed `event_seq`,
 inclusive, even with an empty log; at `event_seq` it waits for new events.

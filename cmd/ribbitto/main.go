@@ -256,7 +256,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	}
 	var setupService web.SetupService
 	if config.setupToken != "" {
-		setupService = setup.New(postgres.NewSetupStore(pool), hasher, config.setupToken)
+		setupService = setup.New(postgres.NewSetupStore(pool, postgres.EventLogIn), hasher, config.setupToken)
 	}
 
 	catalogues, err := i18n.New(slog.Default())
@@ -264,13 +264,13 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		return nil, nil, err
 	}
 	authorizer := authz.New(postgres.NewAuthzStore(pool))
-	posting := message.New(postgres.NewPostingStore(pool))
+	posting := message.New(postgres.NewPostingStore(pool, postgres.EventLogIn))
 	// A nil hub must stay a nil Notifier, not a typed nil in the interface.
-	branching := topic.NewBrancher(postgres.NewBranchStore(pool), nil)
+	branching := topic.NewBrancher(postgres.NewBranchStore(pool, postgres.EventLogIn), nil)
 	var stream *web.Streaming
 	if config.hub != nil {
-		posting = message.NewWithNotifier(postgres.NewPostingStore(pool), config.hub)
-		branching = topic.NewBrancher(postgres.NewBranchStore(pool), config.hub)
+		posting = message.NewWithNotifier(postgres.NewPostingStore(pool, postgres.EventLogIn), config.hub)
+		branching = topic.NewBrancher(postgres.NewBranchStore(pool, postgres.EventLogIn), config.hub)
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
 		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds()), config.hub, 1024, time.Minute)
@@ -280,7 +280,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Sessions:      sessions,
 		SignIn:        identitypg.NewSignIn(pool, hasher, sessions),
 		Setup:         setupService,
-		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, config.signupEnabled),
+		SignUp:        signup.New(postgres.NewSetupStore(pool, postgres.EventLogIn), hasher, config.signupEnabled),
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        postgres.NewTopicStore(pool),

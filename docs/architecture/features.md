@@ -72,7 +72,8 @@ topic posts rely on the lookup inside the posting transaction.
 - posting (`message`) advances `organization.event_seq` before inserting
   the message, because the sequence must be taken in the writing
   transaction ([decision 5](../decisions/05-one-event-sequence-per-organisation.md));
-- these flows call realtime's transaction-bound `NewEventLog(tx)` writer
+- these flows call realtime's transaction-bound writer, an `EventAppender`
+  that their store is given (`postgres.EventLogIn` today, #400)
   (`AppendMessagePosted`, `AppendMemberJoined` or `AppendMessagesMoved`, each
   storing the payload its publisher's codec encodes)
   immediately after the message, member or move, so `event_log` commits with

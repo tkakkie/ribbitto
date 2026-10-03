@@ -41,7 +41,7 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, has
 		if err != nil {
 			return err
 		}
-		if err := NewEventLog(tx).AppendMemberJoined(ctx, org.Bytes, member.ID.Bytes, seq); err != nil {
+		if err := s.events(platformTx).AppendMemberJoined(ctx, org.Bytes, member.ID.Bytes, seq); err != nil {
 			return err
 		}
 		id = account.ID.Bytes

@@ -15,9 +15,17 @@ day-to-day progress.
 | **M1 Accounts** ✓ done | First-run setup, sign-up, sign-in, sign-out, server-side sessions | Security checklist met: CSRF, cookie attributes, hashed session tokens, rate limits, one-time setup |
 | **M2 Channels and messages** ✓ done | Public channels, posting, history with paging | Two people can talk (after a reload) |
 | **M3 Real time** ✓ done | Server-Sent Events hub with per-connection authorization and replay | Messages arrive instantly; nothing is lost on reconnect; nothing reaches a connection that may not read it |
-| **Topics** ← next | Topics inside channels: the default topic, the feed and topic view, branching ([decision 21](decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)) | A conversation started in the default topic can be branched into its own topic, and both views show it |
-| **M4 Awareness** | Unread counts, presence, typing indicator | |
+| **Topics** ✓ done | Topics inside channels: the default topic, the feed and topic view, branching ([decision 21](decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)) | A conversation started in the default topic can be branched into its own topic, and both views show it |
+| **M4 Awareness** ← next, after the two steps below | Unread counts, presence, typing indicator | |
 | **M5 Polish** | Dark mode, mobile layout, motion | |
+
+Before M4, two steps:
+1. The modular-monolith migration ([decision 26](decisions/26-modules-by-feature-layout-seams-and-order.md),
+   [decision 27](decisions/27-channels-topics-and-messages-are-one-conversation-module.md),
+   [`modules.md`](architecture/modules.md)): `identity`, then `realtime`,
+   `org` and `conversation`, then removing the old layers. Feature work pauses
+   until it ends.
+2. The load tests (#216, #219).
 
 ## After the MVP
 

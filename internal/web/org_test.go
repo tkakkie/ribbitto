@@ -344,7 +344,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				t.Fatalf("foreign post: %d %s", w.Code, w.Body.String())
 			}
 		}
-		poster := message.New(postgres.NewPostingStore(pool))
+		poster := message.New(postgres.NewPostingStore(pool, postgres.EventLogIn))
 		for range 51 {
 			if _, err := poster.Post(ctx, a, acmeChannel, "hello after reload"); err != nil {
 				t.Fatal(err)

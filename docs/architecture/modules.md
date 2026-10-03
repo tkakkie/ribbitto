@@ -46,7 +46,6 @@ the temporary implementation behind it.
 | posting, setup, sign-up, branching (`infra`) | `realtime` event appends, through the `EventAppender` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | each flow's own step: 3, 4 |
 | `realtime` reader and retention | `org` sequence bounds (`postgres.EventBoundsIn`, and `EventSequences` for the watermark), retention lock and boundary write (`postgres.RetentionBoundaryIn`) | 2 | 3 |
 | the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |
-| retention's tests (`event_cleaner_test.go` in `infra`, built through `realtimepg`) | — | 2 | 2.8b (#426) moves them into `realtime`'s store tests |
 | posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 4 |
 | setup (`org`) | `conversation` default channel | 3 | 4 |
 

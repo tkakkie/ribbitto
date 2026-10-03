@@ -55,7 +55,7 @@ The latest page also reads `organization.event_seq` in that snapshot and renders
 it as `data-event-cursor` on the outer layout div, outside every htmx swap.
 Pages with `?before=` omit the cursor; loading older history or replacing the
 composer leaves the initial page cursor intact for #159.
-Snapshot composition remains in the adapter until #154 M11.
+Snapshot composition remains in the adapter until #154 M7.
 `MessageReader.One` uses the same snapshot pattern for an event's
 organisation, channel and `event_seq`, returning the message with current
 author names or `message.ErrNotFound`.

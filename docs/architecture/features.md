@@ -82,3 +82,44 @@ topic posts rely on the lookup inside the posting transaction.
 Their atomicity and `event_seq` ordering stay as they are. They are
 resolved at migration, by an orchestrating module or a shared transaction.
 A new exception needs its issue to say why, and is added to this list.
+
+## Target
+
+Where the migration goes ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)); the code above is today's.
+Each module is `internal/<module>` (API, use cases, consumer interfaces),
+`internal/<module>/internal/postgres` (store, `sqlcgen`) and a wiring
+package `internal/<module>/<module>pg`, whose constructors only `cmd/*` and
+tests call. `internal/kernel` holds `ID`; `internal/platform/postgres` the
+pool, migrations, `pgtest`, and opaque `Tx` and `Snapshot` capabilities.
+
+| Module | Owns | May import (roots) | Step |
+|---|---|---|---|
+| `identity`: accounts, passwords, sessions, sign-in | `account`, `session` | — | 1 |
+| `realtime`: event log, retention, hub, stream loop, envelope | `event_log` | — | 2 |
+| `org`: organisations, members, authorisation (`Membership`), setup, sign-up | `organization`, `member`, `setup` | `identity`, `realtime` | 3 |
+| `channel` | `channel` | `org` | 4 |
+| `topic`: topics, branching | `topic` | `org`, `realtime` | 5 |
+| `message`: posting, history, the page snapshot use case | `message` | `identity`, `org`, `topic`, `realtime` | 6 |
+
+`internal/web` stays the UI shell and imports module roots. Its per-kind
+stream renderers are adapters for the payloads that `message` and `topic`
+register with `realtime`. Step 0 creates `kernel` and `platform`; step 7
+removes `internal/domain`, `internal/app` and `internal/infra/postgres`.
+
+**Known exceptions at the target.** Each keeps its transaction. The
+orchestrator declares an interface, the owner's wiring package implements
+it on the `Tx`, and the composition root injects it; this holds for every
+cross-module write, in either import direction.
+
+| Flow (orchestrator) | Writes of other modules | Resolved in step |
+|---|---|---|
+| setup (`org`) | `identity` account, `channel` default channel | 3 |
+| sign-up (`org`, moved from `identity`) | `identity` account | 3 |
+| channel creation (`channel`) | `topic` default topic: a second statement in the same `Tx`; the deferred foreign key keeps it valid | 4 |
+| branching (`topic`) | `org` sequence, `message` moves and notice | 6 (until then through `topic`'s existing store) |
+| posting (`message`) | `org` sequence | 6 |
+| event appends (each publisher) | `realtime`'s event log, through an injected factory taking the `Tx` | 2 |
+| retention (`realtime`) | `org` `event_log_boundary_seq` | 3 (until then through today's store) |
+
+A step that leaves a flow on a temporary path names it and the step that
+removes it.

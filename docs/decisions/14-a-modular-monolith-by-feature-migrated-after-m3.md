@@ -27,3 +27,4 @@ known); staying a layered monolith with feature files inside the layers, as
 Zulip and Mattermost do at that scope. That their large layer packages make
 AI work with limited context hard is a hypothesis, supported by M1 but not
 proven.
+**Completed by:** [decision 26](26-modules-by-feature-layout-seams-and-order.md) (layout, seams and order).

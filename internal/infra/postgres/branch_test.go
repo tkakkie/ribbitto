@@ -74,7 +74,7 @@ func TestBranchStore(t *testing.T) {
 	requireNoError(t, pool.QueryRow(ctx, `SELECT kind, (data->>'from_topic_id')::uuid, (data->>'to_topic_id')::uuid,
 		ARRAY(SELECT jsonb_array_elements_text(data->'message_ids')::uuid) FROM event_log WHERE organization_id = $1 AND seq = $2`, acme.OrganizationID, before+1).Scan(&moveKind, &from, &to, &movedIDs))
 	requireNoError(t, pool.QueryRow(ctx, "SELECT kind FROM event_log WHERE organization_id = $1 AND seq = $2 AND (data->>'message_id')::uuid = $3", acme.OrganizationID, before+2, got[3].id).Scan(&noticeKind))
-	if moveKind != string(realtime.EventMessagesMoved) || from != source || to != dest.ID || !slices.Equal(movedIDs, []domain.ID{posted[0].ID, posted[2].ID}) || noticeKind != string(realtime.EventMessagePosted) {
+	if moveKind != string(topic.KindMessagesMoved) || from != source || to != dest.ID || !slices.Equal(movedIDs, []domain.ID{posted[0].ID, posted[2].ID}) || noticeKind != string(message.KindPosted) {
 		t.Fatalf("events: %s %x→%x %v, then %s", moveKind, from, to, movedIDs, noticeKind)
 	}
 	// Replay must preserve both durable events and their routing IDs, even
@@ -97,7 +97,7 @@ func TestBranchStore(t *testing.T) {
 		move := events[0]
 		moved, err := topic.DecodeMoved(move.Payload)
 		requireNoError(t, err)
-		if move.OrganizationID != acme.OrganizationID || move.Seq != before+1 || move.Kind != realtime.EventMessagesMoved ||
+		if move.OrganizationID != acme.OrganizationID || move.Seq != before+1 || move.Kind != topic.KindMessagesMoved ||
 			move.ChannelID != acme.Channel.ID || !slices.Equal(move.Topics, []domain.ID{source, dest.ID}) ||
 			moved.FromTopicID != source || moved.ToTopicID != dest.ID ||
 			move.AudienceMemberID != nil || !slices.Equal(moved.MessageIDs, movedIDs) {
@@ -105,7 +105,7 @@ func TestBranchStore(t *testing.T) {
 		}
 		next, err := reader.EventsAfter(ctx, acme.OrganizationID, move.Seq, 1)
 		requireNoError(t, err)
-		if len(next) != 1 || next[0].Kind != realtime.EventMessagePosted || next[0].Seq != before+2 ||
+		if len(next) != 1 || next[0].Kind != message.KindPosted || next[0].Seq != before+2 ||
 			next[0].ChannelID != acme.Channel.ID || next[0].AudienceMemberID != nil ||
 			!slices.Equal(next[0].Topics, []domain.ID{source}) {
 			t.Fatalf("notice after move: %+v", next)
@@ -156,11 +156,11 @@ type failingNotice struct {
 }
 
 func (f failingNotice) Append(ctx context.Context, organizationID domain.ID, seq int64, kind realtime.EventKind, audience *domain.ID, payload []byte) error {
-	if kind == realtime.EventMessagePosted {
+	if kind == message.KindPosted {
 		return errNoticeAppend
 	}
 	err := f.EventAppender.Append(ctx, organizationID, seq, kind, audience, payload)
-	*f.moved = err == nil && kind == realtime.EventMessagesMoved
+	*f.moved = err == nil && kind == topic.KindMessagesMoved
 	return err
 }
 

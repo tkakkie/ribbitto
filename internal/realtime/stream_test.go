@@ -18,8 +18,16 @@ var (
 	sub      = Subscription{Organization: orgA, OrganizationSlug: "acme", Account: account1, Channel: channelA}
 )
 
+// Synthetic kinds: realtime routes on the envelope, so its tests need no
+// publisher's kind names.
+const (
+	kindPosted EventKind = "test.posted"
+	kindMoved  EventKind = "test.moved"
+	kindJoined EventKind = "test.joined"
+)
+
 func posted(seq int64, channel kernel.ID) Event {
-	return Event{OrganizationID: orgA, Seq: seq, Kind: EventMessagePosted, ChannelID: channel}
+	return Event{OrganizationID: orgA, Seq: seq, Kind: kindPosted, ChannelID: channel}
 }
 
 // fakeLog is an event log that can grow while a stream runs. failOn makes
@@ -214,7 +222,7 @@ func TestStreamDrainsBatchesOnAColdHub(t *testing.T) {
 	log := &fakeLog{events: []Event{
 		posted(1, channelA),
 		posted(2, channelB), // another channel
-		{OrganizationID: orgA, Seq: 3, Kind: EventMemberJoined},
+		{OrganizationID: orgA, Seq: 3, Kind: kindJoined},
 		{OrganizationID: orgA, Seq: 4, Kind: "future.kind"}, // unregistered: the reader leaves it unrouted
 		denied,
 		posted(6, channelA),
@@ -574,7 +582,7 @@ func (l slowFilteredLog) EventsAfter(_ context.Context, org kernel.ID, after int
 	time.Sleep(l.delay)
 	events := make([]Event, limit)
 	for i := range events {
-		events[i] = Event{OrganizationID: org, Seq: after + int64(i) + 1, Kind: EventMessagePosted, ChannelID: channelB}
+		events[i] = Event{OrganizationID: org, Seq: after + int64(i) + 1, Kind: kindPosted, ChannelID: channelB}
 	}
 	return events, nil
 }

@@ -344,8 +344,8 @@ func TestCachedEventsKeepOrganisationsApart(t *testing.T) {
 	hub := NewHub()
 	log := &fakeLog{events: []Event{
 		posted(1, channelA), posted(2, channelA),
-		{OrganizationID: orgB, Seq: 1, Kind: EventMessagePosted, ChannelID: channelB},
-		{OrganizationID: orgB, Seq: 2, Kind: EventMessagePosted, ChannelID: channelB},
+		{OrganizationID: orgB, Seq: 1, Kind: kindPosted, ChannelID: channelB},
+		{OrganizationID: orgB, Seq: 2, Kind: kindPosted, ChannelID: channelB},
 	}}
 	events := NewCachedEvents(t.Context(), log, hub, 64, time.Minute)
 	a, err := events.EventsAfter(t.Context(), orgA, 0, 2)

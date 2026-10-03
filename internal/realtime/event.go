@@ -14,16 +14,6 @@ var ErrCursorExpired = errors.New("event cursor expired")
 // kind's envelope with no channel or topics, so streams skip it.
 type EventKind string
 
-const (
-	// EventMessagePosted names a message, its channel and posting-time topic.
-	EventMessagePosted EventKind = "message.posted"
-	// EventMemberJoined names the member joining an organisation.
-	EventMemberJoined EventKind = "member.joined"
-	// EventMessagesMoved names the messages branching moved, their channel,
-	// and the topics they left and joined (docs/domain/topics.md).
-	EventMessagesMoved EventKind = "messages.moved"
-)
-
 // Event is a durable change ordered within an organisation: an envelope
 // that realtime routes without knowing its kind (decision 26). A nil
 // AudienceMemberID means organisation-wide; otherwise only that member may

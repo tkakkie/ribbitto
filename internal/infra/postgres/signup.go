@@ -14,7 +14,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
-	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // SignUp takes the organisation sequence before inserting either account or member.
@@ -47,7 +46,7 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, has
 		if err != nil {
 			return err
 		}
-		if err := s.events(platformTx).Append(ctx, org.Bytes, seq, realtime.EventMemberJoined, nil, data); err != nil {
+		if err := s.events(platformTx).Append(ctx, org.Bytes, seq, appmember.KindJoined, nil, data); err != nil {
 			return err
 		}
 		id = account.ID.Bytes

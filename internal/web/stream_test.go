@@ -515,7 +515,7 @@ func (r lifetimeReads) One(ctx context.Context, _ authz.Membership, _ domain.ID,
 
 func (r lifetimeReads) EventsAfter(ctx context.Context, org domain.ID, _ int64, _ int) ([]realtime.Event, error) {
 	if r.render {
-		return []realtime.Event{{OrganizationID: org, ChannelID: domain.ID{1}, Seq: 1, Kind: realtime.EventMessagePosted}}, nil
+		return []realtime.Event{{OrganizationID: org, ChannelID: domain.ID{1}, Seq: 1, Kind: message.KindPosted}}, nil
 	}
 	_, err := r.One(ctx, authz.Membership{}, domain.ID{}, 0)
 	return nil, err

@@ -4,7 +4,8 @@
 //
 // Feature: realtime (feature map in docs/architecture/features.md). It
 // declares the durable event types (Event, an envelope it routes without
-// kind names; EventKind; ErrCursorExpired) and
+// kind names; EventKind, whose values each publisher declares;
+// ErrCursorExpired) and
 // the kind registry (Kinds of each publisher's Router), and
 // imports only kernel (ID) and platform (the transaction handles). Its store
 // (internal/postgres) reads, appends and expires the event log, and

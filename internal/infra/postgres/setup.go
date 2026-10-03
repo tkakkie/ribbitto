@@ -14,7 +14,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
-	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // SetupStore implements setup.Store with a single transaction per attempt.
@@ -65,7 +64,7 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 		if err != nil {
 			return err
 		}
-		if err := s.events(platformTx).Append(ctx, org.ID.Bytes, seq, realtime.EventMemberJoined, nil, data); err != nil {
+		if err := s.events(platformTx).Append(ctx, org.ID.Bytes, seq, appmember.KindJoined, nil, data); err != nil {
 			return err
 		}
 		// Listed exception (feature map): setup writes the channel feature's

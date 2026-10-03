@@ -17,7 +17,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
-	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // MessageStore persists messages using a pool or a caller-owned transaction.
@@ -138,7 +137,7 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 		if err != nil {
 			return err
 		}
-		return s.events(platformTx).Append(ctx, organizationID, seq, realtime.EventMessagePosted, nil, data)
+		return s.events(platformTx).Append(ctx, organizationID, seq, message.KindPosted, nil, data)
 	})
 	var pgErr *pgconn.PgError
 	switch {

@@ -62,7 +62,7 @@ flowchart LR
   cmd[cmd/ribbitto] --> web & app & identity & postgres[infra/postgres] & realtime & platform[platform/postgres] & migrations[db/migrations]
   seed[cmd/seed] --> app & identity & postgres & platform & domain
   web[internal/web] --> app & identity & domain & realtime & static[web/static]
-  postgres --> app & identity & domain
+  postgres --> app & identity & domain & platform
   realtime[internal/realtime] --> domain
   app[internal/app] --> identity & domain[internal/domain]
   identity[internal/identity] --> kernel & platform & domain

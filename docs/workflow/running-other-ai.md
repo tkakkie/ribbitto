@@ -135,7 +135,7 @@ The orchestrator then:
    backslash-continued lines and flags any URL with user information:
 
    ```sh
-   sed -e :a -e '/\\$/N' -e 's/\\\n//' -e ta PR_BODY.md |
+   sed -e :a -e '/\\$/{' -e '$!N' -e '}' -e 's/\\\n//' -e ta PR_BODY.md |
      grep -niE '://[^/@[:space:]]*@|password|passwd|secret|token|(api|access|private)[-_[:space:]]?key'
    ```
 

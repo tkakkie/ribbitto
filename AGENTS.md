@@ -44,13 +44,14 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 
 ## Layout and dependency direction
 
-`cmd/*` wire everything. Depguard enforces
-[`packages.md`](docs/architecture/packages.md)'s import rules; never break them.
-Modules ([decision 26](docs/decisions/26-modules-by-feature-layout-seams-and-order.md),
-[`modules.md`](docs/architecture/modules.md)):
+`cmd/ribbitto` and `cmd/seed` do the wiring.
+[`packages.md`](docs/architecture/packages.md) defines the import rules and
+depguard checks a subset; never break them.
+Modules ([`modules.md`](docs/architecture/modules.md), from decision 26):
 
 - Others import only a module's root (now `internal/identity`); its
-  store only its wiring (`<module>pg`); the wiring only `cmd/*` and tests.
+  store only its wiring (`<module>pg`) and own tests; the wiring only
+  `cmd/*` and tests.
 - Layers, until their module moves: `domain` (→ `kernel`),
   `app` (use cases, the only authorization logic; → `domain`, roots),
   `infra/postgres` (implements `app`), `realtime` (→ `domain`; the rest as

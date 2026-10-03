@@ -25,6 +25,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 )
@@ -32,11 +33,13 @@ import (
 //go:embed conversations.json
 var conversations []byte
 
+type scriptMessage struct{ Author, Body string }
+
 type script struct {
 	Members  []struct{ Name, Handle string }
 	Channels []struct {
 		Name     string
-		Messages []struct{ Author, Body string }
+		Messages []scriptMessage
 	}
 }
 
@@ -91,7 +94,7 @@ func newSecret() (string, error) {
 
 func run(ctx context.Context, databaseURL string, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("seed (development only)", flag.ContinueOnError)
-	count := flags.Int("messages", 100, "messages per channel; repeats each fictional conversation in order")
+	count := flags.Int("messages", 100, "messages per channel before development topic fixtures; repeats each fictional conversation in order")
 	streams := flags.Int("streams", 0, "target concurrent streams; enables load-test sessions")
 	perAccount := flags.Int("streams-per-account", 16, "load-test allocation cap; does not change production caps")
 	sessionCount := flags.Int("sessions-per-account", 1, "sessions per seeded account in load-test mode")
@@ -194,6 +197,8 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	}
 	channels := channel.New(postgres.NewChannelStore(pool))
 	posts := message.New(postgres.NewPostingStore(pool))
+	var general domain.Channel
+	var generalMessages []scriptMessage
 	for _, conversation := range data.Channels {
 		var destination domain.Channel
 		if conversation.Name == channel.DefaultName {
@@ -203,6 +208,9 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 		if err != nil {
 			return fmt.Errorf("preparing channel %s: %w", conversation.Name, err)
+		}
+		if conversation.Name == channel.DefaultName {
+			general, generalMessages = destination, conversation.Messages
 		}
 		id := destination.ID
 		manifest.ChannelIDs = append(manifest.ChannelIDs, fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]))
@@ -216,6 +224,12 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 			if _, err := posts.Post(ctx, member, destination.ID, line.Body); err != nil {
 				return fmt.Errorf("posting %s message %d: %w", conversation.Name, i+1, err)
 			}
+		}
+	}
+	if !loadTest {
+		branches := topic.NewBrancher(postgres.NewBranchStore(pool), nil)
+		if err := seedTopics(ctx, posts, branches, members, general, generalMessages); err != nil {
+			return fmt.Errorf("seeding topics: %w", err)
 		}
 	}
 	if loadTest {

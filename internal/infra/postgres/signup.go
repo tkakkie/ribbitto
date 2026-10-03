@@ -11,13 +11,16 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
 // SignUp takes the organisation sequence before inserting either account or member.
 // SetupStore also implements signup.Store because both use the installation setup row.
 func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, hash string) (domain.ID, error) {
 	var id domain.ID
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
+		tx := pgxbridge.Tx(platformTx)
 		q := sqlcgen.New(tx)
 		org, err := q.SetupOrganization(ctx)
 		if errors.Is(err, pgx.ErrNoRows) {

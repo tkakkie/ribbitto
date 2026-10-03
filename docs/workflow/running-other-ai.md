@@ -131,10 +131,12 @@ The orchestrator then:
    or the Grok and Muse launcher test scripts outside the sandbox);
 3. checks the PR text before it is published (#358): this prints nothing,
    or each match is reviewed, real credentials are redacted and harmless
-   mentions (a placeholder, the word in prose) may stay:
+   mentions (a placeholder, the word in prose) may stay. It joins
+   backslash-continued lines and flags any URL with user information:
 
    ```sh
-   grep -niE '://[^/@[:space:]]+:[^@[:space:]]*@|password|passwd|secret|token|(api|access|private)[_-]?key' PR_BODY.md
+   sed -e :a -e '/\\$/N' -e 's/\\\n//' -e ta PR_BODY.md |
+     grep -niE '://[^/@[:space:]]*@|password|passwd|secret|token|(api|access|private)[-_[:space:]]?key'
    ```
 
 4. commits, pushes and opens the PR.

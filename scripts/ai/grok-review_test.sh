@@ -218,6 +218,7 @@ mark('prompt', do { local $/; <$f> });
 close $f;
 mark('grok');
 my $mode = $ENV{MODE};
+exit $1 if $mode =~ /^exit(124|125)$/;
 if ($mode eq 'INT' || $mode eq 'TERM') {
   $| = 1;
   print "{\"type\":\"text\",\"data\":\"Before signal.\\n\"}\n";
@@ -433,6 +434,11 @@ DRIVER
         [[ -f $CASE_DIR/out/caffeinate ]] || fail 'caffeinate -i not invoked'
       fi
       case $mode in
+        exit124|exit125)
+          contains "$CASE_DIR/out/stderr" "Grok failed (exit ${mode#exit})"
+          if grep -Eq 'timed out|did not finish|stalled|rerun once|rerun with RIBBITTO_GROK_TIMEOUT=' "$CASE_DIR/out/stderr"; then
+            fail 'Grok failure reported as a timeout or stall'
+          fi ;;
         INT|TERM)
           printf 'Before signal.\n' > "$CASE_DIR/out/expected"
           cmp -s "$CASE_DIR/out/expected" "$CASE_DIR/out/stdout" || fail 'signal lost report text' ;;
@@ -542,6 +548,8 @@ STALL_LIMIT=1 run_case active-timeout-124 124 active-timeout 4 49
 STALL_LIMIT=1 run_case exit-before-stall-keeps-42 42 exit-before-stall default 49
 run_case gh-failure 1 gh-failure default 49
 run_case exit-status-42 42 exit42 default 49
+run_case exit-status-124 124 exit124 default 49
+run_case exit-status-125 125 exit125 default 49
 run_case without-caffeinate 0 no-caffeinate default 49
 run_case descendants-after-success 0 descendants default 49
 run_case timeout-124 124 timeout 1 49

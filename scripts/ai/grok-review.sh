@@ -24,9 +24,10 @@
 #                             waits after creating Grok's process group; tests
 #                             only, to deliver signals during that setup
 #
-# Exit status: 0 on success; 124 on timeout; 125 on stall; 130/143 when
-# interrupted; Grok's own status when Grok fails; 126 if Grok's process
-# group could not be created; 1 for any other error.
+# Exit status: 0 on success; 124 on supervisor timeout; 125 on supervisor
+# stall; 130/143 when interrupted; Grok's own status when Grok fails (including
+# 124/125, without supervisor rerun guidance); 126 if Grok's process group
+# could not be created; 1 for any other error.
 set -euo pipefail
 
 die() { echo "grok-review: $*" >&2; exit 1; }
@@ -192,7 +193,10 @@ perl -e '
   use JSON::PP qw(decode_json);
   use Encode qw(encode_utf8);
   use Time::HiRes ();
-  my ($limit, $stall, $setup_delay, @cmd) = @ARGV;
+  my ($limit, $stall, $setup_delay, $stop_file, @cmd) = @ARGV;
+  # Open before starting Grok so a failure cannot leave an unsupervised child.
+  # A separate record distinguishes supervisor stops from Grok exit codes.
+  open my $stopped, ">", $stop_file or die "grok-review: stop record: $!\n";
   my $block = POSIX::SigSet->new(SIGINT, SIGTERM, SIGALRM);
   my $old = POSIX::SigSet->new;
   sigprocmask(SIG_BLOCK, $block, $old) or die "grok-review: sigprocmask: $!\n";
@@ -278,6 +282,8 @@ perl -e '
   };
   my $stop = sub {
     my ($code, $why) = @_;
+    print {$stopped} "$code\n";
+    close $stopped;
     print STDERR "grok-review: $why\n";
     $reap_group->();
     waitpid($pid, 0);
@@ -317,17 +323,19 @@ perl -e '
   # first, then drain without waiting for EOF from an inherited writer.
   1 while $read_stream->(0);
   exit $status;
-' "$timeout" "$stall" "$setup_delay" "${grok_cmd[@]}" </dev/null >"$tmp/report" &
+' "$timeout" "$stall" "$setup_delay" "$tmp/stopped" "${grok_cmd[@]}" </dev/null >"$tmp/report" &
 supervisor=$!
 status=0
 wait "$supervisor" || status=$?
 supervisor=""
-case $status in
-  0) ;;
-  125)
+stopped=""
+if [[ -f $tmp/stopped ]]; then read -r stopped <"$tmp/stopped" || true; fi
+case $status:$stopped in
+  0:*) ;;
+  125:125)
     echo 'grok-review: rerun once using the invocation in docs/workflow/adversarial-review.md; if it stalls again, record it in the PR and ask the maintainer' >&2
     exit 125 ;;
-  124)
+  124:124)
     next=$(( timeout * 2 > 86400 ? 86400 : timeout * 2 ))
     if [[ -t 2 ]]; then printf '\033[0m' >&2; fi
     echo "grok-review: Grok did not finish within ${timeout}s" >&2

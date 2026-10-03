@@ -59,13 +59,13 @@ internal/app/signup -> internal/identity
 internal/app/topic -> internal/app/authz
 internal/app/topic -> internal/domain
 internal/domain -> internal/kernel
-internal/identity -> internal/domain
+internal/identity -> internal/kernel
 internal/identity/identitypg -> internal/identity
 internal/identity/identitypg -> internal/identity/internal/postgres
 internal/identity/identitypg -> internal/platform/postgres
-internal/identity/internal/postgres -> internal/domain
 internal/identity/internal/postgres -> internal/identity
 internal/identity/internal/postgres -> internal/identity/internal/postgres/sqlcgen
+internal/identity/internal/postgres -> internal/kernel
 internal/identity/internal/postgres -> internal/platform/postgres
 internal/identity/internal/postgres -> internal/platform/postgres/pgxbridge
 internal/infra/postgres -> internal/app/authz

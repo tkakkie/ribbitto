@@ -73,8 +73,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/domain/
             - github.com/tkakkie/ribbitto/internal/kernel$
           deny: *non_html
-        # identity is the first module (decision 26). domain is temporary, for
-        # the ID alias until step 5; identity uses no other domain identifier.
+        # identity is the first module (decision 26).
         identity:
           list-mode: lax
           files: ["**/internal/identity/*.go", "**/internal/identity/**/*.go", "!$test"]
@@ -84,7 +83,6 @@ linters:
             - github.com/tkakkie/ribbitto/internal/kernel$
             - github.com/tkakkie/ribbitto/internal/platform$
             - github.com/tkakkie/ribbitto/internal/platform/
-            - github.com/tkakkie/ribbitto/internal/domain$
           deny: *non_html
         # A module's wiring is composition code (decision 26): only cmd/* and
         # tests import it. Its store is imported only by its wiring and the

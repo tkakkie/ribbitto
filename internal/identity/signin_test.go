@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 type fakeAccounts struct {
@@ -16,12 +16,12 @@ type fakeAccounts struct {
 	err     error
 }
 
-func (f fakeAccounts) AccountCredentials(_ context.Context, email string) (domain.ID, string, error) {
+func (f fakeAccounts) AccountCredentials(_ context.Context, email string) (kernel.ID, string, error) {
 	if f.err != nil {
-		return domain.ID{}, "", f.err
+		return kernel.ID{}, "", f.err
 	}
 	if email != f.account.Email {
-		return domain.ID{}, "", identity.ErrNoAccount
+		return kernel.ID{}, "", identity.ErrNoAccount
 	}
 	return f.account.ID, f.hash, nil
 }
@@ -36,7 +36,7 @@ func TestSignIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	alice := identity.Account{ID: domain.ID{7}, Email: "alice@example.com", DisplayName: "Alice"}
+	alice := identity.Account{ID: kernel.ID{7}, Email: "alice@example.com", DisplayName: "Alice"}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	broken := errors.New("connection refused")
@@ -98,8 +98,8 @@ func TestSignIn(t *testing.T) {
 // failingReplace is a store whose atomic replacement fails.
 type failingReplace struct{ *fakeStore }
 
-func (failingReplace) ReplaceSession(context.Context, []byte, []byte, domain.ID, time.Time) (domain.ID, bool, error) {
-	return domain.ID{}, false, errors.New("transaction failed")
+func (failingReplace) ReplaceSession(context.Context, []byte, []byte, kernel.ID, time.Time) (kernel.ID, bool, error) {
+	return kernel.ID{}, false, errors.New("transaction failed")
 }
 
 func TestSignInReplacementFailure(t *testing.T) {
@@ -112,7 +112,7 @@ func TestSignInReplacementFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	alice := identity.Account{ID: domain.ID{7}, Email: "alice@example.com"}
+	alice := identity.Account{ID: kernel.ID{7}, Email: "alice@example.com"}
 	base := &fakeStore{sessions: map[string]fakeSession{}}
 	previous, _, err := identity.NewSessions(base, time.Now, nil).Create(t.Context(), alice.ID)
 	if err != nil {

@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // SessionLifetime is how long a session lasts after sign-in. It is absolute:
@@ -25,31 +25,31 @@ var ErrNoSession = errors.New("no such session")
 // Session identifies a live session and says when it expires. Streams use
 // it to end with the session.
 type Session struct {
-	ID        domain.ID
+	ID        kernel.ID
 	ExpiresAt time.Time
 }
 
 // SessionStore persists sessions by the SHA-256 hash of their token. It never
 // receives a token, so a leaked table cannot be used to sign in.
 type SessionStore interface {
-	CreateSession(ctx context.Context, tokenHash []byte, accountID domain.ID, expiresAt time.Time) error
+	CreateSession(ctx context.Context, tokenHash []byte, accountID kernel.ID, expiresAt time.Time) error
 	// SessionAccount returns the account and the session with this hash if
 	// it expires after now, and ErrNoSession otherwise.
 	SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (Account, Session, error)
 	// DeleteSession deletes the session with this hash, if there is one, and
 	// reports its id.
-	DeleteSession(ctx context.Context, tokenHash []byte) (ended domain.ID, found bool, err error)
+	DeleteSession(ctx context.Context, tokenHash []byte) (ended kernel.ID, found bool, err error)
 	// ReplaceSession deletes the session with oldHash, if there is one, and
 	// stores the new session, atomically: either both happen or neither. It
 	// reports the deleted session's id.
-	ReplaceSession(ctx context.Context, oldHash, newHash []byte, accountID domain.ID, expiresAt time.Time) (ended domain.ID, found bool, err error)
+	ReplaceSession(ctx context.Context, oldHash, newHash []byte, accountID kernel.ID, expiresAt time.Time) (ended kernel.ID, found bool, err error)
 	DeleteExpiredSessions(ctx context.Context, before time.Time) error
 }
 
 // SessionCanceller ends what still runs on a session that is deleted or may
 // have been deleted, such as open event streams. realtime.Hub satisfies it.
 type SessionCanceller interface {
-	CancelSession(sessionID domain.ID)
+	CancelSession(sessionID kernel.ID)
 }
 
 // Sessions creates, resolves and deletes server-side sessions.
@@ -67,7 +67,7 @@ func NewSessions(store SessionStore, now func() time.Time, cancel SessionCancell
 }
 
 // ended tells the canceller, if any, to stop a session's streams.
-func (s *Sessions) ended(id domain.ID, found bool) {
+func (s *Sessions) ended(id kernel.ID, found bool) {
 	if found && s.cancel != nil {
 		s.cancel.CancelSession(id)
 	}
@@ -75,7 +75,7 @@ func (s *Sessions) ended(id domain.ID, found bool) {
 
 // Create starts a session for the account and returns its token, which only
 // the caller (the browser's cookie) keeps, and its expiry.
-func (s *Sessions) Create(ctx context.Context, accountID domain.ID) (string, time.Time, error) {
+func (s *Sessions) Create(ctx context.Context, accountID kernel.ID) (string, time.Time, error) {
 	token, hash, expiresAt, err := s.newToken()
 	if err != nil {
 		return "", time.Time{}, err
@@ -90,7 +90,7 @@ func (s *Sessions) Create(ctx context.Context, accountID domain.ID) (string, tim
 // ends the session named by previousToken (the browser's cookie, possibly
 // empty or stale). A mutation error ends the previous session's streams
 // anyway: the transaction may have committed before reporting the error.
-func (s *Sessions) Replace(ctx context.Context, previousToken string, accountID domain.ID) (string, time.Time, error) {
+func (s *Sessions) Replace(ctx context.Context, previousToken string, accountID kernel.ID) (string, time.Time, error) {
 	old, ok := hashToken(previousToken)
 	if !ok {
 		return s.Create(ctx, accountID)

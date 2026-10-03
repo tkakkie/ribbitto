@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
@@ -42,7 +42,7 @@ func TestSessionStore(t *testing.T) {
 		t.Fatalf("Resolve = %+v, %v", account, err)
 	}
 	// The session's own id and expiry come back with it.
-	var rowID domain.ID
+	var rowID kernel.ID
 	var expires time.Time
 	requireNoError(t, pool.QueryRow(ctx, "SELECT id, expires_at FROM session WHERE account_id = $1 ORDER BY created_at DESC LIMIT 1", id).Scan(&rowID, &expires))
 	if session.ID != rowID || !session.ExpiresAt.Equal(expires) {
@@ -147,7 +147,7 @@ func TestSessionStoreReportsEndedSessions(t *testing.T) {
 	store := postgres.NewSessionStore(pool)
 	id := account(t, pool, "ended@example.com", "Ended")
 	expires := time.Now().Add(time.Hour)
-	sessionID := func(hash []byte) (got domain.ID) {
+	sessionID := func(hash []byte) (got kernel.ID) {
 		requireNoError(t, pool.QueryRow(ctx, "SELECT id FROM session WHERE token_hash = $1", hash).Scan(&got))
 		return got
 	}

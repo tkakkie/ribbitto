@@ -16,14 +16,14 @@ type fakeAccounts struct {
 	err     error
 }
 
-func (f fakeAccounts) AccountCredentials(_ context.Context, email string) (identity.Account, string, error) {
+func (f fakeAccounts) AccountCredentials(_ context.Context, email string) (domain.ID, string, error) {
 	if f.err != nil {
-		return identity.Account{}, "", f.err
+		return domain.ID{}, "", f.err
 	}
 	if email != f.account.Email {
-		return identity.Account{}, "", identity.ErrNoAccount
+		return domain.ID{}, "", identity.ErrNoAccount
 	}
-	return f.account, f.hash, nil
+	return f.account.ID, f.hash, nil
 }
 
 func TestSignIn(t *testing.T) {
@@ -59,7 +59,7 @@ func TestSignIn(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &fakeStore{sessions: map[string]fakeSession{}}
-			sessions := identity.NewSessions(store, time.Now)
+			sessions := identity.NewSessions(store, time.Now, nil)
 			previous, _, err := sessions.Create(t.Context(), alice.ID)
 			if err != nil {
 				t.Fatal(err)
@@ -114,16 +114,16 @@ func TestSignInReplacementFailure(t *testing.T) {
 	}
 	alice := identity.Account{ID: domain.ID{7}, Email: "alice@example.com"}
 	base := &fakeStore{sessions: map[string]fakeSession{}}
-	previous, _, err := identity.NewSessions(base, time.Now).Create(t.Context(), alice.ID)
+	previous, _, err := identity.NewSessions(base, time.Now, nil).Create(t.Context(), alice.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	signIn := identity.NewSignIn(fakeAccounts{account: alice, hash: hash}, hasher, identity.NewSessions(failingReplace{base}, time.Now))
+	signIn := identity.NewSignIn(fakeAccounts{account: alice, hash: hash}, hasher, identity.NewSessions(failingReplace{base}, time.Now, nil))
 	if _, _, err := signIn.SignIn(t.Context(), alice.Email, password, previous); err == nil {
 		t.Fatal("sign-in succeeded despite the store failure")
 	}
 	// A failed replacement changes nothing: the browser keeps its session.
-	if _, _, err := identity.NewSessions(base, time.Now).Resolve(t.Context(), previous); err != nil || len(base.sessions) != 1 {
+	if _, _, err := identity.NewSessions(base, time.Now, nil).Resolve(t.Context(), previous); err != nil || len(base.sessions) != 1 {
 		t.Fatalf("previous session: %v; %d sessions, want 1", err, len(base.sessions))
 	}
 }

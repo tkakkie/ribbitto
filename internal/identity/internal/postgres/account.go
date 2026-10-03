@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres/sqlcgen"
@@ -19,33 +20,39 @@ type AccountStore struct {
 	queries *sqlcgen.Queries
 }
 
-// NewAccountStore returns an AccountStore that runs its queries on db.
-func NewAccountStore(db sqlcgen.DBTX) *AccountStore {
-	return &AccountStore{queries: sqlcgen.New(db)}
+// NewAccountStore returns an AccountStore that runs its queries on pool.
+func NewAccountStore(pool *pgxpool.Pool) *AccountStore {
+	return &AccountStore{queries: sqlcgen.New(pool)}
 }
 
-// NewDirectoryIn returns an AccountStore bound to the caller's snapshot, so
-// its display-name batch reads the same state as the caller's other reads.
-func NewDirectoryIn(snapshot platform.Snapshot) *AccountStore {
-	return NewAccountStore(pgxbridge.Snapshot(snapshot))
-}
-
-// AccountCredentials returns the account with this normalised email and its
-// password hash.
-func (s *AccountStore) AccountCredentials(ctx context.Context, email string) (identity.Account, string, error) {
-	row, err := s.queries.GetAccountByEmail(ctx, email)
+// AccountCredentials returns the ID and password hash of the account with
+// this normalised email.
+func (s *AccountStore) AccountCredentials(ctx context.Context, email string) (domain.ID, string, error) {
+	row, err := s.queries.GetAccountCredentialsByEmail(ctx, email)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return identity.Account{}, "", identity.ErrNoAccount
+		return domain.ID{}, "", identity.ErrNoAccount
 	}
 	if err != nil {
-		return identity.Account{}, "", fmt.Errorf("selecting account: %w", err)
+		return domain.ID{}, "", fmt.Errorf("selecting account: %w", err)
 	}
-	return identity.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName}, row.PasswordHash, nil
+	return row.ID.Bytes, row.PasswordHash, nil
 }
 
-// LookupDisplayNames implements identity.Directory without credentials.
-func (s *AccountStore) LookupDisplayNames(ctx context.Context, ids []domain.ID) (map[domain.ID]string, error) {
-	rows, err := s.queries.LookupDisplayNames(ctx, uuidArray(ids))
+// Directory implements identity.Directory inside a caller's snapshot. It
+// reads only display names, never credentials.
+type Directory struct {
+	queries *sqlcgen.Queries
+}
+
+// NewDirectoryIn returns a Directory bound to the caller's snapshot, so its
+// display-name batch reads the same state as the caller's other reads.
+func NewDirectoryIn(snapshot platform.Snapshot) *Directory {
+	return &Directory{queries: sqlcgen.New(pgxbridge.Snapshot(snapshot))}
+}
+
+// LookupDisplayNames returns the display names of the accounts that exist.
+func (d *Directory) LookupDisplayNames(ctx context.Context, ids []domain.ID) (map[domain.ID]string, error) {
+	rows, err := d.queries.LookupDisplayNames(ctx, uuidArray(ids))
 	if err != nil {
 		return nil, fmt.Errorf("looking up display names: %w", err)
 	}

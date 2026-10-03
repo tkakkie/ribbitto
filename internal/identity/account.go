@@ -3,7 +3,8 @@ package identity
 import "github.com/tkakkie/ribbitto/internal/domain"
 
 // Account is a person who can sign in. It is global, not tied to one
-// organisation; its password hash never leaves the persistence layer.
+// organisation. It carries no credentials: the password hash goes only from
+// identity's store to sign-in, through AccountStore.
 type Account struct {
 	ID          domain.ID
 	Email       string

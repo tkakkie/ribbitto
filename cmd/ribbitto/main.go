@@ -305,10 +305,15 @@ func setupToken() (string, error) {
 	return token, nil
 }
 
+// expiredSessions is what the clean-up needs; *identity.Sessions is one.
+type expiredSessions interface {
+	DeleteExpired(context.Context) error
+}
+
 // startSessionCleanup deletes expired sessions at once and then hourly. The
 // returned function cancels the loop, including a query in progress, and
 // waits for it to finish.
-func startSessionCleanup(ctx context.Context, sessions *identity.Sessions) (stop func()) {
+func startSessionCleanup(ctx context.Context, sessions expiredSessions) (stop func()) {
 	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
@@ -343,7 +348,7 @@ func startRealtimeWorker(ctx context.Context, w interface {
 // deleteExpiredSessions runs until ctx ends. Failures are only logged:
 // expired sessions are already rejected, so a missed run just leaves rows
 // until the next one.
-func deleteExpiredSessions(ctx context.Context, sessions *identity.Sessions) {
+func deleteExpiredSessions(ctx context.Context, sessions expiredSessions) {
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 	for {

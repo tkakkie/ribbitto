@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/tkakkie/ribbitto/internal/domain"
 )
 
 // ErrInvalidInput means the email is not an address or the password is
@@ -20,9 +22,9 @@ var ErrNoAccount = errors.New("no such account")
 
 // AccountStore finds accounts for signing in.
 type AccountStore interface {
-	// AccountCredentials returns the account with this normalised email and
-	// its stored password hash, or ErrNoAccount.
-	AccountCredentials(ctx context.Context, email string) (Account, string, error)
+	// AccountCredentials returns the ID and stored password hash of the
+	// account with this normalised email, or ErrNoAccount.
+	AccountCredentials(ctx context.Context, email string) (accountID domain.ID, passwordHash string, err error)
 }
 
 // SignIn signs accounts in and out.
@@ -46,13 +48,13 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 	if err != nil || password == "" {
 		return "", time.Time{}, ErrInvalidInput
 	}
-	account, hash, err := s.accounts.AccountCredentials(ctx, email)
+	accountID, hash, err := s.accounts.AccountCredentials(ctx, email)
 	if errors.Is(err, ErrNoAccount) {
 		// Do one Argon2id verification as for a real account, which makes
 		// timing-based discovery of accounts much harder. Timing is not
 		// identical when a stored hash uses other parameters than the
 		// current ones.
-		if err := s.hasher.VerifyDummy(ctx, password); err != nil {
+		if err := s.hasher.verifyDummy(ctx, password); err != nil {
 			return "", time.Time{}, err
 		}
 		return "", time.Time{}, ErrInvalidCredentials
@@ -69,7 +71,7 @@ func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken stri
 	}
 	// One transaction creates the new session and ends the one the browser
 	// sent; an uncertain outcome still ends the previous session's streams.
-	return s.sessions.Replace(ctx, previousToken, account.ID)
+	return s.sessions.Replace(ctx, previousToken, accountID)
 }
 
 // SignOut ends the session with this token.

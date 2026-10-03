@@ -116,7 +116,7 @@ func TestSessions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			now := start
 			store := &fakeStore{sessions: map[string]fakeSession{}}
-			sessions := identity.NewSessions(store, func() time.Time { return now })
+			sessions := identity.NewSessions(store, func() time.Time { return now }, nil)
 			token, expiresAt, err := sessions.Create(t.Context(), account)
 			if err != nil {
 				t.Fatal(err)
@@ -151,7 +151,7 @@ func TestSessionsStoreErrors(t *testing.T) {
 	broken := errors.New("connection refused")
 	store := &fakeStore{sessions: map[string]fakeSession{}}
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
-	sessions := identity.NewSessions(store, func() time.Time { return now })
+	sessions := identity.NewSessions(store, func() time.Time { return now }, nil)
 	token, _, err := sessions.Create(t.Context(), domain.ID{1})
 	if err != nil {
 		t.Fatal(err)
@@ -202,7 +202,7 @@ func TestSessionsEndStreamsFailClosed(t *testing.T) {
 			t.Run(operation+"/"+tt.name, func(t *testing.T) {
 				store := &fakeStore{sessions: map[string]fakeSession{}}
 				ended := &canceller{hub: realtime.NewHub()}
-				sessions := identity.NewSessionsWithCanceller(store, time.Now, ended)
+				sessions := identity.NewSessions(store, time.Now, ended)
 				open := func() (string, identity.Session, context.Context) {
 					t.Helper()
 					token, _, err := sessions.Create(t.Context(), domain.ID{1})
@@ -313,7 +313,7 @@ func TestSessionsWithoutLivePreviousSession(t *testing.T) {
 				now := time.Now()
 				store := &fakeStore{sessions: map[string]fakeSession{}}
 				ended := &canceller{hub: realtime.NewHub()}
-				sessions := identity.NewSessionsWithCanceller(store, func() time.Time { return now }, ended)
+				sessions := identity.NewSessions(store, func() time.Time { return now }, ended)
 				token, _, err := sessions.Create(t.Context(), domain.ID{1})
 				if err != nil {
 					t.Fatal(err)

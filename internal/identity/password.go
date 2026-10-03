@@ -111,10 +111,10 @@ func (h *Hasher) Verify(ctx context.Context, password, stored string) (bool, err
 	return subtle.ConstantTimeCompare(key, p.key) == 1, nil
 }
 
-// VerifyDummy does the work of a verification against a hash no password
+// verifyDummy does the work of a verification against a hash no password
 // matches. Sign-in calls it for unknown emails so that response time does
 // not tell which accounts exist.
-func (h *Hasher) VerifyDummy(ctx context.Context, password string) error {
+func (h *Hasher) verifyDummy(ctx context.Context, password string) error {
 	_, err := h.Verify(ctx, password, h.dummy)
 	return err
 }

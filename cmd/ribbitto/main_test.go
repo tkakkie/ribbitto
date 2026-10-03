@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
@@ -32,30 +31,20 @@ func TestSetupToken(t *testing.T) {
 	}
 }
 
-// blockingStore's clean-up blocks until its context ends, like a query
-// waiting on a lock.
-type blockingStore struct{ started chan struct{} }
+// blockingCleanup blocks until its context ends, like a query waiting on a
+// lock.
+type blockingCleanup struct{ started chan struct{} }
 
-func (blockingStore) CreateSession(context.Context, []byte, domain.ID, time.Time) error { return nil }
-func (blockingStore) SessionAccount(context.Context, []byte, time.Time) (identity.Account, identity.Session, error) {
-	return identity.Account{}, identity.Session{}, identity.ErrNoSession
-}
-func (blockingStore) DeleteSession(context.Context, []byte) (domain.ID, bool, error) {
-	return domain.ID{}, false, nil
-}
-func (blockingStore) ReplaceSession(context.Context, []byte, []byte, domain.ID, time.Time) (domain.ID, bool, error) {
-	return domain.ID{}, false, nil
-}
-func (s blockingStore) DeleteExpiredSessions(ctx context.Context, _ time.Time) error {
+func (s blockingCleanup) DeleteExpired(ctx context.Context) error {
 	close(s.started)
 	<-ctx.Done()
 	return ctx.Err()
 }
 
 func TestSessionCleanupStops(t *testing.T) {
-	store := blockingStore{started: make(chan struct{})}
+	store := blockingCleanup{started: make(chan struct{})}
 	// The parent context stays alive, as when serve returns a listener error.
-	stop := startSessionCleanup(context.Background(), identity.NewSessions(store, time.Now))
+	stop := startSessionCleanup(context.Background(), store)
 	<-store.started
 	stopped := make(chan struct{})
 	go func() {

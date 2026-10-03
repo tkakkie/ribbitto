@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createSession = `-- name: CreateSession :one
-INSERT INTO session (token_hash, account_id, expires_at) VALUES ($1, $2, $3) RETURNING id, token_hash, account_id, created_at, expires_at
+const createSession = `-- name: CreateSession :exec
+INSERT INTO session (token_hash, account_id, expires_at) VALUES ($1, $2, $3)
 `
 
 type CreateSessionParams struct {
@@ -21,17 +21,9 @@ type CreateSessionParams struct {
 	ExpiresAt pgtype.Timestamptz
 }
 
-func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
-	row := q.db.QueryRow(ctx, createSession, arg.TokenHash, arg.AccountID, arg.ExpiresAt)
-	var i Session
-	err := row.Scan(
-		&i.ID,
-		&i.TokenHash,
-		&i.AccountID,
-		&i.CreatedAt,
-		&i.ExpiresAt,
-	)
-	return i, err
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
+	_, err := q.db.Exec(ctx, createSession, arg.TokenHash, arg.AccountID, arg.ExpiresAt)
+	return err
 }
 
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
@@ -68,7 +60,7 @@ func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash []byte
 }
 
 const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
-SELECT session.id, session.token_hash, session.account_id, session.created_at, session.expires_at, account.id, account.email, account.display_name
+SELECT session.id AS session_id, session.expires_at, account.id, account.email, account.display_name
 FROM session JOIN account ON account.id = session.account_id
 WHERE session.token_hash = $1 AND session.expires_at > $2
 `
@@ -79,7 +71,8 @@ type GetSessionByTokenHashParams struct {
 }
 
 type GetSessionByTokenHashRow struct {
-	Session     Session
+	SessionID   pgtype.UUID
+	ExpiresAt   pgtype.Timestamptz
 	ID          pgtype.UUID
 	Email       string
 	DisplayName string
@@ -89,11 +82,8 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, arg GetSessionByTok
 	row := q.db.QueryRow(ctx, getSessionByTokenHash, arg.TokenHash, arg.Now)
 	var i GetSessionByTokenHashRow
 	err := row.Scan(
-		&i.Session.ID,
-		&i.Session.TokenHash,
-		&i.Session.AccountID,
-		&i.Session.CreatedAt,
-		&i.Session.ExpiresAt,
+		&i.SessionID,
+		&i.ExpiresAt,
 		&i.ID,
 		&i.Email,
 		&i.DisplayName,

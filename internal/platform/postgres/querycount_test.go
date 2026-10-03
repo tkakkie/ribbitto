@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 func TestQueryCounterClassifies(t *testing.T) {
@@ -53,5 +53,12 @@ func TestOpenPoolTracer(t *testing.T) {
 	after := counter.Counts()
 	if after.Begins-before.Begins != 2 || after.Commits-before.Commits != 1 || after.Rollbacks-before.Rollbacks != 1 || after.Queries-before.Queries != 1 {
 		t.Fatalf("counts moved from %+v to %+v", before, after)
+	}
+}
+
+func requireNoError(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
 	}
 }

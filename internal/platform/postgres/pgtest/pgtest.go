@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/tkakkie/ribbitto/db/migrations"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
 const templateLock = 0x726962626974746f

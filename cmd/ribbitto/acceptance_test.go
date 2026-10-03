@@ -17,8 +17,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
@@ -35,7 +35,7 @@ func acceptanceDatabase(t *testing.T) *pgxpool.Pool {
 	pool := pgtest.NewEmpty(t)
 	db := stdlib.OpenDBFromPool(pool)
 	defer func() { acceptanceOK(t, db.Close()) }()
-	acceptanceOK(t, postgres.Migrate(t.Context(), db, "up", io.Discard))
+	acceptanceOK(t, platform.Migrate(t.Context(), db, "up", io.Discard))
 	return pool
 }
 

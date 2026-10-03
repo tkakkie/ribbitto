@@ -22,18 +22,20 @@ linters:
       # File globs need separate selectors for roots and descendants.
       # Layer rules exclude tests; migration ownership also applies to tests.
       rules:
+        # Temporary (decision 26, until the migration's last step): the
+        # target-version tests in internal/infra/postgres keep migrating
+        # directly until their module moves.
         migrations:
           list-mode: lax
-          files: ["$all", "!**/internal/infra/postgres/*.go", "!**/internal/infra/postgres/**/*.go", "!**/cmd/ribbitto/*.go", "!**/cmd/ribbitto/**/*.go"]
+          files: ["$all", "!**/internal/platform/postgres/*.go", "!**/internal/platform/postgres/**/*.go", "!**/internal/infra/postgres/*_test.go", "!**/cmd/ribbitto/*.go", "!**/cmd/ribbitto/**/*.go"]
           deny:
             - pkg: github.com/tkakkie/ribbitto/db/migrations
-              desc: Only internal/infra/postgres and cmd/ribbitto own migrations.
-        domain:
+              desc: Only internal/platform/postgres and cmd/ribbitto own migrations.
+        kernel:
           list-mode: lax
-          files: ["**/internal/domain/*.go", "**/internal/domain/**/*.go", "!$test"]
+          files: ["**/internal/kernel/*.go", "**/internal/kernel/**/*.go", "!$test"]
           allow:
-            - github.com/tkakkie/ribbitto/internal/domain$
-            - github.com/tkakkie/ribbitto/internal/domain/
+            - github.com/tkakkie/ribbitto/internal/kernel$
           deny: &non_html
             - pkg: github.com/tkakkie/ribbitto/internal/
               desc: Respect the dependency direction in AGENTS.md.
@@ -43,6 +45,24 @@ linters:
               desc: Only internal/web produces HTML; see AGENTS.md.
             - pkg: html/template$
               desc: Only internal/web produces HTML; see AGENTS.md.
+        platform:
+          list-mode: lax
+          files: ["**/internal/platform/*.go", "**/internal/platform/**/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/platform$
+            - github.com/tkakkie/ribbitto/internal/platform/
+            - github.com/tkakkie/ribbitto/internal/kernel$
+          deny: *non_html
+        # domain keeps ID as an alias of kernel.ID until the migration's last
+        # step removes the package (decision 26).
+        domain:
+          list-mode: lax
+          files: ["**/internal/domain/*.go", "**/internal/domain/**/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/domain$
+            - github.com/tkakkie/ribbitto/internal/domain/
+            - github.com/tkakkie/ribbitto/internal/kernel$
+          deny: *non_html
         app:
           list-mode: lax
           files: ["**/internal/app/*.go", "**/internal/app/**/*.go", "!$test"]
@@ -62,6 +82,9 @@ linters:
             - github.com/tkakkie/ribbitto/internal/domain/
             - github.com/tkakkie/ribbitto/internal/app$
             - github.com/tkakkie/ribbitto/internal/app/
+            # Temporary: infra/postgres/pgtest delegates to the platform's
+            # database lifecycle until the migration's last step.
+            - github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest$
           deny: *non_html
         realtime:
           list-mode: lax

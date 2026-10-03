@@ -28,6 +28,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
 //go:embed conversations.json
@@ -120,7 +121,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	if err != nil {
 		return err
 	}
-	pool, err := postgres.OpenPool(ctx, databaseURL, nil)
+	pool, err := platform.OpenPool(ctx, databaseURL, nil)
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}

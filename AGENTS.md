@@ -52,8 +52,11 @@ interfaces), `web` (handlers and templ; imports `domain`, `app`,
 `realtime`, never `infra`). Handlers call use cases that return plain
 structs; only `internal/web` produces HTML, with components in `internal/web/view`.
 It may import `web/static` for embedded assets. Do not add an import that breaks this.
-`db/migrations` is owned by `internal/infra/postgres` and may be imported
-only by it and `cmd/ribbitto`.
+`db/migrations` is owned by `internal/platform/postgres` and may be imported
+only by it and `cmd/ribbitto`. The move to modules ([decision 26](docs/decisions/26-modules-by-feature-layout-seams-and-order.md))
+adds `internal/kernel` (`ID` only) and `internal/platform/postgres` (pool,
+migrations, test databases; no feature queries); the layers stay until
+their modules move, and the feature map's *Target* lists the temporary paths.
 
 Features: the code is heading for a modular monolith by feature
 ([decision 14](docs/decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)); the feature map in

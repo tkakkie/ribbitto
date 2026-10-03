@@ -23,6 +23,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
@@ -66,7 +67,7 @@ func TestStreamCost(t *testing.T) {
 	// templates); the benchmark migrates it itself.
 	fixturePool := pgtest.NewEmpty(t)
 	db := stdlib.OpenDBFromPool(fixturePool)
-	if err := postgres.Migrate(t.Context(), db, "up", io.Discard); err != nil {
+	if err := platform.Migrate(t.Context(), db, "up", io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -92,7 +93,7 @@ func TestStreamCost(t *testing.T) {
 		}
 		config.MaxConns = int32(n)
 	}
-	queries := postgres.NewQueryCounter()
+	queries := platform.NewQueryCounter()
 	config.ConnConfig.Tracer = queries
 	pool, err := pgxpool.NewWithConfig(t.Context(), config)
 	if err != nil {
@@ -183,7 +184,7 @@ func per(n int64, d int) float64 {
 // measureStep opens n streams from the current sequence, posts at rate for
 // duration, waits for every delivery or a drain deadline, and closes them.
 // Counts cover the posting window and the drain, not the streams' start.
-func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service, pool *pgxpool.Pool, queries *postgres.QueryCounter,
+func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service, pool *pgxpool.Pool, queries *platform.QueryCounter,
 	events, dbReads *countingReader, m authz.Membership, subs []realtime.Subscription, n, rate int, duration time.Duration) stepResult {
 	t.Helper()
 	sub := subs[0]

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -120,14 +121,103 @@ func TestBranchStore(t *testing.T) {
 		{"from another channel's topic", topic.Branch{Messages: []domain.ID{elsewhere.ID}, From: random.DefaultTopicID, To: &dest.ID}, topic.ErrNotFound},
 		{"a taken name", topic.Branch{Messages: []domain.ID{posted[0].ID}, From: dest.ID, NewName: "DESIGN"}, topic.ErrNameTaken},
 	} {
-		if _, _, err := store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, tt.b, notice); !errors.Is(err, tt.want) {
-			t.Fatalf("%s: %v, want %v", tt.name, err, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			before := readBranchState(t, pool, acme.OrganizationID)
+			if _, _, err := store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, tt.b, notice); !errors.Is(err, tt.want) {
+				t.Fatalf("%s: %v, want %v", tt.name, err, tt.want)
+			}
+			assertBranchState(t, readBranchState(t, pool, acme.OrganizationID), before)
+		})
 	}
 	listed, err := topics.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 10)
 	requireNoError(t, err)
 	if eventSeq(t, pool, acme.OrganizationID) != after || len(listed) != 2 {
 		t.Fatalf("a refused branch changed something: event_seq %d (was %d), topics %+v", eventSeq(t, pool, acme.OrganizationID), after, listed)
+	}
+}
+
+func TestBranchStorePartlyStaleSelection(t *testing.T) {
+	t.Parallel()
+	for _, existing := range []bool{false, true} {
+		name := "new topic"
+		if existing {
+			name = "existing topic"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			pool := pgtest.New(t)
+			ctx := t.Context()
+			acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+			posting, store, topics := postgres.NewPostingStore(pool), postgres.NewBranchStore(pool), postgres.NewTopicStore(pool)
+			valid, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "still in source")
+			requireNoError(t, err)
+			stale, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "already moved")
+			requireNoError(t, err)
+			source := acme.Channel.DefaultTopicID
+			notice := func(d domain.Topic) string { return "moved to " + d.Name }
+			_, _, err = store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, topic.Branch{Messages: []domain.ID{stale.ID}, From: source, NewName: "elsewhere"}, notice)
+			requireNoError(t, err)
+
+			b := topic.Branch{Messages: []domain.ID{valid.ID, stale.ID}, From: source, NewName: "destination"}
+			if existing {
+				dest, err := topics.CreateTopic(ctx, acme.OrganizationID, acme.Channel.ID, b.NewName)
+				requireNoError(t, err)
+				b.To, b.NewName = &dest.ID, ""
+			}
+			before := readBranchState(t, pool, acme.OrganizationID)
+			// MoveMessages updates the valid row before detecting the stale
+			// selection, so refusing must undo that topic_id change too.
+			_, _, err = store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, b, notice)
+			if !errors.Is(err, topic.ErrConflict) {
+				t.Fatalf("partly stale selection: %v, want %v", err, topic.ErrConflict)
+			}
+			assertBranchState(t, readBranchState(t, pool, acme.OrganizationID), before)
+		})
+	}
+}
+
+type branchMessage struct {
+	id, topic domain.ID
+}
+
+type branchState struct {
+	messages            []branchMessage
+	seq, events, topics int64
+}
+
+func readBranchState(t *testing.T, pool *pgxpool.Pool, org domain.ID) branchState {
+	t.Helper()
+	var state branchState
+	requireNoError(t, pool.QueryRow(t.Context(), `SELECT event_seq,
+		(SELECT count(*) FROM event_log WHERE organization_id = $1),
+		(SELECT count(*) FROM topic WHERE organization_id = $1)
+		FROM organization WHERE id = $1`, org).Scan(&state.seq, &state.events, &state.topics))
+	rows, err := pool.Query(t.Context(), "SELECT id, topic_id FROM message WHERE organization_id = $1 ORDER BY id", org)
+	requireNoError(t, err)
+	defer rows.Close()
+	for rows.Next() {
+		var m branchMessage
+		requireNoError(t, rows.Scan(&m.id, &m.topic))
+		state.messages = append(state.messages, m)
+	}
+	requireNoError(t, rows.Err())
+	return state
+}
+
+func assertBranchState(t *testing.T, got, want branchState) {
+	t.Helper()
+	// Comparing all message IDs also detects an unexpected branch notice.
+	if !slices.Equal(got.messages, want.messages) {
+		t.Errorf("messages after refusal: %+v, want %+v", got.messages, want.messages)
+	}
+	if got.events != want.events {
+		t.Errorf("event_log rows after refusal: %d, want %d", got.events, want.events)
+	}
+	if got.seq != want.seq {
+		t.Errorf("event_seq after refusal: %d, want %d", got.seq, want.seq)
+	}
+	if got.topics != want.topics {
+		t.Errorf("topics after refusal: %d, want %d", got.topics, want.topics)
 	}
 }
 

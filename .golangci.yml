@@ -139,8 +139,9 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app$
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/identity$
-            # Temporary, until the migration's last step: the legacy event
-            # reader and writer use realtime's event types.
+            # Temporary, until the migration's last step: the flows' appender
+            # interface, org's adapters for realtime (cursor bounds, committed
+            # sequences, the retention lock and boundary) and the kind list.
             - github.com/tkakkie/ribbitto/internal/realtime$
             # Temporary, until the migration's last step: infra/postgres/pgtest
             # delegates to the platform's database lifecycle, and the legacy
@@ -173,7 +174,6 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/realtime$
-            - github.com/tkakkie/ribbitto/internal/realtime/
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/
               desc: Respect the dependency direction in AGENTS.md.

@@ -26,15 +26,6 @@ type Channel struct {
 	DefaultTopicIsDefault bool
 }
 
-type EventLog struct {
-	OrganizationID   pgtype.UUID
-	Seq              int64
-	Kind             string
-	AudienceMemberID pgtype.UUID
-	Data             []byte
-	CreatedAt        pgtype.Timestamptz
-}
-
 type Member struct {
 	ID             pgtype.UUID
 	OrganizationID pgtype.UUID
@@ -63,20 +54,6 @@ type Organization struct {
 	EventSeq            int64
 	CreatedAt           pgtype.Timestamptz
 	EventLogBoundarySeq int64
-}
-
-type Session struct {
-	ID        pgtype.UUID
-	TokenHash []byte
-	AccountID pgtype.UUID
-	CreatedAt pgtype.Timestamptz
-	ExpiresAt pgtype.Timestamptz
-}
-
-type Setup struct {
-	ID             bool
-	OrganizationID pgtype.UUID
-	CompletedAt    pgtype.Timestamptz
 }
 
 type Topic struct {

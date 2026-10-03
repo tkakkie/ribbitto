@@ -18,7 +18,7 @@ what a run measures. Each has a disposition, agreed by the maintainer on
 |---|---|---|
 | A4 | The live render cache is bounded by entries (4096, `renderCapacity` in `web/stream_renderer.go`), not by bytes. An entry holds one rendered message; a 4,000-character body escapes and appears twice, so one entry can approach tens of kilobytes. | **Test with explicit limits.** Each step records total heap and an estimate of the cache's own share (below), from values the run can already read. A byte budget is added only if those numbers show the entry bound is not enough. |
 | A5 | There is no process-wide or per-address cap on open streams, only `DefaultMaxStreamsPerAccount` (16) per account ([stream limits](stream-limits.md)). | **Test without a cap**, so the ceiling #216 looks for is not hidden by one. After #216, a process-wide cap is sized from its first failing step and answered like the per-account cap: 429 before the stream starts. |
-| A7 | Detached cache loads (`realtime.Cache`) are neither bounded nor cancelled when every waiter leaves, and can delay exit after shutdown. | **Implement first:** #297 bounds and cancels them before either run, so neither measures a pile-up of abandoned loads and #219's SIGTERM-to-exit time measures the fixed behaviour. |
+| A7 | Detached cache loads (`realtime.Cache`) are neither bounded nor cancelled when every waiter leaves, and can delay exit after shutdown. | **Done first:** #297 (#316) bounds and cancels them before either run, so neither measures a pile-up of abandoned loads and #219's SIGTERM-to-exit time measures the fixed behaviour. |
 
 The event cache (`realtime.NewCachedEvents`, 1024 entries, one minute) is
 bounded by entries too, but an entry holds IDs-only events and a batch is

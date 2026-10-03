@@ -10,7 +10,8 @@ import (
 // the replay boundary or above the committed event_seq.
 var ErrCursorExpired = errors.New("event cursor expired")
 
-// EventKind identifies a durable change. Readers skip unknown kinds.
+// EventKind identifies a durable change. The reader keeps an unregistered
+// kind's envelope with no channel or topics, so streams skip it.
 type EventKind string
 
 const (

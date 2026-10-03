@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
@@ -30,7 +30,7 @@ func (s setupBarrier) Open(ctx context.Context) (bool, error) {
 
 func TestSetup(t *testing.T) {
 	t.Parallel()
-	hasher, err := auth.NewHasher()
+	hasher, err := identity.NewHasher()
 	requireNoError(t, err)
 	for _, attempts := range []int{1, 10} {
 		t.Run(fmt.Sprint(attempts), func(t *testing.T) {

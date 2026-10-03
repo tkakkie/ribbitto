@@ -16,7 +16,7 @@ cases, stores, `db/queries/**`, `db/migrations/**`, scripts):
 1. authentication, authorisation, sessions or organisation scoping: who is
    signed in, who is a member, what a member may see or do, and how a
    session expires (for example `internal/app/authz/**`,
-   `internal/app/auth/**`, `internal/web/middleware/**`, `internal/web/org.go`,
+   `internal/identity/**`, `internal/web/middleware/**`, `internal/web/org.go`,
    the setup, sign-up and sign-in handlers, and the stores and queries for
    accounts, members and sessions);
 2. real-time delivery, on the server (`internal/realtime/**`, the stream

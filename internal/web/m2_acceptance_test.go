@@ -14,9 +14,9 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -29,7 +29,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
+	sessions := identity.NewSessions(postgres.NewSessionStore(pool), time.Now)
 	var logs bytes.Buffer
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&logs, nil)))
 	if err != nil {

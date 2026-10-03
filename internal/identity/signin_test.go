@@ -1,4 +1,4 @@
-package auth_test
+package identity_test
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
 type fakeAccounts struct {
@@ -21,13 +21,13 @@ func (f fakeAccounts) AccountCredentials(_ context.Context, email string) (domai
 		return domain.Account{}, "", f.err
 	}
 	if email != f.account.Email {
-		return domain.Account{}, "", auth.ErrNoAccount
+		return domain.Account{}, "", identity.ErrNoAccount
 	}
 	return f.account, f.hash, nil
 }
 
 func TestSignIn(t *testing.T) {
-	hasher, err := auth.NewHasher()
+	hasher, err := identity.NewHasher()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,23 +48,23 @@ func TestSignIn(t *testing.T) {
 		want            error
 	}{
 		{"success, email normalised", t.Context(), fakeAccounts{account: alice, hash: hash}, "  Alice@Example.com ", password, nil},
-		{"wrong password", t.Context(), fakeAccounts{account: alice, hash: hash}, "alice@example.com", password + "!", auth.ErrInvalidCredentials},
-		{"unknown email", t.Context(), fakeAccounts{account: alice, hash: hash}, "bob@example.com", password, auth.ErrInvalidCredentials},
+		{"wrong password", t.Context(), fakeAccounts{account: alice, hash: hash}, "alice@example.com", password + "!", identity.ErrInvalidCredentials},
+		{"unknown email", t.Context(), fakeAccounts{account: alice, hash: hash}, "bob@example.com", password, identity.ErrInvalidCredentials},
 		// With a cancelled context the hasher refuses to work, so ErrBusy
 		// proves an unknown email still goes through a verification.
-		{"unknown email still verifies", cancelled, fakeAccounts{account: alice, hash: hash}, "bob@example.com", password, auth.ErrBusy},
-		{"empty password", t.Context(), fakeAccounts{account: alice, hash: hash}, "alice@example.com", "", auth.ErrInvalidInput},
-		{"not an email", t.Context(), fakeAccounts{account: alice, hash: hash}, "alice", password, auth.ErrInvalidInput},
+		{"unknown email still verifies", cancelled, fakeAccounts{account: alice, hash: hash}, "bob@example.com", password, identity.ErrBusy},
+		{"empty password", t.Context(), fakeAccounts{account: alice, hash: hash}, "alice@example.com", "", identity.ErrInvalidInput},
+		{"not an email", t.Context(), fakeAccounts{account: alice, hash: hash}, "alice", password, identity.ErrInvalidInput},
 		{"store error", t.Context(), fakeAccounts{err: broken}, "alice@example.com", password, broken},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &fakeStore{sessions: map[string]fakeSession{}}
-			sessions := auth.NewSessions(store, time.Now)
+			sessions := identity.NewSessions(store, time.Now)
 			previous, _, err := sessions.Create(t.Context(), alice.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			signIn := auth.NewSignIn(tt.accounts, hasher, sessions)
+			signIn := identity.NewSignIn(tt.accounts, hasher, sessions)
 			token, _, err := signIn.SignIn(tt.ctx, tt.email, tt.password, previous)
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("SignIn error = %v, want %v", err, tt.want)
@@ -82,13 +82,13 @@ func TestSignIn(t *testing.T) {
 			}
 			// Session fixation: the token the browser sent before must not
 			// survive sign-in.
-			if token == previous || !errors.Is(previousErr, auth.ErrNoSession) {
+			if token == previous || !errors.Is(previousErr, identity.ErrNoSession) {
 				t.Fatalf("previous token still resolves after sign-in: %v", previousErr)
 			}
 			if err := signIn.SignOut(t.Context(), token); err != nil {
 				t.Fatal(err)
 			}
-			if _, _, err := sessions.Resolve(t.Context(), token); !errors.Is(err, auth.ErrNoSession) {
+			if _, _, err := sessions.Resolve(t.Context(), token); !errors.Is(err, identity.ErrNoSession) {
 				t.Fatalf("token resolves after sign-out: %v", err)
 			}
 		})
@@ -103,7 +103,7 @@ func (failingReplace) ReplaceSession(context.Context, []byte, []byte, domain.ID,
 }
 
 func TestSignInReplacementFailure(t *testing.T) {
-	hasher, err := auth.NewHasher()
+	hasher, err := identity.NewHasher()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,16 +114,16 @@ func TestSignInReplacementFailure(t *testing.T) {
 	}
 	alice := domain.Account{ID: domain.ID{7}, Email: "alice@example.com"}
 	base := &fakeStore{sessions: map[string]fakeSession{}}
-	previous, _, err := auth.NewSessions(base, time.Now).Create(t.Context(), alice.ID)
+	previous, _, err := identity.NewSessions(base, time.Now).Create(t.Context(), alice.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	signIn := auth.NewSignIn(fakeAccounts{account: alice, hash: hash}, hasher, auth.NewSessions(failingReplace{base}, time.Now))
+	signIn := identity.NewSignIn(fakeAccounts{account: alice, hash: hash}, hasher, identity.NewSessions(failingReplace{base}, time.Now))
 	if _, _, err := signIn.SignIn(t.Context(), alice.Email, password, previous); err == nil {
 		t.Fatal("sign-in succeeded despite the store failure")
 	}
 	// A failed replacement changes nothing: the browser keeps its session.
-	if _, _, err := auth.NewSessions(base, time.Now).Resolve(t.Context(), previous); err != nil || len(base.sessions) != 1 {
+	if _, _, err := identity.NewSessions(base, time.Now).Resolve(t.Context(), previous); err != nil || len(base.sessions) != 1 {
 		t.Fatalf("previous session: %v; %d sessions, want 1", err, len(base.sessions))
 	}
 }

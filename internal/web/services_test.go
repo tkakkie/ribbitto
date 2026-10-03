@@ -4,13 +4,13 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 )
 
@@ -47,15 +47,15 @@ func asAlice(s *Services) {
 // can control their clock. A non-empty setupToken enables setup; signUp adds
 // sign-up with the operator's switch on. Rate limits stay off: a suite that
 // tests them sets Limits.
-func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *auth.Sessions, setupToken string, signUp bool) Services {
+func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessions, setupToken string, signUp bool) Services {
 	t.Helper()
-	hasher, err := auth.NewHasher()
+	hasher, err := identity.NewHasher()
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := Services{
 		Sessions:  sessions,
-		SignIn:    auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
+		SignIn:    identity.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
 		Authz:     authz.New(postgres.NewAuthzStore(pool)),
 		Channels:  channel.New(postgres.NewChannelStore(pool)),
 		Topics:    postgres.NewTopicStore(pool),

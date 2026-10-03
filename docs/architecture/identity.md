@@ -1,6 +1,6 @@
 # Sessions and signing in
 
-`internal/app/auth.Sessions` owns the session lifecycle; `internal/web/middleware`
+`internal/identity.Sessions` owns the session lifecycle; `internal/web/middleware`
 connects it to HTTP.
 
 - **Create** (inside `Replace`, below): 32 random bytes from `crypto/rand` are
@@ -10,7 +10,7 @@ connects it to HTTP.
 - **Resolve** (every request): the token is decoded strictly, hashed and
   looked up together with its account, only while `expires_at` is after the
   application clock's now. A malformed, unknown, deleted or expired token is
-  `auth.ErrNoSession`, meaning signed out; a store error stays an error, so
+  `identity.ErrNoSession`, meaning signed out; a store error stays an error, so
   a database outage is not mistaken for a sign-out.
 - **Delete** (sign-out): the row goes, so the token stops working at once.
 - **Open streams** (#207): `Resolve` also returns the session's id and
@@ -20,7 +20,7 @@ connects it to HTTP.
   the deleted session's id. On a mutation error they cancel the resolved id
   anyway: the deletion may have committed even if the store returned no id.
   This fails closed; after a rollback the streams reconnect and re-check the
-  still-valid session. Other sessions stay connected. `auth.ErrNoSession`
+  still-valid session. Other sessions stay connected. `identity.ErrNoSession`
   (empty, malformed, unknown, deleted or expired token) preserves idempotent
   sign-out and replacement creation; an operational lookup error aborts
   without changing sessions or cancelling streams. This extra lookup happens
@@ -33,7 +33,7 @@ connects it to HTTP.
 Session token hashes must never be logged; PostgreSQL errors from session
 creation and replacement omit the detail, which could contain the hash.
 
-**Signing in** (`auth.SignIn`). The email is normalised and looked up.
+**Signing in** (`identity.SignIn`). The email is normalised and looked up.
 An unknown email still runs one Argon2id verification against a dummy hash
 made with the current parameters and gets the same `ErrInvalidCredentials`
 as a wrong password, which makes timing-based discovery of accounts much
@@ -60,7 +60,7 @@ from email or chat), and cross-origin POSTs are stopped separately
 
 **Sign-in and sign-out pages** (`internal/web/signin.go`). `GET /signin`
 shows the form (a signed-in request is redirected to `/`). `POST /signin`
-calls `auth.SignIn` (above) with the cookie the browser sent, so that
+calls `identity.SignIn` (above) with the cookie the browser sent, so that
 session is the one replaced; on success it sets the new cookie and
 redirects to `/` with 303. An unknown email and a wrong password get the
 same page, status (422) and message; the typed email is kept and the
@@ -68,5 +68,5 @@ password never echoed. An email rejected by `domain.ValidateEmail` or an
 empty password gets 422 with its own message, without revealing whether an
 account exists. A busy hasher answers 503. `POST /signout` deletes
 the session row, clears the cookie and redirects to `/signin`; there is no
-GET sign-out. `cmd/ribbitto` creates the process's one `auth.Hasher` here
+GET sign-out. `cmd/ribbitto` creates the process's one `identity.Hasher` here
 and shares it with every authentication use case.

@@ -21,10 +21,11 @@ packages. See [load client](load-client.md) for limits and usage.
 | `internal/kernel` | What every module shares and none owns ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)): `ID` only today. | nothing |
 | `internal/platform/postgres` | The pool, the migration connection and runner, statement counting for development metrics, test databases (`pgtest`), and the opaque `Tx` and `Snapshot` with `InTx` and `InSnapshot`. No feature queries. Its `pgxbridge` unwraps a handle to pgx, for stores only. | `kernel`, `db/migrations` |
 | `internal/domain` | Entities, value types, invariants, domain errors and domain event types. No I/O. `ID` is an alias of `kernel.ID` until the migration's last step. | `kernel` |
-| `internal/app` | Use cases and the **only** authorization logic. Decides what must be atomic; the PostgreSQL adapters open and commit the transactions (see [the feature map](features.md)). Defines the interfaces it needs (repositories, event publisher). | `domain` |
-| `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces. Its `pgtest` keeps the feature fixtures and delegates databases to the platform until the migration's last step. | `domain`, `app`, `platform/postgres/pgtest`; until that step also allowed `platform/postgres` and its `pgxbridge` |
+| `internal/identity` | The `identity` module's root (step 1a): password hashing, sessions, signing in and the display-name `Directory`, with the store interfaces they need. | `kernel`, `platform`; `domain` until the migration's last step (`Account` and `ValidateEmail` until step 1a-2) |
+| `internal/app` | Use cases and the **only** authorization logic. Decides what must be atomic; the PostgreSQL adapters open and commit the transactions (see [the feature map](features.md)). Defines the interfaces it needs (repositories, event publisher). | `domain`, `identity` |
+| `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces. Its `pgtest` keeps the feature fixtures and delegates databases to the platform until the migration's last step. | `domain`, `app`, `identity`, `platform/postgres/pgtest`; until that step also allowed `platform/postgres` and its `pgxbridge` |
 | `internal/realtime` | Real-time delivery (M3): the hub's latest sequences and connection registry, the per-connection delivery loop, shared reads, the watermark check and event retention; presence is planned. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
-| `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `realtime`, `web/static` |
+| `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `identity`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |
 
@@ -34,11 +35,12 @@ fails `make check`:
 
 - each layer's imports **within `internal/`** (other imports from this module
   are listed above by convention, not enforced per layer);
-- the `view` rule forbids `internal/web/view` from importing `internal/app`
-  or `internal/infra`, including sub-packages (see [web layers](web-layers.md));
-- `domain`, `app`, `infra/postgres` and `realtime` cannot import
+- the `view` rule forbids `internal/web/view` from importing `internal/app`,
+  `internal/identity` or `internal/infra`, including sub-packages (see [web layers](web-layers.md));
+- `domain`, `identity`, `app`, `infra/postgres` and `realtime` cannot import
   `github.com/a-h/templ` (including sub-packages) or `html/template`;
-- `kernel` imports nothing internal; `platform` only `kernel`;
+- `kernel` imports nothing internal; `platform` only `kernel`; `app`,
+  `infra/postgres` and `web` import only a module's root;
 - only stores (`**/internal/postgres/**`) import `platform/postgres/pgxbridge`,
   and `internal/infra/postgres` until the migration's last step;
   `make lint-fixtures` (part of `make check`) proves a module root is
@@ -57,12 +59,13 @@ in `AGENTS.md`. Fixtures under `testdata/` are excluded.
 
 ```mermaid
 flowchart LR
-  cmd[cmd/ribbitto] --> web & app & postgres[infra/postgres] & realtime & platform[platform/postgres] & migrations[db/migrations]
-  seed[cmd/seed] --> app & postgres & platform & domain
-  web[internal/web] --> app & domain & realtime & static[web/static]
-  postgres --> app & domain
+  cmd[cmd/ribbitto] --> web & app & identity & postgres[infra/postgres] & realtime & platform[platform/postgres] & migrations[db/migrations]
+  seed[cmd/seed] --> app & identity & postgres & platform & domain
+  web[internal/web] --> app & identity & domain & realtime & static[web/static]
+  postgres --> app & identity & domain & platform
   realtime[internal/realtime] --> domain
-  app[internal/app] --> domain[internal/domain]
+  app[internal/app] --> identity & domain[internal/domain]
+  identity[internal/identity] --> kernel & platform & domain
   domain --> kernel[internal/kernel]
   platform --> kernel & migrations
 ```

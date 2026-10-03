@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
 // Entry is a stored message with its current author names and topic label.
@@ -33,7 +33,7 @@ type History interface {
 type Reader struct {
 	History  History
 	Members  member.Directory
-	Accounts auth.Directory
+	Accounts identity.Directory
 	Topics   topic.Directory
 }
 

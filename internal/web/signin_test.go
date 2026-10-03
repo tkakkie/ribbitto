@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -42,11 +42,11 @@ func (f *fakeSignIn) SignOut(_ context.Context, token string) error {
 // oneSession signs in whoever sends the cookie value "live".
 type oneSession struct{}
 
-func (oneSession) Resolve(_ context.Context, token string) (domain.Account, auth.Session, error) {
+func (oneSession) Resolve(_ context.Context, token string) (domain.Account, identity.Session, error) {
 	if token == "live" {
-		return domain.Account{ID: domain.ID{1}, DisplayName: "Alice"}, auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, nil
+		return domain.Account{ID: domain.ID{1}, DisplayName: "Alice"}, identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, nil
 	}
-	return domain.Account{}, auth.Session{}, auth.ErrNoSession
+	return domain.Account{}, identity.Session{}, identity.ErrNoSession
 }
 
 func newSignInHandler(t *testing.T, service *fakeSignIn) http.Handler {
@@ -108,11 +108,11 @@ func TestSignInPost(t *testing.T) {
 		}
 	})
 	// Unknown email and wrong password both arrive as ErrInvalidCredentials
-	// (auth tests prove that); the page must not differ by input either.
+	// (identity tests prove that); the page must not differ by input either.
 	var bodies []string
 	for _, email := range []string{"alice@example.com", "nobody@example.com"} {
 		f := url.Values{"email": {email}, "password": {"wrong password 123"}}
-		w := postSignIn(newSignInHandler(t, &fakeSignIn{err: auth.ErrInvalidCredentials}), f, "")
+		w := postSignIn(newSignInHandler(t, &fakeSignIn{err: identity.ErrInvalidCredentials}), f, "")
 		body := w.Body.String()
 		if w.Code != http.StatusUnprocessableEntity || !strings.Contains(body, "The email address or password is incorrect.") ||
 			!strings.Contains(body, `value="`+email+`"`) || strings.Contains(body, "wrong password 123") {
@@ -131,8 +131,8 @@ func TestSignInPost(t *testing.T) {
 		status int
 		text   string
 	}{
-		{"invalid input", auth.ErrInvalidInput, http.StatusUnprocessableEntity, "Enter your email address and password."},
-		{"busy hasher", auth.ErrBusy, http.StatusServiceUnavailable, "Service Unavailable"},
+		{"invalid input", identity.ErrInvalidInput, http.StatusUnprocessableEntity, "Enter your email address and password."},
+		{"busy hasher", identity.ErrBusy, http.StatusServiceUnavailable, "Service Unavailable"},
 		{"store error", errors.New("connection refused"), http.StatusInternalServerError, "Internal Server Error"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

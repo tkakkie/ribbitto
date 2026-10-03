@@ -7,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
 // ErrToken rejects an incorrect token, including any unconfigured token.
@@ -42,12 +42,12 @@ type Store interface {
 // Service controls first-run setup. Share the process's password hasher.
 type Service struct {
 	store  Store
-	hasher *auth.Hasher
+	hasher *identity.Hasher
 	token  string
 }
 
 // New constructs a setup service with the configured token.
-func New(store Store, hasher *auth.Hasher, token string) *Service {
+func New(store Store, hasher *identity.Hasher, token string) *Service {
 	return &Service{store: store, hasher: hasher, token: token}
 }
 

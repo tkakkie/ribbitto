@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -60,7 +60,7 @@ func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpServic
 			case errors.Is(err, signup.ErrClosed):
 				http.NotFound(w, r)
 				return
-			case errors.Is(err, auth.ErrBusy):
+			case errors.Is(err, identity.ErrBusy):
 				http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 				return
 			case errors.Is(err, signup.ErrEmailTaken):

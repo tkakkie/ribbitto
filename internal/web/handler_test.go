@@ -20,9 +20,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/web/static"
 )
@@ -421,17 +421,17 @@ func (noOrganisations) HomeSlug(context.Context, *domain.Account) (string, error
 // noSessions signs nobody in, for tests that do not need a session.
 type noSessions struct{}
 
-func (noSessions) Resolve(context.Context, string) (domain.Account, auth.Session, error) {
-	return domain.Account{}, auth.Session{}, auth.ErrNoSession
+func (noSessions) Resolve(context.Context, string) (domain.Account, identity.Session, error) {
+	return domain.Account{}, identity.Session{}, identity.ErrNoSession
 }
 
 // countingResolver counts lookups and fails every one, like a database
 // outage.
 type countingResolver struct{ calls int }
 
-func (c *countingResolver) Resolve(context.Context, string) (domain.Account, auth.Session, error) {
+func (c *countingResolver) Resolve(context.Context, string) (domain.Account, identity.Session, error) {
 	c.calls++
-	return domain.Account{}, auth.Session{}, errors.New("connection refused")
+	return domain.Account{}, identity.Session{}, errors.New("connection refused")
 }
 
 func TestNewHandlerRequiresServices(t *testing.T) {

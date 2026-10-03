@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -79,7 +79,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}
 	// Subtests stay sequential: they share this clock and add Carol's membership later.
 	clock := now
-	sessions := auth.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return clock })
+	sessions := identity.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return clock })
 	token := func(account domain.ID) string {
 		t.Helper()
 		value, _, err := sessions.Create(ctx, account)
@@ -128,7 +128,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			{"account without a membership", carolToken, now},
 			{"member of the other organisation", bobToken, now},
 			{"deleted session", deletedToken, now},
-			{"expired session", aliceToken, now.Add(auth.SessionLifetime)},
+			{"expired session", aliceToken, now.Add(identity.SessionLifetime)},
 		} {
 			t.Run(route.method+" "+path+" "+tt.name, func(t *testing.T) {
 				w := get(route.method, path, tt.cookie, tt.at)

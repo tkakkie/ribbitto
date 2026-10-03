@@ -73,6 +73,19 @@ linters:
             - github.com/tkakkie/ribbitto/internal/domain/
             - github.com/tkakkie/ribbitto/internal/kernel$
           deny: *non_html
+        # identity is the first module (decision 26). domain is temporary:
+        # Account and ValidateEmail until step 1a-2, the ID alias until step 5.
+        identity:
+          list-mode: lax
+          files: ["**/internal/identity/*.go", "**/internal/identity/**/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/identity$
+            - github.com/tkakkie/ribbitto/internal/identity/
+            - github.com/tkakkie/ribbitto/internal/kernel$
+            - github.com/tkakkie/ribbitto/internal/platform$
+            - github.com/tkakkie/ribbitto/internal/platform/
+            - github.com/tkakkie/ribbitto/internal/domain$
+          deny: *non_html
         app:
           list-mode: lax
           files: ["**/internal/app/*.go", "**/internal/app/**/*.go", "!$test"]
@@ -81,6 +94,8 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/domain$
             - github.com/tkakkie/ribbitto/internal/domain/
+            # Module roots only; their stores and wiring stay private.
+            - github.com/tkakkie/ribbitto/internal/identity$
           deny: *non_html
         postgres:
           list-mode: lax
@@ -92,6 +107,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/domain/
             - github.com/tkakkie/ribbitto/internal/app$
             - github.com/tkakkie/ribbitto/internal/app/
+            - github.com/tkakkie/ribbitto/internal/identity$
             # Temporary, until the migration's last step: infra/postgres/pgtest
             # delegates to the platform's database lifecycle, and the legacy
             # stores may take the platform's Tx and Snapshot and unwrap them.
@@ -119,6 +135,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/domain/
             - github.com/tkakkie/ribbitto/internal/app$
             - github.com/tkakkie/ribbitto/internal/app/
+            - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/realtime$
             - github.com/tkakkie/ribbitto/internal/realtime/
           deny:
@@ -131,6 +148,10 @@ linters:
             - pkg: github.com/tkakkie/ribbitto/internal/app$
               desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
             - pkg: github.com/tkakkie/ribbitto/internal/app/
+              desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
+            - pkg: github.com/tkakkie/ribbitto/internal/identity$
+              desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
+            - pkg: github.com/tkakkie/ribbitto/internal/identity/
               desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
             - pkg: github.com/tkakkie/ribbitto/internal/infra$
               desc: Views do no I/O; see docs/architecture/web-layers.md.

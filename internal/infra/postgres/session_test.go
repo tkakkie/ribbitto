@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 )
@@ -26,7 +26,7 @@ func TestSessionStore(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&now); err != nil {
 		t.Fatal(err)
 	}
-	sessions := auth.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return now })
+	sessions := identity.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return now })
 
 	older, _, err := sessions.Create(ctx, id)
 	if err != nil {
@@ -115,7 +115,7 @@ func TestSessionStore(t *testing.T) {
 	}
 
 	// Past the older session's expiry, clean-up removes only that one.
-	now = now.Add(auth.SessionLifetime - 30*time.Minute)
+	now = now.Add(identity.SessionLifetime - 30*time.Minute)
 	if err := sessions.DeleteExpired(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestSessionStore(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM session").Scan(&count); err != nil || count != 1 {
 		t.Fatalf("sessions after clean-up = %d, %v; want 1", count, err)
 	}
-	if _, _, err := sessions.Resolve(ctx, older); !errors.Is(err, auth.ErrNoSession) {
+	if _, _, err := sessions.Resolve(ctx, older); !errors.Is(err, identity.ErrNoSession) {
 		t.Fatalf("expired session: %v", err)
 	}
 	if _, _, err := sessions.Resolve(ctx, newer); err != nil {
@@ -132,7 +132,7 @@ func TestSessionStore(t *testing.T) {
 	if err := sessions.Delete(ctx, newer); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := sessions.Resolve(ctx, newer); !errors.Is(err, auth.ErrNoSession) {
+	if _, _, err := sessions.Resolve(ctx, newer); !errors.Is(err, identity.ErrNoSession) {
 		t.Fatalf("deleted session: %v", err)
 	}
 }

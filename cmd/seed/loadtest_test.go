@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 )
@@ -143,8 +143,8 @@ func TestLoadTestSeed(t *testing.T) {
 		}
 	}
 	seen := map[string]bool{}
-	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
-	expired := auth.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return time.Now().Add(auth.SessionLifetime) })
+	sessions := identity.NewSessions(postgres.NewSessionStore(pool), time.Now)
+	expired := identity.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return time.Now().Add(identity.SessionLifetime) })
 	for _, entry := range file.Accounts {
 		if len(entry.Tokens) != 2 || seen[entry.Handle] {
 			t.Fatal("incorrect account grouping")
@@ -156,7 +156,7 @@ func TestLoadTestSeed(t *testing.T) {
 				t.Fatal("token authentication, uniqueness, grouping or secrecy failed")
 			}
 			seen[token] = true
-			if _, _, err := expired.Resolve(t.Context(), token); !errors.Is(err, auth.ErrNoSession) {
+			if _, _, err := expired.Resolve(t.Context(), token); !errors.Is(err, identity.ErrNoSession) {
 				t.Fatal("token exceeded normal lifetime")
 			}
 		}

@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -63,14 +63,14 @@ func TestStreamCursor(t *testing.T) {
 // just after registration would.
 type laterSession struct {
 	hub       *realtime.Hub
-	session   auth.Session
+	session   identity.Session
 	err       error
 	cancelNow bool
 	shutdown  bool
 	seen      *int
 }
 
-func (l laterSession) Resolve(context.Context, string) (domain.Account, auth.Session, error) {
+func (l laterSession) Resolve(context.Context, string) (domain.Account, identity.Session, error) {
 	*l.seen = l.hub.Connections()
 	if l.cancelNow {
 		l.hub.CancelSession(l.session.ID)
@@ -100,13 +100,13 @@ func (noEvents) EventsAfter(context.Context, domain.ID, int64, int) ([]domain.Ev
 // registers: nothing would cancel the stream, so the second look must stop it
 // before anything is sent, and the registration must not outlive it.
 func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
-	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name  string
 		later laterSession
 	}{
-		{"session deleted", laterSession{err: auth.ErrNoSession}},
-		{"session replaced by another", laterSession{session: auth.Session{ID: domain.ID{0x77}, ExpiresAt: time.Now().Add(time.Hour)}}},
+		{"session deleted", laterSession{err: identity.ErrNoSession}},
+		{"session replaced by another", laterSession{session: identity.Session{ID: domain.ID{0x77}, ExpiresAt: time.Now().Add(time.Hour)}}},
 		// The session is still valid at the second look but ends at that
 		// instant: only a registration made before it can be cancelled.
 		{"signed out right after registering", laterSession{session: live, cancelNow: true}},
@@ -179,7 +179,7 @@ func (w *cancellingWriter) Header() http.Header {
 // the first write committing a status: the client still gets 404 (session
 // ended) or 503 (shutdown), never an empty 200.
 func TestStreamCancelledBeforeTheFirstWrite(t *testing.T) {
-	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name   string
 		cancel func(*realtime.Hub)
@@ -244,7 +244,7 @@ func (w *cancellingConn) Unwrap() http.ResponseWriter { return w.ResponseWriter 
 // an expired write deadline resets the stream, so nothing may expire it
 // before the error is written.
 func TestStreamCancelledBeforeTheFirstWriteOverHTTP(t *testing.T) {
-	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name   string
 		cancel func(*realtime.Hub)
@@ -261,7 +261,7 @@ func TestStreamCancelledBeforeTheFirstWriteOverHTTP(t *testing.T) {
 	}
 }
 
-func testCancelledStreamOverHTTP(t *testing.T, live auth.Session, cancel func(*realtime.Hub), want, proto int) {
+func testCancelledStreamOverHTTP(t *testing.T, live identity.Session, cancel func(*realtime.Hub), want, proto int) {
 	t.Helper()
 	hub := realtime.NewHub()
 	seen := -1
@@ -327,7 +327,7 @@ func TestStreamFetchSite(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
+			live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
 			seen := -1
 			var reads atomic.Int32
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
@@ -358,7 +358,7 @@ func TestStreamFetchSite(t *testing.T) {
 }
 
 func TestOpenStreamCleanup(t *testing.T) {
-	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
+	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
 	for _, tt := range []struct {
 		name       string
 		cookie     bool
@@ -418,7 +418,7 @@ func TestStreamCapPerAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	live := auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	seen := -1
 	var reads atomic.Int32
 	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
@@ -536,7 +536,7 @@ func TestStreamCachesEndWithLifetime(t *testing.T) {
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
 				s.Messages = reads
 				s.Stream = &Streaming{Lifetime: parent, Hub: hub, Events: realtime.NewCachedEvents(parent, reads, hub, 8, time.Minute),
-					Sessions: laterSession{hub: hub, session: auth.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, seen: &seen}}
+					Sessions: laterSession{hub: hub, session: identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, seen: &seen}}
 			}))
 			if err != nil {
 				t.Fatal(err)

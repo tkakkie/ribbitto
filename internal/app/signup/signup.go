@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
 // ErrClosed means registration is disabled or setup is incomplete.
@@ -32,12 +32,12 @@ type Store interface {
 // Service shares the process's hasher and reads installation setup state.
 type Service struct {
 	store   Store
-	hasher  *auth.Hasher
+	hasher  *identity.Hasher
 	enabled bool
 }
 
 // New constructs a registration service with the operator's switch.
-func New(store Store, hasher *auth.Hasher, enabled bool) *Service {
+func New(store Store, hasher *identity.Hasher, enabled bool) *Service {
 	return &Service{store: store, hasher: hasher, enabled: enabled}
 }
 

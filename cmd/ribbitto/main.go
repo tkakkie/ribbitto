@@ -16,13 +16,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -237,16 +237,16 @@ type handlerConfig struct {
 }
 
 // buildHandler shares production wiring with the HTTPS acceptance test.
-func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig) (http.Handler, *auth.Sessions, error) {
-	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
+func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig) (http.Handler, *identity.Sessions, error) {
+	sessions := identity.NewSessions(postgres.NewSessionStore(pool), time.Now)
 	if config.hub != nil {
 		// Deleting a session (sign-out, or a sign-in replacing it) ends its
 		// open event streams at once.
-		sessions = auth.NewSessionsWithCanceller(postgres.NewSessionStore(pool), time.Now, config.hub)
+		sessions = identity.NewSessionsWithCanceller(postgres.NewSessionStore(pool), time.Now, config.hub)
 	}
 	// One hasher for the whole process: its slots are the cap on concurrent
 	// Argon2id work (decision 10 in docs/decisions).
-	hasher, err := auth.NewHasher()
+	hasher, err := identity.NewHasher()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -274,7 +274,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	}
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions:      sessions,
-		SignIn:        auth.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
+		SignIn:        identity.NewSignIn(postgres.NewAccountStore(pool), hasher, sessions),
 		Setup:         setupService,
 		SignUp:        signup.New(postgres.NewSetupStore(pool), hasher, config.signupEnabled),
 		SetupSessions: sessions,
@@ -305,7 +305,7 @@ func setupToken() (string, error) {
 // startSessionCleanup deletes expired sessions at once and then hourly. The
 // returned function cancels the loop, including a query in progress, and
 // waits for it to finish.
-func startSessionCleanup(ctx context.Context, sessions *auth.Sessions) (stop func()) {
+func startSessionCleanup(ctx context.Context, sessions *identity.Sessions) (stop func()) {
 	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
@@ -340,7 +340,7 @@ func startRealtimeWorker(ctx context.Context, w interface {
 // deleteExpiredSessions runs until ctx ends. Failures are only logged:
 // expired sessions are already rejected, so a missed run just leaves rows
 // until the next one.
-func deleteExpiredSessions(ctx context.Context, sessions *auth.Sessions) {
+func deleteExpiredSessions(ctx context.Context, sessions *identity.Sessions) {
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 	for {

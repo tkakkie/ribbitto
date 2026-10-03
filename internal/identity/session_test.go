@@ -1,4 +1,4 @@
-package auth_test
+package identity_test
 
 import (
 	"bytes"
@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
@@ -40,16 +40,16 @@ func (f *fakeStore) CreateSession(_ context.Context, hash []byte, accountID doma
 // sessionID derives a fake session's id from its hash.
 func sessionID(hash []byte) domain.ID { return domain.ID(hash[:16]) }
 
-func (f *fakeStore) SessionAccount(_ context.Context, hash []byte, now time.Time) (domain.Account, auth.Session, error) {
+func (f *fakeStore) SessionAccount(_ context.Context, hash []byte, now time.Time) (domain.Account, identity.Session, error) {
 	f.hashes = append(f.hashes, bytes.Clone(hash))
 	if f.err != nil {
-		return domain.Account{}, auth.Session{}, f.err
+		return domain.Account{}, identity.Session{}, f.err
 	}
 	session, ok := f.sessions[string(hash)]
 	if !ok || !session.expiresAt.After(now) {
-		return domain.Account{}, auth.Session{}, auth.ErrNoSession
+		return domain.Account{}, identity.Session{}, identity.ErrNoSession
 	}
-	return domain.Account{ID: session.accountID}, auth.Session{ID: sessionID(hash), ExpiresAt: session.expiresAt}, nil
+	return domain.Account{ID: session.accountID}, identity.Session{ID: sessionID(hash), ExpiresAt: session.expiresAt}, nil
 }
 
 func (f *fakeStore) DeleteSession(_ context.Context, hash []byte) (domain.ID, bool, error) {
@@ -103,25 +103,25 @@ func TestSessions(t *testing.T) {
 		want  error
 	}{
 		{"live", func(c string) string { return c }, 0, false, nil},
-		{"one second before expiry", func(c string) string { return c }, auth.SessionLifetime - time.Second, false, nil},
-		{"at expiry", func(c string) string { return c }, auth.SessionLifetime, false, auth.ErrNoSession},
-		{"deleted", func(c string) string { return c }, 0, true, auth.ErrNoSession},
-		{"unknown", func(string) string { return base64.RawURLEncoding.EncodeToString(make([]byte, 32)) }, 0, false, auth.ErrNoSession},
-		{"empty", func(string) string { return "" }, 0, false, auth.ErrNoSession},
-		{"too short", func(c string) string { return c[:42] }, 0, false, auth.ErrNoSession},
-		{"too long", func(c string) string { return c + "A" }, 0, false, auth.ErrNoSession},
-		{"padded", func(c string) string { return c[:40] + "==" }, 0, false, auth.ErrNoSession},
-		{"standard alphabet", func(string) string { return strings.Repeat("+", 43) }, 0, false, auth.ErrNoSession},
+		{"one second before expiry", func(c string) string { return c }, identity.SessionLifetime - time.Second, false, nil},
+		{"at expiry", func(c string) string { return c }, identity.SessionLifetime, false, identity.ErrNoSession},
+		{"deleted", func(c string) string { return c }, 0, true, identity.ErrNoSession},
+		{"unknown", func(string) string { return base64.RawURLEncoding.EncodeToString(make([]byte, 32)) }, 0, false, identity.ErrNoSession},
+		{"empty", func(string) string { return "" }, 0, false, identity.ErrNoSession},
+		{"too short", func(c string) string { return c[:42] }, 0, false, identity.ErrNoSession},
+		{"too long", func(c string) string { return c + "A" }, 0, false, identity.ErrNoSession},
+		{"padded", func(c string) string { return c[:40] + "==" }, 0, false, identity.ErrNoSession},
+		{"standard alphabet", func(string) string { return strings.Repeat("+", 43) }, 0, false, identity.ErrNoSession},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			now := start
 			store := &fakeStore{sessions: map[string]fakeSession{}}
-			sessions := auth.NewSessions(store, func() time.Time { return now })
+			sessions := identity.NewSessions(store, func() time.Time { return now })
 			token, expiresAt, err := sessions.Create(t.Context(), account)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !expiresAt.Equal(start.Add(auth.SessionLifetime)) {
+			if !expiresAt.Equal(start.Add(identity.SessionLifetime)) {
 				t.Fatalf("expiry = %v", expiresAt)
 			}
 			if tt.del {
@@ -151,13 +151,13 @@ func TestSessionsStoreErrors(t *testing.T) {
 	broken := errors.New("connection refused")
 	store := &fakeStore{sessions: map[string]fakeSession{}}
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
-	sessions := auth.NewSessions(store, func() time.Time { return now })
+	sessions := identity.NewSessions(store, func() time.Time { return now })
 	token, _, err := sessions.Create(t.Context(), domain.ID{1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	store.err = broken
-	if _, _, err := sessions.Resolve(t.Context(), token); !errors.Is(err, broken) || errors.Is(err, auth.ErrNoSession) {
+	if _, _, err := sessions.Resolve(t.Context(), token); !errors.Is(err, broken) || errors.Is(err, identity.ErrNoSession) {
 		t.Fatalf("Resolve: want the store error, distinct from ErrNoSession; got %v", err)
 	}
 	if _, _, err := sessions.Create(t.Context(), domain.ID{1}); !errors.Is(err, broken) {
@@ -202,8 +202,8 @@ func TestSessionsEndStreamsFailClosed(t *testing.T) {
 			t.Run(operation+"/"+tt.name, func(t *testing.T) {
 				store := &fakeStore{sessions: map[string]fakeSession{}}
 				ended := &canceller{hub: realtime.NewHub()}
-				sessions := auth.NewSessionsWithCanceller(store, time.Now, ended)
-				open := func() (string, auth.Session, context.Context) {
+				sessions := identity.NewSessionsWithCanceller(store, time.Now, ended)
+				open := func() (string, identity.Session, context.Context) {
 					t.Helper()
 					token, _, err := sessions.Create(t.Context(), domain.ID{1})
 					if err != nil {
@@ -277,7 +277,7 @@ func TestSessionsEndStreamsFailClosed(t *testing.T) {
 				wantResolve := error(nil)
 				wantRows := 2
 				if changed {
-					wantResolve = auth.ErrNoSession
+					wantResolve = identity.ErrNoSession
 					if !replace {
 						wantRows = 1
 					}
@@ -313,7 +313,7 @@ func TestSessionsWithoutLivePreviousSession(t *testing.T) {
 				now := time.Now()
 				store := &fakeStore{sessions: map[string]fakeSession{}}
 				ended := &canceller{hub: realtime.NewHub()}
-				sessions := auth.NewSessionsWithCanceller(store, func() time.Time { return now }, ended)
+				sessions := identity.NewSessionsWithCanceller(store, func() time.Time { return now }, ended)
 				token, _, err := sessions.Create(t.Context(), domain.ID{1})
 				if err != nil {
 					t.Fatal(err)
@@ -330,7 +330,7 @@ func TestSessionsWithoutLivePreviousSession(t *testing.T) {
 						t.Fatal(err)
 					}
 				case "expired":
-					now = now.Add(auth.SessionLifetime)
+					now = now.Add(identity.SessionLifetime)
 				}
 				other, _, err := sessions.Create(t.Context(), domain.ID{1})
 				if err != nil {
@@ -346,7 +346,7 @@ func TestSessionsWithoutLivePreviousSession(t *testing.T) {
 				}
 				defer unregister()
 				ended.ended = nil
-				if _, _, err := sessions.Resolve(t.Context(), token); !errors.Is(err, auth.ErrNoSession) {
+				if _, _, err := sessions.Resolve(t.Context(), token); !errors.Is(err, identity.ErrNoSession) {
 					t.Fatalf("previous session: %v", err)
 				}
 				if replace {

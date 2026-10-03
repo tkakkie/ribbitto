@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -130,7 +130,7 @@ func TestSetup(t *testing.T) {
 		{"handle", &fakeSetup{open: true, err: setup.ValidationErrors{"handle": errors.New("private detail")}}, 422, "Use 2–32 characters: lowercase letters, digits, _, . or -"},
 		{"email", &fakeSetup{open: true, err: setup.ValidationErrors{"email": errors.New("private detail")}}, 422, "Enter a valid email address."},
 		{"password", &fakeSetup{open: true, err: setup.ValidationErrors{"password": errors.New("private detail")}}, 422, "Use a password of 15–128 characters."},
-		{"busy", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", auth.ErrBusy)}, 503, ""},
+		{"busy", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", identity.ErrBusy)}, 503, ""},
 		{"availability failure", &fakeSetup{openErr: errors.New("private detail")}, 500, ""},
 		{"completion failure", &fakeSetup{open: true, err: errors.New("private detail")}, 500, ""},
 		{"session failure", &fakeSetup{open: true, sessionErr: errors.New("private detail")}, 500, ""},

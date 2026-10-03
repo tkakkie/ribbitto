@@ -15,11 +15,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 )
@@ -75,7 +75,7 @@ func readSnapshot(t *testing.T, pool *pgxpool.Pool) snapshot {
 func TestSeed(t *testing.T) {
 	var previous snapshot
 	var previousPassword string
-	hasher, err := auth.NewHasher()
+	hasher, err := identity.NewHasher()
 	if err != nil {
 		t.Fatal(err)
 	}

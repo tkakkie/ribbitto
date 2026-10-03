@@ -46,17 +46,17 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 
 `cmd/ribbitto` wires everything. Under `internal/`: `domain` (imports only
 `kernel`), `app` (use cases and the only authorization logic; imports
-`domain`), `infra/postgres` (implements `app` interfaces), `realtime`
+`domain`, `identity`), `infra/postgres` (implements `app` interfaces), `realtime`
 (imports `domain`; receives authorization, rendering and event reading as
 interfaces), `web` (handlers and templ; imports `domain`, `app`,
-`realtime`, never `infra`). Handlers call use cases that return plain
+`identity`, `realtime`, never `infra`). Handlers call use cases that return plain
 structs; only `internal/web` produces HTML, with components in `internal/web/view`.
 It may import `web/static` for embedded assets. Do not add an import that breaks this.
 `db/migrations` is owned by `internal/platform/postgres` and may be imported
 only by it, `cmd/ribbitto` and four target-version tests. The move to modules ([decision 26](docs/decisions/26-modules-by-feature-layout-seams-and-order.md))
 adds `internal/kernel` (`ID` only) and `internal/platform/postgres` (pool,
-migrations, test databases; no feature queries); the layers stay until
-their modules move, and the feature map's *Target* lists the temporary paths.
+migrations, test databases; no feature queries). `internal/identity` is
+the first module; the layers stay until theirs move, and the feature map's *Target* lists the temporary paths.
 
 Features: the code is heading for a modular monolith by feature
 ([decision 14](docs/decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)); the feature map in

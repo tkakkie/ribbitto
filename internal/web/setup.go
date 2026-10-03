@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -72,7 +72,7 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 			case errors.Is(err, setup.ErrCompleted):
 				http.NotFound(w, r)
 				return
-			case errors.Is(err, auth.ErrBusy):
+			case errors.Is(err, identity.ErrBusy):
 				http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 				return
 			case errors.Is(err, setup.ErrToken):

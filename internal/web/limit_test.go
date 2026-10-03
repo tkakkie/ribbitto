@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -67,7 +67,7 @@ func drain(limiter *middleware.RateLimiter) {
 }
 
 func TestSignInRateLimit(t *testing.T) {
-	service := &countingSignIn{fakeSignIn: fakeSignIn{err: auth.ErrInvalidCredentials}}
+	service := &countingSignIn{fakeSignIn: fakeSignIn{err: identity.ErrInvalidCredentials}}
 	handler, _ := newLimitedHandler(t, func(s *Services) { s.SignIn = service })
 	form := url.Values{"email": {"a@example.com"}, "password": {"wrong password 123"}}.Encode()
 	for i := range 5 {

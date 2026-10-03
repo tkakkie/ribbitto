@@ -9,12 +9,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
 
-// SessionStore implements auth.SessionStore.
+// SessionStore implements identity.SessionStore.
 type SessionStore struct {
 	db      sessionDB
 	queries *sqlcgen.Queries
@@ -83,19 +83,19 @@ func withoutDetail(err error) error {
 
 // SessionAccount returns the account of a session that expires after now,
 // with the session's id and expiry.
-func (s *SessionStore) SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (domain.Account, auth.Session, error) {
+func (s *SessionStore) SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (domain.Account, identity.Session, error) {
 	row, err := s.queries.GetSessionByTokenHash(ctx, sqlcgen.GetSessionByTokenHashParams{
 		TokenHash: tokenHash,
 		Now:       pgtype.Timestamptz{Time: now, Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Account{}, auth.Session{}, auth.ErrNoSession
+		return domain.Account{}, identity.Session{}, identity.ErrNoSession
 	}
 	if err != nil {
-		return domain.Account{}, auth.Session{}, fmt.Errorf("selecting session: %w", err)
+		return domain.Account{}, identity.Session{}, fmt.Errorf("selecting session: %w", err)
 	}
 	return domain.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName},
-		auth.Session{ID: row.Session.ID.Bytes, ExpiresAt: row.Session.ExpiresAt.Time}, nil
+		identity.Session{ID: row.Session.ID.Bytes, ExpiresAt: row.Session.ExpiresAt.Time}, nil
 }
 
 // DeleteSession deletes the session with this token hash, if any, and

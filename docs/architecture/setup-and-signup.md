@@ -17,7 +17,7 @@ channel and the setup row. Concurrent losers hit the singleton key and roll back
 repeating setup is 404.
 
 `internal/app/setup` checks the configured token and validates all fields
-before using the shared `auth.Hasher`. Its store interface requires atomic
+before using the shared `identity.Hasher`. Its store interface requires atomic
 creation; `postgres.SetupStore` implements it with one transaction for the
 organisation, first sequence, owner account, membership (with the owner's
 handle), default channel ([`channels.md`](../domain/channels.md)) and setup marker.
@@ -32,7 +32,7 @@ Otherwise the handler checks `Open` before rendering or accepting a form.
 POST calls `Complete` (#31); closed setup (including a concurrent completion)
 returns 404, invalid fields or token return 422 without echoing secrets, and
 a busy hasher returns 503. Success signs the owner in through
-`auth.Sessions.Replace` ([`identity.md`](identity.md)), sets the shared session cookie and redirects
+`identity.Sessions.Replace` ([`identity.md`](identity.md)), sets the shared session cookie and redirects
 to `/` with 303. Setup and sign-in share the process's single password hasher.
 
 ## Sign-up

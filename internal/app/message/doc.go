@@ -10,7 +10,7 @@
 // the page snapshot's result. topic.Directory resolves topic labels in one
 // batch per page.
 // Author names use member.Directory (org)
-// followed by auth.Directory (identity); message queries neither feature.
+// followed by identity.Directory; message queries neither feature.
 // It uses org through authz.Membership; posting reports a channel
 // outside the caller's organisation as channel.ErrNotFound. Listed
 // exception: posting advances organization.event_seq, which org owns,

@@ -14,20 +14,19 @@ not show calls through an edge that already exists, dependencies inside one
 package, or SQL access to tables.
 
 ```text
-cmd/ribbitto -> internal/app/auth
 cmd/ribbitto -> internal/app/authz
 cmd/ribbitto -> internal/app/channel
 cmd/ribbitto -> internal/app/message
 cmd/ribbitto -> internal/app/setup
 cmd/ribbitto -> internal/app/signup
 cmd/ribbitto -> internal/app/topic
+cmd/ribbitto -> internal/identity
 cmd/ribbitto -> internal/infra/postgres
 cmd/ribbitto -> internal/platform/postgres
 cmd/ribbitto -> internal/realtime
 cmd/ribbitto -> internal/web
 cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
-cmd/seed -> internal/app/auth
 cmd/seed -> internal/app/authz
 cmd/seed -> internal/app/channel
 cmd/seed -> internal/app/message
@@ -35,28 +34,28 @@ cmd/seed -> internal/app/setup
 cmd/seed -> internal/app/signup
 cmd/seed -> internal/app/topic
 cmd/seed -> internal/domain
+cmd/seed -> internal/identity
 cmd/seed -> internal/infra/postgres
 cmd/seed -> internal/platform/postgres
-internal/app/auth -> internal/domain
 internal/app/authz -> internal/domain
 internal/app/channel -> internal/app/authz
 internal/app/channel -> internal/domain
 internal/app/member -> internal/app/authz
 internal/app/member -> internal/domain
-internal/app/message -> internal/app/auth
 internal/app/message -> internal/app/authz
 internal/app/message -> internal/app/member
 internal/app/message -> internal/app/topic
 internal/app/message -> internal/domain
-internal/app/setup -> internal/app/auth
+internal/app/message -> internal/identity
 internal/app/setup -> internal/domain
-internal/app/signup -> internal/app/auth
+internal/app/setup -> internal/identity
 internal/app/signup -> internal/app/setup
 internal/app/signup -> internal/domain
+internal/app/signup -> internal/identity
 internal/app/topic -> internal/app/authz
 internal/app/topic -> internal/domain
 internal/domain -> internal/kernel
-internal/infra/postgres -> internal/app/auth
+internal/identity -> internal/domain
 internal/infra/postgres -> internal/app/authz
 internal/infra/postgres -> internal/app/channel
 internal/infra/postgres -> internal/app/member
@@ -65,6 +64,7 @@ internal/infra/postgres -> internal/app/setup
 internal/infra/postgres -> internal/app/signup
 internal/infra/postgres -> internal/app/topic
 internal/infra/postgres -> internal/domain
+internal/infra/postgres -> internal/identity
 internal/infra/postgres -> internal/infra/postgres/sqlcgen
 internal/infra/postgres/pgtest -> internal/domain
 internal/infra/postgres/pgtest -> internal/infra/postgres
@@ -76,7 +76,6 @@ internal/platform/postgres/pgtest -> internal/platform/postgres
 internal/platform/postgres/pgxbridge -> internal/platform/postgres
 internal/platform/postgres/pgxbridge -> internal/platform/postgres/internal/handle
 internal/realtime -> internal/domain
-internal/web -> internal/app/auth
 internal/web -> internal/app/authz
 internal/web -> internal/app/channel
 internal/web -> internal/app/message
@@ -84,13 +83,14 @@ internal/web -> internal/app/setup
 internal/web -> internal/app/signup
 internal/web -> internal/app/topic
 internal/web -> internal/domain
+internal/web -> internal/identity
 internal/web -> internal/realtime
 internal/web -> internal/web/i18n
 internal/web -> internal/web/middleware
 internal/web -> internal/web/view
 internal/web -> web/static
-internal/web/middleware -> internal/app/auth
 internal/web/middleware -> internal/domain
+internal/web/middleware -> internal/identity
 internal/web/view -> internal/domain
 internal/web/view -> internal/web/i18n
 ```

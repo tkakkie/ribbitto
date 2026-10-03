@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -44,13 +44,13 @@ func TestSignUp(t *testing.T) {
 		{"handle", &fakeSetup{open: true, err: setup.ValidationErrors{"handle": errors.New("private detail")}}, 422, "Use 2–32 characters: lowercase letters, digits, _, . or -"},
 		{"duplicate email", &fakeSetup{open: true, err: signup.ErrEmailTaken}, 422, "This email address is already registered."},
 		{"duplicate handle", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", signup.ErrHandleTaken)}, 422, "This handle is already taken in this organisation."},
-		{"busy", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", auth.ErrBusy)}, 503, ""},
+		{"busy", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", identity.ErrBusy)}, 503, ""},
 		{"availability failure", &fakeSetup{openErr: errors.New("private detail")}, 500, ""},
 		{"completion failure", &fakeSetup{open: true, err: errors.New("private detail")}, 500, ""},
 		{"session failure", &fakeSetup{open: true, sessionErr: errors.New("private detail")}, 500, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			services := testServices(func(s *Services) { s.SetupSessions, s.SignIn = tt.service, &fakeSignIn{err: auth.ErrInvalidInput} })
+			services := testServices(func(s *Services) { s.SetupSessions, s.SignIn = tt.service, &fakeSignIn{err: identity.ErrInvalidInput} })
 			if tt.service != nil {
 				services.SignUp = fakeSignUp{tt.service}
 			}

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
@@ -88,15 +88,15 @@ type fakeResolver map[string]error
 var alice = domain.Account{ID: domain.ID{1}, Email: "alice@example.com", DisplayName: "Alice"}
 
 // aliceSession is the session fakeResolver signs Alice in with.
-var aliceSession = auth.Session{ID: domain.ID{9}, ExpiresAt: time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
+var aliceSession = identity.Session{ID: domain.ID{9}, ExpiresAt: time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
 
-func (f fakeResolver) Resolve(_ context.Context, token string) (domain.Account, auth.Session, error) {
+func (f fakeResolver) Resolve(_ context.Context, token string) (domain.Account, identity.Session, error) {
 	err, ok := f[token]
 	if !ok {
-		return domain.Account{}, auth.Session{}, auth.ErrNoSession
+		return domain.Account{}, identity.Session{}, identity.ErrNoSession
 	}
 	if err != nil {
-		return domain.Account{}, auth.Session{}, err
+		return domain.Account{}, identity.Session{}, err
 	}
 	return alice, aliceSession, nil
 }
@@ -118,7 +118,7 @@ func TestSession(t *testing.T) {
 		{"no cookie", "", http.StatusOK, false, false, false, true},
 		{"live session", "live", http.StatusOK, true, false, true, true},
 		// Malformed, unknown, deleted and expired tokens all come back from
-		// auth.Sessions as ErrNoSession (tested there); here they are tokens
+		// identity.Sessions as ErrNoSession (tested there); here they are tokens
 		// the fake does not know.
 		{"malformed", "not base64!", http.StatusOK, false, true, false, true},
 		{"unknown, deleted or expired", "gone", http.StatusOK, false, true, false, true},

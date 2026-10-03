@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -581,7 +581,7 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "sign-in", route: "GET /signin", services: base, method: "GET", path: "/signin"},
 		{name: "sign-in, sign-up open", route: "GET /signin", services: withSignUp(true, nil), method: "GET", path: "/signin"},
 		{name: "sign-in, sign-up closed", route: "GET /signin", services: withSignUp(false, nil), method: "GET", path: "/signin"},
-		{name: "sign-in failed", route: "POST /signin", services: func() Services { s := base(); s.SignIn = &fakeSignIn{err: auth.ErrInvalidCredentials}; return s }, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, status: http.StatusUnprocessableEntity},
+		{name: "sign-in failed", route: "POST /signin", services: func() Services { s := base(); s.SignIn = &fakeSignIn{err: identity.ErrInvalidCredentials}; return s }, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, status: http.StatusUnprocessableEntity},
 		{name: "sign-in rate-limited", route: "POST /signin", services: limited, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, repeat: 2, status: http.StatusTooManyRequests},
 		{name: "setup", route: "GET /setup", services: withSetup(nil), method: "GET", path: "/setup"},
 		{name: "setup, every field invalid", route: "POST /setup", services: withSetup(fieldErrors), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 6, invalidFields: []string{"organization_name", "slug", "display_name", "handle", "email", "password"}},

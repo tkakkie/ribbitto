@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
-// SignInService signs accounts in and out (auth.SignIn).
+// SignInService signs accounts in and out (identity.SignIn).
 type SignInService interface {
 	SignIn(ctx context.Context, email, password, previousToken string) (string, time.Time, error)
 	SignOut(ctx context.Context, token string) error
@@ -49,12 +49,12 @@ func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInServic
 			middleware.SetSessionCookie(w, token, expiresAt)
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
-		case errors.Is(err, auth.ErrInvalidInput):
+		case errors.Is(err, identity.ErrInvalidInput):
 			message = "signin.error.required"
-		case errors.Is(err, auth.ErrInvalidCredentials):
+		case errors.Is(err, identity.ErrInvalidCredentials):
 			// One message for an unknown email and a wrong password.
 			message = "signin.error.invalid"
-		case errors.Is(err, auth.ErrBusy):
+		case errors.Is(err, identity.ErrBusy):
 			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 			return
 		default:

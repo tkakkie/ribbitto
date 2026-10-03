@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 )
@@ -20,7 +20,7 @@ func TestAccountStore(t *testing.T) {
 	if err != nil || account != (domain.Account{ID: id, Email: "a@example.com", DisplayName: "A"}) || hash != "$argon2id$x" {
 		t.Fatalf("AccountCredentials = %+v, %q, %v", account, hash, err)
 	}
-	if _, _, err := store.AccountCredentials(ctx, "b@example.com"); !errors.Is(err, auth.ErrNoAccount) {
+	if _, _, err := store.AccountCredentials(ctx, "b@example.com"); !errors.Is(err, identity.ErrNoAccount) {
 		t.Fatalf("unknown email: %v", err)
 	}
 }

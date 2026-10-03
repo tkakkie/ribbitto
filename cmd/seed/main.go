@@ -19,7 +19,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
@@ -27,6 +26,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -126,7 +126,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
 	defer pool.Close()
-	hasher, err := auth.NewHasher()
+	hasher, err := identity.NewHasher()
 	if err != nil {
 		return fmt.Errorf("creating password hasher: %w", err)
 	}
@@ -160,7 +160,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		data.Members = append(data.Members, struct{ Name, Handle string }{handle, handle})
 	}
 	manifest := credentialFile{OrganizationSlug: slug}
-	sessions := auth.NewSessions(postgres.NewSessionStore(pool), time.Now)
+	sessions := identity.NewSessions(postgres.NewSessionStore(pool), time.Now)
 	owner := data.Members[0]
 	created, err := installer.Complete(ctx, token, setup.Input{
 		OrganizationName: "Paper Lantern Studio", Slug: slug,

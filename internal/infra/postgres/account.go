@@ -6,12 +6,12 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
 
-// AccountStore implements auth.AccountStore.
+// AccountStore implements identity.AccountStore.
 type AccountStore struct {
 	queries *sqlcgen.Queries
 }
@@ -26,7 +26,7 @@ func NewAccountStore(db sqlcgen.DBTX) *AccountStore {
 func (s *AccountStore) AccountCredentials(ctx context.Context, email string) (domain.Account, string, error) {
 	row, err := s.queries.GetAccountByEmail(ctx, email)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Account{}, "", auth.ErrNoAccount
+		return domain.Account{}, "", identity.ErrNoAccount
 	}
 	if err != nil {
 		return domain.Account{}, "", fmt.Errorf("selecting account: %w", err)
@@ -34,7 +34,7 @@ func (s *AccountStore) AccountCredentials(ctx context.Context, email string) (do
 	return domain.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName}, row.PasswordHash, nil
 }
 
-// LookupDisplayNames implements identity's auth.Directory without credentials.
+// LookupDisplayNames implements identity's identity.Directory without credentials.
 func (s *AccountStore) LookupDisplayNames(ctx context.Context, ids []domain.ID) (map[domain.ID]string, error) {
 	rows, err := s.queries.LookupDisplayNames(ctx, uuidArray(ids))
 	if err != nil {

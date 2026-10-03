@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
@@ -76,7 +76,7 @@ func TestSignUpHandleConflicts(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	hasher, err := auth.NewHasher()
+	hasher, err := identity.NewHasher()
 	requireNoError(t, err)
 	store := postgres.NewSetupStore(pool)
 	_, err = store.Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")

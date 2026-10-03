@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
 // SessionCookie is the session cookie's name. The __Host- prefix makes the
@@ -18,9 +18,9 @@ import (
 const SessionCookie = "__Host-session"
 
 // SessionResolver turns a session token into its account and session. It
-// returns auth.ErrNoSession for every token that does not sign anyone in.
+// returns identity.ErrNoSession for every token that does not sign anyone in.
 type SessionResolver interface {
-	Resolve(ctx context.Context, token string) (domain.Account, auth.Session, error)
+	Resolve(ctx context.Context, token string) (domain.Account, identity.Session, error)
 }
 
 type accountKey struct{}
@@ -67,7 +67,7 @@ func Session(sessions SessionResolver, next http.Handler) http.Handler {
 		}
 		account, session, err := sessions.Resolve(r.Context(), cookie.Value)
 		switch {
-		case errors.Is(err, auth.ErrNoSession):
+		case errors.Is(err, identity.ErrNoSession):
 			ClearSessionCookie(w)
 			next.ServeHTTP(w, r)
 		case err != nil:
@@ -92,8 +92,8 @@ func Account(ctx context.Context) (domain.Account, bool) {
 
 // CurrentSession returns the session that signed the request in, with its
 // id and expiry, if there is one. Event streams register and end with it.
-func CurrentSession(ctx context.Context) (auth.Session, bool) {
-	session, ok := ctx.Value(sessionKey{}).(auth.Session)
+func CurrentSession(ctx context.Context) (identity.Session, bool) {
+	session, ok := ctx.Value(sessionKey{}).(identity.Session)
 	return session, ok
 }
 

@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -176,7 +176,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Mem
 // openStream keeps the register-then-re-check order that closes the race
 // with sign-out. On success the caller must
 // defer cleanup; on failure it has written the response and freed the slot.
-func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID domain.ID, session auth.Session) (ctx context.Context, cleanup func(), ok bool) {
+func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID domain.ID, session identity.Session) (ctx context.Context, cleanup func(), ok bool) {
 	limit := p.stream.MaxPerAccount
 	if limit <= 0 {
 		limit = DefaultMaxStreamsPerAccount
@@ -211,7 +211,7 @@ func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organiz
 		return nil, nil, false
 	}
 	_, again, err := p.stream.Sessions.Resolve(ctx, cookie.Value)
-	if errors.Is(err, auth.ErrNoSession) || (err == nil && again.ID != session.ID) {
+	if errors.Is(err, identity.ErrNoSession) || (err == nil && again.ID != session.ID) {
 		http.NotFound(w, r)
 		return nil, nil, false
 	}

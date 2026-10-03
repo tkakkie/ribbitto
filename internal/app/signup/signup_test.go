@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/auth"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
 type store struct {
@@ -26,7 +26,7 @@ func (s store) SignUp(_ context.Context, name, handle, email, hash string) (doma
 	return domain.ID{1}, s.err
 }
 func TestSignUp(t *testing.T) {
-	hasher, err := auth.NewHasher()
+	hasher, err := identity.NewHasher()
 	if err != nil {
 		t.Fatal(err)
 	}

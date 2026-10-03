@@ -36,7 +36,7 @@ days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations
 with expired rows in ID order without write locks, then processes one
 organisation at a time, one transaction per batch. Each batch locks only that
-organisation, then reads its lowest 1,000 sequences (the `(organization_id,
+organisation, then reads at most its lowest 1,000 sequences (the `(organization_id,
 seq)` index) and deletes only the expired prefix among them: the rows from the
 lowest sequence up to the first one that has not expired. If the lowest row
 has not expired, the batch deletes nothing; if all 1,000 have, it deletes all

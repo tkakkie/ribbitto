@@ -32,11 +32,12 @@ linters:
             - pkg: github.com/tkakkie/ribbitto/db/migrations
               desc: Only internal/platform/postgres and cmd/ribbitto own migrations.
         # Only stores unwrap the platform's Tx and Snapshot to pgx (decision 26).
-        # internal/infra/postgres may until the migration's last step. The
+        # internal/infra/postgres may until the migration's last step, and the
+        # platform's own runner tests unwrap to prove one transaction. The
         # lint fixtures in internal/lintfixture prove both directions.
         bridge:
           list-mode: lax
-          files: ["$all", "!**/internal/postgres/*.go", "!**/internal/postgres/**/*.go", "!**/internal/platform/postgres/*.go", "!**/internal/platform/postgres/**/*.go", "!**/internal/infra/postgres/*.go", "!**/internal/infra/postgres/**/*.go"]
+          files: ["$all", "!**/internal/postgres/*.go", "!**/internal/postgres/**/*.go", "!**/internal/platform/postgres/tx_test.go", "!**/internal/infra/postgres/*.go", "!**/internal/infra/postgres/**/*.go"]
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge
               desc: Only stores under internal/postgres unwrap Tx and Snapshot; see decision 26.

@@ -8,7 +8,7 @@ TAILWIND_SHA_macos-arm64 := cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f
 TAILWIND_SHA_linux-x64 := dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a
 CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 
-.PHONY: check lint vuln db-up db-down generate schema-docs deps css dev
+.PHONY: check lint lint-fixtures vuln db-up db-down generate schema-docs deps css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -81,6 +81,7 @@ check: $(TEMPL)
 	fi
 	go vet ./...
 	$(MAKE) lint
+	$(MAKE) lint-fixtures
 	go build ./...
 	go test -race ./...
 	bash scripts/deps.sh --check
@@ -95,6 +96,19 @@ check: $(TEMPL)
 # next to make check rather than inside it. Scans the application module.
 vuln:
 	go tool -modfile=tools/go.mod govulncheck ./...
+
+# The lint fixtures (internal/lintfixture, built only with the lintfixture
+# tag) prove that depguard rejects a module root importing pgxbridge and
+# accepts a store doing so; plain lint never sees them.
+lint-fixtures: $(GOLANGCI_LINT)
+	@set -eu; status=0; \
+	out=$$($(GOLANGCI_LINT) run --build-tags lintfixture ./internal/lintfixture/... 2>&1) || status=$$?; \
+	if [ "$$status" -eq 0 ] || ! printf '%s\n' "$$out" | grep -q 'lintfixture/badroot/root.go.*pgxbridge'; then \
+		echo "lint-fixtures: depguard must reject pgxbridge in a module root"; printf '%s\n' "$$out"; exit 1; \
+	fi; \
+	if printf '%s\n' "$$out" | grep -q 'lintfixture/internal/postgres/'; then \
+		echo "lint-fixtures: depguard must accept pgxbridge in a store"; printf '%s\n' "$$out"; exit 1; \
+	fi
 
 lint: $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run ./...

@@ -19,7 +19,7 @@ packages. See [load client](load-client.md) for limits and usage.
 | Package | Responsibility | May import from this module |
 |---|---|---|
 | `internal/kernel` | What every module shares and none owns ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)): `ID` only today. | nothing |
-| `internal/platform/postgres` | The pool, the migration connection and runner, statement counting for development metrics, and test databases (`pgtest`). No feature queries. | `kernel`, `db/migrations` |
+| `internal/platform/postgres` | The pool, the migration connection and runner, statement counting for development metrics, test databases (`pgtest`), and the opaque `Tx` and `Snapshot` with `InTx` and `InSnapshot`. No feature queries. Its `pgxbridge` unwraps a handle to pgx, for stores only. | `kernel`, `db/migrations` |
 | `internal/domain` | Entities, value types, invariants, domain errors and domain event types. No I/O. `ID` is an alias of `kernel.ID` until the migration's last step. | `kernel` |
 | `internal/app` | Use cases and the **only** authorization logic. Decides what must be atomic; the PostgreSQL adapters open and commit the transactions (see [the feature map](features.md)). Defines the interfaces it needs (repositories, event publisher). | `domain` |
 | `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces. Its `pgtest` keeps the feature fixtures and delegates databases to the platform until the migration's last step. | `domain`, `app`, `platform/postgres/pgtest` |
@@ -39,6 +39,10 @@ fails `make check`:
 - `domain`, `app`, `infra/postgres` and `realtime` cannot import
   `github.com/a-h/templ` (including sub-packages) or `html/template`;
 - `kernel` imports nothing internal; `platform` only `kernel`;
+- only stores (`**/internal/postgres/**`) import `platform/postgres/pgxbridge`,
+  and `internal/infra/postgres` until the migration's last step;
+  `make lint-fixtures` (part of `make check`) proves a module root is
+  rejected and a store accepted;
 - `db/migrations` may be imported only by `internal/platform/postgres` and
   `cmd/ribbitto` — **this also applies to test files**, apart from the
   `internal/infra/postgres` tests that migrate to a target version, until

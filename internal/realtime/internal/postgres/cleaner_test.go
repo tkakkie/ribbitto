@@ -3,9 +3,12 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	infra "github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -29,6 +32,21 @@ func appendEvents(tx platform.Tx) infra.EventAppender { return realtimepg.Append
 // writes stay covered until org's module moves.
 func newCleaner(pool *pgxpool.Pool) *postgres.Cleaner {
 	return postgres.NewCleaner(pool, infra.RetentionBoundaryIn)
+}
+
+// Observe completed COMMITs through a separate connection, before the next
+// batch starts, without sleeps or production-only synchronization hooks.
+type retentionCommitTracer struct{ committed func() }
+type retentionCommitKey struct{}
+
+func (tr retentionCommitTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	return context.WithValue(ctx, retentionCommitKey{}, data.SQL == "commit")
+}
+
+func (tr retentionCommitTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
+	if committed, _ := ctx.Value(retentionCommitKey{}).(bool); committed && data.Err == nil {
+		tr.committed()
+	}
 }
 
 func retentionState(t *testing.T, pool *pgxpool.Pool, id domain.ID) [2]int64 {
@@ -109,4 +127,181 @@ func TestEventRetentionFailedRaise(t *testing.T) {
 	if got := retentionState(t, pool, f.OrganizationID); got != before {
 		t.Fatalf("(boundary, rows) = %v after a failed raise, want %v", got, before)
 	}
+}
+
+func TestEventRetentionBlockedOrganization(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	a := pgtest.OrganizationWithOwner(t, pool, "a", "general")
+	b := pgtest.OrganizationWithOwner(t, pool, "b", "general")
+	// UUIDv7 IDs sort by creation time; assert the fixture's processing order.
+	var ordered bool
+	requireNoError(t, pool.QueryRow(ctx, "SELECT $1::uuid < $2::uuid", a.OrganizationID, b.OrganizationID).Scan(&ordered))
+	if !ordered {
+		t.Fatal("expected A to precede B")
+	}
+	for _, f := range []pgtest.OrganizationFixture{a, b} {
+		_, err := infra.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept")
+		requireNoError(t, err)
+		_, err = pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
+		requireNoError(t, err)
+	}
+	locked, err := pool.Begin(ctx)
+	requireNoError(t, err)
+	defer func() { _ = locked.Rollback(t.Context()) }()
+	_, err = locked.Exec(ctx, "SELECT id FROM organization WHERE id = $1 FOR UPDATE", b.OrganizationID)
+	requireNoError(t, err)
+	config := pool.Config()
+	// A database lock timeout is deterministic: B stays locked for the run.
+	config.ConnConfig.RuntimeParams["lock_timeout"] = "100ms"
+	cleaning, err := pgxpool.NewWithConfig(ctx, config)
+	requireNoError(t, err)
+	defer cleaning.Close()
+	cutoff := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	err = newCleaner(cleaning).ExpireEvents(ctx, cutoff)
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "55P03" {
+		t.Fatalf("cleanup = %v, want B's lock timeout", err)
+	}
+	if got := retentionState(t, pool, a.OrganizationID); got != [2]int64{2, 0} {
+		t.Fatalf("A lost committed cleanup: %v", got)
+	}
+	if got := retentionState(t, pool, b.OrganizationID); got != [2]int64{0, 1} {
+		t.Fatalf("B changed while locked: %v", got)
+	}
+	_, err = infra.NewPostingStore(pool, appendEvents).Post(ctx, a.OrganizationID, a.Channel.ID, a.MemberID, "A can still post")
+	requireNoError(t, err)
+	requireNoError(t, locked.Rollback(ctx))
+	requireNoError(t, newCleaner(cleaning).ExpireEvents(ctx, cutoff))
+	if got := retentionState(t, pool, b.OrganizationID); got != [2]int64{2, 0} {
+		t.Fatalf("retry did not finish B: %v", got)
+	}
+}
+
+func TestEventRetentionBatches(t *testing.T) {
+	t.Parallel()
+	for _, interrupt := range []bool{false, true} {
+		t.Run(map[bool]string{false: "complete", true: "cancel after first commit"}[interrupt], func(t *testing.T) {
+			pool := pgtest.New(t)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			org := pgtest.Organization(t, pool, "batches", "Batches", 2502)
+			cutoff := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+			_, err := pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, data, created_at)
+				SELECT $1, seq, 'future.event', '{}', CASE WHEN seq = 2502 THEN $2::timestamptz
+				ELSE '2000-01-01'::timestamptz END FROM generate_series(2502, 1, -1) seq`, org, cutoff)
+			requireNoError(t, err)
+			var states [][2]int64
+			config := pool.Config()
+			config.ConnConfig.Tracer = retentionCommitTracer{committed: func() {
+				states = append(states, retentionState(t, pool, org))
+				if interrupt {
+					cancel()
+				}
+			}}
+			cleaning, err := pgxpool.NewWithConfig(ctx, config)
+			requireNoError(t, err)
+			defer cleaning.Close()
+			err = newCleaner(cleaning).ExpireEvents(ctx, cutoff)
+			want := [][2]int64{{1000, 1502}, {2000, 502}, {2501, 1}, {2501, 1}}
+			if interrupt {
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("cleanup = %v, want cancellation", err)
+				}
+				want = want[:1]
+			} else {
+				requireNoError(t, err)
+			}
+			if !reflect.DeepEqual(states, want) {
+				t.Fatalf("committed (boundary, rows) = %v, want %v", states, want)
+			}
+			// A new run resumes partial work and never expires the cutoff itself.
+			requireNoError(t, newCleaner(pool).ExpireEvents(t.Context(), cutoff))
+			if got := retentionState(t, pool, org); got != [2]int64{2501, 1} {
+				t.Fatalf("final state = %v", got)
+			}
+		})
+	}
+}
+
+// Deleting a batch below the existing boundary never lowers it: a lower
+// sequence can expire later than a higher one.
+func TestEventRetentionBoundaryNeverLowers(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	org := pgtest.Organization(t, pool, "monotonic", "Monotonic", 3)
+	_, err := pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, data, created_at)
+		SELECT $1, seq, 'future.event', '{}', CASE WHEN seq = 1 THEN '2000-01-01'::timestamptz ELSE now() END
+		FROM generate_series(1, 3) seq`, org)
+	requireNoError(t, err)
+	_, err = pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = 2 WHERE id = $1", org)
+	requireNoError(t, err)
+	requireNoError(t, newCleaner(pool).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
+	if got := retentionState(t, pool, org); got != [2]int64{2, 2} {
+		t.Fatalf("(boundary, rows) = %v, want the boundary kept at 2 and seq 1 deleted", got)
+	}
+}
+
+// A cleaner that waits behind a concurrent post's organisation lock deletes
+// with a fresh statement after the lock, so it sees that post's commit.
+func TestEventRetentionWaitsForPost(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	f := pgtest.OrganizationWithOwner(t, pool, "waits", "general")
+	_, err := infra.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "old")
+	requireNoError(t, err)
+	_, err = pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
+	requireNoError(t, err)
+	// The writer holds the organisation's row lock, as posting does, and
+	// commits one more already-expired event while the cleaner waits.
+	writer, err := pool.Begin(ctx)
+	requireNoError(t, err)
+	defer func() { _ = writer.Rollback(t.Context()) }()
+	var seq int64
+	requireNoError(t, writer.QueryRow(ctx, "UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq", f.OrganizationID).Scan(&seq))
+	_, err = writer.Exec(ctx, "INSERT INTO event_log (organization_id, seq, kind, data, created_at) VALUES ($1, $2, 'future.event', '{}', '2000-01-01')", f.OrganizationID, seq)
+	requireNoError(t, err)
+	// One batch, so a later batch cannot hide a delete that missed the commit.
+	type batch struct {
+		deleted int64
+		err     error
+	}
+	done := make(chan batch, 1)
+	go func() {
+		var b batch
+		b.err = platform.InTx(ctx, pool, func(tx platform.Tx) error {
+			var err error
+			b.deleted, err = newCleaner(pool).ExpireBatch(ctx, tx, f.OrganizationID, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+			return err
+		})
+		done <- b
+	}()
+	waitForLockWaiter(t, pool)
+	requireNoError(t, writer.Commit(ctx))
+	b := <-done
+	requireNoError(t, b.err)
+	if b.deleted != 2 {
+		t.Fatalf("the batch deleted %d events, want 2: the writer's commit too", b.deleted)
+	}
+	if got := retentionState(t, pool, f.OrganizationID); got != [2]int64{seq, 0} {
+		t.Fatalf("(boundary, rows) = %v, want [%d 0]", got, seq)
+	}
+}
+
+// waitForLockWaiter returns once a session waits on a row lock.
+func waitForLockWaiter(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	for range 500 {
+		var waiting bool
+		requireNoError(t, pool.QueryRow(t.Context(), "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database())").Scan(&waiting))
+		if waiting {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the cleaner never waited for the organisation lock")
 }

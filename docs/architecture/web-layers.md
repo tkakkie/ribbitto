@@ -112,7 +112,8 @@ keyboard, local time, single-source selection constraints, and glue for SSE.
 - **htmx events:** an `htmx:load` handler works only on the inserted element
   and its descendants, never the whole document (#168).
 
-A headless-browser test dependency awaits a concrete need after M3.
+Move/history regression tests use an installed headless browser through
+go-rod (#349); see the [checks](web-layers-checks.md).
 
 ## How the rules are checked
 

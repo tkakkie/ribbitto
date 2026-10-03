@@ -1,6 +1,7 @@
 package postgres_test
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"slices"
@@ -14,7 +15,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 func TestPostedEventTopic(t *testing.T) {
@@ -26,7 +29,7 @@ func TestPostedEventTopic(t *testing.T) {
 	requireNoError(t, err)
 	posted, err := postgres.NewPostingStore(pool).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, &named.ID, "hello")
 	requireNoError(t, err)
-	reader := postgres.NewEventReader(pool, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
 	events, err := reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 1)
 	requireNoError(t, err)
 	if len(events) != 1 || !slices.Equal(events[0].Topics, []domain.ID{named.ID}) {
@@ -75,7 +78,7 @@ func TestEventsAfter(t *testing.T) {
 			Topics: []domain.ID{posted.TopicID}, Payload: stored(posted.EventSeq)},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
 	}
-	reader := postgres.NewEventReader(pool, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
 	for _, tt := range []struct {
 		name  string
 		after int64
@@ -124,7 +127,7 @@ func TestEventsAfterMalformedData(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	org := pgtest.Organization(t, pool, "malformed", "Malformed", 2)
-	reader := postgres.NewEventReader(pool, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
 	_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
 		VALUES ($1, 1, 'member.joined', '{"member_id":"00000000-0000-0000-0000-000000000001"}')`, org)
 	requireNoError(t, err)
@@ -148,7 +151,7 @@ func TestEventsAfterCursorAboveLog(t *testing.T) {
 	posted, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 	requireNoError(t, err)
 	empty := pgtest.Organization(t, pool, "empty", "Empty", 0)
-	reader := postgres.NewEventReader(pool, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
 	for _, tt := range []struct {
 		name string
 		org  domain.ID
@@ -182,7 +185,7 @@ func TestCommittedSequences(t *testing.T) {
 	other := pgtest.OrganizationWithOwner(t, pool, "watermark-other", "general")
 	posted, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 	requireNoError(t, err)
-	reader := postgres.NewEventReader(pool, postgres.EventKinds())
+	reader := postgres.NewEventSequences(pool)
 	unknown := domain.ID{0xee}
 	got, err := reader.CommittedSequences(ctx, []domain.ID{f.OrganizationID, other.OrganizationID, unknown})
 	requireNoError(t, err)
@@ -228,7 +231,7 @@ func TestEventRetentionTransaction(t *testing.T) {
 		t.Fatalf("deleted %d rows, want 1", count)
 	}
 	// Until commit, a reader sees both the old boundary and every old row.
-	reader := postgres.NewEventReader(pool, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
 	rows, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 10)
 	requireNoError(t, err)
 	if len(rows) != 2 {
@@ -267,7 +270,7 @@ func TestEventsAfterRegisteredKinds(t *testing.T) {
 		routed = payload
 		return channel, []domain.ID{topic}, nil
 	}}
-	got, err := postgres.NewEventReader(pool, kinds).EventsAfter(t.Context(), org, 0, 10)
+	got, err := realtimepg.NewReader(pool, postgres.EventBoundsIn, kinds).EventsAfter(t.Context(), org, 0, 10)
 	requireNoError(t, err)
 	want := []realtime.Event{
 		{OrganizationID: org, Seq: 1, Kind: "test.synthetic", ChannelID: channel, Topics: []domain.ID{topic}, Payload: routed},
@@ -278,7 +281,62 @@ func TestEventsAfterRegisteredKinds(t *testing.T) {
 		t.Fatalf("EventsAfter = %+v; want %+v", got, want)
 	}
 	kinds["test.synthetic"] = func([]byte) (domain.ID, []domain.ID, error) { return domain.ID{}, nil, errors.New("malformed") }
-	if events, err := postgres.NewEventReader(pool, kinds).EventsAfter(t.Context(), org, 0, 10); err == nil || len(events) != 0 {
+	if events, err := realtimepg.NewReader(pool, postgres.EventBoundsIn, kinds).EventsAfter(t.Context(), org, 0, 10); err == nil || len(events) != 0 {
 		t.Fatalf("failed route: %+v, %v; want error without events", events, err)
+	}
+}
+
+// committingBounds commits once, after the reader's bounds and before its rows.
+type committingBounds struct {
+	realtime.Bounds
+	commit *func()
+}
+
+func (b committingBounds) EventBounds(ctx context.Context, organizationID domain.ID) (int64, int64, bool, error) {
+	boundary, committed, found, err := b.Bounds.EventBounds(ctx, organizationID)
+	if err == nil && *b.commit != nil {
+		commit := *b.commit
+		*b.commit = nil
+		commit()
+	}
+	return boundary, committed, found, err
+}
+
+// The bounds and the rows come from one snapshot: a post and a cleanup that
+// commit between the two reads change neither the batch nor its bounds.
+func TestEventsAfterOneSnapshot(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	f := pgtest.OrganizationWithOwner(t, pool, "snapshot", "general")
+	posting := postgres.NewPostingStore(pool)
+	first, err := posting.Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "first")
+	requireNoError(t, err)
+	second, err := posting.Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "second")
+	requireNoError(t, err)
+	_, err = pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1 AND seq = $2", f.OrganizationID, first.EventSeq)
+	requireNoError(t, err)
+	var third domain.Message
+	commit := func() {
+		var err error
+		third, err = posting.Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "third")
+		requireNoError(t, err)
+		requireNoError(t, postgres.NewEventCleaner(pool).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
+	}
+	bounds := func(snapshot platform.Snapshot) realtime.Bounds {
+		return committingBounds{Bounds: postgres.EventBoundsIn(snapshot), commit: &commit}
+	}
+	cursor := first.EventSeq - 1
+	got, err := realtimepg.NewReader(pool, bounds, postgres.EventKinds()).EventsAfter(ctx, f.OrganizationID, cursor, 10)
+	if err != nil || len(got) != 2 || got[0].Seq != first.EventSeq || got[1].Seq != second.EventSeq {
+		t.Fatalf("batch across a commit = %+v, %v; want the first two posts only", got, err)
+	}
+	// Both commits happened: a fresh read sees the cleanup and the new post.
+	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
+	if _, err := reader.EventsAfter(ctx, f.OrganizationID, cursor, 10); !errors.Is(err, realtime.ErrCursorExpired) {
+		t.Fatalf("cursor below the new boundary: %v; want ErrCursorExpired", err)
+	}
+	if got, err := reader.EventsAfter(ctx, f.OrganizationID, second.EventSeq, 10); err != nil || len(got) != 1 || got[0].Seq != third.EventSeq {
+		t.Fatalf("after the commits = %+v, %v; want the third post", got, err)
 	}
 }

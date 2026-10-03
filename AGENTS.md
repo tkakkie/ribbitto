@@ -49,7 +49,7 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 depguard checks a subset; never break them.
 Modules ([`modules.md`](docs/architecture/modules.md), from decision 26):
 
-- Others import only a module's root (now `internal/identity`); its
+- Others import only a module's root (`internal/identity`, `internal/realtime`); its
   store only its wiring (`<module>pg`) and own tests; the wiring only
   `cmd/*` and tests.
 - Layers, until their module moves: `domain` (→ `kernel`),

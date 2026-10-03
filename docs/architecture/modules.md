@@ -44,7 +44,8 @@ the temporary implementation behind it.
 | event payload codecs in `app/message`, `app/topic` and `app/member` | their kinds' payloads, owned by the publisher | 2 | 3 (`member.joined`, with `org`), 4 (`message.posted` and `messages.moved`, with `conversation`) |
 | posting, setup, sign-up, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | each flow's own step: setup and sign-up 3, posting and branching 4 |
 | posting, setup, sign-up, branching (`infra`) | `realtime` event appends | 2 | each flow's own step: 3, 4 |
-| `realtime` reader and retention | `org` sequence bounds, boundary write | 2 | 3 |
+| `realtime` reader and retention | `org` sequence bounds (`postgres.EventBoundsIn`, and `EventSequences` for the watermark), boundary write | 2 | 3 |
+| the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |
 | posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 4 |
 | setup (`org`) | `conversation` default channel | 3 | 4 |
 

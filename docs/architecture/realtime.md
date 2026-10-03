@@ -104,14 +104,16 @@ which consumers decode through the publisher's codec; kinds are an open list. Wi
 (`message.RoutePosted`, `topic.RouteMoved`, `member.RouteJoined`) in
 `realtime.Kinds`, which gives the channel and routing topics; until the
 modules register their own, `postgres.EventKinds()` lists them.
-`postgres.NewEventReader(db, kinds)` provides
+`realtimepg.NewReader(pool, bounds, kinds)` provides
 `EventsAfter(ctx, organizationID, after, limit) ([]realtime.Event, error)`:
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.
 It routes registered kinds through their `Router`s, failing the batch for malformed or missing IDs;
 unregistered kinds keep only their envelope, with no channel, so streams skip them.
-The reader implements the delivery interface and imports `realtime`'s root
-for the event types until it moves into the module; authorization remains
-the connection loop's job.
+The reader is `realtime`'s store (`internal/realtime/internal/postgres`, on
+its own sqlc entry `db/queries/realtime/`) and reads only `event_log`. org's
+cursor bounds come through the injected `realtime.BoundsIn`
+(`postgres.EventBoundsIn`, and the watermark's `postgres.EventSequences`, in
+`infra` until step 3); authorization remains the connection loop's job.
 
 `organization.event_log_boundary_seq` is the highest sequence no longer in
 the log. Migration sets it to each existing organisation's `event_seq`,
@@ -129,7 +131,7 @@ the next hourly tick. It deletes only rows older than the cutoff; messages,
 their sequences and unread positions are untouched.
 A cursor is valid from the boundary through the committed `event_seq`,
 inclusive, even with an empty log; at `event_seq` it waits for new events.
-`EventsAfter` reads both bounds and rows in one SQL statement snapshot, returning
+`EventsAfter` reads both bounds, then the rows, in one read-only snapshot, returning
 `realtime.ErrCursorExpired` outside those bounds, including with a zero limit. Every full
 `CachedEvents` result gets a fresh zero-limit check: immutable cached rows and
 both bounds describe a valid batch at the check's snapshot, or require reset.

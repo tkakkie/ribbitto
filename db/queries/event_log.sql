@@ -3,18 +3,9 @@
 INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
 VALUES ($1, $2, $3, NULL, sqlc.arg(data)::jsonb);
 
--- name: EventsAfter :many
-SELECT o.id AS organization_id, o.event_log_boundary_seq, o.event_seq,
-       coalesce(e.seq, 0)::bigint AS seq, coalesce(e.kind, '')::text AS kind,
-       e.audience_member_id, e.data
-FROM organization o
-LEFT JOIN LATERAL (
-    SELECT seq, kind, audience_member_id, data FROM event_log
-    WHERE organization_id = o.id AND seq > sqlc.arg(after_seq)
-    ORDER BY seq LIMIT sqlc.arg(batch_limit)::bigint
-) e ON true
-WHERE o.id = sqlc.arg(organization_id)
-ORDER BY e.seq;
+-- name: EventBounds :one
+-- realtime's reader reads org's cursor bounds through this, in its snapshot.
+SELECT event_log_boundary_seq, event_seq FROM organization WHERE id = $1;
 
 -- name: OrganizationsWithExpiredEvents :many
 SELECT id FROM organization o

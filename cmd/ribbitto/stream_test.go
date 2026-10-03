@@ -38,9 +38,18 @@ const (
 // where only the event streams are opened.
 func streamServers(t *testing.T, pool *pgxpool.Pool) (api, streams *httptest.Server) {
 	t.Helper()
+	api, streams, _ = streamServersWithHub(t, pool)
+	return api, streams
+}
+
+// streamServersWithHub also exposes the hub so tests can wait for catch-up.
+// No watermark worker runs: only the wired use cases can wake these streams.
+func streamServersWithHub(t *testing.T, pool *pgxpool.Pool) (api, streams *httptest.Server, hub *realtime.Hub) {
+	t.Helper()
+	hub = realtime.NewHub()
 	handler, _, err := buildHandler(t.Context(), pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
 		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
-		hub:            realtime.NewHub(), streamWriteTimeout: testStreamWrite})
+		hub:            hub, streamWriteTimeout: testStreamWrite})
 	acceptanceOK(t, err)
 	start := func(timeouts serverTimeouts) *httptest.Server {
 		server := httptest.NewUnstartedServer(handler)
@@ -55,7 +64,7 @@ func streamServers(t *testing.T, pool *pgxpool.Pool) (api, streams *httptest.Ser
 	}
 	api = start(serverTimeouts{readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout, write: writeTimeout})
 	streams = start(serverTimeouts{readHeader: testServerRead, read: testServerRead, idle: time.Second, write: testServerWrite})
-	return api, streams
+	return api, streams, hub
 }
 
 // on returns the browser pointed at server, keeping its cookies: the jar

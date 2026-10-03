@@ -4,8 +4,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/tkakkie/ribbitto/internal/domain"
 )
 
 // Branching through the production wiring (#305): moved messages show their
@@ -67,6 +71,97 @@ func TestBranching(t *testing.T) {
 	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT count(*) FROM topic").Scan(&topics))
 	if topics != 2 {
 		t.Fatalf("a refused branch left %d topics, want 2", topics)
+	}
+}
+
+// A branch must wake already-caught-up streams through the production wiring,
+// without a watermark worker or initial replay hiding a disconnected notifier.
+func TestBranchingWakesOpenStreams(t *testing.T) {
+	pool := acceptanceDatabase(t)
+	server, streams, hub := streamServersWithHub(t, pool)
+	owner := newAcceptanceBrowser(t, server, "192.0.2.10")
+	owner.visit(t, "POST", "/setup", acceptanceForm("owner"), http.StatusSeeOther)
+	response, _ := owner.visit(t, "GET", "/organizations/owner/", nil, http.StatusSeeOther)
+	channelURL := response.Header.Get("Location")
+	post(t, owner, channelURL, "moves live")
+
+	var org domain.ID
+	var channel, source, destination, message string
+	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT organization_id, id::text, default_topic_id::text FROM channel WHERE is_default").Scan(&org, &channel, &source))
+	// The destination must exist before its stream can be opened.
+	acceptanceOK(t, pool.QueryRow(t.Context(), "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, 'design') RETURNING id::text", org, channel).Scan(&destination))
+	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT id::text FROM message WHERE organization_id = $1 AND body = 'moves live'", org).Scan(&message))
+
+	subs := []struct {
+		name, path string
+		events     <-chan sseEvent
+		want       []string
+	}{
+		{name: "feed", path: channelURL, want: []string{"messages-moved", "message"}},
+		{name: "source", path: channelURL + "/topics/" + source, want: []string{"messages-moved", "message"}},
+		{name: "destination", path: channelURL + "/topics/" + destination, want: []string{"messages-moved"}},
+	}
+	var cursor int64
+	for i := range subs {
+		sub := &subs[i]
+		_, page := owner.visit(t, "GET", sub.path, nil, http.StatusOK)
+		match := pageCursor.FindStringSubmatch(page)
+		if len(match) != 2 {
+			t.Fatalf("%s page has no event cursor", sub.name)
+		}
+		seq, err := strconv.ParseInt(match[1], 10, 64)
+		acceptanceOK(t, err)
+		if i > 0 && seq != cursor {
+			t.Fatalf("%s cursor = %d, want %d", sub.name, seq, cursor)
+		}
+		cursor = seq
+		var status int
+		sub.events, status = openStream(t, on(owner, streams), sub.path, match[1])
+		if status != http.StatusOK {
+			t.Fatalf("%s stream status = %d, want 200", sub.name, status)
+		}
+	}
+	// All setup writes have returned before opening the streams, and no
+	// worker runs, so no raise is in flight while we inspect Waiting.
+	for deadline := time.Now().Add(2 * time.Second); hub.Waiting(org) != len(subs); time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d streams waiting on the hub, want %d", hub.Waiting(org), len(subs))
+		}
+	}
+
+	branch(t, owner, channelURL, url.Values{"message": {message}, "from": {source}, "to": {destination}}, http.StatusSeeOther)
+	// One shared deadline bounds delivery to all three streams after the POST
+	// returns. Events arriving during the POST wait in openStream's buffered channel.
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+	for _, sub := range subs {
+		for i, name := range sub.want {
+			select {
+			case event, ok := <-sub.events:
+				if !ok {
+					t.Fatalf("%s stream ended before %s", sub.name, name)
+				}
+				if event.name != name || event.id != strconv.FormatInt(cursor+int64(i)+1, 10) {
+					t.Fatalf("%s event = %+v, want %s at sequence %d", sub.name, event, name, cursor+int64(i)+1)
+				}
+				if name == "messages-moved" {
+					if !strings.Contains(event.data, `id="message-`+strings.ReplaceAll(message, "-", "")+`"`) || !strings.Contains(event.data, "moves live") {
+						t.Fatalf("%s move lacks the moved message: %s", sub.name, event.data)
+					}
+				} else if !strings.Contains(event.data, "Moved 1 to “design”") {
+					t.Fatalf("%s message is not the branch notice: %s", sub.name, event.data)
+				}
+			case <-deadline.C:
+				t.Fatalf("%s: no %s within 2 s of branch POST", sub.name, name)
+			}
+		}
+	}
+	// The notice is in the same committed batch as the move, but belongs
+	// only to the source topic. Keep watching the destination for leaks.
+	select {
+	case event, ok := <-subs[2].events:
+		t.Fatalf("destination after move: event %+v, open = %t; want no notice and an open stream", event, ok)
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 

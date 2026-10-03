@@ -18,8 +18,8 @@ var (
 	sub      = Subscription{Organization: orgA, OrganizationSlug: "acme", Account: account1, Channel: channelA}
 )
 
-func posted(seq int64, channel domain.ID) domain.Event {
-	return domain.Event{OrganizationID: orgA, Seq: seq, Kind: domain.EventMessagePosted, ChannelID: channel}
+func posted(seq int64, channel domain.ID) Event {
+	return Event{OrganizationID: orgA, Seq: seq, Kind: EventMessagePosted, ChannelID: channel}
 }
 
 // fakeLog is an event log that can grow while a stream runs. failOn makes
@@ -27,19 +27,19 @@ func posted(seq int64, channel domain.ID) domain.Event {
 // read after that many, so a loop that spins stops instead of hanging.
 type fakeLog struct {
 	mu       sync.Mutex
-	events   []domain.Event
+	events   []Event
 	calls    int
 	failOn   int
 	err      error
 	maxReads int
 	// boundary is the replay boundary: a read after a lower cursor returns
-	// domain.ErrCursorExpired, as the PostgreSQL reader does.
+	// ErrCursorExpired, as the PostgreSQL reader does.
 	boundary int64
 }
 
 var errTooManyReads = errors.New("fakeLog: too many reads")
 
-func (l *fakeLog) EventsAfter(_ context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+func (l *fakeLog) EventsAfter(_ context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.calls++
@@ -50,9 +50,9 @@ func (l *fakeLog) EventsAfter(_ context.Context, org domain.ID, after int64, lim
 		return nil, errTooManyReads
 	}
 	if after < l.boundary {
-		return nil, domain.ErrCursorExpired
+		return nil, ErrCursorExpired
 	}
-	var out []domain.Event
+	var out []Event
 	for _, e := range l.events {
 		if e.OrganizationID == org && e.Seq > after && len(out) < limit {
 			out = append(out, e)
@@ -73,27 +73,27 @@ func (l *fakeLog) expire(boundary int64) {
 	l.boundary = boundary
 }
 
-func (l *fakeLog) append(events ...domain.Event) {
+func (l *fakeLog) append(events ...Event) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.events = append(l.events, events...)
 }
 
-type authorizerFunc func(domain.Event) (bool, error)
+type authorizerFunc func(Event) (bool, error)
 
-func (f authorizerFunc) MayReceive(_ context.Context, _ domain.ID, _ string, e domain.Event) (bool, error) {
+func (f authorizerFunc) MayReceive(_ context.Context, _ domain.ID, _ string, e Event) (bool, error) {
 	return f(e)
 }
 
-type rendererFunc func(domain.Event) (Outgoing, error)
+type rendererFunc func(Event) (Outgoing, error)
 
-func (f rendererFunc) Render(_ context.Context, _ Subscription, e domain.Event) (Outgoing, error) {
+func (f rendererFunc) Render(_ context.Context, _ Subscription, e Event) (Outgoing, error) {
 	return f(e)
 }
 
-func allowAll(domain.Event) (bool, error) { return true, nil }
+func allowAll(Event) (bool, error) { return true, nil }
 
-func render(e domain.Event) (Outgoing, error) {
+func render(e Event) (Outgoing, error) {
 	return Outgoing{ID: e.Seq, Name: "message"}, nil
 }
 
@@ -187,7 +187,7 @@ func runAsync(ctx context.Context, s Stream, cursor int64, send Sender) <-chan r
 
 func TestStreamReplaysThenDeliversLive(t *testing.T) {
 	hub := NewHub()
-	log := &fakeLog{events: []domain.Event{posted(1, channelA), posted(2, channelA)}}
+	log := &fakeLog{events: []Event{posted(1, channelA), posted(2, channelA)}}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
 	done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 0, send)
@@ -211,16 +211,16 @@ func TestStreamReplaysThenDeliversLive(t *testing.T) {
 // it waits, and skipped events must still move the cursor.
 func TestStreamDrainsBatchesOnAColdHub(t *testing.T) {
 	denied := posted(5, channelA)
-	log := &fakeLog{events: []domain.Event{
+	log := &fakeLog{events: []Event{
 		posted(1, channelA),
 		posted(2, channelB), // another channel
-		{OrganizationID: orgA, Seq: 3, Kind: domain.EventMemberJoined},
+		{OrganizationID: orgA, Seq: 3, Kind: EventMemberJoined},
 		{OrganizationID: orgA, Seq: 4, Kind: "future.kind", ChannelID: channelA}, // unknown kind
 		denied,
 		posted(6, channelA),
 		posted(7, channelA),
 	}}
-	authorize := func(e domain.Event) (bool, error) { return e.Seq != denied.Seq, nil }
+	authorize := func(e Event) (bool, error) { return e.Seq != denied.Seq, nil }
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
 	done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render), BatchSize: 2}, 0, send)
@@ -240,11 +240,11 @@ func TestStreamDrainsBatchesOnAColdHub(t *testing.T) {
 // Access is checked for each event right before sending, including events
 // read in the same batch as ones already sent.
 func TestStreamRechecksAccessBeforeEachSend(t *testing.T) {
-	log := &fakeLog{events: []domain.Event{posted(1, channelA), posted(2, channelA)}}
+	log := &fakeLog{events: []Event{posted(1, channelA), posted(2, channelA)}}
 	var mu sync.Mutex
 	member := true
 	denied := make(chan struct{})
-	authorize := func(e domain.Event) (bool, error) {
+	authorize := func(e Event) (bool, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		allowed := member
@@ -273,16 +273,16 @@ func TestStreamRechecksAccessBeforeEachSend(t *testing.T) {
 // stop that event: the check comes after the render, right before the send
 // (#262).
 func TestStreamDeniesAccessLostWhileRendering(t *testing.T) {
-	log := &fakeLog{events: []domain.Event{posted(1, channelA), posted(2, channelA), posted(3, channelA)}}
+	log := &fakeLog{events: []Event{posted(1, channelA), posted(2, channelA), posted(3, channelA)}}
 	var mu sync.Mutex
 	member := true
-	authorize := func(e domain.Event) (bool, error) {
+	authorize := func(e Event) (bool, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		return e.Seq != 2 || member, nil
 	}
 	rendering, release := make(chan struct{}), make(chan struct{})
-	renderSlowly := func(e domain.Event) (Outgoing, error) {
+	renderSlowly := func(e Event) (Outgoing, error) {
 		if e.Seq == 2 {
 			close(rendering)
 			<-release
@@ -338,7 +338,7 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 		},
 		{
 			name: "authorization lookup",
-			authorize: func(e domain.Event) (bool, error) {
+			authorize: func(e Event) (bool, error) {
 				if e.Seq == 2 {
 					return false, failure
 				}
@@ -349,7 +349,7 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 		{
 			name:      "renderer",
 			authorize: allowAll,
-			render: func(e domain.Event) (Outgoing, error) {
+			render: func(e Event) (Outgoing, error) {
 				if e.Seq == 2 {
 					return Outgoing{}, failure
 				}
@@ -361,10 +361,10 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 			// even for an event the check would deny; nothing is skipped
 			// without a decision.
 			name: "renderer, on an event that would be denied",
-			authorize: func(e domain.Event) (bool, error) {
+			authorize: func(e Event) (bool, error) {
 				return e.Seq != 2, nil
 			},
-			render: func(e domain.Event) (Outgoing, error) {
+			render: func(e Event) (Outgoing, error) {
 				if e.Seq == 2 {
 					return Outgoing{}, failure
 				}
@@ -379,7 +379,7 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 			if log == nil {
 				log = &fakeLog{}
 			}
-			log.events = []domain.Event{posted(1, channelA), posted(2, channelA), posted(3, channelA)}
+			log.events = []Event{posted(1, channelA), posted(2, channelA), posted(3, channelA)}
 			send := newRecorder()
 			if tt.failSend {
 				send.failOn, send.err = 2, failure
@@ -412,7 +412,7 @@ func TestStreamDoesNotSpinWhenTheHubIsAheadOfTheLog(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		hub := NewHub()
 		hub.Raise(orgA, 50)
-		log := &fakeLog{events: []domain.Event{posted(10, channelA)}, maxReads: 100}
+		log := &fakeLog{events: []Event{posted(10, channelA)}, maxReads: 100}
 		ctx, cancel := context.WithCancel(t.Context())
 		send := newRecorder()
 		done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send)
@@ -450,7 +450,7 @@ func TestStreamRefusesANegativeCursor(t *testing.T) {
 func TestStreamChecksCancellationBetweenEvents(t *testing.T) {
 	cause := errors.New("session ended")
 	ctx, cancel := context.WithCancelCause(t.Context())
-	log := &fakeLog{events: []domain.Event{posted(1, channelA), posted(2, channelA)}}
+	log := &fakeLog{events: []Event{posted(1, channelA), posted(2, channelA)}}
 	send := &cancellingSender{recorder: newRecorder(), cancel: func() { cancel(cause) }}
 	s := Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}
 	cursor, err := s.Run(ctx, sub, 0, send)
@@ -477,7 +477,7 @@ func (c *cancellingSender) Send(ctx context.Context, out Outgoing) error {
 // event still arrives at once.
 func TestStreamSendsHeartbeatsWhileIdle(t *testing.T) {
 	hub := NewHub()
-	log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+	log := &fakeLog{events: []Event{posted(1, channelA)}}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
 	done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), Heartbeat: 5 * time.Millisecond}, 0, send)
@@ -500,7 +500,7 @@ func TestStreamSendsHeartbeatsWhileIdle(t *testing.T) {
 // the loop without moving the cursor.
 func TestStreamStopsOnAFailedHeartbeat(t *testing.T) {
 	hub := NewHub()
-	log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+	log := &fakeLog{events: []Event{posted(1, channelA)}}
 	send := newRecorder()
 	failure := errors.New("i/o timeout")
 	send.heartbeatErr = failure
@@ -570,11 +570,11 @@ func TestHeartbeatDue(t *testing.T) {
 // as a long backlog would, and never runs out.
 type slowFilteredLog struct{ delay time.Duration }
 
-func (l slowFilteredLog) EventsAfter(_ context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+func (l slowFilteredLog) EventsAfter(_ context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
 	time.Sleep(l.delay)
-	events := make([]domain.Event, limit)
+	events := make([]Event, limit)
 	for i := range events {
-		events[i] = domain.Event{OrganizationID: org, Seq: after + int64(i) + 1, Kind: domain.EventMessagePosted, ChannelID: channelB}
+		events[i] = Event{OrganizationID: org, Seq: after + int64(i) + 1, Kind: EventMessagePosted, ChannelID: channelB}
 	}
 	return events, nil
 }
@@ -601,10 +601,10 @@ func TestStreamHeartbeatsWhileDrainingFilteredBatches(t *testing.T) {
 func TestStreamResetsOnAGap(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
-		events []domain.Event
+		events []Event
 	}{
-		{"before the first event", []domain.Event{posted(12, channelA)}},
-		{"inside a batch", []domain.Event{posted(11, channelA), posted(13, channelA)}},
+		{"before the first event", []Event{posted(12, channelA)}},
+		{"inside a batch", []Event{posted(11, channelA), posted(13, channelA)}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			log := &fakeLog{events: tt.events}
@@ -632,7 +632,7 @@ type cancelOnRead struct {
 	cause  error
 }
 
-func (c cancelOnRead) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+func (c cancelOnRead) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
 	c.cancel(c.cause)
 	return c.log.EventsAfter(ctx, org, after, limit)
 }
@@ -644,7 +644,7 @@ func (c cancelOnRead) EventsAfter(ctx context.Context, org domain.ID, after int6
 // context ended while the reset was due sends nothing.
 func TestStreamResetsBelowTheBoundary(t *testing.T) {
 	t.Run("at the boundary", func(t *testing.T) {
-		log := &fakeLog{boundary: 5, events: []domain.Event{posted(6, channelA)}}
+		log := &fakeLog{boundary: 5, events: []Event{posted(6, channelA)}}
 		ctx, cancel := context.WithCancel(t.Context())
 		send := newRecorder()
 		done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 5, send)
@@ -655,7 +655,7 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 		}
 	})
 	t.Run("below the boundary", func(t *testing.T) {
-		log := &fakeLog{boundary: 5, events: []domain.Event{posted(6, channelA)}}
+		log := &fakeLog{boundary: 5, events: []Event{posted(6, channelA)}}
 		send := newRecorder()
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
@@ -666,7 +666,7 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 	})
 	t.Run("an open stream's next read falls below", func(t *testing.T) {
 		hub := NewHub()
-		log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+		log := &fakeLog{events: []Event{posted(1, channelA)}}
 		send := newRecorder()
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
@@ -702,17 +702,17 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 func TestStreamTopicSubscriptionSkipsOtherTopics(t *testing.T) {
 	topicA, topicB := domain.ID{0x7a}, domain.ID{0x7b}
 	topics := map[int64]domain.ID{1: topicA, 2: topicB, 3: topicA}
-	renderTopic := func(e domain.Event) (Outgoing, error) {
+	renderTopic := func(e Event) (Outgoing, error) {
 		out, err := render(e)
 		out.Topic = topics[e.Seq]
 		return out, err
 	}
 	var authorized []int64
-	authorize := func(e domain.Event) (bool, error) {
+	authorize := func(e Event) (bool, error) {
 		authorized = append(authorized, e.Seq)
 		return true, nil
 	}
-	log := &fakeLog{events: []domain.Event{posted(1, channelA), posted(2, channelA), posted(3, channelA)}}
+	log := &fakeLog{events: []Event{posted(1, channelA), posted(2, channelA), posted(3, channelA)}}
 	topicSub := sub
 	topicSub.Topic = &topicA
 	ctx, cancel := context.WithCancel(t.Context())

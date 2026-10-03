@@ -20,11 +20,11 @@ packages. See [load client](load-client.md) for limits and usage.
 |---|---|---|
 | `internal/kernel` | What every module shares and none owns ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)): `ID` only today. | nothing |
 | `internal/platform/postgres` | The pool, the migration connection and runner, statement counting for development metrics, test databases (`pgtest`), and the opaque `Tx` and `Snapshot` with `InTx` and `InSnapshot`. No feature queries. Its `pgxbridge` unwraps a handle to pgx, for stores only. | `kernel`, `db/migrations` |
-| `internal/domain` | Entities, value types, invariants, domain errors and domain event types. No I/O. `ID` is an alias of `kernel.ID` until the migration's last step. | `kernel` |
+| `internal/domain` | Entities, value types, invariants and domain errors. No I/O. `ID` is an alias of `kernel.ID` until the migration's last step. | `kernel` |
 | `internal/identity` | The `identity` module's root (step 1): `Account`, the email and password rules, password hashing, sessions, signing in and the display-name `Directory`, with the store interfaces they need. Its store, `internal/identity/internal/postgres`, runs `db/queries/identity/` on its own `sqlcgen`; its wiring, `identitypg`, builds sessions, sign-in and the snapshot-bound directory (`AccountsIn`). | `kernel`, `platform` |
-| `internal/app` | Use cases and the **only** authorization logic. Decides what must be atomic; the PostgreSQL adapters open and commit the transactions (see [the feature map](features.md)). Defines the interfaces it needs (repositories, event publisher). | `domain`, `identity` |
-| `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces. Its `pgtest` keeps the feature fixtures and delegates databases to the platform until the migration's last step. | `domain`, `app`, `identity`, `platform/postgres/pgtest`; until that step also allowed `platform/postgres` and its `pgxbridge` |
-| `internal/realtime` | Real-time delivery (M3): the hub's latest sequences and connection registry, the per-connection delivery loop, shared reads, the watermark check and event retention; presence is planned. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
+| `internal/app` | Use cases and the **only** authorization logic. Decides what must be atomic; the PostgreSQL adapters open and commit the transactions (see [the feature map](features.md)). Defines the interfaces it needs (repositories, event publisher). | `domain`, `identity`; `realtime`'s root for `app/authz` until step 3, when `org` imports it |
+| `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces. Its `pgtest` keeps the feature fixtures and delegates databases to the platform until the migration's last step. | `domain`, `app`, `identity`, `platform/postgres/pgtest`; until that step also allowed `platform/postgres`, its `pgxbridge` and `realtime`'s root (the event types) |
+| `internal/realtime` | Real-time delivery (M3): the hub's latest sequences and connection registry, the per-connection delivery loop, shared reads, the watermark check and event retention; presence is planned. Declares the durable event types (`Event`, `EventKind`, `ErrCursorExpired`). Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
 | `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `identity`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |
@@ -64,9 +64,9 @@ flowchart LR
   cmd[cmd/ribbitto] --> web & app & identity & identitypg[identity/identitypg] & postgres[infra/postgres] & realtime & platform[platform/postgres] & migrations[db/migrations]
   seed[cmd/seed] --> app & identity & identitypg & postgres & platform & domain
   web[internal/web] --> app & identity & domain & realtime & static[web/static]
-  postgres --> app & identity & domain & platform
+  postgres --> app & identity & domain & platform & realtime
   realtime[internal/realtime] --> domain
-  app[internal/app] --> identity & domain[internal/domain]
+  app[internal/app] --> identity & realtime & domain[internal/domain]
   identity[internal/identity] --> kernel & platform
   identitypg --> identity & store[identity/internal/postgres] & platform
   store --> identity & platform & kernel

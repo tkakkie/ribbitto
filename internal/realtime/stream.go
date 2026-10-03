@@ -11,27 +11,27 @@ import (
 
 // EventReader reads an organisation's durable events with a sequence above
 // after, in sequence order, at most limit of them. infra/postgres implements
-// it without importing this package, so it uses domain types only.
+// it until the reader moves into this module.
 // Each batch checks the replay boundary and committed event_seq in the same
 // snapshot as its rows. A cursor below the boundary or above event_seq returns
-// domain.ErrCursorExpired, including for a zero-limit read; equality is valid.
+// ErrCursorExpired, including for a zero-limit read; equality is valid.
 type EventReader interface {
-	EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]domain.Event, error)
+	EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]Event, error)
 }
 
 // Authorizer decides, immediately before an event is sent, whether the
-// account may still receive it. app implements it without importing this
-// package. (false, nil) is an explicit deny; an error means the check itself
-// failed and says nothing about access.
+// account may still receive it. app/authz implements it. (false, nil) is an
+// explicit deny; an error means the check itself failed and says nothing
+// about access.
 type Authorizer interface {
-	MayReceive(ctx context.Context, accountID domain.ID, organizationSlug string, event domain.Event) (bool, error)
+	MayReceive(ctx context.Context, accountID domain.ID, organizationSlug string, event Event) (bool, error)
 }
 
 // Renderer turns an event of the subscription into what the stream sends.
 // It runs before the Authorizer's check, so its result is discarded when the
 // check denies the event. web implements it.
 type Renderer interface {
-	Render(ctx context.Context, sub Subscription, event domain.Event) (Outgoing, error)
+	Render(ctx context.Context, sub Subscription, event Event) (Outgoing, error)
 }
 
 // Sender writes to the connection: an outgoing event, or a heartbeat that
@@ -131,7 +131,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	written := time.Now()
 	for {
 		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
-		if errors.Is(err, domain.ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
+		if errors.Is(err, ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
 			if ctx.Err() != nil {
 				return cursor, context.Cause(ctx)
 			}
@@ -172,7 +172,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 // It reports whether the event was sent; false is a skip, which still moves
 // the cursor. An error means the event was neither sent nor skipped, so Run
 // returns it with the cursor before the event.
-func (s Stream) deliver(ctx context.Context, sub Subscription, event domain.Event, send Sender) (bool, error) {
+func (s Stream) deliver(ctx context.Context, sub Subscription, event Event, send Sender) (bool, error) {
 	// A cancelled stream (for example a session that ended) sends nothing
 	// more, even if the rest of the batch is already read and the interfaces
 	// it calls would not notice the cancellation.
@@ -254,7 +254,7 @@ func heartbeatDue(ctx context.Context, err error) (bool, error) {
 // log above the boundary has no gaps (#213's trigger), so a gap anywhere in
 // a batch means rows the cursor still needed are gone: the whole batch is
 // refused before any of it is delivered.
-func contiguous(cursor int64, events []domain.Event) bool {
+func contiguous(cursor int64, events []Event) bool {
 	next := cursor + 1
 	for _, event := range events {
 		if event.Seq != next {

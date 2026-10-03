@@ -110,6 +110,9 @@ linters:
             - github.com/tkakkie/ribbitto/internal/domain/
             # Module roots only; their stores and wiring stay private.
             - github.com/tkakkie/ribbitto/internal/identity$
+            # app/authz reads realtime's events, standing for decision 26's
+            # org -> realtime until org moves (step 3).
+            - github.com/tkakkie/ribbitto/internal/realtime$
           deny: *non_html
         postgres:
           list-mode: lax
@@ -122,6 +125,9 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app$
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/identity$
+            # Temporary, until the migration's last step: the legacy event
+            # reader and writer use realtime's event types.
+            - github.com/tkakkie/ribbitto/internal/realtime$
             # Temporary, until the migration's last step: infra/postgres/pgtest
             # delegates to the platform's database lifecycle, and the legacy
             # stores may take the platform's Tx and Snapshot and unwrap them.

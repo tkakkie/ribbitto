@@ -31,7 +31,7 @@ import (
 type CachedEvents struct {
 	events EventReader
 	hub    *Hub
-	cache  *Cache[eventsKey, []domain.Event]
+	cache  *Cache[eventsKey, []Event]
 }
 
 type eventsKey struct {
@@ -49,14 +49,14 @@ func NewCachedEvents(parent context.Context, events EventReader, hub *Hub, capac
 
 func newCachedEvents(parent context.Context, events EventReader, hub *Hub, capacity int, ttl, loadTimeout time.Duration) *CachedEvents {
 	c := &CachedEvents{events: events, hub: hub}
-	c.cache = NewCache[eventsKey, []domain.Event](parent, capacity, DefaultCacheLoads, ttl, loadTimeout, fullBatch, time.Now)
+	c.cache = NewCache[eventsKey, []Event](parent, capacity, DefaultCacheLoads, ttl, loadTimeout, fullBatch, time.Now)
 	return c
 }
 
 // EventsAfter implements EventReader.
-func (c *CachedEvents) EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]domain.Event, error) {
+func (c *CachedEvents) EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]Event, error) {
 	key := eventsKey{organization: organizationID, after: after, level: c.hub.Latest(organizationID), limit: limit}
-	events, err := c.cache.Get(ctx, key, func(ctx context.Context) ([]domain.Event, error) {
+	events, err := c.cache.Get(ctx, key, func(ctx context.Context) ([]Event, error) {
 		return c.events.EventsAfter(ctx, organizationID, after, limit)
 	})
 	if err == nil && fullBatch(key, events) {
@@ -72,6 +72,6 @@ func (c *CachedEvents) EventsAfter(ctx context.Context, organizationID domain.ID
 
 // fullBatch keeps only batches that fill their limit (see CachedEvents). A
 // limit of 0 or less is never full: its empty result says nothing lasting.
-func fullBatch(key eventsKey, events []domain.Event) bool {
+func fullBatch(key eventsKey, events []Event) bool {
 	return key.limit > 0 && len(events) == key.limit
 }

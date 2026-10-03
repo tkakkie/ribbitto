@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/app/topic"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 func TestMoveEventPayload(t *testing.T) {
@@ -82,7 +82,7 @@ func TestMoveEventPayload(t *testing.T) {
 	requireNoError(t, err)
 	events, err := reader.EventsAfter(t.Context(), f.OrganizationID, 1, 1)
 	requireNoError(t, err)
-	if len(events) != 1 || events[0].Kind != domain.EventMessagesMoved || len(events[0].MessageIDs) != len(ids) ||
+	if len(events) != 1 || events[0].Kind != realtime.EventMessagesMoved || len(events[0].MessageIDs) != len(ids) ||
 		events[0].AudienceMemberID == nil || *events[0].AudienceMemberID != f.MemberID {
 		t.Fatalf("targeted move larger than the write-side limit: %+v", events)
 	}

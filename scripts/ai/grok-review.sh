@@ -16,6 +16,7 @@
 #
 # Environment:
 #   RIBBITTO_GROK_TIMEOUT     seconds before Grok is stopped (1–86400, default 2400)
+#   RIBBITTO_GROK_STALL       seconds without progress (1–86400, default 300)
 #   RIBBITTO_GROK_MODEL       model id passed to `grok -m` (default: the CLI default; see `grok models`)
 #   RIBBITTO_GROK_TRUSTED_REF git ref the launcher and prompt must come from (default
 #                             origin/main); change it only to test a PR that edits them
@@ -23,9 +24,10 @@
 #                             waits after creating Grok's process group; tests
 #                             only, to deliver signals during that setup
 #
-# Exit status: 0 on success; 124 on timeout; 130/143 when interrupted; Grok's
-# own status when Grok fails; 126 if Grok's process group could not be
-# created; 1 for any other error.
+# Exit status: 0 on success; 124 on supervisor timeout; 125 on supervisor
+# stall; 130/143 when interrupted; Grok's own status when Grok fails (including
+# 124/125, without supervisor rerun guidance); 126 if Grok's process group
+# could not be created; 1 for any other error.
 set -euo pipefail
 
 die() { echo "grok-review: $*" >&2; exit 1; }
@@ -40,6 +42,10 @@ timeout=${RIBBITTO_GROK_TIMEOUT:-2400}
 # which disables the deadline).
 if ! [[ $timeout =~ ^[1-9][0-9]{0,4}$ ]] || ((timeout > 86400)); then
   die "RIBBITTO_GROK_TIMEOUT must be an integer from 1 to 86400 (seconds), got '$timeout'"
+fi
+stall=${RIBBITTO_GROK_STALL:-300}
+if ! [[ $stall =~ ^[1-9][0-9]{0,4}$ ]] || ((stall > 86400)); then
+  die "RIBBITTO_GROK_STALL must be an integer from 1 to 86400 (seconds), got '$stall'"
 fi
 trusted_ref=${RIBBITTO_GROK_TRUSTED_REF:-origin/main}
 setup_delay=${RIBBITTO_GROK_TEST_SETUP_DELAY:-0}
@@ -71,9 +77,15 @@ supervisor=""
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
+  # Printing can block; another interrupt must not abort resource cleanup.
+  trap '' INT TERM
   if [[ -n $supervisor ]] && kill -0 "$supervisor" 2>/dev/null; then
     kill -TERM "$supervisor" 2>/dev/null || true
     wait "$supervisor" 2>/dev/null || true
+  fi
+  if [[ -f $tmp/report ]] && ! cat "$tmp/report"; then
+    echo 'grok-review: could not print the report' >&2
+    [[ $status -eq 0 ]] && status=1
   fi
   if [[ -d $worktree ]] && ! git -C "$repo" worktree remove --force "$worktree" 2>/dev/null; then
     echo "grok-review: could not remove worktree $worktree; run 'git worktree prune'" >&2
@@ -146,7 +158,7 @@ printf '\nUNTRUSTED_PAYLOAD_JSON: %s\n' "$(cat "$tmp/payload.json")" >>"$tmp/pro
 
 grok_args=(
   --prompt-file "$tmp/prompt.md"
-  --output-format plain
+  --output-format streaming-json
   # Read-only: plan mode and an allow-list of read-only built-in tools.
   --permission-mode plan
   --tools 'read_file,list_dir,grep'
@@ -169,13 +181,22 @@ fi
 # the whole group (TERM, then KILL after a grace period) on expiry, on INT or
 # TERM, and also after Grok exits, so no descendant outlives the run.
 # Signals are blocked until the group exists and the handlers are installed.
-# It exits with Grok's status, 124 on timeout, 130/143 when interrupted, and
-# 126 if the process group could not be created.
+# It exits with Grok's status, 124 on timeout, 125 on stall, 130/143 when
+# interrupted, and 126 if the process group could not be created.
 # Stdin is closed: headless CLIs can otherwise wait for input forever (#2).
+# Buffer the report in a file: a slow/closed stdout must not block or kill
+# the supervisor while it is responsible for Grok and its deadline.
 perl -e '
   use strict; use warnings;
   use POSIX qw(:signal_h :sys_wait_h setpgid _exit);
-  my ($limit, $setup_delay, @cmd) = @ARGV;
+  use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
+  use JSON::PP qw(decode_json);
+  use Encode qw(encode_utf8);
+  use Time::HiRes ();
+  my ($limit, $stall, $setup_delay, $stop_file, @cmd) = @ARGV;
+  # Open before starting Grok so a failure cannot leave an unsupervised child.
+  # A separate record distinguishes supervisor stops from Grok exit codes.
+  open my $stopped, ">", $stop_file or die "grok-review: stop record: $!\n";
   my $block = POSIX::SigSet->new(SIGINT, SIGTERM, SIGALRM);
   my $old = POSIX::SigSet->new;
   sigprocmask(SIG_BLOCK, $block, $old) or die "grok-review: sigprocmask: $!\n";
@@ -184,10 +205,16 @@ perl -e '
   # macOS (EPERM, or ESRCH once the child had exited), so it never does (#82).
   # Perl marks the pipe close-on-exec, so Grok does not inherit it.
   pipe(my $group_ready, my $confirm) or die "grok-review: pipe: $!\n";
+  pipe(my $stream, my $output) or die "grok-review: stream pipe: $!\n";
+  my $flags = fcntl($stream, F_GETFL, 0) // die "grok-review: stream flags: $!\n";
+  fcntl($stream, F_SETFL, $flags | O_NONBLOCK) or die "grok-review: nonblocking stream: $!\n";
   my $pid = fork() // die "grok-review: fork failed: $!\n";
   if ($pid == 0) {
     close $group_ready;
+    close $stream;
     setpgid(0, 0) or _exit(126);
+    open STDOUT, ">&", $output or _exit(126);
+    close $output;
     sleep $setup_delay if $setup_delay;
     syswrite($confirm, "1") == 1 or _exit(126);
     close $confirm;
@@ -197,6 +224,7 @@ perl -e '
     _exit(127);
   }
   close $confirm;
+  close $output;
   my $n;
   do { $n = sysread($group_ready, my $byte, 1) } while (!defined $n && $!{EINTR});
   close $group_ready;
@@ -215,16 +243,53 @@ perl -e '
     for (1 .. 50) { last unless kill 0, -$pid; select(undef, undef, undef, 0.1) }
     kill "KILL", -$pid if kill 0, -$pid;
   };
-  my $stop = sub {
-    my ($code, $why) = @_;
-    print STDERR "grok-review: $why\n";
-    $reap_group->();
-    waitpid($pid, 0);
-    exit $code;
-  };
   # Reap before acting on a signal: Grok may have exited during the last poll
   # interval. Signals during group cleanup must not replace its status either.
   my $stop_request;
+  my $last_update = Time::HiRes::time();
+  my $last_poll = $last_update;
+  my $progress = 0;
+  my ($buffer, $readable) = ("", "");
+  vec($readable, fileno($stream), 1) = 1;
+  $| = 1;
+  my $read_stream = sub {
+    my ($wait) = @_;
+    my $ready = $readable;
+    return 0 unless select($ready, undef, undef, $wait) > 0;
+    my $n = sysread($stream, my $chunk, 65536);
+    if (!defined $n) {
+      return 0 if $!{EINTR} || $!{EAGAIN};
+      $stop_request //= [1, "could not read Grok progress: $!"];
+      $readable = "";
+      return 0;
+    }
+    if (!$n) { $readable = ""; return 0 }
+    $buffer .= $chunk;
+    while ($buffer =~ s/\A([^\n]*)\n//) {
+      # Only complete JSON events count as progress; partial writes and
+      # diagnostics must not keep an otherwise stalled review alive.
+      my $event = eval { decode_json($1) };
+      next unless ref($event) eq "HASH";
+      my $kind = $event->{type};
+      next unless defined $kind && !ref($kind) && length $kind;
+      next if $kind eq "end";
+      $progress = 1;
+      if ($kind eq "text" && defined $event->{data} && !ref($event->{data})) {
+        print encode_utf8($event->{data});
+      }
+    }
+    return 1;
+  };
+  my $stop = sub {
+    my ($code, $why) = @_;
+    print {$stopped} "$code\n";
+    close $stopped;
+    print STDERR "grok-review: $why\n";
+    $reap_group->();
+    waitpid($pid, 0);
+    1 while $read_stream->(0);
+    exit $code;
+  };
   $SIG{ALRM} = sub { $stop_request //= [124, "timed out after $limit s; stopped Grok"] };
   $SIG{INT}  = sub { $stop_request //= [130, "interrupted; stopped Grok"] };
   $SIG{TERM} = sub { $stop_request //= [143, "terminated; stopped Grok"] };
@@ -235,20 +300,42 @@ perl -e '
     # alarm is still a backstop; wall time also catches a deadline that passed
     # during machine sleep, even if the alarm did not advance with it.
     $stop->(124, "timed out after $limit s; stopped Grok") if time >= $deadline;
-    select undef, undef, undef, 2;
+    my $now = Time::HiRes::time();
+    my $gap = $now - $last_poll;
+    # A poll normally waits at most two seconds. Exclude suspension or a
+    # clock step from inactivity, without moving the wall-clock deadline.
+    if ($gap > 30 || $gap < 0) {
+      $last_update += $gap;
+    }
+    $last_poll = $now;
+    # Timestamp received events after accounting for a gap, so a clock step
+    # cannot shift a fresh update into the future or past.
+    $last_update = $now if $progress;
+    $progress = 0;
+    my $remaining = $stall - ($now - $last_update);
+    $stop->(125, "no progress for $stall s; stopped Grok (stalled)") if $remaining <= 0;
+    $read_stream->($remaining < 2 ? $remaining : 2);
   }
   my $status = $? & 127 ? 128 + ($? & 127) : $? >> 8;
   alarm 0;
   $reap_group->();
+  # The leader can exit before its last pipeful is read. Stop descendants
+  # first, then drain without waiting for EOF from an inherited writer.
+  1 while $read_stream->(0);
   exit $status;
-' "$timeout" "$setup_delay" "${grok_cmd[@]}" </dev/null &
+' "$timeout" "$stall" "$setup_delay" "$tmp/stopped" "${grok_cmd[@]}" </dev/null >"$tmp/report" &
 supervisor=$!
 status=0
 wait "$supervisor" || status=$?
 supervisor=""
-case $status in
-  0) ;;
-  124)
+stopped=""
+if [[ -f $tmp/stopped ]]; then read -r stopped <"$tmp/stopped" || true; fi
+case $status:$stopped in
+  0:*) ;;
+  125:125)
+    echo 'grok-review: rerun once using the invocation in docs/workflow/adversarial-review.md; if it stalls again, record it in the PR and ask the maintainer' >&2
+    exit 125 ;;
+  124:124)
     next=$(( timeout * 2 > 86400 ? 86400 : timeout * 2 ))
     if [[ -t 2 ]]; then printf '\033[0m' >&2; fi
     echo "grok-review: Grok did not finish within ${timeout}s" >&2

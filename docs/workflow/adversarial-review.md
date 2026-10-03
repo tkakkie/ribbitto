@@ -85,11 +85,24 @@ exits 0.)
   as a backstop.
 - It stops Grok and everything Grok started after `RIBBITTO_GROK_TIMEOUT`
   seconds (1–86400, default 2400 / 40 minutes; exit 124), and removes the
-  worktree and temporary files on success, failure, timeout, Ctrl-C (130)
-  and `TERM` (143), reporting any cleanup failure. When Grok itself fails,
+  worktree and temporary files on success, failure, timeout, stall, Ctrl-C (130)
+  and `TERM` (143), reporting any cleanup failure. Cleanup ignores further
+  INT/TERM signals, including while it prints the report. When Grok itself fails,
   the script exits with Grok's status. If Grok's process group cannot be
   created, it prints `could not create a process group for Grok` and exits
   126 without starting Grok.
+- It reads Grok's `streaming-json` progress and prints the concatenated text
+  updates as the report when the run ends. If updates stop for `RIBBITTO_GROK_STALL`
+  seconds (1–86400, default 300), it stops the same process group and exits
+  125, keeping report text received before the stall. The limit also applies before
+  the first update. Gaps of more than 30 seconds between supervisor polls
+  (normally at most two seconds), and backward clock steps, are excluded
+  from inactivity to tolerate suspension and clock changes. The overall
+  wall-clock timeout is unchanged. The default
+  is about 6× the largest measured gap (48 seconds, Grok 1.0.41, three
+  reviews; [measurement on #337](https://github.com/tkakkie/ribbitto/issues/337#issuecomment-5954740657)).
+  After a stall, rerun once using the invocation above. If it stalls again,
+  record both runs in the PR and ask the maintainer.
 - The timeout is a backstop against a stuck CLI, not an estimate of review
   time. Raise `RIBBITTO_GROK_TIMEOUT` when a larger PR needs more time or a
   review times out. On timeout, the launcher suggests a value for

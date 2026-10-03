@@ -100,7 +100,7 @@ within the loaded range. Live changes never alter the history paging bound.
 Setup and sign-up call `NewEventLog(tx).AppendMemberJoined` immediately after
 the member, with its `joined_event_seq`. `realtime.Event` is an envelope: organisation,
 sequence, kind, audience, channel, routing `Topics` and the stored `Payload`,
-which only the publisher decodes; kinds are an open list. Wiring registers each kind's publisher `Router`
+which consumers decode through the publisher's codec; kinds are an open list. Wiring registers each kind's publisher `Router`
 (`message.RoutePosted`, `topic.RouteMoved`, `member.RouteJoined`) in
 `realtime.Kinds`, which gives the channel and routing topics; until the
 modules register their own, `postgres.EventKinds()` lists them.

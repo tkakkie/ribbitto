@@ -29,7 +29,7 @@ const (
 // receive it. ChannelID is zero for a kind that is not channel-scoped.
 // Topics are the routing topics its kind's Router gave; nil when it names
 // none (a legacy post, or a kind without topics). Payload is the stored
-// data, which only the kind's publisher decodes. Topics and Payload are
+// data, which consumers decode through the kind's publisher. Topics and Payload are
 // read-only once read, since event batches are shared between streams. No
 // content or HTML is carried.
 type Event struct {

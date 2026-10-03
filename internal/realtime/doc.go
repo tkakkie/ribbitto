@@ -8,7 +8,8 @@
 // the kind registry (Kinds of each publisher's Router), and
 // imports only kernel (ID) and platform (the transaction handles). Its store
 // (internal/realtime/internal/postgres) reads, appends and expires the event
-// log, and its wiring (internal/realtime/realtimepg) builds it. The stream's authorization and rendering, and org's cursor bounds, come in as
+// log, and its wiring (internal/realtime/realtimepg) builds it. The
+// stream's authorization and rendering, and org's cursor bounds, come in as
 // interfaces it defines, implemented by app, web and infra/postgres and
 // wired in cmd/ribbitto.
 //

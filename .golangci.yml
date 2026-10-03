@@ -22,12 +22,12 @@ linters:
       # File globs need separate selectors for roots and descendants.
       # Layer rules exclude tests; migration ownership also applies to tests.
       rules:
-        # Temporary (decision 26, until the migration's last step): the
+        # Temporary (decision 26, until the migration's last step): the four
         # target-version tests in internal/infra/postgres keep migrating
         # directly until their module moves.
         migrations:
           list-mode: lax
-          files: ["$all", "!**/internal/platform/postgres/*.go", "!**/internal/platform/postgres/**/*.go", "!**/internal/infra/postgres/*_test.go", "!**/cmd/ribbitto/*.go", "!**/cmd/ribbitto/**/*.go"]
+          files: ["$all", "!**/internal/platform/postgres/*.go", "!**/internal/platform/postgres/**/*.go", "!**/internal/infra/postgres/default_channel_test.go", "!**/internal/infra/postgres/event_log_test.go", "!**/internal/infra/postgres/member_handle_test.go", "!**/internal/infra/postgres/topic_test.go", "!**/cmd/ribbitto/*.go", "!**/cmd/ribbitto/**/*.go"]
           deny:
             - pkg: github.com/tkakkie/ribbitto/db/migrations
               desc: Only internal/platform/postgres and cmd/ribbitto own migrations.

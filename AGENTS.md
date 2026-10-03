@@ -44,8 +44,8 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 
 ## Layout and dependency direction
 
-`cmd/ribbitto` wires everything. Under `internal/`: `domain` (no internal
-imports), `app` (use cases and the only authorization logic; imports
+`cmd/ribbitto` wires everything. Under `internal/`: `domain` (imports only
+`kernel`), `app` (use cases and the only authorization logic; imports
 `domain`), `infra/postgres` (implements `app` interfaces), `realtime`
 (imports `domain`; receives authorization, rendering and event reading as
 interfaces), `web` (handlers and templ; imports `domain`, `app`,
@@ -53,7 +53,7 @@ interfaces), `web` (handlers and templ; imports `domain`, `app`,
 structs; only `internal/web` produces HTML, with components in `internal/web/view`.
 It may import `web/static` for embedded assets. Do not add an import that breaks this.
 `db/migrations` is owned by `internal/platform/postgres` and may be imported
-only by it and `cmd/ribbitto`. The move to modules ([decision 26](docs/decisions/26-modules-by-feature-layout-seams-and-order.md))
+only by it, `cmd/ribbitto` and four target-version tests. The move to modules ([decision 26](docs/decisions/26-modules-by-feature-layout-seams-and-order.md))
 adds `internal/kernel` (`ID` only) and `internal/platform/postgres` (pool,
 migrations, test databases; no feature queries); the layers stay until
 their modules move, and the feature map's *Target* lists the temporary paths.

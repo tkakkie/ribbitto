@@ -8,16 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // fakeSequences answers CommittedSequences from a map, records each call's
 // organisations, and fails while err is set.
 type fakeSequences struct {
 	mu    sync.Mutex
-	seqs  map[domain.ID]int64
+	seqs  map[kernel.ID]int64
 	err   error
-	calls [][]domain.ID
+	calls [][]kernel.ID
 	done  chan struct{} // receives after every call
 	// during, if set, runs inside the read, before it answers; block makes
 	// the read wait for its context instead of answering.
@@ -26,10 +26,10 @@ type fakeSequences struct {
 }
 
 func newFakeSequences() *fakeSequences {
-	return &fakeSequences{seqs: map[domain.ID]int64{}, done: make(chan struct{}, 16)}
+	return &fakeSequences{seqs: map[kernel.ID]int64{}, done: make(chan struct{}, 16)}
 }
 
-func (f *fakeSequences) CommittedSequences(ctx context.Context, orgs []domain.ID) (map[domain.ID]int64, error) {
+func (f *fakeSequences) CommittedSequences(ctx context.Context, orgs []kernel.ID) (map[kernel.ID]int64, error) {
 	f.mu.Lock()
 	during, block := f.during, f.block
 	f.mu.Unlock()
@@ -48,7 +48,7 @@ func (f *fakeSequences) CommittedSequences(ctx context.Context, orgs []domain.ID
 	if f.err != nil {
 		return nil, f.err
 	}
-	out := map[domain.ID]int64{}
+	out := map[kernel.ID]int64{}
 	for _, org := range orgs {
 		if seq, ok := f.seqs[org]; ok {
 			out[org] = seq
@@ -57,7 +57,7 @@ func (f *fakeSequences) CommittedSequences(ctx context.Context, orgs []domain.ID
 	return out, nil
 }
 
-func (f *fakeSequences) set(org domain.ID, seq int64, err error) {
+func (f *fakeSequences) set(org kernel.ID, seq int64, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.seqs[org] = seq
@@ -78,11 +78,11 @@ func TestActiveOrganizationsFollowTheRegistry(t *testing.T) {
 	}
 	_, first, _ := h.Register(t.Context(), Connection{Organization: orgA, Account: account1, Session: session1}, 4)
 	_, second, _ := h.Register(t.Context(), Connection{Organization: orgA, Account: account2, Session: session2}, 4)
-	if got := h.ActiveOrganizations(); !slices.Equal(got, []domain.ID{orgA}) {
+	if got := h.ActiveOrganizations(); !slices.Equal(got, []kernel.ID{orgA}) {
 		t.Fatalf("ActiveOrganizations() = %v, want [orgA]", got)
 	}
 	first()
-	if got := h.ActiveOrganizations(); !slices.Equal(got, []domain.ID{orgA}) {
+	if got := h.ActiveOrganizations(); !slices.Equal(got, []kernel.ID{orgA}) {
 		t.Fatalf("ActiveOrganizations() = %v with one connection left, want [orgA]", got)
 	}
 	second()

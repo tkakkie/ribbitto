@@ -10,9 +10,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/domain"
+
 	infra "github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/internal/postgres"
@@ -49,7 +50,7 @@ func (tr retentionCommitTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, 
 	}
 }
 
-func retentionState(t *testing.T, pool *pgxpool.Pool, id domain.ID) [2]int64 {
+func retentionState(t *testing.T, pool *pgxpool.Pool, id kernel.ID) [2]int64 {
 	t.Helper()
 	var state [2]int64
 	requireNoError(t, pool.QueryRow(t.Context(), `SELECT event_log_boundary_seq,
@@ -106,7 +107,7 @@ type failingRaise struct{ realtime.RetentionBoundary }
 
 var errRaise = errors.New("raise failed")
 
-func (failingRaise) RaiseBoundary(context.Context, domain.ID, int64) error { return errRaise }
+func (failingRaise) RaiseBoundary(context.Context, kernel.ID, int64) error { return errRaise }
 
 // A failed boundary update rolls the batch's deletion back: the boundary
 // moves with its deletion or not at all.

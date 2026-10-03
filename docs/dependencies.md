@@ -96,9 +96,9 @@ internal/platform/postgres/pgtest -> db/migrations
 internal/platform/postgres/pgtest -> internal/platform/postgres
 internal/platform/postgres/pgxbridge -> internal/platform/postgres
 internal/platform/postgres/pgxbridge -> internal/platform/postgres/internal/handle
-internal/realtime -> internal/domain
+internal/realtime -> internal/kernel
 internal/realtime -> internal/platform/postgres
-internal/realtime/internal/postgres -> internal/domain
+internal/realtime/internal/postgres -> internal/kernel
 internal/realtime/internal/postgres -> internal/platform/postgres
 internal/realtime/internal/postgres -> internal/platform/postgres/pgxbridge
 internal/realtime/internal/postgres -> internal/realtime

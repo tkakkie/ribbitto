@@ -24,6 +24,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -305,7 +306,7 @@ type countingReader struct {
 	calls, empty atomic.Int64
 }
 
-func (c *countingReader) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]realtime.Event, error) {
+func (c *countingReader) EventsAfter(ctx context.Context, org kernel.ID, after int64, limit int) ([]realtime.Event, error) {
 	events, err := c.inner.EventsAfter(ctx, org, after, limit)
 	c.calls.Add(1)
 	if err == nil && len(events) == 0 {

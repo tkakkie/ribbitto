@@ -6,7 +6,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/domain"
+
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -32,7 +33,7 @@ func NewReader(pool *pgxpool.Pool, bounds realtime.BoundsIn, kinds realtime.Kind
 // rows share one read-only snapshot; a cursor outside the inclusive bounds
 // returns realtime.ErrCursorExpired, including when limit is zero, and an
 // unknown organisation has an empty batch.
-func (r *Reader) EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]realtime.Event, error) {
+func (r *Reader) EventsAfter(ctx context.Context, organizationID kernel.ID, after int64, limit int) ([]realtime.Event, error) {
 	events := []realtime.Event{}
 	err := platform.InSnapshot(ctx, r.pool, func(snapshot platform.Snapshot) error {
 		boundary, committed, found, err := r.bounds(snapshot).EventBounds(ctx, organizationID)
@@ -68,10 +69,10 @@ func (r *Reader) EventsAfter(ctx context.Context, organizationID domain.ID, afte
 
 // eventFromRow routes registered kinds through their Routers; the payload
 // stays encoded for the kind's publisher.
-func (r *Reader) eventFromRow(organizationID domain.ID, row sqlcgen.EventsAfterRow) (realtime.Event, error) {
+func (r *Reader) eventFromRow(organizationID kernel.ID, row sqlcgen.EventsAfterRow) (realtime.Event, error) {
 	event := realtime.Event{OrganizationID: organizationID, Seq: row.Seq, Kind: realtime.EventKind(row.Kind)}
 	if row.AudienceMemberID.Valid {
-		id := domain.ID(row.AudienceMemberID.Bytes)
+		id := kernel.ID(row.AudienceMemberID.Bytes)
 		event.AudienceMemberID = &id
 	}
 	route, ok := r.kinds[event.Kind]

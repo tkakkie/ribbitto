@@ -6,7 +6,7 @@
 // declares the durable event types (Event, an envelope it routes without
 // kind names; EventKind; ErrCursorExpired) and
 // the kind registry (Kinds of each publisher's Router), and
-// imports domain and platform (the snapshot handle). Its store
+// imports only kernel (ID) and platform (the transaction handles). Its store
 // (internal/postgres) reads the event log, and realtimepg wires it. The
 // stream's authorization and rendering, and org's cursor bounds, come in as
 // interfaces it defines, implemented by app, web and infra/postgres and

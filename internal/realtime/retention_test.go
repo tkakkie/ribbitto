@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -27,7 +27,7 @@ type interceptedBounds struct {
 	commit *func()
 }
 
-func (b interceptedBounds) EventBounds(ctx context.Context, organizationID domain.ID) (int64, int64, bool, error) {
+func (b interceptedBounds) EventBounds(ctx context.Context, organizationID kernel.ID) (int64, int64, bool, error) {
 	boundary, committed, found, err := b.Bounds.EventBounds(ctx, organizationID)
 	if err == nil && *b.commit != nil {
 		commit := *b.commit
@@ -46,7 +46,7 @@ func (s *retentionSender) Heartbeat(context.Context) error { return nil }
 // The external tests cannot use stream_test.go's in-package helpers.
 type allowAll struct{}
 
-func (allowAll) MayReceive(context.Context, domain.ID, string, realtime.Event) (bool, error) {
+func (allowAll) MayReceive(context.Context, kernel.ID, string, realtime.Event) (bool, error) {
 	return true, nil
 }
 

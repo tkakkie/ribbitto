@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // CachedEvents is an EventReader that shares reads between an
@@ -35,7 +35,7 @@ type CachedEvents struct {
 }
 
 type eventsKey struct {
-	organization domain.ID
+	organization kernel.ID
 	after, level int64
 	limit        int
 }
@@ -54,7 +54,7 @@ func newCachedEvents(parent context.Context, events EventReader, hub *Hub, capac
 }
 
 // EventsAfter implements EventReader.
-func (c *CachedEvents) EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]Event, error) {
+func (c *CachedEvents) EventsAfter(ctx context.Context, organizationID kernel.ID, after int64, limit int) ([]Event, error) {
 	key := eventsKey{organization: organizationID, after: after, level: c.hub.Latest(organizationID), limit: limit}
 	events, err := c.cache.Get(ctx, key, func(ctx context.Context) ([]Event, error) {
 		return c.events.EventsAfter(ctx, organizationID, after, limit)

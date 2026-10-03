@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // Causes reported by context.Cause for a registered connection's context.
@@ -33,10 +33,10 @@ var (
 // the connection's last read and its wait is never lost.
 type Hub struct {
 	mu        sync.Mutex
-	orgs      map[domain.ID]*orgSequence
-	byAccount map[domain.ID]map[*registration]struct{}
-	bySession map[domain.ID]map[*registration]struct{}
-	byOrg     map[domain.ID]map[*registration]struct{}
+	orgs      map[kernel.ID]*orgSequence
+	byAccount map[kernel.ID]map[*registration]struct{}
+	bySession map[kernel.ID]map[*registration]struct{}
+	byOrg     map[kernel.ID]map[*registration]struct{}
 	// shutdown, once CancelAll has run, refuses every registration.
 	shutdown bool
 }
@@ -52,23 +52,23 @@ type orgSequence struct {
 }
 
 type registration struct {
-	organization     domain.ID
-	account, session domain.ID
+	organization     kernel.ID
+	account, session kernel.ID
 	cancel           context.CancelCauseFunc
 }
 
 // NewHub returns an empty hub.
 func NewHub() *Hub {
 	return &Hub{
-		orgs:      make(map[domain.ID]*orgSequence),
-		byAccount: make(map[domain.ID]map[*registration]struct{}),
-		bySession: make(map[domain.ID]map[*registration]struct{}),
-		byOrg:     make(map[domain.ID]map[*registration]struct{}),
+		orgs:      make(map[kernel.ID]*orgSequence),
+		byAccount: make(map[kernel.ID]map[*registration]struct{}),
+		bySession: make(map[kernel.ID]map[*registration]struct{}),
+		byOrg:     make(map[kernel.ID]map[*registration]struct{}),
 	}
 }
 
 // sequence returns the organisation's entry, creating it; the caller holds mu.
-func (h *Hub) sequence(org domain.ID) *orgSequence {
+func (h *Hub) sequence(org kernel.ID) *orgSequence {
 	s, ok := h.orgs[org]
 	if !ok {
 		s = &orgSequence{changed: make(chan struct{})}
@@ -80,7 +80,7 @@ func (h *Hub) sequence(org domain.ID) *orgSequence {
 // Raise records that the organisation's events up to seq are committed. A
 // value at or below the current one changes nothing, so notifications may
 // arrive late or out of order.
-func (h *Hub) Raise(org domain.ID, seq int64) {
+func (h *Hub) Raise(org kernel.ID, seq int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.raise(org, seq)
@@ -89,7 +89,7 @@ func (h *Hub) Raise(org domain.ID, seq int64) {
 // RaiseIfActive is Raise for an organisation that still has a registered
 // connection, checked under the same lock, so a value read while its last
 // connection went away does not raise it.
-func (h *Hub) RaiseIfActive(org domain.ID, seq int64) {
+func (h *Hub) RaiseIfActive(org kernel.ID, seq int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if len(h.byOrg[org]) > 0 {
@@ -98,7 +98,7 @@ func (h *Hub) RaiseIfActive(org domain.ID, seq int64) {
 }
 
 // raise is Raise's body; the caller holds mu.
-func (h *Hub) raise(org domain.ID, seq int64) {
+func (h *Hub) raise(org kernel.ID, seq int64) {
 	s := h.sequence(org)
 	if seq <= s.latest {
 		return
@@ -110,7 +110,7 @@ func (h *Hub) raise(org domain.ID, seq int64) {
 
 // Latest returns the organisation's latest sequence the hub has been told
 // about; 0 if none.
-func (h *Hub) Latest(org domain.ID) int64 {
+func (h *Hub) Latest(org kernel.ID) int64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if s, ok := h.orgs[org]; ok {
@@ -122,7 +122,7 @@ func (h *Hub) Latest(org domain.ID) int64 {
 // Wait blocks until the organisation's latest sequence is greater than
 // after and returns that sequence, at once if it already is. If ctx has
 // ended or ends first, it returns context.Cause(ctx).
-func (h *Hub) Wait(ctx context.Context, org domain.ID, after int64) (int64, error) {
+func (h *Hub) Wait(ctx context.Context, org kernel.ID, after int64) (int64, error) {
 	for {
 		if ctx.Err() != nil {
 			return 0, context.Cause(ctx)
@@ -154,7 +154,7 @@ func (h *Hub) Wait(ctx context.Context, org domain.ID, after int64) (int64, erro
 // counted once it holds the channel the next raise closes; after a raise it
 // stays counted until it runs its decrement, so read the count only while
 // no raise is in flight.
-func (h *Hub) Waiting(org domain.ID) int {
+func (h *Hub) Waiting(org kernel.ID) int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if s, ok := h.orgs[org]; ok {
@@ -166,7 +166,7 @@ func (h *Hub) Waiting(org domain.ID) int {
 // Connection names who holds a stream: the organisation from the URL, and
 // the account and session that authenticated the request.
 type Connection struct {
-	Organization, Account, Session domain.ID
+	Organization, Account, Session kernel.ID
 }
 
 // Register adds a connection unless its account already holds limit
@@ -232,10 +232,10 @@ func (h *Hub) Connections() int {
 // which the hub keeps for every organisation it was ever told about, this
 // follows the registry, so an organisation drops out when its last
 // connection unregisters.
-func (h *Hub) ActiveOrganizations() []domain.ID {
+func (h *Hub) ActiveOrganizations() []kernel.ID {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	orgs := make([]domain.ID, 0, len(h.byOrg))
+	orgs := make([]kernel.ID, 0, len(h.byOrg))
 	for org := range h.byOrg {
 		orgs = append(orgs, org)
 	}
@@ -245,7 +245,7 @@ func (h *Hub) ActiveOrganizations() []domain.ID {
 // CancelAccount ends the contexts of all the account's connections, for
 // example when the account signs out everywhere. The connections keep
 // their slots until they unregister.
-func (h *Hub) CancelAccount(account domain.ID) {
+func (h *Hub) CancelAccount(account kernel.ID) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for r := range h.byAccount[account] {
@@ -273,7 +273,7 @@ func (h *Hub) CancelAll() {
 // CancelSession ends the contexts of the session's connections, for example
 // when it signs out or is replaced. The connections keep their slots until
 // they unregister.
-func (h *Hub) CancelSession(session domain.ID) {
+func (h *Hub) CancelSession(session kernel.ID) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for r := range h.bySession[session] {
@@ -281,7 +281,7 @@ func (h *Hub) CancelSession(session domain.ID) {
 	}
 }
 
-func add(index map[domain.ID]map[*registration]struct{}, key domain.ID, r *registration) {
+func add(index map[kernel.ID]map[*registration]struct{}, key kernel.ID, r *registration) {
 	set, ok := index[key]
 	if !ok {
 		set = make(map[*registration]struct{})
@@ -292,7 +292,7 @@ func add(index map[domain.ID]map[*registration]struct{}, key domain.ID, r *regis
 
 // remove deletes r and drops an empty set, so the maps do not keep an entry
 // for every account or session that ever connected.
-func remove(index map[domain.ID]map[*registration]struct{}, key domain.ID, r *registration) {
+func remove(index map[kernel.ID]map[*registration]struct{}, key kernel.ID, r *registration) {
 	delete(index[key], r)
 	if len(index[key]) == 0 {
 		delete(index, key)

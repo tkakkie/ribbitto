@@ -54,8 +54,8 @@ Modules ([`modules.md`](docs/architecture/modules.md), from decision 26):
   `cmd/*` and tests.
 - Layers, until their module moves: `domain` (→ `kernel`),
   `app` (use cases, the only authorization logic; → `domain`, roots),
-  `infra/postgres` (implements `app`), `realtime` (→ `domain`; the rest as
-  interfaces), `web` (→ `domain`, `app`, roots, `realtime`; never `infra`).
+  `infra/postgres` (implements `app`), `web` (→ `domain`, `app`, roots;
+  never `infra`).
 - Use cases return plain structs; only `internal/web` produces HTML.
 - Only `platform/postgres`, `cmd/ribbitto` and four target-version tests
   import `db/migrations`.

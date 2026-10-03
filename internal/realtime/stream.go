@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // EventReader reads an organisation's durable events with a sequence above
@@ -16,7 +16,7 @@ import (
 // snapshot as its rows. A cursor below the boundary or above event_seq returns
 // ErrCursorExpired, including for a zero-limit read; equality is valid.
 type EventReader interface {
-	EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]Event, error)
+	EventsAfter(ctx context.Context, organizationID kernel.ID, after int64, limit int) ([]Event, error)
 }
 
 // Authorizer decides, immediately before an event is sent, whether the
@@ -24,7 +24,7 @@ type EventReader interface {
 // explicit deny; an error means the check itself failed and says nothing
 // about access.
 type Authorizer interface {
-	MayReceive(ctx context.Context, accountID domain.ID, organizationSlug string, event Event) (bool, error)
+	MayReceive(ctx context.Context, accountID kernel.ID, organizationSlug string, event Event) (bool, error)
 }
 
 // Renderer turns an event of the subscription into what the stream sends.
@@ -45,12 +45,12 @@ type Sender interface {
 // or one topic in it, on behalf of an account. The organisation and account
 // come from the URL and the session, never from the client's request body.
 type Subscription struct {
-	Organization     domain.ID
+	Organization     kernel.ID
 	OrganizationSlug string
-	Account          domain.ID
-	Channel          domain.ID
+	Account          kernel.ID
+	Channel          kernel.ID
 	// Topic, when set, narrows the channel to one topic (a topic view).
-	Topic *domain.ID
+	Topic *kernel.ID
 }
 
 // Outgoing is one event ready to send. ID is the event's sequence, which the
@@ -61,7 +61,7 @@ type Outgoing struct {
 	Data []byte
 	// Topic is the message's topic as the shared render read it. It is
 	// never sent; legacy posting events without a topic use it for filtering.
-	Topic domain.ID
+	Topic kernel.ID
 }
 
 // DefaultBatchSize bounds how many events one read returns.
@@ -219,7 +219,7 @@ func heartbeat(ctx context.Context, send Sender, written *time.Time) error {
 
 // wait is Hub.Wait, sending a heartbeat whenever Heartbeat has passed since
 // *written first; it moves *written on every heartbeat.
-func (s Stream) wait(ctx context.Context, org domain.ID, after int64, send Sender, written *time.Time) (int64, error) {
+func (s Stream) wait(ctx context.Context, org kernel.ID, after int64, send Sender, written *time.Time) (int64, error) {
 	if s.Heartbeat <= 0 {
 		return s.Hub.Wait(ctx, org, after)
 	}

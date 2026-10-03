@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 var (
-	orgA     = domain.ID{0xa}
-	orgB     = domain.ID{0xb}
-	account1 = domain.ID{1}
-	account2 = domain.ID{2}
-	session1 = domain.ID{0x11}
-	session2 = domain.ID{0x12}
+	orgA     = kernel.ID{0xa}
+	orgB     = kernel.ID{0xb}
+	account1 = kernel.ID{1}
+	account2 = kernel.ID{2}
+	session1 = kernel.ID{0x11}
+	session2 = kernel.ID{0x12}
 )
 
 // blocked is how long a wait must stay blocked to count as blocked. It is
@@ -24,7 +24,7 @@ var (
 const blocked = 20 * time.Millisecond
 
 // waitAsync starts Wait and returns a channel with its result.
-func waitAsync(ctx context.Context, h *Hub, org domain.ID, after int64) <-chan error {
+func waitAsync(ctx context.Context, h *Hub, org kernel.ID, after int64) <-chan error {
 	done := make(chan error, 1)
 	go func() {
 		_, err := h.Wait(ctx, org, after)
@@ -35,7 +35,7 @@ func waitAsync(ctx context.Context, h *Hub, org domain.ID, after int64) <-chan e
 
 // waitForHubWaiters blocks until n calls of Wait for org are blocked, each
 // holding the channel the next raise closes.
-func waitForHubWaiters(t *testing.T, h *Hub, org domain.ID, n int) {
+func waitForHubWaiters(t *testing.T, h *Hub, org kernel.ID, n int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for h.Waiting(org) != n {
@@ -101,7 +101,7 @@ func TestRaiseWakesEveryWaiter(t *testing.T) {
 		cancel()
 		wg.Wait()
 	})
-	wait := func(org domain.ID) <-chan error {
+	wait := func(org kernel.ID) <-chan error {
 		done := make(chan error, 1)
 		wg.Go(func() {
 			_, err := h.Wait(ctx, org, 0)

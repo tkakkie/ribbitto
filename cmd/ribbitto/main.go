@@ -254,9 +254,10 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	if err != nil {
 		return nil, nil, err
 	}
+	setupStore := postgres.NewSetupStore(pool, appendEvents)
 	var setupService web.SetupService
 	if config.setupToken != "" {
-		setupService = setup.New(postgres.NewSetupStore(pool, appendEvents), hasher, config.setupToken)
+		setupService = setup.New(setupStore, hasher, config.setupToken)
 	}
 
 	catalogues, err := i18n.New(slog.Default())
@@ -264,23 +265,25 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		return nil, nil, err
 	}
 	authorizer := authz.New(postgres.NewAuthzStore(pool))
-	posting := message.New(postgres.NewPostingStore(pool, appendEvents))
-	// A nil hub must stay a nil Notifier, not a typed nil in the interface.
-	branching := topic.NewBrancher(postgres.NewBranchStore(pool, appendEvents), nil)
+	// A nil hub must stay a nil Notifier, not a typed nil in either interface.
+	var postingNotifier message.Notifier
+	var branchNotifier topic.Notifier
 	var stream *web.Streaming
 	if config.hub != nil {
-		posting = message.NewWithNotifier(postgres.NewPostingStore(pool, appendEvents), config.hub)
-		branching = topic.NewBrancher(postgres.NewBranchStore(pool, appendEvents), config.hub)
+		postingNotifier = config.hub
+		branchNotifier = config.hub
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
 		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds()), config.hub, 1024, time.Minute)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
+	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, appendEvents), postingNotifier)
+	branching := topic.NewBrancher(postgres.NewBranchStore(pool, appendEvents), branchNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions:      sessions,
 		SignIn:        identitypg.NewSignIn(pool, hasher, sessions),
 		Setup:         setupService,
-		SignUp:        signup.New(postgres.NewSetupStore(pool, appendEvents), hasher, config.signupEnabled),
+		SignUp:        signup.New(setupStore, hasher, config.signupEnabled),
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        postgres.NewTopicStore(pool),

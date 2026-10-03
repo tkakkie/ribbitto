@@ -98,11 +98,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			for i := range 100 {
 				moved.MessageIDs = append(moved.MessageIDs, domain.ID{byte(i)})
 			}
-			payload, err := topic.EncodeMoved(moved)
-			if err != nil {
-				t.Fatal(err)
-			}
-			event.Payload = payload
+			event.Payload = topic.EncodeMoved(moved)
 			calls := &atomic.Int32{}
 			release := make(chan struct{})
 			r := messageRenderer{messages: countingMessages{calls: calls, release: release}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
@@ -185,11 +181,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			moved := topic.Moved{ChannelID: e.ChannelID, FromTopicID: domain.ID{5}, ToTopicID: domain.ID{6}, MessageIDs: []domain.ID{{7}, {8}}}
 			if kind == realtime.EventMessagesMoved {
 				e.Seq = 11 // its own render, not the posted one's
-				payload, err := topic.EncodeMoved(moved)
-				if err != nil {
-					t.Fatal(err)
-				}
-				e.Payload = payload
+				e.Payload = topic.EncodeMoved(moved)
 			}
 			out, err := r.Render(en, realtime.Subscription{}, e)
 			if err != nil {

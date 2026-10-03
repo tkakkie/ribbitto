@@ -4,10 +4,19 @@ Decisions that later work must respect, newest last. Each entry is short:
 what was decided, why, and what else was considered.
 
 **Keep it current:** add an entry in the same pull request whenever a
-decision is made that later work must follow (a technology, a data-model
-rule, a process choice). To change a decision, open an issue; when it is
-settled, add a new entry that supersedes the old one rather than editing
-history.
+long-lived choice is made that later work must follow: a technology, a data
+model, a product or a maintenance policy, or a repository-wide policy that
+changes or supersedes an existing decision. To change a decision, open an
+issue; when it is settled, add a new entry that supersedes the old one
+rather than editing history.
+
+**Workflow rules are not decisions** (#363). Operating procedures, review
+gates and the rules for running AI tools live in
+[`docs/workflow/`](docs/workflow/README.md), which is their authoritative
+place. They are added or changed from a `process` issue, without a
+decision entry. The existing process decisions stay as history and are not
+reorganised. A workflow change that conflicts with an existing decision
+needs a new decision that supersedes it.
 
 ## Adding a decision
 

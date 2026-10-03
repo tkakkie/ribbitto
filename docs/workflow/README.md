@@ -30,7 +30,9 @@ disagree, fix the disagreement in a pull request.
 3. **Process grows only from evidence.** From now on, a new process rule
    comes from a `process` issue whose *Problem* section links the AI
    workflow log comments (#2) that motivated it; a rule that never
-   prevented anything can be removed.
+   prevented anything can be removed. Such rules live here and need no
+   decision record, unless they conflict with an existing decision
+   ([`DECISIONS.md`](../../DECISIONS.md)).
 
 ## Roles
 

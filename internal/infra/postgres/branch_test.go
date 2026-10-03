@@ -155,12 +155,15 @@ type failingNotice struct {
 }
 
 func (f failingNotice) AppendMessagesMoved(ctx context.Context, organizationID, channelID, from, to domain.ID, messageIDs []domain.ID, seq int64) error {
-	*f.moved = true
-	return f.EventAppender.AppendMessagesMoved(ctx, organizationID, channelID, from, to, messageIDs, seq)
+	err := f.EventAppender.AppendMessagesMoved(ctx, organizationID, channelID, from, to, messageIDs, seq)
+	*f.moved = err == nil
+	return err
 }
 
+var errNoticeAppend = errors.New("notice append failed")
+
 func (failingNotice) AppendMessagePosted(context.Context, domain.ID, domain.ID, domain.ID, domain.ID, int64) error {
-	return errors.New("notice append failed")
+	return errNoticeAppend
 }
 
 type countingNotifier struct{ raised int }
@@ -186,8 +189,8 @@ func TestBranchStoreFailingNoticeAppend(t *testing.T) {
 	member := authz.Membership{Organization: domain.Organization{ID: acme.OrganizationID}, Member: domain.Member{ID: acme.MemberID}}
 	before := readBranchState(t, pool, acme.OrganizationID)
 	b := topic.Branch{Messages: []domain.ID{posted.ID}, From: acme.Channel.DefaultTopicID, NewName: "design"}
-	if _, err := brancher.Branch(ctx, member, acme.Channel.ID, b, func(d domain.Topic) string { return "moved to " + d.Name }); err == nil {
-		t.Fatal("branch with a failing notice append succeeded")
+	if _, err := brancher.Branch(ctx, member, acme.Channel.ID, b, func(d domain.Topic) string { return "moved to " + d.Name }); !errors.Is(err, errNoticeAppend) {
+		t.Fatalf("branch = %v; want the notice append's error", err)
 	}
 	if !moved {
 		t.Fatal("the move was not appended before the notice")

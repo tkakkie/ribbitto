@@ -16,6 +16,7 @@ Read the file for the area you change:
 |---|---|
 | [`packages.md`](packages.md) | packages, their responsibilities and allowed imports |
 | [`features.md`](features.md) | the feature map: each feature's packages and tables, and the known exceptions |
+| [`modules.md`](modules.md) | the migration target: module construction, the modules and their steps, and every temporary path |
 | [`request-flow.md`](request-flow.md) | the request flow, organisation routes, server timeouts, middleware order |
 | [`setup-and-signup.md`](setup-and-signup.md) | first-run setup and sign-up |
 | [`identity.md`](identity.md) | sessions, signing in and out, the session cookie |

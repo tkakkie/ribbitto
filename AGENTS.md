@@ -44,31 +44,30 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 
 ## Layout and dependency direction
 
-`cmd/ribbitto` wires everything. Under `internal/`: `domain` (imports only
-`kernel`), `app` (use cases and the only authorization logic; imports
-`domain`, `identity`), `infra/postgres` (implements `app` interfaces), `realtime`
-(imports `domain`; receives authorization, rendering and event reading as
-interfaces), `web` (handlers and templ; imports `domain`, `app`,
-`identity`, `realtime`, never `infra`). Handlers call use cases that return plain
-structs; only `internal/web` produces HTML, with components in `internal/web/view`.
-It may import `web/static` for embedded assets. Do not add an import that breaks this.
-`db/migrations` is owned by `internal/platform/postgres` and may be imported
-only by it, `cmd/ribbitto` and four target-version tests. The move to modules ([decision 26](docs/decisions/26-modules-by-feature-layout-seams-and-order.md))
-adds `internal/kernel` (`ID` only) and `internal/platform/postgres` (pool,
-migrations, test databases; no feature queries). `internal/identity` is
-the first module; the layers stay until theirs move, and the feature map's *Target* lists the temporary paths.
+`cmd/*` wire everything. Depguard enforces
+[`packages.md`](docs/architecture/packages.md)'s import rules; never break them.
+Modules ([decision 26](docs/decisions/26-modules-by-feature-layout-seams-and-order.md),
+[`modules.md`](docs/architecture/modules.md)):
 
-Features: the code is heading for a modular monolith by feature
-([decision 14](docs/decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)); the feature map in
-[`docs/architecture/features.md`](docs/architecture/features.md)
-lists each feature's packages and tables.
+- Others import only a module's root (now `internal/identity`); its
+  store only its wiring (`<module>pg`); the wiring only `cmd/*` and tests.
+- Layers, until their module moves: `domain` (→ `kernel`),
+  `app` (use cases, the only authorization logic; → `domain`, roots),
+  `infra/postgres` (implements `app`), `realtime` (→ `domain`; the rest as
+  interfaces), `web` (→ `domain`, `app`, roots, `realtime`; never `infra`).
+- Use cases return plain structs; only `internal/web` produces HTML.
+- Only `platform/postgres`, `cmd/ribbitto` and four target-version tests
+  import `db/migrations`.
 
-- New code goes in feature packages inside the layers.
-- Read the `doc.go` of each feature package you touch first.
-- A feature uses another only through its exported API, never its store
+Features ([map](docs/architecture/features.md)):
+
+- New code goes in its module if migrated, else a feature package in the
+  layers.
+- Read a package's `doc.go` before touching it.
+- Use another feature only through its exported API, never its store
   internals or queries.
-- A feature writes only the tables it owns, except the flows the feature
-  map lists; a new exception needs its issue to say why.
+- Write only your feature's tables, except flows the feature map lists (a
+  new one needs its issue to say why).
 
 ## Where things are explained
 

@@ -87,12 +87,12 @@ The prompt carries the issue and its review comments, plus these rules:
   and `RIBBITTO_REQUIRE_DB=1`. Its Go tests run with the race detector,
   which works in this profile. `make vuln` does not, because
   `vuln.go.dev` is not on the allowlist; CI runs it
-  ([Checks](../../README.md#checks)). The last step of `make check`,
-  `bash scripts/ai/grok-review_test.sh`, stops at once with a message,
-  because the sandbox does not permit `ps` and the script needs it to find
-  and check its fake Grok processes
-  ([#183](https://github.com/tkakkie/ribbitto/issues/183)). Everything
-  before it has run by then, so that failure alone is expected.
+  ([Checks](../../README.md#checks)). `make check` ends with the launcher
+  suites. The first, `bash scripts/ai/grok-review_test.sh`, stops at once
+  with a message: the sandbox does not permit `ps`, which it needs to find
+  its fake Grok processes
+  ([#183](https://github.com/tkakkie/ribbitto/issues/183)), so Muse's suite
+  never runs. Everything before them has run, so that failure is expected.
 
   ```sh
   # Reuse the container if it is already running; either way, wait for it.

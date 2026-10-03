@@ -57,37 +57,6 @@ func (q *Queries) EventBounds(ctx context.Context, id pgtype.UUID) (EventBoundsR
 	return i, err
 }
 
-const expireEventBatch = `-- name: ExpireEventBatch :one
-WITH deleted AS (
-    DELETE FROM event_log e
-    WHERE e.organization_id = $1 AND e.seq IN (
-        SELECT candidate.seq FROM event_log candidate
-        WHERE candidate.organization_id = $1 AND candidate.created_at < $2
-        ORDER BY candidate.seq LIMIT 1000
-    )
-    RETURNING e.seq
-), advanced AS (
-    UPDATE organization
-    SET event_log_boundary_seq = greatest(event_log_boundary_seq, (SELECT max(seq) FROM deleted))
-    WHERE id = $1 AND EXISTS (SELECT 1 FROM deleted)
-)
-SELECT count(*) FROM deleted
-`
-
-type ExpireEventBatchParams struct {
-	OrganizationID pgtype.UUID
-	Cutoff         pgtype.Timestamptz
-}
-
-// The caller already holds this organisation's row lock. Use a fresh
-// snapshot after locking so concurrent cleaners see earlier commits.
-func (q *Queries) ExpireEventBatch(ctx context.Context, arg ExpireEventBatchParams) (int64, error) {
-	row := q.db.QueryRow(ctx, expireEventBatch, arg.OrganizationID, arg.Cutoff)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const lockEventRetentionOrganization = `-- name: LockEventRetentionOrganization :exec
 SELECT id FROM organization WHERE id = $1 FOR UPDATE
 `
@@ -97,29 +66,18 @@ func (q *Queries) LockEventRetentionOrganization(ctx context.Context, id pgtype.
 	return err
 }
 
-const organizationsWithExpiredEvents = `-- name: OrganizationsWithExpiredEvents :many
-SELECT id FROM organization o
-WHERE EXISTS (SELECT 1 FROM event_log e
-              WHERE e.organization_id = o.id AND e.created_at < $1)
-ORDER BY id
+const raiseEventLogBoundary = `-- name: RaiseEventLogBoundary :exec
+UPDATE organization SET event_log_boundary_seq = greatest(event_log_boundary_seq, $1::bigint)
+WHERE id = $2
 `
 
-func (q *Queries) OrganizationsWithExpiredEvents(ctx context.Context, cutoff pgtype.Timestamptz) ([]pgtype.UUID, error) {
-	rows, err := q.db.Query(ctx, organizationsWithExpiredEvents, cutoff)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []pgtype.UUID
-	for rows.Next() {
-		var id pgtype.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type RaiseEventLogBoundaryParams struct {
+	Through        int64
+	OrganizationID pgtype.UUID
+}
+
+// greatest: the boundary never goes down (realtime.RetentionBoundary).
+func (q *Queries) RaiseEventLogBoundary(ctx context.Context, arg RaiseEventLogBoundaryParams) error {
+	_, err := q.db.Exec(ctx, raiseEventLogBoundary, arg.Through, arg.OrganizationID)
+	return err
 }

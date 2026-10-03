@@ -121,8 +121,10 @@ without backfilling; new organisations start at 0. Rows above the boundary
 are gap-free through `event_seq`; a deferred constraint trigger enforces it at
 commit for every writer, including an older binary still running during
 `migrate up`. Retention raises the boundary in the same transaction as deletion,
-locking one organisation before its events as posting does. The cleaner lists
-organisations with expired rows in ID order without write locks, then commits
+locking one organisation before its events as posting does; the lock and the
+boundary (`greatest`, so it never goes down) come through the injected
+`realtime.RetentionBoundary`. The cleaner lists organisations with expired rows
+from `event_log` in ID order without write locks, then commits
 batches of at most 1,000 expired rows in sequence order until none remain for
 each organisation. Each batch reads after acquiring the organisation lock,
 so concurrent cleaners see committed progress. Only that organisation's writers

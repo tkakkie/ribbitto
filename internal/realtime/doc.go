@@ -29,6 +29,7 @@
 // cursor; a cursor the log can no longer serve gets a reset event instead
 // of a partial replay. Cache and CachedEvents let an organisation's streams
 // share reads and renders (#227); docs/architecture/stream-cost.md measures
-// the effect. Retention expires old events through EventCleaner and raises
-// the replay boundary (#161).
+// the effect. Retention expires old events through EventCleaner (the store's
+// Cleaner) and raises the replay boundary through the injected
+// RetentionBoundary, which org owns (#161).
 package realtime

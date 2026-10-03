@@ -75,3 +75,22 @@ func EventKinds() realtime.Kinds {
 		realtime.EventMessagesMoved: topic.RouteMoved,
 	}
 }
+
+// RetentionBoundaryIn locks an organisation and raises its replay boundary
+// for realtime's cleaner, in the cleaner's transaction. It writes
+// organization, so it lives here until org's module moves (step 3).
+func RetentionBoundaryIn(tx platform.Tx) realtime.RetentionBoundary {
+	return retentionBoundary{queries: sqlcgen.New(pgxbridge.Tx(tx))}
+}
+
+type retentionBoundary struct{ queries *sqlcgen.Queries }
+
+func (b retentionBoundary) LockForRetention(ctx context.Context, organizationID domain.ID) error {
+	return b.queries.LockEventRetentionOrganization(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+}
+
+func (b retentionBoundary) RaiseBoundary(ctx context.Context, organizationID domain.ID, through int64) error {
+	return b.queries.RaiseEventLogBoundary(ctx, sqlcgen.RaiseEventLogBoundaryParams{
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Through: through,
+	})
+}

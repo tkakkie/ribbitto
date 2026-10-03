@@ -15,7 +15,9 @@ Ordering, replay and vanished messages are in [`replay.md`](replay.md).
 
 `realtime.Retention` expires replay history once at start and then hourly.
 The worker starts asynchronously before serving, so its first run can overlap
-requests. It takes the same organisation lock as posting; separate transactions
+requests. `realtime`'s store runs it (`realtimepg.NewCleaner`); org's lock and boundary
+come through the injected `realtime.RetentionBoundary` (`infra/postgres` until
+step 3). It takes the same organisation lock as posting; separate transactions
 of at most 1,000 expired rows and a one-minute run timeout limit contention.
 Failed runs retry on the next tick, keeping committed progress. Shutdown cancels
 and waits for the worker, including a blocked first run, before closing the pool.

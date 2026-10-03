@@ -120,7 +120,7 @@ func TestRetentionReplay(t *testing.T) {
 			must(err)
 			reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
 			expire := func() {
-				must(postgres.NewEventCleaner(pool).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
+				must(realtimepg.NewCleaner(pool, postgres.RetentionBoundaryIn).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
 			}
 			var events realtime.EventReader = reader
 			cursor, wantCursor := int64(1), int64(1)

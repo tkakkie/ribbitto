@@ -129,82 +129,25 @@ func (q *Queries) ExpireEventBatch(ctx context.Context, arg ExpireEventBatchPara
 	return count, err
 }
 
-const insertMemberEvent = `-- name: InsertMemberEvent :exec
+const insertEvent = `-- name: InsertEvent :exec
 INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
-VALUES ($1, $2, $3, NULL, jsonb_build_object('member_id', $4::uuid))
+VALUES ($1, $2, $3, NULL, $4::jsonb)
 `
 
-type InsertMemberEventParams struct {
+type InsertEventParams struct {
 	OrganizationID pgtype.UUID
 	Seq            int64
 	Kind           string
-	MemberID       pgtype.UUID
+	Data           []byte
 }
 
-func (q *Queries) InsertMemberEvent(ctx context.Context, arg InsertMemberEventParams) error {
-	_, err := q.db.Exec(ctx, insertMemberEvent,
+// data comes encoded by the kind's publisher (decision 26).
+func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error {
+	_, err := q.db.Exec(ctx, insertEvent,
 		arg.OrganizationID,
 		arg.Seq,
 		arg.Kind,
-		arg.MemberID,
-	)
-	return err
-}
-
-const insertMessageEvent = `-- name: InsertMessageEvent :exec
-INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
-VALUES ($1, $2, $3, NULL, jsonb_build_object('channel_id', $4::uuid, 'message_id', $5::uuid, 'topic_id', $6::uuid))
-`
-
-type InsertMessageEventParams struct {
-	OrganizationID pgtype.UUID
-	Seq            int64
-	Kind           string
-	ChannelID      pgtype.UUID
-	MessageID      pgtype.UUID
-	TopicID        pgtype.UUID
-}
-
-func (q *Queries) InsertMessageEvent(ctx context.Context, arg InsertMessageEventParams) error {
-	_, err := q.db.Exec(ctx, insertMessageEvent,
-		arg.OrganizationID,
-		arg.Seq,
-		arg.Kind,
-		arg.ChannelID,
-		arg.MessageID,
-		arg.TopicID,
-	)
-	return err
-}
-
-const insertMessagesMovedEvent = `-- name: InsertMessagesMovedEvent :exec
-INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
-VALUES ($1, $2, $3, NULL, jsonb_build_object(
-  'channel_id', $4::uuid,
-  'from_topic_id', $5::uuid,
-  'to_topic_id', $6::uuid,
-  'message_ids', to_jsonb($7::uuid[])))
-`
-
-type InsertMessagesMovedEventParams struct {
-	OrganizationID pgtype.UUID
-	Seq            int64
-	Kind           string
-	ChannelID      pgtype.UUID
-	FromTopicID    pgtype.UUID
-	ToTopicID      pgtype.UUID
-	MessageIds     []pgtype.UUID
-}
-
-func (q *Queries) InsertMessagesMovedEvent(ctx context.Context, arg InsertMessagesMovedEventParams) error {
-	_, err := q.db.Exec(ctx, insertMessagesMovedEvent,
-		arg.OrganizationID,
-		arg.Seq,
-		arg.Kind,
-		arg.ChannelID,
-		arg.FromTopicID,
-		arg.ToTopicID,
-		arg.MessageIds,
+		arg.Data,
 	)
 	return err
 }

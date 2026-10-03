@@ -2,7 +2,8 @@
 //
 // Feature: message (feature map in docs/architecture/features.md), which owns
 // the message table. Exported API: Service, the Store interface it needs and
-// ErrInvalidBody, and Reader with History: Before reads a Page below an
+// ErrInvalidBody, EncodePosted (the message.posted payload it publishes),
+// and Reader with History: Before reads a Page below an
 // event_seq bound with an optional topic filter; One reads an Entry by
 // organisation, channel and event_seq,
 // returning ErrNotFound for a missing or out-of-scope message; Many reads a

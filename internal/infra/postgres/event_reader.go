@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/tkakkie/ribbitto/internal/app/member"
+	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -70,96 +72,35 @@ func (r *EventReader) CommittedSequences(ctx context.Context, organizations []do
 	return seqs, nil
 }
 
+// eventFromRow decodes known kinds through their publishers' codecs.
 func eventFromRow(row sqlcgen.EventsAfterRow) (realtime.Event, error) {
 	event := realtime.Event{OrganizationID: row.OrganizationID.Bytes, Seq: row.Seq, Kind: realtime.EventKind(row.Kind)}
 	if row.AudienceMemberID.Valid {
 		id := domain.ID(row.AudienceMemberID.Bytes)
 		event.AudienceMemberID = &id
 	}
-	// Future kinds may have different payload shapes; the delivery loop skips them.
-	if event.Kind != realtime.EventMessagePosted && event.Kind != realtime.EventMemberJoined && event.Kind != realtime.EventMessagesMoved {
-		return event, nil
-	}
-	var data struct {
-		TopicID     json.RawMessage `json:"topic_id"`
-		ChannelID   string          `json:"channel_id"`
-		MessageID   string          `json:"message_id"`
-		MemberID    string          `json:"member_id"`
-		FromTopicID string          `json:"from_topic_id"`
-		ToTopicID   string          `json:"to_topic_id"`
-		MessageIDs  []string        `json:"message_ids"`
-	}
-	if err := json.Unmarshal(row.Data, &data); err != nil {
-		return realtime.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)
-	}
 	var err error
 	switch event.Kind {
 	case realtime.EventMessagePosted:
-		event.ChannelID, err = eventDataID(data.ChannelID)
-		if err == nil {
-			event.MessageID, err = eventDataID(data.MessageID)
-		}
-		// Only an absent field is legacy; a present malformed topic must
-		// fail replay rather than silently change its routing semantics.
-		if err == nil && len(data.TopicID) != 0 {
-			var value string
-			if err = json.Unmarshal(data.TopicID, &value); err == nil {
-				var id domain.ID
-				id, err = eventDataID(value)
-				event.TopicID = &id
-			}
+		var p message.Posted
+		if p, err = message.DecodePosted(row.Data); err == nil {
+			event.ChannelID, event.MessageID, event.TopicID = p.ChannelID, p.MessageID, p.TopicID
 		}
 	case realtime.EventMemberJoined:
-		event.MemberID, err = eventDataID(data.MemberID)
+		var j member.Joined
+		if j, err = member.DecodeJoined(row.Data); err == nil {
+			event.MemberID = j.MemberID
+		}
 	case realtime.EventMessagesMoved:
-		err = decodeMove(&event, data.ChannelID, data.FromTopicID, data.ToTopicID, data.MessageIDs)
+		var m topic.Moved
+		if m, err = topic.DecodeMoved(row.Data); err == nil {
+			event.ChannelID, event.FromTopicID, event.ToTopicID, event.MessageIDs = m.ChannelID, m.FromTopicID, m.ToTopicID, m.MessageIDs
+		}
+	default:
+		// Future kinds may have different payload shapes; the delivery loop skips them.
 	}
 	if err != nil {
 		return realtime.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)
 	}
 	return event, nil
-}
-
-func decodeMove(event *realtime.Event, channel, from, to string, messages []string) error {
-	var err error
-	for _, field := range []struct {
-		value string
-		id    *domain.ID
-	}{{channel, &event.ChannelID}, {from, &event.FromTopicID}, {to, &event.ToTopicID}} {
-		*field.id, err = eventDataID(field.value)
-		if err != nil {
-			return err
-		}
-	}
-	if event.FromTopicID == event.ToTopicID {
-		return fmt.Errorf("move destination is the source")
-	}
-	if len(messages) == 0 {
-		return fmt.Errorf("move has no messages")
-	}
-	seen := make(map[domain.ID]bool, len(messages))
-	for _, value := range messages {
-		id, err := eventDataID(value)
-		if err != nil {
-			return err
-		}
-		if seen[id] {
-			return fmt.Errorf("move repeats a message ID")
-		}
-		seen[id] = true
-		event.MessageIDs = append(event.MessageIDs, id)
-	}
-	return nil
-}
-
-func eventDataID(value string) (domain.ID, error) {
-	// pgtype accepts misplaced UUID separators; persisted payloads use canonical UUIDs.
-	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
-		return domain.ID{}, fmt.Errorf("required ID is not a canonical UUID")
-	}
-	var id pgtype.UUID
-	if err := id.Scan(value); err != nil {
-		return domain.ID{}, fmt.Errorf("parsing event ID: %w", err)
-	}
-	return id.Bytes, nil
 }

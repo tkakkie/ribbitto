@@ -98,6 +98,12 @@ connection, after rendering and immediately before send. The payload includes
 source and destination IDs and each item's original sequence: feeds replace
 loaded IDs; topics remove source items or insert destination items in order
 within the loaded range. Live changes never alter the history paging bound.
+`web`'s renderer chooses by kind: `message.posted` and `messages.moved`
+each have their own render, and any other kind that reaches it is an error
+naming the kind, which stops the stream before that event instead of
+rendering it as a post. A render depends only on the event
+(`Renderer.Render(ctx, event)`); the stream has already applied the
+subscription, and the renderer reads only `MessageReader`'s `One` and `Many`.
 Setup and sign-up append `member.joined` (`member.EncodeJoined`) the same way immediately after
 the member, with its `joined_event_seq`. `realtime.Event` is an envelope: organisation,
 sequence, kind, audience, channel, routing `Topics` and the stored `Payload`,

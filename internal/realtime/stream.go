@@ -27,11 +27,12 @@ type Authorizer interface {
 	MayReceive(ctx context.Context, accountID kernel.ID, organizationSlug string, event Event) (bool, error)
 }
 
-// Renderer turns an event of the subscription into what the stream sends.
-// It runs before the Authorizer's check, so its result is discarded when the
-// check denies the event. web implements it.
+// Renderer turns an event the subscription wants into what the stream
+// sends; the stream does the subscription's filtering, so a render depends
+// only on the event. It runs before the Authorizer's check, so its result
+// is discarded when the check denies the event. web implements it.
 type Renderer interface {
-	Render(ctx context.Context, sub Subscription, event Event) (Outgoing, error)
+	Render(ctx context.Context, event Event) (Outgoing, error)
 }
 
 // Sender writes to the connection: an outgoing event, or a heartbeat that
@@ -189,7 +190,7 @@ func (s Stream) deliver(ctx context.Context, sub Subscription, event Event, send
 	// one query per event. A render error stops the loop even for an event
 	// that would have been denied, so nothing is ever skipped without a
 	// decision.
-	out, err := s.Renderer.Render(ctx, sub, event)
+	out, err := s.Renderer.Render(ctx, event)
 	if err != nil {
 		return false, fmt.Errorf("rendering event %d: %w", event.Seq, err)
 	}

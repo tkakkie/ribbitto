@@ -12,24 +12,17 @@ VALUES (sqlc.arg(organization_id), sqlc.arg(seq), sqlc.arg(kind), sqlc.narg(audi
 -- name: OrganizationsWithExpiredEvents :many
 SELECT DISTINCT organization_id FROM event_log WHERE created_at < sqlc.arg(cutoff) ORDER BY organization_id;
 
--- name: DeleteExpiredEvents :one
--- The caller already holds this organisation's lock. A fresh statement after
--- locking sees committed progress by concurrent cleaners. Only the expired
--- prefix in seq order goes: created_at is the writing transaction's start,
--- which need not follow seq, and the boundary must never pass a row still in
--- the log (#430).
-WITH first_kept AS (
-    SELECT kept.seq FROM event_log kept
-    WHERE kept.organization_id = sqlc.arg(organization_id) AND kept.created_at >= sqlc.arg(cutoff)
-    ORDER BY kept.seq LIMIT 1
-), deleted AS (
-    DELETE FROM event_log e
-    WHERE e.organization_id = sqlc.arg(organization_id) AND e.seq IN (
-        SELECT candidate.seq FROM event_log candidate
-        WHERE candidate.organization_id = sqlc.arg(organization_id) AND candidate.created_at < sqlc.arg(cutoff)
-          AND NOT EXISTS (SELECT 1 FROM first_kept WHERE candidate.seq > first_kept.seq)
-        ORDER BY candidate.seq LIMIT 1000
-    )
-    RETURNING e.seq
+-- name: LowestEvents :many
+-- The cleaner reads these after taking the organisation lock, so it sees
+-- committed progress by concurrent cleaners; 1,000 bounds the work under it.
+SELECT seq, created_at FROM event_log
+WHERE organization_id = sqlc.arg(organization_id)
+ORDER BY seq LIMIT 1000;
+
+-- name: DeleteEventsThrough :one
+WITH deleted AS (
+    DELETE FROM event_log
+    WHERE organization_id = sqlc.arg(organization_id) AND seq <= sqlc.arg(through)::bigint
+    RETURNING seq
 )
 SELECT count(*)::bigint AS deleted, coalesce(max(seq), 0)::bigint AS through FROM deleted;

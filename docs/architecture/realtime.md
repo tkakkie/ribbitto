@@ -130,7 +130,9 @@ prefix rows remain for each organisation. Eligible rows are the expired prefix:
 those below the organisation's lowest-sequence row that has not expired, or
 every expired row when none has, since `created_at` (the writing transaction's
 start) need not follow `seq` (#430); expired rows above that row wait for a
-later run. Each batch reads after acquiring the organisation lock,
+later run. Each batch reads only the organisation's 1,000 lowest sequences
+under the lock and deletes the expired run at their start, so the work under
+the lock stays bounded. Each batch reads after acquiring the organisation lock,
 so concurrent cleaners see committed progress. Only that organisation's writers
 wait; errors or the one-minute run timeout preserve all committed batches for
 the next hourly tick. Messages,

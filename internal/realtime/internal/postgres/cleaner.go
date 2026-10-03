@@ -61,14 +61,29 @@ func (c *Cleaner) expireBatch(ctx context.Context, tx platform.Tx, organizationI
 	if err := boundary.LockForRetention(ctx, organizationID); err != nil {
 		return 0, fmt.Errorf("locking event retention organisation: %w", err)
 	}
-	row, err := sqlcgen.New(pgxbridge.Tx(tx)).DeleteExpiredEvents(ctx, sqlcgen.DeleteExpiredEventsParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Cutoff: cutoff,
+	q := sqlcgen.New(pgxbridge.Tx(tx))
+	lowest, err := q.LowestEvents(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+	if err != nil {
+		return 0, fmt.Errorf("reading the oldest events: %w", err)
+	}
+	// Only the expired prefix in seq order goes: created_at is the writing
+	// transaction's start, which need not follow seq, and the boundary must
+	// never pass a row still in the log (#430).
+	var through int64
+	for _, event := range lowest {
+		if !event.CreatedAt.Time.Before(cutoff.Time) {
+			break
+		}
+		through = event.Seq
+	}
+	if through == 0 {
+		return 0, nil
+	}
+	row, err := q.DeleteEventsThrough(ctx, sqlcgen.DeleteEventsThroughParams{
+		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Through: through,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("deleting event batch: %w", err)
-	}
-	if row.Deleted == 0 {
-		return 0, nil
 	}
 	if err := boundary.RaiseBoundary(ctx, organizationID, row.Through); err != nil {
 		return 0, fmt.Errorf("raising the replay boundary: %w", err)

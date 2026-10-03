@@ -11,42 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteExpiredEvents = `-- name: DeleteExpiredEvents :one
-WITH first_kept AS (
-    SELECT kept.seq FROM event_log kept
-    WHERE kept.organization_id = $1 AND kept.created_at >= $2
-    ORDER BY kept.seq LIMIT 1
-), deleted AS (
-    DELETE FROM event_log e
-    WHERE e.organization_id = $1 AND e.seq IN (
-        SELECT candidate.seq FROM event_log candidate
-        WHERE candidate.organization_id = $1 AND candidate.created_at < $2
-          AND NOT EXISTS (SELECT 1 FROM first_kept WHERE candidate.seq > first_kept.seq)
-        ORDER BY candidate.seq LIMIT 1000
-    )
-    RETURNING e.seq
+const deleteEventsThrough = `-- name: DeleteEventsThrough :one
+WITH deleted AS (
+    DELETE FROM event_log
+    WHERE organization_id = $1 AND seq <= $2::bigint
+    RETURNING seq
 )
 SELECT count(*)::bigint AS deleted, coalesce(max(seq), 0)::bigint AS through FROM deleted
 `
 
-type DeleteExpiredEventsParams struct {
+type DeleteEventsThroughParams struct {
 	OrganizationID pgtype.UUID
-	Cutoff         pgtype.Timestamptz
+	Through        int64
 }
 
-type DeleteExpiredEventsRow struct {
+type DeleteEventsThroughRow struct {
 	Deleted int64
 	Through int64
 }
 
-// The caller already holds this organisation's lock. A fresh statement after
-// locking sees committed progress by concurrent cleaners. Only the expired
-// prefix in seq order goes: created_at is the writing transaction's start,
-// which need not follow seq, and the boundary must never pass a row still in
-// the log (#430).
-func (q *Queries) DeleteExpiredEvents(ctx context.Context, arg DeleteExpiredEventsParams) (DeleteExpiredEventsRow, error) {
-	row := q.db.QueryRow(ctx, deleteExpiredEvents, arg.OrganizationID, arg.Cutoff)
-	var i DeleteExpiredEventsRow
+func (q *Queries) DeleteEventsThrough(ctx context.Context, arg DeleteEventsThroughParams) (DeleteEventsThroughRow, error) {
+	row := q.db.QueryRow(ctx, deleteEventsThrough, arg.OrganizationID, arg.Through)
+	var i DeleteEventsThroughRow
 	err := row.Scan(&i.Deleted, &i.Through)
 	return i, err
 }
@@ -119,6 +105,39 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error 
 		arg.Data,
 	)
 	return err
+}
+
+const lowestEvents = `-- name: LowestEvents :many
+SELECT seq, created_at FROM event_log
+WHERE organization_id = $1
+ORDER BY seq LIMIT 1000
+`
+
+type LowestEventsRow struct {
+	Seq       int64
+	CreatedAt pgtype.Timestamptz
+}
+
+// The cleaner reads these after taking the organisation lock, so it sees
+// committed progress by concurrent cleaners; 1,000 bounds the work under it.
+func (q *Queries) LowestEvents(ctx context.Context, organizationID pgtype.UUID) ([]LowestEventsRow, error) {
+	rows, err := q.db.Query(ctx, lowestEvents, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LowestEventsRow
+	for rows.Next() {
+		var i LowestEventsRow
+		if err := rows.Scan(&i.Seq, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const organizationsWithExpiredEvents = `-- name: OrganizationsWithExpiredEvents :many

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/tkakkie/ribbitto/internal/app/member"
+	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -95,11 +97,20 @@ func TestEventsAfter(t *testing.T) {
 			}
 		})
 	}
+	// The payloads still name the member and the message.
+	got, err := reader.EventsAfter(ctx, f.OrganizationID, 0, 2)
+	requireNoError(t, err)
+	if joined, err := member.DecodeJoined(got[0].Payload); err != nil || joined.MemberID != f.MemberID {
+		t.Fatalf("joined payload: %+v, %v; want member %v", joined, err, f.MemberID)
+	}
+	if p, err := message.DecodePosted(got[1].Payload); err != nil || p.MessageID != posted.ID || p.TopicID == nil || *p.TopicID != posted.TopicID {
+		t.Fatalf("posted payload: %+v, %v; want message %v in topic %v", p, err, posted.ID, posted.TopicID)
+	}
 	// A known event can also target a single member; audience is not payload data.
 	_, err = pool.Exec(ctx, "UPDATE event_log SET audience_member_id = $2 WHERE organization_id = $1 AND seq = 2", f.OrganizationID, f.MemberID)
 	requireNoError(t, err)
 	want[1].AudienceMemberID = &f.MemberID
-	got, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 1)
+	got, err = reader.EventsAfter(ctx, f.OrganizationID, 1, 1)
 	requireNoError(t, err)
 	if !reflect.DeepEqual(got, want[1:2]) {
 		t.Fatalf("targeted event: %+v; want %+v", got, want[1:2])

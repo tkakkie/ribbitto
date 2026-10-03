@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
@@ -21,11 +21,11 @@ type EventCleaner interface {
 // replay boundary, inside the cleaner's transaction; org owns both (decision
 // 26). Posting takes the same lock first, so the lock orders the two.
 type RetentionBoundary interface {
-	LockForRetention(ctx context.Context, organizationID domain.ID) error
+	LockForRetention(ctx context.Context, organizationID kernel.ID) error
 	// RaiseBoundary sets the boundary to through only if that is higher:
 	// a later batch can delete a lower sequence that expired later, and
 	// lowering the boundary would admit cursors whose replay is incomplete.
-	RaiseBoundary(ctx context.Context, organizationID domain.ID, through int64) error
+	RaiseBoundary(ctx context.Context, organizationID kernel.ID, through int64) error
 }
 
 // RetentionBoundaryIn binds a RetentionBoundary to the cleaner's transaction.

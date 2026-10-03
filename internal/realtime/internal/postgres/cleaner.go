@@ -7,7 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/domain"
+
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -54,7 +55,7 @@ func (c *Cleaner) ExpireEvents(ctx context.Context, cutoff time.Time) error {
 }
 
 // expireBatch runs one batch in tx: lock, delete, raise the boundary.
-func (c *Cleaner) expireBatch(ctx context.Context, tx platform.Tx, organizationID domain.ID, cutoff pgtype.Timestamptz) (int64, error) {
+func (c *Cleaner) expireBatch(ctx context.Context, tx platform.Tx, organizationID kernel.ID, cutoff pgtype.Timestamptz) (int64, error) {
 	boundary := c.boundary(tx)
 	// Posting takes this lock first too; no other organisation is locked.
 	if err := boundary.LockForRetention(ctx, organizationID); err != nil {

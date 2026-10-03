@@ -5,43 +5,43 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 func TestStreamSubscriptionInterest(t *testing.T) {
-	topicA, topicB, topicC := domain.ID{0x7a}, domain.ID{0x7b}, domain.ID{0x7c}
+	topicA, topicB, topicC := kernel.ID{0x7a}, kernel.ID{0x7b}, kernel.ID{0x7c}
 	for _, tt := range []struct {
 		name         string
-		channel      domain.ID
+		channel      kernel.ID
 		kind         EventKind
-		selected     *domain.ID
-		topics       []domain.ID
-		rendered     domain.ID
+		selected     *kernel.ID
+		topics       []kernel.ID
+		rendered     kernel.ID
 		deny, revoke bool
 		wantCalls    []string
 		wantSent     []int64
 	}{
-		{"other channel", channelB, EventMessagePosted, nil, []domain.ID{topicA}, topicA, false, false, nil, nil},
-		{"other topic", channelA, EventMessagePosted, &topicA, []domain.ID{topicB}, topicA, false, false, nil, nil},
-		{"unrouted kind", domain.ID{}, "future.kind", nil, nil, topicA, false, false, nil, nil},
-		{"other topic move", channelA, EventMessagesMoved, &topicC, []domain.ID{topicA, topicB}, topicA, false, false, nil, nil},
-		{"source move", channelA, EventMessagesMoved, &topicA, []domain.ID{topicA, topicB}, topicC, false, false, []string{"render", "authorize"}, []int64{1}},
-		{"destination move", channelA, EventMessagesMoved, &topicB, []domain.ID{topicA, topicB}, topicC, false, false, []string{"render", "authorize"}, []int64{1}},
-		{"denied topic move", channelA, EventMessagesMoved, &topicB, []domain.ID{topicA, topicB}, topicC, true, false, []string{"render", "authorize"}, nil},
-		{"topic move access lost while rendering", channelA, EventMessagesMoved, &topicA, []domain.ID{topicA, topicB}, topicC, false, true, []string{"render", "authorize"}, nil},
-		{"feed move", channelA, EventMessagesMoved, nil, []domain.ID{topicA, topicB}, topicA, false, false, []string{"render", "authorize"}, []int64{1}},
-		{"other channel move", channelB, EventMessagesMoved, nil, []domain.ID{topicA, topicB}, topicA, false, false, nil, nil},
-		{"denied move", channelA, EventMessagesMoved, nil, []domain.ID{topicA, topicB}, topicA, true, false, []string{"render", "authorize"}, nil},
-		{"move access lost while rendering", channelA, EventMessagesMoved, nil, []domain.ID{topicA, topicB}, topicA, false, true, []string{"render", "authorize"}, nil},
-		{"feed", channelA, EventMessagePosted, nil, []domain.ID{topicB}, topicB, false, false, []string{"render", "authorize"}, []int64{1}},
-		{"posting-time topic wins", channelA, EventMessagePosted, &topicA, []domain.ID{topicA}, topicB, false, false, []string{"render", "authorize"}, []int64{1}},
+		{"other channel", channelB, EventMessagePosted, nil, []kernel.ID{topicA}, topicA, false, false, nil, nil},
+		{"other topic", channelA, EventMessagePosted, &topicA, []kernel.ID{topicB}, topicA, false, false, nil, nil},
+		{"unrouted kind", kernel.ID{}, "future.kind", nil, nil, topicA, false, false, nil, nil},
+		{"other topic move", channelA, EventMessagesMoved, &topicC, []kernel.ID{topicA, topicB}, topicA, false, false, nil, nil},
+		{"source move", channelA, EventMessagesMoved, &topicA, []kernel.ID{topicA, topicB}, topicC, false, false, []string{"render", "authorize"}, []int64{1}},
+		{"destination move", channelA, EventMessagesMoved, &topicB, []kernel.ID{topicA, topicB}, topicC, false, false, []string{"render", "authorize"}, []int64{1}},
+		{"denied topic move", channelA, EventMessagesMoved, &topicB, []kernel.ID{topicA, topicB}, topicC, true, false, []string{"render", "authorize"}, nil},
+		{"topic move access lost while rendering", channelA, EventMessagesMoved, &topicA, []kernel.ID{topicA, topicB}, topicC, false, true, []string{"render", "authorize"}, nil},
+		{"feed move", channelA, EventMessagesMoved, nil, []kernel.ID{topicA, topicB}, topicA, false, false, []string{"render", "authorize"}, []int64{1}},
+		{"other channel move", channelB, EventMessagesMoved, nil, []kernel.ID{topicA, topicB}, topicA, false, false, nil, nil},
+		{"denied move", channelA, EventMessagesMoved, nil, []kernel.ID{topicA, topicB}, topicA, true, false, []string{"render", "authorize"}, nil},
+		{"move access lost while rendering", channelA, EventMessagesMoved, nil, []kernel.ID{topicA, topicB}, topicA, false, true, []string{"render", "authorize"}, nil},
+		{"feed", channelA, EventMessagePosted, nil, []kernel.ID{topicB}, topicB, false, false, []string{"render", "authorize"}, []int64{1}},
+		{"posting-time topic wins", channelA, EventMessagePosted, &topicA, []kernel.ID{topicA}, topicB, false, false, []string{"render", "authorize"}, []int64{1}},
 		{"legacy matching topic", channelA, EventMessagePosted, &topicA, nil, topicA, false, false, []string{"render", "authorize"}, []int64{1}},
 		{"legacy other topic", channelA, EventMessagePosted, &topicA, nil, topicB, false, false, []string{"render"}, nil},
-		{"denied member", channelA, EventMessagePosted, &topicA, []domain.ID{topicA}, topicA, true, false, []string{"render", "authorize"}, nil},
-		{"access lost while rendering", channelA, EventMessagePosted, &topicA, []domain.ID{topicA}, topicA, false, true, []string{"render", "authorize"}, nil},
+		{"denied member", channelA, EventMessagePosted, &topicA, []kernel.ID{topicA}, topicA, true, false, []string{"render", "authorize"}, nil},
+		{"access lost while rendering", channelA, EventMessagePosted, &topicA, []kernel.ID{topicA}, topicA, false, true, []string{"render", "authorize"}, nil},
 		// Routing follows the envelope alone: a kind realtime has never heard of.
-		{"synthetic kind", channelA, "test.synthetic", &topicC, []domain.ID{topicC}, topicA, false, false, []string{"render", "authorize"}, []int64{1}},
-		{"synthetic kind, other topic", channelA, "test.synthetic", &topicA, []domain.ID{topicC}, topicA, false, false, nil, nil},
+		{"synthetic kind", channelA, "test.synthetic", &topicC, []kernel.ID{topicC}, topicA, false, false, []string{"render", "authorize"}, []int64{1}},
+		{"synthetic kind, other topic", channelA, "test.synthetic", &topicA, []kernel.ID{topicC}, topicA, false, false, nil, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			event := posted(1, tt.channel)

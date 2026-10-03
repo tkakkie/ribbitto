@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // fakeClock is a settable time for TTL tests.
@@ -368,7 +368,7 @@ type blockedLog struct {
 	err     error
 }
 
-func (b *blockedLog) EventsAfter(context.Context, domain.ID, int64, int) ([]Event, error) {
+func (b *blockedLog) EventsAfter(context.Context, kernel.ID, int64, int) ([]Event, error) {
 	b.calls.Add(1)
 	<-b.release
 	return nil, b.err
@@ -421,7 +421,7 @@ type countingLog struct {
 	fromStart int
 }
 
-func (c *countingLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
+func (c *countingLog) EventsAfter(ctx context.Context, org kernel.ID, after int64, limit int) ([]Event, error) {
 	events, err := c.EventReader.EventsAfter(ctx, org, after, limit)
 	if after == 0 && len(events) > 0 {
 		c.mu.Lock()
@@ -438,7 +438,7 @@ type answeredReads struct {
 	answered atomic.Int32
 }
 
-func (a *answeredReads) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
+func (a *answeredReads) EventsAfter(ctx context.Context, org kernel.ID, after int64, limit int) ([]Event, error) {
 	events, err := a.EventReader.EventsAfter(ctx, org, after, limit)
 	a.answered.Add(1)
 	return events, err
@@ -491,7 +491,7 @@ type gatedLog struct {
 	calls            atomic.Int32
 }
 
-func (g *gatedLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
+func (g *gatedLog) EventsAfter(ctx context.Context, org kernel.ID, after int64, limit int) ([]Event, error) {
 	events, err := g.fakeLog.EventsAfter(ctx, org, after, limit)
 	if g.calls.Add(1) == 1 {
 		close(g.started)

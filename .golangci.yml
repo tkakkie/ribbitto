@@ -149,14 +149,14 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform/postgres$
             - github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge$
           deny: *non_html
+        # realtime is the second module (decision 26).
         realtime:
           list-mode: lax
           files: ["**/internal/realtime/*.go", "**/internal/realtime/**/*.go", "!$test"]
           allow:
             - github.com/tkakkie/ribbitto/internal/realtime$
             - github.com/tkakkie/ribbitto/internal/realtime/
-            - github.com/tkakkie/ribbitto/internal/domain$
-            - github.com/tkakkie/ribbitto/internal/domain/
+            - github.com/tkakkie/ribbitto/internal/kernel$
             - github.com/tkakkie/ribbitto/internal/platform$
             - github.com/tkakkie/ribbitto/internal/platform/
           deny: *non_html

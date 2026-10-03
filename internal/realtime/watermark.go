@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // WatermarkInterval is how often Watermark checks the committed sequences.
@@ -22,7 +22,7 @@ const watermarkCheckTimeout = 2 * time.Second
 // shared-kernel organization.event_seq). infra/postgres implements it
 // until org's columns move (step 3).
 type SequenceReader interface {
-	CommittedSequences(ctx context.Context, organizations []domain.ID) (map[domain.ID]int64, error)
+	CommittedSequences(ctx context.Context, organizations []kernel.ID) (map[kernel.ID]int64, error)
 }
 
 // Watermark raises the hub to each active organisation's committed

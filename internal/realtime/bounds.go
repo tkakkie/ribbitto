@@ -3,7 +3,7 @@ package realtime
 import (
 	"context"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
@@ -11,7 +11,7 @@ import (
 // 26): the replay boundary and the committed event_seq. found is false for
 // an unknown organisation.
 type Bounds interface {
-	EventBounds(ctx context.Context, organizationID domain.ID) (boundary, committed int64, found bool, err error)
+	EventBounds(ctx context.Context, organizationID kernel.ID) (boundary, committed int64, found bool, err error)
 }
 
 // BoundsIn binds Bounds to the reader's snapshot, so a batch's bounds and

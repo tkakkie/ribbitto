@@ -3,7 +3,7 @@ package realtime
 import (
 	"errors"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // ErrCursorExpired means the cursor is outside the valid replay range: below
@@ -33,19 +33,19 @@ const (
 // read-only once read, since event batches are shared between streams. No
 // content or HTML is carried.
 type Event struct {
-	OrganizationID   domain.ID
+	OrganizationID   kernel.ID
 	Seq              int64
 	Kind             EventKind
-	AudienceMemberID *domain.ID
-	ChannelID        domain.ID
-	Topics           []domain.ID
+	AudienceMemberID *kernel.ID
+	ChannelID        kernel.ID
+	Topics           []kernel.ID
 	Payload          []byte
 }
 
 // Router reads an event's routing from its stored payload: its channel
 // (zero when the kind is not channel-scoped) and its routing topics. It
 // fails on malformed data. Each kind's publisher provides one (decision 26).
-type Router func(payload []byte) (channel domain.ID, topics []domain.ID, err error)
+type Router func(payload []byte) (channel kernel.ID, topics []kernel.ID, err error)
 
 // Kinds registers the Router of each kind a reader fills in; wiring builds
 // it. A kind it lacks keeps only its envelope, and streams skip it.

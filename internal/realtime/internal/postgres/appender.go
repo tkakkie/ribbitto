@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/domain"
+
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -25,7 +26,7 @@ func AppenderIn(tx platform.Tx) *Appender {
 // Append records an event at the sequence the caller already allocated. A
 // nil audience is organisation-wide; otherwise only that member, of the same
 // organisation, may receive it.
-func (a *Appender) Append(ctx context.Context, organizationID domain.ID, seq int64, kind realtime.EventKind, audience *domain.ID, payload []byte) error {
+func (a *Appender) Append(ctx context.Context, organizationID kernel.ID, seq int64, kind realtime.EventKind, audience *kernel.ID, payload []byte) error {
 	params := sqlcgen.InsertEventParams{
 		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(kind), Data: payload,
 	}

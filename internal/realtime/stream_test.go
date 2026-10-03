@@ -9,16 +9,16 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 var (
-	channelA = domain.ID{0xca}
-	channelB = domain.ID{0xcb}
+	channelA = kernel.ID{0xca}
+	channelB = kernel.ID{0xcb}
 	sub      = Subscription{Organization: orgA, OrganizationSlug: "acme", Account: account1, Channel: channelA}
 )
 
-func posted(seq int64, channel domain.ID) Event {
+func posted(seq int64, channel kernel.ID) Event {
 	return Event{OrganizationID: orgA, Seq: seq, Kind: EventMessagePosted, ChannelID: channel}
 }
 
@@ -39,7 +39,7 @@ type fakeLog struct {
 
 var errTooManyReads = errors.New("fakeLog: too many reads")
 
-func (l *fakeLog) EventsAfter(_ context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
+func (l *fakeLog) EventsAfter(_ context.Context, org kernel.ID, after int64, limit int) ([]Event, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.calls++
@@ -81,7 +81,7 @@ func (l *fakeLog) append(events ...Event) {
 
 type authorizerFunc func(Event) (bool, error)
 
-func (f authorizerFunc) MayReceive(_ context.Context, _ domain.ID, _ string, e Event) (bool, error) {
+func (f authorizerFunc) MayReceive(_ context.Context, _ kernel.ID, _ string, e Event) (bool, error) {
 	return f(e)
 }
 
@@ -570,7 +570,7 @@ func TestHeartbeatDue(t *testing.T) {
 // as a long backlog would, and never runs out.
 type slowFilteredLog struct{ delay time.Duration }
 
-func (l slowFilteredLog) EventsAfter(_ context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
+func (l slowFilteredLog) EventsAfter(_ context.Context, org kernel.ID, after int64, limit int) ([]Event, error) {
 	time.Sleep(l.delay)
 	events := make([]Event, limit)
 	for i := range events {
@@ -632,7 +632,7 @@ type cancelOnRead struct {
 	cause  error
 }
 
-func (c cancelOnRead) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
+func (c cancelOnRead) EventsAfter(ctx context.Context, org kernel.ID, after int64, limit int) ([]Event, error) {
 	c.cancel(c.cause)
 	return c.log.EventsAfter(ctx, org, after, limit)
 }
@@ -700,8 +700,8 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 // shared render; other topics' events are skipped without authorization
 // and still move the cursor (#304).
 func TestStreamTopicSubscriptionSkipsOtherTopics(t *testing.T) {
-	topicA, topicB := domain.ID{0x7a}, domain.ID{0x7b}
-	topics := map[int64]domain.ID{1: topicA, 2: topicB, 3: topicA}
+	topicA, topicB := kernel.ID{0x7a}, kernel.ID{0x7b}
+	topics := map[int64]kernel.ID{1: topicA, 2: topicB, 3: topicA}
 	renderTopic := func(e Event) (Outgoing, error) {
 		out, err := render(e)
 		out.Topic = topics[e.Seq]

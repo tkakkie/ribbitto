@@ -86,8 +86,8 @@ func (r *EventReader) CommittedSequences(ctx context.Context, organizations []do
 	return seqs, nil
 }
 
-// eventFromRow routes registered kinds through their Routers and decodes
-// known kinds through their publishers' codecs.
+// eventFromRow routes registered kinds through their Routers; the payload
+// stays encoded for the kind's publisher.
 func (r *EventReader) eventFromRow(row sqlcgen.EventsAfterRow) (realtime.Event, error) {
 	event := realtime.Event{OrganizationID: row.OrganizationID.Bytes, Seq: row.Seq, Kind: realtime.EventKind(row.Kind)}
 	if row.AudienceMemberID.Valid {
@@ -103,27 +103,5 @@ func (r *EventReader) eventFromRow(row sqlcgen.EventsAfterRow) (realtime.Event, 
 		return realtime.Event{}, fmt.Errorf("routing %s data: %w", event.Kind, err)
 	}
 	event.Payload = row.Data
-	switch event.Kind {
-	case realtime.EventMessagePosted:
-		var p message.Posted
-		if p, err = message.DecodePosted(row.Data); err == nil {
-			event.ChannelID, event.MessageID, event.TopicID = p.ChannelID, p.MessageID, p.TopicID
-		}
-	case realtime.EventMemberJoined:
-		var j member.Joined
-		if j, err = member.DecodeJoined(row.Data); err == nil {
-			event.MemberID = j.MemberID
-		}
-	case realtime.EventMessagesMoved:
-		var m topic.Moved
-		if m, err = topic.DecodeMoved(row.Data); err == nil {
-			event.ChannelID, event.FromTopicID, event.ToTopicID, event.MessageIDs = m.ChannelID, m.FromTopicID, m.ToTopicID, m.MessageIDs
-		}
-	default:
-		// A registered kind without typed fields keeps only its routing.
-	}
-	if err != nil {
-		return realtime.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)
-	}
 	return event, nil
 }

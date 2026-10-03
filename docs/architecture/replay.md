@@ -47,8 +47,10 @@ sequenceDiagram
   `CancelSession` can end, and an `unregister` the handler defers. Only `unregister` frees the slot;
   `context.Cause` tells why a connection ended.
 - **The loop** is `realtime.Stream.Run` (#209). `Subscription` owns the
-  interest checks: other channels, unsupported kinds and other posting-time
-  topics are skipped before rendering or authorization (#261 B6). Explicit
+  interest checks on the envelope alone, with no kind names: other
+  channels, unrouted kinds (no channel) and events whose routing topics do
+  not include a topic page's topic are skipped before rendering or
+  authorization (#261 B6). Explicit
   denies from `authz.MayReceive` are skipped after rendering. All skips advance
   the cursor. `messages.moved` reaches feeds and its source/destination topics
   as `messages-moved`, with one shared batch render and per-connection
@@ -61,11 +63,13 @@ sequenceDiagram
   Moves are silent; the notice arrives separately as `message.posted`.
 - **A topic page** subscribes to one topic of the channel
   (`…/topics/{topicID}/events`; an unknown topic, or another channel's, is
-  404 before the stream opens). New posting events route by their persisted
-  posting-time topic, even when the render reads a later topic. Legacy events
-  without `topic_id` fall back to the topic from the shared render, before
-  authorization, with no extra read per stream. Move routing uses the event's
-  source and destination, independently of the rendered item's current topic.
+  404 before the stream opens). It wants an event whose routing `Topics`
+  include its topic. A post's routing topic is its persisted posting-time
+  topic, even when the render reads a later topic; a move's are its source
+  and destination, independently of the rendered item's current topic. An
+  event without routing topics (a legacy post without `topic_id`) falls back
+  to the topic from the shared render, before authorization, with no extra
+  read per stream.
   The cursor, replay
   and `reset` rules are the channel page's. An error from the reader, the
   authorization check itself, the renderer or the sender stops the loop

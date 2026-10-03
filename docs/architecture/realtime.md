@@ -70,21 +70,22 @@ member in the same organisation. The audience never appears in `data`.
 Each kind's publisher owns its payload (decision 26): `app/message`
 (`EncodePosted`, `DecodePosted`), `app/topic` (`EncodeMoved`, `DecodeMoved`)
 and `app/member` (`EncodeJoined`, `DecodeJoined`) encode and decode it until
-their modules move; the writer stores what they return and the reader
-decodes through them. IDs are canonical UUID text
+their modules move; the writer stores what they return, the reader only
+routes through their `Router`s, and consumers decode the payload (the
+renderer decodes moves). IDs are canonical UUID text
 (`realtime.FormatPayloadID`, `ParsePayloadID`), the JSON value SQL's
 `jsonb_build_object` wrote before (#398), so old and new rows decode alike.
 `message.posted` carries `{"channel_id","message_id","topic_id"}` (UUIDs);
 the topic is captured at posting time, in the message's transaction, including
-branch notices. The reader exposes it as `TopicID`; old rows without the field
-have nil, while a present malformed value fails the batch. A later move never
+branch notices. `message.RoutePosted` gives it as the event's routing topic;
+old rows without the field have none, while a present malformed value fails
+the batch. A later move never
 rewrites this routing data: replay applies the posting and move in order.
 `member.joined` carries `{"member_id":"<uuid>"}`; `messages.moved` (branching,
 [topics](../domain/topics.md#branching)) carries the channel, the two topics
 and the moved message IDs. All use a NULL audience.
-The reader decodes moves (through `topic.DecodeMoved`) into `FromTopicID`, `ToTopicID` and immutable
-`MessageIDs`, retaining the channel and envelope for routing and authorization.
-It rejects missing or malformed IDs, identical source and destination,
+`topic.RouteMoved` routes a move to its channel and both topics; the
+renderer decodes the payload through `topic.DecodeMoved`. The decoder rejects missing or malformed IDs, identical source and destination,
 and empty lists or repeated messages, failing the whole batch rather than
 returning a partial replay. The size limit applies only on write, so lowering
 it cannot make committed moves unreadable. Moves read the requested IDs,
@@ -97,17 +98,17 @@ source and destination IDs and each item's original sequence: feeds replace
 loaded IDs; topics remove source items or insert destination items in order
 within the loaded range. Live changes never alter the history paging bound.
 Setup and sign-up call `NewEventLog(tx).AppendMemberJoined` immediately after
-the member, with its `joined_event_seq`. `realtime.Event` holds the envelope (with the
-routing `Topics` and the stored `Payload`) and, until #417, the referenced IDs;
-kinds are an open list. Wiring registers each kind's publisher `Router`
+the member, with its `joined_event_seq`. `realtime.Event` is an envelope: organisation,
+sequence, kind, audience, channel, routing `Topics` and the stored `Payload`,
+which consumers decode through the publisher's codec; kinds are an open list. Wiring registers each kind's publisher `Router`
 (`message.RoutePosted`, `topic.RouteMoved`, `member.RouteJoined`) in
 `realtime.Kinds`, which gives the channel and routing topics; until the
 modules register their own, `postgres.EventKinds()` lists them.
 `postgres.NewEventReader(db, kinds)` provides
 `EventsAfter(ctx, organizationID, after, limit) ([]realtime.Event, error)`:
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.
-It decodes known kinds through their publishers' decoders, failing the batch for malformed or missing IDs;
-unknown kinds retain their envelope with zero IDs for the delivery loop to skip.
+It routes registered kinds through their `Router`s, failing the batch for malformed or missing IDs;
+unregistered kinds keep only their envelope, with no channel, so streams skip them.
 The reader implements the delivery interface and imports `realtime`'s root
 for the event types until it moves into the module; authorization remains
 the connection loop's job.

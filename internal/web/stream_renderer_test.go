@@ -16,6 +16,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -93,9 +94,15 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		t.Run("concurrent renders read once/"+string(kind), func(t *testing.T) {
 			event := event
 			event.Kind = kind
+			moved := topic.Moved{ChannelID: event.ChannelID, FromTopicID: domain.ID{1}, ToTopicID: domain.ID{2}}
 			for i := range 100 {
-				event.MessageIDs = append(event.MessageIDs, domain.ID{byte(i)})
+				moved.MessageIDs = append(moved.MessageIDs, domain.ID{byte(i)})
 			}
+			payload, err := topic.EncodeMoved(moved)
+			if err != nil {
+				t.Fatal(err)
+			}
+			event.Payload = payload
 			calls := &atomic.Int32{}
 			release := make(chan struct{})
 			r := messageRenderer{messages: countingMessages{calls: calls, release: release}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
@@ -174,10 +181,15 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		const topicSix = "06000000-0000-0000-0000-000000000000"
 		for _, kind := range []realtime.EventKind{realtime.EventMessagePosted, realtime.EventMessagesMoved} {
 			e := event
-			e.Kind, e.MessageIDs = kind, []domain.ID{{7}, {8}}
-			e.FromTopicID, e.ToTopicID = domain.ID{5}, domain.ID{6}
+			e.Kind = kind
+			moved := topic.Moved{ChannelID: e.ChannelID, FromTopicID: domain.ID{5}, ToTopicID: domain.ID{6}, MessageIDs: []domain.ID{{7}, {8}}}
 			if kind == realtime.EventMessagesMoved {
 				e.Seq = 11 // its own render, not the posted one's
+				payload, err := topic.EncodeMoved(moved)
+				if err != nil {
+					t.Fatal(err)
+				}
+				e.Payload = payload
 			}
 			out, err := r.Render(en, realtime.Subscription{}, e)
 			if err != nil {
@@ -205,7 +217,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 					t.Errorf("%s: data-source = %q; want the message's topic", kind, attr(n, "data-source"))
 				}
 			}
-			if want := len(e.MessageIDs); kind == realtime.EventMessagePosted && items != 1 || kind == realtime.EventMessagesMoved && items != want {
+			if want := len(moved.MessageIDs); kind == realtime.EventMessagePosted && items != 1 || kind == realtime.EventMessagesMoved && items != want {
 				t.Errorf("%s: %d items", kind, items)
 			}
 		}

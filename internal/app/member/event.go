@@ -8,6 +8,11 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
+// Joined is the decoded payload of realtime.EventMemberJoined.
+type Joined struct {
+	MemberID domain.ID
+}
+
 // EncodeJoined returns the stored data of realtime.EventMemberJoined, which
 // org publishes and so owns (decision 26; here until org's module moves),
 // for memberID's join: canonical UUID text under member_id.
@@ -17,4 +22,19 @@ func EncodeJoined(memberID domain.ID) ([]byte, error) {
 		return nil, fmt.Errorf("encoding member.joined data: %w", err)
 	}
 	return data, nil
+}
+
+// DecodeJoined reads stored data; member_id is required.
+func DecodeJoined(data []byte) (Joined, error) {
+	var raw struct {
+		MemberID string `json:"member_id"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return Joined{}, err
+	}
+	id, err := realtime.ParsePayloadID(raw.MemberID)
+	if err != nil {
+		return Joined{}, err
+	}
+	return Joined{MemberID: id}, nil
 }

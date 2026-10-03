@@ -68,10 +68,12 @@ is organisation-wide; a value restricts delivery to that member, enforced
 by the stream's per-event authorization (`authz.MayReceive`). Its composite foreign key keeps the
 member in the same organisation. The audience never appears in `data`.
 Each kind's publisher owns its payload (decision 26): `app/message`
-(`EncodePosted`), `app/topic` (`EncodeMoved`) and `app/member`
-(`EncodeJoined`) encode it until their modules move, and the writer stores
-what they return. IDs are canonical UUID text (`realtime.FormatPayloadID`),
-the JSON value SQL's `jsonb_build_object` wrote before (#398).
+(`EncodePosted`, `DecodePosted`), `app/topic` (`EncodeMoved`, `DecodeMoved`)
+and `app/member` (`EncodeJoined`, `DecodeJoined`) encode and decode it until
+their modules move; the writer stores what they return and the reader
+decodes through them. IDs are canonical UUID text
+(`realtime.FormatPayloadID`, `ParsePayloadID`), the JSON value SQL's
+`jsonb_build_object` wrote before (#398), so old and new rows decode alike.
 `message.posted` carries `{"channel_id","message_id","topic_id"}` (UUIDs);
 the topic is captured at posting time, in the message's transaction, including
 branch notices. The reader exposes it as `TopicID`; old rows without the field
@@ -80,7 +82,7 @@ rewrites this routing data: replay applies the posting and move in order.
 `member.joined` carries `{"member_id":"<uuid>"}`; `messages.moved` (branching,
 [topics](../domain/topics.md#branching)) carries the channel, the two topics
 and the moved message IDs. All use a NULL audience.
-The reader decodes moves into `FromTopicID`, `ToTopicID` and immutable
+The reader decodes moves (through `topic.DecodeMoved`) into `FromTopicID`, `ToTopicID` and immutable
 `MessageIDs`, retaining the channel and envelope for routing and authorization.
 It rejects missing or malformed IDs, identical source and destination,
 and empty lists or repeated messages, failing the whole batch rather than
@@ -99,7 +101,7 @@ the member, with its `joined_event_seq`. `realtime.Event` holds the envelope and
 referenced IDs; kinds are an open list. `postgres.NewEventReader(db)` provides
 `EventsAfter(ctx, organizationID, after, limit) ([]realtime.Event, error)`:
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.
-It decodes known kinds' IDs, failing the batch for malformed or missing IDs;
+It decodes known kinds through their publishers' decoders, failing the batch for malformed or missing IDs;
 unknown kinds retain their envelope with zero IDs for the delivery loop to skip.
 The reader implements the delivery interface and imports `realtime`'s root
 for the event types until it moves into the module; authorization remains

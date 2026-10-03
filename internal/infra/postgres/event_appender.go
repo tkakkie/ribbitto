@@ -17,5 +17,5 @@ type EventAppender interface {
 	Append(ctx context.Context, organizationID domain.ID, seq int64, kind realtime.EventKind, audience *domain.ID, payload []byte) error
 }
 
-// EventAppenders binds an EventAppender to a flow's transaction.
-type EventAppenders func(platform.Tx) EventAppender
+// EventAppenderIn binds an EventAppender to a flow's transaction.
+type EventAppenderIn func(platform.Tx) EventAppender

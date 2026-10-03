@@ -107,7 +107,7 @@ database, then start ribbitto. The process keeps sequence state in memory (the
 real-time hub and its caches), so rolling the database back under a running
 process is not supported. After the restart, a browser that reconnects with a
 cursor above the restored log gets `reset` and reloads the page
-([streaming](docs/architecture/streaming.md#ordering-and-replay)).
+([replay](docs/architecture/replay.md#ordering-and-replay)).
 
 ## Documentation
 

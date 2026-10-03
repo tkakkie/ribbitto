@@ -34,23 +34,6 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 	return i, err
 }
 
-const getAccountByEmail = `-- name: GetAccountByEmail :one
-SELECT id, email, display_name, password_hash, created_at FROM account WHERE email = $1
-`
-
-func (q *Queries) GetAccountByEmail(ctx context.Context, email string) (Account, error) {
-	row := q.db.QueryRow(ctx, getAccountByEmail, email)
-	var i Account
-	err := row.Scan(
-		&i.ID,
-		&i.Email,
-		&i.DisplayName,
-		&i.PasswordHash,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const getAccountByID = `-- name: GetAccountByID :one
 SELECT id, email, display_name, password_hash, created_at FROM account WHERE id = $1
 `
@@ -65,6 +48,22 @@ func (q *Queries) GetAccountByID(ctx context.Context, id pgtype.UUID) (Account, 
 		&i.PasswordHash,
 		&i.CreatedAt,
 	)
+	return i, err
+}
+
+const getAccountCredentialsByEmail = `-- name: GetAccountCredentialsByEmail :one
+SELECT id, password_hash FROM account WHERE email = $1
+`
+
+type GetAccountCredentialsByEmailRow struct {
+	ID           pgtype.UUID
+	PasswordHash string
+}
+
+func (q *Queries) GetAccountCredentialsByEmail(ctx context.Context, email string) (GetAccountCredentialsByEmailRow, error) {
+	row := q.db.QueryRow(ctx, getAccountCredentialsByEmail, email)
+	var i GetAccountCredentialsByEmailRow
+	err := row.Scan(&i.ID, &i.PasswordHash)
 	return i, err
 }
 

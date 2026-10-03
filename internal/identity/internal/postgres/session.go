@@ -9,34 +9,30 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres/sqlcgen"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
 // SessionStore implements identity.SessionStore.
 type SessionStore struct {
-	db      sessionDB
+	pool    *pgxpool.Pool
 	queries *sqlcgen.Queries
 }
 
-// sessionDB is what the store needs: queries, plus transactions for
-// ReplaceSession. A *pgxpool.Pool is one.
-type sessionDB interface {
-	sqlcgen.DBTX
-	Begin(ctx context.Context) (pgx.Tx, error)
-}
-
-// NewSessionStore returns a SessionStore that runs its queries on db.
-func NewSessionStore(db sessionDB) *SessionStore {
-	return &SessionStore{db: db, queries: sqlcgen.New(db)}
+// NewSessionStore returns a SessionStore that runs its queries on pool.
+func NewSessionStore(pool *pgxpool.Pool) *SessionStore {
+	return &SessionStore{pool: pool, queries: sqlcgen.New(pool)}
 }
 
 // ReplaceSession deletes the old session and stores the new one in one
 // transaction, and reports the deleted session's id, if there was one.
 func (s *SessionStore) ReplaceSession(ctx context.Context, oldHash, newHash []byte, accountID domain.ID, expiresAt time.Time) (ended domain.ID, found bool, err error) {
-	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		q := sqlcgen.New(tx)
+	err = platform.InTx(ctx, s.pool, func(tx platform.Tx) error {
+		q := sqlcgen.New(pgxbridge.Tx(tx))
 		ids, err := q.DeleteSessionByTokenHash(ctx, oldHash)
 		if err != nil {
 			return err
@@ -44,22 +40,22 @@ func (s *SessionStore) ReplaceSession(ctx context.Context, oldHash, newHash []by
 		if len(ids) > 0 {
 			ended, found = ids[0].Bytes, true
 		}
-		_, err = q.CreateSession(ctx, sqlcgen.CreateSessionParams{
+		return q.CreateSession(ctx, sqlcgen.CreateSessionParams{
 			TokenHash: newHash,
 			AccountID: pgtype.UUID{Bytes: accountID, Valid: true},
 			ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 		})
-		return err
 	})
 	if err != nil {
-		return domain.ID{}, false, fmt.Errorf("replacing session: %w", withoutDetail(err))
+		// Sessions.Replace adds "replacing session"; the store adds no prefix.
+		return domain.ID{}, false, withoutDetail(err)
 	}
 	return ended, found, nil
 }
 
 // CreateSession stores a session by its token hash.
 func (s *SessionStore) CreateSession(ctx context.Context, tokenHash []byte, accountID domain.ID, expiresAt time.Time) error {
-	_, err := s.queries.CreateSession(ctx, sqlcgen.CreateSessionParams{
+	err := s.queries.CreateSession(ctx, sqlcgen.CreateSessionParams{
 		TokenHash: tokenHash,
 		AccountID: pgtype.UUID{Bytes: accountID, Valid: true},
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
@@ -95,7 +91,7 @@ func (s *SessionStore) SessionAccount(ctx context.Context, tokenHash []byte, now
 		return identity.Account{}, identity.Session{}, fmt.Errorf("selecting session: %w", err)
 	}
 	return identity.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName},
-		identity.Session{ID: row.Session.ID.Bytes, ExpiresAt: row.Session.ExpiresAt.Time}, nil
+		identity.Session{ID: row.SessionID.Bytes, ExpiresAt: row.ExpiresAt.Time}, nil
 }
 
 // DeleteSession deletes the session with this token hash, if any, and
@@ -103,7 +99,8 @@ func (s *SessionStore) SessionAccount(ctx context.Context, tokenHash []byte, now
 func (s *SessionStore) DeleteSession(ctx context.Context, tokenHash []byte) (ended domain.ID, found bool, err error) {
 	ids, err := s.queries.DeleteSessionByTokenHash(ctx, tokenHash)
 	if err != nil {
-		return domain.ID{}, false, fmt.Errorf("deleting session: %w", err)
+		// Sessions.Delete adds "deleting session"; the store adds no prefix.
+		return domain.ID{}, false, err
 	}
 	if len(ids) == 0 {
 		return domain.ID{}, false, nil

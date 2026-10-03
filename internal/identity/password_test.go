@@ -66,8 +66,8 @@ func TestHashAndVerify(t *testing.T) {
 			}
 		})
 	}
-	if err := h.VerifyDummy(ctx, "anything"); err != nil {
-		t.Fatalf("VerifyDummy: %v", err)
+	if err := h.verifyDummy(ctx, "anything"); err != nil {
+		t.Fatalf("verifyDummy: %v", err)
 	}
 	if !strings.HasPrefix(h.dummy, "$argon2id$v=19$m=19456,t=2,p=1$") {
 		t.Fatalf("dummy hash does not use the current parameters: %q", h.dummy)
@@ -145,8 +145,8 @@ func TestBusy(t *testing.T) {
 			if _, err := h.Verify(tt.ctx, "pw", stored); !errors.Is(err, ErrBusy) {
 				t.Fatalf("Verify: want ErrBusy, got %v", err)
 			}
-			if err := h.VerifyDummy(tt.ctx, "pw"); !errors.Is(err, ErrBusy) {
-				t.Fatalf("VerifyDummy: want ErrBusy, got %v", err)
+			if err := h.verifyDummy(tt.ctx, "pw"); !errors.Is(err, ErrBusy) {
+				t.Fatalf("verifyDummy: want ErrBusy, got %v", err)
 			}
 		})
 	}
@@ -171,8 +171,8 @@ func TestCancelledContextWithFreeSlot(t *testing.T) {
 		if _, err := h.Verify(ctx, "pw", stored); !errors.Is(err, ErrBusy) {
 			t.Fatalf("Verify: want ErrBusy, got %v", err)
 		}
-		if err := h.VerifyDummy(ctx, "pw"); !errors.Is(err, ErrBusy) {
-			t.Fatalf("VerifyDummy: want ErrBusy, got %v", err)
+		if err := h.verifyDummy(ctx, "pw"); !errors.Is(err, ErrBusy) {
+			t.Fatalf("verifyDummy: want ErrBusy, got %v", err)
 		}
 	}
 	if len(h.slots) != 0 {

@@ -59,14 +59,10 @@ type Sessions struct {
 	cancel SessionCanceller
 }
 
-// NewSessions returns Sessions backed by store; now is time.Now outside tests.
-func NewSessions(store SessionStore, now func() time.Time) *Sessions {
-	return &Sessions{store: store, now: now}
-}
-
-// NewSessionsWithCanceller also ends streams after deletion or replacement,
+// NewSessions returns Sessions backed by store; now is time.Now outside
+// tests. A non-nil cancel also ends streams after deletion or replacement,
 // including when the store reports an error and the outcome is unknown.
-func NewSessionsWithCanceller(store SessionStore, now func() time.Time, cancel SessionCanceller) *Sessions {
+func NewSessions(store SessionStore, now func() time.Time, cancel SessionCanceller) *Sessions {
 	return &Sessions{store: store, now: now, cancel: cancel}
 }
 
@@ -99,7 +95,7 @@ func (s *Sessions) Replace(ctx context.Context, previousToken string, accountID 
 	if !ok {
 		return s.Create(ctx, accountID)
 	}
-	_, previous, resolveErr := s.Resolve(ctx, previousToken)
+	_, previous, resolveErr := s.resolve(ctx, old)
 	if resolveErr != nil && !errors.Is(resolveErr, ErrNoSession) {
 		return "", time.Time{}, resolveErr
 	}
@@ -134,6 +130,12 @@ func (s *Sessions) Resolve(ctx context.Context, token string) (Account, Session,
 	if !ok {
 		return Account{}, Session{}, ErrNoSession
 	}
+	return s.resolve(ctx, hash)
+}
+
+// resolve is Resolve for a token already hashed, so Replace and Delete hash
+// the token only once.
+func (s *Sessions) resolve(ctx context.Context, hash []byte) (Account, Session, error) {
 	account, session, err := s.store.SessionAccount(ctx, hash, s.now())
 	if err != nil && !errors.Is(err, ErrNoSession) {
 		return Account{}, Session{}, fmt.Errorf("resolving session: %w", err)
@@ -148,7 +150,7 @@ func (s *Sessions) Delete(ctx context.Context, token string) error {
 	if !ok {
 		return nil
 	}
-	_, previous, resolveErr := s.Resolve(ctx, token)
+	_, previous, resolveErr := s.resolve(ctx, hash)
 	if resolveErr != nil && !errors.Is(resolveErr, ErrNoSession) {
 		return resolveErr
 	}

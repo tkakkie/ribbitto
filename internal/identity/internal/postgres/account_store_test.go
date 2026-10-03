@@ -15,9 +15,9 @@ func TestAccountStore(t *testing.T) {
 	ctx := t.Context()
 	id := account(t, pool, "a@example.com", "A")
 	store := postgres.NewAccountStore(pool)
-	account, hash, err := store.AccountCredentials(ctx, "a@example.com")
-	if err != nil || account != (identity.Account{ID: id, Email: "a@example.com", DisplayName: "A"}) || hash != "$argon2id$x" {
-		t.Fatalf("AccountCredentials = %+v, %q, %v", account, hash, err)
+	accountID, hash, err := store.AccountCredentials(ctx, "a@example.com")
+	if err != nil || accountID != id || hash != "$argon2id$x" {
+		t.Fatalf("AccountCredentials = %v, %q, %v", accountID, hash, err)
 	}
 	if _, _, err := store.AccountCredentials(ctx, "b@example.com"); !errors.Is(err, identity.ErrNoAccount) {
 		t.Fatalf("unknown email: %v", err)

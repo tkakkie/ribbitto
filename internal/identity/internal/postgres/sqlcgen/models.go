@@ -15,11 +15,3 @@ type Account struct {
 	PasswordHash string
 	CreatedAt    pgtype.Timestamptz
 }
-
-type Session struct {
-	ID        pgtype.UUID
-	TokenHash []byte
-	AccountID pgtype.UUID
-	CreatedAt pgtype.Timestamptz
-	ExpiresAt pgtype.Timestamptz
-}

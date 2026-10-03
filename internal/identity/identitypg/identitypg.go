@@ -12,10 +12,7 @@ import (
 // NewSessions returns the session lifecycle on pool with the given clock.
 // A non-nil cancel ends a deleted session's open streams.
 func NewSessions(pool *pgxpool.Pool, now func() time.Time, cancel identity.SessionCanceller) *identity.Sessions {
-	if cancel == nil {
-		return identity.NewSessions(postgres.NewSessionStore(pool), now)
-	}
-	return identity.NewSessionsWithCanceller(postgres.NewSessionStore(pool), now, cancel)
+	return identity.NewSessions(postgres.NewSessionStore(pool), now, cancel)
 }
 
 // NewSignIn returns sign-in on pool. hasher is the process's one hasher,

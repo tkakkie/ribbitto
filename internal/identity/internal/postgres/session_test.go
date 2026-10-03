@@ -26,7 +26,7 @@ func TestSessionStore(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&now); err != nil {
 		t.Fatal(err)
 	}
-	sessions := identity.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return now })
+	sessions := identity.NewSessions(postgres.NewSessionStore(pool), func() time.Time { return now }, nil)
 
 	older, _, err := sessions.Create(ctx, id)
 	if err != nil {

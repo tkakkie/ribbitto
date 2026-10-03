@@ -15,6 +15,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
 // MessageStore persists messages using a pool or a caller-owned transaction.
@@ -99,7 +101,8 @@ func (s *PostingStore) Post(ctx context.Context, organizationID, channelID, memb
 // PostToTopic posts into the scoped topic, or the default when topicID is nil.
 func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelID, memberID domain.ID, topicID *domain.ID, body string) (domain.Message, error) {
 	var posted domain.Message
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
+		tx := pgxbridge.Tx(platformTx)
 		seq, err := sqlcgen.New(tx).NextEventSeq(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
 		if err != nil {
 			return err

@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
 // SetupStore implements setup.Store with a single transaction per attempt.
@@ -33,7 +34,8 @@ func (s *SetupStore) Open(ctx context.Context) (bool, error) {
 // marker together.
 func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, displayName, handle, passwordHash string) (setup.Result, error) {
 	var result setup.Result
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
+		tx := pgxbridge.Tx(platformTx)
 		q := sqlcgen.New(tx)
 		org, err := q.CreateOrganization(ctx, sqlcgen.CreateOrganizationParams{Name: organizationName, Slug: slug})
 		if err != nil {

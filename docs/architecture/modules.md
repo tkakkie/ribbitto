@@ -38,6 +38,7 @@ the temporary implementation behind it.
 | `app/setup`, `app/signup`, `app/authz`, `app/member` | `identity.Hasher`, `identity.Account` | 1 | 3 |
 | `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
 | setup, sign-up (`infra`) | `identity` account writes | 3 (until then, a `legacy_account.sql` copy of `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry, from step 1) | 3 |
+| posting, setup, sign-up, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | each flow's own step: setup and sign-up 3, posting and branching 4 |
 | posting, setup, sign-up, branching (`infra`) | `realtime` event appends | 2 | each flow's own step: 3, 4 |
 | `realtime` reader and retention | `org` sequence bounds, boundary write | 2 | 3 |
 | posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 4 |

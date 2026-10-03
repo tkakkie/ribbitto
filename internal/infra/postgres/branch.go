@@ -12,6 +12,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
 // BranchStore implements topic.BranchStore: it owns the branching
@@ -27,7 +29,8 @@ func NewBranchStore(pool *pgxpool.Pool) *BranchStore { return &BranchStore{pool:
 func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, memberID domain.ID, b topic.Branch, notice func(domain.Topic) string) (domain.Topic, int64, error) {
 	var destination domain.Topic
 	var noticeSeq int64
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
+		tx := pgxbridge.Tx(platformTx)
 		q := sqlcgen.New(tx)
 		org := pgtype.UUID{Bytes: organizationID, Valid: true}
 		// Sequence first, as posting does: it locks the organisation's row,

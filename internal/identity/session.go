@@ -35,7 +35,7 @@ type SessionStore interface {
 	CreateSession(ctx context.Context, tokenHash []byte, accountID domain.ID, expiresAt time.Time) error
 	// SessionAccount returns the account and the session with this hash if
 	// it expires after now, and ErrNoSession otherwise.
-	SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (domain.Account, Session, error)
+	SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (Account, Session, error)
 	// DeleteSession deletes the session with this hash, if there is one, and
 	// reports its id.
 	DeleteSession(ctx context.Context, tokenHash []byte) (ended domain.ID, found bool, err error)
@@ -129,14 +129,14 @@ func (s *Sessions) newToken() (token string, hash []byte, expiresAt time.Time, e
 // Resolve returns the account and session of a live session. ErrNoSession
 // covers every reason the token does not sign anyone in; any other error is
 // the store's.
-func (s *Sessions) Resolve(ctx context.Context, token string) (domain.Account, Session, error) {
+func (s *Sessions) Resolve(ctx context.Context, token string) (Account, Session, error) {
 	hash, ok := hashToken(token)
 	if !ok {
-		return domain.Account{}, Session{}, ErrNoSession
+		return Account{}, Session{}, ErrNoSession
 	}
 	account, session, err := s.store.SessionAccount(ctx, hash, s.now())
 	if err != nil && !errors.Is(err, ErrNoSession) {
-		return domain.Account{}, Session{}, fmt.Errorf("resolving session: %w", err)
+		return Account{}, Session{}, fmt.Errorf("resolving session: %w", err)
 	}
 	return account, session, err
 }

@@ -62,8 +62,8 @@ func (s *Service) SignUp(ctx context.Context, displayName, handle, email, passwo
 	fields := ValidationErrors{}
 	displayName, fields["display_name"] = domain.ValidateDisplayName(displayName)
 	handle, fields["handle"] = domain.ValidateHandle(handle)
-	email, fields["email"] = domain.ValidateEmail(email)
-	password, fields["password"] = domain.ValidatePassword(password)
+	email, fields["email"] = identity.ValidateEmail(email)
+	password, fields["password"] = identity.ValidatePassword(password)
 	for name, err := range fields {
 		if err == nil {
 			delete(fields, name)

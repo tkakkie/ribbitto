@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/app/authz"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/web/static"
@@ -410,28 +409,28 @@ func TestHelloLanguages(t *testing.T) {
 // noOrganisations makes nobody a member of anything.
 type noOrganisations struct{}
 
-func (noOrganisations) Member(context.Context, *domain.Account, string) (authz.Membership, error) {
+func (noOrganisations) Member(context.Context, *identity.Account, string) (authz.Membership, error) {
 	return authz.Membership{}, authz.ErrNotFound
 }
 
-func (noOrganisations) HomeSlug(context.Context, *domain.Account) (string, error) {
+func (noOrganisations) HomeSlug(context.Context, *identity.Account) (string, error) {
 	return "", authz.ErrNotFound
 }
 
 // noSessions signs nobody in, for tests that do not need a session.
 type noSessions struct{}
 
-func (noSessions) Resolve(context.Context, string) (domain.Account, identity.Session, error) {
-	return domain.Account{}, identity.Session{}, identity.ErrNoSession
+func (noSessions) Resolve(context.Context, string) (identity.Account, identity.Session, error) {
+	return identity.Account{}, identity.Session{}, identity.ErrNoSession
 }
 
 // countingResolver counts lookups and fails every one, like a database
 // outage.
 type countingResolver struct{ calls int }
 
-func (c *countingResolver) Resolve(context.Context, string) (domain.Account, identity.Session, error) {
+func (c *countingResolver) Resolve(context.Context, string) (identity.Account, identity.Session, error) {
 	c.calls++
-	return domain.Account{}, identity.Session{}, errors.New("connection refused")
+	return identity.Account{}, identity.Session{}, errors.New("connection refused")
 }
 
 func TestNewHandlerRequiresServices(t *testing.T) {

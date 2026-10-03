@@ -121,8 +121,7 @@ the temporary implementation behind it.
 | four `infra` target-version tests | `db/migrations` (temporary allowance) | 0 | their module's step, or 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
 | account and session stores (`infra`) | `identity`'s store interfaces | 1 | 1b |
-| `identity` | `domain` `Account`, `ValidateEmail` | 1 | 1a-2 |
-| `app/setup`, `app/signup` | `identity.Hasher` | 1 | 3 |
+| `app/setup`, `app/signup`, `app/authz`, `app/member` | `identity.Hasher`, `identity.Account` | 1 | 3 |
 | `app/message`; page snapshot, `One`, `Many` (`infra`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
 | setup, sign-up (`infra`) | `identity` account writes | 3 (until then, a `legacy_account.sql` copy of `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry, from step 1) | 3 |
 | posting, setup, sign-up, branching (`infra`) | `realtime` event appends | 2 | each flow's own step: 3, 4 |

@@ -85,18 +85,18 @@ func TestSessionCookieMaxAgeBoundaries(t *testing.T) {
 // fakeResolver answers by token; every token it does not know is signed out.
 type fakeResolver map[string]error
 
-var alice = domain.Account{ID: domain.ID{1}, Email: "alice@example.com", DisplayName: "Alice"}
+var alice = identity.Account{ID: domain.ID{1}, Email: "alice@example.com", DisplayName: "Alice"}
 
 // aliceSession is the session fakeResolver signs Alice in with.
 var aliceSession = identity.Session{ID: domain.ID{9}, ExpiresAt: time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
 
-func (f fakeResolver) Resolve(_ context.Context, token string) (domain.Account, identity.Session, error) {
+func (f fakeResolver) Resolve(_ context.Context, token string) (identity.Account, identity.Session, error) {
 	err, ok := f[token]
 	if !ok {
-		return domain.Account{}, identity.Session{}, identity.ErrNoSession
+		return identity.Account{}, identity.Session{}, identity.ErrNoSession
 	}
 	if err != nil {
-		return domain.Account{}, identity.Session{}, err
+		return identity.Account{}, identity.Session{}, err
 	}
 	return alice, aliceSession, nil
 }

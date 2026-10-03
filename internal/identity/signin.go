@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/tkakkie/ribbitto/internal/domain"
 )
 
 // ErrInvalidInput means the email is not an address or the password is
@@ -24,7 +22,7 @@ var ErrNoAccount = errors.New("no such account")
 type AccountStore interface {
 	// AccountCredentials returns the account with this normalised email and
 	// its stored password hash, or ErrNoAccount.
-	AccountCredentials(ctx context.Context, email string) (domain.Account, string, error)
+	AccountCredentials(ctx context.Context, email string) (Account, string, error)
 }
 
 // SignIn signs accounts in and out.
@@ -44,7 +42,7 @@ func NewSignIn(accounts AccountStore, hasher *Hasher, sessions *Sessions) *SignI
 // first, so a token that existed before sign-in (possibly planted by an
 // attacker) never becomes a signed-in session.
 func (s *SignIn) SignIn(ctx context.Context, email, password, previousToken string) (string, time.Time, error) {
-	email, err := domain.ValidateEmail(email)
+	email, err := ValidateEmail(email)
 	if err != nil || password == "" {
 		return "", time.Time{}, ErrInvalidInput
 	}

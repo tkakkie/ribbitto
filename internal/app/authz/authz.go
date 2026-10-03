@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
 // ErrNotFound means the caller may not see the organisation — whether it
@@ -42,7 +43,7 @@ func New(store Store) *Authorizer {
 
 // Member returns the membership of the signed-in account (nil when signed
 // out) in the organisation named by slug, which comes from the URL.
-func (a *Authorizer) Member(ctx context.Context, account *domain.Account, slug string) (Membership, error) {
+func (a *Authorizer) Member(ctx context.Context, account *identity.Account, slug string) (Membership, error) {
 	if account == nil {
 		return Membership{}, ErrNotFound
 	}
@@ -60,7 +61,7 @@ func (a *Authorizer) Member(ctx context.Context, account *domain.Account, slug s
 // HomeSlug returns the organisation that `/` should send the signed-in
 // account to: the one created at setup, if the account is a member of it.
 // The organisation comes from the setup row, never from the request.
-func (a *Authorizer) HomeSlug(ctx context.Context, account *domain.Account) (string, error) {
+func (a *Authorizer) HomeSlug(ctx context.Context, account *identity.Account) (string, error) {
 	if account == nil {
 		return "", ErrNotFound
 	}
@@ -78,7 +79,7 @@ func (a *Authorizer) HomeSlug(ctx context.Context, account *domain.Account) (str
 // (false, nil). A failed lookup is an error, never a deny: the stream must
 // stop and retry, not skip an event the member may be allowed to see.
 func (a *Authorizer) MayReceive(ctx context.Context, accountID domain.ID, organizationSlug string, event domain.Event) (bool, error) {
-	m, err := a.Member(ctx, &domain.Account{ID: accountID}, organizationSlug)
+	m, err := a.Member(ctx, &identity.Account{ID: accountID}, organizationSlug)
 	if errors.Is(err, ErrNotFound) {
 		return false, nil
 	}

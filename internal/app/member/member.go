@@ -7,6 +7,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
 // ErrInvalidHandle wraps a handle that breaks the rules in domain.ValidateHandle.
@@ -18,7 +19,7 @@ var ErrHandleTaken = errors.New("handle already taken")
 
 // Authorizer resolves the signed-in account's membership (authz.Authorizer).
 type Authorizer interface {
-	Member(ctx context.Context, account *domain.Account, slug string) (authz.Membership, error)
+	Member(ctx context.Context, account *identity.Account, slug string) (authz.Membership, error)
 }
 
 // Store changes a member's handle. It returns ErrHandleTaken when the
@@ -44,7 +45,7 @@ func New(authorizer Authorizer, store Store) *Service {
 // no member id parameter on purpose: the only member it can change is the
 // caller's own. A signed-out caller or a non-member gets authz.ErrNotFound.
 // The released handle is free for anyone to take at once.
-func (s *Service) ChangeHandle(ctx context.Context, account *domain.Account, slug, handle string) (string, error) {
+func (s *Service) ChangeHandle(ctx context.Context, account *identity.Account, slug, handle string) (string, error) {
 	membership, err := s.authorizer.Member(ctx, account, slug)
 	if err != nil {
 		return "", err

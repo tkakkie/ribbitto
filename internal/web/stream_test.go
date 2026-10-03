@@ -70,7 +70,7 @@ type laterSession struct {
 	seen      *int
 }
 
-func (l laterSession) Resolve(context.Context, string) (domain.Account, identity.Session, error) {
+func (l laterSession) Resolve(context.Context, string) (identity.Account, identity.Session, error) {
 	*l.seen = l.hub.Connections()
 	if l.cancelNow {
 		l.hub.CancelSession(l.session.ID)
@@ -78,7 +78,7 @@ func (l laterSession) Resolve(context.Context, string) (domain.Account, identity
 	if l.shutdown {
 		l.hub.CancelAll()
 	}
-	return domain.Account{ID: domain.ID{1}}, l.session, l.err
+	return identity.Account{ID: domain.ID{1}}, l.session, l.err
 }
 
 // firstRead counts reads and fails each one, which ends a started stream.

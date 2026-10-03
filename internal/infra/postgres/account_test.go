@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 )
@@ -29,7 +30,7 @@ func TestAccountSchema(t *testing.T) {
 	var accounts []sqlcgen.Account
 	var organizations []sqlcgen.Organization
 	for i, size := range []int{1, 50} {
-		email, err := domain.ValidateEmail([]string{"a@b", strings.Repeat("界", 84) + "@b"}[i])
+		email, err := identity.ValidateEmail([]string{"a@b", strings.Repeat("界", 84) + "@b"}[i])
 		requireNoError(t, err)
 		name, err := domain.ValidateDisplayName(strings.Repeat("界", size))
 		requireNoError(t, err)

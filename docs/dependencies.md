@@ -38,10 +38,12 @@ cmd/seed -> internal/identity
 cmd/seed -> internal/infra/postgres
 cmd/seed -> internal/platform/postgres
 internal/app/authz -> internal/domain
+internal/app/authz -> internal/identity
 internal/app/channel -> internal/app/authz
 internal/app/channel -> internal/domain
 internal/app/member -> internal/app/authz
 internal/app/member -> internal/domain
+internal/app/member -> internal/identity
 internal/app/message -> internal/app/authz
 internal/app/message -> internal/app/member
 internal/app/message -> internal/app/topic
@@ -89,7 +91,6 @@ internal/web -> internal/web/i18n
 internal/web -> internal/web/middleware
 internal/web -> internal/web/view
 internal/web -> web/static
-internal/web/middleware -> internal/domain
 internal/web/middleware -> internal/identity
 internal/web/view -> internal/domain
 internal/web/view -> internal/web/i18n

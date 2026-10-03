@@ -13,6 +13,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 // testServices returns the services NewHandler requires, as DB-free fakes:
@@ -61,14 +63,18 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Channels:  channel.New(postgres.NewChannelStore(pool)),
 		Topics:    postgres.NewTopicStore(pool),
 		Messages:  postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn},
-		Posting:   message.New(postgres.NewPostingStore(pool, postgres.EventLogIn)),
-		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, postgres.EventLogIn), nil),
+		Posting:   message.New(postgres.NewPostingStore(pool, appendEvents)),
+		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, appendEvents), nil),
 	}
 	if setupToken != "" {
-		s.Setup, s.SetupSessions = setup.New(postgres.NewSetupStore(pool, postgres.EventLogIn), hasher, setupToken), sessions
+		s.Setup, s.SetupSessions = setup.New(postgres.NewSetupStore(pool, appendEvents), hasher, setupToken), sessions
 	}
 	if signUp {
-		s.SignUp, s.SetupSessions = signup.New(postgres.NewSetupStore(pool, postgres.EventLogIn), hasher, true), sessions
+		s.SignUp, s.SetupSessions = signup.New(postgres.NewSetupStore(pool, appendEvents), hasher, true), sessions
 	}
 	return s
 }
+
+// appendEvents adapts realtime's appender to the consumer interface the
+// event-writing stores declare (decision 26).
+func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }

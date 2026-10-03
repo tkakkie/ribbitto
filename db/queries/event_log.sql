@@ -1,8 +1,3 @@
--- name: InsertEvent :exec
--- data comes encoded by the kind's publisher (decision 26).
-INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
-VALUES ($1, $2, $3, NULL, sqlc.arg(data)::jsonb);
-
 -- name: EventBounds :one
 -- realtime's reader reads org's cursor bounds through this, in its snapshot.
 SELECT event_log_boundary_seq, event_seq FROM organization WHERE id = $1;

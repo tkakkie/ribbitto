@@ -28,7 +28,7 @@ func TestMessageOne(t *testing.T) {
 	otherChannel := pgtest.Channel(t, pool, local.OrganizationID, "other", false)
 	membership := authz.Membership{Organization: domain.Organization{ID: local.OrganizationID}, Member: domain.Member{ID: local.MemberID}}
 	foreignMembership := authz.Membership{Organization: domain.Organization{ID: foreign.OrganizationID}, Member: domain.Member{ID: foreign.MemberID}}
-	service := message.New(postgres.NewPostingStore(pool, postgres.EventLogIn))
+	service := message.New(postgres.NewPostingStore(pool, appendEvents))
 	posted, err := service.Post(ctx, membership, local.Channel.ID, "local body")
 	requireNoError(t, err)
 	foreignPost, err := service.Post(ctx, foreignMembership, foreign.Channel.ID, "foreign body")
@@ -91,7 +91,7 @@ func TestMessagePaging(t *testing.T) {
 
 	// Interleave posts so that every channel's event_seq values have gaps
 	// filled by another channel's, and globex reuses acme's numbers.
-	service := message.New(postgres.NewPostingStore(pool, postgres.EventLogIn))
+	service := message.New(postgres.NewPostingStore(pool, appendEvents))
 	sizes := map[string]int{"exact": 2 * message.PageSize, "partial": message.PageSize + 1}
 	posted := map[string][]string{}
 	var foreignSeqs []int64
@@ -226,7 +226,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			ctx := t.Context()
 			fixture := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 			m := authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID}, Member: domain.Member{ID: fixture.MemberID}}
-			posting := message.New(postgres.NewPostingStore(pool, postgres.EventLogIn))
+			posting := message.New(postgres.NewPostingStore(pool, appendEvents))
 			initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")
 			requireNoError(t, err)
 			var concurrent domain.Message

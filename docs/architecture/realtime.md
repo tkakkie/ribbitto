@@ -16,8 +16,8 @@ sequenceDiagram
 ```
 
 `message.Service.Post` validates; `postgres.PostingStore` takes the sequence,
-inserts the message and calls `AppendMessagePosted` on the `EventAppender` its store was given for the transaction
-in one transaction. Realtime's `EventLog` writer owns the event insert queries;
+inserts the message, encodes the post with `message.EncodePosted` and calls `Append` on the `EventAppender` its store was given for the transaction
+in one transaction. Realtime's store appender (`realtimepg.AppenderIn`) owns the event insert, kind-agnostic;
 it uses the caller's transaction and already-allocated sequence.
 `message.NewWithNotifier` accepts `message.Notifier` (`Raise(organizationID domain.ID, seq int64)`);
 `Post` calls it only after the store succeeds. `serve` wires `realtime.Hub`
@@ -97,7 +97,7 @@ connection, after rendering and immediately before send. The payload includes
 source and destination IDs and each item's original sequence: feeds replace
 loaded IDs; topics remove source items or insert destination items in order
 within the loaded range. Live changes never alter the history paging bound.
-Setup and sign-up call `AppendMemberJoined` the same way immediately after
+Setup and sign-up append `member.joined` (`member.EncodeJoined`) the same way immediately after
 the member, with its `joined_event_seq`. `realtime.Event` is an envelope: organisation,
 sequence, kind, audience, channel, routing `Topics` and the stored `Payload`,
 which consumers decode through the publisher's codec; kinds are an open list. Wiring registers each kind's publisher `Router`

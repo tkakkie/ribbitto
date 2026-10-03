@@ -196,7 +196,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	var ids []domain.ID
 	var source domain.ID
 	for range 2 {
-		posted, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "selected body")
+		posted, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "selected body")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -215,7 +215,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 		}
 		warm = append(warm, out)
 	}
-	destination, through, err := postgres.NewBranchStore(pool, postgres.EventLogIn).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
+	destination, through, err := postgres.NewBranchStore(pool, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
 		topic.Branch{From: source, Messages: ids, NewName: "New label"}, func(domain.Topic) string { return "branch notice" })
 	if err != nil {
 		t.Fatal(err)
@@ -367,7 +367,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 				if i == 0 || i == tt.count/2 || i == tt.count-1 {
 					selected = nil // Before, within and after the destination's messages.
 				}
-				posted, err := postgres.NewPostingStore(pool, postgres.EventLogIn).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, selected, "body")
+				posted, err := postgres.NewPostingStore(pool, appendEvents).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, selected, "body")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -382,7 +382,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			}
 			boundary := topicPageBoundary(t, destination, page, 0)
 			items := renderedPage(t, page.Entries)
-			_, through, err := postgres.NewBranchStore(pool, postgres.EventLogIn).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
+			_, through, err := postgres.NewBranchStore(pool, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
 				topic.Branch{From: source, To: &destination.ID, Messages: moved}, func(domain.Topic) string { return "notice" })
 			if err != nil {
 				t.Fatal(err)
@@ -447,7 +447,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				var moved []domain.ID
 				for i := range count {
 					for _, selected := range []*domain.ID{nil, &destination.ID} {
-						posted, err := postgres.NewPostingStore(pool, postgres.EventLogIn).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, selected, "body")
+						posted, err := postgres.NewPostingStore(pool, appendEvents).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, selected, "body")
 						if err != nil {
 							t.Fatal(err)
 						}
@@ -478,7 +478,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 						}
 					}
 				}
-				_, through, err := postgres.NewBranchStore(pool, postgres.EventLogIn).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
+				_, through, err := postgres.NewBranchStore(pool, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
 					topic.Branch{From: source.ID, To: &destination.ID, Messages: moved}, func(domain.Topic) string { return "notice" })
 				if err != nil {
 					t.Fatal(err)

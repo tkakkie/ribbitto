@@ -55,3 +55,28 @@ func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]Eve
 	}
 	return items, nil
 }
+
+const insertEvent = `-- name: InsertEvent :exec
+INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
+VALUES ($1, $2, $3, $4, $5::jsonb)
+`
+
+type InsertEventParams struct {
+	OrganizationID   pgtype.UUID
+	Seq              int64
+	Kind             string
+	AudienceMemberID pgtype.UUID
+	Data             []byte
+}
+
+// The publisher encoded data; realtime stores it without knowing the kind.
+func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error {
+	_, err := q.db.Exec(ctx, insertEvent,
+		arg.OrganizationID,
+		arg.Seq,
+		arg.Kind,
+		arg.AudienceMemberID,
+		arg.Data,
+	)
+	return err
+}

@@ -28,7 +28,7 @@ func TestBranchStore(t *testing.T) {
 	ctx := t.Context()
 	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
-	posting, store, topics := postgres.NewPostingStore(pool, postgres.EventLogIn), postgres.NewBranchStore(pool, postgres.EventLogIn), postgres.NewTopicStore(pool)
+	posting, store, topics := postgres.NewPostingStore(pool, appendEvents), postgres.NewBranchStore(pool, appendEvents), postgres.NewTopicStore(pool)
 	var posted []domain.Message
 	for _, body := range []string{"one", "two", "three"} {
 		m, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, body)
@@ -155,17 +155,16 @@ type failingNotice struct {
 	moved *bool
 }
 
-func (f failingNotice) AppendMessagesMoved(ctx context.Context, organizationID, channelID, from, to domain.ID, messageIDs []domain.ID, seq int64) error {
-	err := f.EventAppender.AppendMessagesMoved(ctx, organizationID, channelID, from, to, messageIDs, seq)
-	*f.moved = err == nil
+func (f failingNotice) Append(ctx context.Context, organizationID domain.ID, seq int64, kind realtime.EventKind, audience *domain.ID, payload []byte) error {
+	if kind == realtime.EventMessagePosted {
+		return errNoticeAppend
+	}
+	err := f.EventAppender.Append(ctx, organizationID, seq, kind, audience, payload)
+	*f.moved = err == nil && kind == realtime.EventMessagesMoved
 	return err
 }
 
 var errNoticeAppend = errors.New("notice append failed")
-
-func (failingNotice) AppendMessagePosted(context.Context, domain.ID, domain.ID, domain.ID, domain.ID, int64) error {
-	return errNoticeAppend
-}
 
 type countingNotifier struct{ raised int }
 
@@ -179,11 +178,11 @@ func TestBranchStoreFailingNoticeAppend(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-	posted, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "one")
+	posted, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "one")
 	requireNoError(t, err)
 	moved := false
 	events := func(tx platform.Tx) postgres.EventAppender {
-		return failingNotice{EventAppender: postgres.EventLogIn(tx), moved: &moved}
+		return failingNotice{EventAppender: appendEvents(tx), moved: &moved}
 	}
 	notifier := &countingNotifier{}
 	brancher := topic.NewBrancher(postgres.NewBranchStore(pool, events), notifier)
@@ -214,7 +213,7 @@ func TestBranchStorePartlyStaleSelection(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
 			acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-			posting, store, topics := postgres.NewPostingStore(pool, postgres.EventLogIn), postgres.NewBranchStore(pool, postgres.EventLogIn), postgres.NewTopicStore(pool)
+			posting, store, topics := postgres.NewPostingStore(pool, appendEvents), postgres.NewBranchStore(pool, appendEvents), postgres.NewTopicStore(pool)
 			valid, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "still in source")
 			requireNoError(t, err)
 			stale, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "already moved")

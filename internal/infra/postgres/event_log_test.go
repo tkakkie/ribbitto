@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -12,6 +13,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
+	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 func assertEventLog(t *testing.T, pool *pgxpool.Pool, org domain.ID, wantSeq int64) {
@@ -97,7 +101,7 @@ func TestEventLogMigration(t *testing.T) {
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = 4 WHERE id = $1", old.OrganizationID)
 	requireNoError(t, err)
-	_, err = postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "after logging")
+	_, err = postgres.NewPostingStore(pool, appendEvents).Post(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "after logging")
 	requireNoError(t, err)
 	assertEventLog(t, pool, old.OrganizationID, 5)
 	// Undo every migration after 6, the event log's included.
@@ -116,7 +120,7 @@ func TestEventLogAudienceAndRollback(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	result, err := postgres.NewSetupStore(pool, postgres.EventLogIn).Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
+	result, err := postgres.NewSetupStore(pool, appendEvents).Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
 	requireNoError(t, err)
 	other := pgtest.OrganizationWithOwner(t, pool, "other", "general")
 	_, err = pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
@@ -136,7 +140,7 @@ func TestEventLogAudienceAndRollback(t *testing.T) {
 		BEGIN RAISE EXCEPTION 'refused'; END $$;
 		CREATE TRIGGER refuse_event AFTER INSERT ON event_log FOR EACH ROW EXECUTE FUNCTION refuse_event()`)
 	requireNoError(t, err)
-	if _, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, result.OrganizationID, channelID, memberID, "rolled back"); err == nil {
+	if _, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, result.OrganizationID, channelID, memberID, "rolled back"); err == nil {
 		t.Fatal("post succeeded despite event failure")
 	}
 	assertEventLog(t, pool, result.OrganizationID, 1)
@@ -144,5 +148,44 @@ func TestEventLogAudienceAndRollback(t *testing.T) {
 	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id = $1", result.OrganizationID).Scan(&messages))
 	if messages != 0 {
 		t.Fatalf("%d messages survived rollback", messages)
+	}
+}
+
+// appendEvents adapts realtime's appender to the consumer interface the
+// event-writing stores declare (decision 26).
+func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// realtime's appender keeps the audience: NULL stays organisation-wide, a
+// member of the organisation survives the write and reads back, and another
+// organisation's member is rejected. Today's publishers always append NULL,
+// so without this an appender that dropped the audience would widen delivery.
+func TestAppenderAudience(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	f := pgtest.OrganizationWithOwner(t, pool, "audience", "general")
+	other := pgtest.OrganizationWithOwner(t, pool, "audience-other", "general")
+	appendOne := func(audience *domain.ID) (int64, error) {
+		var seq int64
+		err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
+			if err := pgxbridge.Tx(tx).QueryRow(ctx, "UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq", f.OrganizationID).Scan(&seq); err != nil {
+				return err
+			}
+			return appendEvents(tx).Append(ctx, f.OrganizationID, seq, "test.audience", audience, []byte(`{}`))
+		})
+		return seq, err
+	}
+	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
+	for _, audience := range []*domain.ID{nil, &f.MemberID} {
+		seq, err := appendOne(audience)
+		requireNoError(t, err)
+		got, err := reader.EventsAfter(ctx, f.OrganizationID, seq-1, 1)
+		requireNoError(t, err)
+		if len(got) != 1 || !reflect.DeepEqual(got[0].AudienceMemberID, audience) {
+			t.Fatalf("audience %v read back as %+v", audience, got)
+		}
+	}
+	if _, err := appendOne(&other.MemberID); err == nil {
+		t.Fatal("appended an event whose audience is another organisation's member")
 	}
 }

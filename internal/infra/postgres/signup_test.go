@@ -18,7 +18,7 @@ func TestSignUp(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	store := postgres.NewSetupStore(pool, postgres.EventLogIn)
+	store := postgres.NewSetupStore(pool, appendEvents)
 	_, err := store.SignUp(ctx, "Alice", "alice", "alice@example.org", "$argon2id$test")
 	if !errors.Is(err, signup.ErrClosed) {
 		t.Fatalf("before setup: %v", err)
@@ -28,7 +28,7 @@ func TestSignUp(t *testing.T) {
 	// A handle is unique only within its organisation: "alice" is taken in the other one.
 	otherAccount := pgtest.Account(t, pool, "other@example.org", "Other")
 	pgtest.Member(t, pool, other, otherAccount, domain.RoleOwner, "alice", 1)
-	result, err := postgres.NewSetupStore(pool, postgres.EventLogIn).Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
+	result, err := postgres.NewSetupStore(pool, appendEvents).Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
 	requireNoError(t, err)
 	id, err := store.SignUp(ctx, "Alice", "alice", "alice@example.org", "$argon2id$test")
 	requireNoError(t, err)
@@ -78,7 +78,7 @@ func TestSignUpHandleConflicts(t *testing.T) {
 	ctx := t.Context()
 	hasher, err := identity.NewHasher()
 	requireNoError(t, err)
-	store := postgres.NewSetupStore(pool, postgres.EventLogIn)
+	store := postgres.NewSetupStore(pool, appendEvents)
 	_, err = store.Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
 	requireNoError(t, err)
 	service := signup.New(store, hasher, true)

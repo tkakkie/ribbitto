@@ -2,6 +2,7 @@ package realtimepg
 
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/internal/postgres"
 )
@@ -12,3 +13,8 @@ import (
 func NewReader(pool *pgxpool.Pool, bounds realtime.BoundsIn, kinds realtime.Kinds) realtime.EventReader {
 	return postgres.NewReader(pool, bounds, kinds)
 }
+
+// AppenderIn returns realtime's event appender bound to a writer's
+// transaction. Consumers declare the interface they need and adapt to it
+// with a closure (decision 26).
+func AppenderIn(tx platform.Tx) *postgres.Appender { return postgres.AppenderIn(tx) }

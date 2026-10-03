@@ -21,7 +21,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
 | `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
-| `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `infra/postgres/event_log.go`, `event_reader.go` (now org's cursor bounds and committed sequences, until step 3), `event_cleaner.go`; `db/queries/event_log.sql`; `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
+| `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `infra/postgres/event_appender.go` (the flows' appender interface), `event_reader.go` (now org's cursor bounds and committed sequences, until step 3), `event_cleaner.go`; `db/queries/event_log.sql`; `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
 
 The shared kernel, which any feature may use: the IDs and value types in
 `internal/domain`, the per-organisation `event_seq` and `event_log_boundary_seq`, and the authorisation
@@ -73,9 +73,8 @@ topic posts rely on the lookup inside the posting transaction.
   the message, because the sequence must be taken in the writing
   transaction ([decision 5](../decisions/05-one-event-sequence-per-organisation.md));
 - these flows call realtime's transaction-bound writer, an `EventAppender`
-  that their store is given (`postgres.EventLogIn` today, #400)
-  (`AppendMessagePosted`, `AppendMemberJoined` or `AppendMessagesMoved`, each
-  storing the payload its publisher's codec encodes)
+  that their store is given (realtime's, through `realtimepg.AppenderIn`),
+  appending the payload their publisher's codec encoded
   immediately after the message, member or move, so `event_log` commits with
   the entity and its sequence (#156, #257, #305);
 - realtime retention (#161) writes org's `event_log_boundary_seq`,

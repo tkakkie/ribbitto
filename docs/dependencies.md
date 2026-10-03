@@ -40,6 +40,7 @@ cmd/seed -> internal/identity
 cmd/seed -> internal/identity/identitypg
 cmd/seed -> internal/infra/postgres
 cmd/seed -> internal/platform/postgres
+cmd/seed -> internal/realtime/realtimepg
 internal/app/authz -> internal/domain
 internal/app/authz -> internal/identity
 internal/app/authz -> internal/realtime
@@ -102,6 +103,7 @@ internal/realtime/internal/postgres -> internal/platform/postgres
 internal/realtime/internal/postgres -> internal/platform/postgres/pgxbridge
 internal/realtime/internal/postgres -> internal/realtime
 internal/realtime/internal/postgres -> internal/realtime/internal/postgres/sqlcgen
+internal/realtime/realtimepg -> internal/platform/postgres
 internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
 internal/web -> internal/app/authz

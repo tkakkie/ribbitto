@@ -6,6 +6,7 @@
 // owns the account and session tables. Exported API: Hasher, Sessions and
 // SignIn, Directory for batch display-name lookups, with the AccountStore and SessionStore interfaces they need,
 // SessionLifetime and the errors they return. It writes no other feature's
-// tables. It imports domain for Account and ValidateEmail until migration
-// step 1a-2, and for the ID alias until step 5.
+// tables. It owns the email and password rules (ValidateEmail,
+// ValidatePassword) and Account. It imports domain only for the ID alias,
+// until migration step 5.
 package identity

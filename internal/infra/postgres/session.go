@@ -83,18 +83,18 @@ func withoutDetail(err error) error {
 
 // SessionAccount returns the account of a session that expires after now,
 // with the session's id and expiry.
-func (s *SessionStore) SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (domain.Account, identity.Session, error) {
+func (s *SessionStore) SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (identity.Account, identity.Session, error) {
 	row, err := s.queries.GetSessionByTokenHash(ctx, sqlcgen.GetSessionByTokenHashParams{
 		TokenHash: tokenHash,
 		Now:       pgtype.Timestamptz{Time: now, Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Account{}, identity.Session{}, identity.ErrNoSession
+		return identity.Account{}, identity.Session{}, identity.ErrNoSession
 	}
 	if err != nil {
-		return domain.Account{}, identity.Session{}, fmt.Errorf("selecting session: %w", err)
+		return identity.Account{}, identity.Session{}, fmt.Errorf("selecting session: %w", err)
 	}
-	return domain.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName},
+	return identity.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName},
 		identity.Session{ID: row.Session.ID.Bytes, ExpiresAt: row.Session.ExpiresAt.Time}, nil
 }
 

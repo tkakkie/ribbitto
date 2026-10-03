@@ -175,7 +175,7 @@ func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 	if err := pool.QueryRow(t.Context(), "SELECT id FROM account WHERE email = 'mira@example.test'").Scan(&accountID); err != nil {
 		t.Fatal(err)
 	}
-	member, err := authz.New(postgres.NewAuthzStore(pool)).Member(t.Context(), &domain.Account{ID: accountID}, "paper-lantern")
+	member, err := authz.New(postgres.NewAuthzStore(pool)).Member(t.Context(), &identity.Account{ID: accountID}, "paper-lantern")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestNewSecret(t *testing.T) {
 	if first == second || len(first) != 32 {
 		t.Fatalf("secrets %q and %q", first, second)
 	}
-	if _, err := domain.ValidatePassword(first); err != nil {
+	if _, err := identity.ValidatePassword(first); err != nil {
 		t.Fatal(err)
 	}
 }

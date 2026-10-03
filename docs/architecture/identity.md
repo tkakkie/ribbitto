@@ -1,7 +1,8 @@
 # Sessions and signing in
 
 `internal/identity.Sessions` owns the session lifecycle; `internal/web/middleware`
-connects it to HTTP.
+connects it to HTTP. `internal/identity` also owns `Account` and the email
+and password rules ([validation](../domain/validation.md)).
 
 - **Create** (inside `Replace`, below): 32 random bytes from `crypto/rand` are
   the token, returned once as unpadded base64url for the cookie. Only the
@@ -64,7 +65,7 @@ calls `identity.SignIn` (above) with the cookie the browser sent, so that
 session is the one replaced; on success it sets the new cookie and
 redirects to `/` with 303. An unknown email and a wrong password get the
 same page, status (422) and message; the typed email is kept and the
-password never echoed. An email rejected by `domain.ValidateEmail` or an
+password never echoed. An email rejected by `identity.ValidateEmail` or an
 empty password gets 422 with its own message, without revealing whether an
 account exists. A busy hasher answers 503. `POST /signout` deletes
 the session row, clears the cookie and redirects to `/signin`; there is no

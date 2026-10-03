@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
@@ -20,7 +19,7 @@ const SessionCookie = "__Host-session"
 // SessionResolver turns a session token into its account and session. It
 // returns identity.ErrNoSession for every token that does not sign anyone in.
 type SessionResolver interface {
-	Resolve(ctx context.Context, token string) (domain.Account, identity.Session, error)
+	Resolve(ctx context.Context, token string) (identity.Account, identity.Session, error)
 }
 
 type accountKey struct{}
@@ -85,8 +84,8 @@ func Session(sessions SessionResolver, next http.Handler) http.Handler {
 }
 
 // Account returns the signed-in account of the request, if there is one.
-func Account(ctx context.Context) (domain.Account, bool) {
-	account, ok := ctx.Value(accountKey{}).(domain.Account)
+func Account(ctx context.Context) (identity.Account, bool) {
+	account, ok := ctx.Value(accountKey{}).(identity.Account)
 	return account, ok
 }
 

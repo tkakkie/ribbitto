@@ -37,8 +37,8 @@ func TestSetupToken(t *testing.T) {
 type blockingStore struct{ started chan struct{} }
 
 func (blockingStore) CreateSession(context.Context, []byte, domain.ID, time.Time) error { return nil }
-func (blockingStore) SessionAccount(context.Context, []byte, time.Time) (domain.Account, identity.Session, error) {
-	return domain.Account{}, identity.Session{}, identity.ErrNoSession
+func (blockingStore) SessionAccount(context.Context, []byte, time.Time) (identity.Account, identity.Session, error) {
+	return identity.Account{}, identity.Session{}, identity.ErrNoSession
 }
 func (blockingStore) DeleteSession(context.Context, []byte) (domain.ID, bool, error) {
 	return domain.ID{}, false, nil

@@ -13,9 +13,7 @@ func TestValidation(t *testing.T) {
 		validate       func(string) (string, error)
 		valid, invalid []string
 	}{
-		{"email", domain.ValidateEmail, []string{"a@b", strings.Repeat("界", 84) + "@b"}, []string{"", "a", "@b", "a@", "a@@b", "a^@@b", "a\x00@b", "a\n@b", "a\u0085@b", "a\xff@b", strings.Repeat("a", 253) + "@b"}},
 		{"display", domain.ValidateDisplayName, []string{"a", strings.Repeat("界", 50)}, []string{"", "  ", strings.Repeat("界", 51), "a\x00", "a\n", "a\u007f", "\xff"}},
-		{"password", domain.ValidatePassword, []string{strings.Repeat("界", 15), strings.Repeat("a", 128), strings.Repeat(" ", 15), strings.Repeat("\x00", 15)}, []string{"", strings.Repeat("界", 14), strings.Repeat("界", 129), strings.Repeat("\xff", 15)}},
 		{"organization", domain.ValidateOrganizationName, []string{"a", strings.Repeat("界", 100)}, []string{"", strings.Repeat("界", 101), "a\x00", "a\t", "\xff"}},
 		{"slug", domain.ValidateSlug, []string{"a", "0", "a-b", "a" + strings.Repeat("-", 61) + "0"}, []string{"", "-", "-a", "a-", "A", "a_b", "a.b", "a\n", "界", strings.Repeat("a", 64)}},
 		{"handle", domain.ValidateHandle, []string{"ab", "a0", "tomoya", "a_b.c-d", "a" + strings.Repeat("-", 30) + "z", "member-1", "everyones", "al"}, []string{"", "a", "0a", "_a", "a_", "a.", "a-", "a b", "a@b", "a\x00b", "a\nb", "\xff", "tomoyá", "Kelvin", "ｔｏｍｏｙａ", "a" + strings.Repeat("b", 32), "everyone", "here", "channel", "all", "ALL", "\ttomoya", "tomoya\n", "\u00a0\u200btomoya"}},
@@ -37,11 +35,8 @@ func TestValidation(t *testing.T) {
 		validate    func(string) (string, error)
 		input, want string
 	}{
-		{domain.ValidateEmail, "  USER@EXAMPLE.COM  ", "user@example.com"},
-		{domain.ValidateEmail, "  " + strings.Repeat("A", 252) + "@B  ", strings.Repeat("a", 252) + "@b"},
 		{domain.ValidateDisplayName, "　 Alice 　", "Alice"},
 		{domain.ValidateOrganizationName, "　 Example Team 　", "Example Team"},
-		{domain.ValidateEmail, "  E\u0301@EXAMPLE.COM  ", "é@example.com"},
 		{domain.ValidateDisplayName, "  e\u0301  ", "é"},
 		{domain.ValidateOrganizationName, "  e\u0301  ", "é"},
 		{domain.ValidateDisplayName, "Alice Smith", "Alice Smith"},
@@ -69,9 +64,6 @@ func TestValidationNonPrintableText(t *testing.T) {
 		{"ASCII space", " "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := domain.ValidateEmail("a" + tc.text + "b@example.com"); err == nil {
-				t.Error("email accepted non-printable text or space")
-			}
 			if tc.text == " " {
 				return // ASCII spaces are allowed inside names.
 			}

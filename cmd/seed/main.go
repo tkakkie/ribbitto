@@ -191,7 +191,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 			}
 			manifest.Accounts = append(manifest.Accounts, entry)
 		}
-		members[person.Handle], err = authorizer.Member(ctx, &domain.Account{ID: id}, slug)
+		members[person.Handle], err = authorizer.Member(ctx, &identity.Account{ID: id}, slug)
 		if err != nil {
 			return fmt.Errorf("resolving %s: %w", person.Handle, err)
 		}

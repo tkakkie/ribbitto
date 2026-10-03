@@ -10,6 +10,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 )
@@ -31,11 +32,11 @@ func TestChangeHandle(t *testing.T) {
 			pgtest.Member(t, pool, org, account, domain.RoleMember, name, 1)
 		}
 	}
-	accounts := map[string]*domain.Account{}
+	accounts := map[string]*identity.Account{}
 	rows, err := pool.Query(ctx, "SELECT id, display_name FROM account")
 	requireNoError(t, err)
 	for rows.Next() {
-		var a domain.Account
+		var a identity.Account
 		requireNoError(t, rows.Scan(&a.ID, &a.DisplayName))
 		accounts[a.DisplayName] = &a
 	}

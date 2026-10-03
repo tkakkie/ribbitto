@@ -23,15 +23,15 @@ func NewAccountStore(db sqlcgen.DBTX) *AccountStore {
 
 // AccountCredentials returns the account with this normalised email and its
 // password hash.
-func (s *AccountStore) AccountCredentials(ctx context.Context, email string) (domain.Account, string, error) {
+func (s *AccountStore) AccountCredentials(ctx context.Context, email string) (identity.Account, string, error) {
 	row, err := s.queries.GetAccountByEmail(ctx, email)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Account{}, "", identity.ErrNoAccount
+		return identity.Account{}, "", identity.ErrNoAccount
 	}
 	if err != nil {
-		return domain.Account{}, "", fmt.Errorf("selecting account: %w", err)
+		return identity.Account{}, "", fmt.Errorf("selecting account: %w", err)
 	}
-	return domain.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName}, row.PasswordHash, nil
+	return identity.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName}, row.PasswordHash, nil
 }
 
 // LookupDisplayNames implements identity.Directory without credentials.

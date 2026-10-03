@@ -7,14 +7,14 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
 // Authorizer decides organisation access (authz.Authorizer).
 type Authorizer interface {
-	Member(ctx context.Context, account *domain.Account, slug string) (authz.Membership, error)
-	HomeSlug(ctx context.Context, account *domain.Account) (string, error)
+	Member(ctx context.Context, account *identity.Account, slug string) (authz.Membership, error)
+	HomeSlug(ctx context.Context, account *identity.Account) (string, error)
 }
 
 // orgRoute is a page under /organizations/{slug}/. Its handler receives
@@ -51,7 +51,7 @@ func orgRoutes(pages *pageRenderer, service ChannelService, topics TopicReader, 
 func registerOrgRoutes(routes sessionMux, authorizer Authorizer, table []orgRoute) {
 	for _, route := range table {
 		routes.HandleFunc(route.method+" /organizations/{slug}"+route.path, func(w http.ResponseWriter, r *http.Request) {
-			var account *domain.Account
+			var account *identity.Account
 			if a, ok := middleware.Account(r.Context()); ok {
 				account = &a
 			}

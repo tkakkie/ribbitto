@@ -7,6 +7,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
 // fakeStore holds memberships by (account, slug) and the setup
@@ -39,9 +40,9 @@ func (f fakeStore) HomeSlug(_ context.Context, accountID domain.ID) (string, err
 }
 
 func TestAuthorizer(t *testing.T) {
-	alice := &domain.Account{ID: domain.ID{1}} // member of acme
-	bob := &domain.Account{ID: domain.ID{2}}   // member of globex only
-	carol := &domain.Account{ID: domain.ID{3}} // no membership
+	alice := &identity.Account{ID: domain.ID{1}} // member of acme
+	bob := &identity.Account{ID: domain.ID{2}}   // member of globex only
+	carol := &identity.Account{ID: domain.ID{3}} // no membership
 	acme := authz.Membership{Organization: domain.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: domain.Member{Role: domain.RoleOwner}}
 	globex := authz.Membership{Organization: domain.Organization{ID: domain.ID{11}, Slug: "globex"}}
 	store := fakeStore{
@@ -52,7 +53,7 @@ func TestAuthorizer(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
 		store   fakeStore
-		account *domain.Account
+		account *identity.Account
 		slug    string
 		want    error
 		home    error

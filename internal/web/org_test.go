@@ -304,11 +304,11 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}
 	t.Run("author lookup isolation and reload", func(t *testing.T) {
 		authzService := authz.New(postgres.NewAuthzStore(pool))
-		a, err := authzService.Member(ctx, &domain.Account{ID: alice}, "acme")
+		a, err := authzService.Member(ctx, &identity.Account{ID: alice}, "acme")
 		if err != nil {
 			t.Fatal(err)
 		}
-		b, err := authzService.Member(ctx, &domain.Account{ID: bob}, "globex")
+		b, err := authzService.Member(ctx, &identity.Account{ID: bob}, "globex")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -373,14 +373,14 @@ func serveForm(handler http.Handler, method, path, cookie string, form url.Value
 // oneOrganisation makes the "live" session's account the owner of acme.
 type oneOrganisation struct{}
 
-func (oneOrganisation) Member(_ context.Context, account *domain.Account, slug string) (authz.Membership, error) {
+func (oneOrganisation) Member(_ context.Context, account *identity.Account, slug string) (authz.Membership, error) {
 	if account == nil || slug != "acme" {
 		return authz.Membership{}, authz.ErrNotFound
 	}
 	return authz.Membership{Organization: domain.Organization{Slug: "acme", Name: "Acme Corporation"}, Member: domain.Member{Role: domain.RoleOwner, Handle: "alice"}}, nil
 }
 
-func (oneOrganisation) HomeSlug(context.Context, *domain.Account) (string, error) {
+func (oneOrganisation) HomeSlug(context.Context, *identity.Account) (string, error) {
 	return "acme", nil
 }
 

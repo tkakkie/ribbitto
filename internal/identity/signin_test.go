@@ -11,17 +11,17 @@ import (
 )
 
 type fakeAccounts struct {
-	account domain.Account
+	account identity.Account
 	hash    string
 	err     error
 }
 
-func (f fakeAccounts) AccountCredentials(_ context.Context, email string) (domain.Account, string, error) {
+func (f fakeAccounts) AccountCredentials(_ context.Context, email string) (identity.Account, string, error) {
 	if f.err != nil {
-		return domain.Account{}, "", f.err
+		return identity.Account{}, "", f.err
 	}
 	if email != f.account.Email {
-		return domain.Account{}, "", identity.ErrNoAccount
+		return identity.Account{}, "", identity.ErrNoAccount
 	}
 	return f.account, f.hash, nil
 }
@@ -36,7 +36,7 @@ func TestSignIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	alice := domain.Account{ID: domain.ID{7}, Email: "alice@example.com", DisplayName: "Alice"}
+	alice := identity.Account{ID: domain.ID{7}, Email: "alice@example.com", DisplayName: "Alice"}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	broken := errors.New("connection refused")
@@ -112,7 +112,7 @@ func TestSignInReplacementFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	alice := domain.Account{ID: domain.ID{7}, Email: "alice@example.com"}
+	alice := identity.Account{ID: domain.ID{7}, Email: "alice@example.com"}
 	base := &fakeStore{sessions: map[string]fakeSession{}}
 	previous, _, err := identity.NewSessions(base, time.Now).Create(t.Context(), alice.ID)
 	if err != nil {

@@ -38,7 +38,7 @@ func TestSessionStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	account, session, err := sessions.Resolve(ctx, newer)
-	if err != nil || account != (domain.Account{ID: id, Email: "a@example.com", DisplayName: "A"}) {
+	if err != nil || account != (identity.Account{ID: id, Email: "a@example.com", DisplayName: "A"}) {
 		t.Fatalf("Resolve = %+v, %v", account, err)
 	}
 	// The session's own id and expiry come back with it.

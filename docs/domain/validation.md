@@ -1,6 +1,8 @@
 # Validation
 
-`internal/domain` validates UTF-8 text. Email, display, organisation and
+`internal/identity` owns the email and password rules (`ValidateEmail`,
+`ValidatePassword`); `internal/domain` validates the other fields until their
+modules take them. Both validate UTF-8 text. Email, display, organisation and
 channel names are trimmed and normalised to NFC; email is lower-cased first.
 Lengths count code points after normalisation, except email (bytes) and slug
 (ASCII). Controls including NUL fail before trimming. These fields then

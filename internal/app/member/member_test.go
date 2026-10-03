@@ -8,11 +8,12 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
 type authorizer struct{ membership authz.Membership }
 
-func (a authorizer) Member(_ context.Context, account *domain.Account, slug string) (authz.Membership, error) {
+func (a authorizer) Member(_ context.Context, account *identity.Account, slug string) (authz.Membership, error) {
 	if account == nil || account.ID != a.membership.Member.AccountID || slug != "acme" {
 		return authz.Membership{}, authz.ErrNotFound
 	}
@@ -33,14 +34,14 @@ func (s *store) UpdateHandle(_ context.Context, org, id domain.ID, handle string
 }
 
 func TestChangeHandle(t *testing.T) {
-	alice := &domain.Account{ID: domain.ID{1}}
+	alice := &identity.Account{ID: domain.ID{1}}
 	membership := authz.Membership{
 		Organization: domain.Organization{ID: domain.ID{2}, Slug: "acme"},
 		Member:       domain.Member{ID: domain.ID{3}, OrganizationID: domain.ID{2}, AccountID: alice.ID},
 	}
 	for _, tt := range []struct {
 		name     string
-		account  *domain.Account
+		account  *identity.Account
 		slug     string
 		handle   string
 		storeErr error
@@ -49,9 +50,9 @@ func TestChangeHandle(t *testing.T) {
 	}{
 		{name: "normalised", account: alice, slug: "acme", handle: " Alice ", want: "alice"},
 		{name: "signed out", slug: "acme", handle: "alice", wantErr: authz.ErrNotFound},
-		{name: "another account", account: &domain.Account{ID: domain.ID{9}}, slug: "acme", handle: "alice", wantErr: authz.ErrNotFound},
+		{name: "another account", account: &identity.Account{ID: domain.ID{9}}, slug: "acme", handle: "alice", wantErr: authz.ErrNotFound},
 		{name: "another organisation", account: alice, slug: "globex", handle: "alice", wantErr: authz.ErrNotFound},
-		{name: "non-member with an invalid handle", account: &domain.Account{ID: domain.ID{9}}, slug: "acme", handle: "!", wantErr: authz.ErrNotFound},
+		{name: "non-member with an invalid handle", account: &identity.Account{ID: domain.ID{9}}, slug: "acme", handle: "!", wantErr: authz.ErrNotFound},
 		{name: "invalid", account: alice, slug: "acme", handle: "a", wantErr: member.ErrInvalidHandle},
 		{name: "reserved", account: alice, slug: "acme", handle: "Everyone", wantErr: member.ErrInvalidHandle},
 		{name: "look-alike", account: alice, slug: "acme", handle: "Kelvin", wantErr: member.ErrInvalidHandle},

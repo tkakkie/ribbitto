@@ -40,16 +40,16 @@ func (f *fakeStore) CreateSession(_ context.Context, hash []byte, accountID doma
 // sessionID derives a fake session's id from its hash.
 func sessionID(hash []byte) domain.ID { return domain.ID(hash[:16]) }
 
-func (f *fakeStore) SessionAccount(_ context.Context, hash []byte, now time.Time) (domain.Account, identity.Session, error) {
+func (f *fakeStore) SessionAccount(_ context.Context, hash []byte, now time.Time) (identity.Account, identity.Session, error) {
 	f.hashes = append(f.hashes, bytes.Clone(hash))
 	if f.err != nil {
-		return domain.Account{}, identity.Session{}, f.err
+		return identity.Account{}, identity.Session{}, f.err
 	}
 	session, ok := f.sessions[string(hash)]
 	if !ok || !session.expiresAt.After(now) {
-		return domain.Account{}, identity.Session{}, identity.ErrNoSession
+		return identity.Account{}, identity.Session{}, identity.ErrNoSession
 	}
-	return domain.Account{ID: session.accountID}, identity.Session{ID: sessionID(hash), ExpiresAt: session.expiresAt}, nil
+	return identity.Account{ID: session.accountID}, identity.Session{ID: sessionID(hash), ExpiresAt: session.expiresAt}, nil
 }
 
 func (f *fakeStore) DeleteSession(_ context.Context, hash []byte) (domain.ID, bool, error) {

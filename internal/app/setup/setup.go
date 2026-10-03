@@ -81,10 +81,10 @@ func (s *Service) Complete(ctx context.Context, token string, input Input) (Resu
 	}{
 		{"organization_name", &input.OrganizationName, domain.ValidateOrganizationName},
 		{"slug", &input.Slug, domain.ValidateSlug},
-		{"email", &input.Email, domain.ValidateEmail},
+		{"email", &input.Email, identity.ValidateEmail},
 		{"display_name", &input.DisplayName, domain.ValidateDisplayName},
 		{"handle", &input.Handle, domain.ValidateHandle},
-		{"password", &input.Password, domain.ValidatePassword},
+		{"password", &input.Password, identity.ValidatePassword},
 	} {
 		value, err := field.validate(*field.value)
 		if err != nil {

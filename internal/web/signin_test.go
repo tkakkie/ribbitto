@@ -42,11 +42,11 @@ func (f *fakeSignIn) SignOut(_ context.Context, token string) error {
 // oneSession signs in whoever sends the cookie value "live".
 type oneSession struct{}
 
-func (oneSession) Resolve(_ context.Context, token string) (domain.Account, identity.Session, error) {
+func (oneSession) Resolve(_ context.Context, token string) (identity.Account, identity.Session, error) {
 	if token == "live" {
-		return domain.Account{ID: domain.ID{1}, DisplayName: "Alice"}, identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, nil
+		return identity.Account{ID: domain.ID{1}, DisplayName: "Alice"}, identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, nil
 	}
-	return domain.Account{}, identity.Session{}, identity.ErrNoSession
+	return identity.Account{}, identity.Session{}, identity.ErrNoSession
 }
 
 func newSignInHandler(t *testing.T, service *fakeSignIn) http.Handler {

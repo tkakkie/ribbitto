@@ -68,7 +68,7 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 	}
 	f := pgtest.OrganizationWithOwner(t, pool, "restored", "general")
 	for range 2 {
-		_, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
+		_, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 		must(err)
 	}
 	cached := realtime.NewCachedEvents(t.Context(), realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds()), realtime.NewHub(), 8, time.Minute)
@@ -111,7 +111,7 @@ func TestRetentionReplay(t *testing.T) {
 			}
 			f := pgtest.OrganizationWithOwner(t, pool, "retention", "general")
 			post := func() {
-				_, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept message")
+				_, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept message")
 				must(err)
 			}
 			post()
@@ -181,3 +181,7 @@ func TestRetentionReplay(t *testing.T) {
 		})
 	}
 }
+
+// appendEvents adapts realtime's appender to the consumer interface the
+// event-writing stores declare (decision 26).
+func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }

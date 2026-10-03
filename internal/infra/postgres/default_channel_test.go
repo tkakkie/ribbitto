@@ -26,7 +26,7 @@ func TestSetupDefaultChannelRollback(t *testing.T) {
 		CREATE FUNCTION refuse_channel() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'refused'; END $$;
 		CREATE TRIGGER refuse_channel BEFORE INSERT ON channel FOR EACH ROW EXECUTE FUNCTION refuse_channel()`)
 	requireNoError(t, err)
-	if _, err := postgres.NewSetupStore(pool, postgres.EventLogIn).Create(ctx, "Example", "example", "owner@example.org", "Owner", "owner", "$argon2id$test"); err == nil {
+	if _, err := postgres.NewSetupStore(pool, appendEvents).Create(ctx, "Example", "example", "owner@example.org", "Owner", "owner", "$argon2id$test"); err == nil {
 		t.Fatal("setup succeeded without its default channel")
 	}
 	var rows int

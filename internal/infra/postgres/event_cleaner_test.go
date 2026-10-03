@@ -53,7 +53,7 @@ func TestEventRetentionBlockedOrganization(t *testing.T) {
 		t.Fatal("expected A to precede B")
 	}
 	for _, f := range []pgtest.OrganizationFixture{a, b} {
-		_, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept")
+		_, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept")
 		requireNoError(t, err)
 		_, err = pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
 		requireNoError(t, err)
@@ -81,7 +81,7 @@ func TestEventRetentionBlockedOrganization(t *testing.T) {
 	if got := retentionState(t, pool, b.OrganizationID); got != [2]int64{0, 1} {
 		t.Fatalf("B changed while locked: %v", got)
 	}
-	_, err = postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, a.OrganizationID, a.Channel.ID, a.MemberID, "A can still post")
+	_, err = postgres.NewPostingStore(pool, appendEvents).Post(ctx, a.OrganizationID, a.Channel.ID, a.MemberID, "A can still post")
 	requireNoError(t, err)
 	requireNoError(t, locked.Rollback(ctx))
 	requireNoError(t, postgres.NewEventCleaner(cleaning).ExpireEvents(ctx, cutoff))

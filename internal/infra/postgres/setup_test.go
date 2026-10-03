@@ -36,7 +36,7 @@ func TestSetup(t *testing.T) {
 		t.Run(fmt.Sprint(attempts), func(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
-			store := postgres.NewSetupStore(pool, postgres.EventLogIn)
+			store := postgres.NewSetupStore(pool, appendEvents)
 			s := setup.New(store, hasher, "secret")
 			input := setup.Input{OrganizationName: "Example", Slug: "example", Email: " Owner@Example.org ", DisplayName: " Owner ", Handle: " Owner ", Password: "long enough password"}
 			counts := func(want int) {

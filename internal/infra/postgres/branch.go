@@ -9,11 +9,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/authz"
+	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // BranchStore implements topic.BranchStore: it owns the branching
@@ -73,15 +75,22 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 		if moved != int64(len(b.Messages)) {
 			return topic.ErrConflict // rolls back the new topic and both sequences
 		}
-		log := s.events(platformTx)
-		if err := log.AppendMessagesMoved(ctx, organizationID, channelID, source.ID, destination.ID, b.Messages, moveSeq); err != nil {
+		events := s.events(platformTx)
+		data, err := topic.EncodeMoved(topic.Moved{ChannelID: channelID, FromTopicID: source.ID, ToTopicID: destination.ID, MessageIDs: b.Messages})
+		if err != nil {
+			return err
+		}
+		if err := events.Append(ctx, organizationID, moveSeq, realtime.EventMessagesMoved, nil, data); err != nil {
 			return err
 		}
 		posted, err := NewMessageStore(tx).InsertMessage(ctx, organizationID, channelID, source.ID, memberID, notice(destination), noticeSeq)
 		if err != nil {
 			return err
 		}
-		return log.AppendMessagePosted(ctx, organizationID, channelID, posted.ID, posted.TopicID, noticeSeq)
+		if data, err = message.EncodePosted(channelID, posted.ID, posted.TopicID); err != nil {
+			return err
+		}
+		return events.Append(ctx, organizationID, noticeSeq, realtime.EventMessagePosted, nil, data)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Topic{}, 0, authz.ErrNotFound // the organisation itself is gone

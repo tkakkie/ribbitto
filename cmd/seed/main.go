@@ -30,6 +30,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 //go:embed conversations.json
@@ -132,7 +133,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		return fmt.Errorf("creating password hasher: %w", err)
 	}
 	const slug = "paper-lantern"
-	store := postgres.NewSetupStore(pool, postgres.EventLogIn)
+	store := postgres.NewSetupStore(pool, appendEvents)
 	installer := setup.New(store, hasher, token)
 	// Preflight is read-only; Complete still arbitrates concurrent setup attempts.
 	open, err := installer.Open(ctx)
@@ -198,7 +199,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	channels := channel.New(postgres.NewChannelStore(pool))
-	posts := message.New(postgres.NewPostingStore(pool, postgres.EventLogIn))
+	posts := message.New(postgres.NewPostingStore(pool, appendEvents))
 	var general domain.Channel
 	var generalMessages []scriptMessage
 	for _, conversation := range data.Channels {
@@ -229,7 +230,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	if !loadTest {
-		branches := topic.NewBrancher(postgres.NewBranchStore(pool, postgres.EventLogIn), nil)
+		branches := topic.NewBrancher(postgres.NewBranchStore(pool, appendEvents), nil)
 		if err := seedTopics(ctx, posts, branches, members, general, generalMessages); err != nil {
 			return fmt.Errorf("seeding topics: %w", err)
 		}
@@ -245,3 +246,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	_, err = fmt.Fprintf(out, "Seeded %s. Sign in as %s@example.test (owner) or any other member at example.test with this run's password:\n%s\n", slug, owner.Handle, password)
 	return err
 }
+
+// appendEvents adapts realtime's appender to the consumer interface the
+// event-writing stores declare (decision 26).
+func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }

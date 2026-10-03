@@ -173,7 +173,7 @@ func TestTopicReferences(t *testing.T) {
 			t.Fatalf("default topic of %s: %+v, %v", c.Name, got, err)
 		}
 	}
-	posted, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, acme.OrganizationID, random.ID, acme.MemberID, "hello")
+	posted, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, acme.OrganizationID, random.ID, acme.MemberID, "hello")
 	if err != nil || posted.TopicID != random.DefaultTopicID {
 		t.Fatalf("post: %+v, %v", posted, err)
 	}

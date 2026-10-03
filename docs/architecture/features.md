@@ -118,8 +118,12 @@ the temporary implementation behind it.
 
 | Flow or caller | Needs from | Interface from step | Temporary implementation until step |
 |---|---|---|---|
+| every package (`domain.ID` = `kernel.ID` alias; `identity`'s `domain` import for it) | `kernel` `ID` | 0 | 7 |
+| `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 7 (fixtures move with their modules) |
+| four `infra` target-version tests | `db/migrations` (temporary allowance) | 0 | their module's step, or 7 |
+| `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 7 |
 | page snapshot, `One`, `Many` (`infra`) | `identity` accounts | 1 | 6 (the use case replaces the caller) |
-| setup, sign-up (`infra`) | `identity` account writes | 3 (own queries, a temporary direct exception, until then) | 3 |
+| setup, sign-up (`infra`) | `identity` account writes | 3 (until then, a `legacy_account.sql` copy of `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry, from step 1) | 3 |
 | posting, setup, sign-up, branching (`infra`) | `realtime` event appends | 2 | each flow's own step: 3, 5, 6 |
 | `realtime` reader and retention | `org` sequence bounds, boundary write | 2 | 3 |
 | posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 5, 6 |

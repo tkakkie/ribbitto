@@ -69,6 +69,12 @@ perms=(
 limit 3600 codex exec "${perms[@]}" -o result.md "$(cat prompt.md)" < /dev/null
 ```
 
+**Started.** A background Codex run counts as started only once its log
+shows the header's `workdir:` and `model:` lines, naming the expected
+worktree and model; only then is it reported as running. If the run exits
+before those lines appear, such as Codex refusing an untrusted directory,
+report it as a failed start (#359).
+
 The prompt carries the issue and its review comments, plus these rules:
 
 - **Go caches.** Only the worktree is writable, so use

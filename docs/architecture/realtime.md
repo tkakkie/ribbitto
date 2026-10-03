@@ -67,6 +67,11 @@ author names or `message.ErrNotFound`.
 is organisation-wide; a value restricts delivery to that member, enforced
 by the stream's per-event authorization (`authz.MayReceive`). Its composite foreign key keeps the
 member in the same organisation. The audience never appears in `data`.
+Each kind's publisher owns its payload (decision 26): `app/message`
+(`EncodePosted`), `app/topic` (`EncodeMoved`) and `app/member`
+(`EncodeJoined`) encode it until their modules move, and the writer stores
+what they return. IDs are canonical UUID text (`realtime.FormatPayloadID`),
+the JSON value SQL's `jsonb_build_object` wrote before (#398).
 `message.posted` carries `{"channel_id","message_id","topic_id"}` (UUIDs);
 the topic is captured at posting time, in the message's transaction, including
 branch notices. The reader exposes it as `TopicID`; old rows without the field

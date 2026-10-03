@@ -73,7 +73,8 @@ topic posts rely on the lookup inside the posting transaction.
   the message, because the sequence must be taken in the writing
   transaction ([decision 5](../decisions/05-one-event-sequence-per-organisation.md));
 - these flows call realtime's transaction-bound `NewEventLog(tx)` writer
-  (`AppendMessagePosted`, `AppendMemberJoined` or `AppendMessagesMoved`)
+  (`AppendMessagePosted`, `AppendMemberJoined` or `AppendMessagesMoved`, each
+  storing the payload its publisher's codec encodes)
   immediately after the message, member or move, so `event_log` commits with
   the entity and its sequence (#156, #257, #305);
 - realtime retention (#161) writes org's `event_log_boundary_seq`,

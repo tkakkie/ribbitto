@@ -47,11 +47,13 @@ internal/app/channel -> internal/domain
 internal/app/member -> internal/app/authz
 internal/app/member -> internal/domain
 internal/app/member -> internal/identity
+internal/app/member -> internal/realtime
 internal/app/message -> internal/app/authz
 internal/app/message -> internal/app/member
 internal/app/message -> internal/app/topic
 internal/app/message -> internal/domain
 internal/app/message -> internal/identity
+internal/app/message -> internal/realtime
 internal/app/setup -> internal/domain
 internal/app/setup -> internal/identity
 internal/app/signup -> internal/app/setup
@@ -59,6 +61,7 @@ internal/app/signup -> internal/domain
 internal/app/signup -> internal/identity
 internal/app/topic -> internal/app/authz
 internal/app/topic -> internal/domain
+internal/app/topic -> internal/realtime
 internal/domain -> internal/kernel
 internal/identity -> internal/kernel
 internal/identity/identitypg -> internal/identity

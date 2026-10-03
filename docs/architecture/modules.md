@@ -40,6 +40,7 @@ the temporary implementation behind it.
 | setup, sign-up (`infra`) | `identity` account writes | 3 (until then, a `legacy_account.sql` copy of `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry, from step 1) | 3 |
 | `app/authz` (`MayReceive`) | `realtime` event types (root import) | 2 | 3 (`org` imports `realtime`) |
 | `infra/postgres` event reader and writer | `realtime` event types (root import, temporary allowance) | 2 | 5 |
+| event payload codecs in `app/message`, `app/topic` and `app/member` | their kinds' payloads, owned by the publisher | 2 | 3 (`member.joined`, with `org`), 4 (`message.posted` and `messages.moved`, with `conversation`) |
 | posting, setup, sign-up, branching (`infra`) | `realtime` event appends | 2 | each flow's own step: 3, 4 |
 | `realtime` reader and retention | `org` sequence bounds, boundary write | 2 | 3 |
 | posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 4 |

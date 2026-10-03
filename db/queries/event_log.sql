@@ -1,10 +1,7 @@
--- name: InsertMessageEvent :exec
+-- name: InsertEvent :exec
+-- data comes encoded by the kind's publisher (decision 26).
 INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
-VALUES ($1, $2, $3, NULL, jsonb_build_object('channel_id', sqlc.arg(channel_id)::uuid, 'message_id', sqlc.arg(message_id)::uuid, 'topic_id', sqlc.arg(topic_id)::uuid));
-
--- name: InsertMemberEvent :exec
-INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
-VALUES ($1, $2, $3, NULL, jsonb_build_object('member_id', sqlc.arg(member_id)::uuid));
+VALUES ($1, $2, $3, NULL, sqlc.arg(data)::jsonb);
 
 -- name: EventsAfter :many
 SELECT o.id AS organization_id, o.event_log_boundary_seq, o.event_seq,
@@ -48,11 +45,3 @@ SELECT count(*) FROM deleted;
 
 -- name: CommittedSequences :many
 SELECT id, event_seq FROM organization WHERE id = ANY(sqlc.arg(organization_ids)::uuid[]);
-
--- name: InsertMessagesMovedEvent :exec
-INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
-VALUES ($1, $2, $3, NULL, jsonb_build_object(
-  'channel_id', sqlc.arg(channel_id)::uuid,
-  'from_topic_id', sqlc.arg(from_topic_id)::uuid,
-  'to_topic_id', sqlc.arg(to_topic_id)::uuid,
-  'message_ids', to_jsonb(sqlc.arg(message_ids)::uuid[])));

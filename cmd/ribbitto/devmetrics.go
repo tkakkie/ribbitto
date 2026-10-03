@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
 // Development-only metrics for load tests (#218). They are off unless
@@ -23,7 +23,7 @@ import (
 // literal with a fixed port (1–65535); a wildcard, a host name (its
 // resolution could change), port 0 (the kernel would pick one the load test
 // cannot know) or any other address is refused before the database opens.
-func devMetricsSetup(value string) (addr string, queries *postgres.QueryCounter, err error) {
+func devMetricsSetup(value string) (addr string, queries *platform.QueryCounter, err error) {
 	if value == "" {
 		return "", nil, nil
 	}
@@ -31,12 +31,12 @@ func devMetricsSetup(value string) (addr string, queries *postgres.QueryCounter,
 	if err != nil || !ap.Addr().IsLoopback() || ap.Port() == 0 {
 		return "", nil, fmt.Errorf("RIBBITTO_DEV_METRICS_ADDR must be a loopback IP address and a non-zero port, such as 127.0.0.1:9090")
 	}
-	return value, postgres.NewQueryCounter(), nil
+	return value, platform.NewQueryCounter(), nil
 }
 
 // devMetrics gathers the snapshot. Every source is read-only.
 type devMetrics struct {
-	queries *postgres.QueryCounter
+	queries *platform.QueryCounter
 	pool    *pgxpool.Pool
 	streams interface{ Connections() int }
 }

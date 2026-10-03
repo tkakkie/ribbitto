@@ -22,6 +22,7 @@ cmd/ribbitto -> internal/app/setup
 cmd/ribbitto -> internal/app/signup
 cmd/ribbitto -> internal/app/topic
 cmd/ribbitto -> internal/infra/postgres
+cmd/ribbitto -> internal/platform/postgres
 cmd/ribbitto -> internal/realtime
 cmd/ribbitto -> internal/web
 cmd/ribbitto -> internal/web/i18n
@@ -35,6 +36,7 @@ cmd/seed -> internal/app/signup
 cmd/seed -> internal/app/topic
 cmd/seed -> internal/domain
 cmd/seed -> internal/infra/postgres
+cmd/seed -> internal/platform/postgres
 internal/app/auth -> internal/domain
 internal/app/authz -> internal/domain
 internal/app/channel -> internal/app/authz
@@ -53,7 +55,7 @@ internal/app/signup -> internal/app/setup
 internal/app/signup -> internal/domain
 internal/app/topic -> internal/app/authz
 internal/app/topic -> internal/domain
-internal/infra/postgres -> db/migrations
+internal/domain -> internal/kernel
 internal/infra/postgres -> internal/app/auth
 internal/infra/postgres -> internal/app/authz
 internal/infra/postgres -> internal/app/channel
@@ -64,9 +66,12 @@ internal/infra/postgres -> internal/app/signup
 internal/infra/postgres -> internal/app/topic
 internal/infra/postgres -> internal/domain
 internal/infra/postgres -> internal/infra/postgres/sqlcgen
-internal/infra/postgres/pgtest -> db/migrations
 internal/infra/postgres/pgtest -> internal/domain
 internal/infra/postgres/pgtest -> internal/infra/postgres
+internal/infra/postgres/pgtest -> internal/platform/postgres/pgtest
+internal/platform/postgres -> db/migrations
+internal/platform/postgres/pgtest -> db/migrations
+internal/platform/postgres/pgtest -> internal/platform/postgres
 internal/realtime -> internal/domain
 internal/web -> internal/app/auth
 internal/web -> internal/app/authz

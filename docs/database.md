@@ -13,9 +13,10 @@ health check. Its password is for development only. `make db-down` stops
 it without deleting the named volume at `/var/lib/postgresql`.
 
 `db/migrations` holds numbered goose SQL files embedded in the binary.
-It is owned by `internal/infra/postgres`; only that package and
-`cmd/ribbitto` may import it. The adapter uses a goose provider and pgx's
-`database/sql` adapter without global goose configuration. The first
+It is owned by `internal/platform/postgres`; only its packages,
+`cmd/ribbitto` and four target-version tests in `internal/infra/postgres`
+(temporarily) may import it. The runner uses goose and pgx's
+`database/sql` adapter without global configuration. The first
 migration creates `organization`; goose also maintains its version table.
 
 Migration 00007 adds realtime's `event_log`, keyed by `(organization_id, seq)`,
@@ -43,18 +44,18 @@ the next tick retries remaining work. The listing uses an organisation-scoped
 Messages and unread inputs are never deleted.
 
 Integration tests use `RIBBITTO_TEST_DATABASE_URL`, an admin connection to
-the `postgres` database as the `postgres` superuser. `pgtest.New(t)` creates
+the `postgres` database as the `postgres` superuser. `pgtest.New(t)` (now in
+`platform`) creates
 a database per test, cloned from a migrated template named by the first
 12 hex characters of a SHA-256 hash over sorted migration names and contents.
 A dedicated admin connection serializes template creation with an exclusive
-session advisory lock (`pg_advisory_lock`). Unfinished building databases
-are removed before
-rebuilding; a transaction publishes the final name and makes the template
+session advisory lock (`pg_advisory_lock`). Unfinished builds are removed
+before rebuilding; a transaction publishes the final name and makes the template
 unconnectable. Every call checks the template under the lock without Go
 global caching. Cleanup closes the pool before dropping the database with
 `WITH (FORCE)`. `pgtest.NewEmpty(t)` clones `template0` for migration tests.
 The `cmd/ribbitto` acceptance tests also start from `pgtest.NewEmpty`, apply
-`postgres.Migrate` as the CLI does, and serve the shared production handler
+the platform's `Migrate` as the CLI does, and serve the shared production handler
 on HTTPS with cookie jars. They verify the account flow, request protections,
 organisation isolation and a ten-client setup race, and, over HTTP/2, event
 streams end to end (`TestEventStream`, `TestM3Acceptance`,

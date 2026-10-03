@@ -24,6 +24,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -56,12 +57,12 @@ func run() error {
 	if command == "serve" {
 		return serve(ctx, os.Getenv("RIBBITTO_DATABASE_URL"))
 	}
-	db, err := postgres.Open(ctx, os.Getenv("RIBBITTO_DATABASE_URL"))
+	db, err := platform.Open(ctx, os.Getenv("RIBBITTO_DATABASE_URL"))
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
 	defer func() { _ = db.Close() }()
-	return postgres.Migrate(ctx, db, command, os.Stdout)
+	return platform.Migrate(ctx, db, command, os.Stdout)
 }
 
 func serve(ctx context.Context, databaseURL string) error {
@@ -94,7 +95,7 @@ func serve(ctx context.Context, databaseURL string) error {
 		return err
 	}
 
-	pool, err := postgres.OpenPool(ctx, databaseURL, queries)
+	pool, err := platform.OpenPool(ctx, databaseURL, queries)
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}

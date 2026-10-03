@@ -18,9 +18,11 @@ packages. See [load client](load-client.md) for limits and usage.
 
 | Package | Responsibility | May import from this module |
 |---|---|---|
-| `internal/domain` | Entities, value types, invariants, domain errors and domain event types. No I/O. | nothing |
+| `internal/kernel` | What every module shares and none owns ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)): `ID` only today. | nothing |
+| `internal/platform/postgres` | The pool, the migration connection and runner, statement counting for development metrics, and test databases (`pgtest`). No feature queries. | `kernel`, `db/migrations` |
+| `internal/domain` | Entities, value types, invariants, domain errors and domain event types. No I/O. `ID` is an alias of `kernel.ID` until the migration's last step. | `kernel` |
 | `internal/app` | Use cases and the **only** authorization logic. Decides what must be atomic; the PostgreSQL adapters open and commit the transactions (see [the feature map](features.md)). Defines the interfaces it needs (repositories, event publisher). | `domain` |
-| `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces, connections, migrations. | `domain`, `app`, `db/migrations` |
+| `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces. Its `pgtest` keeps the feature fixtures and delegates databases to the platform until the migration's last step. | `domain`, `app`, `platform/postgres/pgtest` |
 | `internal/realtime` | Real-time delivery (M3): the hub's latest sequences and connection registry, the per-connection delivery loop, shared reads, the watermark check and event retention; presence is planned. Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
 | `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
@@ -36,8 +38,11 @@ fails `make check`:
   or `internal/infra`, including sub-packages (see [web layers](web-layers.md));
 - `domain`, `app`, `infra/postgres` and `realtime` cannot import
   `github.com/a-h/templ` (including sub-packages) or `html/template`;
-- `db/migrations` may be imported only by `internal/infra/postgres` and
-  `cmd/ribbitto` — **this also applies to test files**;
+- `kernel` imports nothing internal; `platform` only `kernel`;
+- `db/migrations` may be imported only by `internal/platform/postgres` and
+  `cmd/ribbitto` — **this also applies to test files**, apart from the
+  `internal/infra/postgres` tests that migrate to a target version, until
+  their module moves;
 - otherwise test files may import any package.
 
 This section and `.golangci.yml` must agree; change them together.
@@ -48,12 +53,14 @@ in `AGENTS.md`. Fixtures under `testdata/` are excluded.
 
 ```mermaid
 flowchart LR
-  cmd[cmd/ribbitto] --> web & app & postgres[infra/postgres] & realtime & migrations[db/migrations]
-  seed[cmd/seed] --> app & postgres & domain
+  cmd[cmd/ribbitto] --> web & app & postgres[infra/postgres] & realtime & platform[platform/postgres] & migrations[db/migrations]
+  seed[cmd/seed] --> app & postgres & platform & domain
   web[internal/web] --> app & domain & realtime & static[web/static]
-  postgres --> app & domain & migrations
+  postgres --> app & domain
   realtime[internal/realtime] --> domain
   app[internal/app] --> domain[internal/domain]
+  domain --> kernel[internal/kernel]
+  platform --> kernel & migrations
 ```
 
 The diagram shows allowed imports; [`docs/dependencies.md`](../dependencies.md) lists the actual ones.

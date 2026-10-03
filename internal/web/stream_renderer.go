@@ -48,7 +48,7 @@ func newRenderCache(parent context.Context) *realtime.Cache[renderKey, realtime.
 func (r messageRenderer) Render(ctx context.Context, _ realtime.Subscription, event realtime.Event) (realtime.Outgoing, error) {
 	key := renderKey{organization: r.membership.Organization.ID, channel: event.ChannelID, seq: event.Seq, language: i18n.Language(ctx)}
 	return r.renders.Get(ctx, key, func(loadCtx context.Context) (realtime.Outgoing, error) {
-		if event.Kind == realtime.EventMessagesMoved {
+		if event.Kind == topic.KindMessagesMoved {
 			moved, err := topic.DecodeMoved(event.Payload)
 			if err != nil {
 				return realtime.Outgoing{}, fmt.Errorf("decoding moved messages: %w", err)

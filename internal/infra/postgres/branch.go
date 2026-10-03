@@ -15,7 +15,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
-	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // BranchStore implements topic.BranchStore: it owns the branching
@@ -80,7 +79,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 		if err != nil {
 			return err
 		}
-		if err := events.Append(ctx, organizationID, moveSeq, realtime.EventMessagesMoved, nil, data); err != nil {
+		if err := events.Append(ctx, organizationID, moveSeq, topic.KindMessagesMoved, nil, data); err != nil {
 			return err
 		}
 		posted, err := NewMessageStore(tx).InsertMessage(ctx, organizationID, channelID, source.ID, memberID, notice(destination), noticeSeq)
@@ -90,7 +89,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 		if data, err = message.EncodePosted(channelID, posted.ID, posted.TopicID); err != nil {
 			return err
 		}
-		return events.Append(ctx, organizationID, noticeSeq, realtime.EventMessagePosted, nil, data)
+		return events.Append(ctx, organizationID, noticeSeq, message.KindPosted, nil, data)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Topic{}, 0, authz.ErrNotFound // the organisation itself is gone

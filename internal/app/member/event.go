@@ -8,14 +8,17 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// Joined is the decoded payload of realtime.EventMemberJoined.
+// KindJoined is the kind of a member joining an organisation, which org
+// publishes and so owns (decision 26; here until org's module moves).
+const KindJoined realtime.EventKind = "member.joined"
+
+// Joined is the decoded payload of KindJoined.
 type Joined struct {
 	MemberID domain.ID
 }
 
-// EncodeJoined returns the stored data of realtime.EventMemberJoined, which
-// org publishes and so owns (decision 26; here until org's module moves),
-// for memberID's join: canonical UUID text under member_id.
+// EncodeJoined returns the stored data of KindJoined for memberID's join:
+// canonical UUID text under member_id.
 func EncodeJoined(memberID domain.ID) ([]byte, error) {
 	data, err := json.Marshal(map[string]string{"member_id": realtime.FormatPayloadID(memberID)})
 	if err != nil {

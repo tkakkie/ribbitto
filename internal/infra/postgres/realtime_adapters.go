@@ -70,9 +70,9 @@ func (r *EventSequences) CommittedSequences(ctx context.Context, organizations [
 // wiring and tests, until each module registers its own (steps 3 and 4).
 func EventKinds() realtime.Kinds {
 	return realtime.Kinds{
-		realtime.EventMessagePosted: message.RoutePosted,
-		realtime.EventMemberJoined:  member.RouteJoined,
-		realtime.EventMessagesMoved: topic.RouteMoved,
+		message.KindPosted:      message.RoutePosted,
+		member.KindJoined:       member.RouteJoined,
+		topic.KindMessagesMoved: topic.RouteMoved,
 	}
 }
 

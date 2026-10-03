@@ -85,12 +85,12 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	memberOf := func(org domain.ID) authz.Membership {
 		return authz.Membership{Organization: domain.Organization{ID: org}}
 	}
-	event := realtime.Event{OrganizationID: orgA, Seq: 9, Kind: realtime.EventMessagePosted, ChannelID: domain.ID{2}}
+	event := realtime.Event{OrganizationID: orgA, Seq: 9, Kind: message.KindPosted, ChannelID: domain.ID{2}}
 	keyOf := func(org domain.ID, e realtime.Event) renderKey {
 		return renderKey{organization: org, channel: e.ChannelID, seq: e.Seq, language: i18n.Language(en)}
 	}
 
-	for _, kind := range []realtime.EventKind{realtime.EventMessagePosted, realtime.EventMessagesMoved} {
+	for _, kind := range []realtime.EventKind{message.KindPosted, topic.KindMessagesMoved} {
 		t.Run("concurrent renders read once/"+string(kind), func(t *testing.T) {
 			event := event
 			event.Kind = kind
@@ -116,7 +116,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 						sub.Topic = &selected
 					}
 					out, err := r.Render(en, sub, event)
-					if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "seq 9") || (kind == realtime.EventMessagesMoved && strings.Count(string(out.Data), "<li ") != 100) {
+					if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "seq 9") || (kind == topic.KindMessagesMoved && strings.Count(string(out.Data), "<li ") != 100) {
 						t.Errorf("Render = %+v, %v", out, err)
 					}
 				})
@@ -179,11 +179,11 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	t.Run("payloads carry the contract's data attributes", func(t *testing.T) {
 		r := messageRenderer{messages: countingMessages{calls: &atomic.Int32{}}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
 		const topicSix = "06000000-0000-0000-0000-000000000000"
-		for _, kind := range []realtime.EventKind{realtime.EventMessagePosted, realtime.EventMessagesMoved} {
+		for _, kind := range []realtime.EventKind{message.KindPosted, topic.KindMessagesMoved} {
 			e := event
 			e.Kind = kind
 			moved := topic.Moved{ChannelID: e.ChannelID, FromTopicID: domain.ID{5}, ToTopicID: domain.ID{6}, MessageIDs: []domain.ID{{7}, {8}}}
-			if kind == realtime.EventMessagesMoved {
+			if kind == topic.KindMessagesMoved {
 				e.Seq = 11 // its own render, not the posted one's
 				payload, err := topic.EncodeMoved(moved)
 				if err != nil {
@@ -199,7 +199,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if kind == realtime.EventMessagesMoved {
+			if kind == topic.KindMessagesMoved {
 				list := find(doc, atom.Ul)
 				if list == nil || attr(list, "data-from-topic") != "05000000-0000-0000-0000-000000000000" || attr(list, "data-to-topic") != topicSix {
 					t.Errorf("%s: the payload's list lost its move routing", kind)
@@ -217,7 +217,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 					t.Errorf("%s: data-source = %q; want the message's topic", kind, attr(n, "data-source"))
 				}
 			}
-			if want := len(moved.MessageIDs); kind == realtime.EventMessagePosted && items != 1 || kind == realtime.EventMessagesMoved && items != want {
+			if want := len(moved.MessageIDs); kind == message.KindPosted && items != 1 || kind == topic.KindMessagesMoved && items != want {
 				t.Errorf("%s: %d items", kind, items)
 			}
 		}

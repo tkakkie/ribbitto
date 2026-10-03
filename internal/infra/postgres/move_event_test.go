@@ -8,7 +8,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
@@ -38,7 +37,7 @@ func TestMoveEventPayload(t *testing.T) {
 	requireNoError(t, err)
 	events, err := reader.EventsAfter(t.Context(), f.OrganizationID, 1, 1)
 	requireNoError(t, err)
-	if len(events) != 1 || events[0].Kind != realtime.EventMessagesMoved ||
+	if len(events) != 1 || events[0].Kind != topic.KindMessagesMoved ||
 		events[0].AudienceMemberID == nil || *events[0].AudienceMemberID != f.MemberID {
 		t.Fatalf("targeted move larger than the write-side limit: %+v", events)
 	}

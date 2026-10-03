@@ -88,29 +88,6 @@ func (q *Queries) ExpireEventBatch(ctx context.Context, arg ExpireEventBatchPara
 	return count, err
 }
 
-const insertEvent = `-- name: InsertEvent :exec
-INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
-VALUES ($1, $2, $3, NULL, $4::jsonb)
-`
-
-type InsertEventParams struct {
-	OrganizationID pgtype.UUID
-	Seq            int64
-	Kind           string
-	Data           []byte
-}
-
-// data comes encoded by the kind's publisher (decision 26).
-func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error {
-	_, err := q.db.Exec(ctx, insertEvent,
-		arg.OrganizationID,
-		arg.Seq,
-		arg.Kind,
-		arg.Data,
-	)
-	return err
-}
-
 const lockEventRetentionOrganization = `-- name: LockEventRetentionOrganization :exec
 SELECT id FROM organization WHERE id = $1 FOR UPDATE
 `

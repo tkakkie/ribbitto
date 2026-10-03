@@ -8,6 +8,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // fakeStore holds memberships by (account, slug) and the setup
@@ -87,8 +88,8 @@ func TestMayReceive(t *testing.T) {
 	aliceMember, otherMember := domain.ID{20}, domain.ID{21}
 	acme := authz.Membership{Organization: domain.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: domain.Member{ID: aliceMember}}
 	store := fakeStore{memberships: map[domain.ID]map[string]authz.Membership{{1}: {"acme": acme}}}
-	event := domain.Event{OrganizationID: acme.Organization.ID, Seq: 5, Kind: domain.EventMessagePosted}
-	withAudience := func(member domain.ID) domain.Event {
+	event := realtime.Event{OrganizationID: acme.Organization.ID, Seq: 5, Kind: realtime.EventMessagePosted}
+	withAudience := func(member domain.ID) realtime.Event {
 		e := event
 		e.AudienceMemberID = &member
 		return e
@@ -100,7 +101,7 @@ func TestMayReceive(t *testing.T) {
 		name    string
 		store   fakeStore
 		account domain.ID
-		event   domain.Event
+		event   realtime.Event
 		want    bool
 		wantErr error
 	}{
@@ -114,7 +115,7 @@ func TestMayReceive(t *testing.T) {
 		{"lookup fails", fakeStore{err: broken}, domain.ID{1}, event, false, broken},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, kind := range []domain.EventKind{domain.EventMessagePosted, domain.EventMessagesMoved} {
+			for _, kind := range []realtime.EventKind{realtime.EventMessagePosted, realtime.EventMessagesMoved} {
 				event := tt.event
 				event.Kind = kind
 				got, err := authz.New(tt.store).MayReceive(t.Context(), tt.account, "acme", event)

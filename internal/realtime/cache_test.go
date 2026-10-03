@@ -299,9 +299,9 @@ func TestCacheJoinersOfAnUnkeptValueLoadAgain(t *testing.T) {
 func TestCachedEventsStoreOnlyFullBatches(t *testing.T) {
 	hub := NewHub()
 	hub.Raise(orgA, 1)
-	log := &fakeLog{events: []domain.Event{posted(1, channelA)}}
+	log := &fakeLog{events: []Event{posted(1, channelA)}}
 	events := NewCachedEvents(t.Context(), log, hub, 64, time.Minute)
-	read := func(after int64, limit int) []domain.Event {
+	read := func(after int64, limit int) []Event {
 		t.Helper()
 		got, err := events.EventsAfter(t.Context(), orgA, after, limit)
 		if err != nil {
@@ -342,10 +342,10 @@ func TestCachedEventsStoreOnlyFullBatches(t *testing.T) {
 
 func TestCachedEventsKeepOrganisationsApart(t *testing.T) {
 	hub := NewHub()
-	log := &fakeLog{events: []domain.Event{
+	log := &fakeLog{events: []Event{
 		posted(1, channelA), posted(2, channelA),
-		{OrganizationID: orgB, Seq: 1, Kind: domain.EventMessagePosted, ChannelID: channelB},
-		{OrganizationID: orgB, Seq: 2, Kind: domain.EventMessagePosted, ChannelID: channelB},
+		{OrganizationID: orgB, Seq: 1, Kind: EventMessagePosted, ChannelID: channelB},
+		{OrganizationID: orgB, Seq: 2, Kind: EventMessagePosted, ChannelID: channelB},
 	}}
 	events := NewCachedEvents(t.Context(), log, hub, 64, time.Minute)
 	a, err := events.EventsAfter(t.Context(), orgA, 0, 2)
@@ -368,7 +368,7 @@ type blockedLog struct {
 	err     error
 }
 
-func (b *blockedLog) EventsAfter(context.Context, domain.ID, int64, int) ([]domain.Event, error) {
+func (b *blockedLog) EventsAfter(context.Context, domain.ID, int64, int) ([]Event, error) {
 	b.calls.Add(1)
 	<-b.release
 	return nil, b.err
@@ -421,7 +421,7 @@ type countingLog struct {
 	fromStart int
 }
 
-func (c *countingLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+func (c *countingLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
 	events, err := c.EventReader.EventsAfter(ctx, org, after, limit)
 	if after == 0 && len(events) > 0 {
 		c.mu.Lock()
@@ -438,7 +438,7 @@ type answeredReads struct {
 	answered atomic.Int32
 }
 
-func (a *answeredReads) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+func (a *answeredReads) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
 	events, err := a.EventReader.EventsAfter(ctx, org, after, limit)
 	a.answered.Add(1)
 	return events, err
@@ -491,7 +491,7 @@ type gatedLog struct {
 	calls            atomic.Int32
 }
 
-func (g *gatedLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+func (g *gatedLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]Event, error) {
 	events, err := g.fakeLog.EventsAfter(ctx, org, after, limit)
 	if g.calls.Add(1) == 1 {
 		close(g.started)
@@ -507,7 +507,7 @@ func (g *gatedLog) EventsAfter(ctx context.Context, org domain.ID, after int64, 
 func TestCachedEventsJoinerSeesCommitsBeforeItJoined(t *testing.T) {
 	hub := NewHub()
 	hub.Raise(orgA, 1)
-	log := &gatedLog{fakeLog: &fakeLog{events: []domain.Event{posted(1, channelA)}}, started: make(chan struct{}), release: make(chan struct{})}
+	log := &gatedLog{fakeLog: &fakeLog{events: []Event{posted(1, channelA)}}, started: make(chan struct{}), release: make(chan struct{})}
 	released := false
 	release := func() {
 		if !released {
@@ -517,8 +517,8 @@ func TestCachedEventsJoinerSeesCommitsBeforeItJoined(t *testing.T) {
 	}
 	t.Cleanup(release) // a regression fails instead of hanging
 	events := NewCachedEvents(t.Context(), log, hub, 64, time.Minute)
-	read := func() chan []domain.Event {
-		out := make(chan []domain.Event, 1)
+	read := func() chan []Event {
+		out := make(chan []Event, 1)
 		go func() {
 			got, err := events.EventsAfter(t.Context(), orgA, 1, 10)
 			if err != nil {

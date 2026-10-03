@@ -29,7 +29,7 @@ type finiteMoveLog struct {
 	through int64
 }
 
-func (r finiteMoveLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]domain.Event, error) {
+func (r finiteMoveLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]realtime.Event, error) {
 	if after == r.through {
 		return nil, io.EOF
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // EventReader reads realtime's durable event log, without delivery
@@ -24,19 +25,19 @@ func NewEventReader(db sqlcgen.DBTX) *EventReader {
 // order strictly after after. Unknown kinds retain only their envelope;
 // malformed data for known kinds fails the batch. Limit must be nonnegative.
 // The replay boundary, committed event_seq and rows share one snapshot;
-// a cursor outside those inclusive bounds returns domain.ErrCursorExpired,
+// a cursor outside those inclusive bounds returns realtime.ErrCursorExpired,
 // including when limit is zero.
-func (r *EventReader) EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]domain.Event, error) {
+func (r *EventReader) EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]realtime.Event, error) {
 	rows, err := r.queries.EventsAfter(ctx, sqlcgen.EventsAfterParams{
 		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, AfterSeq: after, BatchLimit: int64(limit),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("reading events: %w", err)
 	}
-	events := make([]domain.Event, 0, len(rows))
+	events := make([]realtime.Event, 0, len(rows))
 	for _, row := range rows {
 		if after < row.EventLogBoundarySeq || after > row.EventSeq {
-			return nil, domain.ErrCursorExpired
+			return nil, realtime.ErrCursorExpired
 		}
 		if row.Seq == 0 {
 			continue // Both cursor bounds must be returned even when the log is empty.
@@ -69,14 +70,14 @@ func (r *EventReader) CommittedSequences(ctx context.Context, organizations []do
 	return seqs, nil
 }
 
-func eventFromRow(row sqlcgen.EventsAfterRow) (domain.Event, error) {
-	event := domain.Event{OrganizationID: row.OrganizationID.Bytes, Seq: row.Seq, Kind: domain.EventKind(row.Kind)}
+func eventFromRow(row sqlcgen.EventsAfterRow) (realtime.Event, error) {
+	event := realtime.Event{OrganizationID: row.OrganizationID.Bytes, Seq: row.Seq, Kind: realtime.EventKind(row.Kind)}
 	if row.AudienceMemberID.Valid {
 		id := domain.ID(row.AudienceMemberID.Bytes)
 		event.AudienceMemberID = &id
 	}
 	// Future kinds may have different payload shapes; the delivery loop skips them.
-	if event.Kind != domain.EventMessagePosted && event.Kind != domain.EventMemberJoined && event.Kind != domain.EventMessagesMoved {
+	if event.Kind != realtime.EventMessagePosted && event.Kind != realtime.EventMemberJoined && event.Kind != realtime.EventMessagesMoved {
 		return event, nil
 	}
 	var data struct {
@@ -89,11 +90,11 @@ func eventFromRow(row sqlcgen.EventsAfterRow) (domain.Event, error) {
 		MessageIDs  []string        `json:"message_ids"`
 	}
 	if err := json.Unmarshal(row.Data, &data); err != nil {
-		return domain.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)
+		return realtime.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)
 	}
 	var err error
 	switch event.Kind {
-	case domain.EventMessagePosted:
+	case realtime.EventMessagePosted:
 		event.ChannelID, err = eventDataID(data.ChannelID)
 		if err == nil {
 			event.MessageID, err = eventDataID(data.MessageID)
@@ -108,18 +109,18 @@ func eventFromRow(row sqlcgen.EventsAfterRow) (domain.Event, error) {
 				event.TopicID = &id
 			}
 		}
-	case domain.EventMemberJoined:
+	case realtime.EventMemberJoined:
 		event.MemberID, err = eventDataID(data.MemberID)
-	case domain.EventMessagesMoved:
+	case realtime.EventMessagesMoved:
 		err = decodeMove(&event, data.ChannelID, data.FromTopicID, data.ToTopicID, data.MessageIDs)
 	}
 	if err != nil {
-		return domain.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)
+		return realtime.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)
 	}
 	return event, nil
 }
 
-func decodeMove(event *domain.Event, channel, from, to string, messages []string) error {
+func decodeMove(event *realtime.Event, channel, from, to string, messages []string) error {
 	var err error
 	for _, field := range []struct {
 		value string

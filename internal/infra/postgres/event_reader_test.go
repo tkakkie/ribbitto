@@ -12,6 +12,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 func TestPostedEventTopic(t *testing.T) {
@@ -73,9 +74,9 @@ func TestEventsAfter(t *testing.T) {
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE organization SET event_seq = 3 WHERE id = $1", f.OrganizationID)
 	requireNoError(t, err)
-	want := []domain.Event{
-		{OrganizationID: f.OrganizationID, Seq: 1, Kind: domain.EventMemberJoined, MemberID: f.MemberID},
-		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: domain.EventMessagePosted, ChannelID: f.Channel.ID, MessageID: posted.ID, TopicID: &posted.TopicID},
+	want := []realtime.Event{
+		{OrganizationID: f.OrganizationID, Seq: 1, Kind: realtime.EventMemberJoined, MemberID: f.MemberID},
+		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: realtime.EventMessagePosted, ChannelID: f.Channel.ID, MessageID: posted.ID, TopicID: &posted.TopicID},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
 	}
 	reader := postgres.NewEventReader(pool)
@@ -83,14 +84,14 @@ func TestEventsAfter(t *testing.T) {
 		name  string
 		after int64
 		limit int
-		want  []domain.Event
+		want  []realtime.Event
 	}{
 		{"ordered and scoped envelopes and IDs", 0, 10, want},
 		{"limited", 0, 2, want[:2]},
 		{"exclusive cursor", 1, 1, want[1:2]},
 		{"next batch includes unknown kind", 2, 2, want[2:]},
-		{"caught up", 3, 10, []domain.Event{}},
-		{"zero limit", 0, 0, []domain.Event{}},
+		{"caught up", 3, 10, []realtime.Event{}},
+		{"zero limit", 0, 0, []realtime.Event{}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := reader.EventsAfter(ctx, f.OrganizationID, tt.after, tt.limit)
@@ -160,7 +161,7 @@ func TestEventsAfterCursorAboveLog(t *testing.T) {
 			for _, limit := range []int{0, 10} {
 				for _, after := range []int64{tt.seq + 1, tt.seq + 10, 1<<63 - 1} {
 					got, err := reader.EventsAfter(ctx, tt.org, after, limit)
-					if !errors.Is(err, domain.ErrCursorExpired) || len(got) != 0 {
+					if !errors.Is(err, realtime.ErrCursorExpired) || len(got) != 0 {
 						t.Errorf("after=%d limit=%d: %v, %v; want no events and ErrCursorExpired", after, limit, got, err)
 					}
 				}
@@ -244,7 +245,7 @@ func TestEventRetentionTransaction(t *testing.T) {
 	if len(rows) != 1 || rows[0].Seq != 3 {
 		t.Fatalf("boundary cursor lost recent event: %v", rows)
 	}
-	if _, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 10); !errors.Is(err, domain.ErrCursorExpired) {
+	if _, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 10); !errors.Is(err, realtime.ErrCursorExpired) {
 		t.Fatalf("below boundary: %v", err)
 	}
 }

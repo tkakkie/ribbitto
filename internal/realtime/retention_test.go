@@ -38,13 +38,13 @@ func (s *retentionSender) Heartbeat(context.Context) error { return nil }
 // The external tests cannot use stream_test.go's in-package helpers.
 type allowAll struct{}
 
-func (allowAll) MayReceive(context.Context, domain.ID, string, domain.Event) (bool, error) {
+func (allowAll) MayReceive(context.Context, domain.ID, string, realtime.Event) (bool, error) {
 	return true, nil
 }
 
 type renderMessages struct{}
 
-func (renderMessages) Render(_ context.Context, _ realtime.Subscription, e domain.Event) (realtime.Outgoing, error) {
+func (renderMessages) Render(_ context.Context, _ realtime.Subscription, e realtime.Event) (realtime.Outgoing, error) {
 	return realtime.Outgoing{ID: e.Seq, Name: "message"}, nil
 }
 
@@ -83,7 +83,7 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 	must(err)
 	must(tx.Commit(ctx))
 	got, err = cached.EventsAfter(ctx, f.OrganizationID, 2, 1)
-	if !errors.Is(err, domain.ErrCursorExpired) || len(got) != 0 {
+	if !errors.Is(err, realtime.ErrCursorExpired) || len(got) != 0 {
 		t.Fatalf("cached batch above restored log: %v, %v; want no events and ErrCursorExpired", got, err)
 	}
 }

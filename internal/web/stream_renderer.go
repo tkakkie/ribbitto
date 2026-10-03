@@ -44,10 +44,10 @@ func newRenderCache(parent context.Context) *realtime.Cache[renderKey, realtime.
 	return realtime.NewCache[renderKey, realtime.Outgoing](parent, renderCapacity, realtime.DefaultCacheLoads, renderTTL, 10*time.Second, nil, time.Now)
 }
 
-func (r messageRenderer) Render(ctx context.Context, _ realtime.Subscription, event domain.Event) (realtime.Outgoing, error) {
+func (r messageRenderer) Render(ctx context.Context, _ realtime.Subscription, event realtime.Event) (realtime.Outgoing, error) {
 	key := renderKey{organization: r.membership.Organization.ID, channel: event.ChannelID, seq: event.Seq, language: i18n.Language(ctx)}
 	return r.renders.Get(ctx, key, func(loadCtx context.Context) (realtime.Outgoing, error) {
-		if event.Kind == domain.EventMessagesMoved {
+		if event.Kind == realtime.EventMessagesMoved {
 			entries, err := r.messages.Many(loadCtx, r.membership, event.ChannelID, event.MessageIDs)
 			if err != nil {
 				return realtime.Outgoing{}, err

@@ -20,7 +20,7 @@ const watermarkCheckTimeout = 2 * time.Second
 
 // SequenceReader reads organisations' committed event sequences (the
 // shared-kernel organization.event_seq). infra/postgres implements it
-// without importing this package.
+// until org's columns move (step 3).
 type SequenceReader interface {
 	CommittedSequences(ctx context.Context, organizations []domain.ID) (map[domain.ID]int64, error)
 }

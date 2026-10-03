@@ -19,6 +19,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 // countingMessages is a MessageReader whose One is counted, can block and
@@ -39,7 +41,7 @@ func (c countingMessages) One(_ context.Context, m authz.Membership, channel dom
 		return message.Entry{}, c.err
 	}
 	body := fmt.Sprintf("org %v channel %v seq %d", m.Organization.ID, channel, seq)
-	return message.Entry{Message: domain.Message{ID: domain.ID{7}, Body: body}, DisplayName: "Alice", Handle: "alice"}, nil
+	return message.Entry{Message: domain.Message{ID: domain.ID{7}, TopicID: domain.ID{6}, EventSeq: seq, Body: body}, DisplayName: "Alice", Handle: "alice"}, nil
 }
 
 func (c countingMessages) Many(ctx context.Context, m authz.Membership, channel domain.ID, ids []domain.ID) ([]message.Entry, error) {
@@ -163,6 +165,49 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		}
 		if want := fmt.Sprintf("org %v", orgB); !strings.Contains(render(en, orgB, event), want) {
 			t.Fatalf("organisation B was served another organisation's render")
+		}
+	})
+
+	// The data attributes of the DOM contract (#351) on both stream payloads.
+	t.Run("payloads carry the contract's data attributes", func(t *testing.T) {
+		r := messageRenderer{messages: countingMessages{calls: &atomic.Int32{}}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
+		const topicSix = "06000000-0000-0000-0000-000000000000"
+		for _, kind := range []domain.EventKind{domain.EventMessagePosted, domain.EventMessagesMoved} {
+			e := event
+			e.Kind, e.MessageIDs = kind, []domain.ID{{7}, {8}}
+			e.FromTopicID, e.ToTopicID = domain.ID{5}, domain.ID{6}
+			if kind == domain.EventMessagesMoved {
+				e.Seq = 11 // its own render, not the posted one's
+			}
+			out, err := r.Render(en, realtime.Subscription{}, e)
+			if err != nil {
+				t.Fatal(err)
+			}
+			doc, err := html.Parse(strings.NewReader(string(out.Data)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kind == domain.EventMessagesMoved {
+				list := find(doc, atom.Ul)
+				if list == nil || attr(list, "data-from-topic") != "05000000-0000-0000-0000-000000000000" || attr(list, "data-to-topic") != topicSix {
+					t.Errorf("%s: the payload's list lost its move routing", kind)
+				}
+			}
+			items := 0
+			for n := range doc.Descendants() {
+				if n.DataAtom == atom.Li {
+					items++
+					if got, ok := attrOK(n, "data-event-seq"); !ok || got != "9" {
+						t.Errorf("%s: data-event-seq = %q, %t; want 9", kind, got, ok)
+					}
+				}
+				if n.DataAtom == atom.Input && attr(n, "type") == "checkbox" && attr(n, "data-source") != topicSix {
+					t.Errorf("%s: data-source = %q; want the message's topic", kind, attr(n, "data-source"))
+				}
+			}
+			if want := len(e.MessageIDs); kind == domain.EventMessagePosted && items != 1 || kind == domain.EventMessagesMoved && items != want {
+				t.Errorf("%s: %d items", kind, items)
+			}
 		}
 	})
 

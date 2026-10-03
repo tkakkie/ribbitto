@@ -241,6 +241,24 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		if older.Code != 200 || !strings.Contains(older.Body.String(), "topic-message-00") || strings.Contains(older.Body.String(), "topic-message-01") || !strings.Contains(older.Body.String(), `href="`+topicURL+`"`) {
 			t.Fatalf("older: %d %s", older.Code, older.Body.String())
 		}
+		// The topic page's data attributes of the DOM contract (#351):
+		// the topic on the list, and the loaded bound on the latest page
+		// and after the last Load older.
+		for _, page := range []struct {
+			body, oldest string
+		}{{body, fmt.Sprint(before)}, {older.Body.String(), "0"}} {
+			doc, err := html.Parse(strings.NewReader(page.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			id := named.ID
+			if got, ok := idAttribute(t, doc, "message-items", "data-topic"); !ok || got != fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]) {
+				t.Errorf("data-topic = %q, %t; want the topic's ID", got, ok)
+			}
+			if got, _ := idAttribute(t, doc, "load-older", "data-oldest-seq"); got != page.oldest {
+				t.Errorf("data-oldest-seq = %q; want %s", got, page.oldest)
+			}
+		}
 		invalid := serveForm(handler, "POST", topicURL, aliceToken, url.Values{"body": {""}})
 		if invalid.Code != 422 || !strings.Contains(invalid.Body.String(), `action="`+topicURL+`"`) {
 			t.Fatalf("invalid body: %d", invalid.Code)

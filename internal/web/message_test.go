@@ -323,7 +323,7 @@ func TestMessagePagingHandler(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64
-			reader := fakeMessages{entries: []message.Entry{{Message: domain.Message{ID: domain.ID{8}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
+			reader := fakeMessages{entries: []message.Entry{{Message: domain.Message{ID: domain.ID{8}, TopicID: domain.ID{5}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages = reader }))
 			if err != nil {
 				t.Fatal(err)
@@ -352,6 +352,29 @@ func TestMessagePagingHandler(t *testing.T) {
 				t.Fatal("history and Load older responses must not carry announcement text")
 			}
 			assertFullConversationPage(t, body)
+			// The data attributes of the DOM contract (#351), on full pages
+			// and on Load older responses (the HX cases).
+			page, err := html.Parse(strings.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			oldest := "0"
+			if tt.older {
+				oldest = "7"
+			}
+			if got, ok := idAttribute(t, page, "load-older", "data-oldest-seq"); !ok || got != oldest {
+				t.Errorf("data-oldest-seq = %q, %t; want %q", got, ok, oldest)
+			}
+			item := fmt.Sprintf("message-%x", domain.ID{8})
+			if got, ok := idAttribute(t, page, item, "data-event-seq"); !ok || got != "7" {
+				t.Errorf("data-event-seq = %q, %t; want 7", got, ok)
+			}
+			if got, ok := idAttribute(t, page, "select-"+item, "data-source"); !ok || got != "05000000-0000-0000-0000-000000000000" {
+				t.Errorf("data-source = %q, %t; want the message's topic", got, ok)
+			}
+			if _, ok := idAttribute(t, page, "message-items", "data-topic"); ok {
+				t.Error("a channel feed carries data-topic")
+			}
 			if got := strings.Contains(body, `data-event-cursor="42"`); got != (tt.before == 0) {
 				t.Fatalf("page cursor present = %t, before = %d", got, tt.before)
 			}

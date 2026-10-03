@@ -57,6 +57,19 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox (32 lowercase hex digits). `#message-items` is always present,
   including when empty; Load older selects its direct `<li>` children.
+- **The data attributes that scripts read are a contract too,** with the
+  same rule for renaming (#351). A missing one fails silently: without
+  `data-oldest-seq`, the move handler throws after cancelling the SSE event,
+  so the move is neither applied nor swapped. Besides `data-event-cursor`,
+  `data-posted-message` and `data-announcement` (described in this section):
+
+  | Attribute | On | Present | Meaning |
+  |---|---|---|---|
+  | `data-oldest-seq` | `#load-older` | always | `event_seq` of the oldest loaded message, `0` once nothing older remains; a moved item is inserted only at or above it |
+  | `data-topic` | `#message-items` | topic pages only | the topic's ID, compared with a move's topics |
+  | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
+  | `data-event-seq` | each message `<li>` | always | its `event_seq`, which orders an inserted item |
+  | `data-source` | each message's checkbox | always | its topic's ID; a selection stays within one source topic |
 - The latest channel/topic page carries `data-event-cursor` on its outer
   layout div, outside `#conversation` and every swap target, with
   `hx-ext="sse"` and `sse-connect="<page URL>/events?after=<cursor>"`; a

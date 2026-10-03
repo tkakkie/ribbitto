@@ -222,6 +222,19 @@ func find(doc *html.Node, a atom.Atom) *html.Node {
 	return nil
 }
 
+// idAttribute reads key from the element with id, failing the test when
+// there is no such element: the DOM contract names both.
+func idAttribute(t *testing.T, doc *html.Node, id, key string) (string, bool) {
+	t.Helper()
+	for n := range doc.Descendants() {
+		if n.Type == html.ElementNode && attr(n, "id") == id {
+			return attrOK(n, key)
+		}
+	}
+	t.Fatalf("no element with id %q", id)
+	return "", false
+}
+
 // The checker itself: each rule catches what it should and nothing more.
 func TestCheckMarkup(t *testing.T) {
 	page := func(body string) string {

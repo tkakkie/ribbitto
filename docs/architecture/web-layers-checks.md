@@ -19,6 +19,12 @@ any ids they name are still checked in the page. The composer's
 `hx-disabled-elt="find textarea, find button"` and `hx-sync="this:drop"`
 are not swap selectors.
 
+The data attributes in the DOM contract are asserted on the elements that
+own them, where they are produced (#351): `TestMessagePagingHandler` on full
+pages and Load older responses, `TestOrgRoutesAgainstPostgreSQL` on topic
+pages (`data-topic`), and `TestMessageRendererSharesRenders` on the `message`
+and `messages-moved` stream payloads.
+
 `TestComponentsMarkup` renders `SignOutButton`, `MemberName`, `MessageItem`
 and `LiveMessageItem` alone in both languages and applies the fragment
 markup rules.

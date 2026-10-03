@@ -89,6 +89,7 @@ check: $(TEMPL)
 	go -C tools test -race ./docscheck
 	go -C tools run ./docscheck ..
 	bash scripts/ai/grok-review_test.sh
+	bash scripts/ai/muse-review_test.sh
 
 # Needs the Go vulnerability database over the network, so it runs in CI
 # next to make check rather than inside it. Scans the application module.

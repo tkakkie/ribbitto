@@ -18,10 +18,16 @@ import (
 
 // BranchStore implements topic.BranchStore: it owns the branching
 // transaction.
-type BranchStore struct{ pool *pgxpool.Pool }
+type BranchStore struct {
+	pool   *pgxpool.Pool
+	events EventAppenders
+}
 
-// NewBranchStore returns a store using pool.
-func NewBranchStore(pool *pgxpool.Pool) *BranchStore { return &BranchStore{pool: pool} }
+// NewBranchStore returns a store using pool that appends events through
+// events.
+func NewBranchStore(pool *pgxpool.Pool, events EventAppenders) *BranchStore {
+	return &BranchStore{pool: pool, events: events}
+}
 
 // Branch runs one branch atomically. Listed exceptions (feature map): it
 // advances org's event_seq, writes message.topic_id, posts the notice into
@@ -67,7 +73,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 		if moved != int64(len(b.Messages)) {
 			return topic.ErrConflict // rolls back the new topic and both sequences
 		}
-		log := NewEventLog(tx)
+		log := s.events(platformTx)
 		if err := log.AppendMessagesMoved(ctx, organizationID, channelID, source.ID, destination.ID, b.Messages, moveSeq); err != nil {
 			return err
 		}

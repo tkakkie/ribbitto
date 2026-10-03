@@ -85,10 +85,16 @@ func messageFromRow(row sqlcgen.Message) domain.Message {
 }
 
 // PostingStore implements message.Store: it owns the posting transaction.
-type PostingStore struct{ pool *pgxpool.Pool }
+type PostingStore struct {
+	pool   *pgxpool.Pool
+	events EventAppenders
+}
 
-// NewPostingStore returns a PostingStore on pool.
-func NewPostingStore(pool *pgxpool.Pool) *PostingStore { return &PostingStore{pool: pool} }
+// NewPostingStore returns a PostingStore on pool that appends events
+// through events.
+func NewPostingStore(pool *pgxpool.Pool, events EventAppenders) *PostingStore {
+	return &PostingStore{pool: pool, events: events}
+}
 
 // Post takes the next event_seq first — locking the organisation's row, so
 // sequence order is commit order — then inserts the message and event.
@@ -127,7 +133,7 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 		if err != nil {
 			return err
 		}
-		return NewEventLog(tx).AppendMessagePosted(ctx, organizationID, channelID, posted.ID, posted.TopicID, seq)
+		return s.events(platformTx).AppendMessagePosted(ctx, organizationID, channelID, posted.ID, posted.TopicID, seq)
 	})
 	var pgErr *pgconn.PgError
 	switch {

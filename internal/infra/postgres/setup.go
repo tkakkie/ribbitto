@@ -16,10 +16,16 @@ import (
 )
 
 // SetupStore implements setup.Store with a single transaction per attempt.
-type SetupStore struct{ pool *pgxpool.Pool }
+type SetupStore struct {
+	pool   *pgxpool.Pool
+	events EventAppenders
+}
 
-// NewSetupStore returns a setup store backed by pool.
-func NewSetupStore(pool *pgxpool.Pool) *SetupStore { return &SetupStore{pool: pool} }
+// NewSetupStore returns a setup store backed by pool that appends events
+// through events.
+func NewSetupStore(pool *pgxpool.Pool, events EventAppenders) *SetupStore {
+	return &SetupStore{pool: pool, events: events}
+}
 
 // Open reads installation-wide state without an organization filter.
 func (s *SetupStore) Open(ctx context.Context) (bool, error) {
@@ -53,7 +59,7 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 		if err != nil {
 			return err
 		}
-		if err := NewEventLog(tx).AppendMemberJoined(ctx, org.ID.Bytes, member.ID.Bytes, seq); err != nil {
+		if err := s.events(platformTx).AppendMemberJoined(ctx, org.ID.Bytes, member.ID.Bytes, seq); err != nil {
 			return err
 		}
 		// Listed exception (feature map): setup writes the channel feature's

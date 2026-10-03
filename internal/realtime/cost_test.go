@@ -104,7 +104,7 @@ func TestStreamCost(t *testing.T) {
 
 	m := authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: fixture.MemberID}}
 	hub := realtime.NewHub()
-	posting := message.NewWithNotifier(postgres.NewPostingStore(pool), hub)
+	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, postgres.EventLogIn), hub)
 	// dbReads counts reads that reach the database (empty ones included);
 	// loopReads counts the loops' reads, which the cache may answer.
 	dbReads := &countingReader{inner: postgres.NewEventReader(pool, postgres.EventKinds())}

@@ -24,7 +24,7 @@ func TestPostedEventTopic(t *testing.T) {
 	f := pgtest.OrganizationWithOwner(t, pool, "posted-topic", "general")
 	named, err := postgres.NewTopicStore(pool).CreateTopic(ctx, f.OrganizationID, f.Channel.ID, "design")
 	requireNoError(t, err)
-	posted, err := postgres.NewPostingStore(pool).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, &named.ID, "hello")
+	posted, err := postgres.NewPostingStore(pool, postgres.EventLogIn).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, &named.ID, "hello")
 	requireNoError(t, err)
 	reader := postgres.NewEventReader(pool, postgres.EventKinds())
 	events, err := reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 1)
@@ -34,7 +34,7 @@ func TestPostedEventTopic(t *testing.T) {
 	}
 	// An absent topic_id is readable legacy data (message.DecodePosted's
 	// tests cover the malformed values).
-	_, err = postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "second")
+	_, err = postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "second")
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE event_log SET data = data - 'topic_id' WHERE organization_id = $1 AND seq = $2", f.OrganizationID, posted.EventSeq+1)
 	requireNoError(t, err)
@@ -55,12 +55,12 @@ func TestEventsAfter(t *testing.T) {
 	_, err := pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
 		VALUES ($1, 3, 'future.private', $2, '{"channel_id":"future-format"}')`, f.OrganizationID, f.MemberID)
 	requireNoError(t, err)
-	posted, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
+	posted, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, data)
 		VALUES ($1, 1, 'member.joined', jsonb_build_object('member_id', $2::uuid))`, f.OrganizationID, f.MemberID)
 	requireNoError(t, err)
-	_, err = postgres.NewPostingStore(pool).Post(ctx, other.OrganizationID, other.Channel.ID, other.MemberID, "other org")
+	_, err = postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, other.OrganizationID, other.Channel.ID, other.MemberID, "other org")
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE organization SET event_seq = 3 WHERE id = $1", f.OrganizationID)
 	requireNoError(t, err)
@@ -145,7 +145,7 @@ func TestEventsAfterCursorAboveLog(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	f := pgtest.OrganizationWithOwner(t, pool, "cursor", "general")
-	posted, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
+	posted, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 	requireNoError(t, err)
 	empty := pgtest.Organization(t, pool, "empty", "Empty", 0)
 	reader := postgres.NewEventReader(pool, postgres.EventKinds())
@@ -180,7 +180,7 @@ func TestCommittedSequences(t *testing.T) {
 	ctx := t.Context()
 	f := pgtest.OrganizationWithOwner(t, pool, "watermark", "general")
 	other := pgtest.OrganizationWithOwner(t, pool, "watermark-other", "general")
-	posted, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
+	posted, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 	requireNoError(t, err)
 	reader := postgres.NewEventReader(pool, postgres.EventKinds())
 	unknown := domain.ID{0xee}
@@ -210,7 +210,7 @@ func TestEventRetentionTransaction(t *testing.T) {
 	ctx := t.Context()
 	f := pgtest.OrganizationWithOwner(t, pool, "retention", "general")
 	for range 2 {
-		_, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept")
+		_, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept")
 		requireNoError(t, err)
 	}
 	_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = CASE WHEN seq = 2 THEN '2000-01-01'::timestamptz ELSE '2100-01-01'::timestamptz END WHERE organization_id = $1", f.OrganizationID)

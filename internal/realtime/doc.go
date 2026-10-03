@@ -3,7 +3,8 @@
 // framing itself is web's.
 //
 // Feature: realtime (feature map in docs/architecture/features.md). It
-// declares the durable event types (Event, EventKind, ErrCursorExpired) and
+// declares the durable event types (Event, an envelope it routes without
+// kind names; EventKind; ErrCursorExpired) and
 // the kind registry (Kinds of each publisher's Router), and
 // imports only domain; the stream's authorization, rendering and event
 // reading come in as interfaces it defines, implemented by app, web and

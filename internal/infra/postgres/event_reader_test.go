@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestPostedEventTopic(t *testing.T) {
 	reader := postgres.NewEventReader(pool, postgres.EventKinds())
 	events, err := reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 1)
 	requireNoError(t, err)
-	if len(events) != 1 || events[0].TopicID == nil || *events[0].TopicID != named.ID {
+	if len(events) != 1 || !slices.Equal(events[0].Topics, []domain.ID{named.ID}) {
 		t.Fatalf("named-topic post: %+v", events)
 	}
 	// An absent topic_id is readable legacy data (message.DecodePosted's
@@ -37,7 +38,7 @@ func TestPostedEventTopic(t *testing.T) {
 	requireNoError(t, err)
 	events, err = reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 2)
 	requireNoError(t, err)
-	if len(events) != 2 || events[1].TopicID != nil {
+	if len(events) != 2 || events[1].Topics != nil {
 		t.Fatalf("legacy post: %+v", events)
 	}
 }
@@ -67,8 +68,8 @@ func TestEventsAfter(t *testing.T) {
 		return data
 	}
 	want := []realtime.Event{
-		{OrganizationID: f.OrganizationID, Seq: 1, Kind: realtime.EventMemberJoined, MemberID: f.MemberID, Payload: stored(1)},
-		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: realtime.EventMessagePosted, ChannelID: f.Channel.ID, MessageID: posted.ID, TopicID: &posted.TopicID,
+		{OrganizationID: f.OrganizationID, Seq: 1, Kind: realtime.EventMemberJoined, Payload: stored(1)},
+		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: realtime.EventMessagePosted, ChannelID: f.Channel.ID,
 			Topics: []domain.ID{posted.TopicID}, Payload: stored(posted.EventSeq)},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/authz"
+	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -48,7 +49,11 @@ func (r messageRenderer) Render(ctx context.Context, _ realtime.Subscription, ev
 	key := renderKey{organization: r.membership.Organization.ID, channel: event.ChannelID, seq: event.Seq, language: i18n.Language(ctx)}
 	return r.renders.Get(ctx, key, func(loadCtx context.Context) (realtime.Outgoing, error) {
 		if event.Kind == realtime.EventMessagesMoved {
-			entries, err := r.messages.Many(loadCtx, r.membership, event.ChannelID, event.MessageIDs)
+			moved, err := topic.DecodeMoved(event.Payload)
+			if err != nil {
+				return realtime.Outgoing{}, fmt.Errorf("decoding moved messages: %w", err)
+			}
+			entries, err := r.messages.Many(loadCtx, r.membership, event.ChannelID, moved.MessageIDs)
 			if err != nil {
 				return realtime.Outgoing{}, err
 			}
@@ -57,7 +62,7 @@ func (r messageRenderer) Render(ctx context.Context, _ realtime.Subscription, ev
 				items = append(items, viewMessage(r.membership.Organization.Slug, entry))
 			}
 			var html bytes.Buffer
-			if err := view.MovedMessageItems(items, event.FromTopicID, event.ToTopicID).Render(loadCtx, &html); err != nil {
+			if err := view.MovedMessageItems(items, moved.FromTopicID, moved.ToTopicID).Render(loadCtx, &html); err != nil {
 				return realtime.Outgoing{}, fmt.Errorf("rendering moved messages: %w", err)
 			}
 			return realtime.Outgoing{ID: event.Seq, Name: "messages-moved", Data: html.Bytes()}, nil

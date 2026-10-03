@@ -215,7 +215,7 @@ func TestStreamDrainsBatchesOnAColdHub(t *testing.T) {
 		posted(1, channelA),
 		posted(2, channelB), // another channel
 		{OrganizationID: orgA, Seq: 3, Kind: EventMemberJoined},
-		{OrganizationID: orgA, Seq: 4, Kind: "future.kind", ChannelID: channelA}, // unknown kind
+		{OrganizationID: orgA, Seq: 4, Kind: "future.kind"}, // unregistered: the reader leaves it unrouted
 		denied,
 		posted(6, channelA),
 		posted(7, channelA),

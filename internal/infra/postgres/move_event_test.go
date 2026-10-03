@@ -37,11 +37,15 @@ func TestMoveEventPayload(t *testing.T) {
 	requireNoError(t, err)
 	events, err := reader.EventsAfter(t.Context(), f.OrganizationID, 1, 1)
 	requireNoError(t, err)
-	if len(events) != 1 || events[0].Kind != realtime.EventMessagesMoved || len(events[0].MessageIDs) != len(ids) ||
+	if len(events) != 1 || events[0].Kind != realtime.EventMessagesMoved ||
 		events[0].AudienceMemberID == nil || *events[0].AudienceMemberID != f.MemberID {
 		t.Fatalf("targeted move larger than the write-side limit: %+v", events)
 	}
-	for i, id := range events[0].MessageIDs {
+	moved, err := topic.DecodeMoved(events[0].Payload)
+	if err != nil || len(moved.MessageIDs) != len(ids) {
+		t.Fatalf("move payload: %d IDs, %v; want %d", len(moved.MessageIDs), err, len(ids))
+	}
+	for i, id := range moved.MessageIDs {
 		if got := fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]); got != ids[i] {
 			t.Fatalf("message %d = %s, want %s", i, got, ids[i])
 		}

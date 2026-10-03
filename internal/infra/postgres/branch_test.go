@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -80,7 +81,7 @@ func TestBranchStore(t *testing.T) {
 	for _, m := range posted {
 		events, err := reader.EventsAfter(ctx, acme.OrganizationID, m.EventSeq-1, 1)
 		requireNoError(t, err)
-		if len(events) != 1 || events[0].TopicID == nil || *events[0].TopicID != source {
+		if len(events) != 1 || !slices.Equal(events[0].Topics, []domain.ID{source}) {
 			t.Fatalf("posting-time topic after branch: %+v", events)
 		}
 	}
@@ -91,17 +92,24 @@ func TestBranchStore(t *testing.T) {
 			t.Fatalf("replay returned %d events, want %d", len(events), limit)
 		}
 		move := events[0]
+		moved, err := topic.DecodeMoved(move.Payload)
+		requireNoError(t, err)
 		if move.OrganizationID != acme.OrganizationID || move.Seq != before+1 || move.Kind != realtime.EventMessagesMoved ||
-			move.ChannelID != acme.Channel.ID || move.FromTopicID != source || move.ToTopicID != dest.ID ||
-			move.AudienceMemberID != nil || !slices.Equal(move.MessageIDs, movedIDs) {
-			t.Fatalf("decoded move: %+v", move)
+			move.ChannelID != acme.Channel.ID || !slices.Equal(move.Topics, []domain.ID{source, dest.ID}) ||
+			moved.FromTopicID != source || moved.ToTopicID != dest.ID ||
+			move.AudienceMemberID != nil || !slices.Equal(moved.MessageIDs, movedIDs) {
+			t.Fatalf("decoded move: %+v, %+v", move, moved)
 		}
 		next, err := reader.EventsAfter(ctx, acme.OrganizationID, move.Seq, 1)
 		requireNoError(t, err)
 		if len(next) != 1 || next[0].Kind != realtime.EventMessagePosted || next[0].Seq != before+2 ||
-			next[0].ChannelID != acme.Channel.ID || next[0].MessageID != got[3].id || next[0].AudienceMemberID != nil ||
-			next[0].TopicID == nil || *next[0].TopicID != source {
+			next[0].ChannelID != acme.Channel.ID || next[0].AudienceMemberID != nil ||
+			!slices.Equal(next[0].Topics, []domain.ID{source}) {
 			t.Fatalf("notice after move: %+v", next)
+		}
+		notice, err := message.DecodePosted(next[0].Payload)
+		if err != nil || notice.MessageID != got[3].id {
+			t.Fatalf("notice payload: %+v, %v", notice, err)
 		}
 	}
 

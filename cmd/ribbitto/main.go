@@ -27,6 +27,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -117,7 +118,7 @@ func serve(ctx context.Context, databaseURL string) error {
 	// Stop cleanup before closing its pool, including on listener failure.
 	stopCleanup := startSessionCleanup(ctx, sessions)
 	defer stopCleanup()
-	stopWatermark := startRealtimeWorker(ctx, realtime.Watermark{Hub: hub, Sequences: postgres.NewEventReader(pool, postgres.EventKinds())}, realtime.WatermarkInterval)
+	stopWatermark := startRealtimeWorker(ctx, realtime.Watermark{Hub: hub, Sequences: postgres.NewEventSequences(pool)}, realtime.WatermarkInterval)
 	defer stopWatermark()
 	stopRetention := startRealtimeWorker(ctx, realtime.Retention{Events: postgres.NewEventCleaner(pool), Period: retention}, time.Hour)
 	defer stopRetention()
@@ -272,7 +273,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		branching = topic.NewBrancher(postgres.NewBranchStore(pool, postgres.EventLogIn), config.hub)
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
-		events := realtime.NewCachedEvents(ctx, postgres.NewEventReader(pool, postgres.EventKinds()), config.hub, 1024, time.Minute)
+		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds()), config.hub, 1024, time.Minute)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{

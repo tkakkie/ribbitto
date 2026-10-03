@@ -40,62 +40,21 @@ func (q *Queries) CommittedSequences(ctx context.Context, organizationIds []pgty
 	return items, nil
 }
 
-const eventsAfter = `-- name: EventsAfter :many
-SELECT o.id AS organization_id, o.event_log_boundary_seq, o.event_seq,
-       coalesce(e.seq, 0)::bigint AS seq, coalesce(e.kind, '')::text AS kind,
-       e.audience_member_id, e.data
-FROM organization o
-LEFT JOIN LATERAL (
-    SELECT seq, kind, audience_member_id, data FROM event_log
-    WHERE organization_id = o.id AND seq > $1
-    ORDER BY seq LIMIT $2::bigint
-) e ON true
-WHERE o.id = $3
-ORDER BY e.seq
+const eventBounds = `-- name: EventBounds :one
+SELECT event_log_boundary_seq, event_seq FROM organization WHERE id = $1
 `
 
-type EventsAfterParams struct {
-	AfterSeq       int64
-	BatchLimit     int64
-	OrganizationID pgtype.UUID
-}
-
-type EventsAfterRow struct {
-	OrganizationID      pgtype.UUID
+type EventBoundsRow struct {
 	EventLogBoundarySeq int64
 	EventSeq            int64
-	Seq                 int64
-	Kind                string
-	AudienceMemberID    pgtype.UUID
-	Data                []byte
 }
 
-func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]EventsAfterRow, error) {
-	rows, err := q.db.Query(ctx, eventsAfter, arg.AfterSeq, arg.BatchLimit, arg.OrganizationID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []EventsAfterRow
-	for rows.Next() {
-		var i EventsAfterRow
-		if err := rows.Scan(
-			&i.OrganizationID,
-			&i.EventLogBoundarySeq,
-			&i.EventSeq,
-			&i.Seq,
-			&i.Kind,
-			&i.AudienceMemberID,
-			&i.Data,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+// realtime's reader reads org's cursor bounds through this, in its snapshot.
+func (q *Queries) EventBounds(ctx context.Context, id pgtype.UUID) (EventBoundsRow, error) {
+	row := q.db.QueryRow(ctx, eventBounds, id)
+	var i EventBoundsRow
+	err := row.Scan(&i.EventLogBoundarySeq, &i.EventSeq)
+	return i, err
 }
 
 const expireEventBatch = `-- name: ExpireEventBatch :one

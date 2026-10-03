@@ -26,6 +26,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 // TestStreamCost measures what the delivery loop costs per post as the
@@ -107,7 +108,7 @@ func TestStreamCost(t *testing.T) {
 	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, postgres.EventLogIn), hub)
 	// dbReads counts reads that reach the database (empty ones included);
 	// loopReads counts the loops' reads, which the cache may answer.
-	dbReads := &countingReader{inner: postgres.NewEventReader(pool, postgres.EventKinds())}
+	dbReads := &countingReader{inner: realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())}
 	var inner realtime.EventReader = dbReads
 	renderer := readingRenderer{messages: postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}, membership: m}
 	if cached {

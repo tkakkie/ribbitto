@@ -2,75 +2,55 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// EventReader reads realtime's durable event log, without delivery
-// authorization, and the committed sequences the watermark check raises
-// the hub to.
-type EventReader struct {
-	queries *sqlcgen.Queries
-	kinds   realtime.Kinds
+// EventBoundsIn reads org's cursor bounds for realtime's reader, in the
+// reader's snapshot. It reads organization, so it lives here until org's
+// module moves (step 3).
+func EventBoundsIn(snapshot platform.Snapshot) realtime.Bounds {
+	return eventBounds{queries: sqlcgen.New(pgxbridge.Snapshot(snapshot))}
 }
 
-// NewEventReader returns a reader using db that routes the kinds registered
-// in kinds.
-func NewEventReader(db sqlcgen.DBTX, kinds realtime.Kinds) *EventReader {
-	return &EventReader{queries: sqlcgen.New(db), kinds: kinds}
-}
+type eventBounds struct{ queries *sqlcgen.Queries }
 
-// EventKinds returns the publishers' Routers for the kinds written today, for
-// wiring and tests, until each module registers its own (steps 3 and 4).
-func EventKinds() realtime.Kinds {
-	return realtime.Kinds{
-		realtime.EventMessagePosted: message.RoutePosted,
-		realtime.EventMemberJoined:  member.RouteJoined,
-		realtime.EventMessagesMoved: topic.RouteMoved,
+func (b eventBounds) EventBounds(ctx context.Context, organizationID domain.ID) (int64, int64, bool, error) {
+	row, err := b.queries.EventBounds(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, 0, false, nil
 	}
-}
-
-// EventsAfter returns at most limit events for the organisation, in sequence
-// order strictly after after. Unknown kinds retain only their envelope;
-// malformed data for known kinds fails the batch. Limit must be nonnegative.
-// The replay boundary, committed event_seq and rows share one snapshot;
-// a cursor outside those inclusive bounds returns realtime.ErrCursorExpired,
-// including when limit is zero.
-func (r *EventReader) EventsAfter(ctx context.Context, organizationID domain.ID, after int64, limit int) ([]realtime.Event, error) {
-	rows, err := r.queries.EventsAfter(ctx, sqlcgen.EventsAfterParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, AfterSeq: after, BatchLimit: int64(limit),
-	})
 	if err != nil {
-		return nil, fmt.Errorf("reading events: %w", err)
+		return 0, 0, false, err
 	}
-	events := make([]realtime.Event, 0, len(rows))
-	for _, row := range rows {
-		if after < row.EventLogBoundarySeq || after > row.EventSeq {
-			return nil, realtime.ErrCursorExpired
-		}
-		if row.Seq == 0 {
-			continue // Both cursor bounds must be returned even when the log is empty.
-		}
-		event, err := r.eventFromRow(row)
-		if err != nil {
-			return nil, fmt.Errorf("reading event %d: %w", row.Seq, err)
-		}
-		events = append(events, event)
-	}
-	return events, nil
+	return row.EventLogBoundarySeq, row.EventSeq, true, nil
+}
+
+// EventSequences reads the committed sequences the watermark check raises
+// the hub to (realtime.SequenceReader). It reads organization, so it lives
+// here until org's module moves (step 3).
+type EventSequences struct{ queries *sqlcgen.Queries }
+
+// NewEventSequences returns the committed-sequence reader on db.
+func NewEventSequences(db sqlcgen.DBTX) *EventSequences {
+	return &EventSequences{queries: sqlcgen.New(db)}
 }
 
 // CommittedSequences returns the committed event_seq of each given
 // organisation that exists, in one query; it reads org's shared-kernel
 // watermark and writes nothing.
-func (r *EventReader) CommittedSequences(ctx context.Context, organizations []domain.ID) (map[domain.ID]int64, error) {
+func (r *EventSequences) CommittedSequences(ctx context.Context, organizations []domain.ID) (map[domain.ID]int64, error) {
 	ids := make([]pgtype.UUID, len(organizations))
 	for i, org := range organizations {
 		ids[i] = pgtype.UUID{Bytes: org, Valid: true}
@@ -86,22 +66,12 @@ func (r *EventReader) CommittedSequences(ctx context.Context, organizations []do
 	return seqs, nil
 }
 
-// eventFromRow routes registered kinds through their Routers; the payload
-// stays encoded for the kind's publisher.
-func (r *EventReader) eventFromRow(row sqlcgen.EventsAfterRow) (realtime.Event, error) {
-	event := realtime.Event{OrganizationID: row.OrganizationID.Bytes, Seq: row.Seq, Kind: realtime.EventKind(row.Kind)}
-	if row.AudienceMemberID.Valid {
-		id := domain.ID(row.AudienceMemberID.Bytes)
-		event.AudienceMemberID = &id
+// EventKinds returns the publishers' Routers for the kinds written today, for
+// wiring and tests, until each module registers its own (steps 3 and 4).
+func EventKinds() realtime.Kinds {
+	return realtime.Kinds{
+		realtime.EventMessagePosted: message.RoutePosted,
+		realtime.EventMemberJoined:  member.RouteJoined,
+		realtime.EventMessagesMoved: topic.RouteMoved,
 	}
-	route, ok := r.kinds[event.Kind]
-	if !ok {
-		return event, nil // Unregistered kinds keep their envelope; streams skip them.
-	}
-	var err error
-	if event.ChannelID, event.Topics, err = route(row.Data); err != nil {
-		return realtime.Event{}, fmt.Errorf("routing %s data: %w", event.Kind, err)
-	}
-	event.Payload = row.Data
-	return event, nil
 }

@@ -25,6 +25,7 @@ cmd/ribbitto -> internal/identity/identitypg
 cmd/ribbitto -> internal/infra/postgres
 cmd/ribbitto -> internal/platform/postgres
 cmd/ribbitto -> internal/realtime
+cmd/ribbitto -> internal/realtime/realtimepg
 cmd/ribbitto -> internal/web
 cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
@@ -95,6 +96,14 @@ internal/platform/postgres/pgtest -> internal/platform/postgres
 internal/platform/postgres/pgxbridge -> internal/platform/postgres
 internal/platform/postgres/pgxbridge -> internal/platform/postgres/internal/handle
 internal/realtime -> internal/domain
+internal/realtime -> internal/platform/postgres
+internal/realtime/internal/postgres -> internal/domain
+internal/realtime/internal/postgres -> internal/platform/postgres
+internal/realtime/internal/postgres -> internal/platform/postgres/pgxbridge
+internal/realtime/internal/postgres -> internal/realtime
+internal/realtime/internal/postgres -> internal/realtime/internal/postgres/sqlcgen
+internal/realtime/realtimepg -> internal/realtime
+internal/realtime/realtimepg -> internal/realtime/internal/postgres
 internal/web -> internal/app/authz
 internal/web -> internal/app/channel
 internal/web -> internal/app/message

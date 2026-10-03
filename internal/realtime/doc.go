@@ -6,9 +6,11 @@
 // declares the durable event types (Event, an envelope it routes without
 // kind names; EventKind; ErrCursorExpired) and
 // the kind registry (Kinds of each publisher's Router), and
-// imports only domain; the stream's authorization, rendering and event
-// reading come in as interfaces it defines, implemented by app, web and
-// infra/postgres and wired in cmd/ribbitto.
+// imports domain and platform (the snapshot handle). Its store
+// (internal/postgres) reads the event log, and realtimepg wires it. The
+// stream's authorization and rendering, and org's cursor bounds, come in as
+// interfaces it defines, implemented by app, web and infra/postgres and
+// wired in cmd/ribbitto.
 //
 // Hub is the process-wide core. Per organisation it keeps the highest
 // committed event sequence it has been told about (Raise) and lets a

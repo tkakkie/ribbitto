@@ -6,27 +6,35 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
-type retentionDB struct {
-	sqlcgen.DBTX
-	afterQuery func()
+// interceptBounds commits a cleanup or a post once, after the reader has read
+// its bounds and before it reads the rows; the reader's snapshot must hide it.
+func interceptBounds(commit func()) realtime.BoundsIn {
+	return func(snapshot platform.Snapshot) realtime.Bounds {
+		return interceptedBounds{Bounds: postgres.EventBoundsIn(snapshot), commit: &commit}
+	}
 }
 
-func (d *retentionDB) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-	rows, err := d.DBTX.Query(ctx, sql, args...)
-	if err == nil && d.afterQuery != nil {
-		f := d.afterQuery
-		d.afterQuery = nil
-		f() // The SELECT has its snapshot; cleanup commits before rows are decoded.
+type interceptedBounds struct {
+	realtime.Bounds
+	commit *func()
+}
+
+func (b interceptedBounds) EventBounds(ctx context.Context, organizationID domain.ID) (int64, int64, bool, error) {
+	boundary, committed, found, err := b.Bounds.EventBounds(ctx, organizationID)
+	if err == nil && *b.commit != nil {
+		commit := *b.commit
+		*b.commit = nil
+		commit()
 	}
-	return rows, err
+	return boundary, committed, found, err
 }
 
 type retentionSender struct{ send func(realtime.Outgoing) error }
@@ -63,7 +71,7 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 		_, err := postgres.NewPostingStore(pool, postgres.EventLogIn).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 		must(err)
 	}
-	cached := realtime.NewCachedEvents(t.Context(), postgres.NewEventReader(pool, postgres.EventKinds()), realtime.NewHub(), 8, time.Minute)
+	cached := realtime.NewCachedEvents(t.Context(), realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds()), realtime.NewHub(), 8, time.Minute)
 	got, err := cached.EventsAfter(ctx, f.OrganizationID, 2, 1)
 	must(err)
 	if len(got) != 1 || got[0].Seq != 3 || realtime.CachedLen(cached) != 1 {
@@ -110,7 +118,7 @@ func TestRetentionReplay(t *testing.T) {
 			post()
 			_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
 			must(err)
-			reader := postgres.NewEventReader(pool, postgres.EventKinds())
+			reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
 			expire := func() {
 				must(postgres.NewEventCleaner(pool).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
 			}
@@ -125,7 +133,7 @@ func TestRetentionReplay(t *testing.T) {
 				events = cached
 				expire()
 			case "snapshot":
-				events = postgres.NewEventReader(&retentionDB{DBTX: pool, afterQuery: expire}, postgres.EventKinds())
+				events = realtimepg.NewReader(pool, interceptBounds(expire), postgres.EventKinds())
 				want, wantCursor = []string{"message", "reset"}, 2
 			case "open":
 				want, wantCursor = []string{"message", "reset"}, 2
@@ -135,8 +143,8 @@ func TestRetentionReplay(t *testing.T) {
 				if mode == "boundary" {
 					post()
 				} else {
-					// Commit only after the idle SELECT took its empty snapshot.
-					events = postgres.NewEventReader(&retentionDB{DBTX: pool, afterQuery: post}, postgres.EventKinds())
+					// Commit only after the idle read took its snapshot.
+					events = realtimepg.NewReader(pool, interceptBounds(post), postgres.EventKinds())
 				}
 			default:
 				cursor, wantCursor = 2, 2

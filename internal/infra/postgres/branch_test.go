@@ -16,6 +16,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 // One branch: two sequences, the move's then the notice's; the messages
@@ -78,7 +79,7 @@ func TestBranchStore(t *testing.T) {
 	}
 	// Replay must preserve both durable events and their routing IDs, even
 	// when the batch boundary falls between the move and its notice.
-	reader := postgres.NewEventReader(pool, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
 	// Branching changes the message, never its posting-time routing data.
 	for _, m := range posted {
 		events, err := reader.EventsAfter(ctx, acme.OrganizationID, m.EventSeq-1, 1)

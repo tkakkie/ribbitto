@@ -100,6 +100,18 @@ linters:
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/identity/internal/postgres
               desc: Only identitypg and the store's own tests import identity's store; see decision 26.
+        realtimepg:
+          list-mode: lax
+          files: ["$all", "!$test", "!**/cmd/*/*.go", "!**/cmd/*/**/*.go"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/internal/realtime/realtimepg
+              desc: Only cmd/* and tests import a module's wiring; see decision 26.
+        realtimestore:
+          list-mode: lax
+          files: ["$all", "!**/internal/realtime/realtimepg/*.go", "!**/internal/realtime/internal/postgres/*.go", "!**/internal/realtime/internal/postgres/**/*.go"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/internal/realtime/internal/postgres
+              desc: Only realtimepg and the store's own tests import realtime's store; see decision 26.
         app:
           list-mode: lax
           files: ["**/internal/app/*.go", "**/internal/app/**/*.go", "!$test"]
@@ -145,6 +157,8 @@ linters:
             - github.com/tkakkie/ribbitto/internal/realtime/
             - github.com/tkakkie/ribbitto/internal/domain$
             - github.com/tkakkie/ribbitto/internal/domain/
+            - github.com/tkakkie/ribbitto/internal/platform$
+            - github.com/tkakkie/ribbitto/internal/platform/
           deny: *non_html
         web:
           list-mode: lax

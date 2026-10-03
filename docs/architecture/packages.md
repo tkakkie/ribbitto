@@ -24,7 +24,7 @@ packages. See [load client](load-client.md) for limits and usage.
 | `internal/identity` | The `identity` module's root (step 1): `Account`, the email and password rules, password hashing, sessions, signing in and the display-name `Directory`, with the store interfaces they need. Its store, `internal/identity/internal/postgres`, runs `db/queries/identity/` on its own `sqlcgen`; its wiring, `identitypg`, builds sessions, sign-in and the snapshot-bound directory (`AccountsIn`). | `kernel`, `platform` |
 | `internal/app` | Use cases and the **only** authorization logic. Decides what must be atomic; the PostgreSQL adapters open and commit the transactions (see [the feature map](features.md)). Defines the interfaces it needs (repositories, event publisher). `app/message`, `app/topic` and `app/member` own their event kinds' payload codecs until their modules move. | `domain`, `identity`; `realtime`'s root for `app/authz` and the payload codecs, until steps 3 and 4, when `org` and `conversation` import it |
 | `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces. Its `pgtest` keeps the feature fixtures and delegates databases to the platform until the migration's last step. | `domain`, `app`, `identity`, `platform/postgres/pgtest`; until that step also allowed `platform/postgres`, its `pgxbridge` and `realtime`'s root (the event types) |
-| `internal/realtime` | Real-time delivery (M3): the hub's latest sequences and connection registry, the per-connection delivery loop, shared reads, the watermark check and event retention; presence is planned. Declares the durable event types (`Event`, `EventKind`, `ErrCursorExpired`). Receives authorization, rendering and event reading as interfaces it defines itself. | `domain` |
+| `internal/realtime` | Real-time delivery (M3): the hub's latest sequences and connection registry, the per-connection delivery loop, shared reads, the watermark check and event retention; presence is planned. Declares the durable event types (`Event`, `EventKind`, `ErrCursorExpired`). Receives authorization, rendering and org's cursor bounds as interfaces it defines itself. Its store, `internal/realtime/internal/postgres`, reads `event_log` on its own `sqlcgen` (`db/queries/realtime/`); its wiring, `realtimepg`, builds the reader. | `domain`, `platform` |
 | `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `identity`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |
@@ -41,7 +41,7 @@ fails `make check`:
   `github.com/a-h/templ` (including sub-packages) or `html/template`;
 - `kernel` imports nothing internal; `platform` only `kernel`; `app`,
   `infra/postgres` and `web` import only a module's root;
-- a module's wiring (`identitypg`) is imported only by `cmd/*` and tests,
+- a module's wiring (`identitypg`, `realtimepg`) is imported only by `cmd/*` and tests,
   and its store only by its wiring and the store's own tests;
 - only stores (`**/internal/postgres/**`) import `platform/postgres/pgxbridge`,
   and `internal/infra/postgres` until the migration's last step;
@@ -61,11 +61,13 @@ in `AGENTS.md`. Fixtures under `testdata/` are excluded.
 
 ```mermaid
 flowchart LR
-  cmd[cmd/ribbitto] --> web & app & identity & identitypg[identity/identitypg] & postgres[infra/postgres] & realtime & platform[platform/postgres] & migrations[db/migrations]
+  cmd[cmd/ribbitto] --> web & app & identity & identitypg[identity/identitypg] & realtimepg & postgres[infra/postgres] & realtime & platform[platform/postgres] & migrations[db/migrations]
   seed[cmd/seed] --> app & identity & identitypg & postgres & platform & domain
   web[internal/web] --> app & identity & domain & realtime & static[web/static]
   postgres --> app & identity & domain & platform & realtime
-  realtime[internal/realtime] --> domain
+  realtime[internal/realtime] --> domain & platform
+  realtimepg[realtime/realtimepg] --> realtime & rstore[realtime/internal/postgres]
+  rstore --> realtime & platform & domain
   app[internal/app] --> identity & realtime & domain[internal/domain]
   identity[internal/identity] --> kernel & platform
   identitypg --> identity & store[identity/internal/postgres] & platform

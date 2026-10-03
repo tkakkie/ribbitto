@@ -20,4 +20,16 @@ func TestJoinedPayload(t *testing.T) {
 	if got, err := member.DecodeJoined([]byte(`{"member_id":"00000000-0000-0000-0000-00000000000A"}`)); err != nil || got.MemberID != (domain.ID{15: 10}) {
 		t.Fatalf("upper-case member ID = %+v, %v", got, err)
 	}
+	for _, data := range []string{
+		`{"member_id":"invalid"}`,
+		`{"member_id":11111111111111111111111111111111111111}`,
+		`{"member_id":"00000000x0000x0000x0000x000000000001"}`,
+		`{}`,
+		`null`,
+		`[]`,
+	} {
+		if got, err := member.DecodeJoined([]byte(data)); err == nil {
+			t.Errorf("DecodeJoined(%s) = %+v; want an error", data, got)
+		}
+	}
 }

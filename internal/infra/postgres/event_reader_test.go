@@ -239,14 +239,15 @@ func TestEventRetentionTransaction(t *testing.T) {
 }
 
 // The reader routes every registered kind through its Router, with no
-// built-in kind branch; an unregistered kind keeps only its envelope, and a
-// Router's error fails the whole batch.
+// built-in kind branch; an unregistered kind keeps only its envelope, even a
+// built-in one with malformed data, and a Router's error fails the whole batch.
 func TestEventsAfterRegisteredKinds(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
-	org := pgtest.Organization(t, pool, "kinds", "Kinds", 2)
+	org := pgtest.Organization(t, pool, "kinds", "Kinds", 3)
 	_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
-		VALUES ($1, 1, 'test.synthetic', '{"route": "here"}'), ($1, 2, 'test.unregistered', '{}')`, org)
+		VALUES ($1, 1, 'test.synthetic', '{"route": "here"}'), ($1, 2, 'test.unregistered', '{}'),
+		($1, 3, 'message.posted', '{}')`, org)
 	requireNoError(t, err)
 	channel, topic := domain.ID{15: 1}, domain.ID{15: 2}
 	var routed []byte
@@ -259,6 +260,7 @@ func TestEventsAfterRegisteredKinds(t *testing.T) {
 	want := []realtime.Event{
 		{OrganizationID: org, Seq: 1, Kind: "test.synthetic", ChannelID: channel, Topics: []domain.ID{topic}, Payload: routed},
 		{OrganizationID: org, Seq: 2, Kind: "test.unregistered"},
+		{OrganizationID: org, Seq: 3, Kind: realtime.EventMessagePosted},
 	}
 	if len(routed) == 0 || !reflect.DeepEqual(got, want) {
 		t.Fatalf("EventsAfter = %+v; want %+v", got, want)

@@ -17,8 +17,9 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/internal/postgres"
-	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
+
+var retentionCutoff = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func requireNoError(t *testing.T, err error) {
 	t.Helper()
@@ -27,7 +28,7 @@ func requireNoError(t *testing.T, err error) {
 	}
 }
 
-func appendEvents(tx platform.Tx) infra.EventAppender { return realtimepg.AppenderIn(tx) }
+func appendEvents(tx platform.Tx) infra.EventAppender { return postgres.AppenderIn(tx) }
 
 // newCleaner injects infra's real lock and boundary, so organization's
 // writes stay covered until org's module moves.
@@ -72,10 +73,9 @@ func TestEventRetentionTransaction(t *testing.T) {
 	}
 	_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = CASE WHEN seq = 2 THEN '2000-01-01'::timestamptz ELSE '2100-01-01'::timestamptz END WHERE organization_id = $1", f.OrganizationID)
 	requireNoError(t, err)
-	cutoff := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	reader := realtimepg.NewReader(pool, infra.EventBoundsIn, infra.EventKinds())
+	reader := postgres.NewReader(pool, infra.EventBoundsIn, infra.EventKinds())
 	requireNoError(t, platform.InTx(ctx, pool, func(tx platform.Tx) error {
-		count, err := newCleaner(pool).ExpireBatch(ctx, tx, f.OrganizationID, cutoff)
+		count, err := newCleaner(pool).ExpireBatch(ctx, tx, f.OrganizationID, retentionCutoff)
 		requireNoError(t, err)
 		if count != 1 {
 			t.Fatalf("deleted %d rows, want 1", count)
@@ -122,7 +122,7 @@ func TestEventRetentionFailedRaise(t *testing.T) {
 	requireNoError(t, err)
 	before := retentionState(t, pool, f.OrganizationID)
 	boundary := func(tx platform.Tx) realtime.RetentionBoundary { return failingRaise{infra.RetentionBoundaryIn(tx)} }
-	if err := postgres.NewCleaner(pool, boundary).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)); !errors.Is(err, errRaise) {
+	if err := postgres.NewCleaner(pool, boundary).ExpireEvents(ctx, retentionCutoff); !errors.Is(err, errRaise) {
 		t.Fatalf("cleanup = %v, want the raise's error", err)
 	}
 	if got := retentionState(t, pool, f.OrganizationID); got != before {
@@ -160,8 +160,7 @@ func TestEventRetentionBlockedOrganization(t *testing.T) {
 	cleaning, err := pgxpool.NewWithConfig(ctx, config)
 	requireNoError(t, err)
 	defer cleaning.Close()
-	cutoff := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	err = newCleaner(cleaning).ExpireEvents(ctx, cutoff)
+	err = newCleaner(cleaning).ExpireEvents(ctx, retentionCutoff)
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != "55P03" {
 		t.Fatalf("cleanup = %v, want B's lock timeout", err)
@@ -175,7 +174,7 @@ func TestEventRetentionBlockedOrganization(t *testing.T) {
 	_, err = infra.NewPostingStore(pool, appendEvents).Post(ctx, a.OrganizationID, a.Channel.ID, a.MemberID, "A can still post")
 	requireNoError(t, err)
 	requireNoError(t, locked.Rollback(ctx))
-	requireNoError(t, newCleaner(cleaning).ExpireEvents(ctx, cutoff))
+	requireNoError(t, newCleaner(cleaning).ExpireEvents(ctx, retentionCutoff))
 	if got := retentionState(t, pool, b.OrganizationID); got != [2]int64{2, 0} {
 		t.Fatalf("retry did not finish B: %v", got)
 	}
@@ -189,10 +188,9 @@ func TestEventRetentionBatches(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			org := pgtest.Organization(t, pool, "batches", "Batches", 2502)
-			cutoff := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 			_, err := pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, data, created_at)
 				SELECT $1, seq, 'future.event', '{}', CASE WHEN seq = 2502 THEN $2::timestamptz
-				ELSE '2000-01-01'::timestamptz END FROM generate_series(2502, 1, -1) seq`, org, cutoff)
+				ELSE '2000-01-01'::timestamptz END FROM generate_series(2502, 1, -1) seq`, org, retentionCutoff)
 			requireNoError(t, err)
 			var states [][2]int64
 			config := pool.Config()
@@ -205,7 +203,7 @@ func TestEventRetentionBatches(t *testing.T) {
 			cleaning, err := pgxpool.NewWithConfig(ctx, config)
 			requireNoError(t, err)
 			defer cleaning.Close()
-			err = newCleaner(cleaning).ExpireEvents(ctx, cutoff)
+			err = newCleaner(cleaning).ExpireEvents(ctx, retentionCutoff)
 			want := [][2]int64{{1000, 1502}, {2000, 502}, {2501, 1}, {2501, 1}}
 			if interrupt {
 				if !errors.Is(err, context.Canceled) {
@@ -219,7 +217,7 @@ func TestEventRetentionBatches(t *testing.T) {
 				t.Fatalf("committed (boundary, rows) = %v, want %v", states, want)
 			}
 			// A new run resumes partial work and never expires the cutoff itself.
-			requireNoError(t, newCleaner(pool).ExpireEvents(t.Context(), cutoff))
+			requireNoError(t, newCleaner(pool).ExpireEvents(t.Context(), retentionCutoff))
 			if got := retentionState(t, pool, org); got != [2]int64{2501, 1} {
 				t.Fatalf("final state = %v", got)
 			}
@@ -240,7 +238,7 @@ func TestEventRetentionBoundaryNeverLowers(t *testing.T) {
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = 2 WHERE id = $1", org)
 	requireNoError(t, err)
-	requireNoError(t, newCleaner(pool).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
+	requireNoError(t, newCleaner(pool).ExpireEvents(ctx, retentionCutoff))
 	if got := retentionState(t, pool, org); got != [2]int64{2, 2} {
 		t.Fatalf("(boundary, rows) = %v, want the boundary kept at 2 and seq 1 deleted", got)
 	}
@@ -276,7 +274,7 @@ func TestEventRetentionWaitsForPost(t *testing.T) {
 		var b batch
 		b.err = platform.InTx(ctx, pool, func(tx platform.Tx) error {
 			var err error
-			b.deleted, err = newCleaner(pool).ExpireBatch(ctx, tx, f.OrganizationID, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+			b.deleted, err = newCleaner(pool).ExpireBatch(ctx, tx, f.OrganizationID, retentionCutoff)
 			return err
 		})
 		done <- b
@@ -336,7 +334,7 @@ func TestEventRetentionExpiredPrefix(t *testing.T) {
 			if got := retentionState(t, pool, org); got != tt.want {
 				t.Fatalf("(boundary, rows) = %v, want %v", got, tt.want)
 			}
-			events, err := realtimepg.NewReader(pool, infra.EventBoundsIn, infra.EventKinds()).EventsAfter(ctx, org, tt.want[0], 10)
+			events, err := postgres.NewReader(pool, infra.EventBoundsIn, infra.EventKinds()).EventsAfter(ctx, org, tt.want[0], 10)
 			requireNoError(t, err)
 			var seqs []int64
 			for _, e := range events {

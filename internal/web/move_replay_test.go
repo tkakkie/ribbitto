@@ -2,7 +2,6 @@ package web
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -81,36 +80,51 @@ func applyFeed(t *testing.T, feed []string, out realtime.Outgoing) []string {
 // Model topic DOM swaps over the actual payload, preserving full item markup.
 func applyTopic(t *testing.T, items []string, out realtime.Outgoing, selected domain.ID, oldest int64) []string {
 	t.Helper()
+	if out.Name == "message" {
+		return applyFeed(t, items, out)
+	}
 	doc, err := html.Parse(bytes.NewReader(out.Data))
 	if err != nil {
 		t.Fatal(err)
 	}
+	routing := find(doc, atom.Ul)
+	topicID := fmt.Sprintf("%x-%x-%x-%x-%x", selected[:4], selected[4:6], selected[6:8], selected[8:10], selected[10:])
 	for node := range doc.Descendants() {
 		if node.DataAtom != atom.Li {
 			continue
 		}
 		id := attr(node, "id")
-		if out.Name == "messages-moved" && attr(find(doc, atom.Ul), "data-from-topic") == fmt.Sprintf("%x-%x-%x-%x-%x", selected[:4], selected[4:6], selected[6:8], selected[8:10], selected[10:]) {
-			items = slices.DeleteFunc(items, func(s string) bool { return itemAttribute(t, s, "id") == id })
+		index := slices.IndexFunc(items, func(s string) bool { return itemAttribute(t, s, "id") == id })
+		if attr(routing, "data-from-topic") == topicID {
+			if index >= 0 {
+				items = slices.Delete(items, index, index+1)
+			}
 			continue
 		}
 		seq, err := strconv.ParseInt(attr(node, "data-event-seq"), 10, 64)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if seq >= oldest {
-			var rendered bytes.Buffer
-			if err := html.Render(&rendered, node); err != nil {
-				t.Fatal(err)
+		var rendered bytes.Buffer
+		if err := html.Render(&rendered, node); err != nil {
+			t.Fatal(err)
+		}
+		if index >= 0 {
+			items[index] = rendered.String()
+		} else if attr(routing, "data-to-topic") == topicID && seq >= oldest {
+			next := slices.IndexFunc(items, func(s string) bool {
+				other, err := strconv.ParseInt(itemAttribute(t, s, "data-event-seq"), 10, 64)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return other > seq
+			})
+			if next < 0 {
+				next = len(items)
 			}
-			items = applyFeed(t, items, realtime.Outgoing{Name: "message", Data: rendered.Bytes()})
+			items = slices.Insert(items, next, rendered.String())
 		}
 	}
-	slices.SortFunc(items, func(a, b string) int {
-		seqA, _ := strconv.ParseInt(itemAttribute(t, a, "data-event-seq"), 10, 64)
-		seqB, _ := strconv.ParseInt(itemAttribute(t, b, "data-event-seq"), 10, 64)
-		return cmp.Compare(seqA, seqB)
-	})
 	return items
 }
 
@@ -138,8 +152,12 @@ func (p *topicMovePage) loadOlder(t *testing.T, selected domain.Topic, older mes
 	for _, out := range p.moves {
 		p.items = applyTopic(t, p.items, out, p.selected, p.oldest)
 	}
-	p.loading = false
-	p.moves = nil
+	p.finishRequest()
+}
+
+// Failed and aborted requests also discard their retained moves.
+func (p *topicMovePage) finishRequest() {
+	p.loading, p.moves = false, nil
 }
 
 func itemAttribute(t *testing.T, item, key string) string {
@@ -391,7 +409,6 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 				if boundary != 0 {
 					t.Fatalf("exhausted history boundary = %d, want 0", boundary)
 				}
-				items = applyTopic(t, items, delivered.events[0], destination.ID, boundary)
 			}
 			feed, err := reader.Page(ctx, m, f.Channel.ID, nil, &through)
 			if err != nil {
@@ -516,5 +533,34 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestTopicMoveModelRequestScope(t *testing.T) {
+	from, to := domain.ID{1}, domain.ID{2}
+	page := topicMovePage{selected: to, oldest: 40}
+	for _, seq := range []int{60, 20, 60} { // Append even below the bound; replace in place, never sort.
+		page.deliver(t, realtime.Outgoing{Name: "message", Data: streamTestMarkup(t, view.MessageItem(streamTestMessages(to, seq)[0]))})
+	}
+	move := realtime.Outgoing{Name: "messages-moved", Data: streamTestMarkup(t, view.MovedMessageItems(streamTestMessages(to, 30, 50, 60), from, to))}
+	page.loading = true
+	page.deliver(t, move)
+	for i, seq := range []int{50, 60, 20} {
+		if len(page.items) != 3 || itemAttribute(t, page.items[i], "data-event-seq") != fmt.Sprint(seq) {
+			t.Fatalf("model repaired append order or ignored the loaded bound: %v", page.items)
+		}
+	}
+	if len(page.moves) != 1 {
+		t.Fatal("in-flight move not retained")
+	}
+	page.finishRequest() // Both abort and non-swapping 4xx take this path.
+	page.deliver(t, move)
+	if page.loading || len(page.moves) != 0 {
+		t.Fatal("failed request retained moves, or retained a move between requests")
+	}
+	page.loading = true
+	page.loadOlder(t, domain.Topic{ID: to}, message.ChannelPage{})
+	if len(page.items) != 3 {
+		t.Fatal("later request reapplied the failed request's move below the old bound")
 	}
 }

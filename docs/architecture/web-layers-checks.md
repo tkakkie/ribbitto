@@ -46,6 +46,23 @@ Left to review, because a pattern check cannot prove them: that a stored
 value is only a UX setting, that a script owns no application state, and
 that a component makes no authorisation decision.
 
+### Executed stream tests
+
+`TestMessageStreamBrowser` in `internal/web/message_stream_browser_test.go`
+runs the embedded `message-stream-v6.js`, vendored htmx and SSE extension
+in headless Chrome through go-rod. An HTTP test server renders real
+`Channel` and `MovedMessageItems` components without a database. Controlled
+SSE deliveries and history responses cover both topic sides, bounded
+insertion, duplicate replay, moves before/during Load older, stale/fresh
+swaps, and abort/400 followed by another request. Exact ordered ID lists
+detect duplicates and gaps; waits use DOM/lifecycle conditions, not sleeps.
+
+Run `go test ./internal/web -run TestMessageStreamBrowser -v` with Chrome
+installed. No browser is downloaded. Missing or unlaunchable browsers skip
+locally; `RIBBITTO_REQUIRE_BROWSER=1` makes either fatal and is set in CI.
+The Go replay model retains only in-flight moves and models append,
+replacement and bounded insertion without sorting the list.
+
 ### JavaScript pattern check
 
 `TestApplicationJavaScript` in `web/static/javascript_test.go` checks every

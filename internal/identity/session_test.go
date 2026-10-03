@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 type fakeSession struct {
-	accountID domain.ID
+	accountID kernel.ID
 	expiresAt time.Time
 }
 
@@ -30,7 +30,7 @@ type fakeStore struct {
 	mutations     int
 }
 
-func (f *fakeStore) CreateSession(_ context.Context, hash []byte, accountID domain.ID, expiresAt time.Time) error {
+func (f *fakeStore) CreateSession(_ context.Context, hash []byte, accountID kernel.ID, expiresAt time.Time) error {
 	f.mutations++
 	f.hashes = append(f.hashes, bytes.Clone(hash))
 	f.sessions[string(hash)] = fakeSession{accountID, expiresAt}
@@ -38,7 +38,7 @@ func (f *fakeStore) CreateSession(_ context.Context, hash []byte, accountID doma
 }
 
 // sessionID derives a fake session's id from its hash.
-func sessionID(hash []byte) domain.ID { return domain.ID(hash[:16]) }
+func sessionID(hash []byte) kernel.ID { return kernel.ID(hash[:16]) }
 
 func (f *fakeStore) SessionAccount(_ context.Context, hash []byte, now time.Time) (identity.Account, identity.Session, error) {
 	f.hashes = append(f.hashes, bytes.Clone(hash))
@@ -52,37 +52,37 @@ func (f *fakeStore) SessionAccount(_ context.Context, hash []byte, now time.Time
 	return identity.Account{ID: session.accountID}, identity.Session{ID: sessionID(hash), ExpiresAt: session.expiresAt}, nil
 }
 
-func (f *fakeStore) DeleteSession(_ context.Context, hash []byte) (domain.ID, bool, error) {
+func (f *fakeStore) DeleteSession(_ context.Context, hash []byte) (kernel.ID, bool, error) {
 	f.mutations++
 	f.hashes = append(f.hashes, bytes.Clone(hash))
 	if f.err != nil {
-		return domain.ID{}, false, f.err
+		return kernel.ID{}, false, f.err
 	}
 	if f.mutationErr != nil && !f.commitOnError {
-		return domain.ID{}, false, f.mutationErr
+		return kernel.ID{}, false, f.mutationErr
 	}
 	_, found := f.sessions[string(hash)]
 	delete(f.sessions, string(hash))
 	if f.mutationErr != nil {
-		return domain.ID{}, false, f.mutationErr
+		return kernel.ID{}, false, f.mutationErr
 	}
 	return sessionID(hash), found, nil
 }
 
-func (f *fakeStore) ReplaceSession(_ context.Context, oldHash, newHash []byte, accountID domain.ID, expiresAt time.Time) (domain.ID, bool, error) {
+func (f *fakeStore) ReplaceSession(_ context.Context, oldHash, newHash []byte, accountID kernel.ID, expiresAt time.Time) (kernel.ID, bool, error) {
 	f.mutations++
 	f.hashes = append(f.hashes, bytes.Clone(oldHash), bytes.Clone(newHash))
 	if f.err != nil {
-		return domain.ID{}, false, f.err
+		return kernel.ID{}, false, f.err
 	}
 	if f.mutationErr != nil && !f.commitOnError {
-		return domain.ID{}, false, f.mutationErr
+		return kernel.ID{}, false, f.mutationErr
 	}
 	_, found := f.sessions[string(oldHash)]
 	delete(f.sessions, string(oldHash))
 	f.sessions[string(newHash)] = fakeSession{accountID, expiresAt}
 	if f.mutationErr != nil {
-		return domain.ID{}, false, f.mutationErr
+		return kernel.ID{}, false, f.mutationErr
 	}
 	return sessionID(oldHash), found, nil
 }
@@ -94,7 +94,7 @@ func (f *fakeStore) DeleteExpiredSessions(_ context.Context, before time.Time) e
 
 func TestSessions(t *testing.T) {
 	start := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
-	account := domain.ID{1, 2, 3}
+	account := kernel.ID{1, 2, 3}
 	for _, tt := range []struct {
 		name  string
 		token func(created string) string
@@ -152,7 +152,7 @@ func TestSessionsStoreErrors(t *testing.T) {
 	store := &fakeStore{sessions: map[string]fakeSession{}}
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
 	sessions := identity.NewSessions(store, func() time.Time { return now }, nil)
-	token, _, err := sessions.Create(t.Context(), domain.ID{1})
+	token, _, err := sessions.Create(t.Context(), kernel.ID{1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestSessionsStoreErrors(t *testing.T) {
 	if _, _, err := sessions.Resolve(t.Context(), token); !errors.Is(err, broken) || errors.Is(err, identity.ErrNoSession) {
 		t.Fatalf("Resolve: want the store error, distinct from ErrNoSession; got %v", err)
 	}
-	if _, _, err := sessions.Create(t.Context(), domain.ID{1}); !errors.Is(err, broken) {
+	if _, _, err := sessions.Create(t.Context(), kernel.ID{1}); !errors.Is(err, broken) {
 		t.Fatalf("Create: want the store error, got %v", err)
 	}
 	if err := sessions.Delete(t.Context(), token); !errors.Is(err, broken) {
@@ -173,11 +173,11 @@ func TestSessionsStoreErrors(t *testing.T) {
 
 // canceller records the IDs and forwards cancellation to real streams.
 type canceller struct {
-	ended []domain.ID
+	ended []kernel.ID
 	hub   *realtime.Hub
 }
 
-func (c *canceller) CancelSession(id domain.ID) {
+func (c *canceller) CancelSession(id kernel.ID) {
 	c.ended = append(c.ended, id)
 	c.hub.CancelSession(id)
 }
@@ -205,7 +205,7 @@ func TestSessionsEndStreamsFailClosed(t *testing.T) {
 				sessions := identity.NewSessions(store, time.Now, ended)
 				open := func() (string, identity.Session, context.Context) {
 					t.Helper()
-					token, _, err := sessions.Create(t.Context(), domain.ID{1})
+					token, _, err := sessions.Create(t.Context(), kernel.ID{1})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -213,7 +213,7 @@ func TestSessionsEndStreamsFailClosed(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					stream, unregister, err := ended.hub.Register(t.Context(), realtime.Connection{Account: domain.ID{1}, Session: session.ID}, 2)
+					stream, unregister, err := ended.hub.Register(t.Context(), realtime.Connection{Account: kernel.ID{1}, Session: session.ID}, 2)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -228,7 +228,7 @@ func TestSessionsEndStreamsFailClosed(t *testing.T) {
 				if replace {
 					var next string
 					var expiry time.Time
-					next, expiry, err = sessions.Replace(t.Context(), token, domain.ID{1})
+					next, expiry, err = sessions.Replace(t.Context(), token, kernel.ID{1})
 					if err != nil && (next != "" || !expiry.IsZero()) {
 						t.Fatal("failed replacement returned credentials")
 					}
@@ -314,7 +314,7 @@ func TestSessionsWithoutLivePreviousSession(t *testing.T) {
 				store := &fakeStore{sessions: map[string]fakeSession{}}
 				ended := &canceller{hub: realtime.NewHub()}
 				sessions := identity.NewSessions(store, func() time.Time { return now }, ended)
-				token, _, err := sessions.Create(t.Context(), domain.ID{1})
+				token, _, err := sessions.Create(t.Context(), kernel.ID{1})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -332,7 +332,7 @@ func TestSessionsWithoutLivePreviousSession(t *testing.T) {
 				case "expired":
 					now = now.Add(identity.SessionLifetime)
 				}
-				other, _, err := sessions.Create(t.Context(), domain.ID{1})
+				other, _, err := sessions.Create(t.Context(), kernel.ID{1})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -340,7 +340,7 @@ func TestSessionsWithoutLivePreviousSession(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				stream, unregister, err := ended.hub.Register(t.Context(), realtime.Connection{Account: domain.ID{1}, Session: otherSession.ID}, 1)
+				stream, unregister, err := ended.hub.Register(t.Context(), realtime.Connection{Account: kernel.ID{1}, Session: otherSession.ID}, 1)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -350,12 +350,12 @@ func TestSessionsWithoutLivePreviousSession(t *testing.T) {
 					t.Fatalf("previous session: %v", err)
 				}
 				if replace {
-					next, _, err := sessions.Replace(t.Context(), token, domain.ID{2})
+					next, _, err := sessions.Replace(t.Context(), token, kernel.ID{2})
 					if err != nil {
 						t.Fatal(err)
 					}
 					account, _, err := sessions.Resolve(t.Context(), next)
-					if err != nil || account.ID != (domain.ID{2}) {
+					if err != nil || account.ID != (kernel.ID{2}) {
 						t.Fatalf("replacement account: %v, %v", account, err)
 					}
 				} else if err := sessions.Delete(t.Context(), token); err != nil {

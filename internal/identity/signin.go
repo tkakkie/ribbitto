@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // ErrInvalidInput means the email is not an address or the password is
@@ -24,7 +24,7 @@ var ErrNoAccount = errors.New("no such account")
 type AccountStore interface {
 	// AccountCredentials returns the ID and stored password hash of the
 	// account with this normalised email, or ErrNoAccount.
-	AccountCredentials(ctx context.Context, email string) (accountID domain.ID, passwordHash string, err error)
+	AccountCredentials(ctx context.Context, email string) (accountID kernel.ID, passwordHash string, err error)
 }
 
 // SignIn signs accounts in and out.

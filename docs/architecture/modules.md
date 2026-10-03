@@ -31,7 +31,7 @@ the temporary implementation behind it.
 
 | Flow or caller | Needs from | Interface from step | Temporary implementation until step |
 |---|---|---|---|
-| every package (`domain.ID` = `kernel.ID` alias; `identity`'s `domain` import for it) | `kernel` `ID` | 0 | 5 |
+| every package but `identity` (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
 | four `infra` target-version tests | `db/migrations` (temporary allowance) | 0 | their module's step, or 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |

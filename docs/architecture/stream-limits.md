@@ -1,7 +1,7 @@
 # Stream resource limits
 
-What bounds the cost of open Server-Sent Event streams. Ordering, replay
-and authorization are in [`streaming.md`](streaming.md).
+What bounds the cost of open Server-Sent Event streams. Ordering and replay
+are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.md).
 
 - Each cache (events, renders) runs at most 16 loaders at once, second
   loads included; a slot is held until its loader returns, even after a

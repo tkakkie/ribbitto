@@ -41,7 +41,7 @@ rolls the sequence back with it.
   are ephemeral and never replayed.
 - **The hub is told the new sequence after commit.** It keeps, per
   organisation, the highest committed sequence it has seen — a *value*, not
-  a one-shot signal (see [*No lost wakeups*](streaming.md#ordering-and-replay)) — and only ever raises it.
+  a one-shot signal (see [*No lost wakeups*](replay.md#ordering-and-replay)) — and only ever raises it.
   Events themselves are always read from `event_log`. A crash between
   commit and telling the hub loses nothing: readers catch up from the table.
   *Future work:* with more than one server, the value would travel as PostgreSQL `NOTIFY`

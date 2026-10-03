@@ -26,7 +26,7 @@ reactions → editing and deleting → PostgreSQL row-level security →
 multiple organisations → file uploads → search.
 
 Deleting messages, and moving them to another channel, first need the
-stream's rule for [vanished messages](architecture/streaming.md#vanished-messages)
+stream's rule for [vanished messages](architecture/replay.md#vanished-messages)
 (#352).
 
 Email delivery and email verification are not part of M1 to M3 (accounts

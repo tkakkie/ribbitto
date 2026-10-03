@@ -11,7 +11,7 @@ replay from `event_log`. In M3 each connection runs its own read loop; that is
 the current design, not part of this decision, and the planned shared reader
 per organisation (#232, #236) may replace it under the same rule. Details:
 [real time](../architecture/realtime.md#durable-event-log) and
-[streaming](../architecture/streaming.md#ordering-and-replay).
+[streaming](../architecture/replay.md#ordering-and-replay).
 **Why:** one durable source gives replay, reconnection and recovery from a
 missed notification the same code path, and keeps the hub small enough to
 reason about (M3, #156–#158, #237).

@@ -35,10 +35,15 @@ the log and the boundary.
 days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations
 with expired rows in ID order without write locks, then processes one
-organisation at a time in transactions of at most 1,000 expired rows, selected
-in sequence order using the existing `(organization_id, seq)` index. Each transaction locks only that
-organisation before deleting events and advancing its replay boundary, then
-commits before the next batch. Errors and timeouts keep committed progress;
+organisation at a time, one transaction per batch. Each batch locks only that
+organisation, then reads its lowest 1,000 sequences (the `(organization_id,
+seq)` index) and deletes only the expired prefix among them: the rows from the
+lowest sequence up to the first one that has not expired. If the lowest row
+has not expired, the batch deletes nothing; if all 1,000 have, it deletes all
+1,000. An expired row above an unexpired one stays until a later run, since
+`created_at` need not follow `seq` and the boundary must never pass a row
+still in the log (#430). The batch raises the replay boundary to the highest
+sequence it deleted, then commits before the next batch. Errors and timeouts keep committed progress;
 the next tick retries remaining work. The listing reads `event_log` once
 (`created_at` has no index, so PostgreSQL scans the table; about 11 ms for
 500,000 rows on a laptop, as the old organisation-scoped `EXISTS` did); no

@@ -1,6 +1,6 @@
 # Replay
 
-How an event stream orders, replays and resumes events, and what it does when a message it names has vanished. The connection, retention, authorization and limits are in [`streaming.md`](streaming.md).
+How an event stream orders, replays and resumes events, and what it does when a message it names has vanished. The connection, retention and authorization are in [`streaming.md`](streaming.md); resource limits are in [`stream-limits.md`](stream-limits.md).
 
 ## Ordering and replay
 

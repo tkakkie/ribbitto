@@ -85,7 +85,7 @@ A new exception needs its issue to say why, and is added to this list.
 
 ## Target
 
-Where the migration goes ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)); the code above is today's.
+Where the migration goes ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md), with [decision 27](../decisions/27-channels-topics-and-messages-are-one-conversation-module.md)'s `conversation` module); the code above is today's.
 
 **Construction.** Each module consists of three parts:
 - `internal/<module>`: types, errors, use cases and consumer interfaces;
@@ -101,13 +101,11 @@ Where the migration goes ([decision 26](../decisions/26-modules-by-feature-layou
 | `identity`: accounts, passwords, sessions, sign-in | `account`, `session` | — | 1 |
 | `realtime`: event log, retention, hub, stream loop, envelope | `event_log` | — | 2 |
 | `org`: organisations, members, authorisation (`Membership`), setup, sign-up | `organization`, `member`, `setup` | `identity`, `realtime` | 3 |
-| `channel` | `channel` | `org` | 4 |
-| `topic`: topics, branching | `topic` | `org`, `realtime` | 5 |
-| `message`: posting, history, the page snapshot use case | `message` | `identity`, `org`, `channel`, `topic`, `realtime` | 6 |
+| `conversation`: channels, topics, branching, posting, history, the page snapshot use case | `channel`, `topic`, `message` | `identity`, `org`, `realtime` | 4 |
 
 `internal/web` stays the UI shell and imports module roots. Its per-kind
-stream renderers are adapters for the payloads that `message` and `topic`
-register with `realtime`. Step 0 creates `kernel` and `platform`; step 7
+stream renderers are adapters for the payloads that `conversation`
+registers with `realtime`. Step 0 creates `kernel` and `platform`; step 5
 removes `internal/domain`, `internal/app` and `internal/infra/postgres`.
 
 **Known exceptions and temporary paths.** Every flow keeps its transaction
@@ -118,16 +116,17 @@ the temporary implementation behind it.
 
 | Flow or caller | Needs from | Interface from step | Temporary implementation until step |
 |---|---|---|---|
-| every package (`domain.ID` = `kernel.ID` alias; `identity`'s `domain` import for it) | `kernel` `ID` | 0 | 7 |
-| `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 7 (fixtures move with their modules) |
-| four `infra` target-version tests | `db/migrations` (temporary allowance) | 0 | their module's step, or 7 |
-| `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 7 |
-| page snapshot, `One`, `Many` (`infra`) | `identity` accounts | 1 | 6 (the use case replaces the caller) |
+| every package (`domain.ID` = `kernel.ID` alias; `identity`'s `domain` import for it) | `kernel` `ID` | 0 | 5 |
+| `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
+| four `infra` target-version tests | `db/migrations` (temporary allowance) | 0 | their module's step, or 5 |
+| `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
+| page snapshot, `One`, `Many` (`infra`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
 | setup, sign-up (`infra`) | `identity` account writes | 3 (until then, a `legacy_account.sql` copy of `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry, from step 1) | 3 |
-| posting, setup, sign-up, branching (`infra`) | `realtime` event appends | 2 | each flow's own step: 3, 5, 6 |
+| posting, setup, sign-up, branching (`infra`) | `realtime` event appends | 2 | each flow's own step: 3, 4 |
 | `realtime` reader and retention | `org` sequence bounds, boundary write | 2 | 3 |
-| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 5, 6 |
-| setup (`org`) | `channel` default channel | 3 | 4 |
-| channel creation (`channel`) | `topic` default topic (same ID, deferred foreign key) | 4 | 5 |
-| posting, page snapshot, `One`, `Many` (`infra`) | `channel`, `topic` reads | 4, 5 | 6 |
-| branching (`topic`) | `message` moves and notice | 5 | 6 |
+| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 4 |
+| setup (`org`) | `conversation` default channel | 3 | 4 |
+
+Inside `conversation`, a channel's default topic, branching's moves and
+notice, and the channel and topic reads of posting and the page snapshot
+are direct calls in one transaction or snapshot (decision 27).

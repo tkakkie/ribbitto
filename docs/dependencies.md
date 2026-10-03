@@ -70,8 +70,11 @@ internal/infra/postgres/pgtest -> internal/domain
 internal/infra/postgres/pgtest -> internal/infra/postgres
 internal/infra/postgres/pgtest -> internal/platform/postgres/pgtest
 internal/platform/postgres -> db/migrations
+internal/platform/postgres -> internal/platform/postgres/internal/handle
 internal/platform/postgres/pgtest -> db/migrations
 internal/platform/postgres/pgtest -> internal/platform/postgres
+internal/platform/postgres/pgxbridge -> internal/platform/postgres
+internal/platform/postgres/pgxbridge -> internal/platform/postgres/internal/handle
 internal/realtime -> internal/domain
 internal/web -> internal/app/auth
 internal/web -> internal/app/authz

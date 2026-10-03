@@ -13,7 +13,7 @@ health check. Its password is for development only. `make db-down` stops
 it without deleting the named volume at `/var/lib/postgresql`.
 
 `db/migrations` holds numbered goose SQL files embedded in the binary.
-It is owned by `internal/platform/postgres`; only that package,
+It is owned by `internal/platform/postgres`; only its packages,
 `cmd/ribbitto` and four target-version tests in `internal/infra/postgres`
 (temporarily) may import it. The runner uses goose and pgx's
 `database/sql` adapter without global configuration. The first

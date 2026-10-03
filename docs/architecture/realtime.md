@@ -125,11 +125,17 @@ locking one organisation before its events as posting does; the lock and the
 boundary (`greatest`, so it never goes down) come through the injected
 `realtime.RetentionBoundary`. The cleaner lists organisations with expired rows
 from `event_log` in ID order without write locks, then commits
-batches of at most 1,000 expired rows in sequence order until none remain for
-each organisation. Each batch reads after acquiring the organisation lock,
+batches of at most 1,000 expired rows in sequence order until no eligible
+prefix rows remain for each organisation. Eligible rows are the expired prefix:
+those below the organisation's lowest-sequence row that has not expired, or
+every expired row when none has, since `created_at` (the writing transaction's
+start) need not follow `seq` (#430); expired rows above that row wait for a
+later run. Each batch reads only the organisation's 1,000 lowest sequences
+under the lock and deletes the expired run at their start, so the work under
+the lock stays bounded. Each batch reads after acquiring the organisation lock,
 so concurrent cleaners see committed progress. Only that organisation's writers
 wait; errors or the one-minute run timeout preserve all committed batches for
-the next hourly tick. It deletes only rows older than the cutoff; messages,
+the next hourly tick. Messages,
 their sequences and unread positions are untouched.
 A cursor is valid from the boundary through the committed `event_seq`,
 inclusive, even with an empty log; at `event_seq` it waits for new events.

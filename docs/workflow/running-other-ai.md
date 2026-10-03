@@ -110,8 +110,10 @@ The prompt carries the issue and its review comments, plus these rules:
   are done. If port 55433 is taken, pick another and change both commands.
 - **Handoff.** Codex does not commit, push or use GitHub. It leaves the
   changes in the working tree and writes a draft PR description to an
-  untracked `PR_BODY.md`. It also stays inside the handoff on the machine
-  ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
+  untracked `PR_BODY.md`, which never contains a connection string with
+  credentials, a password, a token or a key: a command that needs one shows
+  a placeholder such as `<local test database>` (#358). It also stays
+  inside the handoff on the machine ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
   no other AI CLIs (claude, grok), no browser or Computer Use, since reviews
   and browser checks are the orchestrator's. It never re-signs, patches or
   replaces a tool binary to make it run, and reports the failure instead. It
@@ -127,7 +129,15 @@ The orchestrator then:
 1. reviews the diff;
 2. runs what Codex could not (for example `make db-up`, a live `make dev`,
    or the Grok and Muse launcher test scripts outside the sandbox);
-3. commits, pushes and opens the PR.
+3. checks the PR text before it is published (#358): this prints nothing,
+   or each match is reviewed, real credentials are redacted and harmless
+   mentions (a placeholder, the word in prose) may stay:
+
+   ```sh
+   grep -niE '://[^/@[:space:]]+:[^@[:space:]]*@|password|passwd|secret|token|(api|access|private)[_-]?key' PR_BODY.md
+   ```
+
+4. commits, pushes and opens the PR.
 
 **Reviews.** In `-s read-only` mode Codex cannot reach GitHub, so pipe in
 everything the review needs, as the examples above do:

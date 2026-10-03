@@ -82,3 +82,13 @@ func DecodeMoved(data []byte) (Moved, error) {
 	}
 	return m, nil
 }
+
+// RouteMoved is messages.moved's realtime.Router: the channel and both topics,
+// so a view of either sees the move.
+func RouteMoved(payload []byte) (domain.ID, []domain.ID, error) {
+	m, err := DecodeMoved(payload)
+	if err != nil {
+		return domain.ID{}, nil, err
+	}
+	return m.ChannelID, []domain.ID{m.FromTopicID, m.ToTopicID}, nil
+}

@@ -16,11 +16,25 @@ import (
 // EventReader reads realtime's durable event log, without delivery
 // authorization, and the committed sequences the watermark check raises
 // the hub to.
-type EventReader struct{ queries *sqlcgen.Queries }
+type EventReader struct {
+	queries *sqlcgen.Queries
+	kinds   realtime.Kinds
+}
 
-// NewEventReader returns a reader using db.
-func NewEventReader(db sqlcgen.DBTX) *EventReader {
-	return &EventReader{queries: sqlcgen.New(db)}
+// NewEventReader returns a reader using db that routes the kinds registered
+// in kinds.
+func NewEventReader(db sqlcgen.DBTX, kinds realtime.Kinds) *EventReader {
+	return &EventReader{queries: sqlcgen.New(db), kinds: kinds}
+}
+
+// EventKinds returns the publishers' Routers for the kinds written today, for
+// wiring and tests, until each module registers its own (steps 3 and 4).
+func EventKinds() realtime.Kinds {
+	return realtime.Kinds{
+		realtime.EventMessagePosted: message.RoutePosted,
+		realtime.EventMemberJoined:  member.RouteJoined,
+		realtime.EventMessagesMoved: topic.RouteMoved,
+	}
 }
 
 // EventsAfter returns at most limit events for the organisation, in sequence
@@ -44,7 +58,7 @@ func (r *EventReader) EventsAfter(ctx context.Context, organizationID domain.ID,
 		if row.Seq == 0 {
 			continue // Both cursor bounds must be returned even when the log is empty.
 		}
-		event, err := eventFromRow(row)
+		event, err := r.eventFromRow(row)
 		if err != nil {
 			return nil, fmt.Errorf("reading event %d: %w", row.Seq, err)
 		}
@@ -72,14 +86,23 @@ func (r *EventReader) CommittedSequences(ctx context.Context, organizations []do
 	return seqs, nil
 }
 
-// eventFromRow decodes known kinds through their publishers' codecs.
-func eventFromRow(row sqlcgen.EventsAfterRow) (realtime.Event, error) {
+// eventFromRow routes registered kinds through their Routers and decodes
+// known kinds through their publishers' codecs.
+func (r *EventReader) eventFromRow(row sqlcgen.EventsAfterRow) (realtime.Event, error) {
 	event := realtime.Event{OrganizationID: row.OrganizationID.Bytes, Seq: row.Seq, Kind: realtime.EventKind(row.Kind)}
 	if row.AudienceMemberID.Valid {
 		id := domain.ID(row.AudienceMemberID.Bytes)
 		event.AudienceMemberID = &id
 	}
+	route, ok := r.kinds[event.Kind]
+	if !ok {
+		return event, nil // Unregistered kinds keep their envelope; streams skip them.
+	}
 	var err error
+	if event.ChannelID, event.Topics, err = route(row.Data); err != nil {
+		return realtime.Event{}, fmt.Errorf("routing %s data: %w", event.Kind, err)
+	}
+	event.Payload = row.Data
 	switch event.Kind {
 	case realtime.EventMessagePosted:
 		var p message.Posted
@@ -97,7 +120,7 @@ func eventFromRow(row sqlcgen.EventsAfterRow) (realtime.Event, error) {
 			event.ChannelID, event.FromTopicID, event.ToTopicID, event.MessageIDs = m.ChannelID, m.FromTopicID, m.ToTopicID, m.MessageIDs
 		}
 	default:
-		// Future kinds may have different payload shapes; the delivery loop skips them.
+		// A registered kind without typed fields keeps only its routing.
 	}
 	if err != nil {
 		return realtime.Event{}, fmt.Errorf("decoding %s data: %w", event.Kind, err)

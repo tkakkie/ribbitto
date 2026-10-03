@@ -63,7 +63,7 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 		_, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 		must(err)
 	}
-	cached := realtime.NewCachedEvents(t.Context(), postgres.NewEventReader(pool), realtime.NewHub(), 8, time.Minute)
+	cached := realtime.NewCachedEvents(t.Context(), postgres.NewEventReader(pool, postgres.EventKinds()), realtime.NewHub(), 8, time.Minute)
 	got, err := cached.EventsAfter(ctx, f.OrganizationID, 2, 1)
 	must(err)
 	if len(got) != 1 || got[0].Seq != 3 || realtime.CachedLen(cached) != 1 {
@@ -110,7 +110,7 @@ func TestRetentionReplay(t *testing.T) {
 			post()
 			_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
 			must(err)
-			reader := postgres.NewEventReader(pool)
+			reader := postgres.NewEventReader(pool, postgres.EventKinds())
 			expire := func() {
 				must(postgres.NewEventCleaner(pool).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
 			}
@@ -125,7 +125,7 @@ func TestRetentionReplay(t *testing.T) {
 				events = cached
 				expire()
 			case "snapshot":
-				events = postgres.NewEventReader(&retentionDB{DBTX: pool, afterQuery: expire})
+				events = postgres.NewEventReader(&retentionDB{DBTX: pool, afterQuery: expire}, postgres.EventKinds())
 				want, wantCursor = []string{"message", "reset"}, 2
 			case "open":
 				want, wantCursor = []string{"message", "reset"}, 2
@@ -136,7 +136,7 @@ func TestRetentionReplay(t *testing.T) {
 					post()
 				} else {
 					// Commit only after the idle SELECT took its empty snapshot.
-					events = postgres.NewEventReader(&retentionDB{DBTX: pool, afterQuery: post})
+					events = postgres.NewEventReader(&retentionDB{DBTX: pool, afterQuery: post}, postgres.EventKinds())
 				}
 			default:
 				cursor, wantCursor = 2, 2

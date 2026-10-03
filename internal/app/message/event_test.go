@@ -24,6 +24,12 @@ func TestPostedPayload(t *testing.T) {
 	if err != nil || got.TopicID != nil || got.MessageID != (domain.ID{15: 2}) {
 		t.Fatalf("legacy post = %+v, %v", got, err)
 	}
+	if channel, topics, err := message.RoutePosted([]byte(`{` + ids + `}`)); err != nil || channel != (domain.ID{15: 1}) || topics != nil {
+		t.Fatalf("legacy RoutePosted = %v, %v, %v; want the channel and no topics", channel, topics, err)
+	}
+	if channel, topics, err := message.RoutePosted(data); err != nil || channel != (domain.ID{15: 1}) || !reflect.DeepEqual(topics, []domain.ID{topic}) {
+		t.Fatalf("RoutePosted = %v, %v, %v; want the channel and the posting-time topic", channel, topics, err)
+	}
 	for _, data := range []string{
 		`{"channel_id":"invalid","message_id":"invalid"}`,
 		`{"channel_id":"00000000-0000-0000-0000-000000000001","message_id":false}`,

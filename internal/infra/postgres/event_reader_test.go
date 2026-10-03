@@ -23,7 +23,7 @@ func TestPostedEventTopic(t *testing.T) {
 	requireNoError(t, err)
 	posted, err := postgres.NewPostingStore(pool).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, &named.ID, "hello")
 	requireNoError(t, err)
-	reader := postgres.NewEventReader(pool)
+	reader := postgres.NewEventReader(pool, postgres.EventKinds())
 	events, err := reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 1)
 	requireNoError(t, err)
 	if len(events) != 1 || events[0].TopicID == nil || *events[0].TopicID != named.ID {
@@ -61,12 +61,18 @@ func TestEventsAfter(t *testing.T) {
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE organization SET event_seq = 3 WHERE id = $1", f.OrganizationID)
 	requireNoError(t, err)
+	stored := func(seq int64) []byte {
+		var data []byte
+		requireNoError(t, pool.QueryRow(ctx, "SELECT data FROM event_log WHERE organization_id = $1 AND seq = $2", f.OrganizationID, seq).Scan(&data))
+		return data
+	}
 	want := []realtime.Event{
-		{OrganizationID: f.OrganizationID, Seq: 1, Kind: realtime.EventMemberJoined, MemberID: f.MemberID},
-		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: realtime.EventMessagePosted, ChannelID: f.Channel.ID, MessageID: posted.ID, TopicID: &posted.TopicID},
+		{OrganizationID: f.OrganizationID, Seq: 1, Kind: realtime.EventMemberJoined, MemberID: f.MemberID, Payload: stored(1)},
+		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: realtime.EventMessagePosted, ChannelID: f.Channel.ID, MessageID: posted.ID, TopicID: &posted.TopicID,
+			Topics: []domain.ID{posted.TopicID}, Payload: stored(posted.EventSeq)},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
 	}
-	reader := postgres.NewEventReader(pool)
+	reader := postgres.NewEventReader(pool, postgres.EventKinds())
 	for _, tt := range []struct {
 		name  string
 		after int64
@@ -106,7 +112,7 @@ func TestEventsAfterMalformedData(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	org := pgtest.Organization(t, pool, "malformed", "Malformed", 2)
-	reader := postgres.NewEventReader(pool)
+	reader := postgres.NewEventReader(pool, postgres.EventKinds())
 	_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
 		VALUES ($1, 1, 'member.joined', '{"member_id":"00000000-0000-0000-0000-000000000001"}')`, org)
 	requireNoError(t, err)
@@ -130,7 +136,7 @@ func TestEventsAfterCursorAboveLog(t *testing.T) {
 	posted, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 	requireNoError(t, err)
 	empty := pgtest.Organization(t, pool, "empty", "Empty", 0)
-	reader := postgres.NewEventReader(pool)
+	reader := postgres.NewEventReader(pool, postgres.EventKinds())
 	for _, tt := range []struct {
 		name string
 		org  domain.ID
@@ -164,7 +170,7 @@ func TestCommittedSequences(t *testing.T) {
 	other := pgtest.OrganizationWithOwner(t, pool, "watermark-other", "general")
 	posted, err := postgres.NewPostingStore(pool).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 	requireNoError(t, err)
-	reader := postgres.NewEventReader(pool)
+	reader := postgres.NewEventReader(pool, postgres.EventKinds())
 	unknown := domain.ID{0xee}
 	got, err := reader.CommittedSequences(ctx, []domain.ID{f.OrganizationID, other.OrganizationID, unknown})
 	requireNoError(t, err)
@@ -210,7 +216,7 @@ func TestEventRetentionTransaction(t *testing.T) {
 		t.Fatalf("deleted %d rows, want 1", count)
 	}
 	// Until commit, a reader sees both the old boundary and every old row.
-	reader := postgres.NewEventReader(pool)
+	reader := postgres.NewEventReader(pool, postgres.EventKinds())
 	rows, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 10)
 	requireNoError(t, err)
 	if len(rows) != 2 {
@@ -229,5 +235,36 @@ func TestEventRetentionTransaction(t *testing.T) {
 	}
 	if _, err := reader.EventsAfter(ctx, f.OrganizationID, 1, 10); !errors.Is(err, realtime.ErrCursorExpired) {
 		t.Fatalf("below boundary: %v", err)
+	}
+}
+
+// The reader routes every registered kind through its Router, with no
+// built-in kind branch; an unregistered kind keeps only its envelope, and a
+// Router's error fails the whole batch.
+func TestEventsAfterRegisteredKinds(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	org := pgtest.Organization(t, pool, "kinds", "Kinds", 2)
+	_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
+		VALUES ($1, 1, 'test.synthetic', '{"route": "here"}'), ($1, 2, 'test.unregistered', '{}')`, org)
+	requireNoError(t, err)
+	channel, topic := domain.ID{15: 1}, domain.ID{15: 2}
+	var routed []byte
+	kinds := realtime.Kinds{"test.synthetic": func(payload []byte) (domain.ID, []domain.ID, error) {
+		routed = payload
+		return channel, []domain.ID{topic}, nil
+	}}
+	got, err := postgres.NewEventReader(pool, kinds).EventsAfter(t.Context(), org, 0, 10)
+	requireNoError(t, err)
+	want := []realtime.Event{
+		{OrganizationID: org, Seq: 1, Kind: "test.synthetic", ChannelID: channel, Topics: []domain.ID{topic}, Payload: routed},
+		{OrganizationID: org, Seq: 2, Kind: "test.unregistered"},
+	}
+	if len(routed) == 0 || !reflect.DeepEqual(got, want) {
+		t.Fatalf("EventsAfter = %+v; want %+v", got, want)
+	}
+	kinds["test.synthetic"] = func([]byte) (domain.ID, []domain.ID, error) { return domain.ID{}, nil, errors.New("malformed") }
+	if events, err := postgres.NewEventReader(pool, kinds).EventsAfter(t.Context(), org, 0, 10); err == nil || len(events) != 0 {
+		t.Fatalf("failed route: %+v, %v; want error without events", events, err)
 	}
 }

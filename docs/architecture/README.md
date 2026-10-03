@@ -34,6 +34,6 @@ Read the file for the area you change:
 
 - [`docs/domain/README.md`](../domain/README.md) — glossary and index; [`entities.md`](../domain/entities.md), [`invariants.md`](../domain/invariants.md), [`unread.md`](../domain/unread.md)
 - [`docs/domain/names.md`](../domain/names.md) — display names, handles, how members are shown
-- [`docs/database.md`](../database.md) — local database, migrations, tests
+- [`docs/database.md`](../database.md) — local database, migrations, tests; [`docs/seed-data.md`](../seed-data.md) — development seed data
 - [`docs/schema/README.md`](../schema/README.md) — generated reference for the current schema
 - [`DECISIONS.md`](../../DECISIONS.md) — why things are the way they are: the index of [`decisions/`](../decisions/)

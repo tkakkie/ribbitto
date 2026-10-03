@@ -1,6 +1,6 @@
 # Development load client
 
-With [seed credentials](../database.md#development-seed-data) on a disposable
+With [seed credentials](../seed-data.md) on a disposable
 machine and `make dev` running, use:
 ```sh
 go run ./cmd/loadgen -tokens /tmp/loadtest.json -streams 8 -duration 5s -rate 2

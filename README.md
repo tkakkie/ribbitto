@@ -1,14 +1,25 @@
 # ribbitto
 
-A small, self-hostable team chat with a frog on the logo.
+A self-hostable team chat that is fast, where nothing gets buried, and
+with nothing to learn. There is a frog on the logo.
 
-> **Status: early development.** Nothing works yet. See the
-> [roadmap](docs/roadmap.md) and the pinned Status issue.
+> **Status: early development.** Accounts, channels, topics and real-time
+> messages work; unread counts, presence and the rest of the MVP are in
+> progress, and there is no release yet. See the [roadmap](docs/roadmap.md)
+> and the pinned Status issue.
 
 ## What it will be
 
-- Channels and messages that arrive in real time, with unread counts,
-  presence and typing indicators.
+What each principle means, and how changes are checked against it, is in
+the [vision](docs/vision.md).
+
+- **Fast:** quick to use in the browser and light on a small server, with
+  both measured.
+- **Nothing gets buried:** topics inside channels, unread state per topic,
+  and one view of what was addressed to you.
+- **Nothing to learn:** every channel has a default topic, so you talk
+  first and branch a conversation into its own topic later.
+- Messages arrive in real time, with presence and typing indicators.
 - Server-rendered HTML with htmx: one Go binary, no JavaScript build step.
 - English and Japanese UI.
 - Easy to self-host: a container image and a Compose file with PostgreSQL
@@ -111,6 +122,7 @@ cursor above the restored log gets `reset` and reloads the page
 
 ## Documentation
 
+- [Vision](docs/vision.md) — what ribbitto aims to be, and how changes are checked against it
 - [Architecture](docs/architecture/README.md) — packages, allowed imports, request and real-time flow
 - [Domain](docs/domain/README.md) — glossary and index; [entities](docs/domain/entities.md), [invariants](docs/domain/invariants.md), [unread rules](docs/domain/unread.md)
 - [UI](docs/ui.md) — design direction, tokens, contrast; [markup and accessibility](docs/accessibility.md)

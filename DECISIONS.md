@@ -56,3 +56,4 @@ coverage and the normal document size limit for both the index and entries.
 - [25. Production serves event streams over HTTP/2](docs/decisions/25-production-serves-streams-over-http2.md)
 - [26. Modules by feature: layout, seams and order](docs/decisions/26-modules-by-feature-layout-seams-and-order.md)
 - [27. Channels, topics and messages are one `conversation` module](docs/decisions/27-channels-topics-and-messages-are-one-conversation-module.md)
+- [28. The concept: fast, nothing gets buried, nothing to learn](docs/decisions/28-the-concept-fast-nothing-gets-buried-nothing-to-learn.md)

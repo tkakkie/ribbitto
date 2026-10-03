@@ -5,7 +5,7 @@ project. What is happening right now is in the pinned **Status** issue
 (#1); individual tasks are issues grouped by GitHub milestone.
 
 Update this file when a milestone is finished or the plan changes, not for
-day-to-day progress.
+day-to-day progress. What the steps aim at is in the [vision](vision.md).
 
 ## MVP
 
@@ -32,6 +32,8 @@ Before M4, two steps:
 Roughly in this order: private channels → direct messages → invitations →
 reactions → editing and deleting → PostgreSQL row-level security →
 multiple organisations → file uploads → search.
+
+The "for me" view (#433) follows once mentions (#117) and replies exist.
 
 Deleting messages, and moving them to another channel, first need the
 stream's rule for [vanished messages](architecture/replay.md#vanished-messages)

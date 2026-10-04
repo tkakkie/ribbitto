@@ -21,7 +21,8 @@ Read the file for the area you change:
 | [`setup-and-signup.md`](setup-and-signup.md) | first-run setup and sign-up |
 | [`identity.md`](identity.md) | sessions, signing in and out, the session cookie |
 | [`rate-limits.md`](rate-limits.md) | authentication rate limits and the reverse-proxy contract |
-| [`realtime.md`](realtime.md) | posting a message and the durable event log |
+| [`posting.md`](posting.md) | posting a message: the sequence-first transaction, the hub after commit, the page snapshot |
+| [`realtime.md`](realtime.md) | the durable event log: payloads, routing, replay boundary and retention |
 | [`streaming.md`](streaming.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
 | [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream cap, shutdown, HTTP/2 |

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Writes docs/dependencies.md, the package-import edges between this
-# module's packages, or with --check fails when that file is stale. It uses
-# only `go list`, so it needs no tool beyond Go itself.
+# module's packages, with --check fails when that file is stale, or with
+# --diff <rev> lists changed edges using git and standard shell tools.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 file=docs/dependencies.md
@@ -21,6 +21,9 @@ test-only imports are left out. They are listed for `GOOS=linux`
 the same on every machine. `make check` fails when this file is stale.
 
 A new line here is a new package dependency: say why in the pull request.
+CI lists added and removed edges in the ci job summary, crossing units
+first, and annotates added edges on this file with notices. Run
+`bash scripts/deps.sh --diff origin/main` locally for the same list.
 This list forbids nothing (depguard enforces the layering rules). It does
 not show calls through an edge that already exists, dependencies inside one
 package, or SQL access to tables.
@@ -44,6 +47,47 @@ HEADER
   printf '```\n'
 }
 
+edge_diff() {
+  local base before=""
+  # Resolve the commit first: a missing file is allowed, an unknown rev is not.
+  base=$(git rev-parse --verify --end-of-options "$1^{commit}")
+  if git cat-file -e "$base:$file" 2>/dev/null; then
+    before=$(git show "$base:$file")
+  fi
+  printf '%s\n' "$before" | awk '
+    function unit(package, parts) {
+      split(package, parts, "/")
+      if (parts[1] == "internal" || parts[1] == "cmd")
+        return parts[1] "/" parts[2]
+      return package
+    }
+    function change(kind, edge, parts) {
+      split(edge, parts, " ")
+      print (unit(parts[1]) != unit(parts[3]) ? 1 : 2), kind, edge
+    }
+    FNR == 1 { edges = 0 }
+    /^```text$/ { edges = 1; next }
+    /^```$/ { edges = 0; next }
+    edges && NF == 3 && $2 == "->" {
+      edge = $1 " -> " $3
+      if (FILENAME == "-") old[edge] = 1
+      else current[edge] = 1
+    }
+    END {
+      for (edge in current) if (!(edge in old)) change("Added", edge)
+      for (edge in old) if (!(edge in current)) change("Removed", edge)
+    }
+  ' - "$file" | LC_ALL=C sort | awk '
+    NR == 1 { print "## Package-import edge changes" }
+    $1 != group {
+      group = $1
+      print "\n### " (group == 1 ? "Crossing units" : "Within one unit") "\n"
+    }
+    { printf "- %s: `%s -> %s`\n", $2, $3, $5 }
+    END { if (NR == 0) print "No package-import edges changed." }
+  '
+}
+
 case "${1:-}" in
 "")
   render >"$file.tmp"
@@ -55,8 +99,15 @@ case "${1:-}" in
     exit 1
   fi
   ;;
+--diff)
+  if [[ $# != 2 ]]; then
+    echo "usage: scripts/deps.sh --diff <rev>" >&2
+    exit 2
+  fi
+  edge_diff "$2"
+  ;;
 *)
-  echo "usage: scripts/deps.sh [--check]" >&2
+  echo "usage: scripts/deps.sh [--check | --diff <rev>]" >&2
   exit 2
   ;;
 esac

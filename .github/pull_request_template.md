@@ -2,7 +2,7 @@ Closes #
 
 **Summary:** <!-- 1–3 lines -->
 
-**Boundaries:** <!-- features touched; new edges in docs/dependencies.md, each with its reason; or n/a -->
+**Boundaries:** <!-- features touched; new edges in docs/dependencies.md, each with its reason; or n/a. Added/removed edges appear in the ci job summary (crossing units first), with added-edge notices on docs/dependencies.md. Locally: bash scripts/deps.sh --diff origin/main -->
 
 **Look here:** <!-- file:line, or "nothing in particular" -->
 

@@ -26,7 +26,10 @@ stop and ask the maintainer.
   features only through their exported API and writes only its own
   tables or a listed exception (feature map in
   `docs/architecture/features.md`); every new edge in
-  `docs/dependencies.md` is explained in the PR.
+  `docs/dependencies.md` is explained in the PR. The ci job summary lists
+  added and removed edges, crossing units first; added edges also appear
+  as notices on `docs/dependencies.md`. Authors can run
+  `bash scripts/deps.sh --diff origin/main` locally for the same list.
 - Tests prove the behaviour (authorization: someone who must not see the
   data does not see it). No test was deleted, skipped or weakened.
 - A test-only pull request meant to catch a regression records, in

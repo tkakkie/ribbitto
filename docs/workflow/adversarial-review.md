@@ -46,12 +46,14 @@ into realtime's store). **When in doubt, the higher tier.**
     what a member may see or do, and how a session expires (for example in
     `internal/org/**`, `internal/identity/**`, `internal/web/middleware/**`,
     the setup, sign-up and sign-in handlers, and their stores and queries);
-  - a change to `Makefile`, `tools/**` or a linter, vet or code-generation
-    setting (`.golangci.yml`, `sqlc.yaml`) that removes, skips or loosens a
-    check `make check` or CI runs.
+  - a change that removes, skips or loosens a check `make check` or CI
+    runs, wherever it lives: a test or an assertion, `Makefile`, `tools/**`,
+    or a linter, vet or code-generation setting (`.golangci.yml`,
+    `sqlc.yaml`).
 - **C — none:** everything that matches no A or B area: behaviour-preserving
   changes in B's areas (moves, renames, extractions, consumer-declared seams
-  and their closures), tests only outside A's areas, documentation outside
+  and their closures), tests only outside A's areas that weaken no check,
+  documentation outside
   the gate documents, lint rules that only tighten, dependency bumps, and
   ordinary feature work outside A and B.
 

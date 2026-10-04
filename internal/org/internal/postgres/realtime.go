@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -29,7 +30,7 @@ func (b Bounds) EventBounds(ctx context.Context, organizationID kernel.ID) (boun
 		return 0, 0, false, nil
 	}
 	if err != nil {
-		return 0, 0, false, err
+		return 0, 0, false, fmt.Errorf("reading event bounds: %w", err)
 	}
 	return row.EventLogBoundarySeq, row.EventSeq, true, nil
 }
@@ -46,13 +47,9 @@ func NewSequences(db sqlcgen.DBTX) *Sequences {
 // CommittedSequences returns the committed event_seq of each given
 // organisation that exists, in one query; it writes nothing.
 func (s *Sequences) CommittedSequences(ctx context.Context, organizations []kernel.ID) (map[kernel.ID]int64, error) {
-	ids := make([]pgtype.UUID, len(organizations))
-	for i, id := range organizations {
-		ids[i] = pgtype.UUID{Bytes: id, Valid: true}
-	}
-	rows, err := s.queries.CommittedSequences(ctx, ids)
+	rows, err := s.queries.CommittedSequences(ctx, uuidArray(organizations))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading committed sequences: %w", err)
 	}
 	seqs := make(map[kernel.ID]int64, len(rows))
 	for _, row := range rows {
@@ -73,12 +70,19 @@ type RetentionBoundary struct{ queries *sqlcgen.Queries }
 // LockForRetention locks the organisation's row, the same lock posting's
 // event_seq increment takes, so a batch never interleaves with a commit.
 func (b RetentionBoundary) LockForRetention(ctx context.Context, organizationID kernel.ID) error {
-	return b.queries.LockEventRetentionOrganization(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+	if err := b.queries.LockEventRetentionOrganization(ctx, pgtype.UUID{Bytes: organizationID, Valid: true}); err != nil {
+		return fmt.Errorf("locking organization for retention: %w", err)
+	}
+	return nil
 }
 
 // RaiseBoundary raises the replay boundary to through, never lowering it.
 func (b RetentionBoundary) RaiseBoundary(ctx context.Context, organizationID kernel.ID, through int64) error {
-	return b.queries.RaiseEventLogBoundary(ctx, sqlcgen.RaiseEventLogBoundaryParams{
+	err := b.queries.RaiseEventLogBoundary(ctx, sqlcgen.RaiseEventLogBoundaryParams{
 		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Through: through,
 	})
+	if err != nil {
+		return fmt.Errorf("raising replay boundary: %w", err)
+	}
+	return nil
 }

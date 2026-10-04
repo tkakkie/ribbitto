@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"reflect"
 	"testing"
 	"time"
@@ -30,10 +31,10 @@ func requireNoError(t *testing.T, err error) {
 
 func appendEvents(tx platform.Tx) infra.EventAppender { return postgres.AppenderIn(tx) }
 
-// newCleaner injects infra's real lock and boundary, so organization's
-// writes stay covered until org's module moves.
+// newCleaner injects org's real lock and boundary, so organization's
+// writes stay covered.
 func newCleaner(pool *pgxpool.Pool) *postgres.Cleaner {
-	return postgres.NewCleaner(pool, infra.RetentionBoundaryIn)
+	return postgres.NewCleaner(pool, orgpg.RetentionBoundaryIn)
 }
 
 // Observe completed COMMITs through a separate connection, before the next
@@ -73,7 +74,7 @@ func TestEventRetentionTransaction(t *testing.T) {
 	}
 	_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = CASE WHEN seq = 2 THEN '2000-01-01'::timestamptz ELSE '2100-01-01'::timestamptz END WHERE organization_id = $1", f.OrganizationID)
 	requireNoError(t, err)
-	reader := postgres.NewReader(pool, infra.EventBoundsIn, infra.EventKinds())
+	reader := postgres.NewReader(pool, orgpg.BoundsIn, infra.EventKinds())
 	requireNoError(t, platform.InTx(ctx, pool, func(tx platform.Tx) error {
 		count, err := newCleaner(pool).ExpireBatch(ctx, tx, f.OrganizationID, retentionCutoff)
 		requireNoError(t, err)
@@ -121,7 +122,7 @@ func TestEventRetentionFailedRaise(t *testing.T) {
 	_, err = pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
 	requireNoError(t, err)
 	before := retentionState(t, pool, f.OrganizationID)
-	boundary := func(tx platform.Tx) realtime.RetentionBoundary { return failingRaise{infra.RetentionBoundaryIn(tx)} }
+	boundary := func(tx platform.Tx) realtime.RetentionBoundary { return failingRaise{orgpg.RetentionBoundaryIn(tx)} }
 	if err := postgres.NewCleaner(pool, boundary).ExpireEvents(ctx, retentionCutoff); !errors.Is(err, errRaise) {
 		t.Fatalf("cleanup = %v, want the raise's error", err)
 	}
@@ -334,7 +335,7 @@ func TestEventRetentionExpiredPrefix(t *testing.T) {
 			if got := retentionState(t, pool, org); got != tt.want {
 				t.Fatalf("(boundary, rows) = %v, want %v", got, tt.want)
 			}
-			events, err := postgres.NewReader(pool, infra.EventBoundsIn, infra.EventKinds()).EventsAfter(ctx, org, tt.want[0], 10)
+			events, err := postgres.NewReader(pool, orgpg.BoundsIn, infra.EventKinds()).EventsAfter(ctx, org, tt.want[0], 10)
 			requireNoError(t, err)
 			var seqs []int64
 			for _, e := range events {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"io"
 	"os"
 	"runtime"
@@ -109,7 +110,7 @@ func TestStreamCost(t *testing.T) {
 	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, appendEvents), hub)
 	// dbReads counts reads that reach the database (empty ones included);
 	// loopReads counts the loops' reads, which the cache may answer.
-	dbReads := &countingReader{inner: realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())}
+	dbReads := &countingReader{inner: realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())}
 	var inner realtime.EventReader = dbReads
 	renderer := readingRenderer{messages: postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}, membership: m}
 	if cached {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"log/slog"
 	"net"
 	"net/http"
@@ -118,9 +119,9 @@ func serve(ctx context.Context, databaseURL string) error {
 	// Stop cleanup before closing its pool, including on listener failure.
 	stopCleanup := startSessionCleanup(ctx, sessions)
 	defer stopCleanup()
-	stopWatermark := startRealtimeWorker(ctx, realtime.Watermark{Hub: hub, Sequences: postgres.NewEventSequences(pool)}, realtime.WatermarkInterval)
+	stopWatermark := startRealtimeWorker(ctx, realtime.Watermark{Hub: hub, Sequences: orgpg.NewSequences(pool)}, realtime.WatermarkInterval)
 	defer stopWatermark()
-	stopRetention := startRealtimeWorker(ctx, realtime.Retention{Events: realtimepg.NewCleaner(pool, postgres.RetentionBoundaryIn), Period: retention}, time.Hour)
+	stopRetention := startRealtimeWorker(ctx, realtime.Retention{Events: realtimepg.NewCleaner(pool, orgpg.RetentionBoundaryIn), Period: retention}, time.Hour)
 	defer stopRetention()
 
 	srv := newServer(addr, handler, serverTimeouts{
@@ -274,7 +275,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		branchNotifier = config.hub
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
-		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds()), config.hub, 1024, time.Minute)
+		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds()), config.hub, 1024, time.Minute)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
 	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, appendEvents), postingNotifier)

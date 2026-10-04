@@ -79,6 +79,10 @@ handle upgrade test, with local raw-SQL account fixtures. Their test-only
 in `db/queries/org/`; conversation's schema test still uses infra's `pgtest`
 fixtures until step 5.
 
+Sign-up's database tests belong to `orgpg` (`signup_test.go`), with local
+raw-SQL fixtures and event-log checks; only their setup organisation uses
+`infra`'s setup store until 3.12.
+
 **Known exceptions.** Cross-feature writes that must commit atomically:
 
 - setup (`org`) writes `organization`, `account`, `member`, `channel` and

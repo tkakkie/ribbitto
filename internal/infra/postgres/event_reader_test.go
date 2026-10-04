@@ -71,8 +71,8 @@ func TestEventsAfter(t *testing.T) {
 		return data
 	}
 	want := []realtime.Event{
-		{OrganizationID: f.OrganizationID, Seq: 1, Kind: realtime.EventMemberJoined, Payload: stored(1)},
-		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: realtime.EventMessagePosted, ChannelID: f.Channel.ID,
+		{OrganizationID: f.OrganizationID, Seq: 1, Kind: member.KindJoined, Payload: stored(1)},
+		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: message.KindPosted, ChannelID: f.Channel.ID,
 			Topics: []domain.ID{posted.TopicID}, Payload: stored(posted.EventSeq)},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
 	}
@@ -227,7 +227,7 @@ func TestEventsAfterRegisteredKinds(t *testing.T) {
 	want := []realtime.Event{
 		{OrganizationID: org, Seq: 1, Kind: "test.synthetic", ChannelID: channel, Topics: []domain.ID{topic}, Payload: routed},
 		{OrganizationID: org, Seq: 2, Kind: "test.unregistered"},
-		{OrganizationID: org, Seq: 3, Kind: realtime.EventMessagePosted},
+		{OrganizationID: org, Seq: 3, Kind: message.KindPosted},
 	}
 	if len(routed) == 0 || !reflect.DeepEqual(got, want) {
 		t.Fatalf("EventsAfter = %+v; want %+v", got, want)

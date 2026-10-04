@@ -8,9 +8,12 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// Moved is the payload of realtime.EventMessagesMoved, which branching
-// publishes and so owns (decision 26): the messages a branch moved, their
-// channel, and the topics they left and joined.
+// KindMessagesMoved is the kind of a branch's move, which branching
+// publishes and so owns (decision 26): the messages it moved, their channel,
+// and the topics they left and joined (docs/domain/topics.md).
+const KindMessagesMoved realtime.EventKind = "messages.moved"
+
+// Moved is the payload of KindMessagesMoved.
 type Moved struct {
 	ChannelID   domain.ID
 	FromTopicID domain.ID

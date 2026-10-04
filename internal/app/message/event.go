@@ -7,7 +7,12 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// Posted is the decoded payload of realtime.EventMessagePosted.
+// KindPosted is the kind of a message's posting, which this feature
+// publishes and so owns (decision 26): its message, channel and
+// posting-time topic.
+const KindPosted realtime.EventKind = "message.posted"
+
+// Posted is the decoded payload of KindPosted.
 type Posted struct {
 	ChannelID domain.ID
 	MessageID domain.ID
@@ -16,9 +21,8 @@ type Posted struct {
 	TopicID *domain.ID
 }
 
-// EncodePosted returns the stored data of realtime.EventMessagePosted,
-// which this feature publishes and so owns (decision 26), for a post in
-// topicID: canonical UUID text under channel_id, message_id and topic_id.
+// EncodePosted returns the stored data of KindPosted for a post in topicID:
+// canonical UUID text under channel_id, message_id and topic_id.
 func EncodePosted(channelID, messageID, topicID domain.ID) []byte {
 	// This payload contains only strings, so marshaling cannot fail.
 	data, _ := json.Marshal(map[string]string{

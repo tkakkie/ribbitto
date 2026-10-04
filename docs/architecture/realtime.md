@@ -67,13 +67,15 @@ author names or `message.ErrNotFound`.
 is organisation-wide; a value restricts delivery to that member, enforced
 by the stream's per-event authorization (`authz.MayReceive`). Its composite foreign key keeps the
 member in the same organisation. The audience never appears in `data`.
-Each kind's publisher owns its payload (decision 26): `app/message`
-(`EncodePosted`, `DecodePosted`), `app/topic` (`EncodeMoved`, `DecodeMoved`)
-and `app/member` (`EncodeJoined`, `DecodeJoined`) encode and decode it until
-their modules move. The encoders return only `[]byte`: their strings and
-string slices cannot fail JSON marshaling. The writer stores what they return;
-the reader only routes through their `Router`s, and consumers decode the payload (the
-renderer decodes moves). IDs are canonical UUID text
+Each kind's publisher owns its kind name and payload (decision 26):
+`app/message` (`KindPosted`, `EncodePosted`, `DecodePosted`), `app/topic`
+(`KindMessagesMoved`, `EncodeMoved`, `DecodeMoved`) and `app/member`
+(`KindJoined`, `EncodeJoined`, `DecodeJoined`) declare the kind, encode the
+payload and decode it until their modules move; realtime keeps only the
+`EventKind` type. The encoders return only `[]byte`: their strings and
+string slices cannot fail JSON marshaling. The writer stores what they
+return; the reader only routes through their `Router`s, and consumers
+decode the payload (the renderer decodes moves). IDs are canonical UUID text
 (`realtime.FormatPayloadID`, `ParsePayloadID`), the JSON value SQL's
 `jsonb_build_object` wrote before (#398), so old and new rows decode alike.
 `message.posted` carries `{"channel_id","message_id","topic_id"}` (UUIDs);

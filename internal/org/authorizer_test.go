@@ -46,8 +46,8 @@ func TestAuthorizer(t *testing.T) {
 	alice := &identity.Account{ID: domain.ID{1}} // member of acme
 	bob := &identity.Account{ID: domain.ID{2}}   // member of globex only
 	carol := &identity.Account{ID: domain.ID{3}} // no membership
-	acme := org.Membership{Organization: domain.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: domain.Member{Role: domain.RoleOwner}}
-	globex := org.Membership{Organization: domain.Organization{ID: domain.ID{11}, Slug: "globex"}}
+	acme := org.Membership{Organization: org.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: org.Member{Role: org.RoleOwner}}
+	globex := org.Membership{Organization: org.Organization{ID: domain.ID{11}, Slug: "globex"}}
 	store := fakeStore{
 		memberships: map[domain.ID]map[string]org.Membership{alice.ID: {"acme": acme}, bob.ID: {"globex": globex}},
 		home:        "acme",
@@ -88,7 +88,7 @@ func TestAuthorizer(t *testing.T) {
 
 func TestMayReceive(t *testing.T) {
 	aliceMember, otherMember := domain.ID{20}, domain.ID{21}
-	acme := org.Membership{Organization: domain.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: domain.Member{ID: aliceMember}}
+	acme := org.Membership{Organization: org.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: org.Member{ID: aliceMember}}
 	store := fakeStore{memberships: map[domain.ID]map[string]org.Membership{{1}: {"acme": acme}}}
 	event := realtime.Event{OrganizationID: acme.Organization.ID, Seq: 5, Kind: message.KindPosted}
 	withAudience := func(member domain.ID) realtime.Event {

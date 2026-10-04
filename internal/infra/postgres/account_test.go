@@ -12,6 +12,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // TestAccountSchema holds the organisation and member part of the schema
@@ -38,9 +39,9 @@ func TestAccountSchema(t *testing.T) {
 		account, err := q.CreateAccount(ctx, sqlcgen.CreateAccountParams{Email: email, DisplayName: name, PasswordHash: "$argon2id$test"})
 		requireNoError(t, err)
 		accounts = append(accounts, account)
-		name, err = domain.ValidateOrganizationName(strings.Repeat("界", []int{1, 100}[i]))
+		name, err = org.ValidateOrganizationName(strings.Repeat("界", []int{1, 100}[i]))
 		requireNoError(t, err)
-		slug, err := domain.ValidateSlug(strings.Repeat("a", []int{1, 63}[i]))
+		slug, err := org.ValidateSlug(strings.Repeat("a", []int{1, 63}[i]))
 		requireNoError(t, err)
 		_, err = pool.Exec(ctx, "INSERT INTO organization (slug, name) VALUES ($1, $2)", slug, name)
 		requireNoError(t, err)

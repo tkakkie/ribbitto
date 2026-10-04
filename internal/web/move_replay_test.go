@@ -189,7 +189,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	ctx := t.Context()
 	pool := pgtest.New(t)
 	f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-	m := org.Membership{Organization: domain.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: f.MemberID}}
+	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
 	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
 	renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 	log := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
@@ -313,7 +313,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 
 func topicPageBoundary(t *testing.T, destination domain.Topic, page message.ChannelPage, before int64) int64 {
 	t.Helper()
-	model := view.ChannelPage{Organization: domain.Organization{Name: "Acme", Slug: "acme"}, Topic: &destination, Older: page.Older, Before: before}
+	model := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"}, Topic: &destination, Older: page.Older, Before: before}
 	for _, entry := range page.Entries {
 		model.Messages = append(model.Messages, viewMessage("acme", entry))
 	}
@@ -354,7 +354,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			ctx := t.Context()
 			pool := pgtest.New(t)
 			f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-			m := org.Membership{Organization: domain.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: f.MemberID}}
+			m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
 			destination, err := postgres.NewTopicStore(pool).CreateTopic(ctx, f.OrganizationID, f.Channel.ID, "Destination")
 			if err != nil {
 				t.Fatal(err)
@@ -437,7 +437,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				ctx := t.Context()
 				pool := pgtest.New(t)
 				f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-				m := org.Membership{Organization: domain.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: f.MemberID}}
+				m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
 				destination, err := postgres.NewTopicStore(pool).CreateTopic(ctx, f.OrganizationID, f.Channel.ID, "Destination")
 				if err != nil {
 					t.Fatal(err)

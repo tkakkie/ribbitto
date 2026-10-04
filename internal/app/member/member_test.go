@@ -36,8 +36,8 @@ func (s *store) UpdateHandle(_ context.Context, org, id domain.ID, handle string
 func TestChangeHandle(t *testing.T) {
 	alice := &identity.Account{ID: domain.ID{1}}
 	membership := org.Membership{
-		Organization: domain.Organization{ID: domain.ID{2}, Slug: "acme"},
-		Member:       domain.Member{ID: domain.ID{3}, OrganizationID: domain.ID{2}, AccountID: alice.ID},
+		Organization: org.Organization{ID: domain.ID{2}, Slug: "acme"},
+		Member:       org.Member{ID: domain.ID{3}, OrganizationID: domain.ID{2}, AccountID: alice.ID},
 	}
 	for _, tt := range []struct {
 		name     string

@@ -4,7 +4,8 @@
 //
 // Feature: org (feature map in docs/architecture/features.md), which owns the
 // organization, member and setup tables; this package only reads them.
-// Exported API: Authorizer, built by NewAuthorizer (including MayReceive,
+// Exported API: Organization, Member, Role, ValidateOrganizationName,
+// ValidateSlug, ValidateHandle; Authorizer, built by NewAuthorizer (including MayReceive,
 // which the real-time stream calls for each event after rendering it, right
 // before sending), Membership, the MembershipStore interface it needs and
 // ErrNotFound. Every feature checks access through it. Until org's store

@@ -107,7 +107,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	en := inLanguage("en")
 	orgA, orgB := domain.ID{1}, domain.ID{3}
 	memberOf := func(orgID domain.ID) org.Membership {
-		return org.Membership{Organization: domain.Organization{ID: orgID}}
+		return org.Membership{Organization: org.Organization{ID: orgID}}
 	}
 	base := topic.Moved{ChannelID: domain.ID{2}, FromTopicID: domain.ID{1}, ToTopicID: domain.ID{2}}
 	event := eventOf(t, orgA, 9, message.KindPosted, base)

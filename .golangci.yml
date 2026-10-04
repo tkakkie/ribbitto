@@ -175,8 +175,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform/
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/realtime$
-            # Temporary: domain's Organization, Member and ValidateSlug until
-            # step 3.2 (#447), and its ID alias until step 5 (modules.md).
+            # Temporary: domain's ID alias, until step 5 (modules.md).
             - github.com/tkakkie/ribbitto/internal/domain$
           deny: *non_html
         web:
@@ -207,6 +206,10 @@ linters:
             - pkg: github.com/tkakkie/ribbitto/internal/identity$
               desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
             - pkg: github.com/tkakkie/ribbitto/internal/identity/
+              desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
+            - pkg: github.com/tkakkie/ribbitto/internal/org$
+              desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
+            - pkg: github.com/tkakkie/ribbitto/internal/org/
               desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
             - pkg: github.com/tkakkie/ribbitto/internal/infra$
               desc: Views do no I/O; see docs/architecture/web-layers.md.

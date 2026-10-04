@@ -55,9 +55,11 @@ internal/app/message -> internal/org
 internal/app/message -> internal/realtime
 internal/app/setup -> internal/domain
 internal/app/setup -> internal/identity
+internal/app/setup -> internal/org
 internal/app/signup -> internal/app/setup
 internal/app/signup -> internal/domain
 internal/app/signup -> internal/identity
+internal/app/signup -> internal/org
 internal/app/topic -> internal/domain
 internal/app/topic -> internal/org
 internal/app/topic -> internal/realtime
@@ -86,6 +88,7 @@ internal/infra/postgres -> internal/platform/postgres/pgxbridge
 internal/infra/postgres -> internal/realtime
 internal/infra/postgres/pgtest -> internal/domain
 internal/infra/postgres/pgtest -> internal/infra/postgres
+internal/infra/postgres/pgtest -> internal/org
 internal/infra/postgres/pgtest -> internal/platform/postgres/pgtest
 internal/org -> internal/domain
 internal/org -> internal/identity

@@ -186,7 +186,7 @@ func TestBranchStoreFailingNoticeAppend(t *testing.T) {
 	}
 	notifier := &countingNotifier{}
 	brancher := topic.NewBrancher(postgres.NewBranchStore(pool, events), notifier)
-	member := org.Membership{Organization: domain.Organization{ID: acme.OrganizationID}, Member: domain.Member{ID: acme.MemberID}}
+	member := org.Membership{Organization: org.Organization{ID: acme.OrganizationID}, Member: org.Member{ID: acme.MemberID}}
 	before := readBranchState(t, pool, acme.OrganizationID)
 	b := topic.Branch{Messages: []domain.ID{posted.ID}, From: acme.Channel.DefaultTopicID, NewName: "design"}
 	if _, err := brancher.Branch(ctx, member, acme.Channel.ID, b, func(d domain.Topic) string { return "moved to " + d.Name }); !errors.Is(err, errNoticeAppend) {

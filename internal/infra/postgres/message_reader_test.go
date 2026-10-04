@@ -26,8 +26,8 @@ func TestMessageOne(t *testing.T) {
 	local := pgtest.OrganizationWithOwner(t, pool, "acme", appchannel.DefaultName)
 	foreign := pgtest.OrganizationWithOwner(t, pool, "globex", appchannel.DefaultName)
 	otherChannel := pgtest.Channel(t, pool, local.OrganizationID, "other", false)
-	membership := org.Membership{Organization: domain.Organization{ID: local.OrganizationID}, Member: domain.Member{ID: local.MemberID}}
-	foreignMembership := org.Membership{Organization: domain.Organization{ID: foreign.OrganizationID}, Member: domain.Member{ID: foreign.MemberID}}
+	membership := org.Membership{Organization: org.Organization{ID: local.OrganizationID}, Member: org.Member{ID: local.MemberID}}
+	foreignMembership := org.Membership{Organization: org.Organization{ID: foreign.OrganizationID}, Member: org.Member{ID: foreign.MemberID}}
 	service := message.New(postgres.NewPostingStore(pool, appendEvents))
 	posted, err := service.Post(ctx, membership, local.Channel.ID, "local body")
 	requireNoError(t, err)
@@ -78,7 +78,7 @@ func TestMessagePaging(t *testing.T) {
 			name = "empty"
 		}
 		fixture := pgtest.OrganizationWithOwner(t, pool, slug, name)
-		memberships[slug] = org.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
+		memberships[slug] = org.Membership{Organization: org.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: org.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
 		defaults[slug] = fixture.Channel
 	}
 	acme, globex := memberships["acme"], memberships["globex"]
@@ -225,7 +225,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
 			fixture := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-			m := org.Membership{Organization: domain.Organization{ID: fixture.OrganizationID}, Member: domain.Member{ID: fixture.MemberID}}
+			m := org.Membership{Organization: org.Organization{ID: fixture.OrganizationID}, Member: org.Member{ID: fixture.MemberID}}
 			posting := message.New(postgres.NewPostingStore(pool, appendEvents))
 			initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")
 			requireNoError(t, err)

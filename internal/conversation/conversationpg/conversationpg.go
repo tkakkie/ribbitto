@@ -1,6 +1,8 @@
 package conversationpg
 
 import (
+	"context"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
@@ -33,3 +35,17 @@ func NewTopics(pool *pgxpool.Pool) *conversation.Topics {
 func DefaultChannelCreatorIn(tx platform.Tx) *postgres.DefaultChannelCreator {
 	return postgres.DefaultChannelCreatorIn(tx)
 }
+
+// NewTxRunner returns the transaction runner posting and branching own their
+// transaction through, over pool.
+func NewTxRunner(pool *pgxpool.Pool) conversation.TxRunner { return txRunner{pool: pool} }
+
+type txRunner struct{ pool *pgxpool.Pool }
+
+func (r txRunner) InTx(ctx context.Context, fn func(platform.Tx) error) error {
+	return platform.InTx(ctx, r.pool, fn)
+}
+
+// WriterIn returns posting's writes bound to the caller's transaction; it is
+// a conversation.WriterIn.
+func WriterIn(tx platform.Tx) conversation.Writer { return postgres.WriterIn(tx) }

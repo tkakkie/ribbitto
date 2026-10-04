@@ -15,8 +15,11 @@
 // TopicDirectory (one topic batch per page); PageSize and ChannelPage, the
 // page snapshot's result; MemberDirectoryIn and AccountDirectoryIn, the
 // reader's author lookups from org and identity, bound to the caller's
-// snapshot by closures in cmd/* and the tests; and the two event kinds
-// conversation publishes and so owns.
+// snapshot by closures in cmd/* and the tests; TxRunner, Writer with
+// WriterIn, EventSequenceIn, EventAppenderIn and Notifier, the transaction
+// ports posting and branching will own their transaction through (unused
+// until steps 4.9 and 4.10a); and the two event kinds conversation publishes
+// and so owns.
 // KindPosted with Posted, EncodePosted, DecodePosted and RoutePosted is
 // message.posted, its payload and its routing; KindMessagesMoved with Moved,
 // EncodeMoved, DecodeMoved and RouteMoved is messages.moved. conversationpg

@@ -63,6 +63,7 @@ internal/conversation/conversationpg -> internal/realtime
 internal/conversation/internal/postgres -> internal/conversation
 internal/conversation/internal/postgres -> internal/conversation/internal/postgres/sqlcgen
 internal/conversation/internal/postgres -> internal/kernel
+internal/conversation/internal/postgres -> internal/org
 internal/conversation/internal/postgres -> internal/platform/postgres
 internal/conversation/internal/postgres -> internal/platform/postgres/pgxbridge
 internal/domain -> internal/kernel

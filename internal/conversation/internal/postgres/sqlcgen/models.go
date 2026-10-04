@@ -18,6 +18,17 @@ type Channel struct {
 	DefaultTopicIsDefault bool
 }
 
+type Message struct {
+	ID             pgtype.UUID
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	MemberID       pgtype.UUID
+	Body           string
+	EventSeq       int64
+	CreatedAt      pgtype.Timestamptz
+	TopicID        pgtype.UUID
+}
+
 type Topic struct {
 	ID             pgtype.UUID
 	OrganizationID pgtype.UUID

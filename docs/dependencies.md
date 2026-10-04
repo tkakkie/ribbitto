@@ -38,6 +38,7 @@ cmd/seed -> internal/identity
 cmd/seed -> internal/identity/identitypg
 cmd/seed -> internal/infra/postgres
 cmd/seed -> internal/org
+cmd/seed -> internal/org/orgpg
 cmd/seed -> internal/platform/postgres
 cmd/seed -> internal/realtime/realtimepg
 internal/app/channel -> internal/domain
@@ -85,6 +86,7 @@ internal/org -> internal/kernel
 internal/org -> internal/platform/postgres
 internal/org -> internal/realtime
 internal/org/internal/postgres -> internal/kernel
+internal/org/internal/postgres -> internal/org
 internal/org/internal/postgres -> internal/org/internal/postgres/sqlcgen
 internal/org/internal/postgres -> internal/platform/postgres
 internal/org/internal/postgres -> internal/platform/postgres/pgxbridge

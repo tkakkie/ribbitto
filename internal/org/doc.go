@@ -26,6 +26,8 @@
 // Listed exception: setup creates identity's first account and the default
 // channel in the same transaction as the organisation.
 //
-// Until org's store moves (step 3), infra/postgres implements MembershipStore,
-// HandleStore, Directory and SetupStore, keeping their transactions.
+// Org's store implements MembershipStore, HandleStore and the snapshot-bound
+// Directory. orgpg builds the authorizer and handle changer and binds the
+// directory to the caller's snapshot (MembersIn). infra/postgres
+// implements SetupStore, keeping its transaction until 3.12.
 package org

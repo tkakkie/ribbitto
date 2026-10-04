@@ -22,6 +22,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -305,7 +306,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 	}
 	t.Run("author lookup isolation and reload", func(t *testing.T) {
-		authzService := org.NewAuthorizer(postgres.NewAuthzStore(pool))
+		authzService := orgpg.NewAuthorizer(pool)
 		a, err := authzService.Member(ctx, &identity.Account{ID: alice}, "acme")
 		if err != nil {
 			t.Fatal(err)
@@ -318,7 +319,11 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		if _, err := pool.Exec(ctx, "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $2, 'member', 2, 'carol')", acme, carol); err != nil {
 			t.Fatal(err)
 		}
-		members, err := postgres.NewMemberStore(pool).LookupMembers(ctx, acme, []domain.ID{a.Member.ID, b.Member.ID})
+		var members map[domain.ID]org.DirectoryEntry
+		err = platform.InSnapshot(ctx, pool, func(snapshot platform.Snapshot) (err error) {
+			members, err = orgpg.MembersIn(snapshot).LookupMembers(ctx, acme, []domain.ID{a.Member.ID, b.Member.ID})
+			return err
+		})
 		if err != nil || len(members) != 1 || members[a.Member.ID].AccountID != alice || members[a.Member.ID].Handle != "alice" {
 			t.Fatalf("members: %v, %v", members, err)
 		}

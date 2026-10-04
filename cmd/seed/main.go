@@ -28,6 +28,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -171,7 +172,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		return fmt.Errorf("seeding requires an empty, migrated development database: %w", err)
 	}
 	signups := signup.New(store, hasher, true)
-	authorizer := org.NewAuthorizer(postgres.NewAuthzStore(pool))
+	authorizer := orgpg.NewAuthorizer(pool)
 	members := make(map[string]org.Membership, len(data.Members))
 	for i, person := range data.Members {
 		id := created.AccountID
@@ -249,3 +250,6 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 // appendEvents adapts realtime's appender to the consumer interface the
 // event-writing stores declare (decision 26).
 func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// lookupMembers adapts org's directory to the reader's consumer interface.
+func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }

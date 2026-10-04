@@ -23,7 +23,9 @@ invariant changes. Keep the numbers stable: other documents cite them.
    re-implement it. The entry point is
    `internal/org`: `Authorizer.Member` turns the signed-in account and
    the slug from the URL into a membership, with one not-found error for an
-   unknown slug, a non-member and a signed-out caller.
+   unknown slug, a non-member and a signed-out caller. `orgpg.NewAuthorizer`
+   builds it with org's store, which reads memberships and resolves the home
+   organisation through the setup row.
 6. **`organization.event_seq` only increases, without gaps.** It is taken
    first in the writing transaction, and the same value is stored in both
    `event_log.seq` and the entity's own `event_seq` (for messages) or

@@ -8,9 +8,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/internal/postgres/sqlcgen"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
 // MemberStore implements org.HandleStore.
@@ -25,7 +27,7 @@ func NewMemberStore(db sqlcgen.DBTX) *MemberStore {
 
 // UpdateHandle changes one member's handle. The unique constraint, not a
 // prior lookup, decides between concurrent claims of the same handle.
-func (s *MemberStore) UpdateHandle(ctx context.Context, organizationID, memberID domain.ID, handle string) error {
+func (s *MemberStore) UpdateHandle(ctx context.Context, organizationID, memberID kernel.ID, handle string) error {
 	rows, err := s.queries.UpdateMemberHandle(ctx, sqlcgen.UpdateMemberHandleParams{
 		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true},
 		ID:             pgtype.UUID{Bytes: memberID, Valid: true},
@@ -45,20 +47,31 @@ func (s *MemberStore) UpdateHandle(ctx context.Context, organizationID, memberID
 	return nil
 }
 
+// Directory implements org.Directory inside a caller's snapshot.
+type Directory struct {
+	queries *sqlcgen.Queries
+}
+
+// NewDirectoryIn binds member lookups to the caller's snapshot, so authors
+// reflect the same state as its messages and other directory reads.
+func NewDirectoryIn(snapshot platform.Snapshot) *Directory {
+	return &Directory{queries: sqlcgen.New(pgxbridge.Snapshot(snapshot))}
+}
+
 // LookupMembers implements org.Directory, scoped to one organisation.
-func (s *MemberStore) LookupMembers(ctx context.Context, organizationID domain.ID, ids []domain.ID) (map[domain.ID]org.DirectoryEntry, error) {
+func (s *Directory) LookupMembers(ctx context.Context, organizationID kernel.ID, ids []kernel.ID) (map[kernel.ID]org.DirectoryEntry, error) {
 	rows, err := s.queries.LookupMembers(ctx, sqlcgen.LookupMembersParams{OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, MemberIds: uuidArray(ids)})
 	if err != nil {
 		return nil, fmt.Errorf("looking up members: %w", err)
 	}
-	result := make(map[domain.ID]org.DirectoryEntry, len(rows))
+	result := make(map[kernel.ID]org.DirectoryEntry, len(rows))
 	for _, row := range rows {
 		result[row.ID.Bytes] = org.DirectoryEntry{AccountID: row.AccountID.Bytes, Handle: row.Handle}
 	}
 	return result, nil
 }
 
-func uuidArray(ids []domain.ID) []pgtype.UUID {
+func uuidArray(ids []kernel.ID) []pgtype.UUID {
 	result := make([]pgtype.UUID, len(ids))
 	for i, id := range ids {
 		result[i] = pgtype.UUID{Bytes: id, Valid: true}

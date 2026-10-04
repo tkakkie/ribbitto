@@ -12,6 +12,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -58,10 +59,10 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 	s := Services{
 		Sessions:  sessions,
 		SignIn:    identitypg.NewSignIn(pool, hasher, sessions),
-		Authz:     org.NewAuthorizer(postgres.NewAuthzStore(pool)),
+		Authz:     orgpg.NewAuthorizer(pool),
 		Channels:  channel.New(postgres.NewChannelStore(pool)),
 		Topics:    postgres.NewTopicStore(pool),
-		Messages:  postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn},
+		Messages:  postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers},
 		Posting:   message.New(postgres.NewPostingStore(pool, appendEvents)),
 		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, appendEvents), nil),
 	}
@@ -77,3 +78,6 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 // appendEvents adapts realtime's appender to the consumer interface the
 // event-writing stores declare (decision 26).
 func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// lookupMembers adapts org's directory to the reader's consumer interface.
+func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }

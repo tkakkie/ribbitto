@@ -238,7 +238,7 @@ func TestWriterMoveMessages(t *testing.T) {
 	var planning, random, randomTopic kernel.ID
 	fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, 'Planning', false) RETURNING id", []any{f.acme, f.general}, &planning)
 	fixture(t, pool, channelSQL, []any{f.acme, "random"}, &random, &randomTopic)
-	want := map[kernel.ID]kernel.ID{}
+	before, want := map[kernel.ID]kernel.ID{}, map[kernel.ID]kernel.ID{}
 	selected := []kernel.ID{{0xee}} // unknown
 	for i, m := range []struct{ organization, channel, topic, member, after kernel.ID }{
 		{f.acme, f.general, f.generalTopic, f.alice, planning},       // the only one that moves
@@ -249,24 +249,41 @@ func TestWriterMoveMessages(t *testing.T) {
 	} {
 		var id kernel.ID
 		fixture(t, pool, "INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq) VALUES ($1, $2, $3, $4, 'hello', $5) RETURNING id", []any{m.organization, m.channel, m.topic, m.member, i + 1}, &id)
-		want[id] = m.after
+		before[id], want[id] = m.topic, m.after
 		if i != 1 {
 			selected = append(selected, id)
 		}
 	}
-	var moved int64
-	requireNoError(t, conversationpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error {
-		var err error
-		moved, err = writerIn(tx).MoveMessages(ctx, f.acme, f.general, f.generalTopic, planning, selected)
-		return err
-	}))
-	if moved != 1 {
-		t.Fatalf("moved = %d, want 1", moved)
+	move := func(organizationID, channelID kernel.ID) (moved int64) {
+		requireNoError(t, conversationpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error {
+			var err error
+			moved, err = writerIn(tx).MoveMessages(ctx, organizationID, channelID, f.generalTopic, planning, selected)
+			return err
+		}))
+		return moved
 	}
-	for id, topic := range want {
-		var got kernel.ID
-		if fixture(t, pool, "SELECT topic_id FROM message WHERE id = $1", []any{id}, &got); got != topic {
-			t.Errorf("message %v is in topic %v after commit, want %v", id, got, topic)
+	topicsAre := func(want map[kernel.ID]kernel.ID, when string) {
+		t.Helper()
+		for id, topic := range want {
+			var got kernel.ID
+			if fixture(t, pool, "SELECT topic_id FROM message WHERE id = $1", []any{id}, &got); got != topic {
+				t.Fatalf("%s: message %v is in topic %v, want %v", when, id, got, topic)
+			}
 		}
 	}
+	// The source topic matches, so only the organisation or the channel
+	// predicate can keep its selected message in place.
+	for _, scope := range []struct {
+		name                  string
+		organization, channel kernel.ID
+	}{{"another organisation", f.globex, f.general}, {"another channel", f.acme, random}} {
+		if moved := move(scope.organization, scope.channel); moved != 0 {
+			t.Fatalf("%s: moved = %d, want 0", scope.name, moved)
+		}
+		topicsAre(before, scope.name)
+	}
+	if moved := move(f.acme, f.general); moved != 1 {
+		t.Fatalf("moved = %d, want 1", moved)
+	}
+	topicsAre(want, "after the move")
 }

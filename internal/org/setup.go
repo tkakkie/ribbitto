@@ -82,10 +82,6 @@ func (s *Setup) Complete(ctx context.Context, token string, input SetupInput) (S
 	}{
 		{"organization_name", &input.OrganizationName, ValidateOrganizationName},
 		{"slug", &input.Slug, ValidateSlug},
-		{"email", &input.Email, identity.ValidateEmail},
-		{"display_name", &input.DisplayName, identity.ValidateDisplayName},
-		{"handle", &input.Handle, ValidateHandle},
-		{"password", &input.Password, identity.ValidatePassword},
 	} {
 		value, err := field.validate(*field.value)
 		if err != nil {
@@ -93,6 +89,7 @@ func (s *Setup) Complete(ctx context.Context, token string, input SetupInput) (S
 		}
 		*field.value = value
 	}
+	validateRegistration(&input.DisplayName, &input.Handle, &input.Email, &input.Password, fields)
 	if len(fields) != 0 {
 		return SetupResult{}, fields
 	}
@@ -105,4 +102,18 @@ func (s *Setup) Complete(ctx context.Context, token string, input SetupInput) (S
 		return SetupResult{}, fmt.Errorf("creating setup: %w", err)
 	}
 	return result, nil
+}
+
+// validateRegistration checks the account fields setup and sign-up share,
+// keeping each flow's form keys, and normalises the valid ones in place.
+func validateRegistration(displayName, handle, email, password *string, fields ValidationErrors) {
+	*displayName, fields["display_name"] = identity.ValidateDisplayName(*displayName)
+	*handle, fields["handle"] = ValidateHandle(*handle)
+	*email, fields["email"] = identity.ValidateEmail(*email)
+	*password, fields["password"] = identity.ValidatePassword(*password)
+	for name, err := range fields {
+		if err == nil {
+			delete(fields, name)
+		}
+	}
 }

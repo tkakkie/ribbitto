@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -28,7 +28,7 @@ func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpServic
 	}
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		open, err := service.Open(r.Context())
-		if errors.Is(err, signup.ErrClosed) || (err == nil && !open) {
+		if errors.Is(err, org.ErrSignUpClosed) || (err == nil && !open) {
 			http.NotFound(w, r)
 			return
 		}
@@ -46,7 +46,7 @@ func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpServic
 				form.Values[name] = r.PostForm.Get(name)
 			}
 			account, err := service.SignUp(r.Context(), form.Values["display_name"], form.Values["handle"], form.Values["email"], r.PostForm.Get("password"))
-			var fields signup.ValidationErrors
+			var fields org.ValidationErrors
 			switch {
 			case err == nil:
 				token, expiresAt, err := sessions.Replace(r.Context(), incomingSession(r), account)
@@ -57,15 +57,15 @@ func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpServic
 				middleware.SetSessionCookie(w, token, expiresAt)
 				http.Redirect(w, r, "/", http.StatusSeeOther)
 				return
-			case errors.Is(err, signup.ErrClosed):
+			case errors.Is(err, org.ErrSignUpClosed):
 				http.NotFound(w, r)
 				return
 			case errors.Is(err, identity.ErrBusy):
 				http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 				return
-			case errors.Is(err, signup.ErrEmailTaken):
+			case errors.Is(err, org.ErrEmailTaken):
 				form.Errors["email"] = "signup.error.email_taken"
-			case errors.Is(err, signup.ErrHandleTaken):
+			case errors.Is(err, org.ErrHandleTaken):
 				form.Errors["handle"] = "signup.error.handle_taken"
 			case errors.As(err, &fields):
 				for _, name := range []string{"display_name", "handle", "email", "password"} {

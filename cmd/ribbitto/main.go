@@ -18,7 +18,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
@@ -287,7 +286,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Sessions:      sessions,
 		SignIn:        identitypg.NewSignIn(pool, hasher, sessions),
 		Setup:         setupService,
-		SignUp:        signup.New(setupStore, hasher, config.signupEnabled),
+		SignUp:        org.NewSignUp(setupStore, hasher, config.signupEnabled),
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        postgres.NewTopicStore(pool),

@@ -6,7 +6,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
@@ -70,7 +69,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		s.Setup, s.SetupSessions = org.NewSetup(postgres.NewSetupStore(pool, appendEvents), hasher, setupToken), sessions
 	}
 	if signUp {
-		s.SignUp, s.SetupSessions = signup.New(postgres.NewSetupStore(pool, appendEvents), hasher, true), sessions
+		s.SignUp, s.SetupSessions = org.NewSignUp(postgres.NewSetupStore(pool, appendEvents), hasher, true), sessions
 	}
 	return s
 }

@@ -106,12 +106,12 @@ func TestStreamCost(t *testing.T) {
 
 	m := org.Membership{Organization: org.Organization{ID: fixture.OrganizationID, Slug: "acme"}, Member: org.Member{ID: fixture.MemberID}}
 	hub := realtime.NewHub()
-	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, appendEvents), hub)
+	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, eventSequence, appendEvents), hub)
 	// dbReads counts reads that reach the database (empty ones included);
 	// loopReads counts the loops' reads, which the cache may answer.
 	dbReads := &countingReader{inner: realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())}
 	var inner realtime.EventReader = dbReads
-	renderer := readingRenderer{messages: postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers}, membership: m}
+	renderer := readingRenderer{messages: postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers, Cursor: eventCursor}, membership: m}
 	if cached {
 		inner = realtime.NewCachedEvents(t.Context(), dbReads, hub, 1024, time.Minute)
 		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](t.Context(), 4096, realtime.DefaultCacheLoads, time.Minute, 10*time.Second, nil, time.Now)

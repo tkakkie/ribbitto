@@ -11,17 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getEventSeq = `-- name: GetEventSeq :one
-SELECT event_seq FROM organization WHERE id = $1
-`
-
-func (q *Queries) GetEventSeq(ctx context.Context, id pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, getEventSeq, id)
-	var event_seq int64
-	err := row.Scan(&event_seq)
-	return event_seq, err
-}
-
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
 SELECT id, slug, name, event_seq, created_at, event_log_boundary_seq FROM organization WHERE slug = $1
 `
@@ -44,6 +33,7 @@ const nextEventSeq = `-- name: NextEventSeq :one
 UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq
 `
 
+// Setup and sign-up's copy of org's NextEventSeq (db/queries/org/), until 3.12.
 func (q *Queries) NextEventSeq(ctx context.Context, id pgtype.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, nextEventSeq, id)
 	var event_seq int64

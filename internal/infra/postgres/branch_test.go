@@ -29,7 +29,7 @@ func TestBranchStore(t *testing.T) {
 	ctx := t.Context()
 	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
-	posting, store, topics := postgres.NewPostingStore(pool, appendEvents), postgres.NewBranchStore(pool, appendEvents), postgres.NewTopicStore(pool)
+	posting, store, topics := postgres.NewPostingStore(pool, eventSequence, appendEvents), postgres.NewBranchStore(pool, eventSequence, appendEvents), postgres.NewTopicStore(pool)
 	var posted []domain.Message
 	for _, body := range []string{"one", "two", "three"} {
 		m, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, body)
@@ -179,14 +179,14 @@ func TestBranchStoreFailingNoticeAppend(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-	posted, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "one")
+	posted, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "one")
 	requireNoError(t, err)
 	moved := false
 	events := func(tx platform.Tx) postgres.EventAppender {
 		return failingNotice{EventAppender: appendEvents(tx), moved: &moved}
 	}
 	notifier := &countingNotifier{}
-	brancher := topic.NewBrancher(postgres.NewBranchStore(pool, events), notifier)
+	brancher := topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, events), notifier)
 	member := org.Membership{Organization: org.Organization{ID: acme.OrganizationID}, Member: org.Member{ID: acme.MemberID}}
 	before := readBranchState(t, pool, acme.OrganizationID)
 	b := topic.Branch{Messages: []domain.ID{posted.ID}, From: acme.Channel.DefaultTopicID, NewName: "design"}
@@ -214,7 +214,7 @@ func TestBranchStorePartlyStaleSelection(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
 			acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-			posting, store, topics := postgres.NewPostingStore(pool, appendEvents), postgres.NewBranchStore(pool, appendEvents), postgres.NewTopicStore(pool)
+			posting, store, topics := postgres.NewPostingStore(pool, eventSequence, appendEvents), postgres.NewBranchStore(pool, eventSequence, appendEvents), postgres.NewTopicStore(pool)
 			valid, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "still in source")
 			requireNoError(t, err)
 			stale, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "already moved")

@@ -68,8 +68,8 @@ Malformed topic paging links use a scoped topic lookup without history;
 topic posts rely on the lookup inside the posting transaction.
 
 Identity's store creates accounts in the caller's transaction through
-`identitypg.AccountCreatorIn`, implementing `org.AccountCreator`; only the
-wiring imports org. Setup and sign-up inject org's factory via a closure;
+`identitypg.AccountCreatorIn`. Closures in `cmd/*` and the tests adapt it to
+org's factory and prove that the creator fits `org.AccountCreator`;
 identity owns `ErrEmailTaken` and `ErrInvalidEmail`, which org maps to its
 conflicts or field errors.
 

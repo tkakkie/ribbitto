@@ -35,10 +35,10 @@ the temporary implementation behind it.
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
 | four `infra` target-version tests | `db/migrations` (temporary allowance) | 0 | their module's step, or 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
-| `app/setup`, `app/signup`, `app/authz`, `app/member` | `identity.Hasher`, `identity.Account` | 1 | 3 |
+| `app/setup`, `app/signup`, `app/member` | `identity.Hasher`, `identity.Account` | 1 | 3 |
+| `internal/web`, `cmd/*` (through `app/authz`, which forwards to `org`'s names) | `org`'s root | 3.1a | 3.1b |
 | `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
 | setup, sign-up (`infra`) | `identity` account writes | 3 (until then, a `legacy_account.sql` copy of `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry, from step 1) | 3 |
-| `app/authz` (`MayReceive`) | `realtime` event types (root import) | 2 | 3 (`org` imports `realtime`) |
 | `infra/postgres` appender interface (`EventAppender`), the bounds, committed-sequence and retention-boundary adapters, and the kind list | `realtime` types (root import, temporary allowance) | 2 | 5 |
 | the kind registry (`postgres.EventKinds()`, used by `cmd/ribbitto` and tests) | each publisher's `realtime.Router` | 2 | 3 and 4, as each module registers its own |
 | event payload codecs in `app/message`, `app/topic` and `app/member` | their kinds' payloads, owned by the publisher | 2 | 3 (`member.joined`, with `org`), 4 (`message.posted` and `messages.moved`, with `conversation`) |

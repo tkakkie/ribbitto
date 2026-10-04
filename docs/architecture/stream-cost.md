@@ -35,7 +35,7 @@ server is disposable: it can be a tunnel.
 ## What is measured
 
 Per step: `N` streams of one member in one organisation, all following one
-channel, run the real loop (#209), event reader (#208), `authz.MayReceive` and
+channel, run the real loop (#209), event reader (#208), `org.Authorizer.MayReceive` and
 one-message read (#206); the renderer reads the message but renders no HTML.
 Posts go through `message.Service` with the hub as notifier.
 

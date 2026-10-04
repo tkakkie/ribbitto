@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // ErrInvalidHandle wraps a handle that breaks the rules in domain.ValidateHandle.
@@ -17,13 +17,13 @@ var ErrInvalidHandle = errors.New("invalid handle")
 // handle, ignoring case.
 var ErrHandleTaken = errors.New("handle already taken")
 
-// Authorizer resolves the signed-in account's membership (authz.Authorizer).
+// Authorizer resolves the signed-in account's membership (org.Authorizer).
 type Authorizer interface {
-	Member(ctx context.Context, account *identity.Account, slug string) (authz.Membership, error)
+	Member(ctx context.Context, account *identity.Account, slug string) (org.Membership, error)
 }
 
 // Store changes a member's handle. It returns ErrHandleTaken when the
-// organisation's unique constraint rejects the handle, and authz.ErrNotFound
+// organisation's unique constraint rejects the handle, and org.ErrNotFound
 // when the member no longer exists.
 type Store interface {
 	UpdateHandle(ctx context.Context, organizationID, memberID domain.ID, handle string) error
@@ -43,7 +43,7 @@ func New(authorizer Authorizer, store Store) *Service {
 // ChangeHandle sets the signed-in account's handle in the organisation named
 // by slug (from the URL) and returns the stored, canonical handle. There is
 // no member id parameter on purpose: the only member it can change is the
-// caller's own. A signed-out caller or a non-member gets authz.ErrNotFound.
+// caller's own. A signed-out caller or a non-member gets org.ErrNotFound.
 // The released handle is free for anyone to take at once.
 func (s *Service) ChangeHandle(ctx context.Context, account *identity.Account, slug, handle string) (string, error) {
 	membership, err := s.authorizer.Member(ctx, account, slug)

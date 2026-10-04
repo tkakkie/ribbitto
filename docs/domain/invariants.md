@@ -18,10 +18,10 @@ invariant changes. Keep the numbers stable: other documents cite them.
    and `/` resolve it from the setup row, never from the request. An account
    that is not a member gets **404**. Enforced by `registerOrgRoutes` in
    `internal/web/org.go`.
-5. **Authorization is decided only in `internal/app`.** Handlers and the
+5. **Authorization is decided only in `internal/org`.** Handlers and the
    real-time loop (`realtime.Stream.Run`) call it; they never
    re-implement it. The entry point is
-   `internal/app/authz`: `Authorizer.Member` turns the signed-in account and
+   `internal/org`: `Authorizer.Member` turns the signed-in account and
    the slug from the URL into a membership, with one not-found error for an
    unknown slug, a non-member and a signed-out caller.
 6. **`organization.event_seq` only increases, without gaps.** It is taken
@@ -63,7 +63,7 @@ invariant changes. Keep the numbers stable: other documents cite them.
 These are **requirements for all code and migrations**, not a description
 of what is implemented today: `organization`, `account`, `session`,
 `member`, `setup`, `channel`, `message`, `event_log` and `topic` have tables; setup authorization is implemented, and
-organisation routes go through `internal/app/authz`. Every migration that adds an
+organisation routes go through `internal/org`. Every migration that adds an
 organisation-owned table must include `organization_id` and
 composite foreign keys (1–3), and every use case must be covered by tests
 for 4–5 as it is written. Row-level security in PostgreSQL is planned as a

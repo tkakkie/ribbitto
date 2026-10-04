@@ -1,4 +1,4 @@
-package authz
+package org
 
 import (
 	"context"
@@ -22,8 +22,8 @@ type Membership struct {
 	Member       domain.Member
 }
 
-// Store looks memberships up. Every query is scoped to one organisation.
-type Store interface {
+// MembershipStore looks memberships up. Every query is scoped to one organisation.
+type MembershipStore interface {
 	// Membership returns the account's membership in the organisation with
 	// this slug, or ErrNotFound.
 	Membership(ctx context.Context, accountID domain.ID, slug string) (Membership, error)
@@ -34,11 +34,11 @@ type Store interface {
 
 // Authorizer resolves the caller's membership.
 type Authorizer struct {
-	store Store
+	store MembershipStore
 }
 
-// New returns an Authorizer backed by store.
-func New(store Store) *Authorizer {
+// NewAuthorizer returns an Authorizer backed by store.
+func NewAuthorizer(store MembershipStore) *Authorizer {
 	return &Authorizer{store: store}
 }
 

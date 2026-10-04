@@ -1,33 +1,33 @@
-package authz_test
+package org_test
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // fakeStore holds memberships by (account, slug) and the setup
 // organisation's slug.
 type fakeStore struct {
-	memberships map[domain.ID]map[string]authz.Membership
+	memberships map[domain.ID]map[string]org.Membership
 	home        string
 	err         error
 }
 
-func (f fakeStore) Membership(_ context.Context, accountID domain.ID, slug string) (authz.Membership, error) {
+func (f fakeStore) Membership(_ context.Context, accountID domain.ID, slug string) (org.Membership, error) {
 	if f.err != nil {
-		return authz.Membership{}, f.err
+		return org.Membership{}, f.err
 	}
 	m, ok := f.memberships[accountID][slug]
 	if !ok {
-		return authz.Membership{}, authz.ErrNotFound
+		return org.Membership{}, org.ErrNotFound
 	}
 	return m, nil
 }
@@ -37,7 +37,7 @@ func (f fakeStore) HomeSlug(_ context.Context, accountID domain.ID) (string, err
 		return "", f.err
 	}
 	if _, ok := f.memberships[accountID][f.home]; !ok {
-		return "", authz.ErrNotFound
+		return "", org.ErrNotFound
 	}
 	return f.home, nil
 }
@@ -46,10 +46,10 @@ func TestAuthorizer(t *testing.T) {
 	alice := &identity.Account{ID: domain.ID{1}} // member of acme
 	bob := &identity.Account{ID: domain.ID{2}}   // member of globex only
 	carol := &identity.Account{ID: domain.ID{3}} // no membership
-	acme := authz.Membership{Organization: domain.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: domain.Member{Role: domain.RoleOwner}}
-	globex := authz.Membership{Organization: domain.Organization{ID: domain.ID{11}, Slug: "globex"}}
+	acme := org.Membership{Organization: domain.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: domain.Member{Role: domain.RoleOwner}}
+	globex := org.Membership{Organization: domain.Organization{ID: domain.ID{11}, Slug: "globex"}}
 	store := fakeStore{
-		memberships: map[domain.ID]map[string]authz.Membership{alice.ID: {"acme": acme}, bob.ID: {"globex": globex}},
+		memberships: map[domain.ID]map[string]org.Membership{alice.ID: {"acme": acme}, bob.ID: {"globex": globex}},
 		home:        "acme",
 	}
 	broken := errors.New("connection refused")
@@ -62,20 +62,20 @@ func TestAuthorizer(t *testing.T) {
 		home    error
 	}{
 		{"member", store, alice, "acme", nil, nil},
-		{"signed out", store, nil, "acme", authz.ErrNotFound, authz.ErrNotFound},
-		{"no membership", store, carol, "acme", authz.ErrNotFound, authz.ErrNotFound},
-		{"member of another organisation", store, bob, "acme", authz.ErrNotFound, authz.ErrNotFound},
-		{"unknown slug", store, alice, "initech", authz.ErrNotFound, nil},
-		{"impossible slug", store, alice, "Not A Slug", authz.ErrNotFound, nil},
+		{"signed out", store, nil, "acme", org.ErrNotFound, org.ErrNotFound},
+		{"no membership", store, carol, "acme", org.ErrNotFound, org.ErrNotFound},
+		{"member of another organisation", store, bob, "acme", org.ErrNotFound, org.ErrNotFound},
+		{"unknown slug", store, alice, "initech", org.ErrNotFound, nil},
+		{"impossible slug", store, alice, "Not A Slug", org.ErrNotFound, nil},
 		{"store error", fakeStore{err: broken}, alice, "acme", broken, broken},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			a := authz.New(tt.store)
+			a := org.NewAuthorizer(tt.store)
 			got, err := a.Member(t.Context(), tt.account, tt.slug)
 			if !errors.Is(err, tt.want) || (tt.want == nil && got != acme) {
 				t.Fatalf("Member = %+v, %v; want %v", got, err, tt.want)
 			}
-			if tt.want == nil && errors.Is(err, authz.ErrNotFound) {
+			if tt.want == nil && errors.Is(err, org.ErrNotFound) {
 				t.Fatal("store error reported as not found")
 			}
 			slug, err := a.HomeSlug(t.Context(), tt.account)
@@ -88,8 +88,8 @@ func TestAuthorizer(t *testing.T) {
 
 func TestMayReceive(t *testing.T) {
 	aliceMember, otherMember := domain.ID{20}, domain.ID{21}
-	acme := authz.Membership{Organization: domain.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: domain.Member{ID: aliceMember}}
-	store := fakeStore{memberships: map[domain.ID]map[string]authz.Membership{{1}: {"acme": acme}}}
+	acme := org.Membership{Organization: domain.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: domain.Member{ID: aliceMember}}
+	store := fakeStore{memberships: map[domain.ID]map[string]org.Membership{{1}: {"acme": acme}}}
 	event := realtime.Event{OrganizationID: acme.Organization.ID, Seq: 5, Kind: message.KindPosted}
 	withAudience := func(member domain.ID) realtime.Event {
 		e := event
@@ -120,7 +120,7 @@ func TestMayReceive(t *testing.T) {
 			for _, kind := range []realtime.EventKind{message.KindPosted, topic.KindMessagesMoved} {
 				event := tt.event
 				event.Kind = kind
-				got, err := authz.New(tt.store).MayReceive(t.Context(), tt.account, "acme", event)
+				got, err := org.NewAuthorizer(tt.store).MayReceive(t.Context(), tt.account, "acme", event)
 				if got != tt.want || !errors.Is(err, tt.wantErr) || (tt.wantErr == nil && err != nil) {
 					t.Fatalf("MayReceive(%s) = %v, %v; want %v, %v", kind, got, err, tt.want, tt.wantErr)
 				}

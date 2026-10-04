@@ -24,7 +24,7 @@ existence of an organisation or channel is not revealed.
 
 **Organisation routes.** Every page under `/organizations/{slug}/` is listed in
 `orgRoutes` (`internal/web/org.go`) and registered by `registerOrgRoutes`,
-which calls `authz.Authorizer.Member` with the signed-in account and the
+which calls `org.Authorizer.Member` with the signed-in account and the
 slug before the page's handler runs and passes it the resolved membership;
 handlers never read `{slug}` themselves. A signed-out request, an unknown
 slug, a non-member and a member of another organisation all get the same
@@ -32,7 +32,7 @@ slug, a non-member and a member of another organisation all get the same
 would reveal which slugs exist. The same list drives
 `TestOrgRoutesAgainstPostgreSQL`, so a new route is covered by the 404 tests
 as soon as it is added. `GET /` redirects a member of the setup
-organisation to its page (`authz.Authorizer.HomeSlug`); everyone else sees
+organisation to its page (`org.Authorizer.HomeSlug`); everyone else sees
 the home page.
 
 The channel handlers in `internal/web/channel.go` call `channel.Service`

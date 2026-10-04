@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // DefaultName is the initial name of an organisation's default channel. It
@@ -34,7 +34,7 @@ type Store interface {
 	GetDefaultChannel(ctx context.Context, organizationID domain.ID) (domain.Channel, error)
 }
 
-// Service runs the channel use cases for a member resolved by authz.
+// Service runs the channel use cases for a member resolved by org.
 type Service struct {
 	store Store
 }
@@ -45,7 +45,7 @@ func New(store Store) *Service {
 }
 
 // List returns the channels of the member's organisation.
-func (s *Service) List(ctx context.Context, m authz.Membership) ([]domain.Channel, error) {
+func (s *Service) List(ctx context.Context, m org.Membership) ([]domain.Channel, error) {
 	channels, err := s.store.ListChannels(ctx, m.Organization.ID)
 	if err != nil {
 		return nil, fmt.Errorf("listing channels: %w", err)
@@ -56,7 +56,7 @@ func (s *Service) List(ctx context.Context, m authz.Membership) ([]domain.Channe
 // Create adds a channel. Every member may create one (all channels are
 // public in the MVP); it is never the default, and nothing here deletes a
 // channel or moves the default, so each organisation keeps exactly one.
-func (s *Service) Create(ctx context.Context, m authz.Membership, name string) (domain.Channel, error) {
+func (s *Service) Create(ctx context.Context, m org.Membership, name string) (domain.Channel, error) {
 	name, err := domain.ValidateChannelName(name)
 	if err != nil {
 		return domain.Channel{}, fmt.Errorf("%w: %w", ErrInvalidName, err)
@@ -69,7 +69,7 @@ func (s *Service) Create(ctx context.Context, m authz.Membership, name string) (
 }
 
 // Get returns a channel of the member's organisation by id, or ErrNotFound.
-func (s *Service) Get(ctx context.Context, m authz.Membership, id domain.ID) (domain.Channel, error) {
+func (s *Service) Get(ctx context.Context, m org.Membership, id domain.ID) (domain.Channel, error) {
 	found, err := s.store.GetChannel(ctx, m.Organization.ID, id)
 	if err != nil {
 		return domain.Channel{}, fmt.Errorf("finding channel: %w", err)
@@ -80,7 +80,7 @@ func (s *Service) Get(ctx context.Context, m authz.Membership, id domain.ID) (do
 // Default returns the member's organisation's default channel. Its absence
 // is a broken invariant: the error deliberately does not wrap ErrNotFound,
 // so a caller answers it as a server error, not as a 404 that would hide it.
-func (s *Service) Default(ctx context.Context, m authz.Membership) (domain.Channel, error) {
+func (s *Service) Default(ctx context.Context, m org.Membership) (domain.Channel, error) {
 	found, err := s.store.GetDefaultChannel(ctx, m.Organization.ID)
 	if errors.Is(err, ErrNotFound) {
 		return domain.Channel{}, fmt.Errorf("organisation %x has no default channel", m.Organization.ID)

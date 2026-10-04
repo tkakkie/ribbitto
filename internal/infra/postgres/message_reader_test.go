@@ -10,13 +10,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 func TestMessageOne(t *testing.T) {
@@ -26,8 +26,8 @@ func TestMessageOne(t *testing.T) {
 	local := pgtest.OrganizationWithOwner(t, pool, "acme", appchannel.DefaultName)
 	foreign := pgtest.OrganizationWithOwner(t, pool, "globex", appchannel.DefaultName)
 	otherChannel := pgtest.Channel(t, pool, local.OrganizationID, "other", false)
-	membership := authz.Membership{Organization: domain.Organization{ID: local.OrganizationID}, Member: domain.Member{ID: local.MemberID}}
-	foreignMembership := authz.Membership{Organization: domain.Organization{ID: foreign.OrganizationID}, Member: domain.Member{ID: foreign.MemberID}}
+	membership := org.Membership{Organization: domain.Organization{ID: local.OrganizationID}, Member: domain.Member{ID: local.MemberID}}
+	foreignMembership := org.Membership{Organization: domain.Organization{ID: foreign.OrganizationID}, Member: domain.Member{ID: foreign.MemberID}}
 	service := message.New(postgres.NewPostingStore(pool, appendEvents))
 	posted, err := service.Post(ctx, membership, local.Channel.ID, "local body")
 	requireNoError(t, err)
@@ -44,7 +44,7 @@ func TestMessageOne(t *testing.T) {
 	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
 	for _, tt := range []struct {
 		name       string
-		membership authz.Membership
+		membership org.Membership
 		channel    domain.ID
 		seq        int64
 		want       message.Entry
@@ -70,7 +70,7 @@ func TestMessagePaging(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	memberships := map[string]authz.Membership{}
+	memberships := map[string]org.Membership{}
 	defaults := map[string]domain.Channel{}
 	for _, slug := range []string{"acme", "globex"} {
 		name := appchannel.DefaultName
@@ -78,7 +78,7 @@ func TestMessagePaging(t *testing.T) {
 			name = "empty"
 		}
 		fixture := pgtest.OrganizationWithOwner(t, pool, slug, name)
-		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
+		memberships[slug] = org.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
 		defaults[slug] = fixture.Channel
 	}
 	acme, globex := memberships["acme"], memberships["globex"]
@@ -225,7 +225,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
 			fixture := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-			m := authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID}, Member: domain.Member{ID: fixture.MemberID}}
+			m := org.Membership{Organization: domain.Organization{ID: fixture.OrganizationID}, Member: domain.Member{ID: fixture.MemberID}}
 			posting := message.New(postgres.NewPostingStore(pool, appendEvents))
 			initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")
 			requireNoError(t, err)

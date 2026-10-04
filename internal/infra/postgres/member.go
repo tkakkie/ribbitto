@@ -8,10 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // MemberStore implements member.Store.
@@ -41,7 +41,7 @@ func (s *MemberStore) UpdateHandle(ctx context.Context, organizationID, memberID
 	case err != nil:
 		return fmt.Errorf("updating handle: %w", err)
 	case rows == 0:
-		return authz.ErrNotFound
+		return org.ErrNotFound
 	}
 	return nil
 }

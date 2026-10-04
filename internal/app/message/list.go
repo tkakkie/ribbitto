@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // Entry is a stored message with its current author names and topic label.
@@ -62,10 +62,10 @@ type ChannelPage struct {
 // Before returns the page of messages older than event_seq before, or the
 // latest page when before is nil. A nil topicID includes every topic.
 // The caller resolves membership and the
-// channel through authz and channel before reading. before is only an upper
+// channel through org.Authorizer and channel before reading. before is only an upper
 // bound: the query is scoped to the membership's organisation and the
 // channel, so a value taken from another channel cannot reach its messages.
-func (s Reader) Before(ctx context.Context, m authz.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (Page, error) {
+func (s Reader) Before(ctx context.Context, m org.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (Page, error) {
 	// One extra row says whether an older page exists without a count query.
 	messages, err := s.History.ListMessagesBefore(ctx, m.Organization.ID, channelID, topicID, before, PageSize+1)
 	if err != nil {
@@ -83,7 +83,7 @@ func (s Reader) Before(ctx context.Context, m authz.Membership, channelID domain
 }
 
 // entries adds topic labels and author names, returning messages oldest first.
-func (s Reader) entries(ctx context.Context, m authz.Membership, channelID domain.ID, messages []domain.Message) ([]Entry, error) {
+func (s Reader) entries(ctx context.Context, m org.Membership, channelID domain.ID, messages []domain.Message) ([]Entry, error) {
 	ids := make([]domain.ID, 0, len(messages))
 	for _, msg := range messages {
 		ids = append(ids, msg.MemberID)

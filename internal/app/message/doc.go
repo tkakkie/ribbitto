@@ -13,7 +13,7 @@
 // batch per page.
 // Author names use member.Directory (org)
 // followed by identity.Directory; message queries neither feature.
-// It uses org through authz.Membership; posting reports a channel
+// It uses org through org.Membership; posting reports a channel
 // outside the caller's organisation as channel.ErrNotFound. Listed
 // exception: posting advances organization.event_seq, which org owns,
 // and writes realtime's event_log, so the sequence and event commit together.

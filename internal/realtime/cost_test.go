@@ -18,13 +18,13 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -104,7 +104,7 @@ func TestStreamCost(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 
-	m := authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: fixture.MemberID}}
+	m := org.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: fixture.MemberID}}
 	hub := realtime.NewHub()
 	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, appendEvents), hub)
 	// dbReads counts reads that reach the database (empty ones included);
@@ -117,7 +117,7 @@ func TestStreamCost(t *testing.T) {
 		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](t.Context(), 4096, realtime.DefaultCacheLoads, time.Minute, 10*time.Second, nil, time.Now)
 	}
 	loopReads := &countingReader{inner: inner}
-	stream := realtime.Stream{Hub: hub, Events: loopReads, Authorizer: authz.New(postgres.NewAuthzStore(pool)), Renderer: renderer}
+	stream := realtime.Stream{Hub: hub, Events: loopReads, Authorizer: org.NewAuthorizer(postgres.NewAuthzStore(pool)), Renderer: renderer}
 
 	t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step; cache %t; distinct members %t",
 		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration, cached, distinct)
@@ -188,7 +188,7 @@ func per(n int64, d int) float64 {
 // duration, waits for every delivery or a drain deadline, and closes them.
 // Counts cover the posting window and the drain, not the streams' start.
 func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service, pool *pgxpool.Pool, queries *platform.QueryCounter,
-	events, dbReads *countingReader, m authz.Membership, subs []realtime.Subscription, n, rate int, duration time.Duration) stepResult {
+	events, dbReads *countingReader, m org.Membership, subs []realtime.Subscription, n, rate int, duration time.Duration) stepResult {
 	t.Helper()
 	sub := subs[0]
 	var cursor int64
@@ -320,7 +320,7 @@ func (c *countingReader) EventsAfter(ctx context.Context, org kernel.ID, after i
 // measured) when the cache is on.
 type readingRenderer struct {
 	messages   postgres.MessageReader
-	membership authz.Membership
+	membership org.Membership
 	renders    *realtime.Cache[int64, realtime.Outgoing]
 }
 

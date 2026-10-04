@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // ErrNotFound means no message has this event_seq in the caller's organisation
@@ -15,7 +15,7 @@ var ErrNotFound = errors.New("message not found")
 
 // One returns a message with current author names, or ErrNotFound. The caller
 // resolves membership and channel access before reading, as for Before.
-func (s Reader) One(ctx context.Context, m authz.Membership, channelID domain.ID, eventSeq int64) (Entry, error) {
+func (s Reader) One(ctx context.Context, m org.Membership, channelID domain.ID, eventSeq int64) (Entry, error) {
 	msg, err := s.History.GetMessage(ctx, m.Organization.ID, channelID, eventSeq)
 	if err != nil {
 		return Entry{}, fmt.Errorf("reading message: %w", err)
@@ -29,7 +29,7 @@ func (s Reader) One(ctx context.Context, m authz.Membership, channelID domain.ID
 
 // Many reads exactly the requested messages with current labels and authors,
 // oldest first. The ID list bounds the read; an incomplete batch fails replay.
-func (s Reader) Many(ctx context.Context, m authz.Membership, channelID domain.ID, ids []domain.ID) ([]Entry, error) {
+func (s Reader) Many(ctx context.Context, m org.Membership, channelID domain.ID, ids []domain.ID) ([]Entry, error) {
 	messages, err := s.History.GetMessages(ctx, m.Organization.ID, channelID, ids)
 	if err != nil {
 		return nil, fmt.Errorf("reading messages: %w", err)

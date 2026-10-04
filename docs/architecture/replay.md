@@ -51,7 +51,7 @@ sequenceDiagram
   channels, unrouted kinds (no channel) and events whose routing topics do
   not include a topic page's topic are skipped before rendering or
   authorization (#261 B6). Explicit
-  denies from `authz.MayReceive` are skipped after rendering. All skips advance
+  denies from `org.Authorizer.MayReceive` are skipped after rendering. All skips advance
   the cursor. `messages.moved` reaches feeds and its source/destination topics
   as `messages-moved`, with one shared batch render and per-connection
   authorization. Other topics skip before either. Feeds replace loaded IDs;

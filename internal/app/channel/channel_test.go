@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // store keeps channels per organisation, as the real store scopes them.
@@ -55,8 +55,8 @@ func TestChannels(t *testing.T) {
 	acme, globex := domain.ID{1}, domain.ID{2}
 	general := domain.Channel{ID: domain.ID{3}, OrganizationID: acme, Name: "general", IsDefault: true}
 	secret := domain.Channel{ID: domain.ID{4}, OrganizationID: globex, Name: "secret", IsDefault: true}
-	member := func(org domain.ID) authz.Membership {
-		return authz.Membership{Organization: domain.Organization{ID: org}, Member: domain.Member{ID: domain.ID{9}, OrganizationID: org}}
+	member := func(orgID domain.ID) org.Membership {
+		return org.Membership{Organization: domain.Organization{ID: orgID}, Member: domain.Member{ID: domain.ID{9}, OrganizationID: orgID}}
 	}
 	newService := func() (*channel.Service, *store) {
 		s := &store{channels: map[domain.ID][]domain.Channel{acme: {general}, globex: {secret}}}

@@ -6,13 +6,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
@@ -28,7 +28,7 @@ type MessageReader struct {
 }
 
 // One reads one message, its author names and topic in a read-only snapshot.
-func (s MessageReader) One(ctx context.Context, m authz.Membership, channelID domain.ID, eventSeq int64) (entry message.Entry, err error) {
+func (s MessageReader) One(ctx context.Context, m org.Membership, channelID domain.ID, eventSeq int64) (entry message.Entry, err error) {
 	err = platform.InSnapshot(ctx, s.Pool, func(snapshot platform.Snapshot) error {
 		tx := pgxbridge.Snapshot(snapshot)
 		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
@@ -42,13 +42,13 @@ func (s MessageReader) One(ctx context.Context, m authz.Membership, channelID do
 }
 
 // Before reads a page for a resolved member, omitting the cursor on older pages.
-func (s MessageReader) Before(ctx context.Context, m authz.Membership, channelID domain.ID, before *int64) (message.ChannelPage, error) {
+func (s MessageReader) Before(ctx context.Context, m org.Membership, channelID domain.ID, before *int64) (message.ChannelPage, error) {
 	return s.Page(ctx, m, channelID, nil, before)
 }
 
 // Page reads channel or topic history; the latest page of either carries the
 // snapshot's event cursor for its stream, older pages none.
-func (s MessageReader) Page(ctx context.Context, m authz.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (page message.ChannelPage, err error) {
+func (s MessageReader) Page(ctx context.Context, m org.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (page message.ChannelPage, err error) {
 	err = platform.InSnapshot(ctx, s.Pool, func(snapshot platform.Snapshot) error {
 		tx := pgxbridge.Snapshot(snapshot)
 		channels := channel.New(NewChannelStore(tx))
@@ -93,7 +93,7 @@ func (s MessageReader) Page(ctx context.Context, m authz.Membership, channelID d
 }
 
 // Many reads a move's bounded message batch and directories in one snapshot.
-func (s MessageReader) Many(ctx context.Context, m authz.Membership, channelID domain.ID, ids []domain.ID) (entries []message.Entry, err error) {
+func (s MessageReader) Many(ctx context.Context, m org.Membership, channelID domain.ID, ids []domain.ID) (entries []message.Entry, err error) {
 	err = platform.InSnapshot(ctx, s.Pool, func(snapshot platform.Snapshot) error {
 		tx := pgxbridge.Snapshot(snapshot)
 		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}

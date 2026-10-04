@@ -5,17 +5,17 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
-type authorizer struct{ membership authz.Membership }
+type authorizer struct{ membership org.Membership }
 
-func (a authorizer) Member(_ context.Context, account *identity.Account, slug string) (authz.Membership, error) {
+func (a authorizer) Member(_ context.Context, account *identity.Account, slug string) (org.Membership, error) {
 	if account == nil || account.ID != a.membership.Member.AccountID || slug != "acme" {
-		return authz.Membership{}, authz.ErrNotFound
+		return org.Membership{}, org.ErrNotFound
 	}
 	return a.membership, nil
 }
@@ -35,7 +35,7 @@ func (s *store) UpdateHandle(_ context.Context, org, id domain.ID, handle string
 
 func TestChangeHandle(t *testing.T) {
 	alice := &identity.Account{ID: domain.ID{1}}
-	membership := authz.Membership{
+	membership := org.Membership{
 		Organization: domain.Organization{ID: domain.ID{2}, Slug: "acme"},
 		Member:       domain.Member{ID: domain.ID{3}, OrganizationID: domain.ID{2}, AccountID: alice.ID},
 	}
@@ -49,10 +49,10 @@ func TestChangeHandle(t *testing.T) {
 		wantErr  error
 	}{
 		{name: "normalised", account: alice, slug: "acme", handle: " Alice ", want: "alice"},
-		{name: "signed out", slug: "acme", handle: "alice", wantErr: authz.ErrNotFound},
-		{name: "another account", account: &identity.Account{ID: domain.ID{9}}, slug: "acme", handle: "alice", wantErr: authz.ErrNotFound},
-		{name: "another organisation", account: alice, slug: "globex", handle: "alice", wantErr: authz.ErrNotFound},
-		{name: "non-member with an invalid handle", account: &identity.Account{ID: domain.ID{9}}, slug: "acme", handle: "!", wantErr: authz.ErrNotFound},
+		{name: "signed out", slug: "acme", handle: "alice", wantErr: org.ErrNotFound},
+		{name: "another account", account: &identity.Account{ID: domain.ID{9}}, slug: "acme", handle: "alice", wantErr: org.ErrNotFound},
+		{name: "another organisation", account: alice, slug: "globex", handle: "alice", wantErr: org.ErrNotFound},
+		{name: "non-member with an invalid handle", account: &identity.Account{ID: domain.ID{9}}, slug: "acme", handle: "!", wantErr: org.ErrNotFound},
 		{name: "invalid", account: alice, slug: "acme", handle: "a", wantErr: member.ErrInvalidHandle},
 		{name: "reserved", account: alice, slug: "acme", handle: "Everyone", wantErr: member.ErrInvalidHandle},
 		{name: "look-alike", account: alice, slug: "acme", handle: "Kelvin", wantErr: member.ErrInvalidHandle},

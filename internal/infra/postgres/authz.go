@@ -7,12 +7,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
-// AuthzStore implements authz.Store.
+// AuthzStore implements org.MembershipStore.
 type AuthzStore struct {
 	queries *sqlcgen.Queries
 }
@@ -23,18 +23,18 @@ func NewAuthzStore(db sqlcgen.DBTX) *AuthzStore {
 }
 
 // Membership returns the account's membership in the organisation with slug.
-func (s *AuthzStore) Membership(ctx context.Context, accountID domain.ID, slug string) (authz.Membership, error) {
+func (s *AuthzStore) Membership(ctx context.Context, accountID domain.ID, slug string) (org.Membership, error) {
 	row, err := s.queries.GetMembershipBySlug(ctx, sqlcgen.GetMembershipBySlugParams{
 		Slug:      slug,
 		AccountID: pgtype.UUID{Bytes: accountID, Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return authz.Membership{}, authz.ErrNotFound
+		return org.Membership{}, org.ErrNotFound
 	}
 	if err != nil {
-		return authz.Membership{}, fmt.Errorf("selecting membership: %w", err)
+		return org.Membership{}, fmt.Errorf("selecting membership: %w", err)
 	}
-	return authz.Membership{
+	return org.Membership{
 		Organization: domain.Organization{ID: row.OrganizationID.Bytes, Slug: row.Slug, Name: row.Name},
 		Member: domain.Member{
 			ID:             row.MemberID.Bytes,
@@ -50,7 +50,7 @@ func (s *AuthzStore) Membership(ctx context.Context, accountID domain.ID, slug s
 func (s *AuthzStore) HomeSlug(ctx context.Context, accountID domain.ID) (string, error) {
 	slug, err := s.queries.GetHomeSlug(ctx, pgtype.UUID{Bytes: accountID, Valid: true})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", authz.ErrNotFound
+		return "", org.ErrNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("selecting home organisation: %w", err)

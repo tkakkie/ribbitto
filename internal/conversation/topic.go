@@ -1,11 +1,15 @@
-package domain
+package conversation
 
-import "time"
+import (
+	"time"
+
+	"github.com/tkakkie/ribbitto/internal/kernel"
+)
 
 // Topic is a named conversation inside a channel, identified by ID. The
 // default topic has no Name: the UI shows its label from the message files.
 type Topic struct {
-	ID, OrganizationID, ChannelID ID
+	ID, OrganizationID, ChannelID kernel.ID
 	Name                          string
 	IsDefault                     bool
 	CreatedAt                     time.Time

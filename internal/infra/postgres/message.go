@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
@@ -117,7 +116,7 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 		// topic (decision 21), read through topic's API. A channel always
 		// has one, so none means the channel is not in this organisation.
 		defaultTopic, err := NewTopicStore(tx).GetDefaultTopic(ctx, organizationID, channelID)
-		if errors.Is(err, topic.ErrNotFound) {
+		if errors.Is(err, conversation.ErrTopicNotFound) {
 			return conversation.ErrChannelNotFound
 		}
 		if err != nil {

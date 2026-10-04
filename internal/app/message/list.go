@@ -51,8 +51,8 @@ type Page struct {
 // ChannelPage is a channel, its sidebar and history read in one snapshot.
 type ChannelPage struct {
 	Page
-	Topic    *domain.Topic
-	Topics   []domain.Topic
+	Topic    *conversation.Topic
+	Topics   []conversation.Topic
 	Current  conversation.Channel
 	Channels []conversation.Channel
 	// EventCursor is the snapshot's organisation sequence; nil on older pages.

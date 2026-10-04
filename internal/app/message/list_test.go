@@ -53,14 +53,14 @@ func (f *directoryHistory) LookupDisplayNames(_ context.Context, ids []domain.ID
 	}
 	return map[domain.ID]string{{6}: "Author"}, f.step("names")
 }
-func (f *directoryHistory) LookupTopics(_ context.Context, org, ch domain.ID, ids []domain.ID) (map[domain.ID]domain.Topic, error) {
+func (f *directoryHistory) LookupTopics(_ context.Context, org, ch domain.ID, ids []domain.ID) (map[domain.ID]conversation.Topic, error) {
 	if org != (domain.ID{1}) || ch != (domain.ID{2}) || !reflect.DeepEqual(ids, []domain.ID{{}, {}}) {
 		f.t.Fatal("wrong topic scope")
 	}
 	if f.fail == "missing topic" {
 		return nil, nil
 	}
-	return map[domain.ID]domain.Topic{{}: {Name: "Design"}}, f.step("topics")
+	return map[domain.ID]conversation.Topic{{}: {Name: "Design"}}, f.step("topics")
 }
 func TestBefore(t *testing.T) {
 	for _, failure := range []string{"", "history", "members", "names", "topics", "missing topic", "missing member", "missing account"} {
@@ -101,8 +101,8 @@ func (fullHistory) LookupDisplayNames(context.Context, []domain.ID) (map[domain.
 	return map[domain.ID]string{{6}: "Author"}, nil
 }
 
-func (fullHistory) LookupTopics(context.Context, domain.ID, domain.ID, []domain.ID) (map[domain.ID]domain.Topic, error) {
-	return map[domain.ID]domain.Topic{{}: {}}, nil
+func (fullHistory) LookupTopics(context.Context, domain.ID, domain.ID, []domain.ID) (map[domain.ID]conversation.Topic, error) {
+	return map[domain.ID]conversation.Topic{{}: {}}, nil
 }
 
 func TestBeforePages(t *testing.T) {

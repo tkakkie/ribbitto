@@ -1,8 +1,9 @@
 // Package message holds posting.
 //
 // Feature: message (feature map in docs/architecture/features.md), which owns
-// the message table. Exported API: Service and the Store interface it needs;
-// nothing else. Message, its body rule, its errors and the history reader
+// the message table. Exported API: Service with New and NewWithNotifier, the
+// Store interface it needs, and Notifier. Message, its body rule, its errors
+// and the history reader
 // (Reader, Entry, Page, ChannelPage, PageSize) are conversation's, not this
 // package's.
 // It uses org through org.Membership; posting reports a channel

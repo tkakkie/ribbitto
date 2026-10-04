@@ -4,6 +4,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
@@ -24,4 +25,11 @@ func NewChannels(pool *pgxpool.Pool) *conversation.Channels {
 // NewTopics builds the topic lookups on conversation's pool-bound store.
 func NewTopics(pool *pgxpool.Pool) *conversation.Topics {
 	return conversation.NewTopics(postgres.NewTopicStore(pool))
+}
+
+// DefaultChannelCreatorIn returns the default-channel creator bound to setup's
+// transaction. Composition roots adapt it to org.DefaultChannelCreatorIn with
+// a closure (decision 26).
+func DefaultChannelCreatorIn(tx platform.Tx) *postgres.DefaultChannelCreator {
+	return postgres.DefaultChannelCreatorIn(tx)
 }

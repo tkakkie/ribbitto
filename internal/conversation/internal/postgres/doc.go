@@ -3,6 +3,7 @@
 // through db/queries/conversation on its own sqlc entry. It accepts a pool or
 // caller-owned transaction or snapshot without managing its lifecycle.
 // conversationpg.NewChannels and NewTopics bind it to the pool for
-// production; infra's page snapshot and setup keep the frozen legacy store
-// until their migration steps.
+// production, and DefaultChannelCreatorIn to setup's transaction for its
+// default channel; infra's page snapshot keeps the frozen legacy store until
+// its migration step.
 package postgres

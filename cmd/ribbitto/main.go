@@ -259,7 +259,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		setupService = orgpg.NewSetup(pool, hasher, config.setupToken,
 			func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
 			func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) },
-			func(tx platform.Tx) org.DefaultChannelCreator { return postgres.DefaultChannelCreatorIn(tx) })
+			func(tx platform.Tx) org.DefaultChannelCreator { return conversationpg.DefaultChannelCreatorIn(tx) })
 	}
 
 	catalogues, err := i18n.New(slog.Default())

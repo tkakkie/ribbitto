@@ -23,6 +23,12 @@ func fixture(t *testing.T, pool *pgxpool.Pool, sql string, args []any, dest ...a
 	requireNoError(t, pool.QueryRow(t.Context(), sql, args...).Scan(dest...))
 }
 
+// channelSQL inserts a channel and its default topic in one statement: the
+// channel's foreign key to its topic is deferred to commit.
+const channelSQL = `WITH channel AS (INSERT INTO channel (organization_id, name) VALUES ($1, $2) RETURNING organization_id, id, default_topic_id),
+	topic AS (INSERT INTO topic (organization_id, channel_id, id, is_default) SELECT organization_id, id, default_topic_id, true FROM channel)
+	SELECT id, default_topic_id FROM channel`
+
 // fixtures is acme with alice and a channel, and globex with bob and one.
 type fixtures struct {
 	acme, globex, alice, bob, general, foreign kernel.ID
@@ -36,12 +42,8 @@ func newFixtures(t *testing.T, pool *pgxpool.Pool) (f fixtures) {
 		INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) SELECT $1, id, 'member', 1, $2 FROM account RETURNING id`
 	fixture(t, pool, member, []any{f.acme, "alice"}, &f.alice)
 	fixture(t, pool, member, []any{f.globex, "bob"}, &f.bob)
-	// One statement each: the channel's foreign key to its topic is deferred to commit.
-	channel := `WITH channel AS (INSERT INTO channel (organization_id, name) VALUES ($1, $2) RETURNING organization_id, id, default_topic_id),
-		topic AS (INSERT INTO topic (organization_id, channel_id, id, is_default) SELECT organization_id, id, default_topic_id, true FROM channel)
-		SELECT id, default_topic_id FROM channel`
-	fixture(t, pool, channel, []any{f.acme, "general"}, &f.general, &f.generalTopic)
-	fixture(t, pool, channel, []any{f.globex, "general"}, &f.foreign, &f.foreignTopic)
+	fixture(t, pool, channelSQL, []any{f.acme, "general"}, &f.general, &f.generalTopic)
+	fixture(t, pool, channelSQL, []any{f.globex, "general"}, &f.foreign, &f.foreignTopic)
 	return f
 }
 
@@ -62,10 +64,12 @@ func TestWriterIn(t *testing.T) {
 	rollback := errors.New("caller rolls back")
 	err := conversationpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error {
 		writer, q := writerIn(tx), pgxbridge.Tx(tx)
-		if got, err := writer.GetDefaultTopic(ctx, f.acme, f.general); err != nil || got.ID != f.generalTopic || !got.IsDefault || got.ChannelID != f.general || got.OrganizationID != f.acme {
-			t.Fatalf("GetDefaultTopic = %+v, %v; want %v", got, err, f.generalTopic)
+		// Uncommitted rows, so only a read on the caller's transaction finds them.
+		var random, randomTopic kernel.ID
+		requireNoError(t, q.QueryRow(ctx, channelSQL, f.acme, "random").Scan(&random, &randomTopic))
+		if got, err := writer.GetDefaultTopic(ctx, f.acme, random); err != nil || got.ID != randomTopic || !got.IsDefault || got.ChannelID != random || got.OrganizationID != f.acme {
+			t.Fatalf("GetDefaultTopic = %+v, %v; want %v", got, err, randomTopic)
 		}
-		// Uncommitted, so only a read on the caller's transaction finds it.
 		var planning kernel.ID
 		requireNoError(t, q.QueryRow(ctx, "INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, 'Planning', false) RETURNING id", f.acme, f.general).Scan(&planning))
 		if got, err := writer.GetTopic(ctx, f.acme, f.general, planning); err != nil || got.ID != planning || got.Name != "Planning" || got.IsDefault {
@@ -87,8 +91,8 @@ func TestWriterIn(t *testing.T) {
 		t.Fatalf("caller rollback: %v, want it as is", err)
 	}
 	var topics int
-	if fixture(t, pool, "SELECT count(*) FROM topic WHERE NOT is_default", nil, &topics); topics != 0 || messages(t, pool) != 0 {
-		t.Fatalf("after rollback: %d named topics, %d messages; want none", topics, messages(t, pool))
+	if fixture(t, pool, "SELECT count(*) FROM topic WHERE name = 'Planning' OR channel_id NOT IN ($1, $2)", []any{f.general, f.foreign}, &topics); topics != 0 || messages(t, pool) != 0 {
+		t.Fatalf("after rollback: %d new topics, %d messages; want none", topics, messages(t, pool))
 	}
 }
 
@@ -119,6 +123,9 @@ func TestWriterErrors(t *testing.T) {
 			if tc.want != nil && !errors.Is(err, tc.want) || tc.constraint != "" && (!errors.As(err, &pgErr) || pgErr.ConstraintName != tc.constraint) {
 				t.Fatalf("error = %v, want %v with the PostgreSQL error of %q", err, tc.want, tc.constraint)
 			}
+			if tc.want == nil && err == error(pgErr) {
+				t.Fatalf("error = %v, want it wrapped, not the bare PostgreSQL error", err)
+			}
 			// An untranslated failure must not become an error web answers with 404.
 			for _, mapped := range []error{conversation.ErrChannelNotFound, org.ErrNotFound, conversation.ErrTopicNotFound} {
 				if tc.want == nil && errors.Is(err, mapped) {
@@ -133,7 +140,7 @@ func TestWriterErrors(t *testing.T) {
 }
 
 // The runner commits on nil, and a failed commit, here event_log's deferred
-// gap check, comes back through it.
+// gap check, comes back through it as is.
 func TestTxRunnerCommits(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
@@ -147,12 +154,16 @@ func TestTxRunnerCommits(t *testing.T) {
 		t.Fatalf("%d messages after commit, want 1", n)
 	}
 	err := runner.InTx(ctx, func(tx platform.Tx) error {
-		_, err := pgxbridge.Tx(tx).Exec(ctx, "UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1", f.acme)
-		return err
+		// The update succeeds; only the deferred trigger at commit refuses it.
+		tag, err := pgxbridge.Tx(tx).Exec(ctx, "UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1", f.acme)
+		if err != nil || tag.RowsAffected() != 1 {
+			t.Fatalf("update in the callback = %v, %v; want one row", tag, err)
+		}
+		return nil
 	})
 	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) || pgErr.Code != "23514" || !strings.Contains(pgErr.Message, "without event_log rows") {
-		t.Fatalf("commit without an event = %v, want the gap check's error", err)
+	if !errors.As(err, &pgErr) || err != error(pgErr) || pgErr.Code != "23514" || !strings.Contains(pgErr.Message, "without event_log rows") {
+		t.Fatalf("commit without an event = %v, want the gap check's error as is", err)
 	}
 	var seq int64
 	if fixture(t, pool, "SELECT event_seq FROM organization WHERE id = $1", []any{f.acme}, &seq); seq != 0 {

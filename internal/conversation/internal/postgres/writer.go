@@ -48,7 +48,9 @@ func (w Writer) GetTopic(ctx context.Context, organizationID, channelID, id kern
 
 // InsertMessage inserts posting's message. The composite foreign keys, not a
 // lookup first, keep a message inside its organisation: another
-// organisation's channel or member fails here.
+// organisation's channel or member fails here. The caller resolves topicID
+// in the same transaction first, so a topic outside the channel never
+// reaches the insert and message_topic_fkey stays unmapped.
 func (w Writer) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (conversation.Message, error) {
 	row, err := w.queries.InsertMessage(ctx, sqlcgen.InsertMessageParams{
 		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, TopicID: pgtype.UUID{Bytes: topicID, Valid: true},

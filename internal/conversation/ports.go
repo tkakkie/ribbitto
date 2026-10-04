@@ -51,8 +51,9 @@ type Writer interface {
 	// GetTopic returns a topic of the channel, or ErrTopicNotFound.
 	GetTopic(ctx context.Context, organizationID, channelID, id kernel.ID) (Topic, error)
 	// InsertMessage inserts posting's message at the sequence the caller
-	// took. Another organisation's channel is ErrChannelNotFound and
-	// another organisation's member org.ErrNotFound.
+	// took, into a topic it resolved in the same transaction first
+	// (GetDefaultTopic or GetTopic). Another organisation's channel is
+	// ErrChannelNotFound and another organisation's member org.ErrNotFound.
 	InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (Message, error)
 }
 

@@ -96,8 +96,8 @@ unreviewed. If answering Copilot needs a change:
    ```
 
 3. All pass → if the follow-up's diff matches tier A or B, keep the pull
-   request a draft until that tier's review has completed at the new head
-   with every finding disposed of
+   request a draft until the pull request's tier has been reviewed again at
+   the new head, with every finding disposed of
    ([completion](adversarial-review.md#which-review-runs)); then mark it
    ready for review again and the normal merge decision. Copilot is not
    re-requested; if Copilot reviews again anyway, handle it the same way
@@ -107,12 +107,16 @@ unreviewed. If answering Copilot needs a change:
 
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
-than combine both sides, it needs a normal review.
+than combine both sides, it needs a normal review, and if its diff matches
+tier A or B, the pull request's tier is reviewed again
+([completion](adversarial-review.md#which-review-runs)).
 
 ## Risk
 
 A change is **high** risk if it touches any of: `internal/org/**`,
-`internal/identity/**`, `internal/web/middleware/**`,
+`internal/identity/**`, `internal/web/middleware/**`, the authentication
+entry points `internal/web/org.go`, `signin.go`, `signup.go` and
+`setup.go`,
 `internal/realtime/**`, `db/migrations/**`, `db/queries/**`,
 `.github/**`, `scripts/**`, `tools/**`, `Makefile`, `.golangci.yml`,
 `sqlc.yaml`, `go.mod`, `go.sum`, `docs/workflow/**`, or any `AGENTS.md`

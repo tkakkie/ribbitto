@@ -3,10 +3,10 @@
 `internal/identity` owns the email and password rules (`ValidateEmail`,
 `ValidatePassword`); `internal/org` owns `ValidateOrganizationName`,
 `ValidateSlug` and `ValidateHandle`. `internal/domain` validates the remaining
-fields until their modules take them. These rules validate UTF-8 text. Email, display, organisation and
-channel names are trimmed and normalised to NFC; email is lower-cased first.
-Lengths count code points after normalisation, except email (bytes) and slug
-(ASCII). Controls including NUL fail before trimming. These fields then
+fields until their modules take them. These rules validate UTF-8 text.
+Email, display, organisation and channel names are trimmed and normalised to
+NFC; email is lower-cased first. Lengths count code points after
+normalisation, except email (bytes) and slug (ASCII). Controls including NUL fail before trimming. These fields then
 require `unicode.IsPrint`, rejecting format characters (zero-width spaces,
 RTL overrides, BOMs, soft hyphens) and line/paragraph separators. Names allow
 only ASCII and ideographic (U+3000) spaces; email allows none. The database

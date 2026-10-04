@@ -29,11 +29,12 @@ to view models, and choose the status, component and full page or fragment. They
 
 Components render view models defined in `internal/web/view`. They do not
 receive `internal/app` or use-case types: handlers convert those. A view
-model may hold pure `domain` value types (`domain.Channel` and `domain.ID`).
-`ChannelPage.Organization` is a view-owned `Organization` with `Slug` and
-`Name`; handlers convert from `org.Organization`. Views do not import `org`. Components do no I/O and make no authorisation decisions;
-presentation logic (building URLs, formatting, choosing an i18n message
-ID) belongs in them.
+model may hold pure `domain` value types (`domain.Channel` and `domain.ID`),
+which carry no behaviour a template could misuse. `ChannelPage.Organization`
+is a view-owned `Organization` with `Slug` and `Name`; handlers convert from
+`org.Organization`, and views do not import `org`. Components do no I/O and
+make no authorisation decisions; presentation logic (building URLs,
+formatting, choosing an i18n message ID) belongs in them.
 
 ## htmx
 

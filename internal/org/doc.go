@@ -30,6 +30,8 @@
 // channel in the organisation transaction; sign-up creates identity's account
 // with its member and advances organization.event_seq in the same transaction.
 //
-// Until org's store moves (step 3), infra/postgres implements MembershipStore,
-// HandleStore, Directory, SetupStore and SignUpStore, keeping their transactions.
+// Org's store implements MembershipStore, HandleStore and the snapshot-bound
+// Directory. orgpg builds the authorizer and handle changer and binds the
+// directory to the caller's snapshot (MembersIn). infra/postgres implements
+// SetupStore and SignUpStore, keeping their transactions until 3.12 and 3.11.
 package org

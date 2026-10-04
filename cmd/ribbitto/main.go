@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"log/slog"
 	"net"
 	"net/http"
@@ -24,6 +23,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -263,7 +263,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	authorizer := org.NewAuthorizer(postgres.NewAuthzStore(pool))
+	authorizer := orgpg.NewAuthorizer(pool)
 	// A nil hub must stay a nil Notifier, not a typed nil in either interface.
 	var postingNotifier message.Notifier
 	var branchNotifier topic.Notifier
@@ -290,7 +290,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        postgres.NewTopicStore(pool),
-		Messages:      postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn},
+		Messages:      postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers},
 		Posting:       posting,
 		Branching:     branching,
 		Channels:      channel.New(postgres.NewChannelStore(pool)),
@@ -384,3 +384,6 @@ func signupEnabled(value string) (bool, error) {
 // appendEvents adapts realtime's appender to the consumer interface the
 // event-writing stores declare (decision 26).
 func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// lookupMembers adapts org's directory to the reader's consumer interface.
+func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }

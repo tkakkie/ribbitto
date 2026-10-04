@@ -75,12 +75,16 @@ does, not only the paths it touches.
 
 **A required review counts only when it completes:** a report on the pull
 request at its head commit, each finding with a disposition. After a later
-push (a Copilot follow-up or a merge of `main` included) whose diff matches
-tier A or B, the **pull request's** tier, not the push's, is reviewed again
-at the new head: a tier A pull request needs Grok again. An earlier report
+push (a Copilot follow-up or a merge of `main` included) whose diff from
+the last adversarially reviewed head (or the base, if none) matches tier A
+or B, the **pull request's** tier is recomputed over its whole diff at the
+new head, never lower than that diff's, and reviewed again: a pull request
+that is or becomes tier A needs Grok again, and a tier C one lifted to B or
+A gets its first review. An earlier report
 covers a later head only when every later commit is tier C. A time-out, an outage or an
 empty run is not a review: retry once, then ask the maintainer.
-When Grok is unavailable (quota or outage), a tier A pull request gets Muse
+When Grok is unavailable (quota or outage), the failed runs and their
+errors are recorded on the pull request, a tier A pull request gets Muse
 Code under the same rule, and the maintainer decides whether to merge or
 wait for Grok.
 

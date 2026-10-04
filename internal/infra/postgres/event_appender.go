@@ -8,11 +8,10 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// EventAppender is what the event-writing flows (posting, branching and
-// setup) need from realtime's event log inside their transaction: an
-// append of a payload their publisher encoded. infra declares it as their
-// consumer until the flows move (org in step 3, conversation in step 4);
-// wiring injects realtime's appender (decision 26).
+// EventAppender is what posting and branching need from realtime's event
+// log inside their transaction: an append of a payload their publisher
+// encoded. infra declares it as their consumer until conversation moves in
+// step 4; wiring injects realtime's appender (decision 26).
 type EventAppender interface {
 	Append(ctx context.Context, organizationID domain.ID, seq int64, kind realtime.EventKind, audience *domain.ID, payload []byte) error
 }

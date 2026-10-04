@@ -14,7 +14,7 @@ WHERE id = sqlc.arg(organization_id);
 SELECT id, event_seq FROM organization WHERE id = ANY(sqlc.arg(organization_ids)::uuid[]);
 
 -- name: NextEventSeq :one
--- Posting and branching take this first: the row lock makes sequence order
+-- Posting, branching, setup and sign-up take this first: the row lock makes sequence order
 -- commit order (decision 5).
 UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq;
 

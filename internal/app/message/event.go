@@ -2,7 +2,6 @@ package message
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -24,16 +23,14 @@ type Posted struct {
 
 // EncodePosted returns the stored data of KindPosted for a post in topicID:
 // canonical UUID text under channel_id, message_id and topic_id.
-func EncodePosted(channelID, messageID, topicID domain.ID) ([]byte, error) {
-	data, err := json.Marshal(map[string]string{
+func EncodePosted(channelID, messageID, topicID domain.ID) []byte {
+	// This payload contains only strings, so marshaling cannot fail.
+	data, _ := json.Marshal(map[string]string{
 		"channel_id": realtime.FormatPayloadID(channelID),
 		"message_id": realtime.FormatPayloadID(messageID),
 		"topic_id":   realtime.FormatPayloadID(topicID),
 	})
-	if err != nil {
-		return nil, fmt.Errorf("encoding message.posted data: %w", err)
-	}
-	return data, nil
+	return data
 }
 
 // DecodePosted reads stored data. Both IDs are required. Only an absent

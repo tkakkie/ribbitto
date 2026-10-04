@@ -72,9 +72,10 @@ Each kind's publisher owns its kind name and payload (decision 26):
 (`KindMessagesMoved`, `EncodeMoved`, `DecodeMoved`) and `app/member`
 (`KindJoined`, `EncodeJoined`, `DecodeJoined`) declare the kind, encode the
 payload and decode it until their modules move; realtime keeps only the
-`EventKind` type. The writer stores what they return, the reader only
-routes through their `Router`s, and consumers decode the payload (the
-renderer decodes moves). IDs are canonical UUID text
+`EventKind` type. The encoders return only `[]byte`: their strings and
+string slices cannot fail JSON marshaling. The writer stores what they
+return; the reader only routes through their `Router`s, and consumers
+decode the payload (the renderer decodes moves). IDs are canonical UUID text
 (`realtime.FormatPayloadID`, `ParsePayloadID`), the JSON value SQL's
 `jsonb_build_object` wrote before (#398), so old and new rows decode alike.
 `message.posted` carries `{"channel_id","message_id","topic_id"}` (UUIDs);

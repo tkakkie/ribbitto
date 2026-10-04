@@ -233,8 +233,8 @@ func (c *Cache[K, V]) run(ctx context.Context, call *cacheCall[V], load func(con
 	}
 }
 
-// Len reports how many entries the cache holds, for tests.
-func (c *Cache[K, V]) Len() int {
+// len reports how many entries the cache holds, for tests.
+func (c *Cache[K, V]) len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.order.Len()

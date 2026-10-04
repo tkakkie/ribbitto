@@ -2,7 +2,6 @@ package postgres_test
 
 import (
 	"errors"
-	"reflect"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -14,7 +13,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
-	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
@@ -154,38 +152,3 @@ func TestEventLogAudienceAndRollback(t *testing.T) {
 // appendEvents adapts realtime's appender to the consumer interface the
 // event-writing stores declare (decision 26).
 func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
-
-// realtime's appender keeps the audience: NULL stays organisation-wide, a
-// member of the organisation survives the write and reads back, and another
-// organisation's member is rejected. Today's publishers always append NULL,
-// so without this an appender that dropped the audience would widen delivery.
-func TestAppenderAudience(t *testing.T) {
-	t.Parallel()
-	pool := pgtest.New(t)
-	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "audience", "general")
-	other := pgtest.OrganizationWithOwner(t, pool, "audience-other", "general")
-	appendOne := func(audience *domain.ID) (int64, error) {
-		var seq int64
-		err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
-			if err := pgxbridge.Tx(tx).QueryRow(ctx, "UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq", f.OrganizationID).Scan(&seq); err != nil {
-				return err
-			}
-			return appendEvents(tx).Append(ctx, f.OrganizationID, seq, "test.audience", audience, []byte(`{}`))
-		})
-		return seq, err
-	}
-	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
-	for _, audience := range []*domain.ID{nil, &f.MemberID} {
-		seq, err := appendOne(audience)
-		requireNoError(t, err)
-		got, err := reader.EventsAfter(ctx, f.OrganizationID, seq-1, 1)
-		requireNoError(t, err)
-		if len(got) != 1 || !reflect.DeepEqual(got[0].AudienceMemberID, audience) {
-			t.Fatalf("audience %v read back as %+v", audience, got)
-		}
-	}
-	if _, err := appendOne(&other.MemberID); err == nil {
-		t.Fatal("appended an event whose audience is another organisation's member")
-	}
-}

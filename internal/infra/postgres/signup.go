@@ -42,10 +42,7 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, has
 		if err != nil {
 			return err
 		}
-		data, err := appmember.EncodeJoined(member.ID.Bytes)
-		if err != nil {
-			return err
-		}
+		data := appmember.EncodeJoined(member.ID.Bytes)
 		if err := s.events(platformTx).Append(ctx, org.Bytes, seq, appmember.KindJoined, nil, data); err != nil {
 			return err
 		}

@@ -87,12 +87,12 @@ func messageFromRow(row sqlcgen.Message) domain.Message {
 // PostingStore implements message.Store: it owns the posting transaction.
 type PostingStore struct {
 	pool   *pgxpool.Pool
-	events EventAppenders
+	events EventAppenderIn
 }
 
 // NewPostingStore returns a PostingStore on pool that appends events
 // through events.
-func NewPostingStore(pool *pgxpool.Pool, events EventAppenders) *PostingStore {
+func NewPostingStore(pool *pgxpool.Pool, events EventAppenderIn) *PostingStore {
 	return &PostingStore{pool: pool, events: events}
 }
 
@@ -133,10 +133,7 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 		if err != nil {
 			return err
 		}
-		data, err := message.EncodePosted(channelID, posted.ID, posted.TopicID)
-		if err != nil {
-			return err
-		}
+		data := message.EncodePosted(channelID, posted.ID, posted.TopicID)
 		return s.events(platformTx).Append(ctx, organizationID, seq, message.KindPosted, nil, data)
 	})
 	var pgErr *pgconn.PgError

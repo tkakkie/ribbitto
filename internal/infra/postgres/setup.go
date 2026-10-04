@@ -19,12 +19,12 @@ import (
 // SetupStore implements setup.Store with a single transaction per attempt.
 type SetupStore struct {
 	pool   *pgxpool.Pool
-	events EventAppenders
+	events EventAppenderIn
 }
 
 // NewSetupStore returns a setup store backed by pool that appends events
 // through events.
-func NewSetupStore(pool *pgxpool.Pool, events EventAppenders) *SetupStore {
+func NewSetupStore(pool *pgxpool.Pool, events EventAppenderIn) *SetupStore {
 	return &SetupStore{pool: pool, events: events}
 }
 
@@ -60,10 +60,7 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 		if err != nil {
 			return err
 		}
-		data, err := appmember.EncodeJoined(member.ID.Bytes)
-		if err != nil {
-			return err
-		}
+		data := appmember.EncodeJoined(member.ID.Bytes)
 		if err := s.events(platformTx).Append(ctx, org.ID.Bytes, seq, appmember.KindJoined, nil, data); err != nil {
 			return err
 		}

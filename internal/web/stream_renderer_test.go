@@ -62,20 +62,17 @@ func eventOf(t *testing.T, org domain.ID, seq int64, kind realtime.EventKind, mo
 	t.Helper()
 	e := realtime.Event{OrganizationID: org, Seq: seq, Kind: kind}
 	var route realtime.Router
-	var err error
 	switch kind {
 	case message.KindPosted:
-		e.Payload, err = message.EncodePosted(moved.ChannelID, domain.ID{7}, moved.ToTopicID)
+		e.Payload = message.EncodePosted(moved.ChannelID, domain.ID{7}, moved.ToTopicID)
 		route = message.RoutePosted
 	case topic.KindMessagesMoved:
-		e.Payload, err = topic.EncodeMoved(moved)
+		e.Payload = topic.EncodeMoved(moved)
 		route = topic.RouteMoved
 	default:
 		t.Fatalf("no codec for %q", kind)
 	}
-	if err != nil {
-		t.Fatal(err)
-	}
+	var err error
 	if e.ChannelID, e.Topics, err = route(e.Payload); err != nil {
 		t.Fatal(err)
 	}

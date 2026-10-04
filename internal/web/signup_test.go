@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -23,7 +23,7 @@ import (
 type fakeSignUp struct{ *fakeSetup }
 
 func (f fakeSignUp) SignUp(ctx context.Context, name, handle, email, password string) (domain.ID, error) {
-	result, err := f.Complete(ctx, "", setup.Input{DisplayName: name, Handle: handle, Email: email, Password: password})
+	result, err := f.Complete(ctx, "", org.SetupInput{DisplayName: name, Handle: handle, Email: email, Password: password})
 	return result.AccountID, err
 }
 
@@ -38,10 +38,10 @@ func TestSignUp(t *testing.T) {
 		{"disabled", nil, 404, ""},
 		{"completed", &fakeSetup{}, 404, ""},
 		{"completed concurrently", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", signup.ErrClosed)}, 404, ""},
-		{"name", &fakeSetup{open: true, err: setup.ValidationErrors{"display_name": errors.New("private detail")}}, 422, "Enter a display name of 1–50 printable characters, at least one of them visible."},
-		{"email", &fakeSetup{open: true, err: setup.ValidationErrors{"email": errors.New("private detail")}}, 422, "Enter a valid email address."},
-		{"password", &fakeSetup{open: true, err: setup.ValidationErrors{"password": errors.New("private detail")}}, 422, "Use a password of 15–128 characters."},
-		{"handle", &fakeSetup{open: true, err: setup.ValidationErrors{"handle": errors.New("private detail")}}, 422, "Use 2–32 characters: lowercase letters, digits, _, . or -"},
+		{"name", &fakeSetup{open: true, err: org.ValidationErrors{"display_name": errors.New("private detail")}}, 422, "Enter a display name of 1–50 printable characters, at least one of them visible."},
+		{"email", &fakeSetup{open: true, err: org.ValidationErrors{"email": errors.New("private detail")}}, 422, "Enter a valid email address."},
+		{"password", &fakeSetup{open: true, err: org.ValidationErrors{"password": errors.New("private detail")}}, 422, "Use a password of 15–128 characters."},
+		{"handle", &fakeSetup{open: true, err: org.ValidationErrors{"handle": errors.New("private detail")}}, 422, "Use 2–32 characters: lowercase letters, digits, _, . or -"},
 		{"duplicate email", &fakeSetup{open: true, err: signup.ErrEmailTaken}, 422, "This email address is already registered."},
 		{"duplicate handle", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", signup.ErrHandleTaken)}, 422, "This handle is already taken in this organisation."},
 		{"busy", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", identity.ErrBusy)}, 503, ""},
@@ -69,7 +69,7 @@ func TestSignUp(t *testing.T) {
 			}
 			checkRegistration(t, handler, tt, "/signup", form,
 				[]string{"display_name", "handle", "email"}, "",
-				setup.Input{DisplayName: "Owner", Handle: "owner", Email: "owner@example.com", Password: "secret-password"})
+				org.SetupInput{DisplayName: "Owner", Handle: "owner", Email: "owner@example.com", Password: "secret-password"})
 		})
 	}
 }

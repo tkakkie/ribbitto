@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -22,7 +21,7 @@ var ErrEmailTaken = errors.New("email already registered")
 var ErrHandleTaken = errors.New("handle already taken")
 
 // ValidationErrors associates invalid fields with their validation errors.
-type ValidationErrors = setup.ValidationErrors
+type ValidationErrors = org.ValidationErrors
 
 // Store reads setup availability and registers an account and member atomically.
 type Store interface {

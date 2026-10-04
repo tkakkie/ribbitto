@@ -18,9 +18,9 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -525,7 +525,7 @@ func TestPagesMarkup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fieldErrors := setup.ValidationErrors{}
+	fieldErrors := org.ValidationErrors{}
 	for _, field := range []string{"organization_name", "slug", "display_name", "handle", "email", "password"} {
 		fieldErrors[field] = errors.New("invalid")
 	}
@@ -585,7 +585,7 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "sign-in rate-limited", route: "POST /signin", services: limited, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, repeat: 2, status: http.StatusTooManyRequests},
 		{name: "setup", route: "GET /setup", services: withSetup(nil), method: "GET", path: "/setup"},
 		{name: "setup, every field invalid", route: "POST /setup", services: withSetup(fieldErrors), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 6, invalidFields: []string{"organization_name", "slug", "display_name", "handle", "email", "password"}},
-		{name: "setup, wrong token", route: "POST /setup", services: withSetup(setup.ErrToken), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 1, invalidFields: []string{"token"}},
+		{name: "setup, wrong token", route: "POST /setup", services: withSetup(org.ErrSetupToken), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 1, invalidFields: []string{"token"}},
 		{name: "sign-up", route: "GET /signup", services: withSignUp(true, nil), method: "GET", path: "/signup"},
 		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 4, invalidFields: []string{"display_name", "handle", "email", "password"}},
 		{name: "channel", route: "GET /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},

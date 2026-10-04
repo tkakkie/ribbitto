@@ -6,7 +6,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -67,7 +66,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, appendEvents), nil),
 	}
 	if setupToken != "" {
-		s.Setup, s.SetupSessions = setup.New(postgres.NewSetupStore(pool, appendEvents), hasher, setupToken), sessions
+		s.Setup, s.SetupSessions = org.NewSetup(postgres.NewSetupStore(pool, appendEvents), hasher, setupToken), sessions
 	}
 	if signUp {
 		s.SignUp, s.SetupSessions = signup.New(postgres.NewSetupStore(pool, appendEvents), hasher, true), sessions

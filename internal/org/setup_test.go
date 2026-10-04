@@ -1,15 +1,15 @@
-package setup_test
+package org_test
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/setup"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 type setupStore struct {
-	setup.Store
+	org.SetupStore
 	open bool
 }
 
@@ -21,9 +21,9 @@ func TestRejectedSetup(t *testing.T) {
 		closed                             bool
 		want                               error
 	}{
-		{name: "wrong token", configured: "secret", submitted: "wrong", want: setup.ErrToken},
-		{name: "empty configured", want: setup.ErrToken},
-		{name: "completed", configured: "secret", submitted: "secret", closed: true, want: setup.ErrCompleted},
+		{name: "wrong token", configured: "secret", submitted: "wrong", want: org.ErrSetupToken},
+		{name: "empty configured", want: org.ErrSetupToken},
+		{name: "completed", configured: "secret", submitted: "secret", closed: true, want: org.ErrSetupCompleted},
 		{name: "email", field: "email"},
 		{name: "display name", field: "display_name"},
 		{name: "password", field: "password"},
@@ -32,16 +32,16 @@ func TestRejectedSetup(t *testing.T) {
 		{name: "handle", field: "handle"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			input := setup.Input{OrganizationName: "Example", Slug: "example", Email: "a@b", DisplayName: "Owner", Handle: "owner", Password: "long enough password"}
+			input := org.SetupInput{OrganizationName: "Example", Slug: "example", Email: "a@b", DisplayName: "Owner", Handle: "owner", Password: "long enough password"}
 			if tc.field != "" {
 				tc.configured, tc.submitted = "secret", "secret"
 				fields := map[string]*string{"email": &input.Email, "display_name": &input.DisplayName, "password": &input.Password, "organization_name": &input.OrganizationName, "slug": &input.Slug, "handle": &input.Handle}
 				*fields[tc.field] = ""
 			}
 			// Nil hasher and embedded store panic if rejection reaches hashing or writes.
-			s := setup.New(setupStore{open: !tc.closed}, nil, tc.configured)
+			s := org.NewSetup(setupStore{open: !tc.closed}, nil, tc.configured)
 			_, err := s.Complete(t.Context(), tc.submitted, input)
-			var fields setup.ValidationErrors
+			var fields org.ValidationErrors
 			if tc.field != "" {
 				if !errors.As(err, &fields) || len(fields) != 1 || fields[tc.field] == nil {
 					t.Fatalf("want field %s, got %v", tc.field, err)

@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -17,7 +17,7 @@ import (
 // SetupService checks availability and creates the organisation and owner.
 type SetupService interface {
 	Open(context.Context) (bool, error)
-	Complete(context.Context, string, setup.Input) (setup.Result, error)
+	Complete(context.Context, string, org.SetupInput) (org.SetupResult, error)
 }
 
 // SessionReplacer signs a newly created account in. Like sign-in, it ends
@@ -37,7 +37,7 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 	}
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		open, err := service.Open(r.Context())
-		if errors.Is(err, setup.ErrCompleted) || (err == nil && !open) {
+		if errors.Is(err, org.ErrSetupCompleted) || (err == nil && !open) {
 			http.NotFound(w, r)
 			return
 		}
@@ -54,11 +54,11 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 			for _, name := range []string{"organization_name", "slug", "display_name", "handle", "email"} {
 				form.Values[name] = r.PostForm.Get(name)
 			}
-			result, err := service.Complete(r.Context(), r.PostForm.Get("token"), setup.Input{
+			result, err := service.Complete(r.Context(), r.PostForm.Get("token"), org.SetupInput{
 				OrganizationName: form.Values["organization_name"], Slug: form.Values["slug"],
 				DisplayName: form.Values["display_name"], Handle: form.Values["handle"], Email: form.Values["email"], Password: r.PostForm.Get("password"),
 			})
-			var fields setup.ValidationErrors
+			var fields org.ValidationErrors
 			switch {
 			case err == nil:
 				token, expiresAt, err := sessions.Replace(r.Context(), incomingSession(r), result.AccountID)
@@ -69,13 +69,13 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 				middleware.SetSessionCookie(w, token, expiresAt)
 				http.Redirect(w, r, "/", http.StatusSeeOther)
 				return
-			case errors.Is(err, setup.ErrCompleted):
+			case errors.Is(err, org.ErrSetupCompleted):
 				http.NotFound(w, r)
 				return
 			case errors.Is(err, identity.ErrBusy):
 				http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 				return
-			case errors.Is(err, setup.ErrToken):
+			case errors.Is(err, org.ErrSetupToken):
 				form.Errors["token"] = "setup.error.token"
 			case errors.As(err, &fields):
 				for _, name := range []string{"organization_name", "slug", "display_name", "handle", "email", "password"} {

@@ -20,6 +20,12 @@
 // payload and its routing. AccountCreator and AccountCreatorIn declare the
 // account write setup and sign-up will inject.
 //
-// Until org's store moves (step 3), infra/postgres implements
-// MembershipStore, HandleStore and Directory.
+// Setup (NewSetup, SetupInput, SetupResult, SetupStore, ErrSetupToken and
+// ErrSetupCompleted) authorizes and validates installation-wide first-run setup
+// before hashing. ValidationErrors is also aliased by app/signup.
+// Listed exception: setup creates identity's first account and the default
+// channel in the same transaction as the organisation.
+//
+// Until org's store moves (step 3), infra/postgres implements MembershipStore,
+// HandleStore, Directory and SetupStore, keeping their transactions.
 package org

@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 func TestLoadTestSizing(t *testing.T) {
@@ -162,7 +162,7 @@ func TestLoadTestSeed(t *testing.T) {
 		}
 	}
 	// Setup refusal precedes bounds and file creation, including on load-test reruns.
-	if err := run(t.Context(), address.String(), append(args, "-messages", "0"), io.Discard); !errors.Is(err, setup.ErrCompleted) {
+	if err := run(t.Context(), address.String(), append(args, "-messages", "0"), io.Discard); !errors.Is(err, org.ErrSetupCompleted) {
 		t.Fatalf("completed setup: %v", err)
 	}
 	if !reflect.DeepEqual(got, readSnapshot(t, pool)) {

@@ -8,21 +8,21 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // Hold all attempts after the open check, so every contender reaches Create.
 type setupBarrier struct {
-	setup.Store
+	org.SetupStore
 	ready, release chan struct{}
 }
 
 func (s setupBarrier) Open(ctx context.Context) (bool, error) {
-	open, err := s.Store.Open(ctx)
+	open, err := s.SetupStore.Open(ctx)
 	s.ready <- struct{}{}
 	<-s.release
 	return open, err
@@ -37,8 +37,8 @@ func TestSetup(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
 			store := postgres.NewSetupStore(pool, appendEvents)
-			s := setup.New(store, hasher, "secret")
-			input := setup.Input{OrganizationName: "Example", Slug: "example", Email: " Owner@Example.org ", DisplayName: " Owner ", Handle: " Owner ", Password: "long enough password"}
+			s := org.NewSetup(store, hasher, "secret")
+			input := org.SetupInput{OrganizationName: "Example", Slug: "example", Email: " Owner@Example.org ", DisplayName: " Owner ", Handle: " Owner ", Password: "long enough password"}
 			counts := func(want int) {
 				t.Helper()
 				var orgs, accounts, members, setups, defaults int
@@ -49,20 +49,20 @@ func TestSetup(t *testing.T) {
 				}
 			}
 			_, err := s.Complete(ctx, "wrong", input)
-			if !errors.Is(err, setup.ErrToken) {
+			if !errors.Is(err, org.ErrSetupToken) {
 				t.Fatalf("rejected token: %v", err)
 			}
 			counts(0)
 			for _, tc := range []struct{ slug, email, handle, field string }{{"example", "A@b", "owner", "email"}, {"example", "e\u0301@b", "owner", "email"}, {"Bad", "a@b", "owner", "slug"}, {"example", "a@b", "Owner", "handle"}, {"example", "a@b", "all", "handle"}} {
 				_, err := store.Create(ctx, "Example", tc.slug, tc.email, "Owner", tc.handle, "$argon2id$test")
-				var fields setup.ValidationErrors
+				var fields org.ValidationErrors
 				if !errors.As(err, &fields) || fields[tc.field] == nil {
 					t.Fatalf("database validation for %s: %v", tc.field, err)
 				}
 				counts(0)
 			}
-			barrier := setupBarrier{Store: store, ready: make(chan struct{}, attempts), release: make(chan struct{})}
-			contender := setup.New(barrier, hasher, "secret")
+			barrier := setupBarrier{SetupStore: store, ready: make(chan struct{}, attempts), release: make(chan struct{})}
+			contender := org.NewSetup(barrier, hasher, "secret")
 			results := make(chan error, attempts)
 			for i := range attempts {
 				go func() {
@@ -80,7 +80,7 @@ func TestSetup(t *testing.T) {
 			for range attempts {
 				if err := <-results; err == nil {
 					successes++
-				} else if !errors.Is(err, setup.ErrCompleted) {
+				} else if !errors.Is(err, org.ErrSetupCompleted) {
 					t.Fatalf("contender: %v", err)
 				}
 			}
@@ -88,7 +88,7 @@ func TestSetup(t *testing.T) {
 				t.Fatalf("successes = %d", successes)
 			}
 			_, err = s.Complete(ctx, "secret", input)
-			if !errors.Is(err, setup.ErrCompleted) {
+			if !errors.Is(err, org.ErrSetupCompleted) {
 				t.Fatalf("repeated setup: %v", err)
 			}
 			counts(1)

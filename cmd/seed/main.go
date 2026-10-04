@@ -21,7 +21,6 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -134,14 +133,14 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	}
 	const slug = "paper-lantern"
 	store := postgres.NewSetupStore(pool, appendEvents)
-	installer := setup.New(store, hasher, token)
+	installer := org.NewSetup(store, hasher, token)
 	// Preflight is read-only; Complete still arbitrates concurrent setup attempts.
 	open, err := installer.Open(ctx)
 	if err != nil {
 		return err
 	}
 	if !open {
-		return setup.ErrCompleted
+		return org.ErrSetupCompleted
 	}
 	loadTest := false
 	flags.Visit(func(f *flag.Flag) { loadTest = loadTest || f.Name != "messages" })
@@ -164,7 +163,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	manifest := credentialFile{OrganizationSlug: slug}
 	sessions := identitypg.NewSessions(pool, time.Now, nil)
 	owner := data.Members[0]
-	created, err := installer.Complete(ctx, token, setup.Input{
+	created, err := installer.Complete(ctx, token, org.SetupInput{
 		OrganizationName: "Paper Lantern Studio", Slug: slug,
 		Email: owner.Handle + "@example.test", DisplayName: owner.Name, Handle: owner.Handle, Password: password,
 	})

@@ -35,7 +35,7 @@ the temporary implementation behind it.
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
 | four `infra` target-version tests | `db/migrations` (temporary allowance) | 0 | their module's step, or 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
-| `app/setup`, `app/signup` | `identity.Hasher`, `identity.Account` | 1 | 3 |
+| `app/signup` | `identity.Hasher`, `identity.Account` | 1 | 3.5b |
 | `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
 | setup, sign-up (`infra`) | `identity` account writes through injected `org.AccountCreatorIn` (`identitypg.AccountCreatorIn`, adapted by a closure) | 3.9 | sign-up 3.11, setup 3.12; until then `legacy_account.sql` copies `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry |
 | `infra/postgres` appender interface (`EventAppender`) and the kind list | `realtime` types (root import, temporary allowance) | 2 | 5 |

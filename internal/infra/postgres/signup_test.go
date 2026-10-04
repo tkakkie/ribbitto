@@ -11,7 +11,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
@@ -41,7 +40,6 @@ func TestSignUp(t *testing.T) {
 	id, err := service.SignUp(ctx, "Alice", "alice", "alice@example.org", "long enough password")
 	requireNoError(t, err)
 	organizationID := pgtype.UUID{Bytes: result.OrganizationID, Valid: true}
-	q := sqlcgen.New(pool)
 	var account struct {
 		ID    pgtype.UUID
 		Email string

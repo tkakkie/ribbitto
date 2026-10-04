@@ -119,7 +119,7 @@ func TestChannelService(t *testing.T) {
 	acme := pgtest.Organization(t, pool, "acme", "Acme", 0)
 	globex := pgtest.Organization(t, pool, "globex", "Globex", 0)
 	member := func(orgID domain.ID) org.Membership {
-		return org.Membership{Organization: domain.Organization{ID: orgID}, Member: domain.Member{OrganizationID: orgID}}
+		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{OrganizationID: orgID}}
 	}
 	store := postgres.NewChannelStore(pool)
 	service := appchannel.New(store)

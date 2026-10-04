@@ -9,7 +9,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity"
 )
 
-// ErrInvalidHandle wraps a handle that breaks the rules in domain.ValidateHandle.
+// ErrInvalidHandle wraps a handle that breaks the rules in ValidateHandle.
 var ErrInvalidHandle = errors.New("invalid handle")
 
 // ErrHandleTaken means another member of the organisation already uses the
@@ -50,7 +50,7 @@ func (s *HandleChanger) ChangeHandle(ctx context.Context, account *identity.Acco
 	if err != nil {
 		return "", err
 	}
-	handle, err = domain.ValidateHandle(handle)
+	handle, err = ValidateHandle(handle)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrInvalidHandle, err)
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // ErrClosed means registration is disabled or setup is incomplete.
@@ -61,7 +62,7 @@ func (s *Service) SignUp(ctx context.Context, displayName, handle, email, passwo
 	}
 	fields := ValidationErrors{}
 	displayName, fields["display_name"] = domain.ValidateDisplayName(displayName)
-	handle, fields["handle"] = domain.ValidateHandle(handle)
+	handle, fields["handle"] = org.ValidateHandle(handle)
 	email, fields["email"] = identity.ValidateEmail(email)
 	password, fields["password"] = identity.ValidatePassword(password)
 	for name, err := range fields {

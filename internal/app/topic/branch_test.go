@@ -64,7 +64,7 @@ func TestBrancherValidates(t *testing.T) {
 func TestBrancherRunsAndRaises(t *testing.T) {
 	orgID := domain.ID{7}
 	store, hub := &fakeBranchStore{}, &raised{}
-	m := org.Membership{Organization: domain.Organization{ID: orgID}}
+	m := org.Membership{Organization: org.Organization{ID: orgID}}
 	dest, err := topic.NewBrancher(store, hub).Branch(t.Context(), m, domain.ID{3}, topic.Branch{Messages: []domain.ID{{5}}, From: domain.ID{1}, NewName: "  設計 "}, func(d domain.Topic) string { return "to " + d.Name })
 	if err != nil || dest.ID != (domain.ID{9}) || dest.Name != "to dest" || store.got.NewName != "設計" {
 		t.Fatalf("Branch = %+v, %v; store got %+v", dest, err, store.got)

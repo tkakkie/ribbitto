@@ -169,7 +169,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 					t.Fatalf("branch: %d %s", w.Code, w.Body.String())
 				}
 			case "POST /channels":
-				created, err := services.Channels.List(ctx, org.Membership{Organization: domain.Organization{ID: acme}})
+				created, err := services.Channels.List(ctx, org.Membership{Organization: org.Organization{ID: acme}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -383,7 +383,7 @@ func (oneOrganisation) Member(_ context.Context, account *identity.Account, slug
 	if account == nil || slug != "acme" {
 		return org.Membership{}, org.ErrNotFound
 	}
-	return org.Membership{Organization: domain.Organization{Slug: "acme", Name: "Acme Corporation"}, Member: domain.Member{Role: domain.RoleOwner, Handle: "alice"}}, nil
+	return org.Membership{Organization: org.Organization{Slug: "acme", Name: "Acme Corporation"}, Member: org.Member{Role: org.RoleOwner, Handle: "alice"}}, nil
 }
 
 func (oneOrganisation) HomeSlug(context.Context, *identity.Account) (string, error) {

@@ -159,7 +159,7 @@ func TestMessageTimestampView(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			page := view.ChannelPage{
-				Organization: domain.Organization{Name: "Acme", Slug: "acme"},
+				Organization: view.Organization{Name: "Acme", Slug: "acme"},
 				Messages:     []view.Message{{CreatedAt: tt.created}},
 			}
 			var b strings.Builder

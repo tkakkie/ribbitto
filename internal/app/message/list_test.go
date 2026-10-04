@@ -66,7 +66,7 @@ func TestBefore(t *testing.T) {
 		t.Run("failure="+failure, func(t *testing.T) {
 			f := &directoryHistory{t: t, fail: failure}
 			before := int64(9)
-			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).Before(t.Context(), org.Membership{Organization: domain.Organization{ID: domain.ID{1}}}, domain.ID{2}, &domain.ID{7}, &before)
+			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).Before(t.Context(), org.Membership{Organization: org.Organization{ID: domain.ID{1}}}, domain.ID{2}, &domain.ID{7}, &before)
 			if (err != nil) != (failure != "") {
 				t.Fatalf("error: %v", err)
 			}

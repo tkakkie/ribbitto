@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // Members that exist before handles get member-<n>, numbered per
@@ -71,7 +71,7 @@ func TestMemberHandleUpgrade(t *testing.T) {
 		if err := rows.Scan(&id, &handle); err != nil {
 			t.Fatal(err)
 		}
-		if valid, err := domain.ValidateHandle(handle); err != nil || valid != handle {
+		if valid, err := org.ValidateHandle(handle); err != nil || valid != handle {
 			t.Errorf("handle %q is not canonical: %v", handle, err)
 		}
 		got[id[len(id)-3:]] = handle

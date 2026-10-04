@@ -49,7 +49,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 					selected, initial, afterMove = source, []int{50, 61}, []int{61}
 					stale, fresh = []int{20, 30, 35}, []int{20, 35}
 				}
-				snapshot := view.ChannelPage{Organization: domain.Organization{Name: "Acme", Slug: "acme"},
+				snapshot := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
 					Topic: &domain.Topic{ID: selected}, EventCursor: new(int64), Older: true}
 				snapshot.Messages = streamTestMessages(selected, initial...)
 				events := make(chan realtime.Outgoing, 1)

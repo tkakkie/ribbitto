@@ -25,7 +25,7 @@ func TestPostMessage(t *testing.T) {
 		// These fixture memberships predate logging, as on an upgraded database.
 		_, err := pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = event_seq WHERE id = $1", fixture.OrganizationID)
 		requireNoError(t, err)
-		memberships[slug] = org.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
+		memberships[slug] = org.Membership{Organization: org.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: org.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
 		channels[slug] = fixture.Channel.ID
 	}
 	service := message.New(postgres.NewPostingStore(pool, appendEvents))

@@ -57,7 +57,7 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 			r.SetPathValue("channelID", "01000000-0000-0000-0000-000000000000")
 			r.SetPathValue("topicID", "03000000-0000-0000-0000-000000000000")
 			w := httptest.NewRecorder()
-			p.show(w, r, org.Membership{Organization: domain.Organization{ID: domain.ID{9}, Slug: "acme"}})
+			p.show(w, r, org.Membership{Organization: org.Organization{ID: domain.ID{9}, Slug: "acme"}})
 			if w.Code != tt.status {
 				t.Fatalf("status %d, body %s", w.Code, w.Body.String())
 			}

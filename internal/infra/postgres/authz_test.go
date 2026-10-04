@@ -25,12 +25,12 @@ func TestAuthzStore(t *testing.T) {
 	if _, err := pool.Exec(ctx, "INSERT INTO setup (organization_id) VALUES ($1)", acme); err != nil {
 		t.Fatal(err)
 	}
-	pgtest.Member(t, pool, acme, alice, domain.RoleOwner, "alice", 1)
-	pgtest.Member(t, pool, globex, bob, domain.RoleMember, "bob", 1)
+	pgtest.Member(t, pool, acme, alice, org.RoleOwner, "alice", 1)
+	pgtest.Member(t, pool, globex, bob, org.RoleMember, "bob", 1)
 	store := postgres.NewAuthzStore(pool)
 	m, err := store.Membership(ctx, alice, "acme")
-	if err != nil || m.Organization != (domain.Organization{ID: acme, Slug: "acme", Name: "Acme"}) ||
-		m.Member.OrganizationID != acme || m.Member.AccountID != alice || m.Member.Role != domain.RoleOwner || m.Member.Handle != "alice" {
+	if err != nil || m.Organization != (org.Organization{ID: acme, Slug: "acme", Name: "Acme"}) ||
+		m.Member.OrganizationID != acme || m.Member.AccountID != alice || m.Member.Role != org.RoleOwner || m.Member.Handle != "alice" {
 		t.Fatalf("alice in acme: %+v, %v", m, err)
 	}
 	for _, tt := range []struct {

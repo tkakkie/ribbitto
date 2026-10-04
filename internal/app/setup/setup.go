@@ -9,6 +9,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // ErrToken rejects an incorrect token, including any unconfigured token.
@@ -79,11 +80,11 @@ func (s *Service) Complete(ctx context.Context, token string, input Input) (Resu
 		value    *string
 		validate func(string) (string, error)
 	}{
-		{"organization_name", &input.OrganizationName, domain.ValidateOrganizationName},
-		{"slug", &input.Slug, domain.ValidateSlug},
+		{"organization_name", &input.OrganizationName, org.ValidateOrganizationName},
+		{"slug", &input.Slug, org.ValidateSlug},
 		{"email", &input.Email, identity.ValidateEmail},
 		{"display_name", &input.DisplayName, domain.ValidateDisplayName},
-		{"handle", &input.Handle, domain.ValidateHandle},
+		{"handle", &input.Handle, org.ValidateHandle},
 		{"password", &input.Password, identity.ValidatePassword},
 	} {
 		value, err := field.validate(*field.value)

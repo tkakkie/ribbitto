@@ -1,4 +1,6 @@
-package domain
+package org
+
+import "github.com/tkakkie/ribbitto/internal/domain"
 
 // Role is a member's role in an organisation.
 type Role string
@@ -11,7 +13,7 @@ const (
 
 // Organization is a workspace; it owns everything its members create.
 type Organization struct {
-	ID   ID
+	ID   domain.ID
 	Slug string
 	Name string
 }
@@ -19,9 +21,9 @@ type Organization struct {
 // Member is an account's membership in one organisation. Organisation-owned
 // data refers to members, never directly to accounts.
 type Member struct {
-	ID             ID
-	OrganizationID ID
-	AccountID      ID
+	ID             domain.ID
+	OrganizationID domain.ID
+	AccountID      domain.ID
 	Role           Role
 	// Handle helps people tell members apart within the organisation. It
 	// can change, so nothing stores or authorises by it: ID does that.

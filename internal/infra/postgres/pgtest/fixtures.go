@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // OrganizationFixture holds the IDs and default channel created by OrganizationWithOwner.
@@ -23,11 +24,11 @@ type OrganizationFixture struct {
 // with channelName, leaves event_seq at 1, and creates no setup row.
 func OrganizationWithOwner(t *testing.T, pool *pgxpool.Pool, slug, channelName string) OrganizationFixture {
 	t.Helper()
-	org := Organization(t, pool, slug, slug, 1)
+	orgID := Organization(t, pool, slug, slug, 1)
 	account := Account(t, pool, slug+"@example.org", slug)
-	member := Member(t, pool, org, account, domain.RoleOwner, "owner", 1)
-	channel := Channel(t, pool, org, channelName, true)
-	return OrganizationFixture{OrganizationID: org, AccountID: account, MemberID: member, Channel: channel}
+	member := Member(t, pool, orgID, account, org.RoleOwner, "owner", 1)
+	channel := Channel(t, pool, orgID, channelName, true)
+	return OrganizationFixture{OrganizationID: orgID, AccountID: account, MemberID: member, Channel: channel}
 }
 
 // Organization inserts only an organisation, with the given event_seq.
@@ -49,10 +50,10 @@ func Account(t *testing.T, pool *pgxpool.Pool, email, name string) domain.ID {
 
 // Member inserts a membership with the given role, handle and joined_event_seq.
 // It leaves the organisation's event_seq unchanged, including for partial fixtures.
-func Member(t *testing.T, pool *pgxpool.Pool, org, account domain.ID, role domain.Role, handle string, joinedEventSeq int64) domain.ID {
+func Member(t *testing.T, pool *pgxpool.Pool, orgID, account domain.ID, role org.Role, handle string, joinedEventSeq int64) domain.ID {
 	t.Helper()
 	var id domain.ID
-	require(t, pool.QueryRow(t.Context(), "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $2, $3, $4, $5) RETURNING id", org, account, role, joinedEventSeq, handle).Scan(&id))
+	require(t, pool.QueryRow(t.Context(), "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $2, $3, $4, $5) RETURNING id", orgID, account, role, joinedEventSeq, handle).Scan(&id))
 	return id
 }
 

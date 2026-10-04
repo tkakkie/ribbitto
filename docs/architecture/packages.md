@@ -72,6 +72,7 @@ flowchart LR
   postgres --> app & org & conversation & identity & domain & platform & realtime
   conversationpg --> conversation[internal/conversation] & realtime
   conversation --> identity & org & realtime & kernel & platform
+  cstore[conversation/internal/postgres] --> conversation & platform & kernel
   realtime[internal/realtime] --> kernel & platform
   realtimepg[realtime/realtimepg] --> realtime & rstore[realtime/internal/postgres] & platform
   rstore --> realtime & platform & kernel

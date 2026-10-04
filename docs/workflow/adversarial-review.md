@@ -53,9 +53,8 @@ into realtime's store). **When in doubt, the higher tier.**
 - **C — none:** everything that matches no A or B area: behaviour-preserving
   changes in B's areas (moves, renames, extractions, consumer-declared seams
   and their closures), tests only outside A's areas that weaken no check,
-  documentation outside
-  the gate documents, lint rules that only tighten, dependency bumps, and
-  ordinary feature work outside A and B.
+  documentation outside the gate documents, lint rules that only tighten,
+  dependency bumps, and ordinary feature work outside A and B.
 
 The template's *Adversarial* field names the review: `Grok`,
 `Muse Code (B)`, `Antigravity (B)`,

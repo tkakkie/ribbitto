@@ -37,7 +37,7 @@ of:
 - a combining mark (Unicode category M), which has no base character to
   attach to when nothing else is there.
 
-The rule (`domain.IsBlankLookingName`) is this fixed list of code points and
+The rule (`identity.IsBlankLookingName`) is this fixed list of code points and
 one category — not a judgement of how a font or browser renders the name.
 It does not promise to catch every string that some font shows as nothing.
 
@@ -54,12 +54,14 @@ It does not promise to catch every string that some font shows as nothing.
 
 The database does not check this rule: PostgreSQL regular expressions have
 no Unicode categories, and names stored before the rule must keep working.
-The domain is the gate for new names.
+Identity is the gate for new names.
 
 **Showing names.** Views show a member through `view.MemberName`, which puts
 the display name in its own `<bdi>` so right-to-left text cannot reorder the
 text around it. A blank-looking display name — including one stored before
-this rule — is shown as `@handle` alone. Channel message authors use the same component.
+this rule — is converted to an empty name by web when building the channel
+page and message view models, and shown as `@handle` alone. Channel message
+authors use the same component for the page and stream.
 The page resolves member IDs to handles and account IDs through org, then
 looks up display names through identity, in two batches.
 

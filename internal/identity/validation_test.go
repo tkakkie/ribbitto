@@ -13,6 +13,7 @@ func TestValidation(t *testing.T) {
 		validate       func(string) (string, error)
 		valid, invalid []string
 	}{
+		{"display", identity.ValidateDisplayName, []string{"a", strings.Repeat("界", 50)}, []string{"", "  ", strings.Repeat("界", 51), "a\x00", "a\n", "a\u007f", "\xff"}},
 		{"email", identity.ValidateEmail, []string{"a@b", strings.Repeat("界", 84) + "@b"}, []string{"", "a", "@b", "a@", "a@@b", "a^@@b", "a\x00@b", "a\n@b", "a\u0085@b", "a\xff@b", strings.Repeat("a", 253) + "@b"}},
 		{"password", identity.ValidatePassword, []string{strings.Repeat("界", 15), strings.Repeat("a", 128), strings.Repeat(" ", 15), strings.Repeat("\x00", 15)}, []string{"", strings.Repeat("界", 14), strings.Repeat("界", 129), strings.Repeat("\xff", 15)}},
 	} {
@@ -33,6 +34,10 @@ func TestValidation(t *testing.T) {
 		validate    func(string) (string, error)
 		input, want string
 	}{
+		{identity.ValidateDisplayName, "　 Alice 　", "Alice"},
+		{identity.ValidateDisplayName, "  e\u0301  ", "é"},
+		{identity.ValidateDisplayName, "Alice Smith", "Alice Smith"},
+		{identity.ValidateDisplayName, "山田\u3000太郎", "山田\u3000太郎"},
 		{identity.ValidateEmail, "  USER@EXAMPLE.COM  ", "user@example.com"},
 		{identity.ValidateEmail, "  " + strings.Repeat("A", 252) + "@B  ", strings.Repeat("a", 252) + "@b"},
 		{identity.ValidateEmail, "  E\u0301@EXAMPLE.COM  ", "é@example.com"},
@@ -58,6 +63,50 @@ func TestValidationNonPrintableText(t *testing.T) {
 			if _, err := identity.ValidateEmail("a" + tc.text + "b@example.com"); err == nil {
 				t.Error("email accepted non-printable text or space")
 			}
+			if tc.text == " " {
+				return // ASCII spaces are allowed inside names.
+			}
+			if _, err := identity.ValidateDisplayName("a" + tc.text + "b"); err == nil {
+				t.Error("display name accepted non-printable text")
+			}
 		})
+	}
+}
+
+// The accepted and rejected names mirror the examples in docs/domain/names.md.
+func TestBlankLookingNames(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		blank bool
+	}{
+		{"", true},
+		{"ㅤ", true},   // Hangul filler
+		{"ﾠ", true},   // half-width Hangul filler
+		{"ᅟᅠ", true},  // Hangul choseong and jungseong fillers
+		{"⠀⠀", true},  // braille blank
+		{"́", true},   // combining acute accent with no base
+		{"⃝", true},   // enclosing mark with no base
+		{"ㅤ ㅤ", true}, // fillers around an ASCII space
+		{"⠀　́", true}, // braille blank, ideographic space, mark
+		{"Alice", false},
+		{"山田　太郎", false},
+		{"김민준", false},
+		{"가", false}, // Hangul written with conjoining jamo
+		{"é", false},
+		{"é", false}, // a base with its mark
+		{"ㅤa", false}, // one visible character is enough
+		{"😀", false},
+		{"مريم", false},
+	} {
+		if got := identity.IsBlankLookingName(tc.name); got != tc.blank {
+			t.Errorf("IsBlankLookingName(%q) = %t, want %t", tc.name, got, tc.blank)
+		}
+		// Every name that is valid otherwise is rejected exactly when blank-looking.
+		if tc.name == "" {
+			continue
+		}
+		if _, err := identity.ValidateDisplayName(tc.name); (err != nil) != tc.blank {
+			t.Errorf("ValidateDisplayName(%q): %v, want rejected = %t", tc.name, err, tc.blank)
+		}
 	}
 }

@@ -1,8 +1,8 @@
 # Sessions and signing in
 
 `internal/identity.Sessions` owns the session lifecycle; `internal/web/middleware`
-connects it to HTTP. `internal/identity` also owns `Account` and the email
-and password rules ([validation](../domain/validation.md)).
+connects it to HTTP. `internal/identity` also owns `Account` and the email,
+password and display-name rules ([validation](../domain/validation.md)).
 
 **Account creation in a caller's transaction.** `org.AccountCreator` and its
 `AccountCreatorIn` factory accept validated, normalised values and a password

@@ -1,4 +1,4 @@
-package view_test
+package web
 
 import (
 	"strings"
@@ -21,7 +21,7 @@ func TestMemberName(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var b strings.Builder
-			if err := view.MemberName(tt.displayName, "alice").Render(t.Context(), &b); err != nil {
+			if err := view.MemberName(memberDisplayName(tt.displayName), "alice").Render(t.Context(), &b); err != nil {
 				t.Fatal(err)
 			}
 			got := b.String()

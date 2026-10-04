@@ -44,7 +44,7 @@ disagree, fix the disagreement in a pull request.
 | Copilot | Reviews each pull request **once**, automatically, when it is marked ready for review, at **Lite**, guided by `.github/instructions/code-review.instructions.md`. Drafts and new pushes do not trigger it (the `main` ruleset); re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
 | Grok | Adversarial review of tier A pull requests (#339, #498), run with `scripts/ai/grok-review.sh`. Advisory. |
 | Muse Code | Adversarial review of tier B pull requests, and of tier A ones while Grok is unavailable (#330, #498). Advisory. |
-| Antigravity | Optional: the occasional documentation audit (below), UI screenshot review, experiments, tier B's review when the maintainer runs it. |
+| Antigravity | Optional: the occasional documentation audit (below), UI screenshot review, experiments, an extra adversarial review that never satisfies a tier. |
 
 Claude and Codex should end up with roughly equal shares of implementation.
 If one has done the last few issues, give the next one to the other.

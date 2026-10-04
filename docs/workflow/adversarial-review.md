@@ -1,8 +1,8 @@
 # Adversarial review
 
 **A pull request gets the adversarial review its tier asks for before the
-maintainer is asked**, whatever its risk class: Grok (tier A), Muse Code or
-Antigravity (tier B), or none (tier C). The required review must run; its
+maintainer is asked**, whatever its risk class: Grok (tier A), Muse Code
+(tier B), or none (tier C). The required review must run; its
 findings are advisory. It does not count towards the two review rounds. It
 runs after the cross-review, while the pull request is still a draft, and
 before it is marked ready for review.
@@ -45,38 +45,40 @@ get one adversarial review).
     `.github/pull_request_template.md`); and the security and scoping rules
     in `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does
     not exempt a change from this item.
-- **B — one review by Muse Code, or by Antigravity when the maintainer runs
-  it:**
+- **B — one review by Muse Code, run by its launcher** (Antigravity may add
+  an extra review, which never satisfies a tier):
   - a change in A's code areas that keeps behaviour and order: moves,
     extractions, new seams and their closures, and tests (including new
     tests of races or of the event log);
-  - a change that **alters behaviour** in authentication, authorisation,
-    sessions or organisation scoping: who is signed in, who is a member,
-    what a member may see or do, and how a session expires (for example in
-    `internal/org/**`, `internal/identity/**`, `internal/web/middleware/**`,
-    the setup, sign-up and sign-in handlers, and their stores and queries);
+  - **any** code change, behaviour-preserving moves included, in
+    authentication, authorisation, sessions or organisation scoping: who is
+    signed in, who is a member, what a member may see or do, and how a
+    session expires (`internal/org/**`, `internal/identity/**`,
+    `internal/web/middleware/**`, `internal/web/org.go`, the setup, sign-up
+    and sign-in handlers, and their stores and queries). Several of these
+    are normal risk, so the maintainer may not read their diff (#501);
   - a change that removes, skips or loosens a check `make check` or CI
     runs, wherever it lives: a test or an assertion, `Makefile`, `tools/**`,
     or a linter, vet or code-generation setting (`.golangci.yml`,
     `sqlc.yaml`).
-- **C — none:** everything that matches no A or B case: behaviour-preserving
-  changes in authentication's, authorisation's and scoping's areas (moves,
-  renames, extractions, consumer-declared seams and their closures), tests
-  outside A's areas that weaken no check, documentation outside the gate
-  documents, lint rules that only tighten, dependency bumps, and ordinary
-  feature work outside A and B.
+- **C — none:** everything that matches no A or B case: tests outside A's
+  and B's areas that weaken no check, comments and documentation outside
+  the gate documents, lint rules that only tighten, dependency bumps, and
+  ordinary feature work outside A and B.
 
 The template's *Adversarial* field names the review: `Grok`,
-`Muse Code (B)`, `Antigravity (B)`,
+`Muse Code (B)`,
 `Muse Code (Grok unavailable until <date>)`, or
 `skipped (C: <reason>)`, for example "behaviour unchanged" or "outside A and
 B: <area>". The other AI checks the tier against what the diff does, not
-only the paths it touches; a change that alters behaviour in a B area is not
-C.
+only the paths it touches.
 
 **A required review counts only when it completes:** a report on the pull
-request at its head commit, each finding with a disposition. A time-out, an
-outage or an empty run is not a review: retry once, then ask the maintainer.
+request at its head commit, each finding with a disposition. A later push
+(a Copilot follow-up included) whose diff matches tier A or B gets that
+tier's review again at the new head; an earlier report covers a later head
+only when every later commit matches neither. A time-out, an outage or an
+empty run is not a review: retry once, then ask the maintainer.
 When Grok is unavailable (quota or outage), a tier A pull request gets Muse
 Code under the same rule, and the maintainer decides whether to merge or
 wait for Grok.

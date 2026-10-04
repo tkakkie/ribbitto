@@ -96,7 +96,9 @@ unreviewed. If answering Copilot needs a change:
    ```
 
 3. All pass → mark it ready for review again and the normal merge
-   decision. The adversarial review does not run again and Copilot is not
+   decision. The adversarial review runs again only when the follow-up's
+   diff matches tier A or B
+   ([completion](adversarial-review.md#which-review-runs)); Copilot is not
    re-requested; if Copilot reviews again anyway, handle it the same way
    once, then ask the maintainer. A change needing a design or
    specification decision, a failed check or a new blocking finding → ask

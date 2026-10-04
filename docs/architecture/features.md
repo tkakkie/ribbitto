@@ -83,7 +83,10 @@ fixtures until step 5.
 
 - setup (`org`) writes `organization`, `account`, `member`, `channel` and
   `setup`, so it creates `identity`'s first `account` and the `channel`
-  feature's default channel (a completed setup must never lack one);
+  feature's default channel (a completed setup must never lack one). `org`
+  declares the default channel's seam, `DefaultChannelCreatorIn`, which
+  `infra`'s channel store implements until step 4; setup uses it from 3.12
+  and until then still writes the channel through `infra`'s setup store;
 - creating a channel (`channel`) writes its default `topic` in the same
   statement, so a channel never exists without one (decision 21, #307);
 - branching (`topic`) advances `organization.event_seq`, through org's

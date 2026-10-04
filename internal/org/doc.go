@@ -18,25 +18,27 @@
 // returning DirectoryEntry values. KindJoined with Joined, EncodeJoined,
 // DecodeJoined and RouteJoined is the member.joined kind org publishes, its
 // payload and its routing. AccountCreator and AccountCreatorIn declare the
-// account write setup and sign-up will inject. TxRunner, RegistrationWriter
-// with RegistrationWriterIn, SetupState and ErrSlugUnavailable are the
-// transaction runner, org's transaction-bound writes and the setup-state read
-// through which setup and sign-up will own their transaction (3.12, 3.11).
+// account write sign-up injects (setup follows in 3.12). TxRunner,
+// RegistrationWriter with RegistrationWriterIn, SetupState and
+// ErrSlugUnavailable are the transaction runner, org's transaction-bound
+// writes and the setup-state read through which sign-up owns its transaction;
+// setup follows in 3.12. EventAppender and EventAppenderIn inject realtime
+// writes into that transaction.
 //
 // Setup (NewSetup, SetupInput, SetupResult, SetupStore, ErrSetupToken and
 // ErrSetupCompleted) authorizes and validates installation-wide first-run setup
-// before hashing. SignUp (NewSignUp, SignUpStore, ErrSignUpClosed and
+// before hashing. SignUp (NewSignUp, ErrSignUpClosed and
 // ErrEmailTaken) controls installation-wide registration. Both share
 // ValidationErrors and the account-field validation; ErrHandleTaken is shared
 // with HandleChanger.
 // Listed exceptions: setup creates identity's first account and the default
 // channel in the organisation transaction; sign-up creates identity's account
-// with its member and advances organization.event_seq in the same transaction.
+// through its injected writer, with its member and sequence in one transaction.
 //
 // Org's store implements MembershipStore, HandleStore, the snapshot-bound
 // Directory, RegistrationWriter and SetupState. orgpg builds the authorizer
-// and handle changer, binds the directory to the caller's snapshot
+// and handle changer and sign-up, binds the directory to the caller's snapshot
 // (MembersIn) and the registration writes to the caller's transaction, and
-// implements TxRunner over the pool. infra/postgres implements
-// SetupStore and SignUpStore, keeping their transactions until 3.12 and 3.11.
+// implements TxRunner over the pool. infra/postgres implements SetupStore,
+// keeping setup's transaction until 3.12.
 package org

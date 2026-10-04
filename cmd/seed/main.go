@@ -170,7 +170,9 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	if err != nil {
 		return fmt.Errorf("seeding requires an empty, migrated development database: %w", err)
 	}
-	signups := org.NewSignUp(store, hasher, true)
+	signups := orgpg.NewSignUp(pool, hasher, true,
+		func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
+		func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) })
 	authorizer := orgpg.NewAuthorizer(pool)
 	members := make(map[string]org.Membership, len(data.Members))
 	for i, person := range data.Members {

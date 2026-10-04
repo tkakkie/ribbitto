@@ -7,6 +7,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
 // ErrSignUpClosed means registration is disabled or setup is incomplete.
@@ -15,22 +16,20 @@ var ErrSignUpClosed = errors.New("sign-up closed")
 // ErrEmailTaken means an account already uses the normalized email.
 var ErrEmailTaken = errors.New("email already registered")
 
-// SignUpStore reads setup availability and registers an account and member atomically.
-type SignUpStore interface {
-	Open(context.Context) (bool, error) // True until setup completes.
-	SignUp(ctx context.Context, displayName, handle, email, passwordHash string) (domain.ID, error)
-}
-
-// SignUp shares the process's hasher and reads installation setup state.
+// SignUp shares the process's hasher and owns the registration transaction.
 type SignUp struct {
-	store   SignUpStore
-	hasher  *identity.Hasher
-	enabled bool
+	state    SetupState
+	runner   TxRunner
+	writes   RegistrationWriterIn
+	accounts AccountCreatorIn
+	events   EventAppenderIn
+	hasher   *identity.Hasher
+	enabled  bool
 }
 
-// NewSignUp constructs a registration service with the operator's switch.
-func NewSignUp(store SignUpStore, hasher *identity.Hasher, enabled bool) *SignUp {
-	return &SignUp{store: store, hasher: hasher, enabled: enabled}
+// NewSignUp constructs a registration service with transaction-bound writers.
+func NewSignUp(state SetupState, runner TxRunner, writes RegistrationWriterIn, accounts AccountCreatorIn, events EventAppenderIn, hasher *identity.Hasher, enabled bool) *SignUp {
+	return &SignUp{state: state, runner: runner, writes: writes, accounts: accounts, events: events, hasher: hasher, enabled: enabled}
 }
 
 // Open reports whether registration is enabled and setup has completed.
@@ -38,7 +37,7 @@ func (s *SignUp) Open(ctx context.Context) (bool, error) {
 	if !s.enabled {
 		return false, nil
 	}
-	open, err := s.store.Open(ctx)
+	open, err := s.state.Open(ctx)
 	return !open && err == nil, err
 }
 
@@ -60,5 +59,39 @@ func (s *SignUp) SignUp(ctx context.Context, displayName, handle, email, passwor
 	if err != nil {
 		return domain.ID{}, fmt.Errorf("hashing sign-up password: %w", err)
 	}
-	return s.store.SignUp(ctx, displayName, handle, email, hash)
+	var id domain.ID
+	err = s.runner.InTx(ctx, func(tx platform.Tx) error {
+		writes := s.writes(tx)
+		organizationID, err := writes.SetupOrganization(ctx)
+		if err != nil {
+			return err
+		}
+		// Lock the organisation before either account or member is written.
+		seq, err := writes.NextEventSeq(ctx, organizationID)
+		if err != nil {
+			return err
+		}
+		id, err = s.accounts(tx).CreateAccount(ctx, email, displayName, hash)
+		if err != nil {
+			return err
+		}
+		memberID, err := writes.CreateMember(ctx, organizationID, id, RoleMember, seq, handle)
+		if err != nil {
+			return err
+		}
+		return s.events(tx).Append(ctx, organizationID, seq, KindJoined, nil, EncodeJoined(memberID))
+	})
+	switch {
+	case errors.Is(err, identity.ErrEmailTaken):
+		return domain.ID{}, ErrEmailTaken
+	case errors.Is(err, ErrHandleTaken):
+		return domain.ID{}, ErrHandleTaken
+	case errors.Is(err, identity.ErrInvalidEmail):
+		return domain.ID{}, ValidationErrors{"email": identity.ErrInvalidEmail}
+	case errors.Is(err, ErrInvalidHandle):
+		return domain.ID{}, ValidationErrors{"handle": ErrInvalidHandle}
+	case err != nil:
+		return domain.ID{}, fmt.Errorf("storing sign-up transaction: %w", err)
+	}
+	return id, nil
 }

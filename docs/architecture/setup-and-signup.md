@@ -38,19 +38,23 @@ to `/` with 303. Setup and sign-in share the process's single password hasher.
 
 ## Sign-up
 
-`org.SignUp` (`NewSignUp`, `SignUpStore`) shares `ValidationErrors` and one
-private account-field validator with `org.Setup`: display name, handle, email
-and password keep their rules and keys; setup also validates organisation name
-and slug. Each flow checks its gate, then every field, then hashes.
-`SignUp.Open` gates registration and the sign-in link on
+`org.SignUp` (`NewSignUp`, built by `orgpg.NewSignUp`) shares
+`ValidationErrors` and one private account-field validator with `org.Setup`:
+display name, handle, email and password keep their rules and keys; setup also
+validates organisation name and slug. Each flow checks its gate, then every
+field, then hashes. `SignUp.Open` gates registration and the sign-in link on
 `RIBBITTO_SIGNUP=on` and completed setup. Its separate handler and form share
-the process hasher; `postgres.SetupStore` implements `org.SignUpStore` until
-3.11. Its transaction reads the setup organisation, takes
-its next sequence first, then inserts the account and member, with the
-handle the form asked for. Duplicate email or a handle already used in the
-organisation rolls back everything and takes no sequence; the unique
-constraint decides concurrent claims, and a taken handle is a field error
-(422), using `org.ErrEmailTaken` and the shared `org.ErrHandleTaken`.
-`org.ErrSignUpClosed` means the operator disabled sign-up or setup is incomplete.
-Success signs the new account in through
-`Sessions.Replace` and redirects to `/` with 303; invalid input returns 422 and a busy hasher returns 503.
+the process hasher. Through the injected `TxRunner`, the root owns one
+transaction: read the setup organisation, take its sequence first, create
+identity's account through `AccountCreatorIn`, insert org's member, then
+append `member.joined` through `EventAppenderIn`. Org declares both factories;
+wiring adapts the providers with closures, all bound to the same transaction.
+The member gets the validated handle and sequence. Database email and handle
+rejections become typed conflicts or field errors without inspecting pgconn.
+Duplicate email or a handle already used in the organisation rolls back
+everything and takes no sequence; the unique constraint decides concurrent
+claims, and a taken handle is a field error (422), using `org.ErrEmailTaken`
+and the shared `org.ErrHandleTaken`. `org.ErrSignUpClosed` means the operator
+disabled sign-up or setup is incomplete. Success signs the new account in
+through `Sessions.Replace` and redirects to `/` with 303; invalid input
+returns 422 and a busy hasher returns 503.

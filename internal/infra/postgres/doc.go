@@ -8,6 +8,6 @@
 // snapshot-bound factories: identity's accounts, its own MemberDirectoryIn
 // and EventCursorIn (implemented by orgpg.MembersIn and orgpg.EventCursorIn),
 // until conversation owns the page snapshot.
-// EventKinds, in realtime_adapters.go, lists the publishers' kinds for
-// realtime's reader until each module registers its own.
+// EventKinds, in realtime_adapters.go, lists conversation's kinds for
+// realtime's reader until conversation registers its own in step 4.
 package postgres

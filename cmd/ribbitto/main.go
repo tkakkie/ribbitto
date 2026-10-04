@@ -274,7 +274,11 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		branchNotifier = config.hub
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
-		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds()), config.hub, 1024, time.Minute)
+		kinds := postgres.EventKinds()
+		for kind, router := range orgpg.EventKinds() {
+			kinds[kind] = router
+		}
+		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, orgpg.BoundsIn, kinds), config.hub, 1024, time.Minute)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
 	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, eventSequence, appendEvents), postingNotifier)

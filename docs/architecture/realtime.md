@@ -109,10 +109,12 @@ subscription, and the renderer reads only `MessageReader`'s `One` and `Many`.
 Setup and sign-up append `member.joined` (`org.EncodeJoined`) the same way immediately after
 the member, with its `joined_event_seq`. `realtime.Event` is an envelope: organisation,
 sequence, kind, audience, channel, routing `Topics` and the stored `Payload`,
-which consumers decode through the publisher's codec; kinds are an open list. Wiring registers each kind's publisher `Router`
-(`message.RoutePosted`, `topic.RouteMoved`, `org.RouteJoined`) in
-`realtime.Kinds`, which gives the channel and routing topics; until the
-modules register their own, `postgres.EventKinds()` lists them.
+which consumers decode through the publisher's codec; kinds are an open list.
+Wiring registers each publisher's `Router` in `realtime.Kinds`, which gives
+the channel and routing topics. `orgpg.EventKinds()` provides `org.RouteJoined`;
+`postgres.EventKinds()` keeps `message.RoutePosted` and `topic.RouteMoved`
+until `conversation` registers them in step 4. `cmd/ribbitto` and the tests
+combine both sets for the reader.
 `realtimepg.NewReader(pool, bounds, kinds)` provides
 `EventsAfter(ctx, organizationID, after, limit) ([]realtime.Event, error)`:
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.

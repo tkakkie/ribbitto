@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -24,10 +23,10 @@ import (
 
 // ChannelService provides channels within the resolved member's organisation.
 type ChannelService interface {
-	List(context.Context, org.Membership) ([]domain.Channel, error)
-	Get(context.Context, org.Membership, domain.ID) (domain.Channel, error)
-	Default(context.Context, org.Membership) (domain.Channel, error)
-	Create(context.Context, org.Membership, string) (domain.Channel, error)
+	List(context.Context, org.Membership) ([]conversation.Channel, error)
+	Get(context.Context, org.Membership, domain.ID) (conversation.Channel, error)
+	Default(context.Context, org.Membership) (conversation.Channel, error)
+	Create(context.Context, org.Membership, string) (conversation.Channel, error)
 }
 
 // MessageReader provides the channel page and cursor from one snapshot, and
@@ -110,7 +109,7 @@ func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m org
 		_, err = p.topics.GetTopic(r.Context(), m.Organization.ID, id, *p.topicID)
 	}
 	switch {
-	case errors.Is(err, channel.ErrNotFound), errors.Is(err, topic.ErrNotFound):
+	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, topic.ErrNotFound):
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "finding channel", err)
@@ -130,9 +129,9 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 	case err == nil:
 		http.Redirect(w, r, view.ChannelURL(m.Organization.Slug, c.ID), http.StatusSeeOther)
 		return
-	case errors.Is(err, channel.ErrInvalidName):
+	case errors.Is(err, conversation.ErrInvalidChannelName):
 		message = "channel.error.name"
-	case errors.Is(err, channel.ErrNameTaken):
+	case errors.Is(err, conversation.ErrChannelNameTaken):
 		message = "channel.error.name_taken"
 	default:
 		serverError(w, r, "creating channel", err)
@@ -154,7 +153,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		before = &page.Before
 	}
 	history, err := p.messages.Page(r.Context(), m, id, p.topicID, before)
-	if errors.Is(err, channel.ErrNotFound) || errors.Is(err, org.ErrNotFound) || errors.Is(err, topic.ErrNotFound) {
+	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) || errors.Is(err, topic.ErrNotFound) {
 		http.NotFound(w, r)
 		return
 	}
@@ -177,7 +176,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 
 func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID) {
 	c, err := p.service.Get(r.Context(), m, id)
-	if errors.Is(err, channel.ErrNotFound) {
+	if errors.Is(err, conversation.ErrChannelNotFound) {
 		http.NotFound(w, r)
 		return
 	}
@@ -193,7 +192,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	switch {
 	case errors.Is(err, conversation.ErrInvalidBody):
 		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
-	case errors.Is(err, channel.ErrNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, topic.ErrNotFound):
+	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, topic.ErrNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member.
 		http.NotFound(w, r)
@@ -207,7 +206,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 }
 
 // Enhanced posts never replace history or the connection's snapshot cursor.
-func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c domain.Channel, status int, page view.ChannelPage) {
+func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, status int, page view.ChannelPage) {
 	if r.Header.Get("HX-Request") == "true" && p.topicID == nil {
 		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, viewChannel(c)
 		templ.Handler(view.MessageComposer(page), templ.WithStatus(status)).ServeHTTP(w, r)
@@ -237,11 +236,11 @@ func pathID(raw string) (domain.ID, bool) {
 
 // viewChannel and the helpers below copy only what the views display, so
 // view never depends on the use cases' entities.
-func viewChannel(c domain.Channel) view.Channel {
+func viewChannel(c conversation.Channel) view.Channel {
 	return view.Channel{ID: c.ID, Name: c.Name}
 }
 
-func viewChannels(channels []domain.Channel) []view.Channel {
+func viewChannels(channels []conversation.Channel) []view.Channel {
 	out := make([]view.Channel, len(channels))
 	for i, c := range channels {
 		out[i] = viewChannel(c)

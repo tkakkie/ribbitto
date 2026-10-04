@@ -11,7 +11,7 @@ import (
 
 // Store posts a message atomically: in one transaction it takes the
 // organisation's next event_seq first, then inserts the message and event with it. A
-// channel that is not in the organisation is channel.ErrNotFound, and the
+// channel that is not in the organisation is conversation.ErrChannelNotFound, and the
 // sequence is not consumed. A mismatched topic is topic.ErrNotFound.
 // Success means the transaction has committed; nil topicID selects the default.
 type Store interface {

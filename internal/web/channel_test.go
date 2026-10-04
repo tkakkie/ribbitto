@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -77,12 +77,12 @@ type fakeChannels struct {
 	created                                string
 }
 
-func (f *fakeChannels) List(context.Context, org.Membership) ([]domain.Channel, error) {
-	return []domain.Channel{{ID: domain.ID{1}, Name: "雑談 <script>alert(1)</script>", IsDefault: true}, {ID: domain.ID{2}, Name: "Other"}}, f.listErr
+func (f *fakeChannels) List(context.Context, org.Membership) ([]conversation.Channel, error) {
+	return []conversation.Channel{{ID: domain.ID{1}, Name: "雑談 <script>alert(1)</script>", IsDefault: true}, {ID: domain.ID{2}, Name: "Other"}}, f.listErr
 }
-func (f *fakeChannels) Get(ctx context.Context, m org.Membership, id domain.ID) (domain.Channel, error) {
+func (f *fakeChannels) Get(ctx context.Context, m org.Membership, id domain.ID) (conversation.Channel, error) {
 	if f.getErr != nil {
-		return domain.Channel{}, f.getErr
+		return conversation.Channel{}, f.getErr
 	}
 	list, _ := f.List(ctx, m)
 	for _, c := range list {
@@ -90,15 +90,15 @@ func (f *fakeChannels) Get(ctx context.Context, m org.Membership, id domain.ID) 
 			return c, nil
 		}
 	}
-	return domain.Channel{}, channel.ErrNotFound
+	return conversation.Channel{}, conversation.ErrChannelNotFound
 }
-func (f *fakeChannels) Default(ctx context.Context, m org.Membership) (domain.Channel, error) {
+func (f *fakeChannels) Default(ctx context.Context, m org.Membership) (conversation.Channel, error) {
 	list, _ := f.List(ctx, m)
 	return list[0], f.defaultErr
 }
-func (f *fakeChannels) Create(_ context.Context, _ org.Membership, name string) (domain.Channel, error) {
+func (f *fakeChannels) Create(_ context.Context, _ org.Membership, name string) (conversation.Channel, error) {
 	f.created = name
-	return domain.Channel{ID: domain.ID{3}, Name: name}, f.createErr
+	return conversation.Channel{ID: domain.ID{3}, Name: name}, f.createErr
 }
 
 func TestChannelHandlers(t *testing.T) {
@@ -110,7 +110,7 @@ func TestChannelHandlers(t *testing.T) {
 		htmx                                       bool
 	}{
 		{name: "default by flag", method: "GET", path: "/organizations/acme/", status: 303, location: current},
-		{name: "missing default", method: "GET", path: "/organizations/acme/", fake: fakeChannels{defaultErr: channel.ErrNotFound}, status: 500},
+		{name: "missing default", method: "GET", path: "/organizations/acme/", fake: fakeChannels{defaultErr: conversation.ErrChannelNotFound}, status: 500},
 		{name: "malformed id", method: "GET", path: "/organizations/acme/channels/bad", status: 404},
 		{name: "non-hex id", method: "GET", path: "/organizations/acme/channels/zz000000-0000-0000-0000-000000000000", status: 404},
 		{name: "unknown id", method: "GET", path: view.ChannelURL("acme", domain.ID{9}), status: 404},
@@ -119,12 +119,12 @@ func TestChannelHandlers(t *testing.T) {
 		{name: "list failure", method: "GET", path: current, fake: fakeChannels{listErr: errors.New("offline")}, status: 500},
 		{name: "create Japanese", method: "POST", path: "/organizations/acme/channels?name=wrong", body: url.Values{"name": {"雑談"}, "organization_id": {"other"}}.Encode(), status: 303, location: view.ChannelURL("acme", domain.ID{3})},
 		{name: "create failure", method: "POST", path: "/organizations/acme/channels", body: "name=a", fake: fakeChannels{createErr: errors.New("offline")}, status: 500},
-		{name: "invalid name", method: "POST", path: "/organizations/acme/channels", body: "name=", fake: fakeChannels{createErr: channel.ErrInvalidName}, status: 422},
-		{name: "duplicate name", method: "POST", path: "/organizations/acme/channels", body: "name=taken", fake: fakeChannels{createErr: channel.ErrNameTaken}, status: 422},
+		{name: "invalid name", method: "POST", path: "/organizations/acme/channels", body: "name=", fake: fakeChannels{createErr: conversation.ErrInvalidChannelName}, status: 422},
+		{name: "duplicate name", method: "POST", path: "/organizations/acme/channels", body: "name=taken", fake: fakeChannels{createErr: conversation.ErrChannelNameTaken}, status: 422},
 		// Channel creation is not enhanced: HX changes neither redirects nor validation responses.
 		{name: "create Japanese with HX", htmx: true, method: "POST", path: "/organizations/acme/channels?name=wrong", body: url.Values{"name": {"雑談"}, "organization_id": {"other"}}.Encode(), status: 303, location: view.ChannelURL("acme", domain.ID{3})},
-		{name: "invalid name with HX", htmx: true, method: "POST", path: "/organizations/acme/channels", body: "name=", fake: fakeChannels{createErr: channel.ErrInvalidName}, status: 422},
-		{name: "duplicate name with HX", htmx: true, method: "POST", path: "/organizations/acme/channels", body: "name=taken", fake: fakeChannels{createErr: channel.ErrNameTaken}, status: 422},
+		{name: "invalid name with HX", htmx: true, method: "POST", path: "/organizations/acme/channels", body: "name=", fake: fakeChannels{createErr: conversation.ErrInvalidChannelName}, status: 422},
+		{name: "duplicate name with HX", htmx: true, method: "POST", path: "/organizations/acme/channels", body: "name=taken", fake: fakeChannels{createErr: conversation.ErrChannelNameTaken}, status: 422},
 		{name: "cross origin", method: "POST", path: "/organizations/acme/channels", body: "name=blocked", origin: "https://attacker.example", status: 403},
 		{name: "malformed form", method: "POST", path: "/organizations/acme/channels", body: "name=%zz", status: 400},
 		{name: "oversized form", method: "POST", path: "/organizations/acme/channels", body: "name=" + strings.Repeat("a", 65536), status: 413},

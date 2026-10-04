@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -119,7 +118,7 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 		// has one, so none means the channel is not in this organisation.
 		defaultTopic, err := NewTopicStore(tx).GetDefaultTopic(ctx, organizationID, channelID)
 		if errors.Is(err, topic.ErrNotFound) {
-			return channel.ErrNotFound
+			return conversation.ErrChannelNotFound
 		}
 		if err != nil {
 			return err
@@ -139,12 +138,12 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 	})
 	var pgErr *pgconn.PgError
 	switch {
-	case errors.Is(err, channel.ErrNotFound):
-		return conversation.Message{}, channel.ErrNotFound
+	case errors.Is(err, conversation.ErrChannelNotFound):
+		return conversation.Message{}, conversation.ErrChannelNotFound
 	// The composite foreign keys, not a lookup first, keep a message inside
 	// its organisation: another organisation's channel or member fails here.
 	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_channel_id_fkey":
-		return conversation.Message{}, channel.ErrNotFound
+		return conversation.Message{}, conversation.ErrChannelNotFound
 	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_member_id_fkey":
 		return conversation.Message{}, org.ErrNotFound
 	case errors.Is(err, org.ErrNotFound):

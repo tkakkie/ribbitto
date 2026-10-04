@@ -13,7 +13,7 @@
 // Author names use org.Directory
 // followed by identity.Directory; message queries neither feature.
 // It uses org through org.Membership; posting reports a channel
-// outside the caller's organisation as channel.ErrNotFound. Listed
+// outside the caller's organisation as conversation.ErrChannelNotFound. Listed
 // exception: posting advances organization.event_seq, which org owns,
 // and writes realtime's event_log, so the sequence and event commit together.
 // PostToTopic selects a scoped topic; Post uses the channel default.

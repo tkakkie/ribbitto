@@ -10,7 +10,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -24,8 +23,8 @@ func TestMessageOne(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	local := pgtest.OrganizationWithOwner(t, pool, "acme", appchannel.DefaultName)
-	foreign := pgtest.OrganizationWithOwner(t, pool, "globex", appchannel.DefaultName)
+	local := pgtest.OrganizationWithOwner(t, pool, "acme", conversation.DefaultChannelName)
+	foreign := pgtest.OrganizationWithOwner(t, pool, "globex", conversation.DefaultChannelName)
 	otherChannel := pgtest.Channel(t, pool, local.OrganizationID, "other", false)
 	membership := org.Membership{Organization: org.Organization{ID: local.OrganizationID}, Member: org.Member{ID: local.MemberID}}
 	foreignMembership := org.Membership{Organization: org.Organization{ID: foreign.OrganizationID}, Member: org.Member{ID: foreign.MemberID}}
@@ -72,9 +71,9 @@ func TestMessagePaging(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	memberships := map[string]org.Membership{}
-	defaults := map[string]domain.Channel{}
+	defaults := map[string]conversation.Channel{}
 	for _, slug := range []string{"acme", "globex"} {
-		name := appchannel.DefaultName
+		name := conversation.DefaultChannelName
 		if slug == "acme" {
 			name = "empty"
 		}
@@ -204,7 +203,7 @@ func TestMessagePaging(t *testing.T) {
 			}
 		}
 	}
-	if page, err := reader.Before(ctx, globex, channels["exact"], nil); !errors.Is(err, appchannel.ErrNotFound) || len(page.Entries) != 0 || page.Older {
+	if page, err := reader.Before(ctx, globex, channels["exact"], nil); !errors.Is(err, conversation.ErrChannelNotFound) || len(page.Entries) != 0 || page.Older {
 		t.Fatalf("globex read acme's channel: %+v, %v", page, err)
 	}
 }

@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -90,7 +90,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 		p.branchError(w, r, m, id, 422, "topic.branch_name_taken")
 	case errors.Is(err, topic.ErrInvalidBranch):
 		p.branchError(w, r, m, id, 422, "topic.branch_invalid")
-	case errors.Is(err, topic.ErrNotFound), errors.Is(err, channel.ErrNotFound), errors.Is(err, org.ErrNotFound):
+	case errors.Is(err, topic.ErrNotFound), errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound):
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "branching messages", err)
@@ -108,7 +108,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 func (p channelPages) branchError(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID, status int, key string) {
 	// Scope error responses too; invalid input must not reveal another channel.
 	if _, err := p.service.Get(r.Context(), m, id); err != nil {
-		if errors.Is(err, channel.ErrNotFound) {
+		if errors.Is(err, conversation.ErrChannelNotFound) {
 			http.NotFound(w, r)
 		} else {
 			serverError(w, r, "finding channel", err)

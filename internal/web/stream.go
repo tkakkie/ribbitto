@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -81,7 +81,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		return
 	}
 	c, err := p.service.Get(r.Context(), m, id)
-	if errors.Is(err, channel.ErrNotFound) {
+	if errors.Is(err, conversation.ErrChannelNotFound) {
 		http.NotFound(w, r)
 		return
 	}

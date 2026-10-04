@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -73,7 +72,7 @@ func TestPost(t *testing.T) {
 		{name: "empty", body: " \n ", wantErr: conversation.ErrInvalidBody},
 		{name: "too long", body: strings.Repeat("界", 4001), wantErr: conversation.ErrInvalidBody},
 		{name: "control character", body: "a\x00b", wantErr: conversation.ErrInvalidBody},
-		{name: "channel outside the organisation", body: "hi", storeErr: channel.ErrNotFound, wantErr: channel.ErrNotFound},
+		{name: "channel outside the organisation", body: "hi", storeErr: conversation.ErrChannelNotFound, wantErr: conversation.ErrChannelNotFound},
 	} {
 		for _, topicID := range []*domain.ID{nil, {4}} {
 			t.Run(tt.name, func(t *testing.T) {

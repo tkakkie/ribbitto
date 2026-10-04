@@ -35,6 +35,7 @@ cmd/ribbitto -> internal/web/middleware
 cmd/seed -> internal/app/channel
 cmd/seed -> internal/app/message
 cmd/seed -> internal/app/topic
+cmd/seed -> internal/conversation
 cmd/seed -> internal/domain
 cmd/seed -> internal/identity
 cmd/seed -> internal/identity/identitypg
@@ -43,6 +44,7 @@ cmd/seed -> internal/org
 cmd/seed -> internal/org/orgpg
 cmd/seed -> internal/platform/postgres
 cmd/seed -> internal/realtime/realtimepg
+internal/app/channel -> internal/conversation
 internal/app/channel -> internal/domain
 internal/app/channel -> internal/org
 internal/app/message -> internal/app/topic
@@ -77,6 +79,7 @@ internal/infra/postgres -> internal/org
 internal/infra/postgres -> internal/platform/postgres
 internal/infra/postgres -> internal/platform/postgres/pgxbridge
 internal/infra/postgres -> internal/realtime
+internal/infra/postgres/pgtest -> internal/conversation
 internal/infra/postgres/pgtest -> internal/domain
 internal/infra/postgres/pgtest -> internal/infra/postgres
 internal/infra/postgres/pgtest -> internal/org
@@ -112,7 +115,6 @@ internal/realtime/internal/postgres -> internal/realtime/internal/postgres/sqlcg
 internal/realtime/realtimepg -> internal/platform/postgres
 internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
-internal/web -> internal/app/channel
 internal/web -> internal/app/message
 internal/web -> internal/app/topic
 internal/web -> internal/conversation

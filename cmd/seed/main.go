@@ -22,7 +22,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -203,32 +203,32 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	}
 	channels := channel.New(postgres.NewChannelStore(pool))
 	posts := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
-	var general domain.Channel
+	var general conversation.Channel
 	var generalMessages []scriptMessage
-	for _, conversation := range data.Channels {
-		var destination domain.Channel
-		if conversation.Name == channel.DefaultName {
+	for _, scripted := range data.Channels {
+		var destination conversation.Channel
+		if scripted.Name == conversation.DefaultChannelName {
 			destination, err = channels.Default(ctx, members[owner.Handle])
 		} else {
-			destination, err = channels.Create(ctx, members[owner.Handle], conversation.Name)
+			destination, err = channels.Create(ctx, members[owner.Handle], scripted.Name)
 		}
 		if err != nil {
-			return fmt.Errorf("preparing channel %s: %w", conversation.Name, err)
+			return fmt.Errorf("preparing channel %s: %w", scripted.Name, err)
 		}
-		if conversation.Name == channel.DefaultName {
-			general, generalMessages = destination, conversation.Messages
+		if scripted.Name == conversation.DefaultChannelName {
+			general, generalMessages = destination, scripted.Messages
 		}
 		id := destination.ID
 		manifest.ChannelIDs = append(manifest.ChannelIDs, fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]))
 		// Repeat whole exchanges, preserving references and author order without randomness.
 		for i := 0; i < *count; i++ {
-			line := conversation.Messages[i%len(conversation.Messages)]
+			line := scripted.Messages[i%len(scripted.Messages)]
 			member, ok := members[line.Author]
 			if !ok {
 				return fmt.Errorf("unknown script author %q", line.Author)
 			}
 			if _, err := posts.Post(ctx, member, destination.ID, line.Body); err != nil {
-				return fmt.Errorf("posting %s message %d: %w", conversation.Name, i+1, err)
+				return fmt.Errorf("posting %s message %d: %w", scripted.Name, i+1, err)
 			}
 		}
 	}

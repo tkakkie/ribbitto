@@ -6,8 +6,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
+
+var _ org.AccountCreator = (*postgres.AccountCreator)(nil)
+
+// AccountCreatorIn returns identity's account creator bound to the caller's
+// transaction. Composition roots adapt it to org.AccountCreatorIn with a closure.
+func AccountCreatorIn(tx platform.Tx) *postgres.AccountCreator { return postgres.AccountCreatorIn(tx) }
 
 // NewSessions returns the session lifecycle on pool with the given clock.
 // A non-nil cancel ends a deleted session's open streams.

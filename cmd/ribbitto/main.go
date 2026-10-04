@@ -19,6 +19,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
@@ -295,7 +296,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        postgres.NewTopicStore(pool),
-		Messages:      postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers, Cursor: eventCursor},
+		Messages:      postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor},
 		Posting:       posting,
 		Branching:     branching,
 		Channels:      channel.New(postgres.NewChannelStore(pool)),
@@ -391,7 +392,12 @@ func signupEnabled(value string) (bool, error) {
 func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
 
 // lookupMembers adapts org's directory to the reader's consumer interface.
-func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }
+func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
+
+// lookupAccounts adapts identity's directory to the reader's consumer interface.
+func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
+	return identitypg.AccountsIn(s)
+}
 
 // eventSequence adapts org's sequence to the posting and branching stores'
 // consumer interface.

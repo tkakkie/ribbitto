@@ -48,10 +48,11 @@ org's exported `org.Directory.LookupMembers` (member IDs filtered by
 organisation, returning handles and account IDs), then identity's
 `identity.Directory.LookupDisplayNames` (only those account IDs). Their adapters
 own the queries in `org/member.sql` and `identity/account.sql`; message never
-queries those tables. `MessageReader` receives org's directory through infra's
-`MemberDirectoryIn` factory, adapted from `orgpg.MembersIn` by a one-line
-closure, alongside `identitypg.AccountsIn`, and the latest page's cursor
-through `EventCursorIn` (`orgpg.EventCursorIn`), all bound to its snapshot. It
+queries those tables. `MessageReader` receives both directories through
+conversation's `MemberDirectoryIn` and `AccountDirectoryIn` factories, adapted
+from `orgpg.MembersIn` and `identitypg.AccountsIn` by one-line closures, and
+the latest page's cursor through `EventCursorIn` (`orgpg.EventCursorIn`), all
+bound to its snapshot. It
 shares one read-only repeatable-read transaction
 across the channel and sidebar (through `channel.Service`), the selected topic
 and the bounded topic list (through `topic.Store`), history, both author

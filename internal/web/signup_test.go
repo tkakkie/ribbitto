@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -37,13 +36,13 @@ func TestSignUp(t *testing.T) {
 		{"success", &fakeSetup{open: true}, 303, ""},
 		{"disabled", nil, 404, ""},
 		{"completed", &fakeSetup{}, 404, ""},
-		{"completed concurrently", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", signup.ErrClosed)}, 404, ""},
+		{"completed concurrently", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", org.ErrSignUpClosed)}, 404, ""},
 		{"name", &fakeSetup{open: true, err: org.ValidationErrors{"display_name": errors.New("private detail")}}, 422, "Enter a display name of 1–50 printable characters, at least one of them visible."},
 		{"email", &fakeSetup{open: true, err: org.ValidationErrors{"email": errors.New("private detail")}}, 422, "Enter a valid email address."},
 		{"password", &fakeSetup{open: true, err: org.ValidationErrors{"password": errors.New("private detail")}}, 422, "Use a password of 15–128 characters."},
 		{"handle", &fakeSetup{open: true, err: org.ValidationErrors{"handle": errors.New("private detail")}}, 422, "Use 2–32 characters: lowercase letters, digits, _, . or -"},
-		{"duplicate email", &fakeSetup{open: true, err: signup.ErrEmailTaken}, 422, "This email address is already registered."},
-		{"duplicate handle", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", signup.ErrHandleTaken)}, 422, "This handle is already taken in this organisation."},
+		{"duplicate email", &fakeSetup{open: true, err: org.ErrEmailTaken}, 422, "This email address is already registered."},
+		{"duplicate handle", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", org.ErrHandleTaken)}, 422, "This handle is already taken in this organisation."},
 		{"busy", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", identity.ErrBusy)}, 503, ""},
 		{"availability failure", &fakeSetup{openErr: errors.New("private detail")}, 500, ""},
 		{"completion failure", &fakeSetup{open: true, err: errors.New("private detail")}, 500, ""},

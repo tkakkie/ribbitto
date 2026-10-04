@@ -8,7 +8,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -17,7 +16,7 @@ import (
 )
 
 // SignUp takes the organisation sequence before inserting either account or member.
-// SetupStore also implements signup.Store because both use the installation setup row.
+// SetupStore also implements org.SignUpStore because both use the installation setup row.
 func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, hash string) (domain.ID, error) {
 	var id domain.ID
 	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
@@ -25,7 +24,7 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, has
 		q := sqlcgen.New(tx)
 		orgID, err := q.SetupOrganization(ctx)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return signup.ErrClosed
+			return org.ErrSignUpClosed
 		}
 		if err != nil {
 			return err
@@ -53,20 +52,20 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, has
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == "23505" && pgErr.ConstraintName == "account_email_key" {
-				return domain.ID{}, signup.ErrEmailTaken
+				return domain.ID{}, org.ErrEmailTaken
 			}
 			// The database is the last line of defence for uniqueness: a
 			// concurrent sign-up may claim the handle after validation.
 			if pgErr.Code == "23505" && pgErr.ConstraintName == "member_organization_id_handle_key" {
-				return domain.ID{}, signup.ErrHandleTaken
+				return domain.ID{}, org.ErrHandleTaken
 			}
 			if pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "member_handle_") {
-				return domain.ID{}, signup.ValidationErrors{"handle": err}
+				return domain.ID{}, org.ValidationErrors{"handle": err}
 			}
 			// account.email has two CHECKs; the second (NFC) is named
 			// account_email_check1, so match by column prefix as setup does.
 			if pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "account_email_") {
-				return domain.ID{}, signup.ValidationErrors{"email": err}
+				return domain.ID{}, org.ValidationErrors{"email": err}
 			}
 		}
 		return domain.ID{}, fmt.Errorf("storing sign-up transaction: %w", err)

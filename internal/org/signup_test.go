@@ -1,4 +1,4 @@
-package signup_test
+package org_test
 
 import (
 	"context"
@@ -6,19 +6,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
-type store struct {
+type signUpStore struct {
 	pending bool
 	err     error
 	t       *testing.T
 }
 
-func (s store) Open(context.Context) (bool, error) { return s.pending, nil }
-func (s store) SignUp(_ context.Context, name, handle, email, hash string) (domain.ID, error) {
+func (s signUpStore) Open(context.Context) (bool, error) { return s.pending, nil }
+func (s signUpStore) SignUp(_ context.Context, name, handle, email, hash string) (domain.ID, error) {
 	s.t.Helper()
 	if name != "Alice" || handle != "alice" || email != "alice@example.org" || !strings.HasPrefix(hash, "$argon2id$") {
 		s.t.Fatalf("bad normalized account or hash: %s %s %s", name, handle, email)
@@ -36,15 +36,15 @@ func TestSignUp(t *testing.T) {
 		want                                        error
 	}{
 		{label: "normalized account", name: " Alice ", handle: " Alice ", email: " Alice@Example.org ", password: "long enough password"},
-		{label: "duplicate email", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: signup.ErrEmailTaken},
-		{label: "duplicate handle", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: signup.ErrHandleTaken},
+		{label: "duplicate email", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: org.ErrEmailTaken},
+		{label: "duplicate handle", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: org.ErrHandleTaken},
 		{label: "invalid name", field: "display_name", handle: "alice", email: "a@b", password: "long enough password"},
 		{label: "invalid handle", name: "Alice", field: "handle", email: "a@b", password: "long enough password"},
 		{label: "reserved handle", name: "Alice", handle: "everyone", field: "handle", email: "a@b", password: "long enough password"},
 		{label: "invalid email", name: "Alice", handle: "alice", field: "email", password: "long enough password"},
 		{label: "invalid password", name: "Alice", handle: "alice", email: "a@b", field: "password"},
-		{label: "disabled", off: true, want: signup.ErrClosed},
-		{label: "setup pending", pending: true, want: signup.ErrClosed},
+		{label: "disabled", off: true, want: org.ErrSignUpClosed},
+		{label: "setup pending", pending: true, want: org.ErrSignUpClosed},
 	} {
 		t.Run(tc.label, func(t *testing.T) {
 			h := hasher
@@ -52,13 +52,13 @@ func TestSignUp(t *testing.T) {
 			if tc.field != "" || tc.off || tc.pending {
 				h = nil
 			}
-			service := signup.New(store{pending: tc.pending, err: tc.want, t: t}, h, !tc.off)
+			service := org.NewSignUp(signUpStore{pending: tc.pending, err: tc.want, t: t}, h, !tc.off)
 			open, err := service.Open(t.Context())
 			if err != nil || open != (!tc.off && !tc.pending) {
 				t.Fatalf("Open: %t %v", open, err)
 			}
 			id, err := service.SignUp(t.Context(), tc.name, tc.handle, tc.email, tc.password)
-			var fields signup.ValidationErrors
+			var fields org.ValidationErrors
 			if tc.field != "" {
 				if !errors.As(err, &fields) || len(fields) != 1 || fields[tc.field] == nil {
 					t.Fatalf("field %s: %v", tc.field, err)

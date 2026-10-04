@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -20,7 +19,7 @@ func TestSignUp(t *testing.T) {
 	ctx := t.Context()
 	store := postgres.NewSetupStore(pool, appendEvents)
 	_, err := store.SignUp(ctx, "Alice", "alice", "alice@example.org", "$argon2id$test")
-	if !errors.Is(err, signup.ErrClosed) {
+	if !errors.Is(err, org.ErrSignUpClosed) {
 		t.Fatalf("before setup: %v", err)
 	}
 	// Insert the other organisation first to catch selection by creation order.
@@ -32,11 +31,11 @@ func TestSignUp(t *testing.T) {
 	requireNoError(t, err)
 	id, err := store.SignUp(ctx, "Alice", "alice", "alice@example.org", "$argon2id$test")
 	requireNoError(t, err)
-	org := pgtype.UUID{Bytes: result.OrganizationID, Valid: true}
+	organizationID := pgtype.UUID{Bytes: result.OrganizationID, Valid: true}
 	q := sqlcgen.New(pool)
 	account, err := q.GetAccountByID(ctx, pgtype.UUID{Bytes: id, Valid: true})
 	requireNoError(t, err)
-	member, err := q.GetMemberByOrganizationAndAccount(ctx, sqlcgen.GetMemberByOrganizationAndAccountParams{OrganizationID: org, AccountID: account.ID})
+	member, err := q.GetMemberByOrganizationAndAccount(ctx, sqlcgen.GetMemberByOrganizationAndAccountParams{OrganizationID: organizationID, AccountID: account.ID})
 	requireNoError(t, err)
 	if account.Email != "alice@example.org" || member.Role != "member" || member.JoinedEventSeq != 2 || member.Handle != "alice" {
 		t.Fatalf("account/member: %+v %+v", account, member)
@@ -47,23 +46,23 @@ func TestSignUp(t *testing.T) {
 		want          error
 		field         string
 	}{
-		{"alice2", "alice@example.org", signup.ErrEmailTaken, ""},
+		{"alice2", "alice@example.org", org.ErrEmailTaken, ""},
 		{"alice2", "Bad@Email", nil, "email"},
 		{"alice2", "e\u0301@example.org", nil, "email"},
-		{"alice", "alice2@example.org", signup.ErrHandleTaken, ""},
-		{"owner", "alice2@example.org", signup.ErrHandleTaken, ""},
+		{"alice", "alice2@example.org", org.ErrHandleTaken, ""},
+		{"owner", "alice2@example.org", org.ErrHandleTaken, ""},
 		{"Alice2", "alice2@example.org", nil, "handle"},
 		{"here", "alice2@example.org", nil, "handle"},
 	} {
 		_, err := store.SignUp(ctx, "Alice", tc.handle, tc.email, "$argon2id$test")
-		var fields signup.ValidationErrors
+		var fields org.ValidationErrors
 		if tc.want != nil && !errors.Is(err, tc.want) || tc.field != "" && (!errors.As(err, &fields) || fields[tc.field] == nil) {
 			t.Fatalf("handle %s, email %s: %v", tc.handle, tc.email, err)
 		}
 		assertEventLog(t, pool, result.OrganizationID, 2)
 		var accounts, members, otherMembers int
 		var seq, otherSeq int64
-		requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM account), (SELECT count(*) FROM member WHERE organization_id=$1), (SELECT event_seq FROM organization WHERE id=$1), (SELECT count(*) FROM member WHERE organization_id=$2), (SELECT event_seq FROM organization WHERE id=$2)", org, other).Scan(&accounts, &members, &seq, &otherMembers, &otherSeq))
+		requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM account), (SELECT count(*) FROM member WHERE organization_id=$1), (SELECT event_seq FROM organization WHERE id=$1), (SELECT count(*) FROM member WHERE organization_id=$2), (SELECT event_seq FROM organization WHERE id=$2)", organizationID, other).Scan(&accounts, &members, &seq, &otherMembers, &otherSeq))
 		if accounts != 3 || members != 2 || seq != member.JoinedEventSeq || otherMembers != 1 || otherSeq != 0 {
 			t.Fatalf("counts/sequences: %d %d %d %d %d", accounts, members, seq, otherMembers, otherSeq)
 		}
@@ -81,8 +80,8 @@ func TestSignUpHandleConflicts(t *testing.T) {
 	store := postgres.NewSetupStore(pool, appendEvents)
 	_, err = store.Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
 	requireNoError(t, err)
-	service := signup.New(store, hasher, true)
-	if _, err := service.SignUp(ctx, "Owner Two", " OWNER ", "owner2@example.org", "long enough password"); !errors.Is(err, signup.ErrHandleTaken) {
+	service := org.NewSignUp(store, hasher, true)
+	if _, err := service.SignUp(ctx, "Owner Two", " OWNER ", "owner2@example.org", "long enough password"); !errors.Is(err, org.ErrHandleTaken) {
 		t.Fatalf("case variant: %v", err)
 	}
 	const racers = 8
@@ -98,7 +97,7 @@ func TestSignUpHandleConflicts(t *testing.T) {
 		switch err := <-results; {
 		case err == nil:
 			winners++
-		case !errors.Is(err, signup.ErrHandleTaken):
+		case !errors.Is(err, org.ErrHandleTaken):
 			t.Fatalf("racer: %v", err)
 		}
 	}

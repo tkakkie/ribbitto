@@ -16,7 +16,6 @@ package, or SQL access to tables.
 ```text
 cmd/ribbitto -> internal/app/channel
 cmd/ribbitto -> internal/app/message
-cmd/ribbitto -> internal/app/signup
 cmd/ribbitto -> internal/app/topic
 cmd/ribbitto -> internal/identity
 cmd/ribbitto -> internal/identity/identitypg
@@ -31,7 +30,6 @@ cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
 cmd/seed -> internal/app/channel
 cmd/seed -> internal/app/message
-cmd/seed -> internal/app/signup
 cmd/seed -> internal/app/topic
 cmd/seed -> internal/domain
 cmd/seed -> internal/identity
@@ -47,9 +45,6 @@ internal/app/message -> internal/domain
 internal/app/message -> internal/identity
 internal/app/message -> internal/org
 internal/app/message -> internal/realtime
-internal/app/signup -> internal/domain
-internal/app/signup -> internal/identity
-internal/app/signup -> internal/org
 internal/app/topic -> internal/domain
 internal/app/topic -> internal/org
 internal/app/topic -> internal/realtime
@@ -66,7 +61,6 @@ internal/identity/internal/postgres -> internal/platform/postgres
 internal/identity/internal/postgres -> internal/platform/postgres/pgxbridge
 internal/infra/postgres -> internal/app/channel
 internal/infra/postgres -> internal/app/message
-internal/infra/postgres -> internal/app/signup
 internal/infra/postgres -> internal/app/topic
 internal/infra/postgres -> internal/domain
 internal/infra/postgres -> internal/identity
@@ -110,7 +104,6 @@ internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
 internal/web -> internal/app/channel
 internal/web -> internal/app/message
-internal/web -> internal/app/signup
 internal/web -> internal/app/topic
 internal/web -> internal/domain
 internal/web -> internal/identity

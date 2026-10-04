@@ -22,10 +22,14 @@
 //
 // Setup (NewSetup, SetupInput, SetupResult, SetupStore, ErrSetupToken and
 // ErrSetupCompleted) authorizes and validates installation-wide first-run setup
-// before hashing. ValidationErrors is also aliased by app/signup.
-// Listed exception: setup creates identity's first account and the default
-// channel in the same transaction as the organisation.
+// before hashing. SignUp (NewSignUp, SignUpStore, ErrSignUpClosed and
+// ErrEmailTaken) controls installation-wide registration. Both share
+// ValidationErrors and the account-field validation; ErrHandleTaken is shared
+// with HandleChanger.
+// Listed exceptions: setup creates identity's first account and the default
+// channel in the organisation transaction; sign-up creates identity's account
+// with its member and advances organization.event_seq in the same transaction.
 //
 // Until org's store moves (step 3), infra/postgres implements MembershipStore,
-// HandleStore, Directory and SetupStore, keeping their transactions.
+// HandleStore, Directory, SetupStore and SignUpStore, keeping their transactions.
 package org

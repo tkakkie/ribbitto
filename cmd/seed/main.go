@@ -21,7 +21,6 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -170,7 +169,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	if err != nil {
 		return fmt.Errorf("seeding requires an empty, migrated development database: %w", err)
 	}
-	signups := signup.New(store, hasher, true)
+	signups := org.NewSignUp(store, hasher, true)
 	authorizer := org.NewAuthorizer(postgres.NewAuthzStore(pool))
 	members := make(map[string]org.Membership, len(data.Members))
 	for i, person := range data.Members {

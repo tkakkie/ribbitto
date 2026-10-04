@@ -135,6 +135,18 @@ linters:
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/org/internal/postgres
               desc: Only orgpg and the store's own tests import org's store; see decision 26.
+        conversationpg:
+          list-mode: lax
+          files: ["$all", "!$test", "!**/cmd/*/*.go", "!**/cmd/*/**/*.go"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/internal/conversation/conversationpg
+              desc: Only cmd/* and tests import a module's wiring; see decision 26.
+        conversationstore:
+          list-mode: lax
+          files: ["$all", "!**/internal/conversation/conversationpg/*.go", "!**/internal/conversation/internal/postgres/*.go", "!**/internal/conversation/internal/postgres/**/*.go"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/internal/conversation/internal/postgres
+              desc: Only conversationpg and the store's own tests import conversation's store; see decision 26.
         app:
           list-mode: lax
           files: ["**/internal/app/*.go", "**/internal/app/**/*.go", "!$test"]
@@ -146,10 +158,9 @@ linters:
             # Module roots only; their stores and wiring stay private.
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
-            # app/message and app/topic encode their kinds' payloads with
-            # realtime's ID text; they stand for decision 26's conversation ->
-            # realtime until that module moves (step 4).
-            - github.com/tkakkie/ribbitto/internal/realtime$
+            # Temporary, until step 4.17 deletes app: the use cases move into
+            # conversation one at a time.
+            - github.com/tkakkie/ribbitto/internal/conversation$
           deny: *non_html
         postgres:
           list-mode: lax
@@ -163,8 +174,10 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
-            # Temporary, until the migration's last step: the flows' appender
-            # interface and the kind list.
+            # Temporary, until step 4.16: posting and branching encode
+            # conversation's payloads until they move into it.
+            - github.com/tkakkie/ribbitto/internal/conversation$
+            # Temporary, until step 4: the flows' appender interface.
             - github.com/tkakkie/ribbitto/internal/realtime$
             # Temporary, until the migration's last step: infra/postgres/pgtest
             # delegates to the platform's database lifecycle, and the legacy
@@ -199,6 +212,21 @@ linters:
             # Temporary: only domain's ID alias, until step 5 (modules.md).
             - github.com/tkakkie/ribbitto/internal/domain$
           deny: *non_html
+        # conversation is the fourth module (decisions 26 and 27), filled in
+        # during step 4.
+        conversation:
+          list-mode: lax
+          files: ["**/internal/conversation/*.go", "**/internal/conversation/**/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/conversation$
+            - github.com/tkakkie/ribbitto/internal/conversation/
+            - github.com/tkakkie/ribbitto/internal/kernel$
+            - github.com/tkakkie/ribbitto/internal/platform$
+            - github.com/tkakkie/ribbitto/internal/platform/
+            - github.com/tkakkie/ribbitto/internal/identity$
+            - github.com/tkakkie/ribbitto/internal/org$
+            - github.com/tkakkie/ribbitto/internal/realtime$
+          deny: *non_html
         web:
           list-mode: lax
           files: ["**/internal/web/*.go", "**/internal/web/**/*.go", "!$test"]
@@ -212,6 +240,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
+            - github.com/tkakkie/ribbitto/internal/conversation$
             - github.com/tkakkie/ribbitto/internal/realtime$
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/

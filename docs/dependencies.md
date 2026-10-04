@@ -20,6 +20,7 @@ package, or SQL access to tables.
 cmd/ribbitto -> internal/app/channel
 cmd/ribbitto -> internal/app/message
 cmd/ribbitto -> internal/app/topic
+cmd/ribbitto -> internal/conversation/conversationpg
 cmd/ribbitto -> internal/identity
 cmd/ribbitto -> internal/identity/identitypg
 cmd/ribbitto -> internal/infra/postgres
@@ -48,10 +49,12 @@ internal/app/message -> internal/app/topic
 internal/app/message -> internal/domain
 internal/app/message -> internal/identity
 internal/app/message -> internal/org
-internal/app/message -> internal/realtime
 internal/app/topic -> internal/domain
 internal/app/topic -> internal/org
-internal/app/topic -> internal/realtime
+internal/conversation -> internal/kernel
+internal/conversation -> internal/realtime
+internal/conversation/conversationpg -> internal/conversation
+internal/conversation/conversationpg -> internal/realtime
 internal/domain -> internal/kernel
 internal/identity -> internal/kernel
 internal/identity/identitypg -> internal/identity
@@ -65,6 +68,7 @@ internal/identity/internal/postgres -> internal/platform/postgres/pgxbridge
 internal/infra/postgres -> internal/app/channel
 internal/infra/postgres -> internal/app/message
 internal/infra/postgres -> internal/app/topic
+internal/infra/postgres -> internal/conversation
 internal/infra/postgres -> internal/domain
 internal/infra/postgres -> internal/identity
 internal/infra/postgres -> internal/infra/postgres/sqlcgen
@@ -110,6 +114,7 @@ internal/realtime/realtimepg -> internal/realtime/internal/postgres
 internal/web -> internal/app/channel
 internal/web -> internal/app/message
 internal/web -> internal/app/topic
+internal/web -> internal/conversation
 internal/web -> internal/domain
 internal/web -> internal/identity
 internal/web -> internal/org

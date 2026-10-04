@@ -1,29 +1,29 @@
-package message
+package conversation
 
 import (
 	"encoding/json"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// KindPosted is the kind of a message's posting, which this feature
+// KindPosted is the kind of a message's posting, which conversation
 // publishes and so owns (decision 26): its message, channel and
 // posting-time topic.
 const KindPosted realtime.EventKind = "message.posted"
 
 // Posted is the decoded payload of KindPosted.
 type Posted struct {
-	ChannelID domain.ID
-	MessageID domain.ID
+	ChannelID kernel.ID
+	MessageID kernel.ID
 	// TopicID is the posting-time topic. Nil means a legacy payload
 	// written before topics, without topic_id.
-	TopicID *domain.ID
+	TopicID *kernel.ID
 }
 
 // EncodePosted returns the stored data of KindPosted for a post in topicID:
 // canonical UUID text under channel_id, message_id and topic_id.
-func EncodePosted(channelID, messageID, topicID domain.ID) []byte {
+func EncodePosted(channelID, messageID, topicID kernel.ID) []byte {
 	// This payload contains only strings, so marshaling cannot fail.
 	data, _ := json.Marshal(map[string]string{
 		"channel_id": realtime.FormatPayloadID(channelID),
@@ -69,10 +69,10 @@ func DecodePosted(data []byte) (Posted, error) {
 
 // RoutePosted is message.posted's realtime.Router: the channel and, unless
 // the payload is legacy, the posting-time topic.
-func RoutePosted(payload []byte) (domain.ID, []domain.ID, error) {
+func RoutePosted(payload []byte) (kernel.ID, []kernel.ID, error) {
 	p, err := DecodePosted(payload)
 	if err != nil || p.TopicID == nil {
 		return p.ChannelID, nil, err
 	}
-	return p.ChannelID, []domain.ID{*p.TopicID}, nil
+	return p.ChannelID, []kernel.ID{*p.TopicID}, nil
 }

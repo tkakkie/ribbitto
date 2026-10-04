@@ -16,7 +16,7 @@ sequenceDiagram
 ```
 
 `message.Service.Post` validates; `postgres.PostingStore` takes the sequence,
-inserts the message, encodes the post with `message.EncodePosted` and calls `Append` on the `EventAppender` its store was given for the transaction
+inserts the message, encodes the post with `conversation.EncodePosted` and calls `Append` on the `EventAppender` its store was given for the transaction
 in one transaction. Realtime's store appender (`realtimepg.AppenderIn`) owns the event insert, kind-agnostic;
 it uses the caller's transaction and already-allocated sequence.
 `message.NewWithNotifier` accepts `message.Notifier` (`Raise(organizationID domain.ID, seq int64)`);

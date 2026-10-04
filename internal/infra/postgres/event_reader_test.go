@@ -3,13 +3,14 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"reflect"
 	"slices"
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -34,7 +35,7 @@ func TestPostedEventTopic(t *testing.T) {
 	if len(events) != 1 || !slices.Equal(events[0].Topics, []domain.ID{named.ID}) {
 		t.Fatalf("named-topic post: %+v", events)
 	}
-	// An absent topic_id is readable legacy data (message.DecodePosted's
+	// An absent topic_id is readable legacy data (conversation.DecodePosted's
 	// tests cover the malformed values).
 	_, err = postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "second")
 	requireNoError(t, err)
@@ -73,7 +74,7 @@ func TestEventsAfter(t *testing.T) {
 	}
 	want := []realtime.Event{
 		{OrganizationID: f.OrganizationID, Seq: 1, Kind: org.KindJoined, Payload: stored(1)},
-		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: message.KindPosted, ChannelID: f.Channel.ID,
+		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: conversation.KindPosted, ChannelID: f.Channel.ID,
 			Topics: []domain.ID{posted.TopicID}, Payload: stored(posted.EventSeq)},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
 	}
@@ -105,7 +106,7 @@ func TestEventsAfter(t *testing.T) {
 	if joined, err := org.DecodeJoined(got[0].Payload); err != nil || joined.MemberID != f.MemberID {
 		t.Fatalf("joined payload: %+v, %v; want member %v", joined, err, f.MemberID)
 	}
-	if p, err := message.DecodePosted(got[1].Payload); err != nil || p.MessageID != posted.ID || p.TopicID == nil || *p.TopicID != posted.TopicID {
+	if p, err := conversation.DecodePosted(got[1].Payload); err != nil || p.MessageID != posted.ID || p.TopicID == nil || *p.TopicID != posted.TopicID {
 		t.Fatalf("posted payload: %+v, %v; want message %v in topic %v", p, err, posted.ID, posted.TopicID)
 	}
 	// A known event can also target a single member; audience is not payload data.
@@ -198,7 +199,7 @@ func TestEventsAfterRegisteredKinds(t *testing.T) {
 	want := []realtime.Event{
 		{OrganizationID: org, Seq: 1, Kind: "test.synthetic", ChannelID: channel, Topics: []domain.ID{topic}, Payload: routed},
 		{OrganizationID: org, Seq: 2, Kind: "test.unregistered"},
-		{OrganizationID: org, Seq: 3, Kind: message.KindPosted},
+		{OrganizationID: org, Seq: 3, Kind: conversation.KindPosted},
 	}
 	if len(routed) == 0 || !reflect.DeepEqual(got, want) {
 		t.Fatalf("EventsAfter = %+v; want %+v", got, want)
@@ -279,7 +280,7 @@ func TestEventsAfterOneSnapshot(t *testing.T) {
 
 // eventKinds gives readers the same publisher registrations as cmd/ribbitto.
 func eventKinds() realtime.Kinds {
-	kinds := postgres.EventKinds()
+	kinds := conversationpg.EventKinds()
 	for kind, router := range orgpg.EventKinds() {
 		kinds[kind] = router
 	}

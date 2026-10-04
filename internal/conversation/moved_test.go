@@ -1,4 +1,4 @@
-package topic_test
+package conversation_test
 
 import (
 	"encoding/json"
@@ -6,20 +6,20 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/topic"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 func TestMovedPayload(t *testing.T) {
-	want := topic.Moved{
-		ChannelID: domain.ID{15: 1}, FromTopicID: domain.ID{0: 0xab, 15: 2}, ToTopicID: domain.ID{0: 0xcd, 15: 3},
-		MessageIDs: []domain.ID{{15: 4}, {0: 0xef, 15: 5}},
+	want := conversation.Moved{
+		ChannelID: kernel.ID{15: 1}, FromTopicID: kernel.ID{0: 0xab, 15: 2}, ToTopicID: kernel.ID{0: 0xcd, 15: 3},
+		MessageIDs: []kernel.ID{{15: 4}, {0: 0xef, 15: 5}},
 	}
-	data := topic.EncodeMoved(want)
-	if got, err := topic.DecodeMoved(data); err != nil || !reflect.DeepEqual(got, want) {
+	data := conversation.EncodeMoved(want)
+	if got, err := conversation.DecodeMoved(data); err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("round trip = %+v, %v; want %+v", got, err, want)
 	}
-	if channel, topics, err := topic.RouteMoved(data); err != nil || channel != want.ChannelID || !reflect.DeepEqual(topics, []domain.ID{want.FromTopicID, want.ToTopicID}) {
+	if channel, topics, err := conversation.RouteMoved(data); err != nil || channel != want.ChannelID || !reflect.DeepEqual(topics, []kernel.ID{want.FromTopicID, want.ToTopicID}) {
 		t.Fatalf("RouteMoved = %v, %v, %v; want the channel and both topics", channel, topics, err)
 	}
 	uuid := func(n int) string { return fmt.Sprintf("00000000-0000-0000-0000-%012x", n) }
@@ -59,7 +59,7 @@ func TestMovedPayload(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got, err := topic.DecodeMoved(encoded); err == nil {
+			if got, err := conversation.DecodeMoved(encoded); err == nil {
 				t.Fatalf("DecodeMoved(%s) = %+v; want an error", encoded, got)
 			}
 		})

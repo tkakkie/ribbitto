@@ -1,24 +1,24 @@
-package topic
+package conversation
 
 import (
 	"encoding/json"
 	"errors"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// KindMessagesMoved is the kind of a branch's move, which branching
+// KindMessagesMoved is the kind of a branch's move, which conversation
 // publishes and so owns (decision 26): the messages it moved, their channel,
 // and the topics they left and joined (docs/domain/topics.md).
 const KindMessagesMoved realtime.EventKind = "messages.moved"
 
 // Moved is the payload of KindMessagesMoved.
 type Moved struct {
-	ChannelID   domain.ID
-	FromTopicID domain.ID
-	ToTopicID   domain.ID
-	MessageIDs  []domain.ID
+	ChannelID   kernel.ID
+	FromTopicID kernel.ID
+	ToTopicID   kernel.ID
+	MessageIDs  []kernel.ID
 }
 
 // EncodeMoved returns the stored data of m: canonical UUID text under
@@ -56,7 +56,7 @@ func DecodeMoved(data []byte) (Moved, error) {
 	var err error
 	for _, field := range []struct {
 		value string
-		id    *domain.ID
+		id    *kernel.ID
 	}{{raw.ChannelID, &m.ChannelID}, {raw.FromTopicID, &m.FromTopicID}, {raw.ToTopicID, &m.ToTopicID}} {
 		if *field.id, err = realtime.ParsePayloadID(field.value); err != nil {
 			return Moved{}, err
@@ -68,7 +68,7 @@ func DecodeMoved(data []byte) (Moved, error) {
 	if len(raw.MessageIDs) == 0 {
 		return Moved{}, errors.New("move has no messages")
 	}
-	seen := make(map[domain.ID]bool, len(raw.MessageIDs))
+	seen := make(map[kernel.ID]bool, len(raw.MessageIDs))
 	for _, value := range raw.MessageIDs {
 		id, err := realtime.ParsePayloadID(value)
 		if err != nil {
@@ -85,10 +85,10 @@ func DecodeMoved(data []byte) (Moved, error) {
 
 // RouteMoved is messages.moved's realtime.Router: the channel and both topics,
 // so a view of either sees the move.
-func RouteMoved(payload []byte) (domain.ID, []domain.ID, error) {
+func RouteMoved(payload []byte) (kernel.ID, []kernel.ID, error) {
 	m, err := DecodeMoved(payload)
 	if err != nil {
-		return domain.ID{}, nil, err
+		return kernel.ID{}, nil, err
 	}
-	return m.ChannelID, []domain.ID{m.FromTopicID, m.ToTopicID}, nil
+	return m.ChannelID, []kernel.ID{m.FromTopicID, m.ToTopicID}, nil
 }

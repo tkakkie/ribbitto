@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"testing"
 
@@ -37,11 +38,11 @@ func TestMoveEventPayload(t *testing.T) {
 	requireNoError(t, err)
 	events, err := reader.EventsAfter(t.Context(), f.OrganizationID, 1, 1)
 	requireNoError(t, err)
-	if len(events) != 1 || events[0].Kind != topic.KindMessagesMoved ||
+	if len(events) != 1 || events[0].Kind != conversation.KindMessagesMoved ||
 		events[0].AudienceMemberID == nil || *events[0].AudienceMemberID != f.MemberID {
 		t.Fatalf("targeted move larger than the write-side limit: %+v", events)
 	}
-	moved, err := topic.DecodeMoved(events[0].Payload)
+	moved, err := conversation.DecodeMoved(events[0].Payload)
 	if err != nil || len(moved.MessageIDs) != len(ids) {
 		t.Fatalf("move payload: %d IDs, %v; want %d", len(moved.MessageIDs), err, len(ids))
 	}

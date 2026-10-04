@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"io"
 	"reflect"
@@ -571,7 +572,7 @@ func TestTopicMoveModelRequestScope(t *testing.T) {
 
 // eventKinds gives readers the same publisher registrations as cmd/ribbitto.
 func eventKinds() realtime.Kinds {
-	kinds := postgres.EventKinds()
+	kinds := conversationpg.EventKinds()
 	for kind, router := range orgpg.EventKinds() {
 		kinds[kind] = router
 	}

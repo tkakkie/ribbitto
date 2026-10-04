@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -200,7 +201,7 @@ func eventCursor(s platform.Snapshot) postgres.EventCursor { return orgpg.EventC
 
 // eventKinds gives readers the same publisher registrations as cmd/ribbitto.
 func eventKinds() realtime.Kinds {
-	kinds := postgres.EventKinds()
+	kinds := conversationpg.EventKinds()
 	for kind, router := range orgpg.EventKinds() {
 		kinds[kind] = router
 	}

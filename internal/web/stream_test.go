@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -515,7 +516,7 @@ func (r lifetimeReads) One(ctx context.Context, _ org.Membership, _ domain.ID, _
 
 func (r lifetimeReads) EventsAfter(ctx context.Context, orgID domain.ID, _ int64, _ int) ([]realtime.Event, error) {
 	if r.render {
-		return []realtime.Event{{OrganizationID: orgID, ChannelID: domain.ID{1}, Seq: 1, Kind: message.KindPosted}}, nil
+		return []realtime.Event{{OrganizationID: orgID, ChannelID: domain.ID{1}, Seq: 1, Kind: conversation.KindPosted}}, nil
 	}
 	_, err := r.One(ctx, org.Membership{}, domain.ID{}, 0)
 	return nil, err

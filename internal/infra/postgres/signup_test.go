@@ -35,7 +35,11 @@ func TestSignUp(t *testing.T) {
 	q := sqlcgen.New(pool)
 	account, err := q.GetAccountByID(ctx, pgtype.UUID{Bytes: id, Valid: true})
 	requireNoError(t, err)
-	member, err := q.GetMemberByOrganizationAndAccount(ctx, sqlcgen.GetMemberByOrganizationAndAccountParams{OrganizationID: organizationID, AccountID: account.ID})
+	var member struct {
+		Role, Handle   string
+		JoinedEventSeq int64
+	}
+	err = pool.QueryRow(ctx, "SELECT role, handle, joined_event_seq FROM member WHERE organization_id = $1 AND account_id = $2", organizationID, account.ID).Scan(&member.Role, &member.Handle, &member.JoinedEventSeq)
 	requireNoError(t, err)
 	if account.Email != "alice@example.org" || member.Role != "member" || member.JoinedEventSeq != 2 || member.Handle != "alice" {
 		t.Fatalf("account/member: %+v %+v", account, member)

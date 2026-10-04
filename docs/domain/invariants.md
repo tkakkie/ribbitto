@@ -18,7 +18,7 @@ invariant changes. Keep the numbers stable: other documents cite them.
    and `/` resolve it from the setup row, never from the request. An account
    that is not a member gets **404**. Enforced by `registerOrgRoutes` in
    `internal/web/org.go`.
-5. **Authorization is decided only in `internal/app`.** Handlers and the
+5. **Authorization is decided only in `internal/org`.** Handlers and the
    real-time loop (`realtime.Stream.Run`) call it; they never
    re-implement it. The entry point is
    `internal/org`: `Authorizer.Member` turns the signed-in account and

@@ -70,8 +70,9 @@ member in the same organisation. The audience never appears in `data`.
 Each kind's publisher owns its kind name and payload (decision 26):
 `app/message` (`KindPosted`, `EncodePosted`, `DecodePosted`), `app/topic`
 (`KindMessagesMoved`, `EncodeMoved`, `DecodeMoved`) and `app/member`
-(`KindJoined`, `EncodeJoined`, `DecodeJoined`) declare and encode and decode
-them until their modules move; realtime keeps only the `EventKind` type; the writer stores what they return, the reader only
+(`KindJoined`, `EncodeJoined`, `DecodeJoined`) declare the kind, encode the
+payload and decode it until their modules move; realtime keeps only the
+`EventKind` type. The writer stores what they return, the reader only
 routes through their `Router`s, and consumers decode the payload (the
 renderer decodes moves). IDs are canonical UUID text
 (`realtime.FormatPayloadID`, `ParsePayloadID`), the JSON value SQL's

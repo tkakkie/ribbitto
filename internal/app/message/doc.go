@@ -1,17 +1,10 @@
-// Package message holds posting and message reads with current author names.
+// Package message holds posting.
 //
 // Feature: message (feature map in docs/architecture/features.md), which owns
 // the message table. conversation owns Message, ValidateMessageBody,
-// ErrInvalidBody and ErrMessageNotFound. Exported API: Service, the Store
-// interface it needs, and Reader with History: Before reads a Page below an
-// event_seq bound with an optional topic filter; One reads an Entry by
-// organisation, channel and event_seq,
-// returning conversation.ErrMessageNotFound for a missing or out-of-scope
-// message; Many reads a bounded ID batch with the same scoping and hydration.
-// ChannelPage is the page snapshot's result. topic.Directory resolves topic labels in one
-// batch per page.
-// Author names use org.Directory
-// followed by identity.Directory; message queries neither feature.
+// ErrInvalidBody and ErrMessageNotFound, and the history reader (Reader,
+// Entry, Page, ChannelPage, PageSize). Exported API: Service and the Store
+// interface it needs.
 // It uses org through org.Membership; posting reports a channel
 // outside the caller's organisation as conversation.ErrChannelNotFound. Listed
 // exception: posting advances organization.event_seq, which org owns,

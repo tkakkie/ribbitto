@@ -15,7 +15,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -192,9 +191,9 @@ func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 		}
 		want, sourceSeq := 1, int64(6+4*count)
 		if i == 0 {
-			want += message.PageSize + 10
+			want += conversation.PageSize + 10
 		} else {
-			sourceSeq += 3 + message.PageSize + 10
+			sourceSeq += 3 + conversation.PageSize + 10
 		}
 		if total != want {
 			t.Fatalf("%s: %d messages, want %d", name, total, want)
@@ -221,7 +220,7 @@ func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 			t.Fatalf("%s: invalid branch, notice or events: %v", name, err)
 		}
 		page, err := reader.Page(t.Context(), member, channelID, &topicID, nil)
-		if err != nil || page.Older != (i == 0) || len(page.Entries) != min(want, message.PageSize) {
+		if err != nil || page.Older != (i == 0) || len(page.Entries) != min(want, conversation.PageSize) {
 			t.Fatalf("%s: latest page: %+v, %v", name, page, err)
 		}
 		if page.Older {

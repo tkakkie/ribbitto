@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -106,30 +106,30 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 
 	secrets := []string{"Acceptance Team", "general", "Project discussion"}
 	var historyURLs []string
-	for _, conversation := range []struct{ path, name string }{
+	for _, channel := range []struct{ path, name string }{
 		{defaultURL, "general"}, {createdURL, "Project discussion"},
 	} {
 		for _, person := range people {
-			w := request("GET", conversation.path, person.cookie, nil, http.StatusOK)
+			w := request("GET", channel.path, person.cookie, nil, http.StatusOK)
 			doc, err := html.Parse(w.Body)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if heading := find(doc, atom.H1); heading == nil || text(heading) != conversation.name {
-				t.Fatalf("%s did not open %s", person.handle, conversation.name)
+			if heading := find(doc, atom.H1); heading == nil || text(heading) != channel.name {
+				t.Fatalf("%s did not open %s", person.handle, channel.name)
 			}
 		}
-		bodies := make([]string, message.PageSize+2)
+		bodies := make([]string, conversation.PageSize+2)
 		for i := range bodies {
-			bodies[i] = fmt.Sprintf("%s message %03d", conversation.name, i)
+			bodies[i] = fmt.Sprintf("%s message %03d", channel.name, i)
 			person := people[i%len(people)]
-			w := request("POST", conversation.path, person.cookie, url.Values{"body": {bodies[i]}}, http.StatusSeeOther)
-			redirect(w, conversation.path)
+			w := request("POST", channel.path, person.cookie, url.Values{"body": {bodies[i]}}, http.StatusSeeOther)
+			redirect(w, channel.path)
 		}
 		secrets = append(secrets, bodies...)
 		for _, person := range people {
 			// Fresh GETs use only the session cookie, never the POST response.
-			path := conversation.path
+			path := channel.path
 			for _, bounds := range [][2]int{{2, len(bodies)}, {0, 2}} {
 				w := request("GET", path, person.cookie, nil, http.StatusOK)
 				doc, err := html.Parse(w.Body)
@@ -164,7 +164,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 						t.Fatalf("oldest page still links to %q", older)
 					}
 				} else {
-					if !strings.HasPrefix(older, conversation.path+"?before=") {
+					if !strings.HasPrefix(older, channel.path+"?before=") {
 						t.Fatalf("missing older history link: %q", older)
 					}
 					historyURLs = append(historyURLs, older)

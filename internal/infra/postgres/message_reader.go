@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -34,27 +33,27 @@ type MessageReader struct {
 }
 
 // One reads one message, its author names and topic in a read-only snapshot.
-func (s MessageReader) One(ctx context.Context, m org.Membership, channelID domain.ID, eventSeq int64) (entry message.Entry, err error) {
+func (s MessageReader) One(ctx context.Context, m org.Membership, channelID domain.ID, eventSeq int64) (entry conversation.Entry, err error) {
 	err = platform.InSnapshot(ctx, s.Pool, func(snapshot platform.Snapshot) error {
 		tx := pgxbridge.Snapshot(snapshot)
-		reader := message.Reader{History: NewMessageStore(tx), Members: s.Members(snapshot), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
+		reader := conversation.Reader{History: NewMessageStore(tx), Members: s.Members(snapshot), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
 		entry, err = reader.One(ctx, m, channelID, eventSeq)
 		return err
 	})
 	if err != nil {
-		return message.Entry{}, fmt.Errorf("reading message snapshot: %w", err)
+		return conversation.Entry{}, fmt.Errorf("reading message snapshot: %w", err)
 	}
 	return entry, nil
 }
 
 // Before reads a page for a resolved member, omitting the cursor on older pages.
-func (s MessageReader) Before(ctx context.Context, m org.Membership, channelID domain.ID, before *int64) (message.ChannelPage, error) {
+func (s MessageReader) Before(ctx context.Context, m org.Membership, channelID domain.ID, before *int64) (conversation.ChannelPage, error) {
 	return s.Page(ctx, m, channelID, nil, before)
 }
 
 // Page reads channel or topic history; the latest page of either carries the
 // snapshot's event cursor for its stream, older pages none.
-func (s MessageReader) Page(ctx context.Context, m org.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (page message.ChannelPage, err error) {
+func (s MessageReader) Page(ctx context.Context, m org.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (page conversation.ChannelPage, err error) {
 	err = platform.InSnapshot(ctx, s.Pool, func(snapshot platform.Snapshot) error {
 		tx := pgxbridge.Snapshot(snapshot)
 		channels := conversation.NewChannels(NewChannelStore(tx))
@@ -78,7 +77,7 @@ func (s MessageReader) Page(ctx context.Context, m org.Membership, channelID dom
 		if err != nil {
 			return err
 		}
-		reader := message.Reader{History: NewMessageStore(tx), Members: s.Members(snapshot), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
+		reader := conversation.Reader{History: NewMessageStore(tx), Members: s.Members(snapshot), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
 		page.Page, err = reader.Before(ctx, m, channelID, topicID, before)
 		if err != nil {
 			return err
@@ -93,16 +92,16 @@ func (s MessageReader) Page(ctx context.Context, m org.Membership, channelID dom
 		return nil
 	})
 	if err != nil {
-		return message.ChannelPage{}, fmt.Errorf("reading channel page snapshot: %w", err)
+		return conversation.ChannelPage{}, fmt.Errorf("reading channel page snapshot: %w", err)
 	}
 	return page, nil
 }
 
 // Many reads a move's bounded message batch and directories in one snapshot.
-func (s MessageReader) Many(ctx context.Context, m org.Membership, channelID domain.ID, ids []domain.ID) (entries []message.Entry, err error) {
+func (s MessageReader) Many(ctx context.Context, m org.Membership, channelID domain.ID, ids []domain.ID) (entries []conversation.Entry, err error) {
 	err = platform.InSnapshot(ctx, s.Pool, func(snapshot platform.Snapshot) error {
 		tx := pgxbridge.Snapshot(snapshot)
-		reader := message.Reader{History: NewMessageStore(tx), Members: s.Members(snapshot), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
+		reader := conversation.Reader{History: NewMessageStore(tx), Members: s.Members(snapshot), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
 		entries, err = reader.Many(ctx, m, channelID, ids)
 		return err
 	})

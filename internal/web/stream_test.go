@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -555,11 +554,11 @@ type lifetimeReads struct {
 	render   bool
 }
 
-func (r lifetimeReads) One(ctx context.Context, _ org.Membership, _ domain.ID, _ int64) (message.Entry, error) {
+func (r lifetimeReads) One(ctx context.Context, _ org.Membership, _ domain.ID, _ int64) (conversation.Entry, error) {
 	r.started <- ctx
 	<-ctx.Done()
 	r.returned <- struct{}{}
-	return message.Entry{}, ctx.Err()
+	return conversation.Entry{}, ctx.Err()
 }
 
 func (r lifetimeReads) EventsAfter(ctx context.Context, orgID domain.ID, _ int64, _ int) ([]realtime.Event, error) {

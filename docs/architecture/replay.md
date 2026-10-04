@@ -127,7 +127,7 @@ implements this rule:
 
 That feature decides how, and in which layer, a vanished target becomes a
 normal skip, but not by teaching `realtime.Stream` the message feature's
-`conversation.ErrMessageNotFound`. It also decides whether `message.Reader.Many` (an incomplete
+`conversation.ErrMessageNotFound`. It also decides whether `conversation.Reader.Many` (an incomplete
 batch is `conversation.ErrMessageNotFound`) changes, so that ordinary data inconsistency is not
 taken for disappearance. Its tests replay a vanished `message.posted` and a
 `messages.moved` with missing and surviving IDs, and check that the

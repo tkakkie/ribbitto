@@ -46,15 +46,15 @@ func TestMessageOne(t *testing.T) {
 		membership org.Membership
 		channel    domain.ID
 		seq        int64
-		want       message.Entry
+		want       conversation.Entry
 		wantErr    error
 	}{
-		{"hydrated", membership, local.Channel.ID, posted.EventSeq, message.Entry{Message: posted, DisplayName: "Current Name", Handle: "current-handle", DefaultTopic: true}, nil},
-		{"missing", membership, local.Channel.ID, posted.EventSeq + 100, message.Entry{}, conversation.ErrMessageNotFound},
-		{"wrong channel", membership, otherChannel.ID, posted.EventSeq, message.Entry{}, conversation.ErrMessageNotFound},
-		{"foreign message", membership, foreign.Channel.ID, foreignPost.EventSeq, message.Entry{}, conversation.ErrMessageNotFound},
-		{"foreign member", foreignMembership, local.Channel.ID, posted.EventSeq, message.Entry{}, conversation.ErrMessageNotFound},
-		{"foreign hydrated", foreignMembership, foreign.Channel.ID, foreignPost.EventSeq, message.Entry{Message: foreignPost, DisplayName: "globex", Handle: "owner", DefaultTopic: true}, nil},
+		{"hydrated", membership, local.Channel.ID, posted.EventSeq, conversation.Entry{Message: posted, DisplayName: "Current Name", Handle: "current-handle", DefaultTopic: true}, nil},
+		{"missing", membership, local.Channel.ID, posted.EventSeq + 100, conversation.Entry{}, conversation.ErrMessageNotFound},
+		{"wrong channel", membership, otherChannel.ID, posted.EventSeq, conversation.Entry{}, conversation.ErrMessageNotFound},
+		{"foreign message", membership, foreign.Channel.ID, foreignPost.EventSeq, conversation.Entry{}, conversation.ErrMessageNotFound},
+		{"foreign member", foreignMembership, local.Channel.ID, posted.EventSeq, conversation.Entry{}, conversation.ErrMessageNotFound},
+		{"foreign hydrated", foreignMembership, foreign.Channel.ID, foreignPost.EventSeq, conversation.Entry{Message: foreignPost, DisplayName: "globex", Handle: "owner", DefaultTopic: true}, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := reader.One(ctx, tt.membership, tt.channel, tt.seq)
@@ -91,10 +91,10 @@ func TestMessagePaging(t *testing.T) {
 	// Interleave posts so that every channel's event_seq values have gaps
 	// filled by another channel's, and globex reuses acme's numbers.
 	service := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
-	sizes := map[string]int{"exact": 2 * message.PageSize, "partial": message.PageSize + 1}
+	sizes := map[string]int{"exact": 2 * conversation.PageSize, "partial": conversation.PageSize + 1}
 	posted := map[string][]string{}
 	var foreignSeqs []int64
-	for i := range 2 * message.PageSize {
+	for i := range 2 * conversation.PageSize {
 		for _, name := range []string{"exact", "partial"} {
 			if i < sizes[name] {
 				body := fmt.Sprintf("%s %d", name, i)
@@ -172,12 +172,12 @@ func TestMessagePaging(t *testing.T) {
 				if !page.Older {
 					break
 				}
-				if len(page.Entries) != message.PageSize || pages > 10 {
+				if len(page.Entries) != conversation.PageSize || pages > 10 {
 					t.Fatalf("page %d has %d entries and claims older ones", pages, len(page.Entries))
 				}
 				before = &page.Entries[0].EventSeq
 			}
-			if want := (sizes[name] + message.PageSize - 1) / message.PageSize; pages != max(want, 1) {
+			if want := (sizes[name] + conversation.PageSize - 1) / conversation.PageSize; pages != max(want, 1) {
 				t.Fatalf("%d pages for %d messages", pages, sizes[name])
 			}
 			if !slices.Equal(got, posted[name]) {
@@ -257,7 +257,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			if !began || concurrent.EventSeq == 0 || page.EventCursor == nil {
 				t.Fatalf("missing transaction, concurrent commit or cursor: %+v", page)
 			}
-			visible := slices.ContainsFunc(page.Entries, func(e message.Entry) bool { return e.ID == concurrent.ID })
+			visible := slices.ContainsFunc(page.Entries, func(e conversation.Entry) bool { return e.ID == concurrent.ID })
 			if !visible && concurrent.EventSeq <= *page.EventCursor {
 				t.Fatal("concurrent message is neither on the page nor after its cursor")
 			}

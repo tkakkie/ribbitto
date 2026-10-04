@@ -16,12 +16,12 @@ package, or SQL access to tables.
 ```text
 cmd/ribbitto -> internal/app/channel
 cmd/ribbitto -> internal/app/message
-cmd/ribbitto -> internal/app/setup
 cmd/ribbitto -> internal/app/signup
 cmd/ribbitto -> internal/app/topic
 cmd/ribbitto -> internal/identity
 cmd/ribbitto -> internal/identity/identitypg
 cmd/ribbitto -> internal/infra/postgres
+cmd/ribbitto -> internal/org
 cmd/ribbitto -> internal/org/orgpg
 cmd/ribbitto -> internal/platform/postgres
 cmd/ribbitto -> internal/realtime
@@ -31,7 +31,6 @@ cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
 cmd/seed -> internal/app/channel
 cmd/seed -> internal/app/message
-cmd/seed -> internal/app/setup
 cmd/seed -> internal/app/signup
 cmd/seed -> internal/app/topic
 cmd/seed -> internal/domain
@@ -49,10 +48,6 @@ internal/app/message -> internal/domain
 internal/app/message -> internal/identity
 internal/app/message -> internal/org
 internal/app/message -> internal/realtime
-internal/app/setup -> internal/domain
-internal/app/setup -> internal/identity
-internal/app/setup -> internal/org
-internal/app/signup -> internal/app/setup
 internal/app/signup -> internal/domain
 internal/app/signup -> internal/identity
 internal/app/signup -> internal/org
@@ -72,7 +67,6 @@ internal/identity/internal/postgres -> internal/platform/postgres
 internal/identity/internal/postgres -> internal/platform/postgres/pgxbridge
 internal/infra/postgres -> internal/app/channel
 internal/infra/postgres -> internal/app/message
-internal/infra/postgres -> internal/app/setup
 internal/infra/postgres -> internal/app/signup
 internal/infra/postgres -> internal/app/topic
 internal/infra/postgres -> internal/domain
@@ -118,7 +112,6 @@ internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
 internal/web -> internal/app/channel
 internal/web -> internal/app/message
-internal/web -> internal/app/setup
 internal/web -> internal/app/signup
 internal/web -> internal/app/topic
 internal/web -> internal/domain

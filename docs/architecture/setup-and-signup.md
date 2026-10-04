@@ -16,9 +16,10 @@ organisation, takes its next `event_seq` (1), creates the account
 channel and the setup row. Concurrent losers hit the singleton key and roll back;
 repeating setup is 404.
 
-`internal/app/setup` checks the configured token and validates all fields
-before using the shared `identity.Hasher`. Its store interface requires atomic
-creation; `postgres.SetupStore` implements it with one transaction for the
+`org.Setup` checks the configured token, then whether setup is open, and
+validates all fields before using the shared `identity.Hasher`. Its
+`org.SetupStore` interface requires atomic creation; `postgres.SetupStore`
+implements it (until step 3.12) with one transaction for the
 organisation, first sequence, owner account, membership (with the owner's
 handle), default channel ([`channels.md`](../domain/channels.md)) and setup marker.
 `cmd/ribbitto` validates `RIBBITTO_SETUP_TOKEN` before opening the database:
@@ -37,7 +38,9 @@ to `/` with 303. Setup and sign-in share the process's single password hasher.
 
 ## Sign-up
 
-`internal/app/signup.Open` gates registration and the sign-in link on
+`internal/app/signup` stays in place until step 3.5b; its `ValidationErrors`
+aliases `org.ValidationErrors`, while its validation remains separate.
+Its `Open` gates registration and the sign-in link on
 `RIBBITTO_SIGNUP=on` and completed setup. Its separate handler and form share
 the process hasher; one transaction reads the setup organisation, takes
 its next sequence first, then inserts the account and member, with the

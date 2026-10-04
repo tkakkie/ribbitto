@@ -20,7 +20,14 @@
 // payload and its routing. AccountCreator and AccountCreatorIn declare the
 // account write setup and sign-up will inject.
 //
+// Setup (NewSetup, SetupInput, SetupResult, SetupStore, ErrSetupToken and
+// ErrSetupCompleted) authorizes and validates installation-wide first-run setup
+// before hashing. ValidationErrors is also aliased by app/signup.
+// Listed exception: setup creates identity's first account and the default
+// channel in the same transaction as the organisation.
+//
 // Org's store implements MembershipStore, HandleStore and the snapshot-bound
 // Directory. orgpg builds the authorizer and handle changer and binds the
-// directory to the caller's snapshot (MembersIn).
+// directory to the caller's snapshot (MembersIn). infra/postgres
+// implements SetupStore, keeping its transaction until 3.12.
 package org

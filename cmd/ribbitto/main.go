@@ -18,12 +18,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -257,7 +257,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	setupStore := postgres.NewSetupStore(pool, appendEvents)
 	var setupService web.SetupService
 	if config.setupToken != "" {
-		setupService = setup.New(setupStore, hasher, config.setupToken)
+		setupService = org.NewSetup(setupStore, hasher, config.setupToken)
 	}
 
 	catalogues, err := i18n.New(slog.Default())

@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -23,7 +23,7 @@ import (
 type fakeSetup struct {
 	open                     bool
 	err, openErr, sessionErr error
-	input                    setup.Input
+	input                    org.SetupInput
 	token                    string
 	account                  domain.ID
 	completed, created       bool
@@ -31,9 +31,9 @@ type fakeSetup struct {
 }
 
 func (f *fakeSetup) Open(context.Context) (bool, error) { return f.open, f.openErr }
-func (f *fakeSetup) Complete(_ context.Context, token string, input setup.Input) (setup.Result, error) {
+func (f *fakeSetup) Complete(_ context.Context, token string, input org.SetupInput) (org.SetupResult, error) {
 	f.completed, f.token, f.input = true, token, input
-	return setup.Result{AccountID: domain.ID{42}}, f.err
+	return org.SetupResult{AccountID: domain.ID{42}}, f.err
 }
 func (f *fakeSetup) Replace(_ context.Context, previous string, account domain.ID) (string, time.Time, error) {
 	f.created, f.previous, f.account = true, previous, account
@@ -48,7 +48,7 @@ type registrationCase struct {
 }
 
 // Setup and sign-up share the response contract and session replacement flow.
-func checkRegistration(t *testing.T, handler http.Handler, tt registrationCase, path string, form url.Values, retainedFields []string, token string, input setup.Input) {
+func checkRegistration(t *testing.T, handler http.Handler, tt registrationCase, path string, form url.Values, retainedFields []string, token string, input org.SetupInput) {
 	t.Helper()
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
 		r := httptest.NewRequest(method, path, strings.NewReader(form.Encode()))
@@ -122,14 +122,14 @@ func TestSetup(t *testing.T) {
 		{"success", &fakeSetup{open: true}, 303, ""},
 		{"disabled", nil, 404, ""},
 		{"completed", &fakeSetup{}, 404, ""},
-		{"completed concurrently", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", setup.ErrCompleted)}, 404, ""},
-		{"wrong token", &fakeSetup{open: true, err: setup.ErrToken}, 422, "The setup token is incorrect."},
-		{"organisation", &fakeSetup{open: true, err: setup.ValidationErrors{"organization_name": errors.New("private detail")}}, 422, "Enter an organisation name of 1–100 printable characters."},
-		{"slug", &fakeSetup{open: true, err: setup.ValidationErrors{"slug": errors.New("private detail")}}, 422, "Use 1–63 lowercase letters, digits or hyphens, starting and ending with a letter or digit."},
-		{"name", &fakeSetup{open: true, err: setup.ValidationErrors{"display_name": errors.New("private detail")}}, 422, "Enter a display name of 1–50 printable characters, at least one of them visible."},
-		{"handle", &fakeSetup{open: true, err: setup.ValidationErrors{"handle": errors.New("private detail")}}, 422, "Use 2–32 characters: lowercase letters, digits, _, . or -"},
-		{"email", &fakeSetup{open: true, err: setup.ValidationErrors{"email": errors.New("private detail")}}, 422, "Enter a valid email address."},
-		{"password", &fakeSetup{open: true, err: setup.ValidationErrors{"password": errors.New("private detail")}}, 422, "Use a password of 15–128 characters."},
+		{"completed concurrently", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", org.ErrSetupCompleted)}, 404, ""},
+		{"wrong token", &fakeSetup{open: true, err: org.ErrSetupToken}, 422, "The setup token is incorrect."},
+		{"organisation", &fakeSetup{open: true, err: org.ValidationErrors{"organization_name": errors.New("private detail")}}, 422, "Enter an organisation name of 1–100 printable characters."},
+		{"slug", &fakeSetup{open: true, err: org.ValidationErrors{"slug": errors.New("private detail")}}, 422, "Use 1–63 lowercase letters, digits or hyphens, starting and ending with a letter or digit."},
+		{"name", &fakeSetup{open: true, err: org.ValidationErrors{"display_name": errors.New("private detail")}}, 422, "Enter a display name of 1–50 printable characters, at least one of them visible."},
+		{"handle", &fakeSetup{open: true, err: org.ValidationErrors{"handle": errors.New("private detail")}}, 422, "Use 2–32 characters: lowercase letters, digits, _, . or -"},
+		{"email", &fakeSetup{open: true, err: org.ValidationErrors{"email": errors.New("private detail")}}, 422, "Enter a valid email address."},
+		{"password", &fakeSetup{open: true, err: org.ValidationErrors{"password": errors.New("private detail")}}, 422, "Use a password of 15–128 characters."},
 		{"busy", &fakeSetup{open: true, err: fmt.Errorf("wrapped: %w", identity.ErrBusy)}, 503, ""},
 		{"availability failure", &fakeSetup{openErr: errors.New("private detail")}, 500, ""},
 		{"completion failure", &fakeSetup{open: true, err: errors.New("private detail")}, 500, ""},
@@ -146,7 +146,7 @@ func TestSetup(t *testing.T) {
 			}
 			checkRegistration(t, handler, tt, "/setup", form,
 				[]string{"organization_name", "slug", "display_name", "handle", "email"}, form.Get("token"),
-				setup.Input{OrganizationName: "Example", Slug: "example", DisplayName: "Owner", Handle: "owner", Email: "owner@example.com", Password: "secret-password"})
+				org.SetupInput{OrganizationName: "Example", Slug: "example", DisplayName: "Owner", Handle: "owner", Email: "owner@example.com", Password: "secret-password"})
 		})
 	}
 }

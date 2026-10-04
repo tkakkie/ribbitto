@@ -6,12 +6,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -67,7 +67,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), nil),
 	}
 	if setupToken != "" {
-		s.Setup, s.SetupSessions = setup.New(postgres.NewSetupStore(pool, appendEvents), hasher, setupToken), sessions
+		s.Setup, s.SetupSessions = org.NewSetup(postgres.NewSetupStore(pool, appendEvents), hasher, setupToken), sessions
 	}
 	if signUp {
 		s.SignUp, s.SetupSessions = signup.New(postgres.NewSetupStore(pool, appendEvents), hasher, true), sessions

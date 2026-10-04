@@ -16,12 +16,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 )
 
@@ -149,8 +149,8 @@ func TestSeed(t *testing.T) {
 			t.Fatal("same flags produced different members, channels, bodies, authors or order")
 		}
 		previous = got
-		if err := run(t.Context(), databaseURL, []string{"-messages", "23"}, io.Discard); !errors.Is(err, setup.ErrCompleted) {
-			t.Fatalf("second run: want setup.ErrCompleted, got %v", err)
+		if err := run(t.Context(), databaseURL, []string{"-messages", "23"}, io.Discard); !errors.Is(err, org.ErrSetupCompleted) {
+			t.Fatalf("second run: want org.ErrSetupCompleted, got %v", err)
 		}
 		if !reflect.DeepEqual(got, readSnapshot(t, pool)) {
 			t.Fatal("refused run changed the database")

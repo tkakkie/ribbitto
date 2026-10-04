@@ -9,14 +9,13 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
-	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
-// SetupStore implements setup.Store with a single transaction per attempt.
+// SetupStore implements org.SetupStore with a single transaction per attempt.
 type SetupStore struct {
 	pool   *pgxpool.Pool
 	events EventAppenderIn
@@ -39,8 +38,8 @@ func (s *SetupStore) Open(ctx context.Context) (bool, error) {
 
 // Create commits the organization, owner, default channel and completion
 // marker together.
-func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, displayName, handle, passwordHash string) (setup.Result, error) {
-	var result setup.Result
+func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, displayName, handle, passwordHash string) (org.SetupResult, error) {
+	var result org.SetupResult
 	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
 		tx := pgxbridge.Tx(platformTx)
 		q := sqlcgen.New(tx)
@@ -73,7 +72,7 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 		if err := q.CompleteSetup(ctx, organization.ID); err != nil {
 			return err
 		}
-		result = setup.Result{OrganizationID: organization.ID.Bytes, AccountID: account.ID.Bytes}
+		result = org.SetupResult{OrganizationID: organization.ID.Bytes, AccountID: account.ID.Bytes}
 		return nil
 	})
 	if err != nil {
@@ -81,22 +80,22 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 		if errors.As(err, &pgErr) && (pgErr.Code == "23505" || pgErr.Code == "23514") {
 			// A concurrent winner may have collided on email or slug first.
 			if open, checkErr := s.Open(ctx); checkErr == nil && !open {
-				return setup.Result{}, setup.ErrCompleted
+				return org.SetupResult{}, org.ErrSetupCompleted
 			}
 			// Match by column prefix: PostgreSQL names a column's second
 			// CHECK "…_check1" (account.email has two), and more may follow.
 			switch name := pgErr.ConstraintName; {
 			case name == "setup_pkey":
-				return setup.Result{}, setup.ErrCompleted
+				return org.SetupResult{}, org.ErrSetupCompleted
 			case strings.HasPrefix(name, "account_email_"):
-				return setup.Result{}, setup.ValidationErrors{"email": errors.New("email is unavailable or invalid")}
+				return org.SetupResult{}, org.ValidationErrors{"email": errors.New("email is unavailable or invalid")}
 			case strings.HasPrefix(name, "organization_slug_"):
-				return setup.Result{}, setup.ValidationErrors{"slug": errors.New("slug is unavailable or invalid")}
+				return org.SetupResult{}, org.ValidationErrors{"slug": errors.New("slug is unavailable or invalid")}
 			case strings.HasPrefix(name, "member_handle_"):
-				return setup.Result{}, setup.ValidationErrors{"handle": errors.New("handle is invalid")}
+				return org.SetupResult{}, org.ValidationErrors{"handle": errors.New("handle is invalid")}
 			}
 		}
-		return setup.Result{}, fmt.Errorf("storing setup transaction: %w", err)
+		return org.SetupResult{}, fmt.Errorf("storing setup transaction: %w", err)
 	}
 	return result, nil
 }

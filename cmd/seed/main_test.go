@@ -15,7 +15,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -23,6 +22,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 type snapshot struct {
@@ -176,7 +176,7 @@ func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 	if err := pool.QueryRow(t.Context(), "SELECT id FROM account WHERE email = 'mira@example.test'").Scan(&accountID); err != nil {
 		t.Fatal(err)
 	}
-	member, err := authz.New(postgres.NewAuthzStore(pool)).Member(t.Context(), &identity.Account{ID: accountID}, "paper-lantern")
+	member, err := org.NewAuthorizer(postgres.NewAuthzStore(pool)).Member(t.Context(), &identity.Account{ID: accountID}, "paper-lantern")
 	if err != nil {
 		t.Fatal(err)
 	}

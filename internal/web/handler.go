@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -77,7 +77,7 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 			case err == nil:
 				http.Redirect(w, r, "/organizations/"+slug+"/", http.StatusSeeOther)
 				return
-			case !errors.Is(err, authz.ErrNotFound):
+			case !errors.Is(err, org.ErrNotFound):
 				serverError(w, r, "finding home organisation", err)
 				return
 			}

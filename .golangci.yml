@@ -191,6 +191,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app$
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/identity$
+            - github.com/tkakkie/ribbitto/internal/org$
             - github.com/tkakkie/ribbitto/internal/realtime$
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/

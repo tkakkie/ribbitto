@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"golang.org/x/net/html"
@@ -33,7 +33,7 @@ type countingMessages struct {
 	err     error
 }
 
-func (c countingMessages) One(_ context.Context, m authz.Membership, channel domain.ID, seq int64) (message.Entry, error) {
+func (c countingMessages) One(_ context.Context, m org.Membership, channel domain.ID, seq int64) (message.Entry, error) {
 	c.calls.Add(1)
 	if c.release != nil {
 		<-c.release
@@ -45,7 +45,7 @@ func (c countingMessages) One(_ context.Context, m authz.Membership, channel dom
 	return message.Entry{Message: domain.Message{ID: domain.ID{7}, TopicID: domain.ID{6}, EventSeq: seq, Body: body}, DisplayName: "Alice", Handle: "alice"}, nil
 }
 
-func (c countingMessages) Many(ctx context.Context, m authz.Membership, channel domain.ID, ids []domain.ID) ([]message.Entry, error) {
+func (c countingMessages) Many(ctx context.Context, m org.Membership, channel domain.ID, ids []domain.ID) ([]message.Entry, error) {
 	entry, err := c.One(ctx, m, channel, 9)
 	entries := make([]message.Entry, 0, len(ids))
 	for _, id := range ids {
@@ -106,8 +106,8 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	}
 	en := inLanguage("en")
 	orgA, orgB := domain.ID{1}, domain.ID{3}
-	memberOf := func(org domain.ID) authz.Membership {
-		return authz.Membership{Organization: domain.Organization{ID: org}}
+	memberOf := func(orgID domain.ID) org.Membership {
+		return org.Membership{Organization: domain.Organization{ID: orgID}}
 	}
 	base := topic.Moved{ChannelID: domain.ID{2}, FromTopicID: domain.ID{1}, ToTopicID: domain.ID{2}}
 	event := eventOf(t, orgA, 9, message.KindPosted, base)

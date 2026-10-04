@@ -10,11 +10,11 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -22,18 +22,18 @@ import (
 
 // ChannelService provides channels within the resolved member's organisation.
 type ChannelService interface {
-	List(context.Context, authz.Membership) ([]domain.Channel, error)
-	Get(context.Context, authz.Membership, domain.ID) (domain.Channel, error)
-	Default(context.Context, authz.Membership) (domain.Channel, error)
-	Create(context.Context, authz.Membership, string) (domain.Channel, error)
+	List(context.Context, org.Membership) ([]domain.Channel, error)
+	Get(context.Context, org.Membership, domain.ID) (domain.Channel, error)
+	Default(context.Context, org.Membership) (domain.Channel, error)
+	Create(context.Context, org.Membership, string) (domain.Channel, error)
 }
 
 // MessageReader provides the channel page and cursor from one snapshot, and
 // one message by sequence or a bounded batch by ID for the stream.
 type MessageReader interface {
-	Many(context.Context, authz.Membership, domain.ID, []domain.ID) ([]message.Entry, error)
-	Page(context.Context, authz.Membership, domain.ID, *domain.ID, *int64) (message.ChannelPage, error)
-	One(context.Context, authz.Membership, domain.ID, int64) (message.Entry, error)
+	Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]message.Entry, error)
+	Page(context.Context, org.Membership, domain.ID, *domain.ID, *int64) (message.ChannelPage, error)
+	One(context.Context, org.Membership, domain.ID, int64) (message.Entry, error)
 }
 
 // TopicReader looks up topics scoped to their organisation and channel.
@@ -53,7 +53,7 @@ type channelPages struct {
 	service   ChannelService
 }
 
-func (p channelPages) home(w http.ResponseWriter, r *http.Request, m authz.Membership) {
+func (p channelPages) home(w http.ResponseWriter, r *http.Request, m org.Membership) {
 	c, err := p.service.Default(r.Context(), m)
 	if err != nil {
 		serverError(w, r, "finding default channel", err)
@@ -62,7 +62,7 @@ func (p channelPages) home(w http.ResponseWriter, r *http.Request, m authz.Membe
 	http.Redirect(w, r, view.ChannelURL(m.Organization.Slug, c.ID), http.StatusSeeOther)
 }
 
-func (p channelPages) show(w http.ResponseWriter, r *http.Request, m authz.Membership) {
+func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Membership) {
 	id, ok := channelID(r)
 	if !ok {
 		http.NotFound(w, r)
@@ -102,7 +102,7 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m authz.Membe
 
 // Preserve channel lookup errors ahead of malformed paging links, without a
 // separate channel read on successfully rendered pages.
-func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m authz.Membership, id domain.ID) {
+func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID) {
 	_, err := p.service.Get(r.Context(), m, id)
 	if err == nil && p.topicID != nil {
 		_, err = p.topics.GetTopic(r.Context(), m.Organization.ID, id, *p.topicID)
@@ -117,7 +117,7 @@ func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m aut
 	}
 }
 
-func (p channelPages) create(w http.ResponseWriter, r *http.Request, m authz.Membership) {
+func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membership) {
 	if !parseForm(w, r) {
 		return
 	}
@@ -146,13 +146,13 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m authz.Mem
 	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message})
 }
 
-func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Membership, id domain.ID, status int, page view.ChannelPage) {
+func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID, status int, page view.ChannelPage) {
 	var before *int64
 	if page.Before > 0 {
 		before = &page.Before
 	}
 	history, err := p.messages.Page(r.Context(), m, id, p.topicID, before)
-	if errors.Is(err, channel.ErrNotFound) || errors.Is(err, authz.ErrNotFound) || errors.Is(err, topic.ErrNotFound) {
+	if errors.Is(err, channel.ErrNotFound) || errors.Is(err, org.ErrNotFound) || errors.Is(err, topic.ErrNotFound) {
 		http.NotFound(w, r)
 		return
 	}
@@ -173,7 +173,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m authz.Mem
 	})
 }
 
-func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membership, id domain.ID) {
+func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID) {
 	c, err := p.service.Get(r.Context(), m, id)
 	if errors.Is(err, channel.ErrNotFound) {
 		http.NotFound(w, r)
@@ -191,7 +191,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membe
 	switch {
 	case errors.Is(err, message.ErrInvalidBody):
 		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
-	case errors.Is(err, channel.ErrNotFound), errors.Is(err, authz.ErrNotFound), errors.Is(err, topic.ErrNotFound):
+	case errors.Is(err, channel.ErrNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, topic.ErrNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member.
 		http.NotFound(w, r)
@@ -205,7 +205,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m authz.Membe
 }
 
 // Enhanced posts never replace history or the connection's snapshot cursor.
-func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m authz.Membership, c domain.Channel, status int, page view.ChannelPage) {
+func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c domain.Channel, status int, page view.ChannelPage) {
 	if r.Header.Get("HX-Request") == "true" && p.topicID == nil {
 		page.Organization, page.Current = m.Organization, c
 		templ.Handler(view.MessageComposer(page), templ.WithStatus(status)).ServeHTTP(w, r)

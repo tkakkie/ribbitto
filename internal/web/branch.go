@@ -8,24 +8,24 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
 // Branching moves selected messages to another topic of the channel.
 type Branching interface {
-	Branch(ctx context.Context, m authz.Membership, channelID domain.ID, b topic.Branch, notice func(domain.Topic) string) (domain.Topic, error)
+	Branch(ctx context.Context, m org.Membership, channelID domain.ID, b topic.Branch, notice func(domain.Topic) string) (domain.Topic, error)
 }
 
 // branch serves POST …/channels/{channelID}/branch. The form names the
 // messages (message, repeated), the topic they are expected in (from), and
 // the destination: an existing topic (to) or a new one (name). Success is
 // 303 to the destination's topic view (HX-Redirect for enhanced posts).
-func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m authz.Membership) {
+func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membership) {
 	id, ok := channelID(r)
 	if !ok || p.branching == nil {
 		http.NotFound(w, r)
@@ -90,7 +90,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m authz.Mem
 		p.branchError(w, r, m, id, 422, "topic.branch_name_taken")
 	case errors.Is(err, topic.ErrInvalidBranch):
 		p.branchError(w, r, m, id, 422, "topic.branch_invalid")
-	case errors.Is(err, topic.ErrNotFound), errors.Is(err, channel.ErrNotFound), errors.Is(err, authz.ErrNotFound):
+	case errors.Is(err, topic.ErrNotFound), errors.Is(err, channel.ErrNotFound), errors.Is(err, org.ErrNotFound):
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "branching messages", err)
@@ -105,7 +105,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m authz.Mem
 	}
 }
 
-func (p channelPages) branchError(w http.ResponseWriter, r *http.Request, m authz.Membership, id domain.ID, status int, key string) {
+func (p channelPages) branchError(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID, status int, key string) {
 	// Scope error responses too; invalid input must not reveal another channel.
 	if _, err := p.service.Get(r.Context(), m, id); err != nil {
 		if errors.Is(err, channel.ErrNotFound) {

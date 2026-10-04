@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // Two source posts and their notices, plus a full page and ten direct posts.
 const topicFixtureMessages = 4 + message.PageSize + 10
 
-func seedTopics(ctx context.Context, posts *message.Service, branches *topic.Brancher, members map[string]authz.Membership, general domain.Channel, lines []scriptMessage) error {
+func seedTopics(ctx context.Context, posts *message.Service, branches *topic.Brancher, members map[string]org.Membership, general domain.Channel, lines []scriptMessage) error {
 	for i, name := range []string{"rooftop-garden", "garden-time"} {
 		// Extra source posts keep even -messages 1 intact in the default topic.
 		line := lines[i*4]

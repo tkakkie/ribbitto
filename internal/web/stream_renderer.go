@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -25,7 +25,7 @@ import (
 // streams of different members share it, and each language has its own.
 type messageRenderer struct {
 	messages   liveMessages
-	membership authz.Membership
+	membership org.Membership
 	renders    *realtime.Cache[renderKey, realtime.Outgoing]
 }
 
@@ -33,8 +33,8 @@ type messageRenderer struct {
 // post, and a move's batch by ID. The channel page's MessageReader provides
 // both.
 type liveMessages interface {
-	One(context.Context, authz.Membership, domain.ID, int64) (message.Entry, error)
-	Many(context.Context, authz.Membership, domain.ID, []domain.ID) ([]message.Entry, error)
+	One(context.Context, org.Membership, domain.ID, int64) (message.Entry, error)
+	Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]message.Entry, error)
 }
 
 type renderKey struct {

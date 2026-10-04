@@ -16,7 +16,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
@@ -25,6 +24,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -264,7 +264,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	authorizer := authz.New(postgres.NewAuthzStore(pool))
+	authorizer := org.NewAuthorizer(postgres.NewAuthzStore(pool))
 	// A nil hub must stay a nil Notifier, not a typed nil in either interface.
 	var postingNotifier message.Notifier
 	var branchNotifier topic.Notifier

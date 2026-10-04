@@ -5,23 +5,23 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
-// Authorizer decides organisation access (authz.Authorizer).
+// Authorizer decides organisation access (org.Authorizer).
 type Authorizer interface {
-	Member(ctx context.Context, account *identity.Account, slug string) (authz.Membership, error)
+	Member(ctx context.Context, account *identity.Account, slug string) (org.Membership, error)
 	HomeSlug(ctx context.Context, account *identity.Account) (string, error)
 }
 
 // orgRoute is a page under /organizations/{slug}/. Its handler receives
-// the membership that authz resolved and never reads {slug} itself.
+// the membership that org.Authorizer resolved and never reads {slug} itself.
 type orgRoute struct {
 	method, path string // path below /organizations/{slug}
-	handle       func(w http.ResponseWriter, r *http.Request, m authz.Membership)
+	handle       func(w http.ResponseWriter, r *http.Request, m org.Membership)
 }
 
 // orgRoutes lists every route under /organizations/{slug}/. The same list
@@ -46,7 +46,7 @@ func orgRoutes(pages *pageRenderer, service ChannelService, topics TopicReader, 
 }
 
 // registerOrgRoutes puts every route under /organizations/{slug}/ behind
-// authz. A signed-out request gets 404 too, not a redirect to sign-in:
+// org. A signed-out request gets 404 too, not a redirect to sign-in:
 // a redirect would reveal which slugs exist.
 func registerOrgRoutes(routes sessionMux, authorizer Authorizer, table []orgRoute) {
 	for _, route := range table {
@@ -56,7 +56,7 @@ func registerOrgRoutes(routes sessionMux, authorizer Authorizer, table []orgRout
 				account = &a
 			}
 			membership, err := authorizer.Member(r.Context(), account, r.PathValue("slug"))
-			if errors.Is(err, authz.ErrNotFound) {
+			if errors.Is(err, org.ErrNotFound) {
 				http.NotFound(w, r)
 				return
 			}

@@ -109,7 +109,7 @@ func topicFromRow(row sqlcgen.Topic) conversation.Topic {
 	return conversation.Topic{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, Name: row.Name.String, IsDefault: row.IsDefault, CreatedAt: row.CreatedAt.Time}
 }
 
-// LookupTopics implements topic.Directory without per-message queries.
+// LookupTopics implements conversation.TopicDirectory without per-message queries.
 func (s *TopicStore) LookupTopics(ctx context.Context, organizationID, channelID domain.ID, ids []domain.ID) (map[domain.ID]conversation.Topic, error) {
 	rows, err := s.queries.LookupTopics(ctx, sqlcgen.LookupTopicsParams{
 		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true},

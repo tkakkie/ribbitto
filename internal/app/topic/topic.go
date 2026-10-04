@@ -19,9 +19,3 @@ type Store interface {
 	GetDefaultTopic(ctx context.Context, organizationID, channelID domain.ID) (conversation.Topic, error)
 	ListTopics(ctx context.Context, organizationID, channelID domain.ID, limit int) ([]conversation.Topic, error)
 }
-
-// Directory resolves requested topic IDs within an organisation and channel.
-// Missing and out-of-scope topics are omitted.
-type Directory interface {
-	LookupTopics(context.Context, domain.ID, domain.ID, []domain.ID) (map[domain.ID]conversation.Topic, error)
-}

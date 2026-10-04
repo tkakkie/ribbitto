@@ -1,40 +1,45 @@
-package message
+package conversation
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/topic"
-	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // Entry is a stored message with its current author names and topic label.
 type Entry struct {
-	conversation.Message
+	Message
 	DisplayName, Handle string
 	TopicName           string
 	DefaultTopic        bool
 }
 
 // History reads messages within one organisation and channel. Lists are
-// newest first, optionally filtered by topic; GetMessage returns conversation.ErrMessageNotFound
-// when the scoped key is absent. GetMessages returns the requested IDs only,
+// newest first, optionally filtered by topic; GetMessage returns
+// ErrMessageNotFound when the scoped key is absent. GetMessages returns the requested IDs only,
 // newest first; missing or out-of-scope IDs are omitted.
 type History interface {
-	GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]conversation.Message, error)
-	ListMessagesBefore(context.Context, domain.ID, domain.ID, *domain.ID, *int64, int32) ([]conversation.Message, error)
-	GetMessage(context.Context, domain.ID, domain.ID, int64) (conversation.Message, error)
+	GetMessages(context.Context, kernel.ID, kernel.ID, []kernel.ID) ([]Message, error)
+	ListMessagesBefore(context.Context, kernel.ID, kernel.ID, *kernel.ID, *int64, int32) ([]Message, error)
+	GetMessage(context.Context, kernel.ID, kernel.ID, int64) (Message, error)
 }
 
-// Reader composes history with org, identity and topic's exported directory APIs.
+// TopicDirectory resolves requested topic IDs within an organisation and
+// channel in one batch, so a page costs one topic query rather than one per
+// message. Missing and out-of-scope topics are omitted.
+type TopicDirectory interface {
+	LookupTopics(ctx context.Context, organizationID, channelID kernel.ID, topicIDs []kernel.ID) (map[kernel.ID]Topic, error)
+}
+
+// Reader composes history with the topic labels and with the author lookups
+// from org and identity.
 type Reader struct {
 	History  History
-	Members  org.Directory
-	Accounts identity.Directory
-	Topics   topic.Directory
+	Members  MemberDirectory
+	Accounts AccountDirectory
+	Topics   TopicDirectory
 }
 
 // PageSize is how many messages one page of history holds.
@@ -51,10 +56,10 @@ type Page struct {
 // ChannelPage is a channel, its sidebar and history read in one snapshot.
 type ChannelPage struct {
 	Page
-	Topic    *conversation.Topic
-	Topics   []conversation.Topic
-	Current  conversation.Channel
-	Channels []conversation.Channel
+	Topic    *Topic
+	Topics   []Topic
+	Current  Channel
+	Channels []Channel
 	// EventCursor is the snapshot's organisation sequence; nil on older pages.
 	EventCursor *int64
 }
@@ -62,10 +67,10 @@ type ChannelPage struct {
 // Before returns the page of messages older than event_seq before, or the
 // latest page when before is nil. A nil topicID includes every topic.
 // The caller resolves membership and the
-// channel through org.Authorizer and channel before reading. before is only an upper
+// channel through org.Authorizer and Channels before reading. before is only an upper
 // bound: the query is scoped to the membership's organisation and the
 // channel, so a value taken from another channel cannot reach its messages.
-func (s Reader) Before(ctx context.Context, m org.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (Page, error) {
+func (s Reader) Before(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, before *int64) (Page, error) {
 	// One extra row says whether an older page exists without a count query.
 	messages, err := s.History.ListMessagesBefore(ctx, m.Organization.ID, channelID, topicID, before, PageSize+1)
 	if err != nil {
@@ -83,8 +88,8 @@ func (s Reader) Before(ctx context.Context, m org.Membership, channelID domain.I
 }
 
 // entries adds topic labels and author names, returning messages oldest first.
-func (s Reader) entries(ctx context.Context, m org.Membership, channelID domain.ID, messages []conversation.Message) ([]Entry, error) {
-	ids := make([]domain.ID, 0, len(messages))
+func (s Reader) entries(ctx context.Context, m org.Membership, channelID kernel.ID, messages []Message) ([]Entry, error) {
+	ids := make([]kernel.ID, 0, len(messages))
 	for _, msg := range messages {
 		ids = append(ids, msg.MemberID)
 	}

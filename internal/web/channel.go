@@ -31,9 +31,9 @@ type ChannelService interface {
 // MessageReader provides the channel page and cursor from one snapshot, and
 // one message by sequence or a bounded batch by ID for the stream.
 type MessageReader interface {
-	Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]message.Entry, error)
-	Page(context.Context, org.Membership, domain.ID, *domain.ID, *int64) (message.ChannelPage, error)
-	One(context.Context, org.Membership, domain.ID, int64) (message.Entry, error)
+	Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]conversation.Entry, error)
+	Page(context.Context, org.Membership, domain.ID, *domain.ID, *int64) (conversation.ChannelPage, error)
+	One(context.Context, org.Membership, domain.ID, int64) (conversation.Entry, error)
 }
 
 // TopicReader looks up a topic of a channel in the resolved member's
@@ -271,7 +271,7 @@ func viewTopics(topics []conversation.Topic) []view.Topic {
 // viewMessage converts a history entry into what MessageItem renders, for
 // the page and the stream alike; slug is the organisation's, for the label's
 // link to the topic view.
-func viewMessage(slug string, entry message.Entry) view.Message {
+func viewMessage(slug string, entry conversation.Entry) view.Message {
 	return view.Message{
 		ID: entry.ID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,

@@ -1,4 +1,4 @@
-package message_test
+package conversation_test
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -86,12 +85,12 @@ func TestOne(t *testing.T) {
 			msg := conversation.Message{ID: kernel.ID{4}, OrganizationID: kernel.ID{1}, ChannelID: kernel.ID{2}, MemberID: kernel.ID{3}, Body: "body", EventSeq: 9}
 			f := &singleMessage{t: t, msg: msg, readErr: tt.readErr, memberErr: tt.memberErr, nameErr: tt.nameErr, missingMember: tt.missingMember, missingName: tt.missingName}
 			membership := org.Membership{Organization: org.Organization{ID: msg.OrganizationID}}
-			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).One(t.Context(), membership, msg.ChannelID, msg.EventSeq)
+			got, err := (conversation.Reader{History: f, Members: f, Accounts: f, Topics: f}).One(t.Context(), membership, msg.ChannelID, msg.EventSeq)
 			if !reflect.DeepEqual(f.calls, tt.wantCalls) {
 				t.Fatalf("calls = %v, want %v", f.calls, tt.wantCalls)
 			}
 			if tt.wantError != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantError) || got != (message.Entry{}) {
+				if err == nil || !strings.Contains(err.Error(), tt.wantError) || got != (conversation.Entry{}) {
 					t.Fatalf("entry = %+v, error = %v; want zero entry and %q", got, err, tt.wantError)
 				}
 				for _, cause := range []error{tt.readErr, tt.memberErr, tt.nameErr} {
@@ -101,7 +100,7 @@ func TestOne(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || got != (message.Entry{Message: msg, DisplayName: "Current Name", Handle: "current-handle"}) {
+			if err != nil || got != (conversation.Entry{Message: msg, DisplayName: "Current Name", Handle: "current-handle"}) {
 				t.Fatalf("entry = %+v, error = %v", got, err)
 			}
 		})
@@ -157,7 +156,7 @@ func (f *partialBatch) LookupTopics(context.Context, kernel.ID, kernel.ID, []ker
 func TestManyIncompleteBatch(t *testing.T) {
 	f := &partialBatch{t: t, found: []conversation.Message{{ID: kernel.ID{5}, OrganizationID: kernel.ID{1}, ChannelID: kernel.ID{2}, MemberID: kernel.ID{3}}}}
 	membership := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
-	got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).Many(t.Context(), membership, kernel.ID{2}, []kernel.ID{{4}, {5}})
+	got, err := (conversation.Reader{History: f, Members: f, Accounts: f, Topics: f}).Many(t.Context(), membership, kernel.ID{2}, []kernel.ID{{4}, {5}})
 	if !errors.Is(err, conversation.ErrMessageNotFound) || got != nil {
 		t.Fatalf("entries = %+v, error = %v; want nil and ErrMessageNotFound", got, err)
 	}

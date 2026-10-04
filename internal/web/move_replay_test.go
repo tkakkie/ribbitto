@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -149,7 +148,7 @@ func (p *topicMovePage) deliver(t *testing.T, out realtime.Outgoing) {
 	p.items = applyTopic(t, p.items, out, p.selected, p.oldest)
 }
 
-func (p *topicMovePage) loadOlder(t *testing.T, selected conversation.Topic, older message.ChannelPage) {
+func (p *topicMovePage) loadOlder(t *testing.T, selected conversation.Topic, older conversation.ChannelPage) {
 	t.Helper()
 	p.items = append(renderedPage(t, older.Entries), p.items...)
 	p.oldest = topicPageBoundary(t, selected, older, p.oldest)
@@ -173,7 +172,7 @@ func itemAttribute(t *testing.T, item, key string) string {
 	return attr(find(doc, atom.Li), key)
 }
 
-func renderedPage(t *testing.T, entries []message.Entry) []string {
+func renderedPage(t *testing.T, entries []conversation.Entry) []string {
 	t.Helper()
 	var items []string
 	for _, entry := range entries {
@@ -313,7 +312,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	}
 }
 
-func topicPageBoundary(t *testing.T, destination conversation.Topic, page message.ChannelPage, before int64) int64 {
+func topicPageBoundary(t *testing.T, destination conversation.Topic, page conversation.ChannelPage, before int64) int64 {
 	t.Helper()
 	selected := viewTopic(destination)
 	model := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"}, Topic: &selected, Older: page.Older, Before: before}
@@ -351,7 +350,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 	}{
 		{"empty", 3, false},
 		{"fully loaded", 6, false},
-		{"partially loaded", message.PageSize + 4, true},
+		{"partially loaded", conversation.PageSize + 4, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := t.Context()
@@ -401,7 +400,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 				items = applyTopic(t, items, delivered.events[0], destination.ID, boundary)
 			}
 			if tt.older {
-				if len(items) != message.PageSize+2 {
+				if len(items) != conversation.PageSize+2 {
 					t.Fatal("move must insert only the two items within the loaded range")
 				}
 				older, err := reader.Page(ctx, m, f.Channel.ID, &destination.ID, &boundary)
@@ -434,7 +433,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 
 func TestMoveCrossesLoadOlder(t *testing.T) {
 	t.Parallel()
-	for _, count := range []int{message.PageSize + 4, 2*message.PageSize + 4} {
+	for _, count := range []int{conversation.PageSize + 4, 2*conversation.PageSize + 4} {
 		for _, stale := range []bool{true, false} {
 			t.Run(fmt.Sprintf("count=%d/stale=%t", count, stale), func(t *testing.T) {
 				ctx := t.Context()
@@ -457,7 +456,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 						if selected == nil {
 							source.ID = posted.TopicID
 							// One below the next page, one in it, one already loaded.
-							if i == 0 || i == count-message.PageSize-2 || i == count-1 {
+							if i == 0 || i == count-conversation.PageSize-2 || i == count-1 {
 								moved = append(moved, posted.ID)
 							}
 						}
@@ -465,7 +464,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				}
 				topics := []conversation.Topic{source, destination}
 				pages := make([]topicMovePage, len(topics))
-				responses := make([]message.ChannelPage, len(topics))
+				responses := make([]conversation.ChannelPage, len(topics))
 				var cursor int64
 				for i, selected := range topics {
 					page, err := reader.Page(ctx, m, f.Channel.ID, &selected.ID, nil)
@@ -514,10 +513,10 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 						if len(page.moves) != 0 || page.loading {
 							t.Fatal("completed history retained moves")
 						}
-						if (page.oldest == 0) != (count == message.PageSize+4) {
+						if (page.oldest == 0) != (count == conversation.PageSize+4) {
 							t.Fatalf("unexpected history bound %d", page.oldest)
 						}
-						var entries []message.Entry
+						var entries []conversation.Entry
 						var before *int64
 						for {
 							reloaded, err := reader.Page(ctx, m, f.Channel.ID, &selected.ID, before)
@@ -530,7 +529,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 							}
 							before = &reloaded.Entries[0].EventSeq
 						}
-						entries = slices.DeleteFunc(entries, func(e message.Entry) bool { return e.EventSeq < page.oldest })
+						entries = slices.DeleteFunc(entries, func(e conversation.Entry) bool { return e.EventSeq < page.oldest })
 						if !reflect.DeepEqual(page.items, renderedPage(t, entries)) {
 							t.Fatal("move crossing history differs from reload within the new bound")
 						}
@@ -564,7 +563,7 @@ func TestTopicMoveModelRequestScope(t *testing.T) {
 		t.Fatal("failed request retained moves, or retained a move between requests")
 	}
 	page.loading = true
-	page.loadOlder(t, conversation.Topic{ID: to}, message.ChannelPage{})
+	page.loadOlder(t, conversation.Topic{ID: to}, conversation.ChannelPage{})
 	if len(page.items) != 3 {
 		t.Fatal("later request reapplied the failed request's move below the old bound")
 	}

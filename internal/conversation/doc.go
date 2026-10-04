@@ -9,9 +9,14 @@
 // ErrTopicNameTaken; Topics, NewTopics and TopicReader, the topic lookup
 // scoped by a membership that web's stream and paging links use;
 // Message, ValidateMessageBody, ErrInvalidBody and ErrMessageNotFound;
-// MemberDirectoryIn and AccountDirectoryIn, the page reader's author lookups
-// from org and identity, bound to the caller's snapshot by closures in cmd/*
-// and the tests; and the two event kinds conversation publishes and so owns.
+// Reader, the history reader: Before reads a Page below an event_seq bound
+// with an optional topic filter, One an Entry by event_seq and Many a
+// bounded ID batch, all scoped by organisation and channel, over History and
+// TopicDirectory (one topic batch per page); PageSize and ChannelPage, the
+// page snapshot's result; MemberDirectoryIn and AccountDirectoryIn, the
+// reader's author lookups from org and identity, bound to the caller's
+// snapshot by closures in cmd/* and the tests; and the two event kinds
+// conversation publishes and so owns.
 // KindPosted with Posted, EncodePosted, DecodePosted and RoutePosted is
 // message.posted, its payload and its routing; KindMessagesMoved with Moved,
 // EncodeMoved, DecodeMoved and RouteMoved is messages.moved. conversationpg

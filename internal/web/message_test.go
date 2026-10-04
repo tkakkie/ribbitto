@@ -35,11 +35,11 @@ type fakeMessages struct {
 
 // One is not used by handler tests; the stream is tested end to end.
 func (fakeMessages) Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]message.Entry, error) {
-	return nil, message.ErrNotFound
+	return nil, conversation.ErrMessageNotFound
 }
 
 func (fakeMessages) One(context.Context, org.Membership, domain.ID, int64) (message.Entry, error) {
-	return message.Entry{}, message.ErrNotFound
+	return message.Entry{}, conversation.ErrMessageNotFound
 }
 
 func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, topicID *domain.ID, before *int64) (message.ChannelPage, error) {
@@ -71,8 +71,8 @@ func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, 
 
 func populatedMessages() fakeMessages {
 	return fakeMessages{entries: []message.Entry{
-		{Message: domain.Message{ID: domain.ID{8}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x31}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author", TopicName: "<design>مرحبا"},
-		{Message: domain.Message{ID: domain.ID{9}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x32}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy", DefaultTopic: true},
+		{Message: conversation.Message{ID: domain.ID{8}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x31}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author", TopicName: "<design>مرحبا"},
+		{Message: conversation.Message{ID: domain.ID{9}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x32}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy", DefaultTopic: true},
 	}}
 }
 
@@ -194,9 +194,9 @@ type postingStore struct {
 	org, channel, member domain.ID
 }
 
-func (s *postingStore) PostToTopic(_ context.Context, org, ch, member domain.ID, _ *domain.ID, body string) (domain.Message, error) {
+func (s *postingStore) PostToTopic(_ context.Context, org, ch, member domain.ID, _ *domain.ID, body string) (conversation.Message, error) {
 	s.org, s.channel, s.member, s.body = org, ch, member, body
-	return domain.Message{ID: s.id, Body: body}, s.err
+	return conversation.Message{ID: s.id, Body: body}, s.err
 }
 
 func testPoster() *message.Service { return message.New(&postingStore{}) }
@@ -323,7 +323,7 @@ func TestMessagePagingHandler(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64
-			reader := fakeMessages{entries: []message.Entry{{Message: domain.Message{ID: domain.ID{8}, TopicID: domain.ID{5}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
+			reader := fakeMessages{entries: []message.Entry{{Message: conversation.Message{ID: domain.ID{8}, TopicID: domain.ID{5}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages = reader }))
 			if err != nil {
 				t.Fatal(err)

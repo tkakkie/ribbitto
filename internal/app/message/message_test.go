@@ -21,12 +21,12 @@ type store struct {
 	returned             bool
 }
 
-func (s *store) PostToTopic(_ context.Context, org, ch, member domain.ID, topicID *domain.ID, body string) (domain.Message, error) {
+func (s *store) PostToTopic(_ context.Context, org, ch, member domain.ID, topicID *domain.ID, body string) (conversation.Message, error) {
 	defer func() { s.returned = true }()
 	s.calls++
 	s.topicID = topicID
 	s.org, s.channel, s.member, s.body = org, ch, member, body
-	return domain.Message{OrganizationID: org, ChannelID: ch, MemberID: member, Body: body, EventSeq: 7}, s.err
+	return conversation.Message{OrganizationID: org, ChannelID: ch, MemberID: member, Body: body, EventSeq: 7}, s.err
 }
 
 type notifierFunc func(domain.ID, int64)
@@ -42,7 +42,7 @@ func TestPostNotification(t *testing.T) {
 		wantCalls         int
 	}{
 		{name: "committed", body: "hello", wantCalls: 1},
-		{name: "invalid body", body: " ", wantErr: message.ErrInvalidBody},
+		{name: "invalid body", body: " ", wantErr: conversation.ErrInvalidBody},
 		{name: "store error", body: "hello", storeErr: storeErr, wantErr: storeErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -69,15 +69,15 @@ func TestPost(t *testing.T) {
 		storeErr, wantErr error
 	}{
 		{name: "normalised", body: "  hello\r\nworld\t", want: "hello\nworld"},
-		{name: "empty", body: " \n ", wantErr: message.ErrInvalidBody},
-		{name: "too long", body: strings.Repeat("界", 4001), wantErr: message.ErrInvalidBody},
-		{name: "control character", body: "a\x00b", wantErr: message.ErrInvalidBody},
+		{name: "empty", body: " \n ", wantErr: conversation.ErrInvalidBody},
+		{name: "too long", body: strings.Repeat("界", 4001), wantErr: conversation.ErrInvalidBody},
+		{name: "control character", body: "a\x00b", wantErr: conversation.ErrInvalidBody},
 		{name: "channel outside the organisation", body: "hi", storeErr: conversation.ErrChannelNotFound, wantErr: conversation.ErrChannelNotFound},
 	} {
 		for _, topicID := range []*domain.ID{nil, {4}} {
 			t.Run(tt.name, func(t *testing.T) {
 				s := &store{err: tt.storeErr}
-				var got domain.Message
+				var got conversation.Message
 				var err error
 				if topicID == nil {
 					got, err = message.New(s).Post(t.Context(), m, domain.ID{3}, tt.body)
@@ -89,7 +89,7 @@ func TestPost(t *testing.T) {
 				}
 				// An invalid body never reaches the store (and takes no sequence);
 				// the organisation and author always come from the membership.
-				reached := !errors.Is(tt.wantErr, message.ErrInvalidBody)
+				reached := !errors.Is(tt.wantErr, conversation.ErrInvalidBody)
 				if reached != (s.calls == 1) || reached && (s.org != m.Organization.ID || s.member != m.Member.ID || s.channel != (domain.ID{3}) || s.topicID != topicID) {
 					t.Fatalf("store: %+v", s)
 				}

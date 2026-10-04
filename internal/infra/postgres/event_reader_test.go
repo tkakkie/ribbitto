@@ -253,7 +253,7 @@ func TestEventsAfterOneSnapshot(t *testing.T) {
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1 AND seq = $2", f.OrganizationID, first.EventSeq)
 	requireNoError(t, err)
-	var third domain.Message
+	var third conversation.Message
 	commit := func() {
 		var err error
 		third, err = posting.Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "third")

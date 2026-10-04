@@ -15,6 +15,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -275,7 +276,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 			membership := m
 			membership.Organization.ID = tt.org
 			entries, err := reader.Many(ctx, membership, tt.channel, tt.ids)
-			if !errors.Is(err, message.ErrNotFound) || len(entries) != 0 {
+			if !errors.Is(err, conversation.ErrMessageNotFound) || len(entries) != 0 {
 				t.Fatalf("batch escaped scope or returned partial data: %+v, %v", entries, err)
 			}
 		})

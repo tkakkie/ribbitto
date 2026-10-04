@@ -19,7 +19,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`; `db/queries/identity/`); `web` `signin.go` | `account`, `session` |
 | `org`: organisations, memberships, authorisation, first-run setup, sign-up | the completed `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres` and wiring `orgpg`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel` (Service and Store); `conversation` (Channel, its name rule, errors and default name); `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
-| `message`: plain-text posts and history | `app/message`; `conversation/posted.go` (`message.posted`); `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
+| `message`: plain-text posts and history | `app/message`; `conversation/posted.go` (`message.posted`); `conversation/message.go` (type, body rule and errors); `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
 | `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic`; `conversation/moved.go` (`messages.moved`); `domain/topic.go`; `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
 | `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `infra/postgres/event_appender.go` (the flows' appender interface); `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
 
@@ -41,7 +41,7 @@ composite foreign keys including `organization_id`. History uses one
 newest-first keyset query, `ListMessagesBefore`, with a nullable upper
 sequence bound for the latest page, an optional scoped topic filter passed
 explicitly through `Reader.Before` and `History`, and no author joins. `Reader.One` reads
-one message by organisation, channel and `event_seq`, returning `ErrNotFound`
+one message by organisation, channel and `event_seq`, returning `conversation.ErrMessageNotFound`
 for a missing or out-of-scope message. The use cases
 (`app/channel`, `app/message`) exist. `message.Reader` resolves authors through
 org's exported `org.Directory.LookupMembers` (member IDs filtered by

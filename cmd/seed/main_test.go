@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
@@ -127,7 +128,7 @@ func TestSeed(t *testing.T) {
 		counts := map[string]int{}
 		long, tabs, combining := false, false, false
 		for i, post := range got.Messages[:4*count] {
-			body, err := domain.ValidateMessageBody(post.Body)
+			body, err := conversation.ValidateMessageBody(post.Body)
 			if err != nil || body != post.Body || post.Seq != int64(6+i) || post.Topic != "" {
 				t.Fatalf("invalid message or sequence at %d: %v", i, err)
 			}

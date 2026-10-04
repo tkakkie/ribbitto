@@ -42,7 +42,7 @@ func (c countingMessages) One(_ context.Context, m org.Membership, channel domai
 		return message.Entry{}, c.err
 	}
 	body := fmt.Sprintf("org %v channel %v seq %d", m.Organization.ID, channel, seq)
-	return message.Entry{Message: domain.Message{ID: domain.ID{7}, TopicID: domain.ID{6}, EventSeq: seq, Body: body}, DisplayName: "Alice", Handle: "alice"}, nil
+	return message.Entry{Message: conversation.Message{ID: domain.ID{7}, TopicID: domain.ID{6}, EventSeq: seq, Body: body}, DisplayName: "Alice", Handle: "alice"}, nil
 }
 
 func (c countingMessages) Many(ctx context.Context, m org.Membership, channel domain.ID, ids []domain.ID) ([]message.Entry, error) {

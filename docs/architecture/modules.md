@@ -51,6 +51,10 @@ the temporary implementation behind it.
 `app/message.Reader` keeps its `org.Directory` field until step 4, when
 conversation declares its own.
 
+Sign-up's database tests live in `internal/org/orgpg` since 3.11b, with
+local raw-SQL fixtures and event-log assertions. Their setup organisation
+still comes from `infra`'s setup store until 3.12.
+
 Inside `conversation`, a channel's default topic, branching's moves and
 notice, and the channel and topic reads of posting and the page snapshot
 are direct calls in one transaction or snapshot (decision 27).

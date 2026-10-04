@@ -1,4 +1,4 @@
-package postgres_test
+package orgpg_test
 
 import (
 	"context"
@@ -10,11 +10,11 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -31,10 +31,10 @@ func TestSignUp(t *testing.T) {
 		t.Fatalf("before setup: %v", err)
 	}
 	// Insert the other organisation first to catch selection by creation order.
-	other := pgtest.Organization(t, pool, "other", "Other", 0)
+	other := fixtureOrganization(t, pool, "other", "Other", 0)
 	// A handle is unique only within its organisation: "alice" is taken in the other one.
-	otherAccount := pgtest.Account(t, pool, "other@example.org", "Other")
-	pgtest.Member(t, pool, other, otherAccount, org.RoleOwner, "alice", 1)
+	otherAccount := fixtureAccount(t, pool, "other@example.org", "Other")
+	fixtureMember(t, pool, other, otherAccount, org.RoleOwner, "alice", 1)
 	result, err := postgres.NewSetupStore(pool, appendEvents).Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
 	requireNoError(t, err)
 	id, err := service.SignUp(ctx, "Alice", "alice", "alice@example.org", "long enough password")
@@ -50,7 +50,7 @@ func TestSignUp(t *testing.T) {
 		Role, Handle   string
 		JoinedEventSeq int64
 	}
-	err = pool.QueryRow(ctx, "SELECT role, handle, joined_event_seq FROM member WHERE organization_id = $1 AND account_id = $2", organizationID, account.ID).Scan(&member.Role, &member.Handle, &member.JoinedEventSeq)
+	err = pool.QueryRow(ctx, "SELECT role, handle, joined_event_seq FROM member WHERE organization_id=$1 AND account_id=$2", organizationID, account.ID).Scan(&member.Role, &member.Handle, &member.JoinedEventSeq)
 	requireNoError(t, err)
 	if account.Email != "alice@example.org" || member.Role != "member" || member.JoinedEventSeq != 2 || member.Handle != "alice" {
 		t.Fatalf("account/member: %+v %+v", account, member)
@@ -144,8 +144,9 @@ func TestSignUpHandleConflicts(t *testing.T) {
 	}
 }
 
-func signupAccount(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
-func signupEvents(tx platform.Tx) org.EventAppender   { return realtimepg.AppenderIn(tx) }
+func signupAccount(tx platform.Tx) org.AccountCreator    { return identitypg.AccountCreatorIn(tx) }
+func signupEvents(tx platform.Tx) org.EventAppender      { return realtimepg.AppenderIn(tx) }
+func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
 
 type rawSignupAccount struct {
 	org.AccountCreator

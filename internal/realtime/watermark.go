@@ -18,9 +18,9 @@ const WatermarkInterval = 5 * time.Second
 // hold a pool connection or delay the following checks.
 const watermarkCheckTimeout = 2 * time.Second
 
-// SequenceReader reads organisations' committed event sequences (the
-// shared-kernel organization.event_seq). infra/postgres implements it
-// until org's columns move (step 3).
+// SequenceReader reads organisations' committed event sequences (org's
+// organization.event_seq). infra/postgres implements it until org's
+// columns move (step 3).
 type SequenceReader interface {
 	CommittedSequences(ctx context.Context, organizations []kernel.ID) (map[kernel.ID]int64, error)
 }

@@ -40,7 +40,8 @@ fails `make check`:
 - `domain`, `identity`, `app`, `infra/postgres` and `realtime` cannot import
   `github.com/a-h/templ` (including sub-packages) or `html/template`;
 - `kernel` imports nothing internal; `platform` only `kernel`; `app`,
-  `infra/postgres` and `web` import only a module's root;
+  `infra/postgres` and `web` import a module's root, never its store or
+  wiring;
 - a module's wiring (`identitypg`, `realtimepg`) is imported only by `cmd/*` and tests,
   and its store only by its wiring and the store's own tests;
 - only stores (`**/internal/postgres/**`) import `platform/postgres/pgxbridge`,
@@ -51,7 +52,9 @@ fails `make check`:
   `cmd/ribbitto` — **this also applies to test files**, apart from the
   `internal/infra/postgres` tests that migrate to a target version, until
   their module moves;
-- otherwise test files may import any package.
+- otherwise test files may import any package, but the store and bridge
+  rules above bind them too (only the platform's `tx_test.go` is exempt from
+  the bridge rule).
 
 This section and `.golangci.yml` must agree; change them together.
 

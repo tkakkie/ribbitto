@@ -5,5 +5,7 @@
 // EventBoundsIn and EventSequences read org's cursor bounds and committed
 // sequences for realtime's reader and watermark, and RetentionBoundaryIn
 // locks an organisation and raises its replay boundary for realtime's
-// cleaner, until org's module moves (step 3).
+// cleaner, until org's module moves (step 3). EventKinds lists the
+// publishers' kinds for realtime's reader. These adapters are in
+// realtime_adapters.go.
 package postgres

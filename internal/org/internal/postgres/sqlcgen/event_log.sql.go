@@ -57,6 +57,18 @@ func (q *Queries) EventBounds(ctx context.Context, id pgtype.UUID) (EventBoundsR
 	return i, err
 }
 
+const getEventSeq = `-- name: GetEventSeq :one
+SELECT event_seq FROM organization WHERE id = $1
+`
+
+// The latest page's cursor, read in the page's snapshot.
+func (q *Queries) GetEventSeq(ctx context.Context, id pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getEventSeq, id)
+	var event_seq int64
+	err := row.Scan(&event_seq)
+	return event_seq, err
+}
+
 const lockEventRetentionOrganization = `-- name: LockEventRetentionOrganization :exec
 SELECT id FROM organization WHERE id = $1 FOR UPDATE
 `
@@ -64,6 +76,19 @@ SELECT id FROM organization WHERE id = $1 FOR UPDATE
 func (q *Queries) LockEventRetentionOrganization(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, lockEventRetentionOrganization, id)
 	return err
+}
+
+const nextEventSeq = `-- name: NextEventSeq :one
+UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq
+`
+
+// Posting and branching take this first: the row lock makes sequence order
+// commit order (decision 5).
+func (q *Queries) NextEventSeq(ctx context.Context, id pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, nextEventSeq, id)
+	var event_seq int64
+	err := row.Scan(&event_seq)
+	return event_seq, err
 }
 
 const raiseEventLogBoundary = `-- name: RaiseEventLogBoundary :exec

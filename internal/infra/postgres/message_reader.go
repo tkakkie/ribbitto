@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
@@ -28,6 +26,10 @@ type MessageReader struct {
 	// Members returns org's member directory bound to the same snapshot
 	// (orgpg.MembersIn, adapted by a closure). Temporary until step 4 too.
 	Members MemberDirectoryIn
+	// Cursor returns org's committed event_seq bound to the same snapshot
+	// (orgpg.EventCursorIn, adapted by a closure), for the latest page.
+	// Temporary until step 4 too.
+	Cursor EventCursorIn
 }
 
 // One reads one message, its author names and topic in a read-only snapshot.
@@ -81,7 +83,7 @@ func (s MessageReader) Page(ctx context.Context, m org.Membership, channelID dom
 			return err
 		}
 		if before == nil {
-			seq, err := sqlcgen.New(tx).GetEventSeq(ctx, pgtype.UUID{Bytes: m.Organization.ID, Valid: true})
+			seq, err := s.Cursor(snapshot).EventSeq(ctx, m.Organization.ID)
 			if err != nil {
 				return fmt.Errorf("reading page cursor: %w", err)
 			}

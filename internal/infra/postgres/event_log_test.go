@@ -101,7 +101,7 @@ func TestEventLogMigration(t *testing.T) {
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = 4 WHERE id = $1", old.OrganizationID)
 	requireNoError(t, err)
-	_, err = postgres.NewPostingStore(pool, appendEvents).Post(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "after logging")
+	_, err = postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "after logging")
 	requireNoError(t, err)
 	assertEventLog(t, pool, old.OrganizationID, 5)
 	// Undo every migration after 6, the event log's included.
@@ -140,7 +140,7 @@ func TestEventLogAudienceAndRollback(t *testing.T) {
 		BEGIN RAISE EXCEPTION 'refused'; END $$;
 		CREATE TRIGGER refuse_event AFTER INSERT ON event_log FOR EACH ROW EXECUTE FUNCTION refuse_event()`)
 	requireNoError(t, err)
-	if _, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, result.OrganizationID, channelID, memberID, "rolled back"); err == nil {
+	if _, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, result.OrganizationID, channelID, memberID, "rolled back"); err == nil {
 		t.Fatal("post succeeded despite event failure")
 	}
 	assertEventLog(t, pool, result.OrganizationID, 1)
@@ -157,3 +157,11 @@ func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.App
 
 // lookupMembers adapts org's directory to the reader's consumer interface.
 func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }
+
+// eventSequence adapts org's sequence to the posting and branching stores'
+// consumer interface.
+func eventSequence(tx platform.Tx) postgres.EventSequence { return orgpg.SequenceIn(tx) }
+
+// eventCursor adapts org's committed event_seq to the reader's consumer
+// interface.
+func eventCursor(s platform.Snapshot) postgres.EventCursor { return orgpg.EventCursorIn(s) }

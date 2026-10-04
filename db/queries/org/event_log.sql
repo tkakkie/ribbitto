@@ -12,3 +12,12 @@ WHERE id = sqlc.arg(organization_id);
 
 -- name: CommittedSequences :many
 SELECT id, event_seq FROM organization WHERE id = ANY(sqlc.arg(organization_ids)::uuid[]);
+
+-- name: NextEventSeq :one
+-- Posting and branching take this first: the row lock makes sequence order
+-- commit order (decision 5).
+UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq;
+
+-- name: GetEventSeq :one
+-- The latest page's cursor, read in the page's snapshot.
+SELECT event_seq FROM organization WHERE id = $1;

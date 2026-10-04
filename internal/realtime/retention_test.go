@@ -69,7 +69,7 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 	}
 	f := pgtest.OrganizationWithOwner(t, pool, "restored", "general")
 	for range 2 {
-		_, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
+		_, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 		must(err)
 	}
 	cached := realtime.NewCachedEvents(t.Context(), realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds()), realtime.NewHub(), 8, time.Minute)
@@ -112,7 +112,7 @@ func TestRetentionReplay(t *testing.T) {
 			}
 			f := pgtest.OrganizationWithOwner(t, pool, "retention", "general")
 			post := func() {
-				_, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept message")
+				_, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept message")
 				must(err)
 			}
 			post()
@@ -189,6 +189,14 @@ func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.App
 
 // lookupMembers adapts org's directory to the reader's consumer interface.
 func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }
+
+// eventSequence adapts org's sequence to the posting and branching stores'
+// consumer interface.
+func eventSequence(tx platform.Tx) postgres.EventSequence { return orgpg.SequenceIn(tx) }
+
+// eventCursor adapts org's committed event_seq to the reader's consumer
+// interface.
+func eventCursor(s platform.Snapshot) postgres.EventCursor { return orgpg.EventCursorIn(s) }
 
 // eventKinds gives readers the same publisher registrations as cmd/ribbitto.
 func eventKinds() realtime.Kinds {

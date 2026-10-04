@@ -280,8 +280,8 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, orgpg.BoundsIn, kinds), config.hub, 1024, time.Minute)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
-	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, appendEvents), postingNotifier)
-	branching := topic.NewBrancher(postgres.NewBranchStore(pool, appendEvents), branchNotifier)
+	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, eventSequence, appendEvents), postingNotifier)
+	branching := topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), branchNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions:      sessions,
 		SignIn:        identitypg.NewSignIn(pool, hasher, sessions),
@@ -290,7 +290,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        postgres.NewTopicStore(pool),
-		Messages:      postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers},
+		Messages:      postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers, Cursor: eventCursor},
 		Posting:       posting,
 		Branching:     branching,
 		Channels:      channel.New(postgres.NewChannelStore(pool)),
@@ -387,3 +387,11 @@ func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.App
 
 // lookupMembers adapts org's directory to the reader's consumer interface.
 func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }
+
+// eventSequence adapts org's sequence to the posting and branching stores'
+// consumer interface.
+func eventSequence(tx platform.Tx) postgres.EventSequence { return orgpg.SequenceIn(tx) }
+
+// eventCursor adapts org's committed event_seq to the reader's consumer
+// interface.
+func eventCursor(s platform.Snapshot) postgres.EventCursor { return orgpg.EventCursorIn(s) }

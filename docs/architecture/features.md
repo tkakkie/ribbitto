@@ -17,7 +17,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | Feature | Packages and files | Owns |
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`; `db/queries/identity/`); `web` `signin.go` | `account`, `session` |
-| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the `org` module (`internal/org`: authorisation, `Organization`, `Member`, `Role`, organisation name, slug and handle rules, the handle change, first-run setup and sign-up (`Setup`, `SignUp`, with their `SetupStore` and `SignUpStore` interfaces), the author directory, the `member.joined` payload and the `AccountCreator`/`AccountCreatorIn` consumer contract; step 3, migrating; its store `internal/org/internal/postgres` and wiring `orgpg` (also registers `member.joined` through `EventKinds`), with `db/queries/org/` for memberships, home slug, handles, the snapshot-bound directory and `realtime`'s bounds, sequences and retention boundary); `infra/postgres` `setup.go`, `signup.go`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
+| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the `org` module (`internal/org`: authorisation, `Organization`, `Member`, `Role`, organisation name, slug and handle rules, the handle change, first-run setup and sign-up (`Setup`, `SignUp`, with their `SetupStore` and `SignUpStore` interfaces), the author directory, the `member.joined` payload and the `AccountCreator`/`AccountCreatorIn` consumer contract; step 3, migrating; its store `internal/org/internal/postgres` and wiring `orgpg` (also registers `member.joined` through `EventKinds`), with `db/queries/org/` for memberships, home slug, handles, the snapshot-bound directory, posting's and branching's event sequence, the page cursor and `realtime`'s bounds, sequences and retention boundary); `infra/postgres` `setup.go`, `signup.go`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
 | `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
@@ -33,7 +33,10 @@ composition roots serve every feature.
 
 `ChannelStore` and `MessageStore` accept a pool or a caller-owned
 transaction; `PostingStore` owns the posting transaction (sequence first,
-then the message and event). Message references to channels and `org`'s members use
+then the message and event). It takes org's sequence through infra's
+`EventSequenceIn` factory (`orgpg.SequenceIn`, adapted by a one-line
+closure) on its own transaction; an unknown organisation is
+`org.ErrNotFound`, which posting returns unchanged. Message references to channels and `org`'s members use
 composite foreign keys including `organization_id`. History uses one
 newest-first keyset query, `ListMessagesBefore`, with a nullable upper
 sequence bound for the latest page, an optional scoped topic filter passed
@@ -47,7 +50,8 @@ organisation, returning handles and account IDs), then identity's
 own the queries in `org/member.sql` and `identity/account.sql`; message never
 queries those tables. `MessageReader` receives org's directory through infra's
 `MemberDirectoryIn` factory, adapted from `orgpg.MembersIn` by a one-line
-closure, alongside `identitypg.AccountsIn`, both bound to its snapshot. It
+closure, alongside `identitypg.AccountsIn`, and the latest page's cursor
+through `EventCursorIn` (`orgpg.EventCursorIn`), all bound to its snapshot. It
 shares one read-only repeatable-read transaction
 across the channel and sidebar (through `channel.Service`), the selected topic
 and the bounded topic list (through `topic.Store`), history, both author
@@ -76,7 +80,8 @@ Identity owns the distinct `ErrEmailTaken` and `ErrInvalidEmail` mappings.
   feature's default channel (a completed setup must never lack one);
 - creating a channel (`channel`) writes its default `topic` in the same
   statement, so a channel never exists without one (decision 21, #307);
-- branching (`topic`) advances `organization.event_seq`, moves messages by
+- branching (`topic`) advances `organization.event_seq`, through org's
+  injected sequence (`EventSequenceIn`) as posting does, moves messages by
   writing `message.topic_id` and posts its notice into `message`, in one
   transaction with both events (decision 21, #305);
 - sign-up (`org`) creates identity's `account` with its `member` and advances

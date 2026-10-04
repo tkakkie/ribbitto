@@ -156,8 +156,8 @@ everything the review needs, as the examples above do:
 
 ## Running Muse Code
 
-The optional second adversarial reviewer
-([`adversarial-review.md`](adversarial-review.md#muse-code-optional)),
+Tier B's reviewer and tier A's fallback
+([`adversarial-review.md`](adversarial-review.md#muse-code)),
 with the invocation tested in
 [#246's preflight](https://github.com/tkakkie/ribbitto/issues/246#issuecomment-5932976563).
 It must name a Standard model (`muse-spark-1.3`): Meta states that

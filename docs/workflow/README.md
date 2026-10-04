@@ -11,7 +11,7 @@ disagree, fix the disagreement in a pull request.
 |---|---|
 | `README.md` (this file) | Principles, roles, the lifecycles of an issue and a pull request, keeping state, the occasional audit, labels |
 | [`reviewing.md`](reviewing.md) | Reviewing, closure verification, the Copilot follow-up check, risk |
-| [`adversarial-review.md`](adversarial-review.md) | when Grok's adversarial review is required, how to run it, and Muse Code as an optional second |
+| [`adversarial-review.md`](adversarial-review.md) | which adversarial review a change needs (Grok, Muse Code or none), how to run Grok, and Muse Code |
 | [`running-other-ai.md`](running-other-ai.md) | Running Codex, Claude or Muse Code headless, and how the maintainer's sessions run Codex |
 
 ## Principles
@@ -42,9 +42,9 @@ disagree, fix the disagreement in a pull request.
 | Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
 | Copilot | Reviews each pull request **once**, automatically, when it is marked ready for review, at **Lite**, guided by `.github/instructions/code-review.instructions.md`. Drafts and new pushes do not trigger it (the `main` ruleset); re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
-| Grok | Adversarial review of pull requests in its required areas (#339), run with `scripts/ai/grok-review.sh`. Advisory. |
-| Muse Code | Optional second adversarial review (#330). Advisory; never replaces Grok's. |
-| Antigravity | Optional: the occasional documentation audit (below), UI screenshot review, experiments, stand-in for Grok. |
+| Grok | Adversarial review of tier A pull requests (#339, #498), run with `scripts/ai/grok-review.sh`. Advisory. |
+| Muse Code | Adversarial review of tier B pull requests, and of tier A ones while Grok is unavailable (#330, #498). Advisory. |
+| Antigravity | Optional: the occasional documentation audit (below), UI screenshot review, experiments, tier B's review when the maintainer runs it. |
 
 Claude and Codex should end up with roughly equal shares of implementation.
 If one has done the last few issues, give the next one to the other.
@@ -87,7 +87,7 @@ idea (maintainer, one line) or finding (AI)
   → at most two rounds; if round 2 leaves only mechanical fixes,
     closure verification; otherwise the maintainer decides
   → reviewer approves
-  → Grok's adversarial review when the change requires it
+  → the adversarial review the change's tier requires
     (see adversarial-review.md), still as a draft
   → label `ai-reviewed` → mark ready for review
   → Copilot reviews once, automatically; wait until its review of
@@ -101,9 +101,9 @@ idea (maintainer, one line) or finding (AI)
 ```
 
 - `high` risk: the maintainer reads the whole diff.
-- Grok runs an adversarial review when the change alters one of the areas
-  in [`adversarial-review.md`](adversarial-review.md#when-grok-runs),
-  whatever its risk, while the pull request is still a draft and before it
+- The adversarial review its tier requires (Grok, Muse Code or none,
+  [`adversarial-review.md`](adversarial-review.md#which-review-runs)) runs
+  whatever the risk, while the pull request is still a draft and before it
   is marked ready, so Copilot's one review comes last.
 - `normal` risk: the maintainer reads the summary and "Look here".
 - Every merge is decided by the maintainer, one pull request at a time.
@@ -161,7 +161,7 @@ in [`.github/prompts/audit.md`](../../.github/prompts/audit.md) (#116).
 
 | Label | Set by | Meaning |
 |---|---|---|
-| `ai-reviewed` | the orchestrating AI, after the reviewer approves (after Grok has also run, when the change requires it) | The cross-review is done. For a pull request, Copilot's review still follows before the maintainer is asked. |
+| `ai-reviewed` | the orchestrating AI, after the reviewer approves (after the adversarial review its tier requires has run) | The cross-review is done. For a pull request, Copilot's review still follows before the maintainer is asked. |
 | `ready` | maintainer only | Issue approved; implementation may start. |
 | `process` | template | Workflow improvement. |
 | `bug` | template | Something is broken. |

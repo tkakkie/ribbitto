@@ -17,7 +17,6 @@ not show calls through an edge that already exists, dependencies inside one
 package, or SQL access to tables.
 
 ```text
-cmd/ribbitto -> internal/app/channel
 cmd/ribbitto -> internal/app/message
 cmd/ribbitto -> internal/app/topic
 cmd/ribbitto -> internal/conversation/conversationpg
@@ -32,10 +31,10 @@ cmd/ribbitto -> internal/realtime/realtimepg
 cmd/ribbitto -> internal/web
 cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
-cmd/seed -> internal/app/channel
 cmd/seed -> internal/app/message
 cmd/seed -> internal/app/topic
 cmd/seed -> internal/conversation
+cmd/seed -> internal/conversation/conversationpg
 cmd/seed -> internal/domain
 cmd/seed -> internal/identity
 cmd/seed -> internal/identity/identitypg
@@ -44,9 +43,6 @@ cmd/seed -> internal/org
 cmd/seed -> internal/org/orgpg
 cmd/seed -> internal/platform/postgres
 cmd/seed -> internal/realtime/realtimepg
-internal/app/channel -> internal/conversation
-internal/app/channel -> internal/domain
-internal/app/channel -> internal/org
 internal/app/message -> internal/app/topic
 internal/app/message -> internal/conversation
 internal/app/message -> internal/domain
@@ -56,8 +52,10 @@ internal/app/topic -> internal/conversation
 internal/app/topic -> internal/domain
 internal/app/topic -> internal/org
 internal/conversation -> internal/kernel
+internal/conversation -> internal/org
 internal/conversation -> internal/realtime
 internal/conversation/conversationpg -> internal/conversation
+internal/conversation/conversationpg -> internal/conversation/internal/postgres
 internal/conversation/conversationpg -> internal/realtime
 internal/conversation/internal/postgres -> internal/conversation
 internal/conversation/internal/postgres -> internal/conversation/internal/postgres/sqlcgen
@@ -72,7 +70,6 @@ internal/identity/internal/postgres -> internal/identity/internal/postgres/sqlcg
 internal/identity/internal/postgres -> internal/kernel
 internal/identity/internal/postgres -> internal/platform/postgres
 internal/identity/internal/postgres -> internal/platform/postgres/pgxbridge
-internal/infra/postgres -> internal/app/channel
 internal/infra/postgres -> internal/app/message
 internal/infra/postgres -> internal/app/topic
 internal/infra/postgres -> internal/conversation

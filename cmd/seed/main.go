@@ -19,10 +19,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -201,7 +201,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 			return fmt.Errorf("resolving %s: %w", person.Handle, err)
 		}
 	}
-	channels := channel.New(postgres.NewChannelStore(pool))
+	channels := conversationpg.NewChannels(pool)
 	posts := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
 	var general conversation.Channel
 	var generalMessages []scriptMessage

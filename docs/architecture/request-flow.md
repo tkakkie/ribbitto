@@ -35,12 +35,12 @@ as soon as it is added. `GET /` redirects a member of the setup
 organisation to its page (`org.Authorizer.HomeSlug`); everyone else sees
 the home page.
 
-The channel handlers in `internal/web/channel.go` call `channel.Service`
+The channel handlers in `internal/web/channel.go` call `conversation.Channels`
 with that membership; they never query the database directly:
 
 | Route | Result |
 |---|---|
-| `GET /organizations/{slug}/` | 303 to `Service.Default`, found by `is_default`; a missing default is logged and answers 500 |
+| `GET /organizations/{slug}/` | 303 to `conversation.Channels.Default`, found by `is_default`; a missing default is logged and answers 500 |
 | `GET /organizations/{slug}/channels/{channel-id}` | Channel page and sidebar; malformed, unknown and other organisations' UUIDs answer 404. `?before=<event_seq>` shows the older page; a bound that is not one positive integer, or a malformed query, answers 400 |
 | `POST /organizations/{slug}/channels/{channel-id}` | Calls `message.Service.Post`; htmx receives only the reset composer (the message itself arrives over the event stream), otherwise 303 back to the channel; invalid bodies render a field error (422) |
 | `GET /organizations/{slug}/channels/{channel-id}/events` | The channel's event stream (SSE); a malformed cursor answers 400, a present `Sec-Fetch-Site` other than a single `same-origin` value 403 (before registration; absent is allowed), a non-member or ended session 404, an account at its stream cap 429, a server shutting down 503. Cancellation before the first write also answers 404 (session ended) or 503 (shutdown) ([streaming](streaming.md); the cap and shutdown: [stream limits](stream-limits.md)) |

@@ -6,7 +6,8 @@
 // Exported API so far: Channel, its name rule, errors and default name;
 // Channels (List, Create, Get, Default), NewChannels and ChannelStore;
 // Topic, ValidateTopicName, ErrTopicNotFound, ErrInvalidTopicName and
-// ErrTopicNameTaken;
+// ErrTopicNameTaken; Topics, NewTopics and TopicReader, the topic lookup
+// scoped by a membership that web's stream and paging links use;
 // Message, ValidateMessageBody, ErrInvalidBody and ErrMessageNotFound; and the
 // two event kinds conversation publishes and so owns.
 // KindPosted with Posted, EncodePosted, DecodePosted and RoutePosted is

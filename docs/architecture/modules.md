@@ -54,3 +54,7 @@ Sign-up's setup organisation comes from `org`'s setup.
 Inside `conversation`, a channel's default topic, branching's moves and
 notice, and the channel and topic reads of posting and the page snapshot
 are direct calls in one transaction or snapshot (decision 27).
+
+The topic stream's and topic paging links' scope check is decision 26's
+resolver in conversation's root: `conversation.Topics.Get` takes the
+resolved `org.Membership`, so web never supplies the organisation.

@@ -26,11 +26,12 @@ type fakeTopics struct {
 	lookups *[][3]domain.ID
 }
 
-func (f fakeTopics) GetTopic(_ context.Context, org, channel, id domain.ID) (conversation.Topic, error) {
+// Get records the membership's organisation, the only scope the root uses.
+func (f fakeTopics) Get(_ context.Context, m org.Membership, channel, id domain.ID) (conversation.Topic, error) {
 	if f.lookups != nil {
-		*f.lookups = append(*f.lookups, [3]domain.ID{org, channel, id})
+		*f.lookups = append(*f.lookups, [3]domain.ID{m.Organization.ID, channel, id})
 	}
-	return conversation.Topic{OrganizationID: org, ChannelID: channel, ID: id}, f.err
+	return conversation.Topic{OrganizationID: m.Organization.ID, ChannelID: channel, ID: id}, f.err
 }
 
 func TestTopicHandlersWithoutHistoryRead(t *testing.T) {

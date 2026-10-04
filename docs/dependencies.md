@@ -56,8 +56,10 @@ internal/app/topic -> internal/conversation
 internal/app/topic -> internal/domain
 internal/app/topic -> internal/org
 internal/conversation -> internal/kernel
+internal/conversation -> internal/org
 internal/conversation -> internal/realtime
 internal/conversation/conversationpg -> internal/conversation
+internal/conversation/conversationpg -> internal/conversation/internal/postgres
 internal/conversation/conversationpg -> internal/realtime
 internal/conversation/internal/postgres -> internal/conversation
 internal/conversation/internal/postgres -> internal/conversation/internal/postgres/sqlcgen

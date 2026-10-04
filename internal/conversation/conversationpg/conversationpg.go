@@ -1,7 +1,9 @@
 package conversationpg
 
 import (
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
@@ -12,4 +14,9 @@ func EventKinds() realtime.Kinds {
 		conversation.KindPosted:        conversation.RoutePosted,
 		conversation.KindMessagesMoved: conversation.RouteMoved,
 	}
+}
+
+// NewTopics builds the topic lookups on conversation's pool-bound store.
+func NewTopics(pool *pgxpool.Pool) *conversation.Topics {
+	return conversation.NewTopics(postgres.NewTopicStore(pool))
 }

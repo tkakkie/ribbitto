@@ -358,6 +358,54 @@ func TestStreamFetchSite(t *testing.T) {
 	}
 }
 
+// A topic stream asks conversation for the topic with the resolved
+// membership and answers its ErrTopicNotFound with 404 before anything is
+// registered or sent. The stream is configured and the session valid, so
+// only the lookup can refuse it; the found case proves the stream would start.
+func TestTopicStreamLookup(t *testing.T) {
+	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	for _, tt := range []struct {
+		name      string
+		lookupErr error
+		status    int
+	}{
+		{"found", nil, http.StatusOK},
+		{"not found", conversation.ErrTopicNotFound, http.StatusNotFound},
+		{"lookup failure", errors.New("offline"), http.StatusInternalServerError},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			hub := realtime.NewHub()
+			seen := -1
+			var reads atomic.Int32
+			var lookups [][3]domain.ID
+			p := channelPages{service: &fakeChannels{}, topics: fakeTopics{err: tt.lookupErr, lookups: &lookups},
+				stream: &Streaming{Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}}
+			membership := org.Membership{Organization: org.Organization{ID: domain.ID{9}, Slug: "acme"}}
+			handler := middleware.Session(oneSession{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { p.events(w, r, membership) }))
+			selected := domain.ID{3}
+			r := httptest.NewRequest(http.MethodGet, view.ConversationURL("acme", domain.ID{1}, &selected)+"/events?after=0", nil)
+			r.SetPathValue("channelID", "01000000-0000-0000-0000-000000000000")
+			r.SetPathValue("topicID", "03000000-0000-0000-0000-000000000000")
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+			handler.ServeHTTP(w, r)
+			if len(lookups) != 1 || lookups[0] != ([3]domain.ID{{9}, {1}, {3}}) {
+				t.Fatalf("topic lookups %v; want one, scoped to the membership's organisation", lookups)
+			}
+			streamed := w.Header().Get("Content-Type") == "text/event-stream; charset=utf-8"
+			if w.Code != tt.status || streamed != (tt.status == http.StatusOK) {
+				t.Fatalf("status %d, event stream %t; want %d", w.Code, streamed, tt.status)
+			}
+			if tt.status != http.StatusOK && (seen != -1 || reads.Load() != 0 || strings.Contains(w.Body.String(), "event:") || strings.Contains(w.Body.String(), "data:")) {
+				t.Fatalf("registered %d, reads %d, body %q; want nothing before the refusal", seen, reads.Load(), w.Body.String())
+			}
+			if n := hub.Connections(); n != 0 {
+				t.Fatalf("%d connections still registered", n)
+			}
+		})
+	}
+}
+
 func TestOpenStreamCleanup(t *testing.T) {
 	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
 	for _, tt := range []struct {

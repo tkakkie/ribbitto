@@ -294,7 +294,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 			func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }),
 		SetupSessions: sessions,
 		Authz:         authorizer,
-		Topics:        postgres.NewTopicStore(pool),
+		Topics:        conversationpg.NewTopics(pool),
 		Messages:      postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers, Cursor: eventCursor},
 		Posting:       posting,
 		Branching:     branching,

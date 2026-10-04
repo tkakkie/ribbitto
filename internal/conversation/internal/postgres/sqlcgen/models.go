@@ -17,3 +17,12 @@ type Channel struct {
 	DefaultTopicID        pgtype.UUID
 	DefaultTopicIsDefault bool
 }
+
+type Topic struct {
+	ID             pgtype.UUID
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	Name           pgtype.Text
+	IsDefault      bool
+	CreatedAt      pgtype.Timestamptz
+}

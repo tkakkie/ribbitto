@@ -7,6 +7,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -60,7 +61,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		SignIn:    identitypg.NewSignIn(pool, hasher, sessions),
 		Authz:     orgpg.NewAuthorizer(pool),
 		Channels:  channel.New(postgres.NewChannelStore(pool)),
-		Topics:    postgres.NewTopicStore(pool),
+		Topics:    conversationpg.NewTopics(pool),
 		Messages:  postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers, Cursor: eventCursor},
 		Posting:   message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents)),
 		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), nil),

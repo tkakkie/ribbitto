@@ -46,6 +46,7 @@ cmd/seed -> internal/realtime/realtimepg
 internal/app/channel -> internal/domain
 internal/app/channel -> internal/org
 internal/app/message -> internal/app/topic
+internal/app/message -> internal/conversation
 internal/app/message -> internal/domain
 internal/app/message -> internal/identity
 internal/app/message -> internal/org

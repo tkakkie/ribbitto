@@ -8,24 +8,25 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 type singleMessage struct {
 	t                           *testing.T
-	msg                         domain.Message
+	msg                         conversation.Message
 	readErr, memberErr, nameErr error
 	missingMember, missingName  bool
 	calls                       []string
 }
 
-func (f *singleMessage) ListMessagesBefore(context.Context, domain.ID, domain.ID, *domain.ID, *int64, int32) ([]domain.Message, error) {
+func (f *singleMessage) ListMessagesBefore(context.Context, domain.ID, domain.ID, *domain.ID, *int64, int32) ([]conversation.Message, error) {
 	f.t.Fatal("unexpected history page read")
 	return nil, nil
 }
 
-func (f *singleMessage) GetMessage(_ context.Context, org, ch domain.ID, seq int64) (domain.Message, error) {
+func (f *singleMessage) GetMessage(_ context.Context, org, ch domain.ID, seq int64) (conversation.Message, error) {
 	f.calls = append(f.calls, "message")
 	if org != f.msg.OrganizationID || ch != f.msg.ChannelID || seq != f.msg.EventSeq {
 		f.t.Fatal("wrong message scope or sequence")
@@ -74,7 +75,7 @@ func TestOne(t *testing.T) {
 		wantCalls                   []string
 	}{
 		{name: "hydrated", wantCalls: []string{"message", "members", "names"}},
-		{name: "missing", readErr: message.ErrNotFound, wantError: "reading message", wantCalls: []string{"message"}},
+		{name: "missing", readErr: conversation.ErrMessageNotFound, wantError: "reading message", wantCalls: []string{"message"}},
 		{name: "store error", readErr: failure, wantError: "reading message", wantCalls: []string{"message"}},
 		{name: "member error", memberErr: failure, wantError: "reading authors", wantCalls: []string{"message", "members"}},
 		{name: "account error", nameErr: failure, wantError: "reading author names", wantCalls: []string{"message", "members", "names"}},
@@ -82,7 +83,7 @@ func TestOne(t *testing.T) {
 		{name: "missing account", missingName: true, wantError: "missing author", wantCalls: []string{"message", "members", "names"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			msg := domain.Message{ID: domain.ID{4}, OrganizationID: domain.ID{1}, ChannelID: domain.ID{2}, MemberID: domain.ID{3}, Body: "body", EventSeq: 9}
+			msg := conversation.Message{ID: domain.ID{4}, OrganizationID: domain.ID{1}, ChannelID: domain.ID{2}, MemberID: domain.ID{3}, Body: "body", EventSeq: 9}
 			f := &singleMessage{t: t, msg: msg, readErr: tt.readErr, memberErr: tt.memberErr, nameErr: tt.nameErr, missingMember: tt.missingMember, missingName: tt.missingName}
 			membership := org.Membership{Organization: org.Organization{ID: msg.OrganizationID}}
 			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).One(t.Context(), membership, msg.ChannelID, msg.EventSeq)
@@ -107,6 +108,6 @@ func TestOne(t *testing.T) {
 	}
 }
 
-func (singleMessage) GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]domain.Message, error) {
+func (singleMessage) GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]conversation.Message, error) {
 	return nil, errors.New("unexpected batch read")
 }

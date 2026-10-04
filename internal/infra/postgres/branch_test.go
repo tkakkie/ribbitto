@@ -30,7 +30,7 @@ func TestBranchStore(t *testing.T) {
 	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
 	posting, store, topics := postgres.NewPostingStore(pool, eventSequence, appendEvents), postgres.NewBranchStore(pool, eventSequence, appendEvents), postgres.NewTopicStore(pool)
-	var posted []domain.Message
+	var posted []conversation.Message
 	for _, body := range []string{"one", "two", "three"} {
 		m, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, body)
 		requireNoError(t, err)

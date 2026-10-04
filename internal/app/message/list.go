@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -12,20 +13,20 @@ import (
 
 // Entry is a stored message with its current author names and topic label.
 type Entry struct {
-	domain.Message
+	conversation.Message
 	DisplayName, Handle string
 	TopicName           string
 	DefaultTopic        bool
 }
 
 // History reads messages within one organisation and channel. Lists are
-// newest first, optionally filtered by topic; GetMessage returns ErrNotFound
+// newest first, optionally filtered by topic; GetMessage returns conversation.ErrMessageNotFound
 // when the scoped key is absent. GetMessages returns the requested IDs only,
 // newest first; missing or out-of-scope IDs are omitted.
 type History interface {
-	GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]domain.Message, error)
-	ListMessagesBefore(context.Context, domain.ID, domain.ID, *domain.ID, *int64, int32) ([]domain.Message, error)
-	GetMessage(context.Context, domain.ID, domain.ID, int64) (domain.Message, error)
+	GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]conversation.Message, error)
+	ListMessagesBefore(context.Context, domain.ID, domain.ID, *domain.ID, *int64, int32) ([]conversation.Message, error)
+	GetMessage(context.Context, domain.ID, domain.ID, int64) (conversation.Message, error)
 }
 
 // Reader composes history with org, identity and topic's exported directory APIs.
@@ -82,7 +83,7 @@ func (s Reader) Before(ctx context.Context, m org.Membership, channelID domain.I
 }
 
 // entries adds topic labels and author names, returning messages oldest first.
-func (s Reader) entries(ctx context.Context, m org.Membership, channelID domain.ID, messages []domain.Message) ([]Entry, error) {
+func (s Reader) entries(ctx context.Context, m org.Membership, channelID domain.ID, messages []conversation.Message) ([]Entry, error) {
 	ids := make([]domain.ID, 0, len(messages))
 	for _, msg := range messages {
 		ids = append(ids, msg.MemberID)

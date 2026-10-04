@@ -2,25 +2,21 @@ package message
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
-// ErrNotFound means no message has this event_seq in the caller's organisation
-// and channel, including when the message exists in another scope.
-var ErrNotFound = errors.New("message not found")
-
-// One returns a message with current author names, or ErrNotFound. The caller
+// One returns a message with current author names, or conversation.ErrMessageNotFound. The caller
 // resolves membership and channel access before reading, as for Before.
 func (s Reader) One(ctx context.Context, m org.Membership, channelID domain.ID, eventSeq int64) (Entry, error) {
 	msg, err := s.History.GetMessage(ctx, m.Organization.ID, channelID, eventSeq)
 	if err != nil {
 		return Entry{}, fmt.Errorf("reading message: %w", err)
 	}
-	entries, err := s.entries(ctx, m, channelID, []domain.Message{msg})
+	entries, err := s.entries(ctx, m, channelID, []conversation.Message{msg})
 	if err != nil {
 		return Entry{}, err
 	}
@@ -35,7 +31,7 @@ func (s Reader) Many(ctx context.Context, m org.Membership, channelID domain.ID,
 		return nil, fmt.Errorf("reading messages: %w", err)
 	}
 	if len(messages) != len(ids) {
-		return nil, ErrNotFound
+		return nil, conversation.ErrMessageNotFound
 	}
 	return s.entries(ctx, m, channelID, messages)
 }

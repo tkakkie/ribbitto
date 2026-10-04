@@ -45,27 +45,3 @@ func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Mem
 	)
 	return i, err
 }
-
-const getMemberByOrganizationAndAccount = `-- name: GetMemberByOrganizationAndAccount :one
-SELECT id, organization_id, account_id, role, joined_event_seq, created_at, handle FROM member WHERE organization_id = $1 AND account_id = $2
-`
-
-type GetMemberByOrganizationAndAccountParams struct {
-	OrganizationID pgtype.UUID
-	AccountID      pgtype.UUID
-}
-
-func (q *Queries) GetMemberByOrganizationAndAccount(ctx context.Context, arg GetMemberByOrganizationAndAccountParams) (Member, error) {
-	row := q.db.QueryRow(ctx, getMemberByOrganizationAndAccount, arg.OrganizationID, arg.AccountID)
-	var i Member
-	err := row.Scan(
-		&i.ID,
-		&i.OrganizationID,
-		&i.AccountID,
-		&i.Role,
-		&i.JoinedEventSeq,
-		&i.CreatedAt,
-		&i.Handle,
-	)
-	return i, err
-}

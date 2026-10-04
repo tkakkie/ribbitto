@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/internal/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 // TestAccountSchema holds the organisation and member part of the schema
@@ -28,55 +28,54 @@ func TestAccountSchema(t *testing.T) {
 		t.Fatalf("new tables have %d nullable columns", nullable)
 	}
 	// Both minimum and multibyte maximum values must survive the database checks.
-	var accounts []sqlcgen.Account
+	var accounts []pgtype.UUID
 	var organizations []sqlcgen.Organization
 	for i, size := range []int{1, 50} {
 		email, err := identity.ValidateEmail([]string{"a@b", strings.Repeat("界", 84) + "@b"}[i])
 		requireNoError(t, err)
 		name, err := identity.ValidateDisplayName(strings.Repeat("界", size))
 		requireNoError(t, err)
-		account, err := q.CreateAccount(ctx, sqlcgen.CreateAccountParams{Email: email, DisplayName: name, PasswordHash: "$argon2id$test"})
-		requireNoError(t, err)
-		accounts = append(accounts, account)
+		account := fixtureAccount(t, pool, email, name)
+		accounts = append(accounts, pgtype.UUID{Bytes: account, Valid: true})
 		name, err = org.ValidateOrganizationName(strings.Repeat("界", []int{1, 100}[i]))
 		requireNoError(t, err)
 		slug, err := org.ValidateSlug(strings.Repeat("a", []int{1, 63}[i]))
 		requireNoError(t, err)
 		_, err = pool.Exec(ctx, "INSERT INTO organization (slug, name) VALUES ($1, $2)", slug, name)
 		requireNoError(t, err)
-		org, err := q.GetOrganizationBySlug(ctx, slug)
+		organization, err := q.GetOrganizationBySlug(ctx, slug)
 		requireNoError(t, err)
-		organizations = append(organizations, org)
+		organizations = append(organizations, organization)
 	}
-	org, other := organizations[0], organizations[1]
+	organization, other := organizations[0], organizations[1]
 	// Each sequence commits with its event row, as every writer must (the
 	// migration's deferred trigger refuses a sequence without one).
 	for want := int64(1); want <= 3; want++ {
 		tx, err := pool.Begin(ctx)
 		requireNoError(t, err)
-		got, err := sqlcgen.New(tx).NextEventSeq(ctx, org.ID)
+		got, err := sqlcgen.New(tx).NextEventSeq(ctx, organization.ID)
 		if err != nil || got != want {
 			t.Fatalf("sequence: got %d, %v; want %d", got, err, want)
 		}
-		_, err = tx.Exec(ctx, "INSERT INTO event_log (organization_id, seq, kind, data) VALUES ($1, $2, 'test.sequence', '{}')", org.ID, got)
+		_, err = tx.Exec(ctx, "INSERT INTO event_log (organization_id, seq, kind, data) VALUES ($1, $2, 'test.sequence', '{}')", organization.ID, got)
 		requireNoError(t, err)
 		requireNoError(t, tx.Commit(ctx))
 	}
 	// The rows only satisfied the trigger; remove them so the restrict checks
 	// below see member's foreign key alone.
-	_, err := pool.Exec(ctx, "DELETE FROM event_log WHERE organization_id = $1", org.ID)
+	_, err := pool.Exec(ctx, "DELETE FROM event_log WHERE organization_id = $1", organization.ID)
 	requireNoError(t, err)
 	unchanged, err := q.GetOrganizationBySlug(ctx, other.Slug)
 	if err != nil || unchanged.EventSeq != 0 {
 		t.Fatalf("other organization changed: %+v, %v", unchanged, err)
 	}
-	member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: accounts[0].ID, Role: "owner", JoinedEventSeq: 1, Handle: "owner"})
+	member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: organization.ID, AccountID: accounts[0], Role: "owner", JoinedEventSeq: 1, Handle: "owner"})
 	requireNoError(t, err)
-	gotMember, err := q.GetMemberByOrganizationAndAccount(ctx, sqlcgen.GetMemberByOrganizationAndAccountParams{OrganizationID: org.ID, AccountID: accounts[0].ID})
+	gotMember, err := q.GetMemberByOrganizationAndAccount(ctx, sqlcgen.GetMemberByOrganizationAndAccountParams{OrganizationID: organization.ID, AccountID: accounts[0]})
 	if err != nil || gotMember != member {
 		t.Fatalf("member lookup: %+v, %v", gotMember, err)
 	}
-	_, err = q.GetMemberByOrganizationAndAccount(ctx, sqlcgen.GetMemberByOrganizationAndAccountParams{OrganizationID: other.ID, AccountID: accounts[0].ID})
+	_, err = q.GetMemberByOrganizationAndAccount(ctx, sqlcgen.GetMemberByOrganizationAndAccountParams{OrganizationID: other.ID, AccountID: accounts[0]})
 	if !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("cross-organization lookup: %v", err)
 	}
@@ -103,7 +102,7 @@ func TestAccountSchema(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Typed parameters allow each statement to use either fixture identifier.
-			_, err := pool.Exec(ctx, "WITH fixture AS (SELECT $1::uuid, $2::uuid) "+tc.sql, org.ID, accounts[1].ID)
+			_, err := pool.Exec(ctx, "WITH fixture AS (SELECT $1::uuid, $2::uuid) "+tc.sql, organization.ID, accounts[1])
 			var pgErr *pgconn.PgError
 			if !errors.As(err, &pgErr) || pgErr.Code != tc.code {
 				t.Fatalf("want SQLSTATE %s, got %v", tc.code, err)
@@ -112,12 +111,5 @@ func TestAccountSchema(t *testing.T) {
 				t.Fatalf("restricted by %q, want member_organization_id_fkey", pgErr.ConstraintName)
 			}
 		})
-	}
-}
-
-func requireNoError(t *testing.T, err error) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
 	}
 }

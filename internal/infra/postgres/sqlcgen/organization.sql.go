@@ -23,24 +23,6 @@ func (q *Queries) GetEventSeq(ctx context.Context, id pgtype.UUID) (int64, error
 	return event_seq, err
 }
 
-const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
-SELECT id, slug, name, event_seq, created_at, event_log_boundary_seq FROM organization WHERE slug = $1
-`
-
-func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error) {
-	row := q.db.QueryRow(ctx, getOrganizationBySlug, slug)
-	var i Organization
-	err := row.Scan(
-		&i.ID,
-		&i.Slug,
-		&i.Name,
-		&i.EventSeq,
-		&i.CreatedAt,
-		&i.EventLogBoundarySeq,
-	)
-	return i, err
-}
-
 const nextEventSeq = `-- name: NextEventSeq :one
 UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq
 `

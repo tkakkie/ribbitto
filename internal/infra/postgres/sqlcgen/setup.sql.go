@@ -56,15 +56,3 @@ func (q *Queries) SetupOpen(ctx context.Context) (bool, error) {
 	err := row.Scan(&not_exists)
 	return not_exists, err
 }
-
-const setupOrganization = `-- name: SetupOrganization :one
-SELECT organization_id FROM setup WHERE id
-`
-
-// A copy of org's SetupOrganization (db/queries/org/), until 3.11.
-func (q *Queries) SetupOrganization(ctx context.Context) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, setupOrganization)
-	var organization_id pgtype.UUID
-	err := row.Scan(&organization_id)
-	return organization_id, err
-}

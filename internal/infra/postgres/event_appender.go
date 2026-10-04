@@ -8,8 +8,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// EventAppender is what the event-writing flows (posting, branching, setup
-// and sign-up) need from realtime's event log inside their transaction: an
+// EventAppender is what the event-writing flows (posting, branching and
+// setup) need from realtime's event log inside their transaction: an
 // append of a payload their publisher encoded. infra declares it as their
 // consumer until the flows move (org in step 3, conversation in step 4);
 // wiring injects realtime's appender (decision 26).

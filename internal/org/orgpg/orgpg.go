@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -74,4 +75,9 @@ func NewSetupState(pool *pgxpool.Pool) org.SetupState { return postgres.NewSetup
 // EventKinds returns org's routers for registration with realtime's reader.
 func EventKinds() realtime.Kinds {
 	return realtime.Kinds{org.KindJoined: org.RouteJoined}
+}
+
+// NewSignUp wires registration with the shared hasher and injected writers.
+func NewSignUp(pool *pgxpool.Pool, hasher *identity.Hasher, enabled bool, accounts org.AccountCreatorIn, events org.EventAppenderIn) *org.SignUp {
+	return org.NewSignUp(NewSetupState(pool), NewTxRunner(pool), RegistrationWriterIn, accounts, events, hasher, enabled)
 }

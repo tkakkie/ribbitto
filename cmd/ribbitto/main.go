@@ -283,10 +283,12 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, eventSequence, appendEvents), postingNotifier)
 	branching := topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), branchNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
-		Sessions:      sessions,
-		SignIn:        identitypg.NewSignIn(pool, hasher, sessions),
-		Setup:         setupService,
-		SignUp:        org.NewSignUp(setupStore, hasher, config.signupEnabled),
+		Sessions: sessions,
+		SignIn:   identitypg.NewSignIn(pool, hasher, sessions),
+		Setup:    setupService,
+		SignUp: orgpg.NewSignUp(pool, hasher, config.signupEnabled,
+			func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
+			func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }),
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        postgres.NewTopicStore(pool),

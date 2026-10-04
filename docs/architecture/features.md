@@ -17,7 +17,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | Feature | Packages and files | Owns |
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`; `db/queries/identity/`); `web` `signin.go` | `account`, `session` |
-| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the `org` module (`internal/org`: authorisation, `Organization`, `Member`, `Role`, organisation name, slug and handle rules, the handle change, first-run setup and sign-up (`Setup`, `SignUp`, with their `SetupStore` and `SignUpStore` interfaces), the author directory, the `member.joined` payload, the `AccountCreator`/`AccountCreatorIn` consumer contract, and the transaction runner `TxRunner`, the transaction-bound registration writes `RegistrationWriter`/`RegistrationWriterIn` and the `SetupState` read that setup and sign-up will use from 3.11 and 3.12; step 3, migrating; its store `internal/org/internal/postgres` and wiring `orgpg` (also registers `member.joined` through `EventKinds`), with `db/queries/org/` for memberships, home slug, handles, the snapshot-bound directory, the registration writes and setup state (copies of the legacy entry's setup and member queries until 3.12), posting's and branching's event sequence, the page cursor and `realtime`'s bounds, sequences and retention boundary); `infra/postgres` `setup.go`, `signup.go`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
+| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the `org` module (`internal/org`: authorisation, `Organization`, `Member`, `Role`, organisation name, slug and handle rules, the handle change, first-run setup and sign-up (`Setup`, `SignUp`, setup keeps `SetupStore`; sign-up owns its transaction), the author directory, the `member.joined` payload, the `AccountCreator`/`AccountCreatorIn` consumer contract, and the transaction runner `TxRunner`, the transaction-bound registration writes `RegistrationWriter`/`RegistrationWriterIn` and the `SetupState` read used by sign-up since 3.11, with setup following in 3.12; step 3, migrating; its store `internal/org/internal/postgres` and wiring `orgpg` (also registers `member.joined` through `EventKinds`), with `db/queries/org/` for memberships, home slug, handles, the snapshot-bound directory, the registration writes and setup state (copies of the legacy entry's setup and member queries until 3.12), posting's and branching's event sequence, the page cursor and `realtime`'s bounds, sequences and retention boundary); `infra/postgres` `setup.go`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
 | `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
@@ -69,8 +69,8 @@ topic posts rely on the lookup inside the posting transaction.
 
 Identity's store now provides transaction-bound account creation through
 `identitypg.AccountCreatorIn`, implementing `org.AccountCreator`; only the
-wiring imports org. Setup and sign-up still use `legacy_account.sql` until
-3.12 and 3.11 respectively, when they inject org's factory via a closure.
+wiring imports org. Sign-up injects org's factory via a closure; setup keeps
+`legacy_account.sql` until 3.12.
 Identity owns the distinct `ErrEmailTaken` and `ErrInvalidEmail` mappings.
 
 Org's store tests own the organisation/member schema checks, slug lookup and
@@ -90,13 +90,16 @@ fixtures until step 5.
   injected sequence (`EventSequenceIn`) as posting does, moves messages by
   writing `message.topic_id` and posts its notice into `message`, in one
   transaction with both events (decision 21, #305);
-- sign-up (`org`) creates identity's `account` with its `member` and advances
-  `organization.event_seq` in the same transaction;
+- sign-up (`org.SignUp`) owns one transaction through `TxRunner`: org's
+  registration writes take the sequence and create its member, with identity's
+  account and realtime's event injected through `AccountCreatorIn` and
+  `EventAppenderIn`, bound to the same transaction;
 - posting (`message`) advances `organization.event_seq` before inserting
   the message, because the sequence must be taken in the writing
   transaction ([decision 5](../decisions/05-one-event-sequence-per-organisation.md));
 - these flows call realtime's transaction-bound writer, an `EventAppender`
-  that their store is given (realtime's, through `realtimepg.AppenderIn`),
+  that their store or root use case is given (realtime's, through
+  `realtimepg.AppenderIn`),
   appending the payload their publisher's codec encoded
   immediately after the message, member or move, so `event_log` commits with
   the entity and its sequence (#156, #257, #305);

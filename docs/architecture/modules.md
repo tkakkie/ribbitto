@@ -38,12 +38,12 @@ the temporary implementation behind it.
 | three `infra` target-version tests and `org`'s handle upgrade test | `db/migrations` (temporary allowance) | 0 | 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
 | `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
-| setup, sign-up (`infra`) | `identity` account writes through injected `org.AccountCreatorIn` (`identitypg.AccountCreatorIn`, adapted by a closure) | 3.9 | sign-up 3.11, setup 3.12; until then `legacy_account.sql` copies `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry |
+| setup (`infra`) | `identity` account writes through injected `org.AccountCreatorIn` (`identitypg.AccountCreatorIn`, adapted by a closure) | 3.9 | 3.12; until then `legacy_account.sql` copies `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry |
 | `infra/postgres` appender interface (`EventAppender`) and the kind list | `realtime` types (root import, temporary allowance) | 2 | 5 |
 | conversation's kind registry (`postgres.EventKinds()`, combined with `orgpg.EventKinds()` by `cmd/ribbitto` and tests) | each publisher's `realtime.Router` | 2 | 4 for `conversation`; `org` registers its own through `orgpg` since 3.13 |
 | event payload codecs in `app/message` and `app/topic` | their kinds' payloads, owned by the publisher | 2 | 4 (`message.posted` and `messages.moved`, with `conversation`); `member.joined`'s moved into `org` in 3.4 |
-| posting, setup, sign-up, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | each flow's own step: setup and sign-up 3, posting and branching 4 |
-| posting, setup, sign-up, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | each flow's own step: 3, 4 |
+| posting, setup, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | each flow's own step: setup 3.12, posting and branching 4 |
+| posting, setup, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | each flow's own step: 3, 4 |
 | the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |
 | posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`, since 3.8), members (`MemberDirectoryIn`, from `orgpg.MembersIn`, since 3.7) and cursor (`EventCursorIn`, from `orgpg.EventCursorIn`, since 3.8), each adapted by a closure | 3 | 4 |
 | setup (`org`) | `conversation` default channel | 3 | 4 |

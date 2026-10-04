@@ -35,7 +35,7 @@ the temporary implementation behind it.
 |---|---|---|---|
 | every package but `identity` and `realtime` (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
-| four `infra` target-version tests | `db/migrations` (temporary allowance) | 0 | their module's step, or 5 |
+| three `infra` target-version tests and `org`'s handle upgrade test | `db/migrations` (temporary allowance) | 0 | 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
 | `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
 | setup (`infra`) | `identity` account writes through injected `org.AccountCreatorIn` (`identitypg.AccountCreatorIn`, adapted by a closure) | 3.9 | 3.12; until then `legacy_account.sql` copies `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry |

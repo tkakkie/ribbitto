@@ -12,7 +12,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 func TestChannelMessageSchema(t *testing.T) {
@@ -20,40 +20,36 @@ func TestChannelMessageSchema(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// Raw SQL and queries exercise schema constraints directly, including invalid rows.
-	q := sqlcgen.New(pool)
 	channels, messages := postgres.NewChannelStore(pool), postgres.NewMessageStore(pool)
 	var nullable int
 	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('channel', 'message') AND is_nullable = 'YES'").Scan(&nullable))
 	if nullable != 0 {
 		t.Fatalf("new tables have %d nullable columns", nullable)
 	}
-	account, err := q.CreateAccount(ctx, sqlcgen.CreateAccountParams{Email: "a@b", DisplayName: "Author", PasswordHash: "$argon2id$test"})
-	requireNoError(t, err)
+	account := pgtest.Account(t, pool, "a@b", "Author")
 	var orgs []domain.ID
 	var members []domain.ID
 	var defaults []domain.Channel
 	for _, slug := range []string{"team", "other"} {
-		org, err := q.CreateOrganization(ctx, sqlcgen.CreateOrganizationParams{Name: slug, Slug: slug})
+		organizationID := pgtest.Organization(t, pool, slug, slug, 0)
+		member := pgtest.Member(t, pool, organizationID, account, org.RoleMember, "member", 1)
+		channel, err := channels.CreateChannel(ctx, organizationID, "雑談", true)
 		requireNoError(t, err)
-		member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: account.ID, Role: "member", JoinedEventSeq: 1, Handle: "member"})
-		requireNoError(t, err)
-		channel, err := channels.CreateChannel(ctx, org.ID.Bytes, "雑談", true)
-		requireNoError(t, err)
-		orgs, members, defaults = append(orgs, org.ID.Bytes), append(members, member.ID.Bytes), append(defaults, channel)
-		got, err := channels.GetDefaultChannel(ctx, org.ID.Bytes)
+		orgs, members, defaults = append(orgs, organizationID), append(members, member), append(defaults, channel)
+		got, err := channels.GetDefaultChannel(ctx, organizationID)
 		if err != nil || got != channel {
 			t.Fatalf("default: %+v, %v; want %+v", got, err, channel)
 		}
 	}
-	org, other := orgs[0], orgs[1]
+	organizationID, other := orgs[0], orgs[1]
 	channel, foreign := defaults[0], defaults[1]
 	for _, input := range []string{"a", "　 開発 会議　 ", "a　b", " e\u0301 ", strings.Repeat("e\u0301", 80), strings.Repeat("界", 80)} {
 		name, err := domain.ValidateChannelName(input)
 		requireNoError(t, err)
-		created, err := channels.CreateChannel(ctx, org, name, false)
+		created, err := channels.CreateChannel(ctx, organizationID, name, false)
 		requireNoError(t, err)
-		got, err := channels.GetChannel(ctx, org, created.ID)
-		if err != nil || got != created || got.Name != name || got.IsDefault || got.OrganizationID != org || got.ID[6]>>4 != 7 || got.CreatedAt.IsZero() {
+		got, err := channels.GetChannel(ctx, organizationID, created.ID)
+		if err != nil || got != created || got.Name != name || got.IsDefault || got.OrganizationID != organizationID || got.ID[6]>>4 != 7 || got.CreatedAt.IsZero() {
 			t.Fatalf("channel round trip: %+v, %v", got, err)
 		}
 	}
@@ -69,9 +65,9 @@ func TestChannelMessageSchema(t *testing.T) {
 	for _, input := range []string{"a", "hello\t", "a\r\nb\rc\nd", "\u00a0\u2002hello\u2003\u3000", "\t\r\n　a \r\n \tb　\n", "a\u00a0b", "e\u0301", "👩\u200d💻", "see \u2067שלום\u2069 now", "\u2066abc\u2069 \u2068x\u2069", "a\u200eb\u200fc\u061cd", strings.Repeat("界", 4000), strings.Repeat("e\u0301", 2000)} {
 		body, err := domain.ValidateMessageBody(input)
 		requireNoError(t, err)
-		message, err := messages.InsertMessage(ctx, org, channel.ID, channel.DefaultTopicID, members[0], body, int64(len(posted)+1))
+		message, err := messages.InsertMessage(ctx, organizationID, channel.ID, channel.DefaultTopicID, members[0], body, int64(len(posted)+1))
 		requireNoError(t, err)
-		if message.Body != body || message.OrganizationID != org || message.ChannelID != channel.ID || message.TopicID != channel.DefaultTopicID || message.MemberID != members[0] || message.ID[6]>>4 != 7 || message.CreatedAt.IsZero() {
+		if message.Body != body || message.OrganizationID != organizationID || message.ChannelID != channel.ID || message.TopicID != channel.DefaultTopicID || message.MemberID != members[0] || message.ID[6]>>4 != 7 || message.CreatedAt.IsZero() {
 			t.Fatalf("message round trip: %+v", message)
 		}
 		posted = append(posted, message)
@@ -80,9 +76,9 @@ func TestChannelMessageSchema(t *testing.T) {
 	_, err = messages.InsertMessage(ctx, other, foreign.ID, foreign.DefaultTopicID, members[1], "other", 1)
 	requireNoError(t, err)
 	// A newer message in a sibling channel must not appear in this channel's pages.
-	sibling, err := channels.CreateChannel(ctx, org, "sibling", false)
+	sibling, err := channels.CreateChannel(ctx, organizationID, "sibling", false)
 	requireNoError(t, err)
-	_, err = messages.InsertMessage(ctx, org, sibling.ID, sibling.DefaultTopicID, members[0], "sibling", 100)
+	_, err = messages.InsertMessage(ctx, organizationID, sibling.ID, sibling.DefaultTopicID, members[0], "sibling", 100)
 	requireNoError(t, err)
 	slices.Reverse(posted)
 	for _, tc := range []struct {
@@ -92,11 +88,11 @@ func TestChannelMessageSchema(t *testing.T) {
 		limit  int32
 		want   []domain.Message
 	}{
-		{"latest", org, 0, 3, posted[:3]},
-		{"max bigint", org, math.MaxInt64, 3, posted[:3]},
-		{"next page", org, posted[2].EventSeq, 20, posted[3:]},
-		{"oldest boundary", org, 1, 20, nil},
-		{"zero limit", org, 0, 0, nil},
+		{"latest", organizationID, 0, 3, posted[:3]},
+		{"max bigint", organizationID, math.MaxInt64, 3, posted[:3]},
+		{"next page", organizationID, posted[2].EventSeq, 20, posted[3:]},
+		{"oldest boundary", organizationID, 1, 20, nil},
+		{"zero limit", organizationID, 0, 0, nil},
 		{"other organisation", other, 0, 20, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -125,7 +121,7 @@ func TestChannelMessageSchema(t *testing.T) {
 		{"non-NFC name", "UPDATE channel SET name = 'e\u0301' WHERE organization_id = $1", "23514"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := pool.Exec(ctx, "WITH fixture AS (SELECT $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid) "+tc.sql, org, other, channel.ID, foreign.ID, members[1])
+			_, err := pool.Exec(ctx, "WITH fixture AS (SELECT $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid) "+tc.sql, organizationID, other, channel.ID, foreign.ID, members[1])
 			var pgErr *pgconn.PgError
 			if !errors.As(err, &pgErr) || pgErr.Code != tc.code {
 				t.Fatalf("want SQLSTATE %s, got %v", tc.code, err)
@@ -133,7 +129,7 @@ func TestChannelMessageSchema(t *testing.T) {
 		})
 	}
 	for _, body := range []string{"", strings.Repeat("界", 4001), "a\rb", " hello", "hello ", "\thello", "hello\t", "\nhello", "hello\n", "a\x01b", "a\vb", "a\fb", "a\x1fb", "a\x7fb", "a\u0085b", "a\u009fb", "a\u2028b", "a\u2029b", "a\u202ab", "a\u202bb", "a\u202cb", "a\u202db", "https://evil.example/\u202eexample.com", "a\x00b"} {
-		_, err := messages.InsertMessage(ctx, org, channel.ID, channel.DefaultTopicID, members[0], body, 200)
+		_, err := messages.InsertMessage(ctx, organizationID, channel.ID, channel.DefaultTopicID, members[0], body, 200)
 		var pgErr *pgconn.PgError
 		code := "23514"
 		if strings.ContainsRune(body, 0) {

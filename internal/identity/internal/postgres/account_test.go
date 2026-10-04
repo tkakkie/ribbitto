@@ -15,8 +15,7 @@ import (
 )
 
 // TestAccountSchema holds the account and session part of the schema checks;
-// the organisation and member part stays in internal/infra/postgres until org
-// becomes a module.
+// org's store tests hold the organisation and member part.
 func TestAccountSchema(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)

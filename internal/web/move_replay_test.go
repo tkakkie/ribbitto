@@ -150,7 +150,7 @@ func (p *topicMovePage) deliver(t *testing.T, out realtime.Outgoing) {
 	p.items = applyTopic(t, p.items, out, p.selected, p.oldest)
 }
 
-func (p *topicMovePage) loadOlder(t *testing.T, selected domain.Topic, older message.ChannelPage) {
+func (p *topicMovePage) loadOlder(t *testing.T, selected conversation.Topic, older message.ChannelPage) {
 	t.Helper()
 	p.items = append(renderedPage(t, older.Entries), p.items...)
 	p.oldest = topicPageBoundary(t, selected, older, p.oldest)
@@ -219,7 +219,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 		warm = append(warm, out)
 	}
 	destination, through, err := postgres.NewBranchStore(pool, eventSequence, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
-		topic.Branch{From: source, Messages: ids, NewName: "New label"}, func(domain.Topic) string { return "branch notice" })
+		topic.Branch{From: source, Messages: ids, NewName: "New label"}, func(conversation.Topic) string { return "branch notice" })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +314,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	}
 }
 
-func topicPageBoundary(t *testing.T, destination domain.Topic, page message.ChannelPage, before int64) int64 {
+func topicPageBoundary(t *testing.T, destination conversation.Topic, page message.ChannelPage, before int64) int64 {
 	t.Helper()
 	selected := viewTopic(destination)
 	model := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"}, Topic: &selected, Older: page.Older, Before: before}
@@ -387,7 +387,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			boundary := topicPageBoundary(t, destination, page, 0)
 			items := renderedPage(t, page.Entries)
 			_, through, err := postgres.NewBranchStore(pool, eventSequence, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
-				topic.Branch{From: source, To: &destination.ID, Messages: moved}, func(domain.Topic) string { return "notice" })
+				topic.Branch{From: source, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -447,7 +447,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 					t.Fatal(err)
 				}
 				reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers, Cursor: eventCursor}
-				var source domain.Topic
+				var source conversation.Topic
 				var moved []domain.ID
 				for i := range count {
 					for _, selected := range []*domain.ID{nil, &destination.ID} {
@@ -464,7 +464,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 						}
 					}
 				}
-				topics := []domain.Topic{source, destination}
+				topics := []conversation.Topic{source, destination}
 				pages := make([]topicMovePage, len(topics))
 				responses := make([]message.ChannelPage, len(topics))
 				var cursor int64
@@ -483,7 +483,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 					}
 				}
 				_, through, err := postgres.NewBranchStore(pool, eventSequence, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
-					topic.Branch{From: source.ID, To: &destination.ID, Messages: moved}, func(domain.Topic) string { return "notice" })
+					topic.Branch{From: source.ID, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -565,7 +565,7 @@ func TestTopicMoveModelRequestScope(t *testing.T) {
 		t.Fatal("failed request retained moves, or retained a move between requests")
 	}
 	page.loading = true
-	page.loadOlder(t, domain.Topic{ID: to}, message.ChannelPage{})
+	page.loadOlder(t, conversation.Topic{ID: to}, message.ChannelPage{})
 	if len(page.items) != 3 {
 		t.Fatal("later request reapplied the failed request's move below the old bound")
 	}

@@ -48,6 +48,7 @@ internal/app/message -> internal/conversation
 internal/app/message -> internal/domain
 internal/app/message -> internal/identity
 internal/app/message -> internal/org
+internal/app/topic -> internal/conversation
 internal/app/topic -> internal/domain
 internal/app/topic -> internal/org
 internal/conversation -> internal/kernel

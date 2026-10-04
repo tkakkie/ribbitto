@@ -60,7 +60,7 @@ func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, 
 	}
 	page := message.ChannelPage{Page: message.Page{Entries: f.entries, Older: f.older}, Current: current, Channels: list}
 	if topicID != nil {
-		page.Topic = &domain.Topic{ID: *topicID, Name: "Planning"}
+		page.Topic = &conversation.Topic{ID: *topicID, Name: "Planning"}
 	}
 	if before == nil && topicID == nil {
 		cursor := int64(42)

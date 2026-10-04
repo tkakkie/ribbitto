@@ -3,9 +3,10 @@
 // docs/domain/topics.md).
 //
 // Feature: topic (feature map in docs/architecture/features.md), which owns
-// the topic table. Exported API: Store, Directory (batch label lookup),
+// the topic table. conversation owns Topic, ValidateTopicName,
+// ErrTopicNotFound, ErrInvalidTopicName and ErrTopicNameTaken.
+// Exported API: Store, Directory (batch label lookup),
 // Brancher with its BranchStore, Branch and Notifier, MaxBranchMessages, and
-// ErrNotFound, ErrInvalidName, ErrNameTaken, ErrConflict and
-// ErrInvalidBranch. Every lookup is scoped by organisation and channel, so
-// a topic of another channel is not found.
+// ErrConflict and ErrInvalidBranch. Every lookup is scoped by organisation
+// and channel, so a topic of another channel is not found.
 package topic

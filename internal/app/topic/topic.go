@@ -2,36 +2,26 @@ package topic
 
 import (
 	"context"
-	"errors"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 )
 
-// ErrNotFound means the topic does not exist in the given organisation and
-// channel, including when it exists in another channel or organisation.
-var ErrNotFound = errors.New("topic not found")
-
-// ErrInvalidName wraps a name that breaks domain.ValidateTopicName.
-var ErrInvalidName = errors.New("invalid topic name")
-
-// ErrNameTaken means the channel already has a topic with that name,
-// ignoring case.
-var ErrNameTaken = errors.New("topic name already taken")
-
 // Store reads and writes topics, always within one organisation and
-// channel. Lookups return ErrNotFound; CreateTopic returns ErrNameTaken for
-// a duplicate name. ListTopics returns at most limit topics, the default
+// channel. Lookups return conversation.ErrTopicNotFound; CreateTopic returns
+// conversation.ErrTopicNameTaken for a duplicate name.
+// ListTopics returns at most limit topics, the default
 // first, then by name (case-insensitive).
 type Store interface {
-	CreateTopic(ctx context.Context, organizationID, channelID domain.ID, name string) (domain.Topic, error)
-	CreateDefaultTopic(ctx context.Context, organizationID, channelID domain.ID) (domain.Topic, error)
-	GetTopic(ctx context.Context, organizationID, channelID, id domain.ID) (domain.Topic, error)
-	GetDefaultTopic(ctx context.Context, organizationID, channelID domain.ID) (domain.Topic, error)
-	ListTopics(ctx context.Context, organizationID, channelID domain.ID, limit int) ([]domain.Topic, error)
+	CreateTopic(ctx context.Context, organizationID, channelID domain.ID, name string) (conversation.Topic, error)
+	CreateDefaultTopic(ctx context.Context, organizationID, channelID domain.ID) (conversation.Topic, error)
+	GetTopic(ctx context.Context, organizationID, channelID, id domain.ID) (conversation.Topic, error)
+	GetDefaultTopic(ctx context.Context, organizationID, channelID domain.ID) (conversation.Topic, error)
+	ListTopics(ctx context.Context, organizationID, channelID domain.ID, limit int) ([]conversation.Topic, error)
 }
 
 // Directory resolves requested topic IDs within an organisation and channel.
 // Missing and out-of-scope topics are omitted.
 type Directory interface {
-	LookupTopics(context.Context, domain.ID, domain.ID, []domain.ID) (map[domain.ID]domain.Topic, error)
+	LookupTopics(context.Context, domain.ID, domain.ID, []domain.ID) (map[domain.ID]conversation.Topic, error)
 }

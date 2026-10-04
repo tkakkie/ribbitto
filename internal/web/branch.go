@@ -18,7 +18,7 @@ import (
 
 // Branching moves selected messages to another topic of the channel.
 type Branching interface {
-	Branch(ctx context.Context, m org.Membership, channelID domain.ID, b topic.Branch, notice func(domain.Topic) string) (domain.Topic, error)
+	Branch(ctx context.Context, m org.Membership, channelID domain.ID, b topic.Branch, notice func(conversation.Topic) string) (conversation.Topic, error)
 }
 
 // branch serves POST …/channels/{channelID}/branch. The form names the
@@ -73,7 +73,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 	count := len(b.Messages)
 	// The notice is an ordinary message in the brancher's language; its
 	// text names the destination as it is at the time of branching.
-	notice := func(destination domain.Topic) string {
+	notice := func(destination conversation.Topic) string {
 		name := destination.Name
 		if destination.IsDefault {
 			name = i18n.T(r.Context(), "topic.default")
@@ -84,13 +84,13 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 	switch {
 	case errors.Is(err, topic.ErrConflict):
 		p.branchError(w, r, m, id, 409, "topic.branch_conflict")
-	case errors.Is(err, topic.ErrInvalidName):
+	case errors.Is(err, conversation.ErrInvalidTopicName):
 		p.branchError(w, r, m, id, 422, "topic.branch_name_invalid")
-	case errors.Is(err, topic.ErrNameTaken):
+	case errors.Is(err, conversation.ErrTopicNameTaken):
 		p.branchError(w, r, m, id, 422, "topic.branch_name_taken")
 	case errors.Is(err, topic.ErrInvalidBranch):
 		p.branchError(w, r, m, id, 422, "topic.branch_invalid")
-	case errors.Is(err, topic.ErrNotFound), errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound):
+	case errors.Is(err, conversation.ErrTopicNotFound), errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound):
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "branching messages", err)

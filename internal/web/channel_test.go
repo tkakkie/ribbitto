@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -27,11 +26,11 @@ type fakeTopics struct {
 	lookups *[][3]domain.ID
 }
 
-func (f fakeTopics) GetTopic(_ context.Context, org, channel, id domain.ID) (domain.Topic, error) {
+func (f fakeTopics) GetTopic(_ context.Context, org, channel, id domain.ID) (conversation.Topic, error) {
 	if f.lookups != nil {
 		*f.lookups = append(*f.lookups, [3]domain.ID{org, channel, id})
 	}
-	return domain.Topic{OrganizationID: org, ChannelID: channel, ID: id}, f.err
+	return conversation.Topic{OrganizationID: org, ChannelID: channel, ID: id}, f.err
 }
 
 func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
@@ -43,7 +42,7 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 		{"post", "POST", "", nil, 303},
 		{"invalid bound", "GET", "?before=bad", nil, 400},
 		{"malformed query", "GET", "?before=%zz", nil, 400},
-		{"unknown topic", "GET", "?before=bad", topic.ErrNotFound, 404},
+		{"unknown topic", "GET", "?before=bad", conversation.ErrTopicNotFound, 404},
 		{"lookup failure", "GET", "?before=bad", errors.New("offline"), 500},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

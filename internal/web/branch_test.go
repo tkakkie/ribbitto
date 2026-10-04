@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -22,9 +23,9 @@ type fakeBranchStore struct {
 	got topic.Branch
 }
 
-func (s *fakeBranchStore) Branch(_ context.Context, _, _, _ domain.ID, b topic.Branch, _ func(domain.Topic) string) (domain.Topic, int64, error) {
+func (s *fakeBranchStore) Branch(_ context.Context, _, _, _ domain.ID, b topic.Branch, _ func(conversation.Topic) string) (conversation.Topic, int64, error) {
 	s.got = b
-	return domain.Topic{ID: domain.ID{0x32}}, 1, s.err
+	return conversation.Topic{ID: domain.ID{0x32}}, 1, s.err
 }
 
 func TestBranchSelection(t *testing.T) {
@@ -46,10 +47,10 @@ func TestBranchSelection(t *testing.T) {
 		{"existing", []string{selection}, nil, 303, ""},
 		{"mixed", []string{selection, strings.Replace(selection, source, "32000000-0000-0000-0000-000000000000", 1)}, nil, 422, "topic.branch_mixed"},
 		{"stale", []string{selection}, topic.ErrConflict, 409, "topic.branch_conflict"},
-		{"name", []string{selection}, topic.ErrInvalidName, 422, "topic.branch_name_invalid"},
-		{"duplicate", []string{selection}, topic.ErrNameTaken, 422, "topic.branch_name_taken"},
+		{"name", []string{selection}, conversation.ErrInvalidTopicName, 422, "topic.branch_name_invalid"},
+		{"duplicate", []string{selection}, conversation.ErrTopicNameTaken, 422, "topic.branch_name_taken"},
 		{"too many", strings.Split(strings.Repeat(selection+",", 100)+selection, ","), nil, 422, "topic.branch_invalid"},
-		{"out of scope", []string{selection}, topic.ErrNotFound, 404, ""},
+		{"out of scope", []string{selection}, conversation.ErrTopicNotFound, 404, ""},
 	} {
 		for _, hx := range []bool{false, true} {
 			for _, lang := range []string{"en", "ja"} {

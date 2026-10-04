@@ -11,7 +11,6 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -39,7 +38,7 @@ type MessageReader interface {
 
 // TopicReader looks up topics scoped to their organisation and channel.
 type TopicReader interface {
-	GetTopic(context.Context, domain.ID, domain.ID, domain.ID) (domain.Topic, error)
+	GetTopic(context.Context, domain.ID, domain.ID, domain.ID) (conversation.Topic, error)
 }
 
 type channelPages struct {
@@ -109,7 +108,7 @@ func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m org
 		_, err = p.topics.GetTopic(r.Context(), m.Organization.ID, id, *p.topicID)
 	}
 	switch {
-	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, topic.ErrNotFound):
+	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, conversation.ErrTopicNotFound):
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "finding channel", err)
@@ -153,7 +152,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		before = &page.Before
 	}
 	history, err := p.messages.Page(r.Context(), m, id, p.topicID, before)
-	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) || errors.Is(err, topic.ErrNotFound) {
+	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) || errors.Is(err, conversation.ErrTopicNotFound) {
 		http.NotFound(w, r)
 		return
 	}
@@ -192,7 +191,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	switch {
 	case errors.Is(err, conversation.ErrInvalidBody):
 		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
-	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, topic.ErrNotFound):
+	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member.
 		http.NotFound(w, r)
@@ -248,11 +247,11 @@ func viewChannels(channels []conversation.Channel) []view.Channel {
 	return out
 }
 
-func viewTopic(t domain.Topic) view.Topic {
+func viewTopic(t conversation.Topic) view.Topic {
 	return view.Topic{ID: t.ID, Name: t.Name, IsDefault: t.IsDefault}
 }
 
-func viewTopicPtr(t *domain.Topic) *view.Topic {
+func viewTopicPtr(t *conversation.Topic) *view.Topic {
 	if t == nil {
 		return nil
 	}
@@ -260,7 +259,7 @@ func viewTopicPtr(t *domain.Topic) *view.Topic {
 	return &v
 }
 
-func viewTopics(topics []domain.Topic) []view.Topic {
+func viewTopics(topics []conversation.Topic) []view.Topic {
 	out := make([]view.Topic, len(topics))
 	for i, t := range topics {
 		out[i] = viewTopic(t)

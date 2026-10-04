@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
@@ -36,10 +37,10 @@ type Branch struct {
 // messages, posts the notice in the source topic and records both events.
 // notice gives the notice's body for the destination. It returns the
 // destination and the notice's sequence, the last one committed. A topic
-// outside the organisation and channel is ErrNotFound; a message not in
-// From is ErrConflict, and then nothing is written.
+// outside the organisation and channel is conversation.ErrTopicNotFound;
+// a message not in From is ErrConflict, and then nothing is written.
 type BranchStore interface {
-	Branch(ctx context.Context, organizationID, channelID, memberID domain.ID, b Branch, notice func(domain.Topic) string) (domain.Topic, int64, error)
+	Branch(ctx context.Context, organizationID, channelID, memberID domain.ID, b Branch, notice func(conversation.Topic) string) (conversation.Topic, int64, error)
 }
 
 // Notifier records the latest committed event sequence for an organisation.
@@ -63,13 +64,13 @@ func NewBrancher(store BranchStore, notifier Notifier) *Brancher {
 
 // Branch validates b and runs it in the member's organisation and the
 // channel. It returns the destination topic.
-func (s *Brancher) Branch(ctx context.Context, m org.Membership, channelID domain.ID, b Branch, notice func(domain.Topic) string) (domain.Topic, error) {
+func (s *Brancher) Branch(ctx context.Context, m org.Membership, channelID domain.ID, b Branch, notice func(conversation.Topic) string) (conversation.Topic, error) {
 	if err := validBranch(&b); err != nil {
-		return domain.Topic{}, err
+		return conversation.Topic{}, err
 	}
 	destination, seq, err := s.store.Branch(ctx, m.Organization.ID, channelID, m.Member.ID, b, notice)
 	if err != nil {
-		return domain.Topic{}, fmt.Errorf("branching: %w", err)
+		return conversation.Topic{}, fmt.Errorf("branching: %w", err)
 	}
 	if s.notifier != nil {
 		s.notifier.Raise(m.Organization.ID, seq)
@@ -94,9 +95,9 @@ func validBranch(b *Branch) error {
 	case b.To != nil && *b.To == b.From:
 		return fmt.Errorf("%w: the destination is the source", ErrInvalidBranch)
 	case b.To == nil:
-		name, err := domain.ValidateTopicName(b.NewName)
+		name, err := conversation.ValidateTopicName(b.NewName)
 		if err != nil {
-			return fmt.Errorf("%w: %w", ErrInvalidName, err)
+			return fmt.Errorf("%w: %w", conversation.ErrInvalidTopicName, err)
 		}
 		b.NewName = name
 	}

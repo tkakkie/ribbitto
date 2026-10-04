@@ -97,7 +97,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 			http.NotFound(w, r)
 			return
 		}
-		_, err := p.topics.GetTopic(r.Context(), m.Organization.ID, c.ID, selected)
+		_, err := p.topics.Get(r.Context(), m, c.ID, selected)
 		if errors.Is(err, conversation.ErrTopicNotFound) {
 			http.NotFound(w, r)
 			return

@@ -20,3 +20,8 @@ func EventKinds() realtime.Kinds {
 func NewChannels(pool *pgxpool.Pool) *conversation.Channels {
 	return conversation.NewChannels(postgres.NewChannelStore(pool))
 }
+
+// NewTopics builds the topic lookups on conversation's pool-bound store.
+func NewTopics(pool *pgxpool.Pool) *conversation.Topics {
+	return conversation.NewTopics(postgres.NewTopicStore(pool))
+}

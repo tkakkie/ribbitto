@@ -5,31 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
-	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/org"
-	"github.com/tkakkie/ribbitto/internal/org/orgpg"
-	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
-	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
-
-// completeSetup runs org's setup with infra's default-channel creator.
-func completeSetup(t *testing.T, pool *pgxpool.Pool) (org.SetupResult, error) {
-	t.Helper()
-	hasher, err := identity.NewHasher()
-	requireNoError(t, err)
-	return orgpg.NewSetup(pool, hasher, "secret",
-		func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
-		func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) },
-		func(tx platform.Tx) org.DefaultChannelCreator { return postgres.DefaultChannelCreatorIn(tx) },
-	).Complete(t.Context(), "secret", org.SetupInput{OrganizationName: "Example", Slug: "example", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
-}
 
 // Organisations from before default channels get exactly one each.
 func TestDefaultChannelBackfill(t *testing.T) {

@@ -23,11 +23,11 @@ linters:
       # Layer rules exclude tests; migration ownership also applies to tests.
       rules:
         # Temporary (decision 26, until the migration's last step): the four
-        # target-version tests (three in infra, one in org) keep migrating
-        # directly until step 5.
+        # target-version tests (two in infra, one each in org and conversation)
+        # keep migrating directly until step 5.
         migrations:
           list-mode: lax
-          files: ["$all", "!**/internal/platform/postgres/*.go", "!**/internal/platform/postgres/**/*.go", "!**/internal/infra/postgres/default_channel_test.go", "!**/internal/infra/postgres/event_log_test.go", "!**/internal/org/internal/postgres/member_handle_test.go", "!**/internal/infra/postgres/topic_test.go", "!**/cmd/ribbitto/*.go", "!**/cmd/ribbitto/**/*.go"]
+          files: ["$all", "!**/internal/platform/postgres/*.go", "!**/internal/platform/postgres/**/*.go", "!**/internal/conversation/internal/postgres/default_channel_backfill_test.go", "!**/internal/infra/postgres/event_log_test.go", "!**/internal/org/internal/postgres/member_handle_test.go", "!**/internal/infra/postgres/topic_test.go", "!**/cmd/ribbitto/*.go", "!**/cmd/ribbitto/**/*.go"]
           deny:
             - pkg: github.com/tkakkie/ribbitto/db/migrations
               desc: Only internal/platform/postgres and cmd/ribbitto own migrations.

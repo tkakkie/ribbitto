@@ -25,7 +25,7 @@
 // transactions. EventAppender and EventAppenderIn inject realtime
 // writes into that transaction. DefaultChannelCreator and
 // DefaultChannelCreatorIn declare the default-channel write setup injects;
-// infra/postgres implements them until conversation does in step 4.
+// conversationpg.DefaultChannelCreatorIn implements them.
 //
 // Setup (NewSetup, SetupInput, SetupResult, ErrSetupToken and
 // ErrSetupCompleted) authorizes and validates installation-wide first-run setup

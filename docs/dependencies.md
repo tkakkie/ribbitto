@@ -92,6 +92,7 @@ internal/org/internal/postgres -> internal/kernel
 internal/org/internal/postgres -> internal/org/internal/postgres/sqlcgen
 internal/org/internal/postgres -> internal/platform/postgres
 internal/org/internal/postgres -> internal/platform/postgres/pgxbridge
+internal/org/orgpg -> internal/org
 internal/org/orgpg -> internal/org/internal/postgres
 internal/org/orgpg -> internal/platform/postgres
 internal/org/orgpg -> internal/realtime

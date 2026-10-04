@@ -72,7 +72,7 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 		_, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 		must(err)
 	}
-	cached := realtime.NewCachedEvents(t.Context(), realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds()), realtime.NewHub(), 8, time.Minute)
+	cached := realtime.NewCachedEvents(t.Context(), realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds()), realtime.NewHub(), 8, time.Minute)
 	got, err := cached.EventsAfter(ctx, f.OrganizationID, 2, 1)
 	must(err)
 	if len(got) != 1 || got[0].Seq != 3 || realtime.CachedLen(cached) != 1 {
@@ -119,7 +119,7 @@ func TestRetentionReplay(t *testing.T) {
 			post()
 			_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
 			must(err)
-			reader := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
+			reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
 			expire := func() {
 				must(realtimepg.NewCleaner(pool, orgpg.RetentionBoundaryIn).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
 			}
@@ -134,7 +134,7 @@ func TestRetentionReplay(t *testing.T) {
 				events = cached
 				expire()
 			case "snapshot":
-				events = realtimepg.NewReader(pool, interceptBounds(expire), postgres.EventKinds())
+				events = realtimepg.NewReader(pool, interceptBounds(expire), eventKinds())
 				want, wantCursor = []string{"message", "reset"}, 2
 			case "open":
 				want, wantCursor = []string{"message", "reset"}, 2
@@ -145,7 +145,7 @@ func TestRetentionReplay(t *testing.T) {
 					post()
 				} else {
 					// Commit only after the idle read took its snapshot.
-					events = realtimepg.NewReader(pool, interceptBounds(post), postgres.EventKinds())
+					events = realtimepg.NewReader(pool, interceptBounds(post), eventKinds())
 				}
 			default:
 				cursor, wantCursor = 2, 2
@@ -186,3 +186,12 @@ func TestRetentionReplay(t *testing.T) {
 // appendEvents adapts realtime's appender to the consumer interface the
 // event-writing stores declare (decision 26).
 func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// eventKinds gives readers the same publisher registrations as cmd/ribbitto.
+func eventKinds() realtime.Kinds {
+	kinds := postgres.EventKinds()
+	for kind, router := range orgpg.EventKinds() {
+		kinds[kind] = router
+	}
+	return kinds
+}

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/domain"
-	infra "github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
@@ -33,7 +32,7 @@ func TestAppenderAudience(t *testing.T) {
 		})
 		return seq, err
 	}
-	reader := postgres.NewReader(pool, orgpg.BoundsIn, infra.EventKinds())
+	reader := postgres.NewReader(pool, orgpg.BoundsIn, eventKinds())
 	for _, audience := range []*domain.ID{nil, &f.MemberID} {
 		seq, err := appendOne(audience)
 		requireNoError(t, err)

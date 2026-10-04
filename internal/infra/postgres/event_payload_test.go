@@ -21,12 +21,9 @@ func TestEventPayloadCompatibility(t *testing.T) {
 	pool := pgtest.New(t)
 	id := func(n byte) domain.ID { return domain.ID{0: 0xab, 6: 0x7c, 8: 0x9d, 15: n} }
 	uuid := func(n byte) pgtype.UUID { return pgtype.UUID{Bytes: id(n), Valid: true} }
-	posted, err := message.EncodePosted(id(1), id(2), id(3))
-	requireNoError(t, err)
-	joined, err := member.EncodeJoined(id(4))
-	requireNoError(t, err)
-	moved, err := topic.EncodeMoved(topic.Moved{ChannelID: id(1), FromTopicID: id(3), ToTopicID: id(5), MessageIDs: []domain.ID{id(2), id(6)}})
-	requireNoError(t, err)
+	posted := message.EncodePosted(id(1), id(2), id(3))
+	joined := member.EncodeJoined(id(4))
+	moved := topic.EncodeMoved(topic.Moved{ChannelID: id(1), FromTopicID: id(3), ToTopicID: id(5), MessageIDs: []domain.ID{id(2), id(6)}})
 	for _, tt := range []struct {
 		name    string
 		encoded []byte

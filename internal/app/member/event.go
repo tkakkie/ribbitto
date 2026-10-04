@@ -2,7 +2,6 @@ package member
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -19,12 +18,10 @@ type Joined struct {
 
 // EncodeJoined returns the stored data of KindJoined for memberID's join:
 // canonical UUID text under member_id.
-func EncodeJoined(memberID domain.ID) ([]byte, error) {
-	data, err := json.Marshal(map[string]string{"member_id": realtime.FormatPayloadID(memberID)})
-	if err != nil {
-		return nil, fmt.Errorf("encoding member.joined data: %w", err)
-	}
-	return data, nil
+func EncodeJoined(memberID domain.ID) []byte {
+	// This payload contains only strings, so marshaling cannot fail.
+	data, _ := json.Marshal(map[string]string{"member_id": realtime.FormatPayloadID(memberID)})
+	return data
 }
 
 // DecodeJoined reads stored data; member_id is required.

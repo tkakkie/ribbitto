@@ -39,11 +39,10 @@ type TxRunner interface {
 	InTx(ctx context.Context, fn func(platform.Tx) error) error
 }
 
-// Writer is posting's reads and writes in the caller's transaction, on
-// validated values (branching's join in step 4.8b). It takes no organisation
-// lock (the sequence, taken first, does) and never begins, commits or rolls
-// back: the caller does, also after an error, which leaves the transaction
-// unusable.
+// Writer is posting's and branching's reads and writes in the caller's
+// transaction, on validated values. It takes no organisation lock (the
+// sequence, taken first, does) and never begins, commits or rolls back: the
+// caller does, also after an error, which leaves the transaction unusable.
 type Writer interface {
 	// GetDefaultTopic returns the channel's default topic; none, as for
 	// another organisation's channel, is ErrTopicNotFound.
@@ -55,6 +54,15 @@ type Writer interface {
 	// (GetDefaultTopic or GetTopic). Another organisation's channel is
 	// ErrChannelNotFound and another organisation's member org.ErrNotFound.
 	InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (Message, error)
+	// CreateTopic creates a named topic. A name the channel already has is
+	// ErrTopicNameTaken; one the database rejects is ErrInvalidTopicName.
+	CreateTopic(ctx context.Context, organizationID, channelID kernel.ID, name string) (Topic, error)
+	// InsertNotice inserts branching's notice like InsertMessage but maps no
+	// error, so a failure there stays a server error (R2 on #502).
+	InsertNotice(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (Message, error)
+	// MoveMessages moves the given messages still in the source topic of
+	// the channel to the destination and returns how many moved.
+	MoveMessages(ctx context.Context, organizationID, channelID, fromTopicID, toTopicID kernel.ID, messageIDs []kernel.ID) (int64, error)
 }
 
 // WriterIn binds conversation's writes to the caller's transaction.

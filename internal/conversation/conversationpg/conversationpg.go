@@ -46,6 +46,6 @@ func (r txRunner) InTx(ctx context.Context, fn func(platform.Tx) error) error {
 	return platform.InTx(ctx, r.pool, fn)
 }
 
-// WriterIn returns posting's writes bound to the caller's transaction; it is
-// a conversation.WriterIn.
+// WriterIn returns posting's and branching's writes bound to the caller's
+// transaction; it is a conversation.WriterIn.
 func WriterIn(tx platform.Tx) conversation.Writer { return postgres.WriterIn(tx) }

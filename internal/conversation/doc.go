@@ -18,8 +18,9 @@
 // snapshot by closures in cmd/* and the tests; TxRunner, Writer with
 // WriterIn, EventSequenceIn, EventAppenderIn and Notifier, the transaction
 // ports posting and branching will own their transaction through (unused
-// until steps 4.9 and 4.10a); and the two event kinds conversation publishes
-// and so owns.
+// until steps 4.9 and 4.10a; the store backs branching's CreateTopic and
+// MoveMessages with copies of the legacy queries until step 4.16); and the
+// two event kinds conversation publishes and so owns.
 // KindPosted with Posted, EncodePosted, DecodePosted and RoutePosted is
 // message.posted, its payload and its routing; KindMessagesMoved with Moved,
 // EncodeMoved, DecodeMoved and RouteMoved is messages.moved. conversationpg

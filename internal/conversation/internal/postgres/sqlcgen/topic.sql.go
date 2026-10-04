@@ -11,6 +11,38 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createTopic = `-- name: CreateTopic :one
+INSERT INTO topic (organization_id, channel_id, name, is_default)
+VALUES ($1, $2, $3, $4) RETURNING id, organization_id, channel_id, name, is_default, created_at
+`
+
+type CreateTopicParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	Name           pgtype.Text
+	IsDefault      bool
+}
+
+// Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
+func (q *Queries) CreateTopic(ctx context.Context, arg CreateTopicParams) (Topic, error) {
+	row := q.db.QueryRow(ctx, createTopic,
+		arg.OrganizationID,
+		arg.ChannelID,
+		arg.Name,
+		arg.IsDefault,
+	)
+	var i Topic
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ChannelID,
+		&i.Name,
+		&i.IsDefault,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getDefaultTopic = `-- name: GetDefaultTopic :one
 SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic WHERE organization_id = $1 AND channel_id = $2 AND is_default
 `
@@ -59,4 +91,36 @@ func (q *Queries) GetTopic(ctx context.Context, arg GetTopicParams) (Topic, erro
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const moveMessages = `-- name: MoveMessages :execrows
+UPDATE message SET topic_id = $1
+WHERE organization_id = $2 AND channel_id = $3
+  AND topic_id = $4 AND id = ANY($5::uuid[])
+`
+
+type MoveMessagesParams struct {
+	ToTopicID      pgtype.UUID
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	FromTopicID    pgtype.UUID
+	MessageIds     []pgtype.UUID
+}
+
+// Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
+// Listed exception (feature map): branching writes message.topic_id. Only
+// messages still in the expected topic move; the caller compares the count
+// with the selection and rolls back on a mismatch (409).
+func (q *Queries) MoveMessages(ctx context.Context, arg MoveMessagesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, moveMessages,
+		arg.ToTopicID,
+		arg.OrganizationID,
+		arg.ChannelID,
+		arg.FromTopicID,
+		arg.MessageIds,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

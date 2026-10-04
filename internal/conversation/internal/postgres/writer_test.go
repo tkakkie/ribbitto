@@ -106,6 +106,17 @@ func TestWriterErrors(t *testing.T) {
 			return err
 		}
 	}
+	notice := func(channelID, topicID, memberID kernel.ID, body string) func(conversation.Writer) error {
+		return func(w conversation.Writer) error {
+			_, err := w.InsertNotice(ctx, f.acme, channelID, topicID, memberID, body, 1)
+			return err
+		}
+	}
+	createTopic := func(name string) func(conversation.Writer) error {
+		return func(w conversation.Writer) error { _, err := w.CreateTopic(ctx, f.acme, f.general, name); return err }
+	}
+	var planning kernel.ID
+	fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, 'Planning', false) RETURNING id", []any{f.acme, f.general}, &planning)
 	for _, tc := range []struct {
 		name       string
 		write      func(conversation.Writer) error
@@ -116,6 +127,12 @@ func TestWriterErrors(t *testing.T) {
 		{"message_organization_id_channel_id_fkey", insert(f.foreign, f.foreignTopic, f.alice, "hello"), conversation.ErrChannelNotFound, ""},
 		{"message_organization_id_member_id_fkey", insert(f.general, f.generalTopic, f.bob, "hello"), org.ErrNotFound, ""},
 		{"body CHECK", insert(f.general, f.generalTopic, f.alice, " hello"), nil, "message_body_check2"},
+		{"topic_name_idx", createTopic("planning"), conversation.ErrTopicNameTaken, ""},
+		{"topic_name_check", createTopic(strings.Repeat("a", 81)), conversation.ErrInvalidTopicName, "topic_name_check"},
+		// The notice maps nothing (R2 on #502), its foreign keys included.
+		{"notice's channel key", notice(f.foreign, f.foreignTopic, f.alice, "hello"), nil, "message_organization_id_channel_id_fkey"},
+		{"notice's member key", notice(f.general, f.generalTopic, f.bob, "hello"), nil, "message_organization_id_member_id_fkey"},
+		{"notice's body CHECK", notice(f.general, f.generalTopic, f.alice, " hello"), nil, "message_body_check2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := conversationpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error { return tc.write(writerIn(tx)) })
@@ -126,14 +143,15 @@ func TestWriterErrors(t *testing.T) {
 			if tc.want == nil && err == error(pgErr) {
 				t.Fatalf("error = %v, want it wrapped, not the bare PostgreSQL error", err)
 			}
-			// An untranslated failure must not become an error web answers with 404.
-			for _, mapped := range []error{conversation.ErrChannelNotFound, org.ErrNotFound, conversation.ErrTopicNotFound} {
+			// An untranslated failure must not become an error web answers with 404, 409 or 422.
+			for _, mapped := range []error{conversation.ErrChannelNotFound, org.ErrNotFound, conversation.ErrTopicNotFound, conversation.ErrTopicNameTaken, conversation.ErrInvalidTopicName} {
 				if tc.want == nil && errors.Is(err, mapped) {
 					t.Fatalf("error = %v, mapped to %v", err, mapped)
 				}
 			}
-			if n := messages(t, pool); n != 0 {
-				t.Fatalf("%d messages after the failed write, want 0", n)
+			var topics int
+			if fixture(t, pool, "SELECT count(*) FROM topic WHERE NOT is_default", nil, &topics); topics != 1 || messages(t, pool) != 0 {
+				t.Fatalf("%d named topics and %d messages after the failed write, want only Planning", topics, messages(t, pool))
 			}
 		})
 	}
@@ -169,4 +187,103 @@ func TestTxRunnerCommits(t *testing.T) {
 	if fixture(t, pool, "SELECT event_seq FROM organization WHERE id = $1", []any{f.acme}, &seq); seq != 0 {
 		t.Fatalf("event_seq = %d after the failed commit, want 0", seq)
 	}
+}
+
+// Branching's writes run on the caller's transaction: the new topic, the
+// notice and the move are visible there and gone after the runner rolls back.
+func TestWriterBranchesIn(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx, f := t.Context(), newFixtures(t, pool)
+	rollback := errors.New("caller rolls back")
+	err := conversationpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error {
+		writer := writerIn(tx)
+		planning, err := writer.CreateTopic(ctx, f.acme, f.general, "Planning")
+		if err != nil || planning.OrganizationID != f.acme || planning.ChannelID != f.general || planning.Name != "Planning" || planning.IsDefault || planning.CreatedAt.IsZero() {
+			t.Fatalf("CreateTopic = %+v, %v", planning, err)
+		}
+		if got, err := writer.GetTopic(ctx, f.acme, f.general, planning.ID); err != nil || got != planning {
+			t.Fatalf("GetTopic = %+v, %v; want %+v", got, err, planning)
+		}
+		posted, err := writer.InsertNotice(ctx, f.acme, f.general, f.generalTopic, f.alice, "moved", 1)
+		if err != nil || posted.OrganizationID != f.acme || posted.ChannelID != f.general || posted.TopicID != f.generalTopic ||
+			posted.MemberID != f.alice || posted.Body != "moved" || posted.EventSeq != 1 || posted.CreatedAt.IsZero() {
+			t.Fatalf("InsertNotice = %+v, %v", posted, err)
+		}
+		if moved, err := writer.MoveMessages(ctx, f.acme, f.general, f.generalTopic, planning.ID, []kernel.ID{posted.ID}); err != nil || moved != 1 {
+			t.Fatalf("MoveMessages = %d, %v; want 1", moved, err)
+		}
+		var topic kernel.ID
+		requireNoError(t, pgxbridge.Tx(tx).QueryRow(ctx, "SELECT topic_id FROM message WHERE id = $1", posted.ID).Scan(&topic))
+		if topic != planning.ID {
+			t.Fatalf("message in the caller's transaction is in topic %v, want %v", topic, planning.ID)
+		}
+		return rollback
+	})
+	if err != rollback {
+		t.Fatalf("caller rollback: %v, want it as is", err)
+	}
+	var topics int
+	if fixture(t, pool, "SELECT count(*) FROM topic WHERE NOT is_default", nil, &topics); topics != 0 || messages(t, pool) != 0 {
+		t.Fatalf("after rollback: %d named topics, %d messages; want none", topics, messages(t, pool))
+	}
+}
+
+// MoveMessages moves only the selected messages still in the source topic of
+// the organisation's channel, and counts only those.
+func TestWriterMoveMessages(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx, f := t.Context(), newFixtures(t, pool)
+	var planning, random, randomTopic kernel.ID
+	fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, 'Planning', false) RETURNING id", []any{f.acme, f.general}, &planning)
+	fixture(t, pool, channelSQL, []any{f.acme, "random"}, &random, &randomTopic)
+	before, want := map[kernel.ID]kernel.ID{}, map[kernel.ID]kernel.ID{}
+	selected := []kernel.ID{{0xee}} // unknown
+	for i, m := range []struct{ organization, channel, topic, member, after kernel.ID }{
+		{f.acme, f.general, f.generalTopic, f.alice, planning},       // the only one that moves
+		{f.acme, f.general, f.generalTopic, f.alice, f.generalTopic}, // not selected
+		{f.acme, f.general, planning, f.alice, planning},             // already moved
+		{f.acme, random, randomTopic, f.alice, randomTopic},          // another channel
+		{f.globex, f.foreign, f.foreignTopic, f.bob, f.foreignTopic}, // another organisation
+	} {
+		var id kernel.ID
+		fixture(t, pool, "INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq) VALUES ($1, $2, $3, $4, 'hello', $5) RETURNING id", []any{m.organization, m.channel, m.topic, m.member, i + 1}, &id)
+		before[id], want[id] = m.topic, m.after
+		if i != 1 {
+			selected = append(selected, id)
+		}
+	}
+	move := func(organizationID, channelID kernel.ID) (moved int64) {
+		requireNoError(t, conversationpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error {
+			var err error
+			moved, err = writerIn(tx).MoveMessages(ctx, organizationID, channelID, f.generalTopic, planning, selected)
+			return err
+		}))
+		return moved
+	}
+	topicsAre := func(want map[kernel.ID]kernel.ID, when string) {
+		t.Helper()
+		for id, topic := range want {
+			var got kernel.ID
+			if fixture(t, pool, "SELECT topic_id FROM message WHERE id = $1", []any{id}, &got); got != topic {
+				t.Fatalf("%s: message %v is in topic %v, want %v", when, id, got, topic)
+			}
+		}
+	}
+	// The source topic matches, so only the organisation or the channel
+	// predicate can keep its selected message in place.
+	for _, scope := range []struct {
+		name                  string
+		organization, channel kernel.ID
+	}{{"another organisation", f.globex, f.general}, {"another channel", f.acme, random}} {
+		if moved := move(scope.organization, scope.channel); moved != 0 {
+			t.Fatalf("%s: moved = %d, want 0", scope.name, moved)
+		}
+		topicsAre(before, scope.name)
+	}
+	if moved := move(f.acme, f.general); moved != 1 {
+		t.Fatalf("moved = %d, want 1", moved)
+	}
+	topicsAre(want, "after the move")
 }

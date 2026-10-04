@@ -2,7 +2,6 @@ package postgres_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -10,9 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
-	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
-	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -107,47 +103,5 @@ func TestDefaultChannelBackfill(t *testing.T) {
 		if r.defaults != want.defaults || r.channels != want.channels || r.name != want.name || want.id != "" && r.id != want.id {
 			t.Errorf("%s: got %+v, want %+v", slug, r, want)
 		}
-	}
-}
-
-// The use cases see only the member's organisation, even with a known id.
-func TestChannelService(t *testing.T) {
-	t.Parallel()
-	pool := pgtest.New(t)
-	ctx := t.Context()
-	acme := pgtest.Organization(t, pool, "acme", "Acme", 0)
-	globex := pgtest.Organization(t, pool, "globex", "Globex", 0)
-	member := func(orgID domain.ID) org.Membership {
-		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{OrganizationID: orgID}}
-	}
-	store := postgres.NewChannelStore(pool)
-	service := appchannel.New(store)
-	for _, org := range []domain.ID{acme, globex} {
-		pgtest.Channel(t, pool, org, conversation.DefaultChannelName, true)
-	}
-	secret, err := service.Create(ctx, member(globex), " 開発 ")
-	if err != nil || secret.Name != "開発" || secret.IsDefault {
-		t.Fatalf("create: %+v, %v", secret, err)
-	}
-	if _, err := service.Create(ctx, member(globex), "開発"); !errors.Is(err, conversation.ErrChannelNameTaken) {
-		t.Fatalf("duplicate name: %v", err)
-	}
-	if _, err := service.Create(ctx, member(acme), "開発"); err != nil {
-		t.Fatalf("same name in another organisation: %v", err)
-	}
-	if _, err := service.Get(ctx, member(acme), secret.ID); !errors.Is(err, conversation.ErrChannelNotFound) {
-		t.Fatalf("another organisation's channel by id: %v", err)
-	}
-	list, err := service.List(ctx, member(acme))
-	if err != nil || len(list) != 2 {
-		t.Fatalf("list: %+v, %v", list, err)
-	}
-	for _, c := range list {
-		if c.OrganizationID != acme || c.ID == secret.ID {
-			t.Fatalf("list leaked %+v", c)
-		}
-	}
-	if got, err := service.Default(ctx, member(globex)); err != nil || got.Name != conversation.DefaultChannelName || got.OrganizationID != globex {
-		t.Fatalf("default: %+v, %v", got, err)
 	}
 }

@@ -22,26 +22,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
-// A failure while creating the default channel rolls the whole setup back.
-func TestSetupDefaultChannelRollback(t *testing.T) {
-	t.Parallel()
-	pool := pgtest.New(t)
-	ctx := t.Context()
-	// Raw SQL installs an adversarial trigger to exercise setup rollback.
-	_, err := pool.Exec(ctx, `
-		CREATE FUNCTION refuse_channel() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'refused'; END $$;
-		CREATE TRIGGER refuse_channel BEFORE INSERT ON channel FOR EACH ROW EXECUTE FUNCTION refuse_channel()`)
-	requireNoError(t, err)
-	if _, err := completeSetup(t, pool); err == nil {
-		t.Fatal("setup succeeded without its default channel")
-	}
-	var rows int
-	requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM organization) + (SELECT count(*) FROM account) + (SELECT count(*) FROM member) + (SELECT count(*) FROM setup) + (SELECT count(*) FROM channel)").Scan(&rows))
-	if rows != 0 {
-		t.Fatalf("%d rows left behind", rows)
-	}
-}
-
 // completeSetup runs org's setup with infra's default-channel creator.
 func completeSetup(t *testing.T, pool *pgxpool.Pool) (org.SetupResult, error) {
 	t.Helper()

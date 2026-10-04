@@ -14,16 +14,16 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
-// TestAccountSchema holds the organisation and member part of the schema
+// TestOrganizationMemberSchema holds the organisation, member and setup schema
 // checks; identity's store tests hold the account and session part.
-func TestAccountSchema(t *testing.T) {
+func TestOrganizationMemberSchema(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// Raw SQL and queries exercise schema constraints directly, including invalid rows.
 	q := sqlcgen.New(pool)
 	var nullable int
-	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('member') AND is_nullable = 'YES'").Scan(&nullable))
+	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('organization', 'member', 'setup') AND is_nullable = 'YES'").Scan(&nullable))
 	if nullable != 0 {
 		t.Fatalf("new tables have %d nullable columns", nullable)
 	}
@@ -79,10 +79,8 @@ func TestAccountSchema(t *testing.T) {
 	if !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("cross-organization lookup: %v", err)
 	}
-	for _, id := range []pgtype.UUID{member.ID} {
-		if !id.Valid || id.Bytes[6]>>4 != 7 {
-			t.Fatalf("expected UUIDv7, got %v", id)
-		}
+	if !member.ID.Valid || member.ID.Bytes[6]>>4 != 7 {
+		t.Fatalf("expected UUIDv7, got %v", member.ID)
 	}
 	for _, tc := range []struct{ name, sql, code string }{
 		{"role", "UPDATE member SET role = 'admin' WHERE organization_id = $1", "23514"},

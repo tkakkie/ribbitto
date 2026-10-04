@@ -8,10 +8,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
+	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
-	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
@@ -21,10 +20,9 @@ func TestAccountCreatorIn(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	var createAccount org.AccountCreatorIn = func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
 	rollback := errors.New("caller rolls back")
 	err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
-		id, err := createAccount(tx).CreateAccount(ctx, "new@example.org", "New", "$argon2id$new")
+		id, err := postgres.AccountCreatorIn(tx).CreateAccount(ctx, "new@example.org", "New", "$argon2id$new")
 		requireNoError(t, err)
 		row, err := sqlcgen.New(pgxbridge.Tx(tx)).GetAccountByID(ctx, pgtype.UUID{Bytes: id, Valid: true})
 		requireNoError(t, err)
@@ -51,7 +49,6 @@ func TestAccountCreatorErrors(t *testing.T) {
 	id := account(t, pool, "taken@example.org", "Original")
 	original, err := q.GetAccountByID(ctx, pgtype.UUID{Bytes: id, Valid: true})
 	requireNoError(t, err)
-	var createAccount org.AccountCreatorIn = func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
 	for _, tc := range []struct {
 		name, email, displayName, hash string
 		want                           error
@@ -65,7 +62,7 @@ func TestAccountCreatorErrors(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
-				creator := createAccount(tx)
+				creator := postgres.AccountCreatorIn(tx)
 				_, err := creator.CreateAccount(ctx, "earlier@example.org", "Earlier", "$argon2id$earlier")
 				requireNoError(t, err)
 				id, err := creator.CreateAccount(ctx, tc.email, tc.displayName, tc.hash)

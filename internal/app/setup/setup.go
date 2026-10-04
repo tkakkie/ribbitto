@@ -83,7 +83,7 @@ func (s *Service) Complete(ctx context.Context, token string, input Input) (Resu
 		{"organization_name", &input.OrganizationName, org.ValidateOrganizationName},
 		{"slug", &input.Slug, org.ValidateSlug},
 		{"email", &input.Email, identity.ValidateEmail},
-		{"display_name", &input.DisplayName, domain.ValidateDisplayName},
+		{"display_name", &input.DisplayName, identity.ValidateDisplayName},
 		{"handle", &input.Handle, org.ValidateHandle},
 		{"password", &input.Password, identity.ValidatePassword},
 	} {

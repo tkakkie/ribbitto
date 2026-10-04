@@ -197,7 +197,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform/
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/realtime$
-            # Temporary: domain's ID alias, until step 5 (modules.md).
+            # Temporary: only domain's ID alias, until step 5 (modules.md).
             - github.com/tkakkie/ribbitto/internal/domain$
           deny: *non_html
         web:

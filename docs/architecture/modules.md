@@ -37,7 +37,7 @@ the temporary implementation behind it.
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
 | `app/setup`, `app/signup`, `app/member` | `identity.Hasher`, `identity.Account` | 1 | 3 |
 | `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
-| setup, sign-up (`infra`) | `identity` account writes | 3 (until then, a `legacy_account.sql` copy of `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry, from step 1) | 3 |
+| setup, sign-up (`infra`) | `identity` account writes through injected `org.AccountCreatorIn` (`identitypg.AccountCreatorIn`, adapted by a closure) | 3.9 | sign-up 3.11, setup 3.12; until then `legacy_account.sql` copies `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry |
 | `infra/postgres` appender interface (`EventAppender`), the bounds, committed-sequence and retention-boundary adapters, and the kind list | `realtime` types (root import, temporary allowance) | 2 | 5 |
 | the kind registry (`postgres.EventKinds()`, used by `cmd/ribbitto` and tests) | each publisher's `realtime.Router` | 2 | 3 and 4, as each module registers its own |
 | event payload codecs in `app/message`, `app/topic` and `app/member` | their kinds' payloads, owned by the publisher | 2 | 3 (`member.joined`, with `org`), 4 (`message.posted` and `messages.moved`, with `conversation`) |

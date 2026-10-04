@@ -4,6 +4,17 @@
 connects it to HTTP. `internal/identity` also owns `Account` and the email
 and password rules ([validation](../domain/validation.md)).
 
+**Account creation in a caller's transaction.** `org.AccountCreator` and its
+`AccountCreatorIn` factory accept validated, normalised values and a password
+hash. `identitypg.AccountCreatorIn` binds identity's store to the supplied
+`platform.Tx`; it never opens, commits or rolls back. Composition roots adapt
+it to org's factory with a closure. The store maps `account_email_key` to
+`identity.ErrEmailTaken` and every `account_email_*` CHECK to
+`identity.ErrInvalidEmail`; other errors remain wrapped PostgreSQL errors.
+These distinct errors preserve sign-up's field mappings and let setup
+re-check completion after rollback for either. Neither flow uses the creator
+yet: sign-up switches in 3.11 and setup in 3.12.
+
 - **Create** (inside `Replace`, below): 32 random bytes from `crypto/rand` are
   the token, returned once as unpadded base64url for the cookie. Only the
   token's SHA-256 hash is stored, with an absolute expiry 30 days ahead;

@@ -315,12 +315,13 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 
 func topicPageBoundary(t *testing.T, destination domain.Topic, page message.ChannelPage, before int64) int64 {
 	t.Helper()
-	model := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"}, Topic: &destination, Older: page.Older, Before: before}
+	selected := viewTopic(destination)
+	model := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"}, Topic: &selected, Older: page.Older, Before: before}
 	for _, entry := range page.Entries {
 		model.Messages = append(model.Messages, viewMessage("acme", entry))
 	}
 	var markup bytes.Buffer
-	if err := view.Channel("", model).Render(t.Context(), &markup); err != nil {
+	if err := view.ChannelScreen("", model).Render(t.Context(), &markup); err != nil {
 		t.Fatal(err)
 	}
 	doc, err := html.Parse(&markup)

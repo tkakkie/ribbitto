@@ -156,8 +156,8 @@ everything the review needs, as the examples above do:
 
 ## Running Muse Code
 
-The optional second adversarial reviewer
-([`adversarial-review.md`](adversarial-review.md#muse-code-optional)),
+Tier B's reviewer and tier A's fallback
+([`adversarial-review.md`](adversarial-review.md#muse-code)),
 with the invocation tested in
 [#246's preflight](https://github.com/tkakkie/ribbitto/issues/246#issuecomment-5932976563).
 It must name a Standard model (`muse-spark-1.3`): Meta states that
@@ -202,7 +202,8 @@ timeout (exit 124), INT (130) and TERM (143); the launcher removes the
 worktree and temporary files and reports cleanup failures. Muse failures
 keep their exit status; failure to create its process group exits 126.
 The same early Bash SIGINT limitation as [Grok's launcher](adversarial-review.md)
-applies. A failed optional review is recorded in the PR, never as success.
+applies. A failed run never counts as success: record it; retry a required
+run once, then ask the maintainer.
 
 `RIBBITTO_MUSE_TRUSTED_REF` overrides the launcher and prompt ref only for
 testing changes to them; `RIBBITTO_MUSE_TEST_SETUP_DELAY` is only for

@@ -163,7 +163,7 @@ func TestMessageTimestampView(t *testing.T) {
 				Messages:     []view.Message{{CreatedAt: tt.created}},
 			}
 			var b strings.Builder
-			if err := view.Channel("", page).Render(context.Background(), &b); err != nil {
+			if err := view.ChannelScreen("", page).Render(context.Background(), &b); err != nil {
 				t.Fatal(err)
 			}
 			doc, err := html.Parse(strings.NewReader(b.String()))

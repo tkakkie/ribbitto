@@ -33,16 +33,28 @@ func (s *MemberStore) UpdateHandle(ctx context.Context, organizationID, memberID
 		ID:             pgtype.UUID{Bytes: memberID, Valid: true},
 		Handle:         handle,
 	})
-	var pgErr *pgconn.PgError
-	switch {
-	case errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "member_organization_id_handle_key":
-		return org.ErrHandleTaken
-	case errors.As(err, &pgErr) && pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "member_handle_"):
-		return fmt.Errorf("%w: %w", org.ErrInvalidHandle, err)
-	case err != nil:
+	if err != nil {
+		if mapped := memberHandleError(err); mapped != nil {
+			return mapped
+		}
 		return fmt.Errorf("updating handle: %w", err)
-	case rows == 0:
+	}
+	if rows == 0 {
 		return org.ErrNotFound
+	}
+	return nil
+}
+
+func memberHandleError(err error) error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return nil
+	}
+	switch {
+	case pgErr.Code == "23505" && pgErr.ConstraintName == "member_organization_id_handle_key":
+		return org.ErrHandleTaken
+	case pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "member_handle_"):
+		return fmt.Errorf("%w: %w", org.ErrInvalidHandle, err)
 	}
 	return nil
 }

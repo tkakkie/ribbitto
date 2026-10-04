@@ -67,15 +67,12 @@ func (w RegistrationWriter) CreateMember(ctx context.Context, organizationID, ac
 		JoinedEventSeq: joinedEventSeq,
 		Handle:         handle,
 	})
-	var pgErr *pgconn.PgError
-	switch {
 	// The database is the last line of defence for uniqueness: a concurrent
 	// registration may claim the handle after validation.
-	case errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "member_organization_id_handle_key":
-		return kernel.ID{}, org.ErrHandleTaken
-	case errors.As(err, &pgErr) && pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "member_handle_"):
-		return kernel.ID{}, fmt.Errorf("%w: %w", org.ErrInvalidHandle, err)
-	case err != nil:
+	if err != nil {
+		if mapped := memberHandleError(err); mapped != nil {
+			return kernel.ID{}, mapped
+		}
 		return kernel.ID{}, fmt.Errorf("creating member: %w", err)
 	}
 	return row.ID.Bytes, nil

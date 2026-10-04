@@ -6,6 +6,7 @@ import (
 	"maps"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -14,6 +15,29 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
+
+func TestUpdateHandleConstraints(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	organizationID := fixtureOrganization(t, pool, "acme", "Acme", 1)
+	accountID := fixtureAccount(t, pool, "alice@example.org", "Alice")
+	memberID := fixtureMember(t, pool, organizationID, accountID, org.RoleMember, "alice", 1)
+	store := postgres.NewMemberStore(pool)
+	for _, tc := range []struct {
+		handle, constraint string
+	}{
+		{"Alice", "member_handle_format_check"},
+		{"all", "member_handle_reserved_check"},
+	} {
+		t.Run(tc.constraint, func(t *testing.T) {
+			err := store.UpdateHandle(t.Context(), organizationID, memberID, tc.handle)
+			var pgErr *pgconn.PgError
+			if !errors.Is(err, org.ErrInvalidHandle) || !errors.As(err, &pgErr) || pgErr.ConstraintName != tc.constraint {
+				t.Fatalf("UpdateHandle = %v, want ErrInvalidHandle wrapping %s", err, tc.constraint)
+			}
+		})
+	}
+}
 
 func TestChangeHandle(t *testing.T) {
 	t.Parallel()

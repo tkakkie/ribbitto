@@ -84,7 +84,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform$
             - github.com/tkakkie/ribbitto/internal/platform/
           deny: *non_html
-        # Only identity's wiring implements org's account-creator interface.
+        # Identity's wiring may import its exact store, not store sub-packages.
         identitywiring:
           list-mode: lax
           files: ["**/internal/identity/identitypg/*.go", "!$test"]
@@ -94,7 +94,6 @@ linters:
             - github.com/tkakkie/ribbitto/internal/kernel$
             - github.com/tkakkie/ribbitto/internal/platform$
             - github.com/tkakkie/ribbitto/internal/platform/
-            - github.com/tkakkie/ribbitto/internal/org$
           deny: *non_html
         # A module's wiring is composition code (decision 26): only cmd/* and
         # tests import it. Its store is imported only by its wiring and the

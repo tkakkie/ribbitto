@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -60,7 +60,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Sessions:  sessions,
 		SignIn:    identitypg.NewSignIn(pool, hasher, sessions),
 		Authz:     orgpg.NewAuthorizer(pool),
-		Channels:  channel.New(postgres.NewChannelStore(pool)),
+		Channels:  conversationpg.NewChannels(pool),
 		Topics:    postgres.NewTopicStore(pool),
 		Messages:  postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor},
 		Posting:   message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents)),

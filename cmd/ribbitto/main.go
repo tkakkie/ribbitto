@@ -16,7 +16,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -299,7 +298,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Messages:      postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor},
 		Posting:       posting,
 		Branching:     branching,
-		Channels:      channel.New(postgres.NewChannelStore(pool)),
+		Channels:      conversationpg.NewChannels(pool),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
 		Stream:        stream,
 	})

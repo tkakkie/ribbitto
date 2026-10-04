@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -58,7 +57,7 @@ func (s MessageReader) Before(ctx context.Context, m org.Membership, channelID d
 func (s MessageReader) Page(ctx context.Context, m org.Membership, channelID domain.ID, topicID *domain.ID, before *int64) (page message.ChannelPage, err error) {
 	err = platform.InSnapshot(ctx, s.Pool, func(snapshot platform.Snapshot) error {
 		tx := pgxbridge.Snapshot(snapshot)
-		channels := channel.New(NewChannelStore(tx))
+		channels := conversation.NewChannels(NewChannelStore(tx))
 		page.Current, err = channels.Get(ctx, m, channelID)
 		if err != nil {
 			return err

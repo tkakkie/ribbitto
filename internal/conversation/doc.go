@@ -4,6 +4,7 @@
 // the package never imports domain.
 //
 // Exported API so far: Channel, its name rule, errors and default name;
+// Channels (List, Create, Get, Default), NewChannels and ChannelStore;
 // Topic, ValidateTopicName, ErrTopicNotFound, ErrInvalidTopicName and
 // ErrTopicNameTaken;
 // Message, ValidateMessageBody, ErrInvalidBody and ErrMessageNotFound;

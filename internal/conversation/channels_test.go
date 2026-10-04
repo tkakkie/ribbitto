@@ -1,4 +1,4 @@
-package channel_test
+package conversation_test
 
 import (
 	"context"
@@ -6,35 +6,34 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
-// store keeps channels per organisation, as the real store scopes them.
-type store struct {
-	channels map[domain.ID][]conversation.Channel
+// channelStore keeps channels per organisation, as the real store scopes them.
+type channelStore struct {
+	channels map[kernel.ID][]conversation.Channel
 	created  []conversation.Channel
 }
 
-func (s *store) ListChannels(_ context.Context, org domain.ID) ([]conversation.Channel, error) {
+func (s *channelStore) ListChannels(_ context.Context, org kernel.ID) ([]conversation.Channel, error) {
 	return s.channels[org], nil
 }
 
-func (s *store) CreateChannel(_ context.Context, org domain.ID, name string, isDefault bool) (conversation.Channel, error) {
+func (s *channelStore) CreateChannel(_ context.Context, org kernel.ID, name string, isDefault bool) (conversation.Channel, error) {
 	for _, c := range s.channels[org] {
 		if c.Name == name {
 			return conversation.Channel{}, conversation.ErrChannelNameTaken
 		}
 	}
-	c := conversation.Channel{ID: domain.ID{byte(len(s.created) + 10)}, OrganizationID: org, Name: name, IsDefault: isDefault}
+	c := conversation.Channel{ID: kernel.ID{byte(len(s.created) + 10)}, OrganizationID: org, Name: name, IsDefault: isDefault}
 	s.created = append(s.created, c)
 	s.channels[org] = append(s.channels[org], c)
 	return c, nil
 }
 
-func (s *store) GetChannel(_ context.Context, org, id domain.ID) (conversation.Channel, error) {
+func (s *channelStore) GetChannel(_ context.Context, org, id kernel.ID) (conversation.Channel, error) {
 	for _, c := range s.channels[org] {
 		if c.ID == id {
 			return c, nil
@@ -43,7 +42,7 @@ func (s *store) GetChannel(_ context.Context, org, id domain.ID) (conversation.C
 	return conversation.Channel{}, conversation.ErrChannelNotFound
 }
 
-func (s *store) GetDefaultChannel(_ context.Context, org domain.ID) (conversation.Channel, error) {
+func (s *channelStore) GetDefaultChannel(_ context.Context, org kernel.ID) (conversation.Channel, error) {
 	for _, c := range s.channels[org] {
 		if c.IsDefault {
 			return c, nil
@@ -53,15 +52,15 @@ func (s *store) GetDefaultChannel(_ context.Context, org domain.ID) (conversatio
 }
 
 func TestChannels(t *testing.T) {
-	acme, globex := domain.ID{1}, domain.ID{2}
-	general := conversation.Channel{ID: domain.ID{3}, OrganizationID: acme, Name: "general", IsDefault: true}
-	secret := conversation.Channel{ID: domain.ID{4}, OrganizationID: globex, Name: "secret", IsDefault: true}
-	member := func(orgID domain.ID) org.Membership {
-		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{ID: domain.ID{9}, OrganizationID: orgID}}
+	acme, globex := kernel.ID{1}, kernel.ID{2}
+	general := conversation.Channel{ID: kernel.ID{3}, OrganizationID: acme, Name: "general", IsDefault: true}
+	secret := conversation.Channel{ID: kernel.ID{4}, OrganizationID: globex, Name: "secret", IsDefault: true}
+	member := func(orgID kernel.ID) org.Membership {
+		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{ID: kernel.ID{9}, OrganizationID: orgID}}
 	}
-	newService := func() (*channel.Service, *store) {
-		s := &store{channels: map[domain.ID][]conversation.Channel{acme: {general}, globex: {secret}}}
-		return channel.New(s), s
+	newService := func() (*conversation.Channels, *channelStore) {
+		s := &channelStore{channels: map[kernel.ID][]conversation.Channel{acme: {general}, globex: {secret}}}
+		return conversation.NewChannels(s), s
 	}
 
 	t.Run("create", func(t *testing.T) {

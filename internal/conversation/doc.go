@@ -4,6 +4,7 @@
 // the package never imports domain.
 //
 // Exported API so far: Channel, its name rule, errors and default name;
+// Channels (List, Create, Get, Default), NewChannels and ChannelStore;
 // Topic, ValidateTopicName, ErrTopicNotFound, ErrInvalidTopicName and
 // ErrTopicNameTaken; Topics, NewTopics and TopicReader, the topic lookup
 // scoped by a membership that web's stream and paging links use;

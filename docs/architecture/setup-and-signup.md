@@ -16,12 +16,16 @@ organisation, takes its next `event_seq` (1), creates the account
 channel and the setup row. Concurrent losers hit the singleton key and roll back;
 repeating setup is 404.
 
-`org.Setup` checks the configured token, then whether setup is open, and
-validates all fields before using the shared `identity.Hasher`. Its
-`org.SetupStore` interface requires atomic creation; `postgres.SetupStore`
-implements it (until step 3.12) with one transaction for the
-organisation, first sequence, owner account, membership (with the owner's
-handle), default channel ([`channels.md`](../domain/channels.md)) and setup marker.
+`org.Setup` (built by `orgpg.NewSetup`) checks the configured token, then
+whether setup is open, and validates all fields before using the shared
+`identity.Hasher`. As sign-up does, the root owns that transaction through
+`TxRunner`, appending `member.joined` after the membership, with identity's
+account, the event and the default channel ([`channels.md`](../domain/channels.md))
+injected through `AccountCreatorIn`, `EventAppenderIn` and
+`DefaultChannelCreatorIn` (`infra`'s creator until step 4). After a slug,
+email, handle or setup-row conflict it re-checks on the pool whether setup is
+open, since a concurrent winner may have collided first: closed means
+`ErrSetupCompleted`, open a field error. The root never inspects pgconn.
 `cmd/ribbitto` validates `RIBBITTO_SETUP_TOKEN` before opening the database:
 empty disables setup, and a non-empty value needs at least 32 characters.
 When disabled, `/setup` is not registered at all, so GET and POST are the

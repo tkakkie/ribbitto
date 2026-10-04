@@ -9,6 +9,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
 // ErrSetupToken rejects an incorrect token, including any unconfigured token.
@@ -33,35 +34,34 @@ type SetupResult struct {
 	OrganizationID, AccountID domain.ID
 }
 
-// SetupStore persists setup atomically; Create must return ErrSetupCompleted
-// for losers.
-type SetupStore interface {
-	Open(context.Context) (bool, error)
-	Create(ctx context.Context, organizationName, slug, email, displayName, handle, passwordHash string) (SetupResult, error)
-}
-
 // Setup controls first-run setup. Share the process's password hasher.
 type Setup struct {
-	store  SetupStore
-	hasher *identity.Hasher
-	token  string
+	state    SetupState
+	runner   TxRunner
+	writes   RegistrationWriterIn
+	accounts AccountCreatorIn
+	events   EventAppenderIn
+	channels DefaultChannelCreatorIn
+	hasher   *identity.Hasher
+	token    string
 }
 
-// NewSetup constructs a setup service with the configured token.
-func NewSetup(store SetupStore, hasher *identity.Hasher, token string) *Setup {
-	return &Setup{store: store, hasher: hasher, token: token}
+// NewSetup constructs a setup service with the configured token and
+// transaction-bound writers.
+func NewSetup(state SetupState, runner TxRunner, writes RegistrationWriterIn, accounts AccountCreatorIn, events EventAppenderIn, channels DefaultChannelCreatorIn, hasher *identity.Hasher, token string) *Setup {
+	return &Setup{state: state, runner: runner, writes: writes, accounts: accounts, events: events, channels: channels, hasher: hasher, token: token}
 }
 
 // Open reports whether the installation has no completed setup row.
 func (s *Setup) Open(ctx context.Context) (bool, error) {
-	open, err := s.store.Open(ctx)
+	open, err := s.state.Open(ctx)
 	if err != nil {
 		return false, fmt.Errorf("checking setup: %w", err)
 	}
 	return open, nil
 }
 
-// Complete validates before hashing; the store commits all rows or none.
+// Complete validates before hashing and commits all rows or none.
 func (s *Setup) Complete(ctx context.Context, token string, input SetupInput) (SetupResult, error) {
 	configured, submitted := sha256.Sum256([]byte(s.token)), sha256.Sum256([]byte(token))
 	if subtle.ConstantTimeCompare(configured[:], submitted[:]) != 1 || s.token == "" {
@@ -97,11 +97,71 @@ func (s *Setup) Complete(ctx context.Context, token string, input SetupInput) (S
 	if err != nil {
 		return SetupResult{}, fmt.Errorf("hashing setup password: %w", err)
 	}
-	result, err := s.store.Create(ctx, input.OrganizationName, input.Slug, input.Email, input.DisplayName, input.Handle, hash)
+	var result SetupResult
+	err = s.runner.InTx(ctx, func(tx platform.Tx) error {
+		writes := s.writes(tx)
+		organizationID, err := writes.CreateOrganization(ctx, input.OrganizationName, input.Slug)
+		if err != nil {
+			return err
+		}
+		seq, err := writes.NextEventSeq(ctx, organizationID)
+		if err != nil {
+			return err
+		}
+		accountID, err := s.accounts(tx).CreateAccount(ctx, input.Email, input.DisplayName, hash)
+		if err != nil {
+			return err
+		}
+		memberID, err := writes.CreateMember(ctx, organizationID, accountID, RoleOwner, seq, input.Handle)
+		if err != nil {
+			return err
+		}
+		if err := s.events(tx).Append(ctx, organizationID, seq, KindJoined, nil, EncodeJoined(memberID)); err != nil {
+			return err
+		}
+		// Listed exception (feature map): a completed setup never exists
+		// without its default channel; a failure here rolls the organisation
+		// back too.
+		if err := s.channels(tx).CreateDefaultChannel(ctx, organizationID); err != nil {
+			return err
+		}
+		if err := writes.CompleteSetup(ctx, organizationID); err != nil {
+			return err
+		}
+		result = SetupResult{OrganizationID: organizationID, AccountID: accountID}
+		return nil
+	})
 	if err != nil {
-		return SetupResult{}, fmt.Errorf("creating setup: %w", err)
+		return SetupResult{}, fmt.Errorf("creating setup: %w", s.failed(ctx, err))
 	}
 	return result, nil
+}
+
+// failed maps a rolled-back setup transaction's error to setup's result.
+func (s *Setup) failed(ctx context.Context, err error) error {
+	conflict := false
+	for _, target := range []error{ErrSlugUnavailable, ErrInvalidHandle, ErrHandleTaken, ErrSetupCompleted, identity.ErrEmailTaken, identity.ErrInvalidEmail} {
+		conflict = conflict || errors.Is(err, target)
+	}
+	if !conflict {
+		return fmt.Errorf("storing setup transaction: %w", err)
+	}
+	// A concurrent winner may have collided on email or slug first; the
+	// loser must still learn that setup is complete, not that a field is.
+	if open, checkErr := s.state.Open(ctx); checkErr == nil && !open {
+		return ErrSetupCompleted
+	}
+	switch {
+	case errors.Is(err, ErrSetupCompleted):
+		return ErrSetupCompleted
+	case errors.Is(err, identity.ErrEmailTaken), errors.Is(err, identity.ErrInvalidEmail):
+		return ValidationErrors{"email": errors.New("email is unavailable or invalid")}
+	case errors.Is(err, ErrSlugUnavailable):
+		return ValidationErrors{"slug": errors.New("slug is unavailable or invalid")}
+	case errors.Is(err, ErrInvalidHandle):
+		return ValidationErrors{"handle": errors.New("handle is invalid")}
+	}
+	return fmt.Errorf("storing setup transaction: %w", err)
 }
 
 // validateRegistration checks the account fields setup and sign-up share,

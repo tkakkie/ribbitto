@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
@@ -35,7 +34,7 @@ func TestSignUp(t *testing.T) {
 	// A handle is unique only within its organisation: "alice" is taken in the other one.
 	otherAccount := fixtureAccount(t, pool, "other@example.org", "Other")
 	fixtureMember(t, pool, other, otherAccount, org.RoleOwner, "alice", 1)
-	result, err := postgres.NewSetupStore(pool, appendEvents).Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
+	result, err := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel).Complete(ctx, "secret", org.SetupInput{OrganizationName: "Team", Slug: "team", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
 	requireNoError(t, err)
 	id, err := service.SignUp(ctx, "Alice", "alice", "alice@example.org", "long enough password")
 	requireNoError(t, err)
@@ -112,8 +111,7 @@ func TestSignUpHandleConflicts(t *testing.T) {
 	ctx := t.Context()
 	hasher, err := identity.NewHasher()
 	requireNoError(t, err)
-	store := postgres.NewSetupStore(pool, appendEvents)
-	_, err = store.Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
+	_, err = orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel).Complete(ctx, "secret", org.SetupInput{OrganizationName: "Team", Slug: "team", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
 	requireNoError(t, err)
 	service := orgpg.NewSignUp(pool, hasher, true, signupAccount, signupEvents)
 	if _, err := service.SignUp(ctx, "Owner Two", " OWNER ", "owner2@example.org", "long enough password"); !errors.Is(err, org.ErrHandleTaken) {
@@ -144,9 +142,8 @@ func TestSignUpHandleConflicts(t *testing.T) {
 	}
 }
 
-func signupAccount(tx platform.Tx) org.AccountCreator    { return identitypg.AccountCreatorIn(tx) }
-func signupEvents(tx platform.Tx) org.EventAppender      { return realtimepg.AppenderIn(tx) }
-func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
+func signupAccount(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
+func signupEvents(tx platform.Tx) org.EventAppender   { return realtimepg.AppenderIn(tx) }
 
 type rawSignupAccount struct {
 	org.AccountCreator

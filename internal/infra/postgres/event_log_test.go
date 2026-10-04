@@ -120,7 +120,7 @@ func TestEventLogAudienceAndRollback(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	result, err := postgres.NewSetupStore(pool, appendEvents).Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
+	result, err := completeSetup(t, pool)
 	requireNoError(t, err)
 	other := pgtest.OrganizationWithOwner(t, pool, "other", "general")
 	_, err = pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)

@@ -1,7 +1,9 @@
 version: "2"
 sql:
-  # The legacy layered store. sqlc reads only the files directly in
-  # db/queries/, so modules' query directories stay out of it.
+  # The legacy layered store: conversation's channel, topic and message
+  # queries until step 4; it keeps no org or account query. sqlc reads only
+  # the files directly in db/queries/, so modules' query directories stay
+  # out of it.
   - engine: postgresql
     schema: db/migrations/
     queries: db/queries/

@@ -13,8 +13,8 @@ it to org's factory with a closure. The store maps `account_email_key` to
 `identity.ErrInvalidEmail`; other errors remain wrapped PostgreSQL errors.
 These distinct errors preserve sign-up's field mappings and let setup
 re-check completion after rollback for either. `org.SignUp` uses the creator
-and maps identity's errors to `org.ErrEmailTaken` and an `email` field error.
-`org.Setup` keeps the legacy account write until 3.12.
+and maps identity's errors to `org.ErrEmailTaken` and an `email` field error;
+`org.Setup` uses it too and maps both to an `email` field error.
 Their handlers replace sessions as a separate step after account creation.
 
 - **Create** (inside `Replace`, below): 32 random bytes from `crypto/rand` are

@@ -86,7 +86,16 @@ wait for Grok.
 
 ## Running Grok
 
-The launcher, its security boundary and its limits are in
+Run it from the maintainer's checkout, taking the launcher from `main`:
+
+```sh
+git fetch origin main &&
+  launcher=$(git show origin/main:scripts/ai/grok-review.sh) &&
+  bash -c "$launcher" grok-review <pr-number>
+```
+
+Never run a pull request's copy of `scripts/ai/grok-review.sh`. The
+launcher, its security boundary and its limits are in
 [`running-grok.md`](running-grok.md).
 
 ## Muse Code

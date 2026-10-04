@@ -61,7 +61,7 @@ func (s *Service) SignUp(ctx context.Context, displayName, handle, email, passwo
 		return domain.ID{}, ErrClosed
 	}
 	fields := ValidationErrors{}
-	displayName, fields["display_name"] = domain.ValidateDisplayName(displayName)
+	displayName, fields["display_name"] = identity.ValidateDisplayName(displayName)
 	handle, fields["handle"] = org.ValidateHandle(handle)
 	email, fields["email"] = identity.ValidateEmail(email)
 	password, fields["password"] = identity.ValidatePassword(password)

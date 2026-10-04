@@ -1,7 +1,8 @@
 # Validation
 
-`internal/identity` owns the email and password rules (`ValidateEmail`,
-`ValidatePassword`); `internal/org` owns `ValidateOrganizationName`,
+`internal/identity` owns the email, password and display-name rules
+(`ValidateEmail`, `ValidatePassword`, `ValidateDisplayName`,
+`IsBlankLookingName`); `internal/org` owns `ValidateOrganizationName`,
 `ValidateSlug` and `ValidateHandle`. `internal/domain` validates the remaining
 fields until their modules take them. These rules validate UTF-8 text.
 Email, display, organisation and channel names are trimmed and normalised to

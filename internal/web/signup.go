@@ -9,7 +9,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
-	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
@@ -49,13 +48,7 @@ func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpServic
 			var fields org.ValidationErrors
 			switch {
 			case err == nil:
-				token, expiresAt, err := sessions.Replace(r.Context(), incomingSession(r), account)
-				if err != nil {
-					serverError(w, r, "creating sign-up session", err)
-					return
-				}
-				middleware.SetSessionCookie(w, token, expiresAt)
-				http.Redirect(w, r, "/", http.StatusSeeOther)
+				signInAndRedirect(w, r, sessions, account, "creating sign-up session")
 				return
 			case errors.Is(err, org.ErrSignUpClosed):
 				http.NotFound(w, r)

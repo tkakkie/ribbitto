@@ -61,13 +61,7 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 			var fields org.ValidationErrors
 			switch {
 			case err == nil:
-				token, expiresAt, err := sessions.Replace(r.Context(), incomingSession(r), result.AccountID)
-				if err != nil {
-					serverError(w, r, "creating setup session", err)
-					return
-				}
-				middleware.SetSessionCookie(w, token, expiresAt)
-				http.Redirect(w, r, "/", http.StatusSeeOther)
+				signInAndRedirect(w, r, sessions, result.AccountID, "creating setup session")
 				return
 			case errors.Is(err, org.ErrSetupCompleted):
 				http.NotFound(w, r)
@@ -96,4 +90,14 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 	// and a completed setup answers 404 whatever the session state.
 	routes.HandleFuncWithoutSession("GET /setup", handler)
 	routes.HandleFuncWithoutSession("POST /setup", handler)
+}
+
+func signInAndRedirect(w http.ResponseWriter, r *http.Request, sessions SessionReplacer, accountID domain.ID, doing string) {
+	token, expiresAt, err := sessions.Replace(r.Context(), incomingSession(r), accountID)
+	if err != nil {
+		serverError(w, r, doing, err)
+		return
+	}
+	middleware.SetSessionCookie(w, token, expiresAt)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

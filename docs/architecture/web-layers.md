@@ -28,11 +28,12 @@ to view models, and choose the status, component and full page or fragment. They
 ## templ
 
 Components render view models defined in `internal/web/view`. They do not
-receive `internal/app` or use-case types: handlers convert those. A view
-model may hold pure `domain` value types (`domain.Channel` and `domain.ID`),
-which carry no behaviour a template could misuse. `ChannelPage.Organization`
-is a view-owned `Organization` with `Slug` and `Name`; handlers convert from
-`org.Organization`, and views do not import `org`. Components do no I/O and
+receive `internal/app` or use-case types: handlers convert those. View
+models own their `Organization` (`Slug`, `Name`), `Channel` (`ID`, `Name`)
+and `Topic` (`ID`, `Name`, `IsDefault`); handlers convert from `org` and the
+use cases, and views import neither `org` nor `conversation`. From `domain`
+they hold only `domain.ID`, which carries no behaviour a template could
+misuse. Components do no I/O and
 make no authorisation decisions; presentation logic (building URLs,
 formatting, choosing an i18n message ID) belongs in them.
 

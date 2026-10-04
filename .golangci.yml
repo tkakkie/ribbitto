@@ -232,6 +232,10 @@ linters:
               desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
             - pkg: github.com/tkakkie/ribbitto/internal/org/
               desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
+            - pkg: github.com/tkakkie/ribbitto/internal/conversation$
+              desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
+            - pkg: github.com/tkakkie/ribbitto/internal/conversation/
+              desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
             - pkg: github.com/tkakkie/ribbitto/internal/infra$
               desc: Views do no I/O; see docs/architecture/web-layers.md.
             - pkg: github.com/tkakkie/ribbitto/internal/infra/

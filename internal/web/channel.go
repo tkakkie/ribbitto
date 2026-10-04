@@ -168,9 +168,9 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		page.Organization, page.DisplayName, page.Handle, page.Role = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
-		page.Current, page.Channels, page.Older = history.Current, history.Channels, history.Older
-		page.EventCursor, page.Topic, page.Topics = history.EventCursor, history.Topic, history.Topics
-		return view.Channel(url, page)
+		page.Current, page.Channels, page.Older = viewChannel(history.Current), viewChannels(history.Channels), history.Older
+		page.EventCursor, page.Topic, page.Topics = history.EventCursor, viewTopicPtr(history.Topic), viewTopics(history.Topics)
+		return view.ChannelScreen(url, page)
 	})
 }
 
@@ -208,7 +208,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 // Enhanced posts never replace history or the connection's snapshot cursor.
 func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c domain.Channel, status int, page view.ChannelPage) {
 	if r.Header.Get("HX-Request") == "true" && p.topicID == nil {
-		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, c
+		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, viewChannel(c)
 		templ.Handler(view.MessageComposer(page), templ.WithStatus(status)).ServeHTTP(w, r)
 		return
 	}
@@ -232,6 +232,40 @@ func pathID(raw string) (domain.ID, bool) {
 	}
 	copy(id[:], decoded)
 	return id, true
+}
+
+// viewChannel and the helpers below copy only what the views display, so
+// view never depends on the use cases' entities.
+func viewChannel(c domain.Channel) view.Channel {
+	return view.Channel{ID: c.ID, Name: c.Name}
+}
+
+func viewChannels(channels []domain.Channel) []view.Channel {
+	out := make([]view.Channel, len(channels))
+	for i, c := range channels {
+		out[i] = viewChannel(c)
+	}
+	return out
+}
+
+func viewTopic(t domain.Topic) view.Topic {
+	return view.Topic{ID: t.ID, Name: t.Name, IsDefault: t.IsDefault}
+}
+
+func viewTopicPtr(t *domain.Topic) *view.Topic {
+	if t == nil {
+		return nil
+	}
+	v := viewTopic(*t)
+	return &v
+}
+
+func viewTopics(topics []domain.Topic) []view.Topic {
+	out := make([]view.Topic, len(topics))
+	for i, t := range topics {
+		out[i] = viewTopic(t)
+	}
+	return out
 }
 
 // viewMessage converts a history entry into what MessageItem renders, for

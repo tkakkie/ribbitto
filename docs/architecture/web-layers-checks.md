@@ -7,8 +7,8 @@ The rules are in [`web-layers.md`](web-layers.md).
 Checked by tools today: the layer imports (depguard), no `templ.Raw`
 (forbidigo), and the markup rules in `TestPagesMarkup` ([a11y]).
 The depguard `view` rule forbids non-test files in `internal/web/view`
-from importing `internal/app`, `internal/identity` or `internal/infra`,
-including sub-packages.
+from importing `internal/app`, `internal/identity`, `internal/org`,
+`internal/conversation` or `internal/infra`, including sub-packages.
 `TestPagesMarkup` also follows every `hx-get` and `hx-post` in each case,
 in both languages, with `HX-Request: true`. It checks `hx-target` ids in
 the requesting page, `hx-select` matches in the response, and every
@@ -52,7 +52,7 @@ that a component makes no authorisation decision.
 `TestMessageStreamBrowser` in `internal/web/message_stream_browser_test.go`
 runs the embedded `message-stream-v6.js`, vendored htmx and SSE extension
 in headless Chrome through go-rod. An HTTP test server renders real
-`Channel` and `MovedMessageItems` components without a database. Controlled
+`ChannelScreen` and `MovedMessageItems` components without a database. Controlled
 SSE deliveries and history responses cover both topic sides, bounded
 insertion, duplicate replay, moves before/during Load older, stale/fresh
 swaps, and abort/400 followed by another request. Exact ordered ID lists

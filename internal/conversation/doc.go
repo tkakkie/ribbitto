@@ -8,8 +8,10 @@
 // Topic, ValidateTopicName, ErrTopicNotFound, ErrInvalidTopicName and
 // ErrTopicNameTaken; Topics, NewTopics and TopicReader, the topic lookup
 // scoped by a membership that web's stream and paging links use;
-// Message, ValidateMessageBody, ErrInvalidBody and ErrMessageNotFound; and the
-// two event kinds conversation publishes and so owns.
+// Message, ValidateMessageBody, ErrInvalidBody and ErrMessageNotFound;
+// MemberDirectoryIn and AccountDirectoryIn, the page reader's author lookups
+// from org and identity, bound to the caller's snapshot by closures in cmd/*
+// and the tests; and the two event kinds conversation publishes and so owns.
 // KindPosted with Posted, EncodePosted, DecodePosted and RoutePosted is
 // message.posted, its payload and its routing; KindMessagesMoved with Moved,
 // EncodeMoved, DecodeMoved and RouteMoved is messages.moved. conversationpg

@@ -255,7 +255,12 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
 
 // lookupMembers adapts org's directory to the reader's consumer interface.
-func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }
+func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
+
+// lookupAccounts adapts identity's directory to the reader's consumer interface.
+func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
+	return identitypg.AccountsIn(s)
+}
 
 // eventSequence adapts org's sequence to the posting and branching stores'
 // consumer interface.

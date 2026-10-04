@@ -37,12 +37,12 @@ the temporary implementation behind it.
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
 | three `infra` target-version tests and `org`'s handle upgrade test | `db/migrations` (temporary allowance) | 0 | 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
-| `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
+| `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`) | `identity` accounts, through conversation's `AccountDirectoryIn` (from `identitypg.AccountsIn`, adapted by a closure) | 1 | 4 (the use case replaces the caller) |
 | `infra/postgres` appender interface (`EventAppender`) | `realtime` types (root import, temporary allowance) | 2 | 4 |
 | posting, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | 4 |
 | posting, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | 4 |
 | the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |
-| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`), members (`MemberDirectoryIn`, from `orgpg.MembersIn`) and cursor (`EventCursorIn`, from `orgpg.EventCursorIn`), each adapted by a closure | 3 | 4 |
+| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`), members (conversation's `MemberDirectoryIn`, from `orgpg.MembersIn`) and cursor (`EventCursorIn`, from `orgpg.EventCursorIn`), each adapted by a closure | 3 | 4 |
 | setup (`org`) | `conversation` default channel through `org.DefaultChannelCreatorIn` (temporarily `infra`'s `DefaultChannelCreatorIn` over its channel store, adapted by a closure in `cmd/*` and the tests) | 3 | 4 |
 
 `app/message.Reader` keeps its `org.Directory` field until step 4, when

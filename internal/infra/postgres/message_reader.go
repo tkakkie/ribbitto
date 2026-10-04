@@ -9,7 +9,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
@@ -20,12 +19,14 @@ import (
 type MessageReader struct {
 	Pool *pgxpool.Pool
 	// Accounts returns identity's display-name directory bound to the
-	// snapshot the reader opened (identitypg.AccountsIn). Temporary until
-	// migration step 4, when conversation owns the page snapshot.
-	Accounts func(platform.Snapshot) identity.Directory
+	// snapshot the reader opened (identitypg.AccountsIn, adapted by a closure
+	// to conversation's factory). Temporary until migration step 4, when
+	// conversation owns the page snapshot.
+	Accounts conversation.AccountDirectoryIn
 	// Members returns org's member directory bound to the same snapshot
-	// (orgpg.MembersIn, adapted by a closure). Temporary until step 4 too.
-	Members MemberDirectoryIn
+	// (orgpg.MembersIn, adapted by a closure to conversation's factory).
+	// Temporary until step 4 too.
+	Members conversation.MemberDirectoryIn
 	// Cursor returns org's committed event_seq bound to the same snapshot
 	// (orgpg.EventCursorIn, adapted by a closure), for the latest page.
 	// Temporary until step 4 too.

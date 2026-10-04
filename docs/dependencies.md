@@ -66,6 +66,7 @@ internal/domain -> internal/kernel
 internal/identity -> internal/kernel
 internal/identity/identitypg -> internal/identity
 internal/identity/identitypg -> internal/identity/internal/postgres
+internal/identity/identitypg -> internal/org
 internal/identity/identitypg -> internal/platform/postgres
 internal/identity/internal/postgres -> internal/identity
 internal/identity/internal/postgres -> internal/identity/internal/postgres/sqlcgen
@@ -90,6 +91,8 @@ internal/infra/postgres/pgtest -> internal/infra/postgres
 internal/infra/postgres/pgtest -> internal/platform/postgres/pgtest
 internal/org -> internal/domain
 internal/org -> internal/identity
+internal/org -> internal/kernel
+internal/org -> internal/platform/postgres
 internal/org -> internal/realtime
 internal/org/internal/postgres -> internal/kernel
 internal/org/internal/postgres -> internal/org/internal/postgres/sqlcgen

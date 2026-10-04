@@ -60,7 +60,10 @@ func TestValidationNonPrintableText(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.text == " " {
-				return // ASCII spaces are allowed inside names.
+				if got, err := org.ValidateOrganizationName("a b"); err != nil || got != "a b" {
+					t.Errorf("organization name with ASCII space = %q, %v; want a b", got, err)
+				}
+				return
 			}
 			if _, err := org.ValidateOrganizationName("a" + tc.text + "b"); err == nil {
 				t.Error("organization name accepted non-printable text")

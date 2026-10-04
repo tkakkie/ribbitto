@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -90,7 +88,7 @@ func TestMayReceive(t *testing.T) {
 	aliceMember, otherMember := domain.ID{20}, domain.ID{21}
 	acme := org.Membership{Organization: org.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: org.Member{ID: aliceMember}}
 	store := fakeStore{memberships: map[domain.ID]map[string]org.Membership{{1}: {"acme": acme}}}
-	event := realtime.Event{OrganizationID: acme.Organization.ID, Seq: 5, Kind: message.KindPosted}
+	event := realtime.Event{OrganizationID: acme.Organization.ID, Seq: 5, Kind: org.KindJoined}
 	withAudience := func(member domain.ID) realtime.Event {
 		e := event
 		e.AudienceMemberID = &member
@@ -117,7 +115,7 @@ func TestMayReceive(t *testing.T) {
 		{"lookup fails", fakeStore{err: broken}, domain.ID{1}, event, false, broken},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, kind := range []realtime.EventKind{message.KindPosted, topic.KindMessagesMoved} {
+			for _, kind := range []realtime.EventKind{org.KindJoined, "test.other"} {
 				event := tt.event
 				event.Kind = kind
 				got, err := org.NewAuthorizer(tt.store).MayReceive(t.Context(), tt.account, "acme", event)

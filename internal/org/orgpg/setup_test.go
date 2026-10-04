@@ -220,3 +220,34 @@ func TestSetupOpenConflict(t *testing.T) {
 		})
 	}
 }
+
+type failingDefaultChannel struct{ err error }
+
+func (c failingDefaultChannel) CreateDefaultChannel(context.Context, kernel.ID) error {
+	return c.err
+}
+
+func TestSetupDefaultChannelRollback(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	hasher, err := identity.NewHasher()
+	requireNoError(t, err)
+	failure := errors.New("default channel refused")
+	channels := func(platform.Tx) org.DefaultChannelCreator {
+		return failingDefaultChannel{err: failure}
+	}
+	s := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, channels)
+	_, err = s.Complete(ctx, "secret", org.SetupInput{OrganizationName: "Example", Slug: "example", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
+	if !errors.Is(err, failure) {
+		t.Fatalf("Complete = %v, want injected default-channel error", err)
+	}
+	var rows int
+	requireNoError(t, pool.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM organization) + (SELECT count(*) FROM account) +
+		(SELECT count(*) FROM member) + (SELECT count(*) FROM setup) +
+		(SELECT count(*) FROM event_log)`).Scan(&rows))
+	if rows != 0 {
+		t.Fatalf("%d rows left behind after default-channel failure", rows)
+	}
+}

@@ -35,8 +35,7 @@ get one adversarial review).
     posting, branching, setup and sign-up): a change that **alters
     behaviour**, adds, removes or reorders goroutines, locks or background
     work, or changes **which writes share a transaction or the order they
-    run in** (for example a root use case taking over a store's transaction,
-    #476, #483);
+    run in**;
   - any change to the rules that guard these areas and the AI and CI
     tooling: the AI launchers in `scripts/ai/**`; the trusted prompts and
     review instructions in `.github/prompts/**` and

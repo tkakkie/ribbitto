@@ -19,6 +19,7 @@ package, or SQL access to tables.
 ```text
 cmd/ribbitto -> internal/app/message
 cmd/ribbitto -> internal/app/topic
+cmd/ribbitto -> internal/conversation
 cmd/ribbitto -> internal/conversation/conversationpg
 cmd/ribbitto -> internal/identity
 cmd/ribbitto -> internal/identity/identitypg
@@ -53,6 +54,7 @@ internal/app/topic -> internal/domain
 internal/app/topic -> internal/org
 internal/conversation -> internal/kernel
 internal/conversation -> internal/org
+internal/conversation -> internal/platform/postgres
 internal/conversation -> internal/realtime
 internal/conversation/conversationpg -> internal/conversation
 internal/conversation/conversationpg -> internal/conversation/internal/postgres
@@ -77,7 +79,6 @@ internal/infra/postgres -> internal/app/message
 internal/infra/postgres -> internal/app/topic
 internal/infra/postgres -> internal/conversation
 internal/infra/postgres -> internal/domain
-internal/infra/postgres -> internal/identity
 internal/infra/postgres -> internal/infra/postgres/sqlcgen
 internal/infra/postgres -> internal/org
 internal/infra/postgres -> internal/platform/postgres

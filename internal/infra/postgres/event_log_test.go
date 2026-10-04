@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -173,7 +174,12 @@ func TestEventLogAudienceAndRollback(t *testing.T) {
 func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
 
 // lookupMembers adapts org's directory to the reader's consumer interface.
-func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }
+func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
+
+// lookupAccounts adapts identity's directory to the reader's consumer interface.
+func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
+	return identitypg.AccountsIn(s)
+}
 
 // eventSequence adapts org's sequence to the posting and branching stores'
 // consumer interface.

@@ -7,7 +7,8 @@
 // they are given (implemented by orgpg.SequenceIn), on their transaction.
 // MessageReader is given both author lookups and the page cursor as
 // snapshot-bound factories, until conversation owns the page snapshot:
-// identity's accounts, MemberDirectoryIn (implemented by orgpg.MembersIn) and
-// EventCursorIn (implemented by orgpg.EventCursorIn).
+// conversation's AccountDirectoryIn and MemberDirectoryIn (implemented by
+// identitypg.AccountsIn and orgpg.MembersIn) and EventCursorIn (implemented
+// by orgpg.EventCursorIn).
 // Posting and branching encode their events with conversation's codecs.
 package postgres

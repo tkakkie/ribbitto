@@ -16,7 +16,8 @@
 // Directory looks members up for author names, one organisation at a time,
 // returning DirectoryEntry values. KindJoined with Joined, EncodeJoined,
 // DecodeJoined and RouteJoined is the member.joined kind org publishes, its
-// payload and its routing.
+// payload and its routing. AccountCreator and AccountCreatorIn declare the
+// account write setup and sign-up will inject.
 //
 // Until org's store moves (step 3), infra/postgres implements
 // MembershipStore, HandleStore and Directory.

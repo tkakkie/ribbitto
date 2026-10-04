@@ -2,17 +2,14 @@ package postgres
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
-	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
@@ -20,14 +17,15 @@ import (
 // BranchStore implements topic.BranchStore: it owns the branching
 // transaction.
 type BranchStore struct {
-	pool   *pgxpool.Pool
-	events EventAppenderIn
+	pool      *pgxpool.Pool
+	sequences EventSequenceIn
+	events    EventAppenderIn
 }
 
-// NewBranchStore returns a store using pool that appends events through
-// events.
-func NewBranchStore(pool *pgxpool.Pool, events EventAppenderIn) *BranchStore {
-	return &BranchStore{pool: pool, events: events}
+// NewBranchStore returns a store using pool that takes org's sequences
+// through sequences and appends events through events.
+func NewBranchStore(pool *pgxpool.Pool, sequences EventSequenceIn, events EventAppenderIn) *BranchStore {
+	return &BranchStore{pool: pool, sequences: sequences, events: events}
 }
 
 // Branch runs one branch atomically. Listed exceptions (feature map): it
@@ -39,14 +37,14 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
 		tx := pgxbridge.Tx(platformTx)
 		q := sqlcgen.New(tx)
-		org := pgtype.UUID{Bytes: organizationID, Valid: true}
 		// Sequence first, as posting does: it locks the organisation's row,
 		// and the move's sequence comes before the notice's.
-		moveSeq, err := q.NextEventSeq(ctx, org)
+		sequences := s.sequences(platformTx)
+		moveSeq, err := sequences.NextEventSeq(ctx, organizationID)
 		if err != nil {
 			return err
 		}
-		noticeSeq, err = q.NextEventSeq(ctx, org)
+		noticeSeq, err = sequences.NextEventSeq(ctx, organizationID)
 		if err != nil {
 			return err
 		}
@@ -64,7 +62,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 			return err
 		}
 		moved, err := q.MoveMessages(ctx, sqlcgen.MoveMessagesParams{
-			OrganizationID: org, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true},
+			OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true},
 			FromTopicID: pgtype.UUID{Bytes: source.ID, Valid: true}, ToTopicID: pgtype.UUID{Bytes: destination.ID, Valid: true},
 			MessageIds: uuidArray(b.Messages),
 		})
@@ -86,10 +84,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 		data = message.EncodePosted(channelID, posted.ID, posted.TopicID)
 		return events.Append(ctx, organizationID, noticeSeq, message.KindPosted, nil, data)
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Topic{}, 0, org.ErrNotFound // the organisation itself is gone
-	}
-	if err != nil {
+	if err != nil { // org.ErrNotFound from the sequence when the organisation is gone
 		return domain.Topic{}, 0, err
 	}
 	return destination, noticeSeq, nil

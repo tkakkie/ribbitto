@@ -86,14 +86,15 @@ func messageFromRow(row sqlcgen.Message) domain.Message {
 
 // PostingStore implements message.Store: it owns the posting transaction.
 type PostingStore struct {
-	pool   *pgxpool.Pool
-	events EventAppenderIn
+	pool      *pgxpool.Pool
+	sequences EventSequenceIn
+	events    EventAppenderIn
 }
 
-// NewPostingStore returns a PostingStore on pool that appends events
-// through events.
-func NewPostingStore(pool *pgxpool.Pool, events EventAppenderIn) *PostingStore {
-	return &PostingStore{pool: pool, events: events}
+// NewPostingStore returns a PostingStore on pool that takes org's sequence
+// through sequences and appends events through events.
+func NewPostingStore(pool *pgxpool.Pool, sequences EventSequenceIn, events EventAppenderIn) *PostingStore {
+	return &PostingStore{pool: pool, sequences: sequences, events: events}
 }
 
 // Post takes the next event_seq first — locking the organisation's row, so
@@ -109,7 +110,7 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 	var posted domain.Message
 	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
 		tx := pgxbridge.Tx(platformTx)
-		seq, err := sqlcgen.New(tx).NextEventSeq(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+		seq, err := s.sequences(platformTx).NextEventSeq(ctx, organizationID)
 		if err != nil {
 			return err
 		}
@@ -146,7 +147,7 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 		return domain.Message{}, channel.ErrNotFound
 	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_member_id_fkey":
 		return domain.Message{}, org.ErrNotFound
-	case errors.Is(err, pgx.ErrNoRows):
+	case errors.Is(err, org.ErrNotFound):
 		return domain.Message{}, org.ErrNotFound // the organisation itself is gone
 	case err != nil:
 		return domain.Message{}, fmt.Errorf("posting message: %w", err)

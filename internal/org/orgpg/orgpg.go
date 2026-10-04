@@ -22,6 +22,18 @@ func RetentionBoundaryIn(tx platform.Tx) realtime.RetentionBoundary {
 	return postgres.RetentionBoundaryIn(tx)
 }
 
+// SequenceIn returns org's event sequence bound to a writer's transaction,
+// for posting and branching. Consumers declare the interface they need and
+// adapt to it with a closure (decision 26).
+func SequenceIn(tx platform.Tx) postgres.Sequence { return postgres.SequenceIn(tx) }
+
+// EventCursorIn returns the organisation's committed event_seq bound to a
+// reader's snapshot, for the latest page's cursor. Consumers adapt to it
+// with a closure too.
+func EventCursorIn(snapshot platform.Snapshot) postgres.EventCursor {
+	return postgres.EventCursorIn(snapshot)
+}
+
 // NewAuthorizer returns org's authorisation entry point on pool.
 func NewAuthorizer(pool *pgxpool.Pool) *org.Authorizer {
 	return org.NewAuthorizer(postgres.NewAuthzStore(pool))

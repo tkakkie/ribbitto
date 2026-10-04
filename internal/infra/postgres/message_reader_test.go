@@ -28,7 +28,7 @@ func TestMessageOne(t *testing.T) {
 	otherChannel := pgtest.Channel(t, pool, local.OrganizationID, "other", false)
 	membership := org.Membership{Organization: org.Organization{ID: local.OrganizationID}, Member: org.Member{ID: local.MemberID}}
 	foreignMembership := org.Membership{Organization: org.Organization{ID: foreign.OrganizationID}, Member: org.Member{ID: foreign.MemberID}}
-	service := message.New(postgres.NewPostingStore(pool, appendEvents))
+	service := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
 	posted, err := service.Post(ctx, membership, local.Channel.ID, "local body")
 	requireNoError(t, err)
 	foreignPost, err := service.Post(ctx, foreignMembership, foreign.Channel.ID, "foreign body")
@@ -41,7 +41,7 @@ func TestMessageOne(t *testing.T) {
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, `UPDATE member SET handle = 'current-handle' WHERE organization_id = $1 AND id = $2`, local.OrganizationID, local.MemberID)
 	requireNoError(t, err)
-	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers}
+	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers, Cursor: eventCursor}
 	for _, tt := range []struct {
 		name       string
 		membership org.Membership
@@ -91,7 +91,7 @@ func TestMessagePaging(t *testing.T) {
 
 	// Interleave posts so that every channel's event_seq values have gaps
 	// filled by another channel's, and globex reuses acme's numbers.
-	service := message.New(postgres.NewPostingStore(pool, appendEvents))
+	service := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
 	sizes := map[string]int{"exact": 2 * message.PageSize, "partial": message.PageSize + 1}
 	posted := map[string][]string{}
 	var foreignSeqs []int64
@@ -132,7 +132,7 @@ func TestMessagePaging(t *testing.T) {
 	reading, err := pgxpool.NewWithConfig(ctx, config)
 	requireNoError(t, err)
 	t.Cleanup(reading.Close)
-	reader := postgres.MessageReader{Pool: reading, Accounts: identitypg.AccountsIn, Members: lookupMembers}
+	reader := postgres.MessageReader{Pool: reading, Accounts: identitypg.AccountsIn, Members: lookupMembers, Cursor: eventCursor}
 	for _, name := range []string{"empty", "exact", "partial"} {
 		t.Run(name, func(t *testing.T) {
 			var got []string
@@ -226,7 +226,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			ctx := t.Context()
 			fixture := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 			m := org.Membership{Organization: org.Organization{ID: fixture.OrganizationID}, Member: org.Member{ID: fixture.MemberID}}
-			posting := message.New(postgres.NewPostingStore(pool, appendEvents))
+			posting := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
 			initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")
 			requireNoError(t, err)
 			var concurrent domain.Message
@@ -253,7 +253,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			reading, err := pgxpool.NewWithConfig(ctx, config)
 			requireNoError(t, err)
 			t.Cleanup(reading.Close)
-			page, err := (postgres.MessageReader{Pool: reading, Accounts: identitypg.AccountsIn, Members: lookupMembers}).Before(ctx, m, fixture.Channel.ID, nil)
+			page, err := (postgres.MessageReader{Pool: reading, Accounts: identitypg.AccountsIn, Members: lookupMembers, Cursor: eventCursor}).Before(ctx, m, fixture.Channel.ID, nil)
 			requireNoError(t, err)
 			if !began || concurrent.EventSeq == 0 || page.EventCursor == nil {
 				t.Fatalf("missing transaction, concurrent commit or cursor: %+v", page)

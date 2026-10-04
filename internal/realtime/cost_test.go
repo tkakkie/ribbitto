@@ -20,7 +20,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -84,7 +83,7 @@ func TestStreamCost(t *testing.T) {
 	if distinct {
 		for i := 1; i < slices.Max(steps); i++ {
 			account := pgtest.Account(t, fixturePool, fmt.Sprintf("m%05d@example.org", i), fmt.Sprintf("Member %d", i))
-			pgtest.Member(t, fixturePool, fixture.OrganizationID, account, domain.RoleMember, fmt.Sprintf("m%05d", i), 1)
+			pgtest.Member(t, fixturePool, fixture.OrganizationID, account, org.RoleMember, fmt.Sprintf("m%05d", i), 1)
 			subs = append(subs, realtime.Subscription{Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: account, Channel: fixture.Channel.ID})
 		}
 	}
@@ -105,7 +104,7 @@ func TestStreamCost(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 
-	m := org.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: fixture.MemberID}}
+	m := org.Membership{Organization: org.Organization{ID: fixture.OrganizationID, Slug: "acme"}, Member: org.Member{ID: fixture.MemberID}}
 	hub := realtime.NewHub()
 	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, appendEvents), hub)
 	// dbReads counts reads that reach the database (empty ones included);

@@ -16,6 +16,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // The topic table enforces decision 21's invariants on its own: one default
@@ -221,13 +222,13 @@ func TestTopicBackfill(t *testing.T) {
 	requireNoError(t, err)
 	// Raw SQL writes what the binary of migration 8 wrote.
 	for _, slug := range []string{"acme", "globex"} {
-		org := pgtest.Organization(t, pool, slug, slug, 0)
-		member := pgtest.Member(t, pool, org, pgtest.Account(t, pool, slug+"@example.org", slug), domain.RoleOwner, "owner", 1)
+		orgID := pgtest.Organization(t, pool, slug, slug, 0)
+		member := pgtest.Member(t, pool, orgID, pgtest.Account(t, pool, slug+"@example.org", slug), org.RoleOwner, "owner", 1)
 		_, err := pool.Exec(ctx, `
 			WITH c AS (INSERT INTO channel (organization_id, name, is_default) VALUES ($1, 'general', true), ($1, 'random', false), ($1, 'empty', false) RETURNING id, name)
 			INSERT INTO message (organization_id, channel_id, member_id, body, event_seq)
 			SELECT $1, c.id, $2, 'm' || n, n + CASE c.name WHEN 'general' THEN 0 ELSE 10 END
-			FROM c, generate_series(1, 3) n WHERE c.name <> 'empty'`, org, member)
+			FROM c, generate_series(1, 3) n WHERE c.name <> 'empty'`, orgID, member)
 		requireNoError(t, err)
 	}
 	_, err = provider.UpTo(ctx, 9)

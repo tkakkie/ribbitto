@@ -35,12 +35,12 @@ func (s *AuthzStore) Membership(ctx context.Context, accountID domain.ID, slug s
 		return org.Membership{}, fmt.Errorf("selecting membership: %w", err)
 	}
 	return org.Membership{
-		Organization: domain.Organization{ID: row.OrganizationID.Bytes, Slug: row.Slug, Name: row.Name},
-		Member: domain.Member{
+		Organization: org.Organization{ID: row.OrganizationID.Bytes, Slug: row.Slug, Name: row.Name},
+		Member: org.Member{
 			ID:             row.MemberID.Bytes,
 			OrganizationID: row.OrganizationID.Bytes,
 			AccountID:      accountID,
-			Role:           domain.Role(row.Role),
+			Role:           org.Role(row.Role),
 			Handle:         row.Handle,
 		},
 	}, nil

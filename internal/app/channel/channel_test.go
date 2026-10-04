@@ -56,7 +56,7 @@ func TestChannels(t *testing.T) {
 	general := domain.Channel{ID: domain.ID{3}, OrganizationID: acme, Name: "general", IsDefault: true}
 	secret := domain.Channel{ID: domain.ID{4}, OrganizationID: globex, Name: "secret", IsDefault: true}
 	member := func(orgID domain.ID) org.Membership {
-		return org.Membership{Organization: domain.Organization{ID: orgID}, Member: domain.Member{ID: domain.ID{9}, OrganizationID: orgID}}
+		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{ID: domain.ID{9}, OrganizationID: orgID}}
 	}
 	newService := func() (*channel.Service, *store) {
 		s := &store{channels: map[domain.ID][]domain.Channel{acme: {general}, globex: {secret}}}

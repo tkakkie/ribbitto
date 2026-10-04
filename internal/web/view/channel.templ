@@ -7,9 +7,15 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
 
+// Organization holds the organisation fields displayed by a channel page.
+type Organization struct {
+	Slug string
+	Name string
+}
+
 // ChannelPage holds the sidebar, conversation and channel creation form.
 type ChannelPage struct {
-	Organization              domain.Organization
+	Organization              Organization
 	DisplayName, Handle, Role string
 	Topic                     *domain.Topic
 	Topics                    []domain.Topic

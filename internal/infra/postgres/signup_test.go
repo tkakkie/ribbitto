@@ -7,11 +7,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 func TestSignUp(t *testing.T) {
@@ -27,7 +27,7 @@ func TestSignUp(t *testing.T) {
 	other := pgtest.Organization(t, pool, "other", "Other", 0)
 	// A handle is unique only within its organisation: "alice" is taken in the other one.
 	otherAccount := pgtest.Account(t, pool, "other@example.org", "Other")
-	pgtest.Member(t, pool, other, otherAccount, domain.RoleOwner, "alice", 1)
+	pgtest.Member(t, pool, other, otherAccount, org.RoleOwner, "alice", 1)
 	result, err := postgres.NewSetupStore(pool, appendEvents).Create(ctx, "Team", "team", "owner@example.org", "Owner", "owner", "$argon2id$test")
 	requireNoError(t, err)
 	id, err := store.SignUp(ctx, "Alice", "alice", "alice@example.org", "$argon2id$test")

@@ -166,7 +166,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		page.Messages[i] = viewMessage(m.Organization.Slug, entry)
 	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
-		page.Organization, page.DisplayName, page.Handle, page.Role = m.Organization, account.DisplayName, m.Member.Handle, string(m.Member.Role)
+		page.Organization, page.DisplayName, page.Handle, page.Role = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, account.DisplayName, m.Member.Handle, string(m.Member.Role)
 		page.Current, page.Channels, page.Older = history.Current, history.Channels, history.Older
 		page.EventCursor, page.Topic, page.Topics = history.EventCursor, history.Topic, history.Topics
 		return view.Channel(url, page)
@@ -207,7 +207,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 // Enhanced posts never replace history or the connection's snapshot cursor.
 func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c domain.Channel, status int, page view.ChannelPage) {
 	if r.Header.Get("HX-Request") == "true" && p.topicID == nil {
-		page.Organization, page.Current = m.Organization, c
+		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, c
 		templ.Handler(view.MessageComposer(page), templ.WithStatus(status)).ServeHTTP(w, r)
 		return
 	}

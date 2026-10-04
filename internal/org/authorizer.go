@@ -18,8 +18,8 @@ var ErrNotFound = errors.New("not found")
 
 // Membership is a member together with its organisation.
 type Membership struct {
-	Organization domain.Organization
-	Member       domain.Member
+	Organization Organization
+	Member       Member
 }
 
 // MembershipStore looks memberships up. Every query is scoped to one organisation.
@@ -49,7 +49,7 @@ func (a *Authorizer) Member(ctx context.Context, account *identity.Account, slug
 		return Membership{}, ErrNotFound
 	}
 	// A slug that cannot exist is not worth a query.
-	if _, err := domain.ValidateSlug(slug); err != nil {
+	if _, err := ValidateSlug(slug); err != nil {
 		return Membership{}, ErrNotFound
 	}
 	membership, err := a.store.Membership(ctx, account.ID, slug)

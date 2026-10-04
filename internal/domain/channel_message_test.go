@@ -7,7 +7,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/domain"
 )
 
-// Topic names follow channel names (docs/domain/topics.md), so both share the cases.
+// Topic names follow channel names (docs/domain/topics.md); conversation's
+// TestValidateChannelName runs the same cases for channels.
 func TestValidateTopicName(t *testing.T) {
 	for _, tc := range []struct{ input, want string }{
 		{"a", "a"}, {"　 雑談 開発　 ", "雑談 開発"}, {"a　b", "a　b"},

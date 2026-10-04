@@ -1,4 +1,4 @@
-package member
+package org
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 )
 
 // KindJoined is the kind of a member joining an organisation, which org
-// publishes and so owns (decision 26; here until org's module moves).
+// publishes and so owns (decision 26).
 const KindJoined realtime.EventKind = "member.joined"
 
 // Joined is the decoded payload of KindJoined.

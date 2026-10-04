@@ -147,10 +147,9 @@ linters:
             # Module roots only; their stores and wiring stay private.
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
-            # app/message, app/topic and app/member encode their kinds'
-            # payloads with realtime's ID text; they stand for decision 26's
-            # org and conversation -> realtime until those modules move
-            # (steps 3 and 4).
+            # app/message and app/topic encode their kinds' payloads with
+            # realtime's ID text; they stand for decision 26's conversation ->
+            # realtime until that module moves (step 4).
             - github.com/tkakkie/ribbitto/internal/realtime$
           deny: *non_html
         postgres:

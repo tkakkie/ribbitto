@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -34,15 +33,15 @@ func (f *singleMessage) GetMessage(_ context.Context, org, ch domain.ID, seq int
 	return f.msg, f.readErr
 }
 
-func (f *singleMessage) LookupMembers(_ context.Context, org domain.ID, ids []domain.ID) (map[domain.ID]member.Identity, error) {
+func (f *singleMessage) LookupMembers(_ context.Context, orgID domain.ID, ids []domain.ID) (map[domain.ID]org.DirectoryEntry, error) {
 	f.calls = append(f.calls, "members")
-	if org != f.msg.OrganizationID || !reflect.DeepEqual(ids, []domain.ID{f.msg.MemberID}) {
+	if orgID != f.msg.OrganizationID || !reflect.DeepEqual(ids, []domain.ID{f.msg.MemberID}) {
 		f.t.Fatal("wrong author scope")
 	}
 	if f.missingMember {
 		return nil, nil
 	}
-	return map[domain.ID]member.Identity{f.msg.MemberID: {AccountID: domain.ID{6}, Handle: "current-handle"}}, f.memberErr
+	return map[domain.ID]org.DirectoryEntry{f.msg.MemberID: {AccountID: domain.ID{6}, Handle: "current-handle"}}, f.memberErr
 }
 
 func (f *singleMessage) LookupDisplayNames(_ context.Context, ids []domain.ID) (map[domain.ID]string, error) {

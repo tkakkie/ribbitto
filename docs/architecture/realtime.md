@@ -68,10 +68,10 @@ is organisation-wide; a value restricts delivery to that member, enforced
 by the stream's per-event authorization (`org.Authorizer.MayReceive`). Its composite foreign key keeps the
 member in the same organisation. The audience never appears in `data`.
 Each kind's publisher owns its kind name and payload (decision 26):
-`app/message` (`KindPosted`, `EncodePosted`, `DecodePosted`), `app/topic`
-(`KindMessagesMoved`, `EncodeMoved`, `DecodeMoved`) and `app/member`
-(`KindJoined`, `EncodeJoined`, `DecodeJoined`) declare the kind, encode the
-payload and decode it until their modules move; realtime keeps only the
+`app/message` (`KindPosted`, `EncodePosted`, `DecodePosted`) and `app/topic`
+(`KindMessagesMoved`, `EncodeMoved`, `DecodeMoved`) until `conversation`
+moves, and `org` (`KindJoined`, `EncodeJoined`, `DecodeJoined`), declare the
+kind, encode the payload and decode it; realtime keeps only the
 `EventKind` type. The encoders return only `[]byte`: their strings and
 string slices cannot fail JSON marshaling. The writer stores what they
 return; the reader only routes through their `Router`s, and consumers
@@ -106,11 +106,11 @@ naming the kind, which stops the stream before that event instead of
 rendering it as a post. A render depends only on the event
 (`Renderer.Render(ctx, event)`); the stream has already applied the
 subscription, and the renderer reads only `MessageReader`'s `One` and `Many`.
-Setup and sign-up append `member.joined` (`member.EncodeJoined`) the same way immediately after
+Setup and sign-up append `member.joined` (`org.EncodeJoined`) the same way immediately after
 the member, with its `joined_event_seq`. `realtime.Event` is an envelope: organisation,
 sequence, kind, audience, channel, routing `Topics` and the stored `Payload`,
 which consumers decode through the publisher's codec; kinds are an open list. Wiring registers each kind's publisher `Router`
-(`message.RoutePosted`, `topic.RouteMoved`, `member.RouteJoined`) in
+(`message.RoutePosted`, `topic.RouteMoved`, `org.RouteJoined`) in
 `realtime.Kinds`, which gives the channel and routing topics; until the
 modules register their own, `postgres.EventKinds()` lists them.
 `realtimepg.NewReader(pool, bounds, kinds)` provides

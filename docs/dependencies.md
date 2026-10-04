@@ -44,11 +44,6 @@ cmd/seed -> internal/platform/postgres
 cmd/seed -> internal/realtime/realtimepg
 internal/app/channel -> internal/domain
 internal/app/channel -> internal/org
-internal/app/member -> internal/domain
-internal/app/member -> internal/identity
-internal/app/member -> internal/org
-internal/app/member -> internal/realtime
-internal/app/message -> internal/app/member
 internal/app/message -> internal/app/topic
 internal/app/message -> internal/domain
 internal/app/message -> internal/identity
@@ -76,7 +71,6 @@ internal/identity/internal/postgres -> internal/kernel
 internal/identity/internal/postgres -> internal/platform/postgres
 internal/identity/internal/postgres -> internal/platform/postgres/pgxbridge
 internal/infra/postgres -> internal/app/channel
-internal/infra/postgres -> internal/app/member
 internal/infra/postgres -> internal/app/message
 internal/infra/postgres -> internal/app/setup
 internal/infra/postgres -> internal/app/signup

@@ -18,12 +18,6 @@ var ErrSetupToken = errors.New("invalid setup token")
 // ErrSetupCompleted means installation setup has already succeeded.
 var ErrSetupCompleted = errors.New("setup already completed")
 
-// ValidationErrors associates invalid fields with their validation errors.
-type ValidationErrors map[string]error
-
-// Error describes validation failure without exposing submitted values.
-func (ValidationErrors) Error() string { return "invalid setup fields" }
-
 // SetupInput contains the submitted fields, before normalization.
 type SetupInput struct {
 	OrganizationName, Slug, Email, DisplayName, Handle, Password string
@@ -132,48 +126,31 @@ func (s *Setup) Complete(ctx context.Context, token string, input SetupInput) (S
 		return nil
 	})
 	if err != nil {
-		return SetupResult{}, fmt.Errorf("creating setup: %w", s.failed(ctx, err))
+		return SetupResult{}, s.failed(ctx, err)
 	}
 	return result, nil
 }
 
 // failed maps a rolled-back setup transaction's error to setup's result.
 func (s *Setup) failed(ctx context.Context, err error) error {
-	conflict := false
-	for _, target := range []error{ErrSlugUnavailable, ErrInvalidHandle, ErrHandleTaken, ErrSetupCompleted, identity.ErrEmailTaken, identity.ErrInvalidEmail} {
-		conflict = conflict || errors.Is(err, target)
-	}
-	if !conflict {
-		return fmt.Errorf("storing setup transaction: %w", err)
+	mapped := registrationError(err)
+	switch {
+	case mapped != nil:
+	case errors.Is(err, ErrSetupCompleted):
+		mapped = ErrSetupCompleted
+	case errors.Is(err, identity.ErrEmailTaken):
+		mapped = ValidationErrors{"email": identity.ErrEmailTaken}
+	case errors.Is(err, ErrSlugUnavailable):
+		mapped = ValidationErrors{"slug": ErrSlugUnavailable}
+	case errors.Is(err, ErrHandleTaken):
+		mapped = fmt.Errorf("creating setup: %w", err)
+	default:
+		return fmt.Errorf("creating setup: %w", err)
 	}
 	// A concurrent winner may have collided on email or slug first; the
 	// loser must still learn that setup is complete, not that a field is.
 	if open, checkErr := s.state.Open(ctx); checkErr == nil && !open {
 		return ErrSetupCompleted
 	}
-	switch {
-	case errors.Is(err, ErrSetupCompleted):
-		return ErrSetupCompleted
-	case errors.Is(err, identity.ErrEmailTaken), errors.Is(err, identity.ErrInvalidEmail):
-		return ValidationErrors{"email": errors.New("email is unavailable or invalid")}
-	case errors.Is(err, ErrSlugUnavailable):
-		return ValidationErrors{"slug": errors.New("slug is unavailable or invalid")}
-	case errors.Is(err, ErrInvalidHandle):
-		return ValidationErrors{"handle": errors.New("handle is invalid")}
-	}
-	return fmt.Errorf("storing setup transaction: %w", err)
-}
-
-// validateRegistration checks the account fields setup and sign-up share,
-// keeping each flow's form keys, and normalises the valid ones in place.
-func validateRegistration(displayName, handle, email, password *string, fields ValidationErrors) {
-	*displayName, fields["display_name"] = identity.ValidateDisplayName(*displayName)
-	*handle, fields["handle"] = ValidateHandle(*handle)
-	*email, fields["email"] = identity.ValidateEmail(*email)
-	*password, fields["password"] = identity.ValidatePassword(*password)
-	for name, err := range fields {
-		if err == nil {
-			delete(fields, name)
-		}
-	}
+	return mapped
 }

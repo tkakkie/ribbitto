@@ -28,7 +28,7 @@ func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpServic
 	}
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		open, err := service.Open(r.Context())
-		if errors.Is(err, org.ErrSignUpClosed) || (err == nil && !open) {
+		if err == nil && !open {
 			http.NotFound(w, r)
 			return
 		}

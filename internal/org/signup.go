@@ -38,14 +38,17 @@ func (s *SignUp) Open(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	open, err := s.state.Open(ctx)
-	return !open && err == nil, err
+	if err != nil {
+		return false, fmt.Errorf("checking sign-up: %w", err)
+	}
+	return !open, nil
 }
 
 // SignUp validates before hashing and commits the account and member together.
 func (s *SignUp) SignUp(ctx context.Context, displayName, handle, email, password string) (domain.ID, error) {
 	open, err := s.Open(ctx)
 	if err != nil {
-		return domain.ID{}, fmt.Errorf("checking sign-up: %w", err)
+		return domain.ID{}, err
 	}
 	if !open {
 		return domain.ID{}, ErrSignUpClosed
@@ -81,15 +84,16 @@ func (s *SignUp) SignUp(ctx context.Context, displayName, handle, email, passwor
 		}
 		return s.events(tx).Append(ctx, organizationID, seq, KindJoined, nil, EncodeJoined(memberID))
 	})
+	mapped := registrationError(err)
 	switch {
 	case errors.Is(err, identity.ErrEmailTaken):
 		return domain.ID{}, ErrEmailTaken
 	case errors.Is(err, ErrHandleTaken):
 		return domain.ID{}, ErrHandleTaken
-	case errors.Is(err, identity.ErrInvalidEmail):
-		return domain.ID{}, ValidationErrors{"email": identity.ErrInvalidEmail}
-	case errors.Is(err, ErrInvalidHandle):
-		return domain.ID{}, ValidationErrors{"handle": ErrInvalidHandle}
+	case mapped != nil:
+		return domain.ID{}, mapped
+	case errors.Is(err, ErrSignUpClosed):
+		return domain.ID{}, ErrSignUpClosed
 	case err != nil:
 		return domain.ID{}, fmt.Errorf("storing sign-up transaction: %w", err)
 	}

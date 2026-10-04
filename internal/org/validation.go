@@ -1,11 +1,13 @@
 package org
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -74,4 +76,35 @@ func validateText(value string, minLength, maxLength int, field string) (string,
 		return "", fmt.Errorf("%s must contain %d–%d printable Unicode code points", field, minLength, maxLength)
 	}
 	return value, nil
+}
+
+// ValidationErrors associates invalid fields with their validation errors.
+type ValidationErrors map[string]error
+
+// Error describes validation failure without exposing submitted values.
+func (ValidationErrors) Error() string { return "invalid registration fields" }
+
+// registrationError maps store validation failures shared by both flows.
+func registrationError(err error) error {
+	switch {
+	case errors.Is(err, identity.ErrInvalidEmail):
+		return ValidationErrors{"email": identity.ErrInvalidEmail}
+	case errors.Is(err, ErrInvalidHandle):
+		return ValidationErrors{"handle": ErrInvalidHandle}
+	}
+	return nil
+}
+
+// validateRegistration checks the account fields setup and sign-up share,
+// keeping each flow's form keys, and normalises the valid ones in place.
+func validateRegistration(displayName, handle, email, password *string, fields ValidationErrors) {
+	*displayName, fields["display_name"] = identity.ValidateDisplayName(*displayName)
+	*handle, fields["handle"] = ValidateHandle(*handle)
+	*email, fields["email"] = identity.ValidateEmail(*email)
+	*password, fields["password"] = identity.ValidatePassword(*password)
+	for name, err := range fields {
+		if err == nil {
+			delete(fields, name)
+		}
+	}
 }

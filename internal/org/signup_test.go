@@ -17,11 +17,12 @@ type signUpStore struct {
 	org.RegistrationWriter
 	steps   *[]string
 	pending bool
+	openErr error
 	err     error
 	t       *testing.T
 }
 
-func (s signUpStore) Open(context.Context) (bool, error) { return s.pending, nil }
+func (s signUpStore) Open(context.Context) (bool, error) { return s.pending, s.openErr }
 func (s signUpStore) CreateAccount(_ context.Context, email, name, hash string) (domain.ID, error) {
 	s.t.Helper()
 	*s.steps = append(*s.steps, "account")
@@ -30,6 +31,9 @@ func (s signUpStore) CreateAccount(_ context.Context, email, name, hash string) 
 	}
 	if errors.Is(s.err, org.ErrEmailTaken) {
 		return domain.ID{}, identity.ErrEmailTaken
+	}
+	if errors.Is(s.err, identity.ErrInvalidEmail) {
+		return domain.ID{}, s.err
 	}
 	return domain.ID{1}, nil
 }
@@ -42,6 +46,9 @@ func (s signUpStore) InTx(_ context.Context, fn func(platform.Tx) error) error {
 }
 func (s signUpStore) SetupOrganization(context.Context) (domain.ID, error) {
 	*s.steps = append(*s.steps, "setup")
+	if errors.Is(s.err, org.ErrSignUpClosed) {
+		return domain.ID{}, s.err
+	}
 	return domain.ID{2}, nil
 }
 func (s signUpStore) NextEventSeq(_ context.Context, organizationID domain.ID) (int64, error) {
@@ -71,14 +78,20 @@ func TestSignUp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	unexpected := errors.New("store unavailable")
 	for _, tc := range []struct {
-		label, name, handle, email, password, field string
-		off, pending                                bool
-		want                                        error
+		label, name, handle, email, password, field, storeField string
+		off, pending, openFailure                               bool
+		want                                                    error
 	}{
 		{label: "normalized account", name: " Alice ", handle: " Alice ", email: " Alice@Example.org ", password: "long enough password"},
 		{label: "duplicate email", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: org.ErrEmailTaken},
 		{label: "duplicate handle", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: org.ErrHandleTaken},
+		{label: "store invalid email", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", storeField: "email", want: identity.ErrInvalidEmail},
+		{label: "store invalid handle", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", storeField: "handle", want: org.ErrInvalidHandle},
+		{label: "setup row missing", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: org.ErrSignUpClosed},
+		{label: "unexpected store error", name: "Alice", handle: "alice", email: "alice@example.org", password: "long enough password", want: unexpected},
+		{label: "open failure", openFailure: true, want: unexpected},
 		{label: "invalid name", field: "display_name", handle: "alice", email: "a@b", password: "long enough password"},
 		{label: "invalid handle", name: "Alice", field: "handle", email: "a@b", password: "long enough password"},
 		{label: "reserved handle", name: "Alice", handle: "everyone", field: "handle", email: "a@b", password: "long enough password"},
@@ -90,7 +103,7 @@ func TestSignUp(t *testing.T) {
 		t.Run(tc.label, func(t *testing.T) {
 			h := hasher
 			// Rejections must not reach hashing.
-			if tc.field != "" || tc.off || tc.pending {
+			if tc.field != "" || tc.off || tc.pending || tc.openFailure {
 				h = nil
 			}
 			var steps []string
@@ -99,18 +112,35 @@ func TestSignUp(t *testing.T) {
 				func(platform.Tx) org.RegistrationWriter { return store },
 				func(platform.Tx) org.AccountCreator { return store },
 				func(platform.Tx) org.EventAppender { return store }, h, !tc.off)
+			if tc.openFailure {
+				store.openErr = tc.want
+				service = org.NewSignUp(store, nil, nil, nil, nil, nil, true)
+			}
 			open, err := service.Open(t.Context())
-			if err != nil || open != (!tc.off && !tc.pending) {
+			if !errors.Is(err, store.openErr) || open != (!tc.off && !tc.pending && !tc.openFailure) {
 				t.Fatalf("Open: %t %v", open, err)
+			}
+			if tc.openFailure && err.Error() != "checking sign-up: "+unexpected.Error() {
+				t.Fatalf("Open missing context: %v", err)
 			}
 			id, err := service.SignUp(t.Context(), tc.name, tc.handle, tc.email, tc.password)
 			var fields org.ValidationErrors
-			if tc.field != "" {
-				if !errors.As(err, &fields) || len(fields) != 1 || fields[tc.field] == nil {
-					t.Fatalf("field %s: %v", tc.field, err)
+			field := tc.field
+			if tc.storeField != "" {
+				field = tc.storeField
+			}
+			if field != "" {
+				if !errors.As(err, &fields) || len(fields) != 1 || fields[field] == nil || tc.storeField != "" && !errors.Is(fields[field], tc.want) {
+					t.Fatalf("field %s: %v", field, err)
 				}
 			} else if !errors.Is(err, tc.want) || (err == nil && id != (domain.ID{1})) {
 				t.Fatalf("case %+v: %v %v", tc, id, err)
+			}
+			if tc.openFailure && (len(steps) != 0 || err.Error() != "checking sign-up: "+unexpected.Error()) {
+				t.Fatalf("Open failure reached writes or added context twice: %v, %v", steps, err)
+			}
+			if tc.want == unexpected && !tc.openFailure && err.Error() != "storing sign-up transaction: "+unexpected.Error() {
+				t.Fatalf("unexpected wrapping: %v", err)
 			}
 		})
 	}

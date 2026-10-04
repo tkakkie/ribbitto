@@ -8,5 +8,7 @@
 // its migration step. Writer holds posting's and branching's writes and maps
 // their constraints to conversation's and org's errors, except the branch
 // notice's; conversationpg.WriterIn binds it to a caller's transaction,
-// unused in production until steps 4.9 and 4.10a.
+// unused in production until steps 4.9 and 4.10a. Branching's CreateTopic and
+// MoveMessages queries duplicate the legacy entry's db/queries/topic.sql
+// until step 4.16 removes that copy.
 package postgres

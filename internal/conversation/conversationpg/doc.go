@@ -5,4 +5,6 @@
 // setup's default-channel write to org's transaction; NewTxRunner runs
 // posting's and branching's transaction over the pool and WriterIn binds
 // their writes to it; EventKinds registers its event routers with realtime.
+// Branching's CreateTopic and MoveMessages run on copies of the legacy
+// queries until step 4.16.
 package conversationpg

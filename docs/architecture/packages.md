@@ -74,7 +74,7 @@ flowchart LR
   rstore --> realtime & platform & kernel
   app[internal/app] --> org & identity & realtime & domain[internal/domain]
   org[internal/org] --> identity & realtime & domain & kernel & platform
-  orgpg --> org & ostore[org/internal/postgres] & platform & realtime
+  orgpg --> ostore[org/internal/postgres] & platform & realtime
   ostore --> platform & kernel
   identity[internal/identity] --> kernel & platform
   identitypg --> identity & store[identity/internal/postgres] & platform

@@ -14,8 +14,9 @@ it without deleting the named volume at `/var/lib/postgresql`.
 
 `db/migrations` holds numbered goose SQL files embedded in the binary.
 It is owned by `internal/platform/postgres`; only its packages,
-`cmd/ribbitto` and four target-version tests in `internal/infra/postgres`
-(temporarily) may import it. The runner uses goose and pgx's
+`cmd/ribbitto`, three target-version tests in `internal/infra/postgres`
+and `internal/org/internal/postgres/member_handle_test.go` (until step 5)
+may import it. The runner uses goose and pgx's
 `database/sql` adapter without global configuration. The first
 migration creates `organization`; goose also maintains its version table.
 

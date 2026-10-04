@@ -60,6 +60,30 @@ func (q *Queries) GetHomeSlug(ctx context.Context, accountID pgtype.UUID) (strin
 	return slug, err
 }
 
+const getMemberByOrganizationAndAccount = `-- name: GetMemberByOrganizationAndAccount :one
+SELECT id, organization_id, account_id, role, joined_event_seq, created_at, handle FROM member WHERE organization_id = $1 AND account_id = $2
+`
+
+type GetMemberByOrganizationAndAccountParams struct {
+	OrganizationID pgtype.UUID
+	AccountID      pgtype.UUID
+}
+
+func (q *Queries) GetMemberByOrganizationAndAccount(ctx context.Context, arg GetMemberByOrganizationAndAccountParams) (Member, error) {
+	row := q.db.QueryRow(ctx, getMemberByOrganizationAndAccount, arg.OrganizationID, arg.AccountID)
+	var i Member
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.AccountID,
+		&i.Role,
+		&i.JoinedEventSeq,
+		&i.CreatedAt,
+		&i.Handle,
+	)
+	return i, err
+}
+
 const getMembershipBySlug = `-- name: GetMembershipBySlug :one
 SELECT o.id AS organization_id, o.slug, o.name, m.id AS member_id, m.role, m.handle
 FROM organization o

@@ -51,8 +51,8 @@ fails `make check`:
   rejected and a store accepted;
 - `db/migrations` may be imported only by `internal/platform/postgres` and
   `cmd/ribbitto` — **this also applies to test files**, apart from the
-  `internal/infra/postgres` tests that migrate to a target version, until
-  their module moves;
+  three target-version tests in `internal/infra/postgres` and
+  `internal/org/internal/postgres/member_handle_test.go`, until step 5;
 - otherwise test files may import any package, but the store and bridge
   rules above bind them too (only the platform's `tx_test.go` is exempt from
   the bridge rule).

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
@@ -24,15 +25,15 @@ func (f *directoryHistory) step(s string) error {
 	}
 	return nil
 }
-func (f *directoryHistory) GetMessage(context.Context, domain.ID, domain.ID, int64) (domain.Message, error) {
+func (f *directoryHistory) GetMessage(context.Context, domain.ID, domain.ID, int64) (conversation.Message, error) {
 	f.t.Fatal("unexpected single-message read")
-	return domain.Message{}, nil
+	return conversation.Message{}, nil
 }
-func (f *directoryHistory) ListMessagesBefore(_ context.Context, org, ch domain.ID, topicID *domain.ID, before *int64, limit int32) ([]domain.Message, error) {
+func (f *directoryHistory) ListMessagesBefore(_ context.Context, org, ch domain.ID, topicID *domain.ID, before *int64, limit int32) ([]conversation.Message, error) {
 	if org != (domain.ID{1}) || ch != (domain.ID{2}) || topicID == nil || *topicID != (domain.ID{7}) || before == nil || *before != 9 || limit != message.PageSize+1 {
 		f.t.Fatal("wrong history scope or limit")
 	}
-	return []domain.Message{{ID: domain.ID{4}, MemberID: domain.ID{3}}, {ID: domain.ID{5}, MemberID: domain.ID{3}}}, f.step("history")
+	return []conversation.Message{{ID: domain.ID{4}, MemberID: domain.ID{3}}, {ID: domain.ID{5}, MemberID: domain.ID{3}}}, f.step("history")
 }
 func (f *directoryHistory) LookupMembers(_ context.Context, orgID domain.ID, ids []domain.ID) (map[domain.ID]org.DirectoryEntry, error) {
 	if orgID != (domain.ID{1}) || !reflect.DeepEqual(ids, []domain.ID{{3}, {3}}) {
@@ -80,15 +81,15 @@ func TestBefore(t *testing.T) {
 // fullHistory returns n newest-first messages by one author, as many as asked.
 type fullHistory struct{ n int }
 
-func (fullHistory) GetMessage(context.Context, domain.ID, domain.ID, int64) (domain.Message, error) {
-	return domain.Message{}, errors.New("unexpected single-message read")
+func (fullHistory) GetMessage(context.Context, domain.ID, domain.ID, int64) (conversation.Message, error) {
+	return conversation.Message{}, errors.New("unexpected single-message read")
 }
 
-func (f fullHistory) ListMessagesBefore(_ context.Context, _, _ domain.ID, _ *domain.ID, before *int64, limit int32) ([]domain.Message, error) {
-	var out []domain.Message
+func (f fullHistory) ListMessagesBefore(_ context.Context, _, _ domain.ID, _ *domain.ID, before *int64, limit int32) ([]conversation.Message, error) {
+	var out []conversation.Message
 	for seq := int64(f.n); seq >= 1 && len(out) < int(limit); seq-- {
 		if before == nil || seq < *before {
-			out = append(out, domain.Message{ID: domain.ID{byte(seq)}, EventSeq: seq, MemberID: domain.ID{3}})
+			out = append(out, conversation.Message{ID: domain.ID{byte(seq)}, EventSeq: seq, MemberID: domain.ID{3}})
 		}
 	}
 	return out, nil
@@ -141,10 +142,10 @@ func TestBeforePages(t *testing.T) {
 	}
 }
 
-func (directoryHistory) GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]domain.Message, error) {
+func (directoryHistory) GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]conversation.Message, error) {
 	return nil, errors.New("unexpected batch read")
 }
 
-func (fullHistory) GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]domain.Message, error) {
+func (fullHistory) GetMessages(context.Context, domain.ID, domain.ID, []domain.ID) ([]conversation.Message, error) {
 	return nil, errors.New("unexpected batch read")
 }

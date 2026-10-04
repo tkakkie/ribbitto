@@ -58,5 +58,5 @@ composer leaves the initial page cursor intact for #159.
 Snapshot composition remains in the adapter until #154 M7.
 `MessageReader.One` uses the same snapshot pattern for an event's
 organisation, channel and `event_seq`, returning the message with current
-author names or `message.ErrNotFound`.
+author names or `conversation.ErrMessageNotFound`.
 

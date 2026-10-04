@@ -30,7 +30,7 @@ message it answers; the link opens a paged reply-chain view
 
 ## Accepted bodies
 
-`domain.ValidateMessageBody`, in this order:
+`conversation.ValidateMessageBody`, in this order:
 
 1. reject invalid UTF-8;
 2. turn CRLF and lone CR into LF;
@@ -55,7 +55,7 @@ mix directions in plain text with Arabic or Hebrew.
 The database checks the length, the absence of CR, the rejected controls,
 separators and bidi characters (listed one by one, not as a range), and
 that the body does not start or end with ASCII white space; PostgreSQL
-`text` rejects NUL. The Unicode-aware trim stays in the domain.
+`text` rejects NUL. The Unicode-aware trim stays in conversation.
 
 ## Showing bodies
 

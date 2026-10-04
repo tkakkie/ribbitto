@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -51,10 +52,10 @@ func TestMessageOne(t *testing.T) {
 		wantErr    error
 	}{
 		{"hydrated", membership, local.Channel.ID, posted.EventSeq, message.Entry{Message: posted, DisplayName: "Current Name", Handle: "current-handle", DefaultTopic: true}, nil},
-		{"missing", membership, local.Channel.ID, posted.EventSeq + 100, message.Entry{}, message.ErrNotFound},
-		{"wrong channel", membership, otherChannel.ID, posted.EventSeq, message.Entry{}, message.ErrNotFound},
-		{"foreign message", membership, foreign.Channel.ID, foreignPost.EventSeq, message.Entry{}, message.ErrNotFound},
-		{"foreign member", foreignMembership, local.Channel.ID, posted.EventSeq, message.Entry{}, message.ErrNotFound},
+		{"missing", membership, local.Channel.ID, posted.EventSeq + 100, message.Entry{}, conversation.ErrMessageNotFound},
+		{"wrong channel", membership, otherChannel.ID, posted.EventSeq, message.Entry{}, conversation.ErrMessageNotFound},
+		{"foreign message", membership, foreign.Channel.ID, foreignPost.EventSeq, message.Entry{}, conversation.ErrMessageNotFound},
+		{"foreign member", foreignMembership, local.Channel.ID, posted.EventSeq, message.Entry{}, conversation.ErrMessageNotFound},
 		{"foreign hydrated", foreignMembership, foreign.Channel.ID, foreignPost.EventSeq, message.Entry{Message: foreignPost, DisplayName: "globex", Handle: "owner", DefaultTopic: true}, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -229,7 +230,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			posting := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
 			initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")
 			requireNoError(t, err)
-			var concurrent domain.Message
+			var concurrent conversation.Message
 			var began bool
 			config := pool.Config()
 			config.ConnConfig.Tracer = queryHook(func(ctx context.Context, sql string) {

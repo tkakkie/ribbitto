@@ -1,16 +1,26 @@
-package domain
+package conversation
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
+
+// ErrInvalidBody wraps a body that breaks ValidateMessageBody.
+var ErrInvalidBody = errors.New("invalid message body")
+
+// ErrMessageNotFound means no message has this event_seq in the caller's organisation
+// and channel, including when the message exists in another scope.
+var ErrMessageNotFound = errors.New("message not found")
 
 // Message is a plain-text post identified by ID. EventSeq orders it within its organisation.
 type Message struct {
-	ID, OrganizationID, ChannelID, TopicID, MemberID ID
+	ID, OrganizationID, ChannelID, TopicID, MemberID kernel.ID
 	Body                                             string
 	EventSeq                                         int64
 	CreatedAt                                        time.Time

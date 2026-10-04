@@ -112,7 +112,7 @@ sequenceDiagram
 
 Nothing deletes a message or moves it to another channel yet (#352). Once
 something does, replay can reach an event whose message is gone: the read
-reports `ErrNotFound`, the render fails and the loop stops before the event,
+reports `conversation.ErrMessageNotFound`, the render fails and the loop stops before the event,
 so every reconnect repeats it. The first feature that makes this reachable
 implements this rule:
 
@@ -127,8 +127,8 @@ implements this rule:
 
 That feature decides how, and in which layer, a vanished target becomes a
 normal skip, but not by teaching `realtime.Stream` the message feature's
-`ErrNotFound`. It also decides whether `message.Reader.Many` (an incomplete
-batch is `ErrNotFound`) changes, so that ordinary data inconsistency is not
+`conversation.ErrMessageNotFound`. It also decides whether `message.Reader.Many` (an incomplete
+batch is `conversation.ErrMessageNotFound`) changes, so that ordinary data inconsistency is not
 taken for disappearance. Its tests replay a vanished `message.posted` and a
 `messages.moved` with missing and surviving IDs, and check that the
 surviving messages end in the right state and later events still arrive.

@@ -13,6 +13,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -190,7 +191,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	body := r.PostForm.Get("body")
 	posted, err := p.posting.PostToTopic(r.Context(), m, c.ID, p.topicID, body)
 	switch {
-	case errors.Is(err, message.ErrInvalidBody):
+	case errors.Is(err, conversation.ErrInvalidBody):
 		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Body: body, BodyError: "message.error.body"})
 	case errors.Is(err, channel.ErrNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, topic.ErrNotFound):
 		// The channel, membership or organisation went away after this

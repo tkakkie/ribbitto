@@ -3,3 +3,26 @@
 //   sqlc v1.31.1
 
 package sqlcgen
+
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type Member struct {
+	ID             pgtype.UUID
+	OrganizationID pgtype.UUID
+	AccountID      pgtype.UUID
+	Role           string
+	JoinedEventSeq int64
+	CreatedAt      pgtype.Timestamptz
+	Handle         string
+}
+
+type Organization struct {
+	ID                  pgtype.UUID
+	Slug                string
+	Name                string
+	EventSeq            int64
+	CreatedAt           pgtype.Timestamptz
+	EventLogBoundarySeq int64
+}

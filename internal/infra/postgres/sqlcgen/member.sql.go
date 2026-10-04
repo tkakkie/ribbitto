@@ -24,6 +24,7 @@ type CreateMemberParams struct {
 	Handle         string
 }
 
+// A copy of org's CreateMember (db/queries/org/), until 3.12.
 func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error) {
 	row := q.db.QueryRow(ctx, createMember,
 		arg.OrganizationID,

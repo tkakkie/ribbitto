@@ -17,3 +17,7 @@ UPDATE member SET handle = $3 WHERE organization_id = $1 AND id = $2;
 -- name: LookupMembers :many
 SELECT id, account_id, handle FROM member
 WHERE organization_id = $1 AND id = ANY(sqlc.arg(member_ids)::uuid[]);
+
+-- name: CreateMember :one
+INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle)
+VALUES ($1, $2, $3, $4, $5) RETURNING *;

@@ -3,9 +3,8 @@
 // Feature: message (feature map in docs/architecture/features.md), which owns
 // the message table. Exported API: Service with New and NewWithNotifier, the
 // Store interface it needs, and Notifier. Message, its body rule, its errors
-// and the history reader
-// (Reader, Entry, Page, ChannelPage, PageSize) are conversation's, not this
-// package's.
+// and the history reader (Reader, Entry, Page, ChannelPage, PageSize) are
+// conversation's, not this package's.
 // It uses org through org.Membership; posting reports a channel
 // outside the caller's organisation as conversation.ErrChannelNotFound. Listed
 // exception: posting advances organization.event_seq, which org owns,

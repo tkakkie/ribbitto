@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/app/topic"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -21,7 +20,7 @@ func TestMoveEventPayload(t *testing.T) {
 		VALUES ($1, 1, 'member.joined', jsonb_build_object('member_id', $2::uuid))`, f.OrganizationID, f.MemberID)
 	requireNoError(t, err)
 	uuid := func(n int) string { return fmt.Sprintf("00000000-0000-0000-0000-%012x", n) }
-	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
 	// A lower write-side limit must not make already-committed moves unreadable.
 	ids := make([]string, topic.MaxBranchMessages+1)
 	for i := range ids {

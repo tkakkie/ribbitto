@@ -3,16 +3,14 @@ package postgres
 import (
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
-	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
-// EventKinds returns the publishers' Routers for the kinds written today, for
-// wiring and tests, until each module registers its own (steps 3 and 4).
+// EventKinds returns conversation's routers for wiring and tests until
+// conversation registers its own kinds in step 4. Org registers through orgpg.
 func EventKinds() realtime.Kinds {
 	return realtime.Kinds{
 		message.KindPosted:      message.RoutePosted,
-		org.KindJoined:          org.RouteJoined,
 		topic.KindMessagesMoved: topic.RouteMoved,
 	}
 }

@@ -5,10 +5,10 @@ pull request, the AI that did not implement it. Claude's work → Codex;
 Codex's work → Claude.
 
 **How many rounds:** at most **two** reviews by the other AI per issue or
-pull request, counting re-reviews. Copilot and Grok do not count. If
-round two still has blocking findings, a pull request may go through
-*closure verification* (below) when it qualifies; in every other case,
-stop and ask the maintainer.
+pull request, counting re-reviews. Copilot and the adversarial review do
+not count. If round two still has blocking findings, a pull request may go
+through *closure verification* (below) when it qualifies; in every other
+case, stop and ask the maintainer.
 
 **What to check on an issue:**
 - The *why* is clear and the scope fits one pull request.
@@ -71,8 +71,8 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    - ✅ | ❌ finding — how it was checked
    ```
 
-4. All pass → the remaining steps (Grok when
-   [required](adversarial-review.md#when-grok-runs), then
+4. All pass → the remaining steps (the adversarial review its
+   [tier requires](adversarial-review.md#which-review-runs), then
    `ai-reviewed` and ready for review, then Copilot) and the normal merge
    decision. Any other change
    in the diff, a failed check, a new blocking finding or anything needing
@@ -95,24 +95,34 @@ unreviewed. If answering Copilot needs a change:
    - ✅ | ❌ Copilot comment — how it was checked
    ```
 
-3. All pass → mark it ready for review again and the normal merge
-   decision. Grok does not run again and Copilot is not re-requested; if
-   Copilot reviews again anyway, handle it the same way once, then ask the
-   maintainer. A change needing a design or specification decision, a
-   failed check or a new blocking finding → ask the maintainer.
+3. All pass → if the follow-up's diff matches tier A or B, keep the pull
+   request a draft until the pull request's tier, recomputed at the new
+   head, has been reviewed again there, with every finding disposed of
+   ([completion](adversarial-review.md#which-review-runs)); then mark it
+   ready for review again and the normal merge decision. Copilot is not
+   re-requested; if Copilot reviews again anyway, handle it the same way
+   once, then ask the maintainer. A change needing a design or
+   specification decision, a failed check or a new blocking finding → ask
+   the maintainer.
 
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
-than combine both sides, it needs a normal review.
+than combine both sides, it needs a normal review. Either way, if the diff
+from the last adversarially reviewed head to the merge result matches tier
+A or B, the pull request's tier, recomputed at the merge result, is
+reviewed again before it is marked ready
+([completion](adversarial-review.md#which-review-runs)).
 
 ## Risk
 
 A change is **high** risk if it touches any of: `internal/org/**`,
-`internal/identity/**`, `internal/web/middleware/**`,
+`internal/identity/**`, `internal/web/middleware/**`, the authentication
+entry points `internal/web/org.go`, `internal/web/signin.go`,
+`internal/web/signup.go` and `internal/web/setup.go`,
 `internal/realtime/**`, `db/migrations/**`, `db/queries/**`,
 `.github/**`, `scripts/**`, `tools/**`, `Makefile`, `.golangci.yml`,
 `sqlc.yaml`, `go.mod`, `go.sum`, `docs/workflow/**`, or any `AGENTS.md`
 or `CLAUDE.md`. Everything else is **normal**. The author states the risk
-in the template; the reviewer checks it. Whether Grok runs is decided
-separately, by what the change alters
-([`adversarial-review.md`](adversarial-review.md#when-grok-runs)).
+in the template; the reviewer checks it. Which adversarial review runs is
+decided separately, by what the change alters
+([`adversarial-review.md`](adversarial-review.md#which-review-runs)).

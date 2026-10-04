@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -71,7 +71,7 @@ func TestEventsAfter(t *testing.T) {
 		return data
 	}
 	want := []realtime.Event{
-		{OrganizationID: f.OrganizationID, Seq: 1, Kind: member.KindJoined, Payload: stored(1)},
+		{OrganizationID: f.OrganizationID, Seq: 1, Kind: org.KindJoined, Payload: stored(1)},
 		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: message.KindPosted, ChannelID: f.Channel.ID,
 			Topics: []domain.ID{posted.TopicID}, Payload: stored(posted.EventSeq)},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
@@ -101,7 +101,7 @@ func TestEventsAfter(t *testing.T) {
 	// The payloads still name the member and the message.
 	got, err := reader.EventsAfter(ctx, f.OrganizationID, 0, 2)
 	requireNoError(t, err)
-	if joined, err := member.DecodeJoined(got[0].Payload); err != nil || joined.MemberID != f.MemberID {
+	if joined, err := org.DecodeJoined(got[0].Payload); err != nil || joined.MemberID != f.MemberID {
 		t.Fatalf("joined payload: %+v, %v; want member %v", joined, err, f.MemberID)
 	}
 	if p, err := message.DecodePosted(got[1].Payload); err != nil || p.MessageID != posted.ID || p.TopicID == nil || *p.TopicID != posted.TopicID {

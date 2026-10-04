@@ -11,7 +11,7 @@
 // bounded ID batch with the same scoping and hydration; ChannelPage is
 // the page snapshot's result. topic.Directory resolves topic labels in one
 // batch per page.
-// Author names use member.Directory (org)
+// Author names use org.Directory
 // followed by identity.Directory; message queries neither feature.
 // It uses org through org.Membership; posting reports a channel
 // outside the caller's organisation as channel.ErrNotFound. Listed

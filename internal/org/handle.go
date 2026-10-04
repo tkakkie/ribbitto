@@ -1,4 +1,4 @@
-package member
+package org
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // ErrInvalidHandle wraps a handle that breaks the rules in domain.ValidateHandle.
@@ -17,35 +16,36 @@ var ErrInvalidHandle = errors.New("invalid handle")
 // handle, ignoring case.
 var ErrHandleTaken = errors.New("handle already taken")
 
-// Authorizer resolves the signed-in account's membership (org.Authorizer).
-type Authorizer interface {
-	Member(ctx context.Context, account *identity.Account, slug string) (org.Membership, error)
+// MembershipResolver resolves the signed-in account's membership
+// (Authorizer implements it).
+type MembershipResolver interface {
+	Member(ctx context.Context, account *identity.Account, slug string) (Membership, error)
 }
 
-// Store changes a member's handle. It returns ErrHandleTaken when the
-// organisation's unique constraint rejects the handle, and org.ErrNotFound
+// HandleStore changes a member's handle. It returns ErrHandleTaken when the
+// organisation's unique constraint rejects the handle, and ErrNotFound
 // when the member no longer exists.
-type Store interface {
+type HandleStore interface {
 	UpdateHandle(ctx context.Context, organizationID, memberID domain.ID, handle string) error
 }
 
-// Service runs use cases on the caller's own membership.
-type Service struct {
-	authorizer Authorizer
-	store      Store
+// HandleChanger runs use cases on the caller's own membership.
+type HandleChanger struct {
+	authorizer MembershipResolver
+	store      HandleStore
 }
 
-// New returns a Service.
-func New(authorizer Authorizer, store Store) *Service {
-	return &Service{authorizer: authorizer, store: store}
+// NewHandleChanger returns a HandleChanger.
+func NewHandleChanger(authorizer MembershipResolver, store HandleStore) *HandleChanger {
+	return &HandleChanger{authorizer: authorizer, store: store}
 }
 
 // ChangeHandle sets the signed-in account's handle in the organisation named
 // by slug (from the URL) and returns the stored, canonical handle. There is
 // no member id parameter on purpose: the only member it can change is the
-// caller's own. A signed-out caller or a non-member gets org.ErrNotFound.
+// caller's own. A signed-out caller or a non-member gets ErrNotFound.
 // The released handle is free for anyone to take at once.
-func (s *Service) ChangeHandle(ctx context.Context, account *identity.Account, slug, handle string) (string, error) {
+func (s *HandleChanger) ChangeHandle(ctx context.Context, account *identity.Account, slug, handle string) (string, error) {
 	membership, err := s.authorizer.Member(ctx, account, slug)
 	if err != nil {
 		return "", err

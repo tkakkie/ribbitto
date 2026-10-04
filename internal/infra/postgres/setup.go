@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
-	appmember "github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
@@ -44,11 +44,11 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
 		tx := pgxbridge.Tx(platformTx)
 		q := sqlcgen.New(tx)
-		org, err := q.CreateOrganization(ctx, sqlcgen.CreateOrganizationParams{Name: organizationName, Slug: slug})
+		organization, err := q.CreateOrganization(ctx, sqlcgen.CreateOrganizationParams{Name: organizationName, Slug: slug})
 		if err != nil {
 			return err
 		}
-		seq, err := q.NextEventSeq(ctx, org.ID)
+		seq, err := q.NextEventSeq(ctx, organization.ID)
 		if err != nil {
 			return err
 		}
@@ -56,24 +56,24 @@ func (s *SetupStore) Create(ctx context.Context, organizationName, slug, email, 
 		if err != nil {
 			return err
 		}
-		member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org.ID, AccountID: account.ID, Role: "owner", JoinedEventSeq: seq, Handle: handle})
+		member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: organization.ID, AccountID: account.ID, Role: "owner", JoinedEventSeq: seq, Handle: handle})
 		if err != nil {
 			return err
 		}
-		data := appmember.EncodeJoined(member.ID.Bytes)
-		if err := s.events(platformTx).Append(ctx, org.ID.Bytes, seq, appmember.KindJoined, nil, data); err != nil {
+		data := org.EncodeJoined(member.ID.Bytes)
+		if err := s.events(platformTx).Append(ctx, organization.ID.Bytes, seq, org.KindJoined, nil, data); err != nil {
 			return err
 		}
 		// Listed exception (feature map): setup writes the channel feature's
 		// table so that a completed setup never exists without its default
 		// channel; a failure here rolls the organisation back too.
-		if _, err := NewChannelStore(tx).CreateChannel(ctx, org.ID.Bytes, channel.DefaultName, true); err != nil {
+		if _, err := NewChannelStore(tx).CreateChannel(ctx, organization.ID.Bytes, channel.DefaultName, true); err != nil {
 			return err
 		}
-		if err := q.CompleteSetup(ctx, org.ID); err != nil {
+		if err := q.CompleteSetup(ctx, organization.ID); err != nil {
 			return err
 		}
-		result = setup.Result{OrganizationID: org.ID.Bytes, AccountID: account.ID.Bytes}
+		result = setup.Result{OrganizationID: organization.ID.Bytes, AccountID: account.ID.Bytes}
 		return nil
 	})
 	if err != nil {

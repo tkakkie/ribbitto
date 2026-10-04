@@ -68,10 +68,10 @@ is organisation-wide; a value restricts delivery to that member, enforced
 by the stream's per-event authorization (`org.Authorizer.MayReceive`). Its composite foreign key keeps the
 member in the same organisation. The audience never appears in `data`.
 Each kind's publisher owns its kind name and payload (decision 26):
-`app/message` (`KindPosted`, `EncodePosted`, `DecodePosted`), `app/topic`
-(`KindMessagesMoved`, `EncodeMoved`, `DecodeMoved`) and `app/member`
-(`KindJoined`, `EncodeJoined`, `DecodeJoined`) declare the kind, encode the
-payload and decode it until their modules move; realtime keeps only the
+`app/message` (`KindPosted`, `EncodePosted`, `DecodePosted`) and `app/topic`
+(`KindMessagesMoved`, `EncodeMoved`, `DecodeMoved`) until `conversation`
+moves, and `org` (`KindJoined`, `EncodeJoined`, `DecodeJoined`), declare the
+kind, encode the payload and decode it; realtime keeps only the
 `EventKind` type. The encoders return only `[]byte`: their strings and
 string slices cannot fail JSON marshaling. The writer stores what they
 return; the reader only routes through their `Router`s, and consumers

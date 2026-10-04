@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -41,7 +40,7 @@ func TestChangeHandle(t *testing.T) {
 		accounts[a.DisplayName] = &a
 	}
 	requireNoError(t, rows.Err())
-	service := member.New(org.NewAuthorizer(postgres.NewAuthzStore(pool)), postgres.NewMemberStore(pool))
+	service := org.NewHandleChanger(org.NewAuthorizer(postgres.NewAuthzStore(pool)), postgres.NewMemberStore(pool))
 	change := func(name, slug, handle string) (string, error) {
 		return service.ChangeHandle(ctx, accounts[name], slug, handle)
 	}
@@ -56,8 +55,8 @@ func TestChangeHandle(t *testing.T) {
 		name, account, slug, handle string
 		want                        error
 	}{
-		{"case variant of another member's handle", "alice", "acme", "BOB", member.ErrHandleTaken},
-		{"reserved word", "alice", "acme", "all", member.ErrInvalidHandle},
+		{"case variant of another member's handle", "alice", "acme", "BOB", org.ErrHandleTaken},
+		{"reserved word", "alice", "acme", "all", org.ErrInvalidHandle},
 		{"member of another organisation", "carol", "acme", "carol2", org.ErrNotFound},
 		{"account without a membership", "dave", "acme", "dave", org.ErrNotFound},
 		{"signed out", "nobody", "acme", "nobody", org.ErrNotFound},
@@ -103,7 +102,7 @@ func TestChangeHandle(t *testing.T) {
 		switch err := <-results; {
 		case err == nil:
 			winners++
-		case !errors.Is(err, member.ErrHandleTaken):
+		case !errors.Is(err, org.ErrHandleTaken):
 			t.Fatalf("racer: %v", err)
 		}
 	}

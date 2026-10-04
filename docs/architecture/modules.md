@@ -35,12 +35,12 @@ the temporary implementation behind it.
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
 | four `infra` target-version tests | `db/migrations` (temporary allowance) | 0 | their module's step, or 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
-| `app/setup`, `app/signup`, `app/member` | `identity.Hasher`, `identity.Account` | 1 | 3 |
+| `app/setup`, `app/signup` | `identity.Hasher`, `identity.Account` | 1 | 3 |
 | `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
 | setup, sign-up (`infra`) | `identity` account writes | 3 (until then, a `legacy_account.sql` copy of `CreateAccount` and `GetAccountByID` on the `infra` sqlc entry, from step 1) | 3 |
 | `infra/postgres` appender interface (`EventAppender`), the bounds, committed-sequence and retention-boundary adapters, and the kind list | `realtime` types (root import, temporary allowance) | 2 | 5 |
 | the kind registry (`postgres.EventKinds()`, used by `cmd/ribbitto` and tests) | each publisher's `realtime.Router` | 2 | 3 and 4, as each module registers its own |
-| event payload codecs in `app/message`, `app/topic` and `app/member` | their kinds' payloads, owned by the publisher | 2 | 3 (`member.joined`, with `org`), 4 (`message.posted` and `messages.moved`, with `conversation`) |
+| event payload codecs in `app/message` and `app/topic` | their kinds' payloads, owned by the publisher | 2 | 4 (`message.posted` and `messages.moved`, with `conversation`); `member.joined`'s moved into `org` in 3.4 |
 | posting, setup, sign-up, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | each flow's own step: setup and sign-up 3, posting and branching 4 |
 | posting, setup, sign-up, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | each flow's own step: 3, 4 |
 | `realtime` reader and retention | `org` sequence bounds (`postgres.EventBoundsIn`, and `EventSequences` for the watermark), retention lock and boundary write (`postgres.RetentionBoundaryIn`) | 2 | 3 |

@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -35,14 +34,14 @@ func (f *directoryHistory) ListMessagesBefore(_ context.Context, org, ch domain.
 	}
 	return []domain.Message{{ID: domain.ID{4}, MemberID: domain.ID{3}}, {ID: domain.ID{5}, MemberID: domain.ID{3}}}, f.step("history")
 }
-func (f *directoryHistory) LookupMembers(_ context.Context, org domain.ID, ids []domain.ID) (map[domain.ID]member.Identity, error) {
-	if org != (domain.ID{1}) || !reflect.DeepEqual(ids, []domain.ID{{3}, {3}}) {
+func (f *directoryHistory) LookupMembers(_ context.Context, orgID domain.ID, ids []domain.ID) (map[domain.ID]org.DirectoryEntry, error) {
+	if orgID != (domain.ID{1}) || !reflect.DeepEqual(ids, []domain.ID{{3}, {3}}) {
 		f.t.Fatal("wrong author scope")
 	}
 	if f.fail == "missing member" {
 		return nil, nil
 	}
-	return map[domain.ID]member.Identity{{3}: {AccountID: domain.ID{6}, Handle: "author"}}, f.step("members")
+	return map[domain.ID]org.DirectoryEntry{{3}: {AccountID: domain.ID{6}, Handle: "author"}}, f.step("members")
 }
 func (f *directoryHistory) LookupDisplayNames(_ context.Context, ids []domain.ID) (map[domain.ID]string, error) {
 	if f.fail == "missing member" || f.fail == "missing account" {
@@ -94,8 +93,8 @@ func (f fullHistory) ListMessagesBefore(_ context.Context, _, _ domain.ID, _ *do
 	}
 	return out, nil
 }
-func (fullHistory) LookupMembers(context.Context, domain.ID, []domain.ID) (map[domain.ID]member.Identity, error) {
-	return map[domain.ID]member.Identity{{3}: {AccountID: domain.ID{6}}}, nil
+func (fullHistory) LookupMembers(context.Context, domain.ID, []domain.ID) (map[domain.ID]org.DirectoryEntry, error) {
+	return map[domain.ID]org.DirectoryEntry{{3}: {AccountID: domain.ID{6}}}, nil
 }
 func (fullHistory) LookupDisplayNames(context.Context, []domain.ID) (map[domain.ID]string, error) {
 	return map[domain.ID]string{{6}: "Author"}, nil

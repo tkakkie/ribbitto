@@ -6,11 +6,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -70,7 +70,7 @@ func (r *EventSequences) CommittedSequences(ctx context.Context, organizations [
 func EventKinds() realtime.Kinds {
 	return realtime.Kinds{
 		message.KindPosted:      message.RoutePosted,
-		member.KindJoined:       member.RouteJoined,
+		org.KindJoined:          org.RouteJoined,
 		topic.KindMessagesMoved: topic.RouteMoved,
 	}
 }

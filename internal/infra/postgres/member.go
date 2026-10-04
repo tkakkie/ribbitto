@@ -8,13 +8,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
-// MemberStore implements member.Store.
+// MemberStore implements org.HandleStore.
 type MemberStore struct {
 	queries *sqlcgen.Queries
 }
@@ -35,9 +34,9 @@ func (s *MemberStore) UpdateHandle(ctx context.Context, organizationID, memberID
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "member_organization_id_handle_key":
-		return member.ErrHandleTaken
+		return org.ErrHandleTaken
 	case errors.As(err, &pgErr) && pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "member_handle_"):
-		return fmt.Errorf("%w: %w", member.ErrInvalidHandle, err)
+		return fmt.Errorf("%w: %w", org.ErrInvalidHandle, err)
 	case err != nil:
 		return fmt.Errorf("updating handle: %w", err)
 	case rows == 0:
@@ -46,15 +45,15 @@ func (s *MemberStore) UpdateHandle(ctx context.Context, organizationID, memberID
 	return nil
 }
 
-// LookupMembers implements org's member.Directory, scoped to one organisation.
-func (s *MemberStore) LookupMembers(ctx context.Context, organizationID domain.ID, ids []domain.ID) (map[domain.ID]member.Identity, error) {
+// LookupMembers implements org.Directory, scoped to one organisation.
+func (s *MemberStore) LookupMembers(ctx context.Context, organizationID domain.ID, ids []domain.ID) (map[domain.ID]org.DirectoryEntry, error) {
 	rows, err := s.queries.LookupMembers(ctx, sqlcgen.LookupMembersParams{OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, MemberIds: uuidArray(ids)})
 	if err != nil {
 		return nil, fmt.Errorf("looking up members: %w", err)
 	}
-	result := make(map[domain.ID]member.Identity, len(rows))
+	result := make(map[domain.ID]org.DirectoryEntry, len(rows))
 	for _, row := range rows {
-		result[row.ID.Bytes] = member.Identity{AccountID: row.AccountID.Bytes, Handle: row.Handle}
+		result[row.ID.Bytes] = org.DirectoryEntry{AccountID: row.AccountID.Bytes, Handle: row.Handle}
 	}
 	return result, nil
 }

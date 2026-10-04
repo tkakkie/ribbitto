@@ -8,10 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	appmember "github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/signup"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
@@ -23,14 +23,14 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, has
 	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
 		tx := pgxbridge.Tx(platformTx)
 		q := sqlcgen.New(tx)
-		org, err := q.SetupOrganization(ctx)
+		orgID, err := q.SetupOrganization(ctx)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return signup.ErrClosed
 		}
 		if err != nil {
 			return err
 		}
-		seq, err := q.NextEventSeq(ctx, org)
+		seq, err := q.NextEventSeq(ctx, orgID)
 		if err != nil {
 			return err
 		}
@@ -38,12 +38,12 @@ func (s *SetupStore) SignUp(ctx context.Context, displayName, handle, email, has
 		if err != nil {
 			return err
 		}
-		member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: org, AccountID: account.ID, Role: "member", JoinedEventSeq: seq, Handle: handle})
+		member, err := q.CreateMember(ctx, sqlcgen.CreateMemberParams{OrganizationID: orgID, AccountID: account.ID, Role: "member", JoinedEventSeq: seq, Handle: handle})
 		if err != nil {
 			return err
 		}
-		data := appmember.EncodeJoined(member.ID.Bytes)
-		if err := s.events(platformTx).Append(ctx, org.Bytes, seq, appmember.KindJoined, nil, data); err != nil {
+		data := org.EncodeJoined(member.ID.Bytes)
+		if err := s.events(platformTx).Append(ctx, orgID.Bytes, seq, org.KindJoined, nil, data); err != nil {
 			return err
 		}
 		id = account.ID.Bytes

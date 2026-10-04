@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -32,7 +31,7 @@ type History interface {
 // Reader composes history with org, identity and topic's exported directory APIs.
 type Reader struct {
 	History  History
-	Members  member.Directory
+	Members  org.Directory
 	Accounts identity.Directory
 	Topics   topic.Directory
 }

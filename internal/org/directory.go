@@ -1,4 +1,4 @@
-package member
+package org
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/domain"
 )
 
-// Identity is the public author information owned by org.
-type Identity struct {
+// DirectoryEntry is a member's public author information.
+type DirectoryEntry struct {
 	AccountID domain.ID
 	Handle    string
 }
@@ -15,5 +15,5 @@ type Identity struct {
 // Directory looks up only the requested member IDs within one organisation.
 // Missing and foreign members are omitted. It exposes no membership credentials.
 type Directory interface {
-	LookupMembers(context.Context, domain.ID, []domain.ID) (map[domain.ID]Identity, error)
+	LookupMembers(context.Context, domain.ID, []domain.ID) (map[domain.ID]DirectoryEntry, error)
 }

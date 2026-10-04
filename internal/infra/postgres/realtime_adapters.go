@@ -1,9 +1,9 @@
 package postgres
 
 import (
-	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
@@ -12,7 +12,7 @@ import (
 func EventKinds() realtime.Kinds {
 	return realtime.Kinds{
 		message.KindPosted:      message.RoutePosted,
-		member.KindJoined:       member.RouteJoined,
+		org.KindJoined:          org.RouteJoined,
 		topic.KindMessagesMoved: topic.RouteMoved,
 	}
 }

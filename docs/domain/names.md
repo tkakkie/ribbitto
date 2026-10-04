@@ -74,5 +74,5 @@ Members that existed before handles got `member-<n>`, numbered per
 organisation in id order.
 
 A handle can change safely, since nothing refers to it: a member changes
-only their own (`app/member`), and a released handle is free for anyone at
+only their own (`org.HandleChanger`), and a released handle is free for anyone at
 once.

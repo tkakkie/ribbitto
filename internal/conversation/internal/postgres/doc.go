@@ -5,7 +5,8 @@
 // conversationpg.NewChannels and NewTopics bind it to the pool for
 // production, and DefaultChannelCreatorIn to setup's transaction for its
 // default channel; infra's page snapshot keeps the frozen legacy store until
-// its migration step. Writer holds posting's writes and maps their
-// constraints to conversation's and org's errors; conversationpg.WriterIn
-// binds it to a caller's transaction, unused in production until step 4.9.
+// its migration step. Writer holds posting's and branching's writes and maps
+// their constraints to conversation's and org's errors, except the branch
+// notice's; conversationpg.WriterIn binds it to a caller's transaction,
+// unused in production until steps 4.9 and 4.10a.
 package postgres

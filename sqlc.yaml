@@ -4,8 +4,8 @@ sql:
   # queries until step 4; it keeps no org or account query. sqlc reads only
   # the files directly in db/queries/, so modules' query directories stay
   # out of it. channel.sql and message.sql's InsertMessage are duplicated
-  # in conversation/ until step 4.15, and topic.sql's GetTopic and
-  # GetDefaultTopic until 4.16.
+  # in conversation/ until step 4.15, and topic.sql's GetTopic,
+  # GetDefaultTopic, CreateTopic and MoveMessages until 4.16.
   - engine: postgresql
     schema: db/migrations/
     queries: db/queries/

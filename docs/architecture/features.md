@@ -73,6 +73,12 @@ wiring imports org. Sign-up injects org's factory via a closure; setup keeps
 `legacy_account.sql` until 3.12.
 Identity owns the distinct `ErrEmailTaken` and `ErrInvalidEmail` mappings.
 
+Org's store tests own the organisation/member schema checks, slug lookup and
+handle upgrade test, with local raw-SQL account fixtures. Their test-only
+`GetOrganizationBySlug` and `GetMemberByOrganizationAndAccount` queries live
+in `db/queries/org/`; conversation's schema test still uses infra's `pgtest`
+fixtures until step 5.
+
 **Known exceptions.** Cross-feature writes that must commit atomically:
 
 - setup (`org`) writes `organization`, `account`, `member`, `channel` and

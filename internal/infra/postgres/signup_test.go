@@ -11,7 +11,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
@@ -41,14 +40,17 @@ func TestSignUp(t *testing.T) {
 	id, err := service.SignUp(ctx, "Alice", "alice", "alice@example.org", "long enough password")
 	requireNoError(t, err)
 	organizationID := pgtype.UUID{Bytes: result.OrganizationID, Valid: true}
-	q := sqlcgen.New(pool)
 	var account struct {
 		ID    pgtype.UUID
 		Email string
 	}
 	err = pool.QueryRow(ctx, "SELECT id, email FROM account WHERE id=$1", id).Scan(&account.ID, &account.Email)
 	requireNoError(t, err)
-	member, err := q.GetMemberByOrganizationAndAccount(ctx, sqlcgen.GetMemberByOrganizationAndAccountParams{OrganizationID: organizationID, AccountID: account.ID})
+	var member struct {
+		Role, Handle   string
+		JoinedEventSeq int64
+	}
+	err = pool.QueryRow(ctx, "SELECT role, handle, joined_event_seq FROM member WHERE organization_id = $1 AND account_id = $2", organizationID, account.ID).Scan(&member.Role, &member.Handle, &member.JoinedEventSeq)
 	requireNoError(t, err)
 	if account.Email != "alice@example.org" || member.Role != "member" || member.JoinedEventSeq != 2 || member.Handle != "alice" {
 		t.Fatalf("account/member: %+v %+v", account, member)

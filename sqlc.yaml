@@ -3,7 +3,8 @@ sql:
   # The legacy layered store: conversation's channel, topic and message
   # queries until step 4; it keeps no org or account query. sqlc reads only
   # the files directly in db/queries/, so modules' query directories stay
-  # out of it. channel.sql is duplicated in conversation/ until step 4.15.
+  # out of it. channel.sql is duplicated in conversation/ until step 4.15,
+  # and topic.sql's GetTopic until 4.16.
   - engine: postgresql
     schema: db/migrations/
     queries: db/queries/

@@ -36,9 +36,10 @@ type MessageReader interface {
 	One(context.Context, org.Membership, domain.ID, int64) (message.Entry, error)
 }
 
-// TopicReader looks up topics scoped to their organisation and channel.
+// TopicReader looks up a topic of a channel in the resolved member's
+// organisation; conversation's root owns that scope check.
 type TopicReader interface {
-	GetTopic(context.Context, domain.ID, domain.ID, domain.ID) (conversation.Topic, error)
+	Get(context.Context, org.Membership, domain.ID, domain.ID) (conversation.Topic, error)
 }
 
 type channelPages struct {
@@ -105,7 +106,7 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID) {
 	_, err := p.service.Get(r.Context(), m, id)
 	if err == nil && p.topicID != nil {
-		_, err = p.topics.GetTopic(r.Context(), m.Organization.ID, id, *p.topicID)
+		_, err = p.topics.Get(r.Context(), m, id, *p.topicID)
 	}
 	switch {
 	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, conversation.ErrTopicNotFound):

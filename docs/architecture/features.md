@@ -20,7 +20,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `org`: organisations, memberships, authorisation, first-run setup, sign-up | the completed `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres` and wiring `orgpg`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `conversation` (Channel, its name rule, errors and default name; Channels and ChannelStore); `conversationpg` (NewChannels); `conversation/internal/postgres/channel.go`, `db/queries/conversation/channel.sql`; `infra/postgres/channel.go`, `db/queries/channel.sql` (legacy copy until 4.15); `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `conversation/posted.go` (`message.posted`); `conversation/message.go` (type, body rule and errors); `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
-| `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic` (Store, Directory and branching); `conversation/moved.go` (`messages.moved`); `conversation/topic.go`, `topic_errors.go` (type, name rule and errors); `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
+| `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic` (Store, Directory and branching); `conversation/moved.go` (`messages.moved`); `conversation/topic.go`, `topic_errors.go` (type, name rule and errors), `topics.go` (`Topics.Get`, the membership-scoped lookup); `conversationpg` (`NewTopics`); `conversation/internal/postgres/topic.go`, `db/queries/conversation/topic.sql` (`GetTopic`, legacy copy until 4.16); `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
 | `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `infra/postgres/event_appender.go` (the flows' appender interface); `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
 
 The shared kernel, which any feature may use: `internal/kernel` (`ID`) and
@@ -65,7 +65,8 @@ by organisation, channel, sequence and language, with no extra read per stream
 per event. `MessageReader.Many` reads only a move's message IDs with the same snapshot
 and directory batches; its shared render corrects feed labels and checkbox
 sources and supplies topic-page removals and ordered insertions.
-Malformed topic paging links use a scoped topic lookup without history;
+Malformed topic paging links and the topic stream check the topic through
+`conversation.Topics.Get`, scoped by the resolved membership, without history;
 topic posts rely on the lookup inside the posting transaction.
 
 Identity's store creates accounts in the caller's transaction through

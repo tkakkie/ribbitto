@@ -31,8 +31,8 @@ func NewBranchStore(pool *pgxpool.Pool, sequences EventSequenceIn, events EventA
 // Branch runs one branch atomically. Listed exceptions (feature map): it
 // advances org's event_seq, writes message.topic_id, posts the notice into
 // message and writes realtime's event_log, all in one transaction.
-func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, memberID domain.ID, b topic.Branch, notice func(domain.Topic) string) (domain.Topic, int64, error) {
-	var destination domain.Topic
+func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, memberID domain.ID, b topic.Branch, notice func(conversation.Topic) string) (conversation.Topic, int64, error) {
+	var destination conversation.Topic
 	var noticeSeq int64
 	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
 		tx := pgxbridge.Tx(platformTx)
@@ -85,7 +85,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 		return events.Append(ctx, organizationID, noticeSeq, conversation.KindPosted, nil, data)
 	})
 	if err != nil { // org.ErrNotFound from the sequence when the organisation is gone
-		return domain.Topic{}, 0, err
+		return conversation.Topic{}, 0, err
 	}
 	return destination, noticeSeq, nil
 }

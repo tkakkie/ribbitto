@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -99,7 +98,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 			return
 		}
 		_, err := p.topics.GetTopic(r.Context(), m.Organization.ID, c.ID, selected)
-		if errors.Is(err, topic.ErrNotFound) {
+		if errors.Is(err, conversation.ErrTopicNotFound) {
 			http.NotFound(w, r)
 			return
 		}

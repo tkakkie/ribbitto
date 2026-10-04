@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -43,7 +42,7 @@ func TestTopicSchema(t *testing.T) {
 	}
 
 	for _, input := range []string{"a", "　 設計 会議　 ", " é ", strings.Repeat("界", 80)} {
-		name, err := domain.ValidateTopicName(input)
+		name, err := conversation.ValidateTopicName(input)
 		requireNoError(t, err)
 		created, err := store.CreateTopic(ctx, acme.OrganizationID, general, name)
 		requireNoError(t, err)
@@ -52,14 +51,14 @@ func TestTopicSchema(t *testing.T) {
 			t.Fatalf("topic round trip: %+v, %v", got, err)
 		}
 	}
-	if _, err := store.CreateTopic(ctx, acme.OrganizationID, general, "A"); !errors.Is(err, topic.ErrNameTaken) {
+	if _, err := store.CreateTopic(ctx, acme.OrganizationID, general, "A"); !errors.Is(err, conversation.ErrTopicNameTaken) {
 		t.Fatalf("duplicate name ignoring case: %v", err)
 	}
 	if _, err := store.CreateTopic(ctx, acme.OrganizationID, random.ID, "a"); err != nil {
 		t.Fatalf("same name in another channel: %v", err)
 	}
 	for _, name := range []string{"", strings.Repeat("界", 81), "é"} {
-		if _, err := store.CreateTopic(ctx, acme.OrganizationID, general, name); !errors.Is(err, topic.ErrInvalidName) {
+		if _, err := store.CreateTopic(ctx, acme.OrganizationID, general, name); !errors.Is(err, conversation.ErrInvalidTopicName) {
 			t.Fatalf("invalid name %q: %v", name, err)
 		}
 	}
@@ -106,7 +105,7 @@ func TestTopicStoreScope(t *testing.T) {
 
 	def, err := store.GetDefaultTopic(ctx, acme.OrganizationID, acme.Channel.ID)
 	requireNoError(t, err)
-	var named []domain.Topic
+	var named []conversation.Topic
 	for _, name := range []string{"design", "release", "hiring"} {
 		created, err := store.CreateTopic(ctx, acme.OrganizationID, acme.Channel.ID, name)
 		requireNoError(t, err)
@@ -126,14 +125,16 @@ func TestTopicStoreScope(t *testing.T) {
 		if got, err := store.LookupTopics(ctx, lookup.org, lookup.channel, []domain.ID{lookup.id}); err != nil || len(got) != 0 {
 			t.Fatalf("batch leaked %s: %+v, %v", lookup.what, got, err)
 		}
-		if _, err := store.GetTopic(ctx, lookup.org, lookup.channel, lookup.id); !errors.Is(err, topic.ErrNotFound) {
+		if _, err := store.GetTopic(ctx, lookup.org, lookup.channel, lookup.id); !errors.Is(err, conversation.ErrTopicNotFound) {
 			t.Fatalf("%s: %v", lookup.what, err)
 		}
 	}
 
-	slices.SortFunc(named, func(a, b domain.Topic) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+	slices.SortFunc(named, func(a, b conversation.Topic) int {
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
 	all, err := store.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 10)
-	if want := append([]domain.Topic{def}, named...); err != nil || !slices.Equal(all, want) {
+	if want := append([]conversation.Topic{def}, named...); err != nil || !slices.Equal(all, want) {
 		t.Fatalf("list: %+v, %v; want %+v", all, err, want)
 	}
 	if first, err := store.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 2); err != nil || !slices.Equal(first, all[:2]) {

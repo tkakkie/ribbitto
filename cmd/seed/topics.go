@@ -25,7 +25,7 @@ func seedTopics(ctx context.Context, posts *message.Service, branches *topic.Bra
 		}
 		destination, err := branches.Branch(ctx, member, general.ID, topic.Branch{
 			Messages: []domain.ID{source.ID}, From: general.DefaultTopicID, NewName: name,
-		}, func(t domain.Topic) string { return fmt.Sprintf("Moved 1 message to %s.", t.Name) })
+		}, func(t conversation.Topic) string { return fmt.Sprintf("Moved 1 message to %s.", t.Name) })
 		if err != nil {
 			return fmt.Errorf("branching %s: %w", name, err)
 		}

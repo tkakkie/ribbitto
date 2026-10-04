@@ -121,7 +121,7 @@ func TestPostingAndBranchingIntoUnknownOrganization(t *testing.T) {
 		},
 		"branch": func() error {
 			_, _, err := branching.Branch(ctx, unknown, acme.Channel.ID, acme.MemberID,
-				topic.Branch{Messages: []domain.ID{posted.ID}, From: topicID, NewName: "lost"}, func(domain.Topic) string { return "lost" })
+				topic.Branch{Messages: []domain.ID{posted.ID}, From: topicID, NewName: "lost"}, func(conversation.Topic) string { return "lost" })
 			return err
 		},
 	} {

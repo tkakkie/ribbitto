@@ -62,8 +62,8 @@ func (f *singleMessage) LookupDisplayNames(_ context.Context, ids []domain.ID) (
 	return map[domain.ID]string{{6}: "Current Name"}, f.nameErr
 }
 
-func (f *singleMessage) LookupTopics(context.Context, domain.ID, domain.ID, []domain.ID) (map[domain.ID]domain.Topic, error) {
-	return map[domain.ID]domain.Topic{f.msg.TopicID: {}}, nil
+func (f *singleMessage) LookupTopics(context.Context, domain.ID, domain.ID, []domain.ID) (map[domain.ID]conversation.Topic, error) {
+	return map[domain.ID]conversation.Topic{f.msg.TopicID: {}}, nil
 }
 
 func TestOne(t *testing.T) {

@@ -14,6 +14,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -166,7 +167,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		page.Messages[i] = viewMessage(m.Organization.Slug, entry)
 	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
-		page.Organization, page.DisplayName, page.Handle, page.Role = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, account.DisplayName, m.Member.Handle, string(m.Member.Role)
+		page.Organization, page.DisplayName, page.Handle, page.Role = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
 		page.Current, page.Channels, page.Older = history.Current, history.Channels, history.Older
 		page.EventCursor, page.Topic, page.Topics = history.EventCursor, history.Topic, history.Topics
 		return view.Channel(url, page)
@@ -238,9 +239,18 @@ func pathID(raw string) (domain.ID, bool) {
 // link to the topic view.
 func viewMessage(slug string, entry message.Entry) view.Message {
 	return view.Message{
-		ID: entry.ID, DisplayName: entry.DisplayName, Handle: entry.Handle,
+		ID: entry.ID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
 		TopicID: entry.TopicID, TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
 		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID),
 	}
+}
+
+// memberDisplayName keeps legacy blank-looking names out of the view, where
+// an empty name means to show only the handle.
+func memberDisplayName(name string) string {
+	if identity.IsBlankLookingName(name) {
+		return ""
+	}
+	return name
 }

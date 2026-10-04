@@ -915,7 +915,7 @@ func TestComponentsMarkup(t *testing.T) {
 		})},
 		{"SignOutButton", view.SignOutButton()},
 		{"MemberName", view.MemberName("مريم", "author")},
-		{"MemberName blank fallback", view.MemberName("\u3164", "legacy")},
+		{"MemberName blank fallback", view.MemberName(memberDisplayName("\u3164"), "legacy")},
 	} {
 		for _, lang := range []string{"en", "ja"} {
 			t.Run(component.name+"/"+lang, func(t *testing.T) {
@@ -925,6 +925,11 @@ func TestComponentsMarkup(t *testing.T) {
 					var b strings.Builder
 					if err := component.view.Render(r.Context(), &b); err != nil {
 						t.Fatal(err)
+					}
+					if component.name == "MemberName blank fallback" {
+						if b.String() != `<bdi class="font-semibold text-fg">@legacy</bdi>` {
+							t.Fatalf("fallback shows the blank name or repeats the handle: %s", b.String())
+						}
 					}
 					doc, err := html.Parse(strings.NewReader(b.String()))
 					if err != nil {

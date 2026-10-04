@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
@@ -34,7 +33,7 @@ func TestAccountSchema(t *testing.T) {
 	for i, size := range []int{1, 50} {
 		email, err := identity.ValidateEmail([]string{"a@b", strings.Repeat("界", 84) + "@b"}[i])
 		requireNoError(t, err)
-		name, err := domain.ValidateDisplayName(strings.Repeat("界", size))
+		name, err := identity.ValidateDisplayName(strings.Repeat("界", size))
 		requireNoError(t, err)
 		account, err := q.CreateAccount(ctx, sqlcgen.CreateAccountParams{Email: email, DisplayName: name, PasswordHash: "$argon2id$test"})
 		requireNoError(t, err)

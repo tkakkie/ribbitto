@@ -26,7 +26,7 @@ import (
 
 type fakeMessages struct {
 	channels *fakeChannels
-	entries  []message.Entry
+	entries  []conversation.Entry
 	older    bool
 	err      error
 	// before, when set, records the bound each read received.
@@ -34,15 +34,15 @@ type fakeMessages struct {
 }
 
 // One is not used by handler tests; the stream is tested end to end.
-func (fakeMessages) Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]message.Entry, error) {
+func (fakeMessages) Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]conversation.Entry, error) {
 	return nil, conversation.ErrMessageNotFound
 }
 
-func (fakeMessages) One(context.Context, org.Membership, domain.ID, int64) (message.Entry, error) {
-	return message.Entry{}, conversation.ErrMessageNotFound
+func (fakeMessages) One(context.Context, org.Membership, domain.ID, int64) (conversation.Entry, error) {
+	return conversation.Entry{}, conversation.ErrMessageNotFound
 }
 
-func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, topicID *domain.ID, before *int64) (message.ChannelPage, error) {
+func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, topicID *domain.ID, before *int64) (conversation.ChannelPage, error) {
 	if f.before != nil {
 		*f.before = append(*f.before, before)
 	}
@@ -52,13 +52,13 @@ func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, 
 	}
 	current, err := channels.Get(ctx, m, id)
 	if err != nil {
-		return message.ChannelPage{}, err
+		return conversation.ChannelPage{}, err
 	}
 	list, err := channels.List(ctx, m)
 	if err != nil {
-		return message.ChannelPage{}, err
+		return conversation.ChannelPage{}, err
 	}
-	page := message.ChannelPage{Page: message.Page{Entries: f.entries, Older: f.older}, Current: current, Channels: list}
+	page := conversation.ChannelPage{Page: conversation.Page{Entries: f.entries, Older: f.older}, Current: current, Channels: list}
 	if topicID != nil {
 		page.Topic = &conversation.Topic{ID: *topicID, Name: "Planning"}
 	}
@@ -70,7 +70,7 @@ func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, 
 }
 
 func populatedMessages() fakeMessages {
-	return fakeMessages{entries: []message.Entry{
+	return fakeMessages{entries: []conversation.Entry{
 		{Message: conversation.Message{ID: domain.ID{8}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x31}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author", TopicName: "<design>مرحبا"},
 		{Message: conversation.Message{ID: domain.ID{9}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x32}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy", DefaultTopic: true},
 	}}
@@ -323,7 +323,7 @@ func TestMessagePagingHandler(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64
-			reader := fakeMessages{entries: []message.Entry{{Message: conversation.Message{ID: domain.ID{8}, TopicID: domain.ID{5}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
+			reader := fakeMessages{entries: []conversation.Entry{{Message: conversation.Message{ID: domain.ID{8}, TopicID: domain.ID{5}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages = reader }))
 			if err != nil {
 				t.Fatal(err)
@@ -467,7 +467,7 @@ func TestFeedTopicLabels(t *testing.T) {
 
 // labelLink is the markup of entry's topic label linking to its own topic
 // view in organisation acme: each label must point at its message's topic.
-func labelLink(entry message.Entry) string {
+func labelLink(entry conversation.Entry) string {
 	label := "&lt;design&gt;مرحبا"
 	if entry.DefaultTopic {
 		label = "chorus"

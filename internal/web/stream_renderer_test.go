@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -33,21 +32,21 @@ type countingMessages struct {
 	err     error
 }
 
-func (c countingMessages) One(_ context.Context, m org.Membership, channel domain.ID, seq int64) (message.Entry, error) {
+func (c countingMessages) One(_ context.Context, m org.Membership, channel domain.ID, seq int64) (conversation.Entry, error) {
 	c.calls.Add(1)
 	if c.release != nil {
 		<-c.release
 	}
 	if c.err != nil {
-		return message.Entry{}, c.err
+		return conversation.Entry{}, c.err
 	}
 	body := fmt.Sprintf("org %v channel %v seq %d", m.Organization.ID, channel, seq)
-	return message.Entry{Message: conversation.Message{ID: domain.ID{7}, TopicID: domain.ID{6}, EventSeq: seq, Body: body}, DisplayName: "Alice", Handle: "alice"}, nil
+	return conversation.Entry{Message: conversation.Message{ID: domain.ID{7}, TopicID: domain.ID{6}, EventSeq: seq, Body: body}, DisplayName: "Alice", Handle: "alice"}, nil
 }
 
-func (c countingMessages) Many(ctx context.Context, m org.Membership, channel domain.ID, ids []domain.ID) ([]message.Entry, error) {
+func (c countingMessages) Many(ctx context.Context, m org.Membership, channel domain.ID, ids []domain.ID) ([]conversation.Entry, error) {
 	entry, err := c.One(ctx, m, channel, 9)
-	entries := make([]message.Entry, 0, len(ids))
+	entries := make([]conversation.Entry, 0, len(ids))
 	for _, id := range ids {
 		entry.ID = id
 		entries = append(entries, entry)

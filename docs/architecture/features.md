@@ -19,8 +19,8 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`; `db/queries/identity/`); `web` `signin.go` | `account`, `session` |
 | `org`: organisations, memberships, authorisation, first-run setup, sign-up | the completed `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres` and wiring `orgpg`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `conversation` (Channel, its name rule, errors and default name; Channels and ChannelStore); `conversationpg` (NewChannels); `conversation/internal/postgres/channel.go`, `db/queries/conversation/channel.sql`; `infra/postgres/channel.go`, `db/queries/channel.sql` (legacy copy until 4.15); `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
-| `message`: plain-text posts and history | `app/message`; `conversation/posted.go` (`message.posted`); `conversation/message.go` (type, body rule and errors); `conversation/ports.go`, `conversationpg` and `conversation/internal/postgres/writer.go` (posting's runner, ports and writes, unused until 4.9), `db/queries/conversation/message.sql` (`InsertMessage`, legacy copy until 4.15); `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
-| `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic` (Store, Directory and branching); `conversation/moved.go` (`messages.moved`); `conversation/topic.go`, `topic_errors.go` (type, name rule and errors), `topics.go` (`Topics.Get`, the membership-scoped lookup); `conversationpg` (`NewTopics`); `conversation/internal/postgres/topic.go`, `db/queries/conversation/topic.sql` (`GetTopic`, `GetDefaultTopic`; legacy copies until 4.16); `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
+| `message`: plain-text posts and history | `app/message` (posting); `conversation/posted.go` (`message.posted`); `conversation/message.go` (type, body rule and errors); `conversation/list.go`, `read.go` (the history reader); `conversation/ports.go`, `conversationpg` and `conversation/internal/postgres/writer.go` (posting's runner, ports and writes, unused until 4.9), `db/queries/conversation/message.sql` (`InsertMessage`, legacy copy until 4.15); `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
+| `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic` (Store and branching); `conversation/moved.go` (`messages.moved`); `conversation/topic.go`, `topic_errors.go` (type, name rule and errors), `topics.go` (`Topics.Get`, the membership-scoped lookup); `conversationpg` (`NewTopics`); `conversation/internal/postgres/topic.go`, `db/queries/conversation/topic.sql` (`GetTopic`, `GetDefaultTopic`; legacy copies until 4.16); `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
 | `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `infra/postgres/event_appender.go` (the flows' appender interface); `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
 
 The shared kernel, which any feature may use: `internal/kernel` (`ID`) and
@@ -43,10 +43,10 @@ sequence bound for the latest page, an optional scoped topic filter passed
 explicitly through `Reader.Before` and `History`, and no author joins. `Reader.One` reads
 one message by organisation, channel and `event_seq`, returning `conversation.ErrMessageNotFound`
 for a missing or out-of-scope message. The use cases
-(`conversation.Channels`, `app/message`) exist. `message.Reader` resolves authors through
-org's exported `org.Directory.LookupMembers` (member IDs filtered by
-organisation, returning handles and account IDs), then identity's
-`identity.Directory.LookupDisplayNames` (only those account IDs). Their adapters
+(`conversation.Channels`, `conversation.Reader`, `app/message`) exist. `conversation.Reader` resolves authors through
+its own `MemberDirectory.LookupMembers`, served by org (member IDs filtered by
+organisation, returning handles and account IDs), then `AccountDirectory.LookupDisplayNames`,
+served by identity (only those account IDs). Their adapters
 own the queries in `org/member.sql` and `identity/account.sql`; message never
 queries those tables. `MessageReader` receives both directories through
 conversation's `MemberDirectoryIn` and `AccountDirectoryIn` factories, adapted
@@ -56,9 +56,9 @@ bound to its snapshot. It
 shares one read-only repeatable-read transaction
 across the channel and sidebar (through `conversation.Channels`), the selected topic
 and the bounded topic list (through `topic.Store`), history, both author
-lookups and the topic batch through `topic.Directory.LookupTopics`, plus the
+lookups and the topic batch through `conversation.TopicDirectory.LookupTopics`, plus the
 org's `organization.event_seq` on the latest channel or topic page.
-It returns `message.ChannelPage`; older pages have no event cursor.
+It returns `conversation.ChannelPage`; older pages have no event cursor.
 `MessageReader.One` reads one message, its authors and topic in its own snapshot.
 Live labels come from that shared load through the existing render cache, keyed
 by organisation, channel, sequence and language, with no extra read per stream

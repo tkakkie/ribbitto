@@ -44,10 +44,8 @@ cmd/seed -> internal/org
 cmd/seed -> internal/org/orgpg
 cmd/seed -> internal/platform/postgres
 cmd/seed -> internal/realtime/realtimepg
-internal/app/message -> internal/app/topic
 internal/app/message -> internal/conversation
 internal/app/message -> internal/domain
-internal/app/message -> internal/identity
 internal/app/message -> internal/org
 internal/app/topic -> internal/conversation
 internal/app/topic -> internal/domain
@@ -76,7 +74,6 @@ internal/identity/internal/postgres -> internal/identity/internal/postgres/sqlcg
 internal/identity/internal/postgres -> internal/kernel
 internal/identity/internal/postgres -> internal/platform/postgres
 internal/identity/internal/postgres -> internal/platform/postgres/pgxbridge
-internal/infra/postgres -> internal/app/message
 internal/infra/postgres -> internal/app/topic
 internal/infra/postgres -> internal/conversation
 internal/infra/postgres -> internal/domain

@@ -1,4 +1,4 @@
-package message_test
+package conversation_test
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -30,7 +29,7 @@ func (f *directoryHistory) GetMessage(context.Context, kernel.ID, kernel.ID, int
 	return conversation.Message{}, nil
 }
 func (f *directoryHistory) ListMessagesBefore(_ context.Context, org, ch kernel.ID, topicID *kernel.ID, before *int64, limit int32) ([]conversation.Message, error) {
-	if org != (kernel.ID{1}) || ch != (kernel.ID{2}) || topicID == nil || *topicID != (kernel.ID{7}) || before == nil || *before != 9 || limit != message.PageSize+1 {
+	if org != (kernel.ID{1}) || ch != (kernel.ID{2}) || topicID == nil || *topicID != (kernel.ID{7}) || before == nil || *before != 9 || limit != conversation.PageSize+1 {
 		f.t.Fatal("wrong history scope or limit")
 	}
 	return []conversation.Message{{ID: kernel.ID{4}, MemberID: kernel.ID{3}}, {ID: kernel.ID{5}, MemberID: kernel.ID{3}}}, f.step("history")
@@ -67,7 +66,7 @@ func TestBefore(t *testing.T) {
 		t.Run("failure="+failure, func(t *testing.T) {
 			f := &directoryHistory{t: t, fail: failure}
 			before := int64(9)
-			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).Before(t.Context(), org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}, kernel.ID{2}, &kernel.ID{7}, &before)
+			got, err := (conversation.Reader{History: f, Members: f, Accounts: f, Topics: f}).Before(t.Context(), org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}, kernel.ID{2}, &kernel.ID{7}, &before)
 			if (err != nil) != (failure != "") {
 				t.Fatalf("error: %v", err)
 			}
@@ -112,12 +111,12 @@ func TestBeforePages(t *testing.T) {
 	}{
 		{0, []int{0}},
 		{1, []int{1}},
-		{message.PageSize, []int{message.PageSize}},
-		{message.PageSize + 1, []int{message.PageSize, 1}},
-		{2 * message.PageSize, []int{message.PageSize, message.PageSize}},
+		{conversation.PageSize, []int{conversation.PageSize}},
+		{conversation.PageSize + 1, []int{conversation.PageSize, 1}},
+		{2 * conversation.PageSize, []int{conversation.PageSize, conversation.PageSize}},
 	} {
 		f := fullHistory{tt.messages}
-		reader := message.Reader{History: f, Members: f, Accounts: f, Topics: f}
+		reader := conversation.Reader{History: f, Members: f, Accounts: f, Topics: f}
 		var before *int64
 		var sizes []int
 		for {

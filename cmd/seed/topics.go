@@ -12,7 +12,7 @@ import (
 )
 
 // Two source posts and their notices, plus a full page and ten direct posts.
-const topicFixtureMessages = 4 + message.PageSize + 10
+const topicFixtureMessages = 4 + conversation.PageSize + 10
 
 func seedTopics(ctx context.Context, posts *message.Service, branches *topic.Brancher, members map[string]org.Membership, general conversation.Channel, lines []scriptMessage) error {
 	for i, name := range []string{"rooftop-garden", "garden-time"} {
@@ -30,7 +30,7 @@ func seedTopics(ctx context.Context, posts *message.Service, branches *topic.Bra
 			return fmt.Errorf("branching %s: %w", name, err)
 		}
 		if i == 0 {
-			for j := range message.PageSize + 10 {
+			for j := range conversation.PageSize + 10 {
 				line := lines[j%len(lines)]
 				if _, err := posts.PostToTopic(ctx, members[line.Author], general.ID, &destination.ID, line.Body); err != nil {
 					return fmt.Errorf("posting %s message %d: %w", name, j+1, err)

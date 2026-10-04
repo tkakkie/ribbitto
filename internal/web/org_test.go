@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -169,7 +169,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 					t.Fatalf("branch: %d %s", w.Code, w.Body.String())
 				}
 			case "POST /channels":
-				created, err := services.Channels.List(ctx, authz.Membership{Organization: domain.Organization{ID: acme}})
+				created, err := services.Channels.List(ctx, org.Membership{Organization: domain.Organization{ID: acme}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -305,7 +305,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 	}
 	t.Run("author lookup isolation and reload", func(t *testing.T) {
-		authzService := authz.New(postgres.NewAuthzStore(pool))
+		authzService := org.NewAuthorizer(postgres.NewAuthzStore(pool))
 		a, err := authzService.Member(ctx, &identity.Account{ID: alice}, "acme")
 		if err != nil {
 			t.Fatal(err)
@@ -379,11 +379,11 @@ func serveForm(handler http.Handler, method, path, cookie string, form url.Value
 // oneOrganisation makes the "live" session's account the owner of acme.
 type oneOrganisation struct{}
 
-func (oneOrganisation) Member(_ context.Context, account *identity.Account, slug string) (authz.Membership, error) {
+func (oneOrganisation) Member(_ context.Context, account *identity.Account, slug string) (org.Membership, error) {
 	if account == nil || slug != "acme" {
-		return authz.Membership{}, authz.ErrNotFound
+		return org.Membership{}, org.ErrNotFound
 	}
-	return authz.Membership{Organization: domain.Organization{Slug: "acme", Name: "Acme Corporation"}, Member: domain.Member{Role: domain.RoleOwner, Handle: "alice"}}, nil
+	return org.Membership{Organization: domain.Organization{Slug: "acme", Name: "Acme Corporation"}, Member: domain.Member{Role: domain.RoleOwner, Handle: "alice"}}, nil
 }
 
 func (oneOrganisation) HomeSlug(context.Context, *identity.Account) (string, error) {

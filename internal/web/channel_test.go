@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -57,7 +57,7 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 			r.SetPathValue("channelID", "01000000-0000-0000-0000-000000000000")
 			r.SetPathValue("topicID", "03000000-0000-0000-0000-000000000000")
 			w := httptest.NewRecorder()
-			p.show(w, r, authz.Membership{Organization: domain.Organization{ID: domain.ID{9}, Slug: "acme"}})
+			p.show(w, r, org.Membership{Organization: domain.Organization{ID: domain.ID{9}, Slug: "acme"}})
 			if w.Code != tt.status {
 				t.Fatalf("status %d, body %s", w.Code, w.Body.String())
 			}
@@ -77,10 +77,10 @@ type fakeChannels struct {
 	created                                string
 }
 
-func (f *fakeChannels) List(context.Context, authz.Membership) ([]domain.Channel, error) {
+func (f *fakeChannels) List(context.Context, org.Membership) ([]domain.Channel, error) {
 	return []domain.Channel{{ID: domain.ID{1}, Name: "雑談 <script>alert(1)</script>", IsDefault: true}, {ID: domain.ID{2}, Name: "Other"}}, f.listErr
 }
-func (f *fakeChannels) Get(ctx context.Context, m authz.Membership, id domain.ID) (domain.Channel, error) {
+func (f *fakeChannels) Get(ctx context.Context, m org.Membership, id domain.ID) (domain.Channel, error) {
 	if f.getErr != nil {
 		return domain.Channel{}, f.getErr
 	}
@@ -92,11 +92,11 @@ func (f *fakeChannels) Get(ctx context.Context, m authz.Membership, id domain.ID
 	}
 	return domain.Channel{}, channel.ErrNotFound
 }
-func (f *fakeChannels) Default(ctx context.Context, m authz.Membership) (domain.Channel, error) {
+func (f *fakeChannels) Default(ctx context.Context, m org.Membership) (domain.Channel, error) {
 	list, _ := f.List(ctx, m)
 	return list[0], f.defaultErr
 }
-func (f *fakeChannels) Create(_ context.Context, _ authz.Membership, name string) (domain.Channel, error) {
+func (f *fakeChannels) Create(_ context.Context, _ org.Membership, name string) (domain.Channel, error) {
 	f.created = name
 	return domain.Channel{ID: domain.ID{3}, Name: name}, f.createErr
 }

@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -64,7 +64,7 @@ const DefaultStreamHeartbeat = 20 * time.Second
 // Server-Sent Events, until the client goes away or delivery fails. The organisation and account come from the URL and the
 // session; the cursor is Last-Event-ID if the browser sends one (it does on
 // its own reconnects), otherwise ?after.
-func (p channelPages) events(w http.ResponseWriter, r *http.Request, m authz.Membership) {
+func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membership) {
 	if p.stream == nil {
 		http.NotFound(w, r)
 		return

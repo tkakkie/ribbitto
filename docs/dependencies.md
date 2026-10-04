@@ -14,7 +14,6 @@ not show calls through an edge that already exists, dependencies inside one
 package, or SQL access to tables.
 
 ```text
-cmd/ribbitto -> internal/app/authz
 cmd/ribbitto -> internal/app/channel
 cmd/ribbitto -> internal/app/message
 cmd/ribbitto -> internal/app/setup
@@ -23,13 +22,13 @@ cmd/ribbitto -> internal/app/topic
 cmd/ribbitto -> internal/identity
 cmd/ribbitto -> internal/identity/identitypg
 cmd/ribbitto -> internal/infra/postgres
+cmd/ribbitto -> internal/org
 cmd/ribbitto -> internal/platform/postgres
 cmd/ribbitto -> internal/realtime
 cmd/ribbitto -> internal/realtime/realtimepg
 cmd/ribbitto -> internal/web
 cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
-cmd/seed -> internal/app/authz
 cmd/seed -> internal/app/channel
 cmd/seed -> internal/app/message
 cmd/seed -> internal/app/setup
@@ -39,9 +38,9 @@ cmd/seed -> internal/domain
 cmd/seed -> internal/identity
 cmd/seed -> internal/identity/identitypg
 cmd/seed -> internal/infra/postgres
+cmd/seed -> internal/org
 cmd/seed -> internal/platform/postgres
 cmd/seed -> internal/realtime/realtimepg
-internal/app/authz -> internal/org
 internal/app/channel -> internal/domain
 internal/app/channel -> internal/org
 internal/app/member -> internal/domain
@@ -107,7 +106,6 @@ internal/realtime/internal/postgres -> internal/realtime/internal/postgres/sqlcg
 internal/realtime/realtimepg -> internal/platform/postgres
 internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
-internal/web -> internal/app/authz
 internal/web -> internal/app/channel
 internal/web -> internal/app/message
 internal/web -> internal/app/setup
@@ -115,6 +113,7 @@ internal/web -> internal/app/signup
 internal/web -> internal/app/topic
 internal/web -> internal/domain
 internal/web -> internal/identity
+internal/web -> internal/org
 internal/web -> internal/realtime
 internal/web -> internal/web/i18n
 internal/web -> internal/web/middleware

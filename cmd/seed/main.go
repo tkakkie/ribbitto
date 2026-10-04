@@ -19,7 +19,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
@@ -29,6 +28,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -172,8 +172,8 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		return fmt.Errorf("seeding requires an empty, migrated development database: %w", err)
 	}
 	signups := signup.New(store, hasher, true)
-	authorizer := authz.New(postgres.NewAuthzStore(pool))
-	members := make(map[string]authz.Membership, len(data.Members))
+	authorizer := org.NewAuthorizer(postgres.NewAuthzStore(pool))
+	members := make(map[string]org.Membership, len(data.Members))
 	for i, person := range data.Members {
 		id := created.AccountID
 		if i != 0 {

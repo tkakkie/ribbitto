@@ -20,8 +20,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/web/static"
 )
@@ -409,12 +409,12 @@ func TestHelloLanguages(t *testing.T) {
 // noOrganisations makes nobody a member of anything.
 type noOrganisations struct{}
 
-func (noOrganisations) Member(context.Context, *identity.Account, string) (authz.Membership, error) {
-	return authz.Membership{}, authz.ErrNotFound
+func (noOrganisations) Member(context.Context, *identity.Account, string) (org.Membership, error) {
+	return org.Membership{}, org.ErrNotFound
 }
 
 func (noOrganisations) HomeSlug(context.Context, *identity.Account) (string, error) {
-	return "", authz.ErrNotFound
+	return "", org.ErrNotFound
 }
 
 // noSessions signs nobody in, for tests that do not need a session.

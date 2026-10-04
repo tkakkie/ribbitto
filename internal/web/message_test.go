@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -34,15 +34,15 @@ type fakeMessages struct {
 }
 
 // One is not used by handler tests; the stream is tested end to end.
-func (fakeMessages) Many(context.Context, authz.Membership, domain.ID, []domain.ID) ([]message.Entry, error) {
+func (fakeMessages) Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]message.Entry, error) {
 	return nil, message.ErrNotFound
 }
 
-func (fakeMessages) One(context.Context, authz.Membership, domain.ID, int64) (message.Entry, error) {
+func (fakeMessages) One(context.Context, org.Membership, domain.ID, int64) (message.Entry, error) {
 	return message.Entry{}, message.ErrNotFound
 }
 
-func (f fakeMessages) Page(ctx context.Context, m authz.Membership, id domain.ID, topicID *domain.ID, before *int64) (message.ChannelPage, error) {
+func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, topicID *domain.ID, before *int64) (message.ChannelPage, error) {
 	if f.before != nil {
 		*f.before = append(*f.before, before)
 	}
@@ -217,7 +217,7 @@ func TestMessagePostHandler(t *testing.T) {
 		{"long", strings.Repeat("界", 4001), nil, 422},
 		{"forbidden", "<script>\u202ebad</script>", nil, 422},
 		{"missing", "hello", channel.ErrNotFound, 404},
-		{"membership gone", "hello", authz.ErrNotFound, 404},
+		{"membership gone", "hello", org.ErrNotFound, 404},
 		{"failure", "hello", errors.New("offline"), 500},
 	} {
 		for _, hx := range []bool{false, true} {

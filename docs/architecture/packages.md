@@ -26,7 +26,7 @@ packages. See [load client](load-client.md) for limits and usage.
 | `internal/infra/postgres` | PostgreSQL implementations of `app` interfaces. Its `pgtest` keeps the feature fixtures and delegates databases to the platform until the migration's last step. | `domain`, `app`, `identity`, `org`, `platform/postgres/pgtest`; until that step also allowed `platform/postgres`, its `pgxbridge` and `realtime`'s root (the event types) |
 | `internal/realtime` | Real-time delivery (M3): the hub's latest sequences and connection registry, the per-connection delivery loop, shared reads, the watermark check and event retention; presence is planned. Declares the durable event types (`Event`, `EventKind`, `ErrCursorExpired`). Receives authorization, rendering and org's cursor bounds as interfaces it defines itself. Its store, `internal/realtime/internal/postgres`, reads, appends and expires `event_log` on its own `sqlcgen` (`db/queries/realtime/`), with org's retention lock and boundary injected (`RetentionBoundary`); its wiring, `realtimepg`, builds the reader and the cleaner (`NewCleaner`) and binds the appender to a writer's transaction (`AppenderIn`). The `realtime` module's root since step 2; uses `kernel.ID`. | `kernel`, `platform` |
 | `internal/org` | The `org` module's root (step 3, migrating): the **only** authorization logic, `Authorizer` (`Member`, `HomeSlug`, `MayReceive`), `Membership` and the `MembershipStore` it needs, which `infra/postgres` implements until org's store moves. | `kernel`, `platform`, the roots of `identity` and `realtime`; `domain` until step 3.2 for its types, and for the `ID` alias until step 5 |
-| `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app` (including the forwarding `app/authz` until step 3.1b), `identity`, `realtime`, `web/static` |
+| `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `identity`, `org`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |
 
@@ -65,9 +65,9 @@ in `AGENTS.md`. Fixtures under `testdata/` are excluded.
 
 ```mermaid
 flowchart LR
-  cmd[cmd/ribbitto] --> web & app & identity & identitypg[identity/identitypg] & realtimepg & postgres[infra/postgres] & realtime & platform[platform/postgres] & migrations[db/migrations]
-  seed[cmd/seed] --> app & identity & identitypg & realtimepg & postgres & platform & domain
-  web[internal/web] --> app & identity & domain & realtime & static[web/static]
+  cmd[cmd/ribbitto] --> web & app & org & identity & identitypg[identity/identitypg] & realtimepg & postgres[infra/postgres] & realtime & platform[platform/postgres] & migrations[db/migrations]
+  seed[cmd/seed] --> app & org & identity & identitypg & realtimepg & postgres & platform & domain
+  web[internal/web] --> app & org & identity & domain & realtime & static[web/static]
   postgres --> app & org & identity & domain & platform & realtime
   realtime[internal/realtime] --> kernel & platform
   realtimepg[realtime/realtimepg] --> realtime & rstore[realtime/internal/postgres] & platform

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/setup"
@@ -13,6 +12,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -59,7 +59,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 	s := Services{
 		Sessions:  sessions,
 		SignIn:    identitypg.NewSignIn(pool, hasher, sessions),
-		Authz:     authz.New(postgres.NewAuthzStore(pool)),
+		Authz:     org.NewAuthorizer(postgres.NewAuthzStore(pool)),
 		Channels:  channel.New(postgres.NewChannelStore(pool)),
 		Topics:    postgres.NewTopicStore(pool),
 		Messages:  postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn},

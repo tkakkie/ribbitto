@@ -15,6 +15,7 @@ Read the file for the area you change:
 | File | Covers |
 |---|---|
 | [`packages.md`](packages.md) | packages, their responsibilities and allowed imports |
+| [`import-checks.md`](import-checks.md) | how depguard and `make check` enforce the import rules and `doc.go` |
 | [`features.md`](features.md) | the feature map: each feature's packages and tables, and the known exceptions |
 | [`modules.md`](modules.md) | the migration target: module construction, the modules and their steps, and every temporary path |
 | [`request-flow.md`](request-flow.md) | the request flow, organisation routes, server timeouts, middleware order |

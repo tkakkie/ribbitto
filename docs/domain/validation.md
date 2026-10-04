@@ -6,8 +6,8 @@
 `ValidateSlug` and `ValidateHandle`; `internal/conversation` owns
 `ValidateChannelName`, `ValidateTopicName` and `ValidateMessageBody`. These
 rules validate UTF-8 text.
-Email, display, organisation and channel names are trimmed and normalised to
-NFC; email is lower-cased first. Lengths count code points after
+Email, display, organisation, channel and topic names are trimmed and
+normalised to NFC; email is lower-cased first. Lengths count code points after
 normalisation, except email (bytes) and slug (ASCII). Controls including NUL fail before trimming. These fields then
 require `unicode.IsPrint`, rejecting format characters (zero-width spaces,
 RTL overrides, BOMs, soft hyphens) and line/paragraph separators. Names allow
@@ -21,6 +21,8 @@ also requires account email and display name to be NFC.
 - **Password:** 15–128 characters, preserved as entered, no composition rules.
 - **Organisation name:** 1–100 characters after normalisation.
 - **Channel name:** as organisation names, but 1–80 characters.
+- **Topic name:** as channel names; unique per channel ignoring case, and
+  the default topic has none ([`topics.md`](topics.md)).
 - **Message body:** plain text, 1–4000 code points ([`messages.md`](messages.md)).
 - **Slug:** 1–63 characters from `a-z0-9-`, no leading or trailing `-`.
 - **Handle:** 2–32 ASCII characters, unique per organisation ignoring case

@@ -46,7 +46,7 @@ func orgRoutes(pages *pageRenderer, service ChannelService, topics TopicReader, 
 }
 
 // registerOrgRoutes puts every route under /organizations/{slug}/ behind
-// org. A signed-out request gets 404 too, not a redirect to sign-in:
+// the Authorizer. A signed-out request gets 404 too, not a redirect to sign-in:
 // a redirect would reveal which slugs exist.
 func registerOrgRoutes(routes sessionMux, authorizer Authorizer, table []orgRoute) {
 	for _, route := range table {

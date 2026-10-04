@@ -9,7 +9,7 @@ Where the migration goes ([decision 26](../decisions/26-modules-by-feature-layou
 
 `<module>pg`'s constructors take the pool and the use cases' other dependencies (a clock, the shared hasher, a canceller) and return the use cases. Its `Tx`- or `Snapshot`-taking factories implement other modules' consumer interfaces, whose result types the consumer declares. A wiring package may import its own module's root and store, and the roots of modules whose interfaces it implements. It may not import other wiring or stores; only `cmd/*` and tests import it. Roots and stores follow the table's import column.
 
-A cross-module flow's root use case owns its transaction through an injected runner (`org.TxRunner`, from 3.10 for setup and sign-up), which the wiring implements over the pool with `platform.InTx`. The use case passes the runner's `Tx` to the factories it was given; stores bind to the `Tx` they are given and never open, commit or roll back.
+A cross-module flow's root use case owns its transaction through an injected runner (`org.TxRunner` for setup and sign-up), which the wiring implements over the pool with `platform.InTx`. The use case passes the runner's `Tx` to the factories it was given; stores bind to the `Tx` they are given and never open, commit or roll back.
 
 `internal/kernel` holds `ID`. `internal/platform/postgres` holds the pool, migrations, lifecycle test helpers, and the opaque `Tx` and `Snapshot` with their open, commit and rollback operations. Its bridge package (handle to pgx) may be imported only by stores. Feature fixtures stay with their module's tests.
 
@@ -39,19 +39,19 @@ the temporary implementation behind it.
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
 | `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
 | `infra/postgres` appender interface (`EventAppender`) and the kind list | `realtime` types (root import, temporary allowance) | 2 | 5 |
-| conversation's kind registry (`postgres.EventKinds()`, combined with `orgpg.EventKinds()` by `cmd/ribbitto` and tests) | each publisher's `realtime.Router` | 2 | 4 for `conversation`; `org` registers its own through `orgpg` since 3.13 |
-| event payload codecs in `app/message` and `app/topic` | their kinds' payloads, owned by the publisher | 2 | 4 (`message.posted` and `messages.moved`, with `conversation`); `member.joined`'s moved into `org` in 3.4 |
+| conversation's kind registry (`postgres.EventKinds()`, combined with `orgpg.EventKinds()` by `cmd/ribbitto` and tests) | each publisher's `realtime.Router` | 2 | 4 for `conversation`; `org` registers its own through `orgpg` |
+| event payload codecs in `app/message` and `app/topic` | their kinds' payloads, owned by the publisher | 2 | 4 (`message.posted` and `messages.moved`, with `conversation`); `org` owns `member.joined`'s codec |
 | posting, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | 4 |
 | posting, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | 4 |
 | the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |
-| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`, since 3.8), members (`MemberDirectoryIn`, from `orgpg.MembersIn`, since 3.7) and cursor (`EventCursorIn`, from `orgpg.EventCursorIn`, since 3.8), each adapted by a closure | 3 | 4 |
-| setup (`org`) | `conversation` default channel through `org.DefaultChannelCreatorIn` (temporarily `infra`'s `DefaultChannelCreatorIn` over its channel store, adapted by a closure in `cmd/*` and the tests) | 3.12b | 4 |
+| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`), members (`MemberDirectoryIn`, from `orgpg.MembersIn`) and cursor (`EventCursorIn`, from `orgpg.EventCursorIn`), each adapted by a closure | 3 | 4 |
+| setup (`org`) | `conversation` default channel through `org.DefaultChannelCreatorIn` (temporarily `infra`'s `DefaultChannelCreatorIn` over its channel store, adapted by a closure in `cmd/*` and the tests) | 3 | 4 |
 
 `app/message.Reader` keeps its `org.Directory` field until step 4, when
 conversation declares its own.
 
-Sign-up's database tests live in `internal/org/orgpg` since 3.11b, and
-setup's since 3.12, with local raw-SQL fixtures and event-log assertions.
+Setup's and sign-up's database tests live in `internal/org/orgpg`,
+with local raw-SQL fixtures and event-log assertions.
 Sign-up's setup organisation comes from `org`'s setup.
 
 Inside `conversation`, a channel's default topic, branching's moves and

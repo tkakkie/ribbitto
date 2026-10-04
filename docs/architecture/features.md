@@ -9,15 +9,15 @@ feature gains or loses a package or a table, or an exception is added.
 
 The code is layered today, and the direction is a modular monolith by
 feature, migrated after M3 ([decision 14](../decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)).
-Until then, new code goes into feature packages inside the layers, and each
-feature logically owns tables: only that feature writes them, apart from
-the known exceptions below. A feature may own no tables. Every
+New code goes in its module if migrated, else a feature package in the
+layers. Each feature logically owns tables: only that feature writes them,
+apart from the known exceptions below. A feature may own no tables. Every
 package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 
 | Feature | Packages and files | Owns |
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`; `db/queries/identity/`); `web` `signin.go` | `account`, `session` |
-| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the `org` module (`internal/org`: authorisation, `Organization`, `Member`, `Role`, organisation name, slug and handle rules, the handle change, first-run setup and sign-up (`Setup`, `SignUp`, each owning its transaction), the author directory, the `member.joined` payload, the `AccountCreator`/`AccountCreatorIn` consumer contract, and the transaction runner `TxRunner`, the transaction-bound registration writes `RegistrationWriter`/`RegistrationWriterIn` and the `SetupState` read used by sign-up since 3.11 and setup since 3.12; step 3, migrating; its store `internal/org/internal/postgres` and wiring `orgpg` (also registers `member.joined` through `EventKinds`), with `db/queries/org/` for memberships, home slug, handles, the snapshot-bound directory, the registration writes and setup state, posting's and branching's event sequence, the page cursor and `realtime`'s bounds, sequences and retention boundary); `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
+| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the completed `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres` and wiring `orgpg`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
 | `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
@@ -67,19 +67,15 @@ sources and supplies topic-page removals and ordered insertions.
 Malformed topic paging links use a scoped topic lookup without history;
 topic posts rely on the lookup inside the posting transaction.
 
-Identity's store now provides transaction-bound account creation through
+Identity's store creates accounts in the caller's transaction through
 `identitypg.AccountCreatorIn`, implementing `org.AccountCreator`; only the
-wiring imports org. Setup and sign-up inject org's factory via a closure.
-Identity owns the distinct `ErrEmailTaken` and `ErrInvalidEmail` mappings.
+wiring imports org. Setup and sign-up inject org's factory via a closure;
+identity owns `ErrEmailTaken` and `ErrInvalidEmail`, which org maps to its
+conflicts or field errors.
 
-Org's store tests own the organisation/member schema checks, slug lookup and
-handle upgrade test, with local raw-SQL account fixtures. Their test-only
-`GetOrganizationBySlug` and `GetMemberByOrganizationAndAccount` queries live
-in `db/queries/org/`; conversation's schema test still uses infra's `pgtest`
-fixtures until step 5.
-
-Setup's and sign-up's database tests belong to `orgpg` (`setup_test.go`,
-`signup_test.go`), with local raw-SQL fixtures and event-log checks.
+Org's test-only `GetOrganizationBySlug` and `GetMemberByOrganizationAndAccount`
+queries live in `db/queries/org/`; conversation's schema test still uses
+infra's `pgtest` fixtures until conversation moves in step 4.
 
 **Known exceptions.** Cross-feature writes that must commit atomically:
 

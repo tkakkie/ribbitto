@@ -82,7 +82,7 @@ const nextEventSeq = `-- name: NextEventSeq :one
 UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq
 `
 
-// Posting and branching take this first: the row lock makes sequence order
+// Posting, branching, setup and sign-up take this first: the row lock makes sequence order
 // commit order (decision 5).
 func (q *Queries) NextEventSeq(ctx context.Context, id pgtype.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, nextEventSeq, id)

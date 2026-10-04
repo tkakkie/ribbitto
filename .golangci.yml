@@ -185,7 +185,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform$
             - github.com/tkakkie/ribbitto/internal/platform/
           deny: *non_html
-        # org is the third module (decision 26), migrating in step 3.
+        # org is the completed third module (decision 26).
         org:
           list-mode: lax
           files: ["**/internal/org/*.go", "**/internal/org/**/*.go", "!$test"]

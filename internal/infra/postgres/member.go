@@ -45,7 +45,7 @@ func (s *MemberStore) UpdateHandle(ctx context.Context, organizationID, memberID
 	return nil
 }
 
-// LookupMembers implements org's org.Directory, scoped to one organisation.
+// LookupMembers implements org.Directory, scoped to one organisation.
 func (s *MemberStore) LookupMembers(ctx context.Context, organizationID domain.ID, ids []domain.ID) (map[domain.ID]org.DirectoryEntry, error) {
 	rows, err := s.queries.LookupMembers(ctx, sqlcgen.LookupMembersParams{OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, MemberIds: uuidArray(ids)})
 	if err != nil {

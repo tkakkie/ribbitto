@@ -2,6 +2,7 @@ package orgpg
 
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -19,4 +20,9 @@ func NewSequences(pool *pgxpool.Pool) realtime.SequenceReader { return postgres.
 // for realtime's cleaner, in the cleaner's transaction.
 func RetentionBoundaryIn(tx platform.Tx) realtime.RetentionBoundary {
 	return postgres.RetentionBoundaryIn(tx)
+}
+
+// EventKinds returns org's routers for registration with realtime's reader.
+func EventKinds() realtime.Kinds {
+	return realtime.Kinds{org.KindJoined: org.RouteJoined}
 }

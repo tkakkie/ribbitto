@@ -191,7 +191,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	pool := pgtest.New(t)
 	f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
-	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
+	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers}
 	renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 	log := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
 	var ids []domain.ID
@@ -221,7 +221,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{log, through}, Renderer: renderer, Authorizer: org.NewAuthorizer(postgres.NewAuthzStore(pool)), BatchSize: 1}
+	stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{log, through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 	sub := realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID}
 	delivered := &moveDeliveries{}
 	cursor, err := stream.Run(ctx, sub, 1, delivered)
@@ -360,7 +360,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
+			reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers}
 			var moved []domain.ID
 			var source domain.ID
 			for i := range tt.count {
@@ -389,7 +389,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 				t.Fatal(err)
 			}
 			renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
-			stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds()), through}, Renderer: renderer, Authorizer: org.NewAuthorizer(postgres.NewAuthzStore(pool)), BatchSize: 1}
+			stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds()), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 			delivered := &moveDeliveries{}
 			_, err = stream.Run(ctx, realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID, Topic: &destination.ID}, *page.EventCursor, delivered)
 			if !errors.Is(err, io.EOF) || len(delivered.events) != 1 {
@@ -443,7 +443,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
+				reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers}
 				var source domain.Topic
 				var moved []domain.ID
 				for i := range count {
@@ -485,7 +485,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 					t.Fatal(err)
 				}
 				renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
-				stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds()), through}, Renderer: renderer, Authorizer: org.NewAuthorizer(postgres.NewAuthzStore(pool)), BatchSize: 1}
+				stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds()), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 				for i, selected := range topics {
 					t.Run([]string{"source", "destination"}[i], func(t *testing.T) {
 						page := &pages[i]

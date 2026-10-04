@@ -17,7 +17,7 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | Feature | Packages and files | Owns |
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in, sign-up | the `identity` module (root, store, `identitypg`; `db/queries/identity/`), `app/signup`; `infra/postgres` `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
-| `org`: organisations, memberships, authorisation, first-run setup | the `org` module (`internal/org`: authorisation, `Organization`, `Member`, `Role`, organisation name, slug and handle rules, the handle change, the author directory, the `member.joined` payload and the `AccountCreator`/`AccountCreatorIn` consumer contract; step 3, migrating; its store `internal/org/internal/postgres` and wiring `orgpg`, with `db/queries/org/` for `realtime`'s bounds, sequences and retention boundary), `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
+| `org`: organisations, memberships, authorisation, first-run setup | the `org` module (`internal/org`: authorisation, `Organization`, `Member`, `Role`, organisation name, slug and handle rules, the handle change, the author directory, the `member.joined` payload and the `AccountCreator`/`AccountCreatorIn` consumer contract; step 3, migrating; its store `internal/org/internal/postgres` and wiring `orgpg`, with `db/queries/org/` for memberships, home slug, handles, the snapshot-bound directory and `realtime`'s bounds, sequences and retention boundary), `app/setup`; `infra/postgres` `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
 | `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
@@ -44,8 +44,11 @@ for a missing or out-of-scope message. The use cases
 org's exported `org.Directory.LookupMembers` (member IDs filtered by
 organisation, returning handles and account IDs), then identity's
 `identity.Directory.LookupDisplayNames` (only those account IDs). Their adapters
-own the queries in `member.sql` and `identity/account.sql`; message never queries
-those tables. `MessageReader` shares one read-only repeatable-read transaction
+own the queries in `org/member.sql` and `identity/account.sql`; message never
+queries those tables. `MessageReader` receives org's directory through infra's
+`MemberDirectoryIn` factory, adapted from `orgpg.MembersIn` by a one-line
+closure, alongside `identitypg.AccountsIn`, both bound to its snapshot. It
+shares one read-only repeatable-read transaction
 across the channel and sidebar (through `channel.Service`), the selected topic
 and the bounded topic list (through `topic.Store`), history, both author
 lookups and the topic batch through `topic.Directory.LookupTopics`, plus the

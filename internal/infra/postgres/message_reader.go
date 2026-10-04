@@ -25,13 +25,16 @@ type MessageReader struct {
 	// snapshot the reader opened (identitypg.AccountsIn). Temporary until
 	// migration step 4, when conversation owns the page snapshot.
 	Accounts func(platform.Snapshot) identity.Directory
+	// Members returns org's member directory bound to the same snapshot
+	// (orgpg.MembersIn, adapted by a closure). Temporary until step 4 too.
+	Members MemberDirectoryIn
 }
 
 // One reads one message, its author names and topic in a read-only snapshot.
 func (s MessageReader) One(ctx context.Context, m org.Membership, channelID domain.ID, eventSeq int64) (entry message.Entry, err error) {
 	err = platform.InSnapshot(ctx, s.Pool, func(snapshot platform.Snapshot) error {
 		tx := pgxbridge.Snapshot(snapshot)
-		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
+		reader := message.Reader{History: NewMessageStore(tx), Members: s.Members(snapshot), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
 		entry, err = reader.One(ctx, m, channelID, eventSeq)
 		return err
 	})
@@ -72,7 +75,7 @@ func (s MessageReader) Page(ctx context.Context, m org.Membership, channelID dom
 		if err != nil {
 			return err
 		}
-		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
+		reader := message.Reader{History: NewMessageStore(tx), Members: s.Members(snapshot), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
 		page.Page, err = reader.Before(ctx, m, channelID, topicID, before)
 		if err != nil {
 			return err
@@ -96,7 +99,7 @@ func (s MessageReader) Page(ctx context.Context, m org.Membership, channelID dom
 func (s MessageReader) Many(ctx context.Context, m org.Membership, channelID domain.ID, ids []domain.ID) (entries []message.Entry, err error) {
 	err = platform.InSnapshot(ctx, s.Pool, func(snapshot platform.Snapshot) error {
 		tx := pgxbridge.Snapshot(snapshot)
-		reader := message.Reader{History: NewMessageStore(tx), Members: NewMemberStore(tx), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
+		reader := message.Reader{History: NewMessageStore(tx), Members: s.Members(snapshot), Accounts: s.Accounts(snapshot), Topics: NewTopicStore(tx)}
 		entries, err = reader.Many(ctx, m, channelID, ids)
 		return err
 	})

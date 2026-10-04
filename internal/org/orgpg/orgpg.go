@@ -2,6 +2,7 @@ package orgpg
 
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -19,4 +20,20 @@ func NewSequences(pool *pgxpool.Pool) realtime.SequenceReader { return postgres.
 // for realtime's cleaner, in the cleaner's transaction.
 func RetentionBoundaryIn(tx platform.Tx) realtime.RetentionBoundary {
 	return postgres.RetentionBoundaryIn(tx)
+}
+
+// NewAuthorizer returns org's authorisation entry point on pool.
+func NewAuthorizer(pool *pgxpool.Pool) *org.Authorizer {
+	return org.NewAuthorizer(postgres.NewAuthzStore(pool))
+}
+
+// NewHandleChanger returns the caller's own handle change on pool.
+func NewHandleChanger(pool *pgxpool.Pool) *org.HandleChanger {
+	return org.NewHandleChanger(NewAuthorizer(pool), postgres.NewMemberStore(pool))
+}
+
+// MembersIn returns the member directory bound to the caller's snapshot.
+// Composition roots adapt it to their consumer's factory with a closure.
+func MembersIn(snapshot platform.Snapshot) org.Directory {
+	return postgres.NewDirectoryIn(snapshot)
 }

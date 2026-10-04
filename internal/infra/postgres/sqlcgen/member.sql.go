@@ -45,21 +45,6 @@ func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Mem
 	return i, err
 }
 
-const getHomeSlug = `-- name: GetHomeSlug :one
-SELECT o.slug
-FROM setup s
-JOIN organization o ON o.id = s.organization_id
-JOIN member m ON m.organization_id = o.id
-WHERE m.account_id = $1
-`
-
-func (q *Queries) GetHomeSlug(ctx context.Context, accountID pgtype.UUID) (string, error) {
-	row := q.db.QueryRow(ctx, getHomeSlug, accountID)
-	var slug string
-	err := row.Scan(&slug)
-	return slug, err
-}
-
 const getMemberByOrganizationAndAccount = `-- name: GetMemberByOrganizationAndAccount :one
 SELECT id, organization_id, account_id, role, joined_event_seq, created_at, handle FROM member WHERE organization_id = $1 AND account_id = $2
 `
@@ -82,93 +67,4 @@ func (q *Queries) GetMemberByOrganizationAndAccount(ctx context.Context, arg Get
 		&i.Handle,
 	)
 	return i, err
-}
-
-const getMembershipBySlug = `-- name: GetMembershipBySlug :one
-SELECT o.id AS organization_id, o.slug, o.name, m.id AS member_id, m.role, m.handle
-FROM organization o
-JOIN member m ON m.organization_id = o.id
-WHERE o.slug = $1 AND m.account_id = $2
-`
-
-type GetMembershipBySlugParams struct {
-	Slug      string
-	AccountID pgtype.UUID
-}
-
-type GetMembershipBySlugRow struct {
-	OrganizationID pgtype.UUID
-	Slug           string
-	Name           string
-	MemberID       pgtype.UUID
-	Role           string
-	Handle         string
-}
-
-func (q *Queries) GetMembershipBySlug(ctx context.Context, arg GetMembershipBySlugParams) (GetMembershipBySlugRow, error) {
-	row := q.db.QueryRow(ctx, getMembershipBySlug, arg.Slug, arg.AccountID)
-	var i GetMembershipBySlugRow
-	err := row.Scan(
-		&i.OrganizationID,
-		&i.Slug,
-		&i.Name,
-		&i.MemberID,
-		&i.Role,
-		&i.Handle,
-	)
-	return i, err
-}
-
-const lookupMembers = `-- name: LookupMembers :many
-SELECT id, account_id, handle FROM member
-WHERE organization_id = $1 AND id = ANY($2::uuid[])
-`
-
-type LookupMembersParams struct {
-	OrganizationID pgtype.UUID
-	MemberIds      []pgtype.UUID
-}
-
-type LookupMembersRow struct {
-	ID        pgtype.UUID
-	AccountID pgtype.UUID
-	Handle    string
-}
-
-func (q *Queries) LookupMembers(ctx context.Context, arg LookupMembersParams) ([]LookupMembersRow, error) {
-	rows, err := q.db.Query(ctx, lookupMembers, arg.OrganizationID, arg.MemberIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []LookupMembersRow
-	for rows.Next() {
-		var i LookupMembersRow
-		if err := rows.Scan(&i.ID, &i.AccountID, &i.Handle); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const updateMemberHandle = `-- name: UpdateMemberHandle :execrows
-UPDATE member SET handle = $3 WHERE organization_id = $1 AND id = $2
-`
-
-type UpdateMemberHandleParams struct {
-	OrganizationID pgtype.UUID
-	ID             pgtype.UUID
-	Handle         string
-}
-
-func (q *Queries) UpdateMemberHandle(ctx context.Context, arg UpdateMemberHandleParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateMemberHandle, arg.OrganizationID, arg.ID, arg.Handle)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

@@ -20,6 +20,7 @@
 // payload and its routing. AccountCreator and AccountCreatorIn declare the
 // account write setup and sign-up will inject.
 //
-// Until org's store moves (step 3), infra/postgres implements
-// MembershipStore, HandleStore and Directory.
+// Org's store implements MembershipStore, HandleStore and the snapshot-bound
+// Directory. orgpg builds the authorizer and handle changer and binds the
+// directory to the caller's snapshot (MembersIn).
 package org

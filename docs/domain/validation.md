@@ -3,7 +3,8 @@
 `internal/identity` owns the email, password and display-name rules
 (`ValidateEmail`, `ValidatePassword`, `ValidateDisplayName`,
 `IsBlankLookingName`); `internal/org` owns `ValidateOrganizationName`,
-`ValidateSlug` and `ValidateHandle`. `internal/domain` validates the remaining
+`ValidateSlug` and `ValidateHandle`; `internal/conversation` owns
+`ValidateChannelName`. `internal/domain` validates the remaining
 fields until their modules take them. These rules validate UTF-8 text.
 Email, display, organisation and channel names are trimmed and normalised to
 NFC; email is lower-cased first. Lengths count code points after

@@ -11,6 +11,7 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
 	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
@@ -122,19 +123,19 @@ func TestChannelService(t *testing.T) {
 	store := postgres.NewChannelStore(pool)
 	service := appchannel.New(store)
 	for _, org := range []domain.ID{acme, globex} {
-		pgtest.Channel(t, pool, org, appchannel.DefaultName, true)
+		pgtest.Channel(t, pool, org, conversation.DefaultChannelName, true)
 	}
 	secret, err := service.Create(ctx, member(globex), " 開発 ")
 	if err != nil || secret.Name != "開発" || secret.IsDefault {
 		t.Fatalf("create: %+v, %v", secret, err)
 	}
-	if _, err := service.Create(ctx, member(globex), "開発"); !errors.Is(err, appchannel.ErrNameTaken) {
+	if _, err := service.Create(ctx, member(globex), "開発"); !errors.Is(err, conversation.ErrChannelNameTaken) {
 		t.Fatalf("duplicate name: %v", err)
 	}
 	if _, err := service.Create(ctx, member(acme), "開発"); err != nil {
 		t.Fatalf("same name in another organisation: %v", err)
 	}
-	if _, err := service.Get(ctx, member(acme), secret.ID); !errors.Is(err, appchannel.ErrNotFound) {
+	if _, err := service.Get(ctx, member(acme), secret.ID); !errors.Is(err, conversation.ErrChannelNotFound) {
 		t.Fatalf("another organisation's channel by id: %v", err)
 	}
 	list, err := service.List(ctx, member(acme))
@@ -146,7 +147,7 @@ func TestChannelService(t *testing.T) {
 			t.Fatalf("list leaked %+v", c)
 		}
 	}
-	if got, err := service.Default(ctx, member(globex)); err != nil || got.Name != appchannel.DefaultName || got.OrganizationID != globex {
+	if got, err := service.Default(ctx, member(globex)); err != nil || got.Name != conversation.DefaultChannelName || got.OrganizationID != globex {
 		t.Fatalf("default: %+v, %v", got, err)
 	}
 }

@@ -5,9 +5,9 @@ import (
 	"slices"
 	"testing"
 
-	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -22,7 +22,7 @@ func TestPostMessage(t *testing.T) {
 	memberships := map[string]org.Membership{}
 	channels := map[string]domain.ID{}
 	for _, slug := range []string{"acme", "globex"} {
-		fixture := pgtest.OrganizationWithOwner(t, pool, slug, appchannel.DefaultName)
+		fixture := pgtest.OrganizationWithOwner(t, pool, slug, conversation.DefaultChannelName)
 		// These fixture memberships predate logging, as on an upgraded database.
 		_, err := pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = event_seq WHERE id = $1", fixture.OrganizationID)
 		requireNoError(t, err)
@@ -44,7 +44,7 @@ func TestPostMessage(t *testing.T) {
 
 	// A member of globex cannot post into acme's channel, even knowing its
 	// id, and the failed attempt takes no sequence from either organisation.
-	if _, err := service.Post(ctx, memberships["globex"], channels["acme"], "intruder"); !errors.Is(err, appchannel.ErrNotFound) {
+	if _, err := service.Post(ctx, memberships["globex"], channels["acme"], "intruder"); !errors.Is(err, conversation.ErrChannelNotFound) {
 		t.Fatalf("cross-organisation post: %v", err)
 	}
 	// A failed insert (a body the database refuses) rolls the sequence back.
@@ -97,7 +97,7 @@ func TestPostingAndBranchingIntoUnknownOrganization(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	acme := pgtest.OrganizationWithOwner(t, pool, "acme", appchannel.DefaultName)
+	acme := pgtest.OrganizationWithOwner(t, pool, "acme", conversation.DefaultChannelName)
 	posting, branching := postgres.NewPostingStore(pool, eventSequence, appendEvents), postgres.NewBranchStore(pool, eventSequence, appendEvents)
 	posted, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "kept")
 	requireNoError(t, err)

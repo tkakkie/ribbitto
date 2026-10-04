@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -14,7 +15,7 @@ type OrganizationFixture struct {
 	OrganizationID domain.ID
 	AccountID      domain.ID
 	MemberID       domain.ID
-	Channel        domain.Channel
+	Channel        conversation.Channel
 }
 
 // OrganizationWithOwner creates an organisation with event_seq 1, an owner
@@ -59,7 +60,7 @@ func Member(t *testing.T, pool *pgxpool.Pool, orgID, account domain.ID, role org
 
 // Channel creates a channel with the given name and default flag through the store.
 // It leaves event_seq unchanged and creates no accounts or memberships.
-func Channel(t *testing.T, pool *pgxpool.Pool, org domain.ID, name string, isDefault bool) domain.Channel {
+func Channel(t *testing.T, pool *pgxpool.Pool, org domain.ID, name string, isDefault bool) conversation.Channel {
 	t.Helper()
 	channel, err := postgres.NewChannelStore(pool).CreateChannel(t.Context(), org, name, isDefault)
 	require(t, err)

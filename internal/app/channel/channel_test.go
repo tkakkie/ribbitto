@@ -7,59 +7,60 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // store keeps channels per organisation, as the real store scopes them.
 type store struct {
-	channels map[domain.ID][]domain.Channel
-	created  []domain.Channel
+	channels map[domain.ID][]conversation.Channel
+	created  []conversation.Channel
 }
 
-func (s *store) ListChannels(_ context.Context, org domain.ID) ([]domain.Channel, error) {
+func (s *store) ListChannels(_ context.Context, org domain.ID) ([]conversation.Channel, error) {
 	return s.channels[org], nil
 }
 
-func (s *store) CreateChannel(_ context.Context, org domain.ID, name string, isDefault bool) (domain.Channel, error) {
+func (s *store) CreateChannel(_ context.Context, org domain.ID, name string, isDefault bool) (conversation.Channel, error) {
 	for _, c := range s.channels[org] {
 		if c.Name == name {
-			return domain.Channel{}, channel.ErrNameTaken
+			return conversation.Channel{}, conversation.ErrChannelNameTaken
 		}
 	}
-	c := domain.Channel{ID: domain.ID{byte(len(s.created) + 10)}, OrganizationID: org, Name: name, IsDefault: isDefault}
+	c := conversation.Channel{ID: domain.ID{byte(len(s.created) + 10)}, OrganizationID: org, Name: name, IsDefault: isDefault}
 	s.created = append(s.created, c)
 	s.channels[org] = append(s.channels[org], c)
 	return c, nil
 }
 
-func (s *store) GetChannel(_ context.Context, org, id domain.ID) (domain.Channel, error) {
+func (s *store) GetChannel(_ context.Context, org, id domain.ID) (conversation.Channel, error) {
 	for _, c := range s.channels[org] {
 		if c.ID == id {
 			return c, nil
 		}
 	}
-	return domain.Channel{}, channel.ErrNotFound
+	return conversation.Channel{}, conversation.ErrChannelNotFound
 }
 
-func (s *store) GetDefaultChannel(_ context.Context, org domain.ID) (domain.Channel, error) {
+func (s *store) GetDefaultChannel(_ context.Context, org domain.ID) (conversation.Channel, error) {
 	for _, c := range s.channels[org] {
 		if c.IsDefault {
 			return c, nil
 		}
 	}
-	return domain.Channel{}, channel.ErrNotFound
+	return conversation.Channel{}, conversation.ErrChannelNotFound
 }
 
 func TestChannels(t *testing.T) {
 	acme, globex := domain.ID{1}, domain.ID{2}
-	general := domain.Channel{ID: domain.ID{3}, OrganizationID: acme, Name: "general", IsDefault: true}
-	secret := domain.Channel{ID: domain.ID{4}, OrganizationID: globex, Name: "secret", IsDefault: true}
+	general := conversation.Channel{ID: domain.ID{3}, OrganizationID: acme, Name: "general", IsDefault: true}
+	secret := conversation.Channel{ID: domain.ID{4}, OrganizationID: globex, Name: "secret", IsDefault: true}
 	member := func(orgID domain.ID) org.Membership {
 		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{ID: domain.ID{9}, OrganizationID: orgID}}
 	}
 	newService := func() (*channel.Service, *store) {
-		s := &store{channels: map[domain.ID][]domain.Channel{acme: {general}, globex: {secret}}}
+		s := &store{channels: map[domain.ID][]conversation.Channel{acme: {general}, globex: {secret}}}
 		return channel.New(s), s
 	}
 
@@ -69,9 +70,9 @@ func TestChannels(t *testing.T) {
 			wantErr           error
 		}{
 			{name: "normalised", input: "  雑談 ", want: "雑談"},
-			{name: "duplicate", input: "general", wantErr: channel.ErrNameTaken},
-			{name: "empty", input: "  ", wantErr: channel.ErrInvalidName},
-			{name: "too long", input: strings.Repeat("界", 81), wantErr: channel.ErrInvalidName},
+			{name: "duplicate", input: "general", wantErr: conversation.ErrChannelNameTaken},
+			{name: "empty", input: "  ", wantErr: conversation.ErrInvalidChannelName},
+			{name: "too long", input: strings.Repeat("界", 81), wantErr: conversation.ErrInvalidChannelName},
 			{name: "same name as another organisation's", input: "secret", want: "secret"},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
@@ -92,7 +93,7 @@ func TestChannels(t *testing.T) {
 
 	t.Run("another organisation's channel is not found by id", func(t *testing.T) {
 		service, _ := newService()
-		if _, err := service.Get(t.Context(), member(acme), secret.ID); !errors.Is(err, channel.ErrNotFound) {
+		if _, err := service.Get(t.Context(), member(acme), secret.ID); !errors.Is(err, conversation.ErrChannelNotFound) {
 			t.Fatalf("got %v", err)
 		}
 		if got, err := service.Get(t.Context(), member(acme), general.ID); err != nil || got != general {
@@ -115,7 +116,7 @@ func TestChannels(t *testing.T) {
 		service, s := newService()
 		s.channels[acme] = nil
 		_, err := service.Default(t.Context(), member(acme))
-		if err == nil || errors.Is(err, channel.ErrNotFound) {
+		if err == nil || errors.Is(err, conversation.ErrChannelNotFound) {
 			t.Fatalf("got %v", err)
 		}
 	})

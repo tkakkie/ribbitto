@@ -1,11 +1,15 @@
-package domain
+package conversation
 
-import "time"
+import (
+	"time"
+
+	"github.com/tkakkie/ribbitto/internal/kernel"
+)
 
 // Channel is a conversation identified by ID; Name is only its display name.
 // DefaultTopicID is its default topic, created with it (decision 21).
 type Channel struct {
-	ID, OrganizationID, DefaultTopicID ID
+	ID, OrganizationID, DefaultTopicID kernel.ID
 	Name                               string
 	IsDefault                          bool
 	CreatedAt                          time.Time

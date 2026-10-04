@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -26,7 +26,7 @@ func TestDefaultChannelCreatorIn(t *testing.T) {
 		pgxTx := pgxbridge.Tx(tx)
 		got, err := postgres.NewChannelStore(pgxTx).GetDefaultChannel(ctx, acme)
 		requireNoError(t, err)
-		if got.Name != appchannel.DefaultName || !got.IsDefault || got.OrganizationID != acme {
+		if got.Name != conversation.DefaultChannelName || !got.IsDefault || got.OrganizationID != acme {
 			t.Fatalf("default channel in caller's transaction: %+v", got)
 		}
 		topic, err := postgres.NewTopicStore(pgxTx).GetDefaultTopic(ctx, acme, got.ID)

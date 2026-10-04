@@ -13,6 +13,7 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -168,7 +169,7 @@ func TestTopicReferences(t *testing.T) {
 
 	// Creating a channel creates its default topic, and posting without a
 	// topic goes there.
-	for _, c := range []domain.Channel{acme.Channel, random} {
+	for _, c := range []conversation.Channel{acme.Channel, random} {
 		got, err := topics.GetDefaultTopic(ctx, acme.OrganizationID, c.ID)
 		if err != nil || got.ID != c.DefaultTopicID || !got.IsDefault || got.ChannelID != c.ID {
 			t.Fatalf("default topic of %s: %+v, %v", c.Name, got, err)

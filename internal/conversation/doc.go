@@ -3,7 +3,8 @@
 // step 4 of the migration (docs/architecture/modules.md). IDs are kernel.ID;
 // the package never imports domain.
 //
-// Exported API so far: the two event kinds conversation publishes and so owns.
+// Exported API so far: Channel, its name rule, errors and default name, and
+// the two event kinds conversation publishes and so owns.
 // KindPosted with Posted, EncodePosted, DecodePosted and RoutePosted is
 // message.posted, its payload and its routing; KindMessagesMoved with Moved,
 // EncodeMoved, DecodeMoved and RouteMoved is messages.moved. conversationpg

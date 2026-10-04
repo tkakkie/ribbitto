@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -29,7 +29,7 @@ func TestChannelMessageSchema(t *testing.T) {
 	account := pgtest.Account(t, pool, "a@b", "Author")
 	var orgs []domain.ID
 	var members []domain.ID
-	var defaults []domain.Channel
+	var defaults []conversation.Channel
 	for _, slug := range []string{"team", "other"} {
 		organizationID := pgtest.Organization(t, pool, slug, slug, 0)
 		member := pgtest.Member(t, pool, organizationID, account, org.RoleMember, "member", 1)
@@ -44,7 +44,7 @@ func TestChannelMessageSchema(t *testing.T) {
 	organizationID, other := orgs[0], orgs[1]
 	channel, foreign := defaults[0], defaults[1]
 	for _, input := range []string{"a", "　 開発 会議　 ", "a　b", " e\u0301 ", strings.Repeat("e\u0301", 80), strings.Repeat("界", 80)} {
-		name, err := domain.ValidateChannelName(input)
+		name, err := conversation.ValidateChannelName(input)
 		requireNoError(t, err)
 		created, err := channels.CreateChannel(ctx, organizationID, name, false)
 		requireNoError(t, err)
@@ -54,11 +54,11 @@ func TestChannelMessageSchema(t *testing.T) {
 		}
 	}
 	listed, err := channels.ListChannels(ctx, other)
-	if err != nil || !slices.Equal(listed, []domain.Channel{foreign}) {
+	if err != nil || !slices.Equal(listed, []conversation.Channel{foreign}) {
 		t.Fatalf("channel list leaked: %+v, %v", listed, err)
 	}
 	_, err = channels.GetChannel(ctx, other, channel.ID)
-	if !errors.Is(err, appchannel.ErrNotFound) {
+	if !errors.Is(err, conversation.ErrChannelNotFound) {
 		t.Fatalf("cross-organisation channel lookup: %v", err)
 	}
 	var posted []domain.Message

@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/channel"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -592,8 +592,8 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "channel with messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
 		{name: "channel with older messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
 		{name: "older page", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ChannelURL("acme", domain.ID{1}) + "?before=40", cookie: true},
-		{name: "channel invalid name", route: "POST /organizations/{slug}/channels", services: withChannelError(channel.ErrInvalidName), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {""}}, status: http.StatusUnprocessableEntity},
-		{name: "channel duplicate name", route: "POST /organizations/{slug}/channels", services: withChannelError(channel.ErrNameTaken), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"雑談"}}, status: http.StatusUnprocessableEntity},
+		{name: "channel invalid name", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrInvalidChannelName), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {""}}, status: http.StatusUnprocessableEntity},
+		{name: "channel duplicate name", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrChannelNameTaken), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"雑談"}}, status: http.StatusUnprocessableEntity},
 	}
 	for _, body := range []string{"", strings.Repeat("界", 4001), "bad\u202e"} {
 		for _, hx := range []bool{false, true} {

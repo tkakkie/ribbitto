@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	"log/slog"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -216,7 +216,7 @@ func TestMessagePostHandler(t *testing.T) {
 		{"leading newline", "\n\n", nil, 422},
 		{"long", strings.Repeat("界", 4001), nil, 422},
 		{"forbidden", "<script>\u202ebad</script>", nil, 422},
-		{"missing", "hello", channel.ErrNotFound, 404},
+		{"missing", "hello", conversation.ErrChannelNotFound, 404},
 		{"membership gone", "hello", org.ErrNotFound, 404},
 		{"failure", "hello", errors.New("offline"), 500},
 	} {

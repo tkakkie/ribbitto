@@ -9,7 +9,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // The publishers' encoders replaced SQL's jsonb_build_object (#398). Each
@@ -22,7 +21,6 @@ func TestEventPayloadCompatibility(t *testing.T) {
 	id := func(n byte) domain.ID { return domain.ID{0: 0xab, 6: 0x7c, 8: 0x9d, 15: n} }
 	uuid := func(n byte) pgtype.UUID { return pgtype.UUID{Bytes: id(n), Valid: true} }
 	posted := message.EncodePosted(id(1), id(2), id(3))
-	joined := org.EncodeJoined(id(4))
 	moved := topic.EncodeMoved(topic.Moved{ChannelID: id(1), FromTopicID: id(3), ToTopicID: id(5), MessageIDs: []domain.ID{id(2), id(6)}})
 	for _, tt := range []struct {
 		name    string
@@ -45,13 +43,6 @@ func TestEventPayloadCompatibility(t *testing.T) {
 			[]any{uuid(1), uuid(2)},
 			func(b []byte) (any, error) { return message.DecodePosted(b) },
 			message.Posted{ChannelID: id(1), MessageID: id(2)},
-		},
-		{
-			"member.joined", joined,
-			"SELECT jsonb_build_object('member_id', $1::uuid)",
-			[]any{uuid(4)},
-			func(b []byte) (any, error) { return org.DecodeJoined(b) },
-			org.Joined{MemberID: id(4)},
 		},
 		{
 			"messages.moved", moved,

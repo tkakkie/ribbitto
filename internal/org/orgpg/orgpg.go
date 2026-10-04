@@ -37,3 +37,8 @@ func NewHandleChanger(pool *pgxpool.Pool) *org.HandleChanger {
 func MembersIn(snapshot platform.Snapshot) org.Directory {
 	return postgres.NewDirectoryIn(snapshot)
 }
+
+// EventKinds returns org's routers for registration with realtime's reader.
+func EventKinds() realtime.Kinds {
+	return realtime.Kinds{org.KindJoined: org.RouteJoined}
+}

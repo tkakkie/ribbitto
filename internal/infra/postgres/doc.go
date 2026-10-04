@@ -5,6 +5,6 @@
 // MessageReader is given both author lookups as snapshot-bound factories,
 // identity's accounts and its own MemberDirectoryIn (implemented by
 // orgpg.MembersIn), until conversation owns the page snapshot.
-// EventKinds, in realtime_adapters.go, lists the publishers' kinds for
-// realtime's reader until each module registers its own.
+// EventKinds, in realtime_adapters.go, lists conversation's kinds for
+// realtime's reader until conversation registers its own in step 4.
 package postgres

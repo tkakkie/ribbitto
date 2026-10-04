@@ -111,3 +111,83 @@ func TestSetup(t *testing.T) {
 		})
 	}
 }
+
+func TestSetupConflictRace(t *testing.T) {
+	t.Parallel()
+	hasher, err := identity.NewHasher()
+	requireNoError(t, err)
+	for _, field := range []string{"slug", "email"} {
+		t.Run(field, func(t *testing.T) {
+			pool := pgtest.New(t)
+			ctx := t.Context()
+			const attempts = 10
+			barrier := setupBarrier{SetupStore: postgres.NewSetupStore(pool, appendEvents), ready: make(chan struct{}, attempts), release: make(chan struct{})}
+			s := org.NewSetup(barrier, hasher, "secret")
+			results := make(chan error, attempts)
+			for i := range attempts {
+				go func() {
+					input := org.SetupInput{OrganizationName: "Example", Slug: "example", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"}
+					if field == "slug" {
+						input.Email = fmt.Sprintf("owner%d@example.org", i)
+					} else {
+						input.Slug = fmt.Sprintf("example-%d", i)
+					}
+					_, err := s.Complete(ctx, "secret", input)
+					results <- err
+				}()
+			}
+			for range attempts {
+				<-barrier.ready
+			}
+			close(barrier.release)
+			successes := 0
+			for range attempts {
+				if err := <-results; err == nil {
+					successes++
+				} else if !errors.Is(err, org.ErrSetupCompleted) {
+					t.Errorf("contender: %v; want ErrSetupCompleted", err)
+				}
+			}
+			if successes != 1 {
+				t.Errorf("successes = %d; want 1", successes)
+			}
+			var orgs, accounts, members, setups int
+			requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM organization), (SELECT count(*) FROM account), (SELECT count(*) FROM member), (SELECT count(*) FROM setup)").Scan(&orgs, &accounts, &members, &setups))
+			if orgs != 1 || accounts != 1 || members != 1 || setups != 1 {
+				t.Fatalf("row counts: %d %d %d %d; want 1 each", orgs, accounts, members, setups)
+			}
+		})
+	}
+}
+
+func TestSetupOpenConflict(t *testing.T) {
+	t.Parallel()
+	hasher, err := identity.NewHasher()
+	requireNoError(t, err)
+	for _, field := range []string{"slug", "email"} {
+		t.Run(field, func(t *testing.T) {
+			pool := pgtest.New(t)
+			ctx := t.Context()
+			input := org.SetupInput{OrganizationName: "Example", Slug: "example", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"}
+			if field == "slug" {
+				pgtest.Organization(t, pool, input.Slug, "Existing", 0)
+			} else {
+				pgtest.Account(t, pool, input.Email, "Existing")
+			}
+			s := org.NewSetup(postgres.NewSetupStore(pool, appendEvents), hasher, "secret")
+			open, err := s.Open(ctx)
+			if err != nil || !open {
+				t.Fatalf("before conflict: setup open = %t: %v", open, err)
+			}
+			_, err = s.Complete(ctx, "secret", input)
+			var fields org.ValidationErrors
+			if errors.Is(err, org.ErrSetupCompleted) || !errors.As(err, &fields) || len(fields) != 1 || fields[field] == nil {
+				t.Fatalf("open setup conflict: %v; want %s field error", err, field)
+			}
+			open, err = s.Open(ctx)
+			if err != nil || !open {
+				t.Fatalf("after conflict: setup open = %t: %v", open, err)
+			}
+		})
+	}
+}

@@ -73,6 +73,10 @@ wiring imports org. Sign-up injects org's factory via a closure; setup keeps
 `legacy_account.sql` until 3.12.
 Identity owns the distinct `ErrEmailTaken` and `ErrInvalidEmail` mappings.
 
+Sign-up's database tests belong to `orgpg` (`signup_test.go`), with local
+raw-SQL fixtures and event-log checks; only their setup organisation uses
+`infra`'s setup store until 3.12.
+
 **Known exceptions.** Cross-feature writes that must commit atomically:
 
 - setup (`org`) writes `organization`, `account`, `member`, `channel` and

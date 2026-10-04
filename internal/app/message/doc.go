@@ -1,10 +1,10 @@
 // Package message holds posting.
 //
 // Feature: message (feature map in docs/architecture/features.md), which owns
-// the message table. conversation owns Message, ValidateMessageBody,
-// ErrInvalidBody and ErrMessageNotFound, and the history reader (Reader,
-// Entry, Page, ChannelPage, PageSize). Exported API: Service and the Store
-// interface it needs.
+// the message table. Exported API: Service and the Store interface it needs;
+// nothing else. Message, its body rule, its errors and the history reader
+// (Reader, Entry, Page, ChannelPage, PageSize) are conversation's, not this
+// package's.
 // It uses org through org.Membership; posting reports a channel
 // outside the caller's organisation as conversation.ErrChannelNotFound. Listed
 // exception: posting advances organization.event_seq, which org owns,

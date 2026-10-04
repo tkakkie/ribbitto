@@ -37,7 +37,7 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 	}
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		open, err := service.Open(r.Context())
-		if errors.Is(err, org.ErrSetupCompleted) || (err == nil && !open) {
+		if err == nil && !open {
 			http.NotFound(w, r)
 			return
 		}

@@ -28,7 +28,9 @@ open, since a concurrent winner may have collided first: closed means
 `ErrSetupCompleted`. While setup is open, a taken or invalid email or slug
 and an invalid handle are field errors, a setup-row conflict is
 `ErrSetupCompleted`, and a duplicate handle (`ErrHandleTaken`) stays a
-wrapped error, as before. The root never inspects pgconn.
+wrapped error. A failed re-check uses the same open-setup mapping; an
+unexpected error skips the re-check and gets one setup context prefix.
+The root never inspects pgconn.
 `cmd/ribbitto` validates `RIBBITTO_SETUP_TOKEN` before opening the database:
 empty disables setup, and a non-empty value needs at least 32 characters.
 When disabled, `/setup` is not registered at all, so GET and POST are the
@@ -48,7 +50,8 @@ to `/` with 303. Setup and sign-in share the process's single password hasher.
 `org.SignUp` (`NewSignUp`, built by `orgpg.NewSignUp`) shares
 `ValidationErrors` and one private account-field validator with `org.Setup`:
 display name, handle, email and password keep their rules and keys; setup also
-validates organisation name and slug. Each flow checks its gate, then every
+validates organisation name and slug. Both flows share the store mapping for
+invalid email and handle. Each flow checks its gate, then every
 field, then hashes. `SignUp.Open` gates registration and the sign-in link on
 `RIBBITTO_SIGNUP=on` and completed setup. Its separate handler and form share
 the process hasher. Through the injected `TxRunner`, the root owns one
@@ -62,6 +65,8 @@ Duplicate email or a handle already used in the organisation rolls back
 everything and takes no sequence; the unique constraint decides concurrent
 claims, and a taken handle is a field error (422), using `org.ErrEmailTaken`
 and the shared `org.ErrHandleTaken`. `org.ErrSignUpClosed` means the operator
-disabled sign-up or setup is incomplete. Success signs the new account in
-through `Sessions.Replace` and redirects to `/` with 303; invalid input
+disabled sign-up or setup is incomplete, including a missing setup row in the
+transaction. Both flows' `Open` wrap store failures once with check context.
+Success signs the new account in through `Sessions.Replace` and redirects to
+`/` with 303; invalid input
 returns 422 and a busy hasher returns 503.

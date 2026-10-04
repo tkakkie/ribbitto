@@ -18,29 +18,39 @@ the 8 with findings were #334, #427 and #431 (real time and retention),
 #336 and #347 (launchers), and #338, #340 and #364 (gates), while step 3's
 about 30 org, identity and web refactors had none (#498).
 
-**Precedence: A, then B, then C.** A change that touches an A area is tier A
-even as a move, an extraction, a new seam or tests only (#427 moved retention
-into realtime's store). **When in doubt, the higher tier.**
+**Precedence: A, then B, then C.** **When in doubt, the higher tier.** In
+the code areas of A (concurrency, real-time delivery, ordered transactions),
+Grok is for changes to **what the code does or the order it does it in**; a
+change there that keeps both is tier B, once, by Muse Code (#427 moved
+retention into realtime's store and Grok found a defect, so such moves still
+get one adversarial review).
 
 - **A — Grok required:**
-  - concurrency, caches or background work (goroutines, locks, TTLs,
-    clean-up and retention jobs);
-  - real-time delivery, on the server (`internal/realtime/**`, the stream
-    handlers and renderers in `internal/web`, the event log's queries and
-    readers) or in the browser (the SSE scripts in `web/static`);
-  - transactions whose order matters across writers: the organisation's
-    `event_seq` and the realtime append in posting, branching, setup and
-    sign-up;
-  - the rules that guard these areas and the AI and CI tooling: the AI
-    launchers in `scripts/ai/**`; the trusted prompts and review
-    instructions in `.github/prompts/**` and `.github/instructions/**`;
-    `.github/workflows/**`; the files that define the review gates
-    (`docs/workflow/README.md`, `reviewing.md`, `running-other-ai.md`, this
-    whole file, and `.github/pull_request_template.md`); and the security
-    and scoping rules in `AGENTS.md` and `docs/domain/invariants.md`. Being
-    documentation does not exempt a change from this item.
+  - in concurrency, caches or background work (goroutines, locks, TTLs,
+    clean-up and retention jobs), in real-time delivery on the server
+    (`internal/realtime/**`, the stream handlers and renderers in
+    `internal/web`, the event log's queries and readers) or in the browser
+    (the SSE scripts in `web/static`), or in transactions whose order
+    matters (the organisation's `event_seq` and the realtime append in
+    posting, branching, setup and sign-up): a change that **alters
+    behaviour**, adds, removes or reorders goroutines, locks or background
+    work, or changes **which writes share a transaction or the order they
+    run in** (for example a root use case taking over a store's transaction,
+    #476, #483);
+  - any change to the rules that guard these areas and the AI and CI
+    tooling: the AI launchers in `scripts/ai/**`; the trusted prompts and
+    review instructions in `.github/prompts/**` and
+    `.github/instructions/**`; `.github/workflows/**`; the files that define
+    the review gates (`docs/workflow/README.md`, `reviewing.md`,
+    `running-other-ai.md`, this whole file, and
+    `.github/pull_request_template.md`); and the security and scoping rules
+    in `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does
+    not exempt a change from this item.
 - **B — one review by Muse Code, or by Antigravity when the maintainer runs
   it:**
+  - a change in A's code areas that keeps behaviour and order: moves,
+    extractions, new seams and their closures, and tests (including new
+    tests of races or of the event log);
   - a change that **alters behaviour** in authentication, authorisation,
     sessions or organisation scoping: who is signed in, who is a member,
     what a member may see or do, and how a session expires (for example in
@@ -50,11 +60,12 @@ into realtime's store). **When in doubt, the higher tier.**
     runs, wherever it lives: a test or an assertion, `Makefile`, `tools/**`,
     or a linter, vet or code-generation setting (`.golangci.yml`,
     `sqlc.yaml`).
-- **C — none:** everything that matches no A or B area: behaviour-preserving
-  changes in B's areas (moves, renames, extractions, consumer-declared seams
-  and their closures), tests only outside A's areas that weaken no check,
-  documentation outside the gate documents, lint rules that only tighten,
-  dependency bumps, and ordinary feature work outside A and B.
+- **C — none:** everything that matches no A or B case: behaviour-preserving
+  changes in authentication's, authorisation's and scoping's areas (moves,
+  renames, extractions, consumer-declared seams and their closures), tests
+  outside A's areas that weaken no check, documentation outside the gate
+  documents, lint rules that only tighten, dependency bumps, and ordinary
+  feature work outside A and B.
 
 The template's *Adversarial* field names the review: `Grok`,
 `Muse Code (B)`, `Antigravity (B)`,

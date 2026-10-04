@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -60,9 +60,9 @@ func newRenderCache(parent context.Context) *realtime.Cache[renderKey, realtime.
 func (r messageRenderer) Render(ctx context.Context, event realtime.Event) (realtime.Outgoing, error) {
 	var render func(context.Context, realtime.Event) (realtime.Outgoing, error)
 	switch event.Kind {
-	case message.KindPosted:
+	case conversation.KindPosted:
 		render = r.renderPosted
-	case topic.KindMessagesMoved:
+	case conversation.KindMessagesMoved:
 		render = r.renderMoved
 	default:
 		return realtime.Outgoing{}, fmt.Errorf("no live render for event kind %q", event.Kind)
@@ -92,7 +92,7 @@ func (r messageRenderer) renderPosted(ctx context.Context, event realtime.Event)
 // renderMoved renders the messages a branch moved, with the same load
 // context as renderPosted.
 func (r messageRenderer) renderMoved(ctx context.Context, event realtime.Event) (realtime.Outgoing, error) {
-	moved, err := topic.DecodeMoved(event.Payload)
+	moved, err := conversation.DecodeMoved(event.Payload)
 	if err != nil {
 		return realtime.Outgoing{}, fmt.Errorf("decoding moved messages: %w", err)
 	}

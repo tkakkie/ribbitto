@@ -12,6 +12,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -134,8 +135,8 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 		if err != nil {
 			return err
 		}
-		data := message.EncodePosted(channelID, posted.ID, posted.TopicID)
-		return s.events(platformTx).Append(ctx, organizationID, seq, message.KindPosted, nil, data)
+		data := conversation.EncodePosted(channelID, posted.ID, posted.TopicID)
+		return s.events(platformTx).Append(ctx, organizationID, seq, conversation.KindPosted, nil, data)
 	})
 	var pgErr *pgconn.PgError
 	switch {

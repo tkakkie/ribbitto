@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/app/message"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -58,17 +58,17 @@ func (c countingMessages) Many(ctx context.Context, m org.Membership, channel do
 // eventOf builds kind's event as the reader delivers it: the payload from
 // its publisher's codec, and the channel and routing topics its Router gives.
 // A post is moved.ToTopicID's; a move carries moved itself.
-func eventOf(t *testing.T, org domain.ID, seq int64, kind realtime.EventKind, moved topic.Moved) realtime.Event {
+func eventOf(t *testing.T, org domain.ID, seq int64, kind realtime.EventKind, moved conversation.Moved) realtime.Event {
 	t.Helper()
 	e := realtime.Event{OrganizationID: org, Seq: seq, Kind: kind}
 	var route realtime.Router
 	switch kind {
-	case message.KindPosted:
-		e.Payload = message.EncodePosted(moved.ChannelID, domain.ID{7}, moved.ToTopicID)
-		route = message.RoutePosted
-	case topic.KindMessagesMoved:
-		e.Payload = topic.EncodeMoved(moved)
-		route = topic.RouteMoved
+	case conversation.KindPosted:
+		e.Payload = conversation.EncodePosted(moved.ChannelID, domain.ID{7}, moved.ToTopicID)
+		route = conversation.RoutePosted
+	case conversation.KindMessagesMoved:
+		e.Payload = conversation.EncodeMoved(moved)
+		route = conversation.RouteMoved
 	default:
 		t.Fatalf("no codec for %q", kind)
 	}
@@ -109,13 +109,13 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	memberOf := func(orgID domain.ID) org.Membership {
 		return org.Membership{Organization: org.Organization{ID: orgID}}
 	}
-	base := topic.Moved{ChannelID: domain.ID{2}, FromTopicID: domain.ID{1}, ToTopicID: domain.ID{2}}
-	event := eventOf(t, orgA, 9, message.KindPosted, base)
+	base := conversation.Moved{ChannelID: domain.ID{2}, FromTopicID: domain.ID{1}, ToTopicID: domain.ID{2}}
+	event := eventOf(t, orgA, 9, conversation.KindPosted, base)
 	keyOf := func(org domain.ID, e realtime.Event) renderKey {
 		return renderKey{organization: org, channel: e.ChannelID, seq: e.Seq, language: i18n.Language(en)}
 	}
 
-	for _, kind := range []realtime.EventKind{message.KindPosted, topic.KindMessagesMoved} {
+	for _, kind := range []realtime.EventKind{conversation.KindPosted, conversation.KindMessagesMoved} {
 		t.Run("concurrent renders read once/"+string(kind), func(t *testing.T) {
 			moved := base
 			for i := range 100 {
@@ -130,7 +130,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			for range renders {
 				wg.Go(func() {
 					out, err := r.Render(en, event)
-					if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "seq 9") || (kind == topic.KindMessagesMoved && strings.Count(string(out.Data), "<li ") != 100) {
+					if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "seq 9") || (kind == conversation.KindMessagesMoved && strings.Count(string(out.Data), "<li ") != 100) {
 						t.Errorf("Render = %+v, %v", out, err)
 					}
 				})
@@ -158,7 +158,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		}
 		inOtherChannel := base
 		inOtherChannel.ChannelID = domain.ID{4}
-		otherChannel, otherSeq := eventOf(t, orgA, 9, message.KindPosted, inOtherChannel), eventOf(t, orgA, 10, message.KindPosted, base)
+		otherChannel, otherSeq := eventOf(t, orgA, 9, conversation.KindPosted, inOtherChannel), eventOf(t, orgA, 10, conversation.KindPosted, base)
 		cases := []struct {
 			name string
 			ctx  context.Context
@@ -193,10 +193,10 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	t.Run("payloads carry the contract's data attributes", func(t *testing.T) {
 		r := messageRenderer{messages: countingMessages{calls: &atomic.Int32{}}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
 		const topicSix = "06000000-0000-0000-0000-000000000000"
-		moved := topic.Moved{ChannelID: event.ChannelID, FromTopicID: domain.ID{5}, ToTopicID: domain.ID{6}, MessageIDs: []domain.ID{{7}, {8}}}
-		for _, kind := range []realtime.EventKind{message.KindPosted, topic.KindMessagesMoved} {
+		moved := conversation.Moved{ChannelID: event.ChannelID, FromTopicID: domain.ID{5}, ToTopicID: domain.ID{6}, MessageIDs: []domain.ID{{7}, {8}}}
+		for _, kind := range []realtime.EventKind{conversation.KindPosted, conversation.KindMessagesMoved} {
 			seq := int64(9)
-			if kind == topic.KindMessagesMoved {
+			if kind == conversation.KindMessagesMoved {
 				seq = 11 // its own render, not the posted one's
 			}
 			out, err := r.Render(en, eventOf(t, orgA, seq, kind, moved))
@@ -207,7 +207,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if kind == topic.KindMessagesMoved {
+			if kind == conversation.KindMessagesMoved {
 				list := find(doc, atom.Ul)
 				if list == nil || attr(list, "data-from-topic") != "05000000-0000-0000-0000-000000000000" || attr(list, "data-to-topic") != topicSix {
 					t.Errorf("%s: the payload's list lost its move routing", kind)
@@ -225,7 +225,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 					t.Errorf("%s: data-source = %q; want the message's topic", kind, attr(n, "data-source"))
 				}
 			}
-			if want := len(moved.MessageIDs); kind == message.KindPosted && items != 1 || kind == topic.KindMessagesMoved && items != want {
+			if want := len(moved.MessageIDs); kind == conversation.KindPosted && items != 1 || kind == conversation.KindMessagesMoved && items != want {
 				t.Errorf("%s: %d items", kind, items)
 			}
 		}

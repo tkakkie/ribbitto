@@ -6,8 +6,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -73,16 +73,16 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 			return topic.ErrConflict // rolls back the new topic and both sequences
 		}
 		events := s.events(platformTx)
-		data := topic.EncodeMoved(topic.Moved{ChannelID: channelID, FromTopicID: source.ID, ToTopicID: destination.ID, MessageIDs: b.Messages})
-		if err := events.Append(ctx, organizationID, moveSeq, topic.KindMessagesMoved, nil, data); err != nil {
+		data := conversation.EncodeMoved(conversation.Moved{ChannelID: channelID, FromTopicID: source.ID, ToTopicID: destination.ID, MessageIDs: b.Messages})
+		if err := events.Append(ctx, organizationID, moveSeq, conversation.KindMessagesMoved, nil, data); err != nil {
 			return err
 		}
 		posted, err := NewMessageStore(tx).InsertMessage(ctx, organizationID, channelID, source.ID, memberID, notice(destination), noticeSeq)
 		if err != nil {
 			return err
 		}
-		data = message.EncodePosted(channelID, posted.ID, posted.TopicID)
-		return events.Append(ctx, organizationID, noticeSeq, message.KindPosted, nil, data)
+		data = conversation.EncodePosted(channelID, posted.ID, posted.TopicID)
+		return events.Append(ctx, organizationID, noticeSeq, conversation.KindPosted, nil, data)
 	})
 	if err != nil { // org.ErrNotFound from the sequence when the organisation is gone
 		return domain.Topic{}, 0, err

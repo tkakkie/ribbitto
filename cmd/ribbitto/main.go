@@ -19,6 +19,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -275,7 +276,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		branchNotifier = config.hub
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
-		kinds := postgres.EventKinds()
+		kinds := conversationpg.EventKinds()
 		for kind, router := range orgpg.EventKinds() {
 			kinds[kind] = router
 		}

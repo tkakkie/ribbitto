@@ -33,14 +33,12 @@ the temporary implementation behind it.
 
 | Flow or caller | Needs from | Interface from step | Temporary implementation until step |
 |---|---|---|---|
-| every package but `identity` and `realtime` (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
+| every package but `identity`, `realtime` and `conversation` (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
 | three `infra` target-version tests and `org`'s handle upgrade test | `db/migrations` (temporary allowance) | 0 | 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
 | `app/message`; page snapshot, `One`, `Many` (`infra` `MessageReader`, given `identitypg.AccountsIn`) | `identity` accounts | 1 | 4 (the use case replaces the caller) |
-| `infra/postgres` appender interface (`EventAppender`) and the kind list | `realtime` types (root import, temporary allowance) | 2 | 5 |
-| conversation's kind registry (`postgres.EventKinds()`, combined with `orgpg.EventKinds()` by `cmd/ribbitto` and tests) | each publisher's `realtime.Router` | 2 | 4 for `conversation`; `org` registers its own through `orgpg` |
-| event payload codecs in `app/message` and `app/topic` | their kinds' payloads, owned by the publisher | 2 | 4 (`message.posted` and `messages.moved`, with `conversation`); `org` owns `member.joined`'s codec |
+| `infra/postgres` appender interface (`EventAppender`) | `realtime` types (root import, temporary allowance) | 2 | 4 |
 | posting, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | 4 |
 | posting, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | 4 |
 | the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |

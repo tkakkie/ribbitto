@@ -10,9 +10,8 @@ is organisation-wide; a value restricts delivery to that member, enforced
 by the stream's per-event authorization (`org.Authorizer.MayReceive`). Its composite foreign key keeps the
 member in the same organisation. The audience never appears in `data`.
 Each kind's publisher owns its kind name and payload (decision 26):
-`app/message` (`KindPosted`, `EncodePosted`, `DecodePosted`) and `app/topic`
-(`KindMessagesMoved`, `EncodeMoved`, `DecodeMoved`) until `conversation`
-moves, and `org` (`KindJoined`, `EncodeJoined`, `DecodeJoined`), declare the
+`conversation` (`KindPosted`, `EncodePosted`, `DecodePosted`;
+`KindMessagesMoved`, `EncodeMoved`, `DecodeMoved`) and `org` (`KindJoined`, `EncodeJoined`, `DecodeJoined`), declare the
 kind, encode the payload and decode it; realtime keeps only the
 `EventKind` type. The encoders return only `[]byte`: their strings and
 string slices cannot fail JSON marshaling. The writer stores what they
@@ -22,15 +21,15 @@ decode the payload (the renderer decodes moves). IDs are canonical UUID text
 `jsonb_build_object` wrote before (#398), so old and new rows decode alike.
 `message.posted` carries `{"channel_id","message_id","topic_id"}` (UUIDs);
 the topic is captured at posting time, in the message's transaction, including
-branch notices. `message.RoutePosted` gives it as the event's routing topic;
+branch notices. `conversation.RoutePosted` gives it as the event's routing topic;
 old rows without the field have none, while a present malformed value fails
 the batch. A later move never
 rewrites this routing data: replay applies the posting and move in order.
 `member.joined` carries `{"member_id":"<uuid>"}`; `messages.moved` (branching,
 [topics](../domain/topics.md#branching)) carries the channel, the two topics
 and the moved message IDs. All use a NULL audience.
-`topic.RouteMoved` routes a move to its channel and both topics; the
-renderer decodes the payload through `topic.DecodeMoved`. The decoder rejects missing or malformed IDs, identical source and destination,
+`conversation.RouteMoved` routes a move to its channel and both topics; the
+renderer decodes the payload through `conversation.DecodeMoved`. The decoder rejects missing or malformed IDs, identical source and destination,
 and empty lists or repeated messages, failing the whole batch rather than
 returning a partial replay. The size limit applies only on write, so lowering
 it cannot make committed moves unreadable. Moves read the requested IDs,
@@ -56,10 +55,10 @@ the watermark covers it. `realtime.Event` is an envelope: organisation,
 sequence, kind, audience, channel, routing `Topics` and the stored `Payload`,
 which consumers decode through the publisher's codec; kinds are an open list.
 Wiring registers each publisher's `Router` in `realtime.Kinds`, which gives
-the channel and routing topics. `orgpg.EventKinds()` provides `org.RouteJoined`;
-`postgres.EventKinds()` keeps `message.RoutePosted` and `topic.RouteMoved`
-until `conversation` registers them in step 4. `cmd/ribbitto` and the tests
-combine both sets for the reader.
+the channel and routing topics. `orgpg.EventKinds()` provides `org.RouteJoined`
+and `conversationpg.EventKinds()` provides `conversation.RoutePosted` and
+`conversation.RouteMoved`; `cmd/ribbitto` and the tests combine both sets for
+the reader.
 `realtimepg.NewReader(pool, bounds, kinds)` provides
 `EventsAfter(ctx, organizationID, after, limit) ([]realtime.Event, error)`:
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.

@@ -15,7 +15,6 @@ const completeSetup = `-- name: CompleteSetup :exec
 INSERT INTO setup (id, organization_id) VALUES (true, $1)
 `
 
-// A copy of org's CompleteSetup (db/queries/org/), until 3.12.
 func (q *Queries) CompleteSetup(ctx context.Context, organizationID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, completeSetup, organizationID)
 	return err
@@ -30,7 +29,6 @@ type CreateOrganizationParams struct {
 	Slug string
 }
 
-// A copy of org's CreateOrganization (db/queries/org/), until 3.12.
 func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error) {
 	row := q.db.QueryRow(ctx, createOrganization, arg.Name, arg.Slug)
 	var i Organization
@@ -49,7 +47,6 @@ const setupOpen = `-- name: SetupOpen :one
 SELECT NOT EXISTS (SELECT 1 FROM setup)
 `
 
-// A copy of org's SetupOpen (db/queries/org/), until 3.12.
 func (q *Queries) SetupOpen(ctx context.Context) (bool, error) {
 	row := q.db.QueryRow(ctx, setupOpen)
 	var not_exists bool
@@ -61,7 +58,6 @@ const setupOrganization = `-- name: SetupOrganization :one
 SELECT organization_id FROM setup WHERE id
 `
 
-// A copy of org's SetupOrganization (db/queries/org/), until 3.11.
 func (q *Queries) SetupOrganization(ctx context.Context) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, setupOrganization)
 	var organization_id pgtype.UUID

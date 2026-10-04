@@ -11,6 +11,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createMember = `-- name: CreateMember :one
+INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle)
+VALUES ($1, $2, $3, $4, $5) RETURNING id, organization_id, account_id, role, joined_event_seq, created_at, handle
+`
+
+type CreateMemberParams struct {
+	OrganizationID pgtype.UUID
+	AccountID      pgtype.UUID
+	Role           string
+	JoinedEventSeq int64
+	Handle         string
+}
+
+func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error) {
+	row := q.db.QueryRow(ctx, createMember,
+		arg.OrganizationID,
+		arg.AccountID,
+		arg.Role,
+		arg.JoinedEventSeq,
+		arg.Handle,
+	)
+	var i Member
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.AccountID,
+		&i.Role,
+		&i.JoinedEventSeq,
+		&i.CreatedAt,
+		&i.Handle,
+	)
+	return i, err
+}
+
 const getHomeSlug = `-- name: GetHomeSlug :one
 SELECT o.slug
 FROM setup s

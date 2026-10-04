@@ -8,4 +8,8 @@
 // its migration step. Writer holds posting's writes and maps their
 // constraints to conversation's and org's errors; conversationpg.WriterIn
 // binds it to a caller's transaction, unused in production until step 4.9.
+// ReadStore holds the page snapshot's message reads and no write;
+// conversationpg.ReadStoreIn binds it to a caller's snapshot, unused in
+// production until step 4.11c. Its queries duplicate message.sql's legacy
+// ones of the same names, which step 4.15 removes.
 package postgres

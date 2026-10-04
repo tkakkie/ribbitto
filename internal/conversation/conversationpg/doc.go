@@ -4,6 +4,7 @@
 // lookup to the module's store on a pool; DefaultChannelCreatorIn binds
 // setup's default-channel write to org's transaction; NewTxRunner runs
 // posting's and branching's transaction over the pool and WriterIn binds
-// posting's writes to it; EventKinds registers its event routers with
-// realtime.
+// posting's writes to it; NewSnapshotRunner runs the page snapshot over the
+// pool and ReadStoreIn binds conversation's reads to it; EventKinds registers
+// its event routers with realtime.
 package conversationpg

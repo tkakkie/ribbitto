@@ -130,8 +130,9 @@ idea (maintainer, one line) or finding (AI)
   comment, proposes the smallest fixes (mechanical first, removal before
   addition), the maintainer picks, accepted ones become `process` issues,
   and a `Retrospective:` summary comment closes the round. The M4
-  retrospective also checks whether any pull request whose tier did not
-  require Grok (B or C) later turned out to have a defect, wherever it was,
+  retrospective also checks whether any merged pull request without a
+  completed Grok report at its head (tiers B and C, and tier A merged on the
+  Muse Code fallback) later turned out to have a defect, wherever it was,
   and revisits the tiers (#339, #498).
 - **Roadmap:** `docs/roadmap.md`, updated when a milestone ends or the
   plan changes.

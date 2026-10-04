@@ -69,9 +69,10 @@ get one adversarial review).
 The template's *Adversarial* field names the review: `Grok`,
 `Muse Code (B)`,
 `Muse Code (Grok unavailable until <date>)`, or
-`skipped (C: <reason>)`, for example "behaviour unchanged" or "outside A and
-B: <area>". The other AI checks the tier against what the diff does, not
-only the paths it touches.
+`skipped (C: <reason>)`, the reason naming the C case, for example
+"dependency bump". "Behaviour unchanged" is never a C reason: in A's and B's
+areas that is tier B. The other AI checks the tier against what the diff
+does, not only the paths it touches.
 
 **A required review counts only when it completes:** a report on the pull
 request at its head commit, each finding with a disposition. A later push

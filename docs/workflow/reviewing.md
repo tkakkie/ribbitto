@@ -95,10 +95,11 @@ unreviewed. If answering Copilot needs a change:
    - ✅ | ❌ Copilot comment — how it was checked
    ```
 
-3. All pass → mark it ready for review again and the normal merge
-   decision. The adversarial review runs again only when the follow-up's
-   diff matches tier A or B
-   ([completion](adversarial-review.md#which-review-runs)); Copilot is not
+3. All pass → if the follow-up's diff matches tier A or B, keep the pull
+   request a draft until that tier's review has completed at the new head
+   with every finding disposed of
+   ([completion](adversarial-review.md#which-review-runs)); then mark it
+   ready for review again and the normal merge decision. Copilot is not
    re-requested; if Copilot reviews again anyway, handle it the same way
    once, then ask the maintainer. A change needing a design or
    specification decision, a failed check or a new blocking finding → ask

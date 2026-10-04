@@ -12,9 +12,9 @@ it to org's factory with a closure. The store maps `account_email_key` to
 `identity.ErrEmailTaken` and every `account_email_*` CHECK to
 `identity.ErrInvalidEmail`; other errors remain wrapped PostgreSQL errors.
 These distinct errors preserve sign-up's field mappings and let setup
-re-check completion after rollback for either. Neither flow uses the creator
-yet: `org.SignUp` switches in 3.11 and `org.Setup` in 3.12. Sign-up keeps its
-own `org.ErrEmailTaken`, distinct from identity's error; 3.11 maps between them.
+re-check completion after rollback for either. `org.SignUp` uses the creator
+and maps identity's errors to `org.ErrEmailTaken` and an `email` field error.
+`org.Setup` keeps the legacy account write until 3.12.
 Their handlers replace sessions as a separate step after account creation.
 
 - **Create** (inside `Replace`, below): 32 random bytes from `crypto/rand` are

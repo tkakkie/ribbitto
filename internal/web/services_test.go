@@ -69,7 +69,9 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		s.Setup, s.SetupSessions = org.NewSetup(postgres.NewSetupStore(pool, appendEvents), hasher, setupToken), sessions
 	}
 	if signUp {
-		s.SignUp, s.SetupSessions = org.NewSignUp(postgres.NewSetupStore(pool, appendEvents), hasher, true), sessions
+		s.SignUp, s.SetupSessions = orgpg.NewSignUp(pool, hasher, true,
+			func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
+			func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }), sessions
 	}
 	return s
 }

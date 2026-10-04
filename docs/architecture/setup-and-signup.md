@@ -25,7 +25,10 @@ injected through `AccountCreatorIn`, `EventAppenderIn` and
 `DefaultChannelCreatorIn` (`infra`'s creator until step 4). After a slug,
 email, handle or setup-row conflict it re-checks on the pool whether setup is
 open, since a concurrent winner may have collided first: closed means
-`ErrSetupCompleted`, open a field error. The root never inspects pgconn.
+`ErrSetupCompleted`. While setup is open, a taken or invalid email or slug
+and an invalid handle are field errors, a setup-row conflict is
+`ErrSetupCompleted`, and a duplicate handle (`ErrHandleTaken`) stays a
+wrapped error, as before. The root never inspects pgconn.
 `cmd/ribbitto` validates `RIBBITTO_SETUP_TOKEN` before opening the database:
 empty disables setup, and a non-empty value needs at least 32 characters.
 When disabled, `/setup` is not registered at all, so GET and POST are the

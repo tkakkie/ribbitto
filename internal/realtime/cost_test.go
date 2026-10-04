@@ -324,7 +324,7 @@ type readingRenderer struct {
 	renders    *realtime.Cache[int64, realtime.Outgoing]
 }
 
-func (r readingRenderer) Render(ctx context.Context, _ realtime.Subscription, e realtime.Event) (realtime.Outgoing, error) {
+func (r readingRenderer) Render(ctx context.Context, e realtime.Event) (realtime.Outgoing, error) {
 	load := func(ctx context.Context) (realtime.Outgoing, error) {
 		if _, err := r.messages.One(ctx, r.membership, e.ChannelID, e.Seq); err != nil {
 			return realtime.Outgoing{}, err

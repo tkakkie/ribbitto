@@ -209,7 +209,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	}
 	var warm []realtime.Outgoing
 	for _, event := range events {
-		out, err := renderer.Render(ctx, realtime.Subscription{}, event)
+		out, err := renderer.Render(ctx, event)
 		if err != nil {
 			t.Fatal(err)
 		}

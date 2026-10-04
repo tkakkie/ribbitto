@@ -24,10 +24,10 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// countingMessages is a MessageReader whose One is counted, can block and
-// can fail. The body names what was read, so tests can tell renders apart.
+// countingMessages is the renderer's reader, whose One is counted, can
+// block and can fail. The body names what was read, so tests can tell
+// renders apart.
 type countingMessages struct {
-	fakeMessages
 	calls   *atomic.Int32
 	release chan struct{}
 	err     error
@@ -53,6 +53,30 @@ func (c countingMessages) Many(ctx context.Context, m authz.Membership, channel 
 		entries = append(entries, entry)
 	}
 	return entries, err
+}
+
+// eventOf builds kind's event as the reader delivers it: the payload from
+// its publisher's codec, and the channel and routing topics its Router gives.
+// A post is moved.ToTopicID's; a move carries moved itself.
+func eventOf(t *testing.T, org domain.ID, seq int64, kind realtime.EventKind, moved topic.Moved) realtime.Event {
+	t.Helper()
+	e := realtime.Event{OrganizationID: org, Seq: seq, Kind: kind}
+	var route realtime.Router
+	switch kind {
+	case message.KindPosted:
+		e.Payload = message.EncodePosted(moved.ChannelID, domain.ID{7}, moved.ToTopicID)
+		route = message.RoutePosted
+	case topic.KindMessagesMoved:
+		e.Payload = topic.EncodeMoved(moved)
+		route = topic.RouteMoved
+	default:
+		t.Fatalf("no codec for %q", kind)
+	}
+	var err error
+	if e.ChannelID, e.Topics, err = route(e.Payload); err != nil {
+		t.Fatal(err)
+	}
+	return e
 }
 
 // waitForRenderWaiters blocks until n renders have joined key's load.
@@ -85,33 +109,27 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	memberOf := func(org domain.ID) authz.Membership {
 		return authz.Membership{Organization: domain.Organization{ID: org}}
 	}
-	event := realtime.Event{OrganizationID: orgA, Seq: 9, Kind: message.KindPosted, ChannelID: domain.ID{2}}
+	base := topic.Moved{ChannelID: domain.ID{2}, FromTopicID: domain.ID{1}, ToTopicID: domain.ID{2}}
+	event := eventOf(t, orgA, 9, message.KindPosted, base)
 	keyOf := func(org domain.ID, e realtime.Event) renderKey {
 		return renderKey{organization: org, channel: e.ChannelID, seq: e.Seq, language: i18n.Language(en)}
 	}
 
 	for _, kind := range []realtime.EventKind{message.KindPosted, topic.KindMessagesMoved} {
 		t.Run("concurrent renders read once/"+string(kind), func(t *testing.T) {
-			event := event
-			event.Kind = kind
-			moved := topic.Moved{ChannelID: event.ChannelID, FromTopicID: domain.ID{1}, ToTopicID: domain.ID{2}}
+			moved := base
 			for i := range 100 {
 				moved.MessageIDs = append(moved.MessageIDs, domain.ID{byte(i)})
 			}
-			event.Payload = topic.EncodeMoved(moved)
+			event := eventOf(t, orgA, 9, kind, moved)
 			calls := &atomic.Int32{}
 			release := make(chan struct{})
 			r := messageRenderer{messages: countingMessages{calls: calls, release: release}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
 			const renders = 20
 			var wg sync.WaitGroup
-			for i := range renders {
+			for range renders {
 				wg.Go(func() {
-					sub := realtime.Subscription{}
-					if i%3 != 0 {
-						selected := domain.ID{byte(i % 3)}
-						sub.Topic = &selected
-					}
-					out, err := r.Render(en, sub, event)
+					out, err := r.Render(en, event)
 					if err != nil || out.ID != 9 || !strings.Contains(string(out.Data), "seq 9") || (kind == topic.KindMessagesMoved && strings.Count(string(out.Data), "<li ") != 100) {
 						t.Errorf("Render = %+v, %v", out, err)
 					}
@@ -132,15 +150,15 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			t.Helper()
 			e.OrganizationID = org
 			r := messageRenderer{messages: countingMessages{calls: calls}, membership: memberOf(org), renders: shared}
-			out, err := r.Render(ctx, realtime.Subscription{}, e)
+			out, err := r.Render(ctx, e)
 			if err != nil {
 				t.Fatal(err)
 			}
 			return string(out.Data)
 		}
-		otherChannel, otherSeq := event, event
-		otherChannel.ChannelID = domain.ID{4}
-		otherSeq.Seq = 10
+		inOtherChannel := base
+		inOtherChannel.ChannelID = domain.ID{4}
+		otherChannel, otherSeq := eventOf(t, orgA, 9, message.KindPosted, inOtherChannel), eventOf(t, orgA, 10, message.KindPosted, base)
 		cases := []struct {
 			name string
 			ctx  context.Context
@@ -175,15 +193,13 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	t.Run("payloads carry the contract's data attributes", func(t *testing.T) {
 		r := messageRenderer{messages: countingMessages{calls: &atomic.Int32{}}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
 		const topicSix = "06000000-0000-0000-0000-000000000000"
+		moved := topic.Moved{ChannelID: event.ChannelID, FromTopicID: domain.ID{5}, ToTopicID: domain.ID{6}, MessageIDs: []domain.ID{{7}, {8}}}
 		for _, kind := range []realtime.EventKind{message.KindPosted, topic.KindMessagesMoved} {
-			e := event
-			e.Kind = kind
-			moved := topic.Moved{ChannelID: e.ChannelID, FromTopicID: domain.ID{5}, ToTopicID: domain.ID{6}, MessageIDs: []domain.ID{{7}, {8}}}
+			seq := int64(9)
 			if kind == topic.KindMessagesMoved {
-				e.Seq = 11 // its own render, not the posted one's
-				e.Payload = topic.EncodeMoved(moved)
+				seq = 11 // its own render, not the posted one's
 			}
-			out, err := r.Render(en, realtime.Subscription{}, e)
+			out, err := r.Render(en, eventOf(t, orgA, seq, kind, moved))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -225,7 +241,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		var wg sync.WaitGroup
 		for range renders {
 			wg.Go(func() {
-				if _, err := failing.Render(en, realtime.Subscription{}, event); !errors.Is(err, failure) {
+				if _, err := failing.Render(en, event); !errors.Is(err, failure) {
 					t.Errorf("Render = %v, want %v", err, failure)
 				}
 			})
@@ -234,8 +250,24 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		close(release)
 		wg.Wait()
 		r := messageRenderer{messages: countingMessages{calls: calls}, membership: memberOf(orgA), renders: shared}
-		if _, err := r.Render(en, realtime.Subscription{}, event); err != nil || calls.Load() != 2 {
+		if _, err := r.Render(en, event); err != nil || calls.Load() != 2 {
 			t.Fatalf("retry after a failure: %v after %d reads, want one fresh read", err, calls.Load())
+		}
+	})
+
+	// A kind without a live render fails, naming the kind, before any read
+	// or cache entry; it never falls through to the posted render.
+	t.Run("a kind without a render is an error naming it", func(t *testing.T) {
+		calls := &atomic.Int32{}
+		r := messageRenderer{messages: countingMessages{calls: calls}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
+		unknown := event
+		unknown.Kind = "test.unknown"
+		_, err := r.Render(en, unknown)
+		if err == nil || !strings.Contains(err.Error(), `"test.unknown"`) || calls.Load() != 0 {
+			t.Fatalf("Render = %v after %d reads; want an error naming the kind and no read", err, calls.Load())
+		}
+		if out, err := r.Render(en, event); err != nil || out.Name != "message" {
+			t.Fatalf("the posted kind after it = %+v, %v", out, err)
 		}
 	})
 }

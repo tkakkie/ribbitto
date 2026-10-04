@@ -52,7 +52,7 @@ func (allowAll) MayReceive(context.Context, kernel.ID, string, realtime.Event) (
 
 type renderMessages struct{}
 
-func (renderMessages) Render(_ context.Context, _ realtime.Subscription, e realtime.Event) (realtime.Outgoing, error) {
+func (renderMessages) Render(_ context.Context, e realtime.Event) (realtime.Outgoing, error) {
 	return realtime.Outgoing{ID: e.Seq, Name: "message"}, nil
 }
 

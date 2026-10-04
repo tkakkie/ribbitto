@@ -95,7 +95,7 @@ func (f authorizerFunc) MayReceive(_ context.Context, _ kernel.ID, _ string, e E
 
 type rendererFunc func(Event) (Outgoing, error)
 
-func (f rendererFunc) Render(_ context.Context, _ Subscription, e Event) (Outgoing, error) {
+func (f rendererFunc) Render(_ context.Context, e Event) (Outgoing, error) {
 	return f(e)
 }
 

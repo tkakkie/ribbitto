@@ -13,14 +13,27 @@ type Organization struct {
 	Name string
 }
 
+// Channel holds the channel fields a channel page displays.
+type Channel struct {
+	ID   domain.ID
+	Name string
+}
+
+// Topic holds the topic fields a channel page displays.
+type Topic struct {
+	ID        domain.ID
+	Name      string
+	IsDefault bool
+}
+
 // ChannelPage holds the sidebar, conversation and channel creation form.
 type ChannelPage struct {
 	Organization              Organization
 	DisplayName, Handle, Role string
-	Topic                     *domain.Topic
-	Topics                    []domain.Topic
-	Current                   domain.Channel
-	Channels                  []domain.Channel
+	Topic                     *Topic
+	Topics                    []Topic
+	Current                   Channel
+	Channels                  []Channel
 	Name, Error               string
 	Body, BodyError           string
 	BranchError, BranchName   string
@@ -59,7 +72,7 @@ func conversationURL(page ChannelPage) string {
 	return ConversationURL(page.Organization.Slug, page.Current.ID, id)
 }
 
-func topicName(ctx context.Context, topic domain.Topic) string {
+func topicName(ctx context.Context, topic Topic) string {
 	if topic.IsDefault {
 		return i18n.T(ctx, "topic.default")
 	}
@@ -79,8 +92,9 @@ func olderURL(page ChannelPage) string {
 	return fmt.Sprintf("%s?before=%d", conversationURL(page), page.Messages[0].EventSeq)
 }
 
-// Channel renders the desktop chat layout.
-templ Channel(stylesheetURL string, page ChannelPage) {
+// ChannelScreen renders the desktop chat layout. The name leaves Channel to
+// the view model.
+templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 	{{ title := page.Current.Name + " · " + page.Organization.Name }}
 	if page.Topic != nil {
 		{{ title = topicName(ctx, *page.Topic) + " · " + title }}

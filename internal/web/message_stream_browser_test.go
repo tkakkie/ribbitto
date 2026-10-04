@@ -50,7 +50,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 					stale, fresh = []int{20, 30, 35}, []int{20, 35}
 				}
 				snapshot := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
-					Topic: &domain.Topic{ID: selected}, EventCursor: new(int64), Older: true}
+					Topic: &view.Topic{ID: selected}, EventCursor: new(int64), Older: true}
 				snapshot.Messages = streamTestMessages(selected, initial...)
 				events := make(chan realtime.Outgoing, 1)
 				requests := make(chan browserHistory)
@@ -90,7 +90,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 						}
 						return
 					}
-					templ.Handler(view.Channel("/static/css/app.css", snapshot)).ServeHTTP(w, r)
+					templ.Handler(view.ChannelScreen("/static/css/app.css", snapshot)).ServeHTTP(w, r)
 				})
 				server := httptest.NewServer(mux)
 				defer server.Close()
@@ -142,7 +142,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 					response := snapshot
 					response.Before, response.EventCursor, response.Older = 40, nil, older
 					response.Messages = streamTestMessages(selected, ids...)
-					return streamTestMarkup(t, view.Channel("/static/css/app.css", response))
+					return streamTestMarkup(t, view.ChannelScreen("/static/css/app.css", response))
 				}
 				assertBrowserItems(t, page, initial)
 				if mode == "before" {

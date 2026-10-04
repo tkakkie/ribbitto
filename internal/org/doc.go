@@ -23,7 +23,9 @@
 // ErrSlugUnavailable are the transaction runner, org's transaction-bound
 // writes and the setup-state read through which sign-up owns its transaction;
 // setup follows in 3.12. EventAppender and EventAppenderIn inject realtime
-// writes into that transaction.
+// writes into that transaction. DefaultChannelCreator and
+// DefaultChannelCreatorIn declare the default-channel write setup will inject
+// in 3.12; infra/postgres implements them until conversation does in step 4.
 //
 // Setup (NewSetup, SetupInput, SetupResult, SetupStore, ErrSetupToken and
 // ErrSetupCompleted) authorizes and validates installation-wide first-run setup

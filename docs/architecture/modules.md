@@ -46,7 +46,7 @@ the temporary implementation behind it.
 | posting, setup, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | each flow's own step: 3, 4 |
 | the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |
 | posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`, since 3.8), members (`MemberDirectoryIn`, from `orgpg.MembersIn`, since 3.7) and cursor (`EventCursorIn`, from `orgpg.EventCursorIn`, since 3.8), each adapted by a closure | 3 | 4 |
-| setup (`org`) | `conversation` default channel | 3 | 4 |
+| setup (`org`) | `conversation` default channel through `org.DefaultChannelCreatorIn` (temporarily `infra`'s `DefaultChannelCreatorIn` over its channel store, adapted by a closure; not wired until 3.12) | 3.12b | 4 |
 
 `app/message.Reader` keeps its `org.Directory` field until step 4, when
 conversation declares its own.

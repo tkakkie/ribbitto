@@ -135,7 +135,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	installer := orgpg.NewSetup(pool, hasher, token,
 		func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
 		func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) },
-		func(tx platform.Tx) org.DefaultChannelCreator { return postgres.DefaultChannelCreatorIn(tx) })
+		func(tx platform.Tx) org.DefaultChannelCreator { return conversationpg.DefaultChannelCreatorIn(tx) })
 	// Preflight is read-only; Complete still arbitrates concurrent setup attempts.
 	open, err := installer.Open(ctx)
 	if err != nil {

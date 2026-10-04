@@ -9,8 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
@@ -41,7 +41,7 @@ func newSetup(pool *pgxpool.Pool, hasher *identity.Hasher, state org.SetupState,
 }
 
 func defaultChannel(tx platform.Tx) org.DefaultChannelCreator {
-	return postgres.DefaultChannelCreatorIn(tx)
+	return conversationpg.DefaultChannelCreatorIn(tx)
 }
 
 type rawSetupOrganization struct {

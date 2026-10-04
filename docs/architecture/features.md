@@ -82,8 +82,8 @@ infra's `pgtest` fixtures until conversation moves in step 4.
 - setup (`org.Setup`, in one transaction through `TxRunner`) writes `organization`, `account`, `member`, `channel` and
   `setup`, so it creates `identity`'s first `account` and the `channel`
   feature's default channel (a completed setup must never lack one) through
-  the injected `AccountCreatorIn` and `DefaultChannelCreatorIn` (`infra`'s
-  channel store until conversation's in step 4), and its event through
+  the injected `AccountCreatorIn` and `DefaultChannelCreatorIn`
+  (conversation's store), and its event through
   `EventAppenderIn`;
 - creating a channel (`channel`) writes its default `topic` in the same
   statement, so a channel never exists without one (decision 21, #307);

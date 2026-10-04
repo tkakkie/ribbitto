@@ -69,7 +69,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		s.Setup, s.SetupSessions = orgpg.NewSetup(pool, hasher, setupToken,
 			func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
 			func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) },
-			func(tx platform.Tx) org.DefaultChannelCreator { return postgres.DefaultChannelCreatorIn(tx) }), sessions
+			func(tx platform.Tx) org.DefaultChannelCreator { return conversationpg.DefaultChannelCreatorIn(tx) }), sessions
 	}
 	if signUp {
 		s.SignUp, s.SetupSessions = orgpg.NewSignUp(pool, hasher, true,

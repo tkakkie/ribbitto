@@ -22,7 +22,7 @@ whether setup is open, and validates all fields before using the shared
 `TxRunner`, appending `member.joined` after the membership, with identity's
 account, the event and the default channel ([`channels.md`](../domain/channels.md))
 injected through `AccountCreatorIn`, `EventAppenderIn` and
-`DefaultChannelCreatorIn` (`infra`'s creator until step 4). After a slug,
+`DefaultChannelCreatorIn` (`conversationpg.DefaultChannelCreatorIn`). After a slug,
 email, handle or setup-row conflict it re-checks on the pool whether setup is
 open, since a concurrent winner may have collided first: closed means
 `ErrSetupCompleted`. While setup is open, a taken or invalid email or slug

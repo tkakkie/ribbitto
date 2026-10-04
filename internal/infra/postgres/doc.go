@@ -1,10 +1,8 @@
-// Package postgres implements app and org persistence interfaces using
-// PostgreSQL.
+// Package postgres implements app persistence interfaces using PostgreSQL;
+// conversation's store, not this package, creates setup's default channel.
 // Connections, migrations and test databases are in internal/platform/postgres.
 // The event-writing flows append realtime's events through the EventAppender
-// they are given, in their own transactions. Setup and sign-up are org's use
-// cases; DefaultChannelCreatorIn creates setup's default channel on org's
-// transaction until conversation does in step 4.
+// they are given, in their own transactions.
 // Posting and branching take org's event_seq through the EventSequenceIn
 // they are given (implemented by orgpg.SequenceIn), on their transaction.
 // MessageReader is given both author lookups and the page cursor as

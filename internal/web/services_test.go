@@ -62,9 +62,9 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Authz:     orgpg.NewAuthorizer(pool),
 		Channels:  channel.New(postgres.NewChannelStore(pool)),
 		Topics:    postgres.NewTopicStore(pool),
-		Messages:  postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers},
-		Posting:   message.New(postgres.NewPostingStore(pool, appendEvents)),
-		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, appendEvents), nil),
+		Messages:  postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers, Cursor: eventCursor},
+		Posting:   message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents)),
+		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), nil),
 	}
 	if setupToken != "" {
 		s.Setup, s.SetupSessions = org.NewSetup(postgres.NewSetupStore(pool, appendEvents), hasher, setupToken), sessions
@@ -81,3 +81,11 @@ func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.App
 
 // lookupMembers adapts org's directory to the reader's consumer interface.
 func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }
+
+// eventSequence adapts org's sequence to the posting and branching stores'
+// consumer interface.
+func eventSequence(tx platform.Tx) postgres.EventSequence { return orgpg.SequenceIn(tx) }
+
+// eventCursor adapts org's committed event_seq to the reader's consumer
+// interface.
+func eventCursor(s platform.Snapshot) postgres.EventCursor { return orgpg.EventCursorIn(s) }

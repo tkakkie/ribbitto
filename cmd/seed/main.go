@@ -199,7 +199,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	channels := channel.New(postgres.NewChannelStore(pool))
-	posts := message.New(postgres.NewPostingStore(pool, appendEvents))
+	posts := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
 	var general domain.Channel
 	var generalMessages []scriptMessage
 	for _, conversation := range data.Channels {
@@ -230,7 +230,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	if !loadTest {
-		branches := topic.NewBrancher(postgres.NewBranchStore(pool, appendEvents), nil)
+		branches := topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), nil)
 		if err := seedTopics(ctx, posts, branches, members, general, generalMessages); err != nil {
 			return fmt.Errorf("seeding topics: %w", err)
 		}
@@ -253,3 +253,11 @@ func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.App
 
 // lookupMembers adapts org's directory to the reader's consumer interface.
 func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }
+
+// eventSequence adapts org's sequence to the posting and branching stores'
+// consumer interface.
+func eventSequence(tx platform.Tx) postgres.EventSequence { return orgpg.SequenceIn(tx) }
+
+// eventCursor adapts org's committed event_seq to the reader's consumer
+// interface.
+func eventCursor(s platform.Snapshot) postgres.EventCursor { return orgpg.EventCursorIn(s) }

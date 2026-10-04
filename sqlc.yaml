@@ -10,6 +10,7 @@ sql:
         package: sqlcgen
         out: internal/infra/postgres/sqlcgen
         sql_package: pgx/v5
+        omit_unused_structs: true
   # Each module has its own entry and generated package (decision 26).
   - engine: postgresql
     schema: db/migrations/

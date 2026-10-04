@@ -21,12 +21,15 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
 | `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
-| `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `infra/postgres/event_appender.go` (the flows' appender interface), `event_reader.go` (now org's cursor bounds, committed sequences and retention lock and boundary, until step 3); `db/queries/event_log.sql`; `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
+| `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `infra/postgres/event_appender.go` (the flows' appender interface), `realtime_adapters.go` (org's adapters for realtime until step 3: cursor bounds, committed sequences, the retention lock and boundary; and the publishers' kind list); `db/queries/event_log.sql` (those adapters' queries); `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
 
-The shared kernel, which any feature may use: the IDs and value types in
-`internal/domain`, the per-organisation `event_seq` and `event_log_boundary_seq`, and the authorisation
-entry point `app/authz`. Other files in `internal/web` (routing, forms,
-middleware, views) and the composition roots serve every feature.
+The shared kernel, which any feature may use: `internal/kernel` (`ID`) and,
+until their features move, the IDs and value types in `internal/domain`. The
+per-organisation `event_seq` and `event_log_boundary_seq` and the
+authorisation entry point `app/authz` are `org`'s ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)); other
+features use them only through the flows listed below and `app/authz`.
+Other files in `internal/web` (routing, forms, middleware, views) and the
+composition roots serve every feature.
 
 `ChannelStore` and `MessageStore` accept a pool or a caller-owned
 transaction; `PostingStore` owns the posting transaction (sequence first,
@@ -46,7 +49,7 @@ those tables. `MessageReader` shares one read-only repeatable-read transaction
 across the channel and sidebar (through `channel.Service`), the selected topic
 and the bounded topic list (through `topic.Store`), history, both author
 lookups and the topic batch through `topic.Directory.LookupTopics`, plus the
-shared-kernel `organization.event_seq` on the latest channel or topic page.
+org's `organization.event_seq` on the latest channel or topic page.
 It returns `message.ChannelPage`; older pages have no event cursor.
 `MessageReader.One` reads one message, its authors and topic in its own snapshot.
 Live labels come from that shared load through the existing render cache, keyed
@@ -77,8 +80,10 @@ topic posts rely on the lookup inside the posting transaction.
   appending the payload their publisher's codec encoded
   immediately after the message, member or move, so `event_log` commits with
   the entity and its sequence (#156, #257, #305);
-- realtime retention (#161) writes org's `event_log_boundary_seq`,
-  because the boundary and events must be read in the same snapshot.
+- realtime retention (#161) raises org's `event_log_boundary_seq`, under
+  org's organisation lock, in the transaction that deletes the events,
+  through the `RetentionBoundaryIn` adapter in `infra/postgres`'s
+  `realtime_adapters.go` (org's until step 3).
 
 Their atomicity and `event_seq` ordering stay as they are. They are
 resolved at migration, by an orchestrating module or a shared transaction.

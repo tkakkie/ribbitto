@@ -696,9 +696,12 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 	})
 }
 
-// A topic subscription delivers only its topic's messages, read from the
-// shared render; other topics' events are skipped without authorization
-// and still move the cursor (#304).
+// A topic subscription delivers an event without routing topics (a post
+// written before topics) only when its shared render's topic is the
+// subscription's: that render is the fallback, since events with routing
+// topics are routed before rendering (TestStreamSubscriptionInterest). Other
+// topics' events are skipped without authorization and still move the
+// cursor (#304).
 func TestStreamTopicSubscriptionSkipsOtherTopics(t *testing.T) {
 	topicA, topicB := kernel.ID{0x7a}, kernel.ID{0x7b}
 	topics := map[int64]kernel.ID{1: topicA, 2: topicB, 3: topicA}

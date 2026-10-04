@@ -47,8 +47,8 @@ func NewEventSequences(db sqlcgen.DBTX) *EventSequences {
 }
 
 // CommittedSequences returns the committed event_seq of each given
-// organisation that exists, in one query; it reads org's shared-kernel
-// watermark and writes nothing.
+// organisation that exists, in one query; it reads org's event_seq and
+// writes nothing.
 func (r *EventSequences) CommittedSequences(ctx context.Context, organizations []domain.ID) (map[domain.ID]int64, error) {
 	ids := make([]pgtype.UUID, len(organizations))
 	for i, org := range organizations {

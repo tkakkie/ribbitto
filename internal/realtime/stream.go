@@ -10,8 +10,8 @@ import (
 )
 
 // EventReader reads an organisation's durable events with a sequence above
-// after, in sequence order, at most limit of them. infra/postgres implements
-// it until the reader moves into this module.
+// after, in sequence order, at most limit of them. The module's store
+// implements it (realtimepg.NewReader).
 // Each batch checks the replay boundary and committed event_seq in the same
 // snapshot as its rows. A cursor below the boundary or above event_seq returns
 // ErrCursorExpired, including for a zero-limit read; equality is valid.
@@ -92,7 +92,8 @@ var errHeartbeatDue = errors.New("realtime: heartbeat due")
 //
 // Cursor rules:
 //   - An event outside the subscription, of a kind this stream does not deliver
-//     (including kinds it does not know), or explicitly denied by the
+//     (including an unregistered kind, whose envelope the reader keeps with no
+//     channel), or explicitly denied by the
 //     Authorizer is skipped, and the cursor moves past it, so a filtered
 //     event cannot keep the loop spinning.
 //   - Cancellation of ctx is checked before every event, so nothing is sent

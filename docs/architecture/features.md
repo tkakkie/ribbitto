@@ -17,11 +17,11 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | Feature | Packages and files | Owns |
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in, sign-up | the `identity` module (root, store, `identitypg`; `db/queries/identity/`), `app/signup`; `infra/postgres` `signup.go`; `web` `signin.go`, `signup.go` | `account`, `session` |
-| `org`: organisations, memberships, authorisation, first-run setup | the `org` module's root (`internal/org`: authorisation, `Organization`, `Member`, `Role`, organisation name, slug and handle rules, and the `AccountCreator`/`AccountCreatorIn` consumer contract; step 3, migrating), `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
+| `org`: organisations, memberships, authorisation, first-run setup | the `org` module (`internal/org`: authorisation, `Organization`, `Member`, `Role`, organisation name, slug and handle rules, and the `AccountCreator`/`AccountCreatorIn` consumer contract; step 3, migrating; its store `internal/org/internal/postgres` and wiring `orgpg`, with `db/queries/org/` for `realtime`'s bounds, sequences and retention boundary), `app/member`, `app/setup`; `infra/postgres` `authz.go`, `member.go`, `setup.go`; `web` `org.go`, `setup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
 | `channel`: public conversations | `app/channel`; `domain/channel.go`; `infra/postgres/channel.go`; `db/queries/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
 | `message`: plain-text posts and history | `app/message`; `domain/message.go`; `infra/postgres/message.go`, `message_reader.go`; `db/queries/message.sql`; `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
 | `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `app/topic`; `domain/topic.go`; `infra/postgres/topic.go`, `branch.go`; `db/queries/topic.sql`; `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
-| `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `infra/postgres/event_appender.go` (the flows' appender interface), `realtime_adapters.go` (org's adapters for realtime until step 3: cursor bounds, committed sequences, the retention lock and boundary; and the publishers' kind list); `db/queries/event_log.sql` (those adapters' queries); `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
+| `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `infra/postgres/event_appender.go` (the flows' appender interface), `realtime_adapters.go` (the publishers' kind list, until each module registers its own); `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
 
 The shared kernel, which any feature may use: `internal/kernel` (`ID`) and,
 until their features move, the IDs and value types in `internal/domain`. The
@@ -88,8 +88,7 @@ Identity owns the distinct `ErrEmailTaken` and `ErrInvalidEmail` mappings.
   the entity and its sequence (#156, #257, #305);
 - realtime retention (#161) raises org's `event_log_boundary_seq`, under
   org's organisation lock, in the transaction that deletes the events,
-  through the `RetentionBoundaryIn` adapter in `infra/postgres`'s
-  `realtime_adapters.go` (org's until step 3).
+  through `orgpg.RetentionBoundaryIn`, which `org`'s store implements.
 
 Their atomicity and `event_seq` ordering stay as they are. They are
 resolved at migration, by an orchestrating module or a shared transaction.

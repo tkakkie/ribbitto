@@ -30,3 +30,12 @@ sql:
         out: internal/realtime/internal/postgres/sqlcgen
         sql_package: pgx/v5
         omit_unused_structs: true
+  - engine: postgresql
+    schema: db/migrations/
+    queries: db/queries/org/
+    gen:
+      go:
+        package: sqlcgen
+        out: internal/org/internal/postgres/sqlcgen
+        sql_package: pgx/v5
+        omit_unused_structs: true

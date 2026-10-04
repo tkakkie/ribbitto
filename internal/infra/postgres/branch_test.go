@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"slices"
 	"testing"
 
@@ -79,7 +80,7 @@ func TestBranchStore(t *testing.T) {
 	}
 	// Replay must preserve both durable events and their routing IDs, even
 	// when the batch boundary falls between the move and its notice.
-	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
 	// Branching changes the message, never its posting-time routing data.
 	for _, m := range posted {
 		events, err := reader.EventsAfter(ctx, acme.OrganizationID, m.EventSeq-1, 1)

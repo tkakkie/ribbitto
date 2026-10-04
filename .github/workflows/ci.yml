@@ -41,6 +41,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -70,6 +71,17 @@ jobs:
       # The Makefile pins golangci-lint for both local checks and CI.
       - name: check
         run: make check
+
+      - name: package-import edge changes
+        # HEAD^1 is the PR merge commit's base, or the previous commit on main.
+        run: |
+          changes=$(bash scripts/deps.sh --diff HEAD^1)
+          printf '%s\n' "$changes" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$changes" | awk '/^- Added: `/ {
+            sub(/^- Added: `/, ""); sub(/`$/, "")
+            gsub(/%/, "%25")
+            printf "::notice file=docs/dependencies.md::Added package-import edge: %s\n", $0
+          }'
 
       # Fails when a known vulnerability is reachable from our code; see
       # "Checks" in the README for what to do.

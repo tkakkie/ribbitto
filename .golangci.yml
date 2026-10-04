@@ -112,6 +112,18 @@ linters:
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/realtime/internal/postgres
               desc: Only realtimepg and the store's own tests import realtime's store; see decision 26.
+        orgpg:
+          list-mode: lax
+          files: ["$all", "!$test", "!**/cmd/*/*.go", "!**/cmd/*/**/*.go"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/internal/org/orgpg
+              desc: Only cmd/* and tests import a module's wiring; see decision 26.
+        orgstore:
+          list-mode: lax
+          files: ["$all", "!**/internal/org/orgpg/*.go", "!**/internal/org/internal/postgres/*.go", "!**/internal/org/internal/postgres/**/*.go"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/internal/org/internal/postgres
+              desc: Only orgpg and the store's own tests import org's store; see decision 26.
         app:
           list-mode: lax
           files: ["**/internal/app/*.go", "**/internal/app/**/*.go", "!$test"]
@@ -142,8 +154,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
             # Temporary, until the migration's last step: the flows' appender
-            # interface, org's adapters for realtime (cursor bounds, committed
-            # sequences, the retention lock and boundary) and the kind list.
+            # interface and the kind list.
             - github.com/tkakkie/ribbitto/internal/realtime$
             # Temporary, until the migration's last step: infra/postgres/pgtest
             # delegates to the platform's database lifecycle, and the legacy

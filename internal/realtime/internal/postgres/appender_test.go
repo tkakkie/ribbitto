@@ -1,6 +1,7 @@
 package postgres_test
 
 import (
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"reflect"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestAppenderAudience(t *testing.T) {
 		})
 		return seq, err
 	}
-	reader := postgres.NewReader(pool, infra.EventBoundsIn, infra.EventKinds())
+	reader := postgres.NewReader(pool, orgpg.BoundsIn, infra.EventKinds())
 	for _, audience := range []*domain.ID{nil, &f.MemberID} {
 		seq, err := appendOne(audience)
 		requireNoError(t, err)

@@ -3,6 +3,7 @@ package realtime_test
 import (
 	"context"
 	"errors"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 // its bounds and before it reads the rows; the reader's snapshot must hide it.
 func interceptBounds(commit func()) realtime.BoundsIn {
 	return func(snapshot platform.Snapshot) realtime.Bounds {
-		return interceptedBounds{Bounds: postgres.EventBoundsIn(snapshot), commit: &commit}
+		return interceptedBounds{Bounds: orgpg.BoundsIn(snapshot), commit: &commit}
 	}
 }
 
@@ -71,7 +72,7 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 		_, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 		must(err)
 	}
-	cached := realtime.NewCachedEvents(t.Context(), realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds()), realtime.NewHub(), 8, time.Minute)
+	cached := realtime.NewCachedEvents(t.Context(), realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds()), realtime.NewHub(), 8, time.Minute)
 	got, err := cached.EventsAfter(ctx, f.OrganizationID, 2, 1)
 	must(err)
 	if len(got) != 1 || got[0].Seq != 3 || realtime.CachedLen(cached) != 1 {
@@ -118,9 +119,9 @@ func TestRetentionReplay(t *testing.T) {
 			post()
 			_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
 			must(err)
-			reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
+			reader := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
 			expire := func() {
-				must(realtimepg.NewCleaner(pool, postgres.RetentionBoundaryIn).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
+				must(realtimepg.NewCleaner(pool, orgpg.RetentionBoundaryIn).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
 			}
 			var events realtime.EventReader = reader
 			cursor, wantCursor := int64(1), int64(1)

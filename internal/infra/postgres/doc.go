@@ -5,9 +5,9 @@
 // Posting and branching take org's event_seq through the EventSequenceIn
 // they are given (implemented by orgpg.SequenceIn), on their transaction.
 // MessageReader is given both author lookups and the page cursor as
-// snapshot-bound factories: identity's accounts, its own MemberDirectoryIn
-// and EventCursorIn (implemented by orgpg.MembersIn and orgpg.EventCursorIn),
-// until conversation owns the page snapshot.
+// snapshot-bound factories, until conversation owns the page snapshot:
+// identity's accounts, MemberDirectoryIn (implemented by orgpg.MembersIn) and
+// EventCursorIn (implemented by orgpg.EventCursorIn).
 // EventKinds, in realtime_adapters.go, lists conversation's kinds for
 // realtime's reader until conversation registers its own in step 4.
 package postgres

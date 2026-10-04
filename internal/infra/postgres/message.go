@@ -168,3 +168,11 @@ func (s *MessageStore) GetMessages(ctx context.Context, organizationID, channelI
 	}
 	return messages, nil
 }
+
+func uuidArray(ids []domain.ID) []pgtype.UUID {
+	result := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		result[i] = pgtype.UUID{Bytes: id, Valid: true}
+	}
+	return result
+}

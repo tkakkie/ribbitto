@@ -13,6 +13,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -153,3 +154,6 @@ func TestEventLogAudienceAndRollback(t *testing.T) {
 // appendEvents adapts realtime's appender to the consumer interface the
 // event-writing stores declare (decision 26).
 func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// lookupMembers adapts org's directory to the reader's consumer interface.
+func lookupMembers(s platform.Snapshot) postgres.MemberDirectory { return orgpg.MembersIn(s) }

@@ -44,8 +44,11 @@ the temporary implementation behind it.
 | posting, setup, sign-up, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | each flow's own step: setup and sign-up 3, posting and branching 4 |
 | posting, setup, sign-up, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | each flow's own step: 3, 4 |
 | the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |
-| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence, members, cursor | 3 | 4 |
+| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence, members (infra's `MemberDirectoryIn`, implemented by `orgpg.MembersIn` through a closure, since 3.7), cursor | 3 | 4 |
 | setup (`org`) | `conversation` default channel | 3 | 4 |
+
+`app/message.Reader` keeps its `org.Directory` field until step 4, when
+conversation declares its own.
 
 Inside `conversation`, a channel's default topic, branching's moves and
 notice, and the channel and topic reads of posting and the page snapshot

@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 func TestChangeHandle(t *testing.T) {
@@ -19,16 +20,16 @@ func TestChangeHandle(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// acme: alice, bob and six racers; globex: carol; dave has no membership.
-	acmeID := pgtest.Organization(t, pool, "acme", "Acme", 0)
-	globexID := pgtest.Organization(t, pool, "globex", "Globex", 0)
+	acmeID := fixtureOrganization(t, pool, "acme", "Acme", 0)
+	globexID := fixtureOrganization(t, pool, "globex", "Globex", 0)
 	for _, name := range []string{"alice", "bob", "carol", "dave", "racer1", "racer2", "racer3", "racer4", "racer5", "racer6"} {
-		account := pgtest.Account(t, pool, name+"@example.org", name)
+		account := fixtureAccount(t, pool, name+"@example.org", name)
 		orgID := acmeID
 		if name == "carol" {
 			orgID = globexID
 		}
 		if name != "dave" {
-			pgtest.Member(t, pool, orgID, account, org.RoleMember, name, 1)
+			fixtureMember(t, pool, orgID, account, org.RoleMember, name, 1)
 		}
 	}
 	accounts := map[string]*identity.Account{}
@@ -40,7 +41,7 @@ func TestChangeHandle(t *testing.T) {
 		accounts[a.DisplayName] = &a
 	}
 	requireNoError(t, rows.Err())
-	service := org.NewHandleChanger(org.NewAuthorizer(postgres.NewAuthzStore(pool)), postgres.NewMemberStore(pool))
+	service := orgpg.NewHandleChanger(pool)
 	change := func(name, slug, handle string) (string, error) {
 		return service.ChangeHandle(ctx, accounts[name], slug, handle)
 	}
@@ -71,7 +72,7 @@ func TestChangeHandle(t *testing.T) {
 		})
 	}
 	// The store is scoped too: another organisation's member id matches nothing.
-	var acme, carol domain.ID
+	var acme, carol kernel.ID
 	requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT id FROM organization WHERE slug = 'acme'), (SELECT m.id FROM member m JOIN account a ON a.id = m.account_id WHERE a.email = 'carol@example.org')").Scan(&acme, &carol))
 	if err := postgres.NewMemberStore(pool).UpdateHandle(ctx, acme, carol, "hijack"); !errors.Is(err, org.ErrNotFound) || handles(t, pool)["carol"] != "carol" {
 		t.Fatalf("cross-organisation update: %v", err)

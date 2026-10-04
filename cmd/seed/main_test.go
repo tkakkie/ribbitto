@@ -22,7 +22,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 )
 
 type snapshot struct {
@@ -176,11 +176,11 @@ func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 	if err := pool.QueryRow(t.Context(), "SELECT id FROM account WHERE email = 'mira@example.test'").Scan(&accountID); err != nil {
 		t.Fatal(err)
 	}
-	member, err := org.NewAuthorizer(postgres.NewAuthzStore(pool)).Member(t.Context(), &identity.Account{ID: accountID}, "paper-lantern")
+	member, err := orgpg.NewAuthorizer(pool).Member(t.Context(), &identity.Account{ID: accountID}, "paper-lantern")
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
+	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn, Members: lookupMembers}
 	for i, name := range []string{"rooftop-garden", "garden-time"} {
 		var channelID, topicID domain.ID
 		var total int

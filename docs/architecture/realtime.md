@@ -107,9 +107,9 @@ rendering it as a post. A render depends only on the event
 (`Renderer.Render(ctx, event)`); the stream has already applied the
 subscription, and the renderer reads only `MessageReader`'s `One` and `Many`.
 Setup and sign-up append `member.joined` (`org.EncodeJoined`) the same way immediately after
-the member, with its `joined_event_seq`. Sign-up's root use case owns that
-transaction and injects realtime's writer through `org.EventAppenderIn`;
-setup keeps its infra transaction until 3.12. Sign-up does not raise the hub;
+the member, with its `joined_event_seq`. Their root use cases own that
+transaction and inject realtime's writer through `org.EventAppenderIn`.
+Setup and sign-up do not raise the hub;
 the watermark covers it. `realtime.Event` is an envelope: organisation,
 sequence, kind, audience, channel, routing `Topics` and the stored `Payload`,
 which consumers decode through the publisher's codec; kinds are an open list.

@@ -8,14 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Account struct {
-	ID           pgtype.UUID
-	Email        string
-	DisplayName  string
-	PasswordHash string
-	CreatedAt    pgtype.Timestamptz
-}
-
 type Channel struct {
 	ID                    pgtype.UUID
 	OrganizationID        pgtype.UUID
@@ -24,16 +16,6 @@ type Channel struct {
 	CreatedAt             pgtype.Timestamptz
 	DefaultTopicID        pgtype.UUID
 	DefaultTopicIsDefault bool
-}
-
-type Member struct {
-	ID             pgtype.UUID
-	OrganizationID pgtype.UUID
-	AccountID      pgtype.UUID
-	Role           string
-	JoinedEventSeq int64
-	CreatedAt      pgtype.Timestamptz
-	Handle         string
 }
 
 type Message struct {
@@ -45,15 +27,6 @@ type Message struct {
 	EventSeq       int64
 	CreatedAt      pgtype.Timestamptz
 	TopicID        pgtype.UUID
-}
-
-type Organization struct {
-	ID                  pgtype.UUID
-	Slug                string
-	Name                string
-	EventSeq            int64
-	CreatedAt           pgtype.Timestamptz
-	EventLogBoundarySeq int64
 }
 
 type Topic struct {

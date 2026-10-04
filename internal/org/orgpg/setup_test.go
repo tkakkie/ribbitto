@@ -1,4 +1,4 @@
-package postgres_test
+package orgpg_test
 
 import (
 	"context"
@@ -8,24 +8,49 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
-// Hold all attempts after the open check, so every contender reaches Create.
+// Hold all attempts after the open check, so every contender reaches the
+// transaction; the re-check after a failed one passes once released.
 type setupBarrier struct {
-	org.SetupStore
+	org.SetupState
 	ready, release chan struct{}
 }
 
 func (s setupBarrier) Open(ctx context.Context) (bool, error) {
-	open, err := s.SetupStore.Open(ctx)
-	s.ready <- struct{}{}
-	<-s.release
+	open, err := s.SetupState.Open(ctx)
+	select {
+	case <-s.release:
+	default:
+		s.ready <- struct{}{}
+		<-s.release
+	}
 	return open, err
+}
+
+func newSetup(pool *pgxpool.Pool, hasher *identity.Hasher, state org.SetupState, writes org.RegistrationWriterIn, accounts org.AccountCreatorIn) *org.Setup {
+	return org.NewSetup(state, orgpg.NewTxRunner(pool), writes, accounts, signupEvents, defaultChannel, hasher, "secret")
+}
+
+func defaultChannel(tx platform.Tx) org.DefaultChannelCreator {
+	return postgres.DefaultChannelCreatorIn(tx)
+}
+
+type rawSetupOrganization struct {
+	org.RegistrationWriter
+	slug string
+}
+
+func (w rawSetupOrganization) CreateOrganization(ctx context.Context, name, _ string) (kernel.ID, error) {
+	return w.RegistrationWriter.CreateOrganization(ctx, name, w.slug)
 }
 
 func TestSetup(t *testing.T) {
@@ -36,8 +61,7 @@ func TestSetup(t *testing.T) {
 		t.Run(fmt.Sprint(attempts), func(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
-			store := postgres.NewSetupStore(pool, appendEvents)
-			s := org.NewSetup(store, hasher, "secret")
+			s := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel)
 			input := org.SetupInput{OrganizationName: "Example", Slug: "example", Email: " Owner@Example.org ", DisplayName: " Owner ", Handle: " Owner ", Password: "long enough password"}
 			counts := func(want int) {
 				t.Helper()
@@ -54,15 +78,20 @@ func TestSetup(t *testing.T) {
 			}
 			counts(0)
 			for _, tc := range []struct{ slug, email, handle, field string }{{"example", "A@b", "owner", "email"}, {"example", "e\u0301@b", "owner", "email"}, {"Bad", "a@b", "owner", "slug"}, {"example", "a@b", "Owner", "handle"}, {"example", "a@b", "all", "handle"}} {
-				_, err := store.Create(ctx, "Example", tc.slug, tc.email, "Owner", tc.handle, "$argon2id$test")
+				// Substitute after validation so the real constraints reject the raw values.
+				writes := func(tx platform.Tx) org.RegistrationWriter {
+					return rawSetupOrganization{rawSignupMember{orgpg.RegistrationWriterIn(tx), tc.handle}, tc.slug}
+				}
+				accounts := func(tx platform.Tx) org.AccountCreator { return rawSignupAccount{signupAccount(tx), tc.email} }
+				_, err := newSetup(pool, hasher, orgpg.NewSetupState(pool), writes, accounts).Complete(ctx, "secret", input)
 				var fields org.ValidationErrors
 				if !errors.As(err, &fields) || fields[tc.field] == nil {
 					t.Fatalf("database validation for %s: %v", tc.field, err)
 				}
 				counts(0)
 			}
-			barrier := setupBarrier{SetupStore: store, ready: make(chan struct{}, attempts), release: make(chan struct{})}
-			contender := org.NewSetup(barrier, hasher, "secret")
+			barrier := setupBarrier{SetupState: orgpg.NewSetupState(pool), ready: make(chan struct{}, attempts), release: make(chan struct{})}
+			contender := newSetup(pool, hasher, barrier, orgpg.RegistrationWriterIn, signupAccount)
 			results := make(chan error, attempts)
 			for i := range attempts {
 				go func() {
@@ -102,8 +131,8 @@ func TestSetup(t *testing.T) {
 			var completed bool
 			requireNoError(t, pool.QueryRow(ctx, "SELECT s.organization_id, m.account_id, o.event_seq, m.joined_event_seq, m.role, m.handle, s.completed_at IS NOT NULL FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = s.organization_id WHERE s.id").Scan(&organizationID, &accountID, &seq, &joined, &role, &handle, &completed))
 			assertEventLog(t, pool, organizationID.Bytes, 1)
-			account, err := sqlcgen.New(pool).GetAccountByID(ctx, accountID)
-			requireNoError(t, err)
+			var account struct{ Email, DisplayName, PasswordHash string }
+			requireNoError(t, pool.QueryRow(ctx, "SELECT email, display_name, password_hash FROM account WHERE id = $1", accountID).Scan(&account.Email, &account.DisplayName, &account.PasswordHash))
 			matches, err := hasher.Verify(ctx, input.Password, account.PasswordHash)
 			if err != nil || !matches || seq != 1 || joined != 1 || role != "owner" || handle != "owner" || !completed || account.DisplayName != "Owner" || account.Email != strings.ToLower(strings.TrimSpace(account.Email)) {
 				t.Fatalf("invalid owner/setup: seq=%d joined=%d role=%s hash match=%t error=%v", seq, joined, role, matches, err)
@@ -121,8 +150,8 @@ func TestSetupConflictRace(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
 			const attempts = 10
-			barrier := setupBarrier{SetupStore: postgres.NewSetupStore(pool, appendEvents), ready: make(chan struct{}, attempts), release: make(chan struct{})}
-			s := org.NewSetup(barrier, hasher, "secret")
+			barrier := setupBarrier{SetupState: orgpg.NewSetupState(pool), ready: make(chan struct{}, attempts), release: make(chan struct{})}
+			s := newSetup(pool, hasher, barrier, orgpg.RegistrationWriterIn, signupAccount)
 			results := make(chan error, attempts)
 			for i := range attempts {
 				go func() {
@@ -170,11 +199,11 @@ func TestSetupOpenConflict(t *testing.T) {
 			ctx := t.Context()
 			input := org.SetupInput{OrganizationName: "Example", Slug: "example", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"}
 			if field == "slug" {
-				pgtest.Organization(t, pool, input.Slug, "Existing", 0)
+				fixtureOrganization(t, pool, input.Slug, "Existing", 0)
 			} else {
-				pgtest.Account(t, pool, input.Email, "Existing")
+				fixtureAccount(t, pool, input.Email, "Existing")
 			}
-			s := org.NewSetup(postgres.NewSetupStore(pool, appendEvents), hasher, "secret")
+			s := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel)
 			open, err := s.Open(ctx)
 			if err != nil || !open {
 				t.Fatalf("before conflict: setup open = %t: %v", open, err)

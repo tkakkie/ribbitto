@@ -2,8 +2,9 @@
 // PostgreSQL.
 // Connections, migrations and test databases are in internal/platform/postgres.
 // The event-writing flows append realtime's events through the EventAppender
-// they are given, in their own transactions. Sign-up is now org's use case;
-// only setup keeps its registration transaction here until 3.12.
+// they are given, in their own transactions. Setup and sign-up are org's use
+// cases; DefaultChannelCreatorIn creates setup's default channel on org's
+// transaction until conversation does in step 4.
 // Posting and branching take org's event_seq through the EventSequenceIn
 // they are given (implemented by orgpg.SequenceIn), on their transaction.
 // MessageReader is given both author lookups and the page cursor as

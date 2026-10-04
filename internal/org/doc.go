@@ -18,16 +18,16 @@
 // returning DirectoryEntry values. KindJoined with Joined, EncodeJoined,
 // DecodeJoined and RouteJoined is the member.joined kind org publishes, its
 // payload and its routing. AccountCreator and AccountCreatorIn declare the
-// account write sign-up injects (setup follows in 3.12). TxRunner,
+// account write setup and sign-up inject. TxRunner,
 // RegistrationWriter with RegistrationWriterIn, SetupState and
 // ErrSlugUnavailable are the transaction runner, org's transaction-bound
-// writes and the setup-state read through which sign-up owns its transaction;
-// setup follows in 3.12. EventAppender and EventAppenderIn inject realtime
+// writes and the setup-state read through which setup and sign-up own their
+// transactions. EventAppender and EventAppenderIn inject realtime
 // writes into that transaction. DefaultChannelCreator and
-// DefaultChannelCreatorIn declare the default-channel write setup will inject
-// in 3.12; infra/postgres implements them until conversation does in step 4.
+// DefaultChannelCreatorIn declare the default-channel write setup injects;
+// infra/postgres implements them until conversation does in step 4.
 //
-// Setup (NewSetup, SetupInput, SetupResult, SetupStore, ErrSetupToken and
+// Setup (NewSetup, SetupInput, SetupResult, ErrSetupToken and
 // ErrSetupCompleted) authorizes and validates installation-wide first-run setup
 // before hashing. SignUp (NewSignUp, ErrSignUpClosed and
 // ErrEmailTaken) controls installation-wide registration. Both share
@@ -39,8 +39,7 @@
 //
 // Org's store implements MembershipStore, HandleStore, the snapshot-bound
 // Directory, RegistrationWriter and SetupState. orgpg builds the authorizer
-// and handle changer and sign-up, binds the directory to the caller's snapshot
+// and handle changer, setup and sign-up, binds the directory to the caller's snapshot
 // (MembersIn) and the registration writes to the caller's transaction, and
-// implements TxRunner over the pool. infra/postgres implements SetupStore,
-// keeping setup's transaction until 3.12.
+// implements TxRunner over the pool.
 package org

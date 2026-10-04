@@ -8,12 +8,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
-type setupStore struct {
-	org.SetupStore
-	open bool
-}
+type setupState bool
 
-func (s setupStore) Open(context.Context) (bool, error) { return s.open, nil }
+func (s setupState) Open(context.Context) (bool, error) { return bool(s), nil }
 
 func TestRejectedSetup(t *testing.T) {
 	for _, tc := range []struct {
@@ -38,8 +35,8 @@ func TestRejectedSetup(t *testing.T) {
 				fields := map[string]*string{"email": &input.Email, "display_name": &input.DisplayName, "password": &input.Password, "organization_name": &input.OrganizationName, "slug": &input.Slug, "handle": &input.Handle}
 				*fields[tc.field] = ""
 			}
-			// Nil hasher and embedded store panic if rejection reaches hashing or writes.
-			s := org.NewSetup(setupStore{open: !tc.closed}, nil, tc.configured)
+			// The nil hasher and runner panic if rejection reaches hashing or writes.
+			s := org.NewSetup(setupState(!tc.closed), nil, nil, nil, nil, nil, nil, tc.configured)
 			_, err := s.Complete(t.Context(), tc.submitted, input)
 			var fields org.ValidationErrors
 			if tc.field != "" {

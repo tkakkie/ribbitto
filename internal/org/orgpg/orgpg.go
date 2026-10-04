@@ -81,3 +81,9 @@ func EventKinds() realtime.Kinds {
 func NewSignUp(pool *pgxpool.Pool, hasher *identity.Hasher, enabled bool, accounts org.AccountCreatorIn, events org.EventAppenderIn) *org.SignUp {
 	return org.NewSignUp(NewSetupState(pool), NewTxRunner(pool), RegistrationWriterIn, accounts, events, hasher, enabled)
 }
+
+// NewSetup wires first-run setup with the shared hasher, the configured
+// token and the injected writers.
+func NewSetup(pool *pgxpool.Pool, hasher *identity.Hasher, token string, accounts org.AccountCreatorIn, events org.EventAppenderIn, channels org.DefaultChannelCreatorIn) *org.Setup {
+	return org.NewSetup(NewSetupState(pool), NewTxRunner(pool), RegistrationWriterIn, accounts, events, channels, hasher, token)
+}

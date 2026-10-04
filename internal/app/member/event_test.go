@@ -9,10 +9,7 @@ import (
 
 func TestJoinedPayload(t *testing.T) {
 	joined := domain.ID{0: 0xef, 15: 1}
-	data, err := member.EncodeJoined(joined)
-	if err != nil {
-		t.Fatal(err)
-	}
+	data := member.EncodeJoined(joined)
 	if got, err := member.DecodeJoined(data); err != nil || got.MemberID != joined {
 		t.Fatalf("round trip = %+v, %v; want %v", got, err, joined)
 	}

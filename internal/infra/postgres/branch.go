@@ -22,12 +22,12 @@ import (
 // transaction.
 type BranchStore struct {
 	pool   *pgxpool.Pool
-	events EventAppenders
+	events EventAppenderIn
 }
 
 // NewBranchStore returns a store using pool that appends events through
 // events.
-func NewBranchStore(pool *pgxpool.Pool, events EventAppenders) *BranchStore {
+func NewBranchStore(pool *pgxpool.Pool, events EventAppenderIn) *BranchStore {
 	return &BranchStore{pool: pool, events: events}
 }
 
@@ -76,10 +76,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 			return topic.ErrConflict // rolls back the new topic and both sequences
 		}
 		events := s.events(platformTx)
-		data, err := topic.EncodeMoved(topic.Moved{ChannelID: channelID, FromTopicID: source.ID, ToTopicID: destination.ID, MessageIDs: b.Messages})
-		if err != nil {
-			return err
-		}
+		data := topic.EncodeMoved(topic.Moved{ChannelID: channelID, FromTopicID: source.ID, ToTopicID: destination.ID, MessageIDs: b.Messages})
 		if err := events.Append(ctx, organizationID, moveSeq, realtime.EventMessagesMoved, nil, data); err != nil {
 			return err
 		}
@@ -87,9 +84,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 		if err != nil {
 			return err
 		}
-		if data, err = message.EncodePosted(channelID, posted.ID, posted.TopicID); err != nil {
-			return err
-		}
+		data = message.EncodePosted(channelID, posted.ID, posted.TopicID)
 		return events.Append(ctx, organizationID, noticeSeq, realtime.EventMessagePosted, nil, data)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {

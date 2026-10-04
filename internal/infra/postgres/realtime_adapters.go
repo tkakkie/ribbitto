@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -57,7 +56,7 @@ func (r *EventSequences) CommittedSequences(ctx context.Context, organizations [
 	}
 	rows, err := r.queries.CommittedSequences(ctx, ids)
 	if err != nil {
-		return nil, fmt.Errorf("reading committed sequences: %w", err)
+		return nil, err
 	}
 	seqs := make(map[domain.ID]int64, len(rows))
 	for _, row := range rows {

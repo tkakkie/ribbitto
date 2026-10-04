@@ -20,7 +20,7 @@ type EventReader interface {
 }
 
 // Authorizer decides, immediately before an event is sent, whether the
-// account may still receive it. app/authz implements it. (false, nil) is an
+// account may still receive it. org implements it (org.Authorizer). (false, nil) is an
 // explicit deny; an error means the check itself failed and says nothing
 // about access.
 type Authorizer interface {

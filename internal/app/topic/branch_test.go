@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 type fakeBranchStore struct {
@@ -53,7 +53,7 @@ func TestBrancherValidates(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &fakeBranchStore{}
-			_, err := topic.NewBrancher(store, nil).Branch(t.Context(), authz.Membership{}, domain.ID{3}, tt.b, func(domain.Topic) string { return "n" })
+			_, err := topic.NewBrancher(store, nil).Branch(t.Context(), org.Membership{}, domain.ID{3}, tt.b, func(domain.Topic) string { return "n" })
 			if !errors.Is(err, tt.want) || store.called {
 				t.Fatalf("Branch = %v (store called %t), want %v before the store", err, store.called, tt.want)
 			}
@@ -62,14 +62,14 @@ func TestBrancherValidates(t *testing.T) {
 }
 
 func TestBrancherRunsAndRaises(t *testing.T) {
-	org := domain.ID{7}
+	orgID := domain.ID{7}
 	store, hub := &fakeBranchStore{}, &raised{}
-	m := authz.Membership{Organization: domain.Organization{ID: org}}
+	m := org.Membership{Organization: domain.Organization{ID: orgID}}
 	dest, err := topic.NewBrancher(store, hub).Branch(t.Context(), m, domain.ID{3}, topic.Branch{Messages: []domain.ID{{5}}, From: domain.ID{1}, NewName: "  設計 "}, func(d domain.Topic) string { return "to " + d.Name })
 	if err != nil || dest.ID != (domain.ID{9}) || dest.Name != "to dest" || store.got.NewName != "設計" {
 		t.Fatalf("Branch = %+v, %v; store got %+v", dest, err, store.got)
 	}
-	if hub.org != org || hub.seq != 42 {
+	if hub.org != orgID || hub.seq != 42 {
 		t.Fatalf("raised %+v, want the notice's sequence 42", hub)
 	}
 	store.err, hub.seq = topic.ErrConflict, 0

@@ -122,10 +122,11 @@ linters:
             - github.com/tkakkie/ribbitto/internal/domain/
             # Module roots only; their stores and wiring stay private.
             - github.com/tkakkie/ribbitto/internal/identity$
-            # app/authz reads realtime's events, and app/message, app/topic and
-            # app/member encode their kinds' payloads with realtime's ID text;
-            # they stand for decision 26's org and conversation -> realtime
-            # until those modules move (steps 3 and 4).
+            - github.com/tkakkie/ribbitto/internal/org$
+            # app/message, app/topic and app/member encode their kinds'
+            # payloads with realtime's ID text; they stand for decision 26's
+            # org and conversation -> realtime until those modules move
+            # (steps 3 and 4).
             - github.com/tkakkie/ribbitto/internal/realtime$
           deny: *non_html
         postgres:
@@ -139,6 +140,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app$
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/identity$
+            - github.com/tkakkie/ribbitto/internal/org$
             # Temporary, until the migration's last step: the flows' appender
             # interface, org's adapters for realtime (cursor bounds, committed
             # sequences, the retention lock and boundary) and the kind list.
@@ -160,6 +162,22 @@ linters:
             - github.com/tkakkie/ribbitto/internal/kernel$
             - github.com/tkakkie/ribbitto/internal/platform$
             - github.com/tkakkie/ribbitto/internal/platform/
+          deny: *non_html
+        # org is the third module (decision 26), migrating in step 3.
+        org:
+          list-mode: lax
+          files: ["**/internal/org/*.go", "**/internal/org/**/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/org$
+            - github.com/tkakkie/ribbitto/internal/org/
+            - github.com/tkakkie/ribbitto/internal/kernel$
+            - github.com/tkakkie/ribbitto/internal/platform$
+            - github.com/tkakkie/ribbitto/internal/platform/
+            - github.com/tkakkie/ribbitto/internal/identity$
+            - github.com/tkakkie/ribbitto/internal/realtime$
+            # Temporary: domain's Organization, Member and ValidateSlug until
+            # step 3.2 (#447), and its ID alias until step 5 (modules.md).
+            - github.com/tkakkie/ribbitto/internal/domain$
           deny: *non_html
         web:
           list-mode: lax

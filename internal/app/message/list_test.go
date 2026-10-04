@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 type directoryHistory struct {
@@ -67,7 +67,7 @@ func TestBefore(t *testing.T) {
 		t.Run("failure="+failure, func(t *testing.T) {
 			f := &directoryHistory{t: t, fail: failure}
 			before := int64(9)
-			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).Before(t.Context(), authz.Membership{Organization: domain.Organization{ID: domain.ID{1}}}, domain.ID{2}, &domain.ID{7}, &before)
+			got, err := (message.Reader{History: f, Members: f, Accounts: f, Topics: f}).Before(t.Context(), org.Membership{Organization: domain.Organization{ID: domain.ID{1}}}, domain.ID{2}, &domain.ID{7}, &before)
 			if (err != nil) != (failure != "") {
 				t.Fatalf("error: %v", err)
 			}
@@ -121,7 +121,7 @@ func TestBeforePages(t *testing.T) {
 		var before *int64
 		var sizes []int
 		for {
-			page, err := reader.Before(t.Context(), authz.Membership{}, domain.ID{2}, nil, before)
+			page, err := reader.Before(t.Context(), org.Membership{}, domain.ID{2}, nil, before)
 			if err != nil {
 				t.Fatal(err)
 			}

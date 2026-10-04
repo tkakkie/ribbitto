@@ -8,12 +8,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -186,7 +186,7 @@ func TestBranchStoreFailingNoticeAppend(t *testing.T) {
 	}
 	notifier := &countingNotifier{}
 	brancher := topic.NewBrancher(postgres.NewBranchStore(pool, events), notifier)
-	member := authz.Membership{Organization: domain.Organization{ID: acme.OrganizationID}, Member: domain.Member{ID: acme.MemberID}}
+	member := org.Membership{Organization: domain.Organization{ID: acme.OrganizationID}, Member: domain.Member{ID: acme.MemberID}}
 	before := readBranchState(t, pool, acme.OrganizationID)
 	b := topic.Branch{Messages: []domain.ID{posted.ID}, From: acme.Channel.DefaultTopicID, NewName: "design"}
 	if _, err := brancher.Branch(ctx, member, acme.Channel.ID, b, func(d domain.Topic) string { return "moved to " + d.Name }); !errors.Is(err, errNoticeAppend) {

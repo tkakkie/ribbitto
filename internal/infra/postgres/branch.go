@@ -8,11 +8,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
@@ -87,7 +87,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 		return events.Append(ctx, organizationID, noticeSeq, message.KindPosted, nil, data)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Topic{}, 0, authz.ErrNotFound // the organisation itself is gone
+		return domain.Topic{}, 0, org.ErrNotFound // the organisation itself is gone
 	}
 	if err != nil {
 		return domain.Topic{}, 0, err

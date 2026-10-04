@@ -9,11 +9,11 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // A failure while creating the default channel rolls the whole setup back.
@@ -118,8 +118,8 @@ func TestChannelService(t *testing.T) {
 	ctx := t.Context()
 	acme := pgtest.Organization(t, pool, "acme", "Acme", 0)
 	globex := pgtest.Organization(t, pool, "globex", "Globex", 0)
-	member := func(org domain.ID) authz.Membership {
-		return authz.Membership{Organization: domain.Organization{ID: org}, Member: domain.Member{OrganizationID: org}}
+	member := func(orgID domain.ID) org.Membership {
+		return org.Membership{Organization: domain.Organization{ID: orgID}, Member: domain.Member{OrganizationID: orgID}}
 	}
 	store := postgres.NewChannelStore(pool)
 	service := appchannel.New(store)

@@ -9,12 +9,12 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
@@ -145,9 +145,9 @@ func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelI
 	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_channel_id_fkey":
 		return domain.Message{}, channel.ErrNotFound
 	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_member_id_fkey":
-		return domain.Message{}, authz.ErrNotFound
+		return domain.Message{}, org.ErrNotFound
 	case errors.Is(err, pgx.ErrNoRows):
-		return domain.Message{}, authz.ErrNotFound // the organisation itself is gone
+		return domain.Message{}, org.ErrNotFound // the organisation itself is gone
 	case err != nil:
 		return domain.Message{}, fmt.Errorf("posting message: %w", err)
 	}

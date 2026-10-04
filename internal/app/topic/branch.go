@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // MaxBranchMessages bounds how many messages one branch may move, so its
@@ -47,7 +47,7 @@ type Notifier interface {
 	Raise(organizationID domain.ID, seq int64)
 }
 
-// Brancher runs branching for a member resolved by authz. Any member may
+// Brancher runs branching for a member resolved by org. Any member may
 // branch any message of a channel they can read: in the MVP every member
 // reads and writes every public channel (docs/domain/topics.md).
 type Brancher struct {
@@ -63,7 +63,7 @@ func NewBrancher(store BranchStore, notifier Notifier) *Brancher {
 
 // Branch validates b and runs it in the member's organisation and the
 // channel. It returns the destination topic.
-func (s *Brancher) Branch(ctx context.Context, m authz.Membership, channelID domain.ID, b Branch, notice func(domain.Topic) string) (domain.Topic, error) {
+func (s *Brancher) Branch(ctx context.Context, m org.Membership, channelID domain.ID, b Branch, notice func(domain.Topic) string) (domain.Topic, error) {
 	if err := validBranch(&b); err != nil {
 		return domain.Topic{}, err
 	}

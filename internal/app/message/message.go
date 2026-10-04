@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 // ErrInvalidBody wraps a body that breaks domain.ValidateMessageBody.
@@ -26,7 +26,7 @@ type Notifier interface {
 	Raise(organizationID domain.ID, seq int64)
 }
 
-// Service runs the message use cases for a member resolved by authz.
+// Service runs the message use cases for a member resolved by org.
 type Service struct {
 	store    Store
 	notifier Notifier
@@ -46,12 +46,12 @@ func NewWithNotifier(store Store, notifier Notifier) *Service {
 // Post writes body to the channel as the member. The organisation and the
 // author come from the membership, never from the request; the channel id
 // does, and is checked against that organisation.
-func (s *Service) Post(ctx context.Context, m authz.Membership, channelID domain.ID, body string) (domain.Message, error) {
+func (s *Service) Post(ctx context.Context, m org.Membership, channelID domain.ID, body string) (domain.Message, error) {
 	return s.PostToTopic(ctx, m, channelID, nil, body)
 }
 
 // PostToTopic posts to a topic of the channel; nil selects its default topic.
-func (s *Service) PostToTopic(ctx context.Context, m authz.Membership, channelID domain.ID, topicID *domain.ID, body string) (domain.Message, error) {
+func (s *Service) PostToTopic(ctx context.Context, m org.Membership, channelID domain.ID, topicID *domain.ID, body string) (domain.Message, error) {
 	body, err := domain.ValidateMessageBody(body)
 	if err != nil {
 		return domain.Message{}, fmt.Errorf("%w: %w", ErrInvalidBody, err)

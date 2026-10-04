@@ -49,11 +49,12 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 depguard checks a subset; never break them.
 Modules ([`modules.md`](docs/architecture/modules.md), from decision 26):
 
-- Others import only a module's root (`internal/identity`, `internal/realtime`); its
+- Others import only a module's root (`internal/identity`, `internal/realtime`,
+  `internal/org`); its
   store only its wiring (`<module>pg`) and own tests; the wiring only
   `cmd/*` and tests.
 - Layers, until their module moves: `domain` (→ `kernel`),
-  `app` (use cases, the only authorization logic; → `domain`, roots),
+  `app` (use cases; → `domain`, roots; authorization is `org`'s root),
   `infra/postgres` (implements `app`), `web` (→ `domain`, `app`, roots;
   never `infra`).
 - Use cases return plain structs; only `internal/web` produces HTML.

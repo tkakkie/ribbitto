@@ -7,12 +7,12 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/member"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 func TestChangeHandle(t *testing.T) {
@@ -41,7 +41,7 @@ func TestChangeHandle(t *testing.T) {
 		accounts[a.DisplayName] = &a
 	}
 	requireNoError(t, rows.Err())
-	service := member.New(authz.New(postgres.NewAuthzStore(pool)), postgres.NewMemberStore(pool))
+	service := member.New(org.NewAuthorizer(postgres.NewAuthzStore(pool)), postgres.NewMemberStore(pool))
 	change := func(name, slug, handle string) (string, error) {
 		return service.ChangeHandle(ctx, accounts[name], slug, handle)
 	}
@@ -58,9 +58,9 @@ func TestChangeHandle(t *testing.T) {
 	}{
 		{"case variant of another member's handle", "alice", "acme", "BOB", member.ErrHandleTaken},
 		{"reserved word", "alice", "acme", "all", member.ErrInvalidHandle},
-		{"member of another organisation", "carol", "acme", "carol2", authz.ErrNotFound},
-		{"account without a membership", "dave", "acme", "dave", authz.ErrNotFound},
-		{"signed out", "nobody", "acme", "nobody", authz.ErrNotFound},
+		{"member of another organisation", "carol", "acme", "carol2", org.ErrNotFound},
+		{"account without a membership", "dave", "acme", "dave", org.ErrNotFound},
+		{"signed out", "nobody", "acme", "nobody", org.ErrNotFound},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := change(tt.account, tt.slug, tt.handle); !errors.Is(err, tt.want) {
@@ -74,7 +74,7 @@ func TestChangeHandle(t *testing.T) {
 	// The store is scoped too: another organisation's member id matches nothing.
 	var acme, carol domain.ID
 	requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT id FROM organization WHERE slug = 'acme'), (SELECT m.id FROM member m JOIN account a ON a.id = m.account_id WHERE a.email = 'carol@example.org')").Scan(&acme, &carol))
-	if err := postgres.NewMemberStore(pool).UpdateHandle(ctx, acme, carol, "hijack"); !errors.Is(err, authz.ErrNotFound) || handles(t, pool)["carol"] != "carol" {
+	if err := postgres.NewMemberStore(pool).UpdateHandle(ctx, acme, carol, "hijack"); !errors.Is(err, org.ErrNotFound) || handles(t, pool)["carol"] != "carol" {
 		t.Fatalf("cross-organisation update: %v", err)
 	}
 

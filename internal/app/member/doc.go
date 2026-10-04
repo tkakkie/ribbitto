@@ -7,6 +7,6 @@
 // with Joined, EncodeJoined, DecodeJoined and RouteJoined (the member.joined
 // kind org publishes, its payload and its routing),
 // and ErrInvalidHandle and ErrHandleTaken. The member it changes
-// always comes from authz (the session and the URL's organisation), never
+// always comes from org.Authorizer (the session and the URL's organisation), never
 // from a request.
 package member

@@ -5,12 +5,12 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	appchannel "github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 func TestPostMessage(t *testing.T) {
@@ -18,14 +18,14 @@ func TestPostMessage(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// Two organisations, each with one member and a default channel.
-	memberships := map[string]authz.Membership{}
+	memberships := map[string]org.Membership{}
 	channels := map[string]domain.ID{}
 	for _, slug := range []string{"acme", "globex"} {
 		fixture := pgtest.OrganizationWithOwner(t, pool, slug, appchannel.DefaultName)
 		// These fixture memberships predate logging, as on an upgraded database.
 		_, err := pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = event_seq WHERE id = $1", fixture.OrganizationID)
 		requireNoError(t, err)
-		memberships[slug] = authz.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
+		memberships[slug] = org.Membership{Organization: domain.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: domain.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
 		channels[slug] = fixture.Channel.ID
 	}
 	service := message.New(postgres.NewPostingStore(pool, appendEvents))

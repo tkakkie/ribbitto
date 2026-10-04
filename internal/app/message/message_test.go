@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/app/channel"
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 type store struct {
@@ -35,7 +35,7 @@ func (n notifierFunc) Raise(org domain.ID, seq int64) { n(org, seq) }
 
 func TestPostNotification(t *testing.T) {
 	storeErr := errors.New("commit failed")
-	m := authz.Membership{Organization: domain.Organization{ID: domain.ID{1}}, Member: domain.Member{ID: domain.ID{2}}}
+	m := org.Membership{Organization: domain.Organization{ID: domain.ID{1}}, Member: domain.Member{ID: domain.ID{2}}}
 	for _, tt := range []struct {
 		name, body        string
 		storeErr, wantErr error
@@ -63,7 +63,7 @@ func TestPostNotification(t *testing.T) {
 }
 
 func TestPost(t *testing.T) {
-	m := authz.Membership{Organization: domain.Organization{ID: domain.ID{1}}, Member: domain.Member{ID: domain.ID{2}, OrganizationID: domain.ID{1}}}
+	m := org.Membership{Organization: domain.Organization{ID: domain.ID{1}}, Member: domain.Member{ID: domain.ID{2}, OrganizationID: domain.ID{1}}}
 	for _, tt := range []struct {
 		name, body, want  string
 		storeErr, wantErr error

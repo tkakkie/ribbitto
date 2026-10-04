@@ -4,10 +4,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/authz"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 func TestAuthzStore(t *testing.T) {
@@ -43,7 +43,7 @@ func TestAuthzStore(t *testing.T) {
 		{"own organisation's member, other slug", alice, "globex"},
 		{"unknown slug", alice, "initech"},
 	} {
-		if _, err := store.Membership(ctx, tt.account, tt.slug); !errors.Is(err, authz.ErrNotFound) {
+		if _, err := store.Membership(ctx, tt.account, tt.slug); !errors.Is(err, org.ErrNotFound) {
 			t.Errorf("%s: %v", tt.name, err)
 		}
 	}
@@ -52,7 +52,7 @@ func TestAuthzStore(t *testing.T) {
 	}
 	// bob belongs to globex only, which is not the setup organisation.
 	for _, account := range []domain.ID{bob, carol} {
-		if _, err := store.HomeSlug(ctx, account); !errors.Is(err, authz.ErrNotFound) {
+		if _, err := store.HomeSlug(ctx, account); !errors.Is(err, org.ErrNotFound) {
 			t.Errorf("home of %x: %v", account, err)
 		}
 	}

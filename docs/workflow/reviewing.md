@@ -104,7 +104,7 @@ than combine both sides, it needs a normal review.
 
 ## Risk
 
-A change is **high** risk if it touches any of: `internal/app/authz/**`,
+A change is **high** risk if it touches any of: `internal/org/**`,
 `internal/identity/**`, `internal/web/middleware/**`,
 `internal/realtime/**`, `db/migrations/**`, `db/queries/**`,
 `.github/**`, `scripts/**`, `tools/**`, `Makefile`, `.golangci.yml`,

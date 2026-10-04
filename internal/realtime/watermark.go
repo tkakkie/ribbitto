@@ -19,8 +19,7 @@ const WatermarkInterval = 5 * time.Second
 const watermarkCheckTimeout = 2 * time.Second
 
 // SequenceReader reads organisations' committed event sequences (org's
-// organization.event_seq). infra/postgres implements it until org's
-// columns move (step 3).
+// organization.event_seq). orgpg.NewSequences implements it.
 type SequenceReader interface {
 	CommittedSequences(ctx context.Context, organizations []kernel.ID) (map[kernel.ID]int64, error)
 }

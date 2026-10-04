@@ -120,9 +120,9 @@ It routes registered kinds through their `Router`s, failing the batch for malfor
 unregistered kinds keep only their envelope, with no channel, so streams skip them.
 The reader is `realtime`'s store (`internal/realtime/internal/postgres`, on
 its own sqlc entry `db/queries/realtime/`) and reads only `event_log`. org's
-cursor bounds come through the injected `realtime.BoundsIn`
-(`postgres.EventBoundsIn`, and the watermark's `postgres.EventSequences`, in
-`infra` until step 3); authorization remains the connection loop's job.
+cursor bounds come through the injected `realtime.BoundsIn` (`orgpg.BoundsIn`,
+and the watermark's `orgpg.NewSequences`, over org's store and its sqlc entry
+`db/queries/org/`); authorization remains the connection loop's job.
 
 `organization.event_log_boundary_seq` is the highest sequence no longer in
 the log. Migration sets it to each existing organisation's `event_seq`,

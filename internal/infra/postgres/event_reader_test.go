@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"reflect"
 	"slices"
 	"testing"
@@ -27,7 +28,7 @@ func TestPostedEventTopic(t *testing.T) {
 	requireNoError(t, err)
 	posted, err := postgres.NewPostingStore(pool, appendEvents).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, &named.ID, "hello")
 	requireNoError(t, err)
-	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
 	events, err := reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 1)
 	requireNoError(t, err)
 	if len(events) != 1 || !slices.Equal(events[0].Topics, []domain.ID{named.ID}) {
@@ -76,7 +77,7 @@ func TestEventsAfter(t *testing.T) {
 			Topics: []domain.ID{posted.TopicID}, Payload: stored(posted.EventSeq)},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
 	}
-	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
 	for _, tt := range []struct {
 		name  string
 		after int64
@@ -125,7 +126,7 @@ func TestEventsAfterMalformedData(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	org := pgtest.Organization(t, pool, "malformed", "Malformed", 2)
-	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
 	_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
 		VALUES ($1, 1, 'member.joined', '{"member_id":"00000000-0000-0000-0000-000000000001"}')`, org)
 	requireNoError(t, err)
@@ -149,7 +150,7 @@ func TestEventsAfterCursorAboveLog(t *testing.T) {
 	posted, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
 	requireNoError(t, err)
 	empty := pgtest.Organization(t, pool, "empty", "Empty", 0)
-	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
 	for _, tt := range []struct {
 		name string
 		org  domain.ID
@@ -175,36 +176,6 @@ func TestEventsAfterCursorAboveLog(t *testing.T) {
 	}
 }
 
-func TestCommittedSequences(t *testing.T) {
-	t.Parallel()
-	pool := pgtest.New(t)
-	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "watermark", "general")
-	other := pgtest.OrganizationWithOwner(t, pool, "watermark-other", "general")
-	posted, err := postgres.NewPostingStore(pool, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
-	requireNoError(t, err)
-	reader := postgres.NewEventSequences(pool)
-	unknown := domain.ID{0xee}
-	got, err := reader.CommittedSequences(ctx, []domain.ID{f.OrganizationID, other.OrganizationID, unknown})
-	requireNoError(t, err)
-	var otherSeq int64
-	requireNoError(t, pool.QueryRow(ctx, "SELECT event_seq FROM organization WHERE id = $1", other.OrganizationID).Scan(&otherSeq))
-	want := map[domain.ID]int64{f.OrganizationID: posted.EventSeq, other.OrganizationID: otherSeq}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("CommittedSequences = %v, want %v (an unknown organisation is left out)", got, want)
-	}
-	got, err = reader.CommittedSequences(ctx, []domain.ID{f.OrganizationID})
-	requireNoError(t, err)
-	if want := map[domain.ID]int64{f.OrganizationID: posted.EventSeq}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("CommittedSequences(f) = %v, want %v (an existing organisation not asked for is left out)", got, want)
-	}
-	got, err = reader.CommittedSequences(ctx, nil)
-	requireNoError(t, err)
-	if len(got) != 0 {
-		t.Fatalf("CommittedSequences(nil) = %v, want empty", got)
-	}
-}
-
 // The reader routes every registered kind through its Router, with no
 // built-in kind branch; an unregistered kind keeps only its envelope, even a
 // built-in one with malformed data, and a Router's error fails the whole batch.
@@ -222,7 +193,7 @@ func TestEventsAfterRegisteredKinds(t *testing.T) {
 		routed = payload
 		return channel, []domain.ID{topic}, nil
 	}}
-	got, err := realtimepg.NewReader(pool, postgres.EventBoundsIn, kinds).EventsAfter(t.Context(), org, 0, 10)
+	got, err := realtimepg.NewReader(pool, orgpg.BoundsIn, kinds).EventsAfter(t.Context(), org, 0, 10)
 	requireNoError(t, err)
 	want := []realtime.Event{
 		{OrganizationID: org, Seq: 1, Kind: "test.synthetic", ChannelID: channel, Topics: []domain.ID{topic}, Payload: routed},
@@ -233,7 +204,7 @@ func TestEventsAfterRegisteredKinds(t *testing.T) {
 		t.Fatalf("EventsAfter = %+v; want %+v", got, want)
 	}
 	kinds["test.synthetic"] = func([]byte) (domain.ID, []domain.ID, error) { return domain.ID{}, nil, errors.New("malformed") }
-	if events, err := realtimepg.NewReader(pool, postgres.EventBoundsIn, kinds).EventsAfter(t.Context(), org, 0, 10); err == nil || len(events) != 0 {
+	if events, err := realtimepg.NewReader(pool, orgpg.BoundsIn, kinds).EventsAfter(t.Context(), org, 0, 10); err == nil || len(events) != 0 {
 		t.Fatalf("failed route: %+v, %v; want error without events", events, err)
 	}
 }
@@ -242,7 +213,7 @@ func TestEventsAfterRegisteredKinds(t *testing.T) {
 // limit: there are no bounds to check against.
 func TestEventsAfterUnknownOrganization(t *testing.T) {
 	t.Parallel()
-	reader := realtimepg.NewReader(pgtest.New(t), postgres.EventBoundsIn, postgres.EventKinds())
+	reader := realtimepg.NewReader(pgtest.New(t), orgpg.BoundsIn, postgres.EventKinds())
 	for _, limit := range []int{0, 10} {
 		got, err := reader.EventsAfter(t.Context(), domain.ID{0xee}, 5, limit)
 		if err != nil || got == nil || len(got) != 0 {
@@ -286,10 +257,10 @@ func TestEventsAfterOneSnapshot(t *testing.T) {
 		var err error
 		third, err = posting.Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "third")
 		requireNoError(t, err)
-		requireNoError(t, realtimepg.NewCleaner(pool, postgres.RetentionBoundaryIn).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
+		requireNoError(t, realtimepg.NewCleaner(pool, orgpg.RetentionBoundaryIn).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
 	}
 	bounds := func(snapshot platform.Snapshot) realtime.Bounds {
-		return committingBounds{Bounds: postgres.EventBoundsIn(snapshot), commit: &commit}
+		return committingBounds{Bounds: orgpg.BoundsIn(snapshot), commit: &commit}
 	}
 	cursor := first.EventSeq - 1
 	got, err := realtimepg.NewReader(pool, bounds, postgres.EventKinds()).EventsAfter(ctx, f.OrganizationID, cursor, 10)
@@ -297,7 +268,7 @@ func TestEventsAfterOneSnapshot(t *testing.T) {
 		t.Fatalf("batch across a commit = %+v, %v; want the first two posts only", got, err)
 	}
 	// Both commits happened: a fresh read sees the cleanup and the new post.
-	reader := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
 	if _, err := reader.EventsAfter(ctx, f.OrganizationID, cursor, 10); !errors.Is(err, realtime.ErrCursorExpired) {
 		t.Fatalf("cursor below the new boundary: %v; want ErrCursorExpired", err)
 	}

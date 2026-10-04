@@ -8,8 +8,8 @@ import (
 )
 
 // NewReader returns realtime's event reader on pool. bounds reads org's
-// cursor bounds in the reader's snapshot (infra/postgres's EventBoundsIn
-// until step 3), and kinds registers each kind's publisher Router.
+// cursor bounds in the reader's snapshot (orgpg.BoundsIn), and kinds
+// registers each kind's publisher Router.
 func NewReader(pool *pgxpool.Pool, bounds realtime.BoundsIn, kinds realtime.Kinds) realtime.EventReader {
 	return postgres.NewReader(pool, bounds, kinds)
 }
@@ -21,7 +21,7 @@ func AppenderIn(tx platform.Tx) *postgres.Appender { return postgres.AppenderIn(
 
 // NewCleaner returns realtime's retention cleaner on pool. boundary locks an
 // organisation and raises its replay boundary in the cleaner's transaction
-// (infra/postgres's RetentionBoundaryIn until step 3).
+// (orgpg.RetentionBoundaryIn).
 func NewCleaner(pool *pgxpool.Pool, boundary realtime.RetentionBoundaryIn) realtime.EventCleaner {
 	return postgres.NewCleaner(pool, boundary)
 }

@@ -23,6 +23,7 @@ cmd/ribbitto -> internal/identity
 cmd/ribbitto -> internal/identity/identitypg
 cmd/ribbitto -> internal/infra/postgres
 cmd/ribbitto -> internal/org
+cmd/ribbitto -> internal/org/orgpg
 cmd/ribbitto -> internal/platform/postgres
 cmd/ribbitto -> internal/realtime
 cmd/ribbitto -> internal/realtime/realtimepg
@@ -87,6 +88,13 @@ internal/org -> internal/identity
 internal/org -> internal/kernel
 internal/org -> internal/platform/postgres
 internal/org -> internal/realtime
+internal/org/internal/postgres -> internal/kernel
+internal/org/internal/postgres -> internal/org/internal/postgres/sqlcgen
+internal/org/internal/postgres -> internal/platform/postgres
+internal/org/internal/postgres -> internal/platform/postgres/pgxbridge
+internal/org/orgpg -> internal/org/internal/postgres
+internal/org/orgpg -> internal/platform/postgres
+internal/org/orgpg -> internal/realtime
 internal/platform/postgres -> db/migrations
 internal/platform/postgres -> internal/platform/postgres/internal/handle
 internal/platform/postgres/pgtest -> db/migrations

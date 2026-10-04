@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"io"
 	"reflect"
 	"slices"
@@ -192,7 +193,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	m := org.Membership{Organization: domain.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: domain.Member{ID: f.MemberID}}
 	reader := postgres.MessageReader{Pool: pool, Accounts: identitypg.AccountsIn}
 	renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
-	log := realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds())
+	log := realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds())
 	var ids []domain.ID
 	var source domain.ID
 	for range 2 {
@@ -388,7 +389,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 				t.Fatal(err)
 			}
 			renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
-			stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds()), through}, Renderer: renderer, Authorizer: org.NewAuthorizer(postgres.NewAuthzStore(pool)), BatchSize: 1}
+			stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds()), through}, Renderer: renderer, Authorizer: org.NewAuthorizer(postgres.NewAuthzStore(pool)), BatchSize: 1}
 			delivered := &moveDeliveries{}
 			_, err = stream.Run(ctx, realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID, Topic: &destination.ID}, *page.EventCursor, delivered)
 			if !errors.Is(err, io.EOF) || len(delivered.events) != 1 {
@@ -484,7 +485,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 					t.Fatal(err)
 				}
 				renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
-				stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, postgres.EventBoundsIn, postgres.EventKinds()), through}, Renderer: renderer, Authorizer: org.NewAuthorizer(postgres.NewAuthzStore(pool)), BatchSize: 1}
+				stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, postgres.EventKinds()), through}, Renderer: renderer, Authorizer: org.NewAuthorizer(postgres.NewAuthzStore(pool)), BatchSize: 1}
 				for i, selected := range topics {
 					t.Run([]string{"source", "destination"}[i], func(t *testing.T) {
 						page := &pages[i]

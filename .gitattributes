@@ -2,3 +2,5 @@
 *_templ.go linguist-generated=true
 /web/static/vendor/** linguist-vendored
 /docs/schema/** linguist-generated=true
+/internal/*/internal/postgres/sqlcgen/** linguist-generated=true
+/internal/*/internal/postgres/sqlcgen/doc.go -linguist-generated

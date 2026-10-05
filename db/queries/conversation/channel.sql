@@ -1,8 +1,8 @@
 -- name: CreateChannel :one
--- Listed exception (feature map): channel creation writes topic's table, so a
--- channel never exists without its default topic (decision 21). One
--- statement keeps both in one transaction even on a pool; the channel's
--- foreign key to the topic is deferred to commit.
+-- Conversation owns both tables: creating a channel also writes its default
+-- topic, so a channel never exists without one (decision 21). One statement
+-- keeps both in one transaction even on a pool; the channel's foreign key to
+-- the topic is deferred to commit.
 WITH created AS (
   INSERT INTO channel (organization_id, name, is_default)
   VALUES ($1, $2, $3) RETURNING *

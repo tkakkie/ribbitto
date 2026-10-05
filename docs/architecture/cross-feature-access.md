@@ -21,7 +21,7 @@ for a missing or out-of-scope message. `conversation.Reader` resolves authors th
 its own `MemberDirectory.LookupMembers`, served by org (member IDs filtered by
 organisation, returning handles and account IDs), then `AccountDirectory.LookupDisplayNames`,
 served by identity (only those account IDs). Their adapters
-own the queries in `org/member.sql` and `identity/account.sql`; message never
+own the queries in `org/member.sql` and `identity/account.sql`; conversation never
 queries those tables. `conversation.Reader` receives both directories through
 conversation's `MemberDirectoryIn` and `AccountDirectoryIn` factories, adapted
 from `orgpg.MembersIn` and `identitypg.AccountsIn` by one-line closures, and

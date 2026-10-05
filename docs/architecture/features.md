@@ -34,9 +34,8 @@ and the page snapshot) is in
 [cross-feature access](cross-feature-access.md).
 
 Org's test-only `GetOrganizationBySlug` and `GetMemberByOrganizationAndAccount`
-queries live in `db/queries/org/`. Conversation's schema tests live in its
-store with local raw-SQL fixtures; posting, branching and reader flow tests
-live in `conversationpg`. Shared `infra/postgres/pgtest` fixtures write org's
+queries live in `db/queries/org/`. [Modules](modules.md) says where
+conversation's tests live. Shared `infra/postgres/pgtest` fixtures write org's
 and identity's rows plus a channel and its default topic in raw SQL for tests
 until step 5; they use no store.
 
@@ -48,13 +47,10 @@ until step 5; they use no store.
   the injected `AccountCreatorIn` and `DefaultChannelCreatorIn`
   (`conversationpg.DefaultChannelCreatorIn`), and its event through
   `EventAppenderIn`;
-- creating a channel (`conversation.Channels.Create`) writes its default
-  `topic` in the same statement, so a channel never exists without one
-  (decision 21, #307); both tables are conversation's (decision 27);
 - branching (`conversation.Brancher`) owns one transaction through
-  `TxRunner`: its `Writer` creates the destination, moves `message.topic_id`
-  and inserts the notice; org's sequence (`EventSequenceIn`) and realtime's
-  appender (`EventAppenderIn`) bind both events to it (decision 21, #305);
+  `TxRunner`, to which org's sequence (`EventSequenceIn`) and realtime's
+  appender (`EventAppenderIn`) are bound, so both events take their
+  sequence and commit with the move (decision 21, #305);
 - sign-up (`org.SignUp`) owns one transaction through `TxRunner`: org's
   registration writes take the sequence and create its member, with identity's
   account and realtime's event injected through `AccountCreatorIn` and

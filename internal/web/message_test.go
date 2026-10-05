@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -249,59 +248,16 @@ var (
 	_ conversation.Writer        = (*fakePostingWriter)(nil)
 	_ conversation.EventSequence = fakeEventSequence{}
 	_ conversation.EventAppender = fakeEventAppender{}
-	_ message.Store              = postingAdapter{}
 )
 
-// postingAdapter runs today's message.Service over conversation's posting
-// ports. Step 4.9c deletes it and builds conversation.NewPosting over the
-// same fakes instead.
-type postingAdapter struct {
-	runner    conversation.TxRunner
-	writer    conversation.WriterIn
-	sequences conversation.EventSequenceIn
-	events    conversation.EventAppenderIn
+func testPosting(writer conversation.Writer) *conversation.Posting {
+	return conversation.NewPosting(fakeTxRunner{},
+		func(platform.Tx) conversation.Writer { return writer },
+		func(platform.Tx) conversation.EventSequence { return fakeEventSequence{} },
+		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} }, nil)
 }
 
-func (s postingAdapter) PostToTopic(ctx context.Context, org, channel, member kernel.ID, topicID *kernel.ID, body string) (conversation.Message, error) {
-	var posted conversation.Message
-	err := s.runner.InTx(ctx, func(tx platform.Tx) error {
-		seq, err := s.sequences(tx).NextEventSeq(ctx, org)
-		if err != nil {
-			return err
-		}
-		writer := s.writer(tx)
-		selected, err := writer.GetDefaultTopic(ctx, org, channel)
-		if err != nil {
-			return err
-		}
-		if topicID != nil {
-			selected, err = writer.GetTopic(ctx, org, channel, *topicID)
-			if err != nil {
-				return err
-			}
-		}
-		posted, err = writer.InsertMessage(ctx, org, channel, selected.ID, member, body, seq)
-		if err != nil {
-			return err
-		}
-		return s.events(tx).Append(ctx, org, seq, conversation.KindPosted, nil, conversation.EncodePosted(channel, posted.ID, posted.TopicID))
-	})
-	if err != nil {
-		return conversation.Message{}, err
-	}
-	return posted, nil
-}
-
-func testPostingStore(writer conversation.Writer) postingAdapter {
-	return postingAdapter{
-		runner:    fakeTxRunner{},
-		writer:    func(platform.Tx) conversation.Writer { return writer },
-		sequences: func(platform.Tx) conversation.EventSequence { return fakeEventSequence{} },
-		events:    func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} },
-	}
-}
-
-func testPoster() *message.Service { return message.New(testPostingStore(&fakePostingWriter{})) }
+func testPoster() *conversation.Posting { return testPosting(&fakePostingWriter{}) }
 
 func TestMessagePostHandler(t *testing.T) {
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
@@ -329,7 +285,7 @@ func TestMessagePostHandler(t *testing.T) {
 				h, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
 					reader := populatedMessages()
 					reader.before = &reads
-					s.Messages, s.Posting = reader, message.New(testPostingStore(writer))
+					s.Messages, s.Posting = reader, testPosting(writer)
 				}))
 				if err != nil {
 					t.Fatal(err)

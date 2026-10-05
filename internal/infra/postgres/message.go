@@ -82,7 +82,7 @@ func messageFromRow(row sqlcgen.Message) conversation.Message {
 	return conversation.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time}
 }
 
-// PostingStore implements message.Store: it owns the posting transaction.
+// PostingStore is the frozen posting transaction used by legacy store tests.
 type PostingStore struct {
 	pool      *pgxpool.Pool
 	sequences EventSequenceIn

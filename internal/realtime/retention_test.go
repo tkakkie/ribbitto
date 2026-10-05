@@ -186,6 +186,12 @@ func TestRetentionReplay(t *testing.T) {
 	}
 }
 
+// postingEvents binds realtime's appender to conversation's posting transaction.
+func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// postingSequence binds org's sequence to conversation's posting transaction.
+func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
+
 // appendEvents adapts realtime's appender to the consumer interface the
 // event-writing stores declare (decision 26).
 func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }

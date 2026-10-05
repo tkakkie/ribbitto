@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
@@ -63,7 +62,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Channels:  conversationpg.NewChannels(pool),
 		Topics:    conversationpg.NewTopics(pool),
 		Messages:  postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor},
-		Posting:   message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents)),
+		Posting:   conversationpg.NewPosting(pool, postingSequence, postingEvents, nil),
 		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), nil),
 	}
 	if setupToken != "" {
@@ -79,6 +78,12 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 	}
 	return s
 }
+
+// postingEvents binds realtime's appender to conversation's posting transaction.
+func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// postingSequence binds org's sequence to conversation's posting transaction.
+func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
 
 // appendEvents adapts realtime's appender to the consumer interface the
 // event-writing stores declare (decision 26).

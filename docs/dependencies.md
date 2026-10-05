@@ -17,7 +17,6 @@ not show calls through an edge that already exists, dependencies inside one
 package, or SQL access to tables.
 
 ```text
-cmd/ribbitto -> internal/app/message
 cmd/ribbitto -> internal/app/topic
 cmd/ribbitto -> internal/conversation
 cmd/ribbitto -> internal/conversation/conversationpg
@@ -32,7 +31,6 @@ cmd/ribbitto -> internal/realtime/realtimepg
 cmd/ribbitto -> internal/web
 cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
-cmd/seed -> internal/app/message
 cmd/seed -> internal/app/topic
 cmd/seed -> internal/conversation
 cmd/seed -> internal/conversation/conversationpg
@@ -44,9 +42,6 @@ cmd/seed -> internal/org
 cmd/seed -> internal/org/orgpg
 cmd/seed -> internal/platform/postgres
 cmd/seed -> internal/realtime/realtimepg
-internal/app/message -> internal/conversation
-internal/app/message -> internal/domain
-internal/app/message -> internal/org
 internal/app/topic -> internal/conversation
 internal/app/topic -> internal/domain
 internal/app/topic -> internal/org
@@ -118,7 +113,6 @@ internal/realtime/internal/postgres -> internal/realtime/internal/postgres/sqlcg
 internal/realtime/realtimepg -> internal/platform/postgres
 internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
-internal/web -> internal/app/message
 internal/web -> internal/app/topic
 internal/web -> internal/conversation
 internal/web -> internal/domain

@@ -4,7 +4,7 @@ Durable events and the event log they are written to: [real time](realtime.md#du
 
 ```mermaid
 sequenceDiagram
-  participant A as app
+  participant A as conversation.Posting
   participant DB as PostgreSQL
   participant H as realtime hub
   A->>DB: BEGIN
@@ -15,15 +15,19 @@ sequenceDiagram
   A->>H: Notifier.Raise(organizationID, posted.EventSeq) (after commit)
 ```
 
-`message.Service.Post` validates; `postgres.PostingStore` takes the sequence,
-inserts the message, encodes the post with `conversation.EncodePosted` and calls `Append` on the `EventAppender` its store was given for the transaction
-in one transaction. Realtime's store appender (`realtimepg.AppenderIn`) owns the event insert, kind-agnostic;
-it uses the caller's transaction and already-allocated sequence.
-`message.NewWithNotifier` accepts `message.Notifier` (`Raise(organizationID domain.ID, seq int64)`);
-`Post` calls it only after the store succeeds. `serve` wires `realtime.Hub`
-to it; `message.New` leaves notifications disabled. A channel outside
-the caller's organisation fails on the message's composite foreign key and
-rolls the sequence back with it.
+`conversation.Posting.Post` validates and owns the transaction through its
+`TxRunner`: its transaction-bound `EventSequence` takes the sequence, then
+its `Writer` reads the default topic (and the selected topic, if supplied)
+and inserts the message. It encodes the post with `conversation.EncodePosted`
+and calls its transaction-bound `EventAppender.Append` before commit.
+Org's sequence (`orgpg.SequenceIn`) and realtime's appender
+(`realtimepg.AppenderIn`) use that same transaction and sequence.
+`conversation.NewPosting` accepts `conversation.Notifier`
+(`Raise(organizationID kernel.ID, seq int64)`); a nil notifier disables
+notifications. `Post` calls it only after the runner commits; `serve` wires
+`realtime.Hub` to it. A channel outside the caller's organisation fails the
+scoped topic lookup and rolls the sequence back with it. Composite foreign
+keys also enforce the message's organisation scope.
 
 - **Take the sequence number first.** The `UPDATE` (scoped to the
   organisation from the URL, `WHERE id = $1`) locks that organisation's row

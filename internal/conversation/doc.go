@@ -17,16 +17,15 @@
 // reader's author lookups from org and identity, bound to the caller's
 // snapshot by closures in cmd/* and the tests; TxRunner, Writer with
 // WriterIn, EventSequenceIn, EventAppenderIn and Notifier, the transaction
-// ports Posting owns its transaction through and branching will use (unused
-// in production until steps 4.9c and 4.10a; the store backs branching's CreateTopic and
+// ports Posting owns its transaction through and branching will use from
+// step 4.10a (the store backs branching's CreateTopic and
 // MoveMessages with copies of the legacy queries until step 4.16);
 // SnapshotRunner and ReadStore with ReadStoreIn, the snapshot and its message
 // reads the page snapshot, One and Many will own their reads through (unused
 // until step 4.11c; the store's message queries, InsertMessage, GetMessage,
 // ListMessagesBefore and GetMessages, are copies of the legacy ones until
 // step 4.15); Posting, NewPosting, Post and PostToTopic, which validate and
-// commit a post with its event, then notify (unused in production beside the
-// frozen app/message.Service until 4.9c); and the two event kinds
+// commit a post with its event, then notify; and the two event kinds
 // conversation publishes and so owns.
 // KindPosted with Posted, EncodePosted, DecodePosted and RoutePosted is
 // message.posted, its payload and its routing; KindMessagesMoved with Moved,

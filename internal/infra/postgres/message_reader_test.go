@@ -10,8 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -27,7 +27,7 @@ func TestMessageOne(t *testing.T) {
 	otherChannel := pgtest.Channel(t, pool, local.OrganizationID, "other", false)
 	membership := org.Membership{Organization: org.Organization{ID: local.OrganizationID}, Member: org.Member{ID: local.MemberID}}
 	foreignMembership := org.Membership{Organization: org.Organization{ID: foreign.OrganizationID}, Member: org.Member{ID: foreign.MemberID}}
-	service := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
+	service := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
 	posted, err := service.Post(ctx, membership, local.Channel.ID, "local body")
 	requireNoError(t, err)
 	foreignPost, err := service.Post(ctx, foreignMembership, foreign.Channel.ID, "foreign body")
@@ -90,7 +90,7 @@ func TestMessagePaging(t *testing.T) {
 
 	// Interleave posts so that every channel's event_seq values have gaps
 	// filled by another channel's, and globex reuses acme's numbers.
-	service := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
+	service := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
 	sizes := map[string]int{"exact": 2 * conversation.PageSize, "partial": conversation.PageSize + 1}
 	posted := map[string][]string{}
 	var foreignSeqs []int64
@@ -225,7 +225,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			ctx := t.Context()
 			fixture := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 			m := org.Membership{Organization: org.Organization{ID: fixture.OrganizationID}, Member: org.Member{ID: fixture.MemberID}}
-			posting := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
+			posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
 			initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")
 			requireNoError(t, err)
 			var concurrent conversation.Message

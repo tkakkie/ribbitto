@@ -35,6 +35,12 @@ func NewPosting(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, even
 	return conversation.NewPosting(NewTxRunner(pool), WriterIn, sequences, events, notifier)
 }
 
+// NewBrancher builds branching with org's sequence and realtime's appender
+// factories bound to its transaction. A nil notifier disables notifications.
+func NewBrancher(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, notifier conversation.Notifier) *conversation.Brancher {
+	return conversation.NewBrancher(NewTxRunner(pool), WriterIn, sequences, events, notifier)
+}
+
 // DefaultChannelCreatorIn returns the default-channel creator bound to setup's
 // transaction. Composition roots adapt it to org.DefaultChannelCreatorIn with
 // a closure (decision 26).

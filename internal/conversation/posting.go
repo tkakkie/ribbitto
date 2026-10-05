@@ -41,7 +41,7 @@ func (p *Posting) PostToTopic(ctx context.Context, m org.Membership, channelID k
 	var posted Message
 	err = p.runner.InTx(ctx, func(tx platform.Tx) error {
 		// The organisation lock must precede even the topic reads, so sequence
-		// order remains commit order (decision 5), as in the legacy posting store.
+		// order remains commit order (decision 5).
 		seq, err := p.sequences(tx).NextEventSeq(ctx, organizationID)
 		if err != nil {
 			return err

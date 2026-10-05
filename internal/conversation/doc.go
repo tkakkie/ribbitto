@@ -6,9 +6,10 @@
 // owns the channel, topic and message tables. Exported API: Channel, its name
 // rule, errors and default name; Channels (List, Create, Get, Default),
 // NewChannels and ChannelStore; Topic, ValidateTopicName, ErrTopicNotFound,
-// ErrInvalidTopicName and ErrTopicNameTaken; Topics, NewTopics and
-// TopicReader, the topic lookup scoped by a membership that web's stream and
-// paging links use; Message, ValidateMessageBody, ErrInvalidBody and
+// ErrInvalidTopicName and ErrTopicNameTaken; Topics and NewTopics, whose Get
+// is the topic lookup scoped by a membership that web's stream and paging
+// links use, over TopicReader, which looks a topic up within an organisation
+// and channel; Message, ValidateMessageBody, ErrInvalidBody and
 // ErrMessageNotFound.
 //
 // Reader and NewReader own Page and Before (a ChannelPage), One an Entry by

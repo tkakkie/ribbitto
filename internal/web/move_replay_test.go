@@ -191,7 +191,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	pool := pgtest.New(t)
 	f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
-	reader := postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor}
+	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 	renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 	log := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
 	var ids []domain.ID
@@ -361,7 +361,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			reader := postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor}
+			reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 			var moved []domain.ID
 			var source domain.ID
 			for i := range tt.count {
@@ -444,7 +444,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				reader := postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor}
+				reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 				var source conversation.Topic
 				var moved []domain.ID
 				for i := range count {

@@ -35,6 +35,11 @@ func NewPosting(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, even
 	return conversation.NewPosting(NewTxRunner(pool), WriterIn, sequences, events, notifier)
 }
 
+// NewReader builds the page, single-message and batch use case over the pool.
+func NewReader(pool *pgxpool.Pool, members conversation.MemberDirectoryIn, accounts conversation.AccountDirectoryIn, cursor conversation.EventCursorIn) *conversation.Reader {
+	return conversation.NewReader(NewSnapshotRunner(pool), ReadStoreIn, members, accounts, cursor)
+}
+
 // DefaultChannelCreatorIn returns the default-channel creator bound to setup's
 // transaction. Composition roots adapt it to org.DefaultChannelCreatorIn with
 // a closure (decision 26).

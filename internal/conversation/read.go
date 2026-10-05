@@ -11,7 +11,7 @@ import (
 // One returns a message with current author names, or ErrMessageNotFound.
 // The caller resolves membership and channel access before reading, as for
 // Before.
-func (s Reader) One(ctx context.Context, m org.Membership, channelID kernel.ID, eventSeq int64) (Entry, error) {
+func (s historyReader) One(ctx context.Context, m org.Membership, channelID kernel.ID, eventSeq int64) (Entry, error) {
 	msg, err := s.History.GetMessage(ctx, m.Organization.ID, channelID, eventSeq)
 	if err != nil {
 		return Entry{}, fmt.Errorf("reading message: %w", err)
@@ -25,7 +25,7 @@ func (s Reader) One(ctx context.Context, m org.Membership, channelID kernel.ID, 
 
 // Many reads exactly the requested messages with current labels and authors,
 // oldest first. The ID list bounds the read; an incomplete batch fails replay.
-func (s Reader) Many(ctx context.Context, m org.Membership, channelID kernel.ID, ids []kernel.ID) ([]Entry, error) {
+func (s historyReader) Many(ctx context.Context, m org.Membership, channelID kernel.ID, ids []kernel.ID) ([]Entry, error) {
 	messages, err := s.History.GetMessages(ctx, m.Organization.ID, channelID, ids)
 	if err != nil {
 		return nil, fmt.Errorf("reading messages: %w", err)

@@ -7,7 +7,7 @@ SELECT * FROM topic WHERE organization_id = $1 AND channel_id = $2 AND is_defaul
 
 -- name: CreateTopic :one
 INSERT INTO topic (organization_id, channel_id, name, is_default)
-VALUES ($1, $2, $3, $4) RETURNING *;
+VALUES ($1, $2, $3, false) RETURNING *;
 
 -- name: MoveMessages :execrows
 -- Branching moves conversation's own messages by writing message.topic_id.

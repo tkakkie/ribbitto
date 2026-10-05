@@ -12,6 +12,6 @@
 // their constraints to conversation's and org's errors, except the branch
 // notice's; conversationpg.WriterIn binds it to their transaction. ReadStore
 // holds the page snapshot's channel, topic and message reads and no write,
-// delegating the channel lookups and the topic by ID to the channel and topic
-// stores; conversationpg.ReadStoreIn binds it to Reader's snapshot.
+// delegating the channel lookups and embedding the read-only TopicStore for
+// the topic by ID; conversationpg.ReadStoreIn binds it to Reader's snapshot.
 package postgres

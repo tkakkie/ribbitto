@@ -13,23 +13,17 @@ import (
 
 const createTopic = `-- name: CreateTopic :one
 INSERT INTO topic (organization_id, channel_id, name, is_default)
-VALUES ($1, $2, $3, $4) RETURNING id, organization_id, channel_id, name, is_default, created_at
+VALUES ($1, $2, $3, false) RETURNING id, organization_id, channel_id, name, is_default, created_at
 `
 
 type CreateTopicParams struct {
 	OrganizationID pgtype.UUID
 	ChannelID      pgtype.UUID
 	Name           pgtype.Text
-	IsDefault      bool
 }
 
 func (q *Queries) CreateTopic(ctx context.Context, arg CreateTopicParams) (Topic, error) {
-	row := q.db.QueryRow(ctx, createTopic,
-		arg.OrganizationID,
-		arg.ChannelID,
-		arg.Name,
-		arg.IsDefault,
-	)
+	row := q.db.QueryRow(ctx, createTopic, arg.OrganizationID, arg.ChannelID, arg.Name)
 	var i Topic
 	err := row.Scan(
 		&i.ID,

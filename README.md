@@ -95,8 +95,8 @@ only when the change since `LAUNCHER_TESTS_BASE` (default `origin/main`;
 commits, staged, unstaged and untracked files) touches `scripts/ai/`,
 `.github/prompts/`, `.github/workflows/` or the `Makefile`, or when that
 comparison fails; `make check` prints what it chose. `make check-ai` always
-runs them. CI compares with a pull request's base, and always runs them on
-`main` and nightly. CI also runs
+runs them. CI compares a pull request's merge commit with its first parent
+(the base as merged), and always runs them on `main` and nightly. CI also runs
 `make vuln`, which runs the pinned `govulncheck` over the application module
 and fails when a known vulnerability is statically reachable from our code.
 It needs the network, so it is not part of `make check`. When it fails:

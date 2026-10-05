@@ -2,9 +2,10 @@
 # Tests scripts/ai/launcher-tests.sh in a disposable repository whose two
 # self-tests are fakes that record that they ran: a change under each listed
 # path (committed, staged, unstaged or untracked; a deletion; a rename away)
-# runs them, an unrelated change skips them and says so, an unresolvable base
-# or a failing git runs them, a failing helper tool never skips them, and a
-# failing self-test fails the script.
+# runs them, an unrelated change skips them and says so, CI's shallow merge
+# commit selects by the pull request's change against HEAD^1, an unresolvable
+# base or a failing git runs them, a failing helper tool never skips them, and
+# a failing self-test fails the script.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d)
@@ -126,6 +127,45 @@ check --base moved || { cat "$out" >&2; fail "a base ahead of the branch: exited
 grep -qF 'skipped' "$out" || fail "a base ahead of the branch: $(cat "$out")"
 [[ ! -e $RAN ]] || fail "a base ahead of the branch: a self-test ran"
 echo "PASS changes on the base after the merge base do not count"
+
+# CI's checkout (#560): a pull request's merge commit into a main that has
+# moved, two commits deep. HEAD^1, the main it merged, is there; the event's
+# older base.sha is not, so comparing with it can only fail safe. Main's own
+# change to a listed file must not count against the pull request.
+# ci_clone <name> <file the pull request changes>
+ci_clone() {
+  reset
+  echo '# change' >> "$repo/$2"
+  commit 'pull request'
+  git -C "$repo" branch -q -f "pr-$1"
+  git -C "$repo" checkout -q -B "main-$1" base
+  echo '# change' >> "$repo/Makefile"
+  commit 'main moved'
+  git -C "$repo" -c commit.gpgsign=false merge -q --no-ff -m 'merge' "pr-$1"
+  git clone -q --depth 2 --branch "main-$1" "file://$repo" "$work/$1"
+}
+old_base=$(git -C "$repo" rev-parse base)
+ci_check() { (cd "$work/$1" && bash scripts/ai/launcher-tests.sh --base "$2") > "$out" 2>&1; }
+ci_clone unrelated docs/a.txt
+! git -C "$work/unrelated" cat-file -e "$old_base^{commit}" 2> /dev/null ||
+  fail "the shallow clone holds the old base; the case proves nothing"
+rm -f "$RAN"
+ci_check unrelated 'HEAD^1' || { cat "$out" >&2; fail "merge commit, unrelated change: exited non-zero"; }
+grep -qF "launcher self-tests: skipped (nothing changed since 'HEAD^1'" "$out" ||
+  fail "merge commit, unrelated change: not skipped: $(cat "$out")"
+[[ ! -e $RAN ]] || fail "merge commit, unrelated change: a self-test ran"
+rm -f "$RAN"
+ci_check unrelated "$old_base" || { cat "$out" >&2; fail "merge commit, old base: exited non-zero"; }
+grep -qF "fail safe: cannot resolve the base '$old_base'" "$out" ||
+  fail "merge commit, old base: did not fail safe: $(cat "$out")"
+[[ $(cat "$RAN" 2>/dev/null) == $'grok\nmuse' ]] || fail "merge commit, old base: the self-tests did not both run"
+ci_clone listed .github/workflows/ci.yml
+rm -f "$RAN"
+ci_check listed 'HEAD^1' || { cat "$out" >&2; fail "merge commit, listed change: exited non-zero"; }
+grep -qF "run (changed since 'HEAD^1': .github/workflows/ci.yml)" "$out" ||
+  fail "merge commit, listed change: $(cat "$out")"
+[[ $(cat "$RAN" 2>/dev/null) == $'grok\nmuse' ]] || fail "merge commit, listed change: the self-tests did not both run"
+echo "PASS on CI's shallow merge commit, HEAD^1 selects by the pull request's change; the old base.sha only fails safe"
 
 reset
 expect_run 'unknown base' "fail safe: cannot resolve the base 'no-such-ref'" --base no-such-ref

@@ -10,8 +10,9 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 # The AI launchers' self-tests take most of check's time, so check runs them
 # only when the change since this base can affect them (an empty base always
 # runs them); scripts/ai/launcher-tests.sh says what it chose and why. CI
-# passes the pull request's base, or an empty one on main and nightly. It is
-# exported so the recipe reads it from the environment, unquoted by make.
+# passes HEAD^1 on a pull request (its merge commit's first parent, the base
+# as merged), or an empty base on main and nightly. It is exported so the
+# recipe reads it from the environment, unquoted by make.
 LAUNCHER_TESTS_BASE ?= origin/main
 export LAUNCHER_TESTS_BASE
 

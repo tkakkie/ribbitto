@@ -77,12 +77,14 @@ jobs:
       # The Makefile pins golangci-lint for both local checks and CI. On a
       # pull request, the AI launchers' self-tests run only when the diff from
       # the base can affect them: the checkout's two commits are the merge
-      # commit and its first parent, the base, and an unresolvable base runs
-      # them (scripts/ai/launcher-tests.sh). On main and nightly, an empty base
-      # always runs them.
+      # commit and its first parent, HEAD^1, the base branch as merged. The
+      # event's base.sha is not used: once main moves, it is outside this
+      # checkout, and the fail-safe would run them every time (#560). An
+      # unresolvable base runs them (scripts/ai/launcher-tests.sh). On main
+      # and nightly, an empty base always runs them.
       - name: check
         env:
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || '' }}
         run: make check LAUNCHER_TESTS_BASE="$BASE"
 
       - name: package-import edge changes

@@ -15,11 +15,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
@@ -72,8 +72,8 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	defaultTopic, err := postgres.NewTopicStore(pool).GetDefaultTopic(ctx, acme, acmeChannel)
-	if err != nil {
+	var defaultTopic conversation.Topic
+	if err := pool.QueryRow(ctx, "SELECT default_topic_id FROM channel WHERE organization_id = $1 AND id = $2", acme, acmeChannel).Scan(&defaultTopic.ID); err != nil {
 		t.Fatal(err)
 	}
 	var now time.Time
@@ -165,7 +165,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				}
 			case "POST /channels/{channelID}/branch":
 				// The route reaches a member; an empty selection is refused.
-				// Branching itself is tested in cmd/ribbitto and postgres.
+				// Branching itself is tested in cmd/ribbitto and conversationpg.
 				if w.Code != http.StatusUnprocessableEntity {
 					t.Fatalf("branch: %d %s", w.Code, w.Body.String())
 				}
@@ -191,10 +191,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 
 	t.Run("topic history and posting", func(t *testing.T) {
 		clock = now
-		named, err := postgres.NewTopicStore(pool).CreateTopic(ctx, acme, acmeChannel, "Planning")
-		if err != nil {
-			t.Fatal(err)
-		}
+		named := namedTopic(t, pool, acme, acmeChannel, "Planning")
 		other := pgtest.Channel(t, pool, acme, "other", false)
 		var initialCount int
 		if err := pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id = $1", acme).Scan(&initialCount); err != nil {

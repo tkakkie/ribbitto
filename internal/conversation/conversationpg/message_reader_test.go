@@ -13,7 +13,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
@@ -113,9 +112,9 @@ func TestMessagePaging(t *testing.T) {
 	}
 
 	for _, name := range []string{"exact", "partial"} {
-		topic, err := postgres.NewTopicStore(pool).CreateTopic(ctx, acme.Organization.ID, channels[name], name)
-		requireNoError(t, err)
-		_, err = pool.Exec(ctx, "UPDATE message SET topic_id = $3 WHERE organization_id = $1 AND channel_id = $2 AND event_seq % 2 = 0", acme.Organization.ID, channels[name], topic.ID)
+		var topicID domain.ID
+		requireNoError(t, pool.QueryRow(ctx, "INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, $3, false) RETURNING id", acme.Organization.ID, channels[name], name).Scan(&topicID))
+		_, err := pool.Exec(ctx, "UPDATE message SET topic_id = $3 WHERE organization_id = $1 AND channel_id = $2 AND event_seq % 2 = 0", acme.Organization.ID, channels[name], topicID)
 		requireNoError(t, err)
 	}
 	queries, topicQueries := 0, 0

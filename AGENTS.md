@@ -30,6 +30,8 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 
 - `make check` — checks formatting (Go and templ), vets, lints, builds and
   tests (with the race detector); must pass before you open a pull request.
+  It runs the AI launchers' self-tests only when the change can affect them
+  (README *Checks*); `make check-ai` always runs them.
   Format templates with `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; CI runs it too. It needs the network, so
   it is not part of `make check`.

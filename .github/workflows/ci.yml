@@ -5,14 +5,20 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
+  # Nightly, the AI launchers' self-tests run whatever changed, to catch
+  # drift in the runner image or bash.
+  schedule:
+    - cron: "23 3 * * *"
 
 # CI runs untrusted pull request code, so it gets read-only access and no
 # secrets. Anything that labels or merges lives in a separate workflow.
 permissions:
   contents: read
 
+# The event is in the group so that a nightly run and a push to main never
+# cancel each other.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -68,9 +74,16 @@ jobs:
             exit 1
           fi
 
-      # The Makefile pins golangci-lint for both local checks and CI.
+      # The Makefile pins golangci-lint for both local checks and CI. On a
+      # pull request, the AI launchers' self-tests run only when the diff from
+      # the base can affect them: the checkout's two commits are the merge
+      # commit and its first parent, the base, and an unresolvable base runs
+      # them (scripts/ai/launcher-tests.sh). On main and nightly, an empty base
+      # always runs them.
       - name: check
-        run: make check
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+        run: make check LAUNCHER_TESTS_BASE="$BASE"
 
       - name: package-import edge changes
         # HEAD^1 is the PR merge commit's base, or the previous commit on main.

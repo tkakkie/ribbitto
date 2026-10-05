@@ -81,6 +81,8 @@ idea (maintainer, one line) or finding (AI)
      branch claude/<topic> or codex/<topic>)
   → draft pull request from the template, linked with "Closes #N";
     CI runs on every push (`make check`, then `make vuln`;
+    the AI launchers' self-tests only when the change can affect
+    them, and always on `main` and nightly (`make check-ai` locally);
     see Checks in the README)
   → the AI that did not implement it reviews        (see reviewing.md)
     (Claude ↔ Codex)

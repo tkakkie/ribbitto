@@ -17,10 +17,13 @@
 // reader's author lookups from org and identity, bound to the caller's
 // snapshot by closures in cmd/* and the tests; TxRunner, Writer with
 // WriterIn, EventSequenceIn, EventAppenderIn and Notifier, the transaction
-// ports posting and branching will own their transaction through (unused
-// until steps 4.9 and 4.10a; the store backs branching's CreateTopic and
-// MoveMessages with copies of the legacy queries until step 4.16); and the
-// two event kinds conversation publishes and so owns.
+// ports Posting owns its transaction through and branching will use (unused
+// in production until steps 4.9c and 4.10a; the store backs branching's
+// CreateTopic and MoveMessages with copies of the legacy queries until step
+// 4.16); and the
+// two event kinds conversation publishes and so owns. Posting, NewPosting,
+// Post and PostToTopic validate and commit a post with its event, then notify;
+// unused in production beside the frozen app/message.Service until 4.9c.
 // KindPosted with Posted, EncodePosted, DecodePosted and RoutePosted is
 // message.posted, its payload and its routing; KindMessagesMoved with Moved,
 // EncodeMoved, DecodeMoved and RouteMoved is messages.moved. conversationpg

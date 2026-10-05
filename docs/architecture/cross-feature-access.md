@@ -17,7 +17,7 @@ by a one-line closure) on that transaction; an unknown organisation is
 composite foreign keys including `organization_id`. History uses one
 newest-first keyset query, `ListMessagesBefore`, with a nullable upper
 sequence bound for the latest page, an optional scoped topic filter passed
-explicitly through `Reader.Page` and `History`, and no author joins. `Reader.One` reads
+explicitly through `Reader.Page` and `ReadStore`, and no author joins. `Reader.One` reads
 one message by organisation, channel and `event_seq`, returning `conversation.ErrMessageNotFound`
 for a missing or out-of-scope message. `conversation.Reader` resolves authors through
 its own `MemberDirectory.LookupMembers`, served by org (member IDs filtered by
@@ -32,7 +32,7 @@ bound to its snapshot through `SnapshotRunner`. It
 shares one read-only repeatable-read transaction
 across the channel and sidebar, the selected topic and the bounded topic list
 (through its snapshot-bound `ReadStore`), history, both author
-lookups and the topic batch through `conversation.TopicDirectory.LookupTopics`, plus the
+lookups and the topic batch through `conversation.ReadStore.LookupTopics`, plus the
 org's `organization.event_seq` on the latest channel or topic page.
 It returns `conversation.ChannelPage`; older pages have no event cursor.
 `conversation.Reader.One` reads one message, its authors and topic in its own snapshot.

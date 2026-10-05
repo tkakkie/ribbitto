@@ -107,8 +107,20 @@ type SnapshotRunner interface {
 // reads are scoped by organisation, the others by organisation and channel.
 // It has no write method, so a snapshot never carries a write.
 type ReadStore interface {
-	History
-	TopicDirectory
+	// GetMessages returns the requested IDs of the channel only, newest
+	// first; missing or out-of-scope IDs are omitted.
+	GetMessages(ctx context.Context, organizationID, channelID kernel.ID, ids []kernel.ID) ([]Message, error)
+	// ListMessagesBefore returns at most limit messages of the channel older
+	// than event_seq before (the latest when before is nil), newest first,
+	// only of topicID when it is set.
+	ListMessagesBefore(ctx context.Context, organizationID, channelID kernel.ID, topicID *kernel.ID, before *int64, limit int32) ([]Message, error)
+	// GetMessage returns the channel's message at eventSeq, or
+	// ErrMessageNotFound when the scoped key is absent.
+	GetMessage(ctx context.Context, organizationID, channelID kernel.ID, eventSeq int64) (Message, error)
+	// LookupTopics resolves the requested topics of the channel in one batch,
+	// so a page costs one topic query rather than one per message. Missing
+	// and out-of-scope topics are omitted.
+	LookupTopics(ctx context.Context, organizationID, channelID kernel.ID, topicIDs []kernel.ID) (map[kernel.ID]Topic, error)
 	// GetChannel returns a channel of the organisation, or ErrChannelNotFound.
 	GetChannel(ctx context.Context, organizationID, id kernel.ID) (Channel, error)
 	// ListChannels returns the organisation's channels by name, then ID.

@@ -13,16 +13,22 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
+// historyData is ReadStore's message and topic-batch reads, which the reader
+// tests' fakes supply.
+type historyData interface {
+	GetMessages(ctx context.Context, organizationID, channelID kernel.ID, ids []kernel.ID) ([]conversation.Message, error)
+	ListMessagesBefore(ctx context.Context, organizationID, channelID kernel.ID, topicID *kernel.ID, before *int64, limit int32) ([]conversation.Message, error)
+	GetMessage(ctx context.Context, organizationID, channelID kernel.ID, eventSeq int64) (conversation.Message, error)
+	LookupTopics(ctx context.Context, organizationID, channelID kernel.ID, topicIDs []kernel.ID) (map[kernel.ID]conversation.Topic, error)
+}
 type readerData interface {
-	conversation.History
-	conversation.TopicDirectory
+	historyData
 	conversation.MemberDirectory
 	conversation.AccountDirectory
 }
 type snapshotFake struct {
 	*postingFake
-	conversation.History
-	conversation.TopicDirectory
+	historyData
 	organizationID kernel.ID
 }
 
@@ -62,14 +68,14 @@ func (f *snapshotFake) ListMessagesBefore(ctx context.Context, orgID, ch kernel.
 	if err := f.step("history"); err != nil {
 		return nil, err
 	}
-	return f.History.ListMessagesBefore(ctx, orgID, ch, topic, before, limit)
+	return f.historyData.ListMessagesBefore(ctx, orgID, ch, topic, before, limit)
 }
 func (f *snapshotFake) EventSeq(context.Context, kernel.ID) (int64, error) {
 	return 7, f.step("cursor")
 }
 func testReader(t *testing.T, data readerData) (*conversation.Reader, *snapshotFake) {
 	t.Helper()
-	f := &snapshotFake{postingFake: &postingFake{t: t, err: conversation.ErrMessageNotFound}, History: data, TopicDirectory: data}
+	f := &snapshotFake{postingFake: &postingFake{t: t, err: conversation.ErrMessageNotFound}, historyData: data}
 	reader := conversation.NewReader(f,
 		func(s platform.Snapshot) conversation.ReadStore { f.bound(s, "reads"); return f },
 		func(s platform.Snapshot) conversation.MemberDirectory { f.bound(s, "members"); return data },

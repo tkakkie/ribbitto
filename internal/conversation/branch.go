@@ -50,7 +50,7 @@ func NewBrancher(runner TxRunner, writer WriterIn, sequences EventSequenceIn, ev
 // Branch validates b and runs it in the member's organisation and the
 // channel. It returns the destination topic.
 func (s *Brancher) Branch(ctx context.Context, m org.Membership, channelID kernel.ID, b Branch, notice func(Topic) string) (Topic, error) {
-	if err := validBranch(&b); err != nil {
+	if err := validateAndNormalizeBranch(&b); err != nil {
 		return Topic{}, err
 	}
 	destination, seq, err := s.run(ctx, m.Organization.ID, channelID, m.Member.ID, b, notice)
@@ -63,7 +63,7 @@ func (s *Brancher) Branch(ctx context.Context, m org.Membership, channelID kerne
 	return destination, nil
 }
 
-func validBranch(b *Branch) error {
+func validateAndNormalizeBranch(b *Branch) error {
 	if len(b.Messages) == 0 || len(b.Messages) > MaxBranchMessages {
 		return fmt.Errorf("%w: %d messages, want 1–%d", ErrInvalidBranch, len(b.Messages), MaxBranchMessages)
 	}

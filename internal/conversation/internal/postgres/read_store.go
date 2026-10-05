@@ -64,8 +64,8 @@ func (s ReadStore) ListTopics(ctx context.Context, organizationID, channelID ker
 	return topics, nil
 }
 
-// LookupTopics implements conversation.TopicDirectory without per-message
-// queries. Missing and out-of-scope IDs are omitted.
+// LookupTopics implements conversation.ReadStore's topic batch without
+// per-message queries. Missing and out-of-scope IDs are omitted.
 func (s ReadStore) LookupTopics(ctx context.Context, organizationID, channelID kernel.ID, ids []kernel.ID) (map[kernel.ID]conversation.Topic, error) {
 	rows, err := s.queries.LookupTopics(ctx, sqlcgen.LookupTopicsParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), TopicIds: uuids(ids)})
 	if err != nil {

@@ -66,7 +66,7 @@ bounded topic list, the branching endpoint (#305) and its selection UI
   `event_seq`, each labelled with its topic. It is what the channel page
   shows today. Labels are escaped and isolated with `<bdi>` and link to the
   topic view; the default label comes from both language catalogues. Topic names
-  are resolved through `conversation.TopicDirectory` in one batch per page, in the same
+  are resolved through `conversation.ReadStore` in one batch per page, in the same
   snapshot as the messages and authors. Live labels come from the shared
   `conversation.Reader.One` load through the existing render cache, keyed by
   organisation, channel, sequence and language, with no extra read per stream

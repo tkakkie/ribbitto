@@ -19,8 +19,12 @@
 // WriterIn, EventSequenceIn, EventAppenderIn and Notifier, the transaction
 // ports posting and branching will own their transaction through (unused
 // until steps 4.9 and 4.10a; the store backs branching's CreateTopic and
-// MoveMessages with copies of the legacy queries until step 4.16); and the
-// two event kinds conversation publishes and so owns.
+// MoveMessages with copies of the legacy queries until step 4.16);
+// SnapshotRunner and ReadStore with ReadStoreIn, the snapshot and its message
+// reads the page snapshot, One and Many will own their reads through (unused
+// until step 4.11c; the store's message queries, InsertMessage, GetMessage,
+// ListMessagesBefore and GetMessages, are copies of the legacy ones until
+// step 4.15); and the two event kinds conversation publishes and so owns.
 // KindPosted with Posted, EncodePosted, DecodePosted and RoutePosted is
 // message.posted, its payload and its routing; KindMessagesMoved with Moved,
 // EncodeMoved, DecodeMoved and RouteMoved is messages.moved. conversationpg

@@ -18,16 +18,18 @@ import (
 // ReadStoreIn binds conversation's reads to the caller's snapshot without
 // managing its lifecycle.
 func ReadStoreIn(snapshot platform.Snapshot) ReadStore {
-	db := pgxbridge.Snapshot(snapshot)
-	return ReadStore{channels: NewChannelStore(db), topics: NewTopicStore(db), queries: sqlcgen.New(db)}
+	return newReadStore(pgxbridge.Snapshot(snapshot))
 }
 
-// ReadStore implements conversation.ReadStore. It delegates to the channel
-// and topic stores rather than embedding them, so it never gains their write
-// methods.
+func newReadStore(db sqlcgen.DBTX) ReadStore {
+	return ReadStore{TopicStore: NewTopicStore(db), channels: NewChannelStore(db), queries: sqlcgen.New(db)}
+}
+
+// ReadStore implements conversation.ReadStore. It delegates to ChannelStore
+// rather than embedding it, so CreateChannel never becomes a snapshot method.
 type ReadStore struct {
+	*TopicStore
 	channels *ChannelStore
-	topics   *TopicStore
 	queries  *sqlcgen.Queries
 }
 
@@ -39,11 +41,6 @@ func (s ReadStore) GetChannel(ctx context.Context, organizationID, id kernel.ID)
 // ListChannels returns the organisation's channels ordered by name and ID.
 func (s ReadStore) ListChannels(ctx context.Context, organizationID kernel.ID) ([]conversation.Channel, error) {
 	return s.channels.ListChannels(ctx, organizationID)
-}
-
-// GetTopic looks up an ID within the organisation and channel.
-func (s ReadStore) GetTopic(ctx context.Context, organizationID, channelID, id kernel.ID) (conversation.Topic, error) {
-	return s.topics.GetTopic(ctx, organizationID, channelID, id)
 }
 
 // ListTopics returns at most limit topics of the channel, the default first,
@@ -127,14 +124,4 @@ func messagesFromRows(rows []sqlcgen.Message) []conversation.Message {
 
 func messageFromRow(row sqlcgen.Message) conversation.Message {
 	return conversation.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time}
-}
-
-func uuid(id kernel.ID) pgtype.UUID { return pgtype.UUID{Bytes: id, Valid: true} }
-
-func uuids(ids []kernel.ID) []pgtype.UUID {
-	result := make([]pgtype.UUID, len(ids))
-	for i, id := range ids {
-		result[i] = uuid(id)
-	}
-	return result
 }

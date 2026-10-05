@@ -6,13 +6,13 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // TopicStore reads topics using a pool or a caller-owned transaction.
+// It must stay read-only because ReadStore embeds it.
 type TopicStore struct{ queries *sqlcgen.Queries }
 
 // NewTopicStore returns a store using db.
@@ -24,9 +24,9 @@ func NewTopicStore(db sqlcgen.DBTX) *TopicStore {
 // another channel or organisation is ErrTopicNotFound, like a missing one.
 func (s *TopicStore) GetTopic(ctx context.Context, organizationID, channelID, id kernel.ID) (conversation.Topic, error) {
 	row, err := s.queries.GetTopic(ctx, sqlcgen.GetTopicParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true},
-		ChannelID:      pgtype.UUID{Bytes: channelID, Valid: true},
-		ID:             pgtype.UUID{Bytes: id, Valid: true},
+		OrganizationID: uuid(organizationID),
+		ChannelID:      uuid(channelID),
+		ID:             uuid(id),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return conversation.Topic{}, conversation.ErrTopicNotFound

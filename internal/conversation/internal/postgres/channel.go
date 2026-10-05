@@ -8,7 +8,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -28,7 +27,7 @@ func (s *ChannelStore) CreateChannel(ctx context.Context, organizationID kernel.
 }
 
 func (s *ChannelStore) createChannel(ctx context.Context, organizationID kernel.ID, name string, isDefault bool) (conversation.Channel, error) {
-	row, err := s.queries.CreateChannel(ctx, sqlcgen.CreateChannelParams{OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Name: name, IsDefault: isDefault})
+	row, err := s.queries.CreateChannel(ctx, sqlcgen.CreateChannelParams{OrganizationID: uuid(organizationID), Name: name, IsDefault: isDefault})
 	var pgErr *pgconn.PgError
 	switch {
 	// The unique constraint, not a lookup first, decides between concurrent creators.
@@ -37,14 +36,14 @@ func (s *ChannelStore) createChannel(ctx context.Context, organizationID kernel.
 	case errors.As(err, &pgErr) && pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "channel_name_"):
 		return conversation.Channel{}, fmt.Errorf("%w: %w", conversation.ErrInvalidChannelName, err)
 	case err != nil:
-		return conversation.Channel{}, fmt.Errorf("creating channel: %w", err)
+		return conversation.Channel{}, fmt.Errorf("inserting channel: %w", err)
 	}
 	return channelFromRow(sqlcgen.Channel(row)), nil
 }
 
 // ListChannels returns the organisation's channels ordered by name and ID.
 func (s *ChannelStore) ListChannels(ctx context.Context, organizationID kernel.ID) ([]conversation.Channel, error) {
-	rows, err := s.queries.ListChannels(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+	rows, err := s.queries.ListChannels(ctx, uuid(organizationID))
 	if err != nil {
 		return nil, fmt.Errorf("listing channels: %w", err)
 	}
@@ -57,7 +56,7 @@ func (s *ChannelStore) ListChannels(ctx context.Context, organizationID kernel.I
 
 // GetChannel looks up an ID within the organisation.
 func (s *ChannelStore) GetChannel(ctx context.Context, organizationID, id kernel.ID) (conversation.Channel, error) {
-	row, err := s.queries.GetChannel(ctx, sqlcgen.GetChannelParams{OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ID: pgtype.UUID{Bytes: id, Valid: true}})
+	row, err := s.queries.GetChannel(ctx, sqlcgen.GetChannelParams{OrganizationID: uuid(organizationID), ID: uuid(id)})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return conversation.Channel{}, conversation.ErrChannelNotFound
 	}
@@ -69,7 +68,7 @@ func (s *ChannelStore) GetChannel(ctx context.Context, organizationID, id kernel
 
 // GetDefaultChannel returns the organisation's default, if one exists.
 func (s *ChannelStore) GetDefaultChannel(ctx context.Context, organizationID kernel.ID) (conversation.Channel, error) {
-	row, err := s.queries.GetDefaultChannel(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+	row, err := s.queries.GetDefaultChannel(ctx, uuid(organizationID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return conversation.Channel{}, conversation.ErrChannelNotFound
 	}

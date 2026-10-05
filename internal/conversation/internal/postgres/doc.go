@@ -11,8 +11,10 @@
 // used by posting and, from step 4.10a, branching. Branching's CreateTopic and
 // MoveMessages queries duplicate the legacy entry's db/queries/topic.sql
 // until step 4.16 removes that copy. ReadStore holds the page snapshot's
-// message reads and no write; conversationpg.ReadStoreIn binds it to a
-// caller's snapshot, unused in production until step 4.11c. Its queries
-// duplicate message.sql's legacy ones of the same names, which step 4.15
-// removes.
+// channel, topic and message reads and no write, delegating the channel
+// lookups and the topic by ID to the channel and topic stores;
+// conversationpg.ReadStoreIn binds it to a caller's snapshot, unused in
+// production until step 4.11c. Its own queries duplicate the legacy ones of
+// the same names: message.sql's until step 4.15, topic.sql's ListTopics and
+// LookupTopics until 4.16.
 package postgres

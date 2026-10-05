@@ -210,7 +210,7 @@ func eventSequence(tx platform.Tx) postgres.EventSequence { return orgpg.Sequenc
 
 // eventCursor adapts org's committed event_seq to the reader's consumer
 // interface.
-func eventCursor(s platform.Snapshot) postgres.EventCursor { return orgpg.EventCursorIn(s) }
+func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }
 
 // eventKinds gives readers the same publisher registrations as cmd/ribbitto.
 func eventKinds() realtime.Kinds {

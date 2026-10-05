@@ -27,9 +27,9 @@ type MessageReader struct {
 	// Temporary until step 4 too.
 	Members conversation.MemberDirectoryIn
 	// Cursor returns org's committed event_seq bound to the same snapshot
-	// (orgpg.EventCursorIn, adapted by a closure), for the latest page.
-	// Temporary until step 4 too.
-	Cursor EventCursorIn
+	// (orgpg.EventCursorIn, adapted by a closure to conversation's factory),
+	// for the latest page. Temporary until step 4 too.
+	Cursor conversation.EventCursorIn
 }
 
 // One reads one message, its author names and topic in a read-only snapshot.

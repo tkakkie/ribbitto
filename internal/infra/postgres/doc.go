@@ -1,4 +1,3 @@
-// Package postgres keeps the frozen topic store until migration step 4.16;
-// conversation's store, not this package, creates setup's default channel.
-// Connections, migrations and test databases are in internal/platform/postgres.
+// Package postgres remains only to hold pgtest, the shared integration-test
+// fixtures and platform database lifecycle delegates, until migration step 5.
 package postgres

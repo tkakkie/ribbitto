@@ -18,13 +18,10 @@
 // snapshot by closures in cmd/* and the tests, like EventCursorIn, org's
 // committed event_seq for the latest page; TxRunner, Writer with
 // WriterIn, EventSequenceIn, EventAppenderIn and Notifier, the transaction
-// ports Posting and Brancher own their transactions through (the store
-// backs CreateTopic and MoveMessages with copies of the legacy queries until
-// step 4.16);
+// ports Posting and Brancher own their transactions through;
 // SnapshotRunner, which owns Reader's snapshot, and ReadStore with
 // ReadStoreIn, which binds its channel, topic and message reads to that
-// snapshot (the store's ListTopics and LookupTopics queries are copies of
-// the legacy ones until step 4.16); Posting, NewPosting,
+// snapshot; Posting, NewPosting,
 // Post and PostToTopic, which validate and
 // commit a post with its event, then notify; Brancher, NewBrancher, Branch,
 // MaxBranchMessages, ErrInvalidBranch and ErrBranchConflict, which validate

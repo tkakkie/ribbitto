@@ -1,18 +1,5 @@
 version: "2"
 sql:
-  # The legacy layered store holds only topic.sql until step 4.16. sqlc
-  # reads only the files directly in db/queries/, so modules' query
-  # directories stay out of it. GetTopic, GetDefaultTopic, CreateTopic,
-  # MoveMessages, ListTopics and LookupTopics are duplicated in conversation/.
-  - engine: postgresql
-    schema: db/migrations/
-    queries: db/queries/
-    gen:
-      go:
-        package: sqlcgen
-        out: internal/infra/postgres/sqlcgen
-        sql_package: pgx/v5
-        omit_unused_structs: true
   # Each module has its own entry and generated package (decision 26).
   - engine: postgresql
     schema: db/migrations/

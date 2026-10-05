@@ -9,8 +9,7 @@ import (
 
 // New returns a pool on a fresh clone of the migrated template. The database
 // lifecycle lives in internal/platform/postgres/pgtest; this package keeps its
-// API, and the feature fixtures below, until each module moves its own
-// (decision 26, removed in the migration's last step).
+// API and shared feature fixtures until migration step 5 (decision 26).
 func New(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	return platform.New(t)

@@ -13,8 +13,6 @@ linters:
     rules:
       - path: '_templ\.go$'
         linters: [errcheck, revive]
-      - path: '^internal/infra/postgres/sqlcgen/'
-        linters: [errcheck, revive]
   settings:
     depguard:
       # Lax rules restrict listed imports only. Exact roots and slash prefixes
@@ -32,12 +30,11 @@ linters:
             - pkg: github.com/tkakkie/ribbitto/db/migrations
               desc: Only internal/platform/postgres and cmd/ribbitto own migrations.
         # Only stores unwrap the platform's Tx and Snapshot to pgx (decision 26).
-        # internal/infra/postgres may until the migration's last step, and the
-        # platform's own runner tests unwrap to prove one transaction. The
+        # The platform's own runner tests unwrap to prove one transaction. The
         # lint fixtures in internal/lintfixture prove both directions.
         bridge:
           list-mode: lax
-          files: ["$all", "!**/internal/postgres/*.go", "!**/internal/postgres/**/*.go", "!**/internal/platform/postgres/tx_test.go", "!**/internal/infra/postgres/*.go", "!**/internal/infra/postgres/**/*.go"]
+          files: ["$all", "!**/internal/postgres/*.go", "!**/internal/postgres/**/*.go", "!**/internal/platform/postgres/tx_test.go"]
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge
               desc: Only stores under internal/postgres unwrap Tx and Snapshot; see decision 26.
@@ -169,20 +166,12 @@ linters:
             - github.com/tkakkie/ribbitto/internal/infra/postgres$
             - github.com/tkakkie/ribbitto/internal/infra/postgres/
             - github.com/tkakkie/ribbitto/internal/domain$
-            - github.com/tkakkie/ribbitto/internal/domain/
             - github.com/tkakkie/ribbitto/internal/app$
             - github.com/tkakkie/ribbitto/internal/app/
-            - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
-            # Temporary, until step 4.16: infra's topic store uses conversation's
-            # types and errors.
-            - github.com/tkakkie/ribbitto/internal/conversation$
             # Temporary, until the migration's last step: infra/postgres/pgtest
-            # delegates to the platform's database lifecycle. Infra's Tx/Snapshot
-            # bridge allowance is unused; step 4.16 removes it (K16).
+            # delegates to the platform's database lifecycle.
             - github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest$
-            - github.com/tkakkie/ribbitto/internal/platform/postgres$
-            - github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge$
           deny: *non_html
         # realtime is the second module (decision 26).
         realtime:

@@ -42,7 +42,7 @@ the temporary implementation behind it.
 | posting, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | 4 |
 | posting, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | 4 |
 | the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |
-| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`), members (conversation's `MemberDirectoryIn`, from `orgpg.MembersIn`) and cursor (`EventCursorIn`, from `orgpg.EventCursorIn`), each adapted by a closure | 3 | 4 |
+| posting, branching, page snapshot, `One`, `Many`, page cursor (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`), members (conversation's `MemberDirectoryIn`, from `orgpg.MembersIn`) and cursor (conversation's `EventCursorIn`, from `orgpg.EventCursorIn`), each adapted by a closure | 3 | 4 |
 
 Setup's and sign-up's database tests live in `internal/org/orgpg`,
 with local raw-SQL fixtures and event-log assertions.

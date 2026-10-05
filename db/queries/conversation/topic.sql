@@ -20,3 +20,15 @@ VALUES ($1, $2, $3, $4) RETURNING *;
 UPDATE message SET topic_id = sqlc.arg(to_topic_id)
 WHERE organization_id = sqlc.arg(organization_id) AND channel_id = sqlc.arg(channel_id)
   AND topic_id = sqlc.arg(from_topic_id) AND id = ANY(sqlc.arg(message_ids)::uuid[]);
+
+-- name: ListTopics :many
+-- Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
+SELECT * FROM topic
+WHERE organization_id = $1 AND channel_id = $2
+ORDER BY is_default DESC, lower(name), id
+LIMIT $3;
+
+-- name: LookupTopics :many
+-- Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
+SELECT * FROM topic
+WHERE organization_id = $1 AND channel_id = $2 AND id = ANY(sqlc.arg(topic_ids)::uuid[]);

@@ -93,6 +93,86 @@ func (q *Queries) GetTopic(ctx context.Context, arg GetTopicParams) (Topic, erro
 	return i, err
 }
 
+const listTopics = `-- name: ListTopics :many
+SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic
+WHERE organization_id = $1 AND channel_id = $2
+ORDER BY is_default DESC, lower(name), id
+LIMIT $3
+`
+
+type ListTopicsParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	Limit          int32
+}
+
+// Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
+func (q *Queries) ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic, error) {
+	rows, err := q.db.Query(ctx, listTopics, arg.OrganizationID, arg.ChannelID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Topic
+	for rows.Next() {
+		var i Topic
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.ChannelID,
+			&i.Name,
+			&i.IsDefault,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lookupTopics = `-- name: LookupTopics :many
+SELECT id, organization_id, channel_id, name, is_default, created_at FROM topic
+WHERE organization_id = $1 AND channel_id = $2 AND id = ANY($3::uuid[])
+`
+
+type LookupTopicsParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	TopicIds       []pgtype.UUID
+}
+
+// Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
+func (q *Queries) LookupTopics(ctx context.Context, arg LookupTopicsParams) ([]Topic, error) {
+	rows, err := q.db.Query(ctx, lookupTopics, arg.OrganizationID, arg.ChannelID, arg.TopicIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Topic
+	for rows.Next() {
+		var i Topic
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.ChannelID,
+			&i.Name,
+			&i.IsDefault,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const moveMessages = `-- name: MoveMessages :execrows
 UPDATE message SET topic_id = $1
 WHERE organization_id = $2 AND channel_id = $3

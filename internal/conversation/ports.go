@@ -103,12 +103,34 @@ type SnapshotRunner interface {
 	InSnapshot(ctx context.Context, fn func(platform.Snapshot) error) error
 }
 
-// ReadStore is conversation's reads in the caller's snapshot, each scoped by
-// organisation and channel. It has no write method, so a snapshot never
-// carries a write. Step 4.11b2 adds the channel and topic reads.
+// ReadStore is conversation's reads in the caller's snapshot: the channel
+// reads are scoped by organisation, the others by organisation and channel.
+// It has no write method, so a snapshot never carries a write.
 type ReadStore interface {
 	History
+	TopicDirectory
+	// GetChannel returns a channel of the organisation, or ErrChannelNotFound.
+	GetChannel(ctx context.Context, organizationID, id kernel.ID) (Channel, error)
+	// ListChannels returns the organisation's channels by name, then ID.
+	ListChannels(ctx context.Context, organizationID kernel.ID) ([]Channel, error)
+	// GetTopic returns a topic of the channel, or ErrTopicNotFound.
+	GetTopic(ctx context.Context, organizationID, channelID, id kernel.ID) (Topic, error)
+	// ListTopics returns at most limit topics of the channel: the default
+	// first, then by name ignoring case, then by ID. A limit outside
+	// 1…math.MaxInt32 is an error.
+	ListTopics(ctx context.Context, organizationID, channelID kernel.ID, limit int) ([]Topic, error)
 }
 
 // ReadStoreIn binds conversation's reads to the caller's snapshot.
 type ReadStoreIn func(platform.Snapshot) ReadStore
+
+// EventCursor is what the latest page needs from org: the organisation's
+// committed event_seq in the page's snapshot, where its stream starts. An
+// unknown organisation is org.ErrNotFound.
+type EventCursor interface {
+	EventSeq(ctx context.Context, organizationID kernel.ID) (int64, error)
+}
+
+// EventCursorIn binds org's cursor to the caller's snapshot, the one the
+// page is read in.
+type EventCursorIn func(platform.Snapshot) EventCursor

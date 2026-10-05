@@ -124,3 +124,11 @@ func (s *TopicStore) LookupTopics(ctx context.Context, organizationID, channelID
 	}
 	return result, nil
 }
+
+func uuidArray(ids []domain.ID) []pgtype.UUID {
+	result := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		result[i] = pgtype.UUID{Bytes: id, Valid: true}
+	}
+	return result
+}

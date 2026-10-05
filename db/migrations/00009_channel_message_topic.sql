@@ -5,8 +5,9 @@
 -- no row is ever without a topic.
 
 -- The default makes a channel name its default topic's id before the topic
--- exists: channel creation inserts both in one statement (db/queries/channel.sql),
--- and a channel inserted any other way fails at commit unless its topic follows.
+-- exists: channel creation inserts both in one statement
+-- (db/queries/conversation/channel.sql), and a channel inserted any other way
+-- fails at commit unless its topic follows.
 ALTER TABLE channel
   ADD COLUMN default_topic_id uuid DEFAULT uuidv7(),
   -- Fixed to true so the composite foreign key below can only reach the

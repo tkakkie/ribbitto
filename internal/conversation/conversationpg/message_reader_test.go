@@ -77,7 +77,7 @@ func TestMessagePaging(t *testing.T) {
 		}
 		fixture := pgtest.OrganizationWithOwner(t, pool, slug, name)
 		memberships[slug] = org.Membership{Organization: org.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: org.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
-		defaults[slug] = fixture.Channel
+		defaults[slug] = conversation.Channel(fixture.Channel)
 	}
 	acme, globex := memberships["acme"], memberships["globex"]
 	channels := map[string]domain.ID{"empty": defaults["acme"].ID}

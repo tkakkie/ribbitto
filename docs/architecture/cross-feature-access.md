@@ -6,8 +6,7 @@ snapshot reach org's and identity's data. The [feature map](features.md)
 lists each feature's packages and tables and the known exceptions; the
 [architecture index](README.md) lists the other files.
 
-Conversation's channel store and infra's frozen `ChannelStore` accept a pool
-or a caller-owned transaction, as does infra's `MessageStore`.
+Conversation's channel store accepts a pool or a caller-owned transaction.
 `conversation.Posting` owns the posting transaction (sequence first, topic
 reads, then the message and event) through its runner. It takes org's sequence
 through conversation's `EventSequenceIn` factory (`orgpg.SequenceIn`, adapted

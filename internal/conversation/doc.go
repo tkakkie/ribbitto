@@ -23,9 +23,8 @@
 // step 4.16);
 // SnapshotRunner, which owns Reader's snapshot, and ReadStore with
 // ReadStoreIn, which binds its channel, topic and message reads to that
-// snapshot (the store's message queries, InsertMessage, GetMessage,
-// ListMessagesBefore and GetMessages, are copies of the legacy ones until
-// step 4.15, and ListTopics and LookupTopics until 4.16); Posting, NewPosting,
+// snapshot (the store's ListTopics and LookupTopics queries are copies of
+// the legacy ones until step 4.16); Posting, NewPosting,
 // Post and PostToTopic, which validate and
 // commit a post with its event, then notify; Brancher, NewBrancher, Branch,
 // MaxBranchMessages, ErrInvalidBranch and ErrBranchConflict, which validate

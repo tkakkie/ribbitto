@@ -34,7 +34,7 @@ the temporary implementation behind it.
 | Flow or caller | Needs from | Interface from step | Temporary implementation until step |
 |---|---|---|---|
 | every package but `identity`, `realtime` and `conversation` (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
-| `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
+| `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps org's and identity's fixtures plus a raw-SQL channel and default topic) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
 | `conversation`'s topic backfill test, `realtime`'s event-log migration test (`internal/realtime/internal/postgres/event_log_test.go`), `org`'s handle upgrade test and `conversation`'s default-channel backfill test | `db/migrations` (temporary allowance) | 0 | 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
 

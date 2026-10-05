@@ -87,12 +87,12 @@ The prompt carries the issue and its review comments, plus these rules:
   and `RIBBITTO_REQUIRE_DB=1`. Its Go tests run with the race detector,
   which works in this profile. `make vuln` does not, because
   `vuln.go.dev` is not on the allowlist; CI runs it
-  ([Checks](../../README.md#checks)). `make check` ends with the launcher
-  suites. The first, `bash scripts/ai/grok-review_test.sh`, stops at once
-  with a message: the sandbox does not permit `ps`, which it needs to find
-  its fake Grok processes
+  ([Checks](../../README.md#checks)). When the change can affect the
+  launcher suites, `make check` ends with them. The first,
+  `scripts/ai/grok-review_test.sh`, stops at once: the sandbox does not
+  permit `ps`, which it needs to find its fake Grok processes
   ([#183](https://github.com/tkakkie/ribbitto/issues/183)), so Muse's suite
-  never runs. Everything before them has run, so that failure is expected.
+  never runs. Everything before has run, so that failure is expected.
 
   ```sh
   # Reuse the container if it is already running; either way, wait for it.
@@ -207,8 +207,8 @@ run once, then ask the maintainer.
 
 `RIBBITTO_MUSE_TRUSTED_REF` overrides the launcher and prompt ref only for
 testing changes to them; `RIBBITTO_MUSE_TEST_SETUP_DELAY` is only for
-`scripts/ai/muse-review_test.sh`. `make check` runs that suite as well as
-Grok's. Pre-launch Muse tests run without `ps`; process tests require it
+`scripts/ai/muse-review_test.sh`. `make check-ai` runs that suite as well
+as Grok's. Pre-launch Muse tests run without `ps`; process tests require it
 and fail with a diagnostic in the Codex sandbox, so the orchestrator runs
 the full suite outside it.
 

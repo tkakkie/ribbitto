@@ -7,8 +7,16 @@ TAILWIND := ./bin/tailwindcss-$(TAILWIND_VERSION)
 TAILWIND_SHA_macos-arm64 := cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d
 TAILWIND_SHA_linux-x64 := dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a
 CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
+# The AI launchers' self-tests take most of check's time, so check runs them
+# only when the change since this base can affect them (an empty base always
+# runs them); scripts/ai/launcher-tests.sh says what it chose and why. CI
+# passes HEAD^1 on a pull request (its merge commit's first parent, the base
+# as merged), or an empty base on main and nightly. It is exported so the
+# recipe reads it from the environment, unquoted by make.
+LAUNCHER_TESTS_BASE ?= origin/main
+export LAUNCHER_TESTS_BASE
 
-.PHONY: check lint lint-fixtures vuln db-up db-down generate schema-docs deps css dev
+.PHONY: check check-ai lint lint-fixtures vuln db-up db-down generate schema-docs deps css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -89,8 +97,12 @@ check: $(TEMPL)
 	go -C tools vet ./docscheck
 	go -C tools test -race ./docscheck
 	go -C tools run ./docscheck ..
-	bash scripts/ai/grok-review_test.sh
-	bash scripts/ai/muse-review_test.sh
+	bash scripts/ai/launcher-tests_test.sh
+	bash scripts/ai/launcher-tests.sh --base "$$LAUNCHER_TESTS_BASE"
+
+# Always runs the AI launchers' self-tests, whatever changed.
+check-ai:
+	bash scripts/ai/launcher-tests.sh
 
 # Needs the Go vulnerability database over the network, so it runs in CI
 # next to make check rather than inside it. Scans the application module.

@@ -44,6 +44,7 @@ make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
 make dev                   # watches templ and CSS; restarts the server
 make check                 # checks formatting, vets, lints, builds and tests (with -race)
+make check-ai              # always runs the AI launchers' self-tests (see Checks)
 make vuln                  # govulncheck: known vulnerabilities reachable from our code
 make deps                  # regenerates docs/dependencies.md after an import change
 make db-down               # stops PostgreSQL; keeps the named data volume
@@ -89,7 +90,13 @@ so local notes and tools do not change the output.
 `make check` is what CI runs and what must pass before a pull request: it
 checks formatting (`gofmt` for Go, `templ fmt` for templates), vets, lints,
 builds, runs the Go tests with the race detector, and checks the import
-graph and the documents. CI also runs
+graph and the documents. The AI launchers' self-tests, most of its time, run
+only when the change since `LAUNCHER_TESTS_BASE` (default `origin/main`;
+commits, staged, unstaged and untracked files) touches `scripts/ai/`,
+`.github/prompts/`, `.github/workflows/` or the `Makefile`, or when that
+comparison fails; `make check` prints what it chose. `make check-ai` always
+runs them. CI compares a pull request's merge commit with its first parent
+(the base as merged), and always runs them on `main` and nightly. CI also runs
 `make vuln`, which runs the pinned `govulncheck` over the application module
 and fails when a known vulnerability is statically reachable from our code.
 It needs the network, so it is not part of `make check`. When it fails:

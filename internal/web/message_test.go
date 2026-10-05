@@ -18,7 +18,10 @@ import (
 	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -187,19 +190,118 @@ func TestMessageTimestampView(t *testing.T) {
 	}
 }
 
-type postingStore struct {
-	id                   domain.ID
+type fakeTxRunner struct{}
+
+func (fakeTxRunner) InTx(_ context.Context, fn func(platform.Tx) error) error {
+	return fn(platform.Tx{})
+}
+
+type fakePostingWriter struct {
+	id                   kernel.ID
 	err                  error
 	body                 string
-	org, channel, member domain.ID
+	org, channel, member kernel.ID
 }
 
-func (s *postingStore) PostToTopic(_ context.Context, org, ch, member domain.ID, _ *domain.ID, body string) (conversation.Message, error) {
-	s.org, s.channel, s.member, s.body = org, ch, member, body
-	return conversation.Message{ID: s.id, Body: body}, s.err
+func (*fakePostingWriter) GetDefaultTopic(_ context.Context, org, channel kernel.ID) (conversation.Topic, error) {
+	return conversation.Topic{ID: kernel.ID{2}, OrganizationID: org, ChannelID: channel, IsDefault: true}, nil
 }
 
-func testPoster() *message.Service { return message.New(&postingStore{}) }
+func (*fakePostingWriter) GetTopic(_ context.Context, org, channel, id kernel.ID) (conversation.Topic, error) {
+	return conversation.Topic{ID: id, OrganizationID: org, ChannelID: channel}, nil
+}
+
+func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic, member kernel.ID, body string, seq int64) (conversation.Message, error) {
+	w.org, w.channel, w.member, w.body = org, channel, member, body
+	if w.err != nil {
+		return conversation.Message{}, w.err
+	}
+	return conversation.Message{ID: w.id, OrganizationID: org, ChannelID: channel, TopicID: topic, MemberID: member, Body: body, EventSeq: seq}, nil
+}
+
+// Branching's methods must fail if a posting test calls them.
+func (*fakePostingWriter) CreateTopic(context.Context, kernel.ID, kernel.ID, string) (conversation.Topic, error) {
+	panic("posting fake: unexpected CreateTopic")
+}
+
+func (*fakePostingWriter) InsertNotice(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, string, int64) (conversation.Message, error) {
+	panic("posting fake: unexpected InsertNotice")
+}
+
+func (*fakePostingWriter) MoveMessages(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, []kernel.ID) (int64, error) {
+	panic("posting fake: unexpected MoveMessages")
+}
+
+type fakeEventSequence struct{}
+
+func (fakeEventSequence) NextEventSeq(context.Context, kernel.ID) (int64, error) {
+	return 1, nil
+}
+
+type fakeEventAppender struct{}
+
+func (fakeEventAppender) Append(context.Context, kernel.ID, int64, realtime.EventKind, *kernel.ID, []byte) error {
+	return nil
+}
+
+var (
+	_ conversation.TxRunner      = fakeTxRunner{}
+	_ conversation.Writer        = (*fakePostingWriter)(nil)
+	_ conversation.EventSequence = fakeEventSequence{}
+	_ conversation.EventAppender = fakeEventAppender{}
+	_ message.Store              = postingAdapter{}
+)
+
+// postingAdapter runs today's message.Service over conversation's posting
+// ports. Step 4.9c deletes it and builds conversation.NewPosting over the
+// same fakes instead.
+type postingAdapter struct {
+	runner    conversation.TxRunner
+	writer    conversation.WriterIn
+	sequences conversation.EventSequenceIn
+	events    conversation.EventAppenderIn
+}
+
+func (s postingAdapter) PostToTopic(ctx context.Context, org, channel, member kernel.ID, topicID *kernel.ID, body string) (conversation.Message, error) {
+	var posted conversation.Message
+	err := s.runner.InTx(ctx, func(tx platform.Tx) error {
+		seq, err := s.sequences(tx).NextEventSeq(ctx, org)
+		if err != nil {
+			return err
+		}
+		writer := s.writer(tx)
+		selected, err := writer.GetDefaultTopic(ctx, org, channel)
+		if err != nil {
+			return err
+		}
+		if topicID != nil {
+			selected, err = writer.GetTopic(ctx, org, channel, *topicID)
+			if err != nil {
+				return err
+			}
+		}
+		posted, err = writer.InsertMessage(ctx, org, channel, selected.ID, member, body, seq)
+		if err != nil {
+			return err
+		}
+		return s.events(tx).Append(ctx, org, seq, conversation.KindPosted, nil, conversation.EncodePosted(channel, posted.ID, posted.TopicID))
+	})
+	if err != nil {
+		return conversation.Message{}, err
+	}
+	return posted, nil
+}
+
+func testPostingStore(writer conversation.Writer) postingAdapter {
+	return postingAdapter{
+		runner:    fakeTxRunner{},
+		writer:    func(platform.Tx) conversation.Writer { return writer },
+		sequences: func(platform.Tx) conversation.EventSequence { return fakeEventSequence{} },
+		events:    func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} },
+	}
+}
+
+func testPoster() *message.Service { return message.New(testPostingStore(&fakePostingWriter{})) }
 
 func TestMessagePostHandler(t *testing.T) {
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
@@ -222,12 +324,12 @@ func TestMessagePostHandler(t *testing.T) {
 	} {
 		for _, hx := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/htmx=%t", tt.name, hx), func(t *testing.T) {
-				store := &postingStore{id: domain.ID{37}, err: tt.storeErr}
+				writer := &fakePostingWriter{id: domain.ID{37}, err: tt.storeErr}
 				var reads []*int64
 				h, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
 					reader := populatedMessages()
 					reader.before = &reads
-					s.Messages, s.Posting = reader, message.New(store)
+					s.Messages, s.Posting = reader, message.New(testPostingStore(writer))
 				}))
 				if err != nil {
 					t.Fatal(err)
@@ -249,14 +351,14 @@ func TestMessagePostHandler(t *testing.T) {
 					t.Fatalf("status %d: %s", w.Code, w.Body.String())
 				}
 				if tt.status == 303 {
-					if store.body != "hello\nworld" || store.org != (domain.ID{}) || store.member != (domain.ID{}) || store.channel != (domain.ID{1}) {
-						t.Fatalf("posting scope/body: %+v", store)
+					if writer.body != "hello\nworld" || writer.org != (domain.ID{}) || writer.member != (domain.ID{}) || writer.channel != (domain.ID{1}) {
+						t.Fatalf("posting scope/body: %+v", writer)
 					}
 					if !hx && w.Header().Get("Location") != path {
 						t.Fatal("wrong redirect")
 					}
 				}
-				marker := `data-posted-message="` + view.MessageDOMID(store.id) + `"`
+				marker := `data-posted-message="` + view.MessageDOMID(writer.id) + `"`
 				if hx && want == 200 {
 					if !strings.Contains(w.Body.String(), marker) {
 						t.Fatal("success must identify the posted message for stream correlation")
@@ -280,7 +382,7 @@ func TestMessagePostHandler(t *testing.T) {
 				}
 				field := find(doc, atom.Textarea)
 				if want == 422 {
-					if text(field) != tt.body || attr(field, "aria-invalid") != "true" || store.body != "" {
+					if text(field) != tt.body || attr(field, "aria-invalid") != "true" || writer.body != "" {
 						t.Fatal("invalid input lost or posted")
 					}
 					checkFieldError(t, doc, field)

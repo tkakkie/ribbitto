@@ -113,3 +113,14 @@ func namedTopic(t *testing.T, pool *pgxpool.Pool, organizationID, channelID kern
 type recordingNotifier struct{ seq int64 }
 
 func (n *recordingNotifier) Raise(_ kernel.ID, seq int64) { n.seq = seq }
+
+// raised returns the recorded sequence, failing at once if Branch raised
+// nothing: a zero stopping point would make the replay wait until the test
+// times out instead of failing.
+func (n *recordingNotifier) raised(t *testing.T) int64 {
+	t.Helper()
+	if n.seq == 0 {
+		t.Fatal("branch raised no notice sequence")
+	}
+	return n.seq
+}

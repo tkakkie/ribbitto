@@ -220,7 +220,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	through := notifier.seq
+	through := notifier.raised(t)
 	stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{log, through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 	sub := realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID}
 	delivered := &moveDeliveries{}
@@ -387,7 +387,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			through := notifier.seq
+			through := notifier.raised(t)
 			renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 			stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds()), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 			delivered := &moveDeliveries{}
@@ -482,7 +482,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				through := notifier.seq
+				through := notifier.raised(t)
 				renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 				stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds()), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 				for i, selected := range topics {

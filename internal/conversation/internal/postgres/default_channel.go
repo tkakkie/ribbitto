@@ -20,9 +20,9 @@ func DefaultChannelCreatorIn(tx platform.Tx) *DefaultChannelCreator {
 }
 
 // CreateDefaultChannel creates the organisation's default channel, named
-// conversation.DefaultChannelName; CreateChannel writes its default topic in
+// conversation.DefaultChannelName; creation writes its default topic in
 // the same statement.
 func (c *DefaultChannelCreator) CreateDefaultChannel(ctx context.Context, organizationID kernel.ID) error {
-	_, err := c.channels.CreateChannel(ctx, organizationID, conversation.DefaultChannelName, true)
+	_, err := c.channels.createChannel(ctx, organizationID, conversation.DefaultChannelName, true)
 	return err
 }

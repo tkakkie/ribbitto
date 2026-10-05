@@ -4,7 +4,7 @@
 //
 // Feature: conversation (feature map in docs/architecture/features.md), which
 // owns the channel, topic and message tables. Exported API: Channel, its name
-// rule, errors and default name; Channels (List, Create, Get, Default),
+// rule, errors and default name; Channels (Create, Get, Default),
 // NewChannels and ChannelStore; Topic, ValidateTopicName, ErrTopicNotFound,
 // ErrInvalidTopicName and ErrTopicNameTaken; Topics and NewTopics, whose Get
 // is the topic lookup scoped by a membership that web's stream and paging
@@ -12,7 +12,7 @@
 // and channel; Message, ValidateMessageBody, ErrInvalidBody and
 // ErrMessageNotFound.
 //
-// Reader and NewReader own Page and Before (a ChannelPage), One an Entry by
+// Reader and NewReader own Page (a ChannelPage), One an Entry by
 // event_seq and Many a bounded ID batch, all scoped by organisation and
 // channel, over History and TopicDirectory (one topic batch per page);
 // PageSize is the history page's limit and ChannelPage the page snapshot's

@@ -81,10 +81,13 @@ func TestMessagePaging(t *testing.T) {
 	}
 	acme, globex := memberships["acme"], memberships["globex"]
 	channels := map[string]domain.ID{"empty": defaults["acme"].ID}
+	wantChannels := []conversation.Channel{defaults["acme"]}
 	for _, name := range []string{"exact", "partial", "noise"} {
 		ch := pgtest.Channel(t, pool, acme.Organization.ID, name, false)
 		channels[name] = ch.ID
+		wantChannels = append(wantChannels, conversation.Channel(ch))
 	}
+	slices.SortFunc(wantChannels, func(a, b conversation.Channel) int { return strings.Compare(a.Name, b.Name) })
 	foreign := defaults["globex"]
 
 	// Interleave posts so that every channel's event_seq values have gaps
@@ -138,9 +141,12 @@ func TestMessagePaging(t *testing.T) {
 			pages := 0
 			for {
 				queries, topicQueries = 0, 0
-				page, err := reader.Before(ctx, acme, channels[name], before)
+				page, err := reader.Page(ctx, acme, channels[name], nil, before)
 				if err != nil {
 					t.Fatal(err)
+				}
+				if !slices.Equal(page.Channels, wantChannels) {
+					t.Fatalf("sidebar channels = %+v, want only acme's channels %+v (globex has %+v)", page.Channels, wantChannels, foreign)
 				}
 				if (page.EventCursor == nil) != (before != nil) {
 					t.Fatalf("cursor presence disagrees with history bound: %+v", page)
@@ -188,10 +194,10 @@ func TestMessagePaging(t *testing.T) {
 	// before is only an upper bound. A value taken from another channel or
 	// organisation still reads the URL channel within the member's
 	// organisation, and a foreign membership cannot read acme's channel.
-	noise, err := reader.Before(ctx, acme, channels["noise"], nil)
+	noise, err := reader.Page(ctx, acme, channels["noise"], nil, nil)
 	requireNoError(t, err)
 	for _, before := range []int64{noise.Entries[len(noise.Entries)-1].EventSeq, foreignSeqs[len(foreignSeqs)-1]} {
-		page, err := reader.Before(ctx, acme, channels["exact"], &before)
+		page, err := reader.Page(ctx, acme, channels["exact"], nil, &before)
 		if err != nil || len(page.Entries) == 0 {
 			t.Fatalf("before=%d: %d entries, %v", before, len(page.Entries), err)
 		}
@@ -201,7 +207,7 @@ func TestMessagePaging(t *testing.T) {
 			}
 		}
 	}
-	if page, err := reader.Before(ctx, globex, channels["exact"], nil); !errors.Is(err, conversation.ErrChannelNotFound) || len(page.Entries) != 0 || page.Older {
+	if page, err := reader.Page(ctx, globex, channels["exact"], nil, nil); !errors.Is(err, conversation.ErrChannelNotFound) || len(page.Entries) != 0 || page.Older {
 		t.Fatalf("globex read acme's channel: %+v, %v", page, err)
 	}
 }
@@ -251,7 +257,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			reading, err := pgxpool.NewWithConfig(ctx, config)
 			requireNoError(t, err)
 			t.Cleanup(reading.Close)
-			page, err := (conversationpg.NewReader(reading, lookupMembers, lookupAccounts, eventCursor)).Before(ctx, m, fixture.Channel.ID, nil)
+			page, err := (conversationpg.NewReader(reading, lookupMembers, lookupAccounts, eventCursor)).Page(ctx, m, fixture.Channel.ID, nil, nil)
 			requireNoError(t, err)
 			if !began || concurrent.EventSeq == 0 || page.EventCursor == nil {
 				t.Fatalf("missing transaction, concurrent commit or cursor: %+v", page)

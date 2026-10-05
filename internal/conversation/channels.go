@@ -12,8 +12,7 @@ import (
 // ChannelStore reads and writes channels, always within one organisation. Lookups
 // return ErrChannelNotFound; CreateChannel returns ErrChannelNameTaken for a duplicate.
 type ChannelStore interface {
-	ListChannels(ctx context.Context, organizationID kernel.ID) ([]Channel, error)
-	CreateChannel(ctx context.Context, organizationID kernel.ID, name string, isDefault bool) (Channel, error)
+	CreateChannel(ctx context.Context, organizationID kernel.ID, name string) (Channel, error)
 	GetChannel(ctx context.Context, organizationID, id kernel.ID) (Channel, error)
 	GetDefaultChannel(ctx context.Context, organizationID kernel.ID) (Channel, error)
 }
@@ -28,15 +27,6 @@ func NewChannels(store ChannelStore) *Channels {
 	return &Channels{store: store}
 }
 
-// List returns the channels of the member's organisation.
-func (s *Channels) List(ctx context.Context, m org.Membership) ([]Channel, error) {
-	channels, err := s.store.ListChannels(ctx, m.Organization.ID)
-	if err != nil {
-		return nil, fmt.Errorf("listing channels: %w", err)
-	}
-	return channels, nil
-}
-
 // Create adds a channel. Every member may create one (all channels are
 // public in the MVP); it is never the default, and nothing here deletes a
 // channel or moves the default, so each organisation keeps exactly one.
@@ -45,7 +35,7 @@ func (s *Channels) Create(ctx context.Context, m org.Membership, name string) (C
 	if err != nil {
 		return Channel{}, fmt.Errorf("%w: %w", ErrInvalidChannelName, err)
 	}
-	created, err := s.store.CreateChannel(ctx, m.Organization.ID, name, false)
+	created, err := s.store.CreateChannel(ctx, m.Organization.ID, name)
 	if err != nil {
 		return Channel{}, fmt.Errorf("creating channel: %w", err)
 	}

@@ -377,7 +377,7 @@ func TestTopicStreamLookup(t *testing.T) {
 			seen := -1
 			var reads atomic.Int32
 			var lookups [][3]domain.ID
-			p := channelPages{service: &fakeChannels{}, topics: fakeTopics{err: tt.lookupErr, lookups: &lookups},
+			p := channelPages{channels: &fakeChannels{}, topics: fakeTopics{err: tt.lookupErr, lookups: &lookups},
 				stream: &Streaming{Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}}
 			membership := org.Membership{Organization: org.Organization{ID: domain.ID{9}, Slug: "acme"}}
 			handler := middleware.Session(oneSession{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { p.events(w, r, membership) }))

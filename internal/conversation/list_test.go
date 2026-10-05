@@ -66,7 +66,8 @@ func TestBefore(t *testing.T) {
 		t.Run("failure="+failure, func(t *testing.T) {
 			f := &directoryHistory{t: t, fail: failure}
 			before := int64(9)
-			reader, _ := testReader(t, f)
+			reader, snapshot := testReader(t, f)
+			snapshot.organizationID = kernel.ID{1}
 			got, err := reader.Page(t.Context(), org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}, kernel.ID{2}, &kernel.ID{7}, &before)
 			if (err != nil) != (failure != "") {
 				t.Fatalf("error: %v", err)
@@ -121,7 +122,7 @@ func TestBeforePages(t *testing.T) {
 		var before *int64
 		var sizes []int
 		for {
-			page, err := reader.Before(t.Context(), org.Membership{}, kernel.ID{2}, before)
+			page, err := reader.Page(t.Context(), org.Membership{}, kernel.ID{2}, nil, before)
 			if err != nil {
 				t.Fatal(err)
 			}

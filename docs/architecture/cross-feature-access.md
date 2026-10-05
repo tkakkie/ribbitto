@@ -7,6 +7,8 @@ lists each feature's packages and tables and the known exceptions; the
 [architecture index](README.md) lists the other files.
 
 Conversation's channel store accepts a pool or a caller-owned transaction.
+Its `CreateChannel` creates a non-default channel; only setup's
+`DefaultChannelCreator` supplies the default flag inside the store.
 `conversation.Posting` owns the posting transaction (sequence first, topic
 reads, then the message and event) through its runner. It takes org's sequence
 through conversation's `EventSequenceIn` factory (`orgpg.SequenceIn`, adapted

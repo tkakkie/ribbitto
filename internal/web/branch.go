@@ -106,7 +106,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 
 func (p channelPages) branchError(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID, status int, key string) {
 	// Scope error responses too; invalid input must not reveal another channel.
-	if _, err := p.service.Get(r.Context(), m, id); err != nil {
+	if _, err := p.channels.Get(r.Context(), m, id); err != nil {
 		if errors.Is(err, conversation.ErrChannelNotFound) {
 			http.NotFound(w, r)
 		} else {

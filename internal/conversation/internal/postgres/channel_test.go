@@ -36,11 +36,11 @@ func TestChannelStore(t *testing.T) {
 	other := fixtureOrganization(t, pool, "other")
 	store := postgres.NewChannelStore(pool)
 	// A default under another name proves the lookup uses the flag.
-	defaultChannel, err := store.CreateChannel(ctx, acme, "Welcome", true)
+	defaultChannel, err := store.CreateDefaultChannelForTest(ctx, acme, "Welcome")
 	requireNoError(t, err)
-	channel, err := store.CreateChannel(ctx, acme, "開発", false)
+	channel, err := store.CreateChannel(ctx, acme, "開発")
 	requireNoError(t, err)
-	foreign, err := store.CreateChannel(ctx, other, "開発", true)
+	foreign, err := store.CreateDefaultChannelForTest(ctx, other, "開発")
 	requireNoError(t, err)
 	for _, want := range []conversation.Channel{defaultChannel, channel, foreign} {
 		if want.ID == (kernel.ID{}) || want.DefaultTopicID == (kernel.ID{}) || want.CreatedAt.IsZero() {
@@ -101,7 +101,7 @@ func TestChannelStoreCreateErrors(t *testing.T) {
 	ctx := t.Context()
 	organizationID := fixtureOrganization(t, pool, "acme")
 	store := postgres.NewChannelStore(pool)
-	_, err := store.CreateChannel(ctx, organizationID, "taken", true)
+	_, err := store.CreateDefaultChannelForTest(ctx, organizationID, "taken")
 	requireNoError(t, err)
 	for _, tc := range []struct {
 		name string
@@ -115,7 +115,7 @@ func TestChannelStoreCreateErrors(t *testing.T) {
 		{"unknown", kernel.ID{0xee}, nil, "23503"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := store.CreateChannel(ctx, tc.org, tc.name, false)
+			_, err := store.CreateChannel(ctx, tc.org, tc.name)
 			if tc.want != nil && !errors.Is(err, tc.want) {
 				t.Fatalf("error = %v, want %v", err, tc.want)
 			}

@@ -22,8 +22,12 @@ func NewChannelStore(db sqlcgen.DBTX) *ChannelStore {
 	return &ChannelStore{queries: sqlcgen.New(db)}
 }
 
-// CreateChannel inserts a channel with an already validated name.
-func (s *ChannelStore) CreateChannel(ctx context.Context, organizationID kernel.ID, name string, isDefault bool) (conversation.Channel, error) {
+// CreateChannel inserts a non-default channel with an already validated name.
+func (s *ChannelStore) CreateChannel(ctx context.Context, organizationID kernel.ID, name string) (conversation.Channel, error) {
+	return s.createChannel(ctx, organizationID, name, false)
+}
+
+func (s *ChannelStore) createChannel(ctx context.Context, organizationID kernel.ID, name string, isDefault bool) (conversation.Channel, error) {
 	row, err := s.queries.CreateChannel(ctx, sqlcgen.CreateChannelParams{OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Name: name, IsDefault: isDefault})
 	var pgErr *pgconn.PgError
 	switch {

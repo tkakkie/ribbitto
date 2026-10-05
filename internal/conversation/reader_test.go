@@ -23,6 +23,7 @@ type snapshotFake struct {
 	*postingFake
 	conversation.History
 	conversation.TopicDirectory
+	organizationID kernel.ID
 }
 
 func (f *snapshotFake) InSnapshot(_ context.Context, fn func(platform.Snapshot) error) error {
@@ -41,7 +42,11 @@ func (f *snapshotFake) bound(s platform.Snapshot, name string) {
 func (f *snapshotFake) GetChannel(context.Context, kernel.ID, kernel.ID) (conversation.Channel, error) {
 	return conversation.Channel{}, f.step("channel")
 }
-func (f *snapshotFake) ListChannels(context.Context, kernel.ID) ([]conversation.Channel, error) {
+func (f *snapshotFake) ListChannels(_ context.Context, organizationID kernel.ID) ([]conversation.Channel, error) {
+	f.t.Helper()
+	if organizationID != f.organizationID {
+		f.t.Fatalf("ListChannels organisation = %x, want membership's %x", organizationID, f.organizationID)
+	}
 	return nil, f.step("channels")
 }
 func (f *snapshotFake) GetTopic(_ context.Context, _, _, id kernel.ID) (conversation.Topic, error) {
@@ -73,12 +78,14 @@ func testReader(t *testing.T, data readerData) (*conversation.Reader, *snapshotF
 	return reader, f
 }
 func TestReaderPageSnapshot(t *testing.T) {
+	membership := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
 	order := []string{"snapshot", "reads", "channel", "channels", "selected", "topics", "members", "accounts", "history", "bind cursor", "cursor"}
 	for _, fail := range []string{"", "channel", "channels", "selected", "topics", "history", "cursor"} {
 		t.Run("failure="+fail, func(t *testing.T) {
 			reader, f := testReader(t, fullHistory{})
 			f.fail = fail
-			page, err := reader.Page(t.Context(), org.Membership{}, kernel.ID{2}, &kernel.ID{7}, nil)
+			f.organizationID = membership.Organization.ID
+			page, err := reader.Page(t.Context(), membership, kernel.ID{2}, &kernel.ID{7}, nil)
 			want, wantErr := order, error(nil)
 			if fail != "" {
 				want, wantErr = order[:slices.Index(order, fail)+1], f.err
@@ -92,8 +99,9 @@ func TestReaderPageSnapshot(t *testing.T) {
 		})
 	}
 	reader, f := testReader(t, fullHistory{})
+	f.organizationID = membership.Organization.ID
 	before := int64(9)
-	page, err := reader.Before(t.Context(), org.Membership{}, kernel.ID{2}, &before)
+	page, err := reader.Page(t.Context(), membership, kernel.ID{2}, nil, &before)
 	if err != nil || page.EventCursor != nil || !reflect.DeepEqual(f.calls, []string{"snapshot", "reads", "channel", "channels", "topics", "members", "accounts", "history"}) {
 		t.Fatalf("older page = %+v, %v, calls %v", page, err, f.calls)
 	}

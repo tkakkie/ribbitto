@@ -61,15 +61,6 @@ func TestChannelService(t *testing.T) {
 	if _, err := service.Get(ctx, member(acme), secret.ID); !errors.Is(err, conversation.ErrChannelNotFound) {
 		t.Fatalf("another organisation's channel by id: %v", err)
 	}
-	list, err := service.List(ctx, member(acme))
-	if err != nil || len(list) != 2 {
-		t.Fatalf("list: %+v, %v", list, err)
-	}
-	for _, c := range list {
-		if c.OrganizationID != acme || c.ID == secret.ID {
-			t.Fatalf("list leaked %+v", c)
-		}
-	}
 	if got, err := service.Default(ctx, member(globex)); err != nil || got.Name != conversation.DefaultChannelName || got.OrganizationID != globex {
 		t.Fatalf("default: %+v, %v", got, err)
 	}

@@ -18,20 +18,23 @@ import (
 
 // WriterIn binds posting's and branching's writes to the caller's transaction.
 func WriterIn(tx platform.Tx) Writer {
-	db := pgxbridge.Tx(tx)
-	return Writer{queries: sqlcgen.New(db), topics: NewTopicStore(db)}
+	return newWriter(pgxbridge.Tx(tx))
+}
+
+func newWriter(db sqlcgen.DBTX) Writer {
+	return Writer{TopicStore: NewTopicStore(db), queries: sqlcgen.New(db)}
 }
 
 // Writer implements conversation.Writer. It translates constraint names into
 // conversation's and org's errors, so the use cases never see pgconn.
 type Writer struct {
+	*TopicStore
 	queries *sqlcgen.Queries
-	topics  *TopicStore
 }
 
 // GetDefaultTopic returns the channel's default topic in the organisation.
 func (w Writer) GetDefaultTopic(ctx context.Context, organizationID, channelID kernel.ID) (conversation.Topic, error) {
-	row, err := w.queries.GetDefaultTopic(ctx, sqlcgen.GetDefaultTopicParams{OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}})
+	row, err := w.queries.GetDefaultTopic(ctx, sqlcgen.GetDefaultTopicParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID)})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return conversation.Topic{}, conversation.ErrTopicNotFound
 	}
@@ -39,11 +42,6 @@ func (w Writer) GetDefaultTopic(ctx context.Context, organizationID, channelID k
 		return conversation.Topic{}, fmt.Errorf("getting default topic: %w", err)
 	}
 	return topicFromRow(row), nil
-}
-
-// GetTopic looks up an ID within the organisation and channel, as TopicStore does.
-func (w Writer) GetTopic(ctx context.Context, organizationID, channelID, id kernel.ID) (conversation.Topic, error) {
-	return w.topics.GetTopic(ctx, organizationID, channelID, id)
 }
 
 // InsertMessage inserts posting's message. The composite foreign keys, not a
@@ -75,8 +73,8 @@ func (w Writer) InsertNotice(ctx context.Context, organizationID, channelID, top
 // insert runs the query posting and branching share and wraps any error.
 func (w Writer) insert(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (conversation.Message, error) {
 	row, err := w.queries.InsertMessage(ctx, sqlcgen.InsertMessageParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, TopicID: pgtype.UUID{Bytes: topicID, Valid: true},
-		MemberID: pgtype.UUID{Bytes: memberID, Valid: true}, Body: body, EventSeq: eventSeq,
+		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), TopicID: uuid(topicID),
+		MemberID: uuid(memberID), Body: body, EventSeq: eventSeq,
 	})
 	if err != nil {
 		return conversation.Message{}, fmt.Errorf("inserting message: %w", err)
@@ -87,7 +85,7 @@ func (w Writer) insert(ctx context.Context, organizationID, channelID, topicID, 
 // CreateTopic inserts a named topic with an already validated name.
 func (w Writer) CreateTopic(ctx context.Context, organizationID, channelID kernel.ID, name string) (conversation.Topic, error) {
 	row, err := w.queries.CreateTopic(ctx, sqlcgen.CreateTopicParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true}, Name: pgtype.Text{String: name, Valid: true},
+		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), Name: pgtype.Text{String: name, Valid: true},
 	})
 	var pgErr *pgconn.PgError
 	switch {
@@ -105,13 +103,9 @@ func (w Writer) CreateTopic(ctx context.Context, organizationID, channelID kerne
 // MoveMessages moves the messages still in the source topic, within the
 // organisation and channel, and returns how many moved.
 func (w Writer) MoveMessages(ctx context.Context, organizationID, channelID, fromTopicID, toTopicID kernel.ID, messageIDs []kernel.ID) (int64, error) {
-	ids := make([]pgtype.UUID, len(messageIDs))
-	for i, id := range messageIDs {
-		ids[i] = pgtype.UUID{Bytes: id, Valid: true}
-	}
 	moved, err := w.queries.MoveMessages(ctx, sqlcgen.MoveMessagesParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: channelID, Valid: true},
-		FromTopicID: pgtype.UUID{Bytes: fromTopicID, Valid: true}, ToTopicID: pgtype.UUID{Bytes: toTopicID, Valid: true}, MessageIds: ids,
+		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID),
+		FromTopicID: uuid(fromTopicID), ToTopicID: uuid(toTopicID), MessageIds: uuids(messageIDs),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("moving messages: %w", err)

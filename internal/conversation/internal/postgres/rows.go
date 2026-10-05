@@ -1,0 +1,16 @@
+package postgres
+
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/tkakkie/ribbitto/internal/kernel"
+)
+
+func uuid(id kernel.ID) pgtype.UUID { return pgtype.UUID{Bytes: id, Valid: true} }
+
+func uuids(ids []kernel.ID) []pgtype.UUID {
+	result := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		result[i] = uuid(id)
+	}
+	return result
+}

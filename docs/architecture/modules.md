@@ -7,7 +7,7 @@ Where the migration goes ([decision 26](../decisions/26-modules-by-feature-layou
 - `internal/<module>/internal/postgres`: its store and `sqlcgen`;
 - `internal/<module>/<module>pg`: wiring.
 
-`<module>pg`'s constructors take the pool and the use cases' other dependencies (a clock, the shared hasher, a canceller) and return the use cases. Its `Tx`- or `Snapshot`-taking factories implement other modules' consumer interfaces, whose result types the consumer declares. A wiring package may import its own module's root and store, and the roots of modules whose interfaces it implements. It may not import other wiring or stores; only `cmd/*` and tests import it. Roots and stores follow the table's import column.
+`<module>pg`'s constructors take the pool and the use cases' other dependencies (a clock, the shared hasher, a canceller) and return the use cases. Its `Tx`- or `Snapshot`-taking factories implement other modules' consumer interfaces. The consumer owns those interfaces and their factory types; their result types are the provider root's where it exports one (for example `org.DirectoryEntry`), never a duplicate (K7 on #502). A wiring package may import its own module's root and store, and the roots of modules whose interfaces it implements. It may not import other wiring or stores; only `cmd/*` and tests import it. Roots and stores follow the table's import column.
 
 A cross-module flow's root use case owns its transaction through an injected runner (`org.TxRunner` for setup and sign-up, `conversation.TxRunner` for posting and branching), which the wiring implements over the pool with `platform.InTx`. The use case passes the runner's `Tx` to the factories it was given; stores bind to the `Tx` they are given and never open, commit or roll back. A use case reading several modules owns its snapshot the same way, through an injected runner (`conversation.SnapshotRunner` for the page snapshot, `One` and `Many`) over `platform.InSnapshot`, and passes its `Snapshot` to its factories.
 
@@ -22,8 +22,9 @@ A cross-module flow's root use case owns its transaction through an injected run
 
 `internal/web` stays the UI shell and imports module roots. Its per-kind
 stream renderers are adapters for the payloads that `conversation`
-registers with `realtime`. Step 0 creates `kernel` and `platform`; step 4
-removes `internal/app`; step 5 removes `internal/domain` and
+registers with `realtime`. Steps 0 to 4 are done: step 0 created `kernel`
+and `platform`, steps 1 to 4 moved the modules, and step 4 removed
+`internal/app`. Step 5 removes `internal/domain` and
 `internal/infra/postgres`.
 
 **Known exceptions and temporary paths.** Every flow keeps its transaction
@@ -34,7 +35,7 @@ the temporary implementation behind it.
 
 | Flow or caller | Needs from | Interface from step | Temporary implementation until step |
 |---|---|---|---|
-| every package but `identity`, `realtime` and `conversation` (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
+| `org`, `web`, `infra/postgres/pgtest`, `cmd/seed` and some tests (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps org's and identity's fixtures plus a raw-SQL channel and default topic) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
 | `conversation`'s topic backfill test, `realtime`'s event-log migration test (`internal/realtime/internal/postgres/event_log_test.go`), `org`'s handle upgrade test and `conversation`'s default-channel backfill test | `db/migrations` (temporary allowance) | 0 | 5 |
 

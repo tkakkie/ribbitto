@@ -28,7 +28,7 @@ func messageIDs(messages []conversation.Message) []kernel.ID {
 
 // The runner's transaction is read-only and repeatable-read, and returns fn's
 // error as is. The message reads bind to it, scoped to the organisation and
-// channel, in the legacy queries' order and limits.
+// channel, newest first and within the limit.
 func TestReadStoreIn(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)

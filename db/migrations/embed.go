@@ -1,4 +1,5 @@
-// Package migrations embeds the schema owned by internal/infra/postgres.
+// Package migrations embeds the schema of every module's tables, which
+// internal/platform/postgres runs.
 package migrations
 
 import "embed"

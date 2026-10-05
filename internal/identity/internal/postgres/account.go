@@ -63,8 +63,8 @@ func (d *Directory) LookupDisplayNames(ctx context.Context, ids []kernel.ID) (ma
 	return result, nil
 }
 
-// uuidArray is a copy of the legacy store's helper; modules share no store
-// code (decision 26).
+// uuidArray is identity's own copy of a helper org's store also has; modules
+// share no store code (decision 26).
 func uuidArray(ids []kernel.ID) []pgtype.UUID {
 	result := make([]pgtype.UUID, len(ids))
 	for i, id := range ids {

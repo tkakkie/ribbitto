@@ -125,8 +125,8 @@ implements this rule:
 - Any other read, render, authorization or send error stops the loop as
   above, without advancing past the event.
 
-That feature decides how, and in which layer, a vanished target becomes a
-normal skip, but not by teaching `realtime.Stream` the message feature's
+That feature decides how, and in which package, a vanished target becomes a
+normal skip, but not by teaching `realtime.Stream`
 `conversation.ErrMessageNotFound`. It also decides whether `conversation.Reader.Many` (an incomplete
 batch is `conversation.ErrMessageNotFound`) changes, so that ordinary data inconsistency is not
 taken for disappearance. Its tests replay a vanished `message.posted` and a

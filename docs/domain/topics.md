@@ -68,7 +68,7 @@ bounded topic list, the branching endpoint (#305) and its selection UI
   topic view; the default label comes from both language catalogues. Topic names
   are resolved through `conversation.TopicDirectory` in one batch per page, in the same
   snapshot as the messages and authors. Live labels come from the shared
-  `MessageReader.One` load through the existing render cache, keyed by
+  `conversation.Reader.One` load through the existing render cache, keyed by
   organisation, channel, sequence and language, with no extra read per stream
   per event. A move reads its IDs in one shared snapshot and replaces loaded
   items by stable ID, correcting labels and checkbox sources. It neither

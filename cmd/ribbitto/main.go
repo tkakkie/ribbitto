@@ -294,7 +294,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        conversationpg.NewTopics(pool),
-		Messages:      postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor},
+		Messages:      conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor),
 		Posting:       posting,
 		Branching:     branching,
 		Channels:      conversationpg.NewChannels(pool),

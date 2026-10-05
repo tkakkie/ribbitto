@@ -40,7 +40,7 @@ func TestMessageOne(t *testing.T) {
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, `UPDATE member SET handle = 'current-handle' WHERE organization_id = $1 AND id = $2`, local.OrganizationID, local.MemberID)
 	requireNoError(t, err)
-	reader := postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor}
+	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 	for _, tt := range []struct {
 		name       string
 		membership org.Membership
@@ -131,7 +131,7 @@ func TestMessagePaging(t *testing.T) {
 	reading, err := pgxpool.NewWithConfig(ctx, config)
 	requireNoError(t, err)
 	t.Cleanup(reading.Close)
-	reader := postgres.MessageReader{Pool: reading, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor}
+	reader := conversationpg.NewReader(reading, lookupMembers, lookupAccounts, eventCursor)
 	for _, name := range []string{"empty", "exact", "partial"} {
 		t.Run(name, func(t *testing.T) {
 			var got []string
@@ -252,7 +252,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			reading, err := pgxpool.NewWithConfig(ctx, config)
 			requireNoError(t, err)
 			t.Cleanup(reading.Close)
-			page, err := (postgres.MessageReader{Pool: reading, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor}).Before(ctx, m, fixture.Channel.ID, nil)
+			page, err := (conversationpg.NewReader(reading, lookupMembers, lookupAccounts, eventCursor)).Before(ctx, m, fixture.Channel.ID, nil)
 			requireNoError(t, err)
 			if !began || concurrent.EventSeq == 0 || page.EventCursor == nil {
 				t.Fatalf("missing transaction, concurrent commit or cursor: %+v", page)

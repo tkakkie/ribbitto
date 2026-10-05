@@ -6,8 +6,8 @@
 // posting's and branching's transaction over the pool and WriterIn binds
 // their writes to it; NewPosting and NewBrancher build Posting and Brancher
 // over them (Brancher is unused in production beside app/topic's frozen
-// Brancher until 4.10a2);
-// NewSnapshotRunner runs the page snapshot over the pool
+// Brancher until 4.10a2); NewReader builds Reader; NewSnapshotRunner runs its
+// snapshot over the pool
 // and ReadStoreIn binds conversation's reads to it; EventKinds registers its
 // event routers with realtime. Branching's CreateTopic and MoveMessages run on
 // copies of the legacy queries until step 4.16, and the message queries

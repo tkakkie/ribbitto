@@ -36,8 +36,9 @@ and the page snapshot) is in
 [cross-feature access](cross-feature-access.md).
 
 Org's test-only `GetOrganizationBySlug` and `GetMemberByOrganizationAndAccount`
-queries live in `db/queries/org/`; conversation's schema test still uses
-infra's `pgtest` fixtures until conversation moves in step 4.
+queries live in `db/queries/org/`. Conversation's schema tests live in its
+store with local raw-SQL fixtures; posting, branching and reader flow tests
+live in `conversationpg`.
 
 **Known exceptions.** Cross-feature writes that must commit atomically:
 

@@ -1,4 +1,4 @@
-package postgres_test
+package conversationpg_test
 
 import (
 	"context"
@@ -27,7 +27,7 @@ func TestMessageOne(t *testing.T) {
 	otherChannel := pgtest.Channel(t, pool, local.OrganizationID, "other", false)
 	membership := org.Membership{Organization: org.Organization{ID: local.OrganizationID}, Member: org.Member{ID: local.MemberID}}
 	foreignMembership := org.Membership{Organization: org.Organization{ID: foreign.OrganizationID}, Member: org.Member{ID: foreign.MemberID}}
-	service := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	service := conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
 	posted, err := service.Post(ctx, membership, local.Channel.ID, "local body")
 	requireNoError(t, err)
 	foreignPost, err := service.Post(ctx, foreignMembership, foreign.Channel.ID, "foreign body")
@@ -90,7 +90,7 @@ func TestMessagePaging(t *testing.T) {
 
 	// Interleave posts so that every channel's event_seq values have gaps
 	// filled by another channel's, and globex reuses acme's numbers.
-	service := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	service := conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
 	sizes := map[string]int{"exact": 2 * conversation.PageSize, "partial": conversation.PageSize + 1}
 	posted := map[string][]string{}
 	var foreignSeqs []int64
@@ -225,7 +225,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 			ctx := t.Context()
 			fixture := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 			m := org.Membership{Organization: org.Organization{ID: fixture.OrganizationID}, Member: org.Member{ID: fixture.MemberID}}
-			posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+			posting := conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
 			initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")
 			requireNoError(t, err)
 			var concurrent conversation.Message

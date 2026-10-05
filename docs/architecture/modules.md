@@ -35,11 +35,11 @@ the temporary implementation behind it.
 |---|---|---|---|
 | every package but `identity`, `realtime` and `conversation` (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
-| `infra`'s topic backfill test, `realtime`'s event-log migration test (`internal/realtime/internal/postgres/event_log_test.go`), `org`'s handle upgrade test and `conversation`'s default-channel backfill test | `db/migrations` (temporary allowance) | 0 | 5 |
+| `conversation`'s topic backfill test, `realtime`'s event-log migration test (`internal/realtime/internal/postgres/event_log_test.go`), `org`'s handle upgrade test and `conversation`'s default-channel backfill test | `db/migrations` (temporary allowance) | 0 | 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
 | `infra/postgres` appender interface (`EventAppender`) | `realtime` types (root import, temporary allowance) | 2 | 4 |
 | posting, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | 4 |
-| posting, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by infra's tests) | 2 | 4 |
+| posting, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`) | 2 | 4 |
 | posting, branching (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`), adapted by a closure | 3 | 4 |
 
 Setup's and sign-up's database tests live in `internal/org/orgpg`,
@@ -53,3 +53,7 @@ are direct calls in one transaction or snapshot (decision 27).
 The topic stream's and topic paging links' scope check is decision 26's
 resolver in conversation's root: `conversation.Topics.Get` takes the
 resolved `org.Membership`, so web never supplies the organisation.
+
+Conversation's schema, constraint, payload-shape and backfill tests live in its
+store with local raw-SQL fixtures. Its posting, branching and reader flow
+tests live in `conversationpg`; `internal/infra/postgres` has no tests.

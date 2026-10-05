@@ -1,16 +1,17 @@
-package postgres_test
+package conversationpg_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
-	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
 func TestPostMessage(t *testing.T) {
@@ -19,16 +20,18 @@ func TestPostMessage(t *testing.T) {
 	ctx := t.Context()
 	// Two organisations, each with one member and a default channel.
 	memberships := map[string]org.Membership{}
-	channels := map[string]domain.ID{}
+	channels := map[string]kernel.ID{}
+	defaults := map[string]kernel.ID{}
 	for _, slug := range []string{"acme", "globex"} {
 		fixture := pgtest.OrganizationWithOwner(t, pool, slug, conversation.DefaultChannelName)
 		// These fixture memberships predate logging, as on an upgraded database.
 		_, err := pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = event_seq WHERE id = $1", fixture.OrganizationID)
 		requireNoError(t, err)
-		memberships[slug] = org.Membership{Organization: org.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: org.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
+		memberships[slug] = membership(fixture.OrganizationID, fixture.MemberID)
 		channels[slug] = fixture.Channel.ID
+		defaults[slug] = fixture.Channel.DefaultTopicID
 	}
-	service := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	service := newPosting(pool)
 	state := func(slug string) (seq int64, messages int) {
 		t.Helper()
 		requireNoError(t, pool.QueryRow(ctx, "SELECT o.event_seq, (SELECT count(*) FROM message m WHERE m.organization_id = o.id) FROM organization o WHERE slug = $1", slug).Scan(&seq, &messages))
@@ -37,7 +40,7 @@ func TestPostMessage(t *testing.T) {
 	}
 
 	posted, err := service.Post(ctx, memberships["acme"], channels["acme"], " hello\r\n ")
-	if err != nil || posted.Body != "hello" || posted.EventSeq != 2 || posted.MemberID != memberships["acme"].Member.ID {
+	if err != nil || posted.Body != "hello" || posted.EventSeq != 2 || posted.MemberID != memberships["acme"].Member.ID || posted.TopicID != defaults["acme"] {
 		t.Fatalf("post: %+v, %v", posted, err)
 	}
 
@@ -47,7 +50,11 @@ func TestPostMessage(t *testing.T) {
 		t.Fatalf("cross-organisation post: %v", err)
 	}
 	// A failed insert (a body the database refuses) rolls the sequence back.
-	if _, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, memberships["acme"].Organization.ID, channels["acme"], memberships["acme"].Member.ID, " untrimmed"); err == nil {
+	writer := func(tx platform.Tx) conversation.Writer {
+		return rawBodyWriter{Writer: conversationpg.WriterIn(tx), body: " untrimmed"}
+	}
+	refused := conversation.NewPosting(conversationpg.NewTxRunner(pool), writer, eventSequence, appendEvents, nil)
+	if _, err := refused.Post(ctx, memberships["acme"], channels["acme"], " untrimmed"); err == nil {
 		t.Fatal("the database accepted an untrimmed body")
 	}
 	if seq, n := state("acme"); seq != 2 || n != 1 {
@@ -97,8 +104,8 @@ func TestPostingAndBranchingIntoUnknownOrganization(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	acme := pgtest.OrganizationWithOwner(t, pool, "acme", conversation.DefaultChannelName)
-	posting, branching := postgres.NewPostingStore(pool, eventSequence, appendEvents), postgres.NewBranchStore(pool, eventSequence, appendEvents)
-	posted, err := posting.Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "kept")
+	posting, branching := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, nil)
+	posted, err := posting.Post(ctx, membership(acme.OrganizationID, acme.MemberID), acme.Channel.ID, "kept")
 	requireNoError(t, err)
 	written := func() (counts [4]int64) {
 		t.Helper()
@@ -107,20 +114,20 @@ func TestPostingAndBranchingIntoUnknownOrganization(t *testing.T) {
 		return counts
 	}
 	before := written()
-	unknown := domain.ID{0xee}
+	unknown := membership(kernel.ID{0xee}, acme.MemberID)
 	topicID := acme.Channel.DefaultTopicID
 	for name, run := range map[string]func() error{
 		"post": func() error {
-			_, err := posting.Post(ctx, unknown, acme.Channel.ID, acme.MemberID, "lost")
+			_, err := posting.Post(ctx, unknown, acme.Channel.ID, "lost")
 			return err
 		},
 		"post to a topic": func() error {
-			_, err := posting.PostToTopic(ctx, unknown, acme.Channel.ID, acme.MemberID, &topicID, "lost")
+			_, err := posting.PostToTopic(ctx, unknown, acme.Channel.ID, &topicID, "lost")
 			return err
 		},
 		"branch": func() error {
-			_, _, err := branching.Branch(ctx, unknown, acme.Channel.ID, acme.MemberID,
-				conversation.Branch{Messages: []domain.ID{posted.ID}, From: topicID, NewName: "lost"}, func(conversation.Topic) string { return "lost" })
+			_, err := branching.Branch(ctx, unknown, acme.Channel.ID,
+				conversation.Branch{Messages: []kernel.ID{posted.ID}, From: topicID, NewName: "lost"}, func(conversation.Topic) string { return "lost" })
 			return err
 		},
 	} {
@@ -131,4 +138,15 @@ func TestPostingAndBranchingIntoUnknownOrganization(t *testing.T) {
 			t.Fatalf("%s into an unknown organisation wrote: %v, was %v", name, after, before)
 		}
 	}
+}
+
+// rawBodyWriter bypasses normalization only at the insert, so the real
+// database refuses the body after posting has taken its sequence.
+type rawBodyWriter struct {
+	conversation.Writer
+	body string
+}
+
+func (w rawBodyWriter) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, _ string, seq int64) (conversation.Message, error) {
+	return w.Writer.InsertMessage(ctx, organizationID, channelID, topicID, memberID, w.body, seq)
 }

@@ -26,7 +26,7 @@ func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectory
 }
 
 func (s *Reader) history(snapshot platform.Snapshot, reads ReadStore) historyReader {
-	return historyReader{History: reads, Members: s.members(snapshot), Accounts: s.accounts(snapshot), Topics: reads}
+	return historyReader{Reads: reads, Members: s.members(snapshot), Accounts: s.accounts(snapshot)}
 }
 
 // One reads one message, its author names and topic in a read-only snapshot.
@@ -62,7 +62,7 @@ func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID
 			}
 			page.Topic = &selected
 		}
-		page.Topics, err = reads.ListTopics(ctx, m.Organization.ID, channelID, 50)
+		page.Topics, err = reads.ListTopics(ctx, m.Organization.ID, channelID, sidebarTopics)
 		if err != nil {
 			return err
 		}

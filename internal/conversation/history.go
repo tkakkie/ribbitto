@@ -16,34 +16,20 @@ type Entry struct {
 	DefaultTopic        bool
 }
 
-// History reads messages within one organisation and channel. Lists are
-// newest first, optionally filtered by topic; GetMessage returns
-// ErrMessageNotFound when the scoped key is absent. GetMessages returns the requested IDs only,
-// newest first; missing or out-of-scope IDs are omitted.
-type History interface {
-	GetMessages(context.Context, kernel.ID, kernel.ID, []kernel.ID) ([]Message, error)
-	ListMessagesBefore(context.Context, kernel.ID, kernel.ID, *kernel.ID, *int64, int32) ([]Message, error)
-	GetMessage(context.Context, kernel.ID, kernel.ID, int64) (Message, error)
-}
-
-// TopicDirectory resolves requested topic IDs within an organisation and
-// channel in one batch, so a page costs one topic query rather than one per
-// message. Missing and out-of-scope topics are omitted.
-type TopicDirectory interface {
-	LookupTopics(ctx context.Context, organizationID, channelID kernel.ID, topicIDs []kernel.ID) (map[kernel.ID]Topic, error)
-}
-
 // historyReader composes history with the topic labels and with the author lookups
 // from org and identity.
 type historyReader struct {
-	History  History
+	Reads    ReadStore
 	Members  MemberDirectory
 	Accounts AccountDirectory
-	Topics   TopicDirectory
 }
 
 // PageSize is how many messages one page of history holds.
 const PageSize = 50
+
+// sidebarTopics is the most topics the channel sidebar lists, a domain rule
+// (docs/domain/topics.md).
+const sidebarTopics = 50
 
 // Page is one page of a channel's history, oldest first.
 type Page struct {
@@ -72,7 +58,7 @@ type ChannelPage struct {
 // channel, so a value taken from another channel cannot reach its messages.
 func (s historyReader) Before(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, before *int64) (Page, error) {
 	// One extra row says whether an older page exists without a count query.
-	messages, err := s.History.ListMessagesBefore(ctx, m.Organization.ID, channelID, topicID, before, PageSize+1)
+	messages, err := s.Reads.ListMessagesBefore(ctx, m.Organization.ID, channelID, topicID, before, PageSize+1)
 	if err != nil {
 		return Page{}, fmt.Errorf("reading history: %w", err)
 	}
@@ -85,6 +71,34 @@ func (s historyReader) Before(ctx context.Context, m org.Membership, channelID k
 		return Page{}, err
 	}
 	return Page{Entries: entries, Older: older}, nil
+}
+
+// One returns a message with current author names, or ErrMessageNotFound.
+// The caller resolves membership and channel access before reading, as for
+// Before.
+func (s historyReader) One(ctx context.Context, m org.Membership, channelID kernel.ID, eventSeq int64) (Entry, error) {
+	msg, err := s.Reads.GetMessage(ctx, m.Organization.ID, channelID, eventSeq)
+	if err != nil {
+		return Entry{}, fmt.Errorf("reading message: %w", err)
+	}
+	entries, err := s.entries(ctx, m, channelID, []Message{msg})
+	if err != nil {
+		return Entry{}, err
+	}
+	return entries[0], nil
+}
+
+// Many reads exactly the requested messages with current labels and authors,
+// oldest first. The ID list bounds the read; an incomplete batch fails replay.
+func (s historyReader) Many(ctx context.Context, m org.Membership, channelID kernel.ID, ids []kernel.ID) ([]Entry, error) {
+	messages, err := s.Reads.GetMessages(ctx, m.Organization.ID, channelID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("reading messages: %w", err)
+	}
+	if len(messages) != len(ids) {
+		return nil, ErrMessageNotFound
+	}
+	return s.entries(ctx, m, channelID, messages)
 }
 
 // entries adds topic labels and author names, returning messages oldest first.
@@ -109,7 +123,7 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 	for _, msg := range messages {
 		ids = append(ids, msg.TopicID)
 	}
-	topics, err := s.Topics.LookupTopics(ctx, m.Organization.ID, channelID, ids)
+	topics, err := s.Reads.LookupTopics(ctx, m.Organization.ID, channelID, ids)
 	if err != nil {
 		return nil, fmt.Errorf("reading topics: %w", err)
 	}

@@ -3,10 +3,11 @@
 **A pull request gets the adversarial review its tier asks for before the
 maintainer is asked**, whatever its risk class: Grok (tier A), Muse Code
 (tier B), or none (tier C). The required review must run; its
-findings are advisory. It does not count towards the two review rounds. It
-runs once, after the cross-review and after merging the current `main`
-(*When it runs*, below), while the pull request is still a draft, and before
-it is marked ready for review.
+findings are advisory. It does not count towards the two review rounds. The
+initial review runs after the cross-review and after merging the current
+`main`, or after confirming that no merge is needed (*When it runs*, below),
+while the pull request is still a draft, and before it is marked ready for
+review. Later pushes are reviewed again under the completion rule.
 
 ## Which review runs
 
@@ -74,9 +75,9 @@ The template's *Adversarial* field names the review: `Grok`,
 areas that is tier B. The other AI checks the tier against what the diff
 does, not only the paths it touches.
 
-**When it runs:** once, after the other AI approves and its findings are
-fixed, and after the branch has merged the current `main` or needs no
-merge: on that head, while the pull request is still a draft, immediately
+**When it runs:** the initial review runs after the other AI approves and
+its findings are fixed, and after the branch has merged the current `main`
+or it is confirmed that no merge is needed: on that head, while the pull request is still a draft, immediately
 before `ai-reviewed`. It does not run alongside the first cross-review. A
 report on an earlier head covers a later one only under the completion
 rule below.

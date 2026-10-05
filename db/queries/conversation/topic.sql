@@ -10,9 +10,9 @@ INSERT INTO topic (organization_id, channel_id, name, is_default)
 VALUES ($1, $2, $3, $4) RETURNING *;
 
 -- name: MoveMessages :execrows
--- Listed exception (feature map): branching writes message.topic_id. Only
--- messages still in the expected topic move; the caller compares the count
--- with the selection and rolls back on a mismatch (409).
+-- Branching moves conversation's own messages by writing message.topic_id.
+-- Only messages still in the expected topic move; the caller compares the
+-- count with the selection and rolls back on a mismatch (409).
 UPDATE message SET topic_id = sqlc.arg(to_topic_id)
 WHERE organization_id = sqlc.arg(organization_id) AND channel_id = sqlc.arg(channel_id)
   AND topic_id = sqlc.arg(from_topic_id) AND id = ANY(sqlc.arg(message_ids)::uuid[]);

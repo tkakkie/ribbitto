@@ -15,11 +15,12 @@ sequenceDiagram
   A->>H: Notifier.Raise(organizationID, posted.EventSeq) (after commit)
 ```
 
-`conversation.Posting.Post` validates and owns the transaction through its
-`TxRunner`: its transaction-bound `EventSequence` takes the sequence, then
+`conversation.Posting.PostToTopic` validates and owns the transaction through
+its `TxRunner`: its transaction-bound `EventSequence` takes the sequence, then
 its `Writer` reads the default topic (and the selected topic, if supplied)
-and inserts the message. It encodes the post with `conversation.EncodePosted`
-and calls its transaction-bound `EventAppender.Append` before commit.
+and inserts the message; `Post` is its shorthand for the default topic. It
+encodes the post with `conversation.EncodePosted` and calls its
+transaction-bound `EventAppender.Append` before commit.
 Org's sequence (`orgpg.SequenceIn`) and realtime's appender
 (`realtimepg.AppenderIn`) use that same transaction and sequence.
 `conversation.NewPosting` accepts `conversation.Notifier`

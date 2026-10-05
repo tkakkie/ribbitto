@@ -182,9 +182,9 @@ type MoveMessagesParams struct {
 	MessageIds     []pgtype.UUID
 }
 
-// Listed exception (feature map): branching writes message.topic_id. Only
-// messages still in the expected topic move; the caller compares the count
-// with the selection and rolls back on a mismatch (409).
+// Branching moves conversation's own messages by writing message.topic_id.
+// Only messages still in the expected topic move; the caller compares the
+// count with the selection and rolls back on a mismatch (409).
 func (q *Queries) MoveMessages(ctx context.Context, arg MoveMessagesParams) (int64, error) {
 	result, err := q.db.Exec(ctx, moveMessages,
 		arg.ToTopicID,

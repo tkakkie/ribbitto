@@ -38,10 +38,10 @@ type CreateChannelRow struct {
 	DefaultTopicIsDefault bool
 }
 
-// Listed exception (feature map): channel creation writes topic's table, so a
-// channel never exists without its default topic (decision 21). One
-// statement keeps both in one transaction even on a pool; the channel's
-// foreign key to the topic is deferred to commit.
+// Conversation owns both tables: creating a channel also writes its default
+// topic, so a channel never exists without one (decision 21). One statement
+// keeps both in one transaction even on a pool; the channel's foreign key to
+// the topic is deferred to commit.
 func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (CreateChannelRow, error) {
 	row := q.db.QueryRow(ctx, createChannel, arg.OrganizationID, arg.Name, arg.IsDefault)
 	var i CreateChannelRow

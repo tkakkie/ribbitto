@@ -73,7 +73,7 @@ func TestBranchSelection(t *testing.T) {
 		{"existing", []string{selection}, nil, 303, ""},
 		{"mixed", []string{selection, strings.Replace(selection, source, "32000000-0000-0000-0000-000000000000", 1)}, nil, 422, "topic.branch_mixed"},
 		{"stale", []string{selection}, conversation.ErrBranchConflict, 409, "topic.branch_conflict"},
-		{"name", []string{selection}, conversation.ErrInvalidTopicName, 422, "topic.branch_name_invalid"},
+		{"name", []string{selection}, nil, 422, "topic.branch_name_invalid"},
 		{"duplicate", []string{selection}, conversation.ErrTopicNameTaken, 422, "topic.branch_name_taken"},
 		{"too many", strings.Split(strings.Repeat(selection+",", 100)+selection, ","), nil, 422, "topic.branch_invalid"},
 		{"out of scope", []string{selection}, conversation.ErrTopicNotFound, 404, ""},

@@ -64,7 +64,7 @@ func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, 
 	if topicID != nil {
 		page.Topic = &conversation.Topic{ID: *topicID, Name: "Planning"}
 	}
-	if before == nil && topicID == nil {
+	if before == nil {
 		cursor := int64(42)
 		page.EventCursor = &cursor
 	}
@@ -356,6 +356,8 @@ func TestMessagePagingHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	channelURL := view.ChannelURL("acme", domain.ID{1})
+	topicID := domain.ID{5}
+	topicURL := view.ConversationURL("acme", domain.ID{1}, &topicID)
 	for _, tt := range []struct {
 		name, query string
 		older       bool
@@ -363,21 +365,26 @@ func TestMessagePagingHandler(t *testing.T) {
 		before      int64 // 0: the latest page
 		want, avoid []string
 		htmx        bool
+		path        string
+		wantTopic   string
+		wantPost    string
 	}{
-		{"latest with older", "", true, 200, 0, []string{`href="` + channelURL + `?before=7"`, `hx-get="` + channelURL + `?before=7"`, `hx-select-oob="#load-older"`, `id="load-older"`}, []string{"Jump to the newest"}, false},
-		{"latest without older", "", false, 200, 0, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before=", "Jump to the newest"}, false},
-		{"older page", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil, false},
-		{"older page with HX", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil, true},
-		{"oldest page", "?before=8", false, 200, 8, []string{`>Jump to the newest messages</a>`, `<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before="}, false},
-		{"oldest page with HX", "?before=8", false, 200, 8, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before="}, true},
-		{"zero", "?before=0", false, 400, -1, nil, nil, false},
-		{"negative", "?before=-3", false, 400, -1, nil, nil, false},
-		{"not a number", "?before=abc", false, 400, -1, nil, nil, false},
-		{"empty", "?before=", false, 400, -1, nil, nil, false},
-		{"repeated", "?before=5&before=6", false, 400, -1, nil, nil, false},
-		{"overflow", "?before=9223372036854775808", false, 400, -1, nil, nil, false},
-		{"malformed escape", "?before=%ZZ", false, 400, -1, nil, nil, false},
-		{"repeated with a malformed escape", "?before=5&before=%ZZ", false, 400, -1, nil, nil, false},
+		{"latest with older", "", true, 200, 0, []string{`href="` + channelURL + `?before=7"`, `hx-get="` + channelURL + `?before=7"`, `hx-select-oob="#load-older"`, `id="load-older"`}, []string{"Jump to the newest"}, false, channelURL, "", channelURL},
+		{"latest without older", "", false, 200, 0, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before=", "Jump to the newest"}, false, channelURL, "", channelURL},
+		{"older page", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil, false, channelURL, "", ""},
+		{"older page with HX", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil, true, channelURL, "", ""},
+		{"oldest page", "?before=8", false, 200, 8, []string{`>Jump to the newest messages</a>`, `<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before="}, false, channelURL, "", ""},
+		{"oldest page with HX", "?before=8", false, 200, 8, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before="}, true, channelURL, "", ""},
+		{"zero", "?before=0", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"negative", "?before=-3", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"not a number", "?before=abc", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"empty", "?before=", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"repeated", "?before=5&before=6", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"overflow", "?before=9223372036854775808", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"malformed escape", "?before=%ZZ", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"repeated with a malformed escape", "?before=5&before=%ZZ", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"latest topic", "", true, 200, 0, []string{`href="` + topicURL + `?before=7"`, `hx-get="` + topicURL + `?before=7"`}, []string{"Jump to the newest"}, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
+		{"older topic", "?before=40", true, 200, 40, []string{`href="` + topicURL + `?before=7"`, `hx-get="` + topicURL + `?before=7"`, `>Jump to the newest messages</a>`}, nil, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64
@@ -386,7 +393,7 @@ func TestMessagePagingHandler(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			req := httptest.NewRequest("GET", channelURL+tt.query, nil)
+			req := httptest.NewRequest("GET", tt.path+tt.query, nil)
 			if tt.htmx {
 				req.Header.Set("HX-Request", "true")
 			}
@@ -430,14 +437,24 @@ func TestMessagePagingHandler(t *testing.T) {
 			if got, ok := idAttribute(t, page, "select-"+item, "data-source"); !ok || got != "05000000-0000-0000-0000-000000000000" {
 				t.Errorf("data-source = %q, %t; want the message's topic", got, ok)
 			}
-			if _, ok := idAttribute(t, page, "message-items", "data-topic"); ok {
-				t.Error("a channel feed carries data-topic")
+			if got, ok := idAttribute(t, page, "message-items", "data-topic"); got != tt.wantTopic || ok != (tt.wantTopic != "") {
+				t.Errorf("data-topic = %q, %t; want %q", got, ok, tt.wantTopic)
+			}
+			if got, ok := idAttribute(t, page, "message-composer", "hx-post"); got != tt.wantPost || ok != (tt.wantPost != "") {
+				t.Errorf("composer hx-post = %q, %t; want %q", got, ok, tt.wantPost)
 			}
 			if got := strings.Contains(body, `data-event-cursor="42"`); got != (tt.before == 0) {
 				t.Fatalf("page cursor present = %t, before = %d", got, tt.before)
 			}
-			if tt.before != 0 && (strings.Contains(body, "data-event-cursor") || strings.Contains(body, "sse-connect") || strings.Contains(body, `hx-post="`+view.ChannelURL("acme", domain.ID{1})+`"`)) {
-				t.Fatal("older page has a cursor, stream or enhanced composer")
+			if tt.before == 0 {
+				if !strings.Contains(body, `sse-connect="`+tt.path+`/events?after=42"`) {
+					t.Errorf("latest page must connect to %s/events?after=42", tt.path)
+				}
+				if got, ok := idAttribute(t, page, "message-items", "sse-swap"); !ok || got != "message,messages-moved" {
+					t.Errorf("feed sse-swap = %q, %t; want message,messages-moved", got, ok)
+				}
+			} else if strings.Contains(body, "data-event-cursor") || strings.Contains(body, "sse-connect") || strings.Contains(body, "sse-swap") {
+				t.Fatal("older page has a cursor or stream attributes")
 			}
 			if tt.before > 0 {
 				doc, err := html.Parse(strings.NewReader(body))
@@ -445,11 +462,14 @@ func TestMessagePagingHandler(t *testing.T) {
 					t.Fatal(err)
 				}
 				for n := range doc.Descendants() {
+					if n.DataAtom == atom.A && text(n) == "Jump to the newest messages" && attr(n, "href") != tt.path {
+						t.Errorf("newest-page link = %q; want %q", attr(n, "href"), tt.path)
+					}
 					if attr(n, "id") != "message-composer" {
 						continue
 					}
 					posted := serveForm(handler, "POST", attr(n, "action"), "live", url.Values{"body": {"from older page"}})
-					if posted.Code != 303 || posted.Header().Get("Location") != channelURL {
+					if posted.Code != 303 || posted.Header().Get("Location") != tt.path {
 						t.Fatal("older-page form must redirect to the latest page")
 					}
 					invalid := serveForm(handler, "POST", attr(n, "action"), "live", url.Values{"body": {"\n\n"}})

@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -9,23 +10,48 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"golang.org/x/net/html"
 )
 
-type fakeBranchStore struct {
-	err error
-	got topic.Branch
+type fakeBranchWriter struct {
+	fakePostingWriter
+	got conversation.Branch
 }
 
-func (s *fakeBranchStore) Branch(_ context.Context, _, _, _ domain.ID, b topic.Branch, _ func(conversation.Topic) string) (conversation.Topic, int64, error) {
-	s.got = b
-	return conversation.Topic{ID: domain.ID{0x32}}, 1, s.err
+func (s *fakeBranchWriter) GetTopic(_ context.Context, _, _, id kernel.ID) (conversation.Topic, error) {
+	if errors.Is(s.err, conversation.ErrTopicNotFound) {
+		return conversation.Topic{}, s.err
+	}
+	return conversation.Topic{ID: id}, nil
+}
+func (s *fakeBranchWriter) CreateTopic(_ context.Context, _, _ kernel.ID, name string) (conversation.Topic, error) {
+	if errors.Is(s.err, conversation.ErrBranchConflict) {
+		return conversation.Topic{ID: kernel.ID{0x32}, Name: name}, nil
+	}
+	return conversation.Topic{ID: kernel.ID{0x32}, Name: name}, s.err
+}
+func (s *fakeBranchWriter) MoveMessages(_ context.Context, _, _, from, to kernel.ID, ids []kernel.ID) (int64, error) {
+	s.got = conversation.Branch{From: from, To: &to, Messages: ids}
+	if errors.Is(s.err, conversation.ErrBranchConflict) {
+		return 0, nil
+	}
+	return int64(len(ids)), s.err
+}
+func (s *fakeBranchWriter) InsertNotice(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, string, int64) (conversation.Message, error) {
+	return conversation.Message{}, nil
+}
+func testBrancher(writer conversation.Writer) *conversation.Brancher {
+	return conversation.NewBrancher(fakeTxRunner{},
+		func(platform.Tx) conversation.Writer { return writer },
+		func(platform.Tx) conversation.EventSequence { return fakeEventSequence{} },
+		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} }, nil)
 }
 
 func TestBranchSelection(t *testing.T) {
@@ -46,7 +72,7 @@ func TestBranchSelection(t *testing.T) {
 		{"new", []string{selection}, nil, 303, ""},
 		{"existing", []string{selection}, nil, 303, ""},
 		{"mixed", []string{selection, strings.Replace(selection, source, "32000000-0000-0000-0000-000000000000", 1)}, nil, 422, "topic.branch_mixed"},
-		{"stale", []string{selection}, topic.ErrConflict, 409, "topic.branch_conflict"},
+		{"stale", []string{selection}, conversation.ErrBranchConflict, 409, "topic.branch_conflict"},
 		{"name", []string{selection}, conversation.ErrInvalidTopicName, 422, "topic.branch_name_invalid"},
 		{"duplicate", []string{selection}, conversation.ErrTopicNameTaken, 422, "topic.branch_name_taken"},
 		{"too many", strings.Split(strings.Repeat(selection+",", 100)+selection, ","), nil, 422, "topic.branch_invalid"},
@@ -55,12 +81,15 @@ func TestBranchSelection(t *testing.T) {
 		for _, hx := range []bool{false, true} {
 			for _, lang := range []string{"en", "ja"} {
 				t.Run(tt.name+"/"+lang+"/hx="+map[bool]string{false: "false", true: "true"}[hx], func(t *testing.T) {
-					store := &fakeBranchStore{err: tt.err}
-					handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Branching = topic.NewBrancher(store, nil); s.Messages = populatedMessages() }))
+					store := &fakeBranchWriter{fakePostingWriter: fakePostingWriter{err: tt.err}}
+					handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Branching = testBrancher(store); s.Messages = populatedMessages() }))
 					if err != nil {
 						t.Fatal(err)
 					}
 					form := url.Values{"message": tt.selected, "name": {"design"}, "return_topic": {source}, "before": {"9"}}
+					if tt.name == "name" {
+						form.Set("name", strings.Repeat("x", 81))
+					}
 					if tt.name == "existing" {
 						form.Set("name", "")
 						form.Set("to", "32000000-0000-0000-0000-000000000000")
@@ -109,7 +138,7 @@ func TestBranchSelection(t *testing.T) {
 					if hx && strings.Contains(body, "message-composer") {
 						t.Fatal("enhanced error replaced conversation")
 					}
-					if !hx && (!strings.Contains(body, `id="branch-form"`) || !strings.Contains(body, `value="design"`) || !strings.Contains(body, `name="return_topic" value="`+source+`"`) || !strings.Contains(body, `name="before" value="9"`)) {
+					if !hx && (!strings.Contains(body, `id="branch-form"`) || !strings.Contains(body, `value="`+form.Get("name")+`"`) || !strings.Contains(body, `name="return_topic" value="`+source+`"`) || !strings.Contains(body, `name="before" value="9"`)) {
 						t.Fatal("plain error lost usable form or return context")
 					}
 					// checkMarkup resolves the reference; each checkbox names its message.

@@ -124,7 +124,7 @@ Settled in #305:
   the MVP every member reads and writes every public channel; roles and
   private channels may narrow this later.
 - **Bound:** one branch moves 1–100 distinct messages
-  (`topic.MaxBranchMessages`). A new destination's name follows channel
+  (`conversation.MaxBranchMessages`). A new destination's name follows channel
   names; the source cannot be the destination.
 - **Events:** the move takes the next sequence, then the notice the one
   after. The move is `messages.moved`, carrying

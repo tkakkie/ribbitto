@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
@@ -217,7 +216,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 		warm = append(warm, out)
 	}
 	destination, through, err := postgres.NewBranchStore(pool, eventSequence, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
-		topic.Branch{From: source, Messages: ids, NewName: "New label"}, func(conversation.Topic) string { return "branch notice" })
+		conversation.Branch{From: source, Messages: ids, NewName: "New label"}, func(conversation.Topic) string { return "branch notice" })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +384,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			boundary := topicPageBoundary(t, destination, page, 0)
 			items := renderedPage(t, page.Entries)
 			_, through, err := postgres.NewBranchStore(pool, eventSequence, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
-				topic.Branch{From: source, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
+				conversation.Branch{From: source, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -481,7 +480,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 					}
 				}
 				_, through, err := postgres.NewBranchStore(pool, eventSequence, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
-					topic.Branch{From: source.ID, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
+					conversation.Branch{From: source.ID, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
 				if err != nil {
 					t.Fatal(err)
 				}

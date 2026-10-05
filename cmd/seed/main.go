@@ -19,7 +19,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -232,7 +231,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	if !loadTest {
-		branches := topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), nil)
+		branches := conversationpg.NewBrancher(pool, postingSequence, postingEvents, nil)
 		if err := seedTopics(ctx, posts, branches, members, general, generalMessages); err != nil {
 			return fmt.Errorf("seeding topics: %w", err)
 		}
@@ -249,10 +248,10 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	return err
 }
 
-// postingEvents binds realtime's appender to conversation's posting transaction.
+// postingEvents binds realtime's appender to conversation's posting and branching transaction.
 func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
 
-// postingSequence binds org's sequence to conversation's posting transaction.
+// postingSequence binds org's sequence to conversation's posting and branching transaction.
 func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
 
 // appendEvents adapts realtime's appender to the consumer interface the

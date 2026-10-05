@@ -40,7 +40,7 @@ flowchart LR
   cmd[cmd/ribbitto] --> web & orgpg[org/orgpg] & conversationpg[conversation/conversationpg] & identity & identitypg[identity/identitypg] & realtimepg & realtime & platform[platform/postgres] & migrations[db/migrations]
   seed[cmd/seed] --> conversation & conversationpg & org & orgpg & identity & identitypg & realtimepg & platform & domain
   web[internal/web] --> org & conversation & identity & domain & realtime & static[web/static]
-  postgres[infra/postgres/pgtest] --> app & org & domain & platformpgtest[platform/postgres/pgtest]
+  postgres[infra/postgres/pgtest] --> org & domain & platformpgtest[platform/postgres/pgtest]
   conversationpg --> conversation[internal/conversation] & cstore[conversation/internal/postgres] & realtime & platform
   conversation --> identity & org & realtime & kernel & platform
   cstore --> conversation & org & platform & kernel

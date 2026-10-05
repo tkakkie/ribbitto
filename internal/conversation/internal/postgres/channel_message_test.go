@@ -9,10 +9,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 func TestChannelMessageSchema(t *testing.T) {
@@ -20,19 +20,19 @@ func TestChannelMessageSchema(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// Raw SQL and queries exercise schema constraints directly, including invalid rows.
-	channels, messages := postgres.NewChannelStore(pool), postgres.NewMessageStore(pool)
+	channels, messages, history := postgres.NewChannelStore(pool), postgres.NewWriterForTest(pool), postgres.NewReadStoreForTest(pool)
 	var nullable int
 	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('channel', 'message') AND is_nullable = 'YES'").Scan(&nullable))
 	if nullable != 0 {
 		t.Fatalf("new tables have %d nullable columns", nullable)
 	}
-	account := pgtest.Account(t, pool, "a@b", "Author")
-	var orgs []domain.ID
-	var members []domain.ID
+	account := fixtureAccount(t, pool, "a@b", "Author")
+	var orgs []kernel.ID
+	var members []kernel.ID
 	var defaults []conversation.Channel
 	for _, slug := range []string{"team", "other"} {
-		organizationID := pgtest.Organization(t, pool, slug, slug, 0)
-		member := pgtest.Member(t, pool, organizationID, account, org.RoleMember, "member", 1)
+		organizationID := fixtureOrganization(t, pool, slug)
+		member := fixtureMember(t, pool, organizationID, account, org.RoleMember, "member", 1)
 		channel, err := channels.CreateChannel(ctx, organizationID, "雑談", true)
 		requireNoError(t, err)
 		orgs, members, defaults = append(orgs, organizationID), append(members, member), append(defaults, channel)
@@ -83,7 +83,7 @@ func TestChannelMessageSchema(t *testing.T) {
 	slices.Reverse(posted)
 	for _, tc := range []struct {
 		name   string
-		org    domain.ID
+		org    kernel.ID
 		before int64
 		limit  int32
 		want   []conversation.Message
@@ -100,7 +100,7 @@ func TestChannelMessageSchema(t *testing.T) {
 			if tc.before != 0 {
 				before = &tc.before
 			}
-			got, err := messages.ListMessagesBefore(ctx, tc.org, channel.ID, nil, before, tc.limit)
+			got, err := history.ListMessagesBefore(ctx, tc.org, channel.ID, nil, before, tc.limit)
 			if err != nil || !slices.Equal(got, tc.want) {
 				t.Fatalf("page: %+v, %v; want %+v", got, err, tc.want)
 			}

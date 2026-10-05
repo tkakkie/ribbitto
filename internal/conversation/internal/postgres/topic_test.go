@@ -13,10 +13,10 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 // The topic table enforces decision 21's invariants on its own: one default
@@ -26,10 +26,10 @@ func TestTopicSchema(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	store := postgres.NewTopicStore(pool)
-	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-	globex := pgtest.OrganizationWithOwner(t, pool, "globex", "general")
-	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
+	store := postgres.NewWriterForTest(pool)
+	acme := fixtureOrganizationWithOwner(t, pool, "acme", "general")
+	globex := fixtureOrganizationWithOwner(t, pool, "globex", "general")
+	random := fixtureChannel(t, pool, acme.OrganizationID, "random", false)
 	general := acme.Channel.ID
 
 	// Every channel is created with its default topic (#307).
@@ -37,7 +37,7 @@ func TestTopicSchema(t *testing.T) {
 	if err != nil || def.ID != acme.Channel.DefaultTopicID || !def.IsDefault || def.Name != "" || def.ChannelID != general || def.OrganizationID != acme.OrganizationID || def.ID[6]>>4 != 7 || def.CreatedAt.IsZero() {
 		t.Fatalf("default topic: %+v, %v", def, err)
 	}
-	if _, err := store.CreateDefaultTopic(ctx, acme.OrganizationID, general); !isConstraint(err, "23505", "topic_default_idx") {
+	if _, err := pool.Exec(ctx, "INSERT INTO topic (organization_id, channel_id, is_default) VALUES ($1, $2, true)", acme.OrganizationID, general); !isConstraint(err, "23505", "topic_default_idx") {
 		t.Fatalf("second default topic: %v", err)
 	}
 
@@ -98,10 +98,10 @@ func TestTopicStoreScope(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	store := postgres.NewTopicStore(pool)
-	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-	globex := pgtest.OrganizationWithOwner(t, pool, "globex", "general")
-	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
+	store, reader := postgres.NewWriterForTest(pool), postgres.NewReadStoreForTest(pool)
+	acme := fixtureOrganizationWithOwner(t, pool, "acme", "general")
+	globex := fixtureOrganizationWithOwner(t, pool, "globex", "general")
+	random := fixtureChannel(t, pool, acme.OrganizationID, "random", false)
 
 	def, err := store.GetDefaultTopic(ctx, acme.OrganizationID, acme.Channel.ID)
 	requireNoError(t, err)
@@ -115,14 +115,14 @@ func TestTopicStoreScope(t *testing.T) {
 	requireNoError(t, err)
 
 	for _, lookup := range []struct {
-		org, channel, id domain.ID
+		org, channel, id kernel.ID
 		what             string
 	}{
 		{acme.OrganizationID, acme.Channel.ID, secret.ID, "another organisation's topic"},
 		{acme.OrganizationID, random.ID, def.ID, "another channel's topic"},
 		{globex.OrganizationID, acme.Channel.ID, def.ID, "a channel of another organisation"},
 	} {
-		if got, err := store.LookupTopics(ctx, lookup.org, lookup.channel, []domain.ID{lookup.id}); err != nil || len(got) != 0 {
+		if got, err := reader.LookupTopics(ctx, lookup.org, lookup.channel, []kernel.ID{lookup.id}); err != nil || len(got) != 0 {
 			t.Fatalf("batch leaked %s: %+v, %v", lookup.what, got, err)
 		}
 		if _, err := store.GetTopic(ctx, lookup.org, lookup.channel, lookup.id); !errors.Is(err, conversation.ErrTopicNotFound) {
@@ -133,20 +133,20 @@ func TestTopicStoreScope(t *testing.T) {
 	slices.SortFunc(named, func(a, b conversation.Topic) int {
 		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 	})
-	all, err := store.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 10)
+	all, err := reader.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 10)
 	if want := append([]conversation.Topic{def}, named...); err != nil || !slices.Equal(all, want) {
 		t.Fatalf("list: %+v, %v; want %+v", all, err, want)
 	}
-	if first, err := store.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 2); err != nil || !slices.Equal(first, all[:2]) {
+	if first, err := reader.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 2); err != nil || !slices.Equal(first, all[:2]) {
 		t.Fatalf("bounded list: %+v, %v", first, err)
 	}
-	if other, err := store.ListTopics(ctx, acme.OrganizationID, random.ID, 10); err != nil || len(other) != 1 || other[0].ID != random.DefaultTopicID {
+	if other, err := reader.ListTopics(ctx, acme.OrganizationID, random.ID, 10); err != nil || len(other) != 1 || other[0].ID != random.DefaultTopicID {
 		t.Fatalf("another channel's list: %+v, %v", other, err)
 	}
-	if leaked, err := store.ListTopics(ctx, globex.OrganizationID, acme.Channel.ID, 10); err != nil || len(leaked) != 0 {
+	if leaked, err := reader.ListTopics(ctx, globex.OrganizationID, acme.Channel.ID, 10); err != nil || len(leaked) != 0 {
 		t.Fatalf("list across organisations: %+v, %v", leaked, err)
 	}
-	if _, err := store.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 0); err == nil {
+	if _, err := reader.ListTopics(ctx, acme.OrganizationID, acme.Channel.ID, 0); err == nil {
 		t.Fatal("unbounded list accepted")
 	}
 }
@@ -164,22 +164,20 @@ func TestTopicReferences(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	topics := postgres.NewTopicStore(pool)
-	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
+	topics := postgres.NewWriterForTest(pool)
+	acme := fixtureOrganizationWithOwner(t, pool, "acme", "general")
+	random := fixtureChannel(t, pool, acme.OrganizationID, "random", false)
 
-	// Creating a channel creates its default topic, and posting without a
-	// topic goes there.
+	// Creating a channel creates its default topic.
 	for _, c := range []conversation.Channel{acme.Channel, random} {
 		got, err := topics.GetDefaultTopic(ctx, acme.OrganizationID, c.ID)
 		if err != nil || got.ID != c.DefaultTopicID || !got.IsDefault || got.ChannelID != c.ID {
 			t.Fatalf("default topic of %s: %+v, %v", c.Name, got, err)
 		}
 	}
-	posted, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, acme.OrganizationID, random.ID, acme.MemberID, "hello")
-	if err != nil || posted.TopicID != random.DefaultTopicID {
-		t.Fatalf("post: %+v, %v", posted, err)
-	}
+	var posted kernel.ID
+	fixture(t, pool, "INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq) VALUES ($1, $2, $3, $4, 'hello', 2) RETURNING id",
+		[]any{acme.OrganizationID, random.ID, random.DefaultTopicID, acme.MemberID}, &posted)
 	named, err := topics.CreateTopic(ctx, acme.OrganizationID, acme.Channel.ID, "design")
 	requireNoError(t, err)
 
@@ -189,7 +187,7 @@ func TestTopicReferences(t *testing.T) {
 		{"default flag cleared", "UPDATE channel SET default_topic_is_default = false WHERE id = $3", "23514", "channel_default_topic_is_default_check"},
 		{"default topic deleted", "DELETE FROM topic WHERE id = $4", "23001", "channel_default_topic_fkey"},
 	} {
-		_, err := pool.Exec(ctx, "WITH fixture AS (SELECT $1::uuid, $2::uuid, $3::uuid, $4::uuid) "+tc.sql, posted.ID, acme.Channel.DefaultTopicID, random.ID, random.DefaultTopicID)
+		_, err := pool.Exec(ctx, "WITH fixture AS (SELECT $1::uuid, $2::uuid, $3::uuid, $4::uuid) "+tc.sql, posted, acme.Channel.DefaultTopicID, random.ID, random.DefaultTopicID)
 		if !isConstraint(err, tc.code, tc.constraint) {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
@@ -224,8 +222,8 @@ func TestTopicBackfill(t *testing.T) {
 	requireNoError(t, err)
 	// Raw SQL writes what the binary of migration 8 wrote.
 	for _, slug := range []string{"acme", "globex"} {
-		orgID := pgtest.Organization(t, pool, slug, slug, 0)
-		member := pgtest.Member(t, pool, orgID, pgtest.Account(t, pool, slug+"@example.org", slug), org.RoleOwner, "owner", 1)
+		orgID := fixtureOrganization(t, pool, slug)
+		member := fixtureMember(t, pool, orgID, fixtureAccount(t, pool, slug+"@example.org", slug), org.RoleOwner, "owner", 1)
 		_, err := pool.Exec(ctx, `
 			WITH c AS (INSERT INTO channel (organization_id, name, is_default) VALUES ($1, 'general', true), ($1, 'random', false), ($1, 'empty', false) RETURNING id, name)
 			INSERT INTO message (organization_id, channel_id, member_id, body, event_seq)

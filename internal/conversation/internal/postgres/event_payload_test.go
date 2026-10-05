@@ -6,8 +6,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 // The publishers' encoders replaced SQL's jsonb_build_object (#398). Each
@@ -17,10 +17,10 @@ import (
 func TestEventPayloadCompatibility(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
-	id := func(n byte) domain.ID { return domain.ID{0: 0xab, 6: 0x7c, 8: 0x9d, 15: n} }
+	id := func(n byte) kernel.ID { return kernel.ID{0: 0xab, 6: 0x7c, 8: 0x9d, 15: n} }
 	uuid := func(n byte) pgtype.UUID { return pgtype.UUID{Bytes: id(n), Valid: true} }
 	posted := conversation.EncodePosted(id(1), id(2), id(3))
-	moved := conversation.EncodeMoved(conversation.Moved{ChannelID: id(1), FromTopicID: id(3), ToTopicID: id(5), MessageIDs: []domain.ID{id(2), id(6)}})
+	moved := conversation.EncodeMoved(conversation.Moved{ChannelID: id(1), FromTopicID: id(3), ToTopicID: id(5), MessageIDs: []kernel.ID{id(2), id(6)}})
 	for _, tt := range []struct {
 		name    string
 		encoded []byte
@@ -34,7 +34,7 @@ func TestEventPayloadCompatibility(t *testing.T) {
 			"SELECT jsonb_build_object('channel_id', $1::uuid, 'message_id', $2::uuid, 'topic_id', $3::uuid)",
 			[]any{uuid(1), uuid(2), uuid(3)},
 			func(b []byte) (any, error) { return conversation.DecodePosted(b) },
-			conversation.Posted{ChannelID: id(1), MessageID: id(2), TopicID: &[]domain.ID{id(3)}[0]},
+			conversation.Posted{ChannelID: id(1), MessageID: id(2), TopicID: &[]kernel.ID{id(3)}[0]},
 		},
 		{
 			"legacy message.posted", nil,
@@ -49,7 +49,7 @@ func TestEventPayloadCompatibility(t *testing.T) {
 				'to_topic_id', $3::uuid, 'message_ids', to_jsonb($4::uuid[]))`,
 			[]any{uuid(1), uuid(3), uuid(5), []pgtype.UUID{uuid(2), uuid(6)}},
 			func(b []byte) (any, error) { return conversation.DecodeMoved(b) },
-			conversation.Moved{ChannelID: id(1), FromTopicID: id(3), ToTopicID: id(5), MessageIDs: []domain.ID{id(2), id(6)}},
+			conversation.Moved{ChannelID: id(1), FromTopicID: id(3), ToTopicID: id(5), MessageIDs: []kernel.ID{id(2), id(6)}},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

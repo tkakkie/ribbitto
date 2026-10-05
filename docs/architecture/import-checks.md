@@ -24,7 +24,7 @@ fails `make check`:
   rejected and a store accepted;
 - `db/migrations` may be imported only by `internal/platform/postgres` and
   `cmd/ribbitto` — **this also applies to test files**, apart from the
-  one target-version test in `internal/infra/postgres`,
+  topic backfill test in `internal/conversation/internal/postgres/topic_test.go`,
   `internal/realtime/internal/postgres/event_log_test.go`,
   `internal/org/internal/postgres/member_handle_test.go` and
   conversation's `default_channel_backfill_test.go`, until step 5;

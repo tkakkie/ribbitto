@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
@@ -63,3 +64,15 @@ func assertEventLog(t *testing.T, pool *pgxpool.Pool, org kernel.ID, wantSeq int
 		t.Fatalf("event log: seq=%d boundary=%d rows=%d valid=%d; want seq=%d", seq, boundary, count, valid, wantSeq)
 	}
 }
+
+// lookupMembers adapts org's directory to the reader's consumer interface.
+func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
+
+// lookupAccounts adapts identity's directory to the reader's consumer interface.
+func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
+	return identitypg.AccountsIn(s)
+}
+
+// eventCursor adapts org's committed event_seq to the reader's consumer
+// interface.
+func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }

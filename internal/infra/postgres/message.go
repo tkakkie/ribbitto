@@ -6,15 +6,10 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
-	"github.com/tkakkie/ribbitto/internal/org"
-	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
-	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
 // MessageStore persists messages using a pool or a caller-owned transaction.
@@ -80,77 +75,6 @@ func (s *MessageStore) ListMessagesBefore(ctx context.Context, organizationID, c
 
 func messageFromRow(row sqlcgen.Message) conversation.Message {
 	return conversation.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time}
-}
-
-// PostingStore is the frozen posting transaction used by legacy store tests.
-type PostingStore struct {
-	pool      *pgxpool.Pool
-	sequences EventSequenceIn
-	events    EventAppenderIn
-}
-
-// NewPostingStore returns a PostingStore on pool that takes org's sequence
-// through sequences and appends events through events.
-func NewPostingStore(pool *pgxpool.Pool, sequences EventSequenceIn, events EventAppenderIn) *PostingStore {
-	return &PostingStore{pool: pool, sequences: sequences, events: events}
-}
-
-// Post takes the next event_seq first — locking the organisation's row, so
-// sequence order is commit order — then inserts the message and event.
-// Any failure rolls everything back, so no sequence value is lost. Listed
-// exceptions: advances org's event_seq and writes realtime's event_log.
-func (s *PostingStore) Post(ctx context.Context, organizationID, channelID, memberID domain.ID, body string) (conversation.Message, error) {
-	return s.PostToTopic(ctx, organizationID, channelID, memberID, nil, body)
-}
-
-// PostToTopic posts into the scoped topic, or the default when topicID is nil.
-func (s *PostingStore) PostToTopic(ctx context.Context, organizationID, channelID, memberID domain.ID, topicID *domain.ID, body string) (conversation.Message, error) {
-	var posted conversation.Message
-	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
-		tx := pgxbridge.Tx(platformTx)
-		seq, err := s.sequences(platformTx).NextEventSeq(ctx, organizationID)
-		if err != nil {
-			return err
-		}
-		// A message posted without a topic goes to the channel's default
-		// topic (decision 21), read through topic's API. A channel always
-		// has one, so none means the channel is not in this organisation.
-		defaultTopic, err := NewTopicStore(tx).GetDefaultTopic(ctx, organizationID, channelID)
-		if errors.Is(err, conversation.ErrTopicNotFound) {
-			return conversation.ErrChannelNotFound
-		}
-		if err != nil {
-			return err
-		}
-		if topicID != nil {
-			defaultTopic, err = NewTopicStore(tx).GetTopic(ctx, organizationID, channelID, *topicID)
-			if err != nil {
-				return err
-			}
-		}
-		posted, err = NewMessageStore(tx).InsertMessage(ctx, organizationID, channelID, defaultTopic.ID, memberID, body, seq)
-		if err != nil {
-			return err
-		}
-		data := conversation.EncodePosted(channelID, posted.ID, posted.TopicID)
-		return s.events(platformTx).Append(ctx, organizationID, seq, conversation.KindPosted, nil, data)
-	})
-	var pgErr *pgconn.PgError
-	switch {
-	case errors.Is(err, conversation.ErrChannelNotFound):
-		return conversation.Message{}, conversation.ErrChannelNotFound
-	// The composite foreign keys, not a lookup first, keep a message inside
-	// its organisation: another organisation's channel or member fails here.
-	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_channel_id_fkey":
-		return conversation.Message{}, conversation.ErrChannelNotFound
-	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_member_id_fkey":
-		return conversation.Message{}, org.ErrNotFound
-	case errors.Is(err, org.ErrNotFound):
-		return conversation.Message{}, org.ErrNotFound // the organisation itself is gone
-	case err != nil:
-		return conversation.Message{}, fmt.Errorf("posting message: %w", err)
-	}
-	return posted, nil
 }
 
 // GetMessages reads only the requested IDs in the organisation and channel.

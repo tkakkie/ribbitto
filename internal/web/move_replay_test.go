@@ -15,7 +15,6 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -196,7 +195,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	var ids []domain.ID
 	var source domain.ID
 	for range 2 {
-		posted, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "selected body")
+		posted, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).Post(ctx, m, f.Channel.ID, "selected body")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -215,11 +214,13 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 		}
 		warm = append(warm, out)
 	}
-	destination, through, err := postgres.NewBranchStore(pool, eventSequence, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
+	notifier := &recordingNotifier{}
+	destination, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, notifier).Branch(ctx, m, f.Channel.ID,
 		conversation.Branch{From: source, Messages: ids, NewName: "New label"}, func(conversation.Topic) string { return "branch notice" })
 	if err != nil {
 		t.Fatal(err)
 	}
+	through := notifier.seq
 	stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{log, through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 	sub := realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID}
 	delivered := &moveDeliveries{}
@@ -356,10 +357,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			pool := pgtest.New(t)
 			f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 			m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
-			destination, err := postgres.NewTopicStore(pool).CreateTopic(ctx, f.OrganizationID, f.Channel.ID, "Destination")
-			if err != nil {
-				t.Fatal(err)
-			}
+			destination := namedTopic(t, pool, f.OrganizationID, f.Channel.ID, "Destination")
 			reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 			var moved []domain.ID
 			var source domain.ID
@@ -368,7 +366,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 				if i == 0 || i == tt.count/2 || i == tt.count-1 {
 					selected = nil // Before, within and after the destination's messages.
 				}
-				posted, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, selected, "body")
+				posted, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).PostToTopic(ctx, m, f.Channel.ID, selected, "body")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -383,11 +381,13 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			}
 			boundary := topicPageBoundary(t, destination, page, 0)
 			items := renderedPage(t, page.Entries)
-			_, through, err := postgres.NewBranchStore(pool, eventSequence, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
+			notifier := &recordingNotifier{}
+			_, err = conversationpg.NewBrancher(pool, postingSequence, postingEvents, notifier).Branch(ctx, m, f.Channel.ID,
 				conversation.Branch{From: source, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
 			if err != nil {
 				t.Fatal(err)
 			}
+			through := notifier.seq
 			renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 			stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds()), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 			delivered := &moveDeliveries{}
@@ -439,16 +439,13 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				pool := pgtest.New(t)
 				f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 				m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
-				destination, err := postgres.NewTopicStore(pool).CreateTopic(ctx, f.OrganizationID, f.Channel.ID, "Destination")
-				if err != nil {
-					t.Fatal(err)
-				}
+				destination := namedTopic(t, pool, f.OrganizationID, f.Channel.ID, "Destination")
 				reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 				var source conversation.Topic
 				var moved []domain.ID
 				for i := range count {
 					for _, selected := range []*domain.ID{nil, &destination.ID} {
-						posted, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).PostToTopic(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, selected, "body")
+						posted, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).PostToTopic(ctx, m, f.Channel.ID, selected, "body")
 						if err != nil {
 							t.Fatal(err)
 						}
@@ -479,11 +476,13 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 						}
 					}
 				}
-				_, through, err := postgres.NewBranchStore(pool, eventSequence, appendEvents).Branch(ctx, f.OrganizationID, f.Channel.ID, f.MemberID,
+				notifier := &recordingNotifier{}
+				_, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, notifier).Branch(ctx, m, f.Channel.ID,
 					conversation.Branch{From: source.ID, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
 				if err != nil {
 					t.Fatal(err)
 				}
+				through := notifier.seq
 				renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 				stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds()), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 				for i, selected := range topics {

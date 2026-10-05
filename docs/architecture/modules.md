@@ -37,10 +37,6 @@ the temporary implementation behind it.
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
 | `conversation`'s topic backfill test, `realtime`'s event-log migration test (`internal/realtime/internal/postgres/event_log_test.go`), `org`'s handle upgrade test and `conversation`'s default-channel backfill test | `db/migrations` (temporary allowance) | 0 | 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
-| `infra/postgres` appender interface (`EventAppender`) | `realtime` types (root import, temporary allowance) | 2 | 4 |
-| posting, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | 4 |
-| posting, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`) | 2 | 4 |
-| posting, branching (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`), adapted by a closure | 3 | 4 |
 
 Setup's and sign-up's database tests live in `internal/org/orgpg`,
 with local raw-SQL fixtures and event-log assertions.

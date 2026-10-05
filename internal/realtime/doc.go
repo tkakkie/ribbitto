@@ -11,8 +11,8 @@
 // (internal/realtime/internal/postgres) reads, appends and expires the event
 // log, and its wiring (internal/realtime/realtimepg) builds it. The
 // stream's authorization and rendering, and org's cursor bounds, come in as
-// interfaces it defines, implemented by app, web and infra/postgres and
-// wired in cmd/ribbitto.
+// interfaces it defines, implemented by org's Authorizer, web's renderer
+// and org's store (through orgpg.BoundsIn), wired in cmd/ribbitto.
 //
 // Hub is the process-wide core. Per organisation it keeps the highest
 // committed event sequence it has been told about (Raise) and lets a

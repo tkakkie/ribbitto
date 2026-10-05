@@ -175,11 +175,8 @@ linters:
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
             # Temporary, until step 4.16: infra's stores use conversation's
-            # types and errors, and posting and branching encode its payloads,
-            # until they move into it.
+            # types and errors.
             - github.com/tkakkie/ribbitto/internal/conversation$
-            # Temporary, until step 4: the flows' appender interface.
-            - github.com/tkakkie/ribbitto/internal/realtime$
             # Temporary, until the migration's last step: infra/postgres/pgtest
             # delegates to the platform's database lifecycle, and the legacy
             # stores may take the platform's Tx and Snapshot and unwrap them.

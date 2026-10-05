@@ -21,12 +21,11 @@
 // ports Posting and Brancher own their transactions through (branching uses
 // them in production from 4.10a2; the store backs CreateTopic and
 // MoveMessages with copies of the legacy queries until step 4.16);
-// SnapshotRunner and ReadStore with ReadStoreIn, the snapshot and its
-// channel, topic and message reads Reader owns
-// its reads through (the store's message queries,
-// InsertMessage, GetMessage, ListMessagesBefore and GetMessages, are copies
-// of the legacy ones until step 4.15, and ListTopics and LookupTopics until
-// 4.16); Posting, NewPosting, Post and PostToTopic, which validate and
+// SnapshotRunner, which owns Reader's snapshot, and ReadStore with
+// ReadStoreIn, which binds its channel, topic and message reads to that
+// snapshot (the store's message queries, InsertMessage, GetMessage,
+// ListMessagesBefore and GetMessages, are copies of the legacy ones until
+// step 4.15, and ListTopics and LookupTopics until 4.16); Posting, NewPosting, Post and PostToTopic, which validate and
 // commit a post with its event, then notify; Brancher, NewBrancher, Branch,
 // MaxBranchMessages, ErrInvalidBranch and ErrBranchConflict, which validate
 // and commit a move and notice with both events, then notify (unused in

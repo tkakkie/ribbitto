@@ -79,15 +79,17 @@ func TestReadStoreIn(t *testing.T) {
 			}
 		}
 		for _, tc := range []struct {
-			name string
-			ids  []kernel.ID
-			want []kernel.ID
+			name           string
+			organizationID kernel.ID
+			ids            []kernel.ID
+			want           []kernel.ID
 		}{
-			{"newest first, in scope only", []kernel.ID{m[1], m[4], m[5], m[3], {0xee}}, []kernel.ID{m[3], m[1]}},
-			{"missing IDs", []kernel.ID{{0xee}}, []kernel.ID{}},
-			{"empty input", nil, []kernel.ID{}},
+			{"newest first, in scope only", f.acme, []kernel.ID{m[1], m[4], m[5], m[3], {0xee}}, []kernel.ID{m[3], m[1]}},
+			{"read as another organisation", f.globex, []kernel.ID{m[1]}, []kernel.ID{}},
+			{"missing IDs", f.acme, []kernel.ID{{0xee}}, []kernel.ID{}},
+			{"empty input", f.acme, nil, []kernel.ID{}},
 		} {
-			batch, err := store.GetMessages(ctx, f.acme, f.general, tc.ids)
+			batch, err := store.GetMessages(ctx, tc.organizationID, f.general, tc.ids)
 			if got := messageIDs(batch); err != nil || !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("GetMessages, %s = %x, %v; want %x", tc.name, got, err, tc.want)
 			}

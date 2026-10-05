@@ -7,8 +7,8 @@
 // default channel. Writer holds posting's and branching's writes and maps
 // their constraints to conversation's and org's errors, except the branch
 // notice's; conversationpg.WriterIn binds it to a caller's transaction,
-// used by posting and, from step 4.10a, branching. Branching's CreateTopic and
-// MoveMessages queries duplicate the legacy entry's db/queries/topic.sql
+// used in production by posting and, from step 4.10a2, branching. Branching's
+// CreateTopic and MoveMessages queries duplicate the legacy entry's db/queries/topic.sql
 // until step 4.16 removes that copy. ReadStore holds the page snapshot's
 // channel, topic and message reads and no write, delegating the channel
 // lookups and the topic by ID to the channel and topic stores;

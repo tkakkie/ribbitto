@@ -35,6 +35,12 @@ func NewPosting(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, even
 	return conversation.NewPosting(NewTxRunner(pool), WriterIn, sequences, events, notifier)
 }
 
+// NewBrancher builds branching with org's sequence and realtime's appender
+// factories bound to its transaction. A nil notifier disables notifications.
+func NewBrancher(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, notifier conversation.Notifier) *conversation.Brancher {
+	return conversation.NewBrancher(NewTxRunner(pool), WriterIn, sequences, events, notifier)
+}
+
 // NewReader builds the page, single-message and batch use case over the pool.
 func NewReader(pool *pgxpool.Pool, members conversation.MemberDirectoryIn, accounts conversation.AccountDirectoryIn, cursor conversation.EventCursorIn) *conversation.Reader {
 	return conversation.NewReader(NewSnapshotRunner(pool), ReadStoreIn, members, accounts, cursor)

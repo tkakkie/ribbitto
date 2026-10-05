@@ -12,7 +12,7 @@
 # It can affect the self-tests when any path, old or new, is under
 # scripts/ai/ (this script included), .github/prompts/ or .github/workflows/,
 # or is the Makefile. The selection fails safe: when the base cannot be
-# resolved or git fails, the self-tests run. It prints what it chose and why,
+# resolved or listing the changes fails, the self-tests run. It prints what it chose and why,
 # and a self-test failure is its exit status.
 set -euo pipefail
 dir=$(cd "$(dirname "$0")" && pwd)
@@ -55,16 +55,30 @@ changes() {
     git ls-files -z --others --exclude-standard
 }
 if ! changed=$(changes | tr '\0' '\n'); then
-  run "fail safe: git could not list the changes since '$base'"
+  run "fail safe: could not list the changes since '$base'"
   exit 0
 fi
 
-status=0
-matched=$(grep -E '^(scripts/ai/|\.github/prompts/|\.github/workflows/|Makefile$)' <<< "$changed" | sort -u) || status=$?
-if ((status > 1)); then
-  run "fail safe: could not match the changed paths"
-elif [[ -n $matched ]]; then
-  run "changed since '$base': $(tr '\n' ' ' <<< "$matched" | sed 's/ $//')"
+# Matched in bash, with no grep, sort or here-string: a failure of any of
+# them (#560) could otherwise pass for "nothing matched" and skip the tests.
+matched=
+IFS=$'\n'
+set -f
+for path in $changed; do
+  case $path in
+    scripts/ai/* | .github/prompts/* | .github/workflows/* | Makefile)
+      case $'\n'$matched in
+        *$'\n'"$path"$'\n'*) ;;
+        *) matched+=$path$'\n' ;;
+      esac
+      ;;
+  esac
+done
+set +f
+IFS=$' \t\n'
+if [[ -n $matched ]]; then
+  matched=${matched%$'\n'}
+  run "changed since '$base': ${matched//$'\n'/ }"
 else
   echo "launcher self-tests: skipped (nothing changed since '$base' under scripts/ai/, .github/prompts/ or .github/workflows/, nor the Makefile; make check-ai runs them)"
 fi

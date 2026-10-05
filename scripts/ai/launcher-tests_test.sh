@@ -3,7 +3,8 @@
 # self-tests are fakes that record that they ran: a change under each listed
 # path (committed, staged, unstaged or untracked; a deletion; a rename away)
 # runs them, an unrelated change skips them and says so, an unresolvable base
-# or a failing git runs them, and a failing self-test fails the script.
+# or a failing git runs them, a failing helper tool never skips them, and a
+# failing self-test fails the script.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d)
@@ -40,7 +41,8 @@ reset() {
   rm -f "$RAN"
 }
 commit() { git -C "$repo" add -A && git -C "$repo" -c commit.gpgsign=false commit -q -m "$1"; }
-check() { (cd "$repo" && bash scripts/ai/launcher-tests.sh "$@") > "$out" 2>&1; }
+# CHECK_PATH puts fakes on the script's PATH only, never the test's own.
+check() { (cd "$repo" && PATH=${CHECK_PATH:-$PATH} bash scripts/ai/launcher-tests.sh "$@") > "$out" 2>&1; }
 # expect_run <case> <text the output must contain> [args...]
 expect_run() {
   local name=$1 text=$2
@@ -78,6 +80,12 @@ reset
 echo new > "$repo/.github/prompts/new.txt"
 commit 'add a prompt'
 expect_run 'added file' '.github/prompts/new.txt' --base base
+reset
+echo '# change' >> "$repo/Makefile"
+echo '# change' >> "$repo/.github/workflows/ci.yml"
+commit 'two listed files'
+echo '# again' >> "$repo/Makefile"
+expect_run 'two files, one also unstaged' "run (changed since 'base': .github/workflows/ci.yml Makefile)" --base base
 echo "PASS a commit under each listed path runs them and names it"
 
 reset
@@ -130,8 +138,38 @@ mkdir -p "$work/bin"
 real_git=$(command -v git)
 printf '#!/usr/bin/env bash\n[[ $1 != diff ]] || exit 128\nexec %q "$@"\n' "$real_git" > "$work/bin/git"
 chmod +x "$work/bin/git"
-PATH=$work/bin:$PATH expect_run 'failing diff' "fail safe: git could not list the changes since 'base'" --base base
+CHECK_PATH=$work/bin:$PATH expect_run 'failing diff' "fail safe: could not list the changes since 'base'" --base base
 echo "PASS an unresolvable base, unrelated history and a failing git diff run them"
+
+# A failing tool must never pass for "nothing matched" (#560). Each fake
+# records its call; a skip is right only if the decision did not use it.
+fake=$work/fake
+for status in 1 2; do
+  for tool in tr grep sort sed cat; do
+    rm -rf "$fake" && mkdir -p "$fake"
+    printf '#!/bin/sh\necho %s >> "$CALLED"\nexit %s\n' "$tool" "$status" > "$fake/$tool"
+    chmod +x "$fake/$tool"
+    export CALLED=$work/called
+    reset
+    echo '# change' >> "$repo/Makefile"
+    rm -f "$CALLED"
+    CHECK_PATH=$fake:$PATH expect_run "failing $tool ($status), listed change" 'launcher self-tests: run' --base base
+    reset
+    echo '# change' >> "$repo/docs/a.txt"
+    rm -f "$CALLED"
+    CHECK_PATH=$fake:$PATH check --base base || { cat "$out" >&2; fail "failing $tool ($status): exited non-zero"; }
+    if grep -qF 'skipped' "$out" && [[ -e $CALLED ]]; then
+      fail "failing $tool ($status) was used and the tests were skipped: $(cat "$out")"
+    fi
+  done
+done
+# Bash writes a here-document or here-string to a temporary file, which can
+# fail (#560); a portable fake for that failure does not exist, so the script
+# must use none.
+if grep -n '<<' "$root/scripts/ai/launcher-tests.sh"; then
+  fail "launcher-tests.sh uses a here-document or here-string"
+fi
+echo "PASS a failing tr, grep, sort, sed or cat never skips them, and no here-string is used"
 
 reset
 expect_run 'no base' 'always: no base given' --base ''

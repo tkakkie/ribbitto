@@ -57,9 +57,8 @@ func (f *branchFake) InsertNotice(_ context.Context, organizationID, channelID, 
 	if body != "to 設計" || seq != 42 {
 		f.t.Fatal("wrong notice")
 	}
-	f.topic = kernel.ID{4}
 	f.scope(organizationID, channelID)
-	if topicID != f.topic || memberID != (kernel.ID{2}) {
+	if topicID != (kernel.ID{4}) || memberID != (kernel.ID{2}) {
 		f.t.Fatal("wrong notice scope")
 	}
 	return conversation.Message{ID: kernel.ID{6}, TopicID: topicID}, f.step("notice insert")

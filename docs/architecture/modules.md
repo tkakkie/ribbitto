@@ -22,8 +22,9 @@ A cross-module flow's root use case owns its transaction through an injected run
 
 `internal/web` stays the UI shell and imports module roots. Its per-kind
 stream renderers are adapters for the payloads that `conversation`
-registers with `realtime`. Step 0 creates `kernel` and `platform`; step 5
-removes `internal/domain`, `internal/app` and `internal/infra/postgres`.
+registers with `realtime`. Step 0 creates `kernel` and `platform`; step 4
+removes `internal/app`; step 5 removes `internal/domain` and
+`internal/infra/postgres`.
 
 **Known exceptions and temporary paths.** Every flow keeps its transaction
 or snapshot. Each operation it needs from another module is one of the

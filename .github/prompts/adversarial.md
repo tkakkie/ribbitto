@@ -14,7 +14,7 @@ anything.
 ## Where to attack
 
 - **Authorization:** can someone act on or see data they must not? Is every
-  path going through the single authorization entry point in `internal/app`?
+  path going through the single authorization entry point, `org`'s root?
 - **Organisation scoping:** can data from one organisation leak into or be
   changed from another? Is every query on organisation-owned data filtered by
   `organization_id`, and does the organisation come from the URL, never the

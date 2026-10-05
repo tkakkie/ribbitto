@@ -22,12 +22,11 @@ packages. See [load client](load-client.md) for limits and usage.
 | `internal/platform/postgres` | The pool, the migration connection and runner, statement counting for development metrics, test databases (`pgtest`), and the opaque `Tx` and `Snapshot` with `InTx` and `InSnapshot`. No feature queries. Its `pgxbridge` unwraps a handle to pgx, for stores only. | `kernel`, `db/migrations` |
 | `internal/domain` | Only the `ID` alias of `kernel.ID` remains until step 5 removes it. Channels, topics, messages and their rules are in `conversation`. | `kernel` |
 | `internal/identity` | The `identity` module's root (step 1): `Account`, the email, password and display-name rules, password hashing, sessions, signing in and the display-name `Directory`, with the store interfaces they need. Its store, `internal/identity/internal/postgres`, runs `db/queries/identity/` on its own `sqlcgen`; its wiring, `identitypg`, builds sessions, sign-in, the snapshot-bound directory (`AccountsIn`) and the transaction-bound account creator (`AccountCreatorIn`). Closures in `cmd/*` and the tests adapt the creator to org's factory and prove that it fits `org.AccountCreator`. The root owns `ErrEmailTaken` and `ErrInvalidEmail`. | `kernel`, `platform` |
-| `internal/app` | The legacy topic `Store` interface, no longer used; step 4.17 deletes it. | `domain`, `identity`, `org`; `conversation`'s root until step 4.17 deletes it |
-| `internal/infra/postgres` | Only `pgtest` remains until step 5: shared org and identity fixtures plus a raw-SQL channel and default topic, with databases delegated to the platform. It imports no store or `conversation`. | `domain`, `org`, `platform/postgres/pgtest`; unused `app` allowances remain until 4.17 |
+| `internal/infra/postgres` | Only `pgtest` remains until step 5: shared org and identity fixtures plus a raw-SQL channel and default topic, with databases delegated to the platform. It imports no store or `conversation`. | `domain`, `org`, `platform/postgres/pgtest` |
 | `internal/realtime` | Real-time delivery (M3): the hub's latest sequences and connection registry, the per-connection delivery loop, shared reads, the watermark check and event retention; presence is planned. Declares the durable event types (`Event`, `EventKind`, `ErrCursorExpired`). Receives authorization, rendering and org's cursor bounds as interfaces it defines itself. Its store, `internal/realtime/internal/postgres`, reads, appends and expires `event_log` on its own `sqlcgen` (`db/queries/realtime/`), with org's retention lock and boundary injected (`RetentionBoundary`); its wiring, `realtimepg`, builds the reader and the cleaner (`NewCleaner`) and binds the appender to a writer's transaction (`AppenderIn`). The `realtime` module's root since step 2; uses `kernel.ID`. | `kernel`, `platform` |
 | `internal/org` | The completed `org` module: organisations, memberships, the **only** authorization logic, name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds, first-run setup and sign-up owning their transactions. Its store, `internal/org/internal/postgres`, runs `db/queries/org/` on its own `sqlcgen`; its wiring, `orgpg`, builds use cases and binds stores to callers' transactions or snapshots. See [`internal/org/doc.go`](../../internal/org/doc.go) for identifiers. `orgpg.SequenceIn` serves conversation's posting and branching transactions; `MembersIn` and `EventCursorIn` serve its snapshot. | `kernel`, `platform`, the roots of `identity` and `realtime`; `domain` only for its `ID` alias, until step 5 |
 | `internal/conversation` | The `conversation` module's root, filled in during step 4: `Channel`, its name rule, errors and default name, and `Channels` over its `ChannelStore` interface; `Topic`, its name rule and errors, and `Topics` (the membership-scoped lookup); `Message`, its body rule and errors; the snapshot use case (`Reader`, `NewReader`, `Page`, `Before`, `One` and `Many`, with an internal history core over `History` and `TopicDirectory`, returning `Entry` and `ChannelPage`); the snapshot-bound member and account directories and cursor it needs (`MemberDirectoryIn`, `AccountDirectoryIn`, `EventCursorIn`); the `TxRunner`, `Writer`, sequence, appender and `Notifier` ports `Posting` and `Brancher` use; `Posting` and `NewPosting` (with `Post` and `PostToTopic`); `Brancher` and `NewBrancher` (validation and the move/notice transaction); the `SnapshotRunner` and snapshot-bound `ReadStore` `Reader` uses; the `message.posted` and `messages.moved` kinds, payload codecs and routers so far. Its store, `internal/conversation/internal/postgres`, holds channel reads and creation, the topic lookup, posting's and branching's `Writer` and the `ReadStore`'s channel, topic and message reads on its own `sqlcgen` (`db/queries/conversation/`), used by `Reader`, the pool-bound channel use cases, the topic lookup and setup's default channel. Its wiring, `conversationpg`, builds them (`NewChannels`, `NewTopics`, `NewPosting`, `NewBrancher`, `NewReader`), binds the default-channel creator to setup's transaction (`DefaultChannelCreatorIn`), builds the runners and binds the writer and reads (`NewTxRunner`, `WriterIn`, `NewSnapshotRunner`, `ReadStoreIn`), and registers the routers (`EventKinds`). | `kernel`, `platform`, the roots of `identity`, `org` and `realtime` |
-| `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `app`, `identity`, `org`, `conversation`, `realtime`, `web/static` |
+| `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoint. The only package that produces HTML. | `domain`, `identity`, `org`, `conversation`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |
 
@@ -47,14 +46,13 @@ flowchart LR
   realtime[internal/realtime] --> kernel & platform
   realtimepg[realtime/realtimepg] --> realtime & rstore[realtime/internal/postgres] & platform
   rstore --> realtime & platform & kernel
-  app[internal/app] --> org & conversation & identity & domain[internal/domain]
   org[internal/org] --> identity & realtime & domain & kernel & platform
   orgpg --> org & ostore[org/internal/postgres] & platform & identity & realtime
   ostore --> org & platform & kernel
   identity[internal/identity] --> kernel & platform
   identitypg --> identity & store[identity/internal/postgres] & platform
   store --> identity & platform & kernel
-  domain --> kernel[internal/kernel]
+  domain[internal/domain] --> kernel[internal/kernel]
   platform --> kernel & migrations
 ```
 
@@ -64,7 +62,7 @@ Why this shape: the domain and the use cases stay testable without a
 database or HTTP; authorization lives in exactly one place, so a new
 endpoint or a real-time path cannot quietly skip it; and because use cases
 return plain structs and only `web` renders HTML, a JSON API can be added
-next to the HTML handlers later without touching `app`.
+next to the HTML handlers later without touching the use cases.
 
 `serve` opens a `pgxpool.Pool` for the sqlc queries; `migrate` keeps using
 a `database/sql` handle, which goose needs.

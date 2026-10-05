@@ -26,11 +26,11 @@ type Services struct {
 	Setup         SetupService // nil disables both setup routes
 	SetupSessions SessionReplacer
 	Authz         Authorizer
-	Topics        TopicReader
+	Topics        TopicLookup
 	Messages      MessageReader
 	Posting       *conversation.Posting
 	Branching     Branching // nil: branching answers 404
-	Channels      ChannelService
+	Channels      Channels
 	Limits        *middleware.AuthLimits // nil: no rate limits (tests)
 	Stream        *Streaming             // nil: the channel event stream answers 404
 }

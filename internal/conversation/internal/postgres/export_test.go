@@ -1,6 +1,12 @@
 package postgres
 
-import "github.com/tkakkie/ribbitto/internal/conversation/internal/postgres/sqlcgen"
+import (
+	"context"
+
+	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/kernel"
+)
 
 // NewWriterForTest binds writes to db so schema tests can independently
 // exercise invalid statements without aborting a shared transaction.
@@ -11,4 +17,10 @@ func NewWriterForTest(db sqlcgen.DBTX) Writer {
 // NewReadStoreForTest binds schema-test reads to the same fixture database.
 func NewReadStoreForTest(db sqlcgen.DBTX) ReadStore {
 	return ReadStore{channels: NewChannelStore(db), topics: NewTopicStore(db), queries: sqlcgen.New(db)}
+}
+
+// CreateDefaultChannelForTest allows schema tests to exercise the default flag
+// with arbitrary names, independently of setup's transaction.
+func (s *ChannelStore) CreateDefaultChannelForTest(ctx context.Context, organizationID kernel.ID, name string) (conversation.Channel, error) {
+	return s.createChannel(ctx, organizationID, name, true)
 }

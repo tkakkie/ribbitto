@@ -56,7 +56,7 @@ func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, 
 	if err != nil {
 		return conversation.ChannelPage{}, err
 	}
-	list, err := channels.List(ctx, m)
+	list, err := channels.list(ctx, m)
 	if err != nil {
 		return conversation.ChannelPage{}, err
 	}
@@ -99,7 +99,7 @@ func TestMessageListHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
 				s.Messages = tt.reader
-				s.Channels = &fakeChannels{getErr: errors.New("unexpected separate channel read"), listErr: errors.New("unexpected separate sidebar read")}
+				s.Channels = &fakeChannels{getErr: errors.New("unexpected separate channel read")}
 			}))
 			if err != nil {
 				t.Fatal(err)

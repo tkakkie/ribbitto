@@ -17,17 +17,13 @@ type channelStore struct {
 	created  []conversation.Channel
 }
 
-func (s *channelStore) ListChannels(_ context.Context, org kernel.ID) ([]conversation.Channel, error) {
-	return s.channels[org], nil
-}
-
-func (s *channelStore) CreateChannel(_ context.Context, org kernel.ID, name string, isDefault bool) (conversation.Channel, error) {
+func (s *channelStore) CreateChannel(_ context.Context, org kernel.ID, name string) (conversation.Channel, error) {
 	for _, c := range s.channels[org] {
 		if c.Name == name {
 			return conversation.Channel{}, conversation.ErrChannelNameTaken
 		}
 	}
-	c := conversation.Channel{ID: kernel.ID{byte(len(s.created) + 10)}, OrganizationID: org, Name: name, IsDefault: isDefault}
+	c := conversation.Channel{ID: kernel.ID{byte(len(s.created) + 10)}, OrganizationID: org, Name: name}
 	s.created = append(s.created, c)
 	s.channels[org] = append(s.channels[org], c)
 	return c, nil
@@ -100,12 +96,8 @@ func TestChannels(t *testing.T) {
 		}
 	})
 
-	t.Run("list and default stay in the member's organisation", func(t *testing.T) {
+	t.Run("default stays in the member's organisation", func(t *testing.T) {
 		service, _ := newService()
-		list, err := service.List(t.Context(), member(globex))
-		if err != nil || len(list) != 1 || list[0] != secret {
-			t.Fatalf("list: %+v, %v", list, err)
-		}
 		if got, err := service.Default(t.Context(), member(acme)); err != nil || got != general {
 			t.Fatalf("default: %+v, %v", got, err)
 		}

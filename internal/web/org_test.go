@@ -170,18 +170,15 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 					t.Fatalf("branch: %d %s", w.Code, w.Body.String())
 				}
 			case "POST /channels":
-				created, err := services.Channels.List(ctx, org.Membership{Organization: org.Organization{ID: acme}})
-				if err != nil {
-					t.Fatal(err)
+				location := w.Header().Get("Location")
+				rawID, ok := strings.CutPrefix(location, "/organizations/acme/channels/")
+				id, valid := pathID(rawID)
+				if w.Code != http.StatusSeeOther || !ok || !valid {
+					t.Fatalf("create: %d %s", w.Code, location)
 				}
-				var location string
-				for _, c := range created {
-					if c.Name == "新しいチャンネル" {
-						location = view.ChannelURL("acme", c.ID)
-					}
-				}
-				if location == "" || w.Code != http.StatusSeeOther || w.Header().Get("Location") != location {
-					t.Fatalf("create: %d %s", w.Code, w.Header().Get("Location"))
+				created, err := services.Channels.Get(ctx, org.Membership{Organization: org.Organization{ID: acme}}, id)
+				if err != nil || created.Name != "新しいチャンネル" || created.OrganizationID != acme || location != view.ChannelURL("acme", created.ID) {
+					t.Fatalf("created channel: %+v, %v; redirect %s", created, err, location)
 				}
 			default:
 				t.Fatal("route lacks a success expectation")

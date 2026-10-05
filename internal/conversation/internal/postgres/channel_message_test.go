@@ -33,7 +33,7 @@ func TestChannelMessageSchema(t *testing.T) {
 	for _, slug := range []string{"team", "other"} {
 		organizationID := fixtureOrganization(t, pool, slug)
 		member := fixtureMember(t, pool, organizationID, account, org.RoleMember, "member", 1)
-		channel, err := channels.CreateChannel(ctx, organizationID, "雑談", true)
+		channel, err := channels.CreateDefaultChannelForTest(ctx, organizationID, "雑談")
 		requireNoError(t, err)
 		orgs, members, defaults = append(orgs, organizationID), append(members, member), append(defaults, channel)
 		got, err := channels.GetDefaultChannel(ctx, organizationID)
@@ -46,7 +46,7 @@ func TestChannelMessageSchema(t *testing.T) {
 	for _, input := range []string{"a", "　 開発 会議　 ", "a　b", " e\u0301 ", strings.Repeat("e\u0301", 80), strings.Repeat("界", 80)} {
 		name, err := conversation.ValidateChannelName(input)
 		requireNoError(t, err)
-		created, err := channels.CreateChannel(ctx, organizationID, name, false)
+		created, err := channels.CreateChannel(ctx, organizationID, name)
 		requireNoError(t, err)
 		got, err := channels.GetChannel(ctx, organizationID, created.ID)
 		if err != nil || got != created || got.Name != name || got.IsDefault || got.OrganizationID != organizationID || got.ID[6]>>4 != 7 || got.CreatedAt.IsZero() {
@@ -76,7 +76,7 @@ func TestChannelMessageSchema(t *testing.T) {
 	_, err = messages.InsertMessage(ctx, other, foreign.ID, foreign.DefaultTopicID, members[1], "other", 1)
 	requireNoError(t, err)
 	// A newer message in a sibling channel must not appear in this channel's pages.
-	sibling, err := channels.CreateChannel(ctx, organizationID, "sibling", false)
+	sibling, err := channels.CreateChannel(ctx, organizationID, "sibling")
 	requireNoError(t, err)
 	_, err = messages.InsertMessage(ctx, organizationID, sibling.ID, sibling.DefaultTopicID, members[0], "sibling", 100)
 	requireNoError(t, err)

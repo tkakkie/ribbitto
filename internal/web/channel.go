@@ -19,9 +19,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
-// ChannelService provides channels within the resolved member's organisation.
-type ChannelService interface {
-	List(context.Context, org.Membership) ([]conversation.Channel, error)
+// Channels provides channels within the resolved member's organisation.
+type Channels interface {
 	Get(context.Context, org.Membership, domain.ID) (conversation.Channel, error)
 	Default(context.Context, org.Membership) (conversation.Channel, error)
 	Create(context.Context, org.Membership, string) (conversation.Channel, error)
@@ -35,26 +34,26 @@ type MessageReader interface {
 	One(context.Context, org.Membership, domain.ID, int64) (conversation.Entry, error)
 }
 
-// TopicReader looks up a topic of a channel in the resolved member's
+// TopicLookup looks up a topic of a channel in the resolved member's
 // organisation; conversation's root owns that scope check.
-type TopicReader interface {
+type TopicLookup interface {
 	Get(context.Context, org.Membership, domain.ID, domain.ID) (conversation.Topic, error)
 }
 
 type channelPages struct {
 	branching Branching
-	topics    TopicReader
+	topics    TopicLookup
 	topicID   *domain.ID // Set only on the request-local copy in show.
 	stream    *Streaming
 	renders   *realtime.Cache[renderKey, realtime.Outgoing]
 	messages  MessageReader
 	posting   *conversation.Posting
 	pages     *pageRenderer
-	service   ChannelService
+	channels  Channels
 }
 
 func (p channelPages) home(w http.ResponseWriter, r *http.Request, m org.Membership) {
-	c, err := p.service.Default(r.Context(), m)
+	c, err := p.channels.Default(r.Context(), m)
 	if err != nil {
 		serverError(w, r, "finding default channel", err)
 		return
@@ -103,7 +102,7 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 // Preserve channel lookup errors ahead of malformed paging links, without a
 // separate channel read on successfully rendered pages.
 func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID) {
-	_, err := p.service.Get(r.Context(), m, id)
+	_, err := p.channels.Get(r.Context(), m, id)
 	if err == nil && p.topicID != nil {
 		_, err = p.topics.Get(r.Context(), m, id, *p.topicID)
 	}
@@ -122,7 +121,7 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 		return
 	}
 	name := r.PostForm.Get("name")
-	c, err := p.service.Create(r.Context(), m, name)
+	c, err := p.channels.Create(r.Context(), m, name)
 	message := ""
 	switch {
 	case err == nil:
@@ -138,7 +137,7 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	// No channel identity is accepted from the form: failed creation returns
 	// to the default conversation within the resolved organisation.
-	c, err = p.service.Default(r.Context(), m)
+	c, err = p.channels.Default(r.Context(), m)
 	if err != nil {
 		serverError(w, r, "finding default channel", err)
 		return
@@ -174,7 +173,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 }
 
 func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID) {
-	c, err := p.service.Get(r.Context(), m, id)
+	c, err := p.channels.Get(r.Context(), m, id)
 	if errors.Is(err, conversation.ErrChannelNotFound) {
 		http.NotFound(w, r)
 		return

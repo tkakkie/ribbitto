@@ -79,7 +79,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		http.NotFound(w, r)
 		return
 	}
-	c, err := p.service.Get(r.Context(), m, id)
+	c, err := p.channels.Get(r.Context(), m, id)
 	if errors.Is(err, conversation.ErrChannelNotFound) {
 		http.NotFound(w, r)
 		return

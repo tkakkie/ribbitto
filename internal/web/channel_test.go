@@ -49,7 +49,7 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			selected := domain.ID{3}
 			var lookups [][3]domain.ID
-			p := channelPages{service: &fakeChannels{}, posting: testPoster(), topics: fakeTopics{err: tt.lookupErr, lookups: &lookups}}
+			p := channelPages{channels: &fakeChannels{}, posting: testPoster(), topics: fakeTopics{err: tt.lookupErr, lookups: &lookups}}
 			// A nil message reader makes any unnecessary history read fail.
 			path := view.ConversationURL("acme", domain.ID{1}, &selected)
 			r := httptest.NewRequest(tt.method, path+tt.query, strings.NewReader("body=hello"))
@@ -77,14 +77,14 @@ type fakeChannels struct {
 	created                                string
 }
 
-func (f *fakeChannels) List(context.Context, org.Membership) ([]conversation.Channel, error) {
+func (f *fakeChannels) list(context.Context, org.Membership) ([]conversation.Channel, error) {
 	return []conversation.Channel{{ID: domain.ID{1}, Name: "雑談 <script>alert(1)</script>", IsDefault: true}, {ID: domain.ID{2}, Name: "Other"}}, f.listErr
 }
 func (f *fakeChannels) Get(ctx context.Context, m org.Membership, id domain.ID) (conversation.Channel, error) {
 	if f.getErr != nil {
 		return conversation.Channel{}, f.getErr
 	}
-	list, _ := f.List(ctx, m)
+	list, _ := f.list(ctx, m)
 	for _, c := range list {
 		if c.ID == id {
 			return c, nil
@@ -93,7 +93,7 @@ func (f *fakeChannels) Get(ctx context.Context, m org.Membership, id domain.ID) 
 	return conversation.Channel{}, conversation.ErrChannelNotFound
 }
 func (f *fakeChannels) Default(ctx context.Context, m org.Membership) (conversation.Channel, error) {
-	list, _ := f.List(ctx, m)
+	list, _ := f.list(ctx, m)
 	return list[0], f.defaultErr
 }
 func (f *fakeChannels) Create(_ context.Context, _ org.Membership, name string) (conversation.Channel, error) {

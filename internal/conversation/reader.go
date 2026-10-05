@@ -42,11 +42,6 @@ func (s *Reader) One(ctx context.Context, m org.Membership, channelID kernel.ID,
 	return entry, nil
 }
 
-// Before reads a page for a resolved member, omitting the cursor on older pages.
-func (s *Reader) Before(ctx context.Context, m org.Membership, channelID kernel.ID, before *int64) (ChannelPage, error) {
-	return s.Page(ctx, m, channelID, nil, before)
-}
-
 // Page reads channel or topic history; the latest page of either carries the
 // snapshot's event cursor for its stream, older pages none.
 func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, before *int64) (page ChannelPage, err error) {

@@ -81,7 +81,7 @@ func (w Writer) insert(ctx context.Context, organizationID, channelID, topicID, 
 	if err != nil {
 		return conversation.Message{}, fmt.Errorf("inserting message: %w", err)
 	}
-	return conversation.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time}, nil
+	return messageFromRow(row), nil
 }
 
 // CreateTopic inserts a named topic with an already validated name.

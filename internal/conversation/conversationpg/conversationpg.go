@@ -55,3 +55,21 @@ func (r txRunner) InTx(ctx context.Context, fn func(platform.Tx) error) error {
 // WriterIn returns posting's and branching's writes bound to the caller's
 // transaction; it is a conversation.WriterIn.
 func WriterIn(tx platform.Tx) conversation.Writer { return postgres.WriterIn(tx) }
+
+// NewSnapshotRunner returns the snapshot runner the page snapshot, One and
+// Many own their read through, over pool.
+func NewSnapshotRunner(pool *pgxpool.Pool) conversation.SnapshotRunner {
+	return snapshotRunner{pool: pool}
+}
+
+type snapshotRunner struct{ pool *pgxpool.Pool }
+
+func (r snapshotRunner) InSnapshot(ctx context.Context, fn func(platform.Snapshot) error) error {
+	return platform.InSnapshot(ctx, r.pool, fn)
+}
+
+// ReadStoreIn returns conversation's reads bound to the caller's snapshot;
+// it is a conversation.ReadStoreIn.
+func ReadStoreIn(snapshot platform.Snapshot) conversation.ReadStore {
+	return postgres.ReadStoreIn(snapshot)
+}

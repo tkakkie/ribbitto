@@ -93,3 +93,22 @@ type EventAppenderIn func(platform.Tx) EventAppender
 type Notifier interface {
 	Raise(organizationID kernel.ID, seq int64)
 }
+
+// SnapshotRunner runs the page snapshot, One and Many (decision 26): the use
+// case owns the read boundary, and the stores and directories only bind to
+// the Snapshot they are given, so every read sees the same committed state.
+type SnapshotRunner interface {
+	// InSnapshot runs fn in a new read-only, repeatable-read transaction,
+	// returning fn's error as is.
+	InSnapshot(ctx context.Context, fn func(platform.Snapshot) error) error
+}
+
+// ReadStore is conversation's reads in the caller's snapshot, each scoped by
+// organisation and channel. It has no write method, so a snapshot never
+// carries a write. Step 4.11b2 adds the channel and topic reads.
+type ReadStore interface {
+	History
+}
+
+// ReadStoreIn binds conversation's reads to the caller's snapshot.
+type ReadStoreIn func(platform.Snapshot) ReadStore

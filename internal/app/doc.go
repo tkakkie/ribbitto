@@ -1,3 +1,3 @@
-// Package app implements topic use cases and defines
-// interfaces for infrastructure. Authorization belongs to org's root.
+// Package app keeps the legacy topic Store interface, which nothing uses any
+// more, until step 4.17 deletes the package; use cases belong to module roots.
 package app

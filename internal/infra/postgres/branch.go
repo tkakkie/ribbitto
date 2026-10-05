@@ -6,7 +6,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/sqlcgen"
@@ -14,8 +13,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
-// BranchStore implements topic.BranchStore: it owns the branching
-// transaction.
+// BranchStore is the frozen legacy branching transaction for tests until 4.14.
 type BranchStore struct {
 	pool      *pgxpool.Pool
 	sequences EventSequenceIn
@@ -31,7 +29,7 @@ func NewBranchStore(pool *pgxpool.Pool, sequences EventSequenceIn, events EventA
 // Branch runs one branch atomically. Listed exceptions (feature map): it
 // advances org's event_seq, writes message.topic_id, posts the notice into
 // message and writes realtime's event_log, all in one transaction.
-func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, memberID domain.ID, b topic.Branch, notice func(conversation.Topic) string) (conversation.Topic, int64, error) {
+func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, memberID domain.ID, b conversation.Branch, notice func(conversation.Topic) string) (conversation.Topic, int64, error) {
 	var destination conversation.Topic
 	var noticeSeq int64
 	err := platform.InTx(ctx, s.pool, func(platformTx platform.Tx) error {
@@ -70,7 +68,7 @@ func (s *BranchStore) Branch(ctx context.Context, organizationID, channelID, mem
 			return fmt.Errorf("moving messages: %w", err)
 		}
 		if moved != int64(len(b.Messages)) {
-			return topic.ErrConflict // rolls back the new topic and both sequences
+			return conversation.ErrBranchConflict // rolls back the new topic and both sequences
 		}
 		events := s.events(platformTx)
 		data := conversation.EncodeMoved(conversation.Moved{ChannelID: channelID, FromTopicID: source.ID, ToTopicID: destination.ID, MessageIDs: b.Messages})

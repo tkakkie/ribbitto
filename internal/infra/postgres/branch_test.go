@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"github.com/tkakkie/ribbitto/internal/conversation"
+	// R1: test-only wiring until 4.10b moves this file to conversationpg.
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"slices"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -42,7 +43,7 @@ func TestBranchStore(t *testing.T) {
 	source := acme.Channel.DefaultTopicID
 	notice := func(d conversation.Topic) string { return "moved to " + d.Name }
 
-	dest, seq, err := store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, topic.Branch{Messages: []domain.ID{posted[0].ID, posted[2].ID}, From: source, NewName: "design"}, notice)
+	dest, seq, err := store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, conversation.Branch{Messages: []domain.ID{posted[0].ID, posted[2].ID}, From: source, NewName: "design"}, notice)
 	requireNoError(t, err)
 	if dest.Name != "design" || dest.ChannelID != acme.Channel.ID || seq != before+2 || eventSeq(t, pool, acme.OrganizationID) != before+2 {
 		t.Fatalf("branch: %+v at %d; event_seq was %d", dest, seq, before)
@@ -118,21 +119,21 @@ func TestBranchStore(t *testing.T) {
 	}
 
 	// Into an existing topic works the same way.
-	if _, _, err := store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, topic.Branch{Messages: []domain.ID{posted[1].ID}, From: source, To: &dest.ID}, notice); err != nil {
+	if _, _, err := store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, conversation.Branch{Messages: []domain.ID{posted[1].ID}, From: source, To: &dest.ID}, notice); err != nil {
 		t.Fatalf("into an existing topic: %v", err)
 	}
 	after := eventSeq(t, pool, acme.OrganizationID)
 	for _, tt := range []struct {
 		name string
-		b    topic.Branch
+		b    conversation.Branch
 		want error
 	}{
 		// posted[0] already left the default topic: someone branched it first.
-		{"stale selection", topic.Branch{Messages: []domain.ID{posted[0].ID}, From: source, NewName: "late"}, topic.ErrConflict},
-		{"another channel's message", topic.Branch{Messages: []domain.ID{elsewhere.ID}, From: source, NewName: "stolen"}, topic.ErrConflict},
-		{"into another channel's topic", topic.Branch{Messages: []domain.ID{posted[0].ID}, From: dest.ID, To: &random.DefaultTopicID}, conversation.ErrTopicNotFound},
-		{"from another channel's topic", topic.Branch{Messages: []domain.ID{elsewhere.ID}, From: random.DefaultTopicID, To: &dest.ID}, conversation.ErrTopicNotFound},
-		{"a taken name", topic.Branch{Messages: []domain.ID{posted[0].ID}, From: dest.ID, NewName: "DESIGN"}, conversation.ErrTopicNameTaken},
+		{"stale selection", conversation.Branch{Messages: []domain.ID{posted[0].ID}, From: source, NewName: "late"}, conversation.ErrBranchConflict},
+		{"another channel's message", conversation.Branch{Messages: []domain.ID{elsewhere.ID}, From: source, NewName: "stolen"}, conversation.ErrBranchConflict},
+		{"into another channel's topic", conversation.Branch{Messages: []domain.ID{posted[0].ID}, From: dest.ID, To: &random.DefaultTopicID}, conversation.ErrTopicNotFound},
+		{"from another channel's topic", conversation.Branch{Messages: []domain.ID{elsewhere.ID}, From: random.DefaultTopicID, To: &dest.ID}, conversation.ErrTopicNotFound},
+		{"a taken name", conversation.Branch{Messages: []domain.ID{posted[0].ID}, From: dest.ID, NewName: "DESIGN"}, conversation.ErrTopicNameTaken},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			before := readBranchState(t, pool, acme.OrganizationID)
@@ -152,7 +153,7 @@ func TestBranchStore(t *testing.T) {
 // failingNotice appends the move through the real appender, then fails the
 // notice: the branch's last write.
 type failingNotice struct {
-	postgres.EventAppender
+	conversation.EventAppender
 	moved *bool
 }
 
@@ -182,14 +183,14 @@ func TestBranchStoreFailingNoticeAppend(t *testing.T) {
 	posted, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, "one")
 	requireNoError(t, err)
 	moved := false
-	events := func(tx platform.Tx) postgres.EventAppender {
+	events := func(tx platform.Tx) conversation.EventAppender {
 		return failingNotice{EventAppender: appendEvents(tx), moved: &moved}
 	}
 	notifier := &countingNotifier{}
-	brancher := topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, events), notifier)
+	brancher := conversationpg.NewBrancher(pool, func(tx platform.Tx) conversation.EventSequence { return eventSequence(tx) }, events, notifier)
 	member := org.Membership{Organization: org.Organization{ID: acme.OrganizationID}, Member: org.Member{ID: acme.MemberID}}
 	before := readBranchState(t, pool, acme.OrganizationID)
-	b := topic.Branch{Messages: []domain.ID{posted.ID}, From: acme.Channel.DefaultTopicID, NewName: "design"}
+	b := conversation.Branch{Messages: []domain.ID{posted.ID}, From: acme.Channel.DefaultTopicID, NewName: "design"}
 	if _, err := brancher.Branch(ctx, member, acme.Channel.ID, b, func(d conversation.Topic) string { return "moved to " + d.Name }); !errors.Is(err, errNoticeAppend) {
 		t.Fatalf("branch = %v; want the notice append's error", err)
 	}
@@ -221,10 +222,10 @@ func TestBranchStorePartlyStaleSelection(t *testing.T) {
 			requireNoError(t, err)
 			source := acme.Channel.DefaultTopicID
 			notice := func(d conversation.Topic) string { return "moved to " + d.Name }
-			_, _, err = store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, topic.Branch{Messages: []domain.ID{stale.ID}, From: source, NewName: "elsewhere"}, notice)
+			_, _, err = store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, conversation.Branch{Messages: []domain.ID{stale.ID}, From: source, NewName: "elsewhere"}, notice)
 			requireNoError(t, err)
 
-			b := topic.Branch{Messages: []domain.ID{valid.ID, stale.ID}, From: source, NewName: "destination"}
+			b := conversation.Branch{Messages: []domain.ID{valid.ID, stale.ID}, From: source, NewName: "destination"}
 			if existing {
 				dest, err := topics.CreateTopic(ctx, acme.OrganizationID, acme.Channel.ID, b.NewName)
 				requireNoError(t, err)
@@ -234,8 +235,8 @@ func TestBranchStorePartlyStaleSelection(t *testing.T) {
 			// MoveMessages updates the valid row before detecting the stale
 			// selection, so refusing must undo that topic_id change too.
 			_, _, err = store.Branch(ctx, acme.OrganizationID, acme.Channel.ID, acme.MemberID, b, notice)
-			if !errors.Is(err, topic.ErrConflict) {
-				t.Fatalf("partly stale selection: %v, want %v", err, topic.ErrConflict)
+			if !errors.Is(err, conversation.ErrBranchConflict) {
+				t.Fatalf("partly stale selection: %v, want %v", err, conversation.ErrBranchConflict)
 			}
 			assertBranchState(t, readBranchState(t, pool, acme.OrganizationID), before)
 		})

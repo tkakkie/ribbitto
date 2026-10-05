@@ -16,7 +16,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -266,13 +265,11 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		return nil, nil, err
 	}
 	authorizer := orgpg.NewAuthorizer(pool)
-	// A nil hub must stay a nil Notifier, not a typed nil in either interface.
+	// A nil hub must stay a nil Notifier, not a typed nil in the interface.
 	var postingNotifier conversation.Notifier
-	var branchNotifier topic.Notifier
 	var stream *web.Streaming
 	if config.hub != nil {
 		postingNotifier = config.hub
-		branchNotifier = config.hub
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
 		kinds := conversationpg.EventKinds()
@@ -283,7 +280,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
 	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, postingNotifier)
-	branching := topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), branchNotifier)
+	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents, postingNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions: sessions,
 		SignIn:   identitypg.NewSignIn(pool, hasher, sessions),
@@ -385,10 +382,10 @@ func signupEnabled(value string) (bool, error) {
 	}
 }
 
-// postingEvents binds realtime's appender to conversation's posting transaction.
+// postingEvents binds realtime's appender to conversation's posting and branching transaction.
 func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
 
-// postingSequence binds org's sequence to conversation's posting transaction.
+// postingSequence binds org's sequence to conversation's posting and branching transaction.
 func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
 
 // appendEvents adapts realtime's appender to the consumer interface the

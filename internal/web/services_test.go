@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -31,7 +30,7 @@ func testServices(overrides ...func(*Services)) Services {
 		Messages: fakeMessages{},
 		Posting:  testPoster(),
 	}
-	s.Branching = topic.NewBrancher(&fakeBranchStore{}, nil)
+	s.Branching = testBrancher(&fakeBranchWriter{})
 	for _, override := range overrides {
 		override(&s)
 	}
@@ -63,7 +62,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Topics:    conversationpg.NewTopics(pool),
 		Messages:  conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor),
 		Posting:   conversationpg.NewPosting(pool, postingSequence, postingEvents, nil),
-		Branching: topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), nil),
+		Branching: conversationpg.NewBrancher(pool, postingSequence, postingEvents, nil),
 	}
 	if setupToken != "" {
 		s.Setup, s.SetupSessions = orgpg.NewSetup(pool, hasher, setupToken,
@@ -79,10 +78,10 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 	return s
 }
 
-// postingEvents binds realtime's appender to conversation's posting transaction.
+// postingEvents binds realtime's appender to conversation's posting and branching transaction.
 func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
 
-// postingSequence binds org's sequence to conversation's posting transaction.
+// postingSequence binds org's sequence to conversation's posting and branching transaction.
 func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
 
 // appendEvents adapts realtime's appender to the consumer interface the

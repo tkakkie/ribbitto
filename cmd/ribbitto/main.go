@@ -20,7 +20,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -388,10 +387,6 @@ func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimep
 // postingSequence binds org's sequence to conversation's posting and branching transaction.
 func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
 
-// appendEvents adapts realtime's appender to the consumer interface the
-// event-writing stores declare (decision 26).
-func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
-
 // lookupMembers adapts org's directory to the reader's consumer interface.
 func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
 
@@ -399,10 +394,6 @@ func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return or
 func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
 	return identitypg.AccountsIn(s)
 }
-
-// eventSequence adapts org's sequence to the posting and branching stores'
-// consumer interface.
-func eventSequence(tx platform.Tx) postgres.EventSequence { return orgpg.SequenceIn(tx) }
 
 // eventCursor adapts org's committed event_seq to the reader's consumer
 // interface.

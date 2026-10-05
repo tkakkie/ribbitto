@@ -5,15 +5,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	// R1 on #502: test-only, for the kinds helper while branch_test.go is
-	// here; 4.10b removes it when it moves that file.
-	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
-	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
@@ -70,12 +66,3 @@ func eventSequence(tx platform.Tx) postgres.EventSequence { return orgpg.Sequenc
 // eventCursor adapts org's committed event_seq to the reader's consumer
 // interface.
 func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }
-
-// eventKinds gives readers the same publisher registrations as cmd/ribbitto.
-func eventKinds() realtime.Kinds {
-	kinds := conversationpg.EventKinds()
-	for kind, router := range orgpg.EventKinds() {
-		kinds[kind] = router
-	}
-	return kinds
-}

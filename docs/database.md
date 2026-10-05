@@ -14,7 +14,7 @@ it without deleting the named volume at `/var/lib/postgresql`.
 
 `db/migrations` holds numbered goose SQL files embedded in the binary.
 It is owned by `internal/platform/postgres`; only its packages,
-`cmd/ribbitto`, one target-version test in `internal/infra/postgres`,
+`cmd/ribbitto`, `internal/conversation/internal/postgres/topic_test.go`,
 `internal/realtime/internal/postgres/event_log_test.go`,
 `internal/org/internal/postgres/member_handle_test.go` and
 `internal/conversation/internal/postgres/default_channel_backfill_test.go`
@@ -76,14 +76,14 @@ Tests skip only when the variable is unset; an empty or broken value fails.
 `RIBBITTO_REQUIRE_DB=1` also makes an unset URL fail, as required in CI.
 
 ```sh
-RIBBITTO_REQUIRE_DB=1 go test -count=1 -v ./internal/infra/postgres/...
-env -u RIBBITTO_TEST_DATABASE_URL -u RIBBITTO_REQUIRE_DB go test -count=1 -v ./internal/infra/postgres/...
+RIBBITTO_REQUIRE_DB=1 go test -count=1 -v ./internal/conversation/...
+env -u RIBBITTO_TEST_DATABASE_URL -u RIBBITTO_REQUIRE_DB go test -count=1 -v ./internal/conversation/...
 ```
 
-Top-level PostgreSQL-backed tests in `internal/infra/postgres` and
-`internal/web` run in parallel with isolated databases and test-local state.
+Top-level PostgreSQL-backed tests in conversation's store, `conversationpg`
+and `internal/web` run in parallel with isolated databases and test-local state.
 Their subtests remain sequential, preserving shared fixtures, clocks and
-order-dependent assertions.
+order-dependent assertions, unless each subtest opens its own database.
 
 `pgtest.OrganizationWithOwner(t, pool, slug, channelName)` creates an organisation
 at `event_seq` 1, an owner account at `<slug>@example.org`, an owner membership

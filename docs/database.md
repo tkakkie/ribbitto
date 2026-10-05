@@ -89,14 +89,17 @@ order-dependent assertions, unless each subtest opens its own database.
 at `event_seq` 1, an owner account at `<slug>@example.org`, an owner membership
 with handle `owner` and `joined_event_seq` 1, and exactly one default channel
 with the supplied name. The organisation and account display names equal the
-slug. It returns the organisation, account and member IDs plus the channel.
+slug. It returns the organisation, account and member IDs plus a pgtest-local
+`ChannelFixture` with the same fields as `conversation.Channel`.
 
 `pgtest.Organization`, `Account`, `Member` and `Channel` remain composable
 building blocks for partial setups or fixtures with different values.
 `Organization` sets the supplied `event_seq`; `Member` sets the supplied role,
 handle and `joined_event_seq` without advancing it. `Account` uses a placeholder
-password hash and creates no membership. `Channel` uses the store with an
-explicit name/default flag and leaves sequences unchanged. All fixture helpers
+password hash and creates no membership. `Channel` inserts the channel and its
+default topic in one raw-SQL CTE with an explicit name/default flag, satisfying
+the deferred foreign key, and leaves sequences unchanged. These fixtures import
+no store or `conversation` and remain here until step 5. All fixture helpers
 use `t.Context()` internally; none creates a setup row. Schema, migration and
 adversarial tests keep direct SQL to express states these helpers should not hide.
 

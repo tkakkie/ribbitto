@@ -12,8 +12,6 @@
 // until step 4.16 removes that copy. ReadStore holds the page snapshot's
 // channel, topic and message reads and no write, delegating the channel
 // lookups and the topic by ID to the channel and topic stores;
-// conversationpg.ReadStoreIn binds it to Reader's snapshot. Its own queries
-// duplicate the legacy ones of
-// the same names: message.sql's until step 4.15, topic.sql's ListTopics and
-// LookupTopics until 4.16.
+// conversationpg.ReadStoreIn binds it to Reader's snapshot. Its ListTopics
+// and LookupTopics queries duplicate the legacy topic.sql until step 4.16.
 package postgres

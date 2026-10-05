@@ -2,20 +2,27 @@ package pgtest
 
 import (
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
+
+// ChannelFixture holds a channel and the default topic created with it.
+type ChannelFixture struct {
+	ID, OrganizationID, DefaultTopicID domain.ID
+	Name                               string
+	IsDefault                          bool
+	CreatedAt                          time.Time
+}
 
 // OrganizationFixture holds the IDs and default channel created by OrganizationWithOwner.
 type OrganizationFixture struct {
 	OrganizationID domain.ID
 	AccountID      domain.ID
 	MemberID       domain.ID
-	Channel        conversation.Channel
+	Channel        ChannelFixture
 }
 
 // OrganizationWithOwner creates an organisation with event_seq 1, an owner
@@ -58,11 +65,21 @@ func Member(t *testing.T, pool *pgxpool.Pool, orgID, account domain.ID, role org
 	return id
 }
 
-// Channel creates a channel with the given name and default flag through the store.
+// Channel inserts a channel and its default topic with the given name and default flag.
 // It leaves event_seq unchanged and creates no accounts or memberships.
-func Channel(t *testing.T, pool *pgxpool.Pool, org domain.ID, name string, isDefault bool) conversation.Channel {
+func Channel(t *testing.T, pool *pgxpool.Pool, org domain.ID, name string, isDefault bool) ChannelFixture {
 	t.Helper()
-	channel, err := postgres.NewChannelStore(pool).CreateChannel(t.Context(), org, name, isDefault)
-	require(t, err)
+	var channel ChannelFixture
+	// One statement satisfies the channel's deferred foreign key even on a pool.
+	require(t, pool.QueryRow(t.Context(), `
+WITH created AS (
+  INSERT INTO channel (organization_id, name, is_default)
+  VALUES ($1, $2, $3) RETURNING *
+), default_topic AS (
+  INSERT INTO topic (id, organization_id, channel_id, is_default)
+  SELECT default_topic_id, organization_id, id, true FROM created
+)
+SELECT id, organization_id, default_topic_id, name, is_default, created_at FROM created;
+`, org, name, isDefault).Scan(&channel.ID, &channel.OrganizationID, &channel.DefaultTopicID, &channel.Name, &channel.IsDefault, &channel.CreatedAt))
 	return channel
 }

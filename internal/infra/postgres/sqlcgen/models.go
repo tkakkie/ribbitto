@@ -8,27 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Channel struct {
-	ID                    pgtype.UUID
-	OrganizationID        pgtype.UUID
-	Name                  string
-	IsDefault             bool
-	CreatedAt             pgtype.Timestamptz
-	DefaultTopicID        pgtype.UUID
-	DefaultTopicIsDefault bool
-}
-
-type Message struct {
-	ID             pgtype.UUID
-	OrganizationID pgtype.UUID
-	ChannelID      pgtype.UUID
-	MemberID       pgtype.UUID
-	Body           string
-	EventSeq       int64
-	CreatedAt      pgtype.Timestamptz
-	TopicID        pgtype.UUID
-}
-
 type Topic struct {
 	ID             pgtype.UUID
 	OrganizationID pgtype.UUID

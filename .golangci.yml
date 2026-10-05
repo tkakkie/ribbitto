@@ -174,12 +174,12 @@ linters:
             - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
-            # Temporary, until step 4.16: infra's stores use conversation's
+            # Temporary, until step 4.16: infra's topic store uses conversation's
             # types and errors.
             - github.com/tkakkie/ribbitto/internal/conversation$
             # Temporary, until the migration's last step: infra/postgres/pgtest
-            # delegates to the platform's database lifecycle, and the legacy
-            # stores may take the platform's Tx and Snapshot and unwrap them.
+            # delegates to the platform's database lifecycle; the frozen topic
+            # store remains allowed to use its Tx/Snapshot bridge.
             - github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest$
             - github.com/tkakkie/ribbitto/internal/platform/postgres$
             - github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge$

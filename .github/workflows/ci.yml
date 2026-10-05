@@ -76,7 +76,7 @@ jobs:
 
       # The Makefile pins golangci-lint for both local checks and CI. On a
       # pull request, the AI launchers' self-tests run only when the diff from
-      # the base can affect them: the checkout's two commits are the merge
+      # the base can affect them: the depth-2 checkout includes the merge
       # commit and its first parent, HEAD^1, the base branch as merged. The
       # event's base.sha is not used: once main moves, it is outside this
       # checkout, and the fail-safe would run them every time (#560). An

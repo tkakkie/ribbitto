@@ -14,7 +14,7 @@
 //
 // Reader and NewReader own Page (a ChannelPage), One an Entry by
 // event_seq and Many a bounded ID batch, all scoped by organisation and
-// channel, over History and TopicDirectory (one topic batch per page);
+// channel, over ReadStore (one topic batch per page);
 // PageSize is the history page's limit and ChannelPage the page snapshot's
 // result. SnapshotRunner
 // owns Reader's snapshot, and ReadStore with ReadStoreIn binds its channel,

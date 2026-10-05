@@ -28,7 +28,7 @@ to view models, and choose the status, component and full page or fragment. They
 ## templ
 
 Components render view models defined in `internal/web/view`. They do not
-receive `internal/app` or use-case types: handlers convert those. View
+receive module or use-case types: handlers convert those. View
 models own their `Organization` (`Slug`, `Name`), `Channel` (`ID`, `Name`)
 and `Topic` (`ID`, `Name`, `IsDefault`); handlers convert from `org` and the
 use cases, and views import neither `org` nor `conversation`. From `domain`

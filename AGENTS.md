@@ -52,21 +52,20 @@ depguard checks a subset; never break them.
 Modules ([`modules.md`](docs/architecture/modules.md), from decision 26):
 
 - Others import only a module's root (`internal/identity`, `internal/realtime`,
-  `internal/org`); its
+  `internal/org`, `internal/conversation`); its
   store only its wiring (`<module>pg`) and own tests; the wiring only
   `cmd/*` and tests.
-- Layers, until their module moves: `domain` (→ `kernel`),
-  `app` (use cases; → `domain`, roots; authorization is `org`'s root),
-  `infra/postgres` (implements `app`), `web` (→ `domain`, `app`, roots;
-  never `infra`).
+- Until step 5, only `domain` (the `ID` alias; → `kernel`) and
+  `infra/postgres/pgtest` (shared test fixtures) remain outside the modules.
+  `web` imports module roots and `domain`, never `infra`. Authorization is
+  `org`'s root.
 - Use cases return plain structs; only `internal/web` produces HTML.
 - Only `platform/postgres`, `cmd/ribbitto` and four target-version tests
   import `db/migrations`.
 
 Features ([map](docs/architecture/features.md)):
 
-- New code goes in its module if migrated, else a feature package in the
-  layers.
+- New code goes in its module.
 - Read a package's `doc.go` before touching it.
 - Use another feature only through its exported API, never its store
   internals or queries.
@@ -112,8 +111,8 @@ only the token utilities, never raw colours), [`docs/accessibility.md`](docs/acc
 
 ## Tests
 
-- `domain` and `app`: table-driven unit tests.
-- `infra`: integration tests against a real PostgreSQL.
+- Module roots: table-driven unit tests, with no database.
+- Stores and wiring: integration tests against a real PostgreSQL.
 - `web`: unit tests for handlers, middleware and validation that need no
   database; a real PostgreSQL only for cases that involve persistence or
   authentication end to end. Keep most `web` tests fast and DB-free.

@@ -144,21 +144,6 @@ linters:
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/conversation/internal/postgres
               desc: Only conversationpg and the store's own tests import conversation's store; see decision 26.
-        app:
-          list-mode: lax
-          files: ["**/internal/app/*.go", "**/internal/app/**/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/app$
-            - github.com/tkakkie/ribbitto/internal/app/
-            - github.com/tkakkie/ribbitto/internal/domain$
-            - github.com/tkakkie/ribbitto/internal/domain/
-            # Module roots only; their stores and wiring stay private.
-            - github.com/tkakkie/ribbitto/internal/identity$
-            - github.com/tkakkie/ribbitto/internal/org$
-            # Temporary, until step 4.17 deletes app: the use cases move into
-            # conversation one at a time.
-            - github.com/tkakkie/ribbitto/internal/conversation$
-          deny: *non_html
         postgres:
           list-mode: lax
           files: ["**/internal/infra/postgres/*.go", "**/internal/infra/postgres/**/*.go", "!$test"]
@@ -166,8 +151,6 @@ linters:
             - github.com/tkakkie/ribbitto/internal/infra/postgres$
             - github.com/tkakkie/ribbitto/internal/infra/postgres/
             - github.com/tkakkie/ribbitto/internal/domain$
-            - github.com/tkakkie/ribbitto/internal/app$
-            - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/org$
             # Temporary, until the migration's last step: infra/postgres/pgtest
             # delegates to the platform's database lifecycle.
@@ -223,8 +206,6 @@ linters:
             - github.com/tkakkie/ribbitto/internal/web/
             - github.com/tkakkie/ribbitto/internal/domain$
             - github.com/tkakkie/ribbitto/internal/domain/
-            - github.com/tkakkie/ribbitto/internal/app$
-            - github.com/tkakkie/ribbitto/internal/app/
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
             - github.com/tkakkie/ribbitto/internal/conversation$
@@ -236,10 +217,6 @@ linters:
           list-mode: lax
           files: ["**/internal/web/view/*.go", "**/internal/web/view/**/*.go", "!$test"]
           deny:
-            - pkg: github.com/tkakkie/ribbitto/internal/app$
-              desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
-            - pkg: github.com/tkakkie/ribbitto/internal/app/
-              desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
             - pkg: github.com/tkakkie/ribbitto/internal/identity$
               desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
             - pkg: github.com/tkakkie/ribbitto/internal/identity/

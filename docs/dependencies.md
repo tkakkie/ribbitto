@@ -38,8 +38,6 @@ cmd/seed -> internal/org
 cmd/seed -> internal/org/orgpg
 cmd/seed -> internal/platform/postgres
 cmd/seed -> internal/realtime/realtimepg
-internal/app/topic -> internal/conversation
-internal/app/topic -> internal/domain
 internal/conversation -> internal/kernel
 internal/conversation -> internal/org
 internal/conversation -> internal/platform/postgres

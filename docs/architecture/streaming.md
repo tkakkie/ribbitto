@@ -36,7 +36,7 @@ The retention period defaults to seven days; see [database configuration](../dat
   the database (#262). The check stays one membership query per event; a
   render that is then denied is discarded, and renders are shared and cached
   anyway. Only the write itself remains between the check and the
-  connection. The check itself is `app`'s authorization, reached through the
+  connection. The check itself is `org`'s authorization, reached through the
   `Authorizer` interface that `realtime` defines.
 - A stream registers with the hub under its session (#207), then looks the
   session up again, so a sign-out in between still stops it. Deleting a

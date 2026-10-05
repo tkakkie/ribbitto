@@ -15,16 +15,18 @@
 // TopicDirectory (one topic batch per page); PageSize and ChannelPage, the
 // page snapshot's result; MemberDirectoryIn and AccountDirectoryIn, the
 // reader's author lookups from org and identity, bound to the caller's
-// snapshot by closures in cmd/* and the tests; TxRunner, Writer with
+// snapshot by closures in cmd/* and the tests, like EventCursorIn, org's
+// committed event_seq for the latest page; TxRunner, Writer with
 // WriterIn, EventSequenceIn, EventAppenderIn and Notifier, the transaction
 // ports Posting owns its transaction through and branching will use (unused
 // in production until steps 4.9c and 4.10a; the store backs branching's CreateTopic and
 // MoveMessages with copies of the legacy queries until step 4.16);
-// SnapshotRunner and ReadStore with ReadStoreIn, the snapshot and its message
-// reads the page snapshot, One and Many will own their reads through (unused
-// until step 4.11c; the store's message queries, InsertMessage, GetMessage,
-// ListMessagesBefore and GetMessages, are copies of the legacy ones until
-// step 4.15); Posting, NewPosting, Post and PostToTopic, which validate and
+// SnapshotRunner and ReadStore with ReadStoreIn, the snapshot and its
+// channel, topic and message reads the page snapshot, One and Many will own
+// their reads through (unused until step 4.11c; the store's message queries,
+// InsertMessage, GetMessage, ListMessagesBefore and GetMessages, are copies
+// of the legacy ones until step 4.15, and ListTopics and LookupTopics until
+// 4.16); Posting, NewPosting, Post and PostToTopic, which validate and
 // commit a post with its event, then notify (unused in production beside the
 // frozen app/message.Service until 4.9c); and the two event kinds
 // conversation publishes and so owns.

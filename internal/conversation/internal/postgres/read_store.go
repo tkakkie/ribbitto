@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -17,12 +18,65 @@ import (
 // ReadStoreIn binds conversation's reads to the caller's snapshot without
 // managing its lifecycle.
 func ReadStoreIn(snapshot platform.Snapshot) ReadStore {
-	return ReadStore{queries: sqlcgen.New(pgxbridge.Snapshot(snapshot))}
+	db := pgxbridge.Snapshot(snapshot)
+	return ReadStore{channels: NewChannelStore(db), topics: NewTopicStore(db), queries: sqlcgen.New(db)}
 }
 
-// ReadStore implements conversation.ReadStore. It holds only queries and has
-// no write method.
-type ReadStore struct{ queries *sqlcgen.Queries }
+// ReadStore implements conversation.ReadStore. It delegates to the channel
+// and topic stores rather than embedding them, so it never gains their write
+// methods.
+type ReadStore struct {
+	channels *ChannelStore
+	topics   *TopicStore
+	queries  *sqlcgen.Queries
+}
+
+// GetChannel looks up an ID within the organisation.
+func (s ReadStore) GetChannel(ctx context.Context, organizationID, id kernel.ID) (conversation.Channel, error) {
+	return s.channels.GetChannel(ctx, organizationID, id)
+}
+
+// ListChannels returns the organisation's channels ordered by name and ID.
+func (s ReadStore) ListChannels(ctx context.Context, organizationID kernel.ID) ([]conversation.Channel, error) {
+	return s.channels.ListChannels(ctx, organizationID)
+}
+
+// GetTopic looks up an ID within the organisation and channel.
+func (s ReadStore) GetTopic(ctx context.Context, organizationID, channelID, id kernel.ID) (conversation.Topic, error) {
+	return s.topics.GetTopic(ctx, organizationID, channelID, id)
+}
+
+// ListTopics returns at most limit topics of the channel, the default first,
+// then by name (case-insensitive), with ID as a tie-breaker.
+func (s ReadStore) ListTopics(ctx context.Context, organizationID, channelID kernel.ID, limit int) ([]conversation.Topic, error) {
+	// The query takes an int32; a larger limit would wrap.
+	if limit < 1 || limit > math.MaxInt32 {
+		return nil, fmt.Errorf("listing topics: limit %d out of range", limit)
+	}
+	rows, err := s.queries.ListTopics(ctx, sqlcgen.ListTopicsParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), Limit: int32(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("listing topics: %w", err)
+	}
+	topics := make([]conversation.Topic, 0, len(rows))
+	for _, row := range rows {
+		topics = append(topics, topicFromRow(row))
+	}
+	return topics, nil
+}
+
+// LookupTopics implements conversation.TopicDirectory without per-message
+// queries. Missing and out-of-scope IDs are omitted.
+func (s ReadStore) LookupTopics(ctx context.Context, organizationID, channelID kernel.ID, ids []kernel.ID) (map[kernel.ID]conversation.Topic, error) {
+	rows, err := s.queries.LookupTopics(ctx, sqlcgen.LookupTopicsParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), TopicIds: uuids(ids)})
+	if err != nil {
+		return nil, fmt.Errorf("looking up topics: %w", err)
+	}
+	result := make(map[kernel.ID]conversation.Topic, len(rows))
+	for _, row := range rows {
+		result[row.ID.Bytes] = topicFromRow(row)
+	}
+	return result, nil
+}
 
 // GetMessage returns the message at the scoped event sequence, or conversation.ErrMessageNotFound.
 func (s ReadStore) GetMessage(ctx context.Context, organizationID, channelID kernel.ID, eventSeq int64) (conversation.Message, error) {

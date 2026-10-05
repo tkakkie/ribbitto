@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 
@@ -118,4 +119,119 @@ func TestReadStoreIn(t *testing.T) {
 	if err != stop {
 		t.Fatalf("InSnapshot = %v, want fn's error as is", err)
 	}
+}
+
+// The channel and topic reads bind to the runner's snapshot. Each case
+// differs from an in-scope read in one scope only (organisation or channel),
+// so each predicate is checked on its own.
+func TestReadStoreChannelsAndTopics(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx, f := t.Context(), newFixtures(t, pool)
+	// acme's channels are created out of name order, and general's named
+	// topics out of name order and with mixed case.
+	var random, randomTopic, alpha, alphaTopic, beta, gamma, alphaNamed kernel.ID
+	fixture(t, pool, channelSQL, []any{f.acme, "random"}, &random, &randomTopic)
+	fixture(t, pool, channelSQL, []any{f.acme, "alpha"}, &alpha, &alphaTopic)
+	for _, topic := range []struct {
+		name string
+		id   *kernel.ID
+	}{{"beta", &beta}, {"Gamma", &gamma}, {"Alpha", &alphaNamed}} {
+		fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, $3) RETURNING id", []any{f.acme, f.general, topic.name}, topic.id)
+	}
+	err := conversationpg.NewSnapshotRunner(pool).InSnapshot(ctx, func(snapshot platform.Snapshot) error {
+		store := readStoreIn(snapshot)
+		ids := func(read string, got []kernel.ID, err error, want ...kernel.ID) {
+			t.Helper()
+			if want == nil {
+				want = []kernel.ID{}
+			}
+			if err != nil || !reflect.DeepEqual(got, want) {
+				t.Errorf("%s = %x, %v; want %x", read, got, err, want)
+			}
+		}
+		channels, err := store.ListChannels(ctx, f.acme)
+		ids("ListChannels", channelIDs(channels), err, alpha, f.general, random)
+		for _, tc := range []struct {
+			name                      string
+			organizationID, channelID kernel.ID
+			limit                     int
+			want                      []kernel.ID
+		}{
+			{"default first, then by name ignoring case", f.acme, f.general, 50, []kernel.ID{f.generalTopic, alphaNamed, beta, gamma}},
+			{"limit", f.acme, f.general, 2, []kernel.ID{f.generalTopic, alphaNamed}},
+			{"another channel", f.acme, random, 50, []kernel.ID{randomTopic}},
+			{"read as another organisation", f.globex, f.general, 50, nil},
+		} {
+			topics, err := store.ListTopics(ctx, tc.organizationID, tc.channelID, tc.limit)
+			ids("ListTopics, "+tc.name, topicIDs(topics), err, tc.want...)
+		}
+		for _, limit := range []int{0, -1, math.MaxInt32 + 1} {
+			if topics, err := store.ListTopics(ctx, f.acme, f.general, limit); err == nil {
+				t.Errorf("ListTopics(limit %d) = %+v, want an error", limit, topics)
+			}
+		}
+		for _, tc := range []struct {
+			name                      string
+			organizationID, channelID kernel.ID
+			ids                       []kernel.ID
+			want                      []kernel.ID
+		}{
+			{"in scope only", f.acme, f.general, []kernel.ID{beta, f.generalTopic, randomTopic, f.foreignTopic, {0xee}}, []kernel.ID{f.generalTopic, beta}},
+			{"topic of another channel", f.acme, f.general, []kernel.ID{randomTopic}, nil},
+			{"read as another organisation", f.globex, f.general, []kernel.ID{beta}, nil},
+			{"missing IDs", f.acme, f.general, []kernel.ID{{0xee}}, nil},
+			{"empty input", f.acme, f.general, nil, nil},
+		} {
+			found, err := store.LookupTopics(ctx, tc.organizationID, tc.channelID, tc.ids)
+			// The map's keys, in a fixed order, each holding its own topic.
+			got := []kernel.ID{}
+			for _, id := range []kernel.ID{f.generalTopic, beta, randomTopic, f.foreignTopic} {
+				if topic, ok := found[id]; ok && topic.ID == id {
+					got = append(got, id)
+				}
+			}
+			if len(found) != len(got) {
+				t.Errorf("LookupTopics, %s returned unrequested topics: %+v", tc.name, found)
+			}
+			ids("LookupTopics, "+tc.name, got, err, tc.want...)
+		}
+		if got, err := store.GetChannel(ctx, f.acme, f.general); err != nil || got.ID != f.general || got.DefaultTopicID != f.generalTopic {
+			t.Errorf("GetChannel = %+v, %v; want general", got, err)
+		}
+		if got, err := store.GetTopic(ctx, f.acme, f.general, beta); err != nil || got.ID != beta || got.Name != "beta" || got.ChannelID != f.general {
+			t.Errorf("GetTopic = %+v, %v; want beta", got, err)
+		}
+		for _, tc := range []struct {
+			name string
+			read func() error
+			want error
+		}{
+			{"channel read as another organisation", func() error { _, err := store.GetChannel(ctx, f.globex, f.general); return err }, conversation.ErrChannelNotFound},
+			{"topic of another channel", func() error { _, err := store.GetTopic(ctx, f.acme, random, beta); return err }, conversation.ErrTopicNotFound},
+			{"topic read as another organisation", func() error { _, err := store.GetTopic(ctx, f.globex, f.general, beta); return err }, conversation.ErrTopicNotFound},
+		} {
+			if err := tc.read(); !errors.Is(err, tc.want) {
+				t.Errorf("%s: %v, want %v", tc.name, err, tc.want)
+			}
+		}
+		return nil
+	})
+	requireNoError(t, err)
+}
+
+func channelIDs(channels []conversation.Channel) []kernel.ID {
+	ids := []kernel.ID{}
+	for _, c := range channels {
+		ids = append(ids, c.ID)
+	}
+	return ids
+}
+
+func topicIDs(topics []conversation.Topic) []kernel.ID {
+	ids := []kernel.ID{}
+	for _, topic := range topics {
+		ids = append(ids, topic.ID)
+	}
+	return ids
 }

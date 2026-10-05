@@ -35,12 +35,11 @@ the temporary implementation behind it.
 |---|---|---|---|
 | every package but `identity`, `realtime` and `conversation` (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps feature fixtures) | `platform` lifecycle helpers | 0 | 5 (fixtures move with their modules) |
-| two `infra` target-version tests, `org`'s handle upgrade test and `conversation`'s default-channel backfill test | `db/migrations` (temporary allowance) | 0 | 5 |
+| `infra`'s topic backfill test, `realtime`'s event-log migration test (`internal/realtime/internal/postgres/event_log_test.go`), `org`'s handle upgrade test and `conversation`'s default-channel backfill test | `db/migrations` (temporary allowance) | 0 | 5 |
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
 | `infra/postgres` appender interface (`EventAppender`) | `realtime` types (root import, temporary allowance) | 2 | 4 |
 | posting, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | 4 |
 | posting, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | 4 |
-| the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |
 | posting, branching (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`), adapted by a closure | 3 | 4 |
 
 Setup's and sign-up's database tests live in `internal/org/orgpg`,

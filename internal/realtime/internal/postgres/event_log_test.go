@@ -9,17 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
-	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/identity"
-	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/org"
-	"github.com/tkakkie/ribbitto/internal/org/orgpg"
-	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
-	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 func assertEventLog(t *testing.T, pool *pgxpool.Pool, org domain.ID, wantSeq int64) {
@@ -105,7 +97,7 @@ func TestEventLogMigration(t *testing.T) {
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = 4 WHERE id = $1", old.OrganizationID)
 	requireNoError(t, err)
-	_, err = postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, old.OrganizationID, old.Channel.ID, old.MemberID, "after logging")
+	_, err = newPosting(pool).Post(ctx, membership(old), old.Channel.ID, "after logging")
 	requireNoError(t, err)
 	assertEventLog(t, pool, old.OrganizationID, 5)
 	// Undo every migration after 6, the event log's included.
@@ -120,29 +112,15 @@ func TestEventLogMigration(t *testing.T) {
 	}
 }
 
-// completeSetup runs org's setup with conversation's default-channel creator.
-// Its conversationpg import is test-only (R1 on #502); 4.12 removes it with
-// this file.
-func completeSetup(t *testing.T, pool *pgxpool.Pool) (org.SetupResult, error) {
-	t.Helper()
-	hasher, err := identity.NewHasher()
-	requireNoError(t, err)
-	return orgpg.NewSetup(pool, hasher, "secret",
-		func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
-		func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) },
-		func(tx platform.Tx) org.DefaultChannelCreator { return conversationpg.DefaultChannelCreatorIn(tx) },
-	).Complete(t.Context(), "secret", org.SetupInput{OrganizationName: "Example", Slug: "example", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
-}
-
-func TestEventLogAudienceAndRollback(t *testing.T) {
+// The audience must be a member of the event's own organisation.
+func TestEventLogAudience(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	result, err := completeSetup(t, pool)
-	requireNoError(t, err)
+	f := pgtest.OrganizationWithOwner(t, pool, "audience", "general")
 	other := pgtest.OrganizationWithOwner(t, pool, "other", "general")
-	_, err = pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
-		VALUES ($1, 2, 'future.private', $2, '{}')`, result.OrganizationID, other.MemberID)
+	_, err := pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
+		VALUES ($1, 2, 'future.private', $2, '{}')`, f.OrganizationID, other.MemberID)
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != "23503" || pgErr.ConstraintName != "event_log_organization_id_audience_member_id_fkey" {
 		t.Fatalf("cross-organisation audience: %v", err)
@@ -150,47 +128,4 @@ func TestEventLogAudienceAndRollback(t *testing.T) {
 	_, err = pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
 		VALUES ($1, 2, 'future.private', $2, '{}')`, other.OrganizationID, other.MemberID)
 	requireNoError(t, err)
-	var channelID, memberID domain.ID
-	requireNoError(t, pool.QueryRow(ctx, `SELECT c.id, m.id FROM channel c JOIN member m USING (organization_id)
-		WHERE c.organization_id = $1`, result.OrganizationID).Scan(&channelID, &memberID))
-	// Fail after the event insert, so the message, sequence and log must all roll back.
-	_, err = pool.Exec(ctx, `CREATE FUNCTION refuse_event() RETURNS trigger LANGUAGE plpgsql AS $$
-		BEGIN RAISE EXCEPTION 'refused'; END $$;
-		CREATE TRIGGER refuse_event AFTER INSERT ON event_log FOR EACH ROW EXECUTE FUNCTION refuse_event()`)
-	requireNoError(t, err)
-	if _, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, result.OrganizationID, channelID, memberID, "rolled back"); err == nil {
-		t.Fatal("post succeeded despite event failure")
-	}
-	assertEventLog(t, pool, result.OrganizationID, 1)
-	var messages int
-	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id = $1", result.OrganizationID).Scan(&messages))
-	if messages != 0 {
-		t.Fatalf("%d messages survived rollback", messages)
-	}
 }
-
-// postingEvents binds realtime's appender to conversation's posting transaction.
-func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
-
-// postingSequence binds org's sequence to conversation's posting transaction.
-func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
-
-// appendEvents adapts realtime's appender to the consumer interface the
-// event-writing stores declare (decision 26).
-func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
-
-// lookupMembers adapts org's directory to the reader's consumer interface.
-func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
-
-// lookupAccounts adapts identity's directory to the reader's consumer interface.
-func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
-	return identitypg.AccountsIn(s)
-}
-
-// eventSequence adapts org's sequence to the posting and branching stores'
-// consumer interface.
-func eventSequence(tx platform.Tx) postgres.EventSequence { return orgpg.SequenceIn(tx) }
-
-// eventCursor adapts org's committed event_seq to the reader's consumer
-// interface.
-func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }

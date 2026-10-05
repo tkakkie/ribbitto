@@ -33,9 +33,7 @@ func TestPosting(t *testing.T) {
 		INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle)
 		SELECT $1, id, 'member', 1, 'alice' FROM account RETURNING id`, []any{organizationID}, &memberID)
 	query("SELECT id FROM channel WHERE organization_id = $1", []any{organizationID}, &channelID)
-	posting := conversationpg.NewPosting(pool,
-		func(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) },
-		func(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }, nil)
+	posting := conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
 	m := org.Membership{Organization: org.Organization{ID: organizationID}, Member: org.Member{ID: memberID}}
 	for next := int64(1); next <= 2; next++ {
 		posted, err := posting.Post(t.Context(), m, channelID, "  hello\r\nworld  ")

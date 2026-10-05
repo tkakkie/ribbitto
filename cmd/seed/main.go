@@ -252,15 +252,3 @@ func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimep
 
 // postingSequence binds org's sequence to conversation's posting and branching transaction.
 func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
-
-// lookupMembers adapts org's directory to the reader's consumer interface.
-func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
-
-// lookupAccounts adapts identity's directory to the reader's consumer interface.
-func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
-	return identitypg.AccountsIn(s)
-}
-
-// eventCursor adapts org's committed event_seq to the reader's consumer
-// interface.
-func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }

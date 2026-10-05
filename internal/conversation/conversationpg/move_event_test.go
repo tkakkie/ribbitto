@@ -3,11 +3,11 @@ package conversationpg_test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 

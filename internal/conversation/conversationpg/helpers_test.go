@@ -36,12 +36,16 @@ func membership(organizationID, memberID kernel.ID) org.Membership {
 	return org.Membership{Organization: org.Organization{ID: organizationID}, Member: org.Member{ID: memberID}}
 }
 
+// eventSequence and appendEvents bind org's sequence and realtime's appender
+// to posting's and branching's transaction, as cmd/ribbitto does.
+func eventSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
+
+func appendEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
+
 // newPosting builds posting on org's sequence and realtime's appender, as
 // cmd/ribbitto does, without notifications.
 func newPosting(pool *pgxpool.Pool) *conversation.Posting {
-	return conversationpg.NewPosting(pool,
-		func(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) },
-		func(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }, nil)
+	return conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
 }
 
 func assertEventLog(t *testing.T, pool *pgxpool.Pool, org kernel.ID, wantSeq int64) {

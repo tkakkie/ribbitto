@@ -19,9 +19,11 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
 type snapshot struct {
@@ -303,3 +305,15 @@ func TestNewSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// lookupMembers adapts org's directory to the reader's consumer interface.
+func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
+
+// lookupAccounts adapts identity's directory to the reader's consumer interface.
+func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
+	return identitypg.AccountsIn(s)
+}
+
+// eventCursor adapts org's committed event_seq to the reader's consumer
+// interface.
+func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }

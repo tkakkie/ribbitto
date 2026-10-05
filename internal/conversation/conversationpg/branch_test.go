@@ -23,14 +23,14 @@ import (
 // One branch: two sequences, the move's then the notice's; the messages
 // keep their id and event_seq; the notice is a message in the source topic;
 // both events are logged. A stale selection changes nothing (409).
-func TestBranchStore(t *testing.T) {
+func TestBranching(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
 	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
 	notifier := &recordingNotifier{t: t, pool: pool}
-	posting, store, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, notifier), membership(acme.OrganizationID, acme.MemberID)
+	posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, notifier), membership(acme.OrganizationID, acme.MemberID)
 	var posted []conversation.Message
 	for _, body := range []string{"one", "two", "three"} {
 		m, err := posting.Post(ctx, member, acme.Channel.ID, body)
@@ -43,7 +43,7 @@ func TestBranchStore(t *testing.T) {
 	source := acme.Channel.DefaultTopicID
 	notice := func(d conversation.Topic) string { return "moved to " + d.Name }
 
-	dest, err := store.Branch(ctx, member, acme.Channel.ID, conversation.Branch{Messages: []kernel.ID{posted[0].ID, posted[2].ID}, From: source, NewName: "design"}, notice)
+	dest, err := brancher.Branch(ctx, member, acme.Channel.ID, conversation.Branch{Messages: []kernel.ID{posted[0].ID, posted[2].ID}, From: source, NewName: "design"}, notice)
 	requireNoError(t, err)
 	// Branch returns no sequence: the notice's reaches only the notifier.
 	if dest.Name != "design" || dest.ChannelID != acme.Channel.ID || !slices.Equal(notifier.raised, []raise{{acme.OrganizationID, before + 2, before + 2}}) || eventSeq(t, pool, acme.OrganizationID) != before+2 {
@@ -120,7 +120,7 @@ func TestBranchStore(t *testing.T) {
 	}
 
 	// Into an existing topic works the same way.
-	if _, err := store.Branch(ctx, member, acme.Channel.ID, conversation.Branch{Messages: []kernel.ID{posted[1].ID}, From: source, To: &dest.ID}, notice); err != nil {
+	if _, err := brancher.Branch(ctx, member, acme.Channel.ID, conversation.Branch{Messages: []kernel.ID{posted[1].ID}, From: source, To: &dest.ID}, notice); err != nil {
 		t.Fatalf("into an existing topic: %v", err)
 	}
 	after := eventSeq(t, pool, acme.OrganizationID)
@@ -138,7 +138,7 @@ func TestBranchStore(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			before := readBranchState(t, pool, acme.OrganizationID)
-			if _, err := store.Branch(ctx, member, acme.Channel.ID, tt.b, notice); !errors.Is(err, tt.want) {
+			if _, err := brancher.Branch(ctx, member, acme.Channel.ID, tt.b, notice); !errors.Is(err, tt.want) {
 				t.Fatalf("%s: %v, want %v", tt.name, err, tt.want)
 			}
 			assertBranchState(t, readBranchState(t, pool, acme.OrganizationID), before)
@@ -186,16 +186,10 @@ func (n *recordingNotifier) Raise(organizationID kernel.ID, seq int64) {
 	n.raised = append(n.raised, raise{organizationID, seq, eventSeq(n.t, n.pool, organizationID)})
 }
 
-// eventSequence and appendEvents bind org's sequence and realtime's appender
-// to branching's transaction, as cmd/ribbitto does.
-func eventSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
-
-func appendEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
-
 // A failure of the second append rolls back the whole branch: the move event,
 // the messages' topics, the new topic, the notice and both sequence
 // increments, and nothing is raised.
-func TestBranchStoreFailingNoticeAppend(t *testing.T) {
+func TestBranchingFailingNoticeAppend(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
@@ -262,7 +256,7 @@ func TestBranchNoticeInsertFailure(t *testing.T) {
 	}
 }
 
-func TestBranchStorePartlyStaleSelection(t *testing.T) {
+func TestBranchingPartlyStaleSelection(t *testing.T) {
 	t.Parallel()
 	for _, existing := range []bool{false, true} {
 		name := "new topic"
@@ -274,14 +268,14 @@ func TestBranchStorePartlyStaleSelection(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
 			acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-			posting, store, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, nil), membership(acme.OrganizationID, acme.MemberID)
+			posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, nil), membership(acme.OrganizationID, acme.MemberID)
 			valid, err := posting.Post(ctx, member, acme.Channel.ID, "still in source")
 			requireNoError(t, err)
 			stale, err := posting.Post(ctx, member, acme.Channel.ID, "already moved")
 			requireNoError(t, err)
 			source := acme.Channel.DefaultTopicID
 			notice := func(d conversation.Topic) string { return "moved to " + d.Name }
-			_, err = store.Branch(ctx, member, acme.Channel.ID, conversation.Branch{Messages: []kernel.ID{stale.ID}, From: source, NewName: "elsewhere"}, notice)
+			_, err = brancher.Branch(ctx, member, acme.Channel.ID, conversation.Branch{Messages: []kernel.ID{stale.ID}, From: source, NewName: "elsewhere"}, notice)
 			requireNoError(t, err)
 
 			b := conversation.Branch{Messages: []kernel.ID{valid.ID, stale.ID}, From: source, NewName: "destination"}
@@ -293,7 +287,7 @@ func TestBranchStorePartlyStaleSelection(t *testing.T) {
 			before := readBranchState(t, pool, acme.OrganizationID)
 			// MoveMessages updates the valid row before detecting the stale
 			// selection, so refusing must undo that topic_id change too.
-			_, err = store.Branch(ctx, member, acme.Channel.ID, b, notice)
+			_, err = brancher.Branch(ctx, member, acme.Channel.ID, b, notice)
 			if !errors.Is(err, conversation.ErrBranchConflict) {
 				t.Fatalf("partly stale selection: %v, want %v", err, conversation.ErrBranchConflict)
 			}

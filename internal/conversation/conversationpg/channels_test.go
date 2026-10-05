@@ -35,7 +35,7 @@ func fixtureDefaultChannel(t *testing.T, pool *pgxpool.Pool, organizationID kern
 }
 
 // The use cases see only the member's organisation, even with a known id.
-func TestChannelService(t *testing.T) {
+func TestChannels(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()

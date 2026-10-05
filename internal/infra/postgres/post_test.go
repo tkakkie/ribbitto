@@ -5,9 +5,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
@@ -29,7 +29,7 @@ func TestPostMessage(t *testing.T) {
 		memberships[slug] = org.Membership{Organization: org.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: org.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
 		channels[slug] = fixture.Channel.ID
 	}
-	service := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
+	service := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
 	state := func(slug string) (seq int64, messages int) {
 		t.Helper()
 		requireNoError(t, pool.QueryRow(ctx, "SELECT o.event_seq, (SELECT count(*) FROM message m WHERE m.organization_id = o.id) FROM organization o WHERE slug = $1", slug).Scan(&seq, &messages))

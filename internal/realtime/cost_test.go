@@ -19,7 +19,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -105,7 +106,7 @@ func TestStreamCost(t *testing.T) {
 
 	m := org.Membership{Organization: org.Organization{ID: fixture.OrganizationID, Slug: "acme"}, Member: org.Member{ID: fixture.MemberID}}
 	hub := realtime.NewHub()
-	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, eventSequence, appendEvents), hub)
+	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, hub)
 	// dbReads counts reads that reach the database (empty ones included);
 	// loopReads counts the loops' reads, which the cache may answer.
 	dbReads := &countingReader{inner: realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())}
@@ -186,7 +187,7 @@ func per(n int64, d int) float64 {
 // measureStep opens n streams from the current sequence, posts at rate for
 // duration, waits for every delivery or a drain deadline, and closes them.
 // Counts cover the posting window and the drain, not the streams' start.
-func measureStep(t *testing.T, stream realtime.Stream, posting *message.Service, pool *pgxpool.Pool, queries *platform.QueryCounter,
+func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Posting, pool *pgxpool.Pool, queries *platform.QueryCounter,
 	events, dbReads *countingReader, m org.Membership, subs []realtime.Subscription, n, rate int, duration time.Duration) stepResult {
 	t.Helper()
 	sub := subs[0]

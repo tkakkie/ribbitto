@@ -19,7 +19,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
@@ -202,7 +201,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	channels := conversationpg.NewChannels(pool)
-	posts := message.New(postgres.NewPostingStore(pool, eventSequence, appendEvents))
+	posts := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
 	var general conversation.Channel
 	var generalMessages []scriptMessage
 	for _, scripted := range data.Channels {
@@ -249,6 +248,12 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	_, err = fmt.Fprintf(out, "Seeded %s. Sign in as %s@example.test (owner) or any other member at example.test with this run's password:\n%s\n", slug, owner.Handle, password)
 	return err
 }
+
+// postingEvents binds realtime's appender to conversation's posting transaction.
+func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// postingSequence binds org's sequence to conversation's posting transaction.
+func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
 
 // appendEvents adapts realtime's appender to the consumer interface the
 // event-writing stores declare (decision 26).

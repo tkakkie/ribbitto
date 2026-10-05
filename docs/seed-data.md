@@ -21,7 +21,7 @@ sign in as `mira@example.test` (owner), or another script handle at
 Development mode then adds `rooftop-garden` and `garden-time` in `general`.
 `topic.Brancher.Branch` moves one extra script message into each, leaving
 notices and durable `messages.moved` events for replay.
-`message.Service.PostToTopic` adds `conversation.PageSize + 10` (60) more posts
+`conversation.Posting.PostToTopic` adds `conversation.PageSize + 10` (60) more posts
 to `rooftop-garden`: 64 extra messages including notices, also with
 `-messages 1`. The original N posts remain in each default topic.
 

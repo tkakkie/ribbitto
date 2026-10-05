@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -49,7 +48,7 @@ type channelPages struct {
 	stream    *Streaming
 	renders   *realtime.Cache[renderKey, realtime.Outgoing]
 	messages  MessageReader
-	posting   *message.Service
+	posting   *conversation.Posting
 	pages     *pageRenderer
 	service   ChannelService
 }

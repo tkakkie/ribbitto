@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -28,7 +28,7 @@ type Services struct {
 	Authz         Authorizer
 	Topics        TopicReader
 	Messages      MessageReader
-	Posting       *message.Service
+	Posting       *conversation.Posting
 	Branching     Branching // nil: branching answers 404
 	Channels      ChannelService
 	Limits        *middleware.AuthLimits // nil: no rate limits (tests)

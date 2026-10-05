@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/tkakkie/ribbitto/internal/app/message"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -27,7 +27,7 @@ type orgRoute struct {
 // orgRoutes lists every route under /organizations/{slug}/. The same list
 // registers the routes and drives the tests that prove non-members get
 // 404, so a route cannot be added without those tests covering it.
-func orgRoutes(pages *pageRenderer, service ChannelService, topics TopicReader, messages MessageReader, posting *message.Service, branching Branching, stream *Streaming) []orgRoute {
+func orgRoutes(pages *pageRenderer, service ChannelService, topics TopicReader, messages MessageReader, posting *conversation.Posting, branching Branching, stream *Streaming) []orgRoute {
 	handlers := channelPages{pages: pages, service: service, topics: topics, messages: messages, posting: posting, branching: branching, stream: stream}
 	if stream != nil {
 		handlers.renders = newRenderCache(stream.Lifetime)

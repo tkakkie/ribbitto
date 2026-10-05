@@ -16,7 +16,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/tkakkie/ribbitto/internal/app/message"
 	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
@@ -268,7 +267,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	}
 	authorizer := orgpg.NewAuthorizer(pool)
 	// A nil hub must stay a nil Notifier, not a typed nil in either interface.
-	var postingNotifier message.Notifier
+	var postingNotifier conversation.Notifier
 	var branchNotifier topic.Notifier
 	var stream *web.Streaming
 	if config.hub != nil {
@@ -283,7 +282,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, orgpg.BoundsIn, kinds), config.hub, 1024, time.Minute)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
-	posting := message.NewWithNotifier(postgres.NewPostingStore(pool, eventSequence, appendEvents), postingNotifier)
+	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, postingNotifier)
 	branching := topic.NewBrancher(postgres.NewBranchStore(pool, eventSequence, appendEvents), branchNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions: sessions,
@@ -385,6 +384,12 @@ func signupEnabled(value string) (bool, error) {
 		return false, fmt.Errorf("RIBBITTO_SIGNUP must be on, off or empty")
 	}
 }
+
+// postingEvents binds realtime's appender to conversation's posting transaction.
+func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// postingSequence binds org's sequence to conversation's posting transaction.
+func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
 
 // appendEvents adapts realtime's appender to the consumer interface the
 // event-writing stores declare (decision 26).

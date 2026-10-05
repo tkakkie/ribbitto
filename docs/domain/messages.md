@@ -68,7 +68,7 @@ shows browser-local time.
 
 ## Posting from the channel page
 
-The bottom composer posts through `message.Service.Post`. On the latest
+The bottom composer posts through `conversation.Posting.Post`. On the latest
 page, htmx replaces only the composer with an empty form; the message arrives
 through the stream (on reconnect if disconnected). A 422 replaces only the
 composer, keeping the draft and its field error. Older pages use a plain form:

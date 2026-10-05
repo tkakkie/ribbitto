@@ -37,7 +37,7 @@ server is disposable: it can be a tunnel.
 Per step: `N` streams of one member in one organisation, all following one
 channel, run the real loop (#209), event reader (#208), `org.Authorizer.MayReceive` and
 one-message read (#206); the renderer reads the message but renders no HTML.
-Posts go through `message.Service` with the hub as notifier.
+Posts go through `conversation.Posting` with the hub as notifier.
 
 - **Posting** is an open loop: posts are scheduled at the fixed rate
   whatever their latency, with at most one second's worth in flight. A post

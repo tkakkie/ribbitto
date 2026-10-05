@@ -39,7 +39,7 @@ the temporary implementation behind it.
 | `internal/infra/postgres` | the `Tx`/`Snapshot` bridge (temporary allowance) | 0 | 5 |
 | `infra/postgres` appender interface (`EventAppender`) | `realtime` types (root import, temporary allowance) | 2 | 4 |
 | posting, branching (`infra`) | their transactions on `platform.InTx`, their queries through `pgxbridge.Tx` | 2 | 4 |
-| posting, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by `cmd/*` and the tests) | 2 | 4 |
+| posting, branching (`infra`) | `realtime` event appends, through the `EventAppenderIn` factory their stores take (`realtimepg.AppenderIn`, adapted by infra's tests) | 2 | 4 |
 | the reader's tests (`event_reader_test.go`, `move_event_test.go` in `infra`, built through `realtimepg`) | — | 2 | a follow-up moves them into `realtime`'s store tests |
 | posting, branching (`infra`) | `org` sequence (infra's `EventSequenceIn`, from `orgpg.SequenceIn`), adapted by a closure | 3 | 4 |
 

@@ -9,10 +9,6 @@ lists each feature's packages and tables and the known exceptions; the
 Conversation's channel store accepts a pool or a caller-owned transaction.
 Its `CreateChannel` creates a non-default channel; only setup's
 `DefaultChannelCreator` supplies the default flag inside the store.
-Web's `Channels` seam provides `Get`, `Default` and `Create`; the sidebar's
-channel list comes from `Reader.Page` through its snapshot-bound `ReadStore`.
-Web's `TopicLookup` consumes `conversation.Topics.Get`, while conversation's
-`TopicReader` is the store port behind that use case.
 `conversation.Posting` owns the posting transaction (sequence first, topic
 reads, then the message and event) through its runner. It takes org's sequence
 through conversation's `EventSequenceIn` factory (`orgpg.SequenceIn`, adapted

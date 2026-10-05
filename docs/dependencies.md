@@ -21,7 +21,6 @@ cmd/ribbitto -> internal/conversation
 cmd/ribbitto -> internal/conversation/conversationpg
 cmd/ribbitto -> internal/identity
 cmd/ribbitto -> internal/identity/identitypg
-cmd/ribbitto -> internal/infra/postgres
 cmd/ribbitto -> internal/org
 cmd/ribbitto -> internal/org/orgpg
 cmd/ribbitto -> internal/platform/postgres
@@ -35,7 +34,6 @@ cmd/seed -> internal/conversation/conversationpg
 cmd/seed -> internal/domain
 cmd/seed -> internal/identity
 cmd/seed -> internal/identity/identitypg
-cmd/seed -> internal/infra/postgres
 cmd/seed -> internal/org
 cmd/seed -> internal/org/orgpg
 cmd/seed -> internal/platform/postgres

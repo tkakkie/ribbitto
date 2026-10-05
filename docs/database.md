@@ -14,7 +14,8 @@ it without deleting the named volume at `/var/lib/postgresql`.
 
 `db/migrations` holds numbered goose SQL files embedded in the binary.
 It is owned by `internal/platform/postgres`; only its packages,
-`cmd/ribbitto`, two target-version tests in `internal/infra/postgres`,
+`cmd/ribbitto`, one target-version test in `internal/infra/postgres`,
+`internal/realtime/internal/postgres/event_log_test.go`,
 `internal/org/internal/postgres/member_handle_test.go` and
 `internal/conversation/internal/postgres/default_channel_backfill_test.go`
 (until step 5)

@@ -90,8 +90,10 @@ idea (maintainer, one line) or finding (AI)
   → at most two rounds; if round 2 leaves only mechanical fixes,
     closure verification; otherwise the maintainer decides
   → reviewer approves
-  → the adversarial review the change's tier requires
-    (see adversarial-review.md), still as a draft
+  → merge the current `main`, or confirm no merge is needed
+  → the adversarial review the change's tier requires, once, on that
+    head, still as a draft; never alongside the first cross-review
+    (see adversarial-review.md)
   → label `ai-reviewed` → mark ready for review
   → Copilot reviews once, automatically; wait until its review of
     that head is submitted, then answer and resolve its comments
@@ -136,7 +138,9 @@ idea (maintainer, one line) or finding (AI)
   retrospective also checks whether any merged pull request without a
   completed Grok report at its head (tiers B and C, and tier A merged on the
   Muse Code fallback) later turned out to have a defect, wherever it was,
-  and revisits the tiers (#339, #498).
+  and revisits the tiers (#339, #498). Since #558 the first adversarial
+  review runs late, once: in step 4, running it on the draft and again
+  after each merge of `main` cost 13 re-runs that found nothing.
 - **Roadmap:** `docs/roadmap.md`, updated when a milestone ends or the
   plan changes.
 

@@ -71,10 +71,11 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    - ✅ | ❌ finding — how it was checked
    ```
 
-4. All pass → the remaining steps (the adversarial review its
-   [tier requires](adversarial-review.md#which-review-runs), then
-   `ai-reviewed` and ready for review, then Copilot) and the normal merge
-   decision. Any other change
+4. All pass → the remaining steps (merge the current `main` or confirm no
+   merge is needed, then the adversarial review its
+   [tier requires](adversarial-review.md#which-review-runs) on that head,
+   still as a draft, then `ai-reviewed` and ready for review, then
+   Copilot) and the normal merge decision. Any other change
    in the diff, a failed check, a new blocking finding or anything needing
    a decision → ask the maintainer.
 

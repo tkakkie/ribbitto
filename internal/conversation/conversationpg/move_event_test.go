@@ -1,4 +1,4 @@
-package postgres_test
+package conversationpg_test
 
 import (
 	"encoding/json"

@@ -9,9 +9,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -71,8 +71,9 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 		}
 	}
 	f := pgtest.OrganizationWithOwner(t, pool, "restored", "general")
+	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
 	for range 2 {
-		_, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "hello")
+		_, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).Post(ctx, m, f.Channel.ID, "hello")
 		must(err)
 	}
 	cached := realtime.NewCachedEvents(t.Context(), realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds()), realtime.NewHub(), 8, time.Minute)
@@ -114,8 +115,9 @@ func TestRetentionReplay(t *testing.T) {
 				}
 			}
 			f := pgtest.OrganizationWithOwner(t, pool, "retention", "general")
+			m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
 			post := func() {
-				_, err := postgres.NewPostingStore(pool, eventSequence, appendEvents).Post(ctx, f.OrganizationID, f.Channel.ID, f.MemberID, "kept message")
+				_, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).Post(ctx, m, f.Channel.ID, "kept message")
 				must(err)
 			}
 			post()
@@ -192,10 +194,6 @@ func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimep
 // postingSequence binds org's sequence to conversation's posting transaction.
 func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
 
-// appendEvents adapts realtime's appender to the consumer interface the
-// event-writing stores declare (decision 26).
-func appendEvents(tx platform.Tx) postgres.EventAppender { return realtimepg.AppenderIn(tx) }
-
 // lookupMembers adapts org's directory to the reader's consumer interface.
 func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) }
 
@@ -203,10 +201,6 @@ func lookupMembers(s platform.Snapshot) conversation.MemberDirectory { return or
 func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
 	return identitypg.AccountsIn(s)
 }
-
-// eventSequence adapts org's sequence to the posting and branching stores'
-// consumer interface.
-func eventSequence(tx platform.Tx) postgres.EventSequence { return orgpg.SequenceIn(tx) }
 
 // eventCursor adapts org's committed event_seq to the reader's consumer
 // interface.

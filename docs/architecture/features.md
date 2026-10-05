@@ -7,8 +7,9 @@ imports.
 **Keep it current:** update this file in the same pull request whenever a
 feature gains or loses a package or a table, or an exception is added.
 
-The code is layered today, and the direction is a modular monolith by
-feature, migrated after M3 ([decision 14](../decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)).
+The code is a modular monolith by feature ([decision 14](../decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)):
+`identity`, `realtime`, `org` and `conversation` are modules, and step 5
+removes what is left of the layers ([modules](modules.md)).
 New code goes in its module. Each feature logically owns tables: only that feature writes them,
 apart from the known exceptions below. A feature may own no tables. Every
 package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
@@ -17,10 +18,8 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`; `db/queries/identity/`); `web` `signin.go` | `account`, `session` |
 | `org`: organisations, memberships, authorisation, first-run setup, sign-up | the completed `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres` and wiring `orgpg`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
-| `channel`: public conversations | `conversation` (Channel, its name rule, errors and default name; Channels and ChannelStore); `conversationpg` (NewChannels); `conversation/internal/postgres/channel.go`, `db/queries/conversation/channel.sql`; `web/channel.go` (channel handlers; the file also serves `message`), `web/view/channel.templ` | `channel` |
-| `message`: plain-text posts and history | `conversation/posting.go` (`Posting`, `NewPosting`); `conversation/posted.go` (`message.posted`); `conversation/message.go` (type, body rule and errors); `conversation/reader.go` (the snapshot use case), `list.go`, `read.go` (its internal history core); `conversation/ports.go`, `conversationpg` (`NewPosting`, `NewReader`) and `conversation/internal/postgres/writer.go` (posting's runner, ports and writes; branching uses them too), `conversation/internal/postgres/read_store.go` (the page snapshot's message reads) and `conversationpg`'s `NewSnapshotRunner` (its runner), `db/queries/conversation/message.sql` (`InsertMessage`, `GetMessage`, `ListMessagesBefore`, `GetMessages`); `web/channel.go` (history, `?before=` paging, posting), `web/view/channel.templ`, `web/view/message.templ`, `web/static/message-*.js` | `message` |
-| `topic`: conversations inside a channel, the default topic, branching *(decision 21)* | `conversation/branch.go`, `branch_tx.go` (`Brancher`, `NewBrancher`, validation and transaction); `conversation/moved.go` (`messages.moved`); `conversation/topic.go`, `topic_errors.go` (type, name rule and errors), `topics.go` (`Topics.Get`, the membership-scoped lookup); `conversationpg` (`NewTopics`, `NewBrancher`); `conversation/internal/postgres/topic.go`, `conversation/internal/postgres/read_store.go` (the page snapshot's channel and topic reads), `db/queries/conversation/topic.sql` (`GetTopic`, `GetDefaultTopic`, `CreateTopic`, `MoveMessages`, `ListTopics`, `LookupTopics`); `web/channel.go`, `web/view/channel.templ` (topic views and list), `web/branch.go`, `web/view/branch.templ`, `web/static/branch-selection-v1.js` | `topic` |
-| `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `message`) | `event_log` |
+| `conversation`: channels, topics, branching, posting, history and the page snapshot *(decisions 21, 27)* | the completed `conversation` module: `internal/conversation` (channel, topic and message types, rules and errors; `Channels`, `Topics` (the membership-scoped lookup), `Posting`, `Brancher` and `Reader` (the page snapshot, `One`, `Many`); `message.posted` and `messages.moved`; posting and branching own their transaction, `Reader` its snapshot), its store `internal/conversation/internal/postgres` and wiring `conversationpg`; `db/queries/conversation/`; `web` `channel.go` (channel and topic pages, history, `?before=` paging, posting), `branch.go`, `view/channel.templ`, `view/message.templ`, `view/branch.templ`, `web/static/message-*.js`, `web/static/branch-selection-v1.js` | `channel`, `topic`, `message` |
+| `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `conversation`) | `event_log` |
 
 The shared kernel, which any feature may use: `internal/kernel` (`ID`) and
 its alias in `internal/domain` until step 5 removes it. The
@@ -44,13 +43,14 @@ until step 5; they use no store.
 **Known exceptions.** Cross-feature writes that must commit atomically:
 
 - setup (`org.Setup`, in one transaction through `TxRunner`) writes `organization`, `account`, `member`, `channel` and
-  `setup`, so it creates `identity`'s first `account` and the `channel`
-  feature's default channel (a completed setup must never lack one) through
+  `setup`, so it creates `identity`'s first `account` and `conversation`'s
+  default channel (a completed setup must never lack one) through
   the injected `AccountCreatorIn` and `DefaultChannelCreatorIn`
-  (conversation's store), and its event through
+  (`conversationpg.DefaultChannelCreatorIn`), and its event through
   `EventAppenderIn`;
-- creating a channel (`channel`) writes its default `topic` in the same
-  statement, so a channel never exists without one (decision 21, #307);
+- creating a channel (`conversation.Channels.Create`) writes its default
+  `topic` in the same statement, so a channel never exists without one
+  (decision 21, #307); both tables are conversation's (decision 27);
 - branching (`conversation.Brancher`) owns one transaction through
   `TxRunner`: its `Writer` creates the destination, moves `message.topic_id`
   and inserts the notice; org's sequence (`EventSequenceIn`) and realtime's
@@ -72,8 +72,9 @@ until step 5; they use no store.
   org's organisation lock, in the transaction that deletes the events,
   through `orgpg.RetentionBoundaryIn`, which `org`'s store implements.
 
-Their atomicity and `event_seq` ordering stay as they are. They are
-resolved at migration, by an orchestrating module or a shared transaction.
+Each flow commits in one transaction, to which the injected factories of
+the other modules it writes are bound, so its atomicity and `event_seq`
+ordering hold ([modules](modules.md)).
 A new exception needs its issue to say why, and is added to this list.
 
 ## Target

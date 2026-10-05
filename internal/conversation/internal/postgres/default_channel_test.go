@@ -31,7 +31,7 @@ func TestDefaultChannelCreatorIn(t *testing.T) {
 		if got.Name != conversation.DefaultChannelName || !got.IsDefault || got.OrganizationID != acme {
 			t.Fatalf("default channel in caller's transaction: %+v", got)
 		}
-		// Raw SQL, the lookup infra's GetDefaultTopic ran: the store reads no default topics.
+		// Raw SQL, because the channel store reads no default topic.
 		var topic kernel.ID
 		requireNoError(t, pgxTx.QueryRow(ctx, "SELECT id FROM topic WHERE organization_id = $1 AND channel_id = $2 AND is_default", acme, got.ID).Scan(&topic))
 		if topic != got.DefaultTopicID {

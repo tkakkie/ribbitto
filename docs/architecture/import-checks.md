@@ -3,12 +3,14 @@
 How `make check` enforces the import rules of [packages and allowed imports](packages.md). The [architecture index](README.md) lists
 the other files.
 
-Sub-packages of a layer may import each other. depguard in `.golangci.yml`
+A package's sub-packages may import each other, apart from the store and
+wiring rules below. depguard in `.golangci.yml`
 enforces the part of [the package table](packages.md) that matters most, and a violating import
 fails `make check`:
 
-- each layer's imports **within `internal/`** (other imports from this module
-  are listed in the table by convention, not enforced per layer);
+- each module's and remaining layer's imports **within `internal/`** (other
+  imports from this module are listed in the table by convention, not
+  enforced);
 - the `view` rule forbids `internal/web/view` from importing `internal/identity`, `internal/org`, `internal/conversation` or `internal/infra`, including sub-packages (see [web layers](web-layers.md));
 - `domain`, `identity`, `org`, `conversation`, `infra/postgres` and `realtime` cannot import
   `github.com/a-h/templ` (including sub-packages) or `html/template`;

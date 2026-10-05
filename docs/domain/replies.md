@@ -3,7 +3,7 @@
 How an answer links to a message and how its conversation can be read on
 its own. Read this before designing or changing replies or the reply-chain
 view. It was settled in [decision 22](../decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md) (#275);
-implementation follows [topics](topics.md) and belongs to the message feature.
+implementation follows [topics](topics.md) and belongs to the `conversation` module.
 
 **Keep it current:** update this file in the same pull request whenever
 these rules change. Nothing here is implemented yet; `db/migrations/` is

@@ -17,8 +17,7 @@ newest-first keyset query, `ListMessagesBefore`, with a nullable upper
 sequence bound for the latest page, an optional scoped topic filter passed
 explicitly through `Reader.Page` and `History`, and no author joins. `Reader.One` reads
 one message by organisation, channel and `event_seq`, returning `conversation.ErrMessageNotFound`
-for a missing or out-of-scope message. The use cases
-(`conversation.Channels`, `conversation.Reader`, `conversation.Posting`) exist. `conversation.Reader` resolves authors through
+for a missing or out-of-scope message. `conversation.Reader` resolves authors through
 its own `MemberDirectory.LookupMembers`, served by org (member IDs filtered by
 organisation, returning handles and account IDs), then `AccountDirectory.LookupDisplayNames`,
 served by identity (only those account IDs). Their adapters

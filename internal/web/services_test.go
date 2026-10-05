@@ -60,7 +60,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Authz:     orgpg.NewAuthorizer(pool),
 		Channels:  conversationpg.NewChannels(pool),
 		Topics:    conversationpg.NewTopics(pool),
-		Messages:  postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor},
+		Messages:  conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor),
 		Posting:   conversationpg.NewPosting(pool, postingSequence, postingEvents, nil),
 		Branching: conversationpg.NewBrancher(pool, postingSequence, postingEvents, nil),
 	}

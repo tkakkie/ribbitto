@@ -21,7 +21,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -111,7 +110,7 @@ func TestStreamCost(t *testing.T) {
 	// loopReads counts the loops' reads, which the cache may answer.
 	dbReads := &countingReader{inner: realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())}
 	var inner realtime.EventReader = dbReads
-	renderer := readingRenderer{messages: postgres.MessageReader{Pool: pool, Accounts: lookupAccounts, Members: lookupMembers, Cursor: eventCursor}, membership: m}
+	renderer := readingRenderer{messages: conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor), membership: m}
 	if cached {
 		inner = realtime.NewCachedEvents(t.Context(), dbReads, hub, 1024, time.Minute)
 		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](t.Context(), 4096, realtime.DefaultCacheLoads, time.Minute, 10*time.Second, nil, time.Now)
@@ -319,7 +318,7 @@ func (c *countingReader) EventsAfter(ctx context.Context, org kernel.ID, after i
 // through renders (keyed by sequence, as one organisation and channel are
 // measured) when the cache is on.
 type readingRenderer struct {
-	messages   postgres.MessageReader
+	messages   *conversation.Reader
 	membership org.Membership
 	renders    *realtime.Cache[int64, realtime.Outgoing]
 }

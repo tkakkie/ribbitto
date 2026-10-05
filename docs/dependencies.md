@@ -66,7 +66,6 @@ internal/identity/internal/postgres -> internal/identity/internal/postgres/sqlcg
 internal/identity/internal/postgres -> internal/kernel
 internal/identity/internal/postgres -> internal/platform/postgres
 internal/identity/internal/postgres -> internal/platform/postgres/pgxbridge
-internal/infra/postgres -> internal/app/topic
 internal/infra/postgres -> internal/conversation
 internal/infra/postgres -> internal/domain
 internal/infra/postgres -> internal/infra/postgres/sqlcgen

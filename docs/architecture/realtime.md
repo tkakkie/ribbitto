@@ -33,7 +33,7 @@ renderer decodes the payload through `conversation.DecodeMoved`. The decoder rej
 and empty lists or repeated messages, failing the whole batch rather than
 returning a partial replay. The size limit applies only on write, so lowering
 it cannot make committed moves unreadable. Moves read the requested IDs,
-authors and current topics in one shared `MessageReader.Many` snapshot, bounded
+authors and current topics in one shared `conversation.Reader.Many` snapshot, bounded
 by the event's ID list (currently at most 100 on write). One cached render per
 organisation, channel, move sequence and language serves feeds and topics;
 posting-cache entries cannot mask the correction. Authorization stays per

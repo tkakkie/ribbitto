@@ -5,8 +5,8 @@
 // setup's default-channel write to org's transaction; NewTxRunner runs
 // posting's and branching's transaction over the pool and WriterIn binds
 // their writes to it; NewPosting and NewBrancher build Posting and Brancher
-// over them;
-// NewSnapshotRunner runs the page snapshot over the pool
+// over them; NewReader builds Reader; NewSnapshotRunner runs its snapshot
+// over the pool
 // and ReadStoreIn binds conversation's reads to it; EventKinds registers its
 // event routers with realtime. Branching's CreateTopic and MoveMessages run on
 // copies of the legacy queries until step 4.16, and the message queries

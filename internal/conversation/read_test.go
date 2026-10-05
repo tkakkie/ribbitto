@@ -85,7 +85,11 @@ func TestOne(t *testing.T) {
 			msg := conversation.Message{ID: kernel.ID{4}, OrganizationID: kernel.ID{1}, ChannelID: kernel.ID{2}, MemberID: kernel.ID{3}, Body: "body", EventSeq: 9}
 			f := &singleMessage{t: t, msg: msg, readErr: tt.readErr, memberErr: tt.memberErr, nameErr: tt.nameErr, missingMember: tt.missingMember, missingName: tt.missingName}
 			membership := org.Membership{Organization: org.Organization{ID: msg.OrganizationID}}
-			got, err := (conversation.Reader{History: f, Members: f, Accounts: f, Topics: f}).One(t.Context(), membership, msg.ChannelID, msg.EventSeq)
+			reader, snapshot := testReader(t, f)
+			got, err := reader.One(t.Context(), membership, msg.ChannelID, msg.EventSeq)
+			if !reflect.DeepEqual(snapshot.calls, []string{"snapshot", "reads", "members", "accounts"}) {
+				t.Fatal("One did not bind its reads once in one snapshot")
+			}
 			if !reflect.DeepEqual(f.calls, tt.wantCalls) {
 				t.Fatalf("calls = %v, want %v", f.calls, tt.wantCalls)
 			}
@@ -156,7 +160,11 @@ func (f *partialBatch) LookupTopics(context.Context, kernel.ID, kernel.ID, []ker
 func TestManyIncompleteBatch(t *testing.T) {
 	f := &partialBatch{t: t, found: []conversation.Message{{ID: kernel.ID{5}, OrganizationID: kernel.ID{1}, ChannelID: kernel.ID{2}, MemberID: kernel.ID{3}}}}
 	membership := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
-	got, err := (conversation.Reader{History: f, Members: f, Accounts: f, Topics: f}).Many(t.Context(), membership, kernel.ID{2}, []kernel.ID{{4}, {5}})
+	reader, snapshot := testReader(t, f)
+	got, err := reader.Many(t.Context(), membership, kernel.ID{2}, []kernel.ID{{4}, {5}})
+	if !reflect.DeepEqual(snapshot.calls, []string{"snapshot", "reads", "members", "accounts"}) {
+		t.Fatal("Many did not bind its reads once in one snapshot")
+	}
 	if !errors.Is(err, conversation.ErrMessageNotFound) || got != nil {
 		t.Fatalf("entries = %+v, error = %v; want nil and ErrMessageNotFound", got, err)
 	}

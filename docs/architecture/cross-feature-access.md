@@ -16,7 +16,7 @@ by a one-line closure) on that transaction; an unknown organisation is
 composite foreign keys including `organization_id`. History uses one
 newest-first keyset query, `ListMessagesBefore`, with a nullable upper
 sequence bound for the latest page, an optional scoped topic filter passed
-explicitly through `Reader.Before` and `History`, and no author joins. `Reader.One` reads
+explicitly through `Reader.Page` and `History`, and no author joins. `Reader.One` reads
 one message by organisation, channel and `event_seq`, returning `conversation.ErrMessageNotFound`
 for a missing or out-of-scope message. The use cases
 (`conversation.Channels`, `conversation.Reader`, `conversation.Posting`) exist. `conversation.Reader` resolves authors through
@@ -24,21 +24,21 @@ its own `MemberDirectory.LookupMembers`, served by org (member IDs filtered by
 organisation, returning handles and account IDs), then `AccountDirectory.LookupDisplayNames`,
 served by identity (only those account IDs). Their adapters
 own the queries in `org/member.sql` and `identity/account.sql`; message never
-queries those tables. `MessageReader` receives both directories through
+queries those tables. `conversation.Reader` receives both directories through
 conversation's `MemberDirectoryIn` and `AccountDirectoryIn` factories, adapted
 from `orgpg.MembersIn` and `identitypg.AccountsIn` by one-line closures, and
 the latest page's cursor through conversation's `EventCursorIn` (`orgpg.EventCursorIn`), all
-bound to its snapshot. It
+bound to its snapshot through `SnapshotRunner`. It
 shares one read-only repeatable-read transaction
-across the channel and sidebar (through `conversation.Channels`), the selected topic
-and the bounded topic list (through `topic.Store`), history, both author
+across the channel and sidebar, the selected topic and the bounded topic list
+(through its snapshot-bound `ReadStore`), history, both author
 lookups and the topic batch through `conversation.TopicDirectory.LookupTopics`, plus the
 org's `organization.event_seq` on the latest channel or topic page.
 It returns `conversation.ChannelPage`; older pages have no event cursor.
-`MessageReader.One` reads one message, its authors and topic in its own snapshot.
+`conversation.Reader.One` reads one message, its authors and topic in its own snapshot.
 Live labels come from that shared load through the existing render cache, keyed
 by organisation, channel, sequence and language, with no extra read per stream
-per event. `MessageReader.Many` reads only a move's message IDs with the same snapshot
+per event. `conversation.Reader.Many` reads only a move's message IDs with the same snapshot
 and directory batches; its shared render corrects feed labels and checkbox
 sources and supplies topic-page removals and ordered insertions.
 Malformed topic paging links and the topic stream check the topic through

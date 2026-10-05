@@ -22,8 +22,6 @@ type GetMessageParams struct {
 	EventSeq       int64
 }
 
-// Duplicates the legacy query in db/queries/message.sql, which step 4.15
-// deletes. The snapshot tests find statements by name, so it keeps its own.
 func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message, error) {
 	row := q.db.QueryRow(ctx, getMessage, arg.OrganizationID, arg.ChannelID, arg.EventSeq)
 	var i Message
@@ -52,7 +50,6 @@ type GetMessagesParams struct {
 	MessageIds     []pgtype.UUID
 }
 
-// Duplicates the legacy query in db/queries/message.sql, which step 4.15 deletes.
 func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Message, error) {
 	rows, err := q.db.Query(ctx, getMessages, arg.OrganizationID, arg.ChannelID, arg.MessageIds)
 	if err != nil {
@@ -96,7 +93,6 @@ type InsertMessageParams struct {
 	EventSeq       int64
 }
 
-// Duplicates the legacy query in db/queries/message.sql, which step 4.15 deletes.
 func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (Message, error) {
 	row := q.db.QueryRow(ctx, insertMessage,
 		arg.OrganizationID,
@@ -137,7 +133,6 @@ type ListMessagesBeforeParams struct {
 	Limit          int32
 }
 
-// Duplicates the legacy query in db/queries/message.sql, which step 4.15 deletes.
 func (q *Queries) ListMessagesBefore(ctx context.Context, arg ListMessagesBeforeParams) ([]Message, error) {
 	rows, err := q.db.Query(ctx, listMessagesBefore,
 		arg.OrganizationID,

@@ -178,8 +178,8 @@ linters:
             # types and errors.
             - github.com/tkakkie/ribbitto/internal/conversation$
             # Temporary, until the migration's last step: infra/postgres/pgtest
-            # delegates to the platform's database lifecycle; the frozen topic
-            # store remains allowed to use its Tx/Snapshot bridge.
+            # delegates to the platform's database lifecycle. Infra's Tx/Snapshot
+            # bridge allowance is unused; step 4.16 removes it (K16).
             - github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest$
             - github.com/tkakkie/ribbitto/internal/platform/postgres$
             - github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge$

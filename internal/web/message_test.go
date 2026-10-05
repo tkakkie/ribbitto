@@ -213,7 +213,10 @@ func (*fakePostingWriter) GetTopic(_ context.Context, org, channel, id kernel.ID
 
 func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic, member kernel.ID, body string, seq int64) (conversation.Message, error) {
 	w.org, w.channel, w.member, w.body = org, channel, member, body
-	return conversation.Message{ID: w.id, OrganizationID: org, ChannelID: channel, TopicID: topic, MemberID: member, Body: body, EventSeq: seq}, w.err
+	if w.err != nil {
+		return conversation.Message{}, w.err
+	}
+	return conversation.Message{ID: w.id, OrganizationID: org, ChannelID: channel, TopicID: topic, MemberID: member, Body: body, EventSeq: seq}, nil
 }
 
 // Branching's methods must fail if a posting test calls them.

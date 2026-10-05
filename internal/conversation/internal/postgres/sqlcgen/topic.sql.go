@@ -23,7 +23,6 @@ type CreateTopicParams struct {
 	IsDefault      bool
 }
 
-// Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
 func (q *Queries) CreateTopic(ctx context.Context, arg CreateTopicParams) (Topic, error) {
 	row := q.db.QueryRow(ctx, createTopic,
 		arg.OrganizationID,
@@ -52,7 +51,6 @@ type GetDefaultTopicParams struct {
 	ChannelID      pgtype.UUID
 }
 
-// Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
 func (q *Queries) GetDefaultTopic(ctx context.Context, arg GetDefaultTopicParams) (Topic, error) {
 	row := q.db.QueryRow(ctx, getDefaultTopic, arg.OrganizationID, arg.ChannelID)
 	var i Topic
@@ -77,7 +75,6 @@ type GetTopicParams struct {
 	ID             pgtype.UUID
 }
 
-// Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
 // The organisation and channel predicates are the read's scope check.
 func (q *Queries) GetTopic(ctx context.Context, arg GetTopicParams) (Topic, error) {
 	row := q.db.QueryRow(ctx, getTopic, arg.OrganizationID, arg.ChannelID, arg.ID)
@@ -106,7 +103,6 @@ type ListTopicsParams struct {
 	Limit          int32
 }
 
-// Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
 func (q *Queries) ListTopics(ctx context.Context, arg ListTopicsParams) ([]Topic, error) {
 	rows, err := q.db.Query(ctx, listTopics, arg.OrganizationID, arg.ChannelID, arg.Limit)
 	if err != nil {
@@ -145,7 +141,6 @@ type LookupTopicsParams struct {
 	TopicIds       []pgtype.UUID
 }
 
-// Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
 func (q *Queries) LookupTopics(ctx context.Context, arg LookupTopicsParams) ([]Topic, error) {
 	rows, err := q.db.Query(ctx, lookupTopics, arg.OrganizationID, arg.ChannelID, arg.TopicIds)
 	if err != nil {
@@ -187,7 +182,6 @@ type MoveMessagesParams struct {
 	MessageIds     []pgtype.UUID
 }
 
-// Duplicates the legacy query in db/queries/topic.sql, which step 4.16 deletes.
 // Listed exception (feature map): branching writes message.topic_id. Only
 // messages still in the expected topic move; the caller compares the count
 // with the selection and rolls back on a mismatch (409).

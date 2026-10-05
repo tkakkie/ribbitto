@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -18,7 +17,7 @@ import (
 
 // Branching moves selected messages to another topic of the channel.
 type Branching interface {
-	Branch(ctx context.Context, m org.Membership, channelID domain.ID, b topic.Branch, notice func(conversation.Topic) string) (conversation.Topic, error)
+	Branch(ctx context.Context, m org.Membership, channelID domain.ID, b conversation.Branch, notice func(conversation.Topic) string) (conversation.Topic, error)
 }
 
 // branch serves POST …/channels/{channelID}/branch. The form names the
@@ -46,7 +45,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 			r.PostForm["message"][i] = message
 		}
 	}
-	var b topic.Branch
+	var b conversation.Branch
 	for _, raw := range r.PostForm["message"] {
 		message, ok := pathID(raw)
 		if !ok {
@@ -82,13 +81,13 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	destination, err := p.branching.Branch(r.Context(), m, id, b, notice)
 	switch {
-	case errors.Is(err, topic.ErrConflict):
+	case errors.Is(err, conversation.ErrBranchConflict):
 		p.branchError(w, r, m, id, 409, "topic.branch_conflict")
 	case errors.Is(err, conversation.ErrInvalidTopicName):
 		p.branchError(w, r, m, id, 422, "topic.branch_name_invalid")
 	case errors.Is(err, conversation.ErrTopicNameTaken):
 		p.branchError(w, r, m, id, 422, "topic.branch_name_taken")
-	case errors.Is(err, topic.ErrInvalidBranch):
+	case errors.Is(err, conversation.ErrInvalidBranch):
 		p.branchError(w, r, m, id, 422, "topic.branch_invalid")
 	case errors.Is(err, conversation.ErrTopicNotFound), errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound):
 		http.NotFound(w, r)

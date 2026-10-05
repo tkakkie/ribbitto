@@ -18,18 +18,18 @@
 // snapshot by closures in cmd/* and the tests, like EventCursorIn, org's
 // committed event_seq for the latest page; TxRunner, Writer with
 // WriterIn, EventSequenceIn, EventAppenderIn and Notifier, the transaction
-// ports Posting and Brancher own their transactions through (branching uses
-// them in production from 4.10a2; the store backs CreateTopic and
-// MoveMessages with copies of the legacy queries until step 4.16);
+// ports Posting and Brancher own their transactions through (the store
+// backs CreateTopic and MoveMessages with copies of the legacy queries until
+// step 4.16);
 // SnapshotRunner, which owns Reader's snapshot, and ReadStore with
 // ReadStoreIn, which binds its channel, topic and message reads to that
 // snapshot (the store's message queries, InsertMessage, GetMessage,
 // ListMessagesBefore and GetMessages, are copies of the legacy ones until
-// step 4.15, and ListTopics and LookupTopics until 4.16); Posting, NewPosting, Post and PostToTopic, which validate and
+// step 4.15, and ListTopics and LookupTopics until 4.16); Posting, NewPosting,
+// Post and PostToTopic, which validate and
 // commit a post with its event, then notify; Brancher, NewBrancher, Branch,
 // MaxBranchMessages, ErrInvalidBranch and ErrBranchConflict, which validate
-// and commit a move and notice with both events, then notify (unused in
-// production beside app/topic's frozen Brancher until 4.10a2); the event kinds
+// and commit a move and notice with both events, then notify; the event kinds
 // conversation publishes and so owns.
 // KindPosted with Posted, EncodePosted, DecodePosted and RoutePosted is
 // message.posted, its payload and its routing; KindMessagesMoved with Moved,

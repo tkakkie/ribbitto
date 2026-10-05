@@ -5,7 +5,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/app/topic"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/domain"
@@ -121,7 +120,7 @@ func TestPostingAndBranchingIntoUnknownOrganization(t *testing.T) {
 		},
 		"branch": func() error {
 			_, _, err := branching.Branch(ctx, unknown, acme.Channel.ID, acme.MemberID,
-				topic.Branch{Messages: []domain.ID{posted.ID}, From: topicID, NewName: "lost"}, func(conversation.Topic) string { return "lost" })
+				conversation.Branch{Messages: []domain.ID{posted.ID}, From: topicID, NewName: "lost"}, func(conversation.Topic) string { return "lost" })
 			return err
 		},
 	} {

@@ -5,7 +5,7 @@ sequenceDiagram
   participant B as Browser
   participant W as web (handler)
   participant A as use case (module root)
-  participant P as PostgreSQL store (module or infra)
+  participant P as PostgreSQL store (module)
   B->>W: HTTP request (/organizations/{slug}/…)
   W->>W: parse and validate input, resolve session → account
   W->>A: call use case with plain arguments

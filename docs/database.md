@@ -104,13 +104,11 @@ use `t.Context()` internally; none creates a setup row. Schema, migration and
 adversarial tests keep direct SQL to express states these helpers should not hide.
 
 `make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`.
-`sqlc.yaml` has one entry per query set: the files directly in `db/queries/`
-generate `internal/infra/postgres/sqlcgen/`, and each module's directory
-(`db/queries/identity/`, `db/queries/realtime/`, `db/queries/org/`,
-`db/queries/conversation/`)
-generates its store's `sqlcgen`. Every entry sets `omit_unused_structs`, so a table no query uses
-gets no struct. Commit the pgx/v5
-output; CI rejects generation changes to committed files. Never edit
+`sqlc.yaml` has one entry per module: `db/queries/identity/`,
+`db/queries/realtime/`, `db/queries/org/` and `db/queries/conversation/` each
+generate their store's `sqlcgen`. No query files sit directly in `db/queries/`.
+Every entry sets `omit_unused_structs`, so a table no query uses gets no struct.
+Commit the pgx/v5 output; CI rejects generation changes to committed files. Never edit
 generated files.
 
 ## Development seed data

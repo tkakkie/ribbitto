@@ -8,6 +8,5 @@
 // over them; NewReader builds Reader; NewSnapshotRunner runs its snapshot
 // over the pool
 // and ReadStoreIn binds conversation's reads to it; EventKinds registers its
-// event routers with realtime. Branching's CreateTopic and MoveMessages run on
-// copies of the legacy queries until step 4.16.
+// event routers with realtime.
 package conversationpg

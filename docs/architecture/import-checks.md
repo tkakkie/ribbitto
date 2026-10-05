@@ -18,8 +18,7 @@ fails `make check`:
   wiring;
 - a module's wiring (`identitypg`, `realtimepg`, `orgpg`, `conversationpg`) is imported only by `cmd/*` and tests,
   and its store only by its wiring and the store's own tests;
-- only stores (`**/internal/postgres/**`) import `platform/postgres/pgxbridge`,
-  and `internal/infra/postgres` until the migration's last step;
+- only stores (`**/internal/postgres/**`) import `platform/postgres/pgxbridge`;
   `make lint-fixtures` (part of `make check`) proves a module root is
   rejected and a store accepted;
 - `db/migrations` may be imported only by `internal/platform/postgres` and

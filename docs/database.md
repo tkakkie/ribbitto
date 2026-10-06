@@ -86,8 +86,8 @@ order-dependent assertions, unless each subtest opens its own database.
 Fixtures live with the module that owns their tables
 ([decision 29](decisions/29-test-fixtures-live-with-the-module-that-owns-their-tables.md)):
 `identitytest.Account`, `orgtest.Organization` and `orgtest.Member`, and
-`conversationtest.Channel`. Only tests and higher fixture packages import
-them; they import no store, wiring or bridge.
+`conversationtest.Channel` and `conversationtest.Topic`. Only tests and higher
+fixture packages import them; they import no store, wiring or bridge.
 
 `conversationtest.OrganizationWithOwner(t, pool, slug, channelName)` creates an organisation
 at `event_seq` 1, an owner account at `<slug>@example.org`, an owner membership
@@ -98,14 +98,17 @@ slug. It writes org's and identity's rows only through `orgtest` and
 `ChannelFixture` with the same fields as `conversation.Channel`.
 `TestOrganizationWithOwner` pins these premises.
 
-The other four remain composable building blocks for partial setups or
+The other five remain composable building blocks for partial setups or
 fixtures with different values.
 `Organization` sets the supplied `event_seq`; `Member` sets the supplied role,
 handle and `joined_event_seq` without advancing it. `Account` uses a placeholder
 password hash and creates no membership. `Channel` inserts the channel and its
 default topic in one raw-SQL CTE with an explicit name/default flag, satisfying
-the deferred foreign key, and leaves sequences unchanged. All fixture helpers
-use `t.Context()` internally; none creates an event or setup row. Schema, migration and
+the deferred foreign key, and leaves sequences unchanged. `Topic` inserts one
+named, non-default topic in the supplied organisation and channel, returns a
+`TopicFixture` with its ID, organisation, channel, name and creation time, and
+leaves sequences and messages unchanged (`TestTopic` pins these premises).
+All fixture helpers use `t.Context()` internally; none creates an event or setup row. Schema, migration and
 adversarial tests keep direct SQL to express states these helpers should not hide.
 
 `make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`.

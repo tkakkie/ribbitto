@@ -64,19 +64,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var acmeChannel, globexChannel kernel.ID
-	for org, dest := range map[kernel.ID]*kernel.ID{acme: &acmeChannel, globex: &globexChannel} {
-		// A channel needs its default topic in the same statement (decision 21).
-		if err := pool.QueryRow(ctx, `WITH c AS (INSERT INTO channel (organization_id, name, is_default) VALUES ($1, '雑談', true) RETURNING *),
-			t AS (INSERT INTO topic (id, organization_id, channel_id, is_default) SELECT default_topic_id, organization_id, id, true FROM c)
-			SELECT id FROM c`, org).Scan(dest); err != nil {
-			t.Fatal(err)
-		}
-	}
-	var defaultTopic conversation.Topic
-	if err := pool.QueryRow(ctx, "SELECT default_topic_id FROM channel WHERE organization_id = $1 AND id = $2", acme, acmeChannel).Scan(&defaultTopic.ID); err != nil {
-		t.Fatal(err)
-	}
+	acmeFixture := conversationtest.Channel(t, pool, acme, "雑談", true)
+	acmeChannel := acmeFixture.ID
+	globexChannel := conversationtest.Channel(t, pool, globex, "雑談", true).ID
+	defaultTopic := conversation.Topic{ID: acmeFixture.DefaultTopicID}
 	var now time.Time
 	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&now); err != nil {
 		t.Fatal(err)
@@ -189,7 +180,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 
 	t.Run("topic history and posting", func(t *testing.T) {
 		clock = now
-		named := namedTopic(t, pool, acme, acmeChannel, "Planning")
+		named := conversationtest.Topic(t, pool, acme, acmeChannel, "Planning")
 		other := conversationtest.Channel(t, pool, acme, "other", false)
 		var initialCount int
 		if err := pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id = $1", acme).Scan(&initialCount); err != nil {

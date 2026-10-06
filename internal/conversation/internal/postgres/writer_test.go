@@ -120,8 +120,7 @@ func TestWriterErrors(t *testing.T) {
 	createTopic := func(name string) func(conversation.Writer) error {
 		return func(w conversation.Writer) error { _, err := w.CreateTopic(ctx, f.acme, f.general, name); return err }
 	}
-	var planning kernel.ID
-	fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, 'Planning', false) RETURNING id", []any{f.acme, f.general}, &planning)
+	conversationtest.Topic(t, pool, f.acme, f.general, "Planning")
 	for _, tc := range []struct {
 		name       string
 		write      func(conversation.Writer) error
@@ -208,8 +207,7 @@ func TestWriterMoveMessages(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx, f := t.Context(), newFixtures(t, pool)
-	var planning kernel.ID
-	fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, 'Planning', false) RETURNING id", []any{f.acme, f.general}, &planning)
+	planning := conversationtest.Topic(t, pool, f.acme, f.general, "Planning").ID
 	randomChannel := conversationtest.Channel(t, pool, f.acme, "random", false)
 	random, randomTopic := randomChannel.ID, randomChannel.DefaultTopicID
 	before, want := map[kernel.ID]kernel.ID{}, map[kernel.ID]kernel.ID{}

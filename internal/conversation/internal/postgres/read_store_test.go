@@ -37,8 +37,7 @@ func TestReadStoreIn(t *testing.T) {
 	// acme's general also has a named topic, and acme a second channel.
 	randomChannel := conversationtest.Channel(t, pool, f.acme, "random", false)
 	random, randomTopic := randomChannel.ID, randomChannel.DefaultTopicID
-	var beta kernel.ID
-	fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, 'beta') RETURNING id", []any{f.acme, f.general}, &beta)
+	beta := conversationtest.Topic(t, pool, f.acme, f.general, "beta").ID
 	// m[seq] is the message at that event_seq: 1–3 in general, 4 in random,
 	// 5 in globex's channel.
 	var m [6]kernel.ID
@@ -140,7 +139,7 @@ func TestReadStoreChannelsAndTopics(t *testing.T) {
 		name string
 		id   *kernel.ID
 	}{{"beta", &beta}, {"Gamma", &gamma}, {"Alpha", &alphaNamed}} {
-		fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, $3) RETURNING id", []any{f.acme, f.general, topic.name}, topic.id)
+		*topic.id = conversationtest.Topic(t, pool, f.acme, f.general, topic.name).ID
 	}
 	err := platform.InSnapshot(ctx, pool, func(snapshot platform.Snapshot) error {
 		store := readStoreIn(snapshot)

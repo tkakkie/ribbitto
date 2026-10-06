@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
@@ -85,11 +86,13 @@ func TestBranchingWakesOpenStreams(t *testing.T) {
 	channelURL := response.Header.Get("Location")
 	post(t, owner, channelURL, "moves live")
 
-	var org kernel.ID
-	var channel, source, destination, message string
-	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT organization_id, id::text, default_topic_id::text FROM channel WHERE is_default").Scan(&org, &channel, &source))
+	var org, channel kernel.ID
+	var source, message string
+	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT organization_id, id, default_topic_id::text FROM channel WHERE is_default").Scan(&org, &channel, &source))
 	// The destination must exist before its stream can be opened.
-	acceptanceOK(t, pool.QueryRow(t.Context(), "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, 'design') RETURNING id::text", org, channel).Scan(&destination))
+	topic := conversationtest.Topic(t, pool, org, channel, "design")
+	var destination string
+	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT $1::uuid::text", topic.ID).Scan(&destination))
 	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT id::text FROM message WHERE organization_id = $1 AND body = 'moves live'", org).Scan(&message))
 
 	subs := []struct {

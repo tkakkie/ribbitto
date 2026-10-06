@@ -19,6 +19,13 @@ type ChannelFixture struct {
 	CreatedAt                          time.Time
 }
 
+// TopicFixture holds an ordinary named topic.
+type TopicFixture struct {
+	ID, OrganizationID, ChannelID kernel.ID
+	Name                          string
+	CreatedAt                     time.Time
+}
+
 // OrganizationFixture holds the IDs and default channel created by OrganizationWithOwner.
 type OrganizationFixture struct {
 	OrganizationID kernel.ID
@@ -60,4 +67,19 @@ SELECT id, organization_id, default_topic_id, name, is_default, created_at FROM 
 		t.Fatalf("inserting channel: %v", err)
 	}
 	return channel
+}
+
+// Topic inserts one named, non-default topic in the given organisation and channel.
+// It leaves event_seq and messages unchanged.
+func Topic(t *testing.T, pool *pgxpool.Pool, organizationID, channelID kernel.ID, name string) TopicFixture {
+	t.Helper()
+	var topic TopicFixture
+	if err := pool.QueryRow(t.Context(), `
+INSERT INTO topic (organization_id, channel_id, name, is_default)
+VALUES ($1, $2, $3, false)
+RETURNING id, organization_id, channel_id, name, created_at;
+`, organizationID, channelID, name).Scan(&topic.ID, &topic.OrganizationID, &topic.ChannelID, &topic.Name, &topic.CreatedAt); err != nil {
+		t.Fatalf("inserting topic: %v", err)
+	}
+	return topic
 }

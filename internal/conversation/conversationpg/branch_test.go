@@ -281,8 +281,7 @@ func TestBranchingPartlyStaleSelection(t *testing.T) {
 
 			b := conversation.Branch{Messages: []kernel.ID{valid.ID, stale.ID}, From: source, NewName: "destination"}
 			if existing {
-				var dest kernel.ID
-				requireNoError(t, pool.QueryRow(ctx, "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, $3) RETURNING id", acme.OrganizationID, acme.Channel.ID, b.NewName).Scan(&dest))
+				dest := conversationtest.Topic(t, pool, acme.OrganizationID, acme.Channel.ID, b.NewName).ID
 				b.To, b.NewName = &dest, ""
 			}
 			before := readBranchState(t, pool, acme.OrganizationID)

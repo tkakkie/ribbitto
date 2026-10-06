@@ -96,18 +96,6 @@ func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
 // interface.
 func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }
 
-// namedTopic keeps the store's insert shape and database constraints without
-// adding a public use case solely for fixtures.
-func namedTopic(t *testing.T, pool *pgxpool.Pool, organizationID, channelID kernel.ID, name string) conversation.Topic {
-	t.Helper()
-	topic := conversation.Topic{OrganizationID: organizationID, ChannelID: channelID, Name: name}
-	if err := pool.QueryRow(t.Context(), `INSERT INTO topic (organization_id, channel_id, name, is_default)
-		VALUES ($1, $2, $3, false) RETURNING id, created_at`, organizationID, channelID, name).Scan(&topic.ID, &topic.CreatedAt); err != nil {
-		t.Fatal(err)
-	}
-	return topic
-}
-
 // recordingNotifier captures the notice sequence that Branch publishes after
 // commit, keeping replay's stopping point out of the production return value.
 type recordingNotifier struct{ seq int64 }

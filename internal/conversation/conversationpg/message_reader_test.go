@@ -116,8 +116,7 @@ func TestReaderPaging(t *testing.T) {
 	}
 
 	for _, name := range []string{"exact", "partial"} {
-		var topicID kernel.ID
-		requireNoError(t, pool.QueryRow(ctx, "INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, $3, false) RETURNING id", acme.Organization.ID, channels[name], name).Scan(&topicID))
+		topicID := conversationtest.Topic(t, pool, acme.Organization.ID, channels[name], name).ID
 		_, err := pool.Exec(ctx, "UPDATE message SET topic_id = $3 WHERE organization_id = $1 AND channel_id = $2 AND event_seq % 2 = 0", acme.Organization.ID, channels[name], topicID)
 		requireNoError(t, err)
 	}

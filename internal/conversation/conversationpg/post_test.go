@@ -37,7 +37,7 @@ func TestPostMessage(t *testing.T) {
 	state := func(slug string) (seq int64, messages int) {
 		t.Helper()
 		requireNoError(t, pool.QueryRow(ctx, "SELECT o.event_seq, (SELECT count(*) FROM message m WHERE m.organization_id = o.id) FROM organization o WHERE slug = $1", slug).Scan(&seq, &messages))
-		assertEventLog(t, pool, memberships[slug].Organization.ID, seq)
+		assertEventLog(t, pool, memberships[slug].Organization.ID, 1, seq)
 		return seq, messages
 	}
 

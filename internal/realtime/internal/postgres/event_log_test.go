@@ -14,7 +14,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
-func assertEventLog(t *testing.T, pool *pgxpool.Pool, org kernel.ID, wantSeq int64) {
+// assertEventLog takes the scenario's boundary: compared with the boundary it
+// reads, a boundary raised over a lost row would still balance the count.
+func assertEventLog(t *testing.T, pool *pgxpool.Pool, org kernel.ID, wantBoundary, wantSeq int64) {
 	t.Helper()
 	var seq, boundary, count, valid int64
 	requireNoError(t, pool.QueryRow(t.Context(), `
@@ -30,8 +32,8 @@ func assertEventLog(t *testing.T, pool *pgxpool.Pool, org kernel.ID, wantSeq int
 		FROM organization o LEFT JOIN event_log e ON e.organization_id = o.id
 		WHERE o.id = $1 GROUP BY o.id`, org).Scan(&seq, &boundary, &count, &valid))
 	// The primary key makes count == interval length prove there are no gaps.
-	if seq != wantSeq || count != seq-boundary || valid != count {
-		t.Fatalf("event log: seq=%d boundary=%d rows=%d valid=%d; want seq=%d", seq, boundary, count, valid, wantSeq)
+	if seq != wantSeq || boundary != wantBoundary || count != seq-boundary || valid != count {
+		t.Fatalf("event log: seq=%d boundary=%d rows=%d valid=%d; want seq=%d boundary=%d", seq, boundary, count, valid, wantSeq, wantBoundary)
 	}
 }
 
@@ -53,8 +55,8 @@ func TestEventLogMigration(t *testing.T) {
 	requireNoError(t, err)
 	empty := orgtest.Organization(t, pool, "empty", "Empty", 0)
 	migrator.Up(ctx)
-	assertEventLog(t, pool, old.OrganizationID, 2)
-	assertEventLog(t, pool, empty, 0)
+	assertEventLog(t, pool, old.OrganizationID, 2, 2)
+	assertEventLog(t, pool, empty, 0, 0)
 	// A server still running the previous binary takes a sequence and
 	// inserts a message without an event row; the commit must fail so the
 	// log keeps no gap.
@@ -68,7 +70,7 @@ func TestEventLogMigration(t *testing.T) {
 	if err := stale.Commit(ctx); !errors.As(err, &pgErr) || pgErr.Code != "23514" {
 		t.Fatalf("commit without an event row: %v, want check_violation", err)
 	}
-	assertEventLog(t, pool, old.OrganizationID, 2)
+	assertEventLog(t, pool, old.OrganizationID, 2, 2)
 	// An update that takes two sequences must log both, not only the last.
 	for _, rows := range [][]int64{{4}, {3, 4}} {
 		jump, err := pool.Begin(ctx)
@@ -94,7 +96,7 @@ func TestEventLogMigration(t *testing.T) {
 	requireNoError(t, err)
 	_, err = newPosting(pool).Post(ctx, membership(old), old.Channel.ID, "after logging")
 	requireNoError(t, err)
-	assertEventLog(t, pool, old.OrganizationID, 5)
+	assertEventLog(t, pool, old.OrganizationID, 4, 5)
 	// Undo every migration after 6, the event log's included.
 	migrator.DownTo(ctx, 6)
 	var removed bool

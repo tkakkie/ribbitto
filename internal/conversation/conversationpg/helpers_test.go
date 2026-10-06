@@ -48,7 +48,9 @@ func newPosting(pool *pgxpool.Pool) *conversation.Posting {
 	return conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
 }
 
-func assertEventLog(t *testing.T, pool *pgxpool.Pool, org kernel.ID, wantSeq int64) {
+// assertEventLog takes the scenario's boundary: compared with the boundary it
+// reads, a boundary raised over a lost row would still balance the count.
+func assertEventLog(t *testing.T, pool *pgxpool.Pool, org kernel.ID, wantBoundary, wantSeq int64) {
 	t.Helper()
 	var seq, boundary, count, valid int64
 	requireNoError(t, pool.QueryRow(t.Context(), `
@@ -64,8 +66,8 @@ func assertEventLog(t *testing.T, pool *pgxpool.Pool, org kernel.ID, wantSeq int
 		FROM organization o LEFT JOIN event_log e ON e.organization_id = o.id
 		WHERE o.id = $1 GROUP BY o.id`, org).Scan(&seq, &boundary, &count, &valid))
 	// The primary key makes count == interval length prove there are no gaps.
-	if seq != wantSeq || count != seq-boundary || valid != count {
-		t.Fatalf("event log: seq=%d boundary=%d rows=%d valid=%d; want seq=%d", seq, boundary, count, valid, wantSeq)
+	if seq != wantSeq || boundary != wantBoundary || count != seq-boundary || valid != count {
+		t.Fatalf("event log: seq=%d boundary=%d rows=%d valid=%d; want seq=%d boundary=%d", seq, boundary, count, valid, wantSeq, wantBoundary)
 	}
 }
 

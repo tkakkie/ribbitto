@@ -19,19 +19,11 @@ func TestTopicsGet(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	query := func(sql string, args []any, dest ...any) {
-		t.Helper()
-		if err := pool.QueryRow(ctx, sql, args...).Scan(dest...); err != nil {
-			t.Fatal(err)
-		}
-	}
 	acme := orgtest.Organization(t, pool, "acme", "acme", 0)
 	globex := orgtest.Organization(t, pool, "globex", "globex", 0)
 	general := conversationtest.Channel(t, pool, acme, "general", true).ID
 	random := conversationtest.Channel(t, pool, acme, "random", false).ID
-	planning := conversation.Topic{OrganizationID: acme, ChannelID: general, Name: "Planning"}
-	query("INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, $3, false) RETURNING id, created_at",
-		[]any{acme, general, planning.Name}, &planning.ID, &planning.CreatedAt)
+	planning := conversationtest.Topic(t, pool, acme, general, "Planning")
 	member := func(orgID kernel.ID) org.Membership {
 		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{OrganizationID: orgID}}
 	}

@@ -63,6 +63,42 @@ WHERE c.id = $1 AND c.organization_id = $2 AND c.is_default AND c.default_topic_
 	wantInt(t, pool, "event_log_boundary_seq after Channel", 0, boundary, fixture.OrganizationID)
 }
 
+// Topic adds only the requested named topic, without taking an event sequence
+// or moving messages out of the channel's default topic.
+func TestTopic(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+	if _, err := pool.Exec(t.Context(), `
+INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq)
+VALUES ($1, $2, $3, $4, 'unchanged', 1)`, f.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, f.MemberID); err != nil {
+		t.Fatalf("inserting message: %v", err)
+	}
+	var before string
+	if err := pool.QueryRow(t.Context(), "SELECT to_jsonb(message)::text FROM message").Scan(&before); err != nil {
+		t.Fatalf("reading message before Topic: %v", err)
+	}
+	topic := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "Planning")
+	if topic.ID == (kernel.ID{}) || topic.OrganizationID != f.OrganizationID || topic.ChannelID != f.Channel.ID || topic.Name != "Planning" || topic.CreatedAt.IsZero() {
+		t.Fatalf("topic = %+v, want a named topic in the organisation's channel", topic)
+	}
+	wantInt(t, pool, "topic rows", 2, "SELECT count(*) FROM topic")
+	wantInt(t, pool, "requested named topic", 1, `
+SELECT count(*) FROM topic
+WHERE id = $1 AND organization_id = $2 AND channel_id = $3 AND name = $4 AND NOT is_default AND created_at = $5`,
+		topic.ID, f.OrganizationID, f.Channel.ID, topic.Name, topic.CreatedAt)
+	wantInt(t, pool, "event_seq after Topic", 1, "SELECT event_seq FROM organization WHERE id = $1", f.OrganizationID)
+	wantInt(t, pool, "event_log_boundary_seq after Topic", 0, "SELECT event_log_boundary_seq FROM organization WHERE id = $1", f.OrganizationID)
+	wantInt(t, pool, "message rows", 1, "SELECT count(*) FROM message")
+	var after string
+	if err := pool.QueryRow(t.Context(), "SELECT to_jsonb(message)::text FROM message").Scan(&after); err != nil {
+		t.Fatalf("reading message after Topic: %v", err)
+	}
+	if after != before {
+		t.Fatalf("message after Topic = %s, want %s", after, before)
+	}
+}
+
 func wantInt(t *testing.T, pool *pgxpool.Pool, what string, want int64, query string, args ...any) {
 	t.Helper()
 	var got int64

@@ -358,7 +358,11 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			pool := pgtest.New(t)
 			f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 			m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
-			destination := namedTopic(t, pool, f.OrganizationID, f.Channel.ID, "Destination")
+			topic := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "Destination")
+			destination := conversation.Topic{
+				ID: topic.ID, OrganizationID: topic.OrganizationID, ChannelID: topic.ChannelID,
+				Name: topic.Name, CreatedAt: topic.CreatedAt,
+			}
 			reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 			var moved []kernel.ID
 			var source kernel.ID
@@ -440,7 +444,11 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				pool := pgtest.New(t)
 				f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 				m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
-				destination := namedTopic(t, pool, f.OrganizationID, f.Channel.ID, "Destination")
+				topic := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "Destination")
+				destination := conversation.Topic{
+					ID: topic.ID, OrganizationID: topic.OrganizationID, ChannelID: topic.ChannelID,
+					Name: topic.Name, CreatedAt: topic.CreatedAt,
+				}
 				reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 				var source conversation.Topic
 				var moved []kernel.ID

@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -476,19 +477,13 @@ func TestTopicEventStream(t *testing.T) {
 	owner.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
 	response, _ := owner.visit(t, "GET", "/organizations/owner/", nil, 303)
 	channelURL := response.Header.Get("Location")
-	// Branching is #305's; until then topics are made through the store.
-	var org, channel, other string
-	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT organization_id::text, id::text FROM channel WHERE is_default").Scan(&org, &channel))
-	topics := func(channelID, name string) string {
-		var id string
-		acceptanceOK(t, pool.QueryRow(t.Context(), "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, $3) RETURNING id::text", org, channelID, name).Scan(&id))
-		return id
-	}
-	topicURL := channelURL + "/topics/" + topics(channel, "design")
-	acceptanceOK(t, pool.QueryRow(t.Context(), `WITH c AS (INSERT INTO channel (organization_id, name) VALUES ($1, 'random') RETURNING *),
-		d AS (INSERT INTO topic (id, organization_id, channel_id, is_default) SELECT default_topic_id, organization_id, id, true FROM c)
-		SELECT id::text FROM c`, org).Scan(&other))
-	foreignURL := channelURL + "/topics/" + topics(other, "elsewhere")
+	var org, channel kernel.ID
+	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT organization_id, id FROM channel WHERE is_default").Scan(&org, &channel))
+	topic := conversationtest.Topic(t, pool, org, channel, "design")
+	topicURL := view.ConversationURL("owner", channel, &topic.ID)
+	other := conversationtest.Channel(t, pool, org, "random", false)
+	foreign := conversationtest.Topic(t, pool, org, other.ID, "elsewhere")
+	foreignURL := view.ConversationURL("owner", channel, &foreign.ID)
 
 	_, page := owner.visit(t, "GET", topicURL, nil, 200)
 	match := pageCursor.FindStringSubmatch(page)

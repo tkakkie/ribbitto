@@ -16,9 +16,7 @@ func TestPostedEventTopic(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	f := conversationtest.OrganizationWithOwner(t, pool, "posted-topic", "general")
-	// Raw SQL: no public use case creates a named topic without moving messages.
-	var named kernel.ID
-	requireNoError(t, pool.QueryRow(ctx, "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, 'design') RETURNING id", f.OrganizationID, f.Channel.ID).Scan(&named))
+	named := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "design").ID
 	posting, m := newPosting(pool), membership(f.OrganizationID, f.MemberID)
 	posted, err := posting.PostToTopic(ctx, m, f.Channel.ID, &named, "hello")
 	requireNoError(t, err)

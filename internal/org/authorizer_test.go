@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
@@ -14,12 +14,12 @@ import (
 // fakeStore holds memberships by (account, slug) and the setup
 // organisation's slug.
 type fakeStore struct {
-	memberships map[domain.ID]map[string]org.Membership
+	memberships map[kernel.ID]map[string]org.Membership
 	home        string
 	err         error
 }
 
-func (f fakeStore) Membership(_ context.Context, accountID domain.ID, slug string) (org.Membership, error) {
+func (f fakeStore) Membership(_ context.Context, accountID kernel.ID, slug string) (org.Membership, error) {
 	if f.err != nil {
 		return org.Membership{}, f.err
 	}
@@ -30,7 +30,7 @@ func (f fakeStore) Membership(_ context.Context, accountID domain.ID, slug strin
 	return m, nil
 }
 
-func (f fakeStore) HomeSlug(_ context.Context, accountID domain.ID) (string, error) {
+func (f fakeStore) HomeSlug(_ context.Context, accountID kernel.ID) (string, error) {
 	if f.err != nil {
 		return "", f.err
 	}
@@ -41,13 +41,13 @@ func (f fakeStore) HomeSlug(_ context.Context, accountID domain.ID) (string, err
 }
 
 func TestAuthorizer(t *testing.T) {
-	alice := &identity.Account{ID: domain.ID{1}} // member of acme
-	bob := &identity.Account{ID: domain.ID{2}}   // member of globex only
-	carol := &identity.Account{ID: domain.ID{3}} // no membership
-	acme := org.Membership{Organization: org.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: org.Member{Role: org.RoleOwner}}
-	globex := org.Membership{Organization: org.Organization{ID: domain.ID{11}, Slug: "globex"}}
+	alice := &identity.Account{ID: kernel.ID{1}} // member of acme
+	bob := &identity.Account{ID: kernel.ID{2}}   // member of globex only
+	carol := &identity.Account{ID: kernel.ID{3}} // no membership
+	acme := org.Membership{Organization: org.Organization{ID: kernel.ID{10}, Slug: "acme"}, Member: org.Member{Role: org.RoleOwner}}
+	globex := org.Membership{Organization: org.Organization{ID: kernel.ID{11}, Slug: "globex"}}
 	store := fakeStore{
-		memberships: map[domain.ID]map[string]org.Membership{alice.ID: {"acme": acme}, bob.ID: {"globex": globex}},
+		memberships: map[kernel.ID]map[string]org.Membership{alice.ID: {"acme": acme}, bob.ID: {"globex": globex}},
 		home:        "acme",
 	}
 	broken := errors.New("connection refused")
@@ -85,34 +85,34 @@ func TestAuthorizer(t *testing.T) {
 }
 
 func TestMayReceive(t *testing.T) {
-	aliceMember, otherMember := domain.ID{20}, domain.ID{21}
-	acme := org.Membership{Organization: org.Organization{ID: domain.ID{10}, Slug: "acme"}, Member: org.Member{ID: aliceMember}}
-	store := fakeStore{memberships: map[domain.ID]map[string]org.Membership{{1}: {"acme": acme}}}
+	aliceMember, otherMember := kernel.ID{20}, kernel.ID{21}
+	acme := org.Membership{Organization: org.Organization{ID: kernel.ID{10}, Slug: "acme"}, Member: org.Member{ID: aliceMember}}
+	store := fakeStore{memberships: map[kernel.ID]map[string]org.Membership{{1}: {"acme": acme}}}
 	event := realtime.Event{OrganizationID: acme.Organization.ID, Seq: 5, Kind: org.KindJoined}
-	withAudience := func(member domain.ID) realtime.Event {
+	withAudience := func(member kernel.ID) realtime.Event {
 		e := event
 		e.AudienceMemberID = &member
 		return e
 	}
 	otherOrganisation := event
-	otherOrganisation.OrganizationID = domain.ID{11}
+	otherOrganisation.OrganizationID = kernel.ID{11}
 	broken := errors.New("connection refused")
 	for _, tt := range []struct {
 		name    string
 		store   fakeStore
-		account domain.ID
+		account kernel.ID
 		event   realtime.Event
 		want    bool
 		wantErr error
 	}{
-		{"member, organisation-wide", store, domain.ID{1}, event, true, nil},
-		{"member, own audience", store, domain.ID{1}, withAudience(aliceMember), true, nil},
-		{"member, another member's audience", store, domain.ID{1}, withAudience(otherMember), false, nil},
-		{"membership lost", store, domain.ID{2}, event, false, nil},
-		{"event of another organisation", store, domain.ID{1}, otherOrganisation, false, nil},
+		{"member, organisation-wide", store, kernel.ID{1}, event, true, nil},
+		{"member, own audience", store, kernel.ID{1}, withAudience(aliceMember), true, nil},
+		{"member, another member's audience", store, kernel.ID{1}, withAudience(otherMember), false, nil},
+		{"membership lost", store, kernel.ID{2}, event, false, nil},
+		{"event of another organisation", store, kernel.ID{1}, otherOrganisation, false, nil},
 		// A failed lookup must not look like a deny, or the stream would skip
 		// the event for good.
-		{"lookup fails", fakeStore{err: broken}, domain.ID{1}, event, false, broken},
+		{"lookup fails", fakeStore{err: broken}, kernel.ID{1}, event, false, broken},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, kind := range []realtime.EventKind{org.KindJoined, "test.other"} {

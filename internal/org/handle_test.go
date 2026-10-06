@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
@@ -22,21 +22,21 @@ func (a authorizer) Member(_ context.Context, account *identity.Account, slug st
 type store struct {
 	err     error
 	calls   int
-	org, id domain.ID
+	org, id kernel.ID
 	handle  string
 }
 
-func (s *store) UpdateHandle(_ context.Context, org, id domain.ID, handle string) error {
+func (s *store) UpdateHandle(_ context.Context, org, id kernel.ID, handle string) error {
 	s.calls++
 	s.org, s.id, s.handle = org, id, handle
 	return s.err
 }
 
 func TestChangeHandle(t *testing.T) {
-	alice := &identity.Account{ID: domain.ID{1}}
+	alice := &identity.Account{ID: kernel.ID{1}}
 	membership := org.Membership{
-		Organization: org.Organization{ID: domain.ID{2}, Slug: "acme"},
-		Member:       org.Member{ID: domain.ID{3}, OrganizationID: domain.ID{2}, AccountID: alice.ID},
+		Organization: org.Organization{ID: kernel.ID{2}, Slug: "acme"},
+		Member:       org.Member{ID: kernel.ID{3}, OrganizationID: kernel.ID{2}, AccountID: alice.ID},
 	}
 	for _, tt := range []struct {
 		name     string
@@ -49,9 +49,9 @@ func TestChangeHandle(t *testing.T) {
 	}{
 		{name: "normalised", account: alice, slug: "acme", handle: " Alice ", want: "alice"},
 		{name: "signed out", slug: "acme", handle: "alice", wantErr: org.ErrNotFound},
-		{name: "another account", account: &identity.Account{ID: domain.ID{9}}, slug: "acme", handle: "alice", wantErr: org.ErrNotFound},
+		{name: "another account", account: &identity.Account{ID: kernel.ID{9}}, slug: "acme", handle: "alice", wantErr: org.ErrNotFound},
 		{name: "another organisation", account: alice, slug: "globex", handle: "alice", wantErr: org.ErrNotFound},
-		{name: "non-member with an invalid handle", account: &identity.Account{ID: domain.ID{9}}, slug: "acme", handle: "!", wantErr: org.ErrNotFound},
+		{name: "non-member with an invalid handle", account: &identity.Account{ID: kernel.ID{9}}, slug: "acme", handle: "!", wantErr: org.ErrNotFound},
 		{name: "invalid", account: alice, slug: "acme", handle: "a", wantErr: org.ErrInvalidHandle},
 		{name: "reserved", account: alice, slug: "acme", handle: "Everyone", wantErr: org.ErrInvalidHandle},
 		{name: "look-alike", account: alice, slug: "acme", handle: "Kelvin", wantErr: org.ErrInvalidHandle},

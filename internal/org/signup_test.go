@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -23,19 +23,19 @@ type signUpStore struct {
 }
 
 func (s signUpStore) Open(context.Context) (bool, error) { return s.pending, s.openErr }
-func (s signUpStore) CreateAccount(_ context.Context, email, name, hash string) (domain.ID, error) {
+func (s signUpStore) CreateAccount(_ context.Context, email, name, hash string) (kernel.ID, error) {
 	s.t.Helper()
 	*s.steps = append(*s.steps, "account")
 	if name != "Alice" || email != "alice@example.org" || !strings.HasPrefix(hash, "$argon2id$") {
 		s.t.Fatalf("bad normalized account or hash: %s %s", name, email)
 	}
 	if errors.Is(s.err, org.ErrEmailTaken) {
-		return domain.ID{}, identity.ErrEmailTaken
+		return kernel.ID{}, identity.ErrEmailTaken
 	}
 	if errors.Is(s.err, identity.ErrInvalidEmail) {
-		return domain.ID{}, s.err
+		return kernel.ID{}, s.err
 	}
-	return domain.ID{1}, nil
+	return kernel.ID{1}, nil
 }
 func (s signUpStore) InTx(_ context.Context, fn func(platform.Tx) error) error {
 	err := fn(platform.Tx{})
@@ -44,30 +44,30 @@ func (s signUpStore) InTx(_ context.Context, fn func(platform.Tx) error) error {
 	}
 	return err
 }
-func (s signUpStore) SetupOrganization(context.Context) (domain.ID, error) {
+func (s signUpStore) SetupOrganization(context.Context) (kernel.ID, error) {
 	*s.steps = append(*s.steps, "setup")
 	if errors.Is(s.err, org.ErrSignUpClosed) {
-		return domain.ID{}, s.err
+		return kernel.ID{}, s.err
 	}
-	return domain.ID{2}, nil
+	return kernel.ID{2}, nil
 }
-func (s signUpStore) NextEventSeq(_ context.Context, organizationID domain.ID) (int64, error) {
+func (s signUpStore) NextEventSeq(_ context.Context, organizationID kernel.ID) (int64, error) {
 	*s.steps = append(*s.steps, "sequence")
-	if organizationID != (domain.ID{2}) {
+	if organizationID != (kernel.ID{2}) {
 		s.t.Fatal("wrong organization")
 	}
 	return 3, nil
 }
-func (s signUpStore) CreateMember(_ context.Context, organizationID, accountID domain.ID, role org.Role, seq int64, handle string) (domain.ID, error) {
+func (s signUpStore) CreateMember(_ context.Context, organizationID, accountID kernel.ID, role org.Role, seq int64, handle string) (kernel.ID, error) {
 	*s.steps = append(*s.steps, "member")
-	if organizationID != (domain.ID{2}) || accountID != (domain.ID{1}) || role != org.RoleMember || seq != 3 || handle != "alice" {
+	if organizationID != (kernel.ID{2}) || accountID != (kernel.ID{1}) || role != org.RoleMember || seq != 3 || handle != "alice" {
 		s.t.Fatal("bad member")
 	}
-	return domain.ID{4}, s.err
+	return kernel.ID{4}, s.err
 }
-func (s signUpStore) Append(_ context.Context, organizationID domain.ID, seq int64, kind realtime.EventKind, audience *domain.ID, payload []byte) error {
+func (s signUpStore) Append(_ context.Context, organizationID kernel.ID, seq int64, kind realtime.EventKind, audience *kernel.ID, payload []byte) error {
 	*s.steps = append(*s.steps, "event")
-	if organizationID != (domain.ID{2}) || seq != 3 || kind != org.KindJoined || audience != nil || string(payload) != string(org.EncodeJoined(domain.ID{4})) {
+	if organizationID != (kernel.ID{2}) || seq != 3 || kind != org.KindJoined || audience != nil || string(payload) != string(org.EncodeJoined(kernel.ID{4})) {
 		s.t.Fatal("bad joined event")
 	}
 	return nil
@@ -133,7 +133,7 @@ func TestSignUp(t *testing.T) {
 				if !errors.As(err, &fields) || len(fields) != 1 || fields[field] == nil || tc.storeField != "" && !errors.Is(fields[field], tc.want) {
 					t.Fatalf("field %s: %v", field, err)
 				}
-			} else if !errors.Is(err, tc.want) || (err == nil && id != (domain.ID{1})) {
+			} else if !errors.Is(err, tc.want) || (err == nil && id != (kernel.ID{1})) {
 				t.Fatalf("case %+v: %v %v", tc, id, err)
 			}
 			if tc.openFailure && (len(steps) != 0 || err.Error() != "checking sign-up: "+unexpected.Error()) {

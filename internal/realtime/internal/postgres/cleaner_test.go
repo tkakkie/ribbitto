@@ -14,10 +14,12 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/internal/postgres"
 )
@@ -40,7 +42,7 @@ func newPosting(pool *pgxpool.Pool) *conversation.Posting {
 }
 
 // membership is the fixture owner's membership, which posting takes.
-func membership(f pgtest.OrganizationFixture) org.Membership {
+func membership(f conversationtest.OrganizationFixture) org.Membership {
 	return org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
 }
 
@@ -80,7 +82,7 @@ func TestEventRetentionTransaction(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "retention", "general")
+	f := conversationtest.OrganizationWithOwner(t, pool, "retention", "general")
 	for range 2 {
 		_, err := newPosting(pool).Post(ctx, membership(f), f.Channel.ID, "kept")
 		requireNoError(t, err)
@@ -129,7 +131,7 @@ func TestEventRetentionFailedRaise(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "raise", "general")
+	f := conversationtest.OrganizationWithOwner(t, pool, "raise", "general")
 	_, err := newPosting(pool).Post(ctx, membership(f), f.Channel.ID, "old")
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
@@ -149,15 +151,15 @@ func TestEventRetentionBlockedOrganization(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	a := pgtest.OrganizationWithOwner(t, pool, "a", "general")
-	b := pgtest.OrganizationWithOwner(t, pool, "b", "general")
+	a := conversationtest.OrganizationWithOwner(t, pool, "a", "general")
+	b := conversationtest.OrganizationWithOwner(t, pool, "b", "general")
 	// UUIDv7 IDs sort by creation time; assert the fixture's processing order.
 	var ordered bool
 	requireNoError(t, pool.QueryRow(ctx, "SELECT $1::uuid < $2::uuid", a.OrganizationID, b.OrganizationID).Scan(&ordered))
 	if !ordered {
 		t.Fatal("expected A to precede B")
 	}
-	for _, f := range []pgtest.OrganizationFixture{a, b} {
+	for _, f := range []conversationtest.OrganizationFixture{a, b} {
 		_, err := newPosting(pool).Post(ctx, membership(f), f.Channel.ID, "kept")
 		requireNoError(t, err)
 		_, err = pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
@@ -201,7 +203,7 @@ func TestEventRetentionBatches(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			org := pgtest.Organization(t, pool, "batches", "Batches", 2502)
+			org := orgtest.Organization(t, pool, "batches", "Batches", 2502)
 			_, err := pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, data, created_at)
 				SELECT $1, seq, 'future.event', '{}', CASE WHEN seq = 2502 THEN $2::timestamptz
 				ELSE '2000-01-01'::timestamptz END FROM generate_series(2502, 1, -1) seq`, org, retentionCutoff)
@@ -245,7 +247,7 @@ func TestEventRetentionBoundaryNeverLowers(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	org := pgtest.Organization(t, pool, "monotonic", "Monotonic", 3)
+	org := orgtest.Organization(t, pool, "monotonic", "Monotonic", 3)
 	_, err := pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, data, created_at)
 		SELECT $1, seq, 'future.event', '{}', CASE WHEN seq = 1 THEN '2000-01-01'::timestamptz ELSE now() END
 		FROM generate_series(1, 3) seq`, org)
@@ -264,7 +266,7 @@ func TestEventRetentionWaitsForPost(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "waits", "general")
+	f := conversationtest.OrganizationWithOwner(t, pool, "waits", "general")
 	_, err := newPosting(pool).Post(ctx, membership(f), f.Channel.ID, "old")
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE event_log SET created_at = '2000-01-01' WHERE organization_id = $1", f.OrganizationID)
@@ -338,7 +340,7 @@ func TestEventRetentionExpiredPrefix(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
-			org := pgtest.Organization(t, pool, "prefix", "Prefix", int64(len(tt.createdAt)))
+			org := orgtest.Organization(t, pool, "prefix", "Prefix", int64(len(tt.createdAt)))
 			for i, at := range tt.createdAt {
 				_, err := pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, data, created_at)
 					VALUES ($1, $2, 'future.event', '{}', $3::timestamptz)`, org, i+1, at)

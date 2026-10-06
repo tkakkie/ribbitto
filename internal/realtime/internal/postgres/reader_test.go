@@ -9,10 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -21,8 +23,8 @@ func TestEventsAfter(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "events", "general")
-	other := pgtest.OrganizationWithOwner(t, pool, "other", "general")
+	f := conversationtest.OrganizationWithOwner(t, pool, "events", "general")
+	other := conversationtest.OrganizationWithOwner(t, pool, "other", "general")
 	// Insert out of sequence, including a future payload the reader cannot decode.
 	_, err := pool.Exec(ctx, `INSERT INTO event_log (organization_id, seq, kind, audience_member_id, data)
 		VALUES ($1, 3, 'future.private', $2, '{"channel_id":"future-format"}')`, f.OrganizationID, f.MemberID)
@@ -44,7 +46,7 @@ func TestEventsAfter(t *testing.T) {
 	want := []realtime.Event{
 		{OrganizationID: f.OrganizationID, Seq: 1, Kind: org.KindJoined, Payload: stored(1)},
 		{OrganizationID: f.OrganizationID, Seq: posted.EventSeq, Kind: conversation.KindPosted, ChannelID: f.Channel.ID,
-			Topics: []domain.ID{posted.TopicID}, Payload: stored(posted.EventSeq)},
+			Topics: []kernel.ID{posted.TopicID}, Payload: stored(posted.EventSeq)},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
 	}
 	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
@@ -95,7 +97,7 @@ func TestEventsAfter(t *testing.T) {
 func TestEventsAfterMalformedData(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
-	org := pgtest.Organization(t, pool, "malformed", "Malformed", 2)
+	org := orgtest.Organization(t, pool, "malformed", "Malformed", 2)
 	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
 	_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
 		VALUES ($1, 1, 'member.joined', '{"member_id":"00000000-0000-0000-0000-000000000001"}')`, org)
@@ -116,14 +118,14 @@ func TestEventsAfterCursorAboveLog(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "cursor", "general")
+	f := conversationtest.OrganizationWithOwner(t, pool, "cursor", "general")
 	posted, err := newPosting(pool).Post(ctx, membership(f), f.Channel.ID, "hello")
 	requireNoError(t, err)
-	empty := pgtest.Organization(t, pool, "empty", "Empty", 0)
+	empty := orgtest.Organization(t, pool, "empty", "Empty", 0)
 	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
 	for _, tt := range []struct {
 		name string
-		org  domain.ID
+		org  kernel.ID
 		seq  int64
 	}{
 		{"populated log", f.OrganizationID, posted.EventSeq},
@@ -152,28 +154,28 @@ func TestEventsAfterCursorAboveLog(t *testing.T) {
 func TestEventsAfterRegisteredKinds(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
-	org := pgtest.Organization(t, pool, "kinds", "Kinds", 3)
+	org := orgtest.Organization(t, pool, "kinds", "Kinds", 3)
 	_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
 		VALUES ($1, 1, 'test.synthetic', '{"route": "here"}'), ($1, 2, 'test.unregistered', '{}'),
 		($1, 3, 'message.posted', '{}')`, org)
 	requireNoError(t, err)
-	channel, topic := domain.ID{15: 1}, domain.ID{15: 2}
+	channel, topic := kernel.ID{15: 1}, kernel.ID{15: 2}
 	var routed []byte
-	kinds := realtime.Kinds{"test.synthetic": func(payload []byte) (domain.ID, []domain.ID, error) {
+	kinds := realtime.Kinds{"test.synthetic": func(payload []byte) (kernel.ID, []kernel.ID, error) {
 		routed = payload
-		return channel, []domain.ID{topic}, nil
+		return channel, []kernel.ID{topic}, nil
 	}}
 	got, err := realtimepg.NewReader(pool, orgpg.BoundsIn, kinds).EventsAfter(t.Context(), org, 0, 10)
 	requireNoError(t, err)
 	want := []realtime.Event{
-		{OrganizationID: org, Seq: 1, Kind: "test.synthetic", ChannelID: channel, Topics: []domain.ID{topic}, Payload: routed},
+		{OrganizationID: org, Seq: 1, Kind: "test.synthetic", ChannelID: channel, Topics: []kernel.ID{topic}, Payload: routed},
 		{OrganizationID: org, Seq: 2, Kind: "test.unregistered"},
 		{OrganizationID: org, Seq: 3, Kind: conversation.KindPosted},
 	}
 	if len(routed) == 0 || !reflect.DeepEqual(got, want) {
 		t.Fatalf("EventsAfter = %+v; want %+v", got, want)
 	}
-	kinds["test.synthetic"] = func([]byte) (domain.ID, []domain.ID, error) { return domain.ID{}, nil, errors.New("malformed") }
+	kinds["test.synthetic"] = func([]byte) (kernel.ID, []kernel.ID, error) { return kernel.ID{}, nil, errors.New("malformed") }
 	if events, err := realtimepg.NewReader(pool, orgpg.BoundsIn, kinds).EventsAfter(t.Context(), org, 0, 10); err == nil || len(events) != 0 {
 		t.Fatalf("failed route: %+v, %v; want error without events", events, err)
 	}
@@ -185,7 +187,7 @@ func TestEventsAfterUnknownOrganization(t *testing.T) {
 	t.Parallel()
 	reader := realtimepg.NewReader(pgtest.New(t), orgpg.BoundsIn, eventKinds())
 	for _, limit := range []int{0, 10} {
-		got, err := reader.EventsAfter(t.Context(), domain.ID{0xee}, 5, limit)
+		got, err := reader.EventsAfter(t.Context(), kernel.ID{0xee}, 5, limit)
 		if err != nil || got == nil || len(got) != 0 {
 			t.Fatalf("limit %d: %+v, %v; want an empty batch", limit, got, err)
 		}
@@ -198,7 +200,7 @@ type committingBounds struct {
 	commit *func()
 }
 
-func (b committingBounds) EventBounds(ctx context.Context, organizationID domain.ID) (int64, int64, bool, error) {
+func (b committingBounds) EventBounds(ctx context.Context, organizationID kernel.ID) (int64, int64, bool, error) {
 	boundary, committed, found, err := b.Bounds.EventBounds(ctx, organizationID)
 	if err == nil && *b.commit != nil {
 		commit := *b.commit
@@ -214,7 +216,7 @@ func TestEventsAfterOneSnapshot(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "snapshot", "general")
+	f := conversationtest.OrganizationWithOwner(t, pool, "snapshot", "general")
 	posting := newPosting(pool)
 	first, err := posting.Post(ctx, membership(f), f.Channel.ID, "first")
 	requireNoError(t, err)

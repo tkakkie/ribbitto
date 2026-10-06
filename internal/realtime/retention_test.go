@@ -8,12 +8,13 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -70,7 +71,7 @@ func TestCachedEventsCursorAboveLog(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	f := pgtest.OrganizationWithOwner(t, pool, "restored", "general")
+	f := conversationtest.OrganizationWithOwner(t, pool, "restored", "general")
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
 	for range 2 {
 		_, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).Post(ctx, m, f.Channel.ID, "hello")
@@ -114,7 +115,7 @@ func TestRetentionReplay(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			f := pgtest.OrganizationWithOwner(t, pool, "retention", "general")
+			f := conversationtest.OrganizationWithOwner(t, pool, "retention", "general")
 			m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID}}
 			post := func() {
 				_, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).Post(ctx, m, f.Channel.ID, "kept message")

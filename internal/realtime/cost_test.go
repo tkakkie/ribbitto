@@ -21,10 +21,13 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -75,14 +78,14 @@ func TestStreamCost(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	fixture := pgtest.OrganizationWithOwner(t, fixturePool, "acme", "general")
+	fixture := conversationtest.OrganizationWithOwner(t, fixturePool, "acme", "general")
 	cached := os.Getenv("RIBBITTO_STREAM_COST_CACHE") == "1"
 	distinct := os.Getenv("RIBBITTO_STREAM_COST_MEMBERS") == "distinct"
 	subs := []realtime.Subscription{{Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: fixture.AccountID, Channel: fixture.Channel.ID}}
 	if distinct {
 		for i := 1; i < slices.Max(steps); i++ {
-			account := pgtest.Account(t, fixturePool, fmt.Sprintf("m%05d@example.org", i), fmt.Sprintf("Member %d", i))
-			pgtest.Member(t, fixturePool, fixture.OrganizationID, account, org.RoleMember, fmt.Sprintf("m%05d", i), 1)
+			account := identitytest.Account(t, fixturePool, fmt.Sprintf("m%05d@example.org", i), fmt.Sprintf("Member %d", i))
+			orgtest.Member(t, fixturePool, fixture.OrganizationID, account, org.RoleMember, fmt.Sprintf("m%05d", i), 1)
 			subs = append(subs, realtime.Subscription{Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: account, Channel: fixture.Channel.ID})
 		}
 	}

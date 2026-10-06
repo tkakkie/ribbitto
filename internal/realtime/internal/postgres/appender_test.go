@@ -5,9 +5,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 	"github.com/tkakkie/ribbitto/internal/realtime/internal/postgres"
 )
@@ -20,9 +21,9 @@ func TestAppenderAudience(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "audience", "general")
-	other := pgtest.OrganizationWithOwner(t, pool, "audience-other", "general")
-	appendOne := func(audience *domain.ID) (int64, error) {
+	f := conversationtest.OrganizationWithOwner(t, pool, "audience", "general")
+	other := conversationtest.OrganizationWithOwner(t, pool, "audience-other", "general")
+	appendOne := func(audience *kernel.ID) (int64, error) {
 		var seq int64
 		err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
 			if err := pgxbridge.Tx(tx).QueryRow(ctx, "UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq", f.OrganizationID).Scan(&seq); err != nil {
@@ -33,7 +34,7 @@ func TestAppenderAudience(t *testing.T) {
 		return seq, err
 	}
 	reader := postgres.NewReader(pool, orgpg.BoundsIn, eventKinds())
-	for _, audience := range []*domain.ID{nil, &f.MemberID} {
+	for _, audience := range []*kernel.ID{nil, &f.MemberID} {
 		seq, err := appendOne(audience)
 		requireNoError(t, err)
 		got, err := reader.EventsAfter(ctx, f.OrganizationID, seq-1, 1)

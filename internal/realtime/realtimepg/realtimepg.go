@@ -15,8 +15,8 @@ func NewReader(pool *pgxpool.Pool, bounds realtime.BoundsIn, kinds realtime.Kind
 }
 
 // AppenderIn returns realtime's event appender bound to a writer's
-// transaction. Consumers declare the interface they need and adapt to it
-// with adapters (decision 26).
+// transaction. Consumers declare the interface they need, and composition
+// roots adapt to it with a named function (decision 26).
 func AppenderIn(tx platform.Tx) *postgres.Appender { return postgres.AppenderIn(tx) }
 
 // NewCleaner returns realtime's retention cleaner on pool. boundary locks an

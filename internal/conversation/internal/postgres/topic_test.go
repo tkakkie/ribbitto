@@ -216,10 +216,10 @@ func TestTopicBackfill(t *testing.T) {
 	pool := pgtest.NewEmpty(t)
 	migrator := pgtest.NewMigrator(t, pool)
 	migrator.UpTo(ctx, 8)
-	// Raw SQL writes what the binary of migration 8 wrote.
 	for _, slug := range []string{"acme", "globex"} {
 		orgID := orgtest.Organization(t, pool, slug, slug, 0)
 		member := orgtest.Member(t, pool, orgID, identitytest.Account(t, pool, slug+"@example.org", slug), org.RoleOwner, "owner", 1)
+		// Raw SQL writes what the binary of migration 8 wrote.
 		_, err := pool.Exec(ctx, `
 			WITH c AS (INSERT INTO channel (organization_id, name, is_default) VALUES ($1, 'general', true), ($1, 'random', false), ($1, 'empty', false) RETURNING id, name)
 			INSERT INTO message (organization_id, channel_id, member_id, body, event_seq)

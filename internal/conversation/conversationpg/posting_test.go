@@ -6,11 +6,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
@@ -25,14 +28,10 @@ func TestPosting(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	organizationID := fixtureOrganization(t, pool, "acme")
-	fixtureDefaultChannel(t, pool, organizationID)
-	var memberID, channelID kernel.ID
-	query(`WITH account AS (INSERT INTO account (email, display_name, password_hash)
-		VALUES ('alice@example.org', 'Alice', '$argon2id$x') RETURNING id)
-		INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle)
-		SELECT $1, id, 'member', 1, 'alice' FROM account RETURNING id`, []any{organizationID}, &memberID)
-	query("SELECT id FROM channel WHERE organization_id = $1", []any{organizationID}, &channelID)
+	organizationID := orgtest.Organization(t, pool, "acme", "acme", 0)
+	channelID := conversationtest.Channel(t, pool, organizationID, conversation.DefaultChannelName, true).ID
+	alice := identitytest.Account(t, pool, "alice@example.org", "Alice")
+	memberID := orgtest.Member(t, pool, organizationID, alice, org.RoleMember, "alice", 1)
 	posting := conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
 	m := org.Membership{Organization: org.Organization{ID: organizationID}, Member: org.Member{ID: memberID}}
 	for next := int64(1); next <= 2; next++ {

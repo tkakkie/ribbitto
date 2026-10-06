@@ -6,8 +6,10 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
@@ -23,23 +25,10 @@ func TestTopicsGet(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	var acme, globex, general, random kernel.ID
-	query("INSERT INTO organization (slug, name) VALUES ('acme', 'acme') RETURNING id", nil, &acme)
-	query("INSERT INTO organization (slug, name) VALUES ('globex', 'globex') RETURNING id", nil, &globex)
-	// A channel and its default topic in one statement: the channel's foreign
-	// key to the topic is deferred to commit.
-	for _, ch := range []struct {
-		name string
-		id   *kernel.ID
-	}{{"general", &general}, {"random", &random}} {
-		query(`WITH channel AS (
-			INSERT INTO channel (organization_id, name, is_default) VALUES ($1, $2, $2 = 'general')
-			RETURNING organization_id, id, default_topic_id
-		), topic AS (
-			INSERT INTO topic (organization_id, channel_id, id, is_default)
-			SELECT organization_id, id, default_topic_id, true FROM channel
-		) SELECT id FROM channel`, []any{acme, ch.name}, ch.id)
-	}
+	acme := orgtest.Organization(t, pool, "acme", "acme", 0)
+	globex := orgtest.Organization(t, pool, "globex", "globex", 0)
+	general := conversationtest.Channel(t, pool, acme, "general", true).ID
+	random := conversationtest.Channel(t, pool, acme, "random", false).ID
 	planning := conversation.Topic{OrganizationID: acme, ChannelID: general, Name: "Planning"}
 	query("INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, $3, false) RETURNING id, created_at",
 		[]any{acme, general, planning.Name}, &planning.ID, &planning.CreatedAt)

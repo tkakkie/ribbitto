@@ -17,13 +17,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 type snapshot struct {
@@ -173,7 +173,7 @@ func TestDevelopmentBudget(t *testing.T) {
 
 func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 	t.Helper()
-	var accountID domain.ID
+	var accountID kernel.ID
 	if err := pool.QueryRow(t.Context(), "SELECT id FROM account WHERE email = 'mira@example.test'").Scan(&accountID); err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 	}
 	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 	for i, name := range []string{"rooftop-garden", "garden-time"} {
-		var channelID, topicID domain.ID
+		var channelID, topicID kernel.ID
 		var total int
 		if err := pool.QueryRow(t.Context(), `SELECT t.channel_id, t.id, count(p.id)
 			FROM topic t JOIN channel c ON c.id = t.channel_id JOIN message p ON p.topic_id = t.id

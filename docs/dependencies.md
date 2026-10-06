@@ -31,9 +31,9 @@ cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
 cmd/seed -> internal/conversation
 cmd/seed -> internal/conversation/conversationpg
-cmd/seed -> internal/domain
 cmd/seed -> internal/identity
 cmd/seed -> internal/identity/identitypg
+cmd/seed -> internal/kernel
 cmd/seed -> internal/org
 cmd/seed -> internal/org/orgpg
 cmd/seed -> internal/platform/postgres

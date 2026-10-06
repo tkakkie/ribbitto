@@ -6,16 +6,17 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
 func TestMoveEventPayload(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
-	f := pgtest.OrganizationWithOwner(t, pool, "move-event", "general")
-	other := pgtest.OrganizationWithOwner(t, pool, "other-event", "general")
+	f := conversationtest.OrganizationWithOwner(t, pool, "move-event", "general")
+	other := conversationtest.OrganizationWithOwner(t, pool, "other-event", "general")
 	_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
 		VALUES ($1, 1, 'member.joined', jsonb_build_object('member_id', $2::uuid))`, f.OrganizationID, f.MemberID)
 	requireNoError(t, err)

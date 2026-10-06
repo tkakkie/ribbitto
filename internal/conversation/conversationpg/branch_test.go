@@ -11,11 +11,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
@@ -27,8 +28,8 @@ func TestBranching(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-	random := pgtest.Channel(t, pool, acme.OrganizationID, "random", false)
+	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+	random := conversationtest.Channel(t, pool, acme.OrganizationID, "random", false)
 	notifier := &recordingNotifier{t: t, pool: pool}
 	posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, notifier), membership(acme.OrganizationID, acme.MemberID)
 	var posted []conversation.Message
@@ -193,7 +194,7 @@ func TestBranchingFailingNoticeAppend(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 	posted, err := newPosting(pool).Post(ctx, membership(acme.OrganizationID, acme.MemberID), acme.Channel.ID, "one")
 	requireNoError(t, err)
 	moved := false
@@ -225,8 +226,8 @@ func TestBranchNoticeInsertFailure(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
-	globex := pgtest.OrganizationWithOwner(t, pool, "globex", "general")
+	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+	globex := conversationtest.OrganizationWithOwner(t, pool, "globex", "general")
 	posted, err := newPosting(pool).Post(ctx, membership(acme.OrganizationID, acme.MemberID), acme.Channel.ID, "one")
 	requireNoError(t, err)
 	// failingNotice records the move; the notice's append is never reached.
@@ -267,7 +268,7 @@ func TestBranchingPartlyStaleSelection(t *testing.T) {
 			t.Parallel()
 			pool := pgtest.New(t)
 			ctx := t.Context()
-			acme := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+			acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 			posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, nil), membership(acme.OrganizationID, acme.MemberID)
 			valid, err := posting.Post(ctx, member, acme.Channel.ID, "still in source")
 			requireNoError(t, err)

@@ -9,7 +9,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
@@ -65,7 +65,7 @@ type blockingSequences struct {
 	once    *sync.Once
 }
 
-func (s blockingSequences) CommittedSequences(ctx context.Context, _ []domain.ID) (map[domain.ID]int64, error) {
+func (s blockingSequences) CommittedSequences(ctx context.Context, _ []kernel.ID) (map[kernel.ID]int64, error) {
 	s.once.Do(func() { close(s.started) })
 	<-ctx.Done()
 	return nil, ctx.Err()
@@ -75,7 +75,7 @@ func (s blockingSequences) CommittedSequences(ctx context.Context, _ []domain.ID
 // outlives the pool that serve closes next.
 func TestWatermarkStops(t *testing.T) {
 	hub := realtime.NewHub()
-	_, unregister, err := hub.Register(context.Background(), realtime.Connection{Organization: domain.ID{1}, Account: domain.ID{2}, Session: domain.ID{3}}, 1)
+	_, unregister, err := hub.Register(context.Background(), realtime.Connection{Organization: kernel.ID{1}, Account: kernel.ID{2}, Session: kernel.ID{3}}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

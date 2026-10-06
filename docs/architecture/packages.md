@@ -43,7 +43,7 @@ lists those rules and the `doc.go` requirement.
 ```mermaid
 flowchart LR
   cmd[cmd/ribbitto] --> web & orgpg[org/orgpg] & conversationpg[conversation/conversationpg] & identity & identitypg[identity/identitypg] & realtimepg & realtime & platform[platform/postgres]
-  seed[cmd/seed] --> conversation & conversationpg & org & orgpg & identity & identitypg & realtimepg & platform & domain
+  seed[cmd/seed] --> conversation & conversationpg & org & orgpg & identity & identitypg & realtimepg & platform & kernel
   web[internal/web] --> org & conversation & identity & kernel & realtime & static[web/static]
   postgres[infra/postgres/pgtest] --> org & domain & platformpgtest[platform/postgres/pgtest]
   conversationpg --> conversation[internal/conversation] & cstore[conversation/internal/postgres] & realtime & platform

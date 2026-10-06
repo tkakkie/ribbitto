@@ -4,9 +4,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 )
 
@@ -14,7 +15,7 @@ func TestPostedEventTopic(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	f := pgtest.OrganizationWithOwner(t, pool, "posted-topic", "general")
+	f := conversationtest.OrganizationWithOwner(t, pool, "posted-topic", "general")
 	// Raw SQL: no public use case creates a named topic without moving messages.
 	var named kernel.ID
 	requireNoError(t, pool.QueryRow(ctx, "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, 'design') RETURNING id", f.OrganizationID, f.Channel.ID).Scan(&named))

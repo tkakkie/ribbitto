@@ -12,18 +12,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
-	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 func TestReaderOne(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	local := pgtest.OrganizationWithOwner(t, pool, "acme", conversation.DefaultChannelName)
-	foreign := pgtest.OrganizationWithOwner(t, pool, "globex", conversation.DefaultChannelName)
-	otherChannel := pgtest.Channel(t, pool, local.OrganizationID, "other", false)
+	local := conversationtest.OrganizationWithOwner(t, pool, "acme", conversation.DefaultChannelName)
+	foreign := conversationtest.OrganizationWithOwner(t, pool, "globex", conversation.DefaultChannelName)
+	otherChannel := conversationtest.Channel(t, pool, local.OrganizationID, "other", false)
 	membership := org.Membership{Organization: org.Organization{ID: local.OrganizationID}, Member: org.Member{ID: local.MemberID}}
 	foreignMembership := org.Membership{Organization: org.Organization{ID: foreign.OrganizationID}, Member: org.Member{ID: foreign.MemberID}}
 	service := conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
@@ -43,7 +44,7 @@ func TestReaderOne(t *testing.T) {
 	for _, tt := range []struct {
 		name       string
 		membership org.Membership
-		channel    domain.ID
+		channel    kernel.ID
 		seq        int64
 		want       conversation.Entry
 		wantErr    error
@@ -75,15 +76,15 @@ func TestReaderPaging(t *testing.T) {
 		if slug == "acme" {
 			name = "empty"
 		}
-		fixture := pgtest.OrganizationWithOwner(t, pool, slug, name)
+		fixture := conversationtest.OrganizationWithOwner(t, pool, slug, name)
 		memberships[slug] = org.Membership{Organization: org.Organization{ID: fixture.OrganizationID, Slug: slug}, Member: org.Member{ID: fixture.MemberID, OrganizationID: fixture.OrganizationID}}
 		defaults[slug] = conversation.Channel(fixture.Channel)
 	}
 	acme, globex := memberships["acme"], memberships["globex"]
-	channels := map[string]domain.ID{"empty": defaults["acme"].ID}
+	channels := map[string]kernel.ID{"empty": defaults["acme"].ID}
 	wantChannels := []conversation.Channel{defaults["acme"]}
 	for _, name := range []string{"exact", "partial", "noise"} {
-		ch := pgtest.Channel(t, pool, acme.Organization.ID, name, false)
+		ch := conversationtest.Channel(t, pool, acme.Organization.ID, name, false)
 		channels[name] = ch.ID
 		wantChannels = append(wantChannels, conversation.Channel(ch))
 	}
@@ -115,7 +116,7 @@ func TestReaderPaging(t *testing.T) {
 	}
 
 	for _, name := range []string{"exact", "partial"} {
-		var topicID domain.ID
+		var topicID kernel.ID
 		requireNoError(t, pool.QueryRow(ctx, "INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, $3, false) RETURNING id", acme.Organization.ID, channels[name], name).Scan(&topicID))
 		_, err := pool.Exec(ctx, "UPDATE message SET topic_id = $3 WHERE organization_id = $1 AND channel_id = $2 AND event_seq % 2 = 0", acme.Organization.ID, channels[name], topicID)
 		requireNoError(t, err)
@@ -228,7 +229,7 @@ func TestChannelPageSnapshot(t *testing.T) {
 		t.Run(statement, func(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
-			fixture := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+			fixture := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 			m := org.Membership{Organization: org.Organization{ID: fixture.OrganizationID}, Member: org.Member{ID: fixture.MemberID}}
 			posting := conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
 			initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")

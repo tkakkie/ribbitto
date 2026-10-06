@@ -8,10 +8,11 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 func TestPostMessage(t *testing.T) {
@@ -23,7 +24,7 @@ func TestPostMessage(t *testing.T) {
 	channels := map[string]kernel.ID{}
 	defaults := map[string]kernel.ID{}
 	for _, slug := range []string{"acme", "globex"} {
-		fixture := pgtest.OrganizationWithOwner(t, pool, slug, conversation.DefaultChannelName)
+		fixture := conversationtest.OrganizationWithOwner(t, pool, slug, conversation.DefaultChannelName)
 		// These fixture memberships predate logging, as on an upgraded database.
 		_, err := pool.Exec(ctx, "UPDATE organization SET event_log_boundary_seq = event_seq WHERE id = $1", fixture.OrganizationID)
 		requireNoError(t, err)
@@ -103,7 +104,7 @@ func TestPostingAndBranchingIntoUnknownOrganization(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	acme := pgtest.OrganizationWithOwner(t, pool, "acme", conversation.DefaultChannelName)
+	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", conversation.DefaultChannelName)
 	posting, branching := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, nil)
 	posted, err := posting.Post(ctx, membership(acme.OrganizationID, acme.MemberID), acme.Channel.ID, "kept")
 	requireNoError(t, err)

@@ -4,49 +4,28 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
-
-func fixtureOrganization(t *testing.T, pool *pgxpool.Pool, slug string) kernel.ID {
-	t.Helper()
-	var id kernel.ID
-	if err := pool.QueryRow(t.Context(), "INSERT INTO organization (slug, name) VALUES ($1, $1) RETURNING id", slug).Scan(&id); err != nil {
-		t.Fatal(err)
-	}
-	return id
-}
-
-func fixtureDefaultChannel(t *testing.T, pool *pgxpool.Pool, organizationID kernel.ID) {
-	t.Helper()
-	// The deferred channel/topic relationship must be complete in one statement.
-	_, err := pool.Exec(t.Context(), `WITH channel AS (
-        INSERT INTO channel (organization_id, name, is_default)
-        VALUES ($1, $2, true) RETURNING organization_id, id, default_topic_id
-    ) INSERT INTO topic (organization_id, channel_id, id, is_default)
-      SELECT organization_id, id, default_topic_id, true FROM channel`, organizationID, conversation.DefaultChannelName)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
 
 // The use cases see only the member's organisation, even with a known id.
 func TestChannels(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	acme := fixtureOrganization(t, pool, "acme")
-	globex := fixtureOrganization(t, pool, "globex")
+	acme := orgtest.Organization(t, pool, "acme", "acme", 0)
+	globex := orgtest.Organization(t, pool, "globex", "globex", 0)
 	member := func(orgID kernel.ID) org.Membership {
 		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{OrganizationID: orgID}}
 	}
 	service := conversationpg.NewChannels(pool)
 	for _, org := range []kernel.ID{acme, globex} {
-		fixtureDefaultChannel(t, pool, org)
+		conversationtest.Channel(t, pool, org, conversation.DefaultChannelName, true)
 	}
 	secret, err := service.Create(ctx, member(globex), " 開発 ")
 	if err != nil || secret.Name != "開発" || secret.IsDefault {

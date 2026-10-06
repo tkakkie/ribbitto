@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
@@ -22,7 +22,7 @@ func seedTopics(ctx context.Context, posts *conversation.Posting, branches *conv
 			return fmt.Errorf("posting branch source: %w", err)
 		}
 		destination, err := branches.Branch(ctx, member, general.ID, conversation.Branch{
-			Messages: []domain.ID{source.ID}, From: general.DefaultTopicID, NewName: name,
+			Messages: []kernel.ID{source.ID}, From: general.DefaultTopicID, NewName: name,
 		}, func(t conversation.Topic) string { return fmt.Sprintf("Moved 1 message to %s.", t.Name) })
 		if err != nil {
 			return fmt.Errorf("branching %s: %w", name, err)

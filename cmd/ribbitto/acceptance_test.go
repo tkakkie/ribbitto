@@ -17,8 +17,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 

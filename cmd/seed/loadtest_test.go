@@ -17,8 +17,8 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 func TestLoadTestSizing(t *testing.T) {

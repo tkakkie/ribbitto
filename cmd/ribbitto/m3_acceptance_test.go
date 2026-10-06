@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -61,7 +61,7 @@ func TestM3Acceptance(t *testing.T) {
 
 	// Another organisation's member has their own channel's stream open;
 	// this organisation's posts never reach it.
-	other := pgtest.OrganizationWithOwner(t, pool, "globex", "general")
+	other := conversationtest.OrganizationWithOwner(t, pool, "globex", "general")
 	token, _, err := identitypg.NewSessions(pool, time.Now, nil).Create(t.Context(), other.AccountID)
 	acceptanceOK(t, err)
 	outsider := newAcceptanceBrowser(t, server, "192.0.2.42")

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // Branching through the production wiring (#305): moved messages show their
@@ -85,7 +85,7 @@ func TestBranchingWakesOpenStreams(t *testing.T) {
 	channelURL := response.Header.Get("Location")
 	post(t, owner, channelURL, "moves live")
 
-	var org domain.ID
+	var org kernel.ID
 	var channel, source, destination, message string
 	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT organization_id, id::text, default_topic_id::text FROM channel WHERE is_default").Scan(&org, &channel, &source))
 	// The destination must exist before its stream can be opened.

@@ -129,3 +129,4 @@ transaction that decision 5 and branching rely on); per-module web packages
 (the channel page composes five modules; revisit if conflicts recur);
 `Membership` in the kernel (it has a natural owner, `org`).
 **Superseded in part by:** [decision 27](27-channels-topics-and-messages-are-one-conversation-module.md) (`channel`, `topic` and `message` become one `conversation` module; its graph and order).
+**Amended by:** [decision 29](29-test-fixtures-live-with-the-module-that-owns-their-tables.md) (a test-only fixture package).

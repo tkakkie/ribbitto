@@ -46,6 +46,10 @@ internal/conversation/conversationpg -> internal/conversation
 internal/conversation/conversationpg -> internal/conversation/internal/postgres
 internal/conversation/conversationpg -> internal/platform/postgres
 internal/conversation/conversationpg -> internal/realtime
+internal/conversation/conversationtest -> internal/identity/identitytest
+internal/conversation/conversationtest -> internal/kernel
+internal/conversation/conversationtest -> internal/org
+internal/conversation/conversationtest -> internal/org/orgtest
 internal/conversation/internal/postgres -> internal/conversation
 internal/conversation/internal/postgres -> internal/conversation/internal/postgres/sqlcgen
 internal/conversation/internal/postgres -> internal/kernel
@@ -57,6 +61,7 @@ internal/identity -> internal/kernel
 internal/identity/identitypg -> internal/identity
 internal/identity/identitypg -> internal/identity/internal/postgres
 internal/identity/identitypg -> internal/platform/postgres
+internal/identity/identitytest -> internal/kernel
 internal/identity/internal/postgres -> internal/identity
 internal/identity/internal/postgres -> internal/identity/internal/postgres/sqlcgen
 internal/identity/internal/postgres -> internal/kernel
@@ -80,6 +85,8 @@ internal/org/orgpg -> internal/org
 internal/org/orgpg -> internal/org/internal/postgres
 internal/org/orgpg -> internal/platform/postgres
 internal/org/orgpg -> internal/realtime
+internal/org/orgtest -> internal/kernel
+internal/org/orgtest -> internal/org
 internal/platform/postgres -> db/migrations
 internal/platform/postgres -> internal/platform/postgres/internal/handle
 internal/platform/postgres/pgtest -> db/migrations

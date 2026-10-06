@@ -30,8 +30,13 @@ packages. See [load client](load-client.md) for limits and usage.
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |
 
-A package's sub-packages may import each other, apart from the store and
-wiring rules. depguard in `.golangci.yml`
+A package's sub-packages may import each other, apart from the store,
+wiring and fixture rules. The test-only fixture packages
+`identity/identitytest`, `org/orgtest` and `conversation/conversationtest`
+([decision 29](../decisions/29-test-fixtures-live-with-the-module-that-owns-their-tables.md))
+are imported only by tests and higher fixture packages
+(`conversationtest` → `orgtest` → `identitytest`), never by production code,
+and import no store, wiring or bridge. depguard in `.golangci.yml`
 enforces the part of this table that matters most; [import checks](import-checks.md)
 lists those rules and the `doc.go` requirement.
 
@@ -44,6 +49,9 @@ flowchart LR
   conversationpg --> conversation[internal/conversation] & cstore[conversation/internal/postgres] & realtime & platform
   conversation --> identity & org & realtime & kernel & platform
   cstore --> conversation & org & platform & kernel
+  conversationtest[conversation/conversationtest] --> orgtest[org/orgtest] & identitytest[identity/identitytest] & org & kernel
+  orgtest --> org & kernel
+  identitytest --> kernel
   realtime[internal/realtime] --> kernel & platform
   realtimepg[realtime/realtimepg] --> realtime & rstore[realtime/internal/postgres] & platform
   rstore --> realtime & platform & kernel

@@ -1,5 +1,5 @@
 // Package pgtest provides isolated PostgreSQL databases for integration
-// tests: New clones the migrated template, NewEmpty is unmigrated. Feature
-// fixtures live with their module's tests; the shared feature fixtures stay
-// in internal/infra/postgres/pgtest until migration step 5.
+// tests: New clones the migrated template, NewEmpty is unmigrated. Fixtures
+// live with the module that owns their tables (identitytest, orgtest,
+// conversationtest; decision 29), not here.
 package pgtest

@@ -16,9 +16,9 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 
 | Feature | Packages and files | Owns |
 |---|---|---|
-| `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`; `db/queries/identity/`); `web` `signin.go` | `account`, `session` |
-| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the completed `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres` and wiring `orgpg`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
-| `conversation`: channels, topics, branching, posting, history and the page snapshot *(decisions 21, 27)* | the completed `conversation` module: `internal/conversation` (channel, topic and message types, rules and errors; `Channels`, `Topics` (the membership-scoped lookup), `Posting`, `Brancher` and `Reader` (the page snapshot, `One`, `Many`); `message.posted` and `messages.moved`; posting and branching own their transaction, `Reader` its snapshot), its store `internal/conversation/internal/postgres` and wiring `conversationpg`; `db/queries/conversation/`; `web` `channel.go` (channel and topic pages, history, `?before=` paging, posting), `branch.go`, `view/channel.templ`, `view/message.templ`, `view/branch.templ`, `web/static/message-*.js`, `web/static/branch-selection-v1.js` | `channel`, `topic`, `message` |
+| `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`, test fixtures `identitytest`; `db/queries/identity/`); `web` `signin.go` | `account`, `session` |
+| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the completed `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres`, wiring `orgpg` and test fixtures `orgtest`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
+| `conversation`: channels, topics, branching, posting, history and the page snapshot *(decisions 21, 27)* | the completed `conversation` module: `internal/conversation` (channel, topic and message types, rules and errors; `Channels`, `Topics` (the membership-scoped lookup), `Posting`, `Brancher` and `Reader` (the page snapshot, `One`, `Many`); `message.posted` and `messages.moved`; posting and branching own their transaction, `Reader` its snapshot), its store `internal/conversation/internal/postgres`, wiring `conversationpg` and test fixtures `conversationtest`; `db/queries/conversation/`; `web` `channel.go` (channel and topic pages, history, `?before=` paging, posting), `branch.go`, `view/channel.templ`, `view/message.templ`, `view/branch.templ`, `web/static/message-*.js`, `web/static/branch-selection-v1.js` | `channel`, `topic`, `message` |
 | `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `conversation`) | `event_log` |
 
 The shared kernel, which any feature may use: `internal/kernel` (`ID`) and
@@ -35,9 +35,10 @@ and the page snapshot) is in
 
 Org's test-only `GetOrganizationBySlug` and `GetMemberByOrganizationAndAccount`
 queries live in `db/queries/org/`. [Modules](modules.md) says where
-conversation's tests live. Shared `infra/postgres/pgtest` fixtures write org's
-and identity's rows plus a channel and its default topic in raw SQL for tests
-until step 5; they use no store.
+conversation's tests live. Another feature's tests write a table only through
+its owner's test-only fixture package (`identitytest`, `orgtest`,
+`conversationtest`; [decision 29](../decisions/29-test-fixtures-live-with-the-module-that-owns-their-tables.md)),
+which uses no store; scenario-specific SQL stays in the test.
 
 **Known exceptions.** Cross-feature writes that must commit atomically:
 

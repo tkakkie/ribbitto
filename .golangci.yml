@@ -86,11 +86,17 @@ linters:
         # tests import it. Its store is imported only by its wiring and the
         # store's own tests; Go's internal rule alone would also let the
         # module's root import it.
-        identitypg:
+        wiring:
           list-mode: lax
           files: ["$all", "!$test", "!**/cmd/*/*.go", "!**/cmd/*/**/*.go"]
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/identity/identitypg
+              desc: Only cmd/* and tests import a module's wiring; see decision 26.
+            - pkg: github.com/tkakkie/ribbitto/internal/realtime/realtimepg
+              desc: Only cmd/* and tests import a module's wiring; see decision 26.
+            - pkg: github.com/tkakkie/ribbitto/internal/org/orgpg
+              desc: Only cmd/* and tests import a module's wiring; see decision 26.
+            - pkg: github.com/tkakkie/ribbitto/internal/conversation/conversationpg
               desc: Only cmd/* and tests import a module's wiring; see decision 26.
         identitystore:
           list-mode: lax
@@ -98,36 +104,18 @@ linters:
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/identity/internal/postgres
               desc: Only identitypg and the store's own tests import identity's store; see decision 26.
-        realtimepg:
-          list-mode: lax
-          files: ["$all", "!$test", "!**/cmd/*/*.go", "!**/cmd/*/**/*.go"]
-          deny:
-            - pkg: github.com/tkakkie/ribbitto/internal/realtime/realtimepg
-              desc: Only cmd/* and tests import a module's wiring; see decision 26.
         realtimestore:
           list-mode: lax
           files: ["$all", "!**/internal/realtime/realtimepg/*.go", "!**/internal/realtime/internal/postgres/*.go", "!**/internal/realtime/internal/postgres/**/*.go"]
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/realtime/internal/postgres
               desc: Only realtimepg and the store's own tests import realtime's store; see decision 26.
-        orgpg:
-          list-mode: lax
-          files: ["$all", "!$test", "!**/cmd/*/*.go", "!**/cmd/*/**/*.go"]
-          deny:
-            - pkg: github.com/tkakkie/ribbitto/internal/org/orgpg
-              desc: Only cmd/* and tests import a module's wiring; see decision 26.
         orgstore:
           list-mode: lax
           files: ["$all", "!**/internal/org/orgpg/*.go", "!**/internal/org/internal/postgres/*.go", "!**/internal/org/internal/postgres/**/*.go"]
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/org/internal/postgres
               desc: Only orgpg and the store's own tests import org's store; see decision 26.
-        conversationpg:
-          list-mode: lax
-          files: ["$all", "!$test", "!**/cmd/*/*.go", "!**/cmd/*/**/*.go"]
-          deny:
-            - pkg: github.com/tkakkie/ribbitto/internal/conversation/conversationpg
-              desc: Only cmd/* and tests import a module's wiring; see decision 26.
         conversationstore:
           list-mode: lax
           files: ["$all", "!**/internal/conversation/conversationpg/*.go", "!**/internal/conversation/internal/postgres/*.go", "!**/internal/conversation/internal/postgres/**/*.go"]

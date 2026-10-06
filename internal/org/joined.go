@@ -3,7 +3,7 @@ package org
 import (
 	"encoding/json"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
@@ -13,12 +13,12 @@ const KindJoined realtime.EventKind = "member.joined"
 
 // Joined is the decoded payload of KindJoined.
 type Joined struct {
-	MemberID domain.ID
+	MemberID kernel.ID
 }
 
 // EncodeJoined returns the stored data of KindJoined for memberID's join:
 // canonical UUID text under member_id.
-func EncodeJoined(memberID domain.ID) []byte {
+func EncodeJoined(memberID kernel.ID) []byte {
 	// This payload contains only strings, so marshaling cannot fail.
 	data, _ := json.Marshal(map[string]string{"member_id": realtime.FormatPayloadID(memberID)})
 	return data
@@ -41,7 +41,7 @@ func DecodeJoined(data []byte) (Joined, error) {
 
 // RouteJoined is member.joined's realtime.Router. A join belongs to no
 // channel, so streams never deliver it; the payload is still validated.
-func RouteJoined(payload []byte) (domain.ID, []domain.ID, error) {
+func RouteJoined(payload []byte) (kernel.ID, []kernel.ID, error) {
 	_, err := DecodeJoined(payload)
-	return domain.ID{}, nil, err
+	return kernel.ID{}, nil, err
 }

@@ -45,6 +45,34 @@ func TestIsolationAndCleanup(t *testing.T) {
 	}
 }
 
+func TestMigrator(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	pool := NewEmpty(t)
+	migrator := NewMigrator(t, pool)
+	sources := migrator.provider.ListSources()
+	latest := sources[len(sources)-1].Version
+	assert := func(step string, want int64, account, setup bool) {
+		t.Helper()
+		version, err := migrator.provider.GetDBVersion(ctx)
+		require(t, err)
+		var hasAccount, hasSetup bool
+		require(t, pool.QueryRow(ctx, "SELECT to_regclass('public.account') IS NOT NULL, to_regclass('public.setup') IS NOT NULL").Scan(&hasAccount, &hasSetup))
+		if version != want || hasAccount != account || hasSetup != setup {
+			t.Fatalf("after %s: version=%d account=%t setup=%t; want version=%d account=%t setup=%t", step, version, hasAccount, hasSetup, want, account, setup)
+		}
+	}
+	migrator.UpTo(ctx, 2)
+	assert("UpTo(2)", 2, true, false)
+	migrator.Up(ctx)
+	assert("Up", latest, true, true)
+	migrator.Down(ctx)
+	assert("Down", latest-1, true, true)
+	migrator.DownTo(ctx, 2)
+	assert("DownTo(2)", 2, true, false)
+}
+
 func TestTemplateRecovery(t *testing.T) {
 	for _, interrupted := range []bool{false, true} {
 		t.Run(map[bool]string{false: "half-built", true: "interrupted publication"}[interrupted], func(t *testing.T) {

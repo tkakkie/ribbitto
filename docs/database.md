@@ -13,13 +13,9 @@ health check. Its password is for development only. `make db-down` stops
 it without deleting the named volume at `/var/lib/postgresql`.
 
 `db/migrations` holds numbered goose SQL files embedded in the binary.
-It is owned by `internal/platform/postgres`; only its packages,
-`cmd/ribbitto`, `internal/conversation/internal/postgres/topic_test.go`,
-`internal/realtime/internal/postgres/event_log_test.go`,
-`internal/org/internal/postgres/member_handle_test.go` and
-`internal/conversation/internal/postgres/default_channel_backfill_test.go`
-(until step 5)
-may import it. The runner uses goose and pgx's
+It is owned by `internal/platform/postgres`; only its packages and their
+tests may import it. Other tests that need an older schema migrate through
+`pgtest.NewMigrator`. The runner uses goose and pgx's
 `database/sql` adapter without global configuration. The first
 migration creates `organization`; goose also maintains its version table.
 
@@ -64,7 +60,9 @@ session advisory lock (`pg_advisory_lock`). Unfinished builds are removed
 before rebuilding; a transaction publishes the final name and makes the template
 unconnectable. Every call checks the template under the lock without Go
 global caching. Cleanup closes the pool before dropping the database with
-`WITH (FORCE)`. `pgtest.NewEmpty(t)` clones `template0` for migration tests.
+`WITH (FORCE)`. `pgtest.NewEmpty(t)` clones `template0` for migration tests,
+and `pgtest.NewMigrator(t, pool)` moves it to a version with `UpTo`, `Up`,
+`Down` and `DownTo`, failing the test on any error.
 The `cmd/ribbitto` acceptance tests also start from `pgtest.NewEmpty`, apply
 the platform's `Migrate` as the CLI does, and serve the shared production handler
 on HTTPS with cookie jars. They verify the account flow, request protections,

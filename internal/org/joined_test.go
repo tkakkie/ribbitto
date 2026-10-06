@@ -3,21 +3,21 @@ package org_test
 import (
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
 func TestJoinedPayload(t *testing.T) {
-	joined := domain.ID{0: 0xef, 15: 1}
+	joined := kernel.ID{0: 0xef, 15: 1}
 	data := org.EncodeJoined(joined)
 	if got, err := org.DecodeJoined(data); err != nil || got.MemberID != joined {
 		t.Fatalf("round trip = %+v, %v; want %v", got, err, joined)
 	}
-	if channel, topics, err := org.RouteJoined(data); err != nil || channel != (domain.ID{}) || topics != nil {
+	if channel, topics, err := org.RouteJoined(data); err != nil || channel != (kernel.ID{}) || topics != nil {
 		t.Fatalf("RouteJoined = %v, %v, %v; want no channel or topics", channel, topics, err)
 	}
 	// Upper-case hex is read as before; only the layout is canonical.
-	if got, err := org.DecodeJoined([]byte(`{"member_id":"00000000-0000-0000-0000-00000000000A"}`)); err != nil || got.MemberID != (domain.ID{15: 10}) {
+	if got, err := org.DecodeJoined([]byte(`{"member_id":"00000000-0000-0000-0000-00000000000A"}`)); err != nil || got.MemberID != (kernel.ID{15: 10}) {
 		t.Fatalf("upper-case member ID = %+v, %v", got, err)
 	}
 	for _, data := range []string{

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
@@ -45,24 +45,24 @@ func (s *SignUp) Open(ctx context.Context) (bool, error) {
 }
 
 // SignUp validates before hashing and commits the account and member together.
-func (s *SignUp) SignUp(ctx context.Context, displayName, handle, email, password string) (domain.ID, error) {
+func (s *SignUp) SignUp(ctx context.Context, displayName, handle, email, password string) (kernel.ID, error) {
 	open, err := s.Open(ctx)
 	if err != nil {
-		return domain.ID{}, err
+		return kernel.ID{}, err
 	}
 	if !open {
-		return domain.ID{}, ErrSignUpClosed
+		return kernel.ID{}, ErrSignUpClosed
 	}
 	fields := ValidationErrors{}
 	validateRegistration(&displayName, &handle, &email, &password, fields)
 	if len(fields) != 0 {
-		return domain.ID{}, fields
+		return kernel.ID{}, fields
 	}
 	hash, err := s.hasher.Hash(ctx, password)
 	if err != nil {
-		return domain.ID{}, fmt.Errorf("hashing sign-up password: %w", err)
+		return kernel.ID{}, fmt.Errorf("hashing sign-up password: %w", err)
 	}
-	var id domain.ID
+	var id kernel.ID
 	err = s.runner.InTx(ctx, func(tx platform.Tx) error {
 		writes := s.writes(tx)
 		organizationID, err := writes.SetupOrganization(ctx)
@@ -87,15 +87,15 @@ func (s *SignUp) SignUp(ctx context.Context, displayName, handle, email, passwor
 	mapped := registrationError(err)
 	switch {
 	case errors.Is(err, identity.ErrEmailTaken):
-		return domain.ID{}, ErrEmailTaken
+		return kernel.ID{}, ErrEmailTaken
 	case errors.Is(err, ErrHandleTaken):
-		return domain.ID{}, ErrHandleTaken
+		return kernel.ID{}, ErrHandleTaken
 	case mapped != nil:
-		return domain.ID{}, mapped
+		return kernel.ID{}, mapped
 	case errors.Is(err, ErrSignUpClosed):
-		return domain.ID{}, ErrSignUpClosed
+		return kernel.ID{}, ErrSignUpClosed
 	case err != nil:
-		return domain.ID{}, fmt.Errorf("storing sign-up transaction: %w", err)
+		return kernel.ID{}, fmt.Errorf("storing sign-up transaction: %w", err)
 	}
 	return id, nil
 }

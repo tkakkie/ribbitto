@@ -38,7 +38,6 @@ the temporary implementation behind it.
 |---|---|---|---|
 | `org`, `web`, `infra/postgres/pgtest`, `cmd/seed` and some tests (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps a copy of the fixtures in `identitytest`, `orgtest` and `conversationtest` until its callers switch in 5.5–5.9) | `platform` lifecycle helpers | 0 | 5 (5.11 deletes it) |
-| `conversation`'s topic backfill test, `realtime`'s event-log migration test (`internal/realtime/internal/postgres/event_log_test.go`), `org`'s handle upgrade test and `conversation`'s default-channel backfill test | `db/migrations` (temporary allowance) | 0 | 5 |
 
 Setup's and sign-up's database tests live in `internal/org/orgpg`,
 with local raw-SQL fixtures and event-log assertions.

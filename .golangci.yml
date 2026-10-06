@@ -21,15 +21,14 @@ linters:
       # descendants. A module's or package's own import rules exclude tests;
       # the migration, bridge and store rules also apply to tests.
       rules:
-        # Temporary (decision 26, until the migration's last step): the four
-        # target-version tests (one each in realtime and org, two in conversation)
-        # keep migrating directly until step 5.
+        # Only the platform owns migrations (decision 26); tests that need a
+        # schema version migrate through pgtest's Migrator.
         migrations:
           list-mode: lax
-          files: ["$all", "!**/internal/platform/postgres/*.go", "!**/internal/platform/postgres/**/*.go", "!**/internal/conversation/internal/postgres/default_channel_backfill_test.go", "!**/internal/realtime/internal/postgres/event_log_test.go", "!**/internal/org/internal/postgres/member_handle_test.go", "!**/internal/conversation/internal/postgres/topic_test.go", "!**/cmd/ribbitto/*.go", "!**/cmd/ribbitto/**/*.go"]
+          files: ["$all", "!**/internal/platform/postgres/*.go", "!**/internal/platform/postgres/**/*.go"]
           deny:
             - pkg: github.com/tkakkie/ribbitto/db/migrations
-              desc: Only internal/platform/postgres and cmd/ribbitto own migrations.
+              desc: Only internal/platform/postgres owns migrations; tests use its pgtest helpers.
         # Only stores unwrap the platform's Tx and Snapshot to pgx (decision 26).
         # The platform's own runner tests unwrap to prove one transaction. The
         # lint fixtures in internal/lintfixture prove both directions.
@@ -180,8 +179,6 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform/
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/realtime$
-            # Temporary: only domain's ID alias, until step 5 (modules.md).
-            - github.com/tkakkie/ribbitto/internal/domain$
           deny: *non_html
         # conversation is the completed fourth module (decisions 26 and 27).
         conversation:
@@ -244,8 +241,7 @@ linters:
             - github.com/tkakkie/ribbitto/web/static$
             - github.com/tkakkie/ribbitto/internal/web$
             - github.com/tkakkie/ribbitto/internal/web/
-            - github.com/tkakkie/ribbitto/internal/domain$
-            - github.com/tkakkie/ribbitto/internal/domain/
+            - github.com/tkakkie/ribbitto/internal/kernel$
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
             - github.com/tkakkie/ribbitto/internal/conversation$

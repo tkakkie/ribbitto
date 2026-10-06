@@ -31,8 +31,8 @@ Components render view models defined in `internal/web/view`. They do not
 receive module or use-case types: handlers convert those. View
 models own their `Organization` (`Slug`, `Name`), `Channel` (`ID`, `Name`)
 and `Topic` (`ID`, `Name`, `IsDefault`); handlers convert from `org` and the
-use cases, and views import neither `org` nor `conversation`. From `domain`
-they hold only `domain.ID`, which carries no behaviour a template could
+use cases, and views import neither `org` nor `conversation`. From `kernel`
+they hold only `kernel.ID`, which carries no behaviour a template could
 misuse. Components do no I/O and
 make no authorisation decisions; presentation logic (building URLs,
 formatting, choosing an i18n message ID) belongs in them.

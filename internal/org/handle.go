@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
 // ErrInvalidHandle wraps a handle that breaks the rules in ValidateHandle.
@@ -26,7 +26,7 @@ type MembershipResolver interface {
 // organisation's unique constraint rejects the handle, and ErrNotFound
 // when the member no longer exists.
 type HandleStore interface {
-	UpdateHandle(ctx context.Context, organizationID, memberID domain.ID, handle string) error
+	UpdateHandle(ctx context.Context, organizationID, memberID kernel.ID, handle string) error
 }
 
 // HandleChanger runs use cases on the caller's own membership.

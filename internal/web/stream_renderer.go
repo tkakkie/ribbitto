@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -32,12 +32,12 @@ type messageRenderer struct {
 // post, and a move's batch by ID. The channel page's MessageReader provides
 // both.
 type liveMessages interface {
-	One(context.Context, org.Membership, domain.ID, int64) (conversation.Entry, error)
-	Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]conversation.Entry, error)
+	One(context.Context, org.Membership, kernel.ID, int64) (conversation.Entry, error)
+	Many(context.Context, org.Membership, kernel.ID, []kernel.ID) ([]conversation.Entry, error)
 }
 
 type renderKey struct {
-	organization, channel domain.ID
+	organization, channel kernel.ID
 	seq                   int64
 	language              string
 }

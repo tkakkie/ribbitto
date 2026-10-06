@@ -11,8 +11,8 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -21,7 +21,7 @@ import (
 
 // Channels provides channels within the resolved member's organisation.
 type Channels interface {
-	Get(context.Context, org.Membership, domain.ID) (conversation.Channel, error)
+	Get(context.Context, org.Membership, kernel.ID) (conversation.Channel, error)
 	Default(context.Context, org.Membership) (conversation.Channel, error)
 	Create(context.Context, org.Membership, string) (conversation.Channel, error)
 }
@@ -29,21 +29,21 @@ type Channels interface {
 // MessageReader provides the channel page and cursor from one snapshot, and
 // one message by sequence or a bounded batch by ID for the stream.
 type MessageReader interface {
-	Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]conversation.Entry, error)
-	Page(context.Context, org.Membership, domain.ID, *domain.ID, *int64) (conversation.ChannelPage, error)
-	One(context.Context, org.Membership, domain.ID, int64) (conversation.Entry, error)
+	Many(context.Context, org.Membership, kernel.ID, []kernel.ID) ([]conversation.Entry, error)
+	Page(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64) (conversation.ChannelPage, error)
+	One(context.Context, org.Membership, kernel.ID, int64) (conversation.Entry, error)
 }
 
 // TopicLookup looks up a topic of a channel in the resolved member's
 // organisation; conversation's root owns that scope check.
 type TopicLookup interface {
-	Get(context.Context, org.Membership, domain.ID, domain.ID) (conversation.Topic, error)
+	Get(context.Context, org.Membership, kernel.ID, kernel.ID) (conversation.Topic, error)
 }
 
 type channelPages struct {
 	branching Branching
 	topics    TopicLookup
-	topicID   *domain.ID // Set only on the request-local copy in show.
+	topicID   *kernel.ID // Set only on the request-local copy in show.
 	stream    *Streaming
 	renders   *realtime.Cache[renderKey, realtime.Outgoing]
 	messages  MessageReader
@@ -101,7 +101,7 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 
 // Preserve channel lookup errors ahead of malformed paging links, without a
 // separate channel read on successfully rendered pages.
-func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID) {
+func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID) {
 	_, err := p.channels.Get(r.Context(), m, id)
 	if err == nil && p.topicID != nil {
 		_, err = p.topics.Get(r.Context(), m, id, *p.topicID)
@@ -145,7 +145,7 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message})
 }
 
-func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID, status int, page view.ChannelPage) {
+func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage) {
 	var before *int64
 	if page.Before > 0 {
 		before = &page.Before
@@ -172,7 +172,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	})
 }
 
-func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID) {
+func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID) {
 	c, err := p.channels.Get(r.Context(), m, id)
 	if errors.Is(err, conversation.ErrChannelNotFound) {
 		http.NotFound(w, r)
@@ -215,12 +215,12 @@ func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m o
 
 // channelID parses the {channelID} path segment: the UUID in its canonical
 // form, the only one ChannelURL produces.
-func channelID(r *http.Request) (domain.ID, bool) {
+func channelID(r *http.Request) (kernel.ID, bool) {
 	return pathID(r.PathValue("channelID"))
 }
 
-func pathID(raw string) (domain.ID, bool) {
-	var id domain.ID
+func pathID(raw string) (kernel.ID, bool) {
+	var id kernel.ID
 	if len(raw) != 36 || raw[8] != '-' || raw[13] != '-' || raw[18] != '-' || raw[23] != '-' {
 		return id, false
 	}

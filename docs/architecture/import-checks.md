@@ -29,11 +29,9 @@ fails `make check`:
   `make lint-fixtures` (part of `make check`) proves a module root is
   rejected and a store accepted;
 - `db/migrations` may be imported only by `internal/platform/postgres` and
-  `cmd/ribbitto` — **this also applies to test files**, apart from the
-  topic backfill test in `internal/conversation/internal/postgres/topic_test.go`,
-  `internal/realtime/internal/postgres/event_log_test.go`,
-  `internal/org/internal/postgres/member_handle_test.go` and
-  conversation's `default_channel_backfill_test.go`, until step 5;
+  its packages, their tests included — **the rule also applies to test
+  files**, so every other test migrates to a version through
+  `pgtest.NewMigrator`;
 - otherwise test files may import any package, but the store and bridge
   rules above bind them too (only the platform's `tx_test.go` is exempt from
   the bridge rule).

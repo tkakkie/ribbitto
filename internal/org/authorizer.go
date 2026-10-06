@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
@@ -26,10 +26,10 @@ type Membership struct {
 type MembershipStore interface {
 	// Membership returns the account's membership in the organisation with
 	// this slug, or ErrNotFound.
-	Membership(ctx context.Context, accountID domain.ID, slug string) (Membership, error)
+	Membership(ctx context.Context, accountID kernel.ID, slug string) (Membership, error)
 	// HomeSlug returns the slug of the organisation created at setup if the
 	// account is its member, or ErrNotFound.
-	HomeSlug(ctx context.Context, accountID domain.ID) (string, error)
+	HomeSlug(ctx context.Context, accountID kernel.ID) (string, error)
 }
 
 // Authorizer resolves the caller's membership.
@@ -79,7 +79,7 @@ func (a *Authorizer) HomeSlug(ctx context.Context, account *identity.Account) (s
 // another organisation, or an audience that names another member is a deny
 // (false, nil). A failed lookup is an error, never a deny: the stream must
 // stop and retry, not skip an event the member may be allowed to see.
-func (a *Authorizer) MayReceive(ctx context.Context, accountID domain.ID, organizationSlug string, event realtime.Event) (bool, error) {
+func (a *Authorizer) MayReceive(ctx context.Context, accountID kernel.ID, organizationSlug string, event realtime.Event) (bool, error) {
 	m, err := a.Member(ctx, &identity.Account{ID: accountID}, organizationSlug)
 	if errors.Is(err, ErrNotFound) {
 		return false, nil

@@ -9,9 +9,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
-	"github.com/tkakkie/ribbitto/db/migrations"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -214,12 +211,8 @@ func TestTopicBackfill(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	pool := pgtest.NewEmpty(t)
-	db := stdlib.OpenDBFromPool(pool)
-	t.Cleanup(func() { requireNoError(t, db.Close()) })
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
-	requireNoError(t, err)
-	_, err = provider.UpTo(ctx, 8)
-	requireNoError(t, err)
+	migrator := pgtest.NewMigrator(t, pool)
+	migrator.UpTo(ctx, 8)
 	// Raw SQL writes what the binary of migration 8 wrote.
 	for _, slug := range []string{"acme", "globex"} {
 		orgID := fixtureOrganization(t, pool, slug)
@@ -231,8 +224,7 @@ func TestTopicBackfill(t *testing.T) {
 			FROM c, generate_series(1, 3) n WHERE c.name <> 'empty'`, orgID, member)
 		requireNoError(t, err)
 	}
-	_, err = provider.UpTo(ctx, 9)
-	requireNoError(t, err)
+	migrator.UpTo(ctx, 9)
 	var channels, topicsFound, wrong, messages, misplaced int
 	requireNoError(t, pool.QueryRow(ctx, `SELECT
 		(SELECT count(*) FROM channel),
@@ -246,17 +238,15 @@ func TestTopicBackfill(t *testing.T) {
 	}
 	// Down keeps named topics and removes only the defaults; up again
 	// leaves the same shape, without a second default.
-	_, err = pool.Exec(ctx, "INSERT INTO topic (organization_id, channel_id, name) SELECT organization_id, id, 'design' FROM channel WHERE name = 'general'")
+	_, err := pool.Exec(ctx, "INSERT INTO topic (organization_id, channel_id, name) SELECT organization_id, id, 'design' FROM channel WHERE name = 'general'")
 	requireNoError(t, err)
-	_, err = provider.Down(ctx)
-	requireNoError(t, err)
+	migrator.Down(ctx)
 	var named, defaults int
 	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FILTER (WHERE name = 'design'), count(*) FILTER (WHERE is_default) FROM topic").Scan(&named, &defaults))
 	if named != 2 || defaults != 0 {
 		t.Fatalf("after down: %d named topics, %d defaults; want 2 and 0", named, defaults)
 	}
-	_, err = provider.UpTo(ctx, 9)
-	requireNoError(t, err)
+	migrator.UpTo(ctx, 9)
 	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FILTER (WHERE name = 'design'), count(*) FILTER (WHERE is_default) FROM topic").Scan(&named, &defaults))
 	if named != 2 || defaults != 6 {
 		t.Fatalf("after down and up: %d named topics, %d defaults; want 2 and 6", named, defaults)

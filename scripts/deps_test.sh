@@ -48,12 +48,12 @@ if deps --diff refs/heads/unknown-deps-test-revision >/dev/null 2>&1; then
 fi
 echo "PASS unchanged graph, header-only change and unknown revision"
 
-# A new edge: a package that does not import internal/domain yet does.
+# A new edge: a package that does not import internal/kernel yet does.
 source=internal/web/i18n
-edge="$source -> internal/domain"
+edge="$source -> internal/kernel"
 grep -qxF "$edge" "$graph" && fail "test setup: $edge already exists"
 name=$(cd "$copy" && go list -f '{{.Name}}' "./$source")
-printf 'package %s\n\nimport _ "%s/internal/domain"\n' "$name" "$module" >"$copy/$source/zz_new_edge.go"
+printf 'package %s\n\nimport _ "%s/internal/kernel"\n' "$name" "$module" >"$copy/$source/zz_new_edge.go"
 if deps --check >/dev/null 2>&1; then
   fail "--check passed with a new edge not in the graph"
 fi
@@ -96,7 +96,7 @@ cat > "$work/expected.md" <<'EXPECTED'
 ### Crossing units
 
 - Added: `cmd/ribbitto -> cmd/seed`
-- Added: `internal/web/i18n -> internal/domain`
+- Added: `internal/web/i18n -> internal/kernel`
 - Added: `internal/web/i18n -> web/static`
 - Removed: `cmd/ribbitto -> internal/web`
 

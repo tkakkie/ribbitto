@@ -54,14 +54,13 @@ Modules ([`modules.md`](docs/architecture/modules.md), from decision 26):
 - Others import only a module's root (`internal/identity`, `internal/realtime`,
   `internal/org`, `internal/conversation`); its
   store only its wiring (`<module>pg`) and own tests; the wiring only
-  `cmd/*` and tests.
-- Until step 5, only `domain` (the `ID` alias; → `kernel`) and
-  `infra/postgres/pgtest` (shared test fixtures) remain outside the modules.
-  `web` imports module roots and `domain`, never `infra`. Authorization is
-  `org`'s root.
+  `cmd/*` and tests. Exception: a module's fixture package (`<module>test`,
+  decision 29) is imported only by `_test.go` files and by the fixture
+  packages above it (`conversationtest` → `orgtest` → `identitytest`);
+  production code never imports one.
+- `web` imports module roots and `kernel`. Authorization is `org`'s root.
 - Use cases return plain structs; only `internal/web` produces HTML.
-- Only `platform/postgres`, `cmd/ribbitto` and four target-version tests
-  import `db/migrations`.
+- Only `platform/postgres` imports `db/migrations`.
 
 Features ([map](docs/architecture/features.md)):
 

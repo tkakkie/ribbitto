@@ -7,19 +7,12 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
-
-func fixtureOrganization(t *testing.T, pool *pgxpool.Pool, slug string) kernel.ID {
-	t.Helper()
-	var id kernel.ID
-	requireNoError(t, pool.QueryRow(t.Context(), "INSERT INTO organization (slug, name) VALUES ($1, $1) RETURNING id", slug).Scan(&id))
-	return id
-}
 
 func requireNoError(t *testing.T, err error) {
 	t.Helper()
@@ -32,8 +25,8 @@ func TestChannelStore(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	acme := fixtureOrganization(t, pool, "acme")
-	other := fixtureOrganization(t, pool, "other")
+	acme := orgtest.Organization(t, pool, "acme", "acme", 0)
+	other := orgtest.Organization(t, pool, "other", "other", 0)
 	store := postgres.NewChannelStore(pool)
 	// A default under another name proves the lookup uses the flag.
 	defaultChannel, err := store.CreateDefaultChannelForTest(ctx, acme, "Welcome")
@@ -73,7 +66,7 @@ func TestChannelStore(t *testing.T) {
 	if !reflect.DeepEqual(list, []conversation.Channel{defaultChannel, channel}) {
 		t.Fatalf("list = %+v; want only acme's channels, ordered by name", list)
 	}
-	empty := fixtureOrganization(t, pool, "empty")
+	empty := orgtest.Organization(t, pool, "empty", "empty", 0)
 	list, err = store.ListChannels(ctx, empty)
 	requireNoError(t, err)
 	if len(list) != 0 {
@@ -99,7 +92,7 @@ func TestChannelStoreCreateErrors(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	organizationID := fixtureOrganization(t, pool, "acme")
+	organizationID := orgtest.Organization(t, pool, "acme", "acme", 0)
 	store := postgres.NewChannelStore(pool)
 	_, err := store.CreateDefaultChannelForTest(ctx, organizationID, "taken")
 	requireNoError(t, err)

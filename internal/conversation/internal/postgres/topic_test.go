@@ -10,9 +10,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
@@ -24,9 +27,9 @@ func TestTopicSchema(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	store := postgres.NewWriterForTest(pool)
-	acme := fixtureOrganizationWithOwner(t, pool, "acme", "general")
-	globex := fixtureOrganizationWithOwner(t, pool, "globex", "general")
-	random := fixtureChannel(t, pool, acme.OrganizationID, "random", false)
+	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+	globex := conversationtest.OrganizationWithOwner(t, pool, "globex", "general")
+	random := conversationtest.Channel(t, pool, acme.OrganizationID, "random", false)
 	general := acme.Channel.ID
 
 	// Every channel is created with its default topic (#307).
@@ -96,9 +99,9 @@ func TestTopicStoreScope(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	store, reader := postgres.NewWriterForTest(pool), postgres.NewReadStoreForTest(pool)
-	acme := fixtureOrganizationWithOwner(t, pool, "acme", "general")
-	globex := fixtureOrganizationWithOwner(t, pool, "globex", "general")
-	random := fixtureChannel(t, pool, acme.OrganizationID, "random", false)
+	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+	globex := conversationtest.OrganizationWithOwner(t, pool, "globex", "general")
+	random := conversationtest.Channel(t, pool, acme.OrganizationID, "random", false)
 
 	def, err := store.GetDefaultTopic(ctx, acme.OrganizationID, acme.Channel.ID)
 	requireNoError(t, err)
@@ -162,11 +165,11 @@ func TestTopicReferences(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	topics := postgres.NewWriterForTest(pool)
-	acme := fixtureOrganizationWithOwner(t, pool, "acme", "general")
-	random := fixtureChannel(t, pool, acme.OrganizationID, "random", false)
+	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+	random := conversationtest.Channel(t, pool, acme.OrganizationID, "random", false)
 
 	// Creating a channel creates its default topic.
-	for _, c := range []conversation.Channel{acme.Channel, random} {
+	for _, c := range []conversation.Channel{conversation.Channel(acme.Channel), conversation.Channel(random)} {
 		got, err := topics.GetDefaultTopic(ctx, acme.OrganizationID, c.ID)
 		if err != nil || got.ID != c.DefaultTopicID || !got.IsDefault || got.ChannelID != c.ID {
 			t.Fatalf("default topic of %s: %+v, %v", c.Name, got, err)
@@ -213,10 +216,10 @@ func TestTopicBackfill(t *testing.T) {
 	pool := pgtest.NewEmpty(t)
 	migrator := pgtest.NewMigrator(t, pool)
 	migrator.UpTo(ctx, 8)
-	// Raw SQL writes what the binary of migration 8 wrote.
 	for _, slug := range []string{"acme", "globex"} {
-		orgID := fixtureOrganization(t, pool, slug)
-		member := fixtureMember(t, pool, orgID, fixtureAccount(t, pool, slug+"@example.org", slug), org.RoleOwner, "owner", 1)
+		orgID := orgtest.Organization(t, pool, slug, slug, 0)
+		member := orgtest.Member(t, pool, orgID, identitytest.Account(t, pool, slug+"@example.org", slug), org.RoleOwner, "owner", 1)
+		// Raw SQL writes what the binary of migration 8 wrote.
 		_, err := pool.Exec(ctx, `
 			WITH c AS (INSERT INTO channel (organization_id, name, is_default) VALUES ($1, 'general', true), ($1, 'random', false), ($1, 'empty', false) RETURNING id, name)
 			INSERT INTO message (organization_id, channel_id, member_id, body, event_seq)

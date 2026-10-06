@@ -10,8 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
@@ -26,13 +28,13 @@ func TestChannelMessageSchema(t *testing.T) {
 	if nullable != 0 {
 		t.Fatalf("new tables have %d nullable columns", nullable)
 	}
-	account := fixtureAccount(t, pool, "a@b", "Author")
+	account := identitytest.Account(t, pool, "a@b", "Author")
 	var orgs []kernel.ID
 	var members []kernel.ID
 	var defaults []conversation.Channel
 	for _, slug := range []string{"team", "other"} {
-		organizationID := fixtureOrganization(t, pool, slug)
-		member := fixtureMember(t, pool, organizationID, account, org.RoleMember, "member", 1)
+		organizationID := orgtest.Organization(t, pool, slug, slug, 0)
+		member := orgtest.Member(t, pool, organizationID, account, org.RoleMember, "member", 1)
 		channel, err := channels.CreateDefaultChannelForTest(ctx, organizationID, "雑談")
 		requireNoError(t, err)
 		orgs, members, defaults = append(orgs, organizationID), append(members, member), append(defaults, channel)

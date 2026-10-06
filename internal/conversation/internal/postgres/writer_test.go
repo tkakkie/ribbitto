@@ -9,8 +9,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
@@ -37,13 +40,15 @@ type fixtures struct {
 
 func newFixtures(t *testing.T, pool *pgxpool.Pool) (f fixtures) {
 	t.Helper()
-	f.acme, f.globex = fixtureOrganization(t, pool, "acme"), fixtureOrganization(t, pool, "globex")
-	member := `WITH account AS (INSERT INTO account (email, display_name, password_hash) VALUES ($2::text || '@example.org', $2, '$argon2id$x') RETURNING id)
-		INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) SELECT $1, id, 'member', 1, $2 FROM account RETURNING id`
-	fixture(t, pool, member, []any{f.acme, "alice"}, &f.alice)
-	fixture(t, pool, member, []any{f.globex, "bob"}, &f.bob)
-	fixture(t, pool, channelSQL, []any{f.acme, "general"}, &f.general, &f.generalTopic)
-	fixture(t, pool, channelSQL, []any{f.globex, "general"}, &f.foreign, &f.foreignTopic)
+	f.acme, f.globex = orgtest.Organization(t, pool, "acme", "acme", 0), orgtest.Organization(t, pool, "globex", "globex", 0)
+	alice := identitytest.Account(t, pool, "alice@example.org", "alice")
+	bob := identitytest.Account(t, pool, "bob@example.org", "bob")
+	f.alice = orgtest.Member(t, pool, f.acme, alice, org.RoleMember, "alice", 1)
+	f.bob = orgtest.Member(t, pool, f.globex, bob, org.RoleMember, "bob", 1)
+	general := conversationtest.Channel(t, pool, f.acme, "general", false)
+	foreign := conversationtest.Channel(t, pool, f.globex, "general", false)
+	f.general, f.generalTopic = general.ID, general.DefaultTopicID
+	f.foreign, f.foreignTopic = foreign.ID, foreign.DefaultTopicID
 	return f
 }
 
@@ -235,9 +240,10 @@ func TestWriterMoveMessages(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx, f := t.Context(), newFixtures(t, pool)
-	var planning, random, randomTopic kernel.ID
+	var planning kernel.ID
 	fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name, is_default) VALUES ($1, $2, 'Planning', false) RETURNING id", []any{f.acme, f.general}, &planning)
-	fixture(t, pool, channelSQL, []any{f.acme, "random"}, &random, &randomTopic)
+	randomChannel := conversationtest.Channel(t, pool, f.acme, "random", false)
+	random, randomTopic := randomChannel.ID, randomChannel.DefaultTopicID
 	before, want := map[kernel.ID]kernel.ID{}, map[kernel.ID]kernel.ID{}
 	selected := []kernel.ID{{0xee}} // unknown
 	for i, m := range []struct{ organization, channel, topic, member, after kernel.ID }{

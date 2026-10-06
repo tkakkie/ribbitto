@@ -7,9 +7,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
@@ -34,8 +36,8 @@ func TestRegistrationWriterIn(t *testing.T) {
 	ctx := t.Context()
 	// first is created before acme, so the setup organisation can only be
 	// acme if it comes from the setup row.
-	first := fixtureOrganization(t, pool, "first", "First", 5)
-	account := fixtureAccount(t, pool, "owner@example.org", "Owner")
+	first := orgtest.Organization(t, pool, "first", "First", 5)
+	account := identitytest.Account(t, pool, "owner@example.org", "Owner")
 	before := counts(t, pool)
 	rollback := errors.New("caller rolls back")
 	err := orgpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error {
@@ -80,9 +82,9 @@ func TestRegistrationWriterErrors(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	taken := fixtureOrganization(t, pool, "taken", "Taken", 1)
-	fixtureMember(t, pool, taken, fixtureAccount(t, pool, "alice@example.org", "Alice"), org.RoleMember, "alice", 1)
-	bob := fixtureAccount(t, pool, "bob@example.org", "Bob")
+	taken := orgtest.Organization(t, pool, "taken", "Taken", 1)
+	orgtest.Member(t, pool, taken, identitytest.Account(t, pool, "alice@example.org", "Alice"), org.RoleMember, "alice", 1)
+	bob := identitytest.Account(t, pool, "bob@example.org", "Bob")
 	createMember := func(role org.Role, handle string) func(org.RegistrationWriter) error {
 		return func(w org.RegistrationWriter) error {
 			_, err := w.CreateMember(ctx, taken, bob, role, 2, handle)
@@ -128,7 +130,7 @@ func TestRegistrationWriterErrors(t *testing.T) {
 	}
 	// A second completed setup: the first one is committed.
 	requireNoError(t, orgpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error { return registrationIn(tx).CompleteSetup(ctx, taken) }))
-	other := fixtureOrganization(t, pool, "other", "Other", 0)
+	other := orgtest.Organization(t, pool, "other", "Other", 0)
 	err := orgpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error { return registrationIn(tx).CompleteSetup(ctx, other) })
 	var named kernel.ID
 	requireNoError(t, pool.QueryRow(ctx, "SELECT organization_id FROM setup").Scan(&named))

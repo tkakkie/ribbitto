@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
@@ -17,20 +17,12 @@ func requireNoError(t *testing.T, err error) {
 	}
 }
 
-// organization inserts an organisation whose committed event_seq is seq.
-func organization(t *testing.T, pool *pgxpool.Pool, slug string, seq int64) kernel.ID {
-	t.Helper()
-	var id kernel.ID
-	requireNoError(t, pool.QueryRow(t.Context(), "INSERT INTO organization (slug, name, event_seq) VALUES ($1, $1, $2) RETURNING id", slug, seq).Scan(&id))
-	return id
-}
-
 func TestCommittedSequences(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	f := organization(t, pool, "watermark", 7)
-	other := organization(t, pool, "watermark-other", 3)
+	f := orgtest.Organization(t, pool, "watermark", "watermark", 7)
+	other := orgtest.Organization(t, pool, "watermark-other", "watermark-other", 3)
 	reader := postgres.NewSequences(pool)
 	unknown := kernel.ID{0xee}
 	got, err := reader.CommittedSequences(ctx, []kernel.ID{f, other, unknown})

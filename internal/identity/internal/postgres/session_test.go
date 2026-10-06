@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
@@ -19,7 +20,7 @@ func TestSessionStore(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	id := account(t, pool, "a@example.com", "A")
+	id := identitytest.Account(t, pool, "a@example.com", "A")
 	// Start from the database clock: created_at comes from now() in SQL, and
 	// the table requires expires_at > created_at.
 	var now time.Time
@@ -145,7 +146,7 @@ func TestSessionStoreReportsEndedSessions(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	store := postgres.NewSessionStore(pool)
-	id := account(t, pool, "ended@example.com", "Ended")
+	id := identitytest.Account(t, pool, "ended@example.com", "Ended")
 	expires := time.Now().Add(time.Hour)
 	sessionID := func(hash []byte) (got kernel.ID) {
 		requireNoError(t, pool.QueryRow(ctx, "SELECT id FROM session WHERE token_hash = $1", hash).Scan(&got))

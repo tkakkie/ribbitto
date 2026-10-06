@@ -1,4 +1,4 @@
-package postgres_test
+package orgpg_test
 
 import "testing"
 

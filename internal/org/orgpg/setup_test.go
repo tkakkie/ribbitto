@@ -11,9 +11,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
@@ -199,9 +201,9 @@ func TestSetupOpenConflict(t *testing.T) {
 			ctx := t.Context()
 			input := org.SetupInput{OrganizationName: "Example", Slug: "example", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"}
 			if field == "slug" {
-				fixtureOrganization(t, pool, input.Slug, "Existing", 0)
+				orgtest.Organization(t, pool, input.Slug, "Existing", 0)
 			} else {
-				fixtureAccount(t, pool, input.Email, "Existing")
+				identitytest.Account(t, pool, input.Email, "Existing")
 			}
 			s := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel)
 			open, err := s.Open(ctx)

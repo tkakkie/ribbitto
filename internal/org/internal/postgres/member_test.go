@@ -9,19 +9,21 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 func TestUpdateHandleConstraints(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
-	organizationID := fixtureOrganization(t, pool, "acme", "Acme", 1)
-	accountID := fixtureAccount(t, pool, "alice@example.org", "Alice")
-	memberID := fixtureMember(t, pool, organizationID, accountID, org.RoleMember, "alice", 1)
+	organizationID := orgtest.Organization(t, pool, "acme", "Acme", 1)
+	accountID := identitytest.Account(t, pool, "alice@example.org", "Alice")
+	memberID := orgtest.Member(t, pool, organizationID, accountID, org.RoleMember, "alice", 1)
 	store := postgres.NewMemberStore(pool)
 	for _, tc := range []struct {
 		handle, constraint string
@@ -44,16 +46,16 @@ func TestChangeHandle(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	// acme: alice, bob and six racers; globex: carol; dave has no membership.
-	acmeID := fixtureOrganization(t, pool, "acme", "Acme", 0)
-	globexID := fixtureOrganization(t, pool, "globex", "Globex", 0)
+	acmeID := orgtest.Organization(t, pool, "acme", "Acme", 0)
+	globexID := orgtest.Organization(t, pool, "globex", "Globex", 0)
 	for _, name := range []string{"alice", "bob", "carol", "dave", "racer1", "racer2", "racer3", "racer4", "racer5", "racer6"} {
-		account := fixtureAccount(t, pool, name+"@example.org", name)
+		account := identitytest.Account(t, pool, name+"@example.org", name)
 		orgID := acmeID
 		if name == "carol" {
 			orgID = globexID
 		}
 		if name != "dave" {
-			fixtureMember(t, pool, orgID, account, org.RoleMember, name, 1)
+			orgtest.Member(t, pool, orgID, account, org.RoleMember, name, 1)
 		}
 	}
 	accounts := map[string]*identity.Account{}

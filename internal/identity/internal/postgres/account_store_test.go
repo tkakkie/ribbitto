@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
@@ -13,7 +14,7 @@ func TestAccountStore(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	id := account(t, pool, "a@example.com", "A")
+	id := identitytest.Account(t, pool, "a@example.com", "A")
 	store := postgres.NewAccountStore(pool)
 	accountID, hash, err := store.AccountCredentials(ctx, "a@example.com")
 	if err != nil || accountID != id || hash != "$argon2id$x" {

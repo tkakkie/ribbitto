@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -85,44 +85,44 @@ func (s *setupTransaction) Open(context.Context) (bool, error) {
 func (s *setupTransaction) InTx(_ context.Context, fn func(platform.Tx) error) error {
 	return fn(platform.Tx{})
 }
-func (s *setupTransaction) CreateOrganization(_ context.Context, name, slug string) (domain.ID, error) {
+func (s *setupTransaction) CreateOrganization(_ context.Context, name, slug string) (kernel.ID, error) {
 	if name != "Example" || slug != "example" {
 		s.t.Fatal("bad normalized organization")
 	}
-	return domain.ID{1}, s.step("organization")
+	return kernel.ID{1}, s.step("organization")
 }
-func (s *setupTransaction) NextEventSeq(_ context.Context, organizationID domain.ID) (int64, error) {
-	if organizationID != (domain.ID{1}) {
+func (s *setupTransaction) NextEventSeq(_ context.Context, organizationID kernel.ID) (int64, error) {
+	if organizationID != (kernel.ID{1}) {
 		s.t.Fatal("wrong organization")
 	}
 	return 3, s.step("sequence")
 }
-func (s *setupTransaction) CreateAccount(_ context.Context, email, name, hash string) (domain.ID, error) {
+func (s *setupTransaction) CreateAccount(_ context.Context, email, name, hash string) (kernel.ID, error) {
 	if email != "owner@example.org" || name != "Owner" || !strings.HasPrefix(hash, "$argon2id$") {
 		s.t.Fatal("bad normalized account or hash")
 	}
-	return domain.ID{2}, s.step("account")
+	return kernel.ID{2}, s.step("account")
 }
-func (s *setupTransaction) CreateMember(_ context.Context, organizationID, accountID domain.ID, role org.Role, seq int64, handle string) (domain.ID, error) {
-	if organizationID != (domain.ID{1}) || accountID != (domain.ID{2}) || role != org.RoleOwner || seq != 3 || handle != "owner" {
+func (s *setupTransaction) CreateMember(_ context.Context, organizationID, accountID kernel.ID, role org.Role, seq int64, handle string) (kernel.ID, error) {
+	if organizationID != (kernel.ID{1}) || accountID != (kernel.ID{2}) || role != org.RoleOwner || seq != 3 || handle != "owner" {
 		s.t.Fatal("bad owner member")
 	}
-	return domain.ID{4}, s.step("member")
+	return kernel.ID{4}, s.step("member")
 }
-func (s *setupTransaction) Append(_ context.Context, organizationID domain.ID, seq int64, kind realtime.EventKind, audience *domain.ID, payload []byte) error {
-	if organizationID != (domain.ID{1}) || seq != 3 || kind != org.KindJoined || audience != nil || string(payload) != string(org.EncodeJoined(domain.ID{4})) {
+func (s *setupTransaction) Append(_ context.Context, organizationID kernel.ID, seq int64, kind realtime.EventKind, audience *kernel.ID, payload []byte) error {
+	if organizationID != (kernel.ID{1}) || seq != 3 || kind != org.KindJoined || audience != nil || string(payload) != string(org.EncodeJoined(kernel.ID{4})) {
 		s.t.Fatal("bad joined event")
 	}
 	return s.step("event")
 }
-func (s *setupTransaction) CreateDefaultChannel(_ context.Context, organizationID domain.ID) error {
-	if organizationID != (domain.ID{1}) {
+func (s *setupTransaction) CreateDefaultChannel(_ context.Context, organizationID kernel.ID) error {
+	if organizationID != (kernel.ID{1}) {
 		s.t.Fatal("wrong default-channel organization")
 	}
 	return s.step("channel")
 }
-func (s *setupTransaction) CompleteSetup(_ context.Context, organizationID domain.ID) error {
-	if organizationID != (domain.ID{1}) {
+func (s *setupTransaction) CompleteSetup(_ context.Context, organizationID kernel.ID) error {
+	if organizationID != (kernel.ID{1}) {
 		s.t.Fatal("wrong setup organization")
 	}
 	return s.step("setup")
@@ -201,7 +201,7 @@ func TestSetupCompleteTransaction(t *testing.T) {
 						t.Fatalf("unexpected wrapping: %v", err)
 					}
 				}
-				if err == nil && result != (org.SetupResult{OrganizationID: domain.ID{1}, AccountID: domain.ID{2}}) || err != nil && result != (org.SetupResult{}) {
+				if err == nil && result != (org.SetupResult{OrganizationID: kernel.ID{1}, AccountID: kernel.ID{2}}) || err != nil && result != (org.SetupResult{}) {
 					t.Fatalf("bad result: %+v (%v)", result, err)
 				}
 			})

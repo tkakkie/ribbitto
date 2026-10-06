@@ -7,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
@@ -25,7 +25,7 @@ type SetupInput struct {
 
 // SetupResult identifies the organization and account created by setup.
 type SetupResult struct {
-	OrganizationID, AccountID domain.ID
+	OrganizationID, AccountID kernel.ID
 }
 
 // Setup controls first-run setup. Share the process's password hasher.

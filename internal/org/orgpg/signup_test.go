@@ -12,6 +12,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -73,7 +74,7 @@ func TestSignUp(t *testing.T) {
 		{"here", "alice2@example.org", nil, "handle", false},
 		{"alice2", "alice2@example.org", appendFailure, "", true},
 	} {
-		createAccounts, writes, events := org.AccountCreatorIn(signupAccount), org.RegistrationWriterIn(orgpg.RegistrationWriterIn), org.EventAppenderIn(signupEvents)
+		createAccounts, writes, events := org.AccountCreatorIn(signupAccount), org.RegistrationWriterIn(registrationIn), org.EventAppenderIn(signupEvents)
 		handle, email := tc.handle, tc.email
 		// Substitute after validation so the real CHECKs reject the raw values.
 		if tc.field == "email" {
@@ -83,13 +84,13 @@ func TestSignUp(t *testing.T) {
 		if tc.field == "handle" {
 			handle = "alice2"
 			writes = func(tx platform.Tx) org.RegistrationWriter {
-				return rawSignupMember{orgpg.RegistrationWriterIn(tx), tc.handle}
+				return rawSignupMember{postgres.RegistrationWriterIn(tx), tc.handle}
 			}
 		}
 		if tc.failAppend {
 			events = func(platform.Tx) org.EventAppender { return failingSignupAppender{appendFailure} }
 		}
-		attempt := org.NewSignUp(orgpg.NewSetupState(pool), orgpg.NewTxRunner(pool), writes, createAccounts, events, hasher, true)
+		attempt := org.NewSignUp(postgres.NewSetupState(pool), orgpg.NewTxRunnerForTest(pool), writes, createAccounts, events, hasher, true)
 		_, err := attempt.SignUp(ctx, "Alice", handle, email, "long enough password")
 		var fields org.ValidationErrors
 		if tc.want != nil && !errors.Is(err, tc.want) || tc.field != "" && (!errors.As(err, &fields) || fields[tc.field] == nil) {
@@ -143,6 +144,8 @@ func TestSignUpHandleConflicts(t *testing.T) {
 		t.Fatalf("winners=%d accounts=%d racer members=%d event_seq=%d", winners, accounts, members, seq)
 	}
 }
+
+func registrationIn(tx platform.Tx) org.RegistrationWriter { return postgres.RegistrationWriterIn(tx) }
 
 func signupAccount(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
 func signupEvents(tx platform.Tx) org.EventAppender   { return realtimepg.AppenderIn(tx) }

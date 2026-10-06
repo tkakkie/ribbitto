@@ -10,8 +10,8 @@
 // to the pool, and DefaultChannelCreatorIn binds setup's default channel to
 // org's transaction. Writer holds posting's and branching's writes and maps
 // their constraints to conversation's and org's errors, except the branch
-// notice's; conversationpg.WriterIn binds it to their transaction. ReadStore
+// notice's; WriterIn binds it to their transaction. ReadStore
 // holds the page snapshot's channel, topic and message reads and no write,
 // delegating the channel lookups and embedding the read-only TopicStore for
-// the topic by ID; conversationpg.ReadStoreIn binds it to Reader's snapshot.
+// the topic by ID; ReadStoreIn binds it to Reader's snapshot.
 package postgres

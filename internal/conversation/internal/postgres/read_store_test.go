@@ -7,15 +7,15 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
-var readStoreIn conversation.ReadStoreIn = conversationpg.ReadStoreIn
+var readStoreIn conversation.ReadStoreIn = func(snapshot platform.Snapshot) conversation.ReadStore { return postgres.ReadStoreIn(snapshot) }
 
 // messageIDs lists a read's message IDs in order; never nil, so an empty
 // read compares equal to an empty want.
@@ -51,7 +51,7 @@ func TestReadStoreIn(t *testing.T) {
 	}
 	before := func(seq int64) *int64 { return &seq }
 	stop := errors.New("fn failed")
-	err := conversationpg.NewSnapshotRunner(pool).InSnapshot(ctx, func(snapshot platform.Snapshot) error {
+	err := platform.InSnapshot(ctx, pool, func(snapshot platform.Snapshot) error {
 		var isolation, readOnly string
 		requireNoError(t, pgxbridge.Snapshot(snapshot).QueryRow(ctx, "SELECT current_setting('transaction_isolation'), current_setting('transaction_read_only')").Scan(&isolation, &readOnly))
 		if isolation != "repeatable read" || readOnly != "on" {
@@ -142,7 +142,7 @@ func TestReadStoreChannelsAndTopics(t *testing.T) {
 	}{{"beta", &beta}, {"Gamma", &gamma}, {"Alpha", &alphaNamed}} {
 		fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, $3) RETURNING id", []any{f.acme, f.general, topic.name}, topic.id)
 	}
-	err := conversationpg.NewSnapshotRunner(pool).InSnapshot(ctx, func(snapshot platform.Snapshot) error {
+	err := platform.InSnapshot(ctx, pool, func(snapshot platform.Snapshot) error {
 		store := readStoreIn(snapshot)
 		ids := func(read string, got []kernel.ID, err error, want ...kernel.ID) {
 			t.Helper()

@@ -54,11 +54,12 @@ Setup and sign-up do not raise the hub;
 the watermark covers it. `realtime.Event` is an envelope: organisation,
 sequence, kind, audience, channel, routing `Topics` and the stored `Payload`,
 which consumers decode through the publisher's codec; kinds are an open list.
-Wiring registers each publisher's `Router` in `realtime.Kinds`, which gives
+Each publisher registers its `Router` in `realtime.Kinds`, which gives
 the channel and routing topics. `orgpg.EventKinds()` provides `org.RouteJoined`
 and `conversationpg.EventKinds()` provides `conversation.RoutePosted` and
-`conversation.RouteMoved`; `cmd/ribbitto` and the tests combine both sets for
-the reader.
+`conversation.RouteMoved`; wiring in `cmd/ribbitto` and the tests merges both
+registries through `realtime.MergeKinds`, which rejects a duplicate kind
+instead of replacing its router. A duplicate fails start-up with the kind named.
 `realtimepg.NewReader(pool, bounds, kinds)` provides
 `EventsAfter(ctx, organizationID, after, limit) ([]realtime.Event, error)`:
 organisation-scoped rows with `seq > after`, in sequence order, at most `limit`.

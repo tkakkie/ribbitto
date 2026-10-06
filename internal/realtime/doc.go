@@ -5,9 +5,9 @@
 // Module: realtime (feature map in docs/architecture/features.md). It
 // declares the durable event types (Event, an envelope it routes without
 // kind names; EventKind, whose values each publisher declares;
-// ErrCursorExpired) and
-// the kind registry (Kinds of each publisher's Router), and
-// imports only kernel (ID) and platform (the transaction handles). Its store
+// ErrCursorExpired) and the kind registry (Kinds of each publisher's Router,
+// merged by MergeKinds), and imports only kernel (ID) and platform (the
+// transaction handles). Its store
 // (internal/realtime/internal/postgres) reads, appends and expires the event
 // log, and its wiring (internal/realtime/realtimepg) builds it. The
 // stream's authorization and rendering, and org's cursor bounds, come in as

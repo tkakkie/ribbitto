@@ -66,16 +66,27 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 	}
 	if setupToken != "" {
 		s.Setup, s.SetupSessions = orgpg.NewSetup(pool, hasher, setupToken,
-			func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
-			func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) },
-			func(tx platform.Tx) org.DefaultChannelCreator { return conversationpg.DefaultChannelCreatorIn(tx) }), sessions
+			accountCreator,
+			memberEvents,
+			defaultChannelCreator), sessions
 	}
 	if signUp {
 		s.SignUp, s.SetupSessions = orgpg.NewSignUp(pool, hasher, true,
-			func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
-			func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }), sessions
+			accountCreator,
+			memberEvents), sessions
 	}
 	return s
+}
+
+// accountCreator binds identity's account creator to setup's and sign-up's transaction.
+func accountCreator(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
+
+// memberEvents binds realtime's appender to setup's and sign-up's transaction.
+func memberEvents(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// defaultChannelCreator binds conversation's default-channel creator to setup's transaction.
+func defaultChannelCreator(tx platform.Tx) org.DefaultChannelCreator {
+	return conversationpg.DefaultChannelCreatorIn(tx)
 }
 
 // postingEvents binds realtime's appender to conversation's posting and branching transaction.

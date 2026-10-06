@@ -46,7 +46,7 @@ Malformed topic paging links and the topic stream check the topic through
 topic posts rely on the lookup inside the posting transaction.
 
 Identity's store creates accounts in the caller's transaction through
-`identitypg.AccountCreatorIn`. Closures in `cmd/*` and the tests adapt it to
+`identitypg.AccountCreatorIn`. Adapters in `cmd/*` and the tests adapt it to
 org's factory and prove that the creator fits `org.AccountCreator`;
 identity owns `ErrEmailTaken` and `ErrInvalidEmail`, which org maps to its
 conflicts or field errors.

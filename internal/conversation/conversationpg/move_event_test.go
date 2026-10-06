@@ -21,7 +21,7 @@ func TestMoveEventPayload(t *testing.T) {
 		VALUES ($1, 1, 'member.joined', jsonb_build_object('member_id', $2::uuid))`, f.OrganizationID, f.MemberID)
 	requireNoError(t, err)
 	uuid := func(n int) string { return fmt.Sprintf("00000000-0000-0000-0000-%012x", n) }
-	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	// A lower write-side limit must not make already-committed moves unreadable.
 	ids := make([]string, conversation.MaxBranchMessages+1)
 	for i := range ids {

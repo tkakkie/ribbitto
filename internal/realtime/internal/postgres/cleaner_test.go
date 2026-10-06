@@ -89,7 +89,7 @@ func TestEventRetentionTransaction(t *testing.T) {
 	}
 	_, err := pool.Exec(ctx, "UPDATE event_log SET created_at = CASE WHEN seq = 2 THEN '2000-01-01'::timestamptz ELSE '2100-01-01'::timestamptz END WHERE organization_id = $1", f.OrganizationID)
 	requireNoError(t, err)
-	reader := postgres.NewReader(pool, orgpg.BoundsIn, eventKinds())
+	reader := postgres.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	requireNoError(t, platform.InTx(ctx, pool, func(tx platform.Tx) error {
 		count, err := newCleaner(pool).ExpireBatch(ctx, tx, f.OrganizationID, retentionCutoff)
 		requireNoError(t, err)
@@ -350,7 +350,7 @@ func TestEventRetentionExpiredPrefix(t *testing.T) {
 			if got := retentionState(t, pool, org); got != tt.want {
 				t.Fatalf("(boundary, rows) = %v, want %v", got, tt.want)
 			}
-			events, err := postgres.NewReader(pool, orgpg.BoundsIn, eventKinds()).EventsAfter(ctx, org, tt.want[0], 10)
+			events, err := postgres.NewReader(pool, orgpg.BoundsIn, eventKinds(t)).EventsAfter(ctx, org, tt.want[0], 10)
 			requireNoError(t, err)
 			var seqs []int64
 			for _, e := range events {
@@ -364,10 +364,11 @@ func TestEventRetentionExpiredPrefix(t *testing.T) {
 }
 
 // eventKinds gives readers the same publisher registrations as cmd/ribbitto.
-func eventKinds() realtime.Kinds {
-	kinds := conversationpg.EventKinds()
-	for kind, router := range orgpg.EventKinds() {
-		kinds[kind] = router
+func eventKinds(t *testing.T) realtime.Kinds {
+	t.Helper()
+	kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
+	if err != nil {
+		t.Fatal(err)
 	}
 	return kinds
 }

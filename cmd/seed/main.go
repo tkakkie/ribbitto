@@ -130,9 +130,9 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	}
 	const slug = "paper-lantern"
 	installer := orgpg.NewSetup(pool, hasher, token,
-		func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
-		func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) },
-		func(tx platform.Tx) org.DefaultChannelCreator { return conversationpg.DefaultChannelCreatorIn(tx) })
+		accountCreator,
+		memberEvents,
+		defaultChannelCreator)
 	// Preflight is read-only; Complete still arbitrates concurrent setup attempts.
 	open, err := installer.Open(ctx)
 	if err != nil {
@@ -170,8 +170,8 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		return fmt.Errorf("seeding requires an empty, migrated development database: %w", err)
 	}
 	signups := orgpg.NewSignUp(pool, hasher, true,
-		func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
-		func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) })
+		accountCreator,
+		memberEvents)
 	authorizer := orgpg.NewAuthorizer(pool)
 	members := make(map[string]org.Membership, len(data.Members))
 	for i, person := range data.Members {
@@ -245,6 +245,17 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	}
 	_, err = fmt.Fprintf(out, "Seeded %s. Sign in as %s@example.test (owner) or any other member at example.test with this run's password:\n%s\n", slug, owner.Handle, password)
 	return err
+}
+
+// accountCreator binds identity's account creator to setup's and sign-up's transaction.
+func accountCreator(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
+
+// memberEvents binds realtime's appender to setup's and sign-up's transaction.
+func memberEvents(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// defaultChannelCreator binds conversation's default-channel creator to setup's transaction.
+func defaultChannelCreator(tx platform.Tx) org.DefaultChannelCreator {
+	return conversationpg.DefaultChannelCreatorIn(tx)
 }
 
 // postingEvents binds realtime's appender to conversation's posting and branching transaction.

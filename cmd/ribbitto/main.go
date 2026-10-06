@@ -254,9 +254,9 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	var setupService web.SetupService
 	if config.setupToken != "" {
 		setupService = orgpg.NewSetup(pool, hasher, config.setupToken,
-			func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
-			func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) },
-			func(tx platform.Tx) org.DefaultChannelCreator { return conversationpg.DefaultChannelCreatorIn(tx) })
+			accountCreator,
+			memberEvents,
+			defaultChannelCreator)
 	}
 
 	catalogues, err := i18n.New(slog.Default())
@@ -269,12 +269,12 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	var stream *web.Streaming
 	if config.hub != nil {
 		postingNotifier = config.hub
+		kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
+		if err != nil {
+			return nil, nil, fmt.Errorf("merging event kinds: %w", err)
+		}
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
-		kinds := conversationpg.EventKinds()
-		for kind, router := range orgpg.EventKinds() {
-			kinds[kind] = router
-		}
 		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, orgpg.BoundsIn, kinds), config.hub, 1024, time.Minute)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
@@ -285,8 +285,8 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		SignIn:   identitypg.NewSignIn(pool, hasher, sessions),
 		Setup:    setupService,
 		SignUp: orgpg.NewSignUp(pool, hasher, config.signupEnabled,
-			func(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) },
-			func(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }),
+			accountCreator,
+			memberEvents),
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        conversationpg.NewTopics(pool),
@@ -379,6 +379,17 @@ func signupEnabled(value string) (bool, error) {
 	default:
 		return false, fmt.Errorf("RIBBITTO_SIGNUP must be on, off or empty")
 	}
+}
+
+// accountCreator binds identity's account creator to setup's and sign-up's transaction.
+func accountCreator(tx platform.Tx) org.AccountCreator { return identitypg.AccountCreatorIn(tx) }
+
+// memberEvents binds realtime's appender to setup's and sign-up's transaction.
+func memberEvents(tx platform.Tx) org.EventAppender { return realtimepg.AppenderIn(tx) }
+
+// defaultChannelCreator binds conversation's default-channel creator to setup's transaction.
+func defaultChannelCreator(tx platform.Tx) org.DefaultChannelCreator {
+	return conversationpg.DefaultChannelCreatorIn(tx)
 }
 
 // postingEvents binds realtime's appender to conversation's posting and branching transaction.

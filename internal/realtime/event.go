@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
 )
@@ -41,3 +42,19 @@ type Router func(payload []byte) (channel kernel.ID, topics []kernel.ID, err err
 // Kinds registers the Router of each kind a reader fills in; wiring builds
 // it. A kind it lacks keeps only its envelope, and streams skip it.
 type Kinds map[EventKind]Router
+
+// MergeKinds combines publisher registries into a fresh map without modifying
+// them. A kind registered more than once is an error, even with the same
+// router; on error it returns no registry.
+func MergeKinds(registries ...Kinds) (Kinds, error) {
+	merged := make(Kinds)
+	for _, registry := range registries {
+		for kind, router := range registry {
+			if _, exists := merged[kind]; exists {
+				return nil, fmt.Errorf("duplicate event kind %q", kind)
+			}
+			merged[kind] = router
+		}
+	}
+	return merged, nil
+}

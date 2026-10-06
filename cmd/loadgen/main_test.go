@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net/http"
@@ -26,7 +27,7 @@ func TestSafety(t *testing.T) {
 			t.Errorf("dial guard: %s", address)
 		}
 	}
-	for _, args := range [][]string{{"-duration=0"}, {"-duration=11m"}, {"-streams=0"}, {"-streams=100001"}, {"-rate=-1"}, {"-rate=101"}} {
+	for _, args := range [][]string{{"-duration=0"}, {"-duration=11m"}, {"-streams=0"}, {"-streams=100001"}, {"-rate=-1"}, {"-rate=101"}, {"-drain=0"}, {"-drain=6m"}, {"-setup=0"}, {"-setup=6m"}, {"-dial-concurrency=0"}, {"-dial-concurrency=100001"}} {
 		if err := run(args, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "finite limits") {
 			t.Errorf("bounds: %v: %v", args, err)
 		}
@@ -75,7 +76,7 @@ func TestStreamsAndPosting(t *testing.T) {
 					t.Error("missing session")
 				}
 				if r.Method == "POST" {
-					if r.FormValue("body") != "load test" || r.Header.Get("Origin") == "" || r.Header.Get("Sec-Fetch-Site") != "same-origin" {
+					if !strings.HasPrefix(r.FormValue("body"), "loadgen") || r.Header.Get("Origin") == "" || r.Header.Get("Sec-Fetch-Site") != "same-origin" {
 						t.Error("invalid post")
 					}
 					return
@@ -93,17 +94,17 @@ func TestStreamsAndPosting(t *testing.T) {
 				t.Fatal(err)
 			}
 			var out bytes.Buffer
-			if err := run([]string{"-target", server.URL, "-tokens", path, "-cursor=7", "-duration=100ms", "-rate=50"}, &out); err != nil {
+			if err := run([]string{"-target", server.URL, "-tokens", path, "-cursor=7", "-streams=2", "-duration=100ms", "-rate=50", "-drain=10ms"}, &out); err != nil {
 				t.Fatal(err)
 			}
-			want := map[int]string{200: "established=1 refused_429=0 refused_503=0 reset=1 failed=0", 429: "refused_429=1", 503: "refused_503=1", 400: "failed=1"}[status]
-			if !strings.Contains(out.String(), want) || strings.Contains(out.String(), "secret") || strings.Contains(out.String(), " posts=0 ") {
+			want := map[int]string{200: `"Established":2,"Refused429":0,"Refused503":0,"Reset":2,"Failed":0`, 429: `"Refused429":2`, 503: `"Refused503":2`, 400: `"Failed":2`}[status]
+			if !strings.Contains(out.String(), want) || strings.Contains(out.String(), "secret") || strings.Contains(out.String(), `"Answered200":0`) {
 				t.Fatal(out.String())
 			}
 		})
 	}
 	for _, body := range []string{"event: reset\n\n", "event: reset\ndata: {}", "event: reset\nevent: message\ndata: {}\n\n"} {
-		if readReset(strings.NewReader(body)) {
+		if readReset(strings.NewReader(body), nil) {
 			t.Fatal("dispatched incomplete/non-reset event")
 		}
 	}
@@ -162,16 +163,16 @@ func TestHTTP2AndTrust(t *testing.T) {
 }
 
 // The end of a run is the harness's doing: a POST in flight at the deadline
-// finishes and counts, and streams still connecting or open are closed
-// without counting as failures.
+// finishes and counts; established streams close without failures. Streams
+// still connecting at the setup deadline are failures.
 func TestRunEndIsNotAFailure(t *testing.T) {
 	deadline := 100 * time.Millisecond
 	for _, tc := range []struct {
 		name, args, want string
 	}{
-		{"post across the deadline", "-rate=20", " posts=1 post_failed=0"},
-		{"stream before its headers", "-rate=0", "established=0 refused_429=0 refused_503=0 reset=0 failed=0"},
-		{"established stream", "-rate=0", "established=1 refused_429=0 refused_503=0 reset=0 failed=0"},
+		{"post across the deadline", "-rate=20", `"Answered200":2,"PostFailed":0`},
+		{"stream before its headers", "-rate=0", `"Established":0,"Refused429":0,"Refused503":0,"Reset":0,"Failed":1`},
+		{"established stream", "-rate=0", `"Established":1,"Refused429":0,"Refused503":0,"Reset":0,"Failed":0`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// A POST is held from its arrival for longer than the whole run.
@@ -184,7 +185,7 @@ func TestRunEndIsNotAFailure(t *testing.T) {
 					finished.Store(time.Now().UnixNano())
 					return
 				}
-				if tc.name == "established stream" {
+				if tc.name != "stream before its headers" {
 					w.Header().Set("Content-Type", "text/event-stream")
 					w.WriteHeader(http.StatusOK)
 					w.(http.Flusher).Flush()
@@ -198,7 +199,7 @@ func TestRunEndIsNotAFailure(t *testing.T) {
 			}
 			var out bytes.Buffer
 			start := time.Now()
-			if err := run([]string{"-target", server.URL, "-tokens", path, "-duration=" + deadline.String(), tc.args}, &out); err != nil {
+			if err := run([]string{"-target", server.URL, "-tokens", path, "-duration=" + deadline.String(), "-cursor=0", "-setup=100ms", "-drain=10ms", tc.args}, &out); err != nil {
 				t.Fatal(err)
 			}
 			if !strings.Contains(out.String(), tc.want) {
@@ -208,5 +209,113 @@ func TestRunEndIsNotAFailure(t *testing.T) {
 				t.Fatal("the POST finished before the run's deadline")
 			}
 		})
+	}
+}
+
+func TestStep(t *testing.T) {
+	for _, tc := range []struct {
+		name                     string
+		hold, delay, duration    time.Duration
+		rate                     int
+		want                     string
+		missing, reset, explicit bool
+	}{
+		{name: "event before response", hold: 70 * time.Millisecond, duration: 40 * time.Millisecond, rate: 50, want: "pass"},
+		{name: "response before event", delay: 20 * time.Millisecond, duration: 40 * time.Millisecond, rate: 50, want: "pass", explicit: true},
+		{name: "missing", duration: 40 * time.Millisecond, rate: 50, want: "fail", missing: true},
+		{name: "reset idle", duration: 40 * time.Millisecond, want: "fail", reset: true},
+		{name: "underloaded", hold: 1200 * time.Millisecond, duration: 1100 * time.Millisecond, rate: 1, want: "underloaded"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			events := make(chan string, 100)
+			var pageReads atomic.Int64
+			server := httptest.NewServer(http.NewCrossOriginProtection().Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "POST" {
+					marker := r.FormValue("body")
+					if tc.delay > 0 {
+						time.AfterFunc(tc.delay, func() { events <- marker })
+						return
+					}
+					if !tc.missing {
+						events <- marker
+					}
+					time.Sleep(tc.hold)
+					return
+				}
+				if !strings.HasSuffix(r.URL.Path, "/events") {
+					pageReads.Add(1)
+					_, _ = fmt.Fprint(w, `<div sse-connect="/events?after=7"></div>`)
+					return
+				}
+				want := "7"
+				if tc.explicit {
+					want = "9"
+				}
+				if r.Header.Get("Last-Event-ID") != want {
+					t.Error("cursor not shared from page/override")
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				_ = http.NewResponseController(w).Flush()
+				if tc.reset {
+					_, _ = fmt.Fprint(w, "event: reset\ndata: {}\n\n")
+					return
+				}
+				for {
+					select {
+					case marker := <-events:
+						// A rendered message can repeat its body in an attribute and its text.
+						_, _ = fmt.Fprintf(w, "event: message\ndata: <li title=\"%s\">%s</li>\n\n", marker, marker)
+						if tc.hold > 0 {
+							_, _ = fmt.Fprintf(w, "data: %s\n\n", marker)
+						}
+						_ = http.NewResponseController(w).Flush()
+					case <-r.Context().Done():
+						return
+					}
+				}
+			})))
+			defer server.Close()
+			path := t.TempDir() + "/tokens.json"
+			if err := os.WriteFile(path, []byte(`{"organization_slug":"test","channel_ids":["one"],"accounts":[{"tokens":["secret"]}]}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"-target", server.URL, "-tokens", path, "-duration=" + tc.duration.String(), fmt.Sprintf("-rate=%d", tc.rate), "-drain=50ms", "-dial-concurrency=1"}
+			if tc.explicit {
+				args = append(args, "-cursor=9")
+			}
+			var out bytes.Buffer
+			if err := run(args, &out); err != nil {
+				t.Fatal(err)
+			}
+			var got result
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Verdict != tc.want || got.Established != 1 || got.Expected != got.Answered200 || got.Scheduled != got.Sent+got.Missed || got.Answered200 != got.Sent || got.RequestFailed != tc.reset || strings.Contains(out.String(), "secret") {
+				t.Fatalf("bad step: %s", out.String())
+			}
+			if (pageReads.Load() == 0) != tc.explicit || !got.CursorValid || got.CursorOverride != tc.explicit || (got.Missing > 0) != tc.missing || (!tc.missing && got.Received != got.Expected) || ((tc.hold > 0 && got.Duplicated != got.Received) || (tc.hold == 0 && got.Duplicated != 0)) {
+				t.Fatalf("bad accounting: %s", out.String())
+			}
+			if tc.delay > 0 {
+				got.verdict(time.Nanosecond)
+				if got.Verdict != "fail" || !got.Slow {
+					t.Fatal("latency threshold ignored")
+				}
+			}
+		})
+	}
+}
+
+func TestVerdict(t *testing.T) {
+	for _, r := range []result{{P95MS: 2}, {Missing: 1}, {Refused429: 1}, {Refused503: 1}, {Reset: 1}, {Failed: 1}, {PostFailed: 1}, {Missed: 1}, {Scheduled: 1}} {
+		r.verdict(time.Millisecond)
+		want := "fail"
+		if r.Missed > 0 || r.Scheduled > 0 {
+			want = "underloaded"
+		}
+		if r.Verdict != want {
+			t.Fatalf("%+v", r)
+		}
 	}
 }

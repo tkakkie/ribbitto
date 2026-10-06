@@ -20,7 +20,9 @@ func TestOrganizationWithOwner(t *testing.T) {
 	pool := pgtest.New(t)
 	fixture := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 	eventSeq := "SELECT event_seq FROM organization WHERE id = $1"
+	boundary := "SELECT event_log_boundary_seq FROM organization WHERE id = $1"
 	wantInt(t, pool, "event_seq", 1, eventSeq, fixture.OrganizationID)
+	wantInt(t, pool, "event_log_boundary_seq", 0, boundary, fixture.OrganizationID)
 	wantInt(t, pool, "event_log rows", 0, "SELECT count(*) FROM event_log")
 	wantInt(t, pool, "setup rows", 0, "SELECT count(*) FROM setup")
 	wantInt(t, pool, "members", 1, "SELECT count(*) FROM member")
@@ -55,8 +57,10 @@ WHERE c.id = $1 AND c.organization_id = $2 AND c.is_default AND c.default_topic_
 	wantInt(t, pool, "members after Account", 1, "SELECT count(*) FROM member")
 	orgtest.Member(t, pool, fixture.OrganizationID, other, org.RoleMember, "other", 1)
 	wantInt(t, pool, "event_seq after Member", 1, eventSeq, fixture.OrganizationID)
+	wantInt(t, pool, "event_log_boundary_seq after Member", 0, boundary, fixture.OrganizationID)
 	conversationtest.Channel(t, pool, fixture.OrganizationID, "random", false)
 	wantInt(t, pool, "event_seq after Channel", 1, eventSeq, fixture.OrganizationID)
+	wantInt(t, pool, "event_log_boundary_seq after Channel", 0, boundary, fixture.OrganizationID)
 }
 
 func wantInt(t *testing.T, pool *pgxpool.Pool, what string, want int64, query string, args ...any) {

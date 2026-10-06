@@ -9,6 +9,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -52,9 +53,9 @@ func TestPostMessage(t *testing.T) {
 	}
 	// A failed insert (a body the database refuses) rolls the sequence back.
 	writer := func(tx platform.Tx) conversation.Writer {
-		return rawBodyWriter{Writer: conversationpg.WriterIn(tx), body: " untrimmed"}
+		return rawBodyWriter{Writer: postgres.WriterIn(tx), body: " untrimmed"}
 	}
-	refused := conversation.NewPosting(conversationpg.NewTxRunner(pool), writer, eventSequence, appendEvents, nil)
+	refused := conversation.NewPosting(conversationpg.NewTxRunnerForTest(pool), writer, eventSequence, appendEvents, nil)
 	if _, err := refused.Post(ctx, memberships["acme"], channels["acme"], " untrimmed"); err == nil {
 		t.Fatal("the database accepted an untrimmed body")
 	}

@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -19,7 +19,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
-var writerIn conversation.WriterIn = conversationpg.WriterIn
+var writerIn conversation.WriterIn = func(tx platform.Tx) conversation.Writer { return postgres.WriterIn(tx) }
 
 func fixture(t *testing.T, pool *pgxpool.Pool, sql string, args []any, dest ...any) {
 	t.Helper()
@@ -67,7 +67,7 @@ func TestWriterIn(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx, f := t.Context(), newFixtures(t, pool)
 	rollback := errors.New("caller rolls back")
-	err := conversationpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error {
+	err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
 		writer, q := writerIn(tx), pgxbridge.Tx(tx)
 		// Uncommitted rows, so only a read on the caller's transaction finds them.
 		var random, randomTopic kernel.ID
@@ -140,7 +140,7 @@ func TestWriterErrors(t *testing.T) {
 		{"notice's body CHECK", notice(f.general, f.generalTopic, f.alice, " hello"), nil, "message_body_check2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := conversationpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error { return tc.write(writerIn(tx)) })
+			err := platform.InTx(ctx, pool, func(tx platform.Tx) error { return tc.write(writerIn(tx)) })
 			var pgErr *pgconn.PgError
 			if tc.want != nil && !errors.Is(err, tc.want) || tc.constraint != "" && (!errors.As(err, &pgErr) || pgErr.ConstraintName != tc.constraint) {
 				t.Fatalf("error = %v, want %v with the PostgreSQL error of %q", err, tc.want, tc.constraint)
@@ -162,38 +162,6 @@ func TestWriterErrors(t *testing.T) {
 	}
 }
 
-// The runner commits on nil, and a failed commit, here event_log's deferred
-// gap check, comes back through it as is.
-func TestTxRunnerCommits(t *testing.T) {
-	t.Parallel()
-	pool := pgtest.New(t)
-	ctx, f := t.Context(), newFixtures(t, pool)
-	runner := conversationpg.NewTxRunner(pool)
-	requireNoError(t, runner.InTx(ctx, func(tx platform.Tx) error {
-		_, err := writerIn(tx).InsertMessage(ctx, f.acme, f.general, f.generalTopic, f.alice, "hello", 1)
-		return err
-	}))
-	if n := messages(t, pool); n != 1 {
-		t.Fatalf("%d messages after commit, want 1", n)
-	}
-	err := runner.InTx(ctx, func(tx platform.Tx) error {
-		// The update succeeds; only the deferred trigger at commit refuses it.
-		tag, err := pgxbridge.Tx(tx).Exec(ctx, "UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1", f.acme)
-		if err != nil || tag.RowsAffected() != 1 {
-			t.Fatalf("update in the callback = %v, %v; want one row", tag, err)
-		}
-		return nil
-	})
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) || err != error(pgErr) || pgErr.Code != "23514" || !strings.Contains(pgErr.Message, "without event_log rows") {
-		t.Fatalf("commit without an event = %v, want the gap check's error as is", err)
-	}
-	var seq int64
-	if fixture(t, pool, "SELECT event_seq FROM organization WHERE id = $1", []any{f.acme}, &seq); seq != 0 {
-		t.Fatalf("event_seq = %d after the failed commit, want 0", seq)
-	}
-}
-
 // Branching's writes run on the caller's transaction: the new topic, the
 // notice and the move are visible there and gone after the runner rolls back.
 func TestWriterBranchesIn(t *testing.T) {
@@ -201,7 +169,7 @@ func TestWriterBranchesIn(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx, f := t.Context(), newFixtures(t, pool)
 	rollback := errors.New("caller rolls back")
-	err := conversationpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error {
+	err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
 		writer := writerIn(tx)
 		planning, err := writer.CreateTopic(ctx, f.acme, f.general, "Planning")
 		if err != nil || planning.OrganizationID != f.acme || planning.ChannelID != f.general || planning.Name != "Planning" || planning.IsDefault || planning.CreatedAt.IsZero() {
@@ -261,7 +229,7 @@ func TestWriterMoveMessages(t *testing.T) {
 		}
 	}
 	move := func(organizationID, channelID kernel.ID) (moved int64) {
-		requireNoError(t, conversationpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error {
+		requireNoError(t, platform.InTx(ctx, pool, func(tx platform.Tx) error {
 			var err error
 			moved, err = writerIn(tx).MoveMessages(ctx, organizationID, channelID, f.generalTopic, planning, selected)
 			return err

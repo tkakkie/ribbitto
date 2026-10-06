@@ -14,6 +14,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -39,7 +40,7 @@ func (s setupBarrier) Open(ctx context.Context) (bool, error) {
 }
 
 func newSetup(pool *pgxpool.Pool, hasher *identity.Hasher, state org.SetupState, writes org.RegistrationWriterIn, accounts org.AccountCreatorIn) *org.Setup {
-	return org.NewSetup(state, orgpg.NewTxRunner(pool), writes, accounts, signupEvents, defaultChannel, hasher, "secret")
+	return org.NewSetup(state, orgpg.NewTxRunnerForTest(pool), writes, accounts, signupEvents, defaultChannel, hasher, "secret")
 }
 
 func defaultChannel(tx platform.Tx) org.DefaultChannelCreator {
@@ -82,18 +83,18 @@ func TestSetup(t *testing.T) {
 			for _, tc := range []struct{ slug, email, handle, field string }{{"example", "A@b", "owner", "email"}, {"example", "e\u0301@b", "owner", "email"}, {"Bad", "a@b", "owner", "slug"}, {"example", "a@b", "Owner", "handle"}, {"example", "a@b", "all", "handle"}} {
 				// Substitute after validation so the real constraints reject the raw values.
 				writes := func(tx platform.Tx) org.RegistrationWriter {
-					return rawSetupOrganization{rawSignupMember{orgpg.RegistrationWriterIn(tx), tc.handle}, tc.slug}
+					return rawSetupOrganization{rawSignupMember{postgres.RegistrationWriterIn(tx), tc.handle}, tc.slug}
 				}
 				accounts := func(tx platform.Tx) org.AccountCreator { return rawSignupAccount{signupAccount(tx), tc.email} }
-				_, err := newSetup(pool, hasher, orgpg.NewSetupState(pool), writes, accounts).Complete(ctx, "secret", input)
+				_, err := newSetup(pool, hasher, postgres.NewSetupState(pool), writes, accounts).Complete(ctx, "secret", input)
 				var fields org.ValidationErrors
 				if !errors.As(err, &fields) || fields[tc.field] == nil {
 					t.Fatalf("database validation for %s: %v", tc.field, err)
 				}
 				counts(0)
 			}
-			barrier := setupBarrier{SetupState: orgpg.NewSetupState(pool), ready: make(chan struct{}, attempts), release: make(chan struct{})}
-			contender := newSetup(pool, hasher, barrier, orgpg.RegistrationWriterIn, signupAccount)
+			barrier := setupBarrier{SetupState: postgres.NewSetupState(pool), ready: make(chan struct{}, attempts), release: make(chan struct{})}
+			contender := newSetup(pool, hasher, barrier, registrationIn, signupAccount)
 			results := make(chan error, attempts)
 			for i := range attempts {
 				go func() {
@@ -152,8 +153,8 @@ func TestSetupConflictRace(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
 			const attempts = 10
-			barrier := setupBarrier{SetupState: orgpg.NewSetupState(pool), ready: make(chan struct{}, attempts), release: make(chan struct{})}
-			s := newSetup(pool, hasher, barrier, orgpg.RegistrationWriterIn, signupAccount)
+			barrier := setupBarrier{SetupState: postgres.NewSetupState(pool), ready: make(chan struct{}, attempts), release: make(chan struct{})}
+			s := newSetup(pool, hasher, barrier, registrationIn, signupAccount)
 			results := make(chan error, attempts)
 			for i := range attempts {
 				go func() {

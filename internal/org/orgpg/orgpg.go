@@ -53,9 +53,9 @@ func MembersIn(snapshot platform.Snapshot) org.Directory {
 	return postgres.NewDirectoryIn(snapshot)
 }
 
-// NewTxRunner returns the transaction runner setup and sign-up own their
+// newTxRunner returns the transaction runner setup and sign-up own their
 // transaction through, over pool.
-func NewTxRunner(pool *pgxpool.Pool) org.TxRunner { return txRunner{pool: pool} }
+func newTxRunner(pool *pgxpool.Pool) org.TxRunner { return txRunner{pool: pool} }
 
 type txRunner struct{ pool *pgxpool.Pool }
 
@@ -63,14 +63,14 @@ func (r txRunner) InTx(ctx context.Context, fn func(platform.Tx) error) error {
 	return platform.InTx(ctx, r.pool, fn)
 }
 
-// RegistrationWriterIn returns setup's and sign-up's writes bound to the
+// registrationWriterIn returns setup's and sign-up's writes bound to the
 // caller's transaction; it is an org.RegistrationWriterIn.
-func RegistrationWriterIn(tx platform.Tx) org.RegistrationWriter {
+func registrationWriterIn(tx platform.Tx) org.RegistrationWriter {
 	return postgres.RegistrationWriterIn(tx)
 }
 
-// NewSetupState returns the installation's setup state, read on pool.
-func NewSetupState(pool *pgxpool.Pool) org.SetupState { return postgres.NewSetupState(pool) }
+// newSetupState returns the installation's setup state, read on pool.
+func newSetupState(pool *pgxpool.Pool) org.SetupState { return postgres.NewSetupState(pool) }
 
 // EventKinds returns org's routers for registration with realtime's reader.
 func EventKinds() realtime.Kinds {
@@ -79,11 +79,11 @@ func EventKinds() realtime.Kinds {
 
 // NewSignUp wires registration with the shared hasher and injected writers.
 func NewSignUp(pool *pgxpool.Pool, hasher *identity.Hasher, enabled bool, accounts org.AccountCreatorIn, events org.EventAppenderIn) *org.SignUp {
-	return org.NewSignUp(NewSetupState(pool), NewTxRunner(pool), RegistrationWriterIn, accounts, events, hasher, enabled)
+	return org.NewSignUp(newSetupState(pool), newTxRunner(pool), registrationWriterIn, accounts, events, hasher, enabled)
 }
 
 // NewSetup wires first-run setup with the shared hasher, the configured
 // token and the injected writers.
 func NewSetup(pool *pgxpool.Pool, hasher *identity.Hasher, token string, accounts org.AccountCreatorIn, events org.EventAppenderIn, channels org.DefaultChannelCreatorIn) *org.Setup {
-	return org.NewSetup(NewSetupState(pool), NewTxRunner(pool), RegistrationWriterIn, accounts, events, channels, hasher, token)
+	return org.NewSetup(newSetupState(pool), newTxRunner(pool), registrationWriterIn, accounts, events, channels, hasher, token)
 }

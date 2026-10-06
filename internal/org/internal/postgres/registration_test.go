@@ -10,14 +10,14 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
-	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
-var registrationIn org.RegistrationWriterIn = orgpg.RegistrationWriterIn
+var registrationIn org.RegistrationWriterIn = func(tx platform.Tx) org.RegistrationWriter { return postgres.RegistrationWriterIn(tx) }
 
 // counts returns the number of organisations, members and setup rows and
 // the sum of every organisation's event_seq, on the pool or in a pgx.Tx.
@@ -40,7 +40,7 @@ func TestRegistrationWriterIn(t *testing.T) {
 	account := identitytest.Account(t, pool, "owner@example.org", "Owner")
 	before := counts(t, pool)
 	rollback := errors.New("caller rolls back")
-	err := orgpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error {
+	err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
 		writer, q := registrationIn(tx), pgxbridge.Tx(tx)
 		acme, err := writer.CreateOrganization(ctx, "Acme", "acme")
 		requireNoError(t, err)
@@ -114,7 +114,7 @@ func TestRegistrationWriterErrors(t *testing.T) {
 		{"unknown organisation's sequence", func(w org.RegistrationWriter) error { _, err := w.NextEventSeq(ctx, kernel.ID{0xee}); return err }, org.ErrNotFound},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := orgpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error { return tc.write(registrationIn(tx)) })
+			err := platform.InTx(ctx, pool, func(tx platform.Tx) error { return tc.write(registrationIn(tx)) })
 			var pgErr *pgconn.PgError
 			if tc.want != nil && !errors.Is(err, tc.want) || tc.want == nil && (!errors.As(err, &pgErr) || pgErr.Code != "23514" || errors.Is(err, org.ErrSlugUnavailable) || errors.Is(err, org.ErrInvalidHandle)) {
 				t.Fatalf("error = %v, want %v", err, tc.want)
@@ -129,39 +129,12 @@ func TestRegistrationWriterErrors(t *testing.T) {
 		})
 	}
 	// A second completed setup: the first one is committed.
-	requireNoError(t, orgpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error { return registrationIn(tx).CompleteSetup(ctx, taken) }))
+	requireNoError(t, platform.InTx(ctx, pool, func(tx platform.Tx) error { return registrationIn(tx).CompleteSetup(ctx, taken) }))
 	other := orgtest.Organization(t, pool, "other", "Other", 0)
-	err := orgpg.NewTxRunner(pool).InTx(ctx, func(tx platform.Tx) error { return registrationIn(tx).CompleteSetup(ctx, other) })
+	err := platform.InTx(ctx, pool, func(tx platform.Tx) error { return registrationIn(tx).CompleteSetup(ctx, other) })
 	var named kernel.ID
 	requireNoError(t, pool.QueryRow(ctx, "SELECT organization_id FROM setup").Scan(&named))
 	if !errors.Is(err, org.ErrSetupCompleted) || named != taken {
 		t.Fatalf("second setup: %v, setup names %v, want %v", err, named, taken)
-	}
-}
-
-func TestTxRunnerAndSetupState(t *testing.T) {
-	t.Parallel()
-	pool := pgtest.New(t)
-	ctx := t.Context()
-	runner, state := orgpg.NewTxRunner(pool), orgpg.NewSetupState(pool)
-	setup := func(slug string, result error) error {
-		return runner.InTx(ctx, func(tx platform.Tx) error {
-			writer := registrationIn(tx)
-			id, err := writer.CreateOrganization(ctx, slug, slug)
-			requireNoError(t, err)
-			requireNoError(t, writer.CompleteSetup(ctx, id))
-			return result
-		})
-	}
-	failure := errors.New("rolled back")
-	if err := setup("rolled-back", failure); !errors.Is(err, failure) {
-		t.Fatalf("an error from fn returns %v, want it as is", err)
-	}
-	if open, err := state.Open(ctx); err != nil || !open || counts(t, pool) != [4]int64{} {
-		t.Fatalf("after a rollback: open = %t, %v, rows %v", open, err, counts(t, pool))
-	}
-	requireNoError(t, setup("committed", nil))
-	if open, err := state.Open(ctx); err != nil || open || counts(t, pool) != [4]int64{1, 0, 1, 0} {
-		t.Fatalf("after a commit: open = %t, %v, rows %v", open, err, counts(t, pool))
 	}
 }

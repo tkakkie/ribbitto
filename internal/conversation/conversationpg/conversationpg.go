@@ -32,18 +32,18 @@ func NewTopics(pool *pgxpool.Pool) *conversation.Topics {
 // NewPosting builds posting with org's sequence and realtime's appender
 // factories bound to its transaction. A nil notifier disables notifications.
 func NewPosting(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, notifier conversation.Notifier) *conversation.Posting {
-	return conversation.NewPosting(NewTxRunner(pool), WriterIn, sequences, events, notifier)
+	return conversation.NewPosting(newTxRunner(pool), writerIn, sequences, events, notifier)
 }
 
 // NewBrancher builds branching with org's sequence and realtime's appender
 // factories bound to its transaction. A nil notifier disables notifications.
 func NewBrancher(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, notifier conversation.Notifier) *conversation.Brancher {
-	return conversation.NewBrancher(NewTxRunner(pool), WriterIn, sequences, events, notifier)
+	return conversation.NewBrancher(newTxRunner(pool), writerIn, sequences, events, notifier)
 }
 
 // NewReader builds the page, single-message and batch use case over the pool.
 func NewReader(pool *pgxpool.Pool, members conversation.MemberDirectoryIn, accounts conversation.AccountDirectoryIn, cursor conversation.EventCursorIn) *conversation.Reader {
-	return conversation.NewReader(NewSnapshotRunner(pool), ReadStoreIn, members, accounts, cursor)
+	return conversation.NewReader(newSnapshotRunner(pool), readStoreIn, members, accounts, cursor)
 }
 
 // DefaultChannelCreatorIn returns the default-channel creator bound to setup's
@@ -53,9 +53,9 @@ func DefaultChannelCreatorIn(tx platform.Tx) *postgres.DefaultChannelCreator {
 	return postgres.DefaultChannelCreatorIn(tx)
 }
 
-// NewTxRunner returns the transaction runner posting and branching own their
+// newTxRunner returns the transaction runner posting and branching own their
 // transaction through, over pool.
-func NewTxRunner(pool *pgxpool.Pool) conversation.TxRunner { return txRunner{pool: pool} }
+func newTxRunner(pool *pgxpool.Pool) conversation.TxRunner { return txRunner{pool: pool} }
 
 type txRunner struct{ pool *pgxpool.Pool }
 
@@ -63,13 +63,13 @@ func (r txRunner) InTx(ctx context.Context, fn func(platform.Tx) error) error {
 	return platform.InTx(ctx, r.pool, fn)
 }
 
-// WriterIn returns posting's and branching's writes bound to the caller's
+// writerIn returns posting's and branching's writes bound to the caller's
 // transaction; it is a conversation.WriterIn.
-func WriterIn(tx platform.Tx) conversation.Writer { return postgres.WriterIn(tx) }
+func writerIn(tx platform.Tx) conversation.Writer { return postgres.WriterIn(tx) }
 
-// NewSnapshotRunner returns the snapshot runner the page snapshot, One and
+// newSnapshotRunner returns the snapshot runner the page snapshot, One and
 // Many own their read through, over pool.
-func NewSnapshotRunner(pool *pgxpool.Pool) conversation.SnapshotRunner {
+func newSnapshotRunner(pool *pgxpool.Pool) conversation.SnapshotRunner {
 	return snapshotRunner{pool: pool}
 }
 
@@ -79,8 +79,8 @@ func (r snapshotRunner) InSnapshot(ctx context.Context, fn func(platform.Snapsho
 	return platform.InSnapshot(ctx, r.pool, fn)
 }
 
-// ReadStoreIn returns conversation's reads bound to the caller's snapshot;
+// readStoreIn returns conversation's reads bound to the caller's snapshot;
 // it is a conversation.ReadStoreIn.
-func ReadStoreIn(snapshot platform.Snapshot) conversation.ReadStore {
+func readStoreIn(snapshot platform.Snapshot) conversation.ReadStore {
 	return postgres.ReadStoreIn(snapshot)
 }

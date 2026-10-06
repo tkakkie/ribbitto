@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -21,7 +21,7 @@ import (
 
 type fakeSignUp struct{ *fakeSetup }
 
-func (f fakeSignUp) SignUp(ctx context.Context, name, handle, email, password string) (domain.ID, error) {
+func (f fakeSignUp) SignUp(ctx context.Context, name, handle, email, password string) (kernel.ID, error) {
 	result, err := f.Complete(ctx, "", org.SetupInput{DisplayName: name, Handle: handle, Email: email, Password: password})
 	return result.AccountID, err
 }

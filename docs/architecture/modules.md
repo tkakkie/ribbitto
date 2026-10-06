@@ -36,7 +36,7 @@ the temporary implementation behind it.
 
 | Flow or caller | Needs from | Interface from step | Temporary implementation until step |
 |---|---|---|---|
-| `org`, `web`, `infra/postgres/pgtest`, `cmd/seed` and some tests (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
+| `org`, `infra/postgres/pgtest`, `cmd/seed` and some tests (`domain.ID` = `kernel.ID` alias) | `kernel` `ID` | 0 | 5 |
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps a copy of the fixtures in `identitytest`, `orgtest` and `conversationtest` until its callers switch in 5.5–5.9) | `platform` lifecycle helpers | 0 | 5 (5.11 deletes it) |
 
 Setup's and sign-up's database tests live in `internal/org/orgpg`,

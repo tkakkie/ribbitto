@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -25,7 +25,7 @@ type fakeSetup struct {
 	err, openErr, sessionErr error
 	input                    org.SetupInput
 	token                    string
-	account                  domain.ID
+	account                  kernel.ID
 	completed, created       bool
 	previous                 string
 }
@@ -33,9 +33,9 @@ type fakeSetup struct {
 func (f *fakeSetup) Open(context.Context) (bool, error) { return f.open, f.openErr }
 func (f *fakeSetup) Complete(_ context.Context, token string, input org.SetupInput) (org.SetupResult, error) {
 	f.completed, f.token, f.input = true, token, input
-	return org.SetupResult{AccountID: domain.ID{42}}, f.err
+	return org.SetupResult{AccountID: kernel.ID{42}}, f.err
 }
-func (f *fakeSetup) Replace(_ context.Context, previous string, account domain.ID) (string, time.Time, error) {
+func (f *fakeSetup) Replace(_ context.Context, previous string, account kernel.ID) (string, time.Time, error) {
 	f.created, f.previous, f.account = true, previous, account
 	return "owner-session", time.Now().Add(time.Hour), f.sessionErr
 }
@@ -103,7 +103,7 @@ func checkRegistration(t *testing.T, handler http.Handler, tt registrationCase, 
 		if f.completed && (f.token != token || f.input != input) {
 			t.Fatal("incorrect submitted input")
 		}
-		if f.created && f.account != (domain.ID{42}) {
+		if f.created && f.account != (kernel.ID{42}) {
 			t.Fatal("session created for wrong account")
 		}
 		if f.created && f.previous != "previous-token" {

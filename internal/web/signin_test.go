@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -44,7 +44,7 @@ type oneSession struct{}
 
 func (oneSession) Resolve(_ context.Context, token string) (identity.Account, identity.Session, error) {
 	if token == "live" {
-		return identity.Account{ID: domain.ID{1}, DisplayName: "Alice"}, identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, nil
+		return identity.Account{ID: kernel.ID{1}, DisplayName: "Alice"}, identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, nil
 	}
 	return identity.Account{}, identity.Session{}, identity.ErrNoSession
 }

@@ -15,9 +15,9 @@ import (
 	"golang.org/x/net/html/atom"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -178,7 +178,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 	// the setup organisation. Only the adversarial fixtures use direct SQL.
 	outsiders := []struct{ name, cookie string }{{name: "signed out"}}
 	for _, foreign := range []bool{false, true} {
-		var account domain.ID
+		var account kernel.ID
 		if err := pool.QueryRow(ctx, `INSERT INTO account (email, display_name, password_hash)
 			VALUES ($1, 'Outsider', '$argon2id$x') RETURNING id`, fmt.Sprintf("outsider-%t@example.com", foreign)).Scan(&account); err != nil {
 			t.Fatal(err)

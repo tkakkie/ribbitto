@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -61,7 +60,7 @@ func TestBranchSelection(t *testing.T) {
 	}
 	const source = "31000000-0000-0000-0000-000000000000"
 	const selection = "08000000-0000-0000-0000-000000000000/" + source
-	path := view.ChannelURL("acme", domain.ID{1})
+	path := view.ChannelURL("acme", kernel.ID{1})
 	for _, tt := range []struct {
 		name     string
 		selected []string
@@ -115,7 +114,7 @@ func TestBranchSelection(t *testing.T) {
 						if hx {
 							header = "HX-Redirect"
 						}
-						if w.Header().Get(header) != view.ConversationURL("acme", domain.ID{1}, &domain.ID{0x32}) || store.got.From != (domain.ID{0x31}) || len(store.got.Messages) != 1 {
+						if w.Header().Get(header) != view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{0x32}) || store.got.From != (kernel.ID{0x31}) || len(store.got.Messages) != 1 {
 							t.Fatal("lost destination or expected source selection")
 						}
 					}

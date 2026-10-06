@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
@@ -85,10 +85,10 @@ func TestSessionCookieMaxAgeBoundaries(t *testing.T) {
 // fakeResolver answers by token; every token it does not know is signed out.
 type fakeResolver map[string]error
 
-var alice = identity.Account{ID: domain.ID{1}, Email: "alice@example.com", DisplayName: "Alice"}
+var alice = identity.Account{ID: kernel.ID{1}, Email: "alice@example.com", DisplayName: "Alice"}
 
 // aliceSession is the session fakeResolver signs Alice in with.
-var aliceSession = identity.Session{ID: domain.ID{9}, ExpiresAt: time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
+var aliceSession = identity.Session{ID: kernel.ID{9}, ExpiresAt: time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
 
 func (f fakeResolver) Resolve(_ context.Context, token string) (identity.Account, identity.Session, error) {
 	err, ok := f[token]

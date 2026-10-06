@@ -73,7 +73,7 @@ linters:
         # identity is the first module (decision 26).
         identity:
           list-mode: lax
-          files: ["**/internal/identity/*.go", "**/internal/identity/**/*.go", "!**/internal/identity/identitypg/*.go", "!$test"]
+          files: ["**/internal/identity/*.go", "**/internal/identity/**/*.go", "!**/internal/identity/identitypg/*.go", "!**/internal/identity/identitytest/*.go", "!$test"]
           allow:
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/identity/
@@ -170,7 +170,7 @@ linters:
         # org is the completed third module (decision 26).
         org:
           list-mode: lax
-          files: ["**/internal/org/*.go", "**/internal/org/**/*.go", "!$test"]
+          files: ["**/internal/org/*.go", "**/internal/org/**/*.go", "!**/internal/org/orgtest/*.go", "!$test"]
           allow:
             - github.com/tkakkie/ribbitto/internal/org$
             - github.com/tkakkie/ribbitto/internal/org/
@@ -183,7 +183,7 @@ linters:
         # conversation is the completed fourth module (decisions 26 and 27).
         conversation:
           list-mode: lax
-          files: ["**/internal/conversation/*.go", "**/internal/conversation/**/*.go", "!$test"]
+          files: ["**/internal/conversation/*.go", "**/internal/conversation/**/*.go", "!**/internal/conversation/conversationtest/*.go", "!$test"]
           allow:
             - github.com/tkakkie/ribbitto/internal/conversation$
             - github.com/tkakkie/ribbitto/internal/conversation/
@@ -193,6 +193,46 @@ linters:
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
             - github.com/tkakkie/ribbitto/internal/realtime$
+          deny: *non_html
+        # Fixture packages are test-only (decision 29): only tests and higher
+        # fixture packages import them; each one's own rule below fixes the
+        # direction (conversationtest -> orgtest -> identitytest).
+        fixtures:
+          list-mode: lax
+          files: ["$all", "!$test", "!**/internal/org/orgtest/*.go", "!**/internal/conversation/conversationtest/*.go"]
+          deny:
+            - pkg: github.com/tkakkie/ribbitto/internal/identity/identitytest
+              desc: Only tests and higher fixture packages import a fixture package; see decision 29.
+            - pkg: github.com/tkakkie/ribbitto/internal/org/orgtest
+              desc: Only tests and higher fixture packages import a fixture package; see decision 29.
+            - pkg: github.com/tkakkie/ribbitto/internal/conversation/conversationtest
+              desc: Only tests import a fixture package; see decision 29.
+        # A fixture package imports kernel, its own root, the roots it needs for
+        # types and lower fixture packages; never a store, wiring or the bridge.
+        identityfixture:
+          list-mode: lax
+          files: ["**/internal/identity/identitytest/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/identity$
+            - github.com/tkakkie/ribbitto/internal/kernel$
+          deny: *non_html
+        orgfixture:
+          list-mode: lax
+          files: ["**/internal/org/orgtest/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/org$
+            - github.com/tkakkie/ribbitto/internal/kernel$
+            - github.com/tkakkie/ribbitto/internal/identity/identitytest$
+          deny: *non_html
+        conversationfixture:
+          list-mode: lax
+          files: ["**/internal/conversation/conversationtest/*.go", "!$test"]
+          allow:
+            - github.com/tkakkie/ribbitto/internal/conversation$
+            - github.com/tkakkie/ribbitto/internal/org$
+            - github.com/tkakkie/ribbitto/internal/kernel$
+            - github.com/tkakkie/ribbitto/internal/identity/identitytest$
+            - github.com/tkakkie/ribbitto/internal/org/orgtest$
           deny: *non_html
         web:
           list-mode: lax

@@ -83,23 +83,32 @@ and `internal/web` run in parallel with isolated databases and test-local state.
 Their subtests remain sequential, preserving shared fixtures, clocks and
 order-dependent assertions, unless each subtest opens its own database.
 
-`pgtest.OrganizationWithOwner(t, pool, slug, channelName)` creates an organisation
+Fixtures live with the module that owns their tables
+([decision 29](decisions/29-test-fixtures-live-with-the-module-that-owns-their-tables.md)):
+`identitytest.Account`, `orgtest.Organization` and `orgtest.Member`, and
+`conversationtest.Channel`. Only tests and higher fixture packages import
+them; they import no store, wiring or bridge.
+
+`conversationtest.OrganizationWithOwner(t, pool, slug, channelName)` creates an organisation
 at `event_seq` 1, an owner account at `<slug>@example.org`, an owner membership
 with handle `owner` and `joined_event_seq` 1, and exactly one default channel
 with the supplied name. The organisation and account display names equal the
-slug. It returns the organisation, account and member IDs plus a pgtest-local
+slug. It writes org's and identity's rows only through `orgtest` and
+`identitytest`, and returns the organisation, account and member IDs plus a
 `ChannelFixture` with the same fields as `conversation.Channel`.
+`TestOrganizationWithOwner` pins these premises.
 
-`pgtest.Organization`, `Account`, `Member` and `Channel` remain composable
-building blocks for partial setups or fixtures with different values.
+The other four remain composable building blocks for partial setups or
+fixtures with different values.
 `Organization` sets the supplied `event_seq`; `Member` sets the supplied role,
 handle and `joined_event_seq` without advancing it. `Account` uses a placeholder
 password hash and creates no membership. `Channel` inserts the channel and its
 default topic in one raw-SQL CTE with an explicit name/default flag, satisfying
-the deferred foreign key, and leaves sequences unchanged. These fixtures import
-no store or `conversation` and remain here until step 5. All fixture helpers
-use `t.Context()` internally; none creates a setup row. Schema, migration and
+the deferred foreign key, and leaves sequences unchanged. All fixture helpers
+use `t.Context()` internally; none creates an event or setup row. Schema, migration and
 adversarial tests keep direct SQL to express states these helpers should not hide.
+`internal/infra/postgres/pgtest` keeps an identical copy of these fixtures
+until migration step 5.11 deletes it.
 
 `make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`.
 `sqlc.yaml` has one entry per module: `db/queries/identity/`,

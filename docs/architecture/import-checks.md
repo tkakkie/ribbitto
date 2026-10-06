@@ -3,8 +3,8 @@
 How `make check` enforces the import rules of [packages and allowed imports](packages.md). The [architecture index](README.md) lists
 the other files.
 
-A package's sub-packages may import each other, apart from the store and
-wiring rules below. depguard in `.golangci.yml`
+A package's sub-packages may import each other, apart from the store,
+wiring and fixture rules below. depguard in `.golangci.yml`
 enforces the part of [the package table](packages.md) that matters most, and a violating import
 fails `make check`:
 
@@ -19,6 +19,12 @@ fails `make check`:
   wiring;
 - a module's wiring (`identitypg`, `realtimepg`, `orgpg`, `conversationpg`) is imported only by `cmd/*` and tests,
   and its store only by its wiring and the store's own tests;
+- the `fixtures` rule lets only tests and higher fixture packages import the
+  test-only `identitytest`, `orgtest` and `conversationtest` (decision 29);
+  `identityfixture`, `orgfixture` and `conversationfixture` let each import
+  only `kernel`, its own root, the roots it needs for types and lower
+  fixture packages (`conversationtest` → `orgtest` → `identitytest`), and
+  the store, wiring and bridge rules keep them off stores and wiring;
 - only stores (`**/internal/postgres/**`) import `platform/postgres/pgxbridge`;
   `make lint-fixtures` (part of `make check`) proves a module root is
   rejected and a store accepted;

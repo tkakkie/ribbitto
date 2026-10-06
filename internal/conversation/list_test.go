@@ -61,7 +61,7 @@ func (f *directoryHistory) LookupTopics(_ context.Context, org, ch kernel.ID, id
 	}
 	return map[kernel.ID]conversation.Topic{{}: {Name: "Design"}}, f.step("topics")
 }
-func TestBefore(t *testing.T) {
+func TestPageHistory(t *testing.T) {
 	for _, failure := range []string{"", "history", "members", "names", "topics", "missing topic", "missing member", "missing account"} {
 		t.Run("failure="+failure, func(t *testing.T) {
 			f := &directoryHistory{t: t, fail: failure}
@@ -106,7 +106,7 @@ func (fullHistory) LookupTopics(context.Context, kernel.ID, kernel.ID, []kernel.
 	return map[kernel.ID]conversation.Topic{{}: {}}, nil
 }
 
-func TestBeforePages(t *testing.T) {
+func TestPagePaging(t *testing.T) {
 	for _, tt := range []struct {
 		messages int
 		pages    []int

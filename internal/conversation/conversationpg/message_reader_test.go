@@ -17,7 +17,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org"
 )
 
-func TestMessageOne(t *testing.T) {
+func TestReaderOne(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
@@ -64,7 +64,7 @@ func TestMessageOne(t *testing.T) {
 	}
 }
 
-func TestMessagePaging(t *testing.T) {
+func TestReaderPaging(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()

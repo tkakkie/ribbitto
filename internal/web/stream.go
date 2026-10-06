@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -90,7 +90,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	// A topic stream checks its topic before anything is sent: an unknown
 	// topic, or one of another channel, is 404 like a non-member.
-	var topicID *domain.ID
+	var topicID *kernel.ID
 	if raw := r.PathValue("topicID"); raw != "" {
 		selected, ok := pathID(raw)
 		if !ok {
@@ -175,7 +175,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 // openStream keeps the register-then-re-check order that closes the race
 // with sign-out. On success the caller must
 // defer cleanup; on failure it has written the response and freed the slot.
-func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID domain.ID, session identity.Session) (ctx context.Context, cleanup func(), ok bool) {
+func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID kernel.ID, session identity.Session) (ctx context.Context, cleanup func(), ok bool) {
 	limit := p.stream.MaxPerAccount
 	if limit <= 0 {
 		limit = DefaultMaxStreamsPerAccount

@@ -2,11 +2,11 @@ package view
 
 import (
 	"fmt"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
 
-func idValue(id domain.ID) string {
+func idValue(id kernel.ID) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:])
 }
 

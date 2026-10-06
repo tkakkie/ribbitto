@@ -9,7 +9,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -17,7 +17,7 @@ import (
 
 // Branching moves selected messages to another topic of the channel.
 type Branching interface {
-	Branch(ctx context.Context, m org.Membership, channelID domain.ID, b conversation.Branch, notice func(conversation.Topic) string) (conversation.Topic, error)
+	Branch(ctx context.Context, m org.Membership, channelID kernel.ID, b conversation.Branch, notice func(conversation.Topic) string) (conversation.Topic, error)
 }
 
 // branch serves POST …/channels/{channelID}/branch. The form names the
@@ -104,7 +104,7 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 }
 
-func (p channelPages) branchError(w http.ResponseWriter, r *http.Request, m org.Membership, id domain.ID, status int, key string) {
+func (p channelPages) branchError(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, key string) {
 	// Scope error responses too; invalid input must not reveal another channel.
 	if _, err := p.channels.Get(r.Context(), m, id); err != nil {
 		if errors.Is(err, conversation.ErrChannelNotFound) {

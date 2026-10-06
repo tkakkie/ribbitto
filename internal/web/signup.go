@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -15,7 +15,7 @@ import (
 // SignUpService exposes registration availability to installation-wide pages.
 type SignUpService interface {
 	Open(context.Context) (bool, error)
-	SignUp(ctx context.Context, displayName, handle, email, password string) (domain.ID, error)
+	SignUp(ctx context.Context, displayName, handle, email, password string) (kernel.ID, error)
 }
 
 func registerSignUp(routes sessionMux, pages *pageRenderer, service SignUpService, sessions SessionReplacer, allow func(http.ResponseWriter, *http.Request) bool) {

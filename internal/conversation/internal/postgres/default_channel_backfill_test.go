@@ -5,9 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
-	"github.com/tkakkie/ribbitto/db/migrations"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
@@ -17,25 +14,14 @@ func TestDefaultChannelBackfill(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	pool := pgtest.NewEmpty(t)
-	db := stdlib.OpenDBFromPool(pool)
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := provider.UpTo(ctx, 5); err != nil {
-		t.Fatal(err)
-	}
+	migrator := pgtest.NewMigrator(t, pool)
+	migrator.UpTo(ctx, 5)
 	// acme: what the old setup left (an organisation and its setup row, no
 	// channel); globex: a fixture without setup (setup is one-time);
 	// initech: a non-default "general" already exists; hooli: already has a
 	// default under another name.
 	// Raw SQL preserves pre-upgrade states that current-schema fixtures cannot express.
-	_, err = pool.Exec(ctx, `
+	_, err := pool.Exec(ctx, `
 		INSERT INTO organization (slug, name) VALUES ('acme', 'Acme'), ('globex', 'Globex'), ('initech', 'Initech'), ('hooli', 'Hooli');
 		INSERT INTO setup (organization_id) SELECT id FROM organization WHERE slug = 'acme';
 		INSERT INTO channel (organization_id, name, is_default)
@@ -48,9 +34,7 @@ func TestDefaultChannelBackfill(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT (SELECT c.id::text FROM channel c JOIN organization o ON o.id = c.organization_id WHERE o.slug = 'initech' AND c.name = 'general'), (SELECT c.id::text FROM channel c JOIN organization o ON o.id = c.organization_id WHERE o.slug = 'hooli')").Scan(&initechGeneral, &hooliDefault); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := provider.UpTo(ctx, 6); err != nil {
-		t.Fatal(err)
-	}
+	migrator.UpTo(ctx, 6)
 	rows, err := pool.Query(ctx, `
 		SELECT o.slug, count(*) FILTER (WHERE c.is_default), min(c.id::text) FILTER (WHERE c.is_default), min(c.name) FILTER (WHERE c.is_default), count(*)
 		FROM organization o LEFT JOIN channel c ON c.organization_id = o.id GROUP BY o.slug`)

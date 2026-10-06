@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 	"github.com/tkakkie/ribbitto/db/migrations"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
@@ -31,6 +32,61 @@ func New(t *testing.T) *pgxpool.Pool {
 func NewEmpty(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	return newDatabase(t, false)
+}
+
+// Migrator moves a test database between migration versions, so a test can
+// write the rows an older binary wrote and then check what a migration does
+// to them. Its methods fail the test that created it on any error.
+type Migrator struct {
+	t        *testing.T
+	provider *goose.Provider
+}
+
+// NewMigrator returns a Migrator over the pool's database; the database/sql
+// handle it opens is closed when the test ends.
+func NewMigrator(t *testing.T, pool *pgxpool.Pool) *Migrator {
+	t.Helper()
+	db := stdlib.OpenDBFromPool(pool)
+	// Cleanup is LIFO: this runs before the pool from New or NewEmpty closes.
+	t.Cleanup(func() { require(t, db.Close()) })
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	require(t, err)
+	return &Migrator{t: t, provider: provider}
+}
+
+// UpTo applies the pending migrations up to and including version.
+func (m *Migrator) UpTo(ctx context.Context, version int64) {
+	m.t.Helper()
+	_, err := m.provider.UpTo(ctx, version)
+	m.require(err, "migrating up to %d", version)
+}
+
+// Up applies every pending migration.
+func (m *Migrator) Up(ctx context.Context) {
+	m.t.Helper()
+	_, err := m.provider.Up(ctx)
+	m.require(err, "migrating up")
+}
+
+// Down reverts the latest applied migration.
+func (m *Migrator) Down(ctx context.Context) {
+	m.t.Helper()
+	_, err := m.provider.Down(ctx)
+	m.require(err, "migrating down")
+}
+
+// DownTo reverts every applied migration after version.
+func (m *Migrator) DownTo(ctx context.Context, version int64) {
+	m.t.Helper()
+	_, err := m.provider.DownTo(ctx, version)
+	m.require(err, "migrating down to %d", version)
+}
+
+func (m *Migrator) require(err error, format string, args ...any) {
+	m.t.Helper()
+	if err != nil {
+		m.t.Fatalf("%s: %v", fmt.Sprintf(format, args...), err)
+	}
 }
 
 func adminConnection(t *testing.T) *pgx.Conn {

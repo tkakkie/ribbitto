@@ -62,7 +62,7 @@ func (c *Cleaner) expireBatch(ctx context.Context, tx platform.Tx, organizationI
 		return 0, fmt.Errorf("locking event retention organisation: %w", err)
 	}
 	q := sqlcgen.New(pgxbridge.Tx(tx))
-	lowest, err := q.LowestEvents(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+	lowest, err := q.LowestEvents(ctx, uuid(organizationID))
 	if err != nil {
 		return 0, fmt.Errorf("reading the oldest events: %w", err)
 	}
@@ -80,7 +80,7 @@ func (c *Cleaner) expireBatch(ctx context.Context, tx platform.Tx, organizationI
 		return 0, nil
 	}
 	row, err := q.DeleteEventsThrough(ctx, sqlcgen.DeleteEventsThroughParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Through: through,
+		OrganizationID: uuid(organizationID), Through: through,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("deleting event batch: %w", err)

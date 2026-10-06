@@ -45,7 +45,7 @@ func (s *ChannelStore) createChannel(ctx context.Context, organizationID kernel.
 func (s *ChannelStore) ListChannels(ctx context.Context, organizationID kernel.ID) ([]conversation.Channel, error) {
 	rows, err := s.queries.ListChannels(ctx, uuid(organizationID))
 	if err != nil {
-		return nil, fmt.Errorf("listing channels: %w", err)
+		return nil, fmt.Errorf("selecting channels: %w", err)
 	}
 	channels := make([]conversation.Channel, 0, len(rows))
 	for _, row := range rows {

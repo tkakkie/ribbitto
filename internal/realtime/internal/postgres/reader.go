@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -47,7 +46,7 @@ func (r *Reader) EventsAfter(ctx context.Context, organizationID kernel.ID, afte
 			return realtime.ErrCursorExpired
 		}
 		rows, err := sqlcgen.New(pgxbridge.Snapshot(snapshot)).EventsAfter(ctx, sqlcgen.EventsAfterParams{
-			OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, AfterSeq: after, BatchLimit: int64(limit),
+			OrganizationID: uuid(organizationID), AfterSeq: after, BatchLimit: int64(limit),
 		})
 		if err != nil {
 			return fmt.Errorf("reading events: %w", err)

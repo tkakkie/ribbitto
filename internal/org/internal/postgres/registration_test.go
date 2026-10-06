@@ -119,6 +119,9 @@ func TestRegistrationWriterErrors(t *testing.T) {
 			if tc.want != nil && !errors.Is(err, tc.want) || tc.want == nil && (!errors.As(err, &pgErr) || pgErr.Code != "23514" || errors.Is(err, org.ErrSlugUnavailable) || errors.Is(err, org.ErrInvalidHandle)) {
 				t.Fatalf("error = %v, want %v", err, tc.want)
 			}
+			if tc.name == "organization_slug_check" && (!errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != tc.name) {
+				t.Fatalf("slug CHECK cause = %v, want SQLSTATE 23514 and constraint %s", err, tc.name)
+			}
 			// The handle CHECKs keep the PostgreSQL error, so check which one fired.
 			if errors.Is(tc.want, org.ErrInvalidHandle) && (!errors.As(err, &pgErr) || pgErr.ConstraintName != tc.name) {
 				t.Fatalf("constraint = %v, want %s", err, tc.name)

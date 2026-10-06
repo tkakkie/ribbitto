@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres/sqlcgen"
@@ -52,7 +51,7 @@ func NewDirectoryIn(snapshot platform.Snapshot) *Directory {
 
 // LookupDisplayNames returns the display names of the accounts that exist.
 func (d *Directory) LookupDisplayNames(ctx context.Context, ids []kernel.ID) (map[kernel.ID]string, error) {
-	rows, err := d.queries.LookupDisplayNames(ctx, uuidArray(ids))
+	rows, err := d.queries.LookupDisplayNames(ctx, uuids(ids))
 	if err != nil {
 		return nil, fmt.Errorf("looking up display names: %w", err)
 	}
@@ -61,14 +60,4 @@ func (d *Directory) LookupDisplayNames(ctx context.Context, ids []kernel.ID) (ma
 		result[row.ID.Bytes] = row.DisplayName
 	}
 	return result, nil
-}
-
-// uuidArray is identity's own copy of a helper org's store also has; modules
-// share no store code (decision 26).
-func uuidArray(ids []kernel.ID) []pgtype.UUID {
-	result := make([]pgtype.UUID, len(ids))
-	for i, id := range ids {
-		result[i] = pgtype.UUID{Bytes: id, Valid: true}
-	}
-	return result
 }

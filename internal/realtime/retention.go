@@ -22,9 +22,9 @@ type EventCleaner interface {
 // 26). Posting takes the same lock first, so the lock orders the two.
 type RetentionBoundary interface {
 	LockForRetention(ctx context.Context, organizationID kernel.ID) error
-	// RaiseBoundary sets the boundary to through only if that is higher:
-	// a later batch can delete a lower sequence that expired later, and
-	// lowering the boundary would admit cursors whose replay is incomplete.
+	// RaiseBoundary sets the boundary to through only if that is higher.
+	// The boundary only rises, so a cursor whose replay is incomplete is
+	// never admitted again.
 	RaiseBoundary(ctx context.Context, organizationID kernel.ID, through int64) error
 }
 

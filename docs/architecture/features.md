@@ -35,9 +35,8 @@ and the page snapshot) is in
 Org's test-only `GetOrganizationBySlug` and `GetMemberByOrganizationAndAccount`
 queries live in `db/queries/org/`. [Modules](modules.md) says where
 conversation's tests live. Another feature's tests write a table only through
-its owner's test-only fixture package (`identitytest`, `orgtest`,
-`conversationtest`; [decision 29](../decisions/29-test-fixtures-live-with-the-module-that-owns-their-tables.md)),
-which uses no store; scenario-specific SQL stays in the test.
+its owner's test-only fixture package; [modules](modules.md) states the
+fixture rule.
 
 **Known exceptions.** Cross-feature writes that must commit atomically:
 

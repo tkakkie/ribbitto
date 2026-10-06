@@ -6,9 +6,10 @@
 // caller-owned transaction or snapshot through pgxbridge, and never opens,
 // commits or rolls one back.
 //
-// conversationpg.NewChannels and NewTopics bind the channel and topic stores
-// to the pool, and DefaultChannelCreatorIn binds setup's default channel to
-// org's transaction. Writer holds posting's and branching's writes and maps
+// ChannelStore (channel reads and creation) and TopicStore (the topic
+// lookup) run on the pool; DefaultChannelCreator holds setup's
+// default-channel write, and
+// DefaultChannelCreatorIn binds it to org's transaction. Writer holds posting's and branching's writes and maps
 // their constraints to conversation's and org's errors, except the branch
 // notice's; WriterIn binds it to their transaction. ReadStore
 // holds the page snapshot's channel, topic and message reads and no write,

@@ -1,8 +1,8 @@
-// Package realtime delivers durable events to open connections through
-// authorization, rendering, event-reading and sending interfaces; the SSE
-// framing itself is web's.
+// Package realtime is the realtime module's root (decision 26): it delivers
+// durable events to open connections through authorization, rendering,
+// event-reading and sending interfaces; the SSE framing itself is web's.
 //
-// Feature: realtime (feature map in docs/architecture/features.md). It
+// Module: realtime (feature map in docs/architecture/features.md). It
 // declares the durable event types (Event, an envelope it routes without
 // kind names; EventKind, whose values each publisher declares;
 // ErrCursorExpired) and

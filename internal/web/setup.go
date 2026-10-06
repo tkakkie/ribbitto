@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -26,7 +26,7 @@ type SetupService interface {
 // replaces the one before it. An uncertain outcome ends its streams. It
 // offers no plain Create, so a new flow cannot forget that.
 type SessionReplacer interface {
-	Replace(ctx context.Context, previousToken string, accountID domain.ID) (string, time.Time, error)
+	Replace(ctx context.Context, previousToken string, accountID kernel.ID) (string, time.Time, error)
 }
 
 func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService, sessions SessionReplacer, allow func(http.ResponseWriter, *http.Request) bool) {
@@ -92,7 +92,7 @@ func registerSetup(routes sessionMux, pages *pageRenderer, service SetupService,
 	routes.HandleFuncWithoutSession("POST /setup", handler)
 }
 
-func signInAndRedirect(w http.ResponseWriter, r *http.Request, sessions SessionReplacer, accountID domain.ID, doing string) {
+func signInAndRedirect(w http.ResponseWriter, r *http.Request, sessions SessionReplacer, accountID kernel.ID, doing string) {
 	token, expiresAt, err := sessions.Replace(r.Context(), incomingSession(r), accountID)
 	if err != nil {
 		serverError(w, r, doing, err)

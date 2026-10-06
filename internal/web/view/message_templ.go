@@ -12,14 +12,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
 
 // Message holds the conversation fields rendered by a message item.
 type Message struct {
-	ID                  domain.ID
-	TopicID             domain.ID
+	ID                  kernel.ID
+	TopicID             kernel.ID
 	DisplayName, Handle string
 	CreatedAt           time.Time
 	Body                string
@@ -32,7 +32,7 @@ type Message struct {
 }
 
 // MessageDOMID is the stable DOM id shared by page and stream message items.
-func MessageDOMID(id domain.ID) string {
+func MessageDOMID(id kernel.ID) string {
 	return fmt.Sprintf("message-%x", id)
 }
 
@@ -338,7 +338,7 @@ func messageItem(entry Message, announcement string) templ.Component {
 }
 
 // MovedMessageItems carries replacement items without new-post announcements.
-func MovedMessageItems(entries []Message, from, to domain.ID) templ.Component {
+func MovedMessageItems(entries []Message, from, to kernel.ID) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {

@@ -202,8 +202,7 @@ linters:
             - github.com/tkakkie/ribbitto/web/static$
             - github.com/tkakkie/ribbitto/internal/web$
             - github.com/tkakkie/ribbitto/internal/web/
-            - github.com/tkakkie/ribbitto/internal/domain$
-            - github.com/tkakkie/ribbitto/internal/domain/
+            - github.com/tkakkie/ribbitto/internal/kernel$
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/org$
             - github.com/tkakkie/ribbitto/internal/conversation$

@@ -96,8 +96,8 @@ internal/realtime/realtimepg -> internal/platform/postgres
 internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
 internal/web -> internal/conversation
-internal/web -> internal/domain
 internal/web -> internal/identity
+internal/web -> internal/kernel
 internal/web -> internal/org
 internal/web -> internal/realtime
 internal/web -> internal/web/i18n
@@ -105,6 +105,6 @@ internal/web -> internal/web/middleware
 internal/web -> internal/web/view
 internal/web -> web/static
 internal/web/middleware -> internal/identity
-internal/web/view -> internal/domain
+internal/web/view -> internal/kernel
 internal/web/view -> internal/web/i18n
 ```

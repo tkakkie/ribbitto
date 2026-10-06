@@ -8,6 +8,7 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
@@ -34,8 +35,9 @@ func TestReadStoreIn(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx, f := t.Context(), newFixtures(t, pool)
 	// acme's general also has a named topic, and acme a second channel.
-	var random, randomTopic, beta kernel.ID
-	fixture(t, pool, channelSQL, []any{f.acme, "random"}, &random, &randomTopic)
+	randomChannel := conversationtest.Channel(t, pool, f.acme, "random", false)
+	random, randomTopic := randomChannel.ID, randomChannel.DefaultTopicID
+	var beta kernel.ID
 	fixture(t, pool, "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, 'beta') RETURNING id", []any{f.acme, f.general}, &beta)
 	// m[seq] is the message at that event_seq: 1–3 in general, 4 in random,
 	// 5 in globex's channel.
@@ -130,9 +132,10 @@ func TestReadStoreChannelsAndTopics(t *testing.T) {
 	ctx, f := t.Context(), newFixtures(t, pool)
 	// acme's channels are created out of name order, and general's named
 	// topics out of name order and with mixed case.
-	var random, randomTopic, alpha, alphaTopic, beta, gamma, alphaNamed kernel.ID
-	fixture(t, pool, channelSQL, []any{f.acme, "random"}, &random, &randomTopic)
-	fixture(t, pool, channelSQL, []any{f.acme, "alpha"}, &alpha, &alphaTopic)
+	randomChannel := conversationtest.Channel(t, pool, f.acme, "random", false)
+	alphaChannel := conversationtest.Channel(t, pool, f.acme, "alpha", false)
+	random, randomTopic, alpha := randomChannel.ID, randomChannel.DefaultTopicID, alphaChannel.ID
+	var beta, gamma, alphaNamed kernel.ID
 	for _, topic := range []struct {
 		name string
 		id   *kernel.ID

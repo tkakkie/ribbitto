@@ -9,6 +9,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
@@ -20,7 +21,7 @@ func TestDefaultChannelCreatorIn(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	acme := fixtureOrganization(t, pool, "acme")
+	acme := orgtest.Organization(t, pool, "acme", "acme", 0)
 	var createDefault org.DefaultChannelCreatorIn = func(tx platform.Tx) org.DefaultChannelCreator { return conversationpg.DefaultChannelCreatorIn(tx) }
 	rollback := errors.New("caller rolls back")
 	err := platform.InTx(ctx, pool, func(tx platform.Tx) error {

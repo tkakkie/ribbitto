@@ -54,5 +54,7 @@ resolver in conversation's root: `conversation.Topics.Get` takes the
 resolved `org.Membership`, so web never supplies the organisation.
 
 Conversation's schema, constraint, payload-shape and backfill tests live in its
-store with local raw-SQL fixtures. Its posting, branching and reader flow
-tests live in `conversationpg`; `internal/infra/postgres` has no tests.
+store. Its store tests take ordinary rows from the owners' fixture packages
+(decision 29), keeping raw SQL for invalid and historical states. Its posting,
+branching and reader flow tests live in `conversationpg`;
+`internal/infra/postgres` has no tests.

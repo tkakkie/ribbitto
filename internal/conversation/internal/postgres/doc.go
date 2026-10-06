@@ -7,12 +7,13 @@
 // commits or rolls one back.
 //
 // ChannelStore (channel reads and creation) and TopicStore (the topic
-// lookup) run on the pool; DefaultChannelCreator holds setup's
-// default-channel write, and
-// DefaultChannelCreatorIn binds it to org's transaction. Writer holds posting's and branching's writes and maps
-// their constraints to conversation's and org's errors, except the branch
-// notice's; WriterIn binds it to their transaction. ReadStore
-// holds the page snapshot's channel, topic and message reads and no write,
-// delegating the channel lookups and embedding the read-only TopicStore for
-// the topic by ID; ReadStoreIn binds it to Reader's snapshot.
+// lookup) use the pool or caller-owned transaction they are given.
+// DefaultChannelCreator holds setup's default-channel write, and
+// DefaultChannelCreatorIn binds it to org's transaction. Writer holds
+// posting's and branching's writes and maps their constraints to
+// conversation's and org's errors, except the branch notice's; WriterIn
+// binds it to their transaction. ReadStore holds the page snapshot's
+// channel, topic and message reads and no write, delegating the channel
+// lookups and embedding the read-only TopicStore for the topic by ID;
+// ReadStoreIn binds it to Reader's snapshot.
 package postgres

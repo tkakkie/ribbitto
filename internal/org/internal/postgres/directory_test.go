@@ -4,9 +4,11 @@ import (
 	"maps"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
@@ -15,14 +17,14 @@ func TestDirectoryLookupMembers(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	acme := fixtureOrganization(t, pool, "acme", "Acme", 0)
-	globex := fixtureOrganization(t, pool, "globex", "Globex", 0)
-	alice := fixtureAccount(t, pool, "alice@example.org", "Alice")
-	bob := fixtureAccount(t, pool, "bob@example.org", "Bob")
-	carol := fixtureAccount(t, pool, "carol@example.org", "Carol")
-	aliceMember := fixtureMember(t, pool, acme, alice, org.RoleMember, "alice", 1)
-	bobMember := fixtureMember(t, pool, acme, bob, org.RoleMember, "bob", 1)
-	carolMember := fixtureMember(t, pool, globex, carol, org.RoleMember, "carol", 1)
+	acme := orgtest.Organization(t, pool, "acme", "Acme", 0)
+	globex := orgtest.Organization(t, pool, "globex", "Globex", 0)
+	alice := identitytest.Account(t, pool, "alice@example.org", "Alice")
+	bob := identitytest.Account(t, pool, "bob@example.org", "Bob")
+	carol := identitytest.Account(t, pool, "carol@example.org", "Carol")
+	aliceMember := orgtest.Member(t, pool, acme, alice, org.RoleMember, "alice", 1)
+	bobMember := orgtest.Member(t, pool, acme, bob, org.RoleMember, "bob", 1)
+	carolMember := orgtest.Member(t, pool, globex, carol, org.RoleMember, "carol", 1)
 	// Bob is in the requested organisation but was not requested by ID.
 	for _, tc := range []struct {
 		name string

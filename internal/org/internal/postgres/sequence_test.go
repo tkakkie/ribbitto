@@ -7,6 +7,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
@@ -15,7 +16,7 @@ func TestEventCursorIn(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	ctx := t.Context()
-	id := fixtureOrganization(t, pool, "acme", "Acme", 7)
+	id := orgtest.Organization(t, pool, "acme", "Acme", 7)
 	requireNoError(t, platform.InSnapshot(ctx, pool, func(snapshot platform.Snapshot) error {
 		cursor := postgres.EventCursorIn(snapshot)
 		if got, err := cursor.EventSeq(ctx, id); err != nil || got != 7 {

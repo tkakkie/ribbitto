@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres"
 	"github.com/tkakkie/ribbitto/internal/identity/internal/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -46,7 +47,7 @@ func TestAccountCreatorErrors(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	q := sqlcgen.New(pool)
-	id := account(t, pool, "taken@example.org", "Original")
+	id := identitytest.Account(t, pool, "taken@example.org", "Original")
 	original, err := q.GetAccountByID(ctx, pgtype.UUID{Bytes: id, Valid: true})
 	requireNoError(t, err)
 	for _, tc := range []struct {

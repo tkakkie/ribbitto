@@ -40,7 +40,8 @@ the temporary implementation behind it.
 | `infra/postgres/pgtest` (delegates `New`, `NewEmpty`; keeps a copy of the fixtures in `identitytest`, `orgtest` and `conversationtest` until its callers switch in 5.5–5.9) | `platform` lifecycle helpers | 0 | 5 (5.11 deletes it) |
 
 Setup's and sign-up's database tests live in `internal/org/orgpg`,
-with local raw-SQL fixtures and event-log assertions.
+with the owners' fixture packages (decision 29) and local event-log
+assertions.
 Sign-up's setup organisation comes from `org`'s setup.
 
 Inside `conversation`, a channel's default topic, branching's moves and

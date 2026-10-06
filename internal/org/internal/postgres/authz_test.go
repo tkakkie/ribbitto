@@ -4,9 +4,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
@@ -16,17 +18,17 @@ func TestAuthzStore(t *testing.T) {
 	ctx := t.Context()
 	// acme is the setup organisation; globex is a second one, inserted
 	// directly as later multi-organisation work would.
-	acme := fixtureOrganization(t, pool, "acme", "Acme", 0)
-	globex := fixtureOrganization(t, pool, "globex", "Globex", 0)
-	alice := fixtureAccount(t, pool, "alice@example.com", "Alice")
-	bob := fixtureAccount(t, pool, "bob@example.com", "Bob")
-	carol := fixtureAccount(t, pool, "carol@example.com", "Carol")
+	acme := orgtest.Organization(t, pool, "acme", "Acme", 0)
+	globex := orgtest.Organization(t, pool, "globex", "Globex", 0)
+	alice := identitytest.Account(t, pool, "alice@example.com", "Alice")
+	bob := identitytest.Account(t, pool, "bob@example.com", "Bob")
+	carol := identitytest.Account(t, pool, "carol@example.com", "Carol")
 	// Direct SQL selects the home organisation without adding full setup fixtures.
 	if _, err := pool.Exec(ctx, "INSERT INTO setup (organization_id) VALUES ($1)", acme); err != nil {
 		t.Fatal(err)
 	}
-	fixtureMember(t, pool, acme, alice, org.RoleOwner, "alice", 1)
-	fixtureMember(t, pool, globex, bob, org.RoleMember, "bob", 1)
+	orgtest.Member(t, pool, acme, alice, org.RoleOwner, "alice", 1)
+	orgtest.Member(t, pool, globex, bob, org.RoleMember, "bob", 1)
 	store := postgres.NewAuthzStore(pool)
 	m, err := store.Membership(ctx, alice, "acme")
 	if err != nil || m.Organization != (org.Organization{ID: acme, Slug: "acme", Name: "Acme"}) ||

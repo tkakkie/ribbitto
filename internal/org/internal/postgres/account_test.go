@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
@@ -35,7 +36,7 @@ func TestOrganizationMemberSchema(t *testing.T) {
 		requireNoError(t, err)
 		name, err := identity.ValidateDisplayName(strings.Repeat("界", size))
 		requireNoError(t, err)
-		account := fixtureAccount(t, pool, email, name)
+		account := identitytest.Account(t, pool, email, name)
 		accounts = append(accounts, pgtype.UUID{Bytes: account, Valid: true})
 		name, err = org.ValidateOrganizationName(strings.Repeat("界", []int{1, 100}[i]))
 		requireNoError(t, err)

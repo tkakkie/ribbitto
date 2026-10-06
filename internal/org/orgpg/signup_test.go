@@ -9,9 +9,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -30,10 +32,10 @@ func TestSignUp(t *testing.T) {
 		t.Fatalf("before setup: %v", err)
 	}
 	// Insert the other organisation first to catch selection by creation order.
-	other := fixtureOrganization(t, pool, "other", "Other", 0)
+	other := orgtest.Organization(t, pool, "other", "Other", 0)
 	// A handle is unique only within its organisation: "alice" is taken in the other one.
-	otherAccount := fixtureAccount(t, pool, "other@example.org", "Other")
-	fixtureMember(t, pool, other, otherAccount, org.RoleOwner, "alice", 1)
+	otherAccount := identitytest.Account(t, pool, "other@example.org", "Other")
+	orgtest.Member(t, pool, other, otherAccount, org.RoleOwner, "alice", 1)
 	result, err := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel).Complete(ctx, "secret", org.SetupInput{OrganizationName: "Team", Slug: "team", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
 	requireNoError(t, err)
 	id, err := service.SignUp(ctx, "Alice", "alice", "alice@example.org", "long enough password")

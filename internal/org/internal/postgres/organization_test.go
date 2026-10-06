@@ -6,13 +6,14 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres/sqlcgen"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 func TestGetOrganizationBySlug(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
-	fixtureOrganization(t, pool, "example", "Example", 0)
+	orgtest.Organization(t, pool, "example", "Example", 0)
 	queries := sqlcgen.New(pool)
 	organization, err := queries.GetOrganizationBySlug(t.Context(), "example")
 	if err != nil {

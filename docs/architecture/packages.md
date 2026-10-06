@@ -19,7 +19,7 @@ packages. See [load client](load-client.md) for limits and usage.
 | Package | Responsibility | May import from this module |
 |---|---|---|
 | `internal/kernel` | What every module shares and none owns ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)): `ID` only today. | nothing |
-| `internal/platform/postgres` | The pool, the migration connection and runner, statement counting for development metrics, test databases (`pgtest`), and the opaque `Tx` and `Snapshot` with `InTx` and `InSnapshot`. No feature queries. Its `pgxbridge` unwraps a handle to pgx, for stores only. | `kernel`, `db/migrations` |
+| `internal/platform/postgres` | The pool, the migration connection and runner, statement counting for development metrics, test databases (`pgtest`, which also migrates one to a version), and the opaque `Tx` and `Snapshot` with `InTx` and `InSnapshot`. No feature queries. Its `pgxbridge` unwraps a handle to pgx, for stores only. | `kernel`, `db/migrations` |
 | `internal/domain` | Only the `ID` alias of `kernel.ID` remains until step 5 removes it. Channels, topics, messages and their rules are in `conversation`. | `kernel` |
 | `internal/identity` | The `identity` module's root (step 1): `Account`, the email, password and display-name rules, password hashing, sessions, signing in and the display-name `Directory`, with the store interfaces they need. Its store, `internal/identity/internal/postgres`, runs `db/queries/identity/` on its own `sqlcgen`; its wiring, `identitypg`, builds sessions, sign-in, the snapshot-bound directory (`AccountsIn`) and the transaction-bound account creator (`AccountCreatorIn`). Closures in `cmd/*` and the tests adapt the creator to org's factory and prove that it fits `org.AccountCreator`. The root owns `ErrEmailTaken` and `ErrInvalidEmail`. | `kernel`, `platform` |
 | `internal/infra/postgres` | Only `pgtest` remains until step 5: shared org and identity fixtures plus a raw-SQL channel and default topic, with databases delegated to the platform. It imports no store or `conversation`. | `domain`, `org`, `platform/postgres/pgtest` |
@@ -37,7 +37,7 @@ lists those rules and the `doc.go` requirement.
 
 ```mermaid
 flowchart LR
-  cmd[cmd/ribbitto] --> web & orgpg[org/orgpg] & conversationpg[conversation/conversationpg] & identity & identitypg[identity/identitypg] & realtimepg & realtime & platform[platform/postgres] & migrations[db/migrations]
+  cmd[cmd/ribbitto] --> web & orgpg[org/orgpg] & conversationpg[conversation/conversationpg] & identity & identitypg[identity/identitypg] & realtimepg & realtime & platform[platform/postgres]
   seed[cmd/seed] --> conversation & conversationpg & org & orgpg & identity & identitypg & realtimepg & platform & domain
   web[internal/web] --> org & conversation & identity & kernel & realtime & static[web/static]
   postgres[infra/postgres/pgtest] --> org & domain & platformpgtest[platform/postgres/pgtest]
@@ -54,7 +54,7 @@ flowchart LR
   identitypg --> identity & store[identity/internal/postgres] & platform
   store --> identity & platform & kernel
   domain[internal/domain] --> kernel[internal/kernel]
-  platform --> kernel & migrations
+  platform --> kernel & migrations[db/migrations]
 ```
 
 The diagram shows allowed imports; [`docs/dependencies.md`](../dependencies.md) lists the actual ones.

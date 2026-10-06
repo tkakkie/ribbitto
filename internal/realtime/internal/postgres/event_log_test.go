@@ -6,12 +6,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
-	"github.com/tkakkie/ribbitto/db/migrations"
 	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/org"
+	platformtest "github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
 
 func assertEventLog(t *testing.T, pool *pgxpool.Pool, org domain.ID, wantSeq int64) {
@@ -39,25 +37,20 @@ func TestEventLogMigration(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.NewEmpty(t)
 	ctx := t.Context()
-	db := stdlib.OpenDBFromPool(pool)
-	t.Cleanup(func() { requireNoError(t, db.Close()) })
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
-	requireNoError(t, err)
-	_, err = provider.UpTo(ctx, 6)
-	requireNoError(t, err)
+	migrator := platformtest.NewMigrator(t, pool)
+	migrator.UpTo(ctx, 6)
 	// Raw SQL writes what the binary of migration 6 wrote: today's stores
 	// need tables and columns that do not exist yet.
 	old := pgtest.OrganizationFixture{OrganizationID: pgtest.Organization(t, pool, "old", "old", 1)}
 	old.AccountID = pgtest.Account(t, pool, "old@example.org", "old")
 	old.MemberID = pgtest.Member(t, pool, old.OrganizationID, old.AccountID, org.RoleOwner, "owner", 1)
 	requireNoError(t, pool.QueryRow(ctx, "INSERT INTO channel (organization_id, name, is_default) VALUES ($1, 'general', true) RETURNING id", old.OrganizationID).Scan(&old.Channel.ID))
-	_, err = pool.Exec(ctx, "INSERT INTO message (organization_id, channel_id, member_id, body, event_seq) VALUES ($1, $2, $3, 'before logging', 2)", old.OrganizationID, old.Channel.ID, old.MemberID)
+	_, err := pool.Exec(ctx, "INSERT INTO message (organization_id, channel_id, member_id, body, event_seq) VALUES ($1, $2, $3, 'before logging', 2)", old.OrganizationID, old.Channel.ID, old.MemberID)
 	requireNoError(t, err)
 	_, err = pool.Exec(ctx, "UPDATE organization SET event_seq = 2 WHERE id = $1", old.OrganizationID)
 	requireNoError(t, err)
 	empty := pgtest.Organization(t, pool, "empty", "Empty", 0)
-	_, err = provider.Up(ctx)
-	requireNoError(t, err)
+	migrator.Up(ctx)
 	assertEventLog(t, pool, old.OrganizationID, 2)
 	assertEventLog(t, pool, empty, 0)
 	// A server still running the previous binary takes a sequence and
@@ -101,8 +94,7 @@ func TestEventLogMigration(t *testing.T) {
 	requireNoError(t, err)
 	assertEventLog(t, pool, old.OrganizationID, 5)
 	// Undo every migration after 6, the event log's included.
-	_, err = provider.DownTo(ctx, 6)
-	requireNoError(t, err)
+	migrator.DownTo(ctx, 6)
 	var removed bool
 	requireNoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.event_log') IS NULL AND
 		to_regprocedure('organization_event_seq_logged()') IS NULL AND

@@ -5,9 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
-	"github.com/tkakkie/ribbitto/db/migrations"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 )
@@ -19,22 +16,11 @@ func TestMemberHandleUpgrade(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	pool := pgtest.NewEmpty(t)
-	db := stdlib.OpenDBFromPool(pool)
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := provider.UpTo(ctx, 3); err != nil {
-		t.Fatal(err)
-	}
+	migrator := pgtest.NewMigrator(t, pool)
+	migrator.UpTo(ctx, 3)
 	// Raw SQL creates pre-handle members with adversarial IDs for the upgrade.
 	// Ids sharing a long prefix: a placeholder cut from the id would collide.
-	_, err = pool.Exec(ctx, `
+	_, err := pool.Exec(ctx, `
 		INSERT INTO organization (id, slug, name) VALUES
 		  ('00000000-0000-7000-8000-00000000000a', 'acme', 'Acme'),
 		  ('00000000-0000-7000-8000-00000000000b', 'globex', 'Globex');
@@ -55,9 +41,7 @@ func TestMemberHandleUpgrade(t *testing.T) {
 	if err := pool.QueryRow(ctx, snapshot).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := provider.UpTo(ctx, 4); err != nil {
-		t.Fatal(err)
-	}
+	migrator.UpTo(ctx, 4)
 	if err := pool.QueryRow(ctx, snapshot).Scan(&after); err != nil || after != before {
 		t.Fatalf("members or accounts changed: %v\n%s\n%s", err, before, after)
 	}

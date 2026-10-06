@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -202,6 +203,13 @@ func TestRunEndIsNotAFailure(t *testing.T) {
 			if err := run([]string{"-target", server.URL, "-tokens", path, "-duration=" + deadline.String(), "-cursor=0", "-setup=100ms", "-drain=10ms", tc.args}, &out); err != nil {
 				t.Fatal(err)
 			}
+			var got result
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if tc.name == "stream before its headers" && got.SetupSeconds >= 1 {
+				t.Fatalf("setup exceeded 1s with -setup=100ms: %s", out.String())
+			}
 			if !strings.Contains(out.String(), tc.want) {
 				t.Fatalf("%s: want %q", out.String(), tc.want)
 			}
@@ -222,6 +230,7 @@ func TestStep(t *testing.T) {
 	}{
 		{name: "event before response", hold: 70 * time.Millisecond, duration: 40 * time.Millisecond, rate: 50, want: "pass"},
 		{name: "response before event", delay: 20 * time.Millisecond, duration: 40 * time.Millisecond, rate: 50, want: "pass", explicit: true},
+		{name: "event after drain", delay: 200 * time.Millisecond, duration: 40 * time.Millisecond, rate: 1, want: "fail", missing: true},
 		{name: "missing", duration: 40 * time.Millisecond, rate: 50, want: "fail", missing: true},
 		{name: "reset idle", duration: 40 * time.Millisecond, want: "fail", reset: true},
 		{name: "underloaded", hold: 1200 * time.Millisecond, duration: 1100 * time.Millisecond, rate: 1, want: "underloaded"},
@@ -279,7 +288,11 @@ func TestStep(t *testing.T) {
 			if err := os.WriteFile(path, []byte(`{"organization_slug":"test","channel_ids":["one"],"accounts":[{"tokens":["secret"]}]}`), 0600); err != nil {
 				t.Fatal(err)
 			}
-			args := []string{"-target", server.URL, "-tokens", path, "-duration=" + tc.duration.String(), fmt.Sprintf("-rate=%d", tc.rate), "-drain=50ms", "-dial-concurrency=1"}
+			drain := "50ms"
+			if tc.want == "pass" {
+				drain = "1s"
+			}
+			args := []string{"-target", server.URL, "-tokens", path, "-duration=" + tc.duration.String(), fmt.Sprintf("-rate=%d", tc.rate), "-drain=" + drain, "-dial-concurrency=1"}
 			if tc.explicit {
 				args = append(args, "-cursor=9")
 			}
@@ -297,7 +310,13 @@ func TestStep(t *testing.T) {
 			if (pageReads.Load() == 0) != tc.explicit || !got.CursorValid || got.CursorOverride != tc.explicit || (got.Missing > 0) != tc.missing || (!tc.missing && got.Received != got.Expected) || ((tc.hold > 0 && got.Duplicated != got.Received) || (tc.hold == 0 && got.Duplicated != 0)) {
 				t.Fatalf("bad accounting: %s", out.String())
 			}
-			if tc.delay > 0 {
+			if tc.want == "pass" && got.DrainSeconds >= got.DrainLimitSeconds {
+				t.Fatalf("all receipts should end drain early: %s", out.String())
+			}
+			if tc.name == "event after drain" && got.Missing != 1 {
+				t.Fatalf("late receipt should be missing: %s", out.String())
+			}
+			if tc.delay > 0 && !tc.missing {
 				got.verdict(time.Nanosecond)
 				if got.Verdict != "fail" || !got.Slow {
 					t.Fatal("latency threshold ignored")
@@ -308,7 +327,7 @@ func TestStep(t *testing.T) {
 }
 
 func TestVerdict(t *testing.T) {
-	for _, r := range []result{{P95MS: 2}, {Missing: 1}, {Refused429: 1}, {Refused503: 1}, {Reset: 1}, {Failed: 1}, {PostFailed: 1}, {Missed: 1}, {Scheduled: 1}} {
+	for _, r := range []result{{P95MS: 2}, {Missing: 1}, {Refused429: 1}, {Refused503: 1}, {Reset: 1}, {Failed: 1}, {PostFailed: 1}, {Missed: 1}, {Missed: 1, Reset: 1}, {Scheduled: 1}} {
 		r.verdict(time.Millisecond)
 		want := "fail"
 		if r.Missed > 0 || r.Scheduled > 0 {
@@ -316,6 +335,22 @@ func TestVerdict(t *testing.T) {
 		}
 		if r.Verdict != want {
 			t.Fatalf("%+v", r)
+		}
+	}
+}
+
+// Cancellation can close HTTP streams before a late event reaches receive.
+// Exercise both cutoffs directly so transport cancellation cannot mask them.
+func TestReceiveAfterDrain(t *testing.T) {
+	for _, frozen := range []bool{false, true} {
+		p := &post{sent: time.Now(), answered: true}
+		c := &counts{markers: regexp.MustCompile("late"), deliveries: map[string]*post{"late": p}, frozen: frozen}
+		if !frozen {
+			c.deadline = time.Now().Add(-time.Millisecond)
+		}
+		c.receive("late", make(map[*post]bool))
+		if len(p.latencies) != 0 || c.received.Load() != 0 {
+			t.Fatalf("late receipt counted (frozen=%t)", frozen)
 		}
 	}
 }

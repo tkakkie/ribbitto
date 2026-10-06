@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -36,15 +35,15 @@ type fakeMessages struct {
 }
 
 // One is not used by handler tests; the stream is tested end to end.
-func (fakeMessages) Many(context.Context, org.Membership, domain.ID, []domain.ID) ([]conversation.Entry, error) {
+func (fakeMessages) Many(context.Context, org.Membership, kernel.ID, []kernel.ID) ([]conversation.Entry, error) {
 	return nil, conversation.ErrMessageNotFound
 }
 
-func (fakeMessages) One(context.Context, org.Membership, domain.ID, int64) (conversation.Entry, error) {
+func (fakeMessages) One(context.Context, org.Membership, kernel.ID, int64) (conversation.Entry, error) {
 	return conversation.Entry{}, conversation.ErrMessageNotFound
 }
 
-func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, topicID *domain.ID, before *int64) (conversation.ChannelPage, error) {
+func (f fakeMessages) Page(ctx context.Context, m org.Membership, id kernel.ID, topicID *kernel.ID, before *int64) (conversation.ChannelPage, error) {
 	if f.before != nil {
 		*f.before = append(*f.before, before)
 	}
@@ -73,8 +72,8 @@ func (f fakeMessages) Page(ctx context.Context, m org.Membership, id domain.ID, 
 
 func populatedMessages() fakeMessages {
 	return fakeMessages{entries: []conversation.Entry{
-		{Message: conversation.Message{ID: domain.ID{8}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x31}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author", TopicName: "<design>مرحبا"},
-		{Message: conversation.Message{ID: domain.ID{9}, ChannelID: domain.ID{1}, TopicID: domain.ID{0x32}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy", DefaultTopic: true},
+		{Message: conversation.Message{ID: kernel.ID{8}, ChannelID: kernel.ID{1}, TopicID: kernel.ID{0x31}, EventSeq: 7, Body: "<script>bad()</script>\nمرحبا\u2069", CreatedAt: time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)}, DisplayName: "مريم", Handle: "author", TopicName: "<design>مرحبا"},
+		{Message: conversation.Message{ID: kernel.ID{9}, ChannelID: kernel.ID{1}, TopicID: kernel.ID{0x32}, EventSeq: 8, Body: "second", CreatedAt: time.Now()}, DisplayName: "\u3164", Handle: "legacy", DefaultTopic: true},
 	}}
 }
 
@@ -104,7 +103,7 @@ func TestMessageListHandler(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			req := httptest.NewRequest("GET", view.ChannelURL("acme", domain.ID{1}), nil)
+			req := httptest.NewRequest("GET", view.ChannelURL("acme", kernel.ID{1}), nil)
 			req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
@@ -123,7 +122,7 @@ func TestMessageListHandler(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if outer := find(doc, atom.Div); attr(outer, "data-event-cursor") != "42" || attr(outer, "sse-connect") != view.ChannelURL("acme", domain.ID{1})+"/events?after=42" || attr(outer, "hx-ext") != "sse" || outer.Parent.DataAtom != atom.Body {
+			if outer := find(doc, atom.Div); attr(outer, "data-event-cursor") != "42" || attr(outer, "sse-connect") != view.ChannelURL("acme", kernel.ID{1})+"/events?after=42" || attr(outer, "hx-ext") != "sse" || outer.Parent.DataAtom != atom.Body {
 				t.Fatal("cursor must be on the outer layout, outside every swap target")
 			}
 			if items := find(doc, atom.Ol); attr(items, "sse-swap") != "message,messages-moved" {
@@ -136,7 +135,7 @@ func TestMessageListHandler(t *testing.T) {
 			if len(tt.reader.entries) == 0 {
 				return
 			}
-			for _, want := range []string{fmt.Sprintf(`id="message-%x"`, domain.ID{8}), `dir="auto"`, `whitespace-pre-wrap`, "&lt;script&gt;bad()&lt;/script&gt;\nمرحبا\u2069", `datetime="2026-09-29T12:00:00Z"`, "2026-09-29 12:00:00 UTC", `>مريم</bdi>`, "@author", "@legacy"} {
+			for _, want := range []string{fmt.Sprintf(`id="message-%x"`, kernel.ID{8}), `dir="auto"`, `whitespace-pre-wrap`, "&lt;script&gt;bad()&lt;/script&gt;\nمرحبا\u2069", `datetime="2026-09-29T12:00:00Z"`, "2026-09-29 12:00:00 UTC", `>مريم</bdi>`, "@author", "@legacy"} {
 				if !strings.Contains(body, want) {
 					t.Errorf("missing %q", want)
 				}
@@ -280,7 +279,7 @@ func TestMessagePostHandler(t *testing.T) {
 	} {
 		for _, hx := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/htmx=%t", tt.name, hx), func(t *testing.T) {
-				writer := &fakePostingWriter{id: domain.ID{37}, err: tt.storeErr}
+				writer := &fakePostingWriter{id: kernel.ID{37}, err: tt.storeErr}
 				var reads []*int64
 				h, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
 					reader := populatedMessages()
@@ -290,7 +289,7 @@ func TestMessagePostHandler(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				path := view.ChannelURL("acme", domain.ID{1})
+				path := view.ChannelURL("acme", kernel.ID{1})
 				r := httptest.NewRequest("POST", path+"?body=wrong", strings.NewReader(url.Values{"body": {tt.body}, "organization_id": {"other"}, "member_id": {"other"}}.Encode()))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				if hx {
@@ -307,7 +306,7 @@ func TestMessagePostHandler(t *testing.T) {
 					t.Fatalf("status %d: %s", w.Code, w.Body.String())
 				}
 				if tt.status == 303 {
-					if writer.body != "hello\nworld" || writer.org != (domain.ID{}) || writer.member != (domain.ID{}) || writer.channel != (domain.ID{1}) {
+					if writer.body != "hello\nworld" || writer.org != (kernel.ID{}) || writer.member != (kernel.ID{}) || writer.channel != (kernel.ID{1}) {
 						t.Fatalf("posting scope/body: %+v", writer)
 					}
 					if !hx && w.Header().Get("Location") != path {
@@ -355,9 +354,9 @@ func TestMessagePagingHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	channelURL := view.ChannelURL("acme", domain.ID{1})
-	topicID := domain.ID{5}
-	topicURL := view.ConversationURL("acme", domain.ID{1}, &topicID)
+	channelURL := view.ChannelURL("acme", kernel.ID{1})
+	topicID := kernel.ID{5}
+	topicURL := view.ConversationURL("acme", kernel.ID{1}, &topicID)
 	for _, tt := range []struct {
 		name, query string
 		older       bool
@@ -388,7 +387,7 @@ func TestMessagePagingHandler(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64
-			reader := fakeMessages{entries: []conversation.Entry{{Message: conversation.Message{ID: domain.ID{8}, TopicID: domain.ID{5}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
+			reader := fakeMessages{entries: []conversation.Entry{{Message: conversation.Message{ID: kernel.ID{8}, TopicID: kernel.ID{5}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages = reader }))
 			if err != nil {
 				t.Fatal(err)
@@ -430,7 +429,7 @@ func TestMessagePagingHandler(t *testing.T) {
 			if got, ok := idAttribute(t, page, "load-older", "data-oldest-seq"); !ok || got != oldest {
 				t.Errorf("data-oldest-seq = %q, %t; want %q", got, ok, oldest)
 			}
-			item := fmt.Sprintf("message-%x", domain.ID{8})
+			item := fmt.Sprintf("message-%x", kernel.ID{8})
 			if got, ok := idAttribute(t, page, item, "data-event-seq"); !ok || got != "7" {
 				t.Errorf("data-event-seq = %q, %t; want 7", got, ok)
 			}
@@ -505,7 +504,7 @@ func TestFeedTopicLabels(t *testing.T) {
 	for _, lang := range []string{"en", "ja"} {
 		for _, suffix := range []string{"", "?before=9"} {
 			t.Run(lang+suffix, func(t *testing.T) {
-				req := httptest.NewRequest("GET", view.ChannelURL("acme", domain.ID{1})+suffix, nil)
+				req := httptest.NewRequest("GET", view.ChannelURL("acme", kernel.ID{1})+suffix, nil)
 				req.Header.Set("Accept-Language", lang)
 				req.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 				w := httptest.NewRecorder()

@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -78,13 +78,13 @@ func (l laterSession) Resolve(context.Context, string) (identity.Account, identi
 	if l.shutdown {
 		l.hub.CancelAll()
 	}
-	return identity.Account{ID: domain.ID{1}}, l.session, l.err
+	return identity.Account{ID: kernel.ID{1}}, l.session, l.err
 }
 
 // firstRead counts reads and fails each one, which ends a started stream.
 type firstRead struct{ reads *atomic.Int32 }
 
-func (f firstRead) EventsAfter(context.Context, domain.ID, int64, int) ([]realtime.Event, error) {
+func (f firstRead) EventsAfter(context.Context, kernel.ID, int64, int) ([]realtime.Event, error) {
 	f.reads.Add(1)
 	return nil, errors.New("stream started; stop after the first read")
 }
@@ -92,7 +92,7 @@ func (f firstRead) EventsAfter(context.Context, domain.ID, int64, int) ([]realti
 // noEvents is an event log that is never read in these tests.
 type noEvents struct{}
 
-func (noEvents) EventsAfter(context.Context, domain.ID, int64, int) ([]realtime.Event, error) {
+func (noEvents) EventsAfter(context.Context, kernel.ID, int64, int) ([]realtime.Event, error) {
 	return nil, errors.New("the stream must not start")
 }
 
@@ -100,13 +100,13 @@ func (noEvents) EventsAfter(context.Context, domain.ID, int64, int) ([]realtime.
 // registers: nothing would cancel the stream, so the second look must stop it
 // before anything is sent, and the registration must not outlive it.
 func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
-	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name  string
 		later laterSession
 	}{
 		{"session deleted", laterSession{err: identity.ErrNoSession}},
-		{"session replaced by another", laterSession{session: identity.Session{ID: domain.ID{0x77}, ExpiresAt: time.Now().Add(time.Hour)}}},
+		{"session replaced by another", laterSession{session: identity.Session{ID: kernel.ID{0x77}, ExpiresAt: time.Now().Add(time.Hour)}}},
 		// The session is still valid at the second look but ends at that
 		// instant: only a registration made before it can be cancelled.
 		{"signed out right after registering", laterSession{session: live, cancelNow: true}},
@@ -132,7 +132,7 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", "live", nil)
+			w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", "live", nil)
 			if seen != 1 {
 				t.Fatalf("the second look saw %d registered connections, want 1: register before re-checking", seen)
 			}
@@ -179,7 +179,7 @@ func (w *cancellingWriter) Header() http.Header {
 // the first write committing a status: the client still gets 404 (session
 // ended) or 503 (shutdown), never an empty 200.
 func TestStreamCancelledBeforeTheFirstWrite(t *testing.T) {
-	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name   string
 		cancel func(*realtime.Hub)
@@ -202,7 +202,7 @@ func TestStreamCancelledBeforeTheFirstWrite(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
+			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", nil)
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			w := &cancellingWriter{deadlineWriter: &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}, hub: hub, cancel: func() { tt.cancel(hub) }}
 			handler.ServeHTTP(w, r)
@@ -244,7 +244,7 @@ func (w *cancellingConn) Unwrap() http.ResponseWriter { return w.ResponseWriter 
 // an expired write deadline resets the stream, so nothing may expire it
 // before the error is written.
 func TestStreamCancelledBeforeTheFirstWriteOverHTTP(t *testing.T) {
-	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name   string
 		cancel func(*realtime.Hub)
@@ -281,7 +281,7 @@ func testCancelledStreamOverHTTP(t *testing.T, live identity.Session, cancel fun
 	server.EnableHTTP2 = proto == 2
 	server.StartTLS()
 	defer server.Close()
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +327,7 @@ func TestStreamFetchSite(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
+			live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
 			seen := -1
 			var reads atomic.Int32
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
@@ -336,7 +336,7 @@ func TestStreamFetchSite(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
+			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", nil)
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			for _, value := range tt.values {
 				r.Header.Add("Sec-Fetch-Site", value)
@@ -362,7 +362,7 @@ func TestStreamFetchSite(t *testing.T) {
 // registered or sent. The stream is configured and the session valid, so
 // only the lookup can refuse it; the found case proves the stream would start.
 func TestTopicStreamLookup(t *testing.T) {
-	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name      string
 		lookupErr error
@@ -376,19 +376,19 @@ func TestTopicStreamLookup(t *testing.T) {
 			hub := realtime.NewHub()
 			seen := -1
 			var reads atomic.Int32
-			var lookups [][3]domain.ID
+			var lookups [][3]kernel.ID
 			p := channelPages{channels: &fakeChannels{}, topics: fakeTopics{err: tt.lookupErr, lookups: &lookups},
 				stream: &Streaming{Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{hub: hub, session: live, seen: &seen}}}
-			membership := org.Membership{Organization: org.Organization{ID: domain.ID{9}, Slug: "acme"}}
+			membership := org.Membership{Organization: org.Organization{ID: kernel.ID{9}, Slug: "acme"}}
 			handler := middleware.Session(oneSession{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { p.events(w, r, membership) }))
-			selected := domain.ID{3}
-			r := httptest.NewRequest(http.MethodGet, view.ConversationURL("acme", domain.ID{1}, &selected)+"/events?after=0", nil)
+			selected := kernel.ID{3}
+			r := httptest.NewRequest(http.MethodGet, view.ConversationURL("acme", kernel.ID{1}, &selected)+"/events?after=0", nil)
 			r.SetPathValue("channelID", "01000000-0000-0000-0000-000000000000")
 			r.SetPathValue("topicID", "03000000-0000-0000-0000-000000000000")
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
 			handler.ServeHTTP(w, r)
-			if len(lookups) != 1 || lookups[0] != ([3]domain.ID{{9}, {1}, {3}}) {
+			if len(lookups) != 1 || lookups[0] != ([3]kernel.ID{{9}, {1}, {3}}) {
 				t.Fatalf("topic lookups %v; want one, scoped to the membership's organisation", lookups)
 			}
 			streamed := w.Header().Get("Content-Type") == "text/event-stream; charset=utf-8"
@@ -406,7 +406,7 @@ func TestTopicStreamLookup(t *testing.T) {
 }
 
 func TestOpenStreamCleanup(t *testing.T) {
-	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
+	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}
 	for _, tt := range []struct {
 		name       string
 		cookie     bool
@@ -426,7 +426,7 @@ func TestOpenStreamCleanup(t *testing.T) {
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			}
 			w := httptest.NewRecorder()
-			ctx, cleanup, ok := p.openStream(w, r, domain.ID{9}, domain.ID{1}, live)
+			ctx, cleanup, ok := p.openStream(w, r, kernel.ID{9}, kernel.ID{1}, live)
 			if cleanup != nil {
 				t.Cleanup(cleanup)
 			}
@@ -466,7 +466,7 @@ func TestStreamCapPerAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	live := identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
+	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	seen := -1
 	var reads atomic.Int32
 	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
@@ -475,9 +475,9 @@ func TestStreamCapPerAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := view.ChannelURL("acme", domain.ID{1}) + "/events?after=0"
+	url := view.ChannelURL("acme", kernel.ID{1}) + "/events?after=0"
 	// Alice (oneSession's account 1) already holds her one stream.
-	_, unregister, err := hub.Register(t.Context(), realtime.Connection{Organization: domain.ID{9}, Account: domain.ID{1}, Session: domain.ID{0x52}}, 1)
+	_, unregister, err := hub.Register(t.Context(), realtime.Connection{Organization: kernel.ID{9}, Account: kernel.ID{1}, Session: kernel.ID{0x52}}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -505,7 +505,7 @@ func TestStreamCapPerAccount(t *testing.T) {
 func TestStreamDefaultCap(t *testing.T) {
 	hub := realtime.NewHub()
 	for i := range DefaultMaxStreamsPerAccount {
-		if _, _, err := hub.Register(t.Context(), realtime.Connection{Account: domain.ID{1}, Session: domain.ID{byte(i)}}, DefaultMaxStreamsPerAccount); err != nil {
+		if _, _, err := hub.Register(t.Context(), realtime.Connection{Account: kernel.ID{1}, Session: kernel.ID{byte(i)}}, DefaultMaxStreamsPerAccount); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -520,7 +520,7 @@ func TestStreamDefaultCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", "live", nil); w.Code != http.StatusTooManyRequests {
+	if w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", "live", nil); w.Code != http.StatusTooManyRequests {
 		t.Fatalf("status %d with %d streams open, want 429", w.Code, DefaultMaxStreamsPerAccount)
 	}
 }
@@ -541,7 +541,7 @@ func TestStreamRefusedDuringShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", "live", nil)
+	w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", "live", nil)
 	if w.Code != http.StatusServiceUnavailable || seen != -1 {
 		t.Fatalf("status %d (re-check ran: %t), want 503 before anything else", w.Code, seen != -1)
 	}
@@ -554,18 +554,18 @@ type lifetimeReads struct {
 	render   bool
 }
 
-func (r lifetimeReads) One(ctx context.Context, _ org.Membership, _ domain.ID, _ int64) (conversation.Entry, error) {
+func (r lifetimeReads) One(ctx context.Context, _ org.Membership, _ kernel.ID, _ int64) (conversation.Entry, error) {
 	r.started <- ctx
 	<-ctx.Done()
 	r.returned <- struct{}{}
 	return conversation.Entry{}, ctx.Err()
 }
 
-func (r lifetimeReads) EventsAfter(ctx context.Context, orgID domain.ID, _ int64, _ int) ([]realtime.Event, error) {
+func (r lifetimeReads) EventsAfter(ctx context.Context, orgID kernel.ID, _ int64, _ int) ([]realtime.Event, error) {
 	if r.render {
-		return []realtime.Event{{OrganizationID: orgID, ChannelID: domain.ID{1}, Seq: 1, Kind: conversation.KindPosted}}, nil
+		return []realtime.Event{{OrganizationID: orgID, ChannelID: kernel.ID{1}, Seq: 1, Kind: conversation.KindPosted}}, nil
 	}
-	_, err := r.One(ctx, org.Membership{}, domain.ID{}, 0)
+	_, err := r.One(ctx, org.Membership{}, kernel.ID{}, 0)
 	return nil, err
 }
 
@@ -584,12 +584,12 @@ func TestStreamCachesEndWithLifetime(t *testing.T) {
 			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
 				s.Messages = reads
 				s.Stream = &Streaming{Lifetime: parent, Hub: hub, Events: realtime.NewCachedEvents(parent, reads, hub, 8, time.Minute),
-					Sessions: laterSession{hub: hub, session: identity.Session{ID: domain.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, seen: &seen}}
+					Sessions: laterSession{hub: hub, session: identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, seen: &seen}}
 			}))
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", domain.ID{1})+"/events?after=0", nil)
+			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", nil)
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			done := make(chan struct{}, 1)
 			go func() {

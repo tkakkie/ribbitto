@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -32,7 +32,7 @@ type countingMessages struct {
 	err     error
 }
 
-func (c countingMessages) One(_ context.Context, m org.Membership, channel domain.ID, seq int64) (conversation.Entry, error) {
+func (c countingMessages) One(_ context.Context, m org.Membership, channel kernel.ID, seq int64) (conversation.Entry, error) {
 	c.calls.Add(1)
 	if c.release != nil {
 		<-c.release
@@ -41,10 +41,10 @@ func (c countingMessages) One(_ context.Context, m org.Membership, channel domai
 		return conversation.Entry{}, c.err
 	}
 	body := fmt.Sprintf("org %v channel %v seq %d", m.Organization.ID, channel, seq)
-	return conversation.Entry{Message: conversation.Message{ID: domain.ID{7}, TopicID: domain.ID{6}, EventSeq: seq, Body: body}, DisplayName: "Alice", Handle: "alice"}, nil
+	return conversation.Entry{Message: conversation.Message{ID: kernel.ID{7}, TopicID: kernel.ID{6}, EventSeq: seq, Body: body}, DisplayName: "Alice", Handle: "alice"}, nil
 }
 
-func (c countingMessages) Many(ctx context.Context, m org.Membership, channel domain.ID, ids []domain.ID) ([]conversation.Entry, error) {
+func (c countingMessages) Many(ctx context.Context, m org.Membership, channel kernel.ID, ids []kernel.ID) ([]conversation.Entry, error) {
 	entry, err := c.One(ctx, m, channel, 9)
 	entries := make([]conversation.Entry, 0, len(ids))
 	for _, id := range ids {
@@ -57,13 +57,13 @@ func (c countingMessages) Many(ctx context.Context, m org.Membership, channel do
 // eventOf builds kind's event as the reader delivers it: the payload from
 // its publisher's codec, and the channel and routing topics its Router gives.
 // A post is moved.ToTopicID's; a move carries moved itself.
-func eventOf(t *testing.T, org domain.ID, seq int64, kind realtime.EventKind, moved conversation.Moved) realtime.Event {
+func eventOf(t *testing.T, org kernel.ID, seq int64, kind realtime.EventKind, moved conversation.Moved) realtime.Event {
 	t.Helper()
 	e := realtime.Event{OrganizationID: org, Seq: seq, Kind: kind}
 	var route realtime.Router
 	switch kind {
 	case conversation.KindPosted:
-		e.Payload = conversation.EncodePosted(moved.ChannelID, domain.ID{7}, moved.ToTopicID)
+		e.Payload = conversation.EncodePosted(moved.ChannelID, kernel.ID{7}, moved.ToTopicID)
 		route = conversation.RoutePosted
 	case conversation.KindMessagesMoved:
 		e.Payload = conversation.EncodeMoved(moved)
@@ -104,13 +104,13 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		return ctx
 	}
 	en := inLanguage("en")
-	orgA, orgB := domain.ID{1}, domain.ID{3}
-	memberOf := func(orgID domain.ID) org.Membership {
+	orgA, orgB := kernel.ID{1}, kernel.ID{3}
+	memberOf := func(orgID kernel.ID) org.Membership {
 		return org.Membership{Organization: org.Organization{ID: orgID}}
 	}
-	base := conversation.Moved{ChannelID: domain.ID{2}, FromTopicID: domain.ID{1}, ToTopicID: domain.ID{2}}
+	base := conversation.Moved{ChannelID: kernel.ID{2}, FromTopicID: kernel.ID{1}, ToTopicID: kernel.ID{2}}
 	event := eventOf(t, orgA, 9, conversation.KindPosted, base)
-	keyOf := func(org domain.ID, e realtime.Event) renderKey {
+	keyOf := func(org kernel.ID, e realtime.Event) renderKey {
 		return renderKey{organization: org, channel: e.ChannelID, seq: e.Seq, language: i18n.Language(en)}
 	}
 
@@ -118,7 +118,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		t.Run("concurrent renders read once/"+string(kind), func(t *testing.T) {
 			moved := base
 			for i := range 100 {
-				moved.MessageIDs = append(moved.MessageIDs, domain.ID{byte(i)})
+				moved.MessageIDs = append(moved.MessageIDs, kernel.ID{byte(i)})
 			}
 			event := eventOf(t, orgA, 9, kind, moved)
 			calls := &atomic.Int32{}
@@ -145,7 +145,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	t.Run("each part of the key is its own entry", func(t *testing.T) {
 		calls := &atomic.Int32{}
 		shared := newRenderCache(t.Context())
-		render := func(ctx context.Context, org domain.ID, e realtime.Event) string {
+		render := func(ctx context.Context, org kernel.ID, e realtime.Event) string {
 			t.Helper()
 			e.OrganizationID = org
 			r := messageRenderer{messages: countingMessages{calls: calls}, membership: memberOf(org), renders: shared}
@@ -156,12 +156,12 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 			return string(out.Data)
 		}
 		inOtherChannel := base
-		inOtherChannel.ChannelID = domain.ID{4}
+		inOtherChannel.ChannelID = kernel.ID{4}
 		otherChannel, otherSeq := eventOf(t, orgA, 9, conversation.KindPosted, inOtherChannel), eventOf(t, orgA, 10, conversation.KindPosted, base)
 		cases := []struct {
 			name string
 			ctx  context.Context
-			org  domain.ID
+			org  kernel.ID
 			e    realtime.Event
 		}{
 			{"base", en, orgA, event},
@@ -192,7 +192,7 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 	t.Run("payloads carry the contract's data attributes", func(t *testing.T) {
 		r := messageRenderer{messages: countingMessages{calls: &atomic.Int32{}}, membership: memberOf(orgA), renders: newRenderCache(t.Context())}
 		const topicSix = "06000000-0000-0000-0000-000000000000"
-		moved := conversation.Moved{ChannelID: event.ChannelID, FromTopicID: domain.ID{5}, ToTopicID: domain.ID{6}, MessageIDs: []domain.ID{{7}, {8}}}
+		moved := conversation.Moved{ChannelID: event.ChannelID, FromTopicID: kernel.ID{5}, ToTopicID: kernel.ID{6}, MessageIDs: []kernel.ID{{7}, {8}}}
 		for _, kind := range []realtime.EventKind{conversation.KindPosted, conversation.KindMessagesMoved} {
 			seq := int64(9)
 			if kind == conversation.KindMessagesMoved {

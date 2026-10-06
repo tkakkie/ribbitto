@@ -17,13 +17,14 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -39,9 +40,9 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	// Raw SQL on purpose: setup and sign-up create one organisation and join
 	// everyone to it, so they cannot build a second organisation (globex, with
 	// Bob) or an account with no membership (Carol, until she joins later).
-	var acme, globex, alice, bob, carol domain.ID
+	var acme, globex, alice, bob, carol kernel.ID
 	for _, q := range []struct {
-		dest *domain.ID
+		dest *kernel.ID
 		sql  string
 	}{
 		{&acme, "INSERT INTO organization (slug, name) VALUES ('acme', 'Acme Corporation') RETURNING id"},
@@ -63,8 +64,8 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var acmeChannel, globexChannel domain.ID
-	for org, dest := range map[domain.ID]*domain.ID{acme: &acmeChannel, globex: &globexChannel} {
+	var acmeChannel, globexChannel kernel.ID
+	for org, dest := range map[kernel.ID]*kernel.ID{acme: &acmeChannel, globex: &globexChannel} {
 		// A channel needs its default topic in the same statement (decision 21).
 		if err := pool.QueryRow(ctx, `WITH c AS (INSERT INTO channel (organization_id, name, is_default) VALUES ($1, '雑談', true) RETURNING *),
 			t AS (INSERT INTO topic (id, organization_id, channel_id, is_default) SELECT default_topic_id, organization_id, id, true FROM c)
@@ -83,7 +84,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	// Subtests stay sequential: they share this clock and add Carol's membership later.
 	clock := now
 	sessions := identitypg.NewSessions(pool, func() time.Time { return clock }, nil)
-	token := func(account domain.ID) string {
+	token := func(account kernel.ID) string {
 		t.Helper()
 		value, _, err := sessions.Create(ctx, account)
 		if err != nil {
@@ -189,12 +190,12 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	t.Run("topic history and posting", func(t *testing.T) {
 		clock = now
 		named := namedTopic(t, pool, acme, acmeChannel, "Planning")
-		other := pgtest.Channel(t, pool, acme, "other", false)
+		other := conversationtest.Channel(t, pool, acme, "other", false)
 		var initialCount int
 		if err := pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id = $1", acme).Scan(&initialCount); err != nil {
 			t.Fatal(err)
 		}
-		for _, ids := range [][2]domain.ID{{acmeChannel, {}}, {acmeChannel, other.DefaultTopicID}, {{}, named.ID}, {globexChannel, named.ID}} {
+		for _, ids := range [][2]kernel.ID{{acmeChannel, {}}, {acmeChannel, other.DefaultTopicID}, {{}, named.ID}, {globexChannel, named.ID}} {
 			path := view.ConversationURL("acme", ids[0], &ids[1])
 			for _, method := range []string{"GET", "POST"} {
 				w := get(method, path, aliceToken, now)
@@ -313,19 +314,19 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		if _, err := pool.Exec(ctx, "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $2, 'member', 2, 'carol')", acme, carol); err != nil {
 			t.Fatal(err)
 		}
-		var members map[domain.ID]org.DirectoryEntry
+		var members map[kernel.ID]org.DirectoryEntry
 		err = platform.InSnapshot(ctx, pool, func(snapshot platform.Snapshot) (err error) {
-			members, err = orgpg.MembersIn(snapshot).LookupMembers(ctx, acme, []domain.ID{a.Member.ID, b.Member.ID})
+			members, err = orgpg.MembersIn(snapshot).LookupMembers(ctx, acme, []kernel.ID{a.Member.ID, b.Member.ID})
 			return err
 		})
 		if err != nil || len(members) != 1 || members[a.Member.ID].AccountID != alice || members[a.Member.ID].Handle != "alice" {
 			t.Fatalf("members: %v, %v", members, err)
 		}
-		ids := []domain.ID{}
+		ids := []kernel.ID{}
 		for _, m := range members {
 			ids = append(ids, m.AccountID)
 		}
-		var names map[domain.ID]string
+		var names map[kernel.ID]string
 		err = platform.InSnapshot(ctx, pool, func(snapshot platform.Snapshot) (err error) {
 			names, err = identitypg.AccountsIn(snapshot).LookupDisplayNames(ctx, ids)
 			return err
@@ -424,7 +425,7 @@ func TestChannelRendering(t *testing.T) {
 		"en": {"Acme Corporation", `Signed in as <bdi class="font-semibold text-fg">Alice</bdi> <span class="text-muted">@alice</span> · Owner`, "Sign out"},
 		"ja": {"Acme Corporation", `サインイン中: <bdi class="font-semibold text-fg">Alice</bdi> <span class="text-muted">@alice</span> · オーナー`, "サインアウト"},
 	} {
-		r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", domain.ID{1}), nil)
+		r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1}), nil)
 		r.Header.Set("Accept-Language", lang)
 		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 		w := httptest.NewRecorder()
@@ -450,7 +451,7 @@ func TestChannelRendering(t *testing.T) {
 		for n := range doc.Descendants() {
 			if attr(n, "aria-current") == "page" {
 				selected++
-				if n.DataAtom != atom.A || attr(n, "href") != view.ChannelURL("acme", domain.ID{1}) {
+				if n.DataAtom != atom.A || attr(n, "href") != view.ChannelURL("acme", kernel.ID{1}) {
 					t.Fatal("wrong current channel link")
 				}
 				for _, class := range []string{"text-on-selected", "border-l-3", "border-brand"} {

@@ -14,7 +14,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
-	"github.com/tkakkie/ribbitto/internal/domain"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"github.com/tkakkie/ribbitto/web/static"
@@ -42,7 +42,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 			t.Run(side+"/"+mode, func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 				defer cancel()
-				source, destination := domain.ID{1}, domain.ID{2}
+				source, destination := kernel.ID{1}, kernel.ID{2}
 				selected, initial, afterMove := destination, []int{40, 60}, []int{40, 50, 60}
 				stale, fresh := []int{20, 35}, []int{20, 30, 35}
 				if side == "source" {
@@ -109,7 +109,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 					});
 				}`)
 				deliveries, completed := 0, 0
-				move := func(from, to domain.ID, want []int) {
+				move := func(from, to kernel.ID, want []int) {
 					t.Helper()
 					out := realtime.Outgoing{ID: 100 + int64(deliveries), Name: "messages-moved",
 						Data: streamTestMarkup(t, view.MovedMessageItems(streamTestMessages(to, 10, 30, 50), from, to))}
@@ -207,10 +207,10 @@ type browserReply struct {
 	body   []byte
 }
 
-func streamTestMessages(topic domain.ID, seqs ...int) []view.Message {
+func streamTestMessages(topic kernel.ID, seqs ...int) []view.Message {
 	var messages []view.Message
 	for _, seq := range seqs {
-		messages = append(messages, view.Message{ID: domain.ID{byte(seq)}, TopicID: topic, EventSeq: int64(seq), Body: fmt.Sprint(seq)})
+		messages = append(messages, view.Message{ID: kernel.ID{byte(seq)}, TopicID: topic, EventSeq: int64(seq), Body: fmt.Sprint(seq)})
 	}
 	return messages
 }
@@ -228,7 +228,7 @@ func assertBrowserItems(t *testing.T, page *rod.Page, seqs []int) {
 	t.Helper()
 	var ids []string
 	for _, seq := range seqs {
-		ids = append(ids, view.MessageDOMID(domain.ID{byte(seq)}))
+		ids = append(ids, view.MessageDOMID(kernel.ID{byte(seq)}))
 	}
 	got := page.MustEval(`() => Array.from(document.querySelector('#message-items').children, e => e.id).join(',')`).Str()
 	if want := strings.Join(ids, ","); got != want {

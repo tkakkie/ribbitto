@@ -14,9 +14,10 @@ import (
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
-	"github.com/tkakkie/ribbitto/internal/infra/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -29,7 +30,7 @@ type finiteMoveLog struct {
 	through int64
 }
 
-func (r finiteMoveLog) EventsAfter(ctx context.Context, org domain.ID, after int64, limit int) ([]realtime.Event, error) {
+func (r finiteMoveLog) EventsAfter(ctx context.Context, org kernel.ID, after int64, limit int) ([]realtime.Event, error) {
 	if after == r.through {
 		return nil, io.EOF
 	}
@@ -79,7 +80,7 @@ func applyFeed(t *testing.T, feed []string, out realtime.Outgoing) []string {
 }
 
 // Model topic DOM swaps over the actual payload, preserving full item markup.
-func applyTopic(t *testing.T, items []string, out realtime.Outgoing, selected domain.ID, oldest int64) []string {
+func applyTopic(t *testing.T, items []string, out realtime.Outgoing, selected kernel.ID, oldest int64) []string {
 	t.Helper()
 	if out.Name == "message" {
 		return applyFeed(t, items, out)
@@ -131,7 +132,7 @@ func applyTopic(t *testing.T, items []string, out realtime.Outgoing, selected do
 
 // Model the stream script's request-scoped retention and post-history replay.
 type topicMovePage struct {
-	selected domain.ID
+	selected kernel.ID
 	oldest   int64
 	items    []string
 	loading  bool
@@ -187,13 +188,13 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 	pool := pgtest.New(t)
-	f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+	f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
 	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 	renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 	log := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
-	var ids []domain.ID
-	var source domain.ID
+	var ids []kernel.ID
+	var source kernel.ID
 	for range 2 {
 		posted, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).Post(ctx, m, f.Channel.ID, "selected body")
 		if err != nil {
@@ -260,15 +261,15 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	}
 	// A different organisation's member receives neither correction nor notice,
 	// even though this connection hits renders warmed by the authorized member.
-	foreign := pgtest.OrganizationWithOwner(t, pool, "globex", "general")
+	foreign := conversationtest.OrganizationWithOwner(t, pool, "globex", "general")
 	for _, tt := range []struct {
 		name         string
-		org, channel domain.ID
-		ids          []domain.ID
+		org, channel kernel.ID
+		ids          []kernel.ID
 	}{
 		{"foreign organisation", foreign.OrganizationID, f.Channel.ID, ids},
 		{"foreign channel", f.OrganizationID, foreign.Channel.ID, ids},
-		{"incomplete batch", f.OrganizationID, f.Channel.ID, append(slices.Clone(ids), domain.ID{})},
+		{"incomplete batch", f.OrganizationID, f.Channel.ID, append(slices.Clone(ids), kernel.ID{})},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			membership := m
@@ -279,7 +280,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 			}
 		})
 	}
-	for _, selected := range []domain.ID{source, destination.ID} {
+	for _, selected := range []kernel.ID{source, destination.ID} {
 		sub.Topic = &selected
 		got := &moveDeliveries{}
 		cursor, err := stream.Run(ctx, sub, 1, got)
@@ -302,7 +303,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	}
 	// Denial is checked on topic streams even when all their renders are warm.
 	sub.Account = foreign.AccountID
-	for _, selected := range []*domain.ID{nil, &source, &destination.ID} {
+	for _, selected := range []*kernel.ID{nil, &source, &destination.ID} {
 		sub.Topic = selected
 		denied := &moveDeliveries{}
 		cursor, err = stream.Run(ctx, sub, 1, denied)
@@ -355,12 +356,12 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := t.Context()
 			pool := pgtest.New(t)
-			f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+			f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 			m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
 			destination := namedTopic(t, pool, f.OrganizationID, f.Channel.ID, "Destination")
 			reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
-			var moved []domain.ID
-			var source domain.ID
+			var moved []kernel.ID
+			var source kernel.ID
 			for i := range tt.count {
 				selected := &destination.ID
 				if i == 0 || i == tt.count/2 || i == tt.count-1 {
@@ -437,14 +438,14 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 			t.Run(fmt.Sprintf("count=%d/stale=%t", count, stale), func(t *testing.T) {
 				ctx := t.Context()
 				pool := pgtest.New(t)
-				f := pgtest.OrganizationWithOwner(t, pool, "acme", "general")
+				f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 				m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
 				destination := namedTopic(t, pool, f.OrganizationID, f.Channel.ID, "Destination")
 				reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 				var source conversation.Topic
-				var moved []domain.ID
+				var moved []kernel.ID
 				for i := range count {
-					for _, selected := range []*domain.ID{nil, &destination.ID} {
+					for _, selected := range []*kernel.ID{nil, &destination.ID} {
 						posted, err := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil).PostToTopic(ctx, m, f.Channel.ID, selected, "body")
 						if err != nil {
 							t.Fatal(err)
@@ -539,7 +540,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 }
 
 func TestTopicMoveModelRequestScope(t *testing.T) {
-	from, to := domain.ID{1}, domain.ID{2}
+	from, to := kernel.ID{1}, kernel.ID{2}
 	page := topicMovePage{selected: to, oldest: 40}
 	for _, seq := range []int{60, 20, 60} { // Append even below the bound; replace in place, never sort.
 		page.deliver(t, realtime.Outgoing{Name: "message", Data: streamTestMarkup(t, view.MessageItem(streamTestMessages(to, seq)[0]))})

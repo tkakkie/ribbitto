@@ -18,8 +18,8 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/conversation"
-	"github.com/tkakkie/ribbitto/internal/domain"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -588,19 +588,19 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "setup, wrong token", route: "POST /setup", services: withSetup(org.ErrSetupToken), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 1, invalidFields: []string{"token"}},
 		{name: "sign-up", route: "GET /signup", services: withSignUp(true, nil), method: "GET", path: "/signup"},
 		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 4, invalidFields: []string{"display_name", "handle", "email", "password"}},
-		{name: "channel", route: "GET /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
-		{name: "channel with messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
-		{name: "channel with older messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ChannelURL("acme", domain.ID{1}), cookie: true},
-		{name: "older page", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ChannelURL("acme", domain.ID{1}) + "?before=40", cookie: true},
+		{name: "channel", route: "GET /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true},
+		{name: "channel with messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "GET", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true},
+		{name: "channel with older messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true},
+		{name: "older page", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ChannelURL("acme", kernel.ID{1}) + "?before=40", cookie: true},
 		{name: "channel invalid name", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrInvalidChannelName), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {""}}, status: http.StatusUnprocessableEntity},
 		{name: "channel duplicate name", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrChannelNameTaken), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"雑談"}}, status: http.StatusUnprocessableEntity},
 	}
 	for _, body := range []string{"", strings.Repeat("界", 4001), "bad\u202e"} {
 		for _, hx := range []bool{false, true} {
-			cases = append(cases, markupCase{name: fmt.Sprintf("composer invalid %d/htmx=%t", len(body), hx), route: "POST /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", domain.ID{1}), cookie: true, form: url.Values{"body": {body}}, status: 422, alerts: 1, htmx: hx})
+			cases = append(cases, markupCase{name: fmt.Sprintf("composer invalid %d/htmx=%t", len(body), hx), route: "POST /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true, form: url.Values{"body": {body}}, status: 422, alerts: 1, htmx: hx})
 		}
 	}
-	cases = append(cases, markupCase{name: "composer posted", route: "POST /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "POST", path: view.ChannelURL("acme", domain.ID{1}), cookie: true, form: url.Values{"body": {"sent"}}, htmx: true})
+	cases = append(cases, markupCase{name: "composer posted", route: "POST /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "POST", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true, form: url.Values{"body": {"sent"}}, htmx: true})
 	// Routes that answer with a redirect, an empty status or an event
 	// stream, never a page.
 	for _, method := range []string{"GET", "POST"} {
@@ -608,9 +608,9 @@ func TestPagesMarkup(t *testing.T) {
 		if method == "POST" {
 			status, alerts = 422, 1
 		}
-		cases = append(cases, markupCase{name: "topic " + method, route: method + " /organizations/{slug}/channels/{channelID}/topics/{topicID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: method, path: view.ConversationURL("acme", domain.ID{1}, &domain.ID{2}), cookie: true, form: url.Values{"body": {""}}, status: status, alerts: alerts})
+		cases = append(cases, markupCase{name: "topic " + method, route: method + " /organizations/{slug}/channels/{channelID}/topics/{topicID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: method, path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}), cookie: true, form: url.Values{"body": {""}}, status: status, alerts: alerts})
 	}
-	cases = append(cases, markupCase{name: "branch invalid", route: "POST /organizations/{slug}/channels/{channelID}/branch", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", domain.ID{1}) + "/branch", cookie: true, status: 422, alerts: 1})
+	cases = append(cases, markupCase{name: "branch invalid", route: "POST /organizations/{slug}/channels/{channelID}/branch", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/branch", cookie: true, status: 422, alerts: 1})
 	noPage := []string{"POST /signout", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/channels/{channelID}/events", "GET /organizations/{slug}/channels/{channelID}/topics/{topicID}/events"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
@@ -904,12 +904,12 @@ func TestComponentsMarkup(t *testing.T) {
 		view templ.Component
 	}{
 		{"MessageItem", view.MessageItem(view.Message{
-			ID: domain.ID{0xab, 0xcd}, DisplayName: "مريم", Handle: "author",
+			ID: kernel.ID{0xab, 0xcd}, DisplayName: "مريم", Handle: "author",
 			CreatedAt: time.Date(2026, 9, 29, 21, 0, 0, 123456789, time.FixedZone("JST", 9*60*60)),
 			Body:      "<script>bad()</script>\nمرحبا",
 		})},
 		{"LiveMessageItem", view.LiveMessageItem(view.Message{
-			ID: domain.ID{0xab, 0xcd}, DisplayName: "مريم", Handle: "author",
+			ID: kernel.ID{0xab, 0xcd}, DisplayName: "مريم", Handle: "author",
 			CreatedAt: time.Date(2026, 9, 29, 21, 0, 0, 123456789, time.FixedZone("JST", 9*60*60)),
 			Body:      "<script>bad()</script>\nمرحبا",
 		})},

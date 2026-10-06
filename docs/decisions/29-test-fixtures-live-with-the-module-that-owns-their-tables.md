@@ -7,8 +7,8 @@ layout; supersedes nothing):
   `internal/<module>/<module>test`, with raw-SQL fixtures for its own
   tables. Today these are `identitytest` (account), `orgtest`
   (organisation, member) and `conversationtest` (a channel with its default
-  topic, a named topic (#603), and the composite organisation with owner and
-  default channel, because `conversation` may import `org` and `identity`).
+  topic, and the composite organisation with owner and default channel,
+  because `conversation` may import `org` and `identity`).
 - **Importers.** Only `_test.go` files and higher fixture packages
   (`conversationtest` → `orgtest` → `identitytest`) import one; production
   code never does (depguard).

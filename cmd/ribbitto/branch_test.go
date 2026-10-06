@@ -11,7 +11,6 @@ import (
 
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
-	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
 // Branching through the production wiring (#305): moved messages show their
@@ -92,7 +91,8 @@ func TestBranchingWakesOpenStreams(t *testing.T) {
 	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT organization_id, id, default_topic_id::text FROM channel WHERE is_default").Scan(&org, &channel, &source))
 	// The destination must exist before its stream can be opened.
 	topic := conversationtest.Topic(t, pool, org, channel, "design")
-	destination := strings.TrimPrefix(view.ConversationURL("owner", channel, &topic.ID), channelURL+"/topics/")
+	var destination string
+	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT $1::uuid::text", topic.ID).Scan(&destination))
 	acceptanceOK(t, pool.QueryRow(t.Context(), "SELECT id::text FROM message WHERE organization_id = $1 AND body = 'moves live'", org).Scan(&message))
 
 	subs := []struct {

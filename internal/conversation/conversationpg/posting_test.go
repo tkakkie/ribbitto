@@ -82,7 +82,7 @@ func TestPostingRollback(t *testing.T) {
 	if _, err := newPosting(pool).Post(ctx, membership(result.OrganizationID, memberID), channelID, "rolled back"); err == nil {
 		t.Fatal("post succeeded despite event failure")
 	}
-	assertEventLog(t, pool, result.OrganizationID, 1)
+	assertEventLog(t, pool, result.OrganizationID, 0, 1)
 	var messages int
 	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM message WHERE organization_id = $1", result.OrganizationID).Scan(&messages))
 	if messages != 0 {

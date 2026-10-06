@@ -7,8 +7,8 @@ The rules are in [`web-layers.md`](web-layers.md).
 Checked by tools today: the layer imports (depguard), no `templ.Raw`
 (forbidigo), and the markup rules in `TestPagesMarkup` ([a11y]).
 The depguard `view` rule forbids non-test files in `internal/web/view`
-from importing `internal/identity`, `internal/org`,
-`internal/conversation` or `internal/infra`, including sub-packages.
+from importing `internal/identity`, `internal/org` or
+`internal/conversation`, including sub-packages.
 `TestPagesMarkup` also follows every `hx-get` and `hx-post` in each case,
 in both languages, with `HX-Request: true`. It checks `hx-target` ids in
 the requesting page, `hx-select` matches in the response, and every

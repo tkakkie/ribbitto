@@ -1,6 +1,6 @@
 // Package conversation is the conversation module's root (decisions 26 and
 // 27): channels, topics, branching, posting, history and the page snapshot.
-// IDs are kernel.ID; the package never imports domain.
+// IDs are kernel.ID.
 //
 // Feature: conversation (feature map in docs/architecture/features.md), which
 // owns the channel, topic and message tables. Exported API: Channel, its name

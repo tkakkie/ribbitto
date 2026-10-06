@@ -56,7 +56,6 @@ internal/conversation/internal/postgres -> internal/kernel
 internal/conversation/internal/postgres -> internal/org
 internal/conversation/internal/postgres -> internal/platform/postgres
 internal/conversation/internal/postgres -> internal/platform/postgres/pgxbridge
-internal/domain -> internal/kernel
 internal/identity -> internal/kernel
 internal/identity/identitypg -> internal/identity
 internal/identity/identitypg -> internal/identity/internal/postgres
@@ -67,9 +66,6 @@ internal/identity/internal/postgres -> internal/identity/internal/postgres/sqlcg
 internal/identity/internal/postgres -> internal/kernel
 internal/identity/internal/postgres -> internal/platform/postgres
 internal/identity/internal/postgres -> internal/platform/postgres/pgxbridge
-internal/infra/postgres/pgtest -> internal/domain
-internal/infra/postgres/pgtest -> internal/org
-internal/infra/postgres/pgtest -> internal/platform/postgres/pgtest
 internal/org -> internal/identity
 internal/org -> internal/kernel
 internal/org -> internal/platform/postgres

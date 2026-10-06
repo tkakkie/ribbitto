@@ -8,15 +8,14 @@ wiring and fixture rules below. depguard in `.golangci.yml`
 enforces the part of [the package table](packages.md) that matters most, and a violating import
 fails `make check`:
 
-- each module's and remaining layer's imports **within `internal/`** (other
+- each module's and package's imports **within `internal/`** (other
   imports from this module are listed in the table by convention, not
   enforced);
-- the `view` rule forbids `internal/web/view` from importing `internal/identity`, `internal/org`, `internal/conversation` or `internal/infra`, including sub-packages (see [web layers](web-layers.md));
-- `domain`, `identity`, `org`, `conversation`, `infra/postgres` and `realtime` cannot import
+- the `view` rule forbids `internal/web/view` from importing `internal/identity`, `internal/org` or `internal/conversation`, including sub-packages (see [web layers](web-layers.md));
+- `identity`, `org`, `conversation` and `realtime` cannot import
   `github.com/a-h/templ` (including sub-packages) or `html/template`;
 - `kernel` imports nothing internal; `platform` only `kernel`;
-  `infra/postgres` and `web` import a module's root, never its store or
-  wiring;
+  `web` imports a module's root, never its store or wiring;
 - a module's wiring (`identitypg`, `realtimepg`, `orgpg`, `conversationpg`) is imported only by `cmd/*` and tests,
   and its store only by its wiring and the store's own tests;
 - the `fixtures` rule lets only tests and higher fixture packages import the

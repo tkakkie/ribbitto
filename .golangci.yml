@@ -60,17 +60,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform/
             - github.com/tkakkie/ribbitto/internal/kernel$
           deny: *non_html
-        # domain keeps ID as an alias of kernel.ID until the migration's last
-        # step removes the package (decision 26).
-        domain:
-          list-mode: lax
-          files: ["**/internal/domain/*.go", "**/internal/domain/**/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/domain$
-            - github.com/tkakkie/ribbitto/internal/domain/
-            - github.com/tkakkie/ribbitto/internal/kernel$
-          deny: *non_html
-        # identity is the first module (decision 26).
+        # identity is a module (decision 26).
         identity:
           list-mode: lax
           files: ["**/internal/identity/*.go", "**/internal/identity/**/*.go", "!**/internal/identity/identitypg/*.go", "!**/internal/identity/identitytest/*.go", "!$test"]
@@ -144,19 +134,7 @@ linters:
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/conversation/internal/postgres
               desc: Only conversationpg and the store's own tests import conversation's store; see decision 26.
-        postgres:
-          list-mode: lax
-          files: ["**/internal/infra/postgres/*.go", "**/internal/infra/postgres/**/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/infra/postgres$
-            - github.com/tkakkie/ribbitto/internal/infra/postgres/
-            - github.com/tkakkie/ribbitto/internal/domain$
-            - github.com/tkakkie/ribbitto/internal/org$
-            # Temporary, until the migration's last step: infra/postgres/pgtest
-            # delegates to the platform's database lifecycle.
-            - github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest$
-          deny: *non_html
-        # realtime is the second module (decision 26).
+        # realtime is a module (decision 26).
         realtime:
           list-mode: lax
           files: ["**/internal/realtime/*.go", "**/internal/realtime/**/*.go", "!$test"]
@@ -167,7 +145,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform$
             - github.com/tkakkie/ribbitto/internal/platform/
           deny: *non_html
-        # org is the completed third module (decision 26).
+        # org is a module (decision 26).
         org:
           list-mode: lax
           files: ["**/internal/org/*.go", "**/internal/org/**/*.go", "!**/internal/org/orgtest/*.go", "!$test"]
@@ -180,7 +158,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/identity$
             - github.com/tkakkie/ribbitto/internal/realtime$
           deny: *non_html
-        # conversation is the completed fourth module (decisions 26 and 27).
+        # conversation is a module (decisions 26 and 27).
         conversation:
           list-mode: lax
           files: ["**/internal/conversation/*.go", "**/internal/conversation/**/*.go", "!**/internal/conversation/conversationtest/*.go", "!$test"]
@@ -265,10 +243,6 @@ linters:
               desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
             - pkg: github.com/tkakkie/ribbitto/internal/conversation/
               desc: Handlers convert use-case results to view models; see docs/architecture/web-layers.md.
-            - pkg: github.com/tkakkie/ribbitto/internal/infra$
-              desc: Views do no I/O; see docs/architecture/web-layers.md.
-            - pkg: github.com/tkakkie/ribbitto/internal/infra/
-              desc: Views do no I/O; see docs/architecture/web-layers.md.
     revive:
       rules:
         - name: exported

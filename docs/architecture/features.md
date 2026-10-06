@@ -8,8 +8,8 @@ imports.
 feature gains or loses a package or a table, or an exception is added.
 
 The code is a modular monolith by feature ([decision 14](../decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)):
-`identity`, `realtime`, `org` and `conversation` are modules, and step 5
-removes what is left of the layers ([modules](modules.md)).
+`identity`, `realtime`, `org` and `conversation` are modules
+([modules](modules.md)).
 New code goes in its module. Each feature logically owns tables: only that feature writes them,
 apart from the known exceptions below. A feature may own no tables. Every
 package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
@@ -17,12 +17,11 @@ package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 | Feature | Packages and files | Owns |
 |---|---|---|
 | `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`, test fixtures `identitytest`; `db/queries/identity/`); `web` `signin.go` | `account`, `session` |
-| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the completed `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres`, wiring `orgpg` and test fixtures `orgtest`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
-| `conversation`: channels, topics, branching, posting, history and the page snapshot *(decisions 21, 27)* | the completed `conversation` module: `internal/conversation` (channel, topic and message types, rules and errors; `Channels`, `Topics` (the membership-scoped lookup), `Posting`, `Brancher` and `Reader` (the page snapshot, `One`, `Many`); `message.posted` and `messages.moved`; posting and branching own their transaction, `Reader` its snapshot), its store `internal/conversation/internal/postgres`, wiring `conversationpg` and test fixtures `conversationtest`; `db/queries/conversation/`; `web` `channel.go` (channel and topic pages, history, `?before=` paging, posting), `branch.go`, `view/channel.templ`, `view/message.templ`, `view/branch.templ`, `web/static/message-*.js`, `web/static/branch-selection-v1.js` | `channel`, `topic`, `message` |
+| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres`, wiring `orgpg` and test fixtures `orgtest`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
+| `conversation`: channels, topics, branching, posting, history and the page snapshot *(decisions 21, 27)* | the `conversation` module: `internal/conversation` (channel, topic and message types, rules and errors; `Channels`, `Topics` (the membership-scoped lookup), `Posting`, `Brancher` and `Reader` (the page snapshot, `One`, `Many`); `message.posted` and `messages.moved`; posting and branching own their transaction, `Reader` its snapshot), its store `internal/conversation/internal/postgres`, wiring `conversationpg` and test fixtures `conversationtest`; `db/queries/conversation/`; `web` `channel.go` (channel and topic pages, history, `?before=` paging, posting), `branch.go`, `view/channel.templ`, `view/message.templ`, `view/branch.templ`, `web/static/message-*.js`, `web/static/branch-selection-v1.js` | `channel`, `topic`, `message` |
 | `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `web/stream.go` (the SSE endpoint), `web/stream_renderer.go` (live renderer and render cache), `web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `conversation`) | `event_log` |
 
-The shared kernel, which any feature may use: `internal/kernel` (`ID`) and
-its alias in `internal/domain` until step 5 removes it. The
+The shared kernel, which any feature may use: `internal/kernel` (`ID`). The
 per-organisation `event_seq` and `event_log_boundary_seq` and the
 authorisation entry point `org.Authorizer` are `org`'s ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)); other
 features use them only through the flows listed below and `org.Authorizer`.
@@ -74,6 +73,6 @@ the other modules it writes are bound, so its atomicity and `event_seq`
 ordering hold ([modules](modules.md)).
 A new exception needs its issue to say why, and is added to this list.
 
-## Target
+## Module construction
 
-Where the migration goes, the module construction rules and every temporary path until its step: [`modules.md`](modules.md).
+How a module is built and what it may import: [`modules.md`](modules.md).

@@ -107,8 +107,6 @@ default topic in one raw-SQL CTE with an explicit name/default flag, satisfying
 the deferred foreign key, and leaves sequences unchanged. All fixture helpers
 use `t.Context()` internally; none creates an event or setup row. Schema, migration and
 adversarial tests keep direct SQL to express states these helpers should not hide.
-`internal/infra/postgres/pgtest` keeps an identical copy of these fixtures
-until migration step 5.11 deletes it.
 
 `make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`.
 `sqlc.yaml` has one entry per module: `db/queries/identity/`,

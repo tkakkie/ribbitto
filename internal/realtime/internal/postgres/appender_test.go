@@ -33,7 +33,7 @@ func TestAppenderAudience(t *testing.T) {
 		})
 		return seq, err
 	}
-	reader := postgres.NewReader(pool, orgpg.BoundsIn, eventKinds())
+	reader := postgres.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	for _, audience := range []*kernel.ID{nil, &f.MemberID} {
 		seq, err := appendOne(audience)
 		requireNoError(t, err)

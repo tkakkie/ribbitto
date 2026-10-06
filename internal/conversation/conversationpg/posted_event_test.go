@@ -20,7 +20,7 @@ func TestPostedEventTopic(t *testing.T) {
 	posting, m := newPosting(pool), membership(f.OrganizationID, f.MemberID)
 	posted, err := posting.PostToTopic(ctx, m, f.Channel.ID, &named, "hello")
 	requireNoError(t, err)
-	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	events, err := reader.EventsAfter(ctx, f.OrganizationID, posted.EventSeq-1, 1)
 	requireNoError(t, err)
 	if len(events) != 1 || !slices.Equal(events[0].Topics, []kernel.ID{named}) {

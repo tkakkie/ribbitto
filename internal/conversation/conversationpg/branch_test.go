@@ -83,7 +83,7 @@ func TestBranching(t *testing.T) {
 	}
 	// Replay must preserve both durable events and their routing IDs, even
 	// when the batch boundary falls between the move and its notice.
-	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	// Branching changes the message, never its posting-time routing data.
 	for _, m := range posted {
 		events, err := reader.EventsAfter(ctx, acme.OrganizationID, m.EventSeq-1, 1)

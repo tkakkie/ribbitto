@@ -49,7 +49,7 @@ func TestEventsAfter(t *testing.T) {
 			Topics: []kernel.ID{posted.TopicID}, Payload: stored(posted.EventSeq)},
 		{OrganizationID: f.OrganizationID, Seq: 3, Kind: "future.private", AudienceMemberID: &f.MemberID},
 	}
-	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	for _, tt := range []struct {
 		name  string
 		after int64
@@ -98,7 +98,7 @@ func TestEventsAfterMalformedData(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
 	org := orgtest.Organization(t, pool, "malformed", "Malformed", 2)
-	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	_, err := pool.Exec(t.Context(), `INSERT INTO event_log (organization_id, seq, kind, data)
 		VALUES ($1, 1, 'member.joined', '{"member_id":"00000000-0000-0000-0000-000000000001"}')`, org)
 	requireNoError(t, err)
@@ -122,7 +122,7 @@ func TestEventsAfterCursorAboveLog(t *testing.T) {
 	posted, err := newPosting(pool).Post(ctx, membership(f), f.Channel.ID, "hello")
 	requireNoError(t, err)
 	empty := orgtest.Organization(t, pool, "empty", "Empty", 0)
-	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	for _, tt := range []struct {
 		name string
 		org  kernel.ID
@@ -185,7 +185,7 @@ func TestEventsAfterRegisteredKinds(t *testing.T) {
 // limit: there are no bounds to check against.
 func TestEventsAfterUnknownOrganization(t *testing.T) {
 	t.Parallel()
-	reader := realtimepg.NewReader(pgtest.New(t), orgpg.BoundsIn, eventKinds())
+	reader := realtimepg.NewReader(pgtest.New(t), orgpg.BoundsIn, eventKinds(t))
 	for _, limit := range []int{0, 10} {
 		got, err := reader.EventsAfter(t.Context(), kernel.ID{0xee}, 5, limit)
 		if err != nil || got == nil || len(got) != 0 {
@@ -235,12 +235,12 @@ func TestEventsAfterOneSnapshot(t *testing.T) {
 		return committingBounds{Bounds: orgpg.BoundsIn(snapshot), commit: &commit}
 	}
 	cursor := first.EventSeq - 1
-	got, err := realtimepg.NewReader(pool, bounds, eventKinds()).EventsAfter(ctx, f.OrganizationID, cursor, 10)
+	got, err := realtimepg.NewReader(pool, bounds, eventKinds(t)).EventsAfter(ctx, f.OrganizationID, cursor, 10)
 	if err != nil || len(got) != 2 || got[0].Seq != first.EventSeq || got[1].Seq != second.EventSeq {
 		t.Fatalf("batch across a commit = %+v, %v; want the first two posts only", got, err)
 	}
 	// Both commits happened: a fresh read sees the cleanup and the new post.
-	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
+	reader := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	if _, err := reader.EventsAfter(ctx, f.OrganizationID, cursor, 10); !errors.Is(err, realtime.ErrCursorExpired) {
 		t.Fatalf("cursor below the new boundary: %v; want ErrCursorExpired", err)
 	}

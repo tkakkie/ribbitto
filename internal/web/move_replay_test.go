@@ -192,7 +192,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
 	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
 	renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
-	log := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds())
+	log := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	var ids []kernel.ID
 	var source kernel.ID
 	for range 2 {
@@ -394,7 +394,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			}
 			through := notifier.raised(t)
 			renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
-			stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds()), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
+			stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t)), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 			delivered := &moveDeliveries{}
 			_, err = stream.Run(ctx, realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID, Topic: &destination.ID}, *page.EventCursor, delivered)
 			if !errors.Is(err, io.EOF) || len(delivered.events) != 1 {
@@ -493,7 +493,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 				}
 				through := notifier.raised(t)
 				renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
-				stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds()), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
+				stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t)), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 				for i, selected := range topics {
 					t.Run([]string{"source", "destination"}[i], func(t *testing.T) {
 						page := &pages[i]
@@ -577,10 +577,11 @@ func TestTopicMoveModelRequestScope(t *testing.T) {
 }
 
 // eventKinds gives readers the same publisher registrations as cmd/ribbitto.
-func eventKinds() realtime.Kinds {
-	kinds := conversationpg.EventKinds()
-	for kind, router := range orgpg.EventKinds() {
-		kinds[kind] = router
+func eventKinds(t *testing.T) realtime.Kinds {
+	t.Helper()
+	kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
+	if err != nil {
+		t.Fatal(err)
 	}
 	return kinds
 }

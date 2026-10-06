@@ -23,10 +23,11 @@ func requireNoError(t *testing.T, err error) {
 }
 
 // eventKinds gives readers the same publisher registrations as cmd/ribbitto.
-func eventKinds() realtime.Kinds {
-	kinds := conversationpg.EventKinds()
-	for kind, router := range orgpg.EventKinds() {
-		kinds[kind] = router
+func eventKinds(t *testing.T) realtime.Kinds {
+	t.Helper()
+	kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
+	if err != nil {
+		t.Fatal(err)
 	}
 	return kinds
 }

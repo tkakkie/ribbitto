@@ -10,7 +10,8 @@ import (
 )
 
 // AccountCreatorIn returns identity's account creator bound to the caller's
-// transaction. Composition roots adapt it to org.AccountCreatorIn with a closure.
+// transaction. Composition roots adapt it to org.AccountCreatorIn with a
+// named function.
 func AccountCreatorIn(tx platform.Tx) *postgres.AccountCreator { return postgres.AccountCreatorIn(tx) }
 
 // NewSessions returns the session lifecycle on pool with the given clock.

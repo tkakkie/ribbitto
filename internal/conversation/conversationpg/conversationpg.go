@@ -48,7 +48,7 @@ func NewReader(pool *pgxpool.Pool, members conversation.MemberDirectoryIn, accou
 
 // DefaultChannelCreatorIn returns the default-channel creator bound to setup's
 // transaction. Composition roots adapt it to org.DefaultChannelCreatorIn with
-// a closure (decision 26).
+// a named function (decision 26).
 func DefaultChannelCreatorIn(tx platform.Tx) *postgres.DefaultChannelCreator {
 	return postgres.DefaultChannelCreatorIn(tx)
 }

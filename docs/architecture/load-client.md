@@ -27,3 +27,30 @@ otherwise `fail` means p95 >1s, missing delivery or any request/stream failure
 (including 429, 503 and reset); otherwise `pass`. Idle steps fail only on streams.
 Established includes later failures; TCP connections count successful dials.
 The detailed output reference and stopping shell loop belong to #216's run.
+
+`-metrics` accepts a loopback HTTP origin for [development metrics](dev-metrics.md).
+`Server.Before` is read before setup (including the page request), `Server.After`
+after drain with streams still open, and `Server.Closed` after closing and a 100ms
+settle. Each keeps `streams.open`, `runtime.goroutines`, `runtime.heap_inuse_bytes`,
+`pool.total_conns`, `pool.max_conns`, `database.queries`,
+`database.transactions_begun`, `pool.empty_acquire_count` and
+`pool.empty_acquire_wait_ns` with their original JSON names. `Server.Delta` holds
+`Queries`, `TransactionsBegun`, `EmptyAcquireCount` and `EmptyAcquireWaitNS`
+from Before to After; negative differences indicate a counter reset.
+Without `-metrics`, `Server` is null; failed metrics reads fail the command.
+Metrics use a separate transport and are excluded from workload dial counts.
+
+`-source` accepts up to 64 comma-separated loopback IPv4 literals; each dial
+(page, streams, posts) binds the next source round-robin. Extra 127.x sources
+require Linux or configured macOS loopback aliases. `DialFailures` counts
+`TooManyOpenFiles`, `AddressNotAvailable`, `ConnectionRefused`, `Timeout` and
+`Other`. `Generator` reports `NOFILESoft`, `NOFILEHard`, `Goroutines` and
+`HeapInuseBytes` at observation's end, before posts settle and streams close.
+
+`-body-length` (0–4000, default 0) pads to that length without truncating the
+marker; `-body-escape` pads with `&` instead of `x`. Both are recorded.
+`Renders` records distinct message sequences delivered through drain: `Count`,
+`SizesBytes` in sequence order, `MinBytes`, `MeanBytes`, `MaxBytes` and
+`TotalBytes`. Sizes exclude SSE framing. All streams use
+one channel and the default language (no language header/cookie), so sequence
+identifies the [observed render](load-testing.md#what-the-runs-record-for-these).

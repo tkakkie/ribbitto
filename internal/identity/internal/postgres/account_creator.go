@@ -35,7 +35,7 @@ func (c *AccountCreator) CreateAccount(ctx context.Context, email, displayName, 
 			}
 			// The NFC CHECK is account_email_check1; all email CHECKs share this prefix.
 			if pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "account_email_") {
-				return kernel.ID{}, identity.ErrInvalidEmail
+				return kernel.ID{}, fmt.Errorf("%w: %w", identity.ErrInvalidEmail, err)
 			}
 		}
 		return kernel.ID{}, fmt.Errorf("creating account: %w", err)

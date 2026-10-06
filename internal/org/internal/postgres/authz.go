@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres/sqlcgen"
@@ -26,7 +25,7 @@ func NewAuthzStore(db sqlcgen.DBTX) *AuthzStore {
 func (s *AuthzStore) Membership(ctx context.Context, accountID kernel.ID, slug string) (org.Membership, error) {
 	row, err := s.queries.GetMembershipBySlug(ctx, sqlcgen.GetMembershipBySlugParams{
 		Slug:      slug,
-		AccountID: pgtype.UUID{Bytes: accountID, Valid: true},
+		AccountID: uuid(accountID),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return org.Membership{}, org.ErrNotFound
@@ -48,7 +47,7 @@ func (s *AuthzStore) Membership(ctx context.Context, accountID kernel.ID, slug s
 
 // HomeSlug returns the setup organisation's slug if the account is a member.
 func (s *AuthzStore) HomeSlug(ctx context.Context, accountID kernel.ID) (string, error) {
-	slug, err := s.queries.GetHomeSlug(ctx, pgtype.UUID{Bytes: accountID, Valid: true})
+	slug, err := s.queries.GetHomeSlug(ctx, uuid(accountID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", org.ErrNotFound
 	}

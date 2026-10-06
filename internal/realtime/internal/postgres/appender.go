@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
@@ -28,10 +26,10 @@ func AppenderIn(tx platform.Tx) *Appender {
 // organisation, may receive it.
 func (a *Appender) Append(ctx context.Context, organizationID kernel.ID, seq int64, kind realtime.EventKind, audience *kernel.ID, payload []byte) error {
 	params := sqlcgen.InsertEventParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, Seq: seq, Kind: string(kind), Data: payload,
+		OrganizationID: uuid(organizationID), Seq: seq, Kind: string(kind), Data: payload,
 	}
 	if audience != nil {
-		params.AudienceMemberID = pgtype.UUID{Bytes: *audience, Valid: true}
+		params.AudienceMemberID = uuid(*audience)
 	}
 	if err := a.queries.InsertEvent(ctx, params); err != nil {
 		return fmt.Errorf("appending %s event: %w", kind, err)

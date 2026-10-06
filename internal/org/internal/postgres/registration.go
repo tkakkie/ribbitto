@@ -8,7 +8,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres/sqlcgen"
@@ -33,8 +32,10 @@ func (w RegistrationWriter) CreateOrganization(ctx context.Context, name, slug s
 	switch {
 	// Match by column prefix: the slug has a UNIQUE (…_key) and a CHECK
 	// (…_check), and a later CHECK on the column would be …_check1.
-	case errors.As(err, &pgErr) && (pgErr.Code == "23505" || pgErr.Code == "23514") && strings.HasPrefix(pgErr.ConstraintName, "organization_slug_"):
+	case errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.HasPrefix(pgErr.ConstraintName, "organization_slug_"):
 		return kernel.ID{}, org.ErrSlugUnavailable
+	case errors.As(err, &pgErr) && pgErr.Code == "23514" && strings.HasPrefix(pgErr.ConstraintName, "organization_slug_"):
+		return kernel.ID{}, fmt.Errorf("%w: %w", org.ErrSlugUnavailable, err)
 	case err != nil:
 		return kernel.ID{}, fmt.Errorf("creating organization: %w", err)
 	}
@@ -61,8 +62,8 @@ func (w RegistrationWriter) NextEventSeq(ctx context.Context, organizationID ker
 // CreateMember inserts a member with a validated, canonical handle.
 func (w RegistrationWriter) CreateMember(ctx context.Context, organizationID, accountID kernel.ID, role org.Role, joinedEventSeq int64, handle string) (kernel.ID, error) {
 	row, err := w.queries.CreateMember(ctx, sqlcgen.CreateMemberParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true},
-		AccountID:      pgtype.UUID{Bytes: accountID, Valid: true},
+		OrganizationID: uuid(organizationID),
+		AccountID:      uuid(accountID),
 		Role:           string(role),
 		JoinedEventSeq: joinedEventSeq,
 		Handle:         handle,
@@ -80,7 +81,7 @@ func (w RegistrationWriter) CreateMember(ctx context.Context, organizationID, ac
 
 // CompleteSetup inserts the installation's only setup row.
 func (w RegistrationWriter) CompleteSetup(ctx context.Context, organizationID kernel.ID) error {
-	err := w.queries.CompleteSetup(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+	err := w.queries.CompleteSetup(ctx, uuid(organizationID))
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "setup_pkey":

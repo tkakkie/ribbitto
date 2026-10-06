@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres/sqlcgen"
@@ -29,8 +28,8 @@ func NewMemberStore(db sqlcgen.DBTX) *MemberStore {
 // prior lookup, decides between concurrent claims of the same handle.
 func (s *MemberStore) UpdateHandle(ctx context.Context, organizationID, memberID kernel.ID, handle string) error {
 	rows, err := s.queries.UpdateMemberHandle(ctx, sqlcgen.UpdateMemberHandleParams{
-		OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true},
-		ID:             pgtype.UUID{Bytes: memberID, Valid: true},
+		OrganizationID: uuid(organizationID),
+		ID:             uuid(memberID),
 		Handle:         handle,
 	})
 	if err != nil {
@@ -72,7 +71,7 @@ func NewDirectoryIn(snapshot platform.Snapshot) *Directory {
 
 // LookupMembers implements org.Directory, scoped to one organisation.
 func (s *Directory) LookupMembers(ctx context.Context, organizationID kernel.ID, ids []kernel.ID) (map[kernel.ID]org.DirectoryEntry, error) {
-	rows, err := s.queries.LookupMembers(ctx, sqlcgen.LookupMembersParams{OrganizationID: pgtype.UUID{Bytes: organizationID, Valid: true}, MemberIds: uuidArray(ids)})
+	rows, err := s.queries.LookupMembers(ctx, sqlcgen.LookupMembersParams{OrganizationID: uuid(organizationID), MemberIds: uuids(ids)})
 	if err != nil {
 		return nil, fmt.Errorf("looking up members: %w", err)
 	}
@@ -81,12 +80,4 @@ func (s *Directory) LookupMembers(ctx context.Context, organizationID kernel.ID,
 		result[row.ID.Bytes] = org.DirectoryEntry{AccountID: row.AccountID.Bytes, Handle: row.Handle}
 	}
 	return result, nil
-}
-
-func uuidArray(ids []kernel.ID) []pgtype.UUID {
-	result := make([]pgtype.UUID, len(ids))
-	for i, id := range ids {
-		result[i] = pgtype.UUID{Bytes: id, Valid: true}
-	}
-	return result
 }

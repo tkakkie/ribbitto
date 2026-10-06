@@ -51,15 +51,15 @@ func TestAccountCreatorErrors(t *testing.T) {
 	original, err := q.GetAccountByID(ctx, pgtype.UUID{Bytes: id, Valid: true})
 	requireNoError(t, err)
 	for _, tc := range []struct {
-		name, email, displayName, hash string
-		want                           error
+		name, email, displayName, hash, constraint string
+		want                                       error
 	}{
-		{"taken", "taken@example.org", "Changed", "$argon2id$changed", identity.ErrEmailTaken},
-		{"lower case", "Upper@example.org", "New", "$argon2id$new", identity.ErrInvalidEmail},
-		{"NFC", "e\u0301@example.org", "New", "$argon2id$new", identity.ErrInvalidEmail},
-		{"length", strings.Repeat("a", 255) + "@b", "New", "$argon2id$new", identity.ErrInvalidEmail},
-		{"display name", "new@example.org", "", "$argon2id$new", nil},
-		{"password hash", "new@example.org", "New", "invalid", nil},
+		{"taken", "taken@example.org", "Changed", "$argon2id$changed", "", identity.ErrEmailTaken},
+		{"lower case", "Upper@example.org", "New", "$argon2id$new", "account_email_check", identity.ErrInvalidEmail},
+		{"NFC", "e\u0301@example.org", "New", "$argon2id$new", "account_email_check1", identity.ErrInvalidEmail},
+		{"length", strings.Repeat("a", 255) + "@b", "New", "$argon2id$new", "account_email_check", identity.ErrInvalidEmail},
+		{"display name", "new@example.org", "", "$argon2id$new", "", nil},
+		{"password hash", "new@example.org", "New", "invalid", "", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
@@ -78,6 +78,12 @@ func TestAccountCreatorErrors(t *testing.T) {
 					var pgErr *pgconn.PgError
 					if !errors.As(err, &pgErr) || pgErr.Code != "23514" || !strings.HasPrefix(err.Error(), "creating account: ") {
 						t.Fatalf("non-email CHECK should remain a wrapped PostgreSQL error: %v", err)
+					}
+				}
+				if tc.constraint != "" {
+					var pgErr *pgconn.PgError
+					if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != tc.constraint {
+						t.Fatalf("email CHECK cause = %v, want SQLSTATE 23514 and constraint %s", err, tc.constraint)
 					}
 				}
 				return err

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/internal/postgres/sqlcgen"
@@ -27,7 +26,7 @@ type Sequence struct{ queries *sqlcgen.Queries }
 // organisation's row until the writer commits, so sequence order is commit
 // order (decision 5). An unknown organisation is org.ErrNotFound.
 func (s Sequence) NextEventSeq(ctx context.Context, organizationID kernel.ID) (int64, error) {
-	seq, err := s.queries.NextEventSeq(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+	seq, err := s.queries.NextEventSeq(ctx, uuid(organizationID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, org.ErrNotFound
 	}
@@ -50,7 +49,7 @@ type EventCursor struct{ queries *sqlcgen.Queries }
 // EventSeq returns the organisation's committed event_seq. An unknown
 // organisation is org.ErrNotFound.
 func (c EventCursor) EventSeq(ctx context.Context, organizationID kernel.ID) (int64, error) {
-	seq, err := c.queries.GetEventSeq(ctx, pgtype.UUID{Bytes: organizationID, Valid: true})
+	seq, err := c.queries.GetEventSeq(ctx, uuid(organizationID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, org.ErrNotFound
 	}

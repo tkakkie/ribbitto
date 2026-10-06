@@ -42,7 +42,7 @@ func (s *SessionStore) ReplaceSession(ctx context.Context, oldHash, newHash []by
 		}
 		return q.CreateSession(ctx, sqlcgen.CreateSessionParams{
 			TokenHash: newHash,
-			AccountID: pgtype.UUID{Bytes: accountID, Valid: true},
+			AccountID: uuid(accountID),
 			ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 		})
 	})
@@ -57,7 +57,7 @@ func (s *SessionStore) ReplaceSession(ctx context.Context, oldHash, newHash []by
 func (s *SessionStore) CreateSession(ctx context.Context, tokenHash []byte, accountID kernel.ID, expiresAt time.Time) error {
 	err := s.queries.CreateSession(ctx, sqlcgen.CreateSessionParams{
 		TokenHash: tokenHash,
-		AccountID: pgtype.UUID{Bytes: accountID, Valid: true},
+		AccountID: uuid(accountID),
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {

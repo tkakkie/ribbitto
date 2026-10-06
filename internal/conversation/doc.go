@@ -2,7 +2,7 @@
 // 27): channels, topics, branching, posting, history and the page snapshot.
 // IDs are kernel.ID.
 //
-// Feature: conversation (feature map in docs/architecture/features.md), which
+// Module: conversation (feature map in docs/architecture/features.md), which
 // owns the channel, topic and message tables. Exported API: Channel, its name
 // rule, errors and default name; Channels (Create, Get, Default),
 // NewChannels and ChannelStore; Topic, ValidateTopicName, ErrTopicNotFound,

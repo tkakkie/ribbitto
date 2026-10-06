@@ -2,7 +2,7 @@
 // that decides who may see an organisation's data. Handlers and the
 // real-time delivery loop call it; they never decide access themselves.
 //
-// Feature: org (feature map in docs/architecture/features.md), which owns the
+// Module: org (feature map in docs/architecture/features.md), which owns the
 // organization, member and setup tables. Exported API: Organization, Member,
 // Role, ValidateOrganizationName, ValidateSlug, ValidateHandle; Authorizer,
 // built by NewAuthorizer (including MayReceive, which the real-time stream

@@ -48,7 +48,8 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 
 `cmd/ribbitto` and `cmd/seed` do the wiring.
 [`packages.md`](docs/architecture/packages.md) defines the import rules and
-depguard checks a subset; never break them.
+the module manifest test (`module_imports_test.go`) checks the module rules;
+depguard keeps the non-module rules. Never break them.
 Modules ([`modules.md`](docs/architecture/modules.md), from decision 26):
 
 - Others import only a module's root (`internal/identity`, `internal/realtime`,

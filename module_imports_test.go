@@ -1,6 +1,7 @@
 package ribbitto_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,26 +21,29 @@ type module struct {
 // moduleManifest is the import source of truth; fixture roots are narrower than module edges.
 func moduleManifest() []module {
 	return []module{
-		{"internal/identity", "internal/identity/internal/postgres", "internal/identity/identitypg", "internal/identity/identitytest", nil, nil, true},
-		{"internal/realtime", "internal/realtime/internal/postgres", "internal/realtime/realtimepg", "", nil, nil, false},
-		{"internal/org", "internal/org/internal/postgres", "internal/org/orgpg", "internal/org/orgtest", []string{"identity", "realtime"}, nil, false},
-		{"internal/conversation", "internal/conversation/internal/postgres", "internal/conversation/conversationpg", "internal/conversation/conversationtest", []string{"identity", "org", "realtime"}, []string{"org"}, false},
+		{root: "internal/identity", store: "internal/identity/internal/postgres", wiring: "internal/identity/identitypg",
+			fixture: "internal/identity/identitytest", exactWiringStore: true},
+		{root: "internal/realtime", store: "internal/realtime/internal/postgres", wiring: "internal/realtime/realtimepg"},
+		{root: "internal/org", store: "internal/org/internal/postgres", wiring: "internal/org/orgpg",
+			fixture: "internal/org/orgtest", mayImport: []string{"identity", "realtime"}},
+		{root: "internal/conversation", store: "internal/conversation/internal/postgres", wiring: "internal/conversation/conversationpg",
+			fixture: "internal/conversation/conversationtest", mayImport: []string{"identity", "org", "realtime"}, fixtureRoots: []string{"org"}},
 	}
 }
 
 func within(path, root string) bool { return path == root || strings.HasPrefix(path, root+"/") }
 
-func validateManifest(modules []module, exists func(string) bool, candidates []string) bool {
+func validateManifest(modules []module, exists func(string) bool, candidates []string) error {
 	paths, names := map[string]bool{}, map[string]bool{}
 	for _, m := range modules {
 		name := filepath.Base(m.root)
 		if names[name] || m.root == "" || m.store == "" || m.wiring == "" {
-			return false
+			return fmt.Errorf("%q: duplicate module name or missing root, store or wiring", m.root)
 		}
 		names[name] = true
 		for _, path := range []string{m.root, m.store, m.wiring, m.fixture} {
 			if path != "" && (paths[path] || !exists(path)) {
-				return false
+				return fmt.Errorf("%q: duplicate or missing directory", path)
 			}
 			paths[path] = true
 		}
@@ -47,16 +51,16 @@ func validateManifest(modules []module, exists func(string) bool, candidates []s
 	for _, m := range modules {
 		for _, name := range append(slices.Clone(m.mayImport), m.fixtureRoots...) {
 			if !names[name] {
-				return false
+				return fmt.Errorf("%q: unknown module edge %q", m.root, name)
 			}
 		}
 	}
 	for _, path := range candidates {
 		if !paths[path] {
-			return false
+			return fmt.Errorf("%q: unlisted module directory", path)
 		}
 	}
-	return true
+	return nil
 }
 
 func importAllowed(modules []module, from, file, to string) bool {
@@ -92,7 +96,10 @@ func importAllowed(modules []module, from, file, to string) bool {
 			}
 			for _, other := range modules {
 				name := filepath.Base(other.root)
-				if to == other.root && slices.Contains(m.fixtureRoots, name) || other.fixture != "" && to == other.fixture && slices.Contains(m.mayImport, name) {
+				if to == other.root && slices.Contains(m.fixtureRoots, name) {
+					return true
+				}
+				if other.fixture != "" && to == other.fixture && slices.Contains(m.mayImport, name) {
 					return true
 				}
 			}
@@ -133,8 +140,8 @@ func TestModuleImports(t *testing.T) {
 			}
 		}
 	}
-	if !validateManifest(modules, exists, candidates) {
-		t.Fatal("incomplete module manifest: check paths, duplicates, edges and unlisted module-shaped directories")
+	if err := validateManifest(modules, exists, candidates); err != nil {
+		t.Fatalf("incomplete module manifest: %v", err)
 	}
 	// NeedSyntax gives imports per source file, including in-package and external
 	// tests. Package-level Imports would grant production files test exceptions.
@@ -145,14 +152,25 @@ func TestModuleImports(t *testing.T) {
 	if len(pkgs) == 0 || packages.PrintErrors(pkgs) != 0 {
 		t.Fatal("loading repository packages")
 	}
+	seenFiles, seenPaths := map[string]bool{}, map[string]bool{}
 	for _, pkg := range pkgs {
 		if pkg.Name == "main" && strings.HasSuffix(pkg.PkgPath, ".test") && len(pkg.GoFiles) == 1 && !strings.HasSuffix(pkg.GoFiles[0], ".go") { // Cached test main.
 			continue
 		}
 		for _, source := range pkg.Syntax {
 			file := pkg.Fset.Position(source.Pos()).Filename
-			rel := strings.TrimPrefix(filepath.ToSlash(file), filepath.ToSlash(rootDir)+"/")
+			rel, err := filepath.Rel(rootDir, file)
+			if err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				t.Fatalf("source file %q is outside repository root %q: %v", file, rootDir, err)
+			}
+			// Production files occur in both P and P [P.test].
+			if seenFiles[file] {
+				continue
+			}
+			seenFiles[file] = true
+			rel = filepath.ToSlash(rel)
 			from := filepath.ToSlash(filepath.Dir(rel))
+			seenPaths[from] = true
 			for _, spec := range source.Imports {
 				path, err := strconv.Unquote(spec.Path.Value)
 				if err != nil {
@@ -162,6 +180,13 @@ func TestModuleImports(t *testing.T) {
 				if !importAllowed(modules, from, file, to) {
 					t.Errorf("%s: forbidden module import %s", rel, to)
 				}
+			}
+		}
+	}
+	for _, m := range modules {
+		for _, path := range []string{m.root, m.store, m.wiring, m.fixture} {
+			if path != "" && !seenPaths[path] {
+				t.Errorf("manifest path %q: no source files checked", path)
 			}
 		}
 	}
@@ -175,6 +200,8 @@ func TestModuleImportFixtures(t *testing.T) {
 				{m.root, m.root + "/child", m.root, "internal/kernel/child"},
 				{m.wiring, m.store, m.root, m.store},
 				{m.store, m.store + "/sqlcgen", m.wiring + "/child", m.store},
+				{m.store, m.store + "/sqlcgen", m.root, m.store + "/sqlcgen"},
+				{m.store + "@test", m.store + "/sqlcgen", m.root + "@test", m.store + "/sqlcgen"},
 				{"cmd/server", m.wiring, m.root, m.wiring},
 				{m.root + "@test", m.wiring, m.root, m.wiring + "extra"},
 				{m.root + "@test", "internal/web", m.root, "internal/web"},
@@ -183,11 +210,14 @@ func TestModuleImportFixtures(t *testing.T) {
 			if m.fixture != "" {
 				pairs = append(pairs,
 					[4]string{m.root + "@test", m.fixture, m.root, m.fixture},
+					[4]string{m.root + "@test", m.fixture + "/child", m.root, m.fixture + "/child"},
+					[4]string{m.fixture, m.root, m.fixture, m.root + "/child"},
 					[4]string{m.fixture, m.root, m.fixture, "internal/platform/postgres"},
 					[4]string{m.fixture + "@test", "internal/web", m.fixture, "internal/web"})
 			}
 			pairs = append(pairs,
 				[4]string{"internal/org", "internal/identity", "internal/identity", "internal/org"},
+				[4]string{"internal/org", "internal/identity", "internal/org", "internal/identity/child"},
 				[4]string{"internal/conversation", "internal/org", "internal/realtime", "internal/org"},
 				[4]string{"internal/org/orgtest", "internal/identity/identitytest", "internal/identity/identitytest", "internal/org/orgtest"},
 				[4]string{"internal/conversation/conversationtest", "internal/org/orgtest", "internal/org/orgtest", "internal/conversation/conversationtest"},

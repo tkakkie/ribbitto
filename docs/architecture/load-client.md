@@ -60,40 +60,61 @@ identifies the [observed render](load-testing.md#what-the-runs-record-for-these)
 ## Reconnects and run files
 
 `-reconnect` enables the load client's own fixed-delay model; it does not model
-browser scheduling. EOF, read errors, failed dials and 503 reconnect after
+browser scheduling. EOF, read errors, failed dials and any 5xx reconnect after
 `-reconnect-delay` (default 250ms, 0–10s) plus uniform random jitter from zero
 through `-reconnect-jitter` (default 250ms, 0–10s), without exponential backoff.
-429 and other HTTP rejections stop the stream. Only a complete event's terminating
+429/4xx and a 200 without `text/event-stream` stop the stream. Only a complete event's terminating
 blank line advances Last-Event-ID; until then it remains the initial cursor.
 A complete `reset`, including empty data, counts and stops without reconnecting.
-Every logical POST keeps its marker and body across errors and 5xx retries;
-`-post-attempts` (default 3, 1–10) includes the first attempt. POST retries wait
-only the fixed delay; each attempt has a 10s deadline, independently of `-reconnect`.
-Without `-reconnect`, streams run once. `Reconnect` reports the model and connection
-`Attempts` by outcome when enabled; `PostAttemptsMade` counts all POST attempts.
+With `-reconnect`, every logical POST keeps its marker and body across errors
+and 5xx retries; `-post-attempts` (default 3, 1–10) includes the first attempt.
+POST retries wait only the fixed delay; each attempt has a 10s deadline.
+Without `-reconnect`, streams and POSTs make one attempt; explicit `-post-attempts`,
+`-reconnect-delay` and `-reconnect-jitter` are refused.
+`Reconnect` reports the model and global connection `Attempts` by outcome:
+established headers, 503, ECONNREFUSED, or `other` (including other 5xx).
+Global attempts include initial attempts; each stream's `reconnects` excludes them.
+Harness cancellations are excluded. `PostAttemptsMade` counts all POST attempts;
 `Sent`, `Answered200`, `PostFailed` remain logical post counts.
-Connection attempts count established headers, 503, ECONNREFUSED, or other;
-harness cancellations are excluded. Transient failures still affect the verdict.
+With reconnects, `Failed` counts each failed non-429/non-503 attempt, each ended
+established connection except reset/cancellation, and initial setup-slot timeouts;
+`Refused503` counts each 503 attempt. `Failed` can exceed `StreamsAttempted`.
+These failures still affect `RequestFailed` and `Verdict`; neither is a restart
+result. The restart harness and reconciler (#628/#629/#630) determine that result.
 
-`-receipts PATH` exclusively creates a new file with mode 0600. The shared
-run-file contract is one JSON object, defined by Go types in `cmd/loadgen/main.go`:
+`-receipts PATH` exclusively creates a new file with mode 0600, removed if the
+command fails. This document defines the shared version 1 run-file contract for
+loadgen receipts, cmd/seed expected sets (#626), and the reconciler (#629).
+Each file is one JSON object with `header` and exactly one body field:
 
-- `header`: required `version` (integer, currently 1), `organization_slug`,
-  `channel_id` (strings), `initial_cursor`, `final_watermark` (uint64 numbers).
-  All streams share the initial cursor; receipts require a valid numeric cursor.
-  The final watermark is required, read from the channel page after drain until
-  #628 supplies it. A failed page read fails the run rather than inventing it.
-- `streams`: array in stable zero-based `index` order, one record per requested
-  stream including empty ones. Each has `index`, `sequences` (object keyed by
-  decimal uint64 sequence), `reset` (count), and `reconnects` (object).
+- `header`: required `version` (integer, currently 1), `kind` (`receipts` or
+  `expected`), `organization_slug`, `channel_id` (strings), `initial_cursor`,
+  `final_watermark` (uint64 numbers). Both kinds require the final watermark.
+  All streams share a valid numeric initial cursor. Loadgen reads the final
+  watermark from the channel page after drain until #628 supplies it; a failed
+  read fails the run rather than inventing it.
+- Kind `receipts` carries exactly `streams`: an array in stable zero-based
+  `index` order, one record per requested stream including empty ones. Each has
+  `index`, `sequences` (object keyed by decimal uint64 sequence), `reset` (count),
+  and `reconnects` (object). No `messages` field is allowed.
 - Each sequence value has `arrivals` (positive uint64 multiplicity across all
-  connections) and `marker` (this run's `loadgen…Z` marker, or an empty string
-  for an unmarked event). Repeated marker text in one payload is one arrival.
-  Only complete non-reset events with positive sequence IDs received through drain
-  are recorded. No payload, tokens or other content is stored.
+  connections) and `marker` (this run's marker, or `""` for none). Only complete
+  `event: message` frames with positive sequence IDs received through drain are
+  recorded. Repeated marker text in one payload is one arrival. No payload,
+  tokens or other content is stored.
 - `reconnects` has required uint64 counts `established`, `503`, `refused`, `other`,
-  excluding the initial connection attempt. Reset counts include all connections.
+  excluding the initial attempt. Reset counts include all connections. Both
+  counts continue until stream shutdown; sequences freeze at the drain deadline
+  or early drain completion. Global attempts use the same shutdown window.
   Empty sequences are `{}`; all counts and header fields are present even if zero.
+- Kind `expected` carries exactly `messages`: `[{"sequence": N, "marker": "..."}]`
+  in strictly ascending positive uint64 sequence order, with `""` for no marker.
+  Include only message sequences with `initial_cursor < sequence ≤ final_watermark`.
+  No `streams` field is allowed; an empty expected set is `[]`.
+- Marker grammar: literal `loadgen`, exactly 26 random characters from `A–Z`
+  and `2–7` (the `crypto/rand.Text()` alphabet), the zero-based decimal post
+  number without leading zeros (except `0`), then literal `Z`. One random part
+  identifies a run; retries keep the same marker.
 
 ## A ceiling search
 

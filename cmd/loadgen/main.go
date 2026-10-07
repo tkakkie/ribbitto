@@ -34,13 +34,14 @@ type fixture struct {
 	Accounts []struct{ Tokens []string } `json:"accounts"`
 }
 
-// runFile v1 is the shared receipt/expected-set contract; see load-client.md.
+// runFile is the receipts kind of the v1 contract defined in load-client.md.
 type runFile struct {
 	Header  runHeader      `json:"header"`
 	Streams []streamRecord `json:"streams"`
 }
 type runHeader struct {
 	Version          int    `json:"version"`
+	Kind             string `json:"kind"`
 	OrganizationSlug string `json:"organization_slug"`
 	ChannelID        string `json:"channel_id"`
 	InitialCursor    uint64 `json:"initial_cursor"`
@@ -71,6 +72,13 @@ type reconnectModel struct {
 // maxStreams covers #216's idle steps (10k, 20k …) with room to spare and
 // keeps the run finite.
 const maxStreams = 100_000
+
+const (
+	connectionEstablished = iota
+	connectionUnavailable
+	connectionRefused
+	connectionOther
+)
 
 type counts struct {
 	postAttempts                                                                    atomic.Uint64
@@ -304,7 +312,7 @@ func request(ctx context.Context, client *http.Client, method, endpoint, token, 
 
 // A reset is dispatched only at a complete SSE event with a data field.
 // The cursor advances only at the blank line, never on a partial payload.
-func readReset(body io.Reader, receive func(uint64, string), complete ...func(uint64, string)) bool {
+func readReset(body io.Reader, receive func(uint64, string), complete func(uint64, string, string)) bool {
 	s := bufio.NewScanner(body)
 	s.Buffer(make([]byte, 4096), 1<<20)
 	event, data := "", false
@@ -313,8 +321,8 @@ func readReset(body io.Reader, receive func(uint64, string), complete ...func(ui
 	for s.Scan() {
 		line := s.Text()
 		if line == "" {
-			if data && event != "reset" && len(complete) > 0 {
-				complete[0](seq, strings.TrimSuffix(payload.String(), "\n"))
+			if data && event != "reset" && complete != nil {
+				complete(seq, event, strings.TrimSuffix(payload.String(), "\n"))
 			}
 			if event == "reset" && data {
 				return true
@@ -347,7 +355,7 @@ func readReset(body io.Reader, receive func(uint64, string), complete ...func(ui
 
 func streamOnce(ctx context.Context, client *http.Client, endpoint, token string, cursor *string, c *counts, setup context.Context, opened, established func(), seen map[*post]bool, rec *streamRecord, reconnect bool) (outcome int, retry bool) {
 	defer func() {
-		if ctx.Err() == nil || outcome == 0 {
+		if ctx.Err() == nil || outcome == connectionEstablished {
 			c.connectionAttempts[outcome].Add(1)
 			if reconnect {
 				fields := []*uint64{&rec.Reconnects.Established, &rec.Reconnects.Unavailable, &rec.Reconnects.Refused, &rec.Reconnects.Other}
@@ -368,9 +376,9 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 			c.failed.Add(1)
 		}
 		if errors.Is(err, syscall.ECONNREFUSED) {
-			return 2, true
+			return connectionRefused, true
 		}
-		return 3, true
+		return connectionOther, true
 	}
 	defer func() { _ = r.Body.Close() }()
 	if r.ProtoMajor == 2 {
@@ -379,25 +387,25 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 	switch r.StatusCode {
 	case http.StatusTooManyRequests:
 		c.limited.Add(1)
-		return 3, false
+		return connectionOther, false
 	case http.StatusServiceUnavailable:
 		c.shutdown.Add(1)
-		return 1, true
+		return connectionUnavailable, true
 	case http.StatusOK:
 		if strings.Split(r.Header.Get("Content-Type"), ";")[0] != "text/event-stream" {
 			c.failed.Add(1)
-			return 3, false
+			return connectionOther, false
 		}
 		established()
 		notify()
-		if readReset(r.Body, func(seq uint64, data string) { c.receive(seq, data, seen) }, func(seq uint64, data string) {
+		if readReset(r.Body, func(seq uint64, data string) { c.receive(seq, data, seen) }, func(seq uint64, event, data string) {
 			if seq == 0 {
 				return
 			}
 			*cursor = strconv.FormatUint(seq, 10)
 			c.mu.Lock()
 			defer c.mu.Unlock()
-			if c.frozen || (!c.deadline.IsZero() && time.Now().After(c.deadline)) {
+			if event != "message" || c.frozen || (!c.deadline.IsZero() && time.Now().After(c.deadline)) {
 				return
 			}
 			if rec.Sequences[seq] == nil {
@@ -407,15 +415,15 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 		}) {
 			c.reset.Add(1)
 			rec.Reset++
-			return 0, false
+			return connectionEstablished, false
 		} else if ctx.Err() == nil {
 			c.failed.Add(1)
 		}
-		return 0, true
+		return connectionEstablished, true
 	default:
 		c.failed.Add(1)
 	}
-	return 3, false
+	return connectionOther, r.StatusCode >= 500 && r.StatusCode < 600
 }
 
 func retryDelay(delay, jitter time.Duration) time.Duration {
@@ -487,12 +495,12 @@ func sendPost(ctx context.Context, client *http.Client, endpoint, token, body st
 	return false
 }
 
-func run(args []string, out io.Writer) error {
+func run(args []string, out io.Writer) (runErr error) {
 	flags := flag.NewFlagSet("loadgen (development only)", flag.ContinueOnError)
 	reconnect := flags.Bool("reconnect", false, "enable the client's fixed-delay reconnect model")
 	delay := flags.Duration("reconnect-delay", 250*time.Millisecond, "fixed retry delay [0, 10s]")
 	jitter := flags.Duration("reconnect-jitter", 250*time.Millisecond, "random stream retry jitter [0, 10s]")
-	attempts := flags.Int("post-attempts", 3, "POST attempts [1, 10]")
+	attempts := flags.Int("post-attempts", 3, "POST attempts with -reconnect [1, 10]")
 	receipts := flags.String("receipts", "", "exclusive receipt run file (0600)")
 	metrics := flags.String("metrics", "", "loopback HTTP metrics origin")
 	source := flags.String("source", "", "up to 64 comma-separated loopback IPv4 sources")
@@ -513,6 +521,14 @@ func run(args []string, out io.Writer) error {
 	}
 	if *delay < 0 || *delay > 10*time.Second || *jitter < 0 || *jitter > 10*time.Second || *attempts < 1 || *attempts > 10 || flags.NArg() != 0 || *bodyLength < 0 || *bodyLength > 4000 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > maxStreams || *rate < 0 || *rate > 100 || *drain <= 0 || *drain > 5*time.Minute || *setup <= 0 || *setup > 5*time.Minute || *dials < 1 || *dials > maxStreams {
 		return fmt.Errorf("flag outside finite limits")
+	}
+	flags.Visit(func(f *flag.Flag) {
+		if (f.Name == "post-attempts" || f.Name == "reconnect-delay" || f.Name == "reconnect-jitter") && !*reconnect {
+			runErr = fmt.Errorf("%s requires -reconnect", f.Name)
+		}
+	})
+	if runErr != nil {
+		return runErr
 	}
 	c := &counts{}
 	if *source != "" {
@@ -617,7 +633,12 @@ func run(args []string, out io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("creating receipts: %w", err)
 		}
-		defer func() { _ = receiptFile.Close() }()
+		defer func() {
+			_ = receiptFile.Close()
+			if runErr != nil {
+				_ = os.Remove(*receipts)
+			}
+		}()
 	}
 	records := make([]streamRecord, *streams)
 	for i := range records {
@@ -683,7 +704,7 @@ func run(args []string, out io.Writer) error {
 			c.mu.Lock()
 			p.sent = time.Now()
 			c.mu.Unlock()
-			if sendPost(streamCtx, client, endpoint, tokenAt(int(i)), body, c, &reconnectModel{Delay: *delay, PostAttempts: *attempts}) {
+			if sendPost(streamCtx, client, endpoint, tokenAt(int(i)), body, c, r.Reconnect) {
 				c.mu.Lock()
 				p.answered = true
 				c.received.Add(uint64(len(p.latencies)))
@@ -740,7 +761,7 @@ func run(args []string, out io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("invalid final watermark")
 		}
-		if err := json.NewEncoder(receiptFile).Encode(runFile{runHeader{1, data.Slug, data.Channels[0], cursorNumber, final}, records}); err != nil {
+		if err := json.NewEncoder(receiptFile).Encode(runFile{runHeader{1, "receipts", data.Slug, data.Channels[0], cursorNumber, final}, records}); err != nil {
 			return fmt.Errorf("writing receipts: %w", err)
 		}
 		if err := receiptFile.Close(); err != nil {
@@ -748,7 +769,7 @@ func run(args []string, out io.Writer) error {
 		}
 	}
 	if r.Reconnect != nil {
-		r.Reconnect.Attempts = connectionCounts{c.connectionAttempts[0].Load(), c.connectionAttempts[1].Load(), c.connectionAttempts[2].Load(), c.connectionAttempts[3].Load()}
+		r.Reconnect.Attempts = connectionCounts{c.connectionAttempts[connectionEstablished].Load(), c.connectionAttempts[connectionUnavailable].Load(), c.connectionAttempts[connectionRefused].Load(), c.connectionAttempts[connectionOther].Load()}
 	}
 	if r.Server != nil {
 		time.Sleep(100 * time.Millisecond)

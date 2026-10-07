@@ -91,7 +91,7 @@ func TestStreamsAndPosting(t *testing.T) {
 				}
 				w.Header().Set("Content-Type", "text/event-stream")
 				w.WriteHeader(status)
-				_, _ = fmt.Fprint(w, ": heartbeat\r\nid: 8\r\nevent: message\r\ndata: first\r\ndata: second\r\n\r\nevent: reset\r\ndata: {}\r\n\r\n")
+				_, _ = fmt.Fprint(w, ": heartbeat\r\nid: 8\r\nevent: message\r\ndata: first\r\ndata: second\r\n\r\nid: 8\r\nevent: reset\r\ndata: \r\n\r\n")
 			})))
 			defer server.Close()
 			path := t.TempDir() + "/tokens.json"
@@ -109,7 +109,7 @@ func TestStreamsAndPosting(t *testing.T) {
 		})
 	}
 	for _, body := range []string{"event: reset\n\n", "event: reset\ndata: {}", "event: reset\nevent: message\ndata: {}\n\n"} {
-		if readReset(strings.NewReader(body), nil) {
+		if readReset(strings.NewReader(body), nil, nil) {
 			t.Fatal("dispatched incomplete/non-reset event")
 		}
 	}
@@ -270,7 +270,7 @@ func TestStep(t *testing.T) {
 				w.Header().Set("Content-Type", "text/event-stream")
 				_ = http.NewResponseController(w).Flush()
 				if tc.reset {
-					_, _ = fmt.Fprint(w, "event: reset\ndata: {}\n\n")
+					_, _ = fmt.Fprint(w, "id: 8\nevent: reset\ndata: \n\n")
 					return
 				}
 				for {
@@ -520,32 +520,32 @@ func TestSourceDials(t *testing.T) {
 }
 
 func TestReconnect(t *testing.T) {
-	for _, cut := range []string{"503", "refused", "other", "id: 9\n", "id: 9\nevent: message\ndata: first\ndata: sec", "", "reset"} {
+	for _, cut := range []string{"503", "502", "refused", "other", "id: 9\n", "id: 9\nevent: message\ndata: first\ndata: sec", "", "reset"} {
 		t.Run(cut, func(t *testing.T) {
 			var requests, dials atomic.Int64
 			var first time.Time
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				n := requests.Add(1)
 				want := "7"
-				if n > 1 && cut != "503" && cut != "other" {
-					want = "8"
+				if n > 1 && cut != "502" && cut != "other" {
+					want = "9"
 				}
 				if r.Header.Get("Last-Event-ID") != want {
 					t.Errorf("cursor: %s, want %s", r.Header.Get("Last-Event-ID"), want)
 				}
-				if n <= 2 && cut == "503" {
-					w.WriteHeader(503)
+				if n == 2 && cut == "503" || n == 1 && cut == "502" {
+					w.WriteHeader(map[string]int{"503": 503, "502": 502}[cut])
 					return
 				}
 				w.Header().Set("Content-Type", "text/event-stream")
 				if cut != "reset" {
-					_, _ = fmt.Fprint(w, "id: 8\nevent: message\ndata: loadgenTEST0Z\n\n")
+					_, _ = fmt.Fprint(w, "id: 8\nevent: message\ndata: loadgenTEST0Z\n\nid: 9\nevent: messages-moved\ndata: moved\n\n")
 				}
-				if n == 1 && cut != "503" && cut != "refused" && cut != "other" && cut != "reset" {
+				if n == 1 && cut != "refused" && cut != "other" && cut != "reset" {
 					_, _ = fmt.Fprint(w, cut)
 					return
 				}
-				_, _ = fmt.Fprint(w, "event: reset\ndata:\n\n")
+				_, _ = fmt.Fprint(w, "id: 10\nevent: reset\ndata: \n\n")
 			}))
 			defer server.Close()
 			c := &counts{markers: regexp.MustCompile(`loadgen[A-Z0-9]+Z`)}
@@ -577,10 +577,10 @@ func TestReconnect(t *testing.T) {
 			rec := streamRecord{Sequences: make(map[uint64]*receipt)}
 			stream(ctx, &http.Client{Transport: tr}, server.URL+"/events", "secret", "7", c, ctx, slots, func() { <-slots }, &reconnectModel{Delay: 5 * time.Millisecond}, &rec)
 			arrivals := uint64(2)
-			if cut == "503" || cut == "refused" || cut == "other" {
+			if cut == "502" || cut == "refused" || cut == "other" {
 				arrivals = 1
 			}
-			if rec.Reset != 1 || rec.Sequences[9] != nil || ctx.Err() != nil {
+			if rec.Reset != 1 || rec.Sequences[6] != nil || rec.Sequences[9] != nil || rec.Sequences[10] != nil || ctx.Err() != nil {
 				t.Fatalf("bad termination: %+v", rec)
 			}
 			if cut == "reset" {
@@ -590,7 +590,7 @@ func TestReconnect(t *testing.T) {
 			} else if rec.Sequences[8] == nil || rec.Sequences[8].Arrivals != arrivals || rec.Sequences[8].Marker != "loadgenTEST0Z" || rec.Reconnects.Established != 1 {
 				t.Fatalf("bad receipts: %+v", rec)
 			}
-			if cut == "503" && (c.connectionAttempts[1].Load() != 2 || rec.Reconnects.Unavailable != 1) || cut == "refused" && c.connectionAttempts[2].Load() != 1 || cut == "other" && c.connectionAttempts[3].Load() != 1 {
+			if cut == "503" && (c.connectionAttempts[connectionUnavailable].Load() != 1 || rec.Reconnects.Unavailable != 1) || cut == "502" && (rec.Reconnects.Other != 0 || c.connectionAttempts[connectionOther].Load() != 1) || cut == "refused" && c.connectionAttempts[connectionRefused].Load() != 1 || cut == "other" && c.connectionAttempts[connectionOther].Load() != 1 {
 				t.Fatal("attempt outcome lost")
 			}
 		})
@@ -601,13 +601,17 @@ func TestReceiptsAndPostRetry(t *testing.T) {
 	var attempts, pages atomic.Int64
 	events := make(chan string, 1)
 	var marker string
+	var first time.Time
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			body := r.FormValue("body")
 			if attempts.Add(1) == 1 {
-				marker = body
+				marker, first = body, time.Now()
 				w.WriteHeader(503)
 				return
+			}
+			if time.Since(first) < 250*time.Millisecond {
+				t.Error("POST retried before delay")
 			}
 			if body != marker {
 				t.Error("retry changed marker")
@@ -636,7 +640,7 @@ func TestReceiptsAndPostRetry(t *testing.T) {
 				return
 			}
 		}
-		_, _ = fmt.Fprint(w, "event: reset\ndata:\n\n")
+		_, _ = fmt.Fprint(w, "id: 10\nevent: reset\ndata: \n\n")
 	}))
 	defer server.Close()
 	dir := t.TempDir()
@@ -653,7 +657,7 @@ func TestReceiptsAndPostRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{`"final_watermark":99`, `"sequences":{}`, `"reset":1`, `"reconnects":{"established":0,"503":0,"refused":0,"other":0}`} {
+	for _, field := range []string{`{"header":{"version":1,"kind":"receipts","organization_slug":"test","channel_id":"one","initial_cursor":7,"final_watermark":99},"streams":[{"index":0,`, `"arrivals":2,"marker":`, `"sequences":{}`, `"reset":1`, `"reconnects":{"established":0,"503":0,"refused":0,"other":0}`} {
 		if !bytes.Contains(raw, []byte(field)) {
 			t.Fatalf("missing required receipt field: %s", field)
 		}
@@ -666,7 +670,7 @@ func TestReceiptsAndPostRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 || got.Header != (runHeader{1, "test", "one", 7, 99}) || len(got.Streams) != 2 || got.Streams[0].Index != 0 || got.Streams[1].Index != 1 || len(got.Streams[1].Sequences) != 0 || got.Streams[0].Sequences[8] == nil || *got.Streams[0].Sequences[8] != (receipt{2, marker}) || got.Streams[1].Reset != 1 || strings.Contains(string(raw), "secret") {
+	if info.Mode().Perm() != 0600 || got.Header != (runHeader{1, "receipts", "test", "one", 7, 99}) || len(got.Streams) != 2 || got.Streams[0].Index != 0 || got.Streams[1].Index != 1 || len(got.Streams[1].Sequences) != 0 || got.Streams[0].Sequences[8] == nil || *got.Streams[0].Sequences[8] != (receipt{2, marker}) || got.Streams[1].Reset != 1 || strings.Contains(string(raw), "secret") {
 		t.Fatalf("bad file: %s", raw)
 	}
 	var step result
@@ -682,33 +686,74 @@ func TestReceiptsAndPostRetry(t *testing.T) {
 }
 
 func TestRetryLimits(t *testing.T) {
+	readReset(strings.NewReader("id: 8\nevent: reset\ndata: \n\n"), nil, func(uint64, string, string) { t.Error("reset advanced cursor") })
+	for _, flag := range []string{"post-attempts=3", "reconnect-delay=0", "reconnect-jitter=0"} {
+		name, _, _ := strings.Cut(flag, "=")
+		if err := run([]string{"-" + flag}, &bytes.Buffer{}); err == nil || err.Error() != name+" requires -reconnect" {
+			t.Fatalf("accepted %s without reconnect: %v", flag, err)
+		}
+	}
 	for range 100 {
 		if got := retryDelay(5*time.Millisecond, 3*time.Millisecond); got < 5*time.Millisecond || got > 8*time.Millisecond || retryDelay(5*time.Millisecond, 0) != 5*time.Millisecond {
 			t.Fatal("retry is not fixed delay plus bounded jitter")
 		}
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(503) }))
+	var status atomic.Int64
+	status.Store(503)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(int(status.Load())) }))
 	defer server.Close()
 	c := &counts{}
 	if sendPost(t.Context(), server.Client(), server.URL, "secret", "loadgenTEST0Z", c, &reconnectModel{PostAttempts: 3}) || c.postAttempts.Load() != 3 {
 		t.Fatal("POST did not exhaust exactly three attempts")
 	}
+	status.Store(400)
+	if sendPost(t.Context(), server.Client(), server.URL, "secret", "body", c, &reconnectModel{PostAttempts: 3}) || c.postAttempts.Load() != 4 {
+		t.Fatal("4xx POST retried")
+	}
+	status.Store(503)
 	tokens := t.TempDir() + "/tokens.json"
 	if err := os.WriteFile(tokens, []byte(`{"organization_slug":"test","channel_ids":["one"],"accounts":[{"tokens":["secret"]}]}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	args := []string{"-target", server.URL, "-tokens", tokens, "-cursor=7", "-duration=1ms", "-rate=1", "-reconnect-delay=0"}
+	args := []string{"-target", server.URL, "-tokens", tokens, "-cursor=7", "-duration=1ms", "-rate=1"}
 	var out bytes.Buffer
 	var step result
-	if err := run(args, &out); err != nil || json.Unmarshal(out.Bytes(), &step) != nil || step.Sent != 1 || step.PostFailed != 1 || step.Answered200 != 0 || step.PostAttemptsMade != 3 {
+	if err := run(args, &out); err != nil || json.Unmarshal(out.Bytes(), &step) != nil || step.Sent != 1 || step.PostFailed != 1 || step.Answered200 != 0 || step.PostAttemptsMade != 1 {
 		t.Fatalf("bad exhausted POST counts: %v: %s", err, out.String())
 	}
-	if err := run(append(args, "-receipts", t.TempDir()+"/receipts.json"), &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "channel cursor") {
+	path := t.TempDir() + "/receipts.json"
+	if err := run(append(args, "-receipts", path), &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "channel cursor") {
 		t.Fatalf("missing watermark accepted: %v", err)
 	}
-	for _, flags := range [][]string{nil, {"-reconnect-delay=0", "-reconnect-jitter=0", "-post-attempts=1"}, {"-reconnect-delay=10s", "-reconnect-jitter=10s", "-post-attempts=10"}} {
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("failed run left receipts: %v", err)
+	}
+	for _, flags := range [][]string{nil, {"-reconnect", "-reconnect-delay=0", "-reconnect-jitter=0", "-post-attempts=1"}, {"-reconnect", "-reconnect-delay=10s", "-reconnect-jitter=10s", "-post-attempts=10"}} {
 		if err := run(flags, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "credential file") {
 			t.Fatalf("valid flags rejected: %v: %v", flags, err)
 		}
+	}
+}
+
+func TestReceiptDeadlineAndStreamJitter(t *testing.T) {
+	var requests atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "id: 8\nevent: message\ndata: late\n\n")
+		if requests.Add(1) == 17 {
+			_, _ = fmt.Fprint(w, "id: 8\nevent: reset\ndata: \n\n")
+		}
+	}))
+	defer server.Close()
+	c := &counts{deadline: time.Now().Add(-time.Second), markers: regexp.MustCompile(`loadgen[A-Z0-9]+Z`)}
+	rec := streamRecord{Sequences: make(map[uint64]*receipt)}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	slots := make(chan struct{}, 1)
+	slots <- struct{}{}
+	start := time.Now()
+	stream(ctx, server.Client(), server.URL+"/events", "secret", "7", c, ctx, slots, func() { <-slots }, &reconnectModel{Jitter: 10 * time.Millisecond}, &rec)
+	if len(rec.Sequences) != 0 || len(c.renders) != 0 || requests.Load() != 17 || ctx.Err() != nil || time.Since(start) < 20*time.Millisecond {
+		t.Fatalf("deadline or jitter ignored: %+v, requests %d, elapsed %s", rec, requests.Load(), time.Since(start))
 	}
 }

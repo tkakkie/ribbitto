@@ -16,14 +16,14 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 LAUNCHER_TESTS_BASE ?= origin/main
 export LAUNCHER_TESTS_BASE
 
-.PHONY: check check-ai lint lint-fixtures vuln db-up db-down generate schema-docs deps css dev
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-ai lint lint-fixtures vuln db-up db-down generate schema-docs deps css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
 	go tool -modfile=tools/go.mod sqlc generate
 
 schema-docs:
-	go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist
+	python3 scripts/ai_env.py run go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist
 
 # Regenerates docs/dependencies.md; make check fails when it is stale.
 deps:
@@ -41,7 +41,7 @@ dev: $(TEMPL) css
 	$(TAILWIND) $(CSS_ARGS) --watch=always & css_pid=$$!; \
 	trap 'kill "$$css_pid" 2>/dev/null || true; wait "$$css_pid" 2>/dev/null || true' EXIT; \
 	trap 'exit 130' INT; trap 'exit 143' TERM; \
-	RIBBITTO_DEV_ASSETS=web/static $(TEMPL) generate --watch --cmd 'go run ./cmd/ribbitto'
+	RIBBITTO_DEV_ASSETS=web/static python3 scripts/ai_env.py run $(TEMPL) generate --watch --cmd 'go run ./cmd/ribbitto'
 
 $(TAILWIND):
 	@mkdir -p "$(@D)"
@@ -61,7 +61,7 @@ $(TAILWIND):
 # formatter's stdout; the working tree is never rewritten. The exit status is
 # checked on its own: on a parse error the formatter prints nothing, which
 # would match an empty file.
-check: $(TEMPL)
+check: $(TEMPL) db-health
 	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
 	if [ -n "$$unformatted" ]; then \
 		echo "These files need gofmt:"; \
@@ -91,11 +91,12 @@ check: $(TEMPL)
 	$(MAKE) lint
 	$(MAKE) lint-fixtures
 	go build ./...
-	go test -race ./...
+	go test -race $(GO_TEST_FLAGS) ./...
+	$(MAKE) check-ai-env
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
 	go -C tools vet ./docscheck
-	go -C tools test -race ./docscheck
+	go -C tools test -race $(GO_TEST_FLAGS) ./docscheck
 	go -C tools run ./docscheck ..
 	bash scripts/ai/launcher-tests_test.sh
 	bash scripts/ai/launcher-tests.sh --base "$$LAUNCHER_TESTS_BASE"
@@ -138,3 +139,22 @@ $(GOLANGCI_LINT):
 	trap 'rm -f "$$installer"' EXIT; \
 	curl -fsSL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOLANGCI_LINT_VERSION)/install.sh -o "$$installer"; \
 	sh "$$installer" -b "$(@D)" $(GOLANGCI_LINT_VERSION)
+
+# Credentials stay in the inherited admin environment, never in .env.local.
+bin/ai-db: $(wildcard cmd/devdb/*.go) $(wildcard internal/platform/postgres/*.go) $(wildcard db/migrations/*.sql) go.mod go.sum
+	go build -o $@ ./cmd/devdb
+
+ai-env ai-env-clean ai-health: bin/ai-db
+	@python3 scripts/ai_env.py $(patsubst ai-env-clean,clean,$(patsubst ai-health,health,$@))
+
+db-health:
+	@if [ "$${RIBBITTO_TEST_DATABASE_URL+x}" = x ] || [ "$${RIBBITTO_REQUIRE_DB:-}" = 1 ]; then $(MAKE) ai-health; fi
+
+migrate:
+	@python3 scripts/ai_env.py run go run ./cmd/ribbitto migrate $(or $(DIRECTION),up)
+
+seed:
+	@python3 scripts/ai_env.py run go run ./cmd/seed $(ARGS)
+
+check-ai-env: bin/ai-db
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'ai_*_test.py'

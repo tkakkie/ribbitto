@@ -5,6 +5,8 @@ machine and `make dev` running, use:
 ```sh
 go run ./cmd/loadgen -tokens /tmp/loadtest.json -streams 8 -duration 5s -rate 2
 ```
+With worktree configuration, add `-target http://localhost:APP_PORT` using
+`.env.local`'s `AI_APP_PORT`; its metrics port is `AI_METRICS_PORT`.
 For loopback Caddy, add `-target https://localhost:8443 -ca /path/to/root.crt`.
 Only that PEM pool is trusted; HTTP uses HTTP/1.1, HTTPS negotiates HTTP/2.
 The dialer checks every resolved address; proxies and origin changes are refused.

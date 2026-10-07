@@ -17,6 +17,7 @@ not show calls through an edge that already exists, dependencies inside one
 package, or SQL access to tables.
 
 ```text
+cmd/devdb -> internal/platform/postgres
 cmd/ribbitto -> internal/conversation
 cmd/ribbitto -> internal/conversation/conversationpg
 cmd/ribbitto -> internal/identity

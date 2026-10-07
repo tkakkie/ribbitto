@@ -32,14 +32,15 @@ PostgreSQL with pgx, sqlc and goose.
 
 ## Development
 
-Requires Go (see `go.mod` for the version) and Docker Compose for PostgreSQL 18.
+Requires Go (see `go.mod` for the version), Python 3 and Docker Compose for PostgreSQL 18.
 
 ```sh
 cp .env.example .env
 set -a; . ./.env; set +a    # export configuration; the binary does not load .env
 make db-up                 # starts PostgreSQL and waits for health
-go run ./cmd/ribbitto migrate up
-go run ./cmd/ribbitto       # serves http://localhost:8080/ (or: ... serve)
+make migrate               # DIRECTION=up|down|status
+make seed ARGS='-messages 100' # optional development fixtures
+go run ./cmd/ribbitto       # http://localhost:8080; health at /healthz
 make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
 make dev                   # watches templ and CSS; restarts the server
@@ -50,8 +51,15 @@ make deps                  # regenerates docs/dependencies.md after an import ch
 make db-down               # stops PostgreSQL; keeps the named data volume
 ```
 
-The server listens at http://localhost:8080/healthz and never migrates on
-startup.
+For parallel worktrees, optionally run `make ai-env` after `make db-up`.
+It migrates a separate dev database and allocates app/metrics ports in
+`.env.local`; the Make targets above then use those values instead of
+`RIBBITTO_DATABASE_URL`. Start other commands with
+`python3 scripts/ai_env.py run <command>` to use that configuration.
+`make ai-health` checks the shared admin connection without printing credentials.
+`make ai-env-clean` drops only this worktree's dev database and releases its ports.
+See [database development](docs/database.md) for overrides and capacity measurement.
+The server never migrates on startup.
 
 Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the address of the
 proxy that connects to ribbitto, as a `/32` or `/128` CIDR (for example
@@ -90,7 +98,9 @@ so local notes and tools do not change the output.
 `make check` is what CI runs and what must pass before a pull request: it
 checks formatting (`gofmt` for Go, `templ fmt` for templates), vets, lints,
 builds, runs the Go tests with the race detector, and checks the import
-graph and the documents. The AI launchers' self-tests, most of its time, run
+graph and the documents. Worktree tooling uses Python 3 standard-library
+unittests (`make check-ai-env`); there is no Python lint/format gate. The AI
+launchers' self-tests, most of its time, run
 only when the change since `LAUNCHER_TESTS_BASE` (default `origin/main`;
 commits, staged, unstaged and untracked files) touches `scripts/ai/`,
 `.github/prompts/`, `.github/workflows/` or the `Makefile`, or when that

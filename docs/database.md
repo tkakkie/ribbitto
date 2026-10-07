@@ -8,6 +8,40 @@ workflow or the integration-test setup changes.
 applies migrations. `.env.example` contains the local Compose URLs; export
 them into the shell as shown in the README. `.env` is ignored by Git.
 
+`make ai-env` creates/migrates a path-hashed dev database through the admin
+`RIBBITTO_TEST_DATABASE_URL`. Its ignored `.env.local` stores only its name and
+app/metrics ports. `make dev`, `make migrate DIRECTION=up|down|status`,
+`make seed ARGS='-messages 100'` and `make schema-docs` read it. For other
+commands: `python3 scripts/ai_env.py run <command>`. Without `.env.local`,
+shell configuration applies. The test admin URL stays unchanged.
+
+Automatic ports use 20000–32767, below the usual OS ephemeral ranges,
+starting at a path-derived candidate; `ai-env.json` in the shared Git
+directory is published atomically under the OS advisory lock `ai-env.lock`.
+Allocation skips reserved/bound IPv4/IPv6 ports; `AI_APP_PORT`/`AI_METRICS_PORT`
+overrides use the same checks. Reruns keep reservations with a running server.
+Stale entries absent from Git's worktrees or missing `.git` metadata release
+ports and drop their path-derived dev databases. Only registry entries are
+considered; cleanup never scans by database prefix or touches test templates.
+`make ai-env-clean` drops only this worktree's dev database and releases ports.
+`make ai-health` distinguishes missing/invalid admin configuration, connection
+failures and SQL failures without credentials;
+`make check` runs it before tests when DB configuration is set or required.
+`make check-ai-env` tests this tooling.
+
+Run `python3 scripts/ai_capacity.py WT1 WT2 PACKAGES PARALLEL` outside the
+sandbox, with this change in both worktrees and `bin/ai-db` built. It reports
+two uncached required-DB checks' exit codes and counts of lines matching
+`53300|too many clients`, sampled peak/initial client backends (including one
+persistent observer connected before checks), server limit, `-p`, `-parallel`
+and pool limits. Each check runs in its own process group, killed on cleanup.
+Output stays in a 0600 `bin/ai-capacity-*.log` in each worktree; logs may contain
+credentials, so do not share them. The report never prints URLs. The runner
+reuses the inherited/default module cache and GOPATH. SQL pools are unbounded
+(0); pgx
+defaults to max(4, CPUs), unless the admin URL overrides it. Choose settings
+with headroom, then repeat to validate them; settings await these runs.
+
 `make db-up` starts PostgreSQL 18 on loopback port 5432 and waits for its
 health check. Its password is for development only. `make db-down` stops
 it without deleting the named volume at `/var/lib/postgresql`.
@@ -130,7 +164,7 @@ With the Compose database running and `RIBBITTO_DATABASE_URL` exported,
 apply migrations and regenerate the [schema reference](schema/README.md):
 
 ```sh
-go run ./cmd/ribbitto migrate up
+make migrate
 make schema-docs
 ```
 

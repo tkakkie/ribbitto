@@ -78,7 +78,7 @@ From the run in [load results](load-results.md); every step's figures are in
 - **A5 (process-wide cap):**
   - **Highest passing idle step:** 60,000 streams over HTTP/1.1, the fixtures'
     size. The server held 60,019 file descriptors and a peak RSS of 3,349 MiB.
-    Over the idle steps, peak RSS per stream was 45.7–61.0 KiB.
+    Over the HTTP/1.1 idle steps, peak RSS per stream was 45.7–61.0 KiB.
   - **What fails first:**
     - with 10 posts/s, the database pool, between 7,000 and 10,000 streams;
     - idle through Caddy, the proxy's memory, between 40,000 and 50,000
@@ -86,8 +86,7 @@ From the run in [load results](load-results.md); every step's figures are in
   - A cap sized from these is follow-up work (#623).
 - **A7 (detached loads):** within each series, on one server process, each
   step's first snapshot showed 11–15 goroutines after the previous step's
-  thousands of streams had closed (the baseline is 11), with no growth from
-  step to step. The run saw no pile-up of abandoned loads; these counts alone
+  thousands of streams had closed, which remained near the baseline of 11. The run saw no pile-up of abandoned loads; these counts alone
   cannot prove that none remained. The snapshot 100 ms after closing can still
   catch a large step's connections being torn down (49,638 goroutines at
   40,000 streams).

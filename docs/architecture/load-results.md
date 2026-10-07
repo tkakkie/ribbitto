@@ -114,8 +114,8 @@ Peak RSS during the step, and the least memory available in the VM, in MiB:
 what the active steps left behind.
 
 - **Server, per stream:**
-  - peak RSS of 45.7–61.0 KiB (peak RSS divided by streams, over the idle
-    steps);
+  - peak RSS of 45.7–61.0 KiB (peak RSS divided by streams, over the HTTP/1.1
+    idle steps);
   - about 28 KiB of heap in use at 60,000 streams;
   - two goroutines and one file descriptor: 60,019 descriptors at 60,000
     streams.
@@ -125,8 +125,8 @@ what the active steps left behind.
   is a lower bound. Available memory fell to 764 MiB, so memory is the
   likely next limit, but it was not reached.
 - **HTTP/2 ceiling: 40,000 passes and 50,000 fails, on the proxy's memory.**
-  - Between idle steps, Caddy's peak RSS grew by 48–100 KiB per added stream,
-    and the server's by 39–66 KiB. At 40,000 streams Caddy held 3,952 MiB
+  - Between the passing HTTP/2 idle steps (10,000 to 40,000), Caddy's peak RSS
+    grew by 48–100 KiB per added stream, and the server's by 39–66 KiB. At 40,000 streams Caddy held 3,952 MiB
     and the server 1,919 MiB.
   - At 50,000 attempts, 38,500 streams were established when the VM ran out of
     memory (67 MiB left); the kernel's OOM killer stopped Caddy (the

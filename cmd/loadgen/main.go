@@ -498,7 +498,9 @@ func run(args []string, out io.Writer) error {
 			continue
 		}
 		marker := prefix + strconv.FormatUint(i, 10) + "Z"
-		p := &post{sent: time.Now()}
+		// The marker is registered before the request so that a delivery
+		// arriving before the POST's response is kept.
+		p := &post{}
 		c.mu.Lock()
 		c.deliveries[marker] = p
 		c.mu.Unlock()
@@ -507,7 +509,13 @@ func run(args []string, out io.Writer) error {
 			defer func() { <-inflight }()
 			ctx, cancel := context.WithTimeout(streamCtx, 10*time.Second)
 			defer cancel()
-			response, err := request(ctx, client, http.MethodPost, endpoint, tokenAt(int(i)), paddedBody(marker, *bodyLength, *bodyEscape))
+			body := paddedBody(marker, *bodyLength, *bodyEscape)
+			// Post-to-receipt latency starts here, not when the slot was
+			// scheduled, so the client's own goroutine scheduling is excluded.
+			c.mu.Lock()
+			p.sent = time.Now()
+			c.mu.Unlock()
+			response, err := request(ctx, client, http.MethodPost, endpoint, tokenAt(int(i)), body)
 			if err == nil {
 				if response.ProtoMajor == 2 {
 					c.http2.Store(true)

@@ -123,8 +123,8 @@ Each file is one JSON object with `header` and exactly one body field:
 `go run ./cmd/loadgen -compare receipts.json expected.json` compares local files
 without credentials, HTTP or a database; other flags are refused. Both files
 must satisfy the version 1 contract above. Malformed or missing fields, duplicate
-stream indices, and differing versions, organisations, channels or initial
-cursors are refused before counting. Watermarks may differ.
+object keys at any level, duplicate stream indices, and differing versions,
+organisations, channels or initial cursors are refused before counting. Watermarks may differ.
 
 Output is one JSON object with numeric values: `missing` totals expected sequences
 absent across streams; `missing_by_stream` lists `{index, missing}` for every stream,

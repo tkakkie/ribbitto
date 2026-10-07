@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,10 +28,26 @@ type streamMissing struct {
 	Missing uint64 `json:"missing"`
 }
 
-// Checking presence separately preserves the distinction between absent and zero.
+// Check presence and duplicates before decoding counts: repeated keys can merge maps.
 func requiredObject(raw json.RawMessage, fields ...string) (map[string]json.RawMessage, error) {
-	var obj map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil || len(obj) != len(fields) {
+	obj := make(map[string]json.RawMessage)
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return nil, fmt.Errorf("invalid object")
+	}
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil || obj[key.(string)] != nil {
+			return nil, fmt.Errorf("invalid or duplicate object key %v", key)
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, fmt.Errorf("reading object value: %w", err)
+		}
+		obj[key.(string)] = value
+	}
+	_, err := decoder.Token()
+	if err != nil || decoder.Decode(new(json.RawMessage)) != io.EOF || fields != nil && len(obj) != len(fields) {
 		return nil, fmt.Errorf("invalid object fields")
 	}
 	for _, field := range fields {
@@ -94,8 +111,8 @@ func readRunFile(path, kind string) (runFile, error) {
 		if _, err := requiredObject(s["reconnects"], "established", "503", "refused", "other"); err != nil {
 			return data, fmt.Errorf("invalid reconnects for stream %d: %w", i, err)
 		}
-		var sequences map[string]json.RawMessage
-		if err := json.Unmarshal(s["sequences"], &sequences); err != nil {
+		sequences, err := requiredObject(s["sequences"])
+		if err != nil {
 			return data, fmt.Errorf("invalid sequences for stream %d: %w", i, err)
 		}
 		for key, raw := range sequences {

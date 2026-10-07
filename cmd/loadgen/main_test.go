@@ -662,15 +662,15 @@ func TestReceiptsAndPostRetry(t *testing.T) {
 			t.Fatalf("missing required receipt field: %s", field)
 		}
 	}
-	var got runFile
-	if err := json.Unmarshal(raw, &got); err != nil {
+	got, err := readRunFile(path, "receipts")
+	if err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 || got.Header != (runHeader{1, "receipts", "test", "one", 7, 99}) || len(got.Streams) != 2 || got.Streams[0].Index != 0 || got.Streams[1].Index != 1 || len(got.Streams[1].Sequences) != 0 || got.Streams[0].Sequences[8] == nil || *got.Streams[0].Sequences[8] != (receipt{2, marker}) || got.Streams[1].Reset != 1 || strings.Contains(string(raw), "secret") {
+	if info.Mode().Perm() != 0600 || got.Header != (runHeader{1, "receipts", "test", "one", 7, 99}) || len(got.Streams) != 2 || got.Streams[0].Index != 0 || got.Streams[1].Index != 1 || len(got.Streams[1].Sequences) != 0 || got.Streams[0].Sequences[8] == nil || *got.Streams[0].Sequences[8] != (receipt{2, marker}) || got.Streams[1].Reset != 1 || strings.Contains(string(raw), "secret") || bytes.Contains(raw, []byte(`"messages"`)) {
 		t.Fatalf("bad file: %s", raw)
 	}
 	var step result

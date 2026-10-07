@@ -97,6 +97,14 @@ func TestCompareRefusals(t *testing.T) {
 		{"sequence alias", `"10":`, `"010":`},
 		{"marker grammar", `"marker":""`, `"marker":"invalid"`},
 		{"duplicate stream", `"streams":[`, `"streams":[` + comparisonStream(0, `{}`, 0) + `,`},
+		{"duplicate streams key", `"streams":[`, `"streams":[` + comparisonStream(0, `{"99":{"arrivals":0,"marker":"bogus"}}`, 0) + `],"streams":[`},
+		{"duplicate sequences key", `"sequences":`, `"sequences":{"99":{"arrivals":0,"marker":"bogus"}},"sequences":`},
+		{"duplicate header key", `"header":`, `"header":{},"header":`},
+		{"duplicate header field", `"version":1`, `"version":2,"version":1`},
+		{"duplicate stream field", `"index":0`, `"index":1,"index":0`},
+		{"duplicate sequence entry", `"10":`, `"10":{"arrivals":0,"marker":"bogus"},"10":`},
+		{"duplicate receipt field", `"arrivals":1`, `"arrivals":0,"arrivals":1`},
+		{"duplicate reconnect field", `"established":0`, `"established":1,"established":0`},
 		{"null record", `"arrivals":1,"marker":""`, `"arrivals":null,"marker":""`},
 		{"unknown field", `"reset":0`, `"reset":0,"extra":0`},
 		{"trailing object", `}]}`, `}]} {}`},
@@ -124,7 +132,7 @@ func TestCompareRefusals(t *testing.T) {
 			}
 		}
 	}
-	for _, bad := range []string{`[{"sequence":9,"marker":""}]`, `[{"sequence":21,"marker":""}]`, `[{"sequence":10,"marker":""},{"sequence":10,"marker":""}]`, `[{"sequence":11,"marker":""},{"sequence":10,"marker":""}]`, `null`, `[null]`} {
+	for _, bad := range []string{`[{"sequence":9,"marker":""}]`, `[{"sequence":21,"marker":""}]`, `[{"sequence":10,"marker":"invalid"}]`, `[{"sequence":9,"sequence":10,"marker":""}]`, `[{"sequence":10,"marker":""},{"sequence":10,"marker":""}]`, `[{"sequence":11,"marker":""},{"sequence":10,"marker":""}]`, `null`, `[null]`} {
 		if out, err := runComparison(t, receipts, comparisonInput("expected", bad)); err == nil || out != "" {
 			t.Fatalf("accepted malformed expected set: %s, %v", out, err)
 		}
@@ -137,6 +145,9 @@ func TestCompareRefusals(t *testing.T) {
 	}
 	if err := run([]string{"-compare", "unused"}, &bytes.Buffer{}); err == nil {
 		t.Fatal("accepted missing expected path")
+	}
+	if err := run([]string{"-compare", "r", "e", "extra"}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "requires receipts and expected files") {
+		t.Fatalf("accepted extra comparison argument: %v", err)
 	}
 	if err := run([]string{"-compare", t.TempDir() + "/absent", "unused"}, &bytes.Buffer{}); err == nil {
 		t.Fatal("accepted absent file")

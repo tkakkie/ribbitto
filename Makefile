@@ -128,7 +128,7 @@ lint-fixtures: $(GOLANGCI_LINT)
 			echo "lint-fixtures: staticcheck must reject an ignored result in $$file"; printf '%s\n' "$$out"; exit 1; \
 		fi; \
 	done; \
-	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/nilerr.go:' | grep -q '(nilerr)'; then \
+	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/nilerr.go:' | grep -q 'error is not nil (line [0-9]*) but it returns nil (nilerr)'; then \
 		echo "lint-fixtures: nilerr must reject returning nil after a non-nil error"; printf '%s\n' "$$out"; exit 1; \
 	fi
 

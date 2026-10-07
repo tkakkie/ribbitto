@@ -46,8 +46,11 @@ SA4006 on templ's unused `ClearChildren` result, because golangci-lint ignores
 templ's `//lint:file-ignore SA4006` directive.
 
 Nilerr runs with no exclusions and rejects returning a nil error after
-checking that an error is non-nil. `make lint-fixtures` asserts this finding
-in a tagged Go fixture, so disabling nilerr fails the check.
+checking that an error is non-nil, unless the block uses the error (for
+example, `log.Print(err); return nil` counts as handling it). It also reports
+the opposite case, `if err == nil { return err }`. `make lint-fixtures`
+asserts the non-nil-error finding in a tagged Go fixture, so disabling
+nilerr fails the check.
 
 `make check` also requires a `doc.go` in every directory under `internal/`
 that contains non-test Go files, including generated packages, as specified

@@ -119,6 +119,15 @@ Every entry sets `omit_unused_structs`, so a table no query uses gets no struct.
 Commit the pgx/v5 output; CI rejects generation changes to committed files. Never edit
 generated files.
 
+`make check` also runs `go -C tools test -race ./scopecheck`: PostgreSQL's
+parser checks each owned table's own WHERE scope in SELECT, UPDATE and
+DELETE, including CTE bodies. INSERT statements are excluded. Ownership comes
+from migration columns, except installation-wide `setup`; `organization`
+uses `id`. Joins do not carry scope. Outer joins, CTE result reads, derived
+tables and set operations are unsupported. Named exemptions with reasons live
+in `tools/scopecheck/allowlist.txt`; stale entries fail. The parser requires
+cgo and a C compiler (Xcode command-line tools locally, GCC on CI's Ubuntu).
+
 ## Development seed data
 
 Filling a development database with synthetic conversations, and its

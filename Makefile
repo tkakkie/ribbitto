@@ -96,6 +96,8 @@ check: $(TEMPL)
 	bash scripts/deps_test.sh
 	go -C tools vet ./docscheck
 	go -C tools test -race ./docscheck
+	go -C tools vet ./scopecheck
+	go -C tools test -race ./scopecheck
 	go -C tools run ./docscheck ..
 	bash scripts/ai/launcher-tests_test.sh
 	bash scripts/ai/launcher-tests.sh --base "$$LAUNCHER_TESTS_BASE"

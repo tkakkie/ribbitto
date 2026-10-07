@@ -44,6 +44,7 @@ func TestPaths(t *testing.T) {
 		{"missing Go file", "internal/web.go", "internal/web.go"},
 		{"moved Markdown file", "docs/architecture.md", "docs/architecture.md"},
 		{"selector without Go files", "docs/architecture.NewHandler", "docs/architecture.NewHandler"},
+		{"selector with only Go directory", "internal/empty.Missing", "internal/empty.Missing"},
 		{"missing selector package", "internal/gone.NewHandler", "internal/gone.NewHandler"},
 		{"selector prefix is a file", "internal/web/handler.go.Name", "internal/web/handler.go.Name"},
 		{"invalid identifier", "internal/web.42", "internal/web.42"},
@@ -59,9 +60,10 @@ func TestPaths(t *testing.T) {
 				"docs/a.md":               "# Paths\n\n`" + tt.span + "`\n",
 				"internal/web/handler.go": "", "internal/web.NewHandler.go": "",
 				"internal/web/i18n/locales/en.toml": "", "internal/web/i18n/locales/ja.toml": "",
-				"web/static/js/app.js":        "",
-				"internal/identity/doc.go":    "",
-				"docs/architecture/README.md": "",
+				"web/static/js/app.js":                    "",
+				"internal/identity/doc.go":                "",
+				"docs/architecture/README.md":             "",
+				"internal/empty/something.go/placeholder": "",
 			})
 			problems, err := checkPaths(root)
 			if err != nil {

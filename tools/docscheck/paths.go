@@ -102,5 +102,13 @@ func repositoryPathExists(repo *os.Root, path string, identifier *regexp.Regexp)
 		return false
 	}
 	matches, err := fs.Glob(repo.FS(), path[:dot]+"/*.go")
-	return err == nil && len(matches) > 0
+	if err != nil {
+		return false
+	}
+	for _, match := range matches {
+		if info, err := repo.Stat(match); err == nil && info.Mode().IsRegular() {
+			return true
+		}
+	}
+	return false
 }

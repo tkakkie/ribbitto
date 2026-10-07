@@ -5,8 +5,9 @@ reconnect storm) assume about ribbitto's limits before they run. The
 in-process cost per post is in [stream cost](stream-cost.md). Server
 counters are described in [development metrics](dev-metrics.md).
 
-**Keep it current:** #216 adds its results, commands and the measurements
-below; change a disposition here when a measurement changes it.
+**Keep it current:** #216's results and commands are in
+[load results](load-results.md), and its measurements for the dispositions
+are below. Change a disposition here when a measurement changes it.
 
 ## Assumptions and dispositions
 
@@ -53,3 +54,39 @@ numbers are named when #216 tunes them (#261 B13).
 - **A7:** with #297 merged, `runtime.goroutines` after a step's streams
   close (abandoned loads would remain as goroutines) and, in #219, the time
   from SIGTERM to exit.
+
+## Measurements (#216, 2026-10-07)
+
+From the run in [load results](load-results.md); every step's figures are in
+[load results by step](load-results-steps.md).
+
+- **A4 (render cache):** at 1,000 streams and 10 posts/s for 30 s over
+  HTTP/1.1, on a freshly started server, each step delivered 300 renders.
+  - **Short bodies:** about 1.2 KB of payload each (365 KB in all); the heap
+    in use rose from 21 to 37 MiB.
+  - **Worst case:** 4,000-character bodies of `&` came to about 40.8 KB of
+    payload each (12.3 MB in all); the heap in use rose from 38 to 98 MiB.
+  - **The cache's memory is not measured.** A cached buffer can have more
+    capacity than its length, and entries carry overhead, so the cache can
+    hold more than the payloads. The run does not tell how the rest of the
+    heap's rise divides between the cache and other allocations.
+  - **Retained entries:** 600 distinct renders since the server started,
+    under the 4096 bound.
+  - **Full cache:** 4096 worst-case renders come to about 4096 × 40.8 KB ≈
+    167 MB of payload for this workload. That is a lower bound on such a
+    cache's memory, not a ceiling.
+- **A5 (process-wide cap):**
+  - **Highest passing idle step:** 60,000 streams over HTTP/1.1, the fixtures'
+    size. The server held 60,019 file descriptors and a peak RSS of 3,349 MiB.
+    Over the HTTP/1.1 idle steps, peak RSS per stream was 45.7–61.0 KiB.
+  - **What fails first:**
+    - with 10 posts/s, the database pool, between 7,000 and 10,000 streams;
+    - idle through Caddy, the proxy's memory, between 40,000 and 50,000
+      streams.
+  - A cap sized from these is follow-up work (#623).
+- **A7 (detached loads):** within each series, on one server process, each
+  step's first snapshot showed 11–15 goroutines after the previous step's
+  thousands of streams had closed, which remained near the baseline of 11. The run saw no pile-up of abandoned loads; these counts alone
+  cannot prove that none remained. The snapshot 100 ms after closing can still
+  catch a large step's connections being torn down (49,638 goroutines at
+  40,000 streams).

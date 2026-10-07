@@ -33,7 +33,7 @@ func ValidateSlug(value string) (string, error) {
 var reservedHandles = map[string]bool{"everyone": true, "here": true, "channel": true, "all": true}
 
 // ValidateHandle returns the canonical lower-case handle: 2–32 characters,
-// starting with a-z, ending with a-z or 0-9, with a-z, 0-9, _, . or - in
+// starting with a-z, ending with a-z or 0-9, with a-z, 0-9, `_`, `.` or `-` in
 // between, and not a reserved word.
 func ValidateHandle(value string) (string, error) {
 	if !utf8.ValidString(value) || strings.ContainsFunc(value, unicode.IsControl) {

@@ -37,6 +37,13 @@ Read the file for the area you change:
 | [`web-layers.md`](web-layers.md) | what handlers, templ, htmx and JavaScript are each responsible for |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 
+Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),
+[org](../api/org.txt) and [conversation](../api/conversation.txt).
+Run `make api` after an API or doc-comment change; `make check` compares them
+without rewriting files. Entries and members are sorted by name, with signatures
+and first doc sentences; unexported declarations and their members are omitted.
+Loading uses `go/packages` for Linux/amd64 with cgo disabled.
+
 ## See also
 
 - [`docs/domain/README.md`](../domain/README.md) — glossary and index; [`entities.md`](../domain/entities.md), [`invariants.md`](../domain/invariants.md), [`unread.md`](../domain/unread.md)

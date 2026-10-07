@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,7 +27,7 @@ func checkPaths(root string) ([]string, error) {
 	shape := regexp.MustCompile(`^(internal|cmd|db|docs|web|tools|scripts|\.github)/\S+$`)
 	lineSuffix := regexp.MustCompile(`:[0-9]+$`)
 	braceSet := regexp.MustCompile(`\{([^{}]+,[^{}]+)\}`)
-	identifier := regexp.MustCompile(`^[\pL_][\pL\pN_]*$`)
+	identifier := regexp.MustCompile(`^\p{Lu}[\pL\pN_]*$`)
 	var problems []string
 	for _, file := range files {
 		if file != "AGENTS.md" && file != "README.md" && file != "DECISIONS.md" && !strings.HasPrefix(file, "docs/") {
@@ -83,12 +84,23 @@ func repositoryPathExists(repo *os.Root, path string, identifier *regexp.Regexp)
 	if _, err := repo.Stat(path); err == nil {
 		return true
 	}
-	// Files with extensions take precedence over package selectors. A selector
-	// is accepted only when its package is an existing directory.
-	dot := strings.LastIndexByte(path, '.')
-	if dot < 0 || !identifier.MatchString(path[dot+1:]) {
+	// Files with extensions take precedence over package selectors. Requiring
+	// exported identifiers and Go files keeps missing files from passing as selectors.
+	start := strings.LastIndexByte(path, '/') + 1
+	dot := strings.IndexByte(path[start:], '.')
+	if dot < 0 {
 		return false
 	}
+	dot += start
+	for _, name := range strings.Split(path[dot+1:], ".") {
+		if !identifier.MatchString(name) {
+			return false
+		}
+	}
 	info, err := repo.Stat(path[:dot])
-	return err == nil && info.IsDir()
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	matches, err := fs.Glob(repo.FS(), path[:dot]+"/*.go")
+	return err == nil && len(matches) > 0
 }

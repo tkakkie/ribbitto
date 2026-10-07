@@ -28,6 +28,7 @@ func TestPaths(t *testing.T) {
 		{"missing with line suffix", "internal/gone.go:42", "internal/gone.go"},
 		{"trailing slash", "internal/web/", ""},
 		{"slash and line suffix", "internal/web/:42", ""},
+		{"missing slash and line suffix", "internal/gone/:42", "internal/gone"},
 		{"line suffix and slash", "internal/web:42/", ""},
 		{"missing with trailing slash", "internal/gone/", "internal/gone"},
 		{"brace set", "internal/web/i18n/locales/{en,ja}.toml", ""},
@@ -36,6 +37,13 @@ func TestPaths(t *testing.T) {
 		{"brace set with line suffix", "internal/web/i18n/locales/{en,ja}.toml:42", ""},
 		{"package selector", "internal/web.NewHandler", ""},
 		{"identity selector", "internal/identity.Sessions", ""},
+		{"method selector", "internal/identity.Sessions.Create", ""},
+		{"invalid method identifier", "internal/identity.Sessions.42", "internal/identity.Sessions.42"},
+		{"unexported selector", "internal/web.newHandler", "internal/web.newHandler"},
+		{"unexported method selector", "internal/identity.Sessions.create", "internal/identity.Sessions.create"},
+		{"missing Go file", "internal/web.go", "internal/web.go"},
+		{"moved Markdown file", "docs/architecture.md", "docs/architecture.md"},
+		{"selector without Go files", "docs/architecture.NewHandler", "docs/architecture.NewHandler"},
 		{"missing selector package", "internal/gone.NewHandler", "internal/gone.NewHandler"},
 		{"selector prefix is a file", "internal/web/handler.go.Name", "internal/web/handler.go.Name"},
 		{"invalid identifier", "internal/web.42", "internal/web.42"},
@@ -51,8 +59,9 @@ func TestPaths(t *testing.T) {
 				"docs/a.md":               "# Paths\n\n`" + tt.span + "`\n",
 				"internal/web/handler.go": "", "internal/web.NewHandler.go": "",
 				"internal/web/i18n/locales/en.toml": "", "internal/web/i18n/locales/ja.toml": "",
-				"web/static/js/app.js":     "",
-				"internal/identity/doc.go": "",
+				"web/static/js/app.js":        "",
+				"internal/identity/doc.go":    "",
+				"docs/architecture/README.md": "",
 			})
 			problems, err := checkPaths(root)
 			if err != nil {

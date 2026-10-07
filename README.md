@@ -93,8 +93,9 @@ builds, runs the Go tests with the race detector, and checks the import
 graph and the documents. In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,
 repository paths in backticks must exist. Placeholders and globs are skipped;
 brace sets are expanded; `:line` suffixes and trailing slashes are accepted.
-An existing path wins over `package.Identifier`, which otherwise checks the
-package directory. Decision records are exempt from this path check because
+An existing path wins over `package.Identifier` or `package.Type.Method`,
+which require exported identifiers and a package directory containing a Go
+file. Decision records are exempt from this path check because
 they describe history; their Markdown links and anchors are still checked.
 
 The AI launchers' self-tests, most of its time, run

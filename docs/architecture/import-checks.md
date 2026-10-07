@@ -45,9 +45,13 @@ For components that use neither `ctx` nor children, add `{{ _ = ctx }}` to avoid
 SA4006 on templ's unused `ClearChildren` result, because golangci-lint ignores
 templ's `//lint:file-ignore SA4006` directive.
 
-`sqlclosecheck` runs without exclusions to catch SQL/pgx rows and statements
-that are never closed. `make lint-fixtures` proves it rejects unclosed pgx
-rows; disabling the linter fails that assertion.
+`sqlclosecheck` runs without exclusions and rejects SQL/pgx rows and statements
+that are neither closed nor used. Any other use of the rows, such as
+`rows.Next()` or `rows.Err()`, satisfies it: lint does not catch a missing
+Close once rows are used, including an early return from a scan loop. Keep
+`defer rows.Close()` right after the query's error check. `make lint-fixtures`
+proves it rejects unused, unclosed pgx rows; disabling the linter fails that
+assertion.
 
 `make check` also requires a `doc.go` in every directory under `internal/`
 that contains non-test Go files, including generated packages, as specified

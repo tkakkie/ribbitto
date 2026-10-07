@@ -4,9 +4,11 @@ How `make check` enforces the import rules of [packages and allowed imports](pac
 the other files.
 
 A package's sub-packages may import each other, apart from the store,
-wiring and fixture rules below. depguard in `.golangci.yml`
-enforces the part of [the package table](packages.md) that matters most, and a violating import
-fails `make check`:
+wiring and fixture rules below. The [module manifest](../../module_imports_test.go)
+is the source of truth for module paths, edges and fixture exceptions. Its Go tests
+check imports per source file and reject missing paths, duplicates, unknown edge
+names and unlisted module-shaped directories. Depguard keeps the other boundaries;
+both fail `make check` on a violating import:
 
 - each module's and package's imports **within `internal/`** (other
   imports from this module are listed in the table by convention, not
@@ -18,12 +20,9 @@ fails `make check`:
   `web` imports a module's root, never its store or wiring;
 - a module's wiring (`identitypg`, `realtimepg`, `orgpg`, `conversationpg`) is imported only by `cmd/*` and tests,
   and its store only by its wiring and the store's own tests;
-- the `fixtures` rule lets only tests and higher fixture packages import the
-  test-only `identitytest`, `orgtest` and `conversationtest` (decision 29);
-  `identityfixture`, `orgfixture` and `conversationfixture` let each import
-  only `kernel`, its own root, the roots it needs for types and lower
-  fixture packages (`conversationtest` → `orgtest` → `identitytest`), and
-  the store, wiring and bridge rules keep them off stores and wiring;
+- the manifest permits fixture imports only from test files and higher fixture
+  packages; it fixes their root imports and direction, and keeps them off
+  stores and wiring (decision 29);
 - only stores (`**/internal/postgres/**`) import `platform/postgres/pgxbridge`;
   `make lint-fixtures` (part of `make check`) proves a module root is
   rejected and a store accepted;
@@ -35,7 +34,7 @@ fails `make check`:
   rules above bind them too (only the platform's `tx_test.go` is exempt from
   the bridge rule).
 
-This file and `.golangci.yml` must agree; change them together.
+This file, the manifest and `.golangci.yml` must agree; change them together.
 
 `make check` also requires a `doc.go` in every directory under `internal/`
 that contains non-test Go files, including generated packages, as specified

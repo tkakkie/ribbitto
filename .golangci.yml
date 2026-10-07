@@ -19,7 +19,7 @@ linters:
       # allow a module's or package's sub-packages without allowing similarly
       # named packages. File globs need separate selectors for roots and
       # descendants. A module's or package's own import rules exclude tests;
-      # the migration, bridge and store rules also apply to tests.
+      # the migration and bridge rules also apply to tests.
       rules:
         # Only the platform owns migrations (decision 26); tests that need a
         # schema version migrate through pgtest's Migrator.
@@ -60,146 +60,50 @@ linters:
             - github.com/tkakkie/ribbitto/internal/platform/
             - github.com/tkakkie/ribbitto/internal/kernel$
           deny: *non_html
-        # identity is a module (decision 26).
+        # Module imports live in module_imports_test.go. These rules retain
+        # the separate HTML restriction, with the existing file exceptions.
         identity:
           list-mode: lax
           files: ["**/internal/identity/*.go", "**/internal/identity/**/*.go", "!**/internal/identity/identitypg/*.go", "!**/internal/identity/identitytest/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/identity$
-            - github.com/tkakkie/ribbitto/internal/identity/
-            - github.com/tkakkie/ribbitto/internal/kernel$
-            - github.com/tkakkie/ribbitto/internal/platform$
-            - github.com/tkakkie/ribbitto/internal/platform/
-          deny: *non_html
-        # Identity's wiring may import its exact store, not store sub-packages.
+          deny: &module_html
+            - pkg: github.com/a-h/templ$
+              desc: Only internal/web produces HTML; see AGENTS.md.
+            - pkg: github.com/a-h/templ/
+              desc: Only internal/web produces HTML; see AGENTS.md.
+            - pkg: html/template$
+              desc: Only internal/web produces HTML; see AGENTS.md.
         identitywiring:
           list-mode: lax
           files: ["**/internal/identity/identitypg/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/identity$
-            - github.com/tkakkie/ribbitto/internal/identity/internal/postgres$
-            - github.com/tkakkie/ribbitto/internal/kernel$
-            - github.com/tkakkie/ribbitto/internal/platform$
-            - github.com/tkakkie/ribbitto/internal/platform/
-          deny: *non_html
-        # A module's wiring is composition code (decision 26): only cmd/* and
-        # tests import it. Its store is imported only by its wiring and the
-        # store's own tests; Go's internal rule alone would also let the
-        # module's root import it.
-        wiring:
-          list-mode: lax
-          files: ["$all", "!$test", "!**/cmd/*/*.go", "!**/cmd/*/**/*.go"]
-          deny:
-            - pkg: github.com/tkakkie/ribbitto/internal/identity/identitypg
-              desc: Only cmd/* and tests import a module's wiring; see decision 26.
-            - pkg: github.com/tkakkie/ribbitto/internal/realtime/realtimepg
-              desc: Only cmd/* and tests import a module's wiring; see decision 26.
-            - pkg: github.com/tkakkie/ribbitto/internal/org/orgpg
-              desc: Only cmd/* and tests import a module's wiring; see decision 26.
-            - pkg: github.com/tkakkie/ribbitto/internal/conversation/conversationpg
-              desc: Only cmd/* and tests import a module's wiring; see decision 26.
-        identitystore:
-          list-mode: lax
-          files: ["$all", "!**/internal/identity/identitypg/*.go", "!**/internal/identity/internal/postgres/*.go", "!**/internal/identity/internal/postgres/**/*.go"]
-          deny:
-            - pkg: github.com/tkakkie/ribbitto/internal/identity/internal/postgres
-              desc: Only identitypg and the store's own tests import identity's store; see decision 26.
-        realtimestore:
-          list-mode: lax
-          files: ["$all", "!**/internal/realtime/realtimepg/*.go", "!**/internal/realtime/internal/postgres/*.go", "!**/internal/realtime/internal/postgres/**/*.go"]
-          deny:
-            - pkg: github.com/tkakkie/ribbitto/internal/realtime/internal/postgres
-              desc: Only realtimepg and the store's own tests import realtime's store; see decision 26.
-        orgstore:
-          list-mode: lax
-          files: ["$all", "!**/internal/org/orgpg/*.go", "!**/internal/org/internal/postgres/*.go", "!**/internal/org/internal/postgres/**/*.go"]
-          deny:
-            - pkg: github.com/tkakkie/ribbitto/internal/org/internal/postgres
-              desc: Only orgpg and the store's own tests import org's store; see decision 26.
-        conversationstore:
-          list-mode: lax
-          files: ["$all", "!**/internal/conversation/conversationpg/*.go", "!**/internal/conversation/internal/postgres/*.go", "!**/internal/conversation/internal/postgres/**/*.go"]
-          deny:
-            - pkg: github.com/tkakkie/ribbitto/internal/conversation/internal/postgres
-              desc: Only conversationpg and the store's own tests import conversation's store; see decision 26.
+          deny: *module_html
         # realtime is a module (decision 26).
         realtime:
           list-mode: lax
           files: ["**/internal/realtime/*.go", "**/internal/realtime/**/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/realtime$
-            - github.com/tkakkie/ribbitto/internal/realtime/
-            - github.com/tkakkie/ribbitto/internal/kernel$
-            - github.com/tkakkie/ribbitto/internal/platform$
-            - github.com/tkakkie/ribbitto/internal/platform/
-          deny: *non_html
+          deny: *module_html
         # org is a module (decision 26).
         org:
           list-mode: lax
           files: ["**/internal/org/*.go", "**/internal/org/**/*.go", "!**/internal/org/orgtest/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/org$
-            - github.com/tkakkie/ribbitto/internal/org/
-            - github.com/tkakkie/ribbitto/internal/kernel$
-            - github.com/tkakkie/ribbitto/internal/platform$
-            - github.com/tkakkie/ribbitto/internal/platform/
-            - github.com/tkakkie/ribbitto/internal/identity$
-            - github.com/tkakkie/ribbitto/internal/realtime$
-          deny: *non_html
+          deny: *module_html
         # conversation is a module (decisions 26 and 27).
         conversation:
           list-mode: lax
           files: ["**/internal/conversation/*.go", "**/internal/conversation/**/*.go", "!**/internal/conversation/conversationtest/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/conversation$
-            - github.com/tkakkie/ribbitto/internal/conversation/
-            - github.com/tkakkie/ribbitto/internal/kernel$
-            - github.com/tkakkie/ribbitto/internal/platform$
-            - github.com/tkakkie/ribbitto/internal/platform/
-            - github.com/tkakkie/ribbitto/internal/identity$
-            - github.com/tkakkie/ribbitto/internal/org$
-            - github.com/tkakkie/ribbitto/internal/realtime$
-          deny: *non_html
-        # Fixture packages are test-only (decision 29): only tests and higher
-        # fixture packages import them; each one's own rule below fixes the
-        # direction (conversationtest -> orgtest -> identitytest).
-        fixtures:
-          list-mode: lax
-          files: ["$all", "!$test", "!**/internal/org/orgtest/*.go", "!**/internal/conversation/conversationtest/*.go"]
-          deny:
-            - pkg: github.com/tkakkie/ribbitto/internal/identity/identitytest
-              desc: Only tests and higher fixture packages import a fixture package; see decision 29.
-            - pkg: github.com/tkakkie/ribbitto/internal/org/orgtest
-              desc: Only tests and higher fixture packages import a fixture package; see decision 29.
-            - pkg: github.com/tkakkie/ribbitto/internal/conversation/conversationtest
-              desc: Only tests import a fixture package; see decision 29.
-        # A fixture package imports kernel, its own root, the roots it needs for
-        # types and lower fixture packages; never a store, wiring or the bridge.
+          deny: *module_html
+        # Fixtures also produce no HTML (decision 29).
         identityfixture:
           list-mode: lax
           files: ["**/internal/identity/identitytest/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/identity$
-            - github.com/tkakkie/ribbitto/internal/kernel$
-          deny: *non_html
+          deny: *module_html
         orgfixture:
           list-mode: lax
           files: ["**/internal/org/orgtest/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/org$
-            - github.com/tkakkie/ribbitto/internal/kernel$
-            - github.com/tkakkie/ribbitto/internal/identity/identitytest$
-          deny: *non_html
+          deny: *module_html
         conversationfixture:
           list-mode: lax
           files: ["**/internal/conversation/conversationtest/*.go", "!$test"]
-          allow:
-            - github.com/tkakkie/ribbitto/internal/conversation$
-            - github.com/tkakkie/ribbitto/internal/org$
-            - github.com/tkakkie/ribbitto/internal/kernel$
-            - github.com/tkakkie/ribbitto/internal/identity/identitytest$
-            - github.com/tkakkie/ribbitto/internal/org/orgtest$
-          deny: *non_html
+          deny: *module_html
         web:
           list-mode: lax
           files: ["**/internal/web/*.go", "**/internal/web/**/*.go", "!$test"]

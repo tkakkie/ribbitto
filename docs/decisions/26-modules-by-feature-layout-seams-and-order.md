@@ -69,7 +69,7 @@
   `db/migrations` stays one goose directory, owned by `platform/postgres`.
   The page snapshot (#154 M7) becomes a use case that passes one
   `Snapshot` to each module's reader.
-- **Enforcement.** Go `internal` directories, plus per-module depguard:
+- **Enforcement.** Go `internal` directories, plus the [module manifest and Go tests](../../module_imports_test.go):
   - a module's root and `internal/postgres` import only `kernel`,
     `platform` and the roots the graph allows;
   - a wiring package is outside the graph. It may import its own module's

@@ -121,8 +121,8 @@ func summary(p *packages.Package) string {
 				}
 			case *types.Interface:
 				signature = strings.TrimSuffix(signature, types.TypeString(u, q)) + "interface"
-				for i := 0; i < u.NumExplicitMethods(); i++ {
-					members = append(members, u.ExplicitMethod(i))
+				for i := 0; i < u.NumMethods(); i++ {
+					members = append(members, u.Method(i))
 				}
 				for i := 0; i < u.NumEmbeddeds(); i++ {
 					signature += " [embeds " + types.TypeString(u.EmbeddedType(i), q) + "]"

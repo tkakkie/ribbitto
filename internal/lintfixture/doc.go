@@ -1,5 +1,6 @@
 // Package lintfixture holds code that exists only for make check's lint
-// fixtures (built with the lintfixture tag): each subpackage shows that a
-// depguard rule rejects or accepts a given import. Normal builds see only
-// these doc comments.
+// fixtures (built with the lintfixture tag): the root proves staticcheck
+// rejects ignored results in handwritten Go and generated templ output;
+// subpackages show that depguard rejects or accepts an import. Normal builds
+// see only doc comments.
 package lintfixture

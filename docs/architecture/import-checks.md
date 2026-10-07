@@ -37,6 +37,14 @@ fails `make check`:
 
 This file and `.golangci.yml` must agree; change them together.
 
+Staticcheck also runs on generated code, including templ output; the
+`_templ.go` exclusions apply only to errcheck and revive. `make lint-fixtures`
+proves staticcheck rejects ignored pure-function results in both handwritten
+Go and generated templates.
+For components that use neither `ctx` nor children, add `{{ _ = ctx }}` to avoid
+SA4006 on templ's unused `ClearChildren` result, because golangci-lint ignores
+templ's `//lint:file-ignore SA4006` directive.
+
 `make check` also requires a `doc.go` in every directory under `internal/`
 that contains non-test Go files, including generated packages, as specified
 in `AGENTS.md`. Fixtures under `testdata/` are excluded.

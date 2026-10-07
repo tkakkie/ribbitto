@@ -14,7 +14,7 @@ into setup, sign-up, authorization, channel, posting and topic branching
 use cases to create [synthetic conversations](../seed-data.md), and into sessions,
 authorization and history reads for a load run's expected messages. It never
 imports `db/migrations`; the database must already be migrated.
-`cmd/loadgen` is a development-only HTTP client; it imports no application
+`cmd/loadgen` is a development-only HTTP client and run-file comparator; it imports no application
 packages. See [load client](load-client.md) for limits and usage.
 
 | Package | Responsibility | May import from this module |

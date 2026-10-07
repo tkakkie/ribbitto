@@ -1,4 +1,4 @@
-// Command loadgen exercises a disposable loopback server through public HTTP endpoints.
+// Command loadgen exercises a disposable loopback server and compares run files.
 package main
 
 import (
@@ -34,10 +34,15 @@ type fixture struct {
 	Accounts []struct{ Tokens []string } `json:"accounts"`
 }
 
-// runFile is the receipts kind of the v1 contract defined in load-client.md.
+// runFile follows the v1 contract defined in load-client.md.
 type runFile struct {
-	Header  runHeader      `json:"header"`
-	Streams []streamRecord `json:"streams"`
+	Header   runHeader         `json:"header"`
+	Streams  []streamRecord    `json:"streams"`
+	Messages []expectedMessage `json:"messages,omitempty"`
+}
+type expectedMessage struct {
+	Sequence uint64 `json:"sequence"`
+	Marker   string `json:"marker"`
 }
 type runHeader struct {
 	Version          int    `json:"version"`
@@ -499,6 +504,7 @@ func sendPost(ctx context.Context, client *http.Client, endpoint, token, body st
 
 func run(args []string, out io.Writer) (runErr error) {
 	flags := flag.NewFlagSet("loadgen (development only)", flag.ContinueOnError)
+	compare := flags.String("compare", "", "compare receipt run file with positional expected file")
 	reconnect := flags.Bool("reconnect", false, "enable the client's fixed-delay reconnect model")
 	delay := flags.Duration("reconnect-delay", 250*time.Millisecond, "fixed retry delay [0, 10s]")
 	jitter := flags.Duration("reconnect-jitter", 250*time.Millisecond, "random stream retry jitter [0, 10s]")
@@ -520,6 +526,24 @@ func run(args []string, out io.Writer) (runErr error) {
 	dials := flags.Int("dial-concurrency", 64, "concurrent stream attempts [1, 100000]")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("invalid flags")
+	}
+	// Whether -compare was given decides the mode, not its value: an empty
+	// -compare= must be refused, never fall through to a live run.
+	comparing := false
+	flags.Visit(func(f *flag.Flag) { comparing = comparing || f.Name == "compare" })
+	if comparing {
+		flags.Visit(func(f *flag.Flag) {
+			if f.Name != "compare" {
+				runErr = fmt.Errorf("-compare cannot be combined with -%s", f.Name)
+			}
+		})
+		if runErr != nil {
+			return runErr
+		}
+		if *compare == "" || flags.NArg() != 1 {
+			return fmt.Errorf("-compare requires receipts and expected files")
+		}
+		return compareFiles(*compare, flags.Arg(0), out)
 	}
 	if *delay < 0 || *delay > 10*time.Second || *jitter < 0 || *jitter > 10*time.Second || *attempts < 1 || *attempts > 10 || flags.NArg() != 0 || *bodyLength < 0 || *bodyLength > 4000 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > maxStreams || *rate < 0 || *rate > 100 || *drain <= 0 || *drain > 5*time.Minute || *setup <= 0 || *setup > 5*time.Minute || *dials < 1 || *dials > maxStreams {
 		return fmt.Errorf("flag outside finite limits")
@@ -763,7 +787,7 @@ func run(args []string, out io.Writer) (runErr error) {
 		if err != nil {
 			return fmt.Errorf("invalid final watermark")
 		}
-		if err := json.NewEncoder(receiptFile).Encode(runFile{runHeader{1, "receipts", data.Slug, data.Channels[0], cursorNumber, final}, records}); err != nil {
+		if err := json.NewEncoder(receiptFile).Encode(runFile{Header: runHeader{1, "receipts", data.Slug, data.Channels[0], cursorNumber, final}, Streams: records}); err != nil {
 			return fmt.Errorf("writing receipts: %w", err)
 		}
 		if err := receiptFile.Close(); err != nil {

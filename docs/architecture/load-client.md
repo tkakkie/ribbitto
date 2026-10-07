@@ -82,11 +82,11 @@ With reconnects, `Failed` counts each failed non-429/non-503 attempt, each ended
 established connection except reset/cancellation, and initial setup-slot timeouts;
 `Refused503` counts each 503 attempt. `Failed` can exceed `StreamsAttempted`.
 These failures still affect `RequestFailed` and `Verdict`; neither is a restart
-result. The restart harness and reconciler (#628/#629/#630) determine that result.
+result. The restart harness (#628/#630) and comparison below determine that result.
 
 `-receipts PATH` exclusively creates a new file with mode 0600, removed if the
 command fails. This document defines the shared version 1 run-file contract for
-loadgen receipts, cmd/seed expected sets (#626), and the reconciler (#629).
+loadgen receipts, cmd/seed expected sets (#626), and comparison.
 Each file is one JSON object with `header` and exactly one body field:
 
 - `header`: required `version` (integer, currently 1), `kind` (`receipts` or
@@ -117,6 +117,27 @@ Each file is one JSON object with `header` and exactly one body field:
   and `2–7` (the `crypto/rand.Text()` alphabet), the zero-based decimal post
   number without leading zeros (except `0`), then literal `Z`. One random part
   identifies a run; retries keep the same marker.
+
+## Comparing a run
+
+`go run ./cmd/loadgen -compare receipts.json expected.json` compares local files
+without credentials, HTTP or a database; other flags are refused. Both files
+must satisfy the version 1 contract above. Malformed or missing fields, duplicate
+object keys at any level, duplicate stream indices, and differing versions,
+organisations, channels or initial cursors are refused before counting. Watermarks may differ.
+
+Output is one JSON object with numeric values: `missing` totals expected sequences
+absent across streams; `missing_by_stream` lists `{index, missing}` for every stream,
+including empty ones; `streams_affected` counts streams with missing sequences.
+`replayed_duplicates` sums arrivals beyond the first for every (stream, sequence);
+`repeated_pairs` counts pairs with more than one arrival. `duplicate_posts` counts
+nonempty harness markers at more than one expected sequence, once per logical post.
+`unexpected` counts distinct received (stream, sequence) pairs outside the expected
+set, with repeated arrivals still counted as replayed duplicates. `resets` sums
+stream reset counts. `receipts_watermark` and `expected_watermark` report both final
+watermarks; `watermark_differs` is 1 when they differ, otherwise 0.
+For expected 10 and 11, a stream receiving 10 once and 12 three times gives
+missing 1, unexpected 1, replayed duplicates 2 and repeated pairs 1.
 
 ## A ceiling search
 

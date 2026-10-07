@@ -65,13 +65,6 @@ func launchChild(ctx context.Context, path string, args []string, address, chann
 		default:
 		}
 		cursor, err := child.probe(readyCtx, client, "http://"+address+channel, probe)
-		if err != nil {
-			select {
-			case <-child.done:
-				return nil, err
-			default:
-			}
-		}
 		if err == nil {
 			child.cursor, err = strconv.ParseUint(cursor, 10, 64)
 			if err == nil {

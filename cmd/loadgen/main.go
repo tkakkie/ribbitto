@@ -202,13 +202,17 @@ func paddedBody(marker string, length int, escape bool) string {
 
 func (c *counts) receive(seq uint64, data string, seen map[*post]bool) {
 	arrival := time.Now()
-	markers := c.markers.FindAllString(data, -1)
-	sort.Strings(markers)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.frozen || (!c.deadline.IsZero() && arrival.After(c.deadline)) {
 		return
 	}
+	c.receiveLocked(seq, data, seen, arrival)
+}
+
+func (c *counts) receiveLocked(seq uint64, data string, seen map[*post]bool, arrival time.Time) {
+	markers := c.markers.FindAllString(data, -1)
+	sort.Strings(markers)
 	if seq > 0 {
 		if c.renders == nil {
 			c.renders = make(map[uint64]int)
@@ -341,7 +345,7 @@ func readReset(body io.Reader, receive func(uint64, string), complete func(uint6
 				}
 				receive(renderSeq, strings.TrimSuffix(payload.String(), "\n"))
 			}
-			// Publish completion after delivery accounting so drain cannot freeze between them.
+			// The stream callback accounts for delivery and records receipts in one critical section so drain cannot freeze between them.
 			if data && event != "reset" && complete != nil {
 				complete(seq, event, strings.TrimSuffix(payload.String(), "\n"))
 			}
@@ -418,21 +422,29 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 		defer func() { c.mu.Lock(); rec.open = false; c.mu.Unlock() }()
 		established()
 		notify()
-		if readReset(r.Body, func(seq uint64, data string) { c.receive(seq, data, seen) }, func(seq uint64, event, data string) {
-			if seq == 0 {
-				return
-			}
-			*cursor = strconv.FormatUint(seq, 10)
+		if readReset(r.Body, nil, func(seq uint64, event, data string) {
 			c.mu.Lock()
 			defer c.mu.Unlock()
-			if c.frozen || (!c.deadline.IsZero() && time.Now().After(c.deadline)) {
+			arrival := time.Now()
+			renderSeq := uint64(0)
+			if event == "message" {
+				renderSeq = seq
+			}
+			if seq != 0 {
+				*cursor = strconv.FormatUint(seq, 10)
+			}
+			if c.frozen || (!c.deadline.IsZero() && arrival.After(c.deadline)) {
+				return
+			}
+			c.receiveLocked(renderSeq, data, seen, arrival)
+			if seq == 0 {
 				return
 			}
 			if c.handover {
 				if rec.ArrivedAt == nil {
 					rec.ArrivedAt = make(map[uint64][]time.Time)
 				}
-				rec.ArrivedAt[seq] = append(rec.ArrivedAt[seq], time.Now())
+				rec.ArrivedAt[seq] = append(rec.ArrivedAt[seq], arrival)
 			}
 			if event == "message" {
 				if rec.Sequences[seq] == nil {

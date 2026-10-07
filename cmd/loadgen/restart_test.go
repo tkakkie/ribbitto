@@ -38,7 +38,7 @@ func TestRestartHelper(t *testing.T) {
 	if restarted && mode == "relaunch-fail" {
 		os.Exit(2)
 	}
-	if (!restarted && (mode == "held" || mode == "handover")) || (restarted && mode == "unavailable") {
+	if (!restarted && mode == "handover") || (restarted && mode == "unavailable") {
 		if err := os.WriteFile(state+"commit", []byte("seed\n"), 0600); err != nil {
 			os.Exit(4)
 		}
@@ -106,6 +106,11 @@ func TestRestartHelper(t *testing.T) {
 			return
 		}
 		cookie, _ := r.Cookie("__Host-session")
+		if !restarted && mode == "held" && events[0].Add(1) == 1 {
+			if err := os.WriteFile(state+"commit", []byte("seed\n"), 0600); err != nil {
+				os.Exit(4)
+			}
+		}
 		if mode == "total" || (mode == "partial" && cookie.Value == "bad") {
 			w.WriteHeader(403)
 			return

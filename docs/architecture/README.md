@@ -33,6 +33,7 @@ Read the file for the area you change:
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
+| [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |
 | [`web-layers.md`](web-layers.md) | what handlers, templ, htmx and JavaScript are each responsible for |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 

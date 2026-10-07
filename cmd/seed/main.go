@@ -1,4 +1,4 @@
-// Command seed fills an empty, migrated development database with fictional conversations.
+// Command seed fills a development database or reads a load run's expected messages.
 package main
 
 import (
@@ -51,7 +51,7 @@ func main() {
 	}
 }
 
-// localHosts are the only database hosts the command writes to: it creates
+// localHosts are the only database hosts the command accesses: it creates
 // accounts whose credentials it prints, so it guards against being pointed
 // at a remote database, even an empty one (the completed-setup check would
 // not stop that). It checks the address only; a loopback port could still
@@ -74,7 +74,7 @@ func requireLocal(databaseURL string) error {
 	}
 	for _, host := range hosts {
 		if !localHosts[host] {
-			return fmt.Errorf("seed writes only to a local development database (localhost, 127.0.0.1 or ::1), not %q", host)
+			return fmt.Errorf("seed accesses only a local development database (localhost, 127.0.0.1 or ::1), not %q", host)
 		}
 	}
 	return nil
@@ -97,19 +97,36 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	streams := flags.Int("streams", 0, "target concurrent streams; enables load-test sessions")
 	perAccount := flags.Int("streams-per-account", 16, "load-test allocation cap; does not change production caps")
 	sessionCount := flags.Int("sessions-per-account", 1, "sessions per seeded account in load-test mode")
-	output := flags.String("output", "", "new JSON credential file outside any repository (required for load tests)")
+	output := flags.String("output", "", "new JSON credential or expected file outside any repository")
+	expected := flags.Bool("expected", false, "read expected messages only; requires -tokens, -after and -output")
+	tokens := flags.String("tokens", "", "seed credential file for -expected")
+	after := flags.Uint64("after", 0, "initial event cursor for -expected (required, including zero)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return fmt.Errorf("usage: go run ./cmd/seed [-messages N] [-streams N -output PATH] [-streams-per-account N] [-sessions-per-account N]; N must be positive; -streams and -output are required together")
+		return fmt.Errorf("usage: go run ./cmd/seed [-messages N] [-streams N -output PATH] [-streams-per-account N] [-sessions-per-account N]; N must be positive; -streams and -output are required together; or -expected -tokens PATH -after N -output PATH")
+	}
+	if err := requireLocal(databaseURL); err != nil {
+		return err
+	}
+	afterSet, seedFlags := false, false
+	flags.Visit(func(f *flag.Flag) {
+		afterSet = afterSet || f.Name == "after"
+		seedFlags = seedFlags || f.Name == "messages" || f.Name == "streams" || f.Name == "streams-per-account" || f.Name == "sessions-per-account"
+	})
+	if *expected {
+		if !afterSet || seedFlags || *tokens == "" || *output == "" {
+			return errors.New("-expected requires -tokens, -after and -output, without seeding flags")
+		}
+		return writeExpected(ctx, databaseURL, *tokens, *output, *after)
+	}
+	if afterSet || *tokens != "" {
+		return errors.New("-tokens and -after require -expected")
 	}
 	var data script
 	if err := json.Unmarshal(conversations, &data); err != nil {
 		return fmt.Errorf("reading conversations: %w", err)
-	}
-	if err := requireLocal(databaseURL); err != nil {
-		return err
 	}
 	password, err := newSecret()
 	if err != nil {
@@ -142,7 +159,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		return org.ErrSetupCompleted
 	}
 	loadTest := false
-	flags.Visit(func(f *flag.Flag) { loadTest = loadTest || f.Name != "messages" })
+	flags.Visit(func(f *flag.Flag) { loadTest = loadTest || f.Name != "messages" && f.Name != "expected" })
 	accounts, err := validateRun(*count, len(data.Channels), len(data.Members), *streams, *perAccount, *sessionCount, loadTest, *output)
 	if err != nil {
 		return err

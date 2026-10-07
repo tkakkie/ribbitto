@@ -1,6 +1,6 @@
 # Development seed data
 
-`cmd/seed` requires an empty, disposable development database. Before
+Seeding with `cmd/seed` requires an empty, disposable development database. Before
 connecting, it refuses `RIBBITTO_DATABASE_URL` hosts (including fallbacks)
 other than `localhost`, `127.0.0.1` or `::1`. Loopback can still reach a
 local production database or a remote tunnel; use only a disposable one.
@@ -73,3 +73,23 @@ Completed setup makes the command refuse all writes, including on rerun.
 Each use case commits separately: after an interrupted seed, discard the
 disposable database and start with a fresh migrated one. Seeding enables
 sign-up only inside this command; it does not change the server's settings.
+
+## Expected messages after a load run
+
+On the same disposable machine and database, after the load run settles:
+```sh
+go run ./cmd/seed -expected -tokens /tmp/loadtest.json -after 0 -output /tmp/expected.json
+```
+Use the load run's initial cursor for `-after` (required, including zero).
+This mode does no setup or seeding and skips the completed-setup check.
+It checks loopback hosts, validates the credential file and exclusively creates
+the output outside Git repositories with mode `0600`, all before connecting.
+It resolves the first token through `identity.Sessions.Resolve`, checks the
+organisation membership through `org.Authorizer.Member`, and reads the first
+channel's history across all topics through `conversation.Reader.Page`.
+It writes nothing to PostgreSQL. The latest page fixes the final watermark;
+older pages supply messages above the initial cursor through that watermark.
+The JSON follows the [version 1 expected run-file contract](architecture/load-client.md#reconnects-and-run-files):
+`header` identifies the organisation, channel and cursors; `messages` lists
+ascending sequences and each body's leading harness marker, or `""` for none.
+It contains no other content, tokens or people's IDs; failed runs remove the output.

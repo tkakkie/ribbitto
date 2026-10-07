@@ -6,10 +6,11 @@ linters:
     - depguard
     - errcheck
     - forbidigo
+    - nilerr
     - revive
     - staticcheck
   exclusions:
-    # Generated code must still pass staticcheck, the raw HTML ban and import rules.
+    # Generated code must still pass nilerr, staticcheck, the raw HTML ban and import rules.
     generated: disable
     rules:
       - path: '_templ\.go$'

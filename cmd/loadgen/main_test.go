@@ -685,6 +685,58 @@ func TestReceiptsAndPostRetry(t *testing.T) {
 	}
 }
 
+func TestPostStatusSurvivesBodyFailure(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusBadRequest, http.StatusTooManyRequests} {
+		for _, failure := range []string{"disconnect", "timeout"} {
+			t.Run(fmt.Sprintf("%d/%s", status, failure), func(t *testing.T) {
+				const marker = "loadgenTEST0Z"
+				var mu sync.Mutex
+				var committed []string
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					mu.Lock()
+					committed = append(committed, r.FormValue("body"))
+					mu.Unlock()
+					// Commit before answering, then leave the declared body incomplete.
+					w.Header().Set("Content-Length", "2")
+					w.WriteHeader(status)
+					_, _ = fmt.Fprint(w, "x")
+					controller := http.NewResponseController(w)
+					if err := controller.Flush(); err != nil {
+						t.Error(err)
+						return
+					}
+					if failure == "timeout" {
+						<-r.Context().Done()
+						return
+					}
+					conn, _, err := controller.Hijack()
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					_ = conn.Close()
+				}))
+				defer server.Close()
+				client := server.Client()
+				client.Timeout = 200 * time.Millisecond
+				c := &counts{}
+				got := sendPost(t.Context(), client, server.URL, "secret", marker, c, &reconnectModel{PostAttempts: 3})
+				if got != (status == http.StatusOK) {
+					t.Errorf("success = %t, want %t", got, status == http.StatusOK)
+				}
+				if attempts := c.postAttempts.Load(); attempts != 1 {
+					t.Errorf("POST attempts = %d, want 1", attempts)
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				if len(committed) != 1 || committed[0] != marker {
+					t.Errorf("committed markers = %v, want exactly [%s]", committed, marker)
+				}
+			})
+		}
+	}
+}
+
 func TestRetryLimits(t *testing.T) {
 	readReset(strings.NewReader("id: 8\nevent: reset\ndata: \n\n"), nil, func(uint64, string, string) { t.Error("reset advanced cursor") })
 	for _, flag := range []string{"post-attempts=3", "reconnect-delay=0", "reconnect-jitter=0"} {

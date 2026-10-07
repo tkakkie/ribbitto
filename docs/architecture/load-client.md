@@ -66,8 +66,10 @@ through `-reconnect-jitter` (default 250ms, 0–10s), without exponential backof
 429/4xx and a 200 without `text/event-stream` stop the stream. Only a complete event's terminating
 blank line advances Last-Event-ID; until then it remains the initial cursor.
 A complete `reset`, including empty data, counts and stops without reconnecting.
-With `-reconnect`, every logical POST keeps its marker and body across errors
-and 5xx retries; `-post-attempts` (default 3, 1–10) includes the first attempt.
+With `-reconnect`, every logical POST keeps its marker and body across retries
+when no response arrives or the status is 5xx; `-post-attempts` (default 3, 1–10)
+includes the first attempt. A received status is final even if reading the body
+fails: 200 succeeds, and all other non-5xx statuses stop without retrying.
 POST retries wait only the fixed delay; each attempt has a 10s deadline.
 Without `-reconnect`, streams and POSTs make one attempt; explicit `-post-attempts`,
 `-reconnect-delay` and `-reconnect-jitter` are refused.

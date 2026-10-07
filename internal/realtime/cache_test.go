@@ -206,7 +206,12 @@ func TestCacheKeepDecidesWhatIsStored(t *testing.T) {
 		}
 		return got
 	}
-	if get(0) != 0 || get(0) != 0 || loads.Load() != 2 {
+	for range 2 {
+		if get(0) != 0 {
+			t.Fatal("a rejected value was not returned")
+		}
+	}
+	if loads.Load() != 2 {
 		t.Fatalf("a rejected value was stored: %d loads", loads.Load())
 	}
 	if get(5) != 5 || get(9) != 5 || loads.Load() != 3 {

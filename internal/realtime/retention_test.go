@@ -129,7 +129,7 @@ func TestRetentionReplay(t *testing.T) {
 			expire := func() {
 				must(realtimepg.NewCleaner(pool, orgpg.RetentionBoundaryIn).ExpireEvents(ctx, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
 			}
-			var events realtime.EventReader = reader
+			events := reader
 			cursor, wantCursor := int64(1), int64(1)
 			want := []string{"reset"}
 			switch mode {

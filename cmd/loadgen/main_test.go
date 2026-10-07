@@ -39,7 +39,7 @@ func TestSafety(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if to := r.URL.Query().Get("to"); to != "" {
-			http.Redirect(w, r, to, 302)
+			http.Redirect(w, r, to, http.StatusFound)
 		}
 	}))
 	defer server.Close()

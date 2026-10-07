@@ -281,9 +281,10 @@ func TestRestart(t *testing.T) {
 			}))
 			defer proxy.Close()
 			args := []string{"-server", path, "-server-addr", address, "-server-arg", childArg, "-server-arg", "-test.timeout=5s", "-target", proxy.URL, "-tokens", tokens, "-receipts", receipts, "-streams=2", "-restart-after=60ms", "-duration=200ms", "-drain=1s", "-start-deadline=1s", "-exit-deadline=1s", "-reconnect-delay=10ms", "-reconnect-jitter=0", "-post-attempts=3", "-metrics", u.String()}
-			if tc.mode == "lost" {
+			switch tc.mode {
+			case "lost":
 				args = append(args, "-rate=1", "-post-attempts=1")
-			} else if tc.mode == "retry" {
+			case "retry":
 				args = append(args, "-rate=20")
 			}
 			var out bytes.Buffer

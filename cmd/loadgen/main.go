@@ -366,7 +366,7 @@ func run(args []string, out io.Writer) error {
 		return fmt.Errorf("invalid flags")
 	}
 	if flags.NArg() != 0 || *bodyLength < 0 || *bodyLength > 4000 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > maxStreams || *rate < 0 || *rate > 100 || *drain <= 0 || *drain > 5*time.Minute || *setup <= 0 || *setup > 5*time.Minute || *dials < 1 || *dials > maxStreams {
-		return fmt.Errorf("duration, streams or rate outside finite limits")
+		return fmt.Errorf("flag outside finite limits")
 	}
 	c := &counts{}
 	if *source != "" {

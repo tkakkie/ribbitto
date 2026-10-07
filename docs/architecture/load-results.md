@@ -165,11 +165,27 @@ seed -messages 100 -streams 60000 -streams-per-account 16 \
   -sessions-per-account 1 -output /root/loadtest.json
 ```
 
+The run's `Caddyfile`. Its local CA signs the certificate and is not
+installed into any trust store; the admin API is off:
+
+```
+{
+	local_certs
+	skip_install_trust
+	admin off
+}
+https://localhost:8443 {
+	reverse_proxy 127.0.0.1:8080 {
+		flush_interval -1
+	}
+}
+```
+
 Then start Caddy and the server, each in its own shell or in the background,
-and leave them running:
+and leave them running. `XDG_DATA_HOME` fixes where Caddy keeps its local CA:
 
 ```sh
-caddy run --config Caddyfile   # https://localhost:8443 → 127.0.0.1:8080
+XDG_DATA_HOME=/root/caddy-data caddy run --config Caddyfile
 RIBBITTO_ADDR=127.0.0.1:8080 RIBBITTO_DEV_METRICS_ADDR=127.0.0.1:9090 ribbitto serve
 ```
 
@@ -181,4 +197,6 @@ Run each series as [load client](load-client.md#a-ceiling-search) shows, with
 - *idle:* `-rate 0 -duration 60s` at 10,000 … 60,000 streams;
 - *HTTP/1.1:* add `-source
   127.0.0.2,127.0.0.3,127.0.0.4,127.0.0.5,127.0.0.6,127.0.0.7,127.0.0.8,127.0.0.9`;
-- *HTTP/2:* use `-target https://localhost:8443 -ca <Caddy's root.crt>`.
+- *HTTP/2:* use `-target https://localhost:8443 -ca
+  /root/caddy-data/caddy/pki/authorities/local/root.crt`, the root certificate
+  Caddy created on its first start.

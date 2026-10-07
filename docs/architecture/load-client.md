@@ -57,6 +57,44 @@ marker; `-body-escape` pads with `&` instead of `x`. Both are recorded.
 one channel and the default language (no language header/cookie), so sequence
 identifies the [observed render](load-testing.md#what-the-runs-record-for-these).
 
+## Reconnects and run files
+
+`-reconnect` enables the load client's own fixed-delay model; it does not model
+browser scheduling. EOF, read errors, failed dials and 503 reconnect after
+`-reconnect-delay` (default 250ms, 0–10s) plus uniform random jitter from zero
+through `-reconnect-jitter` (default 250ms, 0–10s), without exponential backoff.
+429 and other HTTP rejections stop the stream. Only a complete event's terminating
+blank line advances Last-Event-ID; until then it remains the initial cursor.
+A complete `reset`, including empty data, counts and stops without reconnecting.
+Every logical POST keeps its marker and body across errors and 5xx retries;
+`-post-attempts` (default 3, 1–10) includes the first attempt. POST retries wait
+only the fixed delay; each attempt has a 10s deadline, independently of `-reconnect`.
+Without `-reconnect`, streams run once. `Reconnect` reports the model and connection
+`Attempts` by outcome when enabled; `PostAttemptsMade` counts all POST attempts.
+`Sent`, `Answered200`, `PostFailed` remain logical post counts.
+Connection attempts count established headers, 503, ECONNREFUSED, or other;
+harness cancellations are excluded. Transient failures still affect the verdict.
+
+`-receipts PATH` exclusively creates a new file with mode 0600. The shared
+run-file contract is one JSON object, defined by Go types in `cmd/loadgen/main.go`:
+
+- `header`: required `version` (integer, currently 1), `organization_slug`,
+  `channel_id` (strings), `initial_cursor`, `final_watermark` (uint64 numbers).
+  All streams share the initial cursor; receipts require a valid numeric cursor.
+  The final watermark is required, read from the channel page after drain until
+  #628 supplies it. A failed page read fails the run rather than inventing it.
+- `streams`: array in stable zero-based `index` order, one record per requested
+  stream including empty ones. Each has `index`, `sequences` (object keyed by
+  decimal uint64 sequence), `reset` (count), and `reconnects` (object).
+- Each sequence value has `arrivals` (positive uint64 multiplicity across all
+  connections) and `marker` (this run's `loadgen…Z` marker, or an empty string
+  for an unmarked event). Repeated marker text in one payload is one arrival.
+  Only complete non-reset events with positive sequence IDs received through drain
+  are recorded. No payload, tokens or other content is stored.
+- `reconnects` has required uint64 counts `established`, `503`, `refused`, `other`,
+  excluding the initial connection attempt. Reset counts include all connections.
+  Empty sequences are `{}`; all counts and header fields are present even if zero.
+
 ## A ceiling search
 
 Run one step per invocation and stop at the first step that does not pass

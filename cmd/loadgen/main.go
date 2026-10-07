@@ -4,7 +4,7 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
+	cryptorand "crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	mathrand "math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
@@ -33,11 +34,47 @@ type fixture struct {
 	Accounts []struct{ Tokens []string } `json:"accounts"`
 }
 
+// runFile v1 is the shared receipt/expected-set contract; see load-client.md.
+type runFile struct {
+	Header  runHeader      `json:"header"`
+	Streams []streamRecord `json:"streams"`
+}
+type runHeader struct {
+	Version          int    `json:"version"`
+	OrganizationSlug string `json:"organization_slug"`
+	ChannelID        string `json:"channel_id"`
+	InitialCursor    uint64 `json:"initial_cursor"`
+	FinalWatermark   uint64 `json:"final_watermark"`
+}
+type streamRecord struct {
+	Index      int                 `json:"index"`
+	Sequences  map[uint64]*receipt `json:"sequences"`
+	Reset      uint64              `json:"reset"`
+	Reconnects connectionCounts    `json:"reconnects"`
+}
+type receipt struct {
+	Arrivals uint64 `json:"arrivals"`
+	Marker   string `json:"marker"`
+}
+type connectionCounts struct {
+	Established uint64 `json:"established"`
+	Unavailable uint64 `json:"503"`
+	Refused     uint64 `json:"refused"`
+	Other       uint64 `json:"other"`
+}
+type reconnectModel struct {
+	Delay, Jitter time.Duration
+	PostAttempts  int
+	Attempts      connectionCounts
+}
+
 // maxStreams covers #216's idle steps (10k, 20k …) with room to spare and
 // keeps the run finite.
 const maxStreams = 100_000
 
 type counts struct {
+	postAttempts                                                                    atomic.Uint64
+	connectionAttempts                                                              [4]atomic.Uint64
 	sources                                                                         []*net.TCPAddr
 	nextSource                                                                      atomic.Uint64
 	dialFailures                                                                    [5]atomic.Uint64
@@ -57,8 +94,9 @@ type post struct {
 	duplicates uint64
 }
 type result struct {
+	Reconnect                                                                                                           *reconnectModel `json:",omitempty"`
 	Cursor, StreamsAttempted, Established, Refused429, Refused503, Reset, Failed, TCPConnections                        uint64
-	Scheduled, Sent, Answered200, PostFailed, Missed, Expected, Received, Missing, Duplicated                           uint64
+	Scheduled, Sent, Answered200, PostFailed, Missed, Expected, Received, Missing, Duplicated, PostAttemptsMade         uint64
 	Rate, DialConcurrency                                                                                               int
 	DurationSeconds, SetupLimitSeconds, DrainLimitSeconds, SetupSeconds, ObservationSeconds, DrainSeconds, AchievedRate float64
 	P50MS, P95MS, MaxMS                                                                                                 float64
@@ -265,8 +303,8 @@ func request(ctx context.Context, client *http.Client, method, endpoint, token, 
 }
 
 // A reset is dispatched only at a complete SSE event with a data field.
-// Payloads are examined for this run's markers, never logged; no reconnects.
-func readReset(body io.Reader, receive func(uint64, string)) bool {
+// The cursor advances only at the blank line, never on a partial payload.
+func readReset(body io.Reader, receive func(uint64, string), complete ...func(uint64, string)) bool {
 	s := bufio.NewScanner(body)
 	s.Buffer(make([]byte, 4096), 1<<20)
 	event, data := "", false
@@ -275,6 +313,9 @@ func readReset(body io.Reader, receive func(uint64, string)) bool {
 	for s.Scan() {
 		line := s.Text()
 		if line == "" {
+			if data && event != "reset" && len(complete) > 0 {
+				complete[0](seq, strings.TrimSuffix(payload.String(), "\n"))
+			}
 			if event == "reset" && data {
 				return true
 			}
@@ -304,20 +345,32 @@ func readReset(body io.Reader, receive func(uint64, string)) bool {
 	return false
 }
 
-func stream(ctx context.Context, client *http.Client, endpoint, token, cursor string, c *counts, setup context.Context, opened func()) {
+func streamOnce(ctx context.Context, client *http.Client, endpoint, token string, cursor *string, c *counts, setup context.Context, opened, established func(), seen map[*post]bool, rec *streamRecord, reconnect bool) (outcome int, retry bool) {
+	defer func() {
+		if ctx.Err() == nil || outcome == 0 {
+			c.connectionAttempts[outcome].Add(1)
+			if reconnect {
+				fields := []*uint64{&rec.Reconnects.Established, &rec.Reconnects.Unavailable, &rec.Reconnects.Refused, &rec.Reconnects.Other}
+				*fields[outcome]++
+			}
+		}
+	}()
 	notify := sync.OnceFunc(opened)
 	defer notify()
 	dialCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stop := context.AfterFunc(setup, cancel)
-	r, err := request(dialCtx, client, http.MethodGet, endpoint, token, cursor)
+	r, err := request(dialCtx, client, http.MethodGet, endpoint, token, *cursor)
 	stop()
 	if err != nil {
 		// The harness closing the run is not a failed stream.
 		if ctx.Err() == nil {
 			c.failed.Add(1)
 		}
-		return
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			return 2, true
+		}
+		return 3, true
 	}
 	defer func() { _ = r.Body.Close() }()
 	if r.ProtoMajor == 2 {
@@ -326,28 +379,121 @@ func stream(ctx context.Context, client *http.Client, endpoint, token, cursor st
 	switch r.StatusCode {
 	case http.StatusTooManyRequests:
 		c.limited.Add(1)
+		return 3, false
 	case http.StatusServiceUnavailable:
 		c.shutdown.Add(1)
+		return 1, true
 	case http.StatusOK:
 		if strings.Split(r.Header.Get("Content-Type"), ";")[0] != "text/event-stream" {
 			c.failed.Add(1)
-			return
+			return 3, false
 		}
-		c.established.Add(1)
+		established()
 		notify()
-		seen := make(map[*post]bool)
-		if readReset(r.Body, func(seq uint64, data string) { c.receive(seq, data, seen) }) {
+		if readReset(r.Body, func(seq uint64, data string) { c.receive(seq, data, seen) }, func(seq uint64, data string) {
+			if seq == 0 {
+				return
+			}
+			*cursor = strconv.FormatUint(seq, 10)
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			if c.frozen || (!c.deadline.IsZero() && time.Now().After(c.deadline)) {
+				return
+			}
+			if rec.Sequences[seq] == nil {
+				rec.Sequences[seq] = &receipt{Marker: c.markers.FindString(data)}
+			}
+			rec.Sequences[seq].Arrivals++
+		}) {
 			c.reset.Add(1)
+			rec.Reset++
+			return 0, false
 		} else if ctx.Err() == nil {
 			c.failed.Add(1)
 		}
+		return 0, true
 	default:
 		c.failed.Add(1)
 	}
+	return 3, false
+}
+
+func retryDelay(delay, jitter time.Duration) time.Duration {
+	if jitter > 0 {
+		delay += time.Duration(mathrand.Int64N(int64(jitter) + 1))
+	}
+	return delay
+}
+
+func waitRetry(ctx context.Context, delay, jitter time.Duration) bool {
+	timer := time.NewTimer(retryDelay(delay, jitter))
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return ctx.Err() == nil
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func stream(ctx context.Context, client *http.Client, endpoint, token, cursor string, c *counts, setup context.Context, slots chan struct{}, opened func(), model *reconnectModel, rec *streamRecord) {
+	seen := make(map[*post]bool)
+	established := sync.OnceFunc(func() { c.established.Add(1) })
+	for attempt := 0; ; attempt++ {
+		_, retry := streamOnce(ctx, client, endpoint, token, &cursor, c, setup, opened, established, seen, rec, attempt > 0)
+		if ctx.Err() != nil {
+			return
+		}
+
+		if model == nil || !retry || !waitRetry(ctx, model.Delay, model.Jitter) {
+			return
+		}
+		setup = ctx
+		select {
+		case slots <- struct{}{}:
+			opened = func() { <-slots }
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func sendPost(ctx context.Context, client *http.Client, endpoint, token, body string, c *counts, model *reconnectModel) bool {
+	attempts := 1
+	if model != nil {
+		attempts = model.PostAttempts
+	}
+	for i := 0; i < attempts; i++ {
+		attemptCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		c.postAttempts.Add(1)
+		response, err := request(attemptCtx, client, http.MethodPost, endpoint, token, body)
+		status := 0
+		if err == nil {
+			status = response.StatusCode
+			if response.ProtoMajor == 2 {
+				c.http2.Store(true)
+			}
+			_, err = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
+			_ = response.Body.Close()
+		}
+		cancel()
+		if err == nil && status == http.StatusOK {
+			return true
+		}
+		if i+1 == attempts || (err == nil && status < 500) || !waitRetry(ctx, model.Delay, 0) {
+			return false
+		}
+	}
+	return false
 }
 
 func run(args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("loadgen (development only)", flag.ContinueOnError)
+	reconnect := flags.Bool("reconnect", false, "enable the client's fixed-delay reconnect model")
+	delay := flags.Duration("reconnect-delay", 250*time.Millisecond, "fixed retry delay [0, 10s]")
+	jitter := flags.Duration("reconnect-jitter", 250*time.Millisecond, "random stream retry jitter [0, 10s]")
+	attempts := flags.Int("post-attempts", 3, "POST attempts [1, 10]")
+	receipts := flags.String("receipts", "", "exclusive receipt run file (0600)")
 	metrics := flags.String("metrics", "", "loopback HTTP metrics origin")
 	source := flags.String("source", "", "up to 64 comma-separated loopback IPv4 sources")
 	bodyLength := flags.Int("body-length", 0, "padded body length [0, 4000]; marker is never truncated")
@@ -365,7 +511,7 @@ func run(args []string, out io.Writer) error {
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("invalid flags")
 	}
-	if flags.NArg() != 0 || *bodyLength < 0 || *bodyLength > 4000 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > maxStreams || *rate < 0 || *rate > 100 || *drain <= 0 || *drain > 5*time.Minute || *setup <= 0 || *setup > 5*time.Minute || *dials < 1 || *dials > maxStreams {
+	if *delay < 0 || *delay > 10*time.Second || *jitter < 0 || *jitter > 10*time.Second || *attempts < 1 || *attempts > 10 || flags.NArg() != 0 || *bodyLength < 0 || *bodyLength > 4000 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > maxStreams || *rate < 0 || *rate > 100 || *drain <= 0 || *drain > 5*time.Minute || *setup <= 0 || *setup > 5*time.Minute || *dials < 1 || *dials > maxStreams {
 		return fmt.Errorf("flag outside finite limits")
 	}
 	c := &counts{}
@@ -434,12 +580,12 @@ func run(args []string, out io.Writer) error {
 	}
 	explicitCursor := false
 	flags.Visit(func(f *flag.Flag) { explicitCursor = explicitCursor || f.Name == "cursor" })
-	if !explicitCursor {
+	readCursor := func() (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		page, err := request(ctx, client, http.MethodGet, endpoint, tokenAt(0), "")
 		if err != nil {
-			return fmt.Errorf("cannot read channel cursor")
+			return "", fmt.Errorf("cannot read channel cursor")
 		}
 		html, err := io.ReadAll(io.LimitReader(page.Body, 16<<20))
 		_ = page.Body.Close()
@@ -448,14 +594,38 @@ func run(args []string, out io.Writer) error {
 		}
 		match := regexp.MustCompile(`sse-connect="[^"\n]*/events\?after=([0-9]+)"`).FindSubmatch(html)
 		if err != nil || page.StatusCode != http.StatusOK || len(match) != 2 {
-			return fmt.Errorf("invalid channel cursor")
+			return "", fmt.Errorf("invalid channel cursor")
 		}
-		*cursor = string(match[1])
+		return string(match[1]), nil
 	}
-	prefix := "loadgen" + rand.Text()
+	if !explicitCursor {
+		*cursor, err = readCursor()
+		if err != nil {
+			return err
+		}
+	}
+	prefix := "loadgen" + cryptorand.Text()
 	c.markers, c.deliveries = regexp.MustCompile(prefix+`[0-9]+Z`), make(map[string]*post)
 	cursorNumber, cursorErr := strconv.ParseUint(*cursor, 10, 64)
 	r.Cursor, r.CursorValid, r.CursorOverride = cursorNumber, cursorErr == nil, explicitCursor
+	var receiptFile *os.File
+	if *receipts != "" {
+		if cursorErr != nil {
+			return fmt.Errorf("receipts require a numeric cursor")
+		}
+		receiptFile, err = os.OpenFile(*receipts, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err != nil {
+			return fmt.Errorf("creating receipts: %w", err)
+		}
+		defer func() { _ = receiptFile.Close() }()
+	}
+	records := make([]streamRecord, *streams)
+	for i := range records {
+		records[i] = streamRecord{Index: i, Sequences: make(map[uint64]*receipt)}
+	}
+	if *reconnect {
+		r.Reconnect = &reconnectModel{Delay: *delay, Jitter: *jitter, PostAttempts: *attempts}
+	}
 	r.StreamsAttempted, r.Rate, r.DialConcurrency = uint64(*streams), *rate, *dials
 	r.DurationSeconds, r.SetupLimitSeconds, r.DrainLimitSeconds = duration.Seconds(), setup.Seconds(), drain.Seconds()
 	start := time.Now()
@@ -468,7 +638,7 @@ func run(args []string, out io.Writer) error {
 		wg.Go(func() {
 			select {
 			case slots <- struct{}{}:
-				stream(streamCtx, client, endpoint+"/events", tokenAt(i), *cursor, c, setupCtx, func() { <-slots; ready.Done() })
+				stream(streamCtx, client, endpoint+"/events", tokenAt(i), *cursor, c, setupCtx, slots, func() { <-slots; ready.Done() }, r.Reconnect, &records[i])
 			case <-setupCtx.Done():
 				c.failed.Add(1)
 				ready.Done()
@@ -507,23 +677,13 @@ func run(args []string, out io.Writer) error {
 		r.Sent++
 		posts.Go(func() {
 			defer func() { <-inflight }()
-			ctx, cancel := context.WithTimeout(streamCtx, 10*time.Second)
-			defer cancel()
 			body := paddedBody(marker, *bodyLength, *bodyEscape)
 			// Post-to-receipt latency starts here, not when the slot was
 			// scheduled, so the client's own goroutine scheduling is excluded.
 			c.mu.Lock()
 			p.sent = time.Now()
 			c.mu.Unlock()
-			response, err := request(ctx, client, http.MethodPost, endpoint, tokenAt(int(i)), body)
-			if err == nil {
-				if response.ProtoMajor == 2 {
-					c.http2.Store(true)
-				}
-				_, err = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
-				_ = response.Body.Close()
-			}
-			if err == nil && response.StatusCode == http.StatusOK {
+			if sendPost(streamCtx, client, endpoint, tokenAt(int(i)), body, c, &reconnectModel{Delay: *delay, PostAttempts: *attempts}) {
 				c.mu.Lock()
 				p.answered = true
 				c.received.Add(uint64(len(p.latencies)))
@@ -543,11 +703,14 @@ func run(args []string, out io.Writer) error {
 	posts.Wait() // Finalize the answered-200 set before deciding the drain is complete.
 	start = time.Now()
 	r.Expected = c.established.Load() * c.posts.Load()
+	if *reconnect {
+		r.Expected = uint64(*streams) * c.posts.Load()
+	}
 	c.mu.Lock()
 	c.deadline = start.Add(*drain)
 	c.mu.Unlock()
 	for {
-		if c.received.Load() == r.Expected || time.Since(start) >= *drain {
+		if c.received.Load() >= r.Expected || time.Since(start) >= *drain {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -568,6 +731,25 @@ func run(args []string, out io.Writer) error {
 	}
 	stopStreams()
 	wg.Wait()
+	if receiptFile != nil {
+		watermark, err := readCursor()
+		if err != nil {
+			return err
+		}
+		final, err := strconv.ParseUint(watermark, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid final watermark")
+		}
+		if err := json.NewEncoder(receiptFile).Encode(runFile{runHeader{1, data.Slug, data.Channels[0], cursorNumber, final}, records}); err != nil {
+			return fmt.Errorf("writing receipts: %w", err)
+		}
+		if err := receiptFile.Close(); err != nil {
+			return fmt.Errorf("closing receipts: %w", err)
+		}
+	}
+	if r.Reconnect != nil {
+		r.Reconnect.Attempts = connectionCounts{c.connectionAttempts[0].Load(), c.connectionAttempts[1].Load(), c.connectionAttempts[2].Load(), c.connectionAttempts[3].Load()}
+	}
 	if r.Server != nil {
 		time.Sleep(100 * time.Millisecond)
 		if err := readSnapshot(mt, &r.Server.Closed); err != nil {
@@ -608,6 +790,7 @@ func run(args []string, out io.Writer) error {
 	r.Received = uint64(len(samples))
 	r.Missing = r.Expected - r.Received
 	r.Established, r.Refused429, r.Refused503, r.Reset, r.Failed, r.TCPConnections = c.established.Load(), c.limited.Load(), c.shutdown.Load(), c.reset.Load(), c.failed.Load(), c.tcp.Load()
+	r.PostAttemptsMade = c.postAttempts.Load()
 	r.Answered200, r.PostFailed, r.HTTP2 = c.posts.Load(), c.postFailed.Load(), c.http2.Load()
 	r.AchievedRate = float64(r.Sent) / r.ObservationSeconds
 	r.verdict(time.Second)

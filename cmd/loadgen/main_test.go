@@ -32,7 +32,7 @@ func TestSafety(t *testing.T) {
 			t.Errorf("dial guard: %s", address)
 		}
 	}
-	for _, args := range [][]string{{"-duration=0"}, {"-duration=11m"}, {"-streams=0"}, {"-streams=100001"}, {"-rate=-1"}, {"-rate=101"}, {"-drain=0"}, {"-drain=6m"}, {"-setup=0"}, {"-setup=6m"}, {"-dial-concurrency=0"}, {"-dial-concurrency=100001"}} {
+	for _, args := range [][]string{{"-duration=0"}, {"-duration=11m"}, {"-streams=0"}, {"-streams=100001"}, {"-rate=-1"}, {"-rate=101"}, {"-drain=0"}, {"-drain=6m"}, {"-setup=0"}, {"-setup=6m"}, {"-dial-concurrency=0"}, {"-dial-concurrency=100001"}, {"-reconnect-delay=-1ns"}, {"-reconnect-delay=10.001s"}, {"-reconnect-jitter=-1ns"}, {"-reconnect-jitter=10.001s"}, {"-post-attempts=0"}, {"-post-attempts=11"}} {
 		if err := run(args, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "finite limits") {
 			t.Errorf("bounds: %v: %v", args, err)
 		}
@@ -515,6 +515,200 @@ func TestSourceDials(t *testing.T) {
 		_ = conn.Close()
 		if !local.Equal(c.sources[i%2].IP) {
 			t.Fatalf("dial %d: source %s, want %s", i, local, c.sources[i%2].IP)
+		}
+	}
+}
+
+func TestReconnect(t *testing.T) {
+	for _, cut := range []string{"503", "refused", "other", "id: 9\n", "id: 9\nevent: message\ndata: first\ndata: sec", "", "reset"} {
+		t.Run(cut, func(t *testing.T) {
+			var requests, dials atomic.Int64
+			var first time.Time
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				n := requests.Add(1)
+				want := "7"
+				if n > 1 && cut != "503" && cut != "other" {
+					want = "8"
+				}
+				if r.Header.Get("Last-Event-ID") != want {
+					t.Errorf("cursor: %s, want %s", r.Header.Get("Last-Event-ID"), want)
+				}
+				if n <= 2 && cut == "503" {
+					w.WriteHeader(503)
+					return
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				if cut != "reset" {
+					_, _ = fmt.Fprint(w, "id: 8\nevent: message\ndata: loadgenTEST0Z\n\n")
+				}
+				if n == 1 && cut != "503" && cut != "refused" && cut != "other" && cut != "reset" {
+					_, _ = fmt.Fprint(w, cut)
+					return
+				}
+				_, _ = fmt.Fprint(w, "event: reset\ndata:\n\n")
+			}))
+			defer server.Close()
+			c := &counts{markers: regexp.MustCompile(`loadgen[A-Z0-9]+Z`)}
+			tr, err := newTransport(server.URL, "", c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tr.CloseIdleConnections()
+			dial := tr.DialContext
+			tr.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+				if dials.Add(1) == 1 {
+					first = time.Now()
+					if cut == "refused" || cut == "other" {
+						if cut == "other" {
+							return nil, syscall.EINVAL
+						}
+						return nil, syscall.ECONNREFUSED
+					}
+				}
+				if cut == "refused" && time.Since(first) < 5*time.Millisecond {
+					t.Error("refused dial retried before delay")
+				}
+				return dial(ctx, network, address)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			slots := make(chan struct{}, 1)
+			slots <- struct{}{}
+			rec := streamRecord{Sequences: make(map[uint64]*receipt)}
+			stream(ctx, &http.Client{Transport: tr}, server.URL+"/events", "secret", "7", c, ctx, slots, func() { <-slots }, &reconnectModel{Delay: 5 * time.Millisecond}, &rec)
+			arrivals := uint64(2)
+			if cut == "503" || cut == "refused" || cut == "other" {
+				arrivals = 1
+			}
+			if rec.Reset != 1 || rec.Sequences[9] != nil || ctx.Err() != nil {
+				t.Fatalf("bad termination: %+v", rec)
+			}
+			if cut == "reset" {
+				if requests.Load() != 1 || len(rec.Sequences) != 0 || rec.Reconnects.Established != 0 {
+					t.Fatal("reset reconnected")
+				}
+			} else if rec.Sequences[8] == nil || rec.Sequences[8].Arrivals != arrivals || rec.Sequences[8].Marker != "loadgenTEST0Z" || rec.Reconnects.Established != 1 {
+				t.Fatalf("bad receipts: %+v", rec)
+			}
+			if cut == "503" && (c.connectionAttempts[1].Load() != 2 || rec.Reconnects.Unavailable != 1) || cut == "refused" && c.connectionAttempts[2].Load() != 1 || cut == "other" && c.connectionAttempts[3].Load() != 1 {
+				t.Fatal("attempt outcome lost")
+			}
+		})
+	}
+}
+
+func TestReceiptsAndPostRetry(t *testing.T) {
+	var attempts, pages atomic.Int64
+	events := make(chan string, 1)
+	var marker string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			body := r.FormValue("body")
+			if attempts.Add(1) == 1 {
+				marker = body
+				w.WriteHeader(503)
+				return
+			}
+			if body != marker {
+				t.Error("retry changed marker")
+			}
+			events <- body
+			return
+		}
+		if !strings.HasSuffix(r.URL.Path, "/events") {
+			cursor := 7
+			if pages.Add(1) > 1 {
+				cursor = 99
+			}
+			_, _ = fmt.Fprintf(w, `<div sse-connect="/events?after=%d"></div>`, cursor)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_ = http.NewResponseController(w).Flush()
+		cookie, _ := r.Cookie("__Host-session")
+		if cookie.Value == "secret" {
+			select {
+			case body := <-events:
+				for range 2 {
+					_, _ = fmt.Fprintf(w, "id: 8\nevent: message\ndata: %s\n\n", body)
+				}
+			case <-r.Context().Done():
+				return
+			}
+		}
+		_, _ = fmt.Fprint(w, "event: reset\ndata:\n\n")
+	}))
+	defer server.Close()
+	dir := t.TempDir()
+	tokens, path := dir+"/tokens.json", dir+"/receipts.json"
+	if err := os.WriteFile(tokens, []byte(`{"organization_slug":"test","channel_ids":["one"],"accounts":[{"tokens":["secret","empty"]}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"-target", server.URL, "-tokens", tokens, "-streams=2", "-duration=30ms", "-rate=1", "-drain=10ms", "-reconnect", "-receipts", path}
+	var out bytes.Buffer
+	if err := run(args, &out); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"final_watermark":99`, `"sequences":{}`, `"reset":1`, `"reconnects":{"established":0,"503":0,"refused":0,"other":0}`} {
+		if !bytes.Contains(raw, []byte(field)) {
+			t.Fatalf("missing required receipt field: %s", field)
+		}
+	}
+	var got runFile
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0600 || got.Header != (runHeader{1, "test", "one", 7, 99}) || len(got.Streams) != 2 || got.Streams[0].Index != 0 || got.Streams[1].Index != 1 || len(got.Streams[1].Sequences) != 0 || got.Streams[0].Sequences[8] == nil || *got.Streams[0].Sequences[8] != (receipt{2, marker}) || got.Streams[1].Reset != 1 || strings.Contains(string(raw), "secret") {
+		t.Fatalf("bad file: %s", raw)
+	}
+	var step result
+	if err := json.Unmarshal(out.Bytes(), &step); err != nil {
+		t.Fatal(err)
+	}
+	if step.Sent != 1 || step.Answered200 != 1 || step.PostFailed != 0 || step.PostAttemptsMade != 2 || step.Reconnect.Attempts.Established != 2 || step.Reconnect.Delay != 250*time.Millisecond || step.Reconnect.Jitter != 250*time.Millisecond || step.Reconnect.PostAttempts != 3 {
+		t.Fatalf("bad retry counts: %s", out.String())
+	}
+	if err := run(args, &bytes.Buffer{}); err == nil {
+		t.Fatal("overwrote receipts")
+	}
+}
+
+func TestRetryLimits(t *testing.T) {
+	for range 100 {
+		if got := retryDelay(5*time.Millisecond, 3*time.Millisecond); got < 5*time.Millisecond || got > 8*time.Millisecond || retryDelay(5*time.Millisecond, 0) != 5*time.Millisecond {
+			t.Fatal("retry is not fixed delay plus bounded jitter")
+		}
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(503) }))
+	defer server.Close()
+	c := &counts{}
+	if sendPost(t.Context(), server.Client(), server.URL, "secret", "loadgenTEST0Z", c, &reconnectModel{PostAttempts: 3}) || c.postAttempts.Load() != 3 {
+		t.Fatal("POST did not exhaust exactly three attempts")
+	}
+	tokens := t.TempDir() + "/tokens.json"
+	if err := os.WriteFile(tokens, []byte(`{"organization_slug":"test","channel_ids":["one"],"accounts":[{"tokens":["secret"]}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"-target", server.URL, "-tokens", tokens, "-cursor=7", "-duration=1ms", "-rate=1", "-reconnect-delay=0"}
+	var out bytes.Buffer
+	var step result
+	if err := run(args, &out); err != nil || json.Unmarshal(out.Bytes(), &step) != nil || step.Sent != 1 || step.PostFailed != 1 || step.Answered200 != 0 || step.PostAttemptsMade != 3 {
+		t.Fatalf("bad exhausted POST counts: %v: %s", err, out.String())
+	}
+	if err := run(append(args, "-receipts", t.TempDir()+"/receipts.json"), &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "channel cursor") {
+		t.Fatalf("missing watermark accepted: %v", err)
+	}
+	for _, flags := range [][]string{nil, {"-reconnect-delay=0", "-reconnect-jitter=0", "-post-attempts=1"}, {"-reconnect-delay=10s", "-reconnect-jitter=10s", "-post-attempts=10"}} {
+		if err := run(flags, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "credential file") {
+			t.Fatalf("valid flags rejected: %v: %v", flags, err)
 		}
 	}
 }

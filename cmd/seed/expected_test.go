@@ -28,6 +28,21 @@ func TestExpectedPreflight(t *testing.T) {
 	dir := t.TempDir()
 	tokens, output := filepath.Join(dir, "tokens.json"), filepath.Join(dir, "expected.json")
 	valid := `{"organization_slug":"test","channel_ids":["00000000-0000-0000-0000-000000000001"],"accounts":[{"handle":"owner","tokens":["unknown"]}]}`
+	for _, tc := range []struct {
+		name, want string
+		args       []string
+	}{
+		{"missing after", "-expected requires", []string{"-expected", "-tokens", tokens, "-output", output}},
+		{"seeding flag", "without seeding flags", []string{"-expected", "-tokens", tokens, "-after", "0", "-output", output, "-messages", "1"}},
+		{"tokens without expected", "require -expected", []string{"-tokens", tokens}},
+		{"after without expected", "require -expected", []string{"-after", "0"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := run(t.Context(), "postgres://127.0.0.1:1/unreachable?sslmode=disable", tc.args, io.Discard); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("flag refusal: %v", err)
+			}
+		})
+	}
 	for _, tc := range []struct{ name, input, database, output, want string }{
 		{"remote", valid, "postgres://192.0.2.1/db", output, "local development database"},
 		{"json", `{`, "", output, "invalid credential file"},
@@ -84,10 +99,15 @@ func TestExpected(t *testing.T) {
 	marker := "loadgen" + strings.Repeat("A", 26) + "0Z"
 	markers := map[uint64]string{}
 	posts := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
+	named := conversationtest.Topic(t, pool, m.Organization.ID, channel, "named").ID
+	if _, err := posts.PostToTopic(t.Context(), m, channel, &named, "outside the default topic"); err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct{ body, marker string }{
 		{marker + "&&", marker}, {"loadgen" + strings.Repeat("2", 26) + "12Zx", "loadgen" + strings.Repeat("2", 26) + "12Z"},
 		{"plain", ""}, {"prefix " + marker, ""}, {"loadgen" + strings.Repeat("A", 26) + "01Z", ""},
 		{"loadgen" + strings.Repeat("A", 25) + "0Z", ""}, {"loadgen" + strings.Repeat("A", 27) + "0Z", ""}, {"loadgen" + strings.Repeat("a", 26) + "0Z", ""},
+		{"loadgen" + strings.Repeat("A", 22) + "0189" + "0Z", ""},
 	} {
 		msg, err := posts.Post(t.Context(), m, channel, tc.body)
 		if err != nil {
@@ -158,6 +178,9 @@ func TestExpected(t *testing.T) {
 			if tc.wantErr != nil {
 				if !errors.Is(err, tc.wantErr) {
 					t.Fatalf("refusal: %v", err)
+				}
+				if _, err := os.Stat(output); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("refused output still exists: %v", err)
 				}
 				return
 			}

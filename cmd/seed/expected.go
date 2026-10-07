@@ -117,7 +117,7 @@ func writeExpected(ctx context.Context, databaseURL, tokens, output string, afte
 		func(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) })
 	page, err := reader.Page(ctx, m, channel, nil, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("reading latest expected page: %w", err)
 	}
 	result := expectedFile{Header: expectedHeader{1, "expected", data.OrganizationSlug, data.ChannelIDs[0], after, uint64(*page.EventCursor)}, Messages: []expectedMessage{}}
 	marker := regexp.MustCompile(`^loadgen[A-Z2-7]{26}(0|[1-9][0-9]*)Z`)
@@ -134,7 +134,7 @@ func writeExpected(ctx context.Context, databaseURL, tokens, output string, afte
 		before := page.Entries[0].EventSeq
 		page, err = reader.Page(ctx, m, channel, nil, &before)
 		if err != nil {
-			return err
+			return fmt.Errorf("reading older expected page: %w", err)
 		}
 	}
 	sort.Slice(result.Messages, func(i, j int) bool { return result.Messages[i].Sequence < result.Messages[j].Sequence })

@@ -5,6 +5,10 @@ package view
 // converted to empty by the handler shows only the handle, so nobody
 // appears nameless.
 templ MemberName(displayName, handle string) {
+	{{
+		// templ clears the child context even when this component has no nested components.
+		_ = ctx
+	}}
 	if displayName == "" {
 		<bdi class="font-semibold text-fg">{ "@" + handle }</bdi>
 	} else {

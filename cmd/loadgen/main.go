@@ -756,10 +756,7 @@ func run(args []string, out io.Writer) (runErr error) {
 	c.mu.Lock()
 	c.deadline = start.Add(*drain)
 	c.mu.Unlock()
-	for {
-		if c.received.Load() >= r.Expected || time.Since(start) >= *drain {
-			break
-		}
+	for c.received.Load() < r.Expected && time.Since(start) < *drain {
 		time.Sleep(time.Millisecond)
 	}
 	c.mu.Lock()

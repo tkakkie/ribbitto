@@ -56,7 +56,7 @@ func (w RegistrationWriter) SetupOrganization(ctx context.Context) (kernel.ID, e
 
 // NextEventSeq takes the organisation's next event_seq, as Sequence does.
 func (w RegistrationWriter) NextEventSeq(ctx context.Context, organizationID kernel.ID) (int64, error) {
-	return Sequence{queries: w.queries}.NextEventSeq(ctx, organizationID)
+	return Sequence(w).NextEventSeq(ctx, organizationID)
 }
 
 // CreateMember inserts a member with a validated, canonical handle.

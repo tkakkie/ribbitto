@@ -38,13 +38,16 @@ settle. Each keeps `streams.open`, `runtime.goroutines`, `runtime.heap_inuse_byt
 `Queries`, `TransactionsBegun`, `EmptyAcquireCount` and `EmptyAcquireWaitNS`
 from Before to After; negative differences indicate a counter reset.
 Without `-metrics`, `Server` is null; failed metrics reads fail the command.
-Metrics use a separate transport and are excluded from workload dial counts.
+Metrics use the default source and a separate transport, excluded from workload
+dial counts.
 
 `-source` accepts up to 64 comma-separated loopback IPv4 literals; each dial
 (page, streams, posts) binds the next source round-robin. Extra 127.x sources
 require Linux or configured macOS loopback aliases. `DialFailures` counts
-`TooManyOpenFiles`, `AddressNotAvailable`, `ConnectionRefused`, `Timeout` and
-`Other`. `Generator` reports `NOFILESoft`, `NOFILEHard`, `Goroutines` and
+`TooManyOpenFiles`, `AddressUnavailableOrPortsExhausted`, `ConnectionRefused`,
+`Timeout` and `Other`; harness-cancelled dials are excluded. Bound-source port
+exhaustion reports EADDRINUSE on Linux, grouped with EADDRNOTAVAIL.
+`Generator` reports `NOFILESoft`, `NOFILEHard`, `Goroutines` and
 `HeapInuseBytes` at observation's end, before posts settle and streams close.
 
 `-body-length` (0–4000, default 0) pads to that length without truncating the

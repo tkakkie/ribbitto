@@ -71,7 +71,7 @@ type result struct {
 		Goroutines             int
 		HeapInuseBytes         uint64
 	}
-	DialFailures struct{ TooManyOpenFiles, AddressNotAvailable, ConnectionRefused, Timeout, Other uint64 }
+	DialFailures struct{ TooManyOpenFiles, AddressUnavailableOrPortsExhausted, ConnectionRefused, Timeout, Other uint64 }
 	Renders      struct {
 		Count, MinBytes, MaxBytes, TotalBytes int
 		MeanBytes                             float64
@@ -125,7 +125,7 @@ func dialFailure(err error) int {
 	switch {
 	case errors.Is(err, syscall.EMFILE), errors.Is(err, syscall.ENFILE):
 		return 0
-	case errors.Is(err, syscall.EADDRNOTAVAIL):
+	case errors.Is(err, syscall.EADDRNOTAVAIL), errors.Is(err, syscall.EADDRINUSE):
 		return 1
 	case errors.Is(err, syscall.ECONNREFUSED):
 		return 2
@@ -234,7 +234,7 @@ func newTransport(target, ca string, c *counts) (transport, error) {
 		conn, err := dialer.DialContext(ctx, network, address)
 		if err == nil {
 			c.tcp.Add(1)
-		} else {
+		} else if ctx.Err() == nil {
 			c.dialFailures[dialFailure(err)].Add(1)
 		}
 		return conn, err
@@ -381,7 +381,7 @@ func run(args []string, out io.Writer) error {
 	var mt transport
 	if *metrics != "" {
 		var err error
-		mt, err = newTransport(*metrics, "", &counts{sources: c.sources})
+		mt, err = newTransport(*metrics, "", &counts{})
 		if err != nil || mt.origin.Scheme != "http" {
 			return fmt.Errorf("metrics must be a loopback HTTP origin")
 		}
@@ -566,7 +566,7 @@ func run(args []string, out io.Writer) error {
 			return err
 		}
 	}
-	r.DialFailures.TooManyOpenFiles, r.DialFailures.AddressNotAvailable, r.DialFailures.ConnectionRefused, r.DialFailures.Timeout, r.DialFailures.Other = c.dialFailures[0].Load(), c.dialFailures[1].Load(), c.dialFailures[2].Load(), c.dialFailures[3].Load(), c.dialFailures[4].Load()
+	r.DialFailures.TooManyOpenFiles, r.DialFailures.AddressUnavailableOrPortsExhausted, r.DialFailures.ConnectionRefused, r.DialFailures.Timeout, r.DialFailures.Other = c.dialFailures[0].Load(), c.dialFailures[1].Load(), c.dialFailures[2].Load(), c.dialFailures[3].Load(), c.dialFailures[4].Load()
 	sequences := make([]uint64, 0, len(c.renders))
 	for seq := range c.renders {
 		sequences = append(sequences, seq)

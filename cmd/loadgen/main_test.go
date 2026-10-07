@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -380,7 +381,7 @@ func TestDiagnostics(t *testing.T) {
 		open.Add(1)
 		defer open.Add(-1)
 		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = fmt.Fprint(w, "id: 9\nevent: message\ndata: short\n\nid: 8\nevent: message\ndata: first\ndata: second\n\n")
+		_, _ = fmt.Fprint(w, "id: 10\nevent: presence\ndata: ignored\n\nid: 9\nevent: message\ndata: short\n\nid: 8\nevent: message\ndata: first\ndata: second\n\n")
 		_ = http.NewResponseController(w).Flush()
 		<-r.Context().Done()
 	}))
@@ -389,6 +390,7 @@ func TestDiagnostics(t *testing.T) {
 		if r.URL.Path != "/metrics" || len(r.Cookies()) != 0 {
 			t.Error("invalid metrics request")
 		}
+		w.Header().Set("Connection", "close")
 		n := snapshots.Add(1)
 		_, _ = fmt.Fprintf(w, `{"streams":{"open":%d},"runtime":{"goroutines":42,"heap_inuse_bytes":4096},"pool":{"total_conns":3,"max_conns":8,"empty_acquire_count":%d,"empty_acquire_wait_ns":%d},"database":{"queries":%d,"transactions_begun":%d}}`, open.Load(), n*3, n*4, n*10, n*2)
 	}))
@@ -398,7 +400,7 @@ func TestDiagnostics(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Invalid origins and source lists must be rejected before even the page request.
-	for _, args := range [][]string{{"-metrics=http://192.0.2.1"}, {"-metrics=https://localhost"}, {"-source=192.0.2.1"}, {"-source=::1"}, {"-source=localhost"}, {"-source=127.0.0.1,"}, {"-source=" + strings.Repeat("127.0.0.1,", 64) + "127.0.0.1"}, {"-body-length=-1"}, {"-body-length=4001"}} {
+	for _, args := range [][]string{{"-metrics=http://192.0.2.1"}, {"-metrics=https://localhost"}, {"-source=192.0.2.1"}, {"-source=::1"}, {"-source=::ffff:127.0.0.1"}, {"-source=localhost"}, {"-source=127.0.0.1,"}, {"-source=" + strings.Repeat("127.0.0.1,", 64) + "127.0.0.1"}, {"-body-length=-1"}, {"-body-length=4001"}} {
 		if err := run(append([]string{"-target", server.URL, "-tokens", path}, args...), &bytes.Buffer{}); err == nil {
 			t.Fatalf("accepted %v", args)
 		}
@@ -421,7 +423,7 @@ func TestDiagnostics(t *testing.T) {
 	if m.Before.Streams.Open != 0 || m.After.Streams.Open != 2 || m.Closed.Streams.Open != 0 || m.Before.Database.Queries != 10 || m.After.Database.Queries != 20 || m.Closed.Database.Queries != 30 || m.Delta.Queries != 10 || m.Delta.TransactionsBegun != 2 || m.Delta.EmptyAcquireCount != 3 || m.Delta.EmptyAcquireWaitNS != 4 || m.After.Runtime.Goroutines != 42 || m.After.Runtime.HeapInuseBytes != 4096 || m.After.Pool.TotalConns != 3 || m.After.Pool.MaxConns != 8 {
 		t.Fatalf("bad snapshots: %s", out.String())
 	}
-	if got.Generator.NOFILESoft == 0 || got.Generator.NOFILEHard < got.Generator.NOFILESoft || got.Generator.Goroutines == 0 || got.Generator.HeapInuseBytes == 0 || requests.Load() != 4 || got.TCPConnections < 3 {
+	if got.Generator.NOFILESoft == 0 || got.Generator.NOFILEHard < got.Generator.NOFILESoft || got.Generator.Goroutines == 0 || got.Generator.HeapInuseBytes == 0 || requests.Load() != 4 || got.TCPConnections < 3 || got.TCPConnections > 4 {
 		t.Fatalf("bad generator: %s", out.String())
 	}
 	if got.Renders.Count != 2 || fmt.Sprint(got.Renders.SizesBytes) != "[12 5]" || got.Renders.MinBytes != 5 || got.Renders.MaxBytes != 12 || got.Renders.TotalBytes != 17 || got.Renders.MeanBytes != 8.5 {
@@ -438,13 +440,13 @@ func TestPaddingAndDialFailures(t *testing.T) {
 			}
 		}
 	}
-	for i, err := range []error{syscall.EMFILE, syscall.EADDRNOTAVAIL, syscall.ECONNREFUSED, context.DeadlineExceeded, syscall.EINVAL} {
-		if got := dialFailure(fmt.Errorf("dial: %w", err)); got != i {
-			t.Errorf("class %d: got %d", i, got)
+	for _, tc := range []struct {
+		err  error
+		want int
+	}{{syscall.EMFILE, 0}, {syscall.ENFILE, 0}, {syscall.EADDRNOTAVAIL, 1}, {syscall.EADDRINUSE, 1}, {syscall.ECONNREFUSED, 2}, {context.DeadlineExceeded, 3}, {syscall.EINVAL, 4}} {
+		if got := dialFailure(fmt.Errorf("dial: %w", tc.err)); got != tc.want {
+			t.Errorf("%v: class %d, want %d", tc.err, got, tc.want)
 		}
-	}
-	if dialFailure(syscall.ENFILE) != 0 {
-		t.Error("system file limit not classified")
 	}
 }
 
@@ -488,5 +490,31 @@ func TestSourceDials(t *testing.T) {
 	}
 	if c.dialFailures[2].Load() != 1 {
 		t.Fatal("refused dial not counted")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := tr.DialContext(ctx, "tcp", address); err == nil || c.dialFailures[2].Load() != 1 {
+		t.Fatal("cancelled dial succeeded or counted as refused")
+	}
+	for _, i := range []int{0, 1, 3, 4} {
+		if c.dialFailures[i].Load() != 0 {
+			t.Fatal("cancelled dial counted")
+		}
+	}
+	c.sources[1].IP = net.ParseIP("127.0.0.2")
+	c.nextSource.Store(0)
+	for i := range 4 {
+		conn, err := tr.DialContext(t.Context(), "tcp", tr.origin.Host)
+		if i == 1 && errors.Is(err, syscall.EADDRNOTAVAIL) {
+			t.Skip("127.0.0.2 requires a loopback alias")
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		local := conn.LocalAddr().(*net.TCPAddr).IP
+		_ = conn.Close()
+		if !local.Equal(c.sources[i%2].IP) {
+			t.Fatalf("dial %d: source %s, want %s", i, local, c.sources[i%2].IP)
+		}
 	}
 }

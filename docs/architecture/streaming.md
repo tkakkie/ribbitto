@@ -7,7 +7,7 @@ carrying named events:
 `message`, `messages-moved` and `reset` today; `presence`, `typing`
 and `unread` are planned (M4). The browser sends everything else as ordinary POST requests. One
 process serves every stream; several server processes are future work (the
-hub, the per-account cap and the watermark are per process).
+hub, both stream caps and the watermark are per process).
 
 Ordering, replay and vanished messages are in [`replay.md`](replay.md).
 
@@ -57,5 +57,5 @@ The retention period defaults to seven days; see [database configuration](../dat
 
 ### Resource limits
 
-Cache-load limits, write deadlines, heartbeats, the per-account stream cap,
+Cache-load limits, write deadlines, heartbeats, the process and per-account stream caps,
 shutdown and HTTP/2 are in [`stream-limits.md`](stream-limits.md).

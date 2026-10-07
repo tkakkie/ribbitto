@@ -359,6 +359,72 @@ func TestReceiveAfterDrain(t *testing.T) {
 	}
 }
 
+func TestDrainInterrupted(t *testing.T) {
+	for _, sig := range []os.Signal{os.Interrupt, syscall.SIGTERM} {
+		t.Run(sig.String(), func(t *testing.T) {
+			watermark := make(chan struct{})
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					return
+				}
+				if strings.HasSuffix(r.URL.Path, "/events") {
+					w.Header().Set("Content-Type", "text/event-stream")
+					if err := http.NewResponseController(w).Flush(); err != nil {
+						t.Error(err)
+						return
+					}
+					// Keep the answered POST's delivery pending throughout drain.
+					<-r.Context().Done()
+					return
+				}
+				_, _ = fmt.Fprint(w, `<div sse-connect="/events?after=8"></div>`)
+				close(watermark)
+			}))
+			defer server.Close()
+			dir := t.TempDir()
+			tokens, receipts := dir+"/tokens.json", dir+"/receipts.json"
+			if err := os.WriteFile(tokens, []byte(`{"organization_slug":"test","channel_ids":["one"],"accounts":[{"tokens":["secret"]}]}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			process, err := os.FindProcess(os.Getpid())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = process.Release() }()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			signaled := make(chan error, 1)
+			go func() {
+				select {
+				case <-watermark:
+					// Let the final page read finish before interrupting the long drain.
+					if waitRetry(ctx, 100*time.Millisecond, 0) {
+						signaled <- process.Signal(sig)
+						return
+					}
+				case <-ctx.Done():
+				}
+				signaled <- ctx.Err()
+			}()
+			var out bytes.Buffer
+			err = run([]string{"-target", server.URL, "-tokens", tokens, "-cursor=7", "-duration=30ms", "-rate=1", "-drain=5s", "-receipts", receipts}, &out)
+			cancel()
+			if signalErr := <-signaled; signalErr != nil {
+				t.Fatalf("sending interrupt: %v", signalErr)
+			}
+			if !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "interrupted during drain") {
+				t.Errorf("drain interruption returned %v, want wrapped cancellation", err)
+			}
+			if _, err := os.Stat(receipts); !os.IsNotExist(err) {
+				t.Errorf("interrupted run left receipts: %v", err)
+			}
+			if out.Len() != 0 {
+				t.Errorf("interrupted run printed a result: %s", &out)
+			}
+		})
+	}
+}
+
 func TestDiagnostics(t *testing.T) {
 	var open, requests, snapshots atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -36,7 +36,10 @@ func launchChild(ctx context.Context, path string, args []string, address, chann
 		return nil, fmt.Errorf("server-addr requires a loopback IP and fixed port")
 	}
 	// Checking the bind also refuses listeners which do not answer HTTP.
-	// Another process can claim the port after close; acceptable for this dev tool.
+	// Another process can claim the port after close, and readiness would then
+	// probe it with a seeded test account's cookie. Load runs use a disposable,
+	// loopback-only machine (maintainer, 2026-10-07), so a hostile local process
+	// is outside this tool's threat model (maintainer, 2026-10-08).
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("child address already occupied: %w", err)

@@ -423,9 +423,9 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 		established()
 		notify()
 		if readReset(r.Body, nil, func(seq uint64, event, data string) {
+			arrival := time.Now()
 			c.mu.Lock()
 			defer c.mu.Unlock()
-			arrival := time.Now()
 			renderSeq := uint64(0)
 			if event == "message" {
 				renderSeq = seq
@@ -926,6 +926,9 @@ func run(args []string, out io.Writer) (runErr error) {
 			break
 		}
 		time.Sleep(time.Millisecond)
+	}
+	if err := streamCtx.Err(); err != nil {
+		return fmt.Errorf("interrupted during drain: %w", err)
 	}
 	c.mu.Lock()
 	c.frozen = true

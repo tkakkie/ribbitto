@@ -7,7 +7,10 @@ are in the load client's page.
 `-server PATH` starts an owned child; repeat `-server-arg ARG` for arguments.
 It inherits the environment and overrides `RIBBITTO_ADDR` with `-server-addr`
 (default `127.0.0.1:8080`, loopback IP and fixed port). Every launch refuses
-occupied addresses. Child stderr goes to the caller's stderr. Direct readiness
+occupied addresses. The check binds and closes the port, so another local
+process could claim it before the child does and receive the readiness probe's
+seeded test-account cookie: load runs use a disposable, loopback-only machine,
+and a hostile local process is outside the threat model. Child stderr goes to the caller's stderr. Direct readiness
 requires the first token's channel page to answer 200 with an `events?after=`
 cursor while the child is running; `-target` may point to Caddy. Target readiness
 is separate.

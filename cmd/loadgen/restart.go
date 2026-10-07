@@ -36,12 +36,14 @@ func launchChild(ctx context.Context, path string, args []string, address, chann
 		return nil, fmt.Errorf("server-addr requires a loopback IP and fixed port")
 	}
 	// Checking the bind also refuses listeners which do not answer HTTP.
+	// Another process can claim the port after close; acceptable for this dev tool.
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("child address already occupied: %w", err)
 	}
 	_ = listener.Close()
 	child := &childServer{cmd: exec.Command(path, args...), done: make(chan struct{})}
+	child.cmd.Stderr = os.Stderr
 	child.cmd.Env = append(os.Environ(), "RIBBITTO_ADDR="+address)
 	if err := child.cmd.Start(); err != nil {
 		return nil, fmt.Errorf("starting child: %w", err)
@@ -62,13 +64,15 @@ func launchChild(ctx context.Context, path string, args []string, address, chann
 			return nil, fmt.Errorf("child exited before readiness: %v", child.err)
 		default:
 		}
-		cursor, err := probe(readyCtx, client, "http://"+address+channel)
-		if err == nil {
+		cursor, err := child.probe(readyCtx, client, "http://"+address+channel, probe)
+		if err != nil {
 			select {
 			case <-child.done:
-				return nil, fmt.Errorf("child exited at readiness: %v", child.err)
+				return nil, err
 			default:
 			}
+		}
+		if err == nil {
 			child.cursor, err = strconv.ParseUint(cursor, 10, 64)
 			if err == nil {
 				child.readyAt = time.Now()
@@ -80,6 +84,19 @@ func launchChild(ctx context.Context, path string, args []string, address, chann
 			return nil, fmt.Errorf("child readiness deadline exceeded")
 		}
 	}
+}
+
+// A successful HTTP probe must still belong to a live child.
+func (c *childServer) probe(ctx context.Context, client *http.Client, endpoint string, read func(context.Context, *http.Client, string) (string, error)) (string, error) {
+	cursor, err := read(ctx, client, endpoint)
+	if err == nil {
+		select {
+		case <-c.done:
+			return "", fmt.Errorf("child exited at readiness: %v", c.err)
+		default:
+		}
+	}
+	return cursor, err
 }
 
 // Wait owns reaping; stop never looks up or signals any other process.
@@ -104,7 +121,11 @@ func (c *childServer) stop(deadline time.Duration) (float64, bool) {
 }
 
 func caughtUp(records []streamRecord, initial, final uint64, terminated time.Time) bool {
-	for _, rec := range records {
+	for i := range records {
+		rec := &records[i]
+		if rec.Reset > 0 {
+			continue
+		}
 		reconnected, reached := false, final == initial
 		for _, at := range rec.EstablishedAt {
 			reconnected = reconnected || at.After(terminated)
@@ -112,7 +133,7 @@ func caughtUp(records []streamRecord, initial, final uint64, terminated time.Tim
 		for seq := range rec.ArrivedAt {
 			reached = reached || seq >= final
 		}
-		if rec.Reset > 0 || !reconnected || !reached {
+		if !reconnected || !reached {
 			return false
 		}
 	}

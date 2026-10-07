@@ -580,6 +580,9 @@ func TestReconnect(t *testing.T) {
 			if cut == "502" || cut == "refused" || cut == "other" {
 				arrivals = 1
 			}
+			if len(rec.EstablishedAt) != 0 || rec.ArrivedAt != nil {
+				t.Fatal("ordinary reconnect retained restart timestamps")
+			}
 			if rec.Reset != 1 || rec.Sequences[6] != nil || rec.Sequences[9] != nil || rec.Sequences[10] != nil || ctx.Err() != nil {
 				t.Fatalf("bad termination: %+v", rec)
 			}

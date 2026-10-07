@@ -35,6 +35,18 @@ func TestRestartHelper(t *testing.T) {
 	if err := os.WriteFile(state, nil, 0600); err != nil {
 		os.Exit(3)
 	}
+	if restarted && mode == "relaunch-fail" {
+		os.Exit(2)
+	}
+	if (!restarted && (mode == "held" || mode == "handover")) || (restarted && mode == "unavailable") {
+		if err := os.WriteFile(state+"commit", []byte("seed\n"), 0600); err != nil {
+			os.Exit(4)
+		}
+	}
+	cursor := func() int {
+		commits, _ := os.ReadFile(state + "commit")
+		return 7 + bytes.Count(commits, []byte("\n"))
+	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM)
 	go func() {
@@ -49,17 +61,28 @@ func TestRestartHelper(t *testing.T) {
 		select {}
 	}
 	var pages atomic.Int64
+	var events [2]atomic.Int64
 	err = http.ListenAndServe(os.Getenv("RIBBITTO_ADDR"), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if mode == "never" {
 			w.WriteHeader(503)
 			return
 		}
 		if r.URL.Path == "/metrics" {
-			_, _ = fmt.Fprint(w, `{"database":{"queries":1}}`)
+			queries := 1
+			if restarted {
+				queries = 2
+			}
+			_, _ = fmt.Fprintf(w, `{"database":{"queries":%d}}`, queries)
 			return
 		}
 		if r.Method == "POST" {
-			if err := os.WriteFile(state+"commit", []byte(r.FormValue("body")), 0600); err != nil {
+			f, err := os.OpenFile(state+"commit", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			if err != nil {
+				os.Exit(4)
+			}
+			_, err = fmt.Fprintln(f, r.FormValue("body"))
+			_ = f.Close()
+			if err != nil {
 				os.Exit(4)
 			}
 			if mode == "retry" && restarted {
@@ -70,14 +93,16 @@ func TestRestartHelper(t *testing.T) {
 			return
 		}
 		if !strings.HasSuffix(r.URL.Path, "/events") {
-			cursor := 7
 			if restarted {
-				cursor = 8
-				if pages.Add(1) >= 3 {
+				n := pages.Add(1)
+				if n >= 2 {
+					_ = os.WriteFile(state+"ready", nil, 0600)
+				}
+				if n >= 3 {
 					_ = os.WriteFile(state+"drain", nil, 0600)
 				}
 			}
-			_, _ = fmt.Fprintf(w, `<div sse-connect="/events?after=%d"></div>`, cursor)
+			_, _ = fmt.Fprintf(w, `<div sse-connect="/events?after=%d"></div>`, cursor())
 			return
 		}
 		cookie, _ := r.Cookie("__Host-session")
@@ -85,7 +110,7 @@ func TestRestartHelper(t *testing.T) {
 			w.WriteHeader(403)
 			return
 		}
-		if restarted && (mode == "held" || mode == "lost" || mode == "handover") {
+		if restarted && (mode == "held" || mode == "lost" || mode == "handover" || mode == "unavailable" || mode == "retry") {
 			for {
 				if _, err := os.Stat(state + "drain"); err == nil {
 					break
@@ -94,12 +119,21 @@ func TestRestartHelper(t *testing.T) {
 					return
 				}
 			}
+			idx := 0
+			if cookie.Value == "bad" {
+				idx = 1
+			}
+			if mode == "unavailable" && events[idx].Add(1) <= 10 {
+				w.WriteHeader(503)
+				return
+			}
 			time.Sleep(100 * time.Millisecond)
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		_ = http.NewResponseController(w).Flush()
 		if restarted || mode == "held" {
-			_, _ = fmt.Fprint(w, "id: 8\nevent: message\ndata: replay\n\n")
+			commits, _ := os.ReadFile(state + "commit")
+			_, _ = fmt.Fprintf(w, "id: %d\nevent: message\ndata: %s\n\n", cursor(), strings.Join(strings.Fields(string(commits)), " "))
 			_ = http.NewResponseController(w).Flush()
 		}
 		if restarted && mode == "handover" {
@@ -120,12 +154,26 @@ func TestRestart(t *testing.T) {
 		{"never-bind", "lifecycle", "deadline"}, {"missing", "lifecycle", "starting child"},
 		{"occupied", "lifecycle", "occupied"}, {"held", "run", ""},
 		{"lost", "run", ""}, {"retry", "run", ""}, {"partial", "run", ""},
-		{"total", "run", ""}, {"handover", "handover", ""}, {"no-server", "flags", ""},
+		{"total", "run", ""}, {"unavailable", "run", ""}, {"relaunch-fail", "run", "exited before readiness"},
+		{"at-readiness", "probe", "exited at readiness"}, {"handover", "handover", ""}, {"no-server", "flags", ""},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
+			if tc.kind == "probe" {
+				child := &childServer{done: make(chan struct{})}
+				_, err := child.probe(t.Context(), nil, "", func(context.Context, *http.Client, string) (string, error) {
+					close(child.done) // The reaper finishes while the successful probe is in flight.
+					return "7", nil
+				})
+				failRestartIf(t, err == nil || !strings.Contains(err.Error(), tc.failure), err)
+				return
+			}
 			if tc.kind == "flags" {
 				err := run([]string{"-restart-after=1ms"}, &bytes.Buffer{})
 				failRestartIf(t, err == nil || !strings.Contains(err.Error(), "requires -server"), err)
+				for _, arg := range []string{"-server-addr=127.0.0.1:1", "-server-arg=x", "-start-deadline=1s", "-exit-deadline=1s"} {
+					err := run([]string{arg}, &bytes.Buffer{})
+					failRestartIf(t, err == nil || !strings.Contains(err.Error(), "requires -server"), arg, err)
+				}
 				return
 			}
 			listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -137,6 +185,7 @@ func TestRestart(t *testing.T) {
 			t.Setenv("RIBBITTO_ADDR", "192.0.2.1:1") // Must be overridden in the child.
 			t.Setenv("GORACE", "atexit_sleep_ms=0")
 			path, childArg := os.Args[0], "-test.run=^TestRestartHelper$"
+			childArgs := []string{childArg, "-test.timeout=5s"}
 			assertClosed := func() {
 				t.Helper()
 				listener, err := net.Listen("tcp", address)
@@ -169,7 +218,7 @@ func TestRestart(t *testing.T) {
 				defer func() { _ = server.Close() }()
 			}
 			if tc.kind != "run" {
-				child, err := launchChild(t.Context(), path, []string{childArg}, address, "/channel", probe, 300*time.Millisecond, 150*time.Millisecond)
+				child, err := launchChild(t.Context(), path, childArgs, address, "/channel", probe, 300*time.Millisecond, 150*time.Millisecond)
 				if child != nil {
 					defer func() { child.stop(time.Second); assertClosed() }()
 				}
@@ -187,7 +236,7 @@ func TestRestart(t *testing.T) {
 				failRestartIf(t, err != nil, err)
 				if tc.kind == "handover" {
 					assertHandover(t, child, address, func() (*childServer, error) {
-						return launchChild(t.Context(), path, []string{childArg}, address, "/channel", probe, time.Second, time.Second)
+						return launchChild(t.Context(), path, childArgs, address, "/channel", probe, time.Second, time.Second)
 					})
 					return
 				}
@@ -202,7 +251,29 @@ func TestRestart(t *testing.T) {
 				t.Fatal(err)
 			}
 			u, _ := url.Parse("http://" + address)
-			proxy := httptest.NewServer(httputil.NewSingleHostReverseProxy(u))
+			forward := httputil.NewSingleHostReverseProxy(u)
+			var postAttempts atomic.Int64
+			proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "POST" && (tc.mode == "lost" || tc.mode == "retry") {
+					// Keep the request across the outage: retries must not race child startup.
+					for {
+						if _, err := os.Stat(state + "ready"); err == nil {
+							break
+						}
+						if !waitRetry(r.Context(), time.Millisecond, 0) {
+							return
+						}
+					}
+					if tc.mode == "lost" {
+						_ = waitRetry(r.Context(), 200*time.Millisecond, 0)
+					}
+					if tc.mode == "retry" && postAttempts.Add(1) == 1 {
+						w.WriteHeader(503)
+						return
+					}
+				}
+				forward.ServeHTTP(w, r)
+			}))
 			defer proxy.Close()
 			args := []string{"-server", path, "-server-addr", address, "-server-arg", childArg, "-server-arg", "-test.timeout=5s", "-target", proxy.URL, "-tokens", tokens, "-receipts", receipts, "-streams=2", "-restart-after=60ms", "-duration=200ms", "-drain=1s", "-start-deadline=1s", "-exit-deadline=1s", "-reconnect-delay=10ms", "-reconnect-jitter=0", "-post-attempts=3", "-metrics", u.String()}
 			if tc.mode == "lost" {
@@ -212,6 +283,11 @@ func TestRestart(t *testing.T) {
 			}
 			var out bytes.Buffer
 			err = run(args, &out)
+			if tc.failure != "" {
+				failRestartIf(t, err == nil || !strings.Contains(err.Error(), "restart: child "+tc.failure), err)
+				assertClosed()
+				return
+			}
 			failRestartIf(t, err != nil, err)
 			assertClosed()
 			var got result
@@ -223,18 +299,24 @@ func TestRestart(t *testing.T) {
 			storm, incomplete := got.Restart, tc.mode == "partial" || tc.mode == "total"
 			failRestartIf(t, storm == nil || storm.IncompleteSetup != incomplete || storm.Error != "" || storm.SIGTERM.IsZero() != incomplete, fmt.Sprintf("storm: %s", out.String()))
 			if incomplete {
-				failRestartIf(t, got.Established != map[string]uint64{"partial": 1, "total": 0}[tc.mode] || storm.Old != nil || storm.New != nil, out.String())
+				failRestartIf(t, got.Established != map[string]uint64{"partial": 1, "total": 0}[tc.mode] || storm.Old != nil || storm.New != nil || got.DrainSeconds >= got.DrainLimitSeconds, out.String())
 				return
 			}
-			failRestartIf(t, storm.RecoveryCursor != 8 || !storm.ReadyAt.After(storm.SIGTERM) || storm.ExitSeconds < .04 || storm.ReadySeconds < storm.ExitSeconds || storm.Old == nil || storm.New == nil || storm.Old.Database.Queries != 1 || storm.New.Database.Queries != 1 || got.Server != nil || file.Header.FinalWatermark != 8 || got.DrainSeconds >= 1, out.String())
-			if tc.mode == "held" || tc.mode == "lost" {
-				failRestartIf(t, got.DrainSeconds < .09, "drain did not wait for re-establishment/delivery", out.String())
+			recovery := uint64(7)
+			if tc.mode == "held" || tc.mode == "unavailable" {
+				recovery = 8
 			}
+			commits, _ := os.ReadFile(state + "commit")
+			final := uint64(7 + bytes.Count(commits, []byte("\n")))
+			failRestartIf(t, storm.RecoveryCursor != recovery || !storm.ReadyAt.After(storm.SIGTERM) || storm.ExitSeconds < .04 || storm.ReadySeconds <= storm.ExitSeconds || storm.Old == nil || storm.New == nil || storm.Old.Database.Queries != 1 || storm.New.Database.Queries != 2 || got.Server != nil || file.Header.FinalWatermark != final || got.DrainSeconds >= 1, out.String())
 			for _, rec := range file.Streams {
-				failRestartIf(t, rec.Reconnects.Established < 1 || rec.Sequences[8] == nil, "did not reconnect/drain", rec)
+				failRestartIf(t, rec.Reconnects.Established < 1 || (file.Header.FinalWatermark > 7 && rec.Sequences[file.Header.FinalWatermark] == nil), "did not reconnect/drain", rec)
+				if tc.mode == "unavailable" {
+					failRestartIf(t, rec.Reconnects.Unavailable == 0, "no 503 during drain", rec)
+				}
 			}
 			if tc.mode == "lost" || tc.mode == "retry" {
-				if _, err := os.Stat(state + "commit"); err != nil || (tc.mode == "lost" && (got.PostFailed != 1 || got.Answered200 != 0)) || (tc.mode == "retry" && (got.Sent != 4 || got.PostAttemptsMade <= got.Sent || got.Answered200 < 2)) {
+				if _, err := os.Stat(state + "commit"); err != nil || (tc.mode == "lost" && (final != 8 || got.PostFailed != 1 || got.Answered200 != 0)) || (tc.mode == "retry" && (final != 11 || got.Sent != 4 || got.PostAttemptsMade != 5 || got.Answered200 != 4 || got.Received != 8)) {
 					t.Fatal("lost response/retry not covered", out.String(), err)
 				}
 			}
@@ -246,18 +328,19 @@ func assertHandover(t *testing.T, child *childServer, address string, launch fun
 	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	c := &counts{markers: regexp.MustCompile("loadgen")}
-	rec := streamRecord{Sequences: map[uint64]*receipt{}}
+	c := &counts{handover: true, markers: regexp.MustCompile("loadgen")}
+	records := []streamRecord{{Sequences: map[uint64]*receipt{}}}
+	rec := &records[0]
 	slots, done, opened := make(chan struct{}, 1), make(chan struct{}), make(chan struct{})
 	slots <- struct{}{}
 	go func() {
-		stream(ctx, &http.Client{}, "http://"+address+"/events", "secret", "7", c, ctx, slots, func() { <-slots; close(opened) }, &reconnectModel{Delay: time.Millisecond}, &rec)
+		stream(ctx, &http.Client{}, "http://"+address+"/events", "secret", "7", c, ctx, slots, func() { <-slots; close(opened) }, &reconnectModel{Delay: time.Millisecond}, rec)
 		close(done)
 	}()
 	<-opened
 	terminated := time.Now()
 	c.mu.Lock()
-	emptyComplete := caughtUp([]streamRecord{rec}, 7, 7, terminated)
+	emptyComplete := caughtUp(records, 7, 7, terminated)
 	c.mu.Unlock()
 	failRestartIf(t, emptyComplete, "empty set completed before reconnect")
 	child.stop(time.Second)
@@ -269,7 +352,7 @@ func assertHandover(t *testing.T, child *childServer, address string, launch fun
 	deadline := time.Now().Add(time.Second)
 	for {
 		c.mu.Lock()
-		complete := caughtUp([]streamRecord{rec}, 7, 9, terminated)
+		complete := caughtUp(records, 7, 9, terminated)
 		c.mu.Unlock()
 		if complete || time.Now().After(deadline) {
 			break
@@ -278,11 +361,13 @@ func assertHandover(t *testing.T, child *childServer, address string, launch fun
 	}
 	cancel()
 	<-done
-	failRestartIf(t, len(rec.EstablishedAt) < 2 || !rec.EstablishedAt[1].After(terminated) || len(rec.ArrivedAt[8]) == 0 || rec.ArrivedAt[8][0].Before(child.readyAt) || !caughtUp([]streamRecord{rec}, 7, 9, terminated) || rec.Sequences[9] != nil || len(rec.ArrivedAt[9]) == 0, fmt.Sprintf("handover: %+v", rec))
+	failRestartIf(t, len(rec.EstablishedAt) < 2 || !rec.EstablishedAt[1].After(terminated) || len(rec.ArrivedAt[8]) == 0 || !rec.ArrivedAt[8][0].After(child.readyAt) || !caughtUp(records, 7, 9, terminated) || rec.Sequences[9] != nil || len(rec.ArrivedAt[9]) == 0, fmt.Sprintf("handover: %+v", rec))
 	rec.Sequences = nil
-	failRestartIf(t, !caughtUp([]streamRecord{rec}, 8, 8, terminated), "empty set did not complete after reconnect")
+	failRestartIf(t, !caughtUp(records, 8, 8, terminated), "empty set did not complete after reconnect")
 	rec.Reset++
-	failRestartIf(t, caughtUp([]streamRecord{rec}, 8, 8, terminated), "reset completed drain")
+	rec.EstablishedAt, rec.ArrivedAt = nil, nil
+	failRestartIf(t, !caughtUp(records, 8, 8, terminated), "lone reset blocked drain")
+	failRestartIf(t, !caughtUp(append(records, streamRecord{EstablishedAt: []time.Time{time.Now()}, ArrivedAt: map[uint64][]time.Time{9: {time.Now()}}}), 8, 9, terminated), "reset blocked caught-up stream")
 }
 
 func failRestartIf(t *testing.T, failed bool, details ...any) {

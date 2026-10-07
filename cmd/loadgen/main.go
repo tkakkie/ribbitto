@@ -100,7 +100,7 @@ type counts struct {
 	http2                                                                           atomic.Bool
 	mu                                                                              sync.Mutex
 	deliveries                                                                      map[string]*post
-	frozen                                                                          bool
+	frozen, handover                                                                bool
 	deadline                                                                        time.Time
 	markers                                                                         *regexp.Regexp
 }
@@ -331,9 +331,6 @@ func readReset(body io.Reader, receive func(uint64, string), complete func(uint6
 	for s.Scan() {
 		line := s.Text()
 		if line == "" {
-			if data && event != "reset" && complete != nil {
-				complete(seq, event, strings.TrimSuffix(payload.String(), "\n"))
-			}
 			if event == "reset" && data {
 				return true
 			}
@@ -343,6 +340,10 @@ func readReset(body io.Reader, receive func(uint64, string), complete func(uint6
 					renderSeq = seq
 				}
 				receive(renderSeq, strings.TrimSuffix(payload.String(), "\n"))
+			}
+			// Publish completion after delivery accounting so drain cannot freeze between them.
+			if data && event != "reset" && complete != nil {
+				complete(seq, event, strings.TrimSuffix(payload.String(), "\n"))
 			}
 			payload.Reset()
 			event, data, seq = "", false, 0
@@ -368,6 +369,8 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 		if ctx.Err() == nil || outcome == connectionEstablished {
 			c.connectionAttempts[outcome].Add(1)
 			if reconnect {
+				c.mu.Lock()
+				defer c.mu.Unlock()
 				fields := []*uint64{&rec.Reconnects.Established, &rec.Reconnects.Unavailable, &rec.Reconnects.Refused, &rec.Reconnects.Other}
 				*fields[outcome]++
 			}
@@ -408,7 +411,9 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 		}
 		c.mu.Lock()
 		rec.open = true
-		rec.EstablishedAt = append(rec.EstablishedAt, time.Now())
+		if c.handover {
+			rec.EstablishedAt = append(rec.EstablishedAt, time.Now())
+		}
 		c.mu.Unlock()
 		defer func() { c.mu.Lock(); rec.open = false; c.mu.Unlock() }()
 		established()
@@ -423,10 +428,12 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 			if c.frozen || (!c.deadline.IsZero() && time.Now().After(c.deadline)) {
 				return
 			}
-			if rec.ArrivedAt == nil {
-				rec.ArrivedAt = make(map[uint64][]time.Time)
+			if c.handover {
+				if rec.ArrivedAt == nil {
+					rec.ArrivedAt = make(map[uint64][]time.Time)
+				}
+				rec.ArrivedAt[seq] = append(rec.ArrivedAt[seq], time.Now())
 			}
-			rec.ArrivedAt[seq] = append(rec.ArrivedAt[seq], time.Now())
 			if event == "message" {
 				if rec.Sequences[seq] == nil {
 					rec.Sequences[seq] = &receipt{Marker: c.markers.FindString(data)}
@@ -583,6 +590,9 @@ func run(args []string, out io.Writer) (runErr error) {
 		*reconnect = true
 	}
 	flags.Visit(func(f *flag.Flag) {
+		if (f.Name == "server-addr" || f.Name == "server-arg" || f.Name == "start-deadline" || f.Name == "exit-deadline") && *server == "" {
+			runErr = fmt.Errorf("%s requires -server", f.Name)
+		}
 		if (f.Name == "post-attempts" || f.Name == "reconnect-delay" || f.Name == "reconnect-jitter") && !*reconnect {
 			runErr = fmt.Errorf("%s requires -reconnect", f.Name)
 		}
@@ -590,7 +600,7 @@ func run(args []string, out io.Writer) (runErr error) {
 	if runErr != nil {
 		return runErr
 	}
-	c := &counts{}
+	c := &counts{handover: *restartAfter > 0}
 	if *source != "" {
 		for _, address := range strings.Split(*source, ",") {
 			ip := net.ParseIP(address)
@@ -773,6 +783,12 @@ func run(args []string, out io.Writer) (runErr error) {
 			if r.Restart.IncompleteSetup || !waitRetry(streamCtx, *restartAfter, 0) {
 				return
 			}
+			select {
+			case <-child.done:
+				r.Restart.Error = "child exited before SIGTERM"
+				return
+			default:
+			}
 			c.mu.Lock()
 			for i := range records {
 				if !records[i].open {
@@ -789,6 +805,12 @@ func run(args []string, out io.Writer) (runErr error) {
 					r.Restart.Error = err.Error()
 					return
 				}
+			}
+			select {
+			case <-child.done:
+				r.Restart.Error = "child exited before SIGTERM"
+				return
+			default:
 			}
 			r.Restart.SIGTERM = time.Now()
 			r.Restart.ExitSeconds, r.Restart.ExitOverrun = child.stop(*exitDeadline)
@@ -859,6 +881,9 @@ func run(args []string, out io.Writer) (runErr error) {
 	if streamCtx.Err() != nil {
 		return streamCtx.Err()
 	}
+	if r.Restart != nil && r.Restart.Error != "" {
+		return fmt.Errorf("restart: %s", r.Restart.Error)
+	}
 	var final uint64
 	if receiptFile != nil || r.Restart != nil {
 		watermark, err := readTargetCursor()
@@ -880,7 +905,7 @@ func run(args []string, out io.Writer) (runErr error) {
 	c.mu.Unlock()
 	for {
 		complete := c.received.Load() >= r.Expected
-		if r.Restart != nil {
+		if r.Restart != nil && !r.Restart.IncompleteSetup {
 			c.mu.Lock()
 			complete = !r.Restart.SIGTERM.IsZero() && r.Restart.Error == "" && caughtUp(records, cursorNumber, final, r.Restart.SIGTERM)
 			c.mu.Unlock()

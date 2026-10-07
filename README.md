@@ -90,7 +90,9 @@ so local notes and tools do not change the output.
 `make check` is what CI runs and what must pass before a pull request: it
 checks formatting (`gofmt` for Go, `templ fmt` for templates), vets, lints,
 builds, runs the Go tests with the race detector, and checks the import
-graph and the documents. The AI launchers' self-tests, most of its time, run
+graph and the documents. `tools/sourcecheck` enforces the
+[product vocabulary](docs/domain/vocabulary.md) and
+[UI colour rules](docs/ui.md#tokens). The AI launchers' self-tests, most of its time, run
 only when the change since `LAUNCHER_TESTS_BASE` (default `origin/main`;
 commits, staged, unstaged and untracked files) touches `scripts/ai/`,
 `.github/prompts/`, `.github/workflows/` or the `Makefile`, or when that

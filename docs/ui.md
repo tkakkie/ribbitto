@@ -30,7 +30,12 @@ specification: each screen's details are decided when it is built.
 Defined in `web/styles/app.css` and used through Tailwind utilities
 (`bg-surface`, `text-muted`, `border-border-strong`, `rounded-md`,
 `text-body`, …). Tailwind's default colour palette is switched off, so only
-these colours exist in templates.
+these colours exist in templates. `tools/sourcecheck`, run by `make check`,
+rejects literal colours in arbitrary classes and inline styles in authored
+`.templ` attributes, and in `web/styles/app.css` outside token definitions
+(`--rb-*` in `:root`, and custom properties in `@theme`). Token references,
+`transparent` and `currentColor` pass; generated CSS and vendored assets
+are excluded. The pattern check does not evaluate dynamic expressions.
 
 | Colour token | Light | Dark | Use |
 |---|---|---|---|

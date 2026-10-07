@@ -94,9 +94,10 @@ check: $(TEMPL)
 	go test -race ./...
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
-	go -C tools vet ./docscheck
-	go -C tools test -race ./docscheck
+	go -C tools vet ./...
+	go -C tools test -race ./...
 	go -C tools run ./docscheck ..
+	go -C tools run ./sourcecheck ..
 	bash scripts/ai/launcher-tests_test.sh
 	bash scripts/ai/launcher-tests.sh --base "$$LAUNCHER_TESTS_BASE"
 

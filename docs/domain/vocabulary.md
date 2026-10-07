@@ -2,7 +2,10 @@
 
 Code uses the neutral terms in the [glossary](README.md#glossary). In the
 application, frog-themed product words appear only in UI message files,
-never in identifiers, table names or URL segments.
+never in identifiers, table names or URL segments. `tools/sourcecheck`, run
+by `make check`, reads the UI label column below and checks Go identifiers,
+file and directory names, SQL identifiers, mux registrations (including
+`orgRoute` suffixes), but does not evaluate route expressions or aliases.
 
 **Keep it current:** update this file in the same pull request whenever a
 product label or vocabulary rule changes; keep domain terms in the

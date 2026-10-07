@@ -146,6 +146,9 @@ func TestCompareRefusals(t *testing.T) {
 	if err := run([]string{"-compare", "unused"}, &bytes.Buffer{}); err == nil {
 		t.Fatal("accepted missing expected path")
 	}
+	if err := run([]string{"-compare=", "e"}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "requires receipts and expected files") {
+		t.Fatalf("accepted an empty -compare: %v", err)
+	}
 	if err := run([]string{"-compare", "r", "e", "extra"}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "requires receipts and expected files") {
 		t.Fatalf("accepted extra comparison argument: %v", err)
 	}

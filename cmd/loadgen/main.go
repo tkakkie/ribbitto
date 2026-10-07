@@ -527,7 +527,11 @@ func run(args []string, out io.Writer) (runErr error) {
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("invalid flags")
 	}
-	if *compare != "" {
+	// Whether -compare was given decides the mode, not its value: an empty
+	// -compare= must be refused, never fall through to a live run.
+	comparing := false
+	flags.Visit(func(f *flag.Flag) { comparing = comparing || f.Name == "compare" })
+	if comparing {
 		flags.Visit(func(f *flag.Flag) {
 			if f.Name != "compare" {
 				runErr = fmt.Errorf("-compare cannot be combined with -%s", f.Name)
@@ -536,7 +540,7 @@ func run(args []string, out io.Writer) (runErr error) {
 		if runErr != nil {
 			return runErr
 		}
-		if flags.NArg() != 1 {
+		if *compare == "" || flags.NArg() != 1 {
 			return fmt.Errorf("-compare requires receipts and expected files")
 		}
 		return compareFiles(*compare, flags.Arg(0), out)

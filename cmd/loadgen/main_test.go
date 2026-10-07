@@ -5,13 +5,17 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -348,9 +352,169 @@ func TestReceiveAfterDrain(t *testing.T) {
 		if !frozen {
 			c.deadline = time.Now().Add(-time.Millisecond)
 		}
-		c.receive("late", make(map[*post]bool))
+		c.receive(1, "late", make(map[*post]bool))
 		if len(p.latencies) != 0 || c.received.Load() != 0 {
 			t.Fatalf("late receipt counted (frozen=%t)", frozen)
+		}
+	}
+}
+
+func TestDiagnostics(t *testing.T) {
+	var open, requests, snapshots atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		peer, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if peer != "127.0.0.1" || r.Header.Get("Accept-Language") != "" {
+			t.Errorf("unexpected peer/language: %s", r.RemoteAddr)
+		}
+		requests.Add(1)
+		if r.Method == "POST" {
+			body := r.FormValue("body")
+			if len(body) != 4000 || !strings.HasPrefix(body, "loadgen") || !strings.HasSuffix(body, "&") {
+				t.Error("invalid padding")
+			}
+			return
+		}
+		if !strings.HasSuffix(r.URL.Path, "/events") {
+			_, _ = fmt.Fprint(w, `<div sse-connect="/events?after=7"></div>`)
+			return
+		}
+		open.Add(1)
+		defer open.Add(-1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "id: 10\nevent: presence\ndata: ignored\n\nid: 9\nevent: message\ndata: short\n\nid: 8\nevent: message\ndata: first\ndata: second\n\n")
+		_ = http.NewResponseController(w).Flush()
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	metrics := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/metrics" || len(r.Cookies()) != 0 {
+			t.Error("invalid metrics request")
+		}
+		w.Header().Set("Connection", "close")
+		n := snapshots.Add(1)
+		_, _ = fmt.Fprintf(w, `{"streams":{"open":%d},"runtime":{"goroutines":42,"heap_inuse_bytes":4096},"pool":{"total_conns":3,"max_conns":8,"empty_acquire_count":%d,"empty_acquire_wait_ns":%d},"database":{"queries":%d,"transactions_begun":%d}}`, open.Load(), n*3, n*4, n*10, n*2)
+	}))
+	defer metrics.Close()
+	path := t.TempDir() + "/tokens.json"
+	if err := os.WriteFile(path, []byte(`{"organization_slug":"test","channel_ids":["one"],"accounts":[{"tokens":["secret"]}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Invalid origins and source lists must be rejected before even the page request.
+	for _, args := range [][]string{{"-metrics=http://192.0.2.1"}, {"-metrics=https://localhost"}, {"-source=192.0.2.1"}, {"-source=::1"}, {"-source=::ffff:127.0.0.1"}, {"-source=localhost"}, {"-source=127.0.0.1,"}, {"-source=" + strings.Repeat("127.0.0.1,", 64) + "127.0.0.1"}, {"-body-length=-1"}, {"-body-length=4001"}} {
+		if err := run(append([]string{"-target", server.URL, "-tokens", path}, args...), &bytes.Buffer{}); err == nil {
+			t.Fatalf("accepted %v", args)
+		}
+	}
+	if requests.Load() != 0 || snapshots.Load() != 0 {
+		t.Fatal("requested before validation")
+	}
+	var out bytes.Buffer
+	if err := run([]string{"-target", server.URL, "-metrics", metrics.URL + "/", "-source=" + strings.TrimSuffix(strings.Repeat("127.0.0.1,", 64), ","), "-tokens", path, "-streams=2", "-duration=30ms", "-rate=1", "-drain=1ms", "-body-length=4000", "-body-escape"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	var got result
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	m := got.Server
+	if snapshots.Load() != 3 || m == nil {
+		t.Fatalf("missing snapshots: %s", out.String())
+	}
+	if m.Before.Streams.Open != 0 || m.After.Streams.Open != 2 || m.Closed.Streams.Open != 0 || m.Before.Database.Queries != 10 || m.After.Database.Queries != 20 || m.Closed.Database.Queries != 30 || m.Delta.Queries != 10 || m.Delta.TransactionsBegun != 2 || m.Delta.EmptyAcquireCount != 3 || m.Delta.EmptyAcquireWaitNS != 4 || m.After.Runtime.Goroutines != 42 || m.After.Runtime.HeapInuseBytes != 4096 || m.After.Pool.TotalConns != 3 || m.After.Pool.MaxConns != 8 {
+		t.Fatalf("bad snapshots: %s", out.String())
+	}
+	if got.Generator.NOFILESoft == 0 || got.Generator.NOFILEHard < got.Generator.NOFILESoft || got.Generator.Goroutines == 0 || got.Generator.HeapInuseBytes == 0 || requests.Load() != 4 || got.TCPConnections < 3 || got.TCPConnections > 4 {
+		t.Fatalf("bad generator: %s", out.String())
+	}
+	if got.Renders.Count != 2 || fmt.Sprint(got.Renders.SizesBytes) != "[12 5]" || got.Renders.MinBytes != 5 || got.Renders.MaxBytes != 12 || got.Renders.TotalBytes != 17 || got.Renders.MeanBytes != 8.5 {
+		t.Fatalf("bad renders: %s", out.String())
+	}
+}
+
+func TestPaddingAndDialFailures(t *testing.T) {
+	for _, length := range []int{0, 1, 40, 4000} {
+		for _, escape := range []bool{false, true} {
+			body := paddedBody("markerZ", length, escape)
+			if !strings.HasPrefix(body, "markerZ") || len(body) != max(length, len("markerZ")) {
+				t.Fatal("padding lost marker or length")
+			}
+		}
+	}
+	for _, tc := range []struct {
+		err  error
+		want int
+	}{{syscall.EMFILE, 0}, {syscall.ENFILE, 0}, {syscall.EADDRNOTAVAIL, 1}, {syscall.EADDRINUSE, 1}, {syscall.ECONNREFUSED, 2}, {context.DeadlineExceeded, 3}, {syscall.EINVAL, 4}} {
+		if got := dialFailure(fmt.Errorf("dial: %w", tc.err)); got != tc.want {
+			t.Errorf("%v: class %d, want %d", tc.err, got, tc.want)
+		}
+	}
+}
+
+// Identical local IPs work on macOS too; the selection counter proves that
+// each concurrent dial takes exactly one slot even when peers look alike.
+func TestSourceDials(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+	c := &counts{sources: []*net.TCPAddr{{IP: net.ParseIP("127.0.0.1")}, {IP: net.ParseIP("127.0.0.1")}}}
+	tr, err := newTransport(server.URL, "", c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tr.CloseIdleConnections()
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			conn, err := tr.DialContext(t.Context(), "tcp", tr.origin.Host)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			_ = conn.Close()
+		})
+	}
+	wg.Wait()
+	if c.nextSource.Load() != 8 || c.tcp.Load() != 8 {
+		t.Fatal("lost concurrent source selections")
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if conn, err := tr.DialContext(t.Context(), "tcp", address); err == nil {
+		_ = conn.Close()
+		t.Fatal("dial to closed listener succeeded")
+	}
+	if c.dialFailures[2].Load() != 1 {
+		t.Fatal("refused dial not counted")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := tr.DialContext(ctx, "tcp", address); err == nil || c.dialFailures[2].Load() != 1 {
+		t.Fatal("cancelled dial succeeded or counted as refused")
+	}
+	for _, i := range []int{0, 1, 3, 4} {
+		if c.dialFailures[i].Load() != 0 {
+			t.Fatal("cancelled dial counted")
+		}
+	}
+	c.sources[1].IP = net.ParseIP("127.0.0.2")
+	c.nextSource.Store(0)
+	for i := range 4 {
+		conn, err := tr.DialContext(t.Context(), "tcp", tr.origin.Host)
+		if i == 1 && errors.Is(err, syscall.EADDRNOTAVAIL) {
+			t.Skip("127.0.0.2 requires a loopback alias")
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		local := conn.LocalAddr().(*net.TCPAddr).IP
+		_ = conn.Close()
+		if !local.Equal(c.sources[i%2].IP) {
+			t.Fatalf("dial %d: source %s, want %s", i, local, c.sources[i%2].IP)
 		}
 	}
 }

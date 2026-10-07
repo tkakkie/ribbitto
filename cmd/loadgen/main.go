@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,6 +38,10 @@ type fixture struct {
 const maxStreams = 100_000
 
 type counts struct {
+	sources                                                                         []*net.TCPAddr
+	nextSource                                                                      atomic.Uint64
+	dialFailures                                                                    [5]atomic.Uint64
+	renders                                                                         map[uint64]int
 	established, limited, shutdown, reset, failed, posts, postFailed, tcp, received atomic.Uint64
 	http2                                                                           atomic.Bool
 	mu                                                                              sync.Mutex
@@ -57,10 +63,88 @@ type result struct {
 	DurationSeconds, SetupLimitSeconds, DrainLimitSeconds, SetupSeconds, ObservationSeconds, DrainSeconds, AchievedRate float64
 	P50MS, P95MS, MaxMS                                                                                                 float64
 	CursorOverride, CursorValid, HTTP2, Slow, DeliveryMissing, RequestFailed                                            bool
-	Verdict                                                                                                             string
+	BodyLength                                                                                                          int
+	BodyEscape                                                                                                          bool
+	Server                                                                                                              *serverMetrics
+	Generator                                                                                                           struct {
+		NOFILESoft, NOFILEHard uint64
+		Goroutines             int
+		HeapInuseBytes         uint64
+	}
+	DialFailures struct{ TooManyOpenFiles, AddressUnavailableOrPortsExhausted, ConnectionRefused, Timeout, Other uint64 }
+	Renders      struct {
+		Count, MinBytes, MaxBytes, TotalBytes int
+		MeanBytes                             float64
+		SizesBytes                            []int
+	}
+	Verdict string
 }
 
-func (c *counts) receive(data string, seen map[*post]bool) {
+type snapshot struct {
+	Streams struct {
+		Open int64 `json:"open"`
+	} `json:"streams"`
+	Runtime struct {
+		Goroutines     int64 `json:"goroutines"`
+		HeapInuseBytes int64 `json:"heap_inuse_bytes"`
+	} `json:"runtime"`
+	Pool struct {
+		TotalConns         int64 `json:"total_conns"`
+		MaxConns           int64 `json:"max_conns"`
+		EmptyAcquireCount  int64 `json:"empty_acquire_count"`
+		EmptyAcquireWaitNS int64 `json:"empty_acquire_wait_ns"`
+	} `json:"pool"`
+	Database struct {
+		Queries           int64 `json:"queries"`
+		TransactionsBegun int64 `json:"transactions_begun"`
+	} `json:"database"`
+}
+type serverMetrics struct {
+	Before, After, Closed snapshot
+	Delta                 struct{ Queries, TransactionsBegun, EmptyAcquireCount, EmptyAcquireWaitNS int64 }
+}
+
+func readSnapshot(t transport, dst *snapshot) error {
+	client := &http.Client{Transport: t, Timeout: 5 * time.Second}
+	r, err := client.Get(t.origin.String() + "/metrics")
+	if err != nil {
+		return fmt.Errorf("reading metrics: %w", err)
+	}
+	defer func() { _ = r.Body.Close() }()
+	if r.StatusCode != http.StatusOK {
+		return fmt.Errorf("metrics HTTP status %d", r.StatusCode)
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(dst); err != nil {
+		return fmt.Errorf("decoding metrics: %w", err)
+	}
+	return nil
+}
+
+func dialFailure(err error) int {
+	var netErr net.Error
+	switch {
+	case errors.Is(err, syscall.EMFILE), errors.Is(err, syscall.ENFILE):
+		return 0
+	case errors.Is(err, syscall.EADDRNOTAVAIL), errors.Is(err, syscall.EADDRINUSE):
+		return 1
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return 2
+	case errors.As(err, &netErr) && netErr.Timeout():
+		return 3
+	default:
+		return 4
+	}
+}
+
+func paddedBody(marker string, length int, escape bool) string {
+	char := "x"
+	if escape {
+		char = "&"
+	}
+	return marker + strings.Repeat(char, max(0, length-len(marker)))
+}
+
+func (c *counts) receive(seq uint64, data string, seen map[*post]bool) {
 	arrival := time.Now()
 	markers := c.markers.FindAllString(data, -1)
 	sort.Strings(markers)
@@ -68,6 +152,14 @@ func (c *counts) receive(data string, seen map[*post]bool) {
 	defer c.mu.Unlock()
 	if c.frozen || (!c.deadline.IsZero() && arrival.After(c.deadline)) {
 		return
+	}
+	if seq > 0 {
+		if c.renders == nil {
+			c.renders = make(map[uint64]int)
+		}
+		if _, ok := c.renders[seq]; !ok {
+			c.renders[seq] = len(data)
+		}
 	}
 	for i, marker := range markers {
 		if i > 0 && marker == markers[i-1] {
@@ -133,12 +225,17 @@ func newTransport(target, ca string, c *counts) (transport, error) {
 		}
 	}
 	// Control sees each resolved IP immediately before connect, including retries.
-	dialer := &net.Dialer{Timeout: 5 * time.Second, Control: loopback}
 	t := &http.Transport{ForceAttemptHTTP2: true, TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}, TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: 10 * time.Second, IdleConnTimeout: 30 * time.Second}
 	t.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		dialer := &net.Dialer{Timeout: 5 * time.Second, Control: loopback}
+		if len(c.sources) > 0 {
+			dialer.LocalAddr = c.sources[(c.nextSource.Add(1)-1)%uint64(len(c.sources))]
+		}
 		conn, err := dialer.DialContext(ctx, network, address)
 		if err == nil {
 			c.tcp.Add(1)
+		} else if ctx.Err() == nil {
+			c.dialFailures[dialFailure(err)].Add(1)
 		}
 		return conn, err
 	}
@@ -169,10 +266,11 @@ func request(ctx context.Context, client *http.Client, method, endpoint, token, 
 
 // A reset is dispatched only at a complete SSE event with a data field.
 // Payloads are examined for this run's markers, never logged; no reconnects.
-func readReset(body io.Reader, receive func(string)) bool {
+func readReset(body io.Reader, receive func(uint64, string)) bool {
 	s := bufio.NewScanner(body)
 	s.Buffer(make([]byte, 4096), 1<<20)
 	event, data := "", false
+	var seq uint64
 	var payload strings.Builder
 	for s.Scan() {
 		line := s.Text()
@@ -181,12 +279,19 @@ func readReset(body io.Reader, receive func(string)) bool {
 				return true
 			}
 			if data && receive != nil {
-				receive(payload.String())
+				renderSeq := uint64(0)
+				if event == "message" {
+					renderSeq = seq
+				}
+				receive(renderSeq, strings.TrimSuffix(payload.String(), "\n"))
 			}
 			payload.Reset()
-			event, data = "", false
+			event, data, seq = "", false, 0
 		}
 		field, value, _ := strings.Cut(line, ":")
+		if field == "id" {
+			seq, _ = strconv.ParseUint(strings.TrimPrefix(value, " "), 10, 64)
+		}
 		if field == "event" {
 			event = strings.TrimPrefix(value, " ")
 		}
@@ -231,7 +336,7 @@ func stream(ctx context.Context, client *http.Client, endpoint, token, cursor st
 		c.established.Add(1)
 		notify()
 		seen := make(map[*post]bool)
-		if readReset(r.Body, func(data string) { c.receive(data, seen) }) {
+		if readReset(r.Body, func(seq uint64, data string) { c.receive(seq, data, seen) }) {
 			c.reset.Add(1)
 		} else if ctx.Err() == nil {
 			c.failed.Add(1)
@@ -243,6 +348,10 @@ func stream(ctx context.Context, client *http.Client, endpoint, token, cursor st
 
 func run(args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("loadgen (development only)", flag.ContinueOnError)
+	metrics := flags.String("metrics", "", "loopback HTTP metrics origin")
+	source := flags.String("source", "", "up to 64 comma-separated loopback IPv4 sources")
+	bodyLength := flags.Int("body-length", 0, "padded body length [0, 4000]; marker is never truncated")
+	bodyEscape := flags.Bool("body-escape", false, "pad with HTML-escaped characters")
 	target := flags.String("target", "http://127.0.0.1:8080", "loopback origin")
 	file := flags.String("tokens", "", "seed credential file (never printed)")
 	ca := flags.String("ca", "", "Caddy local CA PEM; required for HTTPS")
@@ -256,10 +365,29 @@ func run(args []string, out io.Writer) error {
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("invalid flags")
 	}
-	if flags.NArg() != 0 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > maxStreams || *rate < 0 || *rate > 100 || *drain <= 0 || *drain > 5*time.Minute || *setup <= 0 || *setup > 5*time.Minute || *dials < 1 || *dials > maxStreams {
-		return fmt.Errorf("duration, streams or rate outside finite limits")
+	if flags.NArg() != 0 || *bodyLength < 0 || *bodyLength > 4000 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > maxStreams || *rate < 0 || *rate > 100 || *drain <= 0 || *drain > 5*time.Minute || *setup <= 0 || *setup > 5*time.Minute || *dials < 1 || *dials > maxStreams {
+		return fmt.Errorf("flag outside finite limits")
 	}
 	c := &counts{}
+	if *source != "" {
+		for _, address := range strings.Split(*source, ",") {
+			ip := net.ParseIP(address)
+			if ip == nil || ip.To4() == nil || !ip.IsLoopback() || strings.Contains(address, ":") || len(c.sources) == 64 {
+				return fmt.Errorf("source requires at most 64 loopback IPv4 addresses")
+			}
+			c.sources = append(c.sources, &net.TCPAddr{IP: ip})
+		}
+	}
+	var mt transport
+	if *metrics != "" {
+		var err error
+		mt, err = newTransport(*metrics, "", &counts{})
+		if err != nil || mt.origin.Scheme != "http" {
+			return fmt.Errorf("metrics must be a loopback HTTP origin")
+		}
+		defer mt.CloseIdleConnections()
+		mt.origin.Path = ""
+	}
 	t, err := newTransport(*target, *ca, c)
 	if err != nil {
 		return err
@@ -282,6 +410,18 @@ func run(args []string, out io.Writer) error {
 			if token == "" || (&http.Cookie{Name: "__Host-session", Value: token}).Valid() != nil {
 				return fmt.Errorf("invalid session cookie")
 			}
+		}
+	}
+	r := result{BodyLength: *bodyLength, BodyEscape: *bodyEscape}
+	var limits syscall.Rlimit
+	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limits); err != nil {
+		return fmt.Errorf("reading file limits: %w", err)
+	}
+	r.Generator.NOFILESoft, r.Generator.NOFILEHard = limits.Cur, limits.Max
+	if *metrics != "" {
+		r.Server = &serverMetrics{}
+		if err := readSnapshot(mt, &r.Server.Before); err != nil {
+			return err
 		}
 	}
 	client := &http.Client{Transport: t}
@@ -315,7 +455,9 @@ func run(args []string, out io.Writer) error {
 	prefix := "loadgen" + rand.Text()
 	c.markers, c.deliveries = regexp.MustCompile(prefix+`[0-9]+Z`), make(map[string]*post)
 	cursorNumber, cursorErr := strconv.ParseUint(*cursor, 10, 64)
-	r := result{Cursor: cursorNumber, CursorValid: cursorErr == nil, CursorOverride: explicitCursor, StreamsAttempted: uint64(*streams), Rate: *rate, DialConcurrency: *dials, DurationSeconds: duration.Seconds(), SetupLimitSeconds: setup.Seconds(), DrainLimitSeconds: drain.Seconds()}
+	r.Cursor, r.CursorValid, r.CursorOverride = cursorNumber, cursorErr == nil, explicitCursor
+	r.StreamsAttempted, r.Rate, r.DialConcurrency = uint64(*streams), *rate, *dials
+	r.DurationSeconds, r.SetupLimitSeconds, r.DrainLimitSeconds = duration.Seconds(), setup.Seconds(), drain.Seconds()
 	start := time.Now()
 	setupCtx, stopSetup := context.WithTimeout(streamCtx, *setup)
 	defer stopSetup()
@@ -367,12 +509,13 @@ func run(args []string, out io.Writer) error {
 			defer func() { <-inflight }()
 			ctx, cancel := context.WithTimeout(streamCtx, 10*time.Second)
 			defer cancel()
+			body := paddedBody(marker, *bodyLength, *bodyEscape)
 			// Post-to-receipt latency starts here, not when the slot was
 			// scheduled, so the client's own goroutine scheduling is excluded.
 			c.mu.Lock()
 			p.sent = time.Now()
 			c.mu.Unlock()
-			response, err := request(ctx, client, http.MethodPost, endpoint, tokenAt(int(i)), marker)
+			response, err := request(ctx, client, http.MethodPost, endpoint, tokenAt(int(i)), body)
 			if err == nil {
 				if response.ProtoMajor == 2 {
 					c.http2.Store(true)
@@ -393,6 +536,10 @@ func run(args []string, out io.Writer) error {
 	}
 	time.Sleep(time.Until(start.Add(*duration)))
 	r.ObservationSeconds = time.Since(start).Seconds()
+	r.Generator.Goroutines = runtime.NumGoroutine()
+	var memory runtime.MemStats
+	runtime.ReadMemStats(&memory)
+	r.Generator.HeapInuseBytes = memory.HeapInuse
 	posts.Wait() // Finalize the answered-200 set before deciding the drain is complete.
 	start = time.Now()
 	r.Expected = c.established.Load() * c.posts.Load()
@@ -409,8 +556,44 @@ func run(args []string, out io.Writer) error {
 	c.frozen = true
 	c.mu.Unlock()
 	r.DrainSeconds = time.Since(start).Seconds()
+	if r.Server != nil {
+		if err := readSnapshot(mt, &r.Server.After); err != nil {
+			stopStreams()
+			wg.Wait()
+			return err
+		}
+		b, a, d := &r.Server.Before, &r.Server.After, &r.Server.Delta
+		d.Queries, d.TransactionsBegun = a.Database.Queries-b.Database.Queries, a.Database.TransactionsBegun-b.Database.TransactionsBegun
+		d.EmptyAcquireCount, d.EmptyAcquireWaitNS = a.Pool.EmptyAcquireCount-b.Pool.EmptyAcquireCount, a.Pool.EmptyAcquireWaitNS-b.Pool.EmptyAcquireWaitNS
+	}
 	stopStreams()
 	wg.Wait()
+	if r.Server != nil {
+		time.Sleep(100 * time.Millisecond)
+		if err := readSnapshot(mt, &r.Server.Closed); err != nil {
+			return err
+		}
+	}
+	r.DialFailures.TooManyOpenFiles, r.DialFailures.AddressUnavailableOrPortsExhausted, r.DialFailures.ConnectionRefused, r.DialFailures.Timeout, r.DialFailures.Other = c.dialFailures[0].Load(), c.dialFailures[1].Load(), c.dialFailures[2].Load(), c.dialFailures[3].Load(), c.dialFailures[4].Load()
+	sequences := make([]uint64, 0, len(c.renders))
+	for seq := range c.renders {
+		sequences = append(sequences, seq)
+	}
+	sort.Slice(sequences, func(i, j int) bool { return sequences[i] < sequences[j] })
+	r.Renders.SizesBytes = make([]int, 0, len(sequences))
+	for _, seq := range sequences {
+		size := c.renders[seq]
+		r.Renders.SizesBytes = append(r.Renders.SizesBytes, size)
+		if r.Renders.Count == 0 || size < r.Renders.MinBytes {
+			r.Renders.MinBytes = size
+		}
+		r.Renders.MaxBytes = max(r.Renders.MaxBytes, size)
+		r.Renders.TotalBytes += size
+		r.Renders.Count++
+	}
+	if r.Renders.Count > 0 {
+		r.Renders.MeanBytes = float64(r.Renders.TotalBytes) / float64(r.Renders.Count)
+	}
 	var samples []time.Duration
 	for _, p := range c.deliveries {
 		if p.answered {

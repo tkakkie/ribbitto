@@ -54,6 +54,7 @@ func TestSources(t *testing.T) {
 		{"css function", "web/styles/app.css", `.x { rotate: calc(tan(1deg) * 1turn); }`, ""},
 		{"css spaced function", "web/styles/app.css", `.x { rotate: tan (1deg); }`, ""},
 		{"css quoted", "web/styles/app.css", `.x { font-family: "Navy Sans"; }`, ""},
+		{"apply quoted", "web/styles/app.css", `.x { content: "@apply bg-[#fff]"; }`, ""},
 		{"style quoted", "sample.templ", `<p style='font-family: "Navy Sans"'>`, ""},
 		{"data attribute", "sample.templ", `<p data-style="red" data-class="bg-[#fff]">`, ""},
 		{"colour reference", "sample.templ", `<p class="text-[var(--white)]" style="color: var(--red)">`, ""},

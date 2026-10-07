@@ -253,7 +253,7 @@ func cssColours(source string, report func(string)) {
 		}
 		return value
 	})
-	for _, parameters := range apply.FindAllStringSubmatch(source, -1) {
+	for _, parameters := range apply.FindAllStringSubmatch(comments.ReplaceAllString(source, ""), -1) {
 		classColours(parameters[1], report)
 	}
 	var blocks []string

@@ -45,6 +45,11 @@ For components that use neither `ctx` nor children, add `{{ _ = ctx }}` to avoid
 SA4006 on templ's unused `ClearChildren` result, because golangci-lint ignores
 templ's `//lint:file-ignore SA4006` directive.
 
+Bodyclose requires HTTP response bodies to be closed, including in tests.
+Acceptance helpers read and close ordinary responses before returning status,
+request metadata, headers, cookies and body text; callers never own an open body.
+`make lint-fixtures` proves an unclosed response is rejected.
+
 `make check` also requires a `doc.go` in every directory under `internal/`
 that contains non-test Go files, including generated packages, as specified
 in `AGENTS.md`. Fixtures under `testdata/` are excluded.

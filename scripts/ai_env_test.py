@@ -15,6 +15,10 @@ spec = importlib.util.spec_from_file_location("ai_env", os.environ.get("AI_ENV_S
 env = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(env)
 
+def need_db(test):
+    if "RIBBITTO_TEST_DATABASE_URL" not in os.environ and os.environ.get("RIBBITTO_REQUIRE_DB") != "1":
+        test.skipTest("admin configuration unset")
+
 def allocate(root, common, live, candidate, result):
     try:
         with patch.object(env.subprocess, "check_output", return_value=live), patch.object(env, "initial_port", return_value=candidate):
@@ -25,6 +29,7 @@ def allocate(root, common, live, candidate, result):
 
 class EnvironmentTest(unittest.TestCase):
     def test_override_range_cli(self):
+        need_db(self)
         with tempfile.TemporaryDirectory(dir="bin") as scratch:
             root = Path(scratch).resolve()
             subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
@@ -47,6 +52,7 @@ class EnvironmentTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("admin URL not set", result.stderr)
         self.assertNotIn("stopped or unreachable", result.stderr)
+        need_db(self)
         with self.assertRaisesRegex(RuntimeError, "statement failed"):
             env.sql("SELECT deliberately_missing_ai_env_column")
 
@@ -126,6 +132,7 @@ class EnvironmentTest(unittest.TestCase):
                         env.configure(root, common, clean=True)
 
     def stale_case(self, listed, metadata):
+        need_db(self)
         with tempfile.TemporaryDirectory(dir="bin") as scratch:
             common = Path(scratch).resolve()
             root, stale = common / "live", common / "stale"

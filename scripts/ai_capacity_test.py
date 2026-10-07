@@ -13,6 +13,10 @@ import ai_env
 
 
 class CapacityTest(unittest.TestCase):
+    def setUp(self):
+        if "RIBBITTO_TEST_DATABASE_URL" not in os.environ and os.environ.get("RIBBITTO_REQUIRE_DB") != "1":
+            self.skipTest("admin configuration unset")
+
     def test_report_private_logs_and_descendant_cleanup(self):
         with tempfile.TemporaryDirectory(dir="bin") as scratch:
             base = Path(scratch).resolve()

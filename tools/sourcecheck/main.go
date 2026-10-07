@@ -68,7 +68,7 @@ func check(root string) ([]string, error) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		if d.IsDir() && (d.Name() == ".git" || d.Name() == "bin" || d.Name() == "node_modules" || d.Name() == "vendor" || rel == "docs" || rel == "internal/web/i18n/locales") {
+		if d.IsDir() && (d.Name() == ".git" || d.Name() == ".claude" || d.Name() == "bin" || d.Name() == "node_modules" || d.Name() == "vendor" || rel == "docs" || rel == "internal/web/i18n/locales") {
 			return filepath.SkipDir
 		}
 		if rel == "." {
@@ -107,7 +107,7 @@ func check(root string) ([]string, error) {
 						if s, ok := n.(*ast.BasicLit); ok && s.Kind == token.STRING {
 							value, _ := strconv.Unquote(s.Value)
 							for _, segment := range strings.Split(value, "/")[1:] {
-								if labels[strings.ToLower(segment)] {
+								if !strings.HasPrefix(segment, "{") && productWord(segment, labels) {
 									report("docs/domain/vocabulary.md", "product vocabulary in mux route: "+value)
 								}
 							}
@@ -134,14 +134,11 @@ func check(root string) ([]string, error) {
 			sqlVocabulary(string(data), vocabulary)
 		case ".templ":
 			for _, attr := range attributes.FindAllStringSubmatch(string(data), -1) {
-				values := []string{attr[2]}
+				reportColour := func(value string) { report("docs/ui.md", "raw colour in template: "+value) }
 				if attr[1] == "class" {
-					values = arbitrary.FindAllString(attr[2], -1)
-				}
-				for _, value := range values {
-					if rawColour(value) {
-						report("docs/ui.md", "raw colour in template: "+value)
-					}
+					classColours(attr[2], reportColour)
+				} else {
+					cssColours(attr[2], reportColour)
 				}
 			}
 		case ".css":
@@ -166,8 +163,10 @@ func productWord(name string, labels map[string]bool) bool {
 		parts.WriteRune(unicode.ToLower(r))
 	}
 	for _, part := range strings.Fields(parts.String()) {
-		if labels[part] {
-			return true
+		for label := range labels {
+			if part == label || part == label+"s" || part == label+"es" {
+				return true
+			}
 		}
 	}
 	return false
@@ -196,7 +195,7 @@ func sqlVocabulary(source string, visit func(string)) {
 	}
 }
 
-var attributes = regexp.MustCompile(`(?s)\b(class|style)\s*=\s*("[^"]*"|'[^']*'|\{.*?\})`)
+var attributes = regexp.MustCompile(`(?s)(?:^|\s)(class|style)\s*=\s*("[^"]*"|'[^']*'|\{.*?\})`)
 var arbitrary = regexp.MustCompile(`\[[^\]]*\]`)
 var comments = regexp.MustCompile(`(?s)/\*.*?\*/|"(?:\\.|[^"])*"|'(?:\\.|[^'])*'`)
 var urls = regexp.MustCompile(`(?i)url\([^)]*\)`)
@@ -207,6 +206,7 @@ var words = regexp.MustCompile(`[A-Za-z]+`)
 func rawColour(value string) bool {
 	value = urls.ReplaceAllString(value, "")
 	value = references.ReplaceAllString(value, "")
+	value = comments.ReplaceAllString(value, "")
 	if literalColour.MatchString(value) {
 		return true
 	}
@@ -222,14 +222,28 @@ func rawColour(value string) bool {
 		"papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown " +
 		"seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle " +
 		"tomato turquoise violet wheat white whitesmoke yellow yellowgreen "
-	for _, word := range words.FindAllString(value, -1) {
-		if strings.Contains(named, " "+strings.ToLower(word)+" ") {
+	for _, loc := range words.FindAllStringIndex(value, -1) {
+		word := value[loc[0]:loc[1]]
+		if !strings.HasPrefix(strings.TrimSpace(value[loc[1]:]), "(") && strings.Contains(named, " "+strings.ToLower(word)+" ") {
 			return true
 		}
 	}
 	return false
 }
 
+func classColours(source string, report func(string)) {
+	for _, value := range arbitrary.FindAllString(source, -1) {
+		value = value[1 : len(value)-1]
+		if _, suffix, ok := strings.Cut(value, ":"); ok {
+			value = suffix
+		}
+		if rawColour(value) {
+			report(value)
+		}
+	}
+}
+
+var apply = regexp.MustCompile(`@apply\s+([^;{}]+)`)
 var declarations = regexp.MustCompile(`([{}])|([\w-]+)\s*:\s*([^;{}]+);?`)
 
 func cssColours(source string, report func(string)) {
@@ -239,6 +253,9 @@ func cssColours(source string, report func(string)) {
 		}
 		return value
 	})
+	for _, parameters := range apply.FindAllStringSubmatch(source, -1) {
+		classColours(parameters[1], report)
+	}
 	var blocks []string
 	last := 0
 	for _, loc := range declarations.FindAllStringSubmatchIndex(source, -1) {

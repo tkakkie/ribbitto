@@ -26,7 +26,6 @@ content are emitted. `underloaded` takes precedence for missed/unsent posts;
 otherwise `fail` means p95 >1s, missing delivery or any request/stream failure
 (including 429, 503 and reset); otherwise `pass`. Idle steps fail only on streams.
 Established includes later failures; TCP connections count successful dials.
-The detailed output reference and stopping shell loop belong to #216's run.
 
 `-metrics` accepts a loopback HTTP origin for [development metrics](dev-metrics.md).
 `Server.Before` is read before setup (including the page request), `Server.After`
@@ -57,3 +56,22 @@ marker; `-body-escape` pads with `&` instead of `x`. Both are recorded.
 `TotalBytes`. Sizes exclude SSE framing. All streams use
 one channel and the default language (no language header/cookie), so sequence
 identifies the [observed render](load-testing.md#what-the-runs-record-for-these).
+
+## A ceiling search
+
+Run one step per invocation and stop at the first step that does not pass
+([results](load-results.md)):
+
+```sh
+for n in 500 1000 2000 3000 5000 7000 10000; do
+  go run ./cmd/loadgen -tokens /tmp/loadtest.json -metrics http://127.0.0.1:9090 \
+    -streams "$n" -rate 10 -duration 30s -setup 5m -drain 60s > "step-$n.json" || break
+  jq -e '.Verdict == "pass"' "step-$n.json" > /dev/null || break
+done
+```
+
+Each JSON object names its verdict's reasons: `Slow` (p95 over 1 s),
+`DeliveryMissing` and `RequestFailed`. The counts behind them are `Missed`,
+`Sent` against `Scheduled`, `Missing`, and `Refused429`, `Refused503`,
+`Reset`, `Failed` and `PostFailed`. Latencies are `P50MS`, `P95MS` and
+`MaxMS`, and `Server.Delta` holds the step's database and pool costs.

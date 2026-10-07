@@ -123,10 +123,11 @@ generated files.
 parser checks each owned table's own WHERE scope in SELECT, UPDATE and
 DELETE, including CTE bodies. INSERT statements are excluded. Ownership comes
 from migration columns, except installation-wide `setup`; `organization`
-uses `id`. Joins do not carry scope. Outer joins, CTE result reads, derived
-tables and set operations are unsupported. Named exemptions with reasons live
-in `tools/scopecheck/allowlist.txt`; stale entries fail. The parser requires
-cgo and a C compiler (Xcode command-line tools locally, GCC on CI's Ubuntu).
+uses `id`. Joins do not carry scope. CTE result reads need no scope; their
+bodies are checked independently. Outer joins, derived tables and set operations
+are unsupported. Module-qualified exemptions with reasons live in
+`tools/scopecheck/allowlist.txt`; stale or unnecessary entries fail. The parser
+requires cgo and a C compiler (Xcode command-line tools locally, GCC on CI's Ubuntu).
 
 ## Development seed data
 

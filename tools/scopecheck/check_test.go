@@ -96,15 +96,19 @@ func check(sql string, tables map[string]string) error {
 	if err != nil {
 		return err
 	}
-	return walk(tree, func(kind string, s map[string]any) error {
+	ctes := map[string]bool{}
+	if err := walk(tree, func(kind string, s map[string]any) error {
 		if kind == "CommonTableExpr" {
+			ctes[fmt.Sprint(s["ctename"])] = true
 			if _, shadows := tables[fmt.Sprint(s["ctename"])]; shadows {
 				return fmt.Errorf("unsupported shape: CTE shadows table")
 			}
 		}
-		if kind == "WithClause" && s["recursive"] == true {
-			return fmt.Errorf("unsupported shape: recursive CTE")
-		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return walk(tree, func(kind string, s map[string]any) error {
 		if !strings.HasSuffix(kind, "Stmt") || kind[0] < 'A' || kind[0] > 'Z' {
 			return nil
 		}
@@ -139,8 +143,9 @@ func check(sql string, tables map[string]string) error {
 			r := node(v, "RangeVar")
 			table, _ := r["relname"].(string)
 			column, known := tables[table]
+			known = known || ctes[table]
 			if !known || r["schemaname"] != nil || r["catalogname"] != nil {
-				return fmt.Errorf("unsupported shape: relation %q (including CTE result reads)", table)
+				return fmt.Errorf("unsupported shape: relation %q", table)
 			}
 			alias := table
 			if a := object(r["alias"]); a != nil {
@@ -185,20 +190,17 @@ func read(t *testing.T, path string) string {
 // The migration schema is the single source for owned tables: an
 // organization_id column means organisation ownership. organization uses
 // its primary key instead; setup is installation-wide despite its FK.
-func schema(t *testing.T) map[string]string {
-	t.Helper()
+func schema(migrations []string) (map[string]string, error) {
 	tables := map[string]string{}
-	paths, err := filepath.Glob("../../db/migrations/*.sql")
-	if err != nil || len(paths) == 0 {
-		t.Fatalf("reading schema: %v", err)
-	}
-	for _, path := range paths {
-		tree, err := parse(strings.Split(read(t, path), "-- +goose Down")[0])
+	for _, migration := range migrations {
+		tree, err := parse(strings.Split(migration, "-- +goose Down")[0])
 		if err != nil {
-			t.Fatal(err)
+			return nil, err
 		}
 		err = walk(tree, func(kind string, s map[string]any) error {
-			if kind == "RenameStmt" || kind == "DropStmt" || kind == "TableLikeClause" || s["inhRelations"] != nil || s["ofTypename"] != nil {
+			if kind == "RenameStmt" && (s["renameType"] == "OBJECT_TABLE" || s["renameType"] == "OBJECT_COLUMN") ||
+				kind == "DropStmt" && s["removeType"] == "OBJECT_TABLE" ||
+				kind == "TableLikeClause" || s["inhRelations"] != nil || s["ofTypename"] != nil {
 				return fmt.Errorf("unsupported schema shape: %s", kind)
 			}
 			if kind == "AlterTableCmd" && (strings.Contains(fmt.Sprint(s["subtype"]), "Inherit") || strings.HasSuffix(fmt.Sprint(s["subtype"]), "Of")) {
@@ -222,22 +224,28 @@ func schema(t *testing.T) map[string]string {
 			})
 		})
 		if err != nil {
-			t.Fatal(err)
+			return nil, err
 		}
 	}
 	tables["organization"], tables["setup"] = "id", ""
-	return tables
+	return tables, nil
 }
 
-func exemptions(text string, queries map[string]string) (map[string]string, error) {
+func exemptions(text string, queries, tables map[string]string) (map[string]string, error) {
 	allow := map[string]string{}
 	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
 		name, reason, ok := strings.Cut(line, " ")
 		if !ok || strings.TrimSpace(reason) == "" || allow[name] != "" {
 			return nil, fmt.Errorf("invalid allowlist entry: %q", line)
 		}
 		if _, exists := queries[name]; !exists {
 			return nil, fmt.Errorf("stale allowlist entry: %s", name)
+		}
+		if check(queries[name], tables) == nil {
+			return nil, fmt.Errorf("unnecessary allowlist entry: %s", name)
 		}
 		allow[name] = reason
 	}
@@ -264,7 +272,7 @@ func TestProductionQueries(t *testing.T) {
 			return fmt.Errorf("unnamed SQL in %s: %v", path, err)
 		}
 		for i, match := range matches {
-			name, end := sql[match[2]:match[3]], len(sql)
+			name, end := filepath.Base(filepath.Dir(path))+"."+sql[match[2]:match[3]], len(sql)
 			if i+1 < len(matches) {
 				end = matches[i+1][0]
 			}
@@ -278,11 +286,27 @@ func TestProductionQueries(t *testing.T) {
 	if err != nil || len(queries) == 0 {
 		t.Fatalf("reading queries: %v", err)
 	}
-	allow, err := exemptions(read(t, "allowlist.txt"), queries)
+	paths, err := filepath.Glob("../../db/migrations/*.sql")
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("reading schema: %v", err)
+	}
+	var migrations []string
+	for _, path := range paths {
+		migrations = append(migrations, read(t, path))
+	}
+	tables, err := schema(migrations)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tables := schema(t)
+	for table, want := range map[string]string{"member": "organization_id", "event_log": "organization_id", "organization": "id"} {
+		if tables[table] != want {
+			t.Fatalf("%s scope: want %q, got %q", table, want, tables[table])
+		}
+	}
+	allow, err := exemptions(read(t, "allowlist.txt"), queries, tables)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for name, sql := range queries {
 		t.Run(name, func(t *testing.T) {
 			// Even exempt queries must parse; an exemption waives scope/shape only.

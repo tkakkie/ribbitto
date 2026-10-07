@@ -481,14 +481,16 @@ func sendPost(ctx context.Context, client *http.Client, endpoint, token, body st
 			if response.ProtoMajor == 2 {
 				c.http2.Store(true)
 			}
-			_, err = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
+			// A received status is final even if draining the body fails.
+			_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
 			_ = response.Body.Close()
 		}
 		cancel()
-		if err == nil && status == http.StatusOK {
+		if status == http.StatusOK {
 			return true
 		}
-		if i+1 == attempts || (err == nil && status < 500) || !waitRetry(ctx, model.Delay, 0) {
+		retry := status == 0 || (status >= 500 && status < 600)
+		if i+1 == attempts || !retry || !waitRetry(ctx, model.Delay, 0) {
 			return false
 		}
 	}

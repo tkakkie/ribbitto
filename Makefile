@@ -64,6 +64,8 @@ $(TAILWIND):
 # formatter's stdout; the working tree is never rewritten. The exit status is
 # checked on its own: on a parse error the formatter prints nothing, which
 # would match an empty file.
+# Tools tests read db/queries, db/migrations and module_imports_test.go outside
+# their module, which Go's test cache does not track; always run them uncached.
 check: $(TEMPL)
 	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
 	if [ -n "$$unformatted" ]; then \
@@ -101,7 +103,7 @@ check: $(TEMPL)
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
 	go -C tools vet ./...
-	go -C tools test -race ./...
+	go -C tools test -race -count=1 ./...
 	go -C tools run ./docscheck ..
 	go -C tools run ./sourcecheck ..
 	bash scripts/ai/launcher-tests_test.sh

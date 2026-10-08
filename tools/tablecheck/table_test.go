@@ -78,6 +78,9 @@ func ownership(source string) (map[string]string, map[string]bool, error) {
 						return nil, nil, err
 					}
 					if key.Name == "root" {
+						if !strings.HasPrefix(s, "internal/") {
+							return nil, nil, fmt.Errorf("module root must start with internal/")
+						}
 						name = strings.TrimPrefix(s, "internal/")
 					} else {
 						tables = append(tables, s)
@@ -189,7 +192,24 @@ func checkSQL(sql, module, query string, owners map[string]string, allow map[exe
 								return err
 							}
 						}
-					case "ResTarget", "ColumnRef", "A_Star", "A_Const", "String", "Integer", "ParamRef", "A_Expr", "BoolExpr", "NullTest", "SubLink", "RangeSubselect", "JoinExpr", "Alias", "FuncCall", "TypeCast", "TypeName", "SortBy", "List", "CoalesceExpr", "MinMaxExpr", "OnConflictClause", "InferClause", "IndexElem", "LockingClause":
+					case "FuncCall":
+						parts := []string{}
+						for _, part := range n["funcname"].([]any) {
+							parts = append(parts, part.(map[string]any)["String"].(map[string]any)["sval"].(string))
+						}
+						name := strings.Join(parts, ".")
+						// Function bodies can hide reads and writes from this walker.
+						switch {
+						case len(parts) == 2 && parts[0] == "sqlc" && (parts[1] == "arg" || parts[1] == "narg"):
+						case len(parts) == 1 && (name == "count" || name == "max" || name == "lower"):
+						default:
+							return fmt.Errorf("unsupported function %s", name)
+						}
+					case "LockingClause":
+						if n["lockedRels"] != nil {
+							return fmt.Errorf("unsupported FOR UPDATE OF (relation or alias)")
+						}
+					case "ResTarget", "ColumnRef", "A_Star", "A_Const", "String", "Integer", "ParamRef", "A_Expr", "BoolExpr", "NullTest", "SubLink", "RangeSubselect", "JoinExpr", "Alias", "TypeCast", "TypeName", "SortBy", "List", "CoalesceExpr", "MinMaxExpr", "OnConflictClause", "InferClause", "IndexElem":
 					default:
 						return fmt.Errorf("unsupported SQL node %s", tag)
 					}
@@ -205,11 +225,13 @@ func checkSQL(sql, module, query string, owners map[string]string, allow map[exe
 }
 
 func checkExemptions(allow map[exemption]bool, stale bool) error {
-	pending := regexp.MustCompile(`(?i)^pending[^a-z0-9]+maintainer(?:[^a-z0-9]|$)`)
+	pending := regexp.MustCompile(`(?i)pending[^a-z0-9]+maintainer(?:[^a-z0-9]|$)`)
+	maintainer := regexp.MustCompile(`(?i)maintainer`)
+	provenance := regexp.MustCompile(`#[0-9]+|https://github\.com/[^/\s]+/[^/\s]+/pull/[0-9]+#(?:discussion_r|issuecomment-)[0-9]+|(?i:decision)[^a-zA-Z0-9]+[0-9]+`)
 	seen := map[string]bool{}
 	for e, used := range allow {
 		key := e.query + "/" + e.table
-		if e.query == "" || e.table == "" || strings.TrimSpace(e.reason) == "" || pending.MatchString(strings.TrimSpace(e.reason)) || seen[key] || stale && !used {
+		if e.query == "" || e.table == "" || strings.TrimSpace(e.reason) == "" || pending.MatchString(strings.TrimSpace(e.reason)) || maintainer.MatchString(e.reason) && !provenance.MatchString(e.reason) || seen[key] || stale && !used {
 			return fmt.Errorf("invalid, pending or stale read exemption: %s", key)
 		}
 		seen[key] = true
@@ -231,8 +253,21 @@ func TestProductionOwnership(t *testing.T) {
 	if err := checkExemptions(allow, false); err != nil {
 		t.Fatal(err)
 	}
-	annotation := regexp.MustCompile(`(?m)^-- name: (\w+) :\w+`)
-	seenQueries := map[string]bool{}
+	paths, err := filepath.Glob("../../db/migrations/*.sql")
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("migration files: %v", err)
+	}
+	migrations := []string{}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		migrations = append(migrations, string(data))
+	}
+	if err := checkMigrations(migrations, owners); err != nil {
+		t.Fatal(err)
+	}
 	err = filepath.WalkDir("../../db/queries", func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -252,29 +287,7 @@ func TestProductionOwnership(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		matches := annotation.FindAllSubmatchIndex(data, -1)
-		if len(matches) == 0 {
-			return fmt.Errorf("%s: no named queries", path)
-		}
-		prefix, err := pgquery.ParseToJSON(string(data[:matches[0][0]]))
-		if err != nil || strings.Contains(prefix, `"stmt"`) {
-			return fmt.Errorf("%s: SQL before first query", path)
-		}
-		for i, match := range matches {
-			end := len(data)
-			if i+1 < len(matches) {
-				end = matches[i+1][0]
-			}
-			query := filepath.ToSlash(rel) + ":" + string(data[match[2]:match[3]])
-			if seenQueries[query] {
-				return fmt.Errorf("duplicate query %s", query)
-			}
-			seenQueries[query] = true
-			if err := checkSQL(string(data[match[0]:end]), module, query, owners, allow); err != nil {
-				return fmt.Errorf("%s: %w", query, err)
-			}
-		}
-		return nil
+		return checkQueries(string(data), filepath.ToSlash(rel), module, owners, allow)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -282,4 +295,71 @@ func TestProductionOwnership(t *testing.T) {
 	if err := checkExemptions(allow, true); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func checkQueries(sql, file, module string, owners map[string]string, allow map[exemption]bool) error {
+	annotation := regexp.MustCompile(`(?m)^-- name: (\w+) :\w+`)
+	matches := annotation.FindAllStringSubmatchIndex(sql, -1)
+	if len(matches) == 0 {
+		return fmt.Errorf("%s: no named queries", file)
+	}
+	prefix, err := pgquery.ParseToJSON(sql[:matches[0][0]])
+	if err != nil || strings.Contains(prefix, `"stmt"`) {
+		return fmt.Errorf("%s: SQL before first query", file)
+	}
+	seen := map[string]bool{}
+	for i, match := range matches {
+		end := len(sql)
+		if i+1 < len(matches) {
+			end = matches[i+1][0]
+		}
+		query := file + ":" + sql[match[2]:match[3]]
+		if seen[query] {
+			return fmt.Errorf("duplicate query %s", query)
+		}
+		seen[query] = true
+		if err := checkSQL(sql[match[0]:end], module, query, owners, allow); err != nil {
+			return fmt.Errorf("%s: %w", query, err)
+		}
+	}
+	return nil
+}
+
+func checkMigrations(migrations []string, owners map[string]string) error {
+	tables := map[string]bool{}
+	for _, sql := range migrations {
+		_, up, ok := strings.Cut(sql, "-- +goose Up")
+		if !ok {
+			return fmt.Errorf("missing migration Up section")
+		}
+		up, _, _ = strings.Cut(up, "-- +goose Down")
+		tree, err := pgquery.Parse(up)
+		if err != nil {
+			return err
+		}
+		for _, raw := range tree.Stmts {
+			n := raw.Stmt
+			if n.GetDropStmt().GetRemoveType() == pgquery.ObjectType_OBJECT_TABLE || n.GetRenameStmt().GetRenameType() == pgquery.ObjectType_OBJECT_TABLE || n.GetCreateTableAsStmt() != nil {
+				return fmt.Errorf("unsupported migration table drop, rename or CREATE AS")
+			}
+			if create := n.GetCreateStmt(); create != nil {
+				r := create.Relation
+				if r.Schemaname != "" || r.Catalogname != "" || tables[r.Relname] {
+					return fmt.Errorf("unsupported qualified or duplicate migration table %s", r.Relname)
+				}
+				tables[r.Relname] = true
+			}
+		}
+	}
+	for table := range tables {
+		if owners[table] == "" {
+			return fmt.Errorf("migration table has no owner: %s", table)
+		}
+	}
+	for table := range owners {
+		if !tables[table] {
+			return fmt.Errorf("owned table not created by migrations: %s", table)
+		}
+	}
+	return nil
 }

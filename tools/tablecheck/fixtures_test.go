@@ -6,7 +6,7 @@ import (
 )
 
 func TestOwnershipFixtures(t *testing.T) {
-	owners := map[string]string{"message": "conversation", "account": "identity"}
+	owners := map[string]string{"message": "conversation", "account": "identity", "organization": "org"}
 	for _, tt := range []struct{ name, sql, reason, want string }{
 		{"owned insert", "INSERT INTO message VALUES (1)", "", ""},
 		{"owned update", "UPDATE message SET id=1", "", ""},
@@ -30,6 +30,17 @@ func TestOwnershipFixtures(t *testing.T) {
 		{"select into", "SELECT * INTO account FROM message", "", "unsupported SELECT INTO"},
 		{"recursive", "WITH RECURSIVE x AS (SELECT 1) SELECT * FROM x", "", "unsupported recursive"},
 		{"qualified", "SELECT * FROM other.message", "", "unsupported qualified"},
+		{"several statements", "SELECT 1; DELETE FROM account", "", "expected one statement"},
+		{"qualified write", "UPDATE other.message SET id=1", "", "unsupported qualified write"},
+		{"function writer", "SELECT my_writer()", "", "unsupported function"},
+		{"function SQL", "SELECT query_to_xml('select * from account', true, false, '')", "", "unsupported function"},
+		{"function sequence", "SELECT nextval('account_id_seq')", "", "unsupported function"},
+		{"qualified function", "SELECT public.lower('x')", "", "unsupported function"},
+		{"quoted dotted function", `SELECT "sqlc.arg"()`, "", "unsupported function"},
+		{"allowed functions", "SELECT sqlc.arg(id), sqlc.narg(id), count(*), max(id), lower(body) FROM message", "", ""},
+		{"locking", "SELECT * FROM message FOR UPDATE", "", ""},
+		{"locking alias", "SELECT * FROM message m FOR UPDATE OF m", "", "unsupported FOR UPDATE OF"},
+		{"exemption table scope", "SELECT * FROM organization", "Reviewed read", "foreign table organization"},
 		{"stale", "SELECT * FROM message", "Reviewed read", "stale"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -49,10 +60,26 @@ func TestOwnershipFixtures(t *testing.T) {
 }
 
 func TestExemptionReasons(t *testing.T) {
-	for _, reason := range []string{"", " ", "PENDING MAINTAINER: read", "pending_maintainer", " Pending--MAINTAINER: read", "pending/maintainer: read"} {
+	for _, reason := range []string{"", " ", "PENDING MAINTAINER: read", "pending_maintainer", " Pending--MAINTAINER: read", "pending/maintainer: read", "Reviewed read; PENDING MAINTAINER: confirm #637", "Maintainer approved"} {
 		if err := checkExemptions(map[exemption]bool{{"Q", "account", reason}: true}, false); err == nil {
 			t.Fatalf("accepted %q", reason)
 		}
+	}
+	for _, reason := range []string{"Reviewed read", "Maintainer approved #637", "Maintainer approved decision 26", "Maintainer approved https://github.com/tkakkie/ribbitto/pull/658#discussion_r123"} {
+		if err := checkExemptions(map[exemption]bool{{"Q", "account", reason}: true}, false); err != nil {
+			t.Fatalf("rejected %q: %v", reason, err)
+		}
+	}
+	if err := checkExemptions(map[exemption]bool{{"Q", "account", "First reason"}: true, {"Q", "account", "Second reason"}: true}, false); err == nil {
+		t.Fatal("accepted duplicate exemption")
+	}
+}
+
+func TestExemptionQueryScope(t *testing.T) {
+	allow := map[exemption]bool{{"Q", "account", "Reviewed read"}: false}
+	err := checkSQL("SELECT * FROM account", "conversation", "R", map[string]string{"account": "identity"}, allow)
+	if err == nil || !strings.Contains(err.Error(), "foreign table account") {
+		t.Fatalf("exemption leaked to another query: %v", err)
 	}
 }
 
@@ -68,9 +95,45 @@ func TestManifestFixtures(t *testing.T) {
 		strings.ReplaceAll(literal, `[]string{"account"}`, "tables()"),
 		strings.ReplaceAll(literal, "return []module", "sideEffect(); return []module"),
 		strings.ReplaceAll(literal, `"internal/identity"`, "root()"),
+		strings.ReplaceAll(literal, `root: "internal/identity",`, ""),
+		strings.ReplaceAll(literal, `"internal/identity"`, `"identity"`),
+		strings.ReplaceAll(literal, `"internal/identity"`, `"internal/nested/identity"`),
+		strings.ReplaceAll(literal, `[]module{{`, `[]module{{root: "internal/identity", ownsTables: []string{}}, {`),
 	} {
 		if _, _, err := ownership(source); err == nil {
 			t.Fatalf("accepted manifest: %s", source)
+		}
+	}
+}
+
+func TestQueryFixtures(t *testing.T) {
+	for _, tt := range []struct{ sql, want string }{
+		{"SELECT 1", "no named queries"},
+		{"-- name: Q :one\nSELECT 1;\n-- name: Q :one\nSELECT 2;", "duplicate query"},
+		{"SELECT 1;\n-- name: Q :one\nSELECT 2;", "SQL before first query"},
+		{"-- name: Q :one\nSELECT 1;\n-- name: R :one\nSELECT 2;", ""},
+	} {
+		err := checkQueries(tt.sql, "conversation/test.sql", "conversation", nil, nil)
+		if tt.want == "" && err != nil || tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)) {
+			t.Fatalf("got %v, want %q", err, tt.want)
+		}
+	}
+}
+
+func TestMigrationFixtures(t *testing.T) {
+	for _, tt := range []struct{ sql, want string }{
+		{"CREATE TABLE account(id int);", ""},
+		{"CREATE TABLE account(id int); CREATE TABLE orphan(id int);", "migration table has no owner"},
+		{"SELECT 1;", "owned table not created"},
+		{"ALTER TABLE account RENAME TO renamed;", "unsupported migration table"},
+		{"DROP TABLE account;", "unsupported migration table"},
+		{"CREATE TABLE account AS SELECT 1;", "unsupported migration table"},
+		{"CREATE TABLE public.account(id int);", "unsupported qualified"},
+		{"CREATE TABLE account(id int); CREATE TABLE account(id int);", "duplicate migration table"},
+	} {
+		err := checkMigrations([]string{"-- +goose Up\n" + tt.sql + "\n-- +goose Down\nDROP TABLE account;"}, map[string]string{"account": "identity"})
+		if tt.want == "" && err != nil || tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)) {
+			t.Fatalf("got %v, want %q", err, tt.want)
 		}
 	}
 }

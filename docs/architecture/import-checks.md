@@ -38,8 +38,13 @@ This file, the manifest and `.golangci.yml` must agree; change them together.
 
 The tools-module test [`tablecheck`](../../tools/tablecheck/table_test.go) reads
 the manifest's literal `ownsTables` and parses SQL with PostgreSQL's parser.
+It requires every migration-created table to have exactly one owner and every
+owned table to exist in the migrations' Up sections; table drops and renames fail.
 It rejects foreign writes, unapproved foreign reads, unknown tables, unsupported
 SQL/manifest shapes and stale read exemptions, including inside CTEs and subqueries.
+Only the query functions `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower` are
+accepted: other function bodies can hide table access. Tools tests run uncached
+because Go does not track these inputs outside the tools module.
 
 Staticcheck also runs on generated code, including templ output; the
 `_templ.go` exclusions apply only to errcheck and revive. `make lint-fixtures`

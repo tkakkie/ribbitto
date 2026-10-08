@@ -62,10 +62,39 @@ get one adversarial review).
     runs, wherever it lives: a test or an assertion, `Makefile`, `tools/**`,
     or a linter, vet or code-generation setting (`.golangci.yml`,
     `sqlc.yaml`).
+  - a change wholly in isolated development tooling that A's first item
+    would otherwise cover (*Isolated development tooling*, below).
 - **C — none:** everything that matches no A or B case: tests outside A's
   and B's areas that weaken no check, comments and documentation outside
   the gate documents, lint rules that only tighten, dependency bumps, and
   ordinary feature work outside A and B.
+
+**Isolated development tooling.** A change that would be tier A only by
+A's first item (concurrency, caches or background work, real-time delivery,
+ordered transactions) is tier B when it lies wholly in demonstrably isolated
+development tooling. Such tooling is a command or script that runs only when
+a developer invokes it: never in production, in deployment, in migrations or
+in a CI job (its own tests in `make check` aside), and no production or CI
+code imports or invokes it. A defect there skews a measurement on a
+developer's machine; it cannot leak data or lose events in production. Each
+qualifying path is listed here with its evidence:
+
+- `cmd/loadgen`, the load generator. It imports no other ribbitto package
+  (`go list -deps ./cmd/loadgen`), and nothing imports it. No `Makefile`
+  target, CI job, deployment file or migration runs it; `make check` runs
+  only its own tests.
+
+`scripts/deps.sh` is not listed: CI's `ci` job and `make check` run it.
+The exception changes nothing else:
+
+- production commands, migrations, deployment tooling and shared code are
+  classified by behaviour, wherever they live;
+- code that a tool imports is classified by its own area;
+- A's second item (the gate files, `scripts/ai/**`, `.github/**`) applies
+  to a tool's change as to any other;
+- tests that guard A's areas stay tier B;
+- a change that removes, skips or loosens a check `make check` or CI runs
+  stays at least tier B, in a listed tool too.
 
 The template's *Adversarial* field names the review: `Grok`,
 `Muse Code (B)`,

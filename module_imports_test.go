@@ -154,7 +154,8 @@ func TestModuleImports(t *testing.T) {
 	}
 	seenFiles, seenPaths := map[string]bool{}, map[string]bool{}
 	for _, pkg := range pkgs {
-		if pkg.Name == "main" && strings.HasSuffix(pkg.PkgPath, ".test") && len(pkg.GoFiles) == 1 && !strings.HasSuffix(pkg.GoFiles[0], ".go") { // Cached test main.
+		// Test mains hold only generated code; every real source file is checked in its own package.
+		if pkg.Name == "main" && strings.HasSuffix(pkg.PkgPath, ".test") {
 			continue
 		}
 		for _, source := range pkg.Syntax {

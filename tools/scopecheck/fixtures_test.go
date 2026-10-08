@@ -66,6 +66,7 @@ func TestMutations(t *testing.T) {
 		{"insert_SELECT_CTE_derived", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO member (organization_id) SELECT organization_id FROM (SELECT * FROM d) x", "unsupported shape"},
 		{"insert_SELECT_CTE_function", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO member (organization_id) SELECT d.organization_id FROM d, generate_series(1, 2)", "unsupported shape"},
 		{"insert_SELECT_CTE_only_join", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO member (organization_id) SELECT a.organization_id FROM d a JOIN d b ON true", "unsupported shape"},
+		{"insert_SELECT_CTE_comma_join", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO member (organization_id) SELECT a.organization_id FROM d a, d b", "unsupported shape"},
 		{"insert_SELECT_CTE_unscoped", "WITH d AS (SELECT * FROM member) INSERT INTO member (organization_id) SELECT organization_id FROM d", "missing scope"},
 		{"insert_SELECT_other_statement_CTE", "WITH d AS (SELECT $1 AS organization_id) SELECT * FROM d; INSERT INTO member (organization_id) SELECT organization_id FROM d", "unsupported shape"},
 		{"insert_SELECT_CTE_conflict_update", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO member (organization_id) SELECT organization_id FROM d ON CONFLICT (id) DO UPDATE SET organization_id = $1", "unsupported shape"},

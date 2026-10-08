@@ -133,8 +133,9 @@ columns, with `organization` scoped by `id` and an explicit installation-wide
 list; unknown ownership, scoped list entries (except singleton `setup`) and stale
 entries fail. Plain INSERT VALUES and INSERT SELECT reading only same-statement
 CTEs pass; subqueries in VALUES, RETURNING or that SELECT are unsupported.
-Joins in that SELECT, physical-table INSERT SELECT reads, ON CONFLICT and other
-INSERT shapes are unsupported; full INSERT checking belongs in a follow-up issue.
+Joins, including comma joins, in that SELECT, physical-table INSERT SELECT reads,
+ON CONFLICT and other INSERT shapes are unsupported; full INSERT checking belongs
+in a follow-up issue.
 CTE reads need no scope; outer joins, derived tables and set operations fail.
 `tools/scopecheck/allowlist.txt` requires reasons; stale, unnecessary and
 `PENDING MAINTAINER:` entries fail. Reasons mentioning "maintainer" must cite

@@ -220,7 +220,11 @@ func insertCTESelect(s map[string]any, ctes map[string]bool) error {
 	if s == nil || s["op"] != "SETOP_NONE" || s["valuesLists"] != nil || s["intoClause"] != nil || s["withClause"] != nil {
 		return fmt.Errorf("unsupported shape: INSERT SELECT")
 	}
-	for _, ref := range list(s["fromClause"]) {
+	fromClause := list(s["fromClause"])
+	if len(fromClause) > 1 {
+		return fmt.Errorf("unsupported shape: INSERT SELECT join")
+	}
+	for _, ref := range fromClause {
 		r := node(ref, "RangeVar")
 		table, _ := r["relname"].(string)
 		if !ctes[table] || r["schemaname"] != nil || r["catalogname"] != nil {

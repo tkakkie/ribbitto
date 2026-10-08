@@ -111,8 +111,9 @@ to 2,000 streams**. Distinct members change nothing, so the sharing is per
 organisation, not per member. The cache stores only full event batches: a
 short batch, such as the one holding a new post, is never stored, and the
 streams that joined a read in flight get a second read started after it
-finished, so none gets a snapshot older than its own call; a stream that
-reads later repeats it.
+finished, so none gets an unkept snapshot older than its own call; shutdown
+returns the parent's cancellation cause if it prevents that second read.
+A stream that reads later repeats it.
 In this run the remaining per-stream query was the membership check; beyond about
 2,000 streams on this machine it saturates the pool.
 

@@ -8,6 +8,7 @@ type Bounds interface // Bounds reads an organisation's cursor bounds, which org
 type BoundsIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) Bounds // BoundsIn binds Bounds to the reader's snapshot, so a batch's bounds and rows describe one moment.
 type Cache[K comparable, V any] struct // Cache is a bounded, expiring in-memory cache shared by an organisation's streams.
   func (*Cache[K, V]).Get(ctx context.Context, key K, load func(context.Context) (V, error)) (V, error) // Get returns the value for key, loading it with load on a miss or after the entry expired.
+  func (*Cache[K, V]).Len() int // Len reports how many entries the cache holds, including expired entries, so tests of its users can observe retention after shutdown.
   func (*Cache[K, V]).Waiting(key K) int // Waiting reports how many callers have joined the load in flight for key (0 if none), so tests can synchronise on it instead of sleeping.
 type CachedEvents struct // CachedEvents is an EventReader that shares reads between an organisation's streams: streams at the same cursor share a full batch's read; for a short one, the read's joiners share one more private read.
   func (*CachedEvents).EventsAfter(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, after int64, limit int) ([]Event, error) // EventsAfter implements EventReader.

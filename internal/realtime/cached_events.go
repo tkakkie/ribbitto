@@ -20,7 +20,8 @@ import (
 // same reason, a stream that joins a read already in flight never gets
 // that read's short batch, whose snapshot may predate the stream's own
 // call: the streams that joined share a second read, started after the
-// first finished (see NewCache). Short batches are therefore still shared,
+// first finished, or get the parent's cancellation cause at shutdown
+// (see NewCache). Short batches are therefore still shared,
 // at the cost of one more read per batch: every stream wakes on the same
 // Raise, which is the steady-state case.
 //

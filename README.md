@@ -83,7 +83,8 @@ Chromium does for both `localhost` and `127.0.0.1` (checked when the cookie
 was added). If your browser drops the cookie, use a Chromium-based browser
 for local development or serve through HTTPS. Use `ribbitto migrate up|down|status` with a built binary; `down`
 reverts one migration. See [database development](docs/database.md) for
-configuration, migration ownership and integration tests.
+configuration and migration ownership, and [database tests](docs/database-tests.md)
+for integration tests.
 
 `make dev` builds CSS before starting the server. It runs the pinned templ
 and Tailwind watchers together, restarting Go when templates or Go source
@@ -164,7 +165,7 @@ cursor above the restored log gets `reset` and reloads the page
 - [UI](docs/ui.md) — design direction, tokens, contrast; [markup and accessibility](docs/accessibility.md)
 - [Decisions](DECISIONS.md) — what was decided and why
 - [Worktree environments](docs/worktree-env.md) — dev databases, port allocation, health checks and cleanup
-- [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow/README.md) · [Database development](docs/database.md)
+- [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow/README.md) · [Database development](docs/database.md) · [Database tests](docs/database-tests.md)
 
 ## Contributing
 

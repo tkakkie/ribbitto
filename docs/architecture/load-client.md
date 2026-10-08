@@ -82,7 +82,8 @@ With reconnects, `Failed` counts each failed non-429/non-503 attempt, each ended
 established connection except reset/cancellation, and initial setup-slot timeouts;
 `Refused503` counts each 503 attempt. `Failed` can exceed `StreamsAttempted`.
 These failures still affect `RequestFailed` and `Verdict`; neither is a restart
-result. The restart harness (#628/#630) and comparison below determine that result.
+result. Inspect `Restart` ([restart harness](load-restart.md)) separately; recovery and replay are #630's, and the
+comparison below reconciles receipts with the expected set.
 
 `-receipts PATH` exclusively creates a new file with mode 0600, removed if the
 command fails. This document defines the shared version 1 run-file contract for
@@ -93,8 +94,8 @@ Each file is one JSON object with `header` and exactly one body field:
   `expected`), `organization_slug`, `channel_id` (strings), `initial_cursor`,
   `final_watermark` (uint64 numbers). Both kinds require the final watermark.
   All streams share a valid numeric initial cursor. Loadgen reads the final
-  watermark from the channel page after drain until #628 supplies it; a failed
-  read fails the run rather than inventing it.
+  watermark from the channel page after POST attempts settle and before drain;
+  a failed read fails the run rather than inventing it.
 - Kind `receipts` carries exactly `streams`: an array in stable zero-based
   `index` order, one record per requested stream including empty ones. Each has
   `index`, `sequences` (object keyed by decimal uint64 sequence), `reset` (count),

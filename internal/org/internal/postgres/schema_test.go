@@ -44,7 +44,7 @@ func TestOrganizationMemberSchema(t *testing.T) {
 		requireNoError(t, err)
 		_, err = pool.Exec(ctx, "INSERT INTO organization (slug, name) VALUES ($1, $2)", slug, name)
 		requireNoError(t, err)
-		organization, err := q.GetOrganizationBySlug(ctx, slug)
+		organization, err := getOrganizationBySlug(ctx, pool, slug)
 		requireNoError(t, err)
 		organizations = append(organizations, organization)
 	}
@@ -66,7 +66,7 @@ func TestOrganizationMemberSchema(t *testing.T) {
 	// below see member's foreign key alone.
 	_, err := pool.Exec(ctx, "DELETE FROM event_log WHERE organization_id = $1", organization.ID)
 	requireNoError(t, err)
-	unchanged, err := q.GetOrganizationBySlug(ctx, other.Slug)
+	unchanged, err := getOrganizationBySlug(ctx, pool, other.Slug)
 	if err != nil || unchanged.EventSeq != 0 {
 		t.Fatalf("other organization changed: %+v, %v", unchanged, err)
 	}

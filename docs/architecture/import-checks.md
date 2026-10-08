@@ -5,7 +5,7 @@ the other files.
 
 A package's sub-packages may import each other, apart from the store,
 wiring and fixture rules below. The [module manifest](../../module_imports_test.go)
-is the source of truth for module paths, edges and fixture exceptions. Its Go tests
+is the source of truth for module paths, edges, fixture exceptions and table ownership. Its Go tests
 check imports per source file and reject missing paths, duplicates, unknown edge
 names and unlisted module-shaped directories. Depguard keeps the other boundaries;
 both fail `make check` on a violating import:
@@ -35,6 +35,28 @@ both fail `make check` on a violating import:
   the bridge rule).
 
 This file, the manifest and `.golangci.yml` must agree; change them together.
+
+The tools-module test [`tablecheck`](../../tools/tablecheck/table_test.go) reads
+the manifest's literal `ownsTables`. It shares the
+[SQL infrastructure](../database.md#database-development) with scopecheck; ownership
+and organisation scoping remain separate policies.
+It requires every migration-created table to have exactly one owner and every
+owned table to exist in the migrations' Up sections; table drops and renames fail.
+It rejects foreign writes, unapproved foreign reads, unknown tables, unsupported
+SQL/manifest shapes and stale read exemptions, including inside CTEs and subqueries.
+Read exemptions use `module.QueryName table reason…`, retaining both query and
+table matching; no write can be exempted. The list lives in the `readExemptions("")`
+literal in `TestProductionOwnership` and is currently empty. Tablecheck's
+`readExemptions` and `checkExemptions` reject duplicate and stale entries;
+the shared `sqlwalk.ReasonRules` rejects empty reasons, pending markers and
+maintainer claims without provenance.
+Only the query functions `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower` are
+accepted: other function bodies can hide table access. Tools tests run uncached
+because Go does not track these inputs outside the tools module.
+Query operators are limited to unqualified `=`, `<`, `>`, `<=` and `+`, and cast
+types to unqualified `uuid`, `bigint` and `jsonb`, as used by production queries.
+Migration DO blocks fail; function and procedure bodies containing dynamic SQL
+(`EXECUTE`) or table creation, rename or drop also fail.
 
 Staticcheck also runs on generated code, including templ output; the
 `_templ.go` exclusions apply only to errcheck and revive. `make lint-fixtures`

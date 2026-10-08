@@ -15,19 +15,20 @@ import (
 type module struct {
 	root, store, wiring, fixture string
 	mayImport, fixtureRoots      []string
+	ownsTables                   []string
 	exactWiringStore             bool
 }
 
-// moduleManifest is the import source of truth; fixture roots are narrower than module edges.
+// moduleManifest is the import and table-ownership source of truth; fixture roots are narrower than module edges.
 func moduleManifest() []module {
 	return []module{
 		{root: "internal/identity", store: "internal/identity/internal/postgres", wiring: "internal/identity/identitypg",
-			fixture: "internal/identity/identitytest", exactWiringStore: true},
-		{root: "internal/realtime", store: "internal/realtime/internal/postgres", wiring: "internal/realtime/realtimepg"},
+			fixture: "internal/identity/identitytest", exactWiringStore: true, ownsTables: []string{"account", "session"}},
+		{root: "internal/realtime", store: "internal/realtime/internal/postgres", wiring: "internal/realtime/realtimepg", ownsTables: []string{"event_log"}},
 		{root: "internal/org", store: "internal/org/internal/postgres", wiring: "internal/org/orgpg",
-			fixture: "internal/org/orgtest", mayImport: []string{"identity", "realtime"}},
+			fixture: "internal/org/orgtest", mayImport: []string{"identity", "realtime"}, ownsTables: []string{"organization", "member", "setup"}},
 		{root: "internal/conversation", store: "internal/conversation/internal/postgres", wiring: "internal/conversation/conversationpg",
-			fixture: "internal/conversation/conversationtest", mayImport: []string{"identity", "org", "realtime"}, fixtureRoots: []string{"org"}},
+			fixture: "internal/conversation/conversationtest", mayImport: []string{"identity", "org", "realtime"}, fixtureRoots: []string{"org"}, ownsTables: []string{"channel", "topic", "message"}},
 	}
 }
 

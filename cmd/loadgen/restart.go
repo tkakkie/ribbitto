@@ -25,6 +25,7 @@ type restartResult struct {
 
 type recoveryResult struct {
 	Reconnected, OutageRecovered, FullyCaughtUp   recoveryTimes
+	LiveAgain                                     *recoveryTimes
 	ResetStreams                                  int
 	DeliveriesThroughRecoveryCursorAfterReconnect uint64 `json:"deliveries_through_recovery_cursor_after_reconnect"`
 	AllDeliveriesAfterReconnect                   uint64 `json:"all_deliveries_after_reconnect"`
@@ -36,12 +37,12 @@ type recoveryTimes struct {
 }
 
 // The caller holds counts.mu at drain completion, before later worker updates.
-func (r *restartResult) measureRecovery(records []streamRecord, initial, final uint64, drainEnd time.Time, deadline time.Duration) {
+func (r *restartResult) measureRecovery(records []streamRecord, initial, final uint64, drainEnd time.Time, deadline time.Duration, deliveries map[string]*post, rate int) {
 	if r.IncompleteSetup || r.SIGTERM.IsZero() {
 		return
 	}
 	r.Recovery = &recoveryResult{}
-	var reconnects, recovered, caught []time.Duration
+	var reconnects, recovered, caught, live []time.Duration
 	recoveryEnd := minTime(drainEnd, r.SIGTERM.Add(deadline))
 	for i := range records {
 		rec := &records[i]
@@ -59,16 +60,28 @@ func (r *restartResult) measureRecovery(records []streamRecord, initial, final u
 			continue
 		}
 		reconnects = append(reconnects, reconnected.Sub(r.SIGTERM))
+		var liveAt time.Time
 		for seq, arrivals := range rec.ArrivedAt {
+			var p *post
+			if receipt := rec.Sequences[seq]; receipt != nil {
+				p = deliveries[receipt.Marker]
+			}
 			for _, at := range arrivals {
 				if at.Before(reconnected) || at.After(drainEnd) {
 					continue
+				}
+				// sent is the first attempt, even when a retry commits later.
+				if p != nil && p.sent.After(reconnected) && at.After(reconnected) {
+					liveAt = minTime(liveAt, at)
 				}
 				r.Recovery.AllDeliveriesAfterReconnect++
 				if seq <= r.RecoveryCursor {
 					r.Recovery.DeliveriesThroughRecoveryCursorAfterReconnect++
 				}
 			}
+		}
+		if !liveAt.IsZero() {
+			live = append(live, liveAt.Sub(r.SIGTERM))
 		}
 		if at := rec.satisfiedAt(initial, r.RecoveryCursor, reconnected); !at.IsZero() && !at.After(recoveryEnd) {
 			recovered = append(recovered, at.Sub(r.SIGTERM))
@@ -81,6 +94,10 @@ func (r *restartResult) measureRecovery(records []streamRecord, initial, final u
 	r.Recovery.Reconnected = summarizeRecovery(reconnects, streams)
 	r.Recovery.OutageRecovered = summarizeRecovery(recovered, streams)
 	r.Recovery.FullyCaughtUp = summarizeRecovery(caught, streams)
+	if rate > 0 {
+		times := summarizeRecovery(live, streams)
+		r.Recovery.LiveAgain = &times
+	}
 }
 
 func (rec *streamRecord) satisfiedAt(initial, target uint64, reconnected time.Time) time.Time {

@@ -49,9 +49,9 @@ drain; separate process snapshots have no delta.
 ## Client recovery and replay load
 
 After drain, `Restart.Recovery` reports `Reconnected`, `OutageRecovered` and
-`FullyCaughtUp`, each with `P50Seconds`, `P95Seconds`, `MaxSeconds` from SIGTERM
-and `IncompleteStreams`. Streams that received a reset are excluded from all
-three times, both their samples and their incomplete-count denominators, and
+`FullyCaughtUp`, plus `LiveAgain` for positive-rate runs, each with
+`P50Seconds`, `P95Seconds`, `MaxSeconds` from SIGTERM and `IncompleteStreams`.
+Streams that received a reset are excluded from all four times, both their samples and their incomplete-count denominators, and
 from both replay counts; `ResetStreams` reports their number separately.
 Quantiles use the nearest rank over completed streams; zero samples give zero
 times. A positive incomplete count means a non-reset stream was still short
@@ -63,7 +63,9 @@ the server's exit time and the ordinary workload verdict.
 Reconnected is the first successful stream re-establishment after SIGTERM.
 Outage recovered is `max(reconnectedAt, cursorSatisfiedAt)`, using the new
 child's page `RecoveryCursor` at readiness; fully caught up uses the final
-watermark instead. Satisfaction is the earliest completed event at or above the
+watermark instead. `FullyCaughtUp` measures reaching the final watermark;
+when posting continues until observation ends, the posting schedule dominates
+this time. Satisfaction is the earliest completed event at or above the
 target in the retained receipt state, including receipts before SIGTERM.
 An idle current stream or an empty expected interval counts at re-establishment.
 A reset stream never counts, even if it re-established or held the target.
@@ -71,6 +73,19 @@ A reset stream never counts, even if it re-established or held the target.
 from SIGTERM and caps outage recovery; drain completion also caps it. Full
 catch-up and reconnect delays are bounded by drain. Expiring the recovery
 deadline does not shorten the drain, so later full catch-up is still measured.
+
+Live again is the first arrival after the stream's first re-establishment of
+an event whose POST was first attempted after that re-establishment. The marker
+in the message receipt links the event to its POST's initial attempt time;
+retries first attempted before re-establishment do not qualify, even if they
+commit later. The cutoff is drain end, inclusive, independent of
+`-recover-deadline`. A later arrival or no qualifying POST leaves the stream
+incomplete, including a late reconnect after posting stops. Rate 0 reports
+`LiveAgain: null` (N/A), rather than zero times or incomplete streams.
+Replay on one connection is in sequence order, so this arrival proves receipt
+through the qualifying post's sequence. It is a catch-up bound: it includes
+waiting for the next qualifying POST and delivery; later commits may still
+be queued. Its quantiles and incomplete count exclude reset streams as above.
 
 `deliveries_through_recovery_cursor_after_reconnect` counts completed sequenced
 events at or below the recovery cursor, received from the first re-establishment

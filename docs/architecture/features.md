@@ -1,6 +1,6 @@
 # Feature map
 
-Each feature's packages and the tables it owns, and the known exceptions to
+Each feature's packages and its table-ownership registry, and the known exceptions to
 table ownership. [Packages](packages.md) lists every package and its allowed
 imports.
 
@@ -10,16 +10,16 @@ feature gains or loses a package or a table, or an exception is added.
 The code is a modular monolith by feature ([decision 14](../decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)):
 `identity`, `realtime`, `org` and `conversation` are modules
 ([modules](modules.md)).
-New code goes in its module. Each feature logically owns tables: only that feature writes them,
-apart from the known exceptions below. A feature may own no tables. Every
+New code goes in its module. Each feature logically owns tables: only that feature's
+SQL writes them. A feature may own no tables. Every
 package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 
 | Feature | Packages and files | Owns |
 |---|---|---|
-| `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`, test fixtures `identitytest`; `db/queries/identity/`); `web` `signin.go` | `account`, `session` |
-| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres`, wiring `orgpg` and test fixtures `orgtest`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `organization` (including `event_seq`, `event_log_boundary_seq`), `member`, `setup` |
-| `conversation`: channels, topics, branching, posting, history and the page snapshot *(decisions 21, 27)* | the `conversation` module: `internal/conversation` (channel, topic and message types, rules and errors; `Channels`, `Topics` (the membership-scoped lookup), `Posting`, `Brancher` and `Reader` (the page snapshot, `One`, `Many`); `message.posted` and `messages.moved`; posting and branching own their transaction, `Reader` its snapshot), its store `internal/conversation/internal/postgres`, wiring `conversationpg` and test fixtures `conversationtest`; `db/queries/conversation/`; `web` `channel.go` (channel and topic pages, history, `?before=` paging, posting), `branch.go`, `view/channel.templ`, `view/message.templ`, `view/branch.templ`, `web/static/message-*.js`, `web/static/branch-selection-v1.js` | `channel`, `topic`, `message` |
-| `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `internal/web/stream.go` (the SSE endpoint), `internal/web/stream_renderer.go` (live renderer and render cache), `internal/web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `conversation`) | `event_log` |
+| `identity`: accounts, passwords, sessions, signing in | the `identity` module (root owns the email, password and display-name rules; store, `identitypg`, test fixtures `identitytest`; `db/queries/identity/`); `web` `signin.go` | `ownsTables` for `identity` in the [manifest](../../module_imports_test.go) |
+| `org`: organisations, memberships, authorisation, first-run setup, sign-up | the `org` module: `internal/org` (name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds; setup and sign-up each own their transaction), its store `internal/org/internal/postgres`, wiring `orgpg` and test fixtures `orgtest`; `db/queries/org/`; `web` `org.go`, `setup.go`, `signup.go` | `ownsTables` for `org` in the [manifest](../../module_imports_test.go) |
+| `conversation`: channels, topics, branching, posting, history and the page snapshot *(decisions 21, 27)* | the `conversation` module: `internal/conversation` (channel, topic and message types, rules and errors; `Channels`, `Topics` (the membership-scoped lookup), `Posting`, `Brancher` and `Reader` (the page snapshot, `One`, `Many`); `message.posted` and `messages.moved`; posting and branching own their transaction, `Reader` its snapshot), its store `internal/conversation/internal/postgres`, wiring `conversationpg` and test fixtures `conversationtest`; `db/queries/conversation/`; `web` `channel.go` (channel and topic pages, history, `?before=` paging, posting), `branch.go`, `view/channel.templ`, `view/message.templ`, `view/branch.templ`, `web/static/message-*.js`, `web/static/branch-selection-v1.js` | `ownsTables` for `conversation` in the [manifest](../../module_imports_test.go) |
+| `realtime` | `internal/realtime` *(M3)*, its store `internal/realtime/internal/postgres` and wiring `realtimepg`; `db/queries/realtime/`; `internal/web/stream.go` (the SSE endpoint), `internal/web/stream_renderer.go` (live renderer and render cache), `internal/web/stream_sender.go` (SSE sender); `web/static/message-stream-v*.js` (SSE glue, shared with `conversation`) | `ownsTables` for `realtime` in the [manifest](../../module_imports_test.go) |
 
 The shared kernel, which any feature may use: `internal/kernel` (`ID`). The
 per-organisation `event_seq` and `event_log_boundary_seq` and the
@@ -32,11 +32,11 @@ How features reach each other's data (stores, posting's transaction, history
 and the page snapshot) is in
 [cross-feature access](cross-feature-access.md).
 
-Org's test-only `GetOrganizationBySlug` and `GetMemberByOrganizationAndAccount`
-queries live in `db/queries/org/`. [Modules](modules.md) says where
-conversation's tests live. Another feature's tests write a table only through
-its owner's test-only fixture package; [modules](modules.md) states the
-fixture rule.
+Org's test-only lookup by slug lives in its store's tests; its test-only
+`GetMemberByOrganizationAndAccount` query lives in `db/queries/org/`.
+[Modules](modules.md) says where conversation's tests live. Another
+feature's tests write a table only through its owner's test-only fixture
+package; [modules](modules.md) states the fixture rule.
 
 **Known exceptions.** Cross-feature writes that must commit atomically:
 
@@ -66,6 +66,16 @@ fixture rule.
 - realtime retention (#161) raises org's `event_log_boundary_seq`, under
   org's organisation lock, in the transaction that deletes the events,
   through `orgpg.RetentionBoundaryIn`, which `org`'s store implements.
+
+These flows use the owning modules' injected APIs, never direct foreign-table
+SQL. The [module manifest](../../module_imports_test.go)'s `ownsTables` is the
+authoritative table registry; the table above points there rather than duplicating
+it. [`tools/tablecheck`](../../tools/tablecheck/table_test.go) checks it against
+migration-created tables and every query in `make check`. Foreign reads need a
+query/table exemption with a reviewed reason; unused entries and reasons containing
+"pending maintainer" (case-insensitive, with any non-alphanumeric separator) fail.
+Reasons mentioning the maintainer need an issue, PR comment or decision reference.
+Writes have no exemptions.
 
 Each flow commits in one transaction, to which the injected factories of
 the other modules it writes are bound, so its atomicity and `event_seq`

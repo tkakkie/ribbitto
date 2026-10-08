@@ -877,6 +877,7 @@ func run(args []string, out io.Writer) (runErr error) {
 			body := paddedBody(marker, *bodyLength, *bodyEscape)
 			// Post-to-receipt latency starts here, not when the slot was
 			// scheduled, so the client's own goroutine scheduling is excluded.
+			// Keep this first-attempt time through retries for live-again eligibility.
 			c.mu.Lock()
 			p.sent = time.Now()
 			c.mu.Unlock()
@@ -943,7 +944,7 @@ func run(args []string, out io.Writer) (runErr error) {
 	c.mu.Lock()
 	c.frozen = true
 	if r.Restart != nil {
-		r.Restart.measureRecovery(records, cursorNumber, final, minTime(time.Now(), c.deadline), *recoverDeadline)
+		r.Restart.measureRecovery(records, cursorNumber, final, minTime(time.Now(), c.deadline), *recoverDeadline, c.deliveries, *rate)
 	}
 	c.mu.Unlock()
 	r.DrainSeconds = time.Since(start).Seconds()

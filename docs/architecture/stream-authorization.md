@@ -3,9 +3,10 @@
 How a stream keeps #262's guarantee without one database query per
 connection per event (#622). **Decided by the maintainer on 2026-10-08:
 option (a2), with its triggers mandatory** ([Decision](#decision)). It is
-not implemented yet: until the implementation issues (#669, #670, #671) land, the rule in
-[streaming](streaming.md#authorization-and-revocation) (one membership query
-per event) is the current behaviour. The comparison is kept as the reasoning.
+not implemented yet: until #669 (the epoch) and #670 (the delivery path)
+land, the rule in [streaming](streaming.md#authorization-and-revocation) (one
+membership query per event) is the current behaviour; #671 then measures it.
+The comparison is kept as the reasoning.
 
 ## Today
 
@@ -74,9 +75,9 @@ commit and a dropped listener loses signals; polling bounds staleness to its
 period. Both weaken "committed before the check" to "a while before".
 
 **(a2) Durable epoch, read fresh and shared.** `organization.access_epoch`
-is bumped by triggers on the tables that decide access (`member` deletes and
-updates of role, organisation or account; `organization` slug updates and
-deletes; later the private-channel tables), so direct SQL and other binaries
+is bumped by triggers on the tables that decide access (`member` deletes,
+updates of role, organisation or account, and `TRUNCATE`; `organization` slug
+updates; later the private-channel tables), so direct SQL and other binaries
 bump it too. **The triggers are part of (a2):** bumps only in application
 code are a weaker variant whose guarantee, like (a1)'s, covers only writes
 through current code, though across processes.
@@ -145,12 +146,13 @@ for a primary-key read, and the choice should be revisited.
 - **Where it lives:** `org.Authorizer` keeps the cache and the shared read
   behind `MayReceive`, so `realtime`'s loop and its `Authorizer` interface do
   not change and `org` remains the only authorization logic.
-- **Left to the implementation issues:** whether a removed member's open
-  stream ends rather than querying for every event it skips; whether joins
-  bump the epoch (only allows are cached, so granting access needs no bump).
+- **Settled by the implementation issues:** joins do not bump (#669; only
+  allows are cached), and a deny keeps today's skip-and-advance (#670; a
+  removed member's open stream still queries per skipped event).
 - **Recorded here and in streaming.md;** no settled decision covers the
   per-event check (decision 23 covers the event log and the hub), so there
-  is no decision record. The implementation issues (#669, #670, #671) are high risk; #669 and #670 are tier A.
+  is no decision record. The implementation issues (#669, #670, #671) are
+  high risk; #669 and #670 are tier A.
 
 ### Tests that would prove (a2)
 

@@ -40,11 +40,18 @@ func walk(v any, visit func(string, map[string]any) error) error {
 	switch v := v.(type) {
 	case map[string]any:
 		for key, child := range v {
+			if key == "InsertStmt" {
+				// Preserve CTE checks before rejecting an unsupported INSERT;
+				// VALUES expressions and RETURNING remain outside this gate.
+				if err := walk(object(child)["withClause"], visit); err != nil {
+					return err
+				}
+			}
 			if err := visit(key, object(child)); err != nil {
 				return err
 			}
-			if key == "InsertStmt" { // INSERT reads are excluded; writable CTEs still need checking.
-				child = object(child)["withClause"]
+			if key == "InsertStmt" {
+				continue
 			}
 			if err := walk(child, visit); err != nil {
 				return err
@@ -96,6 +103,15 @@ func check(sql string, tables map[string]string) error {
 	if err != nil {
 		return err
 	}
+	for _, raw := range list(object(tree)["stmts"]) {
+		if err := checkStatement(object(raw)["stmt"], tables); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkStatement(tree any, tables map[string]string) error {
 	ctes := map[string]bool{}
 	if err := walk(tree, func(kind string, s map[string]any) error {
 		if kind == "CommonTableExpr" {
@@ -124,7 +140,16 @@ func check(sql string, tables map[string]string) error {
 		case "DeleteStmt":
 			refs = append([]any{map[string]any{"RangeVar": s["relation"]}}, list(s["usingClause"])...)
 		case "InsertStmt":
-			return nil // INSERT ownership is outside this gate.
+			values := node(s["selectStmt"], "SelectStmt")
+			// Conflict handling and overriding remain outside both exemptions.
+			if s["onConflictClause"] != nil || s["override"] != "OVERRIDING_NOT_SET" {
+				return fmt.Errorf("unsupported shape: INSERT")
+			}
+			if len(values) == 3 && values["valuesLists"] != nil && values["op"] == "SETOP_NONE" &&
+				values["limitOption"] == "LIMIT_OPTION_DEFAULT" {
+				return nil
+			}
+			return insertCTESelect(values, ctes)
 		default:
 			return fmt.Errorf("unsupported shape: %s", kind)
 		}
@@ -178,6 +203,39 @@ func check(sql string, tables map[string]string) error {
 	})
 }
 
+// CTE bodies have their own scope checks. This exemption must not hide
+// additional reads in the INSERT's SELECT, even when those reads are scoped.
+func insertCTESelect(s map[string]any, ctes map[string]bool) error {
+	if s == nil || s["op"] != "SETOP_NONE" || s["valuesLists"] != nil || s["intoClause"] != nil || s["withClause"] != nil {
+		return fmt.Errorf("unsupported shape: INSERT SELECT")
+	}
+	aliases := map[string]bool{}
+	for _, ref := range list(s["fromClause"]) {
+		r := node(ref, "RangeVar")
+		table, _ := r["relname"].(string)
+		if !ctes[table] || r["schemaname"] != nil || r["catalogname"] != nil {
+			return fmt.Errorf("unsupported shape: INSERT SELECT relation %q", table)
+		}
+		alias := table
+		if a := object(r["alias"]); a != nil {
+			if a["colnames"] != nil {
+				return fmt.Errorf("unsupported shape: renamed columns")
+			}
+			alias, _ = a["aliasname"].(string)
+		}
+		if aliases[alias] {
+			return fmt.Errorf("unsupported shape: duplicate alias %s", alias)
+		}
+		aliases[alias] = true
+	}
+	return walk(s, func(kind string, _ map[string]any) error {
+		if kind == "SubLink" || strings.HasSuffix(kind, "Stmt") {
+			return fmt.Errorf("unsupported shape: INSERT SELECT subquery")
+		}
+		return nil
+	})
+}
+
 func read(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)
@@ -187,9 +245,9 @@ func read(t *testing.T, path string) string {
 	return string(b)
 }
 
-// The migration schema is the single source for owned tables: an
-// organization_id column means organisation ownership. organization uses
-// its primary key instead; setup is installation-wide despite its FK.
+// Migration columns establish ownership, except organization's primary key
+// and the explicit installation-wide list. Classify after all
+// migrations so a later ADD COLUMN can establish ownership.
 func schema(migrations []string) (map[string]string, error) {
 	tables := map[string]string{}
 	for _, migration := range migrations {
@@ -227,12 +285,27 @@ func schema(migrations []string) (map[string]string, error) {
 			return nil, err
 		}
 	}
-	tables["organization"], tables["setup"] = "id", ""
+	installationWide := map[string]bool{
+		"account": true, // Identities exist independently of organisation membership.
+		"session": true, // Authentication sessions belong to installation-wide accounts.
+		"setup":   true, // The installation's singleton setup row resolves its home organisation.
+	}
+	for table, column := range tables {
+		switch {
+		case table == "organization":
+			tables[table] = "id"
+		case installationWide[table]:
+			tables[table] = ""
+		case column != "organization_id":
+			return nil, fmt.Errorf("unknown ownership: %s", table)
+		}
+	}
 	return tables, nil
 }
 
 func exemptions(text string, queries, tables map[string]string) (map[string]string, error) {
 	allow := map[string]string{}
+	provenance := regexp.MustCompile(`(?i)(#[1-9][0-9]*\b|https://github\.com/[^/\s]+/[^/\s]+/pull/[1-9][0-9]*#issuecomment-[1-9][0-9]*\b|\bdecision\s+[1-9][0-9]*\b)`)
 	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
@@ -240,6 +313,9 @@ func exemptions(text string, queries, tables map[string]string) (map[string]stri
 		name, reason, ok := strings.Cut(line, " ")
 		if !ok || strings.TrimSpace(reason) == "" || allow[name] != "" {
 			return nil, fmt.Errorf("invalid allowlist entry: %q", line)
+		}
+		if strings.Contains(strings.ToLower(reason), "maintainer") && !provenance.MatchString(reason) {
+			return nil, fmt.Errorf("missing maintainer provenance: %s", name)
 		}
 		if _, exists := queries[name]; !exists {
 			return nil, fmt.Errorf("stale allowlist entry: %s", name)

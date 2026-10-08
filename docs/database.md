@@ -121,13 +121,30 @@ generated files.
 
 `make check` also runs `go -C tools test -race ./scopecheck`: PostgreSQL's
 parser checks each owned table's own WHERE scope in SELECT, UPDATE and
-DELETE, including CTE bodies. INSERT statements are excluded. Ownership comes
-from migration columns, except installation-wide `setup`; `organization`
-uses `id`. Joins do not carry scope. CTE result reads need no scope; their
+DELETE, including inside CTEs. Plain `INSERT … VALUES` passes unchecked,
+including VALUES expressions and RETURNING; its CTE bodies are checked.
+`INSERT … SELECT` also passes when its FROM names only CTEs in the same
+statement; those bodies are checked independently. Physical tables, joins,
+subqueries anywhere in that SELECT, derived tables and functions in FROM
+remain unsupported, even with scope predicates. This lets CreateChannel
+copy its freshly inserted channel into its default topic without an exemption.
+Every other INSERT shape, including `ON CONFLICT … DO UPDATE` inside CTEs,
+fails as "unsupported shape" unless allowlisted.
+`ON CONFLICT DO NOTHING` also fails: it adds no update, but the exemption
+stays limited to plain VALUES and CTE-only SELECT. Checking physical-table
+INSERT SELECT reads and ON CONFLICT updates belongs in a follow-up issue.
+Ownership comes from migration columns,
+with an explicit installation-wide list in `schema()`; `organization` uses `id`.
+Tables without `organization_id` that have neither classification fail as
+"unknown ownership". Joins do not carry scope. CTE result reads need no scope; their
 bodies are checked independently. Outer joins, derived tables and set operations
 are unsupported. Module-qualified exemptions with reasons live in
-`tools/scopecheck/allowlist.txt`; stale or unnecessary entries fail. The parser
-requires cgo and a C compiler (Xcode command-line tools locally, GCC on CI's Ubuntu).
+`tools/scopecheck/allowlist.txt`; stale or unnecessary entries fail. A reason
+mentioning "maintainer" (case-insensitive) must cite an issue (`#N`), a GitHub
+PR comment URL or a numbered decision. This enforces provenance, not approval
+verification; `PENDING MAINTAINER:` entries still need an explicit decision.
+The parser requires cgo and a C compiler (Xcode command-line tools locally,
+GCC on CI's Ubuntu).
 
 ## Development seed data
 

@@ -36,6 +36,19 @@ def session_members(session):
     return members
 
 
+def kill_member(pid, session):
+    # Check the session again just before the signal. macOS has no pidfd, so a
+    # member that exits and whose PID is reused in the instant between this
+    # check and the kill cannot be told apart; PIDs are allocated sequentially,
+    # which makes immediate reuse unlikely, and the check keeps the window to
+    # these two calls.
+    try:
+        if os.getsid(pid) == session:
+            os.kill(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
 def stop_group(worker):
     # The make parent may already have exited while a child is still alive.
     # Kill the check's group, then every process left in its session, until
@@ -51,10 +64,7 @@ def stop_group(worker):
         if not members:
             break
         for pid in members:
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
+            kill_member(pid, session)
         time.sleep(0.02)
     worker.wait()
 

@@ -182,6 +182,10 @@ def alive(pid):
     state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
     return bool(state) and not state.startswith("Z")
 
+
+class CleanupTest(unittest.TestCase):
+    """Cleanup needs no database, so these tests always run."""
+
     def test_cleanup_falls_back_to_the_group_when_ps_fails(self):
         worker = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
         try:
@@ -192,3 +196,14 @@ def alive(pid):
             if worker.poll() is None:
                 worker.kill()
                 worker.wait()
+
+    def test_cleanup_rescans_for_members_forked_after_a_scan(self):
+        # Each scan finds a process the previous kill could not have known.
+        scans = iter([[101], [102], []])
+        killed = []
+        worker = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+        worker.wait()
+        with patch.object(ai_capacity, "session_members", side_effect=lambda session: next(scans)), \
+                patch.object(ai_capacity, "kill_member", side_effect=lambda pid, session: killed.append(pid)):
+            ai_capacity.stop_group(worker)
+        self.assertEqual(killed, [101, 102])

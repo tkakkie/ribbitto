@@ -72,20 +72,23 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    ```
 
 4. All pass → the remaining steps (merge the current `main` or confirm no
-   merge is needed, then the adversarial review its
+   merge is needed, then Copilot, requested by hand on the draft, and its
+   follow-up check if answering it needs a change, then the initial
+   adversarial review its
    [tier requires](adversarial-review.md#which-review-runs) on that head,
-   still as a draft, then `ai-reviewed` and ready for review, then
-   Copilot) and the normal merge decision. Any other change
+   still as a draft, then `ai-reviewed` and ready for review) and the
+   normal merge decision. Any other change
    in the diff, a failed check, a new blocking finding or anything needing
    a decision → ask the maintainer.
 
 **Copilot follow-up check** (pull requests only; after Copilot's one
-review; not a review round). Copilot reviews after the other AI approved,
-so a change made to answer it would otherwise reach the maintainer
-unreviewed. If answering Copilot needs a change:
+review; not a review round). Copilot is requested by hand on the draft
+after the other AI approved, so a change made to answer it would otherwise
+reach the maintainer unreviewed. If answering Copilot needs a change:
 
-1. Convert the pull request back to a draft and apply only the changes
-   that answer Copilot.
+1. Apply only the changes that answer Copilot; the pull request is still
+   a draft. (If Copilot is re-requested after the pull request was marked
+   ready, convert it back to a draft first.)
 2. The AI that approved the pull request checks that the whole diff since
    the SHA it approved contains only those changes and that each one is
    right, and reports:
@@ -96,11 +99,12 @@ unreviewed. If answering Copilot needs a change:
    - ✅ | ❌ Copilot comment — how it was checked
    ```
 
-3. All pass → if the follow-up's diff matches tier A or B, keep the pull
-   request a draft until the pull request's tier, recomputed at the new
-   head, has been reviewed again there, with every finding disposed of
-   ([completion](adversarial-review.md#which-review-runs)); then mark it
-   ready for review again and the normal merge decision. Copilot is not
+3. All pass → the initial adversarial review runs on the new head, at the
+   pull request's tier recomputed over its whole diff, still as a draft,
+   with every finding disposed of; a follow-up after that review needs it
+   again only if the follow-up's diff matches tier A or B
+   ([completion](adversarial-review.md#which-review-runs)). Then
+   `ai-reviewed`, ready for review and the normal merge decision. Copilot is not
    re-requested; if Copilot reviews again anyway, handle it the same way
    once, then ask the maintainer. A change needing a design or
    specification decision, a failed check or a new blocking finding → ask
@@ -112,7 +116,8 @@ than combine both sides, it needs a normal review. Either way, if the diff
 from the last adversarially reviewed head to the merge result matches tier
 A or B, the pull request's tier, recomputed at the merge result, is
 reviewed again before it is marked ready
-([completion](adversarial-review.md#which-review-runs)).
+([completion](adversarial-review.md#which-review-runs)); a pull request
+already marked ready is converted back to a draft until then.
 
 ## Risk
 

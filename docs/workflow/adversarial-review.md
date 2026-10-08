@@ -4,10 +4,11 @@
 maintainer is asked**, whatever its risk class: Grok (tier A), Muse Code
 (tier B), or none (tier C). The required review must run; its
 findings are advisory. It does not count towards the two review rounds. The
-initial review runs after the cross-review and after merging the current
-`main`, or after confirming that no merge is needed (*When it runs*, below),
-while the pull request is still a draft, and before it is marked ready for
-review. Later pushes are reviewed again under the completion rule.
+initial review runs after the cross-review, after merging the current
+`main` (or confirming that no merge is needed) and after Copilot's one
+review and any follow-up (*When it runs*, below), while the pull request is
+still a draft, and before it is marked ready for review. Later pushes are
+reviewed again under the completion rule.
 
 ## Which review runs
 
@@ -105,11 +106,14 @@ areas that is tier B. The other AI checks the tier against what the diff
 does, not only the paths it touches.
 
 **When it runs:** the initial review runs after the other AI approves and
-its findings are fixed, and after the branch has merged the current `main`
-or it is confirmed that no merge is needed: on that head, while the pull request is still a draft, immediately
-before `ai-reviewed`. It does not run alongside the first cross-review. A
-report on an earlier head covers a later one only under the completion
-rule below.
+its findings are fixed, after the branch has merged the current `main` or
+it is confirmed that no merge is needed, and after Copilot, requested by
+hand on the draft, has reviewed and any change answering it has passed the
+Copilot follow-up check ([reviewing](reviewing.md)): on that head, while the
+pull request is still a draft, immediately before `ai-reviewed`. GitHub
+cannot merge a draft, so this holds the merge until the review completes.
+It does not run alongside the first cross-review. A report on an earlier
+head covers a later one only under the completion rule below.
 
 **A required review counts only when it completes:** a report on the pull
 request at its head commit, each finding with a disposition. After a later
@@ -118,7 +122,8 @@ the last adversarially reviewed head (or the base, if none) matches tier A
 or B, the **pull request's** tier is recomputed over its whole diff at the
 new head, never lower than that diff's, and reviewed again: a pull request
 that is or becomes tier A needs Grok again, and a tier C one lifted to B or
-A gets its first review. An earlier report
+A gets its first review. A pull request already marked ready is converted
+back to a draft until that review completes. An earlier report
 covers a later head only when every later commit is tier C. A time-out, an outage or an
 empty run is not a review: retry once, then ask the maintainer.
 When Grok is unavailable (quota or outage), the failed runs and their

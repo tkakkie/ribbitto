@@ -30,7 +30,7 @@ Read the file for the area you change:
 | [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream caps, shutdown, HTTP/2 |
 | [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
-| [`stream-authorization.md`](stream-authorization.md) | proposal (#622): keeping deliveries authorized without a query per stream per event |
+| [`stream-authorization.md`](stream-authorization.md) | keeping deliveries authorized without a query per stream per event: the options and the decision (#622) |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
@@ -51,6 +51,7 @@ Loading uses `go/packages` for Linux/amd64 with cgo disabled.
 
 - [`docs/domain/README.md`](../domain/README.md) — glossary and index; [`entities.md`](../domain/entities.md), [`invariants.md`](../domain/invariants.md), [`unread.md`](../domain/unread.md)
 - [`docs/domain/names.md`](../domain/names.md) — display names, handles, how members are shown
-- [`docs/database.md`](../database.md) — local database, migrations, tests; [`docs/seed-data.md`](../seed-data.md) — development seed data
+- [`docs/database.md`](../database.md) — local database, migrations; [`docs/database-tests.md`](../database-tests.md) — integration tests and fixtures; [`docs/seed-data.md`](../seed-data.md) — development seed data
+- [`docs/worktree-env.md`](../worktree-env.md) — dev databases, port allocation, health checks and cleanup
 - [`docs/schema/README.md`](../schema/README.md) — generated reference for the current schema
 - [`DECISIONS.md`](../../DECISIONS.md) — why things are the way they are: the index of [`decisions/`](../decisions/)

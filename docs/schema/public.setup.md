@@ -44,6 +44,7 @@ erDiagram
   bigint event_seq
   timestamp_with_time_zone created_at
   bigint event_log_boundary_seq
+  bigint access_epoch
 }
 ```
 

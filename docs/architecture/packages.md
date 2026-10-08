@@ -16,6 +16,9 @@ authorization and history reads for a load run's expected messages. It never
 imports `db/migrations`; the database must already be migrated.
 `cmd/loadgen` is a development-only HTTP client and run-file comparator; it imports no application
 packages. See [load client](load-client.md) for limits and usage.
+`cmd/devdb` is a development-only database helper for worktree configuration
+and health checks. It imports only `internal/platform/postgres` from
+this module to reuse the migration runner; credentials stay in the environment.
 
 | Package | Responsibility | May import from this module |
 |---|---|---|
@@ -40,6 +43,7 @@ lists those rules and the `doc.go` requirement.
 flowchart LR
   cmd[cmd/ribbitto] --> web & orgpg[org/orgpg] & conversationpg[conversation/conversationpg] & identity & identitypg[identity/identitypg] & realtimepg & realtime & platform[platform/postgres]
   seed[cmd/seed] --> conversation & conversationpg & org & orgpg & identity & identitypg & realtimepg & platform & kernel
+  devdb[cmd/devdb] --> platform
   web[internal/web] --> org & conversation & identity & kernel & realtime & static[web/static]
   conversationpg --> conversation[internal/conversation] & cstore[conversation/internal/postgres] & realtime & platform
   conversation --> identity & org & realtime & kernel & platform

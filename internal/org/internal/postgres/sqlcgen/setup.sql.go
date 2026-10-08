@@ -21,7 +21,7 @@ func (q *Queries) CompleteSetup(ctx context.Context, organizationID pgtype.UUID)
 }
 
 const createOrganization = `-- name: CreateOrganization :one
-INSERT INTO organization (name, slug) VALUES ($1, $2) RETURNING id, slug, name, event_seq, created_at, event_log_boundary_seq
+INSERT INTO organization (name, slug) VALUES ($1, $2) RETURNING id, slug, name, event_seq, created_at, event_log_boundary_seq, access_epoch
 `
 
 type CreateOrganizationParams struct {
@@ -39,6 +39,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		&i.EventSeq,
 		&i.CreatedAt,
 		&i.EventLogBoundarySeq,
+		&i.AccessEpoch,
 	)
 	return i, err
 }

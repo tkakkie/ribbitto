@@ -10,11 +10,13 @@
 | event_seq | bigint | 0 | false |  |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
 | event_log_boundary_seq | bigint | 0 | false |  |  |  |
+| access_epoch | bigint | nextval('organization_access_epoch_seq'::regclass) | false |  |  |  |
 
 ## Constraints
 
 | Name | Type | Definition |
 | ---- | ---- | ---------- |
+| organization_access_epoch_not_null | n | NOT NULL access_epoch |
 | organization_created_at_not_null | n | NOT NULL created_at |
 | organization_event_log_boundary_seq_not_null | n | NOT NULL event_log_boundary_seq |
 | organization_event_seq_check | CHECK | CHECK ((event_seq >= 0)) |
@@ -40,6 +42,7 @@
 | Name | Definition |
 | ---- | ---------- |
 | organization_event_seq_logged | CREATE CONSTRAINT TRIGGER organization_event_seq_logged AFTER UPDATE OF event_seq ON public.organization DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION organization_event_seq_logged() |
+| organization_access_guard | CREATE TRIGGER organization_access_guard BEFORE INSERT OR UPDATE OF id, slug, access_epoch ON public.organization FOR EACH ROW EXECUTE FUNCTION organization_access_guard() |
 
 ## Relations
 
@@ -58,6 +61,7 @@ erDiagram
   bigint event_seq
   timestamp_with_time_zone created_at
   bigint event_log_boundary_seq
+  bigint access_epoch
 }
 "public.member" {
   uuid id

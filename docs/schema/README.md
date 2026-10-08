@@ -5,7 +5,7 @@
 | Name | Columns | Comment | Type |
 | ---- | ------- | ------- | ---- |
 | [public.goose_db_version](public.goose_db_version.md) | 4 |  | BASE TABLE |
-| [public.organization](public.organization.md) | 6 |  | BASE TABLE |
+| [public.organization](public.organization.md) | 7 |  | BASE TABLE |
 | [public.account](public.account.md) | 5 |  | BASE TABLE |
 | [public.session](public.session.md) | 5 |  | BASE TABLE |
 | [public.member](public.member.md) | 7 |  | BASE TABLE |
@@ -20,6 +20,9 @@
 | Name | ReturnType | Arguments | Type |
 | ---- | ------- | ------- | ---- |
 | public.organization_event_seq_logged | trigger |  | FUNCTION |
+| public.organization_access_guard | trigger |  | FUNCTION |
+| public.member_access_changed | trigger |  | FUNCTION |
+| public.member_access_truncated | trigger |  | FUNCTION |
 
 ## Relations
 
@@ -52,6 +55,7 @@ erDiagram
   bigint event_seq
   timestamp_with_time_zone created_at
   bigint event_log_boundary_seq
+  bigint access_epoch
 }
 "public.account" {
   uuid id

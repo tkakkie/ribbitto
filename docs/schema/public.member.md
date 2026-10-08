@@ -43,6 +43,13 @@
 | member_organization_id_id_key | CREATE UNIQUE INDEX member_organization_id_id_key ON public.member USING btree (organization_id, id) |
 | member_organization_id_handle_key | CREATE UNIQUE INDEX member_organization_id_handle_key ON public.member USING btree (organization_id, handle) |
 
+## Triggers
+
+| Name | Definition |
+| ---- | ---------- |
+| member_access_changed | CREATE TRIGGER member_access_changed AFTER DELETE OR UPDATE ON public.member FOR EACH ROW EXECUTE FUNCTION member_access_changed() |
+| member_access_truncated | CREATE TRIGGER member_access_truncated AFTER TRUNCATE ON public.member FOR EACH STATEMENT EXECUTE FUNCTION member_access_truncated() |
+
 ## Relations
 
 ```mermaid
@@ -87,6 +94,7 @@ erDiagram
   bigint event_seq
   timestamp_with_time_zone created_at
   bigint event_log_boundary_seq
+  bigint access_epoch
 }
 "public.account" {
   uuid id

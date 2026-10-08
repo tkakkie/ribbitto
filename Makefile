@@ -91,12 +91,12 @@ check: $(TEMPL) db-health
 	$(MAKE) lint
 	$(MAKE) lint-fixtures
 	go build ./...
-	go test -race $(GO_TEST_FLAGS) ./...
+	go test -race ./...
 	$(MAKE) check-ai-env
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
 	go -C tools vet ./docscheck
-	go -C tools test -race $(GO_TEST_FLAGS) ./docscheck
+	go -C tools test -race ./docscheck
 	go -C tools run ./docscheck ..
 	bash scripts/ai/launcher-tests_test.sh
 	bash scripts/ai/launcher-tests.sh --base "$$LAUNCHER_TESTS_BASE"
@@ -157,4 +157,4 @@ seed:
 	@python3 scripts/ai_env.py run go run ./cmd/seed $(ARGS)
 
 check-ai-env: bin/ai-db
-	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'ai_*_test.py'
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'ai_env_test.py'

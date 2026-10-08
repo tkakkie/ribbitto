@@ -124,12 +124,19 @@ sys.exit(7 if os.getcwd().endswith("second") else 0)
             fake_make.write_text("#!" + sys.executable + "\n" + '''
 import os, subprocess, sys, time
 child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
-# Like Chromium under the browser test, this one leaves the check's group.
-detached = subprocess.Popen([sys.executable, "-c", "import os, time; os.setpgrp(); time.sleep(120)"])
-while os.getpgid(detached.pid) != detached.pid:
+# Like Chromium under the browser test, this one leaves the check's group,
+# then starts a process of its own there.
+detached = subprocess.Popen([sys.executable, "-c", (
+    "import os, subprocess, sys, time; os.setpgrp(); "
+    "spawned = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)']); "
+    "open('spawned.tmp', 'w').write(str(spawned.pid)); os.rename('spawned.tmp', 'spawned'); "
+    "time.sleep(120)")])
+while not os.path.exists("spawned"):
     time.sleep(0.01)
+with open("spawned") as source:
+    spawned = int(source.read())
 with open("pids.tmp", "w") as out:
-    out.write(f"{os.getpid()} {child.pid} {detached.pid}")
+    out.write(f"{os.getpid()} {child.pid} {detached.pid} {spawned}")
 os.rename("pids.tmp", "pids")
 time.sleep(120)
 ''')
@@ -174,3 +181,14 @@ def alive(pid):
     # A zombie still answers kill(0); ps reports it as Z once its group is gone.
     state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
     return bool(state) and not state.startswith("Z")
+
+    def test_cleanup_falls_back_to_the_group_when_ps_fails(self):
+        worker = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
+        try:
+            with patch.object(ai_capacity.subprocess, "run", side_effect=subprocess.TimeoutExpired("ps", 10)):
+                ai_capacity.stop_group(worker)
+            self.assertIsNotNone(worker.returncode)
+        finally:
+            if worker.poll() is None:
+                worker.kill()
+                worker.wait()

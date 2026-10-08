@@ -12,50 +12,51 @@ from urllib.parse import parse_qs, urlsplit
 import ai_env
 
 
-def descendants(leader):
-    """Return the processes of leader's group and all their descendants.
+def session_members(session):
+    """Return the PIDs whose session is session, or None if ps fails.
 
-    A descendant may have moved to its own process group (Chromium, started
-    by the browser test, does), so it is found through parent PIDs, not the
-    group alone. The second set holds the leaders of those other groups.
+    Each check starts its own session. A descendant that moves to another
+    process group (Chromium, started by the browser test, does) or loses its
+    parent stays in that session, so the session finds it where parent PIDs
+    or the group would not. macOS ps prints no session IDs, so getsid asks.
     """
-    table = subprocess.run(["ps", "-axo", "pid=,ppid=,pgid="], capture_output=True, text=True, check=True).stdout
-    rows = [tuple(map(int, line.split())) for line in table.splitlines() if line.strip()]
-    found = {pid for pid, _, pgid in rows if pgid == leader} | {leader}
-    grew = True
-    while grew:
-        grew = False
-        for pid, ppid, _ in rows:
-            if ppid in found and pid not in found:
-                found.add(pid)
-                grew = True
-    leaders = {pid for pid, _, pgid in rows if pid in found and pgid == pid and pid != leader}
-    return found, leaders
-
-
-def signal_quietly(send, target):
     try:
-        send(target, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        pass
+        listing = subprocess.run(["ps", "-axo", "pid="], capture_output=True, text=True,
+                                 timeout=10, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    members = []
+    for field in listing.split():
+        pid = int(field)
+        try:
+            if pid != os.getpid() and os.getsid(pid) == session:
+                members.append(pid)
+        except (ProcessLookupError, PermissionError):
+            pass
+    return members
 
 
 def stop_group(worker):
     # The make parent may already have exited while a child is still alive.
-    # Freeze the group so it cannot start more processes, then kill it and
-    # every descendant that left it, with their own groups.
+    # Kill the check's group, then every process left in its session, until
+    # none remains: a member can fork before it dies, and its child inherits
+    # the session. If ps fails, the group kill is all that can be done.
+    session = worker.pid
     try:
-        os.killpg(worker.pid, signal.SIGSTOP)
-    except ProcessLookupError:
+        os.killpg(session, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
         pass
-    found, leaders = descendants(worker.pid)
-    signal_quietly(os.killpg, worker.pid)
-    for leader in leaders:
-        signal_quietly(os.killpg, leader)
-    for pid in found - {worker.pid}:
-        signal_quietly(os.kill, pid)
+    for _ in range(100):
+        members = session_members(session)
+        if not members:
+            break
+        for pid in members:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+        time.sleep(0.02)
     worker.wait()
-
 
 def measure(roots, packages, parallel):
     settings = parse_qs(urlsplit(os.environ["RIBBITTO_TEST_DATABASE_URL"]).query)

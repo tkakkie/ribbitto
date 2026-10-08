@@ -155,6 +155,23 @@ Every entry sets `omit_unused_structs`, so a table no query uses gets no struct.
 Commit the pgx/v5 output; CI rejects generation changes to committed files. Never edit
 generated files.
 
+`make check` runs `go -C tools test -race ./scopecheck`: PostgreSQL's parser
+requires each owned table's own WHERE scope in SELECT, UPDATE and DELETE,
+including CTE bodies; joins never carry scope. UPDATE may not assign the scope
+column (`organization_id`, or `id` for `organization`). Ownership comes from migration
+columns, with `organization` scoped by `id` and an explicit installation-wide
+list; unknown ownership, scoped list entries (except singleton `setup`) and stale
+entries fail. Plain INSERT VALUES and INSERT SELECT reading only same-statement
+CTEs pass; subqueries in VALUES, RETURNING or that SELECT are unsupported.
+Joins, including comma joins, in that SELECT, physical-table INSERT SELECT reads,
+ON CONFLICT and other INSERT shapes are unsupported; full INSERT checking belongs
+in a follow-up issue.
+CTE reads need no scope; outer joins, derived tables and set operations fail.
+`tools/scopecheck/allowlist.txt` requires reasons; stale, unnecessary and
+`PENDING MAINTAINER:` entries fail. Reasons mentioning "maintainer" must cite
+`#N`, a GitHub PR comment URL or a numbered decision (provenance, not approval
+verification). The parser needs cgo and a C compiler (Xcode locally, GCC on CI).
+
 ## Development seed data
 
 Filling a development database with synthetic conversations, and its

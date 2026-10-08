@@ -118,6 +118,23 @@ func TestAllowlist(t *testing.T) {
 	}
 }
 
+func TestPendingMaintainerReasons(t *testing.T) {
+	for _, tc := range []struct{ name, reason string }{
+		{"two_spaces", "PENDING  MAINTAINER: revisit later #658"},
+		{"tab", "PENDING\tMAINTAINER: revisit later #658"},
+		{"space_before_colon", "PENDING MAINTAINER : revisit later #658"},
+		{"lower_case", "pending maintainer: revisit later #658"},
+		{"after_other_text", "Revisit later: PENDING MAINTAINER: #658"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := exemptions("Existing "+tc.reason, map[string]string{"Existing": "SELECT * FROM member"}, map[string]string{"member": "organization_id"})
+			if err == nil || !strings.Contains(err.Error(), "pending maintainer approval") {
+				t.Fatalf("want pending maintainer approval, got %v", err)
+			}
+		})
+	}
+}
+
 func TestSchema(t *testing.T) {
 	for _, tc := range []struct{ sql, table, column, want string }{
 		{"CREATE TABLE member (organization_id uuid)", "member", "organization_id", ""},

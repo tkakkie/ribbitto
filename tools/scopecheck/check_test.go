@@ -310,6 +310,7 @@ func schema(migrations []string) (map[string]string, error) {
 
 func exemptions(text string, queries, tables map[string]string) (map[string]string, error) {
 	allow := map[string]string{}
+	pending := regexp.MustCompile(`(?i)pending\s+maintainer\s*:`)
 	provenance := regexp.MustCompile(`(?i)(#[1-9][0-9]*\b|https://github\.com/[^/\s]+/[^/\s]+/pull/[1-9][0-9]*#issuecomment-[1-9][0-9]*\b|\bdecision\s+[1-9][0-9]*\b)`)
 	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
 		if strings.TrimSpace(line) == "" {
@@ -319,7 +320,7 @@ func exemptions(text string, queries, tables map[string]string) (map[string]stri
 		if !ok || strings.TrimSpace(reason) == "" || allow[name] != "" {
 			return nil, fmt.Errorf("invalid allowlist entry: %q", line)
 		}
-		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(reason)), "PENDING MAINTAINER:") {
+		if pending.MatchString(reason) {
 			return nil, fmt.Errorf("pending maintainer approval: %s", name)
 		}
 		if strings.Contains(strings.ToLower(reason), "maintainer") && !provenance.MatchString(reason) {

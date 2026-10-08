@@ -1,6 +1,7 @@
 // Command docscheck keeps the repository's documents usable by AI: each
 // file stays within a size limit (one topic per file), and every link or
-// reference to a Markdown file and its #anchor resolves. make check runs
+// reference to a Markdown file and its #anchor resolves. Repository paths
+// in code spans must exist outside historical decision records. make check runs
 // it with the repository root as its argument. Markdown is parsed with
 // goldmark (GFM); this tools module, not the application's, carries that
 // dependency.
@@ -61,13 +62,18 @@ func main() {
 		fmt.Fprintln(os.Stderr, "docscheck:", err)
 		os.Exit(2)
 	}
-	for _, p := range append(append(sizes, links...), decisions...) {
+	paths, err := checkPaths(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "docscheck:", err)
+		os.Exit(2)
+	}
+	for _, p := range append(append(append(sizes, links...), decisions...), paths...) {
 		fmt.Fprintln(os.Stderr, p)
 	}
 	if len(sizes) > 0 {
 		fmt.Fprintln(os.Stderr, "\nA file over its limit keeps its pull request small: open an issue to split it, add \"<path> #<issue>\" to "+exceptionsFile+", and split it in a separate pull request.")
 	}
-	if len(sizes)+len(links)+len(decisions) > 0 {
+	if len(sizes)+len(links)+len(decisions)+len(paths) > 0 {
 		os.Exit(1)
 	}
 }

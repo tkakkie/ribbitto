@@ -46,7 +46,8 @@ sys.exit(7 if os.getcwd().endswith("second") else 0)
             def recording_popen(args, *rest, **options):
                 process = popen(args, *rest, **options)
                 if args[-1] != "--observe":
-                    events.append("check")
+                    if args[0] == "make":
+                        events.append("check")
                     return process
                 stdout = process.stdout
 
@@ -111,7 +112,7 @@ sys.exit(7 if os.getcwd().endswith("second") else 0)
             observer.wait()
             observer.stdout.close()
 
-    def test_sigterm_kills_both_check_groups(self):
+    def test_sigterm_kills_both_check_groups_and_detached_descendants(self):
         with tempfile.TemporaryDirectory(dir="bin") as scratch:
             base = Path(scratch).resolve()
             roots = [base / name for name in ("first", "second")]
@@ -123,8 +124,12 @@ sys.exit(7 if os.getcwd().endswith("second") else 0)
             fake_make.write_text("#!" + sys.executable + "\n" + '''
 import os, subprocess, sys, time
 child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+# Like Chromium under the browser test, this one leaves the check's group.
+detached = subprocess.Popen([sys.executable, "-c", "import os, time; os.setpgrp(); time.sleep(120)"])
+while os.getpgid(detached.pid) != detached.pid:
+    time.sleep(0.01)
 with open("pids.tmp", "w") as out:
-    out.write(f"{os.getpid()} {child.pid}")
+    out.write(f"{os.getpid()} {child.pid} {detached.pid}")
 os.rename("pids.tmp", "pids")
 time.sleep(120)
 ''')
@@ -154,10 +159,11 @@ time.sleep(120)
                     runner.wait()
                 # On failure, do not leave the fake checks running.
                 for pid in pids:
-                    try:
-                        os.killpg(pid, signal.SIGKILL)
-                    except (ProcessLookupError, PermissionError):
-                        pass
+                    for send in (os.killpg, os.kill):
+                        try:
+                            send(pid, signal.SIGKILL)
+                        except (ProcessLookupError, PermissionError):
+                            pass
 
 
 def alive(pid):

@@ -12,12 +12,48 @@ from urllib.parse import parse_qs, urlsplit
 import ai_env
 
 
+def descendants(leader):
+    """Return the processes of leader's group and all their descendants.
+
+    A descendant may have moved to its own process group (Chromium, started
+    by the browser test, does), so it is found through parent PIDs, not the
+    group alone. The second set holds the leaders of those other groups.
+    """
+    table = subprocess.run(["ps", "-axo", "pid=,ppid=,pgid="], capture_output=True, text=True, check=True).stdout
+    rows = [tuple(map(int, line.split())) for line in table.splitlines() if line.strip()]
+    found = {pid for pid, _, pgid in rows if pgid == leader} | {leader}
+    grew = True
+    while grew:
+        grew = False
+        for pid, ppid, _ in rows:
+            if ppid in found and pid not in found:
+                found.add(pid)
+                grew = True
+    leaders = {pid for pid, _, pgid in rows if pid in found and pgid == pid and pid != leader}
+    return found, leaders
+
+
+def signal_quietly(send, target):
+    try:
+        send(target, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
 def stop_group(worker):
     # The make parent may already have exited while a child is still alive.
+    # Freeze the group so it cannot start more processes, then kill it and
+    # every descendant that left it, with their own groups.
     try:
-        os.killpg(worker.pid, signal.SIGKILL)
+        os.killpg(worker.pid, signal.SIGSTOP)
     except ProcessLookupError:
         pass
+    found, leaders = descendants(worker.pid)
+    signal_quietly(os.killpg, worker.pid)
+    for leader in leaders:
+        signal_quietly(os.killpg, leader)
+    for pid in found - {worker.pid}:
+        signal_quietly(os.kill, pid)
     worker.wait()
 
 

@@ -10,8 +10,8 @@ feature gains or loses a package or a table, or an exception is added.
 The code is a modular monolith by feature ([decision 14](../decisions/14-a-modular-monolith-by-feature-migrated-after-m3.md)):
 `identity`, `realtime`, `org` and `conversation` are modules
 ([modules](modules.md)).
-New code goes in its module. Each feature logically owns tables: only that feature writes them,
-apart from the known exceptions below. A feature may own no tables. Every
+New code goes in its module. Each feature logically owns tables: only that feature's
+SQL writes them. A feature may own no tables. Every
 package-import edge is listed in [`docs/dependencies.md`](../dependencies.md).
 
 | Feature | Packages and files | Owns |
@@ -39,6 +39,12 @@ its owner's test-only fixture package; [modules](modules.md) states the
 fixture rule.
 
 **Known exceptions.** Cross-feature writes that must commit atomically:
+
+These flows use the owning modules' injected APIs, never direct foreign-table
+SQL. The [module manifest](../../module_imports_test.go)'s `ownsTables` is checked
+against every query by [`tools/tablecheck`](../../tools/tablecheck/table_test.go)
+in `make check`. Foreign reads need a query/table exemption with a reason;
+pending maintainer reasons and stale entries fail. Writes have no exemptions.
 
 - setup (`org.Setup`, in one transaction through `TxRunner`) writes `organization`, `account`, `member`, `channel` and
   `setup`, so it creates `identity`'s first `account` and `conversation`'s

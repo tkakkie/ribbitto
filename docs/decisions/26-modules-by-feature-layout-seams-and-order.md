@@ -115,7 +115,8 @@
   starts (#362). Feature work pauses meanwhile.
 
 **Why:** the compiler, not only lint, then keeps a module's store package
-private; table ownership stays a separate, reviewed rule. In addition, the shared files that caused M1's conflicts (#106) split by
+private; direct-SQL table ownership is checked separately by
+[`tools/tablecheck`](../../tools/tablecheck/table_test.go) (#637). In addition, the shared files that caused M1's conflicts (#106) split by
 module. Consumer interfaces keep one transaction per flow without cycles.
 A small kernel and capability-only platform stop two new shared layers
 growing in place of the old ones. `realtime` moves second, not last as

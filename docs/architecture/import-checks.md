@@ -5,7 +5,7 @@ the other files.
 
 A package's sub-packages may import each other, apart from the store,
 wiring and fixture rules below. The [module manifest](../../module_imports_test.go)
-is the source of truth for module paths, edges and fixture exceptions. Its Go tests
+is the source of truth for module paths, edges, fixture exceptions and table ownership. Its Go tests
 check imports per source file and reject missing paths, duplicates, unknown edge
 names and unlisted module-shaped directories. Depguard keeps the other boundaries;
 both fail `make check` on a violating import:
@@ -35,6 +35,11 @@ both fail `make check` on a violating import:
   the bridge rule).
 
 This file, the manifest and `.golangci.yml` must agree; change them together.
+
+The tools-module test [`tablecheck`](../../tools/tablecheck/table_test.go) reads
+the manifest's literal `ownsTables` and parses SQL with PostgreSQL's parser.
+It rejects foreign writes, unapproved foreign reads, unknown tables, unsupported
+SQL/manifest shapes and stale read exemptions, including inside CTEs and subqueries.
 
 Staticcheck also runs on generated code, including templ output; the
 `_templ.go` exclusions apply only to errcheck and revive. `make lint-fixtures`

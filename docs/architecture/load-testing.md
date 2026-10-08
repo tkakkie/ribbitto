@@ -6,8 +6,9 @@ in-process cost per post is in [stream cost](stream-cost.md). Server
 counters are described in [development metrics](dev-metrics.md).
 
 **Keep it current:** #216's results and commands are in
-[load results](load-results.md), and its measurements for the dispositions
-are below. Change a disposition here when a measurement changes it.
+[load results](load-results.md), #219's in
+[reconnect storm results](load-results-restart.md), and their measurements
+for the dispositions are below. Change a disposition here when a measurement changes it.
 
 ## Assumptions and dispositions
 
@@ -90,3 +91,6 @@ From the run in [load results](load-results.md); every step's figures are in
   cannot prove that none remained. The snapshot 100 ms after closing can still
   catch a large step's connections being torn down (49,638 goroutines at
   40,000 streams).
+- **A7, SIGTERM to exit (#219, 2026-10-08):** 23–80 ms with 300 to 5,000
+  streams open and posts in flight, well within the 10 s exit deadline
+  ([reconnect storm results](load-results-restart.md#exit-and-readiness)).

@@ -1,8 +1,9 @@
 # Load client: restarting a child server
 
 How [the load client](load-client.md) restarts a server it started itself, for
-#219's reconnect storm. The reconnect model, receipts and the run-file format
-are in the load client's page.
+#219's reconnect storm; its results are in
+[reconnect storm results](load-results-restart.md). The reconnect model,
+receipts and the run-file format are in the load client's page.
 
 `-server PATH` starts an owned child; repeat `-server-arg ARG` for arguments.
 It inherits the environment and overrides `RIBBITTO_ADDR` with `-server-addr`

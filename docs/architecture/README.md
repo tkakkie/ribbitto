@@ -36,6 +36,7 @@ Read the file for the area you change:
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |
 | [`load-restart.md`](load-restart.md) | the load client's restart harness: an owned child server, its exit, and the drain to the final watermark |
+| [`load-results-restart.md`](load-results-restart.md) | reconnect storm results: restarting with every stream open, exit time, recovery, replay and the comparison |
 | [`web-layers.md`](web-layers.md) | what handlers, templ, htmx and JavaScript are each responsible for |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 

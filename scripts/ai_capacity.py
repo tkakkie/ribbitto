@@ -59,10 +59,13 @@ def stop_group(worker):
     # none remains: a member can fork before it dies, and its child inherits
     # the session. If ps fails, the group kill is all that can be done.
     session = worker.pid
-    try:
-        os.killpg(session, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        pass
+    # Only a leader that has not been reaped still owns its PID; once poll or
+    # wait has reaped it, killpg could reach a new group that reused the PID.
+    if worker.poll() is None:
+        try:
+            os.killpg(session, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
     for _ in range(100):
         members = session_members(session)
         if not members:
@@ -78,7 +81,13 @@ def measure(roots, packages, parallel):
     report = dict(packages=packages, parallel=parallel, count=1, require_db=1,
                   pgx_pool_max_conns=int(settings.get("pool_max_conns", [max(4, cpus)])[0]),
                   migration_pool_max_open=0, admin_connections_per_pgtest_call=1)
-    workers, outputs = [], []
+    workers, outputs, stopped = [], [], set()
+
+    def stop_once(worker):
+        if worker.pid not in stopped:
+            stopped.add(worker.pid)
+            stop_group(worker)
+
     observer = subprocess.Popen([str(ai_env.HELPER), "--observe"], stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     try:
@@ -98,13 +107,18 @@ def measure(roots, packages, parallel):
                                                 cwd=root, env=environment, stdout=output,
                                                 stderr=subprocess.STDOUT, start_new_session=True))
         while any(worker.poll() is None for worker in workers):
+            # Clean up a finished check at once, not when the slower one ends:
+            # its session's PID stays reserved only while members remain.
+            for worker in workers:
+                if worker.returncode is not None:
+                    stop_once(worker)
             if observer.poll() is not None:
                 raise RuntimeError("capacity observer failed")
             time.sleep(0.1)
         report["exit_codes"] = [worker.returncode for worker in workers]
         # Stop descendants before reading logs or releasing the observer slot.
         for worker in workers:
-            stop_group(worker)
+            stop_once(worker)
         workers.clear()
         observer.stdin.close()
         report["peak_connections"] = int(observer.stdout.read())
@@ -117,7 +131,7 @@ def measure(roots, packages, parallel):
         return report
     finally:
         for worker in workers:
-            stop_group(worker)
+            stop_once(worker)
         if observer.stdin and not observer.stdin.closed:
             observer.stdin.close()
         if observer.poll() is None:

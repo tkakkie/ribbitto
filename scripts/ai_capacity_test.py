@@ -173,6 +173,49 @@ time.sleep(120)
                             pass
 
 
+    def test_finished_check_is_cleaned_up_before_the_other_ends(self):
+        with tempfile.TemporaryDirectory(dir="bin") as scratch:
+            base = Path(scratch).resolve()
+            roots = [base / name for name in ("first", "second")]
+            for root in roots:
+                root.mkdir()
+                (root / "Makefile").write_text("$(GO_TEST_FLAGS)\n")
+            fake_make = base / "make"
+            # The first check exits at once and leaves a process in its session;
+            # the second reports whether that process died while it still ran.
+            fake_make.write_text("#!" + sys.executable + "\n" + '''
+import os, subprocess, sys, time
+first = os.path.join(os.path.dirname(os.getcwd()), "first")
+if os.getcwd() == first:
+    left = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+    with open("left.tmp", "w") as out:
+        out.write(str(left.pid))
+    os.rename("left.tmp", "left")
+    sys.exit(0)
+deadline = time.monotonic() + 20
+while not os.path.exists(os.path.join(first, "left")):
+    time.sleep(0.01)
+pid = int(open(os.path.join(first, "left")).read())
+verdict = "late"
+while time.monotonic() < deadline:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        verdict = "early"
+        break
+    state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    if not state or state.startswith("Z"):
+        verdict = "early"
+        break
+    time.sleep(0.05)
+open("verdict", "w").write(verdict)
+''')
+            fake_make.chmod(0o700)
+            with patch.dict(os.environ, PATH=str(base) + os.pathsep + os.environ["PATH"]):
+                report = ai_capacity.measure(roots, 1, 1)
+            self.assertEqual(report["exit_codes"], [0, 0])
+            self.assertEqual((roots[1] / "verdict").read_text(), "early")
+
 def alive(pid):
     try:
         os.kill(pid, 0)
@@ -207,3 +250,12 @@ class CleanupTest(unittest.TestCase):
                 patch.object(ai_capacity, "kill_member", side_effect=lambda pid, session: killed.append(pid)):
             ai_capacity.stop_group(worker)
         self.assertEqual(killed, [101, 102])
+
+    def test_cleanup_skips_the_group_kill_once_the_leader_is_reaped(self):
+        # A reaped leader's PID may already belong to a new process group.
+        worker = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+        worker.wait()
+        with patch.object(ai_capacity.os, "killpg") as killpg, \
+                patch.object(ai_capacity, "session_members", return_value=[]):
+            ai_capacity.stop_group(worker)
+        killpg.assert_not_called()

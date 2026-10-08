@@ -13,12 +13,13 @@
 // committed event sequence it has been told about (Raise) and lets a
 // connection block until that value passes its cursor (Wait) without a
 // lost wakeup. It is also the registry of open connections: Register caps
-// connections per account and gives each one a context that CancelAccount
-// or CancelSession ends. Events themselves are never held here; they are
-// read from event_log, so a hub that loses a notification (or restarts)
-// only delays delivery until the next raise. Watermark bounds that delay:
-// it periodically raises the hub to the committed sequences of the
-// organisations with connections, for commits that no Raise announced.
+// connections per process and per account and gives each one a context
+// that CancelAccount or CancelSession ends. Events themselves are never
+// held here; they are read from event_log, so a hub that loses a
+// notification (or restarts) only delays delivery until the next raise.
+// Watermark bounds that delay: it periodically raises the hub to the
+// committed sequences of the organisations with connections, for commits
+// that no Raise announced.
 //
 // A cursor the log can no longer serve gets a reset event instead of a
 // partial replay. Shared reads and renders reduce per-connection work

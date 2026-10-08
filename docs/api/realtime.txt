@@ -17,12 +17,13 @@ type Connection struct // Connection names who holds a stream: the organisation 
   field Session github.com/tkakkie/ribbitto/internal/kernel.ID
 const DefaultBatchSize untyped int = 100 // DefaultBatchSize bounds how many events one read returns.
 const DefaultCacheLoads untyped int = 16 // DefaultCacheLoads bounds concurrent loaders in each production cache.
+const DefaultMaxStreams untyped int = 5000 // DefaultMaxStreams caps open streams per process, leaving headroom below the measured active-stream ceiling (docs/architecture/load-testing.md).
 const DefaultRetention time.Duration = 604800000000000 // DefaultRetention keeps seven days of replay history.
 var ErrAccountCancelled error // ErrAccountCancelled ends connections cancelled by CancelAccount.
 var ErrCursorExpired error // ErrCursorExpired means the cursor is outside the valid replay range: below the replay boundary or above the committed event_seq.
 var ErrSessionEnded error // ErrSessionEnded ends connections cancelled by CancelSession.
 var ErrShutdown error // ErrShutdown ends every connection when the server shuts down.
-var ErrTooManyConnections error // ErrTooManyConnections refuses a registration over the account's limit.
+var ErrTooManyConnections error // ErrTooManyConnections refuses a registration over either stream limit.
 var ErrUnregistered error // ErrUnregistered ends a connection whose unregister function ran.
 type Event struct // Event is a durable change ordered within an organisation: an envelope that realtime routes without knowing its kind (decision 26).
   field AudienceMemberID *github.com/tkakkie/ribbitto/internal/kernel.ID
@@ -47,14 +48,15 @@ type Hub struct // Hub holds, per organisation, the highest committed event sequ
   func (*Hub).Latest(org github.com/tkakkie/ribbitto/internal/kernel.ID) int64 // Latest returns the organisation's latest sequence the hub has been told about; 0 if none.
   func (*Hub).Raise(org github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64) // Raise records that the organisation's events up to seq are committed.
   func (*Hub).RaiseIfActive(org github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64) // RaiseIfActive is Raise for an organisation that still has a registered connection, checked under the same lock, so a value read while its last connection went away does not raise it.
-  func (*Hub).Register(parent context.Context, c Connection, limit int) (ctx context.Context, unregister func(), err error) // Register adds a connection unless its account already holds limit connections, in which case it returns ErrTooManyConnections and nothing to unregister, or the hub is shutting down (ErrShutdown).
+  func (*Hub).Register(parent context.Context, c Connection, limit int) (ctx context.Context, unregister func(), err error) // Register adds a connection unless the process already holds maxStreams connections or its account holds limit connections, returning ErrTooManyConnections and nothing to unregister, or the hub is shutting down (ErrShutdown).
   func (*Hub).Wait(ctx context.Context, org github.com/tkakkie/ribbitto/internal/kernel.ID, after int64) (int64, error) // Wait blocks until the organisation's latest sequence is greater than after and returns that sequence, at once if it already is.
   func (*Hub).Waiting(org github.com/tkakkie/ribbitto/internal/kernel.ID) int // Waiting reports how many calls of Wait for the organisation are counted as blocked, so tests can synchronise on it instead of sleeping.
 type Kinds map[EventKind]Router // Kinds registers the Router of each kind a reader fills in; wiring builds it.
 func MergeKinds(registries ...Kinds) (Kinds, error) // MergeKinds combines publisher registries into a fresh map without modifying them.
 func NewCache[K comparable, V any](parent context.Context, capacity int, maxLoads int, ttl time.Duration, loadTimeout time.Duration, keep func(K, V) bool, now func() time.Time) *Cache[K, V] // NewCache returns a cache holding at most capacity entries, each for at most ttl, with at most maxLoads loaders running until they actually return.
 func NewCachedEvents(parent context.Context, events EventReader, hub *Hub, capacity int, ttl time.Duration) *CachedEvents // NewCachedEvents wraps events.
-func NewHub() *Hub // NewHub returns an empty hub.
+func NewHub() *Hub // NewHub returns an empty hub with DefaultMaxStreams as its process cap.
+func NewHubWithMaxStreams(maxStreams int) *Hub // NewHubWithMaxStreams returns an empty hub with the given process cap.
 type Outgoing struct // Outgoing is one event ready to send.
   field Data []byte
   field ID int64

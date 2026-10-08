@@ -142,6 +142,10 @@ missing 1, unexpected 1, replayed duplicates 2 and repeated pairs 1.
 
 ## A ceiling search
 
+For steps above the default cap, raise `RIBBITTO_MAX_STREAMS` on the server
+above the largest step (as [results](load-results.md) does with 60000), or
+they fail with `Refused429`.
+
 Run one step per invocation and stop at the first step that does not pass
 ([results](load-results.md)):
 

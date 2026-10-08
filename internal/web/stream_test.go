@@ -461,7 +461,15 @@ func TestOpenStreamCleanup(t *testing.T) {
 // An account at its cap is refused with 429 before anything is streamed;
 // once a slot is freed, the next stream starts.
 func TestStreamCapPerAccount(t *testing.T) {
-	hub := realtime.NewHub()
+	testStreamCap(t, realtime.NewHub(), kernel.ID{1})
+}
+
+func TestStreamCapPerProcess(t *testing.T) {
+	testStreamCap(t, realtime.NewHubWithMaxStreams(1), kernel.ID{2})
+}
+
+func testStreamCap(t *testing.T, hub *realtime.Hub, occupiedAccount kernel.ID) {
+	t.Helper()
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -476,12 +484,17 @@ func TestStreamCapPerAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	url := view.ChannelURL("acme", kernel.ID{1}) + "/events?after=0"
-	// Alice (oneSession's account 1) already holds her one stream.
-	_, unregister, err := hub.Register(t.Context(), realtime.Connection{Organization: kernel.ID{9}, Account: kernel.ID{1}, Session: kernel.ID{0x52}}, 1)
+	// Occupy either Alice's account slot or the process slot with another
+	// account and organisation, leaving Alice's account slot available.
+	_, unregister, err := hub.Register(t.Context(), realtime.Connection{Organization: kernel.ID{8}, Account: occupiedAccount, Session: kernel.ID{0x52}}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(unregister)
 	w := serveForm(handler, http.MethodGet, url, "live", nil)
+	if seen != -1 || reads.Load() != 0 || hub.Connections() != 1 || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("refusal registered a stream, re-checked the session, read events or set SSE headers")
+	}
 	if w.Code != http.StatusTooManyRequests || strings.Contains(w.Body.String(), "data:") || w.Header().Get("Content-Type") == "text/event-stream; charset=utf-8" {
 		t.Fatalf("over the cap: status %d, type %q; want 429 before streaming", w.Code, w.Header().Get("Content-Type"))
 	}

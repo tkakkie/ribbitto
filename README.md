@@ -63,7 +63,7 @@ ports must match the registry; reruns keep free ports and replace busy ones.
 `make ai-health` checks the shared admin connection without printing credentials.
 `make ai-env-clean` drops this worktree's dev database and releases its ports; it also
 drops the databases and ports of registry entries whose worktrees are gone.
-See [database development](docs/database.md) for configuration overrides.
+See [worktree environments](docs/worktree-env.md) for configuration overrides.
 The server never migrates on startup.
 
 Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the address of the
@@ -163,6 +163,7 @@ cursor above the restored log gets `reset` and reloads the page
 - [Domain](docs/domain/README.md) — glossary and index; [entities](docs/domain/entities.md), [invariants](docs/domain/invariants.md), [unread rules](docs/domain/unread.md)
 - [UI](docs/ui.md) — design direction, tokens, contrast; [markup and accessibility](docs/accessibility.md)
 - [Decisions](DECISIONS.md) — what was decided and why
+- [Worktree environments](docs/worktree-env.md) — dev databases, port allocation, health checks and cleanup
 - [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow/README.md) · [Database development](docs/database.md)
 
 ## Contributing

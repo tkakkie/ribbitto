@@ -135,6 +135,15 @@ func checkStatement(tree any, tables map[string]string) error {
 			}
 			refs = list(s["fromClause"])
 		case "UpdateStmt":
+			table, _ := object(s["relation"])["relname"].(string)
+			if column := tables[table]; column != "" {
+				// A scoped WHERE cannot prevent SET from moving the row's ownership.
+				for _, target := range list(s["targetList"]) {
+					if node(target, "ResTarget")["name"] == column {
+						return fmt.Errorf("scope assignment: %s.%s", table, column)
+					}
+				}
+			}
 			refs = append([]any{map[string]any{"RangeVar": s["relation"]}}, list(s["fromClause"])...)
 		case "DeleteStmt":
 			refs = append([]any{map[string]any{"RangeVar": s["relation"]}}, list(s["usingClause"])...)
@@ -310,7 +319,7 @@ func schema(migrations []string) (map[string]string, error) {
 
 func exemptions(text string, queries, tables map[string]string) (map[string]string, error) {
 	allow := map[string]string{}
-	pending := regexp.MustCompile(`(?i)pending\s+maintainer\s*:`)
+	pending := regexp.MustCompile(`(?i)pending[^a-z0-9]+maintainer\s*:`)
 	provenance := regexp.MustCompile(`(?i)(#[1-9][0-9]*\b|https://github\.com/[^/\s]+/[^/\s]+/pull/[1-9][0-9]*#issuecomment-[1-9][0-9]*\b|\bdecision\s+[1-9][0-9]*\b)`)
 	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
 		if strings.TrimSpace(line) == "" {

@@ -127,7 +127,8 @@ generated files.
 
 `make check` runs `go -C tools test -race ./scopecheck`: PostgreSQL's parser
 requires each owned table's own WHERE scope in SELECT, UPDATE and DELETE,
-including CTE bodies; joins never carry scope. Ownership comes from migration
+including CTE bodies; joins never carry scope. UPDATE may not assign the scope
+column (`organization_id`, or `id` for `organization`). Ownership comes from migration
 columns, with `organization` scoped by `id` and an explicit installation-wide
 list; unknown ownership, scoped list entries (except singleton `setup`) and stale
 entries fail. Plain INSERT VALUES and INSERT SELECT reading only same-statement

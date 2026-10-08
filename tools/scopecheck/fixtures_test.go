@@ -24,6 +24,12 @@ func TestMutations(t *testing.T) {
 		{"distinct", "SELECT * FROM member WHERE organization_id IS DISTINCT FROM $1", "missing scope"},
 		{"not_equal", "SELECT * FROM member WHERE organization_id <> $1", "missing scope"},
 		{"update_target", "UPDATE member SET handle = $1", "missing scope"},
+		{"update_scope", "UPDATE channel SET organization_id = $1 WHERE organization_id = $2 AND id = $3", "scope assignment: channel.organization_id"},
+		{"update_organization_scope", "UPDATE organization SET id = $1 WHERE id = $2", "scope assignment: organization.id"},
+		{"update_aliased_scope", "UPDATE channel c SET organization_id = $1 WHERE c.organization_id = $2 AND c.id = $3", "scope assignment: channel.organization_id"},
+		{"update_aliased_organization_scope", "UPDATE organization o SET id = $1 WHERE o.id = $2", "scope assignment: organization.id"},
+		{"update_scoped", "UPDATE channel SET name = $1 WHERE organization_id = $2 AND id = $3", ""},
+		{"update_aliased_scoped", "UPDATE channel c SET name = $1 WHERE c.organization_id = $2 AND c.id = $3", ""},
 		{"using_unscoped", "DELETE FROM member m USING member n WHERE m.organization_id = $1", "missing scope"},
 		{"qualified_table", "SELECT * FROM public.member WHERE organization_id = $1", "unsupported shape"},
 		{"literal", "SELECT * FROM member WHERE organization_id = 'abc'", "missing scope"},
@@ -74,7 +80,7 @@ func TestMutations(t *testing.T) {
 		{"insert_CTE_unscoped_read", "WITH d AS (SELECT * FROM member) INSERT INTO member (organization_id) VALUES ($1)", "missing scope"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := check(tc.sql, map[string]string{"member": "organization_id", "message": "organization_id", "organization": "id", "setup": ""})
+			err := check(tc.sql, map[string]string{"member": "organization_id", "channel": "organization_id", "message": "organization_id", "organization": "id", "setup": ""})
 			if tc.want == "" {
 				if err != nil {
 					t.Fatal(err)
@@ -122,6 +128,9 @@ func TestPendingMaintainerReasons(t *testing.T) {
 	for _, tc := range []struct{ name, reason string }{
 		{"two_spaces", "PENDING  MAINTAINER: revisit later #658"},
 		{"tab", "PENDING\tMAINTAINER: revisit later #658"},
+		{"hyphen", "PENDING-MAINTAINER: revisit later #658"},
+		{"underscore", "PENDING_MAINTAINER: revisit later #658"},
+		{"non_breaking_space", "PENDING\u00a0MAINTAINER: revisit later #658"},
 		{"space_before_colon", "PENDING MAINTAINER : revisit later #658"},
 		{"lower_case", "pending maintainer: revisit later #658"},
 		{"after_other_text", "Revisit later: PENDING MAINTAINER: #658"},

@@ -9,7 +9,7 @@ the same benchmark.
 ## Running it
 
 It runs only when asked and never in CI. Export `RIBBITTO_TEST_DATABASE_URL`
-first, as for `make check` ([`database.md`](../database.md)): the admin URL of a
+first, as for `make check` ([database tests](../database-tests.md)): the admin URL of a
 disposable PostgreSQL on loopback, kept out of the command line. The two runs
 below then used:
 

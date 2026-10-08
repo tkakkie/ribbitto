@@ -4,10 +4,11 @@
 maintainer is asked**, whatever its risk class: Grok (tier A), Muse Code
 (tier B), or none (tier C). The required review must run; its
 findings are advisory. It does not count towards the two review rounds. The
-initial review runs after the cross-review and after merging the current
-`main`, or after confirming that no merge is needed (*When it runs*, below),
-while the pull request is still a draft, and before it is marked ready for
-review. Later pushes are reviewed again under the completion rule.
+initial review runs after the cross-review, after merging the current
+`main` (or confirming that no merge is needed) and after Copilot's one
+review and any follow-up (*When it runs*, below), while the pull request is
+still a draft, and before it is marked ready for review. Later pushes are
+reviewed again under the completion rule.
 
 ## Which review runs
 
@@ -62,10 +63,39 @@ get one adversarial review).
     runs, wherever it lives: a test or an assertion, `Makefile`, `tools/**`,
     or a linter, vet or code-generation setting (`.golangci.yml`,
     `sqlc.yaml`).
+  - a change wholly in isolated development tooling that A's first item
+    would otherwise cover (*Isolated development tooling*, below).
 - **C — none:** everything that matches no A or B case: tests outside A's
   and B's areas that weaken no check, comments and documentation outside
   the gate documents, lint rules that only tighten, dependency bumps, and
   ordinary feature work outside A and B.
+
+**Isolated development tooling.** A change that would be tier A only by
+A's first item (concurrency, caches or background work, real-time delivery,
+ordered transactions) is tier B when it lies wholly in demonstrably isolated
+development tooling. Such tooling is a command or script that runs only when
+a developer invokes it: never in production, in deployment, in migrations or
+in a CI job (its own tests in `make check` aside), and no production or CI
+code imports or invokes it. A defect there skews a measurement on a
+developer's machine; it cannot leak data or lose events in production. Each
+qualifying path is listed here with its evidence:
+
+- `cmd/loadgen`, the load generator. It imports no other ribbitto package
+  (`go list -deps ./cmd/loadgen`), and nothing imports it. No `Makefile`
+  target, CI job, deployment file or migration runs it; `make check` runs
+  only its own tests.
+
+`scripts/deps.sh` is not listed: CI's `ci` job and `make check` run it.
+The exception changes nothing else:
+
+- production commands, migrations, deployment tooling and shared code are
+  classified by behaviour, wherever they live;
+- code that a tool imports is classified by its own area;
+- A's second item (the gate files, `scripts/ai/**`, `.github/**`) applies
+  to a tool's change as to any other;
+- tests that guard A's areas stay tier B;
+- a change that removes, skips or loosens a check `make check` or CI runs
+  stays at least tier B, in a listed tool too.
 
 The template's *Adversarial* field names the review: `Grok`,
 `Muse Code (B)`,
@@ -76,11 +106,14 @@ areas that is tier B. The other AI checks the tier against what the diff
 does, not only the paths it touches.
 
 **When it runs:** the initial review runs after the other AI approves and
-its findings are fixed, and after the branch has merged the current `main`
-or it is confirmed that no merge is needed: on that head, while the pull request is still a draft, immediately
-before `ai-reviewed`. It does not run alongside the first cross-review. A
-report on an earlier head covers a later one only under the completion
-rule below.
+its findings are fixed, after the branch has merged the current `main` or
+it is confirmed that no merge is needed, and after Copilot, requested by
+hand on the draft, has reviewed and any change answering it has passed the
+Copilot follow-up check ([reviewing](reviewing.md)): on that head, while the
+pull request is still a draft, immediately before `ai-reviewed`. GitHub
+cannot merge a draft, so this holds the merge until the review completes.
+It does not run alongside the first cross-review. A report on an earlier
+head covers a later one only under the completion rule below.
 
 **A required review counts only when it completes:** a report on the pull
 request at its head commit, each finding with a disposition. After a later
@@ -89,7 +122,8 @@ the last adversarially reviewed head (or the base, if none) matches tier A
 or B, the **pull request's** tier is recomputed over its whole diff at the
 new head, never lower than that diff's, and reviewed again: a pull request
 that is or becomes tier A needs Grok again, and a tier C one lifted to B or
-A gets its first review. An earlier report
+A gets its first review. A pull request already marked ready is converted
+back to a draft until that review completes. An earlier report
 covers a later head only when every later commit is tier C. A time-out, an outage or an
 empty run is not a review: retry once, then ask the maintainer.
 When Grok is unavailable (quota or outage), the failed runs and their

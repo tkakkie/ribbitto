@@ -19,6 +19,8 @@ def session_members(session):
     process group (Chromium, started by the browser test, does) or loses its
     parent stays in that session, so the session finds it where parent PIDs
     or the group would not. macOS ps prints no session IDs, so getsid asks.
+    Accepted limit (maintainer, #636): a descendant that calls setsid() leaves
+    the session and is not found; the browser test's Chromium does not.
     """
     try:
         listing = subprocess.run(["ps", "-axo", "pid="], capture_output=True, text=True,
@@ -39,9 +41,11 @@ def session_members(session):
 def kill_member(pid, session):
     # Check the session again just before the signal. macOS has no pidfd, so a
     # member that exits and whose PID is reused in the instant between this
-    # check and the kill cannot be told apart; PIDs are allocated sequentially,
-    # which makes immediate reuse unlikely, and the check keeps the window to
-    # these two calls.
+    # check and the kill cannot be told apart: SIGKILL may then, rarely, reach
+    # an unrelated process. PIDs are allocated sequentially, which makes
+    # immediate reuse unlikely, and the check keeps the window to these two
+    # calls. The maintainer accepted this limit for this development-only
+    # runner (#636); do not add more PID management here.
     try:
         if os.getsid(pid) == session:
             os.kill(pid, signal.SIGKILL)

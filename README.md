@@ -32,14 +32,15 @@ PostgreSQL with pgx, sqlc and goose.
 
 ## Development
 
-Requires Go (see `go.mod` for the version) and Docker Compose for PostgreSQL 18.
+Requires Go (see `go.mod` for the version), Python 3 and Docker Compose for PostgreSQL 18.
 
 ```sh
 cp .env.example .env
 set -a; . ./.env; set +a    # export configuration; the binary does not load .env
 make db-up                 # starts PostgreSQL and waits for health
-go run ./cmd/ribbitto migrate up
-go run ./cmd/ribbitto       # serves http://localhost:8080/ (or: ... serve)
+make migrate               # DIRECTION=up|down|status
+make seed ARGS='-messages 100' # optional development fixtures
+go run ./cmd/ribbitto       # http://localhost:8080; health at /healthz
 make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
 make dev                   # watches templ and CSS; restarts the server
@@ -51,8 +52,19 @@ make api                   # regenerates docs/api/ after a module API or doc-com
 make db-down               # stops PostgreSQL; keeps the named data volume
 ```
 
-The server listens at http://localhost:8080/healthz and never migrates on
-startup.
+For parallel worktrees, optionally run `make ai-env` after `make db-up`.
+It migrates a separate dev database and allocates app/metrics ports in
+`.env.local`; the Make targets above then use those values instead of
+`RIBBITTO_DATABASE_URL`. Start other commands with
+`python3 scripts/ai_env.py run <command>` to use that configuration.
+Commands use the worktree root even from a subdirectory. Git worktree IDs
+keep databases across moves and symlink spellings. Local database names and
+ports must match the registry; reruns keep free ports and replace busy ones.
+`make ai-health` checks the shared admin connection without printing credentials.
+`make ai-env-clean` drops this worktree's dev database and releases its ports; it also
+drops the databases and ports of registry entries whose worktrees are gone.
+See [worktree environments](docs/worktree-env.md) for configuration overrides.
+The server never migrates on startup.
 
 Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the address of the
 proxy that connects to ribbitto, as a `/32` or `/128` CIDR (for example
@@ -104,6 +116,8 @@ after the package must be a valid Go identifier, exported or unexported, and
 the package directory must contain at least one regular `.go` file.
 Decision records are exempt from this path check because
 they describe history; their Markdown links and anchors are still checked.
+Worktree tooling uses Python 3 standard-library unittests (`make check-ai-env`);
+there is no Python lint/format gate.
 
 The AI launchers' self-tests, most of its time, run
 only when the change since `LAUNCHER_TESTS_BASE` (default `origin/main`;
@@ -149,6 +163,7 @@ cursor above the restored log gets `reset` and reloads the page
 - [Domain](docs/domain/README.md) — glossary and index; [entities](docs/domain/entities.md), [invariants](docs/domain/invariants.md), [unread rules](docs/domain/unread.md)
 - [UI](docs/ui.md) — design direction, tokens, contrast; [markup and accessibility](docs/accessibility.md)
 - [Decisions](DECISIONS.md) — what was decided and why
+- [Worktree environments](docs/worktree-env.md) — dev databases, port allocation, health checks and cleanup
 - [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow/README.md) · [Database development](docs/database.md)
 
 ## Contributing

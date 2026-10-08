@@ -7,6 +7,7 @@ used by #216). **For disposable machines only.**
 
 Set `RIBBITTO_DEV_METRICS_ADDR` to a loopback IP address and a non-zero port, such as
 `127.0.0.1:9090`, and `ribbitto serve` also serves `GET /metrics` there.
+`make ai-env` enables metrics in the dev wrapper on `.env.local`'s metrics port.
 
 - **Off by default.** When the setting is empty, `serve` starts no metrics
   listener and `postgres.OpenPool` installs no pgx tracer, so the server

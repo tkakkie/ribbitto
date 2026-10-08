@@ -57,6 +57,10 @@ It migrates a separate dev database and allocates app/metrics ports in
 `.env.local`; the Make targets above then use those values instead of
 `RIBBITTO_DATABASE_URL`. Start other commands with
 `python3 scripts/ai_env.py run <command>` to use that configuration.
+Commands use the worktree root even from a subdirectory. Git worktree IDs
+keep databases across moves and symlink spellings. Local database names and
+ports must match the registry; busy ports are reused only when `/healthz`
+identifies this worktree's server.
 `make ai-health` checks the shared admin connection without printing credentials.
 `make ai-env-clean` drops this worktree's dev database and releases its ports; it also
 drops the databases and ports of registry entries whose worktrees are gone.

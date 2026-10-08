@@ -8,21 +8,25 @@ workflow or the integration-test setup changes.
 applies migrations. `.env.example` contains the local Compose URLs; export
 them into the shell as shown in the README. `.env` is ignored by Git.
 
-`make ai-env` creates/migrates a path-hashed dev database through the admin
+`make ai-env` creates/migrates a database hashed from the resolved worktree root through
 `RIBBITTO_TEST_DATABASE_URL`. Its ignored `.env.local` stores only its name and
 app/metrics ports. `make dev`, `make migrate DIRECTION=up|down|status`,
 `make seed ARGS='-messages 100'` and `make schema-docs` read it. For other
 commands: `python3 scripts/ai_env.py run <command>`. Without `.env.local`,
-shell configuration applies. The test admin URL stays unchanged.
+shell configuration applies. Local names and integer ports must match the registry
+before any connection; only the parsed admin URL's database field changes.
 
 Automatic ports use 20000–32767, below the usual OS ephemeral ranges,
 starting at a path-derived candidate; `ai-env.json` in the shared Git
 directory is published atomically under the OS advisory lock `ai-env.lock`.
 Allocation skips reserved/bound IPv4/IPv6 ports; `AI_APP_PORT`/`AI_METRICS_PORT`
-overrides use the same checks. Reruns keep reservations with a running server.
-Stale entries absent from Git's worktrees or missing `.git` metadata release
-ports and drop their path-derived dev databases. Only registry entries are
-considered; cleanup never scans by database prefix or touches test templates.
+overrides use the same checks. Busy reservations require loopback `GET /healthz`
+with this worktree's `X-Ribbitto-Worktree` marker on app and metrics listeners.
+Entries use stable Git worktree IDs (or `main`); resolved paths are retargeted on
+moves, retaining the original database name. Subdirectories use the Git root.
+Only IDs absent from Git's worktree list release ports and drop databases;
+prunable entries remain until pruned. Legacy path entries upgrade when identified;
+unknown identities refuse cleanup. No prefix scans or test-template cleanup.
 `make ai-env-clean` drops only this worktree's dev database and releases ports.
 `make ai-health` distinguishes missing/invalid admin configuration, connection
 failures and SQL failures without credentials;

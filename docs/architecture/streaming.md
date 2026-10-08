@@ -33,13 +33,15 @@ The retention period defaults to seven days; see [database configuration](../dat
 - Every event is authorized for the connection's member **after it is
   rendered and immediately before sending**, including events already
   queued: access may have been lost in between, also while a render waits on
-  the database (#262). The check stays one membership query per event; a
+  the database (#262). Today the check is one membership query per event; a
   render that is then denied is discarded, and renders are shared and cached
   anyway. Only the write itself remains between the check and the
   connection. The check itself is `org`'s authorization, reached through the
-  `Authorizer` interface that `realtime` defines. How it could stop costing a
-  query per stream per event is a proposal awaiting the maintainer's decision
-  ([stream authorization cost](stream-authorization.md), #622).
+  `Authorizer` interface that `realtime` defines. The per-event query is to
+  be replaced, through #669 and #670, by option (a2) of
+  [stream authorization cost](stream-authorization.md#decision): a cached
+  allow, kept while an access epoch that database triggers bump is unchanged
+  (maintainer's decision on #622).
 - A stream registers with the hub under its session (#207), then looks the
   session up again, so a sign-out in between still stops it. Deleting a
   session (sign-out, or a sign-in replacing it) cancels that session's

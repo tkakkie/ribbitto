@@ -1,10 +1,11 @@
 # Stream authorization cost
 
-How a stream could keep #262's guarantee without one database query per
-connection per event (#622). **This is a proposal, not a decision:** the
-maintainer picks an option. Until then the rule in
-[streaming](streaming.md#authorization-and-revocation) stands (one
-membership query per event), and nothing here is implemented.
+How a stream keeps #262's guarantee without one database query per
+connection per event (#622). **Decided by the maintainer on 2026-10-08:
+option (a2), with its triggers mandatory** ([Decision](#decision)). It is
+not implemented yet: until the implementation issues (#669, #670, #671) land, the rule in
+[streaming](streaming.md#authorization-and-revocation) (one membership query
+per event) is the current behaviour. The comparison is kept as the reasoning.
 
 ## Today
 
@@ -19,8 +20,8 @@ membership query per event), and nothing here is implemented.
   once, while the others skip it before rendering
   (`internal/realtime/subscription.go`). So a post costs one query per
   interested stream, `N` below, plus shared work. In the benchmark and in
-  #216 every stream followed one channel, so `N` was every open stream. With #227's caches the benchmark measured `N + 10`
-  queries per post and passed 2,000 streams ([stream cost](stream-cost.md)).
+  #216 every stream followed one channel, so `N` was every open stream.
+  With #227's caches the benchmark measured `N + 10` queries per post and passed 2,000 streams ([stream cost](stream-cost.md)).
   End to end at 10 posts/s with pgx's default pool of 10, 7,000 streams pass
   (7,015 queries per post) and 10,000 fail (p95 2.8 s over HTTP/1.1, 4.3 s
   through Caddy over HTTP/2); a 40-connection pool fails at 15,000
@@ -129,9 +130,10 @@ cap), and close to `N` in real use, where a member has one or two tabs.
 | (b) | first event of a batch only | no change | about `N` | small | sends after revocation |
 | (c) | yes | yes | at least `N / 16`, about `N` in use | small | still grows with streams |
 
-## Recommendation (for the maintainer to decide)
+## Decision
 
-**(a2), with its triggers.** It is the only option that keeps #262's
+**(a2), with its triggers mandatory** (maintainer, 2026-10-08, on #622),
+as recommended here. It is the only option that keeps #262's
 guarantee by the same ordering argument as today (the deciding read starts
 after the render) and can stop the per-post cost following `N`. It also
 covers direct SQL, today's only revocation path, and needs nothing new for
@@ -143,14 +145,12 @@ for a primary-key read, and the choice should be revisited.
 - **Where it lives:** `org.Authorizer` keeps the cache and the shared read
   behind `MayReceive`, so `realtime`'s loop and its `Authorizer` interface do
   not change and `org` remains the only authorization logic.
-- **Left to the implementation issue:** whether a removed member's open
+- **Left to the implementation issues:** whether a removed member's open
   stream ends rather than querying for every event it skips; whether joins
   bump the epoch (only allows are cached, so granting access needs no bump).
-- **Recording it:** the pick replaces streaming.md's rule. No settled
-  decision covers the per-event check (decision 23 covers the event log and
-  the hub), so a decision record is needed only if the pick changes one. The
-  implementation becomes its own issue or issues, high risk and tier A;
-  #231 lists most of the required checks and can be rewritten to the pick.
+- **Recorded here and in streaming.md;** no settled decision covers the
+  per-event check (decision 23 covers the event log and the hub), so there
+  is no decision record. The implementation issues (#669, #670, #671) are high risk; #669 and #670 are tier A.
 
 ### Tests that would prove (a2)
 

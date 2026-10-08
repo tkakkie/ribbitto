@@ -117,7 +117,9 @@ vuln:
 
 # The lint fixtures (internal/lintfixture, built only with the lintfixture
 # tag) prove that depguard rejects a module root importing pgxbridge and
-# accepts a store doing so; plain lint never sees them.
+# accepts a store doing so, and staticcheck rejects ignored results even in
+# generated templates, and bodyclose rejects unclosed HTTP response bodies;
+# plain lint never sees them.
 lint-fixtures: $(GOLANGCI_LINT)
 	@set -eu; status=0; \
 	out=$$($(GOLANGCI_LINT) run --build-tags lintfixture ./internal/lintfixture/... 2>&1) || status=$$?; \
@@ -126,6 +128,14 @@ lint-fixtures: $(GOLANGCI_LINT)
 	fi; \
 	if printf '%s\n' "$$out" | grep -q 'lintfixture/internal/postgres/'; then \
 		echo "lint-fixtures: depguard must accept pgxbridge in a store"; printf '%s\n' "$$out"; exit 1; \
+	fi; \
+	for file in bad.go bad_templ.go; do \
+		if ! printf '%s\n' "$$out" | grep -F "lintfixture/$$file:" | grep -q 'SA4017:.*TrimSpace'; then \
+			echo "lint-fixtures: staticcheck must reject an ignored result in $$file"; printf '%s\n' "$$out"; exit 1; \
+		fi; \
+	done; \
+	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/bodyclose.go:' | grep -q 'response body must be closed.*(bodyclose)'; then \
+		echo "lint-fixtures: bodyclose must reject an unclosed HTTP response body"; printf '%s\n' "$$out"; exit 1; \
 	fi
 
 lint: $(GOLANGCI_LINT)

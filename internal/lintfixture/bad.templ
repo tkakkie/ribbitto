@@ -1,0 +1,11 @@
+//go:build lintfixture
+
+package lintfixture
+
+import "strings"
+
+// IgnoredGeneratedResult proves generated templates still run staticcheck.
+templ IgnoredGeneratedResult(value string) {
+	{{ strings.TrimSpace(value) }}
+	<p>{ value }</p>
+}

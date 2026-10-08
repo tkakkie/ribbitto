@@ -61,10 +61,7 @@ func closedWithin(t *testing.T, conn net.Conn, limit time.Duration) bool {
 		t.Fatal(err)
 	}
 	_, err := io.Copy(io.Discard, conn)
-	if errors.Is(err, os.ErrDeadlineExceeded) {
-		return false
-	}
-	return true
+	return !errors.Is(err, os.ErrDeadlineExceeded)
 }
 
 func send(t *testing.T, conn net.Conn, request string) {

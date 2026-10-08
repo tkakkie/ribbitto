@@ -37,7 +37,9 @@ The retention period defaults to seven days; see [database configuration](../dat
   render that is then denied is discarded, and renders are shared and cached
   anyway. Only the write itself remains between the check and the
   connection. The check itself is `org`'s authorization, reached through the
-  `Authorizer` interface that `realtime` defines.
+  `Authorizer` interface that `realtime` defines. How it could stop costing a
+  query per stream per event is a proposal awaiting the maintainer's decision
+  ([stream authorization cost](stream-authorization.md), #622).
 - A stream registers with the hub under its session (#207), then looks the
   session up again, so a sign-out in between still stops it. Deleting a
   session (sign-out, or a sign-in replacing it) cancels that session's

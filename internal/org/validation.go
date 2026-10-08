@@ -22,7 +22,7 @@ func ValidateSlug(value string) (string, error) {
 		return "", fmt.Errorf("slug must contain 1–63 characters with alphanumeric ends")
 	}
 	for _, c := range value {
-		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
 			return "", fmt.Errorf("slug must contain only a-z, 0-9 and hyphens")
 		}
 	}

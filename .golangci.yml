@@ -8,9 +8,10 @@ linters:
     - errcheck
     - forbidigo
     - revive
+    - sqlclosecheck
     - staticcheck
   exclusions:
-    # Generated code must still pass bodyclose, staticcheck, the raw HTML ban and import rules.
+    # Generated code must pass every enabled linter except those excluded below.
     generated: disable
     rules:
       - path: '_templ\.go$'

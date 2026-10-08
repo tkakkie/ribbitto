@@ -22,7 +22,7 @@ def need_db(test):
 
 def allocate(root, common, live, candidate, result):
     try:
-        with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_identity", side_effect=lambda common, key: key), patch.object(env, "initial_port", return_value=candidate):
+        with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_token", side_effect=lambda common, key, create=False: key), patch.object(env, "initial_port", return_value=candidate):
             env.configure(root, common)
         result.put("ok")
     except Exception:
@@ -99,7 +99,7 @@ class EnvironmentTest(unittest.TestCase):
                 registry = common / "ai-env.json"
                 entries = json.loads(registry.read_text())
                 self.assertEqual(len({port for entry in entries.values() for port in entry["ports"]}), 4)
-                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_identity", side_effect=lambda common, key: key):
+                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_token", side_effect=lambda common, key, create=False: key):
                     with patch.dict(os.environ, AI_APP_PORT=str(entries[roots[0].name]["ports"][0])):
                         with self.assertRaisesRegex(RuntimeError, "collision"):
                             env.configure(roots[1], common)
@@ -129,7 +129,7 @@ class EnvironmentTest(unittest.TestCase):
                     if worker.is_alive():
                         worker.terminate()
                         worker.join()
-                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_identity", side_effect=lambda common, key: key):
+                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_token", side_effect=lambda common, key, create=False: key):
                     for root in roots:
                         env.configure(root, common, clean=True)
 
@@ -147,11 +147,11 @@ class EnvironmentTest(unittest.TestCase):
             if listed:
                 live["stale"] = stale
             registry = common / "ai-env.json"
-            registry.write_text(json.dumps({"stale": {"path": str(stale), "database_path": str(stale), "ports": [], "metadata_identity": "stale"}}))
+            registry.write_text(json.dumps({"stale": {"path": str(stale), "database_path": str(stale), "ports": [], "metadata_token": "stale"}}))
             stale_name = env.database_name(str(stale))
             env.sql('CREATE DATABASE "' + stale_name + '" TEMPLATE template0')
             try:
-                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_identity", side_effect=lambda common, key: key):
+                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_token", side_effect=lambda common, key, create=False: key):
                     env.configure(root, common)
                     if listed:
                         self.assertIn("stale", json.loads(registry.read_text()))
@@ -181,7 +181,7 @@ class PortTest(unittest.TestCase):
         (self.root / ".git").touch()
         for target, kwargs in (("worktree_root", {"side_effect": lambda path: path.resolve()}),
                                ("worktrees", {"return_value": {"live": self.root}}),
-                               ("metadata_identity", {"return_value": "live"})):
+                               ("metadata_token", {"return_value": "live"})):
             mock = patch.object(env, target, **kwargs)
             mock.start()
             self.addCleanup(mock.stop)
@@ -293,19 +293,72 @@ class WorktreeTest(unittest.TestCase):
         self.configure(self.main)
         self.assert_preserved(name, self.root)
 
+    def test_copied_repository_keeps_every_database_after_repair(self):
+        need_db(self)
+        second = self.directory / "second"
+        self.git("worktree", "add", "-q", "--detach", str(second))
+        roots = (self.main, self.root, second)
+        for root in roots:
+            self.configure(root)
+            name = env.database_name(str(root))
+            env.sql('COMMENT ON DATABASE "' + name + '" IS \'preserved\'')
+        entries = json.loads((self.common / "ai-env.json").read_text())
+        self.assertNotIn("metadata_token", entries["main"])
+        relocated = self.directory / "relocated"
+        relocated.mkdir()
+        for root in roots:
+            shutil.copytree(root, relocated / root.name)
+            root.rename(self.directory / ("original-" + root.name))
+        self.main = relocated / self.main.name
+        self.root = relocated / self.root.name
+        second = relocated / second.name
+        self.git("worktree", "repair", str(self.root), str(second))
+        self.common = env.common_dir(self.main)
+        # run must accept copied tokens even before ai-env retargets the paths.
+        for identity, entry in entries.items():
+            path = relocated / Path(entry["path"]).name
+            name = env.database_name(entry["database_path"])
+            self.assertEqual(env.urlsplit(env.environment(path)["RIBBITTO_DATABASE_URL"]).path, "/" + name)
+        self.configure(self.main)
+        for identity, entry in entries.items():
+            with self.subTest(identity=identity):
+                self.identity = identity
+                path = relocated / Path(entry["path"]).name
+                name = env.database_name(entry["database_path"])
+                self.assert_preserved(name, path)
+                self.configure(path)
+                self.assert_preserved(name, path)
+                self.assertEqual(self.entry()["ports"], entry["ports"])
+                self.assertEqual(self.entry().get("metadata_token"), entry.get("metadata_token"))
+
     def test_reused_worktree_id_gets_fresh_database(self):
         need_db(self)
         for replacement in (self.root, self.directory / "other" / self.root.name):
             with self.subTest(same_path=replacement == self.root):
                 self.configure(self.root)
                 old_name = self.mark_database()
-                old_identity = self.entry()["metadata_identity"]
+                old_token = self.entry()["metadata_token"]
+                local = (self.root / ".env.local").read_text()
                 self.git("worktree", "remove", "--force", str(self.root))
                 self.git("worktree", "add", "-q", "--detach", str(replacement))
                 self.assertEqual(env.current_id(replacement, env.worktrees(self.main, self.common)), self.identity)
+                (replacement / ".env.local").write_text(local)
+                token_file = self.common / "worktrees" / self.identity.removeprefix("worktree:") / "ribbitto-ai-env"
+                self.assertFalse(token_file.exists())
+                for token in (None, old_token + "different"):
+                    if token is not None:
+                        token_file.write_text(token + "\n")
+                    result = subprocess.run(["python3", str(Path(env.__file__).resolve()), "run", "python3", "-c",
+                                             "from pathlib import Path; Path('command-ran').touch()"],
+                                            cwd=replacement, capture_output=True, text=True)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("worktree reservation is stale", result.stderr)
+                    self.assertNotIn("Traceback", result.stderr)
+                    self.assertFalse((replacement / "command-ran").exists())
                 self.configure(replacement)
                 new_name = env.database_name(str(replacement))
-                self.assertNotEqual(self.entry()["metadata_identity"], old_identity)
+                self.assertNotEqual(self.entry()["metadata_token"], old_token)
+                self.assertEqual(token_file.read_text().strip(), self.entry()["metadata_token"])
                 self.assertEqual(env.database_name(self.entry()["database_path"]), new_name)
                 self.assertEqual(env.sql("SELECT count(*) FROM pg_database WHERE datname='" + new_name + "' AND shobj_description(oid, 'pg_database') IS NULL"), "1")
                 if old_name != new_name:

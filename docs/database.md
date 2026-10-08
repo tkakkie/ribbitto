@@ -23,9 +23,10 @@ Allocation skips reserved/bound IPv4/IPv6 ports; `AI_APP_PORT`/`AI_METRICS_PORT`
 overrides use the same checks. Reruns keep free reservations and replace busy ones.
 Entries use stable Git worktree IDs (or `main`); resolved paths are retargeted on
 moves, retaining the original database name. Subdirectories use the Git root.
-Relative Git backlinks resolve from their metadata directory. Entries also record
-that directory's device/inode and birth time where available: a reused Git ID
-with different metadata releases its old ports and drops its old database.
+Relative Git backlinks resolve from their metadata directory. Linked entries also
+record a random token stored there in `ribbitto-ai-env`; moves, copies and Git repair
+preserve it. A missing or different token marks a reused Git ID, releasing its old
+ports and dropping its old database. The main worktree needs no token.
 IDs absent from Git's worktree list are cleaned up too; prunable entries remain
 until pruned. No prefix scans or test-template cleanup.
 `make ai-env-clean` drops only this worktree's dev database and releases ports.

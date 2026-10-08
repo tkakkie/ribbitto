@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import secrets
 import socket
 import subprocess
 import sys
@@ -51,7 +52,8 @@ def environment(root):
         entries = json.loads((common / "ai-env.json").read_text())
         key = current_id(root, worktrees(root, common))
         entry = entries.get(key)
-        if entry and entry.get("metadata_identity") != metadata_identity(common, key):
+        if entry and key != "main" and (not entry.get("metadata_token") or
+                                        entry["metadata_token"] != metadata_token(common, key)):
             raise RuntimeError("worktree reservation is stale; run make ai-env")
         if not entry or values.get("AI_DATABASE") != database_name(entry["database_path"]):
             raise RuntimeError(".env.local AI_DATABASE does not match this worktree; run make ai-env")
@@ -101,12 +103,15 @@ def current_id(root, live):
             return key
     raise RuntimeError("current Git worktree not listed; refusing cleanup")
 
-def metadata_identity(common, key):
-    directory = common if key == "main" else common / "worktrees" / key.removeprefix("worktree:")
-    stat = directory.stat()
-    # Moves retain this directory; remove/add can reuse its name. Birth time,
-    # where available, also distinguishes an immediately recycled inode.
-    return [stat.st_dev, stat.st_ino, getattr(stat, "st_birthtime", None)]
+def metadata_token(common, key, create=False):
+    path = common / "worktrees" / key.removeprefix("worktree:") / "ribbitto-ai-env"
+    # Git preserves this file on moves, copies and repair, but deletes it on
+    # removal, so a reused metadata directory name cannot inherit a database.
+    if create:
+        token = secrets.token_hex(32)
+        atomic(path, token + "\n")
+        return token
+    return path.read_text().strip() if path.exists() else None
 
 def initial_port(key):
     return 20000 + int(hashlib.sha256(key.encode()).hexdigest()[:8], 16) % 12768
@@ -125,21 +130,23 @@ def configure(root, common, clean=False):
         entries = json.loads(registry.read_text()) if registry.exists() else {}
         live = worktrees(root, common)
         key = current_id(root, live)
-        identities = {identity: metadata_identity(common, identity) for identity in live}
+        tokens = {identity: metadata_token(common, identity) for identity in live if identity != "main"}
         for identity, entry in list(entries.items()):
-            if identity not in live or entry.get("metadata_identity") != identities[identity]:
+            if identity not in live or (identity != "main" and (not entry.get("metadata_token") or
+                                                                entry["metadata_token"] != tokens[identity])):
                 sql('DROP DATABASE IF EXISTS "' + database_name(entry["database_path"]) + '" WITH (FORCE)')
                 del entries[identity]
             else:
                 entry["path"] = str(live[identity].resolve())
-        entry = entries.get(key, {"path": str(root), "database_path": str(root), "ports": [],
-                                  "metadata_identity": identities[key]})
+        entry = entries.get(key, {"path": str(root), "database_path": str(root), "ports": []})
         name = database_name(entry["database_path"])
         if clean:
             sql('DROP DATABASE IF EXISTS "' + name + '" WITH (FORCE)')
             entries.pop(key, None)
             (root / ".env.local").unlink(missing_ok=True)
         else:
+            if key != "main" and key not in entries:
+                entry["metadata_token"] = metadata_token(common, key, create=True)
             used = {port for identity, entry in entries.items() if identity != key for port in entry["ports"]}
             previous = entry["ports"]
             ports = []

@@ -16,7 +16,7 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 LAUNCHER_TESTS_BASE ?= origin/main
 export LAUNCHER_TESTS_BASE
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-ai lint lint-fixtures vuln db-up db-down generate schema-docs deps css dev
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-ai lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -28,6 +28,9 @@ schema-docs:
 # Regenerates docs/dependencies.md; make check fails when it is stale.
 deps:
 	bash scripts/deps.sh
+
+api:
+	go -C tools run ./apicheck ..
 
 $(TEMPL): tools/go.mod tools/go.sum
 	go -C tools build -o ../bin/templ github.com/a-h/templ/cmd/templ
@@ -93,11 +96,15 @@ check: $(TEMPL) db-health
 	go build ./...
 	go test -race ./...
 	$(MAKE) check-ai-env
+	go -C tools vet ./apicheck
+	go -C tools test -race ./apicheck
+	go -C tools run ./apicheck -check ..
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
-	go -C tools vet ./docscheck
-	go -C tools test -race ./docscheck
+	go -C tools vet ./...
+	go -C tools test -race ./...
 	go -C tools run ./docscheck ..
+	go -C tools run ./sourcecheck ..
 	bash scripts/ai/launcher-tests_test.sh
 	bash scripts/ai/launcher-tests.sh --base "$$LAUNCHER_TESTS_BASE"
 
@@ -113,8 +120,11 @@ vuln:
 # The lint fixtures (internal/lintfixture, built only with the lintfixture
 # tag) prove that depguard rejects a module root importing pgxbridge and
 # accepts a store doing so, and staticcheck rejects ignored results even in
-# generated templates, and bodyclose rejects unclosed HTTP response bodies;
-# plain lint never sees them.
+# generated templates, bodyclose rejects unclosed HTTP response bodies,
+# sqlclosecheck rejects unused, unclosed pgx rows, and nilerr rejects returning
+# nil after checking a non-nil error; plain lint never sees them. Any other rows
+# use satisfies sqlclosecheck: keep defer rows.Close(); lint does not catch a
+# missing Close once rows are used.
 lint-fixtures: $(GOLANGCI_LINT)
 	@set -eu; status=0; \
 	out=$$($(GOLANGCI_LINT) run --build-tags lintfixture ./internal/lintfixture/... 2>&1) || status=$$?; \
@@ -131,6 +141,12 @@ lint-fixtures: $(GOLANGCI_LINT)
 	done; \
 	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/bodyclose.go:' | grep -q 'response body must be closed.*(bodyclose)'; then \
 		echo "lint-fixtures: bodyclose must reject an unclosed HTTP response body"; printf '%s\n' "$$out"; exit 1; \
+	fi; \
+	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/sqlclosecheck.go:' | grep -Fq 'Rows/Stmt/NamedStmt was not closed (sqlclosecheck)'; then \
+		echo "lint-fixtures: sqlclosecheck must reject unused, unclosed pgx rows"; printf '%s\n' "$$out"; exit 1; \
+	fi; \
+	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/nilerr.go:' | grep -q 'error is not nil (line [0-9]*) but it returns nil (nilerr)'; then \
+		echo "lint-fixtures: nilerr must reject returning nil after a non-nil error"; printf '%s\n' "$$out"; exit 1; \
 	fi
 
 lint: $(GOLANGCI_LINT)

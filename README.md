@@ -48,6 +48,7 @@ make check                 # checks formatting, vets, lints, builds and tests (w
 make check-ai              # always runs the AI launchers' self-tests (see Checks)
 make vuln                  # govulncheck: known vulnerabilities reachable from our code
 make deps                  # regenerates docs/dependencies.md after an import change
+make api                   # regenerates docs/api/ after a module API or doc-comment change
 make db-down               # stops PostgreSQL; keeps the named data volume
 ```
 
@@ -99,7 +100,9 @@ so local notes and tools do not change the output.
 `make check` is what CI runs and what must pass before a pull request: it
 checks formatting (`gofmt` for Go, `templ fmt` for templates), vets, lints,
 builds, runs the Go tests with the race detector, and checks the import
-graph and the documents. In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,
+graph, module API summaries and the documents. `tools/sourcecheck` enforces the
+[product vocabulary](docs/domain/vocabulary.md) and
+[UI colour rules](docs/ui.md#tokens). In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,
 repository paths in backticks must exist. Placeholders and globs are skipped;
 brace sets are expanded; `:line` suffixes and trailing slashes are accepted.
 An existing path wins. Otherwise, a final dot-separated element that is a

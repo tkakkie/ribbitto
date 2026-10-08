@@ -38,9 +38,45 @@ Already holding the watermark before SIGTERM still requires reconnecting; otherw
 Receipts freeze with the watermark in their header.
 Expected sets read their own watermark through `Reader.Page`; the comparison
 reports a mismatch (`watermark_differs`). Only `-restart-after` runs record the
-in-memory hand-over to #630: `SIGTERM`, the new child's
+in-memory recovery state: `SIGTERM`, the new child's
 `ReadyAt` and `RecoveryCursor`, each stream's `EstablishedAt`, and each completed
 event's `ArrivedAt`. Stream `EstablishedAt` and `ArrivedAt` stay in memory;
 `SIGTERM` and `ReadyAt` are serialized in the result.
 With `-metrics`, `Restart.Old` is read just before SIGTERM and `Restart.New` after
 drain; separate process snapshots have no delta.
+
+## Client recovery and replay load
+
+After drain, `Restart.Recovery` reports `Reconnected`, `OutageRecovered` and
+`FullyCaughtUp`, each with `P50Seconds`, `P95Seconds`, `MaxSeconds` from SIGTERM
+and `IncompleteStreams`. Streams that received a reset are excluded from all
+three times, both their samples and their incomplete-count denominators, and
+from both replay counts; `ResetStreams` reports their number separately.
+Quantiles use the nearest rank over completed streams; zero samples give zero
+times. A positive incomplete count means a non-reset stream was still short
+when the recovery deadline or drain ended, including streams that never
+re-established. Incomplete setup
+omits `Recovery` because no restart ran. These measurements are separate from
+the server's exit time and the ordinary workload verdict.
+
+Reconnected is the first successful stream re-establishment after SIGTERM.
+Outage recovered is `max(reconnectedAt, cursorSatisfiedAt)`, using the new
+child's page `RecoveryCursor` at readiness; fully caught up uses the final
+watermark instead. Satisfaction is the earliest completed event at or above the
+target in the retained receipt state, including receipts before SIGTERM.
+An idle current stream or an empty expected interval counts at re-establishment.
+A reset stream never counts, even if it re-established or held the target.
+`-recover-deadline` requires `-restart-after` (default 30s, >0 through 5m), counts
+from SIGTERM and caps outage recovery; drain completion also caps it. Full
+catch-up and reconnect delays are bounded by drain. Expiring the recovery
+deadline does not shorten the drain, so later full catch-up is still measured.
+
+`deliveries_through_recovery_cursor_after_reconnect` counts completed sequenced
+events at or below the recovery cursor, received from the first re-establishment
+through drain. `all_deliveries_after_reconnect` counts all such deliveries,
+including those above the cursor; `Reconnected` gives the reconnect-delay
+distribution. Both include repeated arrivals and deliveries across later
+reconnects on non-reset streams; neither is the comparison's
+`replayed_duplicates`. The bounded cursor count leaves out backlog committed
+after readiness and before a delayed stream reconnects. #219's report must
+repeat this limitation alongside the total and reconnect-delay distribution.

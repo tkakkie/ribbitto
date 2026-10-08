@@ -80,7 +80,7 @@ same pull request: [`docs/architecture/`](docs/architecture/README.md)
 (terms, entities, invariants, unread rules), [`DECISIONS.md`](DECISIONS.md)
 (index of settled decisions in `docs/decisions/` — change them through an issue),
 [`docs/database.md`](docs/database.md), [`docs/ui.md`](docs/ui.md) (design tokens — use
-only the token utilities, never raw colours), [`docs/accessibility.md`](docs/accessibility.md)
+only the token utilities, never raw colours; checked by `tools/sourcecheck`), [`docs/accessibility.md`](docs/accessibility.md)
 (markup and accessibility rules).
 
 ## Writing code
@@ -89,7 +89,8 @@ only the token utilities, never raw colours), [`docs/accessibility.md`](docs/acc
   duplication, no global state, pass `context.Context`, wrap errors with
   `fmt.Errorf("doing x: %w", err)`.
 - Every package under `internal/` has a `doc.go` stating its
-  responsibility. Command packages (`cmd/...`) use the package comment in
+  responsibility; module roots keep owned tables, event kinds and reasons,
+  not API lists. Command packages (`cmd/...`) use the package comment in
   their main file instead; do not add empty `doc.go` files. Exported
   identifiers have doc comments.
 - Comments explain **why**, not what. Record the reason for a non-obvious
@@ -101,8 +102,7 @@ only the token utilities, never raw colours), [`docs/accessibility.md`](docs/acc
 - Never use `templ.Raw` or build HTML by string concatenation.
 - Handlers, templ, htmx and JavaScript follow
   [`docs/architecture/web-layers.md`](docs/architecture/web-layers.md).
-- Product vocabulary (ribbit, pond, marsh…) appears only in UI message
-  files, never in identifiers.
+- Product vocabulary follows `docs/domain/vocabulary.md`; `tools/sourcecheck` checks identifiers, file names and routes.
 - UI strings go in `internal/web/i18n/locales/{en,ja}.toml`; use dotted,
   neutral IDs (`hello.title`, never a product word), and update both languages
   in the same PR. Templates get messages through `i18n.T(ctx, "message.id")`.

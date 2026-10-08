@@ -50,6 +50,12 @@ the next tick retries remaining work. The listing reads `event_log` once
 additional index or migration is needed until the log grows far beyond that.
 Messages and unread inputs are never deleted.
 
+`RIBBITTO_MAX_STREAMS` caps open event streams per process (default `5000`
+when unset). An explicit value must be a positive integer; empty, zero,
+negative, unparsable and overflowing values fail at start. Excess streams
+get 429 before streaming; the per-account cap remains 16. See
+[stream resource limits](architecture/stream-limits.md) for the sizing evidence.
+
 Integration tests use `RIBBITTO_TEST_DATABASE_URL`, an admin connection to
 the `postgres` database as the `postgres` superuser. `pgtest.New(t)` (now in
 `platform`) creates

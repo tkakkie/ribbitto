@@ -2,9 +2,9 @@
 
 What one post costs the delivery loop as open streams grow, measured by
 `TestStreamCost` in `internal/realtime/cost_test.go` (#215). It measures the
-design M3 ships — every connection reads `event_log`, re-authorizes and reads
-the message itself — so that a faster design can be compared with the same
-benchmark.
+current delivery path. The results below precede #670's cached allows and
+fresh shared epoch reads; #671 will measure the new authorization cost with
+the same benchmark.
 
 ## Running it
 
@@ -113,7 +113,7 @@ short batch, such as the one holding a new post, is never stored, and the
 streams that joined a read in flight get a second read started after it
 finished, so none gets a snapshot older than its own call; a stream that
 reads later repeats it.
-The remaining per-stream query is the membership check (#231); beyond about
+In this run the remaining per-stream query was the membership check; beyond about
 2,000 streams on this machine it saturates the pool.
 
 ## What it points to
@@ -123,6 +123,6 @@ between posts: the evidence points at per-connection database work, though
 it does not prove Go adds nothing at higher counts. #227 shares each event read
 (plus one private read for a short batch's joiners) and message read per
 organisation and renders once per language; what
-remains per connection is the membership check, until it has a freshness
-protocol of its own (#231). Whether a shared reader per organisation (#232)
-is worth building is decided on these numbers.
+remained per connection was the membership check. #670 implements its
+[freshness protocol](stream-authorization.md#decision); #671 will supply
+new numbers before further optimization of the reader (#232).

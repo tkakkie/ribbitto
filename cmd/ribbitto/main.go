@@ -66,6 +66,11 @@ func run() error {
 }
 
 func serve(ctx context.Context, databaseURL string) error {
+	authorizationCapacity, err := authorizationCacheCapacity()
+	if err != nil {
+		return err
+	}
+
 	streamCap, err := maxStreams()
 	if err != nil {
 		return err
@@ -113,6 +118,7 @@ func serve(ctx context.Context, databaseURL string) error {
 	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{
 		setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
 		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), hub: hub,
+		authorizationCapacity: authorizationCapacity,
 	})
 	if err != nil {
 		return err
@@ -172,6 +178,19 @@ func serve(ctx context.Context, databaseURL string) error {
 		return err
 	}
 	return nil
+}
+
+// authorizationCacheCapacity follows the stream cap's explicit-value rule.
+func authorizationCacheCapacity() (int, error) {
+	value, set := os.LookupEnv("RIBBITTO_AUTHORIZATION_CACHE_CAPACITY")
+	if !set {
+		return org.DefaultAuthorizationCapacity, nil
+	}
+	capacity, err := strconv.Atoi(value)
+	if err != nil || capacity <= 0 {
+		return 0, fmt.Errorf("RIBBITTO_AUTHORIZATION_CACHE_CAPACITY must be a positive integer")
+	}
+	return capacity, nil
 }
 
 // maxStreams distinguishes an unset variable from an explicitly empty value.
@@ -242,6 +261,7 @@ func newServer(addr string, handler http.Handler, timeouts serverTimeouts) *http
 }
 
 type handlerConfig struct {
+	authorizationCapacity int
 	setupToken, devAssets string
 	signupEnabled         bool
 	trustedProxies        []netip.Prefix
@@ -281,7 +301,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	authorizer := orgpg.NewAuthorizer(pool)
+	authorizer := orgpg.NewCachedAuthorizer(ctx, pool, config.authorizationCapacity)
 	// A nil hub must stay a nil Notifier, not a typed nil in the interface.
 	var postingNotifier conversation.Notifier
 	var stream *web.Streaming

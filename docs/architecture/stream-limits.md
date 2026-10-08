@@ -10,6 +10,15 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   second load, and shutdown every load (`cmd/ribbitto` passes the process
   context, through `Streaming` for renders).
 
+- Stream authorization holds at most 10,000 allows per process by default,
+  evicting the least recently used. `RIBBITTO_AUTHORIZATION_CACHE_CAPACITY`
+  accepts a positive integer; unset keeps the default, while empty or invalid
+  explicit values fail at start. The epoch reader uses its own 16-loader
+  limit, with a 5 s timeout and no retained values. `org.Authorizer.Stats`
+  reports checks, membership-cache hits and actual epoch reads (including
+  failures), so #671 can measure hit rate and sharing without changing the
+  authorization rule.
+
 - Each connection reads the log itself (#209), so nothing queues for a slow
   client: its cursor just lags. A client that stops reading is
   disconnected when a write, event or heartbeat, misses its deadline

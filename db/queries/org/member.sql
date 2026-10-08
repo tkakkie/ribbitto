@@ -1,5 +1,5 @@
 -- name: GetMembershipBySlug :one
-SELECT o.id AS organization_id, o.slug, o.name, m.id AS member_id, m.role, m.handle
+SELECT o.id AS organization_id, o.slug, o.name, o.access_epoch, m.id AS member_id, m.role, m.handle
 FROM organization o
 JOIN member m ON m.organization_id = o.id
 WHERE o.slug = $1 AND m.account_id = $2;
@@ -24,3 +24,6 @@ VALUES ($1, $2, $3, $4, $5) RETURNING *;
 
 -- name: GetMemberByOrganizationAndAccount :one
 SELECT * FROM member WHERE organization_id = $1 AND account_id = $2;
+
+-- name: GetAccessEpoch :one
+SELECT access_epoch FROM organization WHERE id = $1;

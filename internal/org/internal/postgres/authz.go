@@ -34,6 +34,7 @@ func (s *AuthzStore) Membership(ctx context.Context, accountID kernel.ID, slug s
 		return org.Membership{}, fmt.Errorf("selecting membership: %w", err)
 	}
 	return org.Membership{
+		AccessEpoch:  row.AccessEpoch,
 		Organization: org.Organization{ID: row.OrganizationID.Bytes, Slug: row.Slug, Name: row.Name},
 		Member: org.Member{
 			ID:             row.MemberID.Bytes,
@@ -55,4 +56,16 @@ func (s *AuthzStore) HomeSlug(ctx context.Context, accountID kernel.ID) (string,
 		return "", fmt.Errorf("selecting home organisation: %w", err)
 	}
 	return slug, nil
+}
+
+// AccessEpoch reads one organisation's epoch in a fresh pool statement.
+func (s *AuthzStore) AccessEpoch(ctx context.Context, organizationID kernel.ID) (int64, error) {
+	epoch, err := s.queries.GetAccessEpoch(ctx, uuid(organizationID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, org.ErrNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("selecting access epoch: %w", err)
+	}
+	return epoch, nil
 }

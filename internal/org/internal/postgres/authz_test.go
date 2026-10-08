@@ -35,6 +35,14 @@ func TestAuthzStore(t *testing.T) {
 		m.Member.OrganizationID != acme || m.Member.AccountID != alice || m.Member.Role != org.RoleOwner || m.Member.Handle != "alice" {
 		t.Fatalf("alice in acme: %+v, %v", m, err)
 	}
+
+	epoch, err := store.AccessEpoch(ctx, acme)
+	if err != nil || epoch <= 0 || epoch != m.AccessEpoch {
+		t.Fatalf("membership epoch=%d, fresh=%d, error=%v", m.AccessEpoch, epoch, err)
+	}
+	if _, err := store.AccessEpoch(ctx, kernel.ID{}); !errors.Is(err, org.ErrNotFound) {
+		t.Fatalf("missing epoch: %v", err)
+	}
 	for _, tt := range []struct {
 		name    string
 		account kernel.ID

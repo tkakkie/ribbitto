@@ -44,8 +44,8 @@ func TestAuthorizer(t *testing.T) {
 	alice := &identity.Account{ID: kernel.ID{1}} // member of acme
 	bob := &identity.Account{ID: kernel.ID{2}}   // member of globex only
 	carol := &identity.Account{ID: kernel.ID{3}} // no membership
-	acme := org.Membership{Organization: org.Organization{ID: kernel.ID{10}, Slug: "acme"}, Member: org.Member{Role: org.RoleOwner}}
-	globex := org.Membership{Organization: org.Organization{ID: kernel.ID{11}, Slug: "globex"}}
+	acme := org.Membership{AccessEpoch: 1, Organization: org.Organization{ID: kernel.ID{10}, Slug: "acme"}, Member: org.Member{Role: org.RoleOwner}}
+	globex := org.Membership{AccessEpoch: 1, Organization: org.Organization{ID: kernel.ID{11}, Slug: "globex"}}
 	store := fakeStore{
 		memberships: map[kernel.ID]map[string]org.Membership{alice.ID: {"acme": acme}, bob.ID: {"globex": globex}},
 		home:        "acme",
@@ -86,7 +86,7 @@ func TestAuthorizer(t *testing.T) {
 
 func TestMayReceive(t *testing.T) {
 	aliceMember, otherMember := kernel.ID{20}, kernel.ID{21}
-	acme := org.Membership{Organization: org.Organization{ID: kernel.ID{10}, Slug: "acme"}, Member: org.Member{ID: aliceMember}}
+	acme := org.Membership{AccessEpoch: 1, Organization: org.Organization{ID: kernel.ID{10}, Slug: "acme"}, Member: org.Member{ID: aliceMember}}
 	store := fakeStore{memberships: map[kernel.ID]map[string]org.Membership{{1}: {"acme": acme}}}
 	event := realtime.Event{OrganizationID: acme.Organization.ID, Seq: 5, Kind: org.KindJoined}
 	withAudience := func(member kernel.ID) realtime.Event {
@@ -126,3 +126,5 @@ func TestMayReceive(t *testing.T) {
 		})
 	}
 }
+
+func (f fakeStore) AccessEpoch(context.Context, kernel.ID) (int64, error) { return 1, nil }

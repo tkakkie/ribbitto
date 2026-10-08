@@ -33,6 +33,27 @@ that leaves one of the sequences it took without an `event_log` row, so a server
 `migrate up` fails its write instead of leaving a gap. Down drops the trigger,
 the log and the boundary.
 
+Migration 00010 adds `organization.access_epoch` (bigint NOT NULL). Initial
+values, existing rows and every bump come from the unowned installation-wide
+`organization_access_epoch_seq`, so recreating an organisation cannot reuse
+its epoch. `organization_access_guard` assigns fresh epochs on insertion, slug
+changes and explicit epoch changes; it refuses changed organisation IDs and
+decreasing epochs. `member_access_changed` bumps the organisation on deletion
+or changed roles, accounts or organisations, and both organisations on a move;
+it refuses changed member IDs. Joins and unchanged access values do not bump.
+`member_access_truncated` bumps all organisations on member truncation,
+including CASCADE; it has no separate refusal. Bumps share the write's
+transaction, and Down removes the epoch objects. Writers lock organisations
+before members (`SELECT … FOR NO KEY UPDATE`), taking both organisation locks
+in ID order for moves, as in [posting](architecture/posting.md). Direct SQL in
+the opposite lock order can abort with `40P01`; retry the whole transaction
+using the organisation-first protocol. While ribbitto runs, `setval`, `ALTER
+SEQUENCE … RESTART`, `SET session_replication_role = replica`, `ALTER TABLE …
+DISABLE TRIGGER` and data-only `pg_restore --disable-triggers` are unsupported
+because they can lower the epoch or bypass the triggers on which the guarantee
+depends; for restore, [stop ribbitto first](../README.md#restoring-a-backup)
+to clear caches.
+
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations

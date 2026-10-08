@@ -39,8 +39,14 @@ func TestSignUp(t *testing.T) {
 	orgtest.Member(t, pool, other, otherAccount, org.RoleOwner, "alice", 1)
 	result, err := orgpg.NewSetup(pool, hasher, "secret", signupAccount, signupEvents, defaultChannel).Complete(ctx, "secret", org.SetupInput{OrganizationName: "Team", Slug: "team", Email: "owner@example.org", DisplayName: "Owner", Handle: "owner", Password: "long enough password"})
 	requireNoError(t, err)
+	var initialEpoch, joinedEpoch int64
+	requireNoError(t, pool.QueryRow(ctx, "SELECT access_epoch FROM organization WHERE id=$1", result.OrganizationID).Scan(&initialEpoch))
 	id, err := service.SignUp(ctx, "Alice", "alice", "alice@example.org", "long enough password")
 	requireNoError(t, err)
+	requireNoError(t, pool.QueryRow(ctx, "SELECT access_epoch FROM organization WHERE id=$1", result.OrganizationID).Scan(&joinedEpoch))
+	if joinedEpoch != initialEpoch {
+		t.Fatal("sign-up join bumped the access epoch")
+	}
 	organizationID := pgtype.UUID{Bytes: result.OrganizationID, Valid: true}
 	var account struct {
 		ID    pgtype.UUID

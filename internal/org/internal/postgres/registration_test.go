@@ -44,6 +44,7 @@ func TestRegistrationWriterIn(t *testing.T) {
 		writer, q := registrationIn(tx), pgxbridge.Tx(tx)
 		acme, err := writer.CreateOrganization(ctx, "Acme", "acme")
 		requireNoError(t, err)
+		epoch := accessEpoch(t, q, acme)
 		var name string
 		requireNoError(t, q.QueryRow(ctx, "SELECT name FROM organization WHERE id = $1 AND slug = 'acme'", acme).Scan(&name))
 		if name != "Acme" {
@@ -62,6 +63,9 @@ func TestRegistrationWriterIn(t *testing.T) {
 			t.Fatalf("member in caller's transaction = %q, %d, %q", role, joined, handle)
 		}
 		requireNoError(t, writer.CompleteSetup(ctx, acme))
+		if accessEpoch(t, q, acme) != epoch {
+			t.Fatal("setup join bumped the access epoch")
+		}
 		if got, err := writer.SetupOrganization(ctx); err != nil || got != acme {
 			t.Fatalf("SetupOrganization = %v, %v; want acme %v, not the first created %v", got, err, acme, first)
 		}

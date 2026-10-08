@@ -25,4 +25,5 @@ type Organization struct {
 	EventSeq            int64
 	CreatedAt           pgtype.Timestamptz
 	EventLogBoundarySeq int64
+	AccessEpoch         int64
 }

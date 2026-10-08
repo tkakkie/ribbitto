@@ -8,6 +8,8 @@ workflow or the integration-test setup changes.
 applies migrations. `.env.example` contains the local Compose URLs; export
 them into the shell as shown in the README. `.env` is ignored by Git.
 
+See [worktree environments](worktree-env.md) for per-worktree dev databases, ports, health checks and cleanup.
+
 `make db-up` starts PostgreSQL 18 on loopback port 5432 and waits for its
 health check. Its password is for development only. `make db-down` stops
 it without deleting the named volume at `/var/lib/postgresql`.
@@ -182,7 +184,7 @@ With the Compose database running and `RIBBITTO_DATABASE_URL` exported,
 apply migrations and regenerate the [schema reference](schema/README.md):
 
 ```sh
-go run ./cmd/ribbitto migrate up
+make migrate
 make schema-docs
 ```
 

@@ -5,6 +5,11 @@ package view
 // converted to empty by the handler shows only the handle, so nobody
 // appears nameless.
 templ MemberName(displayName, handle string) {
+	{{
+		// staticcheck SA4006 flags templ's unused ClearChildren result in the generated
+		// file, and golangci-lint ignores templ's //lint:file-ignore SA4006 directive.
+		_ = ctx
+	}}
 	if displayName == "" {
 		<bdi class="font-semibold text-fg">{ "@" + handle }</bdi>
 	} else {

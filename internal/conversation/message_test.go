@@ -34,7 +34,7 @@ func TestValidateMessageBody(t *testing.T) {
 			}
 		})
 	}
-	for _, r := range []rune("\x00\x01\x08\v\f\x0e\x1f\x7f\u0080\u0085\u009f\u2028\u2029\u202a\u202b\u202c\u202d\u202e") {
+	for _, r := range "\x00\x01\x08\v\f\x0e\x1f\x7f\u0080\u0085\u009f\u2028\u2029\u202a\u202b\u202c\u202d\u202e" {
 		t.Run("forbidden "+string(r), func(t *testing.T) {
 			for _, input := range []string{string(r) + "hello", "hello" + string(r), "a" + string(r) + "b"} {
 				if _, err := conversation.ValidateMessageBody(input); err == nil {

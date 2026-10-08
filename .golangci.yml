@@ -3,12 +3,14 @@ version: "2"
 linters:
   default: none
   enable:
+    - bodyclose
     - depguard
     - errcheck
     - forbidigo
     - revive
+    - staticcheck
   exclusions:
-    # Generated code must still obey the raw HTML ban and dependency rules.
+    # Generated code must still pass bodyclose, staticcheck, the raw HTML ban and import rules.
     generated: disable
     rules:
       - path: '_templ\.go$'

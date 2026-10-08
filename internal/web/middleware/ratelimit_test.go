@@ -49,7 +49,12 @@ func TestRateLimiterBoundedMemory(t *testing.T) {
 	}
 	// Refilled: both idle buckets may go, and c gets exactly one burst.
 	now = now.Add(time.Second)
-	if !l.Allow(c) || !l.Allow(c) || l.Allow(c) {
+	for range 2 {
+		if !l.Allow(c) {
+			t.Fatal("c did not get its own burst after eviction")
+		}
+	}
+	if l.Allow(c) {
 		t.Fatal("c did not get exactly its own burst after eviction")
 	}
 	if len(l.buckets) > 2 {

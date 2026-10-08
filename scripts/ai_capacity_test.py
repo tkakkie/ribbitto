@@ -2,10 +2,12 @@
 import json
 import os
 from pathlib import Path
+import signal
 import socket
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 import ai_capacity
@@ -39,9 +41,33 @@ print("too many clients", flush=True)
 sys.exit(7 if os.getcwd().endswith("second") else 0)
 ''')
             fake_make.chmod(0o700)
+            events, popen = [], subprocess.Popen
+
+            def recording_popen(args, *rest, **options):
+                process = popen(args, *rest, **options)
+                if args[-1] != "--observe":
+                    events.append("check")
+                    return process
+                stdout = process.stdout
+
+                class Handshake:
+                    def readline(self):
+                        line = stdout.readline()
+                        events.append("handshake")
+                        return line
+
+                    def __getattr__(self, name):
+                        return getattr(stdout, name)
+
+                process.stdout = Handshake()
+                return process
+
             with patch.dict(os.environ, PATH=str(base) + os.pathsep + os.environ["PATH"],
-                            GOMODCACHE="inherited-module-cache", GOPATH="inherited-gopath"):
+                            GOMODCACHE="inherited-module-cache", GOPATH="inherited-gopath"), \
+                    patch.object(ai_capacity.subprocess, "Popen", recording_popen):
                 report = ai_capacity.measure(roots, 2, 3)
+            # The observer must own its connection before either check starts.
+            self.assertEqual(events, ["handshake", "check", "check"])
             self.assertEqual(report["exit_codes"], [0, 7])
             self.assertEqual(report["too_many_clients_lines"], [2, 2])
             self.assertGreaterEqual(report["peak_connections"], report["baseline"])
@@ -61,11 +87,22 @@ sys.exit(7 if os.getcwd().endswith("second") else 0)
         try:
             baseline = json.loads(observer.stdout.readline())
             self.assertGreater(baseline["baseline"], 0)
+            # A second observer holds one more connection; sampling must see it.
+            extra = subprocess.Popen([str(ai_env.HELPER), "--observe"], stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            try:
+                json.loads(extra.stdout.readline())
+                time.sleep(0.5)  # several 100 ms samples while the extra connection is open
+            finally:
+                extra.stdin.close()
+                extra.stdout.read()
+                extra.wait(timeout=10)
+                extra.stdout.close()
             # Closing stdin ends observation and releases the reserved connection.
             observer.stdin.close()
             peak = int(observer.stdout.read())
             self.assertEqual(observer.wait(timeout=10), 0)
-            self.assertGreaterEqual(peak, baseline["baseline"])
+            self.assertGreaterEqual(peak, baseline["baseline"] + 1)
         finally:
             if not observer.stdin.closed:
                 observer.stdin.close()
@@ -73,3 +110,61 @@ sys.exit(7 if os.getcwd().endswith("second") else 0)
                 observer.kill()
             observer.wait()
             observer.stdout.close()
+
+    def test_sigterm_kills_both_check_groups(self):
+        with tempfile.TemporaryDirectory(dir="bin") as scratch:
+            base = Path(scratch).resolve()
+            roots = [base / name for name in ("first", "second")]
+            for root in roots:
+                root.mkdir()
+                (root / "Makefile").write_text("$(GO_TEST_FLAGS)\n")
+            fake_make = base / "make"
+            # Each fake check starts a grandchild, records both PIDs, then waits.
+            fake_make.write_text("#!" + sys.executable + "\n" + '''
+import os, subprocess, sys, time
+child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+with open("pids.tmp", "w") as out:
+    out.write(f"{os.getpid()} {child.pid}")
+os.rename("pids.tmp", "pids")
+time.sleep(120)
+''')
+            fake_make.chmod(0o700)
+            environment = dict(os.environ, PATH=str(base) + os.pathsep + os.environ["PATH"])
+            runner = subprocess.Popen([sys.executable, str(Path(ai_capacity.__file__)), *map(str, roots), "1", "1"],
+                                      env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            pids = []
+            try:
+                pid_files = [root / "pids" for root in roots]
+                deadline = time.monotonic() + 30
+                while not all(path.exists() for path in pid_files):
+                    self.assertIsNone(runner.poll(), "runner exited before both checks started")
+                    self.assertLess(time.monotonic(), deadline, "checks did not start")
+                    time.sleep(0.05)
+                pids = [int(pid) for path in pid_files for pid in path.read_text().split()]
+                runner.send_signal(signal.SIGTERM)
+                self.assertEqual(runner.wait(timeout=30), 128 + signal.SIGTERM)
+                for pid in pids:
+                    deadline = time.monotonic() + 10
+                    while alive(pid):
+                        self.assertLess(time.monotonic(), deadline, f"process {pid} survived SIGTERM")
+                        time.sleep(0.05)
+            finally:
+                if runner.poll() is None:
+                    runner.kill()
+                    runner.wait()
+                # On failure, do not leave the fake checks running.
+                for pid in pids:
+                    try:
+                        os.killpg(pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # A zombie still answers kill(0); ps reports it as Z once its group is gone.
+    state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    return bool(state) and not state.startswith("Z")

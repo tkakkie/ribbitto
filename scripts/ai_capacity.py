@@ -75,7 +75,15 @@ def measure(roots, packages, parallel):
         observer.stdout.close()
 
 
+def exit_on_signal(signum, _frame):
+    # SystemExit unwinds through measure's finally, which kills both check
+    # process groups; the default SIGTERM/SIGHUP action would leave them running.
+    sys.exit(128 + signum)
+
+
 def main():
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, exit_on_signal)
     roots = [Path(arg).resolve() for arg in sys.argv[1:3]]
     packages, parallel = map(int, sys.argv[3:5])
     if len(roots) != 2 or roots[0] == roots[1] or min(packages, parallel) <= 0:

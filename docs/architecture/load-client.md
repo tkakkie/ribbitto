@@ -82,7 +82,7 @@ With reconnects, `Failed` counts each failed non-429/non-503 attempt, each ended
 established connection except reset/cancellation, and initial setup-slot timeouts;
 `Refused503` counts each 503 attempt. `Failed` can exceed `StreamsAttempted`.
 These failures still affect `RequestFailed` and `Verdict`; neither is a restart
-result. Inspect `Restart` ([restart harness](load-restart.md)) separately; recovery and replay are #630's, and the
+result. Inspect `Restart` ([restart, recovery times and replay load](load-restart.md)) separately; the
 comparison below reconciles receipts with the expected set.
 
 `-receipts PATH` exclusively creates a new file with mode 0600, removed if the

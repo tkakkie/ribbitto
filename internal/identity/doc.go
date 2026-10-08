@@ -3,11 +3,6 @@
 // sign in.
 //
 // Module: identity (feature map in docs/architecture/features.md), which
-// owns the account and session tables. Exported API: Hasher, Sessions and
-// SignIn, Directory for batch display-name lookups, with the AccountStore and
-// SessionStore interfaces they need, SessionLifetime and their errors. Account
-// creation errors are ErrEmailTaken and ErrInvalidEmail. It writes no other
-// feature's tables. It owns Account and the email, password and display-name
-// rules (ValidateEmail, ValidatePassword, ValidateDisplayName,
-// IsBlankLookingName), and uses kernel.ID for identifiers.
+// owns the account and session tables and the email, password and display-name
+// rules. It writes no other feature's tables and publishes no event kinds.
 package identity

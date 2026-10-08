@@ -3,13 +3,8 @@
 // event-reading and sending interfaces; the SSE framing itself is web's.
 //
 // Module: realtime (feature map in docs/architecture/features.md). It
-// declares the durable event types (Event, an envelope it routes without
-// kind names; EventKind, whose values each publisher declares;
-// ErrCursorExpired) and the kind registry (Kinds of each publisher's Router,
-// merged by MergeKinds), and imports only kernel (ID) and platform (the
-// transaction handles). Its store
-// (internal/realtime/internal/postgres) reads, appends and expires the event
-// log, and its wiring (internal/realtime/realtimepg) builds it. The
+// owns event_log and publishes no event kinds: each publisher owns its kinds.
+// Its store reads, appends and expires the log; its wiring builds it. The
 // stream's authorization and rendering, and org's cursor bounds, come in as
 // interfaces it defines, implemented by org's Authorizer, web's renderer
 // and org's store (through orgpg.BoundsIn), wired in cmd/ribbitto.
@@ -26,13 +21,9 @@
 // committed sequences of the organisations with connections, for commits
 // that no Raise announced.
 //
-// Stream.Run is the per-connection delivery loop over the EventReader,
-// Authorizer and Renderer interfaces defined here; its doc comment states
-// which events are skipped and which failures stop it without advancing the
-// cursor; a cursor the log can no longer serve gets a reset event instead
-// of a partial replay. Cache and CachedEvents let an organisation's streams
-// share reads and renders (#227); docs/architecture/stream-cost.md measures
-// the effect. Retention expires old events through EventCleaner (the store's
-// Cleaner) and raises the replay boundary through the injected
-// RetentionBoundary, which org owns (#161).
+// A cursor the log can no longer serve gets a reset event instead of a
+// partial replay. Shared reads and renders reduce per-connection work
+// (#227; docs/architecture/stream-cost.md measures the effect). Retention
+// raises the replay boundary through an injected interface, which org owns
+// (#161), so expired events cannot leave a gap in replay.
 package realtime

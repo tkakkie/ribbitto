@@ -80,8 +80,8 @@ func TestCacheCapacityAndTTL(t *testing.T) {
 	get("b")
 	get("a") // hit; b is now the least recently used
 	get("c") // evicts b
-	if c.len() != 2 || loads["a"] != 1 {
-		t.Fatalf("len %d, loads %v", c.len(), loads)
+	if c.Len() != 2 || loads["a"] != 1 {
+		t.Fatalf("len %d, loads %v", c.Len(), loads)
 	}
 	get("b")
 	if loads["b"] != 2 {

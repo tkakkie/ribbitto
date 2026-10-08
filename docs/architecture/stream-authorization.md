@@ -86,8 +86,9 @@ started, and **an epoch value is never retained**: a stored or TTL-cached
 epoch is stale. `realtime.Cache` gives this rule only with a `keep` that
 rejects every value (`internal/realtime/cache.go`): callers that join a load
 share a private second load started after it, and a caller arriving during
-that one starts another. Shutdown may suppress that second read, so `org`
-rejects results after parent cancellation. Sharing comes only from overlap. A
+that one starts another. If shutdown ends that read, the cache returns the
+parent's cause; `org` also rejects results after parent cancellation.
+Sharing comes only from overlap. A
 post's checks mostly overlap, since every interested stream wakes at once, but
 staggered checks (lagging streams, render latency) each read: between one and
 `N` reads per post, roughly the checks' arrival span over a read's duration.

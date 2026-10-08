@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -267,6 +268,53 @@ func TestMessageRendererSharesRenders(t *testing.T) {
 		}
 		if out, err := r.Render(en, event); err != nil || out.Name != "message" {
 			t.Fatalf("the posted kind after it = %+v, %v", out, err)
+		}
+	})
+}
+
+// shutdownRenderParent keeps the render context live after the parent ends,
+// making a successful render race shutdown before AfterFunc propagates it.
+type shutdownRenderParent struct {
+	context.Context
+	release <-chan struct{}
+	done    <-chan struct{}
+}
+
+func (p shutdownRenderParent) Done() <-chan struct{} { return p.done }
+func (p shutdownRenderParent) AfterFunc(f func()) func() bool {
+	return context.AfterFunc(p.Context, func() { <-p.release; f() })
+}
+
+type shutdownMessages struct {
+	countingMessages
+	cancel context.CancelCauseFunc
+}
+
+func (m shutdownMessages) One(ctx context.Context, member org.Membership, channel kernel.ID, seq int64) (conversation.Entry, error) {
+	m.cancel(realtime.ErrShutdown)
+	return m.countingMessages.One(ctx, member, channel, seq)
+}
+
+func TestRenderCacheDoesNotStoreAtShutdown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		parent, cancel := context.WithCancelCause(t.Context())
+		defer cancel(context.Canceled)
+		propagation := make(chan struct{})
+		defer close(propagation)
+		done := make(chan struct{})
+		context.AfterFunc(parent, func() { close(done) })
+		cache := newRenderCache(shutdownRenderParent{parent, propagation, done})
+		calls := &atomic.Int32{}
+		r := messageRenderer{messages: shutdownMessages{countingMessages: countingMessages{calls: calls}, cancel: cancel},
+			membership: org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}, renders: cache}
+		event := eventOf(t, kernel.ID{1}, 9, conversation.KindPosted, conversation.Moved{ChannelID: kernel.ID{2}, ToTopicID: kernel.ID{6}})
+		out, err := r.Render(t.Context(), event)
+		if !errors.Is(err, realtime.ErrShutdown) || len(out.Data) != 0 {
+			t.Errorf("Render returned %d HTML bytes, %v; want no HTML and shutdown cause", len(out.Data), err)
+		}
+		synctest.Wait()
+		if cache.Len() != 0 || calls.Load() != 1 {
+			t.Errorf("entries=%d reads=%d; want 0, 1", cache.Len(), calls.Load())
 		}
 	})
 }

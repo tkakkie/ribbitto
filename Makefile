@@ -16,7 +16,7 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 LAUNCHER_TESTS_BASE ?= origin/main
 export LAUNCHER_TESTS_BASE
 
-.PHONY: check check-ai lint lint-fixtures vuln db-up db-down generate schema-docs deps css dev
+.PHONY: check check-ai lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -28,6 +28,9 @@ schema-docs:
 # Regenerates docs/dependencies.md; make check fails when it is stale.
 deps:
 	bash scripts/deps.sh
+
+api:
+	go -C tools run ./apicheck ..
 
 $(TEMPL): tools/go.mod tools/go.sum
 	go -C tools build -o ../bin/templ github.com/a-h/templ/cmd/templ
@@ -92,6 +95,9 @@ check: $(TEMPL)
 	$(MAKE) lint-fixtures
 	go build ./...
 	go test -race ./...
+	go -C tools vet ./apicheck
+	go -C tools test -race ./apicheck
+	go -C tools run ./apicheck -check ..
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
 	go -C tools vet ./...

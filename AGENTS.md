@@ -49,7 +49,8 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 
 `cmd/ribbitto` and `cmd/seed` do the wiring.
 [`packages.md`](docs/architecture/packages.md) defines the import rules and
-depguard checks a subset; never break them.
+the module manifest test (`module_imports_test.go`) checks the module rules;
+depguard keeps the non-module rules. Never break them.
 Modules ([`modules.md`](docs/architecture/modules.md), from decision 26):
 
 - Others import only a module's root (`internal/identity`, `internal/realtime`,
@@ -89,7 +90,8 @@ only the token utilities, never raw colours; checked by `tools/sourcecheck`), [`
   duplication, no global state, pass `context.Context`, wrap errors with
   `fmt.Errorf("doing x: %w", err)`.
 - Every package under `internal/` has a `doc.go` stating its
-  responsibility. Command packages (`cmd/...`) use the package comment in
+  responsibility; module roots keep owned tables, event kinds and reasons,
+  not API lists. Command packages (`cmd/...`) use the package comment in
   their main file instead; do not add empty `doc.go` files. Exported
   identifiers have doc comments.
 - Comments explain **why**, not what. Record the reason for a non-obvious

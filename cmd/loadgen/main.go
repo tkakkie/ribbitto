@@ -549,6 +549,7 @@ func run(args []string, out io.Writer) (runErr error) {
 	restartAfter := flags.Duration("restart-after", 0, "restart after setup; requires -server (0 disables)")
 	startDeadline := flags.Duration("start-deadline", 30*time.Second, "child readiness deadline (0, 5m]")
 	exitDeadline := flags.Duration("exit-deadline", 10*time.Second, "child exit deadline (0, 5m]")
+	recoverDeadline := flags.Duration("recover-deadline", 30*time.Second, "outage recovery deadline from SIGTERM (0, 5m]")
 	reconnect := flags.Bool("reconnect", false, "enable the client's fixed-delay reconnect model")
 	delay := flags.Duration("reconnect-delay", 250*time.Millisecond, "fixed retry delay [0, 10s]")
 	jitter := flags.Duration("reconnect-jitter", 250*time.Millisecond, "random stream retry jitter [0, 10s]")
@@ -592,7 +593,7 @@ func run(args []string, out io.Writer) (runErr error) {
 	if *delay < 0 || *delay > 10*time.Second || *jitter < 0 || *jitter > 10*time.Second || *attempts < 1 || *attempts > 10 || flags.NArg() != 0 || *bodyLength < 0 || *bodyLength > 4000 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > maxStreams || *rate < 0 || *rate > 100 || *drain <= 0 || *drain > 5*time.Minute || *setup <= 0 || *setup > 5*time.Minute || *dials < 1 || *dials > maxStreams {
 		return fmt.Errorf("flag outside finite limits")
 	}
-	if *restartAfter < 0 || *restartAfter >= *duration || *startDeadline <= 0 || *startDeadline > 5*time.Minute || *exitDeadline <= 0 || *exitDeadline > 5*time.Minute {
+	if *restartAfter < 0 || *restartAfter >= *duration || *startDeadline <= 0 || *startDeadline > 5*time.Minute || *exitDeadline <= 0 || *exitDeadline > 5*time.Minute || *recoverDeadline <= 0 || *recoverDeadline > 5*time.Minute {
 		return fmt.Errorf("flag outside finite limits")
 	}
 	if *restartAfter > 0 {
@@ -602,6 +603,9 @@ func run(args []string, out io.Writer) (runErr error) {
 		*reconnect = true
 	}
 	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "recover-deadline" && *restartAfter == 0 {
+			runErr = fmt.Errorf("recover-deadline requires -restart-after")
+		}
 		if (f.Name == "server-addr" || f.Name == "server-arg" || f.Name == "start-deadline" || f.Name == "exit-deadline") && *server == "" {
 			runErr = fmt.Errorf("%s requires -server", f.Name)
 		}
@@ -932,6 +936,9 @@ func run(args []string, out io.Writer) (runErr error) {
 	}
 	c.mu.Lock()
 	c.frozen = true
+	if r.Restart != nil {
+		r.Restart.measureRecovery(records, cursorNumber, final, minTime(time.Now(), c.deadline), *recoverDeadline)
+	}
 	c.mu.Unlock()
 	r.DrainSeconds = time.Since(start).Seconds()
 	if r.Restart != nil && *metrics != "" && !r.Restart.ReadyAt.IsZero() {

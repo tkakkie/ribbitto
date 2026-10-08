@@ -15,7 +15,7 @@ Read the file for the area you change:
 | File | Covers |
 |---|---|
 | [`packages.md`](packages.md) | packages, their responsibilities and allowed imports |
-| [`import-checks.md`](import-checks.md) | how depguard and `make check` enforce the import rules and `doc.go` |
+| [`import-checks.md`](import-checks.md) | how the module manifest test (`module_imports_test.go`), depguard (non-module rules) and `make check` enforce imports and `doc.go` |
 | [`features.md`](features.md) | the feature map: each feature's packages and tables, and the known exceptions |
 | [`cross-feature-access.md`](cross-feature-access.md) | how features reach each other's data: stores, posting's transaction, history and the page snapshot |
 | [`modules.md`](modules.md) | module construction, the modules, what they own and may import |
@@ -38,6 +38,13 @@ Read the file for the area you change:
 | [`load-restart.md`](load-restart.md) | the load client's restart harness: an owned child server, its exit, and the drain to the final watermark |
 | [`web-layers.md`](web-layers.md) | what handlers, templ, htmx and JavaScript are each responsible for |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
+
+Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),
+[org](../api/org.txt) and [conversation](../api/conversation.txt).
+Run `make api` after an API or doc-comment change; `make check` compares them
+without rewriting files. Entries and members are sorted by name, with signatures
+and first doc sentences; unexported declarations and their members are omitted.
+Loading uses `go/packages` for Linux/amd64 with cgo disabled.
 
 ## See also
 

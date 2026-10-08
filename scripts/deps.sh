@@ -24,7 +24,7 @@ A new line here is a new package dependency: say why in the pull request.
 CI lists added and removed edges in the ci job summary, crossing units
 first, and annotates added edges on this file with notices. Run
 `bash scripts/deps.sh --diff origin/main` locally for the same list.
-This list forbids nothing (depguard enforces the layering rules). It does
+This list forbids nothing (module tests and depguard enforce import rules). It does
 not show calls through an edge that already exists, dependencies inside one
 package, or SQL access to tables.
 

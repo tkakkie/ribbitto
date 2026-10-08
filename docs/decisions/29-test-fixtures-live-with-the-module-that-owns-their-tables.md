@@ -11,9 +11,9 @@ layout; supersedes nothing):
   because `conversation` may import `org` and `identity`).
 - **Importers.** Only `_test.go` files and higher fixture packages
   (`conversationtest` → `orgtest` → `identitytest`) import one; production
-  code never does (depguard).
+  code never does ([module import tests](../../module_imports_test.go)).
 - **Imports.** A fixture package imports `kernel`, its own root and the
-  roots its module may import for their types, lower fixture packages, pgx
+  roots permitted by the manifest for types, lower fixture packages, pgx
   and `testing`; never a store, a wiring package or the bridge. Another
   module's tests write a table only through its owner's fixture package.
 - **Semantics.** Fixtures may build states production never creates (an

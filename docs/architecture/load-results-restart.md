@@ -192,19 +192,20 @@ outside the storm; the VM's busy share is of 10 CPUs.
 In the container of [load results](load-results.md#reproducing-it), with
 `RIBBITTO_DATABASE_URL` pointing at its `ribbitto` database on `127.0.0.1`
 and no other server on `127.0.0.1:8080` (the harness refuses an occupied
-address), run, for A:
+address), run, for A (outputs go outside any Git checkout: `seed -expected`
+refuses an output path inside one):
 
 ```sh
 export RIBBITTO_DEV_METRICS_ADDR=127.0.0.1:9090 RIBBITTO_MAX_STREAMS=5000
 loadgen -tokens /root/loadtest.json -metrics http://127.0.0.1:9090 \
   -server ribbitto -server-arg serve -restart-after 20s \
   -streams 3000 -rate 10 -duration 60s -setup 5m -drain 60s \
-  -dial-concurrency 256 -receipts storm.receipts.json \
+  -dial-concurrency 256 -receipts /tmp/storm.receipts.json \
   -source 127.0.0.2,127.0.0.3,127.0.0.4,127.0.0.5,127.0.0.6,127.0.0.7,127.0.0.8,127.0.0.9 \
-  > storm.json
-seed -expected -tokens /root/loadtest.json -after "$(jq .Cursor storm.json)" \
-  -output storm.expected.json
-loadgen -compare storm.receipts.json storm.expected.json
+  > /tmp/storm.json
+seed -expected -tokens /root/loadtest.json -after "$(jq .Cursor /tmp/storm.json)" \
+  -output /tmp/storm.expected.json
+loadgen -compare /tmp/storm.receipts.json /tmp/storm.expected.json
 ```
 
 - **HTTP/2:** replace `-source …` with `-target https://localhost:8443 -ca

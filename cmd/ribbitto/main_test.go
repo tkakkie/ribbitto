@@ -166,3 +166,39 @@ func TestSignupEnabled(t *testing.T) {
 		t.Fatalf("invalid signup switch did not prevent startup: %v", err)
 	}
 }
+
+func TestMaxStreams(t *testing.T) {
+	for _, tt := range []struct {
+		name, value string
+		want        int
+	}{
+		{name: "unset", want: 5000},
+		{name: "one", value: "1", want: 1},
+		{name: "custom", value: "7000", want: 7000},
+		{name: "empty", value: ""},
+		{name: "zero", value: "0"},
+		{name: "negative", value: "-1"},
+		{name: "unparsable", value: "invalid"},
+		{name: "fraction", value: "1.5"},
+		{name: "whitespace", value: " 1"},
+		{name: "overflow", value: "999999999999999999999999999999"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("RIBBITTO_MAX_STREAMS", tt.value)
+			if tt.name == "unset" {
+				if err := os.Unsetenv("RIBBITTO_MAX_STREAMS"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := maxStreams()
+			if got != tt.want || (err != nil) != (tt.want == 0) {
+				t.Fatalf("maxStreams() = %d, %v; want %d, invalid=%t", got, err, tt.want, tt.want == 0)
+			}
+			if tt.want == 0 {
+				if err := serve(t.Context(), ""); err == nil || !strings.Contains(err.Error(), "RIBBITTO_MAX_STREAMS") {
+					t.Fatalf("invalid stream cap did not prevent startup: %v", err)
+				}
+			}
+		})
+	}
+}

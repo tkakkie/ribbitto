@@ -90,7 +90,21 @@ so local notes and tools do not change the output.
 `make check` is what CI runs and what must pass before a pull request: it
 checks formatting (`gofmt` for Go, `templ fmt` for templates), vets, lints,
 builds, runs the Go tests with the race detector, and checks the import
-graph and the documents. The AI launchers' self-tests, most of its time, run
+graph and the documents. `tools/sourcecheck` enforces the
+[product vocabulary](docs/domain/vocabulary.md) and
+[UI colour rules](docs/ui.md#tokens). In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,
+repository paths in backticks must exist. Placeholders and globs are skipped;
+brace sets are expanded; `:line` suffixes and trailing slashes are accepted.
+An existing path wins. Otherwise, a final dot-separated element that is a
+known extension (`go`, `md`, `sql`, `templ`, `toml`, `js`, `css`, `json`, `yml`,
+`yaml`, `txt`, `sh`) marks a missing file. Only other spans can be package
+selectors such as `package.Identifier` or `package.Type.Method`: every name
+after the package must be a valid Go identifier, exported or unexported, and
+the package directory must contain at least one regular `.go` file.
+Decision records are exempt from this path check because
+they describe history; their Markdown links and anchors are still checked.
+
+The AI launchers' self-tests, most of its time, run
 only when the change since `LAUNCHER_TESTS_BASE` (default `origin/main`;
 commits, staged, unstaged and untracked files) touches `scripts/ai/`,
 `.github/prompts/`, `.github/workflows/` or the `Makefile`, or when that

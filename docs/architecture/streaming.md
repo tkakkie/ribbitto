@@ -7,7 +7,7 @@ carrying named events:
 `message`, `messages-moved` and `reset` today; `presence`, `typing`
 and `unread` are planned (M4). The browser sends everything else as ordinary POST requests. One
 process serves every stream; several server processes are future work (the
-hub, the per-account cap and the watermark are per process).
+hub, both stream caps and the watermark are per process).
 
 Ordering, replay and vanished messages are in [`replay.md`](replay.md).
 
@@ -37,7 +37,9 @@ The retention period defaults to seven days; see [database configuration](../dat
   render that is then denied is discarded, and renders are shared and cached
   anyway. Only the write itself remains between the check and the
   connection. The check itself is `org`'s authorization, reached through the
-  `Authorizer` interface that `realtime` defines.
+  `Authorizer` interface that `realtime` defines. How it could stop costing a
+  query per stream per event is a proposal awaiting the maintainer's decision
+  ([stream authorization cost](stream-authorization.md), #622).
 - A stream registers with the hub under its session (#207), then looks the
   session up again, so a sign-out in between still stops it. Deleting a
   session (sign-out, or a sign-in replacing it) cancels that session's
@@ -57,5 +59,5 @@ The retention period defaults to seven days; see [database configuration](../dat
 
 ### Resource limits
 
-Cache-load limits, write deadlines, heartbeats, the per-account stream cap,
+Cache-load limits, write deadlines, heartbeats, the process and per-account stream caps,
 shutdown and HTTP/2 are in [`stream-limits.md`](stream-limits.md).

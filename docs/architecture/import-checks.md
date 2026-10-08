@@ -36,6 +36,34 @@ both fail `make check` on a violating import:
 
 This file, the manifest and `.golangci.yml` must agree; change them together.
 
+Staticcheck also runs on generated code, including templ output; the
+`_templ.go` exclusions apply only to errcheck and revive. `make lint-fixtures`
+proves staticcheck rejects ignored pure-function results in both handwritten
+Go and generated templates.
+For components that use neither `ctx` nor children, add `{{ _ = ctx }}` to avoid
+SA4006 on templ's unused `ClearChildren` result, because golangci-lint ignores
+templ's `//lint:file-ignore SA4006` directive.
+
+Bodyclose requires HTTP response bodies to be closed, including in tests.
+Acceptance helpers read and close ordinary responses before returning status,
+request metadata, headers, cookies and body text; callers never own an open body.
+`make lint-fixtures` proves an unclosed response is rejected.
+
+`sqlclosecheck` runs without exclusions and rejects SQL/pgx rows and statements
+that are neither closed nor used. Any other use of the rows, such as
+`rows.Next()` or `rows.Err()`, satisfies it: lint does not catch a missing
+Close once rows are used, including an early return from a scan loop. Keep
+`defer rows.Close()` right after the query's error check. `make lint-fixtures`
+proves it rejects unused, unclosed pgx rows; disabling the linter fails that
+assertion.
+
+Nilerr runs with no exclusions and rejects returning a nil error after
+checking that an error is non-nil, unless the block uses the error (for
+example, `log.Print(err); return nil` counts as handling it). It also reports
+the opposite case, `if err == nil { return err }`. `make lint-fixtures`
+asserts the non-nil-error finding in a tagged Go fixture, so disabling
+nilerr fails the check.
+
 `make check` also requires a `doc.go` in every directory under `internal/`
 that contains non-test Go files, including generated packages, as specified
 in `AGENTS.md`. Fixtures under `testdata/` are excluded.

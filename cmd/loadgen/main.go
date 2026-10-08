@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"regexp"
 	"runtime"
 	"sort"
@@ -53,10 +54,13 @@ type runHeader struct {
 	FinalWatermark   uint64 `json:"final_watermark"`
 }
 type streamRecord struct {
-	Index      int                 `json:"index"`
-	Sequences  map[uint64]*receipt `json:"sequences"`
-	Reset      uint64              `json:"reset"`
-	Reconnects connectionCounts    `json:"reconnects"`
+	open          bool
+	EstablishedAt []time.Time            `json:"-"`
+	ArrivedAt     map[uint64][]time.Time `json:"-"`
+	Index         int                    `json:"index"`
+	Sequences     map[uint64]*receipt    `json:"sequences"`
+	Reset         uint64                 `json:"reset"`
+	Reconnects    connectionCounts       `json:"reconnects"`
 }
 type receipt struct {
 	Arrivals uint64 `json:"arrivals"`
@@ -96,7 +100,7 @@ type counts struct {
 	http2                                                                           atomic.Bool
 	mu                                                                              sync.Mutex
 	deliveries                                                                      map[string]*post
-	frozen                                                                          bool
+	frozen, handover                                                                bool
 	deadline                                                                        time.Time
 	markers                                                                         *regexp.Regexp
 }
@@ -107,6 +111,7 @@ type post struct {
 	duplicates uint64
 }
 type result struct {
+	Restart                                                                                                             *restartResult  `json:",omitempty"`
 	Reconnect                                                                                                           *reconnectModel `json:",omitempty"`
 	Cursor, StreamsAttempted, Established, Refused429, Refused503, Reset, Failed, TCPConnections                        uint64
 	Scheduled, Sent, Answered200, PostFailed, Missed, Expected, Received, Missing, Duplicated, PostAttemptsMade         uint64
@@ -197,13 +202,17 @@ func paddedBody(marker string, length int, escape bool) string {
 
 func (c *counts) receive(seq uint64, data string, seen map[*post]bool) {
 	arrival := time.Now()
-	markers := c.markers.FindAllString(data, -1)
-	sort.Strings(markers)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.frozen || (!c.deadline.IsZero() && arrival.After(c.deadline)) {
 		return
 	}
+	c.receiveLocked(seq, data, seen, arrival)
+}
+
+func (c *counts) receiveLocked(seq uint64, data string, seen map[*post]bool, arrival time.Time) {
+	markers := c.markers.FindAllString(data, -1)
+	sort.Strings(markers)
 	if seq > 0 {
 		if c.renders == nil {
 			c.renders = make(map[uint64]int)
@@ -326,9 +335,6 @@ func readReset(body io.Reader, receive func(uint64, string), complete func(uint6
 	for s.Scan() {
 		line := s.Text()
 		if line == "" {
-			if data && event != "reset" && complete != nil {
-				complete(seq, event, strings.TrimSuffix(payload.String(), "\n"))
-			}
 			if event == "reset" && data {
 				return true
 			}
@@ -338,6 +344,10 @@ func readReset(body io.Reader, receive func(uint64, string), complete func(uint6
 					renderSeq = seq
 				}
 				receive(renderSeq, strings.TrimSuffix(payload.String(), "\n"))
+			}
+			// The stream callback accounts for delivery and records receipts in one critical section so drain cannot freeze between them.
+			if data && event != "reset" && complete != nil {
+				complete(seq, event, strings.TrimSuffix(payload.String(), "\n"))
 			}
 			payload.Reset()
 			event, data, seq = "", false, 0
@@ -363,6 +373,8 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 		if ctx.Err() == nil || outcome == connectionEstablished {
 			c.connectionAttempts[outcome].Add(1)
 			if reconnect {
+				c.mu.Lock()
+				defer c.mu.Unlock()
 				fields := []*uint64{&rec.Reconnects.Established, &rec.Reconnects.Unavailable, &rec.Reconnects.Refused, &rec.Reconnects.Other}
 				*fields[outcome]++
 			}
@@ -401,25 +413,50 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 			c.failed.Add(1)
 			return connectionOther, false
 		}
+		c.mu.Lock()
+		rec.open = true
+		if c.handover {
+			rec.EstablishedAt = append(rec.EstablishedAt, time.Now())
+		}
+		c.mu.Unlock()
+		defer func() { c.mu.Lock(); rec.open = false; c.mu.Unlock() }()
 		established()
 		notify()
-		if readReset(r.Body, func(seq uint64, data string) { c.receive(seq, data, seen) }, func(seq uint64, event, data string) {
+		if readReset(r.Body, nil, func(seq uint64, event, data string) {
+			arrival := time.Now()
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			renderSeq := uint64(0)
+			if event == "message" {
+				renderSeq = seq
+			}
+			if seq != 0 {
+				*cursor = strconv.FormatUint(seq, 10)
+			}
+			if c.frozen || (!c.deadline.IsZero() && arrival.After(c.deadline)) {
+				return
+			}
+			c.receiveLocked(renderSeq, data, seen, arrival)
 			if seq == 0 {
 				return
 			}
-			*cursor = strconv.FormatUint(seq, 10)
-			c.mu.Lock()
-			defer c.mu.Unlock()
-			if event != "message" || c.frozen || (!c.deadline.IsZero() && time.Now().After(c.deadline)) {
-				return
+			if c.handover {
+				if rec.ArrivedAt == nil {
+					rec.ArrivedAt = make(map[uint64][]time.Time)
+				}
+				rec.ArrivedAt[seq] = append(rec.ArrivedAt[seq], arrival)
 			}
-			if rec.Sequences[seq] == nil {
-				rec.Sequences[seq] = &receipt{Marker: c.markers.FindString(data)}
+			if event == "message" {
+				if rec.Sequences[seq] == nil {
+					rec.Sequences[seq] = &receipt{Marker: c.markers.FindString(data)}
+				}
+				rec.Sequences[seq].Arrivals++
 			}
-			rec.Sequences[seq].Arrivals++
 		}) {
 			c.reset.Add(1)
+			c.mu.Lock()
 			rec.Reset++
+			c.mu.Unlock()
 			return connectionEstablished, false
 		} else if ctx.Err() == nil {
 			c.failed.Add(1)
@@ -505,6 +542,13 @@ func sendPost(ctx context.Context, client *http.Client, endpoint, token, body st
 func run(args []string, out io.Writer) (runErr error) {
 	flags := flag.NewFlagSet("loadgen (development only)", flag.ContinueOnError)
 	compare := flags.String("compare", "", "compare receipt run file with positional expected file")
+	server := flags.String("server", "", "child executable (environment passed through)")
+	address := flags.String("server-addr", "127.0.0.1:8080", "child loopback IP:port; overrides RIBBITTO_ADDR")
+	var serverArgs []string
+	flags.Func("server-arg", "child argument (repeatable)", func(v string) error { serverArgs = append(serverArgs, v); return nil })
+	restartAfter := flags.Duration("restart-after", 0, "restart after setup; requires -server (0 disables)")
+	startDeadline := flags.Duration("start-deadline", 30*time.Second, "child readiness deadline (0, 5m]")
+	exitDeadline := flags.Duration("exit-deadline", 10*time.Second, "child exit deadline (0, 5m]")
 	reconnect := flags.Bool("reconnect", false, "enable the client's fixed-delay reconnect model")
 	delay := flags.Duration("reconnect-delay", 250*time.Millisecond, "fixed retry delay [0, 10s]")
 	jitter := flags.Duration("reconnect-jitter", 250*time.Millisecond, "random stream retry jitter [0, 10s]")
@@ -548,7 +592,19 @@ func run(args []string, out io.Writer) (runErr error) {
 	if *delay < 0 || *delay > 10*time.Second || *jitter < 0 || *jitter > 10*time.Second || *attempts < 1 || *attempts > 10 || flags.NArg() != 0 || *bodyLength < 0 || *bodyLength > 4000 || *duration <= 0 || *duration > 10*time.Minute || *streams < 1 || *streams > maxStreams || *rate < 0 || *rate > 100 || *drain <= 0 || *drain > 5*time.Minute || *setup <= 0 || *setup > 5*time.Minute || *dials < 1 || *dials > maxStreams {
 		return fmt.Errorf("flag outside finite limits")
 	}
+	if *restartAfter < 0 || *restartAfter >= *duration || *startDeadline <= 0 || *startDeadline > 5*time.Minute || *exitDeadline <= 0 || *exitDeadline > 5*time.Minute {
+		return fmt.Errorf("flag outside finite limits")
+	}
+	if *restartAfter > 0 {
+		if *server == "" {
+			return fmt.Errorf("restart-after requires -server")
+		}
+		*reconnect = true
+	}
 	flags.Visit(func(f *flag.Flag) {
+		if (f.Name == "server-addr" || f.Name == "server-arg" || f.Name == "start-deadline" || f.Name == "exit-deadline") && *server == "" {
+			runErr = fmt.Errorf("%s requires -server", f.Name)
+		}
 		if (f.Name == "post-attempts" || f.Name == "reconnect-delay" || f.Name == "reconnect-jitter") && !*reconnect {
 			runErr = fmt.Errorf("%s requires -reconnect", f.Name)
 		}
@@ -556,7 +612,7 @@ func run(args []string, out io.Writer) (runErr error) {
 	if runErr != nil {
 		return runErr
 	}
-	c := &counts{}
+	c := &counts{handover: *restartAfter > 0}
 	if *source != "" {
 		for _, address := range strings.Split(*source, ",") {
 			ip := net.ParseIP(address)
@@ -606,14 +662,8 @@ func run(args []string, out io.Writer) (runErr error) {
 		return fmt.Errorf("reading file limits: %w", err)
 	}
 	r.Generator.NOFILESoft, r.Generator.NOFILEHard = limits.Cur, limits.Max
-	if *metrics != "" {
-		r.Server = &serverMetrics{}
-		if err := readSnapshot(mt, &r.Server.Before); err != nil {
-			return err
-		}
-	}
 	client := &http.Client{Transport: t}
-	streamCtx, stopStreams := context.WithCancel(context.Background())
+	streamCtx, stopStreams := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopStreams()
 	endpoint := t.origin.Scheme + "://" + t.origin.Host + "/organizations/" + url.PathEscape(data.Slug) + "/channels/" + url.PathEscape(data.Channels[0])
 	tokenAt := func(i int) string {
@@ -622,9 +672,7 @@ func run(args []string, out io.Writer) (runErr error) {
 	}
 	explicitCursor := false
 	flags.Visit(func(f *flag.Flag) { explicitCursor = explicitCursor || f.Name == "cursor" })
-	readCursor := func() (string, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	readCursor := func(ctx context.Context, client *http.Client, endpoint string) (string, error) {
 		page, err := request(ctx, client, http.MethodGet, endpoint, tokenAt(0), "")
 		if err != nil {
 			return "", fmt.Errorf("cannot read channel cursor")
@@ -640,8 +688,47 @@ func run(args []string, out io.Writer) (runErr error) {
 		}
 		return string(match[1]), nil
 	}
+	readTargetCursor := func() (string, error) {
+		ctx, cancel := context.WithTimeout(streamCtx, 10*time.Second)
+		defer cancel()
+		return readCursor(ctx, client, endpoint)
+	}
+	var child *childServer
+	defer func() {
+		if child != nil {
+			child.stop(*exitDeadline)
+		}
+	}()
+	launch := func() error {
+		var launchErr error
+		child, launchErr = launchChild(streamCtx, *server, serverArgs, *address, strings.TrimPrefix(endpoint, t.origin.Scheme+"://"+t.origin.Host), readCursor, *startDeadline, *exitDeadline)
+		if launchErr != nil {
+			return launchErr
+		}
+		ctx, cancel := context.WithTimeout(streamCtx, *startDeadline)
+		defer cancel()
+		for {
+			if _, err := readCursor(ctx, client, endpoint); err == nil {
+				return nil
+			}
+			if !waitRetry(ctx, 10*time.Millisecond, 0) {
+				return fmt.Errorf("target readiness deadline exceeded")
+			}
+		}
+	}
+	if *server != "" {
+		if err := launch(); err != nil {
+			return err
+		}
+	}
+	if *metrics != "" && *restartAfter == 0 {
+		r.Server = &serverMetrics{}
+		if err := readSnapshot(mt, &r.Server.Before); err != nil {
+			return err
+		}
+	}
 	if !explicitCursor {
-		*cursor, err = readCursor()
+		*cursor, err = readTargetCursor()
 		if err != nil {
 			return err
 		}
@@ -696,13 +783,66 @@ func run(args []string, out io.Writer) (runErr error) {
 	stopSetup()
 	r.SetupSeconds = time.Since(start).Seconds()
 	start = time.Now()
+	var storm sync.WaitGroup
+	if *restartAfter > 0 {
+		r.Restart = &restartResult{}
+		c.mu.Lock()
+		for i := range records {
+			r.Restart.IncompleteSetup = r.Restart.IncompleteSetup || !records[i].open
+		}
+		c.mu.Unlock()
+		storm.Go(func() {
+			if r.Restart.IncompleteSetup || !waitRetry(streamCtx, *restartAfter, 0) {
+				return
+			}
+			select {
+			case <-child.done:
+				r.Restart.Error = "child exited before SIGTERM"
+				return
+			default:
+			}
+			c.mu.Lock()
+			for i := range records {
+				if !records[i].open {
+					r.Restart.IncompleteSetup = true
+				}
+			}
+			c.mu.Unlock()
+			if r.Restart.IncompleteSetup {
+				return
+			}
+			if *metrics != "" {
+				r.Restart.Old = &snapshot{}
+				if err := readSnapshot(mt, r.Restart.Old); err != nil {
+					r.Restart.Error = err.Error()
+					return
+				}
+			}
+			select {
+			case <-child.done:
+				r.Restart.Error = "child exited before SIGTERM"
+				return
+			default:
+			}
+			r.Restart.SIGTERM = time.Now()
+			r.Restart.ExitSeconds, r.Restart.ExitOverrun = child.stop(*exitDeadline)
+			if err := launch(); err != nil {
+				r.Restart.Error = err.Error()
+				return
+			}
+			r.Restart.ReadyAt, r.Restart.RecoveryCursor = child.readyAt, child.cursor
+			r.Restart.ReadySeconds = time.Since(r.Restart.SIGTERM).Seconds()
+		})
+	}
 	var posts sync.WaitGroup
 	inflight := make(chan struct{}, *rate)
 	if *rate > 0 {
 		r.Scheduled = (uint64(*duration)*uint64(*rate) + uint64(time.Second) - 1) / uint64(time.Second)
 	}
 	for i := uint64(0); i < r.Scheduled; i++ {
-		time.Sleep(time.Until(start.Add(time.Duration(i) * time.Second / time.Duration(*rate))))
+		if !waitRetry(streamCtx, max(0, time.Until(start.Add(time.Duration(i)*time.Second/time.Duration(*rate)))), 0) {
+			break
+		}
 		select {
 		case inflight <- struct{}{}:
 			if time.Since(start) >= *duration {
@@ -741,13 +881,32 @@ func run(args []string, out io.Writer) (runErr error) {
 			}
 		})
 	}
-	time.Sleep(time.Until(start.Add(*duration)))
+	_ = waitRetry(streamCtx, max(0, time.Until(start.Add(*duration))), 0)
 	r.ObservationSeconds = time.Since(start).Seconds()
 	r.Generator.Goroutines = runtime.NumGoroutine()
 	var memory runtime.MemStats
 	runtime.ReadMemStats(&memory)
 	r.Generator.HeapInuseBytes = memory.HeapInuse
-	posts.Wait() // Finalize the answered-200 set before deciding the drain is complete.
+	posts.Wait() // Include commits with a lost response in the watermark.
+	storm.Wait()
+	defer func() { stopStreams(); wg.Wait() }()
+	if streamCtx.Err() != nil {
+		return streamCtx.Err()
+	}
+	if r.Restart != nil && r.Restart.Error != "" {
+		return fmt.Errorf("restart: %s", r.Restart.Error)
+	}
+	var final uint64
+	if receiptFile != nil || r.Restart != nil {
+		watermark, err := readTargetCursor()
+		if err != nil {
+			return err
+		}
+		final, err = strconv.ParseUint(watermark, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid final watermark")
+		}
+	}
 	start = time.Now()
 	r.Expected = c.established.Load() * c.posts.Load()
 	if *reconnect {
@@ -757,15 +916,30 @@ func run(args []string, out io.Writer) (runErr error) {
 	c.deadline = start.Add(*drain)
 	c.mu.Unlock()
 	for {
-		if c.received.Load() >= r.Expected || time.Since(start) >= *drain {
+		complete := c.received.Load() >= r.Expected
+		if r.Restart != nil && !r.Restart.IncompleteSetup {
+			c.mu.Lock()
+			complete = !r.Restart.SIGTERM.IsZero() && r.Restart.Error == "" && caughtUp(records, cursorNumber, final, r.Restart.SIGTERM)
+			c.mu.Unlock()
+		}
+		if complete || time.Since(start) >= *drain || streamCtx.Err() != nil {
 			break
 		}
 		time.Sleep(time.Millisecond)
+	}
+	if err := streamCtx.Err(); err != nil {
+		return fmt.Errorf("interrupted during drain: %w", err)
 	}
 	c.mu.Lock()
 	c.frozen = true
 	c.mu.Unlock()
 	r.DrainSeconds = time.Since(start).Seconds()
+	if r.Restart != nil && *metrics != "" && !r.Restart.ReadyAt.IsZero() {
+		r.Restart.New = &snapshot{}
+		if err := readSnapshot(mt, r.Restart.New); err != nil {
+			return err
+		}
+	}
 	if r.Server != nil {
 		if err := readSnapshot(mt, &r.Server.After); err != nil {
 			stopStreams()
@@ -779,14 +953,6 @@ func run(args []string, out io.Writer) (runErr error) {
 	stopStreams()
 	wg.Wait()
 	if receiptFile != nil {
-		watermark, err := readCursor()
-		if err != nil {
-			return err
-		}
-		final, err := strconv.ParseUint(watermark, 10, 64)
-		if err != nil {
-			return fmt.Errorf("invalid final watermark")
-		}
 		if err := json.NewEncoder(receiptFile).Encode(runFile{Header: runHeader{1, "receipts", data.Slug, data.Channels[0], cursorNumber, final}, Streams: records}); err != nil {
 			return fmt.Errorf("writing receipts: %w", err)
 		}

@@ -3,15 +3,17 @@ package tablecheck
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
+	"unicode"
 
 	pgquery "github.com/pganalyze/pg_query_go/v6"
 	"github.com/tkakkie/ribbitto/tools/internal/sqlwalk"
 )
 
 // Statement ordinals count parsed Up statements, including DDL, not source lines.
-const reviewedMigrationAccess = `00006.statement2 organization read Maintainer ruling #677: default-channel backfill.
-00007.organization_event_seq_logged event_log read Maintainer ruling #666: deferred event-sequence invariant.`
+const reviewedMigrationAccess = `00006.backfill.statement2 organization read Maintainer ruling #677: default-channel backfill.
+00007.function.organization_event_seq_logged event_log read Maintainer ruling #666: deferred event-sequence invariant.`
 
 type migration struct{ name, sql string }
 
@@ -19,6 +21,7 @@ type migrationExemption struct{ object, table, mode, reason string }
 type migrationPolicy struct {
 	owners    map[string]string
 	functions map[string]string
+	sequences map[string]string
 	allow     map[migrationExemption]bool
 }
 
@@ -76,7 +79,7 @@ func (p *migrationPolicy) calls(tree any) error {
 	}})
 }
 
-func (p *migrationPolicy) visit(tag string, n map[string]any) error {
+func (p *migrationPolicy) visit(tag string, n map[string]any, module string) error {
 	switch tag {
 	case "SelectStmt", "InsertStmt", "UpdateStmt", "DeleteStmt":
 		if n["intoClause"] != nil {
@@ -87,6 +90,8 @@ func (p *migrationPolicy) visit(tag string, n map[string]any) error {
 			return err
 		}
 		switch sqlwalk.Names(n["funcname"]) {
+		case "nextval", "currval":
+			return p.sequenceCall(n, module)
 		case "count", "max", "lower", "row_number":
 		default:
 			return fmt.Errorf("unsupported migration function %s", sqlwalk.Names(n["funcname"]))
@@ -104,6 +109,53 @@ func (p *migrationPolicy) visit(tag string, n map[string]any) error {
 	return nil
 }
 
+// Only bare literal names can be resolved without search_path or runtime SQL.
+func sequenceName(n map[string]any) (string, error) {
+	args := sqlwalk.List(n["args"])
+	if len(args) != 1 {
+		return "", fmt.Errorf("migration sequence call requires one literal name")
+	}
+	name, _ := sqlwalk.Object(sqlwalk.Node(args[0], "A_Const")["sval"])["sval"].(string)
+	if !regexp.MustCompile(`^[a-z_][a-z0-9_]*$`).MatchString(name) {
+		return "", fmt.Errorf("migration sequence call requires an unqualified literal name")
+	}
+	return name, nil
+}
+
+func (p *migrationPolicy) sequenceCall(n map[string]any, module string) error {
+	name, err := sequenceName(n)
+	if err != nil {
+		return err
+	}
+	owner := p.sequences[name]
+	if owner == "" || module == "" || owner != module {
+		return fmt.Errorf("unknown or foreign migration sequence %s (owner=%s)", name, owner)
+	}
+	return nil
+}
+
+func (p *migrationPolicy) ddlExpressions(tree any, module string) error {
+	return sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, Visit: func(tag string, n map[string]any, _ sqlwalk.Scope) error {
+		if tag == "SubLink" {
+			return fmt.Errorf("unsupported migration DDL node %s", tag)
+		}
+		if tag != "FuncCall" {
+			return nil
+		}
+		switch sqlwalk.Names(n["funcname"]) {
+		case "uuidv7", "now", "length", "lower", "octet_length", "starts_with", "btrim":
+			return nil
+		case "pg_catalog.normalize":
+			if len(sqlwalk.List(n["funcname"])) == 2 {
+				return nil
+			}
+		case "nextval", "currval":
+			return p.sequenceCall(n, module)
+		}
+		return fmt.Errorf("unsupported migration DDL function %s", sqlwalk.Names(n["funcname"]))
+	}})
+}
+
 func checkMigrations(migrations []string, owners map[string]string) error {
 	files := make([]migration, len(migrations))
 	for i, sql := range migrations {
@@ -112,8 +164,36 @@ func checkMigrations(migrations []string, owners map[string]string) error {
 	return checkMigrationsWithAccess(files, owners, nil)
 }
 
+func migrationUp(sql string) (string, error) {
+	var up strings.Builder
+	inUp, foundUp := false, false
+	for _, line := range strings.Split(sql, "\n") {
+		if strings.Contains(line, "+goose") {
+			// Goose v3.28 rejects leading spaces/tabs but allows trailing whitespace.
+			// Restrict annotations to these whole lines so executed SQL cannot differ.
+			switch strings.TrimRightFunc(line, unicode.IsSpace) {
+			case "-- +goose Up":
+				inUp, foundUp = true, true
+			case "-- +goose Down":
+				inUp = false
+			case "-- +goose StatementBegin", "-- +goose StatementEnd":
+			default:
+				return "", fmt.Errorf("unsupported migration goose annotation: %q", line)
+			}
+			continue
+		}
+		if inUp {
+			up.WriteString(line + "\n")
+		}
+	}
+	if !foundUp {
+		return "", fmt.Errorf("missing migration Up section")
+	}
+	return up.String(), nil
+}
+
 func checkMigrationsWithAccess(migrations []migration, owners map[string]string, allow map[migrationExemption]bool) error {
-	p := &migrationPolicy{owners: owners, functions: map[string]string{}, allow: allow}
+	p := &migrationPolicy{owners: owners, functions: map[string]string{}, sequences: map[string]string{}, allow: allow}
 	type statement struct {
 		tree              any
 		kind, object, sql string
@@ -123,11 +203,10 @@ func checkMigrationsWithAccess(migrations []migration, owners map[string]string,
 	tables := map[string]bool{}
 	// Collect every definition before checking callers or trigger bindings.
 	for _, file := range migrations {
-		_, up, ok := strings.Cut(file.sql, "-- +goose Up")
-		if !ok {
-			return fmt.Errorf("missing migration Up section")
+		up, err := migrationUp(file.sql)
+		if err != nil {
+			return err
 		}
-		up, _, _ = strings.Cut(up, "-- +goose Down")
 		tree, err := sqlwalk.Parse(up)
 		if err != nil {
 			return err
@@ -141,9 +220,12 @@ func checkMigrationsWithAccess(migrations []migration, owners map[string]string,
 			if length != 0 {
 				end = int(start + length)
 			}
-			s := statement{tree: stmt, object: fmt.Sprintf("%s.statement%d", file.name, j+1), sql: up[int(start):end]}
+			s := statement{tree: stmt, object: fmt.Sprintf("%s.ddl.statement%d", file.name, j+1), sql: up[int(start):end]}
 			for s.kind = range stmt {
 				s.node = sqlwalk.Object(stmt[s.kind])
+			}
+			if s.kind == "InsertStmt" || s.kind == "UpdateStmt" {
+				s.object = fmt.Sprintf("%s.backfill.statement%d", file.name, j+1)
 			}
 			if s.kind == "CreateFunctionStmt" {
 				name := sqlwalk.Names(s.node["funcname"])
@@ -153,7 +235,7 @@ func checkMigrationsWithAccess(migrations []migration, owners map[string]string,
 				if strings.Contains(name, ".") || p.functions[name] != "" || s.node["replace"] == true || s.node["parameters"] != nil {
 					return fmt.Errorf("unsupported migration function definition %s", name)
 				}
-				s.object = fmt.Sprintf("%s.%s", file.name, name)
+				s.object = fmt.Sprintf("%s.function.%s", file.name, name)
 				p.functions[name] = s.object
 			}
 			statements = append(statements, s)
@@ -164,13 +246,33 @@ func checkMigrationsWithAccess(migrations []migration, owners map[string]string,
 		n := s.node
 		switch s.kind {
 		case "CreateStmt":
+			for _, option := range []string{"inhRelations", "partbound", "partspec", "ofTypename"} {
+				if n[option] != nil {
+					return fmt.Errorf("unsupported migration CREATE TABLE %s", option)
+				}
+			}
+			for _, element := range sqlwalk.List(n["tableElts"]) {
+				if sqlwalk.Node(element, "TableLikeClause") != nil {
+					return fmt.Errorf("unsupported migration CREATE TABLE LIKE")
+				}
+			}
 			r := sqlwalk.Object(n["relation"])
 			table, _ := r["relname"].(string)
 			if r["schemaname"] != nil || r["catalogname"] != nil || tables[table] {
 				return fmt.Errorf("unsupported qualified or duplicate migration table %s", table)
 			}
 			tables[table] = true
-		case "IndexStmt", "CreateSeqStmt":
+		case "IndexStmt":
+		case "CreateSeqStmt":
+			r := sqlwalk.Object(n["sequence"])
+			name, _ := r["relname"].(string)
+			if r["schemaname"] != nil || r["catalogname"] != nil {
+				return fmt.Errorf("unsupported qualified migration sequence %s", name)
+			}
+			if _, exists := p.sequences[name]; exists {
+				return fmt.Errorf("duplicate migration sequence %s", name)
+			}
+			p.sequences[name] = ""
 		case "AlterTableStmt":
 			if n["objtype"] != "OBJECT_TABLE" {
 				return fmt.Errorf("unsupported migration ALTER object %v", n["objtype"])
@@ -209,11 +311,52 @@ func checkMigrationsWithAccess(migrations []migration, owners map[string]string,
 			return fmt.Errorf("owned table not created by migrations: %s", table)
 		}
 	}
+	// A direct column default establishes logical module ownership, independently
+	// of PostgreSQL OWNED BY (00010 deliberately keeps its sequence unowned).
+	for _, s := range statements {
+		if s.kind != "CreateStmt" && s.kind != "AlterTableStmt" {
+			continue
+		}
+		module := owners[fmt.Sprint(sqlwalk.Object(s.node["relation"])["relname"])]
+		err := sqlwalk.Walk(s.tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, Visit: func(tag string, n map[string]any, _ sqlwalk.Scope) error {
+			if tag != "ColumnDef" {
+				return nil
+			}
+			for _, constraint := range sqlwalk.List(n["constraints"]) {
+				c := sqlwalk.Node(constraint, "Constraint")
+				call := sqlwalk.Node(c["raw_expr"], "FuncCall")
+				if c["contype"] != "CONSTR_DEFAULT" || sqlwalk.Names(call["funcname"]) != "nextval" {
+					continue
+				}
+				name, err := sequenceName(call)
+				if err != nil {
+					return err
+				}
+				owner, created := p.sequences[name]
+				if !created || module == "" {
+					return fmt.Errorf("unknown migration sequence owner %s", name)
+				}
+				if owner != "" && owner != module {
+					return fmt.Errorf("ambiguous migration sequence owner %s", name)
+				}
+				p.sequences[name] = module
+			}
+			return nil
+		}})
+		if err != nil {
+			return fmt.Errorf("%s: %w", s.object, err)
+		}
+	}
 	for _, s := range statements {
 		if err := p.calls(s.tree); err != nil {
 			return fmt.Errorf("%s: %w", s.object, err)
 		}
 		switch s.kind {
+		case "CreateStmt", "AlterTableStmt", "IndexStmt", "CreateTrigStmt":
+			module := owners[fmt.Sprint(sqlwalk.Object(s.node["relation"])["relname"])]
+			if err := p.ddlExpressions(s.tree, module); err != nil {
+				return fmt.Errorf("%s: %w", s.object, err)
+			}
 		case "CreateFunctionStmt":
 			name := sqlwalk.Names(s.node["funcname"])
 			module := modules[name]
@@ -254,6 +397,8 @@ func (p *migrationPolicy) body(sql string, fn map[string]any, module, object str
 				return fmt.Errorf("unsupported migration routine body")
 			}
 			body, _ = sqlwalk.Node(items[0], "String")["sval"].(string)
+		default:
+			return fmt.Errorf("unsupported migration function option %v", def["defname"])
 		}
 	}
 	if language == "sql" {
@@ -346,7 +491,7 @@ func (p *migrationPolicy) plpgsql(tree any, module, object string) error {
 				switch tag {
 				case "PLpgSQL_function", "PLpgSQL_var", "PLpgSQL_type", "PLpgSQL_rec", "PLpgSQL_row", "PLpgSQL_recfield", "PLpgSQL_stmt_block", "PLpgSQL_stmt_if", "PLpgSQL_if_elsif", "PLpgSQL_stmt_return", "PLpgSQL_stmt_raise", "PLpgSQL_raise_option", "PLpgSQL_stmt_perform", "PLpgSQL_stmt_execsql", "PLpgSQL_stmt_assign":
 				default:
-					return fmt.Errorf("unsupported migration routine node %s (dynamic SQL is refused)", tag)
+					return fmt.Errorf("unsupported migration routine node %s", tag)
 				}
 			}
 			if err := p.plpgsql(child, module, object); err != nil {

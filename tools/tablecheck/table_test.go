@@ -159,7 +159,7 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 		},
 		Visit: func(tag string, n map[string]any, _ sqlwalk.Scope) error {
 			if migration != nil {
-				return migration.visit(tag, n)
+				return migration.visit(tag, n, module)
 			}
 			switch tag {
 			case "SelectStmt", "InsertStmt", "UpdateStmt", "DeleteStmt":

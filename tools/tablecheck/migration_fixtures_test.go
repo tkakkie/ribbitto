@@ -88,6 +88,15 @@ func TestMigrationObjects(t *testing.T) {
 		{"sql return foreign", "CREATE FUNCTION f() RETURNS trigger LANGUAGE sql RETURN (SELECT id FROM account); " + bind, "foreign table account"},
 		{"missing pl body", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql RETURN NULL; " + bind, "unsupported migration routine language or body"},
 		{"other language", "CREATE FUNCTION f() RETURNS trigger LANGUAGE c AS 'lib', 'f'; " + bind, "unsupported migration routine body"},
+		{"security definer", strings.Replace(routine("BEGIN RETURN NULL; END"), "LANGUAGE plpgsql", "LANGUAGE plpgsql SECURITY DEFINER", 1), "function option security"},
+		{"search path", strings.Replace(routine("BEGIN RETURN NULL; END"), "LANGUAGE plpgsql", "LANGUAGE plpgsql SET search_path = pg_temp", 1), "function option set"},
+		{"support option", strings.Replace(routine("BEGIN RETURN NULL; END"), "LANGUAGE plpgsql", "LANGUAGE plpgsql SUPPORT helper", 1), "function option support"},
+		{"volatility option", strings.Replace(routine("BEGIN RETURN NULL; END"), "LANGUAGE plpgsql", "LANGUAGE plpgsql IMMUTABLE", 1), "function option volatility"},
+		{"exception block", routine("BEGIN RETURN NULL; EXCEPTION WHEN OTHERS THEN RETURN NULL; END"), "unsupported migration routine node PLpgSQL_exception_block"},
+		{"case statement", routine("BEGIN CASE WHEN true THEN RETURN NULL; END CASE; RETURN NULL; END"), "unsupported migration routine node PLpgSQL_stmt_case"},
+		{"assert statement", routine("BEGIN ASSERT true; RETURN NULL; END"), "unsupported migration routine node PLpgSQL_stmt_assert"},
+		{"static for", routine("DECLARE x record; BEGIN FOR x IN SELECT id FROM message LOOP RETURN NULL; END LOOP; RETURN NULL; END"), "unsupported migration routine node PLpgSQL_stmt_fors"},
+		{"diagnostics", routine("DECLARE x int; BEGIN GET DIAGNOSTICS x = ROW_COUNT; RETURN NULL; END"), "unsupported migration routine node PLpgSQL_stmt_getdiag"},
 		{"unbound", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$", "unbound migration function f"},
 		{"ambiguous bindings", routine("BEGIN RETURN NULL; END") + " CREATE TRIGGER t2 AFTER INSERT ON account FOR EACH ROW EXECUTE FUNCTION f()", "ambiguous trigger function owner f"},
 		{"same owner bindings", routine("BEGIN RETURN NULL; END") + " CREATE TRIGGER t2 AFTER UPDATE ON message FOR EACH ROW EXECUTE FUNCTION f()", ""},
@@ -115,6 +124,98 @@ func TestMigrationObjects(t *testing.T) {
 				tables = strings.Replace(tables, "message(id int)", "message(id int CHECK(f() > 0))", 1)
 			}
 			err := checkMigrations([]string{"-- +goose Up\n" + tables + tt.sql}, owners)
+			if err != nil && strings.Contains(err.Error(), "(dynamic SQL is refused)") {
+				t.Fatalf("misleading routine node error: %v", err)
+			}
+			if tt.want == "" && err != nil || tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)) {
+				t.Fatalf("got %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestMigrationAnnotations(t *testing.T) {
+	for _, tt := range []struct{ name, sql string }{
+		{"trailing comment marker", "-- +goose Up\nCREATE TABLE message(id int); -- +goose Down\nDROP TABLE message;\n-- +goose Down\n"},
+		{"envsub", "-- +goose Up\n-- +goose ENVSUB ON\nCREATE TABLE message(id int);\n-- +goose Down\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkMigrations([]string{tt.sql}, map[string]string{"message": "conversation"})
+			if err == nil || !strings.Contains(err.Error(), "unsupported migration goose annotation") {
+				t.Fatalf("got %v, want unsupported migration goose annotation", err)
+			}
+		})
+	}
+}
+
+func TestMigrationDDLExpressions(t *testing.T) {
+	owners := map[string]string{"message": "conversation", "account": "identity"}
+	function := " CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$; "
+	for _, tt := range []struct{ name, sql, want string }{
+		{"subquery", "CREATE TABLE message(id int); ALTER TABLE message ADD COLUMN x text DEFAULT (SELECT email FROM account LIMIT 1)", "00001.ddl.statement3: unsupported migration DDL node SubLink"},
+		{"create default query", "CREATE TABLE message(id int, x xml DEFAULT query_to_xml('SELECT * FROM account', true, false, ''))", "DDL function query_to_xml"},
+		{"create check query", "CREATE TABLE message(id int CHECK (query_to_xml('SELECT * FROM account', true, false, '') IS NOT NULL))", "DDL function query_to_xml"},
+		{"create default table", "CREATE TABLE message(id int, x xml DEFAULT table_to_xml('account', true, false, ''))", "DDL function table_to_xml"},
+		{"add default query", "CREATE TABLE message(id int); ALTER TABLE message ADD COLUMN x xml DEFAULT query_to_xml('SELECT * FROM account', true, false, '')", "DDL function query_to_xml"},
+		{"add check table", "CREATE TABLE message(id int); ALTER TABLE message ADD CONSTRAINT c CHECK (table_to_xml('account', true, false, '') IS NOT NULL)", "DDL function table_to_xml"},
+		{"trigger when query", "CREATE TABLE message(id int);" + function + "CREATE TRIGGER t AFTER INSERT ON message FOR EACH ROW WHEN (query_to_xml('SELECT * FROM account', true, false, '') IS NOT NULL) EXECUTE FUNCTION f()", "DDL function query_to_xml"},
+		{"generated expression", "CREATE TABLE message(id int, x xml GENERATED ALWAYS AS (table_to_xml('account',true,false,'')) STORED)", "DDL function table_to_xml"},
+		{"added generated expression", "CREATE TABLE message(id int); ALTER TABLE message ADD COLUMN x xml GENERATED ALWAYS AS (table_to_xml('account',true,false,'')) STORED", "DDL function table_to_xml"},
+		{"index expression", "CREATE TABLE message(id int); CREATE INDEX ix ON message((table_to_xml('account',true,false,'')))", "DDL function table_to_xml"},
+		{"index predicate", "CREATE TABLE message(id int); CREATE INDEX ix ON message(id) WHERE table_to_xml('account',true,false,'') IS NOT NULL", "DDL function table_to_xml"},
+		{"quoted dotted builtin", `CREATE TABLE message(s text CHECK (s="pg_catalog.normalize"(s)))`, "DDL function pg_catalog.normalize"},
+		{"qualified builtin", "CREATE TABLE message(id int DEFAULT public.length('x'))", "DDL function public.length"},
+		{"allowed functions", "CREATE TABLE message(id int, u uuid DEFAULT uuidv7(), t timestamptz DEFAULT now(), s text CHECK (length(s)>0 AND lower(s)=btrim(s) AND octet_length(s)>0 AND starts_with(s,'x') AND s=normalize(s,NFC))); CREATE INDEX ix ON message(lower(s)) WHERE length(s)>0", ""},
+		{"inherits", "CREATE TABLE message(id int) INHERITS (account)", "CREATE TABLE inhRelations"},
+		{"partition of", "CREATE TABLE message PARTITION OF account FOR VALUES IN (1)", "CREATE TABLE inhRelations"},
+		{"partition spec", "CREATE TABLE message(id int) PARTITION BY LIST(id)", "CREATE TABLE partspec"},
+		{"typed table", "CREATE TABLE message OF account", "CREATE TABLE ofTypename"},
+		{"like", "CREATE TABLE message(LIKE account)", "CREATE TABLE LIKE"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkMigrations([]string{"-- +goose Up\nCREATE TABLE account(id int); " + tt.sql}, owners)
+			if tt.want == "" && err != nil || tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)) {
+				t.Fatalf("got %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestMigrationSequences(t *testing.T) {
+	owners := map[string]string{"message": "conversation", "account": "identity"}
+	prefix := "CREATE TABLE message(id bigint); CREATE TABLE account(id bigint); "
+	owned := "CREATE SEQUENCE ids; ALTER TABLE message ADD COLUMN epoch bigint DEFAULT nextval('ids'); "
+	bind := " CREATE TRIGGER t AFTER INSERT ON message FOR EACH ROW EXECUTE FUNCTION f();"
+	for _, tt := range []struct{ name, setup, call, want string }{
+		{"same module nextval", owned, "nextval('ids')", ""},
+		{"same module currval", owned, "currval('ids')", ""},
+		{"create default ownership", "CREATE SEQUENCE ids; CREATE TABLE extra(id bigint DEFAULT nextval('ids')); ", "nextval('ids')", ""},
+		{"foreign sequence", "CREATE SEQUENCE ids; ALTER TABLE account ADD COLUMN epoch bigint DEFAULT nextval('ids'); ", "nextval('ids')", "foreign migration sequence ids"},
+		{"uncreated", "", "nextval('absent')", "unknown or foreign migration sequence absent"},
+		{"unowned", "CREATE SEQUENCE ids; ", "nextval('ids')", "unknown or foreign migration sequence ids"},
+		{"ambiguous", owned + "ALTER TABLE account ADD COLUMN epoch bigint DEFAULT nextval('ids'); ", "nextval('ids')", "ambiguous migration sequence owner ids"},
+		{"setval", owned, "setval('ids', 1)", "unsupported migration function setval"},
+		{"nonliteral", owned, "nextval(NEW.id)", "requires an unqualified literal name"},
+		{"computed literal", owned, "nextval('id' || 's')", "requires an unqualified literal name"},
+		{"qualified literal", owned, "nextval('public.ids')", "requires an unqualified literal name"},
+		{"regclass cast", owned, "nextval('ids'::regclass)", "requires an unqualified literal name"},
+		{"extra arguments", owned, "nextval('ids', 1)", "requires one literal name"},
+		{"qualified function", owned, "pg_catalog.nextval('ids')", "unsupported migration function pg_catalog.nextval"},
+		{"duplicate sequence", owned + "CREATE SEQUENCE ids; ", "nextval('ids')", "duplicate migration sequence ids"},
+		{"qualified definition", "CREATE SEQUENCE public.ids; ", "nextval('ids')", "qualified migration sequence ids"},
+		{"unknown default sequence", "ALTER TABLE message ADD COLUMN epoch bigint DEFAULT nextval('absent'); ", "1", "unknown migration sequence owner absent"},
+		{"nonliteral default", "CREATE SEQUENCE ids; ALTER TABLE message ADD COLUMN epoch bigint DEFAULT nextval('id' || 's'); ", "1", "requires an unqualified literal name"},
+		{"nested default cannot assign ownership", "CREATE SEQUENCE ids; ALTER TABLE message ADD COLUMN epoch bigint DEFAULT (nextval('ids') + 1); ", "1", "unknown or foreign migration sequence ids"},
+		{"foreign DDL sequence", owned + "ALTER TABLE account ADD CONSTRAINT c CHECK(currval('ids') > 0); ", "1", "foreign migration sequence ids"},
+		{"DDL setval", owned + "ALTER TABLE message ADD CONSTRAINT c CHECK(setval('ids', 1) > 0); ", "1", "DDL function setval"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			modules := map[string]string{"message": owners["message"], "account": owners["account"]}
+			if tt.name == "create default ownership" {
+				modules["extra"] = "conversation"
+			}
+			sql := prefix + tt.setup + "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM " + tt.call + "; RETURN NULL; END $$;" + bind
+			err := checkMigrations([]string{"-- +goose Up\n" + sql}, modules)
 			if tt.want == "" && err != nil || tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)) {
 				t.Fatalf("got %v, want %q", err, tt.want)
 			}
@@ -146,11 +247,13 @@ func TestReviewedMigrationAccess(t *testing.T) {
 	}
 	for _, tt := range []struct{ name, remove, target, old, new, want string }{
 		{name: "production"},
-		{name: "remove 00006", remove: "00006.statement2", want: "00006.statement2: foreign table organization (write=false, owner=org)"},
-		{name: "remove 00007", remove: "00007.organization_event_seq_logged", want: "00007.organization_event_seq_logged: foreign table event_log (write=false, owner=realtime)"},
-		{name: "00006 extra access", target: "00006", old: "SELECT o.id, 'general', true", new: "SELECT o.id, (SELECT email FROM account LIMIT 1), true", want: "00006.statement2: foreign table account (write=false, owner=identity)"},
-		{name: "00007 extra access", target: "00007", old: "IF NEW.event_seq >", new: "IF EXISTS (SELECT FROM account) AND NEW.event_seq >", want: "00007.organization_event_seq_logged: foreign table account (write=false, owner=identity)"},
-		{name: "00007 dynamic", target: "00007", old: "BEGIN", new: "BEGIN EXECUTE 'SELECT 1';", want: "00007.organization_event_seq_logged: unsupported migration routine node PLpgSQL_stmt_dynexecute (dynamic SQL is refused)"},
+		{name: "remove 00006", remove: "00006.backfill.statement2", want: "00006.backfill.statement2: foreign table organization (write=false, owner=org)"},
+		{name: "remove 00007", remove: "00007.function.organization_event_seq_logged", want: "00007.function.organization_event_seq_logged: foreign table event_log (write=false, owner=realtime)"},
+		{name: "00006 extra access", target: "00006", old: "SELECT o.id, 'general', true", new: "SELECT o.id, (SELECT email FROM account LIMIT 1), true", want: "00006.backfill.statement2: foreign table account (write=false, owner=identity)"},
+		{name: "00007 extra access", target: "00007", old: "IF NEW.event_seq >", new: "IF EXISTS (SELECT FROM account) AND NEW.event_seq >", want: "00007.function.organization_event_seq_logged: foreign table account (write=false, owner=identity)"},
+		{name: "00010 guard foreign read", target: "00010", old: "IF NEW.id IS DISTINCT FROM OLD.id THEN", new: "IF NEW.id IS DISTINCT FROM OLD.id AND EXISTS(SELECT FROM account) THEN", want: "00010.function.organization_access_guard: foreign table account (write=false, owner=identity)"},
+		{name: "00010 truncate foreign write", target: "00010", old: "UPDATE organization SET access_epoch = NULL;", new: "UPDATE account SET email = 'x';", want: "00010.function.member_access_truncated: foreign table account (write=true, owner=identity)"},
+		{name: "00007 dynamic", target: "00007", old: "BEGIN", new: "BEGIN EXECUTE 'SELECT 1';", want: "00007.function.organization_event_seq_logged: unsupported migration routine node PLpgSQL_stmt_dynexecute"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			allow, err := migrationExemptions(reviewedMigrationAccess)
@@ -189,14 +292,16 @@ func TestMigrationExemptions(t *testing.T) {
 	prefix := "CREATE TABLE message(id int); CREATE TABLE account(id int); "
 	bind := " CREATE TRIGGER t AFTER INSERT ON message FOR EACH ROW EXECUTE FUNCTION f();"
 	for _, tt := range []struct{ name, sql, allow, want string }{
-		{"reviewed write", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO account VALUES(1); RETURN NULL; END $$;" + bind, "00001.f account write Maintainer ruling #677", ""},
-		{"read does not exempt write", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO account VALUES(1); RETURN NULL; END $$;" + bind, "00001.f account read Reviewed", "write=true"},
-		{"write does not exempt read", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM 1 FROM account; RETURN NULL; END $$;" + bind, "00001.f account write Reviewed", "write=false"},
+		{"backfill cannot exempt routine", "CREATE FUNCTION statement5() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM id FROM account; RETURN NULL; END $$; CREATE TRIGGER t AFTER INSERT ON message FOR EACH ROW EXECUTE FUNCTION statement5(); UPDATE message SET id=(SELECT id FROM account)", "00001.backfill.statement5 account read Maintainer ruling #677: backfill only", "00001.function.statement5: foreign table account"},
+		{"routine cannot exempt backfill", "CREATE FUNCTION statement5() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$; CREATE TRIGGER t AFTER INSERT ON message FOR EACH ROW EXECUTE FUNCTION statement5(); UPDATE message SET id=(SELECT id FROM account)", "00001.function.statement5 account read Reviewed", "00001.backfill.statement5: foreign table account"},
+		{"reviewed write", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO account VALUES(1); RETURN NULL; END $$;" + bind, "00001.function.f account write Maintainer ruling #677", ""},
+		{"read does not exempt write", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO account VALUES(1); RETURN NULL; END $$;" + bind, "00001.function.f account read Reviewed", "write=true"},
+		{"write does not exempt read", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM 1 FROM account; RETURN NULL; END $$;" + bind, "00001.function.f account write Reviewed", "write=false"},
 		{"object scope", "UPDATE message SET id=(SELECT id FROM account)", "00001.other account read Reviewed", "foreign table account"},
-		{"stale", "UPDATE message SET id=1", "00001.statement3 account read Reviewed", "stale migration exemption"},
-		{"same module stale", "UPDATE message SET id=1", "00001.statement3 message write Reviewed", "stale migration exemption"},
-		{"unknown owner cannot be exempted", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM 1 FROM account; RETURN NULL; END $$;", "00001.f account read Reviewed", "unbound migration function"},
-		{"call cannot be exempted", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;" + bind + " UPDATE message SET id=f()", "00001.statement5 account read Reviewed", "call to migration-defined function"},
+		{"stale", "UPDATE message SET id=1", "00001.backfill.statement3 account read Reviewed", "stale migration exemption"},
+		{"same module stale", "UPDATE message SET id=1", "00001.backfill.statement3 message write Reviewed", "stale migration exemption"},
+		{"unknown owner cannot be exempted", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM 1 FROM account; RETURN NULL; END $$;", "00001.function.f account read Reviewed", "unbound migration function"},
+		{"call cannot be exempted", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;" + bind + " UPDATE message SET id=f()", "00001.backfill.statement5 account read Reviewed", "call to migration-defined function"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			allow, err := migrationExemptions(tt.allow)

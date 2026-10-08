@@ -73,8 +73,8 @@ authoritative table registry; the table above points there rather than duplicati
 it. [`tools/tablecheck`](../../tools/tablecheck/table_test.go) checks it against
 migration-created tables and every production query in `make check`. Query foreign
 reads need a query/table exemption with a reviewed reason; unused entries and
-reasons containing
-"pending maintainer" (case-insensitive, with any non-alphanumeric separator) fail.
+reasons containing "pending maintainer" (case-insensitive, with any
+non-alphanumeric separator) fail.
 Reasons mentioning the maintainer need an issue, PR comment or decision reference.
 Query writes have no exemptions. The separate [migration gate](import-checks.md)
 checks backfills and trigger routines, with reviewed access exemptions.

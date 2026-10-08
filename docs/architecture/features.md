@@ -32,11 +32,11 @@ How features reach each other's data (stores, posting's transaction, history
 and the page snapshot) is in
 [cross-feature access](cross-feature-access.md).
 
-Org's test-only `GetOrganizationBySlug` and `GetMemberByOrganizationAndAccount`
-queries live in `db/queries/org/`. [Modules](modules.md) says where
-conversation's tests live. Another feature's tests write a table only through
-its owner's test-only fixture package; [modules](modules.md) states the
-fixture rule.
+Org's test-only lookup by slug lives in its store's tests; its test-only
+`GetMemberByOrganizationAndAccount` query lives in `db/queries/org/`.
+[Modules](modules.md) says where conversation's tests live. Another
+feature's tests write a table only through its owner's test-only fixture
+package; [modules](modules.md) states the fixture rule.
 
 **Known exceptions.** Cross-feature writes that must commit atomically:
 

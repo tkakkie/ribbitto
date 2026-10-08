@@ -234,6 +234,8 @@ func rawColour(value string) bool {
 func classColours(source string, report func(string)) {
 	for _, value := range arbitrary.FindAllString(source, -1) {
 		value = value[1 : len(value)-1]
+		// A URL scheme's colon must not be mistaken for a property prefix.
+		value = urls.ReplaceAllString(value, "")
 		if _, suffix, ok := strings.Cut(value, ":"); ok {
 			value = suffix
 		}

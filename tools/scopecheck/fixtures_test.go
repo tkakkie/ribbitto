@@ -45,8 +45,14 @@ func TestMutations(t *testing.T) {
 		{"global", "SELECT * FROM setup", ""},
 		{"insert", "INSERT INTO member (organization_id) VALUES ($1)", ""},
 		{"insert_returning", "INSERT INTO member (organization_id) VALUES ($1) RETURNING *", ""},
+		{"insert_VALUES_subquery", "INSERT INTO message (organization_id, body) VALUES ($1, (SELECT body FROM message WHERE organization_id = $1))", "unsupported shape"},
+		{"insert_RETURNING_subquery", "INSERT INTO message (organization_id, body) VALUES ($1, $2) RETURNING (SELECT body FROM message WHERE organization_id = $1 LIMIT 1)", "unsupported shape"},
+		{"CTE_insert_VALUES_subquery", "WITH i AS (INSERT INTO message (organization_id, body) VALUES ($1, (SELECT body FROM message WHERE organization_id = $1)) RETURNING *) SELECT * FROM i", "unsupported shape"},
 		{"insert_SELECT", "INSERT INTO member (organization_id) SELECT organization_id FROM member", "unsupported shape"},
 		{"insert_SELECT_CTE", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO member (organization_id) SELECT organization_id FROM d", ""},
+		{"insert_SELECT_CTE_RETURNING_subquery", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO message (organization_id) SELECT organization_id FROM d RETURNING (SELECT body FROM message WHERE organization_id = $1 LIMIT 1)", "unsupported shape"},
+		{"insert_SELECT_CTE_union", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO message (organization_id) SELECT organization_id FROM d UNION SELECT organization_id FROM message WHERE organization_id = $1", "unsupported shape"},
+		{"insert_SELECT_CTE_qualified", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO member (organization_id) SELECT organization_id FROM public.d", "unsupported shape"},
 		{"insert_SELECT_scoped_table", "INSERT INTO member (organization_id) SELECT organization_id FROM member WHERE organization_id = $1", "unsupported shape"},
 		{"insert_SELECT_CTE_join", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO member (organization_id) SELECT d.organization_id FROM d JOIN member m ON true WHERE m.organization_id = $1", "unsupported shape"},
 		{"insert_SELECT_CTE_subquery", "WITH d AS (SELECT $1 AS organization_id) INSERT INTO member (organization_id) SELECT organization_id FROM d WHERE organization_id IN (SELECT organization_id FROM member WHERE organization_id = $1)", "unsupported shape"},
@@ -68,7 +74,7 @@ func TestMutations(t *testing.T) {
 		{"insert_CTE_unscoped_read", "WITH d AS (SELECT * FROM member) INSERT INTO member (organization_id) VALUES ($1)", "missing scope"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := check(tc.sql, map[string]string{"member": "organization_id", "organization": "id", "setup": ""})
+			err := check(tc.sql, map[string]string{"member": "organization_id", "message": "organization_id", "organization": "id", "setup": ""})
 			if tc.want == "" {
 				if err != nil {
 					t.Fatal(err)
@@ -87,12 +93,15 @@ func TestAllowlist(t *testing.T) {
 		{"Scoped Unneeded exemption.", "unnecessary allowlist entry"},
 		{"Existing Resolves scope through a join.", ""},
 		{"Existing Approved by maintainer, 2026-10-08.", "missing maintainer provenance"},
+		{"Existing Approved by Maintainer.", "missing maintainer provenance"},
 		{"Existing Approved by MAINTAINER in #658, 2026-10-08.", ""},
 		{"Existing Approved by maintainer in https://github.com/tkakkie/ribbitto/pull/658#issuecomment-6049254742.", ""},
 		{"Existing Approved by maintainer in decision 21.", ""},
 		{"Existing Approved by maintainer in #0.", "missing maintainer provenance"},
 		{"Existing Approved by maintainer in https://github.com/tkakkie/ribbitto/pull/658.", "missing maintainer provenance"},
-		{"Existing PENDING MAINTAINER: shape rejected by #658; decision needed.", ""},
+		{"Existing PENDING MAINTAINER: shape rejected by #658; decision needed.", "pending maintainer approval"},
+		{"Existing PENDING MAINTAINER: decision needed.", "pending maintainer approval"},
+		{"Existing   Pending Maintainer: decision needed, #658.", "pending maintainer approval"},
 		{"Insert Pending shape exemption.", ""},
 		{"Removed Old exemption.", "stale allowlist entry"},
 		{"Existing", "invalid allowlist entry"},
@@ -134,13 +143,38 @@ func TestSchema(t *testing.T) {
 		{"ALTER TABLE public.member ADD COLUMN organization_id uuid", "", "", "unsupported schema shape"},
 	} {
 		t.Run(tc.sql, func(t *testing.T) {
-			tables, err := schema([]string{tc.sql})
+			var migrations []string
+			for _, table := range []string{"account", "session", "setup"} {
+				if table != tc.table {
+					migrations = append(migrations, "CREATE TABLE "+table+" (id uuid)")
+				}
+			}
+			tables, err := schema(append(migrations, tc.sql))
 			if tc.want == "" {
 				column, exists := tables[tc.table]
 				if err != nil || !exists || column != tc.column {
 					t.Fatalf("want %s scope %q, got %v, %v", tc.table, tc.column, tables, err)
 				}
 			} else if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want %q, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestInstallationWide(t *testing.T) {
+	base := "CREATE TABLE account (id uuid); CREATE TABLE session (id uuid); CREATE TABLE setup (organization_id uuid);"
+	for _, tc := range []struct{ name, sql, want string }{
+		{"scoped_account", strings.Replace(base, "account (id uuid)", "account (organization_id uuid)", 1), "listed installation-wide but scoped: account"},
+		{"scoped_session", base + "ALTER TABLE session ADD COLUMN organization_id uuid", "listed installation-wide but scoped: session"},
+		{"stale_account", strings.Replace(base, "CREATE TABLE account (id uuid);", "", 1), "stale installation-wide entry: account"},
+		{"stale_session", strings.Replace(base, "CREATE TABLE session (id uuid);", "", 1), "stale installation-wide entry: session"},
+		{"stale_setup", strings.Replace(base, "CREATE TABLE setup (organization_id uuid);", "", 1), "stale installation-wide entry: setup"},
+		{"alter_without_create", strings.Replace(base, "CREATE TABLE setup (organization_id uuid);", "ALTER TABLE setup ADD COLUMN organization_id uuid;", 1), "stale installation-wide entry: setup"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := schema([]string{tc.sql})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("want %q, got %v", tc.want, err)
 			}
 		})

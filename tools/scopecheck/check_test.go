@@ -41,8 +41,7 @@ func walk(v any, visit func(string, map[string]any) error) error {
 	case map[string]any:
 		for key, child := range v {
 			if key == "InsertStmt" {
-				// Preserve CTE checks before rejecting an unsupported INSERT;
-				// VALUES expressions and RETURNING remain outside this gate.
+				// Preserve CTE scope checks before applying the INSERT shape gate.
 				if err := walk(object(child)["withClause"], visit); err != nil {
 					return err
 				}
@@ -140,6 +139,9 @@ func checkStatement(tree any, tables map[string]string) error {
 		case "DeleteStmt":
 			refs = append([]any{map[string]any{"RangeVar": s["relation"]}}, list(s["usingClause"])...)
 		case "InsertStmt":
+			if err := noSubquery(s["returningList"]); err != nil {
+				return err
+			}
 			values := node(s["selectStmt"], "SelectStmt")
 			// Conflict handling and overriding remain outside both exemptions.
 			if s["onConflictClause"] != nil || s["override"] != "OVERRIDING_NOT_SET" {
@@ -147,7 +149,7 @@ func checkStatement(tree any, tables map[string]string) error {
 			}
 			if len(values) == 3 && values["valuesLists"] != nil && values["op"] == "SETOP_NONE" &&
 				values["limitOption"] == "LIMIT_OPTION_DEFAULT" {
-				return nil
+				return noSubquery(values["valuesLists"])
 			}
 			return insertCTESelect(values, ctes)
 		default:
@@ -209,28 +211,21 @@ func insertCTESelect(s map[string]any, ctes map[string]bool) error {
 	if s == nil || s["op"] != "SETOP_NONE" || s["valuesLists"] != nil || s["intoClause"] != nil || s["withClause"] != nil {
 		return fmt.Errorf("unsupported shape: INSERT SELECT")
 	}
-	aliases := map[string]bool{}
 	for _, ref := range list(s["fromClause"]) {
 		r := node(ref, "RangeVar")
 		table, _ := r["relname"].(string)
 		if !ctes[table] || r["schemaname"] != nil || r["catalogname"] != nil {
 			return fmt.Errorf("unsupported shape: INSERT SELECT relation %q", table)
 		}
-		alias := table
-		if a := object(r["alias"]); a != nil {
-			if a["colnames"] != nil {
-				return fmt.Errorf("unsupported shape: renamed columns")
-			}
-			alias, _ = a["aliasname"].(string)
-		}
-		if aliases[alias] {
-			return fmt.Errorf("unsupported shape: duplicate alias %s", alias)
-		}
-		aliases[alias] = true
 	}
-	return walk(s, func(kind string, _ map[string]any) error {
+	return noSubquery(s)
+}
+
+// These INSERT exemptions allow no nested reads, even with scope predicates.
+func noSubquery(v any) error {
+	return walk(v, func(kind string, _ map[string]any) error {
 		if kind == "SubLink" || strings.HasSuffix(kind, "Stmt") {
-			return fmt.Errorf("unsupported shape: INSERT SELECT subquery")
+			return fmt.Errorf("unsupported shape: INSERT subquery")
 		}
 		return nil
 	})
@@ -250,6 +245,7 @@ func read(t *testing.T, path string) string {
 // migrations so a later ADD COLUMN can establish ownership.
 func schema(migrations []string) (map[string]string, error) {
 	tables := map[string]string{}
+	created := map[string]bool{}
 	for _, migration := range migrations {
 		tree, err := parse(strings.Split(migration, "-- +goose Down")[0])
 		if err != nil {
@@ -272,6 +268,7 @@ func schema(migrations []string) (map[string]string, error) {
 			}
 			table, _ := object(s["relation"])["relname"].(string)
 			if kind == "CreateStmt" {
+				created[table] = true
 				tables[table] = ""
 			}
 			return walk(s, func(kind string, col map[string]any) error {
@@ -295,9 +292,17 @@ func schema(migrations []string) (map[string]string, error) {
 		case table == "organization":
 			tables[table] = "id"
 		case installationWide[table]:
+			if column != "" && table != "setup" {
+				return nil, fmt.Errorf("listed installation-wide but scoped: %s", table)
+			}
 			tables[table] = ""
 		case column != "organization_id":
 			return nil, fmt.Errorf("unknown ownership: %s", table)
+		}
+	}
+	for table := range installationWide {
+		if !created[table] {
+			return nil, fmt.Errorf("stale installation-wide entry: %s", table)
 		}
 	}
 	return tables, nil
@@ -313,6 +318,9 @@ func exemptions(text string, queries, tables map[string]string) (map[string]stri
 		name, reason, ok := strings.Cut(line, " ")
 		if !ok || strings.TrimSpace(reason) == "" || allow[name] != "" {
 			return nil, fmt.Errorf("invalid allowlist entry: %q", line)
+		}
+		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(reason)), "PENDING MAINTAINER:") {
+			return nil, fmt.Errorf("pending maintainer approval: %s", name)
 		}
 		if strings.Contains(strings.ToLower(reason), "maintainer") && !provenance.MatchString(reason) {
 			return nil, fmt.Errorf("missing maintainer provenance: %s", name)

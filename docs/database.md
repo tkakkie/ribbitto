@@ -119,32 +119,20 @@ Every entry sets `omit_unused_structs`, so a table no query uses gets no struct.
 Commit the pgx/v5 output; CI rejects generation changes to committed files. Never edit
 generated files.
 
-`make check` also runs `go -C tools test -race ./scopecheck`: PostgreSQL's
-parser checks each owned table's own WHERE scope in SELECT, UPDATE and
-DELETE, including inside CTEs. Plain `INSERT … VALUES` passes unchecked,
-including VALUES expressions and RETURNING; its CTE bodies are checked.
-`INSERT … SELECT` also passes when its FROM names only CTEs in the same
-statement; those bodies are checked independently. Physical tables, joins,
-subqueries anywhere in that SELECT, derived tables and functions in FROM
-remain unsupported, even with scope predicates. This lets CreateChannel
-copy its freshly inserted channel into its default topic without an exemption.
-Every other INSERT shape, including `ON CONFLICT … DO UPDATE` inside CTEs,
-fails as "unsupported shape" unless allowlisted.
-`ON CONFLICT DO NOTHING` also fails: it adds no update, but the exemption
-stays limited to plain VALUES and CTE-only SELECT. Checking physical-table
-INSERT SELECT reads and ON CONFLICT updates belongs in a follow-up issue.
-Ownership comes from migration columns,
-with an explicit installation-wide list in `schema()`; `organization` uses `id`.
-Tables without `organization_id` that have neither classification fail as
-"unknown ownership". Joins do not carry scope. CTE result reads need no scope; their
-bodies are checked independently. Outer joins, derived tables and set operations
-are unsupported. Module-qualified exemptions with reasons live in
-`tools/scopecheck/allowlist.txt`; stale or unnecessary entries fail. A reason
-mentioning "maintainer" (case-insensitive) must cite an issue (`#N`), a GitHub
-PR comment URL or a numbered decision. This enforces provenance, not approval
-verification; `PENDING MAINTAINER:` entries still need an explicit decision.
-The parser requires cgo and a C compiler (Xcode command-line tools locally,
-GCC on CI's Ubuntu).
+`make check` runs `go -C tools test -race ./scopecheck`: PostgreSQL's parser
+requires each owned table's own WHERE scope in SELECT, UPDATE and DELETE,
+including CTE bodies; joins never carry scope. Ownership comes from migration
+columns, with `organization` scoped by `id` and an explicit installation-wide
+list; unknown ownership, scoped list entries (except singleton `setup`) and stale
+entries fail. Plain INSERT VALUES and INSERT SELECT reading only same-statement
+CTEs pass; subqueries in VALUES, RETURNING or that SELECT are unsupported.
+Joins in that SELECT, physical-table INSERT SELECT reads, ON CONFLICT and other
+INSERT shapes are unsupported; full INSERT checking belongs in a follow-up issue.
+CTE reads need no scope; outer joins, derived tables and set operations fail.
+`tools/scopecheck/allowlist.txt` requires reasons; stale, unnecessary and
+`PENDING MAINTAINER:` entries fail. Reasons mentioning "maintainer" must cite
+`#N`, a GitHub PR comment URL or a numbered decision (provenance, not approval
+verification). The parser needs cgo and a C compiler (Xcode locally, GCC on CI).
 
 ## Development seed data
 

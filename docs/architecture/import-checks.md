@@ -42,8 +42,9 @@ the manifest's literal `ownsTables`. It shares the
 and organisation scoping remain separate policies.
 It requires every migration-created table to have exactly one owner and every
 owned table to exist in the migrations' Up sections; table drops and renames fail.
-It rejects foreign writes, unapproved foreign reads, unknown tables, unsupported
-SQL/manifest shapes and stale read exemptions, including inside CTEs and subqueries.
+For production queries it rejects foreign writes, unapproved foreign reads,
+unknown tables, unsupported SQL/manifest shapes and stale read exemptions,
+including inside CTEs and subqueries.
 Read exemptions use `module.QueryName table reason…`, retaining both query and
 table matching; no write can be exempted. The list lives in the `readExemptions("")`
 literal in `TestProductionOwnership` and is currently empty. Tablecheck's
@@ -55,8 +56,56 @@ accepted: other function bodies can hide table access. Tools tests run uncached
 because Go does not track these inputs outside the tools module.
 Query operators are limited to unqualified `=`, `<`, `>`, `<=` and `+`, and cast
 types to unqualified `uuid`, `bigint` and `jsonb`, as used by production queries.
-Migration DO blocks fail; function and procedure bodies containing dynamic SQL
-(`EXECUTE`) or table creation, rename or drop also fail.
+Migration Up sections have an explicit statement allowlist: CREATE TABLE,
+INDEX and SEQUENCE; ALTER TABLE ADD COLUMN, SET NOT NULL and ADD CONSTRAINT;
+UPDATE/INSERT backfills; functions and triggers (including constraint triggers).
+Every other kind fails with a named error, including RULE, views, policies,
+procedures, DO, EXECUTE, FOREIGN TABLE and table-creating SELECT INTO. Down
+sections are outside this gate. CREATE TABLE also refuses INHERITS, PARTITION OF,
+partitioning specifications, OF types and LIKE clauses. Defaults, CHECKs,
+generated columns, index expressions/predicates and trigger WHEN expressions
+allow only `uuidv7`, `now`, `length`, `lower`, `octet_length`,
+`pg_catalog.normalize`, `starts_with` and `btrim`, plus the checked sequence
+calls below; every other DDL function fails.
+DDL nodes fail closed, with only production's expression shapes and unqualified
+`=`, `<>`, `>`, `<=`, `>=`, `~`, `!~` and `BETWEEN` operators accepted (including
+IN / NOT IN, parsed with `=` / `<>`). DDL casts are refused; production uses none.
+INDEX, ALTER TABLE and trigger targets must be unqualified, migration-created
+tables with known module owners.
+
+Backfills take the written table's module. Functions take the module of every
+trigger's table; mixed-module bindings, unbound functions and calls to
+migration-defined functions from any other SQL (including defaults and checks)
+fail unconditionally. SQL bodies are walked directly; PL/pgSQL uses the pinned
+parser's `ParsePlPgSqlToJSON`, then parses every embedded SQL/expression string,
+including PERFORM, IF subqueries, declarations and assignments. The shared
+ownership walk checks all static reads and writes. Unsupported bodies, nodes,
+expressions and dynamic SQL fail closed; PL/pgSQL SELECT INTO a variable stays
+an assignment. Migration backfills and routine SQL allow only `count`, `max`,
+`lower` and `row_number`, plus the checked sequence calls below. Their operators
+are unqualified `=`, `<`, `>`, `<=`, `>=`, `<>`, `+`, `-` and `||` (including
+IS DISTINCT FROM / IS NOT DISTINCT FROM, parsed with `=`); casts are refused.
+Function definition options are limited to LANGUAGE and AS.
+
+Migration `nextval` and `currval` require exactly one bare literal sequence
+name, a migration-created sequence and the same module as the analysed SQL.
+A direct column DEFAULT `nextval('sequence_name')` assigns the sequence's
+logical module from the table owner; conflicting module assignments fail.
+This is independent of PostgreSQL OWNED BY: 00010 deliberately keeps its
+org sequence unowned there. Unknown/unassigned or foreign sequences, qualified
+names, computed arguments, casts and `setval` fail without exemptions.
+
+The separate `reviewedMigrationAccess` list in
+[`migrations_test.go`](../../tools/tablecheck/migrations_test.go) uses
+`migration.object table read|write reason`. Backfill objects are
+`backfill.statementN` (parsed Up ordinal); routine objects are `function.name`.
+The prefixes prevent an exemption for one kind from admitting the other. The only entries
+are 00006's channel INSERT reading organization (#677) and 00007's deferred
+organization trigger function reading event_log (#666). Reasons follow
+`sqlwalk.ReasonRules`; duplicate and stale entries fail. An exemption requires
+settled ownership and permits only its named access, preserving body analysis
+and every other refusal. Fixtures remove each production exemption and add a
+second foreign access beside it.
 
 Staticcheck also runs on generated code, including templ output; the
 `_templ.go` exclusions apply only to errcheck and revive. `make lint-fixtures`

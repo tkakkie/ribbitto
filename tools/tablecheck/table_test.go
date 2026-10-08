@@ -12,8 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	pgquery "github.com/pganalyze/pg_query_go/v6"
-
 	"github.com/tkakkie/ribbitto/tools/internal/sqlwalk"
 )
 
@@ -107,6 +105,10 @@ func ownership(source string) (map[string]string, map[string]bool, error) {
 type exemption struct{ query, table, reason string }
 
 func checkSQL(sql, module, query string, owners map[string]string, allow map[exemption]bool) error {
+	return checkOwnedSQL(sql, module, query, owners, allow, nil)
+}
+
+func checkOwnedSQL(sql, module, query string, owners map[string]string, allow map[exemption]bool, migration *migrationPolicy) error {
 	tree, err := sqlwalk.Parse(sql)
 	if err != nil {
 		return err
@@ -119,6 +121,10 @@ func checkSQL(sql, module, query string, owners map[string]string, allow map[exe
 	if err != nil {
 		return err
 	}
+	return walkOwnedSQL(sqlwalk.Object(statements[0])["stmt"], module, query, owners, allow, migration, bigints)
+}
+
+func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allow map[exemption]bool, migration *migrationPolicy, bigints map[float64]bool) error {
 	access := func(table string, write bool) error {
 		owner := owners[table]
 		if owner == "" {
@@ -126,6 +132,9 @@ func checkSQL(sql, module, query string, owners map[string]string, allow map[exe
 		}
 		if owner == module {
 			return nil
+		}
+		if migration != nil {
+			return migration.access(query, table, write)
 		}
 		if !write {
 			for e := range allow {
@@ -137,7 +146,7 @@ func checkSQL(sql, module, query string, owners map[string]string, allow map[exe
 		}
 		return fmt.Errorf("foreign table %s (write=%v, owner=%s)", table, write, owner)
 	}
-	return sqlwalk.Walk(sqlwalk.Object(statements[0])["stmt"], sqlwalk.Scope{}, sqlwalk.Options{
+	return sqlwalk.Walk(stmt, sqlwalk.Scope{}, sqlwalk.Options{
 		NodesOnly: true, LexicalCTEs: true,
 		Relation: func(r map[string]any, write bool, _ sqlwalk.Scope) error {
 			if r["schemaname"] != nil || r["catalogname"] != nil {
@@ -149,6 +158,9 @@ func checkSQL(sql, module, query string, owners map[string]string, allow map[exe
 			return access(r["relname"].(string), write)
 		},
 		Visit: func(tag string, n map[string]any, _ sqlwalk.Scope) error {
+			if migration != nil {
+				return migration.visit(tag, n, module)
+			}
 			switch tag {
 			case "SelectStmt", "InsertStmt", "UpdateStmt", "DeleteStmt":
 				if n["intoClause"] != nil {
@@ -267,15 +279,20 @@ func TestProductionOwnership(t *testing.T) {
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("migration files: %v", err)
 	}
-	migrations := []string{}
+	migrations := []migration{}
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		migrations = append(migrations, string(data))
+		name, _, _ := strings.Cut(filepath.Base(path), "_")
+		migrations = append(migrations, migration{name, string(data)})
 	}
-	if err := checkMigrations(migrations, owners); err != nil {
+	migrationAllow, err := migrationExemptions(reviewedMigrationAccess)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkMigrationsWithAccess(migrations, owners, migrationAllow); err != nil {
 		t.Fatal(err)
 	}
 	queries, err := sqlwalk.Load("../../db/queries", modules)
@@ -302,92 +319,6 @@ func checkQueries(sql, file, module string, owners map[string]string, allow map[
 		if err := checkSQL(body, module, query, owners, allow); err != nil {
 			return fmt.Errorf("%s: %w", query, err)
 		}
-	}
-	return nil
-}
-
-func checkMigrations(migrations []string, owners map[string]string) error {
-	tables := map[string]bool{}
-	for _, sql := range migrations {
-		_, up, ok := strings.Cut(sql, "-- +goose Up")
-		if !ok {
-			return fmt.Errorf("missing migration Up section")
-		}
-		up, _, _ = strings.Cut(up, "-- +goose Down")
-		tree, err := pgquery.Parse(up)
-		if err != nil {
-			return err
-		}
-		for _, raw := range tree.Stmts {
-			n := raw.Stmt
-			if n.GetDoStmt() != nil {
-				return fmt.Errorf("unsupported migration DO block")
-			}
-			if fn := n.GetCreateFunctionStmt(); fn != nil {
-				for _, option := range fn.Options {
-					if def := option.GetDefElem(); def.GetDefname() == "as" {
-						for _, body := range def.Arg.GetList().GetItems() {
-							if err := checkMigrationBody(body.GetString_().GetSval()); err != nil {
-								return err
-							}
-						}
-					}
-				}
-				if fn.SqlBody != nil {
-					end := len(up)
-					if raw.StmtLen != 0 {
-						end = int(raw.StmtLocation + raw.StmtLen)
-					}
-					if err := checkMigrationBody(up[raw.StmtLocation:end]); err != nil {
-						return err
-					}
-				}
-			}
-			if n.GetDropStmt().GetRemoveType() == pgquery.ObjectType_OBJECT_TABLE || n.GetRenameStmt().GetRenameType() == pgquery.ObjectType_OBJECT_TABLE || n.GetCreateTableAsStmt() != nil {
-				return fmt.Errorf("unsupported migration table drop, rename or CREATE AS")
-			}
-			if create := n.GetCreateStmt(); create != nil {
-				r := create.Relation
-				if r.Schemaname != "" || r.Catalogname != "" || tables[r.Relname] {
-					return fmt.Errorf("unsupported qualified or duplicate migration table %s", r.Relname)
-				}
-				tables[r.Relname] = true
-			}
-		}
-	}
-	for table := range tables {
-		if owners[table] == "" {
-			return fmt.Errorf("migration table has no owner: %s", table)
-		}
-	}
-	for table := range owners {
-		if !tables[table] {
-			return fmt.Errorf("owned table not created by migrations: %s", table)
-		}
-	}
-	return nil
-}
-
-func checkMigrationBody(body string) error {
-	// Routine bodies are opaque to the migration AST (including procedures).
-	// Scan decoded AS strings and inline SQL bodies, ignoring actual comments
-	// so CREATE/**/TABLE cannot evade the conservative text check.
-	scan, err := pgquery.Scan(body)
-	if err != nil {
-		return fmt.Errorf("unsupported migration routine body: %w", err)
-	}
-	words := []string{}
-	for _, token := range scan.Tokens {
-		if token.Token == pgquery.Token_DO {
-			return fmt.Errorf("unsupported migration DO block")
-		}
-		if token.Token != pgquery.Token_SQL_COMMENT && token.Token != pgquery.Token_C_COMMENT {
-			words = append(words, body[token.Start:token.End])
-		}
-	}
-	unsafe := regexp.MustCompile(`(?is)\bexecute\b|\bcreate\s+(?:(?:global|local)\s+)?(?:(?:temp|temporary|unlogged)\s+)?table\b|\balter\s+table\b.*\brename\b|\bdrop\s+table\b`)
-	if unsafe.MatchString(strings.Join(words, " ")) {
-		return fmt.Errorf("unsupported migration routine dynamic SQL or table DDL")
 	}
 	return nil
 }

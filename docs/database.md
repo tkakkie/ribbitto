@@ -20,13 +20,14 @@ Automatic ports use 20000–32767, below the usual OS ephemeral ranges,
 starting at a path-derived candidate; `ai-env.json` in the shared Git
 directory is published atomically under the OS advisory lock `ai-env.lock`.
 Allocation skips reserved/bound IPv4/IPv6 ports; `AI_APP_PORT`/`AI_METRICS_PORT`
-overrides use the same checks. Busy reservations require loopback `GET /healthz`
-with this worktree's `X-Ribbitto-Worktree` marker on app and metrics listeners.
+overrides use the same checks. Reruns keep free reservations and replace busy ones.
 Entries use stable Git worktree IDs (or `main`); resolved paths are retargeted on
 moves, retaining the original database name. Subdirectories use the Git root.
-Only IDs absent from Git's worktree list release ports and drop databases;
-prunable entries remain until pruned. Legacy path entries upgrade when identified;
-unknown identities refuse cleanup. No prefix scans or test-template cleanup.
+Relative Git backlinks resolve from their metadata directory. Entries also record
+that directory's device/inode and birth time where available: a reused Git ID
+with different metadata releases its old ports and drops its old database.
+IDs absent from Git's worktree list are cleaned up too; prunable entries remain
+until pruned. No prefix scans or test-template cleanup.
 `make ai-env-clean` drops only this worktree's dev database and releases ports.
 `make ai-health` distinguishes missing/invalid admin configuration, connection
 failures and SQL failures without credentials;

@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
@@ -14,27 +12,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 )
-
-func TestWorktreeHealth(t *testing.T) {
-	for _, marker := range []string{"", "ribbitto_dev_example"} {
-		for _, path := range []string{"/healthz", "/other"} {
-			for _, method := range []string{http.MethodGet, http.MethodPost} {
-				t.Run(marker+path+method, func(t *testing.T) {
-					next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
-					response := httptest.NewRecorder()
-					worktreeHealth(next, marker).ServeHTTP(response, httptest.NewRequest(method, path, nil))
-					if marker != "" && path == "/healthz" && method == http.MethodGet {
-						if response.Code != http.StatusOK || response.Header().Get("X-Ribbitto-Worktree") != marker || response.Body.String() != "ok\n" {
-							t.Fatal("health response did not identify the worktree")
-						}
-					} else if response.Code != http.StatusTeapot || response.Header().Get("X-Ribbitto-Worktree") != "" {
-						t.Fatal("request was not delegated to the original handler")
-					}
-				})
-			}
-		}
-	}
-}
 
 func TestSetupToken(t *testing.T) {
 	for _, value := range []string{"unset", "", strings.Repeat("x", 31), strings.Repeat("x", 32)} {

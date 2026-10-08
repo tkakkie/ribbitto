@@ -125,8 +125,7 @@ func serve(ctx context.Context, databaseURL string) error {
 	stopRetention := startRealtimeWorker(ctx, realtime.Retention{Events: realtimepg.NewCleaner(pool, orgpg.RetentionBoundaryIn), Period: retention}, time.Hour)
 	defer stopRetention()
 
-	marker := os.Getenv("RIBBITTO_AI_WORKTREE")
-	srv := newServer(addr, worktreeHealth(handler, marker), serverTimeouts{
+	srv := newServer(addr, handler, serverTimeouts{
 		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout,
 		write: writeTimeout,
 	})
@@ -140,7 +139,6 @@ func serve(ctx context.Context, databaseURL string) error {
 			return fmt.Errorf("RIBBITTO_DEV_METRICS_ADDR: %w", err)
 		}
 		metrics = newMetricsServer(metricsAddr, devMetrics{queries: queries, pool: pool, streams: hub})
-		metrics.Handler = worktreeHealth(metrics.Handler, marker)
 		defer func() { _ = metrics.Close() }()
 		slog.Warn("development metrics enabled; use only on a disposable machine", "addr", metricsAddr)
 		go func() {
@@ -174,23 +172,6 @@ func serve(ctx context.Context, databaseURL string) error {
 		return err
 	}
 	return nil
-}
-
-// worktreeHealth lets dev tooling distinguish its own listeners from foreign
-// processes before reusing a busy reservation. Ordinary servers have no marker.
-func worktreeHealth(next http.Handler, marker string) http.Handler {
-	if marker == "" {
-		return next
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/healthz" {
-			w.Header().Set("X-Ribbitto-Worktree", marker)
-			w.Header().Set("Cache-Control", "no-store")
-			_, _ = w.Write([]byte("ok\n"))
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 // maxStreams distinguishes an unset variable from an explicitly empty value.

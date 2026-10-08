@@ -1,7 +1,6 @@
 """Worktree dev configuration. Credentials never enter the registry or files."""
 import fcntl
 import hashlib
-import http.client
 import json
 import os
 from pathlib import Path
@@ -52,6 +51,8 @@ def environment(root):
         entries = json.loads((common / "ai-env.json").read_text())
         key = current_id(root, worktrees(root, common))
         entry = entries.get(key)
+        if entry and entry.get("metadata_identity") != metadata_identity(common, key):
+            raise RuntimeError("worktree reservation is stale; run make ai-env")
         if not entry or values.get("AI_DATABASE") != database_name(entry["database_path"]):
             raise RuntimeError(".env.local AI_DATABASE does not match this worktree; run make ai-env")
         if len(entry["ports"]) != 2:
@@ -69,8 +70,7 @@ def environment(root):
     env.update(RIBBITTO_DATABASE_URL=urlunsplit(url._replace(path="/" + quote(values["AI_DATABASE"], safe=""),
                                                            query=urlencode(query))),
                RIBBITTO_ADDR="127.0.0.1:" + values["AI_APP_PORT"],
-               RIBBITTO_DEV_METRICS_ADDR="127.0.0.1:" + values["AI_METRICS_PORT"],
-               RIBBITTO_AI_WORKTREE=database_name(entry["database_path"]))
+               RIBBITTO_DEV_METRICS_ADDR="127.0.0.1:" + values["AI_METRICS_PORT"])
     return env
 
 def worktree_root(path):
@@ -88,7 +88,8 @@ def worktrees(root, common):
     if metadata.exists():
         for directory in metadata.iterdir():
             # Git keeps this backlink, including for a moved or prunable worktree.
-            path = Path((directory / "gitdir").read_text().strip()).parent.resolve()
+            gitdir = Path((directory / "gitdir").read_text().strip())
+            path = (directory / gitdir).parent.resolve()
             ids[path] = "worktree:" + directory.name
     if any(path not in ids for path in paths):
         raise RuntimeError("cannot identify Git worktree; refusing stale cleanup")
@@ -100,16 +101,12 @@ def current_id(root, live):
             return key
     raise RuntimeError("current Git worktree not listed; refusing cleanup")
 
-def owns_port(port, marker):
-    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=0.5)
-    try:
-        connection.request("GET", "/healthz")
-        response = connection.getresponse()
-        return response.status == 200 and response.getheader("X-Ribbitto-Worktree") == marker
-    except (OSError, http.client.HTTPException):
-        return False
-    finally:
-        connection.close()
+def metadata_identity(common, key):
+    directory = common if key == "main" else common / "worktrees" / key.removeprefix("worktree:")
+    stat = directory.stat()
+    # Moves retain this directory; remove/add can reuse its name. Birth time,
+    # where available, also distinguishes an immediately recycled inode.
+    return [stat.st_dev, stat.st_ino, getattr(stat, "st_birthtime", None)]
 
 def initial_port(key):
     return 20000 + int(hashlib.sha256(key.encode()).hexdigest()[:8], 16) % 12768
@@ -128,25 +125,15 @@ def configure(root, common, clean=False):
         entries = json.loads(registry.read_text()) if registry.exists() else {}
         live = worktrees(root, common)
         key = current_id(root, live)
-        # Upgrade path-keyed reservations only when their live identity is known.
-        for old, ports in list(entries.items()):
-            if isinstance(ports, list):
-                matches = [identity for identity, path in live.items() if path.resolve() == Path(old).resolve()]
-                if not matches and len(ports) == 2:
-                    expected = local_configuration(database_name(str(Path(old).resolve())), ports)
-                    matches = [identity for identity, path in live.items()
-                               if (path / ".env.local").exists() and (path / ".env.local").read_text() == expected]
-                if len(matches) != 1 or matches[0] in entries:
-                    raise RuntimeError("legacy worktree identity unknown; refusing stale cleanup")
-                entries[matches[0]] = {"path": str(live[matches[0]]), "database_path": str(Path(old).resolve()), "ports": ports}
-                del entries[old]
+        identities = {identity: metadata_identity(common, identity) for identity in live}
         for identity, entry in list(entries.items()):
-            if identity not in live:
+            if identity not in live or entry.get("metadata_identity") != identities[identity]:
                 sql('DROP DATABASE IF EXISTS "' + database_name(entry["database_path"]) + '" WITH (FORCE)')
                 del entries[identity]
             else:
                 entry["path"] = str(live[identity].resolve())
-        entry = entries.get(key, {"path": str(root), "database_path": str(root), "ports": []})
+        entry = entries.get(key, {"path": str(root), "database_path": str(root), "ports": [],
+                                  "metadata_identity": identities[key]})
         name = database_name(entry["database_path"])
         if clean:
             sql('DROP DATABASE IF EXISTS "' + name + '" WITH (FORCE)')
@@ -161,8 +148,7 @@ def configure(root, common, clean=False):
                 candidate = int(explicit) if explicit else (previous[i] if previous else initial_port(str(root)))
                 for offset in range(12768 if not explicit else 1):
                     port = candidate if explicit or offset == 0 else 20000 + (candidate - 20000 + offset) % 12768
-                    if 1 <= port <= 65535 and port not in used and (free(port) or
-                            (not explicit and port in previous and owns_port(port, name))):
+                    if 1 <= port <= 65535 and port not in used and free(port):
                         break
                 else:
                     raise RuntimeError("port collision or invalid override: " + override)

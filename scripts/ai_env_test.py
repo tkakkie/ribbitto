@@ -1,6 +1,5 @@
 """Registry and database safety checks, including real subprocess contention."""
 import fcntl
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import importlib.util
 import json
 import multiprocessing as mp
@@ -11,7 +10,6 @@ from pathlib import Path
 import socket
 import subprocess
 import tempfile
-import threading
 import unittest
 from unittest.mock import patch
 spec = importlib.util.spec_from_file_location("ai_env", os.environ.get("AI_ENV_SOURCE", "scripts/ai_env.py"))
@@ -24,7 +22,7 @@ def need_db(test):
 
 def allocate(root, common, live, candidate, result):
     try:
-        with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "initial_port", return_value=candidate):
+        with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_identity", side_effect=lambda common, key: key), patch.object(env, "initial_port", return_value=candidate):
             env.configure(root, common)
         result.put("ok")
     except Exception:
@@ -101,7 +99,7 @@ class EnvironmentTest(unittest.TestCase):
                 registry = common / "ai-env.json"
                 entries = json.loads(registry.read_text())
                 self.assertEqual(len({port for entry in entries.values() for port in entry["ports"]}), 4)
-                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live):
+                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_identity", side_effect=lambda common, key: key):
                     with patch.dict(os.environ, AI_APP_PORT=str(entries[roots[0].name]["ports"][0])):
                         with self.assertRaisesRegex(RuntimeError, "collision"):
                             env.configure(roots[1], common)
@@ -131,7 +129,7 @@ class EnvironmentTest(unittest.TestCase):
                     if worker.is_alive():
                         worker.terminate()
                         worker.join()
-                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live):
+                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_identity", side_effect=lambda common, key: key):
                     for root in roots:
                         env.configure(root, common, clean=True)
 
@@ -149,11 +147,11 @@ class EnvironmentTest(unittest.TestCase):
             if listed:
                 live["stale"] = stale
             registry = common / "ai-env.json"
-            registry.write_text(json.dumps({"stale": {"path": str(stale), "database_path": str(stale), "ports": []}}))
+            registry.write_text(json.dumps({"stale": {"path": str(stale), "database_path": str(stale), "ports": [], "metadata_identity": "stale"}}))
             stale_name = env.database_name(str(stale))
             env.sql('CREATE DATABASE "' + stale_name + '" TEMPLATE template0')
             try:
-                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live):
+                with patch.object(env, "worktree_root", side_effect=lambda path: path.resolve()), patch.object(env, "worktrees", return_value=live), patch.object(env, "metadata_identity", side_effect=lambda common, key: key):
                     env.configure(root, common)
                     if listed:
                         self.assertIn("stale", json.loads(registry.read_text()))
@@ -182,7 +180,8 @@ class PortTest(unittest.TestCase):
         self.root.mkdir()
         (self.root / ".git").touch()
         for target, kwargs in (("worktree_root", {"side_effect": lambda path: path.resolve()}),
-                               ("worktrees", {"return_value": {"live": self.root}})):
+                               ("worktrees", {"return_value": {"live": self.root}}),
+                               ("metadata_identity", {"return_value": "live"})):
             mock = patch.object(env, target, **kwargs)
             mock.start()
             self.addCleanup(mock.stop)
@@ -210,53 +209,18 @@ class PortTest(unittest.TestCase):
         with patch.object(env, "initial_port", return_value=previous[-1] + 1):
             env.configure(self.root, self.common)
         self.assertEqual(self.ports(), previous)
-        with patch.object(env, "free", return_value=False), patch.object(env, "owns_port", return_value=True):
-            env.configure(self.root, self.common)
-        self.assertEqual(self.ports(), previous)
 
     def test_rerun_replaces_foreign_listener(self):
         env.configure(self.root, self.common)
         previous = self.ports()
-        requests = []
-        class Foreign(BaseHTTPRequestHandler):
-            def do_GET(self):
-                requests.append(self.path)
-                self.send_response(200)
-                self.send_header("X-Ribbitto-Worktree", "other-worktree")
-                self.end_headers()
-            def log_message(self, *_):
-                pass
-        with ThreadingHTTPServer(("127.0.0.1", previous[0]), Foreign) as server:
-            thread = threading.Thread(target=server.serve_forever)
-            thread.start()
-            try:
+        for index in (0, 1):
+            with self.subTest(listener=index), socket.socket() as listener:
+                previous = self.ports()
+                listener.bind(("127.0.0.1", previous[index]))
+                listener.listen()
                 env.configure(self.root, self.common)
-                self.assertNotIn(previous[0], self.ports())
-                self.assertIn("/healthz", requests)
-            finally:
-                server.shutdown()
-                thread.join()
-
-    def test_rerun_keeps_identified_listener(self):
-        env.configure(self.root, self.common)
-        previous = self.ports()
-        marker = env.database_name(str(self.root))
-        class Owned(BaseHTTPRequestHandler):
-            def do_GET(self):
-                self.send_response(200)
-                self.send_header("X-Ribbitto-Worktree", marker)
-                self.end_headers()
-            def log_message(self, *_):
-                pass
-        with ThreadingHTTPServer(("127.0.0.1", previous[0]), Owned) as server:
-            thread = threading.Thread(target=server.serve_forever)
-            thread.start()
-            try:
-                env.configure(self.root, self.common)
-                self.assertEqual(previous, self.ports())
-            finally:
-                server.shutdown()
-                thread.join()
+                self.assertNotIn(previous[index], self.ports())
+                self.assertTrue(all(env.free(port) for port in self.ports()))
 
     def test_override_range(self):
         for value in ("0", "70000"):
@@ -303,7 +267,7 @@ class WorktreeTest(unittest.TestCase):
         self.assertEqual(self.entry()["path"], str(path.resolve()))
         self.assertEqual(env.database_name(self.entry()["database_path"]), name)
         self.assertEqual(env.sql("SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname='" + name + "'"), "preserved")
-        self.assertEqual(env.environment(path)["RIBBITTO_AI_WORKTREE"], name)
+        self.assertEqual(env.urlsplit(env.environment(path)["RIBBITTO_DATABASE_URL"]).path, "/" + name)
 
     def test_moved_worktree_keeps_database_and_entry(self):
         need_db(self)
@@ -318,25 +282,35 @@ class WorktreeTest(unittest.TestCase):
         self.assert_preserved(name, moved)
         self.assertEqual(self.entry()["ports"], ports)
 
-    def test_legacy_moved_worktree_keeps_database(self):
+    def test_relative_gitdir_keeps_database_and_entry(self):
         need_db(self)
+        self.git("config", "worktree.useRelativePaths", "true")
+        self.git("worktree", "repair", str(self.root))
+        metadata = self.common / "worktrees" / self.identity.removeprefix("worktree:")
+        self.assertFalse(Path((metadata / "gitdir").read_text().strip()).is_absolute())
         self.configure(self.root)
         name = self.mark_database()
-        ports = self.entry()["ports"]
-        (self.common / "ai-env.json").write_text(json.dumps({str(self.root): ports}))
-        moved = self.directory / "moved"
-        self.git("worktree", "move", str(self.root), str(moved))
         self.configure(self.main)
-        self.assert_preserved(name, moved)
-        self.assertEqual(self.entry()["ports"], ports)
+        self.assert_preserved(name, self.root)
 
-    def test_unknown_legacy_identity_refuses_cleanup(self):
-        unknown = self.directory / "unknown"
-        (self.common / "ai-env.json").write_text(json.dumps({str(unknown): [21000, 21001]}))
-        with patch.object(env, "sql") as sql:
-            with self.assertRaisesRegex(RuntimeError, "identity unknown; refusing stale cleanup"):
-                env.configure(self.root, self.common)
-            sql.assert_not_called()
+    def test_reused_worktree_id_gets_fresh_database(self):
+        need_db(self)
+        for replacement in (self.root, self.directory / "other" / self.root.name):
+            with self.subTest(same_path=replacement == self.root):
+                self.configure(self.root)
+                old_name = self.mark_database()
+                old_identity = self.entry()["metadata_identity"]
+                self.git("worktree", "remove", "--force", str(self.root))
+                self.git("worktree", "add", "-q", "--detach", str(replacement))
+                self.assertEqual(env.current_id(replacement, env.worktrees(self.main, self.common)), self.identity)
+                self.configure(replacement)
+                new_name = env.database_name(str(replacement))
+                self.assertNotEqual(self.entry()["metadata_identity"], old_identity)
+                self.assertEqual(env.database_name(self.entry()["database_path"]), new_name)
+                self.assertEqual(env.sql("SELECT count(*) FROM pg_database WHERE datname='" + new_name + "' AND shobj_description(oid, 'pg_database') IS NULL"), "1")
+                if old_name != new_name:
+                    self.assertEqual(env.sql("SELECT count(*) FROM pg_database WHERE datname='" + old_name + "'"), "0")
+                self.root = replacement
 
     def test_symlink_spelling_keeps_database_and_entry(self):
         need_db(self)
@@ -360,7 +334,7 @@ class WorktreeTest(unittest.TestCase):
         name = self.mark_database()
         self.configure(child)
         self.assert_preserved(name, child.parent)
-        self.assertEqual(env.environment(child)["RIBBITTO_AI_WORKTREE"], name)
+        self.assertEqual(env.urlsplit(env.environment(child)["RIBBITTO_DATABASE_URL"]).path, "/" + name)
         env.configure(child, self.common, clean=True)
         self.assertNotIn(self.identity, json.loads((self.common / "ai-env.json").read_text()))
         self.assertEqual(env.sql("SELECT count(*) FROM pg_database WHERE datname='" + name + "'"), "0")

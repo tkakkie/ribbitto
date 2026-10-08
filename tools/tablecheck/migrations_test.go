@@ -134,7 +134,51 @@ func (p *migrationPolicy) sequenceCall(n map[string]any, module string) error {
 	return nil
 }
 
-func (p *migrationPolicy) ddlExpressions(tree any, module string) error {
+func (p *migrationPolicy) target(r map[string]any, kind string, tables map[string]bool) (string, error) {
+	table, _ := r["relname"].(string)
+	if r["schemaname"] != nil || r["catalogname"] != nil {
+		return "", fmt.Errorf("unsupported qualified migration %s target %s", kind, table)
+	}
+	if !tables[table] || p.owners[table] == "" {
+		return "", fmt.Errorf("unknown migration %s target %s", kind, table)
+	}
+	return table, nil
+}
+
+func (p *migrationPolicy) foreignKey(n map[string]any, module string, tables map[string]bool) error {
+	if n["contype"] != "CONSTR_FOREIGN" {
+		return nil
+	}
+	// REFERENCES embeds its relation without a RangeVar tag, like DDL targets.
+	table, err := p.target(sqlwalk.Object(n["pktable"]), "foreign key", tables)
+	if err != nil {
+		return err
+	}
+	for _, action := range []struct{ field, clause string }{{"fk_del_action", "ON DELETE"}, {"fk_upd_action", "ON UPDATE"}} {
+		name := ""
+		// PostgreSQL encodes referential actions as single-character strings.
+		switch n[action.field] {
+		case "a", "r": // NO ACTION (including the default), RESTRICT.
+			continue
+		case "c":
+			name = "CASCADE"
+		case "n":
+			name = "SET NULL"
+		case "d":
+			name = "SET DEFAULT"
+		default:
+			return fmt.Errorf("unsupported foreign key %s action %v", action.clause, n[action.field])
+		}
+		// These actions write referencing rows on the referenced table's behalf;
+		// migration access exemptions cannot permit this hidden module crossing.
+		if module != p.owners[table] {
+			return fmt.Errorf("cross-module foreign key to %s (%s -> %s): %s %s writes referencing rows", table, module, p.owners[table], action.clause, name)
+		}
+	}
+	return nil
+}
+
+func (p *migrationPolicy) ddlExpressions(tree any, module string, tables map[string]bool) error {
 	// Check calls first so sequence ownership refusals survive even when a
 	// containing expression uses an unsupported operator or node shape.
 	err := sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, Visit: func(tag string, n map[string]any, _ sqlwalk.Scope) error {
@@ -173,7 +217,9 @@ func (p *migrationPolicy) ddlExpressions(tree any, module string) error {
 			// Production DDL expressions use no casts; type input functions can
 			// hide table access just as functions and operators can.
 			return fmt.Errorf("unsupported migration DDL type %s", sqlwalk.Names(sqlwalk.Object(n["typeName"])["names"]))
-		case "CreateStmt", "AlterTableStmt", "AlterTableCmd", "ColumnDef", "Constraint", "IndexStmt", "IndexElem", "CreateTrigStmt":
+		case "Constraint":
+			return p.foreignKey(n, module, tables)
+		case "CreateStmt", "AlterTableStmt", "AlterTableCmd", "ColumnDef", "IndexStmt", "IndexElem", "CreateTrigStmt":
 			// These are the DDL containers around the expressions, not query nodes.
 		case "FuncCall", "A_Const", "ColumnRef", "BoolExpr", "NullTest", "String", "List":
 		default:
@@ -333,13 +379,8 @@ func checkMigrationsWithAccess(migrations []migration, owners map[string]string,
 	for _, s := range statements {
 		switch s.kind {
 		case "IndexStmt", "AlterTableStmt", "CreateTrigStmt":
-			r := sqlwalk.Object(s.node["relation"])
-			table, _ := r["relname"].(string)
-			if r["schemaname"] != nil || r["catalogname"] != nil {
-				return fmt.Errorf("%s: unsupported qualified migration %s target %s", s.object, s.kind, table)
-			}
-			if !tables[table] || owners[table] == "" {
-				return fmt.Errorf("%s: unknown migration %s target %s", s.object, s.kind, table)
+			if _, err := p.target(sqlwalk.Object(s.node["relation"]), s.kind, tables); err != nil {
+				return fmt.Errorf("%s: %w", s.object, err)
 			}
 		}
 	}
@@ -389,14 +430,21 @@ func checkMigrationsWithAccess(migrations []migration, owners map[string]string,
 			return fmt.Errorf("%s: %w", s.object, err)
 		}
 	}
+	// Foreign keys can refer only to tables already created at this point,
+	// including the current table for self references.
+	created := map[string]bool{}
 	for _, s := range statements {
 		if err := p.calls(s.tree); err != nil {
 			return fmt.Errorf("%s: %w", s.object, err)
 		}
 		switch s.kind {
 		case "CreateStmt", "AlterTableStmt", "IndexStmt", "CreateTrigStmt":
-			module := owners[fmt.Sprint(sqlwalk.Object(s.node["relation"])["relname"])]
-			if err := p.ddlExpressions(s.tree, module); err != nil {
+			table := fmt.Sprint(sqlwalk.Object(s.node["relation"])["relname"])
+			module := owners[table]
+			if s.kind == "CreateStmt" {
+				created[table] = true
+			}
+			if err := p.ddlExpressions(s.tree, module, created); err != nil {
 				return fmt.Errorf("%s: %w", s.object, err)
 			}
 		case "CreateFunctionStmt":

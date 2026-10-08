@@ -72,6 +72,13 @@ DDL nodes fail closed, with only production's expression shapes and unqualified
 IN / NOT IN, parsed with `=` / `<>`). DDL casts are refused; production uses none.
 INDEX, ALTER TABLE and trigger targets must be unqualified, migration-created
 tables with known module owners.
+Foreign keys in CREATE TABLE column/table constraints and ALTER TABLE ADD
+CONSTRAINT or ADD COLUMN constraints resolve referenced tables the same way,
+requiring a preceding CREATE TABLE (or a self reference). Between different
+module owners, ON DELETE and ON UPDATE refuse CASCADE, SET NULL and SET DEFAULT:
+they write the referencing module's rows on the referenced module's behalf.
+RESTRICT and NO ACTION (including the default) are accepted, as is any action
+within one module. Foreign-key refusals have no exemptions.
 
 Backfills take the written table's module. Functions take the module of every
 trigger's table; mixed-module bindings, unbound functions and calls to

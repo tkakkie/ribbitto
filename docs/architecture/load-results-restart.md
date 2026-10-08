@@ -69,18 +69,19 @@ process exits within 80 ms ([load testing](load-testing.md#assumptions-and-dispo
 
 ### Client recovery
 
-Times from SIGTERM, p50 / p95 / max, in milliseconds. No stream was
+Times from SIGTERM over the streams, p50 / p95 / max: reconnected and outage
+recovered in milliseconds, fully caught up in seconds. No stream was
 incomplete for any of the three, and no stream was reset.
 
-| Run | Reconnected | Outage recovered | Fully caught up (s) |
+| Run | Reconnected (ms) | Outage recovered (ms) | Fully caught up (s) |
 |---|---|---|---|
-| sanity | 373 / 492 / 506 | 373 / 492 / 506 | 19.9 |
-| A | 415 / 595 / 606 | 441 / 607 / 621 | 39.9 |
-| B | 425 / 599 / 614 | 450 / 615 / 627 | 39.9 |
-| C | 459 / 636 / 680 | 474 / 639 / 686 | 39.9 |
-| D | 236 / 407 / 416 | 268 / 420 / 425 | 39.9 |
-| E | 216 / 374 / 389 | 240 / 384 / 393 | 39.9 |
-| F | 564 / 1,047 / 1,082 | 602 / 1,071 / 1,140 | 19.9 |
+| sanity | 373 / 492 / 506 | 373 / 492 / 506 | 19.906 / 19.910 / 19.910 |
+| A | 415 / 595 / 606 | 441 / 607 / 621 | 39.927 / 39.950 / 39.951 |
+| B | 425 / 599 / 614 | 450 / 615 / 627 | 39.924 / 39.943 / 39.945 |
+| C | 459 / 636 / 680 | 474 / 639 / 686 | 39.933 / 39.951 / 39.952 |
+| D | 236 / 407 / 416 | 268 / 420 / 425 | 39.931 / 39.944 / 39.946 |
+| E | 216 / 374 / 389 | 240 / 384 / 393 | 39.926 / 39.940 / 39.942 |
+| F | 564 / 1,047 / 1,082 | 602 / 1,071 / 1,140 | 19.937 / 19.959 / 19.962 |
 
 - **Reconnected** is also the reconnect-delay distribution. With the default
   model the server was ready (about 0.12 s) before any client's first retry
@@ -96,9 +97,10 @@ incomplete for any of the three, and no stream was reset.
 - **Outage recovered** (holding the new process's cursor at readiness)
   follows reconnecting within 60 ms.
 - **Fully caught up is the last post's arrival, not a catch-up time.** Posts
-  continue until observation ends, so the final watermark is the last post,
-  delivered 40 s (20 s for sanity and F) after SIGTERM. Outage recovered and
-  the post latencies below are the measures of catching up.
+  continue until observation ends, so the final watermark is the last
+  scheduled post, one interval (1/rate, 0.1 s) before the end: 39.9 s after
+  SIGTERM (19.9 s for sanity and F), plus its delivery. Outage recovered and
+  the post latencies below are the measures of catching up (#668).
 - **Post-to-receipt latency over the whole run** stayed in #216's range: p50
   28–30 ms and p95 44–79 ms at 3,000 streams, 43 / 80 ms at 5,000. Every
   drain completed in under 0.1 s.
@@ -136,25 +138,34 @@ incomplete for any of the three, and no stream was reset.
 
 ### CPU and memory
 
-Sampled every second from `/proc` (the server as the load client's child,
-PostgreSQL as PID 1 and its children). CPU in CPUs, steady state outside the
-storm; the VM's busy share is of 10 CPUs.
+Sampled about every second from `/proc` (the server as the load client's
+child, PostgreSQL as PID 1 and its children). CPU in CPUs, steady state
+outside the storm; the VM's busy share is of 10 CPUs.
 
-| Run | Server | PostgreSQL | Generator | Caddy | VM busy | Storm second |
+| Run | Server | PostgreSQL | Generator | Caddy | VM busy | VM busy, peak near SIGTERM |
 |---|---|---|---|---|---|---|
 | A / B / D | 1.5 | 0.8 | 0.6 | — | 30% | 37–45% |
 | C / E | 1.3 | 0.7 | 0.5 | 0.9 | 35% | 47–50% |
 | F | 2.3 | 1.2 | 1.0 | — | 46% | 53% |
 
-- The storm shows only as one busier second: the server rose by at most
-  about 0.6 CPU (to 1.5–2.1 at 3,000 streams, 2.7 at 5,000). Nothing came
-  near saturating the machine.
+- **Sampling gap at the restart:** the old process's CPU from its last
+  sample (0.02–0.74 s before SIGTERM) until it exited was not observed, so
+  these figures give no server maximum. Counted from the new process's start
+  (taken as SIGTERM plus the exit time, so a lower bound) to its first
+  sample, 0.23–0.93 s later, the new server averaged 0.4–1.6 CPUs with the
+  default model at 300 and 3,000 streams, 2.5–2.65 with the tight model, and
+  2.5 at 5,000. Its later one-second intervals reached 2.1 CPUs at 3,000
+  streams and 2.8 at 5,000.
+- The VM's busy share stayed at or below 54% in every sample of every run.
+  That aggregate does not show that no single resource saturated briefly;
+  the pool's waits are in the database figures above.
 - Server RSS: 224–231 MiB for both processes at 3,000 streams, 356 at 5,000;
-  open file descriptors 3,019 and 5,019.
-- The generator was the largest process: 3.8–4.2 GiB RSS at 3,000 streams over
-  60 s, leaving 1.3–1.7 GiB available in the VM. Its receipt state grows with
+  at most 3,019–3,020 and 5,019 open file descriptors.
+- The generator was the largest process: 3.7–4.1 GiB RSS at 3,000 streams over
+  60 s, leaving 1.3–1.7 GiB available in the VM; 3,437 MiB at 5,000 streams
+  over 30 s (F). Its receipt state grows with
   streams × deliveries (roughly 2 KB each), which bounds the storm size on
-  this machine; see the follow-up below.
+  this machine (#667).
 
 ## What this means
 
@@ -171,11 +182,10 @@ storm; the VM's busy share is of 10 CPUs.
 
 ## Follow-ups
 
-Each problem found becomes its own issue:
-- the generator's memory grows by roughly 2 KB per delivery, which limits
-  storms on one machine;
-- the fully-caught-up time measures the last post, not catching up, while
-  posts continue to the end.
+- #667: the generator's memory grows by roughly 2 KB per delivery,
+  which limits storms on one machine.
+- #668: the fully-caught-up time measures the last post, not catching
+  up, while posts continue to the end.
 
 ## Reproducing it
 

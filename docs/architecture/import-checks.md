@@ -58,6 +58,13 @@ Close once rows are used, including an early return from a scan loop. Keep
 proves it rejects unused, unclosed pgx rows; disabling the linter fails that
 assertion.
 
+Nilerr runs with no exclusions and rejects returning a nil error after
+checking that an error is non-nil, unless the block uses the error (for
+example, `log.Print(err); return nil` counts as handling it). It also reports
+the opposite case, `if err == nil { return err }`. `make lint-fixtures`
+asserts the non-nil-error finding in a tagged Go fixture, so disabling
+nilerr fails the check.
+
 `make check` also requires a `doc.go` in every directory under `internal/`
 that contains non-test Go files, including generated packages, as specified
 in `AGENTS.md`. Fixtures under `testdata/` are excluded.

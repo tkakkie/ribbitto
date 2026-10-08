@@ -7,6 +7,7 @@ linters:
     - depguard
     - errcheck
     - forbidigo
+    - nilerr
     - revive
     - sqlclosecheck
     - staticcheck

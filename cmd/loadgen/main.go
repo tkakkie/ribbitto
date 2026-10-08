@@ -66,6 +66,15 @@ type receipt struct {
 	Arrivals uint64 `json:"arrivals"`
 	Marker   string `json:"marker"`
 }
+
+func (rec *streamRecord) recordReceipt(seq uint64, markers *regexp.Regexp, data string) {
+	if rec.Sequences[seq] == nil {
+		// Regexp matches alias the rendered event; keep only the marker alive.
+		rec.Sequences[seq] = &receipt{Marker: strings.Clone(markers.FindString(data))}
+	}
+	rec.Sequences[seq].Arrivals++
+}
+
 type connectionCounts struct {
 	Established uint64 `json:"established"`
 	Unavailable uint64 `json:"503"`
@@ -447,10 +456,7 @@ func streamOnce(ctx context.Context, client *http.Client, endpoint, token string
 				rec.ArrivedAt[seq] = append(rec.ArrivedAt[seq], arrival)
 			}
 			if event == "message" {
-				if rec.Sequences[seq] == nil {
-					rec.Sequences[seq] = &receipt{Marker: c.markers.FindString(data)}
-				}
-				rec.Sequences[seq].Arrivals++
+				rec.recordReceipt(seq, c.markers, data)
 			}
 		}) {
 			c.reset.Add(1)

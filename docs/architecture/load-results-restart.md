@@ -164,8 +164,8 @@ outside the storm; the VM's busy share is of 10 CPUs.
 - The generator was the largest process: 3.7–4.1 GiB RSS at 3,000 streams over
   60 s, leaving 1.3–1.7 GiB available in the VM; 3,437 MiB at 5,000 streams
   over 30 s (F). Its receipt state grows with
-  streams × deliveries (roughly 2 KB each), which bounds the storm size on
-  this machine (#667).
+  streams × deliveries; after #667, about 0.7 KB per delivery
+  (1,221 MiB generator peak at 3,000 streams).
 
 ## What this means
 
@@ -182,8 +182,6 @@ outside the storm; the VM's busy share is of 10 CPUs.
 
 ## Follow-ups
 
-- #667: the generator's memory grows by roughly 2 KB per delivery,
-  which limits storms on one machine.
 - #668: the fully-caught-up time measures the last post, not catching
   up, while posts continue to the end.
 

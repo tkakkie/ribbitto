@@ -12,13 +12,79 @@ import (
 	"net/http/httptest"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 )
+
+func TestRecordReceiptCopiesMarker(t *testing.T) {
+	markers := regexp.MustCompile(`loadgenTEST[0-9]+Z`)
+	for _, marker := range []string{"loadgenTEST0Z", ""} {
+		t.Run(marker, func(t *testing.T) {
+			payload := "<p>" + marker + strings.Repeat("x", 1200) + "</p>"
+			rec := streamRecord{Sequences: make(map[uint64]*receipt)}
+			rec.recordReceipt(8, markers, payload)
+			first := rec.Sequences[8]
+			if *first != (receipt{1, marker}) {
+				t.Fatalf("first receipt = %+v", first)
+			}
+			// Compare backing storage instead of depending on GC timing or heap size.
+			start := uintptr(unsafe.Pointer(unsafe.StringData(payload)))
+			stored := uintptr(unsafe.Pointer(unsafe.StringData(first.Marker)))
+			if marker != "" && stored >= start && stored < start+uintptr(len(payload)) {
+				t.Fatal("receipt marker still aliases the event payload")
+			}
+			rec.recordReceipt(8, markers, "<p>loadgenTEST1Z</p>")
+			if rec.Sequences[8] != first || *first != (receipt{2, marker}) {
+				t.Fatalf("repeated arrival replaced the first marker or count: %+v", rec.Sequences[8])
+			}
+		})
+	}
+}
+
+func TestStreamReceiptCopiesMarker(t *testing.T) {
+	const deliveries = 16
+	payload := "<p>loadgenTEST0Z" + strings.Repeat("x", 128<<10) + "</p>"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		for seq := 1; seq <= deliveries; seq++ {
+			_, _ = fmt.Fprintf(w, "id: %d\nevent: message\ndata: %s\n\n", seq, payload)
+		}
+		_, _ = fmt.Fprint(w, "event: reset\ndata: \n\n")
+	}))
+	defer server.Close()
+	client := server.Client()
+	defer client.CloseIdleConnections()
+	c := &counts{markers: regexp.MustCompile(`loadgenTEST[0-9]+Z`)}
+	rec := streamRecord{Sequences: make(map[uint64]*receipt)}
+	cursor := "0"
+
+	// Large payloads make a call-site bypass retain over 2 MiB. Force GC
+	// before both samples; allow half that amount for HTTP and receipt state.
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	streamOnce(t.Context(), client, server.URL+"/events", "secret", &cursor, c, t.Context(), func() {}, func() {}, make(map[*post]bool), &rec, false)
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	if len(rec.Sequences) != deliveries {
+		t.Fatalf("received %d sequences, want %d", len(rec.Sequences), deliveries)
+	}
+	for seq, got := range rec.Sequences {
+		if *got != (receipt{1, "loadgenTEST0Z"}) {
+			t.Fatalf("receipt %d = %+v", seq, got)
+		}
+	}
+	if retained := int64(after.HeapAlloc) - int64(before.HeapAlloc); retained >= deliveries*int64(len(payload))/2 {
+		t.Fatalf("receipts still retain event payloads: heap grew by %d bytes", retained)
+	}
+	runtime.KeepAlive(rec)
+}
 
 func TestSafety(t *testing.T) {
 	for _, target := range []string{"http://192.0.2.1", "http://example.com", "ftp://localhost", "http://user@localhost", "http://localhost/path", "http://localhost?x=1", "http://localhost/#x", "https://localhost"} {

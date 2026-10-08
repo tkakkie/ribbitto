@@ -140,7 +140,7 @@ what the active steps left behind.
 ## Follow-ups
 
 - #622: authorize deliveries without a query per connection per event.
-- #623: a process-wide stream cap (A5).
+- #623: a process-wide stream cap (A5), now done; see [stream limits](stream-limits.md).
 - #624: sizing self-hosted machines, including Caddy's per-stream memory.
 
 ## Reproducing it
@@ -182,11 +182,14 @@ https://localhost:8443 {
 ```
 
 Then start Caddy and the server, each in its own shell or in the background,
-and leave them running. `XDG_DATA_HOME` fixes where Caddy keeps its local CA:
+and leave them running. With the process cap now in place (#623), set
+`RIBBITTO_MAX_STREAMS=60000` only for this disposable ceiling search so the
+5,000 default does not hide the measured ceiling. `XDG_DATA_HOME` fixes
+where Caddy keeps its local CA:
 
 ```sh
 XDG_DATA_HOME=/root/caddy-data caddy run --config Caddyfile
-RIBBITTO_ADDR=127.0.0.1:8080 RIBBITTO_DEV_METRICS_ADDR=127.0.0.1:9090 ribbitto serve
+RIBBITTO_MAX_STREAMS=60000 RIBBITTO_ADDR=127.0.0.1:8080 RIBBITTO_DEV_METRICS_ADDR=127.0.0.1:9090 ribbitto serve
 ```
 
 Run each series as [load client](load-client.md#a-ceiling-search) shows, with

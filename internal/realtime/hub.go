@@ -12,8 +12,8 @@ import (
 // Causes reported by context.Cause for a registered connection's context.
 // When the request ends first, the cause is the request context's own.
 var (
-	// ErrTooManyConnections refuses a registration over the account's limit.
-	ErrTooManyConnections = errors.New("realtime: too many connections for the account")
+	// ErrTooManyConnections refuses a registration over either stream limit.
+	ErrTooManyConnections = errors.New("realtime: too many connections")
 	// ErrAccountCancelled ends connections cancelled by CancelAccount.
 	ErrAccountCancelled = errors.New("realtime: account's connections cancelled")
 	// ErrSessionEnded ends connections cancelled by CancelSession.
@@ -32,11 +32,14 @@ var (
 // own cursor under the lock before blocking, so a raise that lands between
 // the connection's last read and its wait is never lost.
 type Hub struct {
-	mu        sync.Mutex
-	orgs      map[kernel.ID]*orgSequence
-	byAccount map[kernel.ID]map[*registration]struct{}
-	bySession map[kernel.ID]map[*registration]struct{}
-	byOrg     map[kernel.ID]map[*registration]struct{}
+	maxStreams int
+	mu         sync.Mutex
+	// connections is guarded by mu.
+	connections int
+	orgs        map[kernel.ID]*orgSequence
+	byAccount   map[kernel.ID]map[*registration]struct{}
+	bySession   map[kernel.ID]map[*registration]struct{}
+	byOrg       map[kernel.ID]map[*registration]struct{}
 	// shutdown, once CancelAll has run, refuses every registration.
 	shutdown bool
 }
@@ -57,13 +60,24 @@ type registration struct {
 	cancel           context.CancelCauseFunc
 }
 
-// NewHub returns an empty hub.
+// DefaultMaxStreams caps open streams per process, leaving headroom below
+// the measured active-stream ceiling (docs/architecture/load-testing.md).
+const DefaultMaxStreams = 5000
+
+// NewHub returns an empty hub with DefaultMaxStreams as its process cap.
 func NewHub() *Hub {
+	return NewHubWithMaxStreams(DefaultMaxStreams)
+}
+
+// NewHubWithMaxStreams returns an empty hub with the given process cap.
+// A cap below 1 refuses every registration.
+func NewHubWithMaxStreams(maxStreams int) *Hub {
 	return &Hub{
-		orgs:      make(map[kernel.ID]*orgSequence),
-		byAccount: make(map[kernel.ID]map[*registration]struct{}),
-		bySession: make(map[kernel.ID]map[*registration]struct{}),
-		byOrg:     make(map[kernel.ID]map[*registration]struct{}),
+		maxStreams: maxStreams,
+		orgs:       make(map[kernel.ID]*orgSequence),
+		byAccount:  make(map[kernel.ID]map[*registration]struct{}),
+		bySession:  make(map[kernel.ID]map[*registration]struct{}),
+		byOrg:      make(map[kernel.ID]map[*registration]struct{}),
 	}
 }
 
@@ -169,11 +183,12 @@ type Connection struct {
 	Organization, Account, Session kernel.ID
 }
 
-// Register adds a connection unless its account already holds limit
-// connections, in which case it returns ErrTooManyConnections and nothing
-// to unregister, or the hub is shutting down (ErrShutdown). The count and the addition happen under one lock, so
-// simultaneous registrations cannot overshoot the limit; a limit below 1
-// refuses every registration.
+// Register adds a connection unless the process already holds maxStreams
+// connections or its account holds limit connections, returning
+// ErrTooManyConnections and nothing to unregister, or the hub is shutting
+// down (ErrShutdown). Both checks and the addition happen under one lock,
+// so simultaneous registrations cannot overshoot either limit; an account
+// limit below 1 refuses every registration.
 //
 // The returned context is derived from parent, normally the request's
 // context. It ends at the first of: parent ending, CancelAccount or
@@ -193,7 +208,7 @@ func (h *Hub) Register(parent context.Context, c Connection, limit int) (ctx con
 	if h.shutdown {
 		return nil, nil, ErrShutdown
 	}
-	if len(h.byAccount[c.Account]) >= limit {
+	if h.connections >= h.maxStreams || len(h.byAccount[c.Account]) >= limit {
 		return nil, nil, ErrTooManyConnections
 	}
 	ctx, cancel := context.WithCancelCause(parent)
@@ -201,6 +216,7 @@ func (h *Hub) Register(parent context.Context, c Connection, limit int) (ctx con
 	add(h.byAccount, c.Account, r)
 	add(h.bySession, c.Session, r)
 	add(h.byOrg, c.Organization, r)
+	h.connections++
 	var once sync.Once
 	unregister = func() {
 		once.Do(func() {
@@ -208,6 +224,7 @@ func (h *Hub) Register(parent context.Context, c Connection, limit int) (ctx con
 			remove(h.byAccount, r.account, r)
 			remove(h.bySession, r.session, r)
 			remove(h.byOrg, r.organization, r)
+			h.connections--
 			h.mu.Unlock()
 			cancel(ErrUnregistered)
 		})
@@ -220,11 +237,7 @@ func (h *Hub) Register(parent context.Context, c Connection, limit int) (ctx con
 func (h *Hub) Connections() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	n := 0
-	for _, set := range h.byAccount {
-		n += len(set)
-	}
-	return n
+	return h.connections
 }
 
 // ActiveOrganizations returns the organisations with at least one

@@ -1,96 +1,47 @@
 package scopecheck
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
-	pgquery "github.com/pganalyze/pg_query_go/v6"
+	"github.com/tkakkie/ribbitto/tools/internal/sqlwalk"
 )
 
-func object(v any) map[string]any           { m, _ := v.(map[string]any); return m }
-func list(v any) []any                      { a, _ := v.([]any); return a }
-func node(v any, key string) map[string]any { return object(object(v)[key]) }
-func names(v any) string {
-	var parts []string
-	for _, item := range list(v) {
-		parts = append(parts, fmt.Sprint(node(item, "String")["sval"]))
-	}
-	return strings.Join(parts, ".")
-}
-
-func parse(sql string) (any, error) {
-	s, err := pgquery.ParseToJSON(sql)
-	if err != nil {
-		return nil, fmt.Errorf("parsing SQL: %w", err)
-	}
-	var tree any
-	err = json.Unmarshal([]byte(s), &tree)
-	return tree, err
-}
-
-// Walking every expression also checks statements in CTEs and subqueries;
-// their predicates never contribute to the enclosing statement's scope.
+// INSERT bodies are checked by the scope policy; WITH must be visited first.
 func walk(v any, visit func(string, map[string]any) error) error {
-	switch v := v.(type) {
-	case map[string]any:
-		for key, child := range v {
-			if key == "InsertStmt" {
-				// Preserve CTE scope checks before applying the INSERT shape gate.
-				if err := walk(object(child)["withClause"], visit); err != nil {
-					return err
-				}
-			}
-			if err := visit(key, object(child)); err != nil {
-				return err
-			}
-			if key == "InsertStmt" {
-				continue
-			}
-			if err := walk(child, visit); err != nil {
-				return err
-			}
-		}
-	case []any:
-		for _, child := range v {
-			if err := walk(child, visit); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return sqlwalk.Walk(v, sqlwalk.Scope{}, sqlwalk.Options{OpaqueInserts: true,
+		Visit: func(kind string, n map[string]any, _ sqlwalk.Scope) error { return visit(kind, n) },
+	})
 }
 
 func parameter(v any) bool {
-	if node(v, "ParamRef") != nil {
+	if sqlwalk.Node(v, "ParamRef") != nil {
 		return true
 	}
-	f := node(v, "FuncCall")
-	return len(list(f["funcname"])) == 2 && names(f["funcname"]) == "sqlc.arg" && len(list(f["args"])) == 1
+	f := sqlwalk.Node(v, "FuncCall")
+	return len(sqlwalk.List(f["funcname"])) == 2 && sqlwalk.Names(f["funcname"]) == "sqlc.arg" && len(sqlwalk.List(f["args"])) == 1
 }
 
 func columnRef(v any, want string) bool {
-	fields := node(v, "ColumnRef")["fields"]
-	return len(list(fields)) == strings.Count(want, ".")+1 && names(fields) == want
+	fields := sqlwalk.Node(v, "ColumnRef")["fields"]
+	return len(sqlwalk.List(fields)) == strings.Count(want, ".")+1 && sqlwalk.Names(fields) == want
 }
 
 func conjunct(v any, column string) bool {
-	b := node(v, "BoolExpr")
+	b := sqlwalk.Node(v, "BoolExpr")
 	if b["boolop"] == "AND_EXPR" {
-		for _, arg := range list(b["args"]) {
+		for _, arg := range sqlwalk.List(b["args"]) {
 			if conjunct(arg, column) {
 				return true
 			}
 		}
 		return false
 	}
-	e := node(v, "A_Expr")
-	if e["kind"] != "AEXPR_OP" || names(e["name"]) != "=" {
+	e := sqlwalk.Node(v, "A_Expr")
+	if e["kind"] != "AEXPR_OP" || sqlwalk.Names(e["name"]) != "=" {
 		return false
 	}
 	return columnRef(e["lexpr"], column) && parameter(e["rexpr"]) ||
@@ -98,12 +49,12 @@ func conjunct(v any, column string) bool {
 }
 
 func check(sql string, tables map[string]string) error {
-	tree, err := parse(sql)
+	tree, err := sqlwalk.Parse(sql)
 	if err != nil {
 		return err
 	}
-	for _, raw := range list(object(tree)["stmts"]) {
-		if err := checkStatement(object(raw)["stmt"], tables); err != nil {
+	for _, raw := range sqlwalk.Statements(tree) {
+		if err := checkStatement(sqlwalk.Object(raw)["stmt"], tables); err != nil {
 			return err
 		}
 	}
@@ -111,20 +62,17 @@ func check(sql string, tables map[string]string) error {
 }
 
 func checkStatement(tree any, tables map[string]string) error {
-	ctes := map[string]bool{}
-	if err := walk(tree, func(kind string, s map[string]any) error {
-		if kind == "CommonTableExpr" {
-			ctes[fmt.Sprint(s["ctename"])] = true
-			if _, shadows := tables[fmt.Sprint(s["ctename"])]; shadows {
-				return fmt.Errorf("unsupported shape: CTE shadows table")
-			}
-		}
-		return nil
-	}); err != nil {
+	ctes, err := sqlwalk.CollectCTEs(tree)
+	if err != nil {
 		return err
 	}
+	for name := range ctes {
+		if _, shadows := tables[name]; shadows {
+			return fmt.Errorf("unsupported shape: CTE shadows table")
+		}
+	}
 	return walk(tree, func(kind string, s map[string]any) error {
-		if !strings.HasSuffix(kind, "Stmt") || kind[0] < 'A' || kind[0] > 'Z' {
+		if !strings.HasSuffix(kind, "Stmt") || !sqlwalk.IsNode(kind) {
 			return nil
 		}
 		var refs []any
@@ -133,25 +81,25 @@ func checkStatement(tree any, tables map[string]string) error {
 			if s["op"] != "SETOP_NONE" || s["valuesLists"] != nil || s["intoClause"] != nil {
 				return fmt.Errorf("unsupported shape: SELECT operation")
 			}
-			refs = list(s["fromClause"])
+			refs = sqlwalk.List(s["fromClause"])
 		case "UpdateStmt":
-			table, _ := object(s["relation"])["relname"].(string)
+			table, _ := sqlwalk.Object(s["relation"])["relname"].(string)
 			if column := tables[table]; column != "" {
 				// A scoped WHERE cannot prevent SET from moving the row's ownership.
-				for _, target := range list(s["targetList"]) {
-					if node(target, "ResTarget")["name"] == column {
+				for _, target := range sqlwalk.List(s["targetList"]) {
+					if sqlwalk.Node(target, "ResTarget")["name"] == column {
 						return fmt.Errorf("scope assignment: %s.%s", table, column)
 					}
 				}
 			}
-			refs = append([]any{map[string]any{"RangeVar": s["relation"]}}, list(s["fromClause"])...)
+			refs = append([]any{map[string]any{"RangeVar": s["relation"]}}, sqlwalk.List(s["fromClause"])...)
 		case "DeleteStmt":
-			refs = append([]any{map[string]any{"RangeVar": s["relation"]}}, list(s["usingClause"])...)
+			refs = append([]any{map[string]any{"RangeVar": s["relation"]}}, sqlwalk.List(s["usingClause"])...)
 		case "InsertStmt":
 			if err := noSubquery(s["returningList"]); err != nil {
 				return err
 			}
-			values := node(s["selectStmt"], "SelectStmt")
+			values := sqlwalk.Node(s["selectStmt"], "SelectStmt")
 			// Conflict handling and overriding remain outside both exemptions.
 			if s["onConflictClause"] != nil || s["override"] != "OVERRIDING_NOT_SET" {
 				return fmt.Errorf("unsupported shape: INSERT")
@@ -167,7 +115,7 @@ func checkStatement(tree any, tables map[string]string) error {
 		aliases := map[string]string{}
 		var relation func(any) error
 		relation = func(v any) error {
-			if j := node(v, "JoinExpr"); j != nil {
+			if j := sqlwalk.Node(v, "JoinExpr"); j != nil {
 				if j["jointype"] != "JOIN_INNER" || j["alias"] != nil || j["isNatural"] == true || j["usingClause"] != nil {
 					return fmt.Errorf("unsupported shape: join")
 				}
@@ -176,15 +124,15 @@ func checkStatement(tree any, tables map[string]string) error {
 				}
 				return relation(j["rarg"])
 			}
-			r := node(v, "RangeVar")
+			r := sqlwalk.Node(v, "RangeVar")
 			table, _ := r["relname"].(string)
 			column, known := tables[table]
-			known = known || ctes[table]
+			known = known || !(sqlwalk.Scope{CTEs: ctes}).Physical(r)
 			if !known || r["schemaname"] != nil || r["catalogname"] != nil {
 				return fmt.Errorf("unsupported shape: relation %q", table)
 			}
 			alias := table
-			if a := object(r["alias"]); a != nil {
+			if a := sqlwalk.Object(r["alias"]); a != nil {
 				if a["colnames"] != nil {
 					return fmt.Errorf("unsupported shape: renamed columns")
 				}
@@ -220,14 +168,14 @@ func insertCTESelect(s map[string]any, ctes map[string]bool) error {
 	if s == nil || s["op"] != "SETOP_NONE" || s["valuesLists"] != nil || s["intoClause"] != nil || s["withClause"] != nil {
 		return fmt.Errorf("unsupported shape: INSERT SELECT")
 	}
-	fromClause := list(s["fromClause"])
+	fromClause := sqlwalk.List(s["fromClause"])
 	if len(fromClause) > 1 {
 		return fmt.Errorf("unsupported shape: INSERT SELECT join")
 	}
 	for _, ref := range fromClause {
-		r := node(ref, "RangeVar")
+		r := sqlwalk.Node(ref, "RangeVar")
 		table, _ := r["relname"].(string)
-		if !ctes[table] || r["schemaname"] != nil || r["catalogname"] != nil {
+		if (sqlwalk.Scope{CTEs: ctes}).Physical(r) {
 			return fmt.Errorf("unsupported shape: INSERT SELECT relation %q", table)
 		}
 	}
@@ -260,7 +208,7 @@ func schema(migrations []string) (map[string]string, error) {
 	tables := map[string]string{}
 	created := map[string]bool{}
 	for _, migration := range migrations {
-		tree, err := parse(strings.Split(migration, "-- +goose Down")[0])
+		tree, err := sqlwalk.Parse(strings.Split(migration, "-- +goose Down")[0])
 		if err != nil {
 			return nil, err
 		}
@@ -276,10 +224,10 @@ func schema(migrations []string) (map[string]string, error) {
 			if kind != "CreateStmt" && kind != "AlterTableStmt" {
 				return nil
 			}
-			if object(s["relation"])["schemaname"] != nil {
+			if sqlwalk.Object(s["relation"])["schemaname"] != nil {
 				return fmt.Errorf("unsupported schema shape: qualified table")
 			}
-			table, _ := object(s["relation"])["relname"].(string)
+			table, _ := sqlwalk.Object(s["relation"])["relname"].(string)
 			if kind == "CreateStmt" {
 				created[table] = true
 				tables[table] = ""
@@ -323,8 +271,6 @@ func schema(migrations []string) (map[string]string, error) {
 
 func exemptions(text string, queries, tables map[string]string) (map[string]string, error) {
 	allow := map[string]string{}
-	pending := regexp.MustCompile(`(?i)pending[^a-z0-9]+maintainer\s*:`)
-	provenance := regexp.MustCompile(`(?i)(#[1-9][0-9]*\b|https://github\.com/[^/\s]+/[^/\s]+/pull/[1-9][0-9]*#issuecomment-[1-9][0-9]*\b|\bdecision\s+[1-9][0-9]*\b)`)
 	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
@@ -333,11 +279,8 @@ func exemptions(text string, queries, tables map[string]string) (map[string]stri
 		if !ok || strings.TrimSpace(reason) == "" || allow[name] != "" {
 			return nil, fmt.Errorf("invalid allowlist entry: %q", line)
 		}
-		if pending.MatchString(reason) {
-			return nil, fmt.Errorf("pending maintainer approval: %s", name)
-		}
-		if strings.Contains(strings.ToLower(reason), "maintainer") && !provenance.MatchString(reason) {
-			return nil, fmt.Errorf("missing maintainer provenance: %s", name)
+		if err := (sqlwalk.ReasonRules{PendingColon: true}).Check(reason); err != nil {
+			return nil, fmt.Errorf("%w: %s", err, name)
 		}
 		if _, exists := queries[name]; !exists {
 			return nil, fmt.Errorf("stale allowlist entry: %s", name)
@@ -351,37 +294,8 @@ func exemptions(text string, queries, tables map[string]string) (map[string]stri
 }
 
 func TestProductionQueries(t *testing.T) {
-	queries := map[string]string{}
-	header := regexp.MustCompile(`(?m)^-- name: (\w+) :\w+[^\n]*`)
-	err := filepath.WalkDir("../../db/queries", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || !strings.HasSuffix(path, ".sql") {
-			return nil
-		}
-		sql := read(t, path)
-		matches := header.FindAllStringSubmatchIndex(sql, -1)
-		if len(matches) == 0 {
-			return fmt.Errorf("no queries in %s", path)
-		}
-		prefix, err := parse(sql[:matches[0][0]])
-		if err != nil || len(list(object(prefix)["stmts"])) != 0 {
-			return fmt.Errorf("unnamed SQL in %s: %v", path, err)
-		}
-		for i, match := range matches {
-			name, end := filepath.Base(filepath.Dir(path))+"."+sql[match[2]:match[3]], len(sql)
-			if i+1 < len(matches) {
-				end = matches[i+1][0]
-			}
-			if _, exists := queries[name]; exists {
-				return fmt.Errorf("duplicate query: %s", name)
-			}
-			queries[name] = sql[match[1]:end]
-		}
-		return nil
-	})
-	if err != nil || len(queries) == 0 {
+	queries, err := sqlwalk.Load("../../db/queries", nil)
+	if err != nil {
 		t.Fatalf("reading queries: %v", err)
 	}
 	paths, err := filepath.Glob("../../db/migrations/*.sql")
@@ -408,7 +322,7 @@ func TestProductionQueries(t *testing.T) {
 	for name, sql := range queries {
 		t.Run(name, func(t *testing.T) {
 			// Even exempt queries must parse; an exemption waives scope/shape only.
-			if tree, err := parse(sql); err != nil || len(list(object(tree)["stmts"])) != 1 {
+			if tree, err := sqlwalk.Parse(sql); err != nil || len(sqlwalk.Statements(tree)) != 1 {
 				t.Fatalf("expected one parsed statement: %v", err)
 			}
 			if allow[name] == "" {

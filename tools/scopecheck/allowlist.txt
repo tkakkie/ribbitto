@@ -1,5 +1,4 @@
 org.GetMembershipBySlug Resolves the organisation by slug and membership by account before its ID is available.
 org.GetHomeSlug Reads installation-wide setup and resolves membership through the organisation join.
-org.GetOrganizationBySlug Test-only lookup by slug; the organisation ID is not available until this lookup resolves it. Approved by maintainer in #658 (https://github.com/tkakkie/ribbitto/pull/658#issuecomment-6049254742), 2026-10-08.
 org.CommittedSequences Internal realtime watermark batch reads authorised organisation IDs via ANY, outside scalar equality support.
 realtime.OrganizationsWithExpiredEvents Installation-wide retention job lists organisation IDs only; each cleanup batch is scoped. Approved by maintainer in #658 (https://github.com/tkakkie/ribbitto/pull/658#issuecomment-6049254742), 2026-10-08.

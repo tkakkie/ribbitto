@@ -34,8 +34,9 @@ these colours exist in templates. `tools/sourcecheck`, run by `make check`,
 rejects literal colours in arbitrary classes and inline styles in authored
 `.templ` attributes, and in `web/styles/app.css` (including `@apply`) outside
 token definitions (`--rb-*` in `:root`, and custom properties in `@theme`). Token references,
-`transparent` and `currentColor` pass; generated CSS and vendored assets
-are excluded. The pattern check does not evaluate dynamic expressions.
+`transparent` and `currentColor` pass; URL contents (quoted or unquoted) are
+ignored before arbitrary property prefixes are stripped. Generated CSS and
+vendored assets are excluded. The pattern check does not evaluate dynamic expressions.
 
 | Colour token | Light | Dark | Use |
 |---|---|---|---|

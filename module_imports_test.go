@@ -116,6 +116,55 @@ func importAllowed(modules []module, from, file, to string) bool {
 	return true
 }
 
+func syntheticTestMain(pkg *packages.Package, rootDir string) bool {
+	const modulePath = "github.com/tkakkie/ribbitto"
+	if pkg.Name != "main" || !strings.HasSuffix(pkg.PkgPath, ".test") || len(pkg.GoFiles)+len(pkg.CompiledGoFiles) == 0 {
+		return false
+	}
+	if pkg.PkgPath != modulePath+".test" && !strings.HasPrefix(pkg.PkgPath, modulePath+"/") {
+		return false
+	}
+	rel := strings.TrimPrefix(strings.TrimPrefix(pkg.PkgPath, modulePath), "/")
+	_, err := os.Stat(filepath.Join(rootDir, filepath.FromSlash(rel)))
+	return os.IsNotExist(err)
+}
+
+func TestModuleImportSyntheticTestMain(t *testing.T) {
+	rootDir := t.TempDir()
+	const modulePath = "github.com/tkakkie/ribbitto"
+	generated := filepath.Join(rootDir, "bin", ".cache", "generated-d")
+	outside := filepath.Join(rootDir, "..", "cache", "generated-d")
+	repository := filepath.Join(rootDir, "internal", "x.test", "main.go")
+	if err := os.MkdirAll(filepath.Dir(repository), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(repository, []byte("package main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name string
+		pkg  packages.Package
+		want bool
+	}{
+		{"generated test main inside repository", packages.Package{Name: "main", PkgPath: modulePath + "/internal/foo.test", GoFiles: []string{generated}}, true},
+		{"generated test main outside repository", packages.Package{Name: "main", PkgPath: modulePath + "/internal/foo.test", GoFiles: []string{outside}}, true},
+		{"generated root test main", packages.Package{Name: "main", PkgPath: modulePath + ".test", GoFiles: []string{generated}}, true},
+		{"repository test-suffixed main", packages.Package{Name: "main", PkgPath: modulePath + "/internal/x.test", GoFiles: []string{repository}}, false},
+		{"mixed source files", packages.Package{Name: "main", PkgPath: modulePath + "/internal/x.test", GoFiles: []string{generated, repository}}, false},
+		{"repository compiled source", packages.Package{Name: "main", PkgPath: modulePath + "/internal/x.test", GoFiles: []string{generated}, CompiledGoFiles: []string{repository}}, false},
+		{"non-main package", packages.Package{Name: "example", PkgPath: modulePath + "/internal/foo.test", GoFiles: []string{generated}}, false},
+		{"non-test package", packages.Package{Name: "main", PkgPath: modulePath, GoFiles: []string{generated}}, false},
+		{"other module", packages.Package{Name: "main", PkgPath: "example/internal/foo.test", GoFiles: []string{generated}}, false},
+		{"no source files", packages.Package{Name: "main", PkgPath: modulePath + ".test"}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := syntheticTestMain(&tt.pkg, rootDir); got != tt.want {
+				t.Errorf("syntheticTestMain() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestModuleImports(t *testing.T) {
 	modules := moduleManifest()
 	rootDir, err := os.Getwd()
@@ -154,8 +203,8 @@ func TestModuleImports(t *testing.T) {
 	}
 	seenFiles, seenPaths := map[string]bool{}, map[string]bool{}
 	for _, pkg := range pkgs {
-		// Test mains hold only generated code; every real source file is checked in its own package.
-		if pkg.Name == "main" && strings.HasSuffix(pkg.PkgPath, ".test") {
+		// Generated test mains have no package directory, regardless of the cache location.
+		if syntheticTestMain(pkg, rootDir) {
 			continue
 		}
 		for _, source := range pkg.Syntax {

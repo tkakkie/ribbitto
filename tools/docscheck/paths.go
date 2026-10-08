@@ -27,7 +27,7 @@ func checkPaths(root string) ([]string, error) {
 	shape := regexp.MustCompile(`^(internal|cmd|db|docs|web|tools|scripts|\.github)/\S+$`)
 	lineSuffix := regexp.MustCompile(`:[0-9]+$`)
 	braceSet := regexp.MustCompile(`\{([^{}]+,[^{}]+)\}`)
-	identifier := regexp.MustCompile(`^\p{Lu}[\pL\pN_]*$`)
+	identifier := regexp.MustCompile(`^[\pL_][\pL\p{Nd}_]*$`)
 	var problems []string
 	for _, file := range files {
 		if file != "AGENTS.md" && file != "README.md" && file != "DECISIONS.md" && !strings.HasPrefix(file, "docs/") {
@@ -84,8 +84,12 @@ func repositoryPathExists(repo *os.Root, path string, identifier *regexp.Regexp)
 	if _, err := repo.Stat(path); err == nil {
 		return true
 	}
-	// Files with extensions take precedence over package selectors. Requiring
-	// exported identifiers and Go files keeps missing files from passing as selectors.
+	// Known extensions keep missing files from passing as selectors, whose names
+	// may be exported or unexported. An existing written path always wins.
+	switch filepath.Ext(path) {
+	case ".go", ".md", ".sql", ".templ", ".toml", ".js", ".css", ".json", ".yml", ".yaml", ".txt", ".sh":
+		return false
+	}
 	start := strings.LastIndexByte(path, '/') + 1
 	dot := strings.IndexByte(path[start:], '.')
 	if dot < 0 {

@@ -93,9 +93,13 @@ builds, runs the Go tests with the race detector, and checks the import
 graph and the documents. In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,
 repository paths in backticks must exist. Placeholders and globs are skipped;
 brace sets are expanded; `:line` suffixes and trailing slashes are accepted.
-An existing path wins over `package.Identifier` or `package.Type.Method`,
-which require exported identifiers and a package directory containing a Go
-file. Decision records are exempt from this path check because
+An existing path wins. Otherwise, a final dot-separated element that is a
+known extension (`go`, `md`, `sql`, `templ`, `toml`, `js`, `css`, `json`, `yml`,
+`yaml`, `txt`, `sh`) marks a missing file. Only other spans can be package
+selectors such as `package.Identifier` or `package.Type.Method`: every name
+after the package must be a valid Go identifier, exported or unexported, and
+the package directory must contain at least one regular `.go` file.
+Decision records are exempt from this path check because
 they describe history; their Markdown links and anchors are still checked.
 
 The AI launchers' self-tests, most of its time, run

@@ -113,6 +113,8 @@ func openStreamIn(ctx context.Context, t *testing.T, b acceptanceBrowser, channe
 	client.Timeout = 0 // the stream is long-lived; the context ends it
 	response, err := client.Do(r)
 	acceptanceOK(t, err)
+	// Also close on assertion failure before the reader goroutine starts.
+	t.Cleanup(func() { _ = response.Body.Close() })
 	events := make(chan sseEvent, 16)
 	if response.StatusCode != http.StatusOK {
 		_ = response.Body.Close()

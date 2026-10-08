@@ -63,9 +63,10 @@ $(TAILWIND):
 # The pinned templ has no check-only flag, so each file is compared with the
 # formatter's stdout; the working tree is never rewritten. The exit status is
 # checked on its own: on a parse error the formatter prints nothing, which
-# would match an empty file.
-# Tools tests read db/queries, db/migrations and module_imports_test.go outside
-# their module, which Go's test cache does not track; always run them uncached.
+# would match an empty file. The tools tests run with -count=1: scopecheck and
+# tablecheck read db/queries, db/migrations and module_imports_test.go from
+# outside the tools module, which Go's test cache does not track, so a cached
+# pass would hide a changed query or manifest.
 check: $(TEMPL)
 	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
 	if [ -n "$$unformatted" ]; then \

@@ -3,7 +3,8 @@
 End-to-end results of #216: how many concurrent event streams ribbitto
 serves, and what breaks first. The assumptions and dispositions are in
 [load testing](load-testing.md), the client in [load client](load-client.md),
-and the in-process cost per post in [stream cost](stream-cost.md).
+and the in-process cost per post in [stream cost](stream-cost.md). #219's
+restart with every stream open is in [reconnect storm results](load-results-restart.md).
 
 ## Run of 2026-10-07
 

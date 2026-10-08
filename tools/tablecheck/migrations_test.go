@@ -135,10 +135,9 @@ func (p *migrationPolicy) sequenceCall(n map[string]any, module string) error {
 }
 
 func (p *migrationPolicy) ddlExpressions(tree any, module string) error {
-	return sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, Visit: func(tag string, n map[string]any, _ sqlwalk.Scope) error {
-		if tag == "SubLink" {
-			return fmt.Errorf("unsupported migration DDL node %s", tag)
-		}
+	// Check calls first so sequence ownership refusals survive even when a
+	// containing expression uses an unsupported operator or node shape.
+	err := sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, Visit: func(tag string, n map[string]any, _ sqlwalk.Scope) error {
 		if tag != "FuncCall" {
 			return nil
 		}
@@ -153,6 +152,34 @@ func (p *migrationPolicy) ddlExpressions(tree any, module string) error {
 			return p.sequenceCall(n, module)
 		}
 		return fmt.Errorf("unsupported migration DDL function %s", sqlwalk.Names(n["funcname"]))
+	}})
+	if err != nil {
+		return err
+	}
+	return sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, Visit: func(tag string, n map[string]any, _ sqlwalk.Scope) error {
+		switch tag {
+		case "A_Expr":
+			name := sqlwalk.Names(n["name"])
+			if len(sqlwalk.List(n["name"])) != 1 {
+				return fmt.Errorf("unsupported qualified migration DDL operator %s", name)
+			}
+			// Only operators observed in production DDL are safe to admit here.
+			switch name {
+			case "=", "<>", ">", "<=", ">=", "~", "!~", "BETWEEN":
+			default:
+				return fmt.Errorf("unsupported migration DDL operator %s", name)
+			}
+		case "TypeCast":
+			// Production DDL expressions use no casts; type input functions can
+			// hide table access just as functions and operators can.
+			return fmt.Errorf("unsupported migration DDL type %s", sqlwalk.Names(sqlwalk.Object(n["typeName"])["names"]))
+		case "CreateStmt", "AlterTableStmt", "AlterTableCmd", "ColumnDef", "Constraint", "IndexStmt", "IndexElem", "CreateTrigStmt":
+			// These are the DDL containers around the expressions, not query nodes.
+		case "FuncCall", "A_Const", "ColumnRef", "BoolExpr", "NullTest", "String", "List":
+		default:
+			return fmt.Errorf("unsupported migration DDL node %s", tag)
+		}
+		return nil
 	}})
 }
 
@@ -299,6 +326,21 @@ func checkMigrationsWithAccess(migrations []migration, owners map[string]string,
 			modules[name] = module
 		default:
 			return fmt.Errorf("unsupported migration statement %s", s.kind)
+		}
+	}
+	// DDL target relations are embedded records, so the ownership walk does not
+	// visit them as RangeVar nodes. Resolve them only against created, owned tables.
+	for _, s := range statements {
+		switch s.kind {
+		case "IndexStmt", "AlterTableStmt", "CreateTrigStmt":
+			r := sqlwalk.Object(s.node["relation"])
+			table, _ := r["relname"].(string)
+			if r["schemaname"] != nil || r["catalogname"] != nil {
+				return fmt.Errorf("%s: unsupported qualified migration %s target %s", s.object, s.kind, table)
+			}
+			if !tables[table] || owners[table] == "" {
+				return fmt.Errorf("%s: unknown migration %s target %s", s.object, s.kind, table)
+			}
 		}
 	}
 	for table := range tables {

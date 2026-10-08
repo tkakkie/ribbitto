@@ -67,6 +67,11 @@ generated columns, index expressions/predicates and trigger WHEN expressions
 allow only `uuidv7`, `now`, `length`, `lower`, `octet_length`,
 `pg_catalog.normalize`, `starts_with` and `btrim`, plus the checked sequence
 calls below; every other DDL function fails.
+DDL nodes fail closed, with only production's expression shapes and unqualified
+`=`, `<>`, `>`, `<=`, `>=`, `~`, `!~` and `BETWEEN` operators accepted (including
+IN / NOT IN, parsed with `=` / `<>`). DDL casts are refused; production uses none.
+INDEX, ALTER TABLE and trigger targets must be unqualified, migration-created
+tables with known module owners.
 
 Backfills take the written table's module. Functions take the module of every
 trigger's table; mixed-module bindings, unbound functions and calls to

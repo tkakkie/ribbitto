@@ -148,11 +148,45 @@ func TestMigrationAnnotations(t *testing.T) {
 	}
 }
 
+func TestMigrationDDLTargets(t *testing.T) {
+	function := "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$; "
+	for _, tt := range []struct{ name, sql, want string }{
+		{"schema index", "CREATE INDEX ix ON public.message(id)", "unsupported qualified migration IndexStmt target message"},
+		{"catalog index", "CREATE INDEX ix ON app.public.message(id)", "unsupported qualified migration IndexStmt target message"},
+		{"unknown index", "CREATE INDEX ix ON absent(id)", "unknown migration IndexStmt target absent"},
+		{"uncreated index", "CREATE INDEX ix ON absent(id)", "unknown migration IndexStmt target absent"},
+		{"schema alter", "ALTER TABLE public.message ADD COLUMN x int", "unsupported qualified migration AlterTableStmt target message"},
+		{"catalog alter", "ALTER TABLE app.public.message ADD COLUMN x int", "unsupported qualified migration AlterTableStmt target message"},
+		{"unknown alter", "ALTER TABLE absent ADD COLUMN x int", "unknown migration AlterTableStmt target absent"},
+		{"uncreated alter", "ALTER TABLE absent ADD COLUMN x int", "unknown migration AlterTableStmt target absent"},
+		{"schema trigger", function + "CREATE TRIGGER t AFTER INSERT ON public.message FOR EACH ROW EXECUTE FUNCTION f()", "unsupported migration trigger binding f"},
+		{"catalog trigger", function + "CREATE TRIGGER t AFTER INSERT ON app.public.message FOR EACH ROW EXECUTE FUNCTION f()", "unsupported migration trigger binding f"},
+		{"uncreated trigger", function + "CREATE TRIGGER t AFTER INSERT ON absent FOR EACH ROW EXECUTE FUNCTION f()", "unknown migration CreateTrigStmt target absent"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			owners := map[string]string{"message": "conversation"}
+			if strings.HasPrefix(tt.name, "uncreated ") {
+				owners["absent"] = "conversation"
+			}
+			err := checkMigrations([]string{"-- +goose Up\nCREATE TABLE message(id int); " + tt.sql}, owners)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("got %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestMigrationDDLExpressions(t *testing.T) {
 	owners := map[string]string{"message": "conversation", "account": "identity"}
 	function := " CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$; "
 	for _, tt := range []struct{ name, sql, want string }{
 		{"subquery", "CREATE TABLE message(id int); ALTER TABLE message ADD COLUMN x text DEFAULT (SELECT email FROM account LIMIT 1)", "00001.ddl.statement3: unsupported migration DDL node SubLink"},
+		{"qualified operator", "CREATE TABLE message(id int DEFAULT (1 OPERATOR(public.###) 2))", "unsupported qualified migration DDL operator public.###"},
+		{"unlisted operator", "CREATE TABLE message(id int CHECK (id ### 2))", "unsupported migration DDL operator ###"},
+		{"unlisted cast", "CREATE TABLE message(id int DEFAULT ('1'::custom_type))", "unsupported migration DDL type custom_type"},
+		{"qualified cast", "CREATE TABLE message(id int DEFAULT ('1'::public.custom_type))", "unsupported migration DDL type public.custom_type"},
+		{"builtin cast", "CREATE TABLE message(id int DEFAULT ('1'::int))", "unsupported migration DDL type pg_catalog.int4"},
+		{"unlisted node", "CREATE TABLE message(id int, x int GENERATED ALWAYS AS (CASE WHEN id > 0 THEN id ELSE 0 END) STORED)", "unsupported migration DDL node CaseExpr"},
 		{"create default query", "CREATE TABLE message(id int, x xml DEFAULT query_to_xml('SELECT * FROM account', true, false, ''))", "DDL function query_to_xml"},
 		{"create check query", "CREATE TABLE message(id int CHECK (query_to_xml('SELECT * FROM account', true, false, '') IS NOT NULL))", "DDL function query_to_xml"},
 		{"create default table", "CREATE TABLE message(id int, x xml DEFAULT table_to_xml('account', true, false, ''))", "DDL function table_to_xml"},
@@ -163,6 +197,9 @@ func TestMigrationDDLExpressions(t *testing.T) {
 		{"added generated expression", "CREATE TABLE message(id int); ALTER TABLE message ADD COLUMN x xml GENERATED ALWAYS AS (table_to_xml('account',true,false,'')) STORED", "DDL function table_to_xml"},
 		{"index expression", "CREATE TABLE message(id int); CREATE INDEX ix ON message((table_to_xml('account',true,false,'')))", "DDL function table_to_xml"},
 		{"index predicate", "CREATE TABLE message(id int); CREATE INDEX ix ON message(id) WHERE table_to_xml('account',true,false,'') IS NOT NULL", "DDL function table_to_xml"},
+		{"index predicate operator", "CREATE TABLE message(id int); CREATE INDEX ix ON message(id) WHERE id ### 2", "unsupported migration DDL operator ###"},
+		{"exclude predicate operator", "CREATE TABLE message(id int, EXCLUDE (id WITH =) WHERE (id ### 2))", "unsupported migration DDL operator ###"},
+		{"trigger when operator", "CREATE TABLE message(id int);" + function + "CREATE TRIGGER t AFTER INSERT ON message FOR EACH ROW WHEN (NEW.id ### 2) EXECUTE FUNCTION f()", "unsupported migration DDL operator ###"},
 		{"quoted dotted builtin", `CREATE TABLE message(s text CHECK (s="pg_catalog.normalize"(s)))`, "DDL function pg_catalog.normalize"},
 		{"qualified builtin", "CREATE TABLE message(id int DEFAULT public.length('x'))", "DDL function public.length"},
 		{"allowed functions", "CREATE TABLE message(id int, u uuid DEFAULT uuidv7(), t timestamptz DEFAULT now(), s text CHECK (length(s)>0 AND lower(s)=btrim(s) AND octet_length(s)>0 AND starts_with(s,'x') AND s=normalize(s,NFC))); CREATE INDEX ix ON message(lower(s)) WHERE length(s)>0", ""},

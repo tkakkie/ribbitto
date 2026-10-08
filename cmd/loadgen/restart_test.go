@@ -316,6 +316,7 @@ func TestRestart(t *testing.T) {
 			final := uint64(7 + bytes.Count(commits, []byte("\n")))
 			failRestartIf(t, storm.RecoveryCursor != recovery || !storm.ReadyAt.After(storm.SIGTERM) || storm.ExitSeconds < .04 || storm.ReadySeconds <= storm.ExitSeconds || storm.Old == nil || storm.New == nil || storm.Old.Database.Queries != 1 || storm.New.Database.Queries != 2 || got.Server != nil || file.Header.FinalWatermark != final || got.DrainSeconds >= 1, out.String())
 			failRestartIf(t, storm.Recovery == nil || storm.Recovery.Reconnected.IncompleteStreams != 0 || storm.Recovery.FullyCaughtUp.IncompleteStreams != 0, out.String())
+			failRestartIf(t, (storm.Recovery.LiveAgain == nil) != (got.Rate == 0), "live-again applicability", out.String())
 			for _, rec := range file.Streams {
 				failRestartIf(t, rec.Reconnects.Established < 1 || (file.Header.FinalWatermark > 7 && rec.Sequences[file.Header.FinalWatermark] == nil), "did not reconnect/drain", rec)
 				if tc.mode == "unavailable" {
@@ -370,7 +371,7 @@ func assertHandover(t *testing.T, child *childServer, address string, launch fun
 	<-done
 	failRestartIf(t, len(rec.EstablishedAt) < 2 || !rec.EstablishedAt[1].After(terminated) || len(rec.ArrivedAt[8]) == 0 || !rec.ArrivedAt[8][0].After(child.readyAt) || !caughtUp(records, 7, 9, terminated) || rec.Sequences[9] != nil || len(rec.ArrivedAt[9]) == 0, fmt.Sprintf("handover: %+v", rec))
 	restart := restartResult{SIGTERM: terminated, RecoveryCursor: 8}
-	restart.measureRecovery(records, 7, 9, time.Now(), time.Hour)
+	restart.measureRecovery(records, 7, 9, time.Now(), time.Hour, nil, 0)
 	failRestartIf(t, restart.Recovery.DeliveriesThroughRecoveryCursorAfterReconnect != 1 || restart.Recovery.AllDeliveriesAfterReconnect != 2 || restart.Recovery.OutageRecovered.IncompleteStreams != 0 || restart.Recovery.FullyCaughtUp.IncompleteStreams != 0, restart.Recovery)
 	rec.Sequences = nil
 	failRestartIf(t, !caughtUp(records, 8, 8, terminated), "empty set did not complete after reconnect")

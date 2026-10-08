@@ -97,10 +97,11 @@ incomplete for any of the three, and no stream was reset.
 - **Outage recovered** (holding the new process's cursor at readiness)
   follows reconnecting within 60 ms.
 - **Fully caught up is the last post's arrival, not a catch-up time.** Posts
-  continue until observation ends, so the final watermark is the last
-  scheduled post, one interval (1/rate, 0.1 s) before the end: 39.9 s after
-  SIGTERM (19.9 s for sanity and F), plus its delivery. Outage recovered and
-  the post latencies below are the measures of catching up (#668).
+  continue until observation ends; the final watermark is the last post,
+  1/rate (0.1 s) before the end: 39.9 s after SIGTERM (19.9 s for sanity and F),
+  plus delivery. #219 used outage recovery and post latencies for catch-up.
+  [Live again](load-restart.md#client-recovery-and-replay-load) (#668) would give
+  catch-up instead of 39.9 / 19.9 s; FullyCaughtUp stays. #219 was not rerun.
 - **Post-to-receipt latency over the whole run** stayed in #216's range: p50
   28–30 ms and p95 44–79 ms at 3,000 streams, 43 / 80 ms at 5,000. Every
   drain completed in under 0.1 s.
@@ -184,8 +185,6 @@ outside the storm; the VM's busy share is of 10 CPUs.
 
 - #667: the generator's memory grows by roughly 2 KB per delivery,
   which limits storms on one machine.
-- #668: the fully-caught-up time measures the last post, not catching
-  up, while posts continue to the end.
 
 ## Reproducing it
 

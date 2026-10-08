@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -78,18 +79,36 @@ func (b acceptanceBrowser) request(t *testing.T, method, path string, form url.V
 	return r
 }
 
-func (b acceptanceBrowser) visit(t *testing.T, method, path string, form url.Values, status int) (*http.Response, string) {
-	t.Helper()
-	response, err := b.client.Do(b.request(t, method, path, form))
-	acceptanceOK(t, err)
-	return response, acceptanceResponse(t, response, status)
+// acceptanceMetadata exposes assertions' inputs without transferring body ownership.
+type acceptanceMetadata struct {
+	StatusCode int
+	Header     http.Header
+	Cookies    []*http.Cookie
+	Request    *http.Request
 }
 
-func acceptanceResponse(t *testing.T, response *http.Response, status int) string {
+func (b acceptanceBrowser) visit(t *testing.T, method, path string, form url.Values, status int) (acceptanceMetadata, string) {
 	t.Helper()
-	defer func() { acceptanceOK(t, response.Body.Close()) }()
-	body, err := io.ReadAll(response.Body)
+	response, body, err := b.send(b.request(t, method, path, form))
 	acceptanceOK(t, err)
+	acceptanceResponse(t, response, body, status)
+	return response, body
+}
+
+// send owns the body even for concurrent requests, whose errors are checked
+// by the test goroutine after receiving the result.
+func (b acceptanceBrowser) send(request *http.Request) (metadata acceptanceMetadata, body string, err error) {
+	response, err := b.client.Do(request)
+	if err != nil {
+		return acceptanceMetadata{}, "", err
+	}
+	defer func() { err = errors.Join(err, response.Body.Close()) }()
+	data, err := io.ReadAll(response.Body)
+	return acceptanceMetadata{response.StatusCode, response.Header, response.Cookies(), response.Request}, string(data), err
+}
+
+func acceptanceResponse(t *testing.T, response acceptanceMetadata, body string, status int) {
+	t.Helper()
 	if response.StatusCode != status {
 		t.Fatalf("%s %s: status %d, want %d; body: %s", response.Request.Method, response.Request.URL.Path, response.StatusCode, status, body)
 	}
@@ -114,7 +133,6 @@ func acceptanceResponse(t *testing.T, response *http.Response, status int) strin
 			t.Fatalf("redirect = %q, want %q", response.Header.Get("Location"), want)
 		}
 	}
-	return string(body)
 }
 
 func acceptanceOK(t *testing.T, err error) {
@@ -133,9 +151,9 @@ func acceptanceCount(t *testing.T, pool *pgxpool.Pool, want int, query string, a
 	}
 }
 
-func acceptanceCookie(t *testing.T, pool *pgxpool.Pool, response *http.Response) *http.Cookie {
+func acceptanceCookie(t *testing.T, pool *pgxpool.Pool, cookies []*http.Cookie) *http.Cookie {
 	t.Helper()
-	for _, cookie := range response.Cookies() {
+	for _, cookie := range cookies {
 		if cookie.Name != middleware.SessionCookie {
 			continue
 		}
@@ -173,7 +191,7 @@ func TestAccountsAcceptance(t *testing.T) {
 		limited.visit(t, "POST", "/setup", wrong, status)
 	}
 	response, _ := owner.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
-	cookie := acceptanceCookie(t, pool, response)
+	cookie := acceptanceCookie(t, pool, response.Cookies)
 	acceptanceCount(t, pool, 1, `SELECT count(*) FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = o.id JOIN account a ON a.id = m.account_id WHERE o.slug = 'owner' AND o.name = 'Private owner' AND a.email = 'owner@example.com' AND a.display_name = 'owner' AND m.role = 'owner' AND m.handle = 'owner'`)
 	owner.visit(t, "GET", "/", nil, 303)
 	response, _ = owner.visit(t, "GET", "/organizations/owner/", nil, 303)
@@ -193,13 +211,13 @@ func TestAccountsAcceptance(t *testing.T) {
 	owner.visit(t, "GET", "/organizations/owner/", nil, 404)
 	owner.visit(t, "GET", "/signin", nil, 200)
 	response, _ = owner.visit(t, "POST", "/signin", acceptanceForm("owner"), 303)
-	acceptanceCookie(t, pool, response)
+	acceptanceCookie(t, pool, response.Cookies)
 	owner.visit(t, "GET", "/organizations/owner/", nil, 303)
 	cross := owner.request(t, "POST", "/signout", nil)
 	cross.Header.Set("Origin", "https://attacker.example")
-	response, err = owner.client.Do(cross)
+	crossResponse, crossBody, err := owner.send(cross)
 	acceptanceOK(t, err)
-	acceptanceResponse(t, response, 403)
+	acceptanceResponse(t, crossResponse, crossBody, 403)
 	owner.visit(t, "GET", "/organizations/owner/", nil, 303)
 	_, err = pool.Exec(t.Context(), "UPDATE session SET created_at = now() - interval '2 days', expires_at = now() - interval '1 day'")
 	acceptanceOK(t, err)
@@ -208,7 +226,7 @@ func TestAccountsAcceptance(t *testing.T) {
 	member := newAcceptanceBrowser(t, server, "192.0.2.3")
 	member.visit(t, "GET", "/signup", nil, 200)
 	response, _ = member.visit(t, "POST", "/signup", acceptanceForm("member"), 303)
-	acceptanceCookie(t, pool, response)
+	acceptanceCookie(t, pool, response.Cookies)
 	acceptanceCount(t, pool, 1, `SELECT count(*) FROM account a JOIN member m ON m.account_id = a.id JOIN setup s ON s.organization_id = m.organization_id WHERE a.email = 'member@example.com' AND m.role = 'member'`)
 	member.visit(t, "GET", "/organizations/owner/", nil, 303)
 	off := newAcceptanceBrowser(t, acceptanceServer(t, pool, "off"), "192.0.2.4")
@@ -264,7 +282,8 @@ func TestSetupAcceptanceRace(t *testing.T) {
 	server := acceptanceServer(t, pool, "on")
 	type result struct {
 		index    int
-		response *http.Response
+		response acceptanceMetadata
+		body     string
 		err      error
 	}
 	results := make(chan result, 10)
@@ -274,8 +293,8 @@ func TestSetupAcceptanceRace(t *testing.T) {
 		request := browser.request(t, "POST", "/setup", acceptanceForm(fmt.Sprintf("racer-%d", i)))
 		go func() {
 			<-start
-			response, err := browser.client.Do(request)
-			results <- result{i, response, err}
+			response, body, err := browser.send(request)
+			results <- result{i, response, body, err}
 		}()
 	}
 	close(start)
@@ -287,10 +306,10 @@ func TestSetupAcceptanceRace(t *testing.T) {
 		if r.response.StatusCode == 303 {
 			status = 303
 			winners++
-			acceptanceCookie(t, pool, r.response)
+			acceptanceCookie(t, pool, r.response.Cookies)
 			acceptanceCount(t, pool, 1, `SELECT count(*) FROM setup s JOIN organization o ON o.id = s.organization_id JOIN member m ON m.organization_id = o.id JOIN account a ON a.id = m.account_id WHERE o.slug = $1 AND a.email = $2 AND m.role = 'owner'`, fmt.Sprintf("racer-%d", r.index), fmt.Sprintf("racer-%d@example.com", r.index))
 		}
-		acceptanceResponse(t, r.response, status)
+		acceptanceResponse(t, r.response, r.body, status)
 	}
 	if winners != 1 {
 		t.Fatalf("setup winners = %d, want 1", winners)
@@ -321,7 +340,7 @@ func TestSessionReplacedAcceptance(t *testing.T) {
 	stale := &http.Cookie{Name: middleware.SessionCookie, Value: base64.RawURLEncoding.EncodeToString(make([]byte, 32)), Path: "/"}
 	browser.client.Jar.SetCookies(u, []*http.Cookie{stale})
 	response, _ := browser.visit(t, "POST", "/setup", acceptanceForm("owner"), 303)
-	t1 := acceptanceCookie(t, pool, response)
+	t1 := acceptanceCookie(t, pool, response.Cookies)
 	browser.visit(t, "GET", "/organizations/owner/", nil, 303)
 
 	// A failed sign-up in the signed-in browser keeps T1.
@@ -331,7 +350,7 @@ func TestSessionReplacedAcceptance(t *testing.T) {
 
 	// Signing up as B in the same browser ends T1; T2 belongs to B.
 	response, _ = browser.visit(t, "POST", "/signup", acceptanceForm("member"), 303)
-	t2 := acceptanceCookie(t, pool, response)
+	t2 := acceptanceCookie(t, pool, response.Cookies)
 	acceptanceSessionCount(t, pool, 0, t1)
 	raw, err := base64.RawURLEncoding.DecodeString(t2.Value)
 	acceptanceOK(t, err)

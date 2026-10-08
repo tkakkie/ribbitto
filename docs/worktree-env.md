@@ -27,6 +27,15 @@ failures and SQL failures without credentials;
 `make check` runs it before tests when DB configuration is set or required.
 `make check-ai-env` tests this tooling.
 
-Capacity measurement and connection settings come in a follow-up pull request
-that closes #636.
+Run `python3 scripts/ai_capacity.py WT1 WT2 PACKAGES PARALLEL` outside the
+sandbox, with this change in both worktrees and `bin/ai-db` built. It reports
+two uncached required-DB checks' exit codes and counts of lines matching
+`53300|too many clients`, sampled peak/initial client backends (including one
+persistent observer connected before checks), server limit, `-p`, `-parallel`
+and pool limits. Each check runs in its own process group, killed on cleanup.
+Output stays in a 0600 `bin/ai-capacity-*.log` in each worktree; logs may contain
+credentials, so do not share them. The report never prints URLs. The runner
+reuses the inherited/default module cache and GOPATH. SQL pools are unbounded
+(0); pgx defaults to max(4, CPUs), unless the admin URL overrides it. Choose
+settings with headroom, then repeat to validate them; settings await these runs.
 

@@ -97,7 +97,7 @@ check: $(TEMPL) db-health
 	$(MAKE) lint
 	$(MAKE) lint-fixtures
 	go build ./...
-	go test -race ./...
+	go test -race $(GO_TEST_FLAGS) ./...
 	$(MAKE) check-ai-env
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck
@@ -187,4 +187,4 @@ seed:
 	@python3 scripts/ai_env.py run go run ./cmd/seed $(ARGS)
 
 check-ai-env: bin/ai-db
-	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'ai_env_test.py'
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'ai_*_test.py'

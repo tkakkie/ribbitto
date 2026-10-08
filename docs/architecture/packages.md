@@ -17,7 +17,7 @@ imports `db/migrations`; the database must already be migrated.
 `cmd/loadgen` is a development-only HTTP client and run-file comparator; it imports no application
 packages. See [load client](load-client.md) for limits and usage.
 `cmd/devdb` is a development-only database helper for worktree configuration
-and health checks. It imports only `internal/platform/postgres` from
+and capacity observation. It imports only `internal/platform/postgres` from
 this module to reuse the migration runner; credentials stay in the environment.
 
 | Package | Responsibility | May import from this module |

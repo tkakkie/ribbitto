@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:18
+    # max_connections awaits the measured two-worktree capacity runs (#636).
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ribbitto-dev-only

@@ -57,7 +57,8 @@ It migrates a separate dev database and allocates app/metrics ports in
 `RIBBITTO_DATABASE_URL`. Start other commands with
 `python3 scripts/ai_env.py run <command>` to use that configuration.
 `make ai-health` checks the shared admin connection without printing credentials.
-`make ai-env-clean` drops only this worktree's dev database and releases its ports.
+`make ai-env-clean` drops this worktree's dev database and releases its ports; it also
+drops the databases and ports of registry entries whose worktrees are gone.
 See [database development](docs/database.md) for configuration overrides.
 The server never migrates on startup.
 

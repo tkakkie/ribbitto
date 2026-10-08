@@ -39,8 +39,9 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 - `make deps` — regenerates `docs/dependencies.md`, the package-import
   edges; commit it with any change that adds or removes one.
 - `make check` also checks documents: every link and `#anchor` to a
-  Markdown file resolves, and each document stays under its size limit (one
-  topic per file). When a file goes over, open an issue to split it, add
+  Markdown file resolves, repository paths in code spans exist, and each
+  document stays under its size limit (one topic per file). When a file
+  goes over, open an issue to split it, add
   `<path> #<issue>` to `docs/size-exceptions.txt`, and split it in a
   separate pull request.
 

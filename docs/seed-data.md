@@ -11,6 +11,8 @@ go run ./cmd/ribbitto migrate up
 go run ./cmd/seed -messages 20000
 ```
 
+For worktree environments, use `make migrate` and `make seed ARGS='-messages 20000'`.
+
 `-messages N` is the positive number of scripted messages **per channel**
 before topic fixtures (default 100). The command creates Paper Lantern
 Studio (`paper-lantern`), five fictional members and four channels including
@@ -25,7 +27,8 @@ notices and durable `messages.moved` events for replay.
 to `rooftop-garden`: 64 extra messages including notices, also with
 `-messages 1`. The original N posts remain in each default topic.
 
-After seeding, run `make dev`, sign in at `http://localhost:8080/` and open
+After seeding, run `make dev`, sign in using `.env.local`'s app port (8080
+without a worktree environment) and open
 `general` to see the notices and topic labels. Select `rooftop-garden`
 from the sidebar to see **Load older** (61 messages; 11 on the older page),
 or `garden-time` for one branched message. Topic URLs are

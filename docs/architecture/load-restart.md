@@ -49,9 +49,13 @@ drain; separate process snapshots have no delta.
 
 After drain, `Restart.Recovery` reports `Reconnected`, `OutageRecovered` and
 `FullyCaughtUp`, each with `P50Seconds`, `P95Seconds`, `MaxSeconds` from SIGTERM
-and `IncompleteStreams`. Quantiles use the nearest rank over completed streams;
-zero samples give zero times. A positive incomplete count means the measurement
-is incomplete, including streams that never re-established. Incomplete setup
+and `IncompleteStreams`. Streams that received a reset are excluded from all
+three times, both their samples and their incomplete-count denominators, and
+from both replay counts; `ResetStreams` reports their number separately.
+Quantiles use the nearest rank over completed streams; zero samples give zero
+times. A positive incomplete count means a non-reset stream was still short
+when the recovery deadline or drain ended, including streams that never
+re-established. Incomplete setup
 omits `Recovery` because no restart ran. These measurements are separate from
 the server's exit time and the ordinary workload verdict.
 
@@ -61,7 +65,7 @@ child's page `RecoveryCursor` at readiness; fully caught up uses the final
 watermark instead. Satisfaction is the earliest completed event at or above the
 target in the retained receipt state, including receipts before SIGTERM.
 An idle current stream or an empty expected interval counts at re-establishment.
-A reset prevents recovery and full catch-up, even if it held the target.
+A reset stream never counts, even if it re-established or held the target.
 `-recover-deadline` requires `-restart-after` (default 30s, >0 through 5m), counts
 from SIGTERM and caps outage recovery; drain completion also caps it. Full
 catch-up and reconnect delays are bounded by drain. Expiring the recovery
@@ -72,7 +76,7 @@ events at or below the recovery cursor, received from the first re-establishment
 through drain. `all_deliveries_after_reconnect` counts all such deliveries,
 including those above the cursor; `Reconnected` gives the reconnect-delay
 distribution. Both include repeated arrivals and deliveries across later
-reconnects, including streams that reset; neither is the comparison's
+reconnects on non-reset streams; neither is the comparison's
 `replayed_duplicates`. The bounded cursor count leaves out backlog committed
 after readiness and before a delayed stream reconnects. #219's report must
 repeat this limitation alongside the total and reconnect-delay distribution.

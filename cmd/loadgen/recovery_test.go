@@ -23,11 +23,11 @@ func TestRecovery(t *testing.T) {
 		reconnect, recovery, full float64
 		through, all              uint64
 	}{
-		{"post-readiness and second reconnect", 7, 8, 9, []time.Time{at(-1), at(2), at(6)}, map[uint64][]time.Time{8: {at(4), at(7)}, 9: {at(8)}}, 0, 9, 5, 2, 4, 8, 2, 3},
+		{"post-readiness and second reconnect", 7, 8, 9, []time.Time{at(-1), at(2), at(6)}, map[uint64][]time.Time{7: {at(1)}, 8: {at(4), at(7)}, 9: {at(8)}}, 0, 9, 5, 2, 4, 8, 2, 3},
 		{"delayed reconnect above cursor", 7, 8, 9, []time.Time{at(-2), at(6)}, map[uint64][]time.Time{8: {at(-1)}, 9: {at(7)}}, 0, 9, 8, 6, 6, 7, 0, 1},
 		{"idle current", 7, 8, 8, []time.Time{at(-2), at(2)}, map[uint64][]time.Time{8: {at(-1)}}, 0, 9, 5, 2, 2, 2, 0, 0},
 		{"empty expected set", 7, 7, 7, []time.Time{at(-1), at(2)}, nil, 0, 9, 5, 2, 2, 2, 0, 0},
-		{"reset", 7, 8, 8, []time.Time{at(-1), at(2)}, map[uint64][]time.Time{8: {at(3)}}, 1, 9, 5, 2, 0, 0, 1, 1},
+		{"reset", 7, 8, 8, []time.Time{at(-1), at(2)}, map[uint64][]time.Time{8: {at(3)}}, 1, 9, 5, 4, 5, 5, 1, 1},
 		{"not reconnected", 7, 7, 7, []time.Time{at(-1)}, nil, 0, 9, 5, 0, 0, 0, 0, 0},
 		{"recovery deadline", 7, 8, 9, []time.Time{at(2)}, map[uint64][]time.Time{9: {at(6)}}, 0, 9, 5, 2, 0, 6, 0, 1},
 		{"drain ends before recovery", 7, 8, 9, []time.Time{at(2)}, map[uint64][]time.Time{9: {at(10)}}, 0, 9, 20, 2, 0, 0, 0, 0},
@@ -38,8 +38,18 @@ func TestRecovery(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := restartResult{SIGTERM: terminated, ReadyAt: at(3), RecoveryCursor: tc.cursor}
 			records := []streamRecord{{EstablishedAt: tc.established, ArrivedAt: tc.arrivals, Reset: tc.reset}}
+			if tc.reset > 0 {
+				records = append(records, streamRecord{EstablishedAt: []time.Time{at(4)}, ArrivedAt: map[uint64][]time.Time{tc.final: {at(5)}}})
+			}
 			r.measureRecovery(records, tc.initial, tc.final, at(tc.drain), time.Duration(tc.deadline)*time.Second)
 			got := r.Recovery
+			resetStreams := 0
+			if tc.reset > 0 {
+				resetStreams = 1
+			}
+			if got.ResetStreams != resetStreams {
+				t.Fatalf("reset streams: %d, want %d", got.ResetStreams, resetStreams)
+			}
 			for _, sample := range []struct {
 				got  recoveryTimes
 				want float64
@@ -56,7 +66,7 @@ func TestRecovery(t *testing.T) {
 				t.Fatalf("deliveries: %+v", got)
 			}
 			encoded, err := json.Marshal(got)
-			if err != nil || !strings.Contains(string(encoded), `"deliveries_through_recovery_cursor_after_reconnect":`) || !strings.Contains(string(encoded), `"all_deliveries_after_reconnect":`) {
+			if err != nil || !strings.Contains(string(encoded), `"ResetStreams":`) || !strings.Contains(string(encoded), `"deliveries_through_recovery_cursor_after_reconnect":`) || !strings.Contains(string(encoded), `"all_deliveries_after_reconnect":`) {
 				t.Fatalf("JSON fields: %s: %v", encoded, err)
 			}
 		})

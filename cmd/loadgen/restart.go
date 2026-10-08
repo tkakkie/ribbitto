@@ -25,6 +25,7 @@ type restartResult struct {
 
 type recoveryResult struct {
 	Reconnected, OutageRecovered, FullyCaughtUp   recoveryTimes
+	ResetStreams                                  int
 	DeliveriesThroughRecoveryCursorAfterReconnect uint64 `json:"deliveries_through_recovery_cursor_after_reconnect"`
 	AllDeliveriesAfterReconnect                   uint64 `json:"all_deliveries_after_reconnect"`
 }
@@ -44,6 +45,10 @@ func (r *restartResult) measureRecovery(records []streamRecord, initial, final u
 	recoveryEnd := minTime(drainEnd, r.SIGTERM.Add(deadline))
 	for i := range records {
 		rec := &records[i]
+		if rec.Reset > 0 {
+			r.Recovery.ResetStreams++
+			continue
+		}
 		var reconnected time.Time
 		for _, at := range rec.EstablishedAt {
 			if at.After(r.SIGTERM) && !at.After(drainEnd) {
@@ -72,9 +77,10 @@ func (r *restartResult) measureRecovery(records []streamRecord, initial, final u
 			caught = append(caught, at.Sub(r.SIGTERM))
 		}
 	}
-	r.Recovery.Reconnected = summarizeRecovery(reconnects, len(records))
-	r.Recovery.OutageRecovered = summarizeRecovery(recovered, len(records))
-	r.Recovery.FullyCaughtUp = summarizeRecovery(caught, len(records))
+	streams := len(records) - r.Recovery.ResetStreams
+	r.Recovery.Reconnected = summarizeRecovery(reconnects, streams)
+	r.Recovery.OutageRecovered = summarizeRecovery(recovered, streams)
+	r.Recovery.FullyCaughtUp = summarizeRecovery(caught, streams)
 }
 
 func (rec *streamRecord) satisfiedAt(initial, target uint64, reconnected time.Time) time.Time {

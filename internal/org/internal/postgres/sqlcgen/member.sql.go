@@ -45,6 +45,17 @@ func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Mem
 	return i, err
 }
 
+const getAccessEpoch = `-- name: GetAccessEpoch :one
+SELECT access_epoch FROM organization WHERE id = $1
+`
+
+func (q *Queries) GetAccessEpoch(ctx context.Context, id pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getAccessEpoch, id)
+	var access_epoch int64
+	err := row.Scan(&access_epoch)
+	return access_epoch, err
+}
+
 const getHomeSlug = `-- name: GetHomeSlug :one
 SELECT o.slug
 FROM setup s
@@ -85,7 +96,7 @@ func (q *Queries) GetMemberByOrganizationAndAccount(ctx context.Context, arg Get
 }
 
 const getMembershipBySlug = `-- name: GetMembershipBySlug :one
-SELECT o.id AS organization_id, o.slug, o.name, m.id AS member_id, m.role, m.handle
+SELECT o.id AS organization_id, o.slug, o.name, o.access_epoch, m.id AS member_id, m.role, m.handle
 FROM organization o
 JOIN member m ON m.organization_id = o.id
 WHERE o.slug = $1 AND m.account_id = $2
@@ -100,6 +111,7 @@ type GetMembershipBySlugRow struct {
 	OrganizationID pgtype.UUID
 	Slug           string
 	Name           string
+	AccessEpoch    int64
 	MemberID       pgtype.UUID
 	Role           string
 	Handle         string
@@ -112,6 +124,7 @@ func (q *Queries) GetMembershipBySlug(ctx context.Context, arg GetMembershipBySl
 		&i.OrganizationID,
 		&i.Slug,
 		&i.Name,
+		&i.AccessEpoch,
 		&i.MemberID,
 		&i.Role,
 		&i.Handle,

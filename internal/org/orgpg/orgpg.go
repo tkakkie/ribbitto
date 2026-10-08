@@ -87,3 +87,8 @@ func NewSignUp(pool *pgxpool.Pool, hasher *identity.Hasher, enabled bool, accoun
 func NewSetup(pool *pgxpool.Pool, hasher *identity.Hasher, token string, accounts org.AccountCreatorIn, events org.EventAppenderIn, channels org.DefaultChannelCreatorIn) *org.Setup {
 	return org.NewSetup(newSetupState(pool), newTxRunner(pool), registrationWriterIn, accounts, events, channels, hasher, token)
 }
+
+// NewCachedAuthorizer shares stream authorization reads for the process lifetime.
+func NewCachedAuthorizer(ctx context.Context, pool *pgxpool.Pool, capacity int) *org.Authorizer {
+	return org.NewCachedAuthorizer(ctx, postgres.NewAuthzStore(pool), capacity)
+}

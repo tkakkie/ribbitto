@@ -3,12 +3,12 @@
 How a stream keeps #262's guarantee without one database query per
 connection per event (#622). **Decided by the maintainer on 2026-10-08:
 option (a2), with its triggers mandatory** ([Decision](#decision)). It is
-not implemented yet: until #669 (the epoch) and #670 (the delivery path)
-land, the rule in [streaming](streaming.md#authorization-and-revocation) (one
-membership query per event) is the current behaviour; #671 then measures it.
-The comparison is kept as the reasoning.
+implemented by #669 (epoch) and #670 (delivery); #671 will measure the new
+cost. Current checks use fresh shared epochs and bounded cached allows,
+reloading memberships independently on misses. Parent cancellation fails
+closed. The comparison preserves the pre-#670 reasoning.
 
-## Today
+## Before #670
 
 - **The check:** `Stream.deliver` (`internal/realtime/stream.go`) filters,
   renders, calls `Authorizer.MayReceive`, then sends.
@@ -41,12 +41,11 @@ For an event E and a connection of account A: if a transaction that removes
 A's access to E commits **before the check for E starts** — before E was
 read, while it waited in a batch, or while its render waited on the
 database — E is not sent and the cursor moves past it. A commit after the
-check can still let that one event through (accepted on #262). Today this
-holds because the check is a `READ COMMITTED` query whose snapshot is taken
+check can still let that one event through (accepted on #262). Before #670, this
+held because the check is a `READ COMMITTED` query whose snapshot is taken
 after the render returns. `TestStreamRechecksAccessBeforeEachSend` and
 `TestStreamDeniesAccessLostWhileRendering`
-(`internal/realtime/stream_test.go`) pin it. Every option must keep them
-unchanged and add a test for each ordering it introduces.
+(`internal/realtime/stream_test.go`) pin it.
 
 ## Options
 
@@ -87,12 +86,14 @@ started, and **an epoch value is never retained**: a stored or TTL-cached
 epoch is stale. `realtime.Cache` gives this rule only with a `keep` that
 rejects every value (`internal/realtime/cache.go`): callers that join a load
 share a private second load started after it, and a caller arriving during
-that one starts another. Sharing comes only from overlap. A post's checks
-mostly overlap, since every interested stream wakes at once, but staggered
-checks (lagging streams, render latency) each read: between one and `N`
-reads per post, roughly the checks' arrival span over a read's duration.
+that one starts another. Shutdown may suppress that second read, so `org`
+rejects results after parent cancellation. Sharing comes only from overlap. A
+post's checks mostly overlap, since every interested stream wakes at once, but
+staggered checks (lagging streams, render latency) each read: between one and
+`N` reads per post, roughly the checks' arrival span over a read's duration.
 - **Ordering:** a revocation committed before the check starts is in the
-  read's snapshot; the epoch differs, so the query runs and denies. A commit
+  read's snapshot; older memberships cannot allow, so a query denies. The
+  installation-wide sequence preserves this across recreation. A commit
   after the read's snapshot can still let the event through: today's window,
   widened by the read's return.
 - **Multi-process:** unchanged; every process reads the durable epoch, so
@@ -134,12 +135,11 @@ cap), and close to `N` in real use, where a member has one or two tabs.
 ## Decision
 
 **(a2), with its triggers mandatory** (maintainer, 2026-10-08, on #622),
-as recommended here. It is the only option that keeps #262's
+implemented by #669 and #670. It is the only option that keeps #262's
 guarantee by the same ordering argument as today (the deciding read starts
 after the render) and can stop the per-post cost following `N`. It also
 covers direct SQL, today's only revocation path, and needs nothing new for
-several processes. (a1) saves the epoch reads but trades away exactly those
-cases. Its gain depends on checks overlapping: if measurements with
+several processes. Its gain depends on checks overlapping: if measurements with
 staggered checks show reads near `N`, (a2) only swaps the membership join
 for a primary-key read, and the choice should be revisited.
 
@@ -149,12 +149,10 @@ for a primary-key read, and the choice should be revisited.
 - **Settled by the implementation issues:** joins do not bump (#669; only
   allows are cached), and a deny keeps today's skip-and-advance (#670; a
   removed member's open stream still queries per skipped event).
-- **Recorded here and in streaming.md;** no settled decision covers the
-  per-event check (decision 23 covers the event log and the hub), so there
-  is no decision record. The implementation issues (#669, #670, #671) are
-  high risk; #669 and #670 are tier A.
+- Recorded here and in streaming.md; decision 23 covers the event log and
+  hub. #669, #670 and #671 are high risk; #669 and #670 are tier A.
 
-### Tests that would prove (a2)
+### Tests that prove (a2)
 
 - **Unchanged:** the `realtime` tests above, #207's register-then-recheck
   and session cancellation.
@@ -166,18 +164,19 @@ for a primary-key read, and the choice should be revisited.
   (nothing is retained).
 - **PostgreSQL:** each trigger bumps the epoch in the writer's transaction,
   and a rolled-back write bumps nothing. A revocation committed while a
-  membership load is in flight (after its read, before the entry is stored;
-  between its reads, were there two) still denies the next event, forced
-  with a gate. With an allowed entry
-  first warmed by a delivered event, a membership deleted by plain SQL while
-  the next render is blocked stops that event.
+  membership load is in flight still denies the next event. Gated streams
+  also cover warmed SQL removal, rename and same-ID/slug recreation.
+  `TestEventStream` checks removal over SSE: the removed member misses the
+  next event while the owner receives it.
+- **Shutdown:** a gated successful epoch read with a waiting joiner fails
+  closed after cancellation; cancelled membership results are never cached.
 
 ## Expected effect
 
 About 15 shared queries per post end to end, plus the epoch reads: a few
 per organisation **when the checks overlap**, up to `N` when they are
-staggered. An access change costs one membership query per cached
-(account, organisation), once. Only measurements can show it.
+staggered. Misses reload independently; denies are never cached. #671 will
+measure the cost.
 
 - **Stream cost:** rerun `TestStreamCost` with `_CACHE=1`, with one member
   and with `_MEMBERS=distinct`, at 1,000 to 5,000 streams and beyond, plus a
@@ -185,6 +184,6 @@ staggered. An access change costs one membership query per cached
   post apart. With overlapping checks, queries per post should stay roughly
   flat instead of `N + 10` and the highest passing step rise above 2,000.
 - **#216's active steps:** queries per post near constant at 7,000 and
-  10,000 (today 7,015 and 10,012); 10,000 should pass with the default pool,
+  10,000 (pre-#670: 7,015 and 10,012); 10,000 should pass with the default pool,
   and the series continues (15,000, 20,000…) to find the next limit, likely
   CPU (the server used about 3.5 CPUs at 10,000) or Caddy.

@@ -119,7 +119,7 @@ func TestStreamCost(t *testing.T) {
 		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](t.Context(), 4096, realtime.DefaultCacheLoads, time.Minute, 10*time.Second, nil, time.Now)
 	}
 	loopReads := &countingReader{inner: inner}
-	stream := realtime.Stream{Hub: hub, Events: loopReads, Authorizer: orgpg.NewAuthorizer(pool), Renderer: renderer}
+	stream := realtime.Stream{Hub: hub, Events: loopReads, Authorizer: orgpg.NewCachedAuthorizer(t.Context(), pool, org.DefaultAuthorizationCapacity), Renderer: renderer}
 
 	t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step; cache %t; distinct members %t",
 		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration, cached, distinct)

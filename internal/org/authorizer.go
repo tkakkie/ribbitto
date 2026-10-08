@@ -20,13 +20,18 @@ var ErrNotFound = errors.New("not found")
 type Membership struct {
 	Organization Organization
 	Member       Member
+	// AccessEpoch is read in the same statement as the membership.
+	AccessEpoch int64
 }
 
 // MembershipStore looks memberships up. Every query is scoped to one organisation.
 type MembershipStore interface {
 	// Membership returns the account's membership in the organisation with
-	// this slug, or ErrNotFound.
+	// this slug, with its epoch from the same statement, or ErrNotFound.
 	Membership(ctx context.Context, accountID kernel.ID, slug string) (Membership, error)
+	// AccessEpoch starts a fresh statement snapshot for the organisation
+	// and returns its epoch, or ErrNotFound.
+	AccessEpoch(ctx context.Context, organizationID kernel.ID) (int64, error)
 	// HomeSlug returns the slug of the organisation created at setup if the
 	// account is its member, or ErrNotFound.
 	HomeSlug(ctx context.Context, accountID kernel.ID) (string, error)
@@ -34,12 +39,14 @@ type MembershipStore interface {
 
 // Authorizer resolves the caller's membership.
 type Authorizer struct {
-	store MembershipStore
+	store  MembershipStore
+	stream *streamAuthorization
 }
 
-// NewAuthorizer returns an Authorizer backed by store.
+// NewAuthorizer returns an Authorizer with default capacity and a background
+// lifetime. Process wiring uses NewCachedAuthorizer to cancel shared reads.
 func NewAuthorizer(store MembershipStore) *Authorizer {
-	return &Authorizer{store: store}
+	return NewCachedAuthorizer(context.Background(), store, DefaultAuthorizationCapacity)
 }
 
 // Member returns the membership of the signed-in account (nil when signed
@@ -74,13 +81,13 @@ func (a *Authorizer) HomeSlug(ctx context.Context, account *identity.Account) (s
 }
 
 // MayReceive reports whether the account may still receive a durable event,
-// checked again immediately before a stream sends it. It satisfies
-// realtime.Authorizer. A lost membership, an event of
+// checked against a fresh access epoch immediately before a stream sends it.
+// It satisfies realtime.Authorizer. A lost membership, an event of
 // another organisation, or an audience that names another member is a deny
 // (false, nil). A failed lookup is an error, never a deny: the stream must
 // stop and retry, not skip an event the member may be allowed to see.
 func (a *Authorizer) MayReceive(ctx context.Context, accountID kernel.ID, organizationSlug string, event realtime.Event) (bool, error) {
-	m, err := a.Member(ctx, &identity.Account{ID: accountID}, organizationSlug)
+	m, err := a.streamMembership(ctx, accountID, organizationSlug, event.OrganizationID)
 	if errors.Is(err, ErrNotFound) {
 		return false, nil
 	}

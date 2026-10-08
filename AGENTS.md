@@ -89,7 +89,8 @@ only the token utilities, never raw colours; checked by `tools/sourcecheck`), [`
   duplication, no global state, pass `context.Context`, wrap errors with
   `fmt.Errorf("doing x: %w", err)`.
 - Every package under `internal/` has a `doc.go` stating its
-  responsibility. Command packages (`cmd/...`) use the package comment in
+  responsibility; module roots keep owned tables, event kinds and reasons,
+  not API lists. Command packages (`cmd/...`) use the package comment in
   their main file instead; do not add empty `doc.go` files. Exported
   identifiers have doc comments.
 - Comments explain **why**, not what. Record the reason for a non-obvious

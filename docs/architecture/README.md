@@ -27,9 +27,10 @@ Read the file for the area you change:
 | [`realtime.md`](realtime.md) | the durable event log: payloads, routing, replay boundary and retention |
 | [`streaming.md`](streaming.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
-| [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream cap, shutdown, HTTP/2 |
+| [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream caps, shutdown, HTTP/2 |
 | [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
+| [`stream-authorization.md`](stream-authorization.md) | proposal (#622): keeping deliveries authorized without a query per stream per event |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |

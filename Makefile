@@ -94,9 +94,10 @@ check: $(TEMPL)
 	go test -race ./...
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
-	go -C tools vet ./docscheck
-	go -C tools test -race ./docscheck
+	go -C tools vet ./...
+	go -C tools test -race ./...
 	go -C tools run ./docscheck ..
+	go -C tools run ./sourcecheck ..
 	bash scripts/ai/launcher-tests_test.sh
 	bash scripts/ai/launcher-tests.sh --base "$$LAUNCHER_TESTS_BASE"
 
@@ -112,7 +113,10 @@ vuln:
 # The lint fixtures (internal/lintfixture, built only with the lintfixture
 # tag) prove that depguard rejects a module root importing pgxbridge and
 # accepts a store doing so, and staticcheck rejects ignored results even in
-# generated templates; plain lint never sees them.
+# generated templates, bodyclose rejects unclosed HTTP response bodies, and
+# sqlclosecheck rejects unused, unclosed pgx rows; plain lint never sees them.
+# Any other rows use satisfies sqlclosecheck: keep defer rows.Close(); lint
+# does not catch a missing Close once rows are used.
 lint-fixtures: $(GOLANGCI_LINT)
 	@set -eu; status=0; \
 	out=$$($(GOLANGCI_LINT) run --build-tags lintfixture ./internal/lintfixture/... 2>&1) || status=$$?; \
@@ -126,7 +130,13 @@ lint-fixtures: $(GOLANGCI_LINT)
 		if ! printf '%s\n' "$$out" | grep -F "lintfixture/$$file:" | grep -q 'SA4017:.*TrimSpace'; then \
 			echo "lint-fixtures: staticcheck must reject an ignored result in $$file"; printf '%s\n' "$$out"; exit 1; \
 		fi; \
-	done
+	done; \
+	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/bodyclose.go:' | grep -q 'response body must be closed.*(bodyclose)'; then \
+		echo "lint-fixtures: bodyclose must reject an unclosed HTTP response body"; printf '%s\n' "$$out"; exit 1; \
+	fi; \
+	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/sqlclosecheck.go:' | grep -Fq 'Rows/Stmt/NamedStmt was not closed (sqlclosecheck)'; then \
+		echo "lint-fixtures: sqlclosecheck must reject unused, unclosed pgx rows"; printf '%s\n' "$$out"; exit 1; \
+	fi
 
 lint: $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run ./...

@@ -8,7 +8,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from urllib.parse import parse_qs, urlsplit
 import ai_env
 
 
@@ -76,10 +75,11 @@ def stop_group(worker):
     worker.wait()
 
 def measure(roots, packages, parallel):
-    settings = parse_qs(urlsplit(os.environ["RIBBITTO_TEST_DATABASE_URL"]).query)
     cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
     report = dict(packages=packages, parallel=parallel, count=1, require_db=1,
-                  pgx_pool_max_conns=int(settings.get("pool_max_conns", [max(4, cpus)])[0]),
+                  # pgtest's admin connection is plain pgx, which would send a
+                  # pool_max_conns URL key to the server, so pools keep pgx's default.
+                  pgx_pool_max_conns=max(4, cpus),
                   migration_pool_max_open=0, admin_connections_per_pgtest_call=1)
     workers, outputs, stopped = [], [], set()
 
@@ -106,12 +106,16 @@ def measure(roots, packages, parallel):
                 workers.append(subprocess.Popen(["make", "check", f"GO_TEST_FLAGS=-count=1 -p {packages} -parallel {parallel}"],
                                                 cwd=root, env=environment, stdout=output,
                                                 stderr=subprocess.STDOUT, start_new_session=True))
-        while any(worker.poll() is None for worker in workers):
-            # Clean up a finished check at once, not when the slower one ends:
+        while True:
+            # Poll every check (any() would stop at the first running one) and
+            # clean up a finished check at once, not when the slower one ends:
             # its session's PID stays reserved only while members remain.
+            running = [worker for worker in workers if worker.poll() is None]
             for worker in workers:
                 if worker.returncode is not None:
                     stop_once(worker)
+            if not running:
+                break
             if observer.poll() is not None:
                 raise RuntimeError("capacity observer failed")
             time.sleep(0.1)

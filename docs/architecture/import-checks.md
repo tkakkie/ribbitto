@@ -45,6 +45,10 @@ SQL/manifest shapes and stale read exemptions, including inside CTEs and subquer
 Only the query functions `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower` are
 accepted: other function bodies can hide table access. Tools tests run uncached
 because Go does not track these inputs outside the tools module.
+Query operators are limited to unqualified `=`, `<`, `>`, `<=` and `+`, and cast
+types to unqualified `uuid`, `bigint` and `jsonb`, as used by production queries.
+Migration DO blocks fail; function and procedure bodies containing dynamic SQL
+(`EXECUTE`) or table creation, rename or drop also fail.
 
 Staticcheck also runs on generated code, including templ output; the
 `_templ.go` exclusions apply only to errcheck and revive. `make lint-fixtures`

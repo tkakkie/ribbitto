@@ -121,6 +121,16 @@ func checkSQL(sql, module, query string, owners map[string]string, allow map[exe
 	if len(tree.Stmts) != 1 {
 		return fmt.Errorf("expected one statement")
 	}
+	scan, err := pgquery.Scan(sql)
+	if err != nil {
+		return err
+	}
+	bigints := map[float64]bool{}
+	for _, token := range scan.Tokens {
+		if token.Token == pgquery.Token_BIGINT {
+			bigints[float64(token.Start)] = true
+		}
+	}
 	access := func(table string, write bool) error {
 		owner := owners[table]
 		if owner == "" {
@@ -209,7 +219,37 @@ func checkSQL(sql, module, query string, owners map[string]string, allow map[exe
 						if n["lockedRels"] != nil {
 							return fmt.Errorf("unsupported FOR UPDATE OF (relation or alias)")
 						}
-					case "ResTarget", "ColumnRef", "A_Star", "A_Const", "String", "Integer", "ParamRef", "A_Expr", "BoolExpr", "NullTest", "SubLink", "RangeSubselect", "JoinExpr", "Alias", "TypeCast", "TypeName", "SortBy", "List", "CoalesceExpr", "MinMaxExpr", "OnConflictClause", "InferClause", "IndexElem":
+					case "A_Expr":
+						parts := n["name"].([]any)
+						if len(parts) != 1 {
+							return fmt.Errorf("unsupported qualified operator")
+						}
+						name := parts[0].(map[string]any)["String"].(map[string]any)["sval"].(string)
+						// These are the only operators used in db/queries; others can
+						// invoke user-defined functions with hidden table access.
+						switch name {
+						case "=", "<", ">", "<=", "+":
+						default:
+							return fmt.Errorf("unsupported operator %s", name)
+						}
+					case "TypeCast":
+						// Embedded type records have no node tag for the walker.
+						n = n["typeName"].(map[string]any)
+						fallthrough
+					case "TypeName":
+						parts := n["names"].([]any)
+						name := parts[0].(map[string]any)["String"].(map[string]any)["sval"].(string)
+						// db/queries casts only to uuid, jsonb and bigint (plus uuid[]).
+						// The parser rewrites BIGINT to pg_catalog.int8, so require
+						// the original keyword token to distinguish explicit qualification.
+						builtin := len(parts) == 1 && (name == "uuid" || name == "jsonb")
+						if len(parts) == 2 && name == "pg_catalog" && parts[1].(map[string]any)["String"].(map[string]any)["sval"] == "int8" && bigints[n["location"].(float64)] {
+							builtin = true
+						}
+						if !builtin {
+							return fmt.Errorf("unsupported type %s", name)
+						}
+					case "ResTarget", "ColumnRef", "A_Star", "A_Const", "String", "Integer", "ParamRef", "BoolExpr", "NullTest", "SubLink", "RangeSubselect", "JoinExpr", "Alias", "SortBy", "List", "CoalesceExpr", "MinMaxExpr", "OnConflictClause", "InferClause", "IndexElem":
 					default:
 						return fmt.Errorf("unsupported SQL node %s", tag)
 					}
@@ -339,6 +379,29 @@ func checkMigrations(migrations []string, owners map[string]string) error {
 		}
 		for _, raw := range tree.Stmts {
 			n := raw.Stmt
+			if n.GetDoStmt() != nil {
+				return fmt.Errorf("unsupported migration DO block")
+			}
+			if fn := n.GetCreateFunctionStmt(); fn != nil {
+				for _, option := range fn.Options {
+					if def := option.GetDefElem(); def.GetDefname() == "as" {
+						for _, body := range def.Arg.GetList().GetItems() {
+							if err := checkMigrationBody(body.GetString_().GetSval()); err != nil {
+								return err
+							}
+						}
+					}
+				}
+				if fn.SqlBody != nil {
+					end := len(up)
+					if raw.StmtLen != 0 {
+						end = int(raw.StmtLocation + raw.StmtLen)
+					}
+					if err := checkMigrationBody(up[raw.StmtLocation:end]); err != nil {
+						return err
+					}
+				}
+			}
 			if n.GetDropStmt().GetRemoveType() == pgquery.ObjectType_OBJECT_TABLE || n.GetRenameStmt().GetRenameType() == pgquery.ObjectType_OBJECT_TABLE || n.GetCreateTableAsStmt() != nil {
 				return fmt.Errorf("unsupported migration table drop, rename or CREATE AS")
 			}
@@ -360,6 +423,30 @@ func checkMigrations(migrations []string, owners map[string]string) error {
 		if !tables[table] {
 			return fmt.Errorf("owned table not created by migrations: %s", table)
 		}
+	}
+	return nil
+}
+
+func checkMigrationBody(body string) error {
+	// Routine bodies are opaque to the migration AST (including procedures).
+	// Scan decoded AS strings and inline SQL bodies, ignoring actual comments
+	// so CREATE/**/TABLE cannot evade the conservative text check.
+	scan, err := pgquery.Scan(body)
+	if err != nil {
+		return fmt.Errorf("unsupported migration routine body: %w", err)
+	}
+	words := []string{}
+	for _, token := range scan.Tokens {
+		if token.Token == pgquery.Token_DO {
+			return fmt.Errorf("unsupported migration DO block")
+		}
+		if token.Token != pgquery.Token_SQL_COMMENT && token.Token != pgquery.Token_C_COMMENT {
+			words = append(words, body[token.Start:token.End])
+		}
+	}
+	unsafe := regexp.MustCompile(`(?is)\bexecute\b|\bcreate\s+(?:(?:global|local)\s+)?(?:(?:temp|temporary|unlogged)\s+)?table\b|\balter\s+table\b.*\brename\b|\bdrop\s+table\b`)
+	if unsafe.MatchString(strings.Join(words, " ")) {
+		return fmt.Errorf("unsupported migration routine dynamic SQL or table DDL")
 	}
 	return nil
 }

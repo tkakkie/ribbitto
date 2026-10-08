@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"syscall"
 	"time"
@@ -18,7 +19,99 @@ type restartResult struct {
 	ExitSeconds, ReadySeconds    float64
 	ExitOverrun, IncompleteSetup bool
 	Error                        string
-	Old, New                     *snapshot `json:",omitempty"`
+	Old, New                     *snapshot       `json:",omitempty"`
+	Recovery                     *recoveryResult `json:",omitempty"`
+}
+
+type recoveryResult struct {
+	Reconnected, OutageRecovered, FullyCaughtUp   recoveryTimes
+	DeliveriesThroughRecoveryCursorAfterReconnect uint64 `json:"deliveries_through_recovery_cursor_after_reconnect"`
+	AllDeliveriesAfterReconnect                   uint64 `json:"all_deliveries_after_reconnect"`
+}
+
+type recoveryTimes struct {
+	P50Seconds, P95Seconds, MaxSeconds float64
+	IncompleteStreams                  int
+}
+
+// The caller holds counts.mu at drain completion, before later worker updates.
+func (r *restartResult) measureRecovery(records []streamRecord, initial, final uint64, drainEnd time.Time, deadline time.Duration) {
+	if r.IncompleteSetup || r.SIGTERM.IsZero() {
+		return
+	}
+	r.Recovery = &recoveryResult{}
+	var reconnects, recovered, caught []time.Duration
+	recoveryEnd := minTime(drainEnd, r.SIGTERM.Add(deadline))
+	for i := range records {
+		rec := &records[i]
+		var reconnected time.Time
+		for _, at := range rec.EstablishedAt {
+			if at.After(r.SIGTERM) && !at.After(drainEnd) {
+				reconnected = minTime(reconnected, at)
+			}
+		}
+		if reconnected.IsZero() {
+			continue
+		}
+		reconnects = append(reconnects, reconnected.Sub(r.SIGTERM))
+		for seq, arrivals := range rec.ArrivedAt {
+			for _, at := range arrivals {
+				if at.Before(reconnected) || at.After(drainEnd) {
+					continue
+				}
+				r.Recovery.AllDeliveriesAfterReconnect++
+				if seq <= r.RecoveryCursor {
+					r.Recovery.DeliveriesThroughRecoveryCursorAfterReconnect++
+				}
+			}
+		}
+		if at := rec.satisfiedAt(initial, r.RecoveryCursor, reconnected); !at.IsZero() && !at.After(recoveryEnd) {
+			recovered = append(recovered, at.Sub(r.SIGTERM))
+		}
+		if at := rec.satisfiedAt(initial, final, reconnected); !at.IsZero() && !at.After(drainEnd) {
+			caught = append(caught, at.Sub(r.SIGTERM))
+		}
+	}
+	r.Recovery.Reconnected = summarizeRecovery(reconnects, len(records))
+	r.Recovery.OutageRecovered = summarizeRecovery(recovered, len(records))
+	r.Recovery.FullyCaughtUp = summarizeRecovery(caught, len(records))
+}
+
+func (rec *streamRecord) satisfiedAt(initial, target uint64, reconnected time.Time) time.Time {
+	if rec.Reset > 0 {
+		return time.Time{}
+	}
+	if target <= initial {
+		return reconnected
+	}
+	var satisfied time.Time
+	for seq, arrivals := range rec.ArrivedAt {
+		if seq >= target {
+			for _, at := range arrivals {
+				satisfied = minTime(satisfied, at)
+			}
+		}
+	}
+	if satisfied.IsZero() || satisfied.After(reconnected) {
+		return satisfied
+	}
+	return reconnected
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.IsZero() || b.Before(a) {
+		return b
+	}
+	return a
+}
+
+func summarizeRecovery(samples []time.Duration, streams int) recoveryTimes {
+	r := recoveryTimes{IncompleteStreams: streams - len(samples)}
+	sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
+	if n := len(samples); n > 0 {
+		r.P50Seconds, r.P95Seconds, r.MaxSeconds = samples[(n*50+99)/100-1].Seconds(), samples[(n*95+99)/100-1].Seconds(), samples[n-1].Seconds()
+	}
+	return r
 }
 
 type childServer struct {

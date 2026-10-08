@@ -1,7 +1,9 @@
 services:
   postgres:
     image: postgres:18
-    # max_connections awaits the measured two-worktree capacity runs (#636).
+    # Two uncached required-DB `make check` runs at -p 2 peaked at 49 client
+    # backends (#636), so 100 leaves about twice that: at most two at once.
+    command: ["postgres", "-c", "max_connections=100"]
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ribbitto-dev-only

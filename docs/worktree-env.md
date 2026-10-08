@@ -36,6 +36,12 @@ and pool limits. Each check runs in its own process group, killed on cleanup.
 Output stays in a 0600 `bin/ai-capacity-*.log` in each worktree; logs may contain
 credentials, so do not share them. The report never prints URLs. The runner
 reuses the inherited/default module cache and GOPATH. SQL pools are unbounded
-(0); pgx defaults to max(4, CPUs), unless the admin URL overrides it. Choose
-settings with headroom, then repeat to validate them; settings await these runs.
+(0); pgx defaults to max(4, CPUs), unless the admin URL overrides it.
+
+Measured on 2026-10-09 (10 CPUs, pgx pools of 10): two uncached required-DB
+`make check` runs at `-p 2` and the default `-parallel` (10) both passed,
+peaking at 49 client backends of `max_connections` 100, with no 53300. The
+shared server therefore keeps `max_connections=100` (`compose.yml`): run at most
+two `make check` at once, at `-p 2`. A second run at that setting confirmed it
+(peak 38, no 53300).
 

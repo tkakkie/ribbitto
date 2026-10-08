@@ -42,7 +42,8 @@ sequenceDiagram
   only raises the value, and `Wait(ctx, org, after)` returns the value
   once it is above `after`, or `context.Cause(ctx)`. It is also the connection
   registry: `Register(parent, connection, limit)` refuses atomically once
-  the account holds `limit` connections. Otherwise it returns a context
+  the process reaches its configured cap or the account holds `limit`
+  connections. Otherwise it returns a context
   derived from the request's context, which `CancelAccount` or
   `CancelSession` can end, and an `unregister` the handler defers. Only `unregister` frees the slot;
   `context.Cause` tells why a connection ended.

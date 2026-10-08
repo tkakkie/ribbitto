@@ -32,6 +32,17 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   the stream without moving the cursor. Presence (M4) will wait about 30 s
   after a disconnect before showing a member as offline, so a reload does
   not flicker.
+- The hub caps streams across all accounts and organisations in the process
+  at `DefaultMaxStreams` (5,000; #623). `cmd/ribbitto` reads
+  `RIBBITTO_MAX_STREAMS`: unset keeps that default; an explicit value must
+  be a positive integer. Empty, zero, negative, unparsable and overflowing
+  values fail at start. The default leaves headroom below #216's active
+  ceiling: 7,000 passed and 10,000 failed at 10 posts/s (maintainer,
+  2026-10-07). Smaller machines may set it lower; it can be re-evaluated
+  if the measured ceiling rises. The hub checks both caps under its
+  registration lock, refusing an excess stream with 429 before registration
+  or any SSE header, without taking an account slot. Only unregistering
+  frees a slot; cancellation alone still counts.
 - An account holds at most `DefaultMaxStreamsPerAccount` (16) streams,
   counted atomically by the hub's registration (#157, #207). One more is
   refused with 429 before it starts, rather than closing the oldest, which

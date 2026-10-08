@@ -223,6 +223,37 @@ func TestSlotHeldUntilUnregister(t *testing.T) {
 	again()
 }
 
+func TestRegisterProcessCap(t *testing.T) {
+	h := NewHubWithMaxStreams(1)
+	first := Connection{Organization: orgA, Account: account1, Session: session1}
+	ctx, unregister, err := h.Register(t.Context(), first, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unregister()
+	// Cancellation alone must not release either slot.
+	h.CancelSession(session1)
+	<-ctx.Done()
+	other := Connection{Organization: orgB, Account: account2, Session: session2}
+	ctx, cleanup, err := h.Register(t.Context(), other, 1)
+	if !errors.Is(err, ErrTooManyConnections) || ctx != nil || cleanup != nil {
+		t.Fatalf("over process cap: context %v, cleanup present %t, error %v", ctx, cleanup != nil, err)
+	}
+	if len(h.byAccount[account2])+len(h.bySession[session2])+len(h.byOrg[orgB]) != 0 || h.Connections() != 1 {
+		t.Fatal("refusal changed the registry or took an account slot")
+	}
+	unregister()
+	unregister() // A repeated cleanup must not release a second process slot.
+	_, cleanup, err = h.Register(t.Context(), other, 1)
+	if err != nil {
+		t.Fatalf("reusing freed slot: %v", err)
+	}
+	defer cleanup()
+	if _, _, err := h.Register(t.Context(), first, 2); !errors.Is(err, ErrTooManyConnections) {
+		t.Fatalf("process cap after reusing slot: %v", err)
+	}
+}
+
 func TestUnregisterIsIdempotent(t *testing.T) {
 	h := NewHub()
 	ctx, unregister, err := h.Register(t.Context(), Connection{Organization: orgA, Account: account1, Session: session1}, 1)
@@ -250,17 +281,24 @@ func TestUnregisterIsIdempotent(t *testing.T) {
 
 func TestRegisterLimitUnderConcurrency(t *testing.T) {
 	tests := []struct {
-		name     string
-		limit    int
-		attempts int
+		name               string
+		processCap, limit  int
+		accounts, attempts int
 	}{
-		{name: "limit reached", limit: 5, attempts: 64},
-		{name: "limit not reached", limit: 64, attempts: 10},
-		{name: "limit below one", limit: 0, attempts: 3},
+		{name: "limit reached", processCap: 100, limit: 5, accounts: 1, attempts: 64},
+		{name: "limit not reached", processCap: 100, limit: 64, accounts: 1, attempts: 10},
+		{name: "limit below one", processCap: 100, limit: 0, accounts: 1, attempts: 3},
+		{name: "process cap", processCap: 7, limit: 64, accounts: 2, attempts: 64},
+		{name: "both caps", processCap: 7, limit: 5, accounts: 2, attempts: 64},
+		{name: "account caps below process cap", processCap: 20, limit: 5, accounts: 2, attempts: 64},
+		{name: "default process cap", processCap: DefaultMaxStreams, limit: 6000, accounts: 1, attempts: 5001},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewHub()
+			h := NewHubWithMaxStreams(tt.processCap)
+			if tt.processCap == DefaultMaxStreams {
+				h = NewHub()
+			}
 			var (
 				mu          sync.Mutex
 				unregisters []func()
@@ -268,16 +306,17 @@ func TestRegisterLimitUnderConcurrency(t *testing.T) {
 				wg          sync.WaitGroup
 			)
 			start := make(chan struct{})
-			for range tt.attempts {
+			for i := range tt.attempts {
 				wg.Go(func() {
 					<-start
-					_, unregister, err := h.Register(t.Context(), Connection{Organization: orgA, Account: account1, Session: session1}, tt.limit)
+					account := kernel.ID{byte(i%tt.accounts + 1)}
+					ctx, unregister, err := h.Register(t.Context(), Connection{Organization: kernel.ID{byte(i%tt.accounts + 10)}, Account: account, Session: kernel.ID{byte(i)}}, tt.limit)
 					mu.Lock()
 					defer mu.Unlock()
 					switch {
 					case errors.Is(err, ErrTooManyConnections):
-						if unregister != nil {
-							t.Error("refused Register returned an unregister function")
+						if ctx != nil || unregister != nil {
+							t.Error("refused Register returned a context or unregister function")
 						}
 						refused++
 					case err != nil:
@@ -289,20 +328,58 @@ func TestRegisterLimitUnderConcurrency(t *testing.T) {
 			}
 			close(start)
 			wg.Wait()
-			want := min(max(tt.limit, 0), tt.attempts)
+			want := min(tt.processCap, max(tt.limit, 0)*tt.accounts, tt.attempts)
 			if len(unregisters) != want || refused != tt.attempts-want {
 				t.Fatalf("registered %d and refused %d, want %d and %d", len(unregisters), refused, want, tt.attempts-want)
+			}
+			if n := h.Connections(); n != want {
+				t.Fatalf("Connections() = %d, want %d", n, want)
+			}
+			registered := 0
+			for _, set := range h.byAccount {
+				if len(set) > tt.limit {
+					t.Fatalf("account holds %d streams, limit %d", len(set), tt.limit)
+				}
+				registered += len(set)
+			}
+			if registered != want {
+				t.Fatalf("registry holds %d streams, want %d", registered, want)
 			}
 			for _, unregister := range unregisters {
 				unregister()
 			}
-			// Another account has its own count.
+			if n := h.Connections(); n != 0 {
+				t.Fatalf("Connections() after unregister = %d, want 0", n)
+			}
+			// Both the process and account slots can be reused.
 			if _, unregister, err := h.Register(t.Context(), Connection{Organization: orgA, Account: account2, Session: session2}, max(tt.limit, 1)); err != nil {
 				t.Fatalf("Register for another account = %v", err)
 			} else {
 				unregister()
 			}
 		})
+	}
+}
+
+func TestRegisterAndUnregisterUnderConcurrency(t *testing.T) {
+	h := NewHubWithMaxStreams(4)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := range 64 {
+		wg.Go(func() {
+			<-start
+			_, unregister, err := h.Register(t.Context(), Connection{Organization: orgA, Account: kernel.ID{byte(i + 1)}, Session: kernel.ID{byte(i + 1)}}, 1)
+			if err == nil {
+				unregister()
+			} else if !errors.Is(err, ErrTooManyConnections) {
+				t.Errorf("Register = %v", err)
+			}
+		})
+	}
+	close(start)
+	wg.Wait()
+	if n := h.Connections(); n != 0 {
+		t.Fatalf("Connections() after unregister = %d, want 0", n)
 	}
 }
 

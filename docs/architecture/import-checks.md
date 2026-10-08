@@ -45,6 +45,19 @@ For components that use neither `ctx` nor children, add `{{ _ = ctx }}` to avoid
 SA4006 on templ's unused `ClearChildren` result, because golangci-lint ignores
 templ's `//lint:file-ignore SA4006` directive.
 
+Bodyclose requires HTTP response bodies to be closed, including in tests.
+Acceptance helpers read and close ordinary responses before returning status,
+request metadata, headers, cookies and body text; callers never own an open body.
+`make lint-fixtures` proves an unclosed response is rejected.
+
+`sqlclosecheck` runs without exclusions and rejects SQL/pgx rows and statements
+that are neither closed nor used. Any other use of the rows, such as
+`rows.Next()` or `rows.Err()`, satisfies it: lint does not catch a missing
+Close once rows are used, including an early return from a scan loop. Keep
+`defer rows.Close()` right after the query's error check. `make lint-fixtures`
+proves it rejects unused, unclosed pgx rows; disabling the linter fails that
+assertion.
+
 Nilerr runs with no exclusions and rejects returning a nil error after
 checking that an error is non-nil, unless the block uses the error (for
 example, `log.Print(err); return nil` counts as handling it). It also reports

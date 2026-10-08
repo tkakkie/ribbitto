@@ -128,12 +128,11 @@ generated files.
 `make check` runs tools tests uncached (`go -C tools test -race -count=1 ./...`).
 Both use [`tools/internal/sqlwalk`](../tools/internal/sqlwalk/doc.go) for
 `module.QueryName` query loading, unnamed SQL and duplicate rejection, `pg_query_go`
-JSON parsing, nodes and statement/CTE/subquery traversal. Policies accept/refuse nodes. Writes always target physical tables. Scopecheck collects CTE names and checks WITH before INSERT; tablecheck uses sequential, lexical CTE
-visibility with isolated nested scopes. Shared reason validation rejects pending
-approval and requires issue, PR-comment or numbered decision provenance for
-maintainer claims (not approval verification). Options preserve scopecheck's
-colon-terminated marker and issue-comment syntax; tablecheck also rejects bare
-markers and accepts review comments. The parser needs cgo and a C compiler.
+JSON parsing and statement/CTE/subquery traversal. Organisation scope and table
+ownership policies stay in their respective checkers. Shared reason validation
+rejects pending approval and requires issue, PR-comment or numbered decision
+provenance for maintainer claims (not approval verification). The parser needs
+cgo and a C compiler (Xcode locally, GCC on CI).
 
 Scopecheck requires each owned table's own WHERE scope in SELECT, UPDATE and DELETE,
 including CTE bodies; joins never carry scope. UPDATE may not assign the scope

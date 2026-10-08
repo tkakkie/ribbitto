@@ -13,10 +13,14 @@ type Scope struct {
 	Level int
 }
 
-// Physical distinguishes physical tables from unqualified CTE reads. Write
-// targets are always physical, even when a visible CTE has the same name.
-func (s Scope) Physical(relation map[string]any, write bool) bool {
-	return write || relation["schemaname"] != nil || relation["catalogname"] != nil || !s.CTEs[fmt.Sprint(relation["relname"])]
+// Physical distinguishes physical or unknown relations from unqualified CTE reads.
+// Missing names must not match a CTE through a formatted placeholder.
+func (s Scope) Physical(relation map[string]any) bool {
+	name, ok := relation["relname"].(string)
+	if !ok {
+		return true
+	}
+	return relation["schemaname"] != nil || relation["catalogname"] != nil || !s.CTEs[name]
 }
 
 // Options selects traversal semantics; all acceptance and refusal is in Visit.
@@ -91,7 +95,7 @@ func Walk(value any, scope Scope, options Options) error {
 				delete(n, "relation")
 				child = n
 			}
-			if kind == "RangeVar" && options.Relation != nil && current.Physical(n, false) {
+			if kind == "RangeVar" && options.Relation != nil && current.Physical(n) {
 				if err := options.Relation(n, false, current); err != nil {
 					return err
 				}

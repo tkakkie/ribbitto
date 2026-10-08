@@ -70,6 +70,31 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+func TestPhysical(t *testing.T) {
+	scope := Scope{CTEs: map[string]bool{"<nil>": true, "7": true, "cte": true}}
+	for _, tc := range []struct {
+		name     string
+		relation map[string]any
+		want     bool
+	}{
+		{"nil relation", nil, true},
+		{"missing name", map[string]any{}, true},
+		{"nil name", map[string]any{"relname": nil}, true},
+		{"non-string name", map[string]any{"relname": 7}, true},
+		{"quoted placeholder CTE", map[string]any{"relname": "<nil>"}, false},
+		{"CTE read", map[string]any{"relname": "cte"}, false},
+		{"physical read", map[string]any{"relname": "member"}, true},
+		{"schema-qualified CTE name", map[string]any{"relname": "cte", "schemaname": "public"}, true},
+		{"catalog-qualified CTE name", map[string]any{"relname": "cte", "catalogname": "database"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := scope.Physical(tc.relation); got != tc.want {
+				t.Fatalf("Physical(%v) = %v, want %v", tc.relation, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestLexicalWalk(t *testing.T) {
 	for _, tc := range []struct {
 		name, sql     string

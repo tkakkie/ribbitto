@@ -127,7 +127,7 @@ func checkStatement(tree any, tables map[string]string) error {
 			r := sqlwalk.Node(v, "RangeVar")
 			table, _ := r["relname"].(string)
 			column, known := tables[table]
-			known = known || !(sqlwalk.Scope{CTEs: ctes}).Physical(r, false)
+			known = known || !(sqlwalk.Scope{CTEs: ctes}).Physical(r)
 			if !known || r["schemaname"] != nil || r["catalogname"] != nil {
 				return fmt.Errorf("unsupported shape: relation %q", table)
 			}
@@ -175,7 +175,7 @@ func insertCTESelect(s map[string]any, ctes map[string]bool) error {
 	for _, ref := range fromClause {
 		r := sqlwalk.Node(ref, "RangeVar")
 		table, _ := r["relname"].(string)
-		if (sqlwalk.Scope{CTEs: ctes}).Physical(r, false) {
+		if (sqlwalk.Scope{CTEs: ctes}).Physical(r) {
 			return fmt.Errorf("unsupported shape: INSERT SELECT relation %q", table)
 		}
 	}

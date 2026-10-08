@@ -45,9 +45,11 @@ owned table to exist in the migrations' Up sections; table drops and renames fai
 It rejects foreign writes, unapproved foreign reads, unknown tables, unsupported
 SQL/manifest shapes and stale read exemptions, including inside CTEs and subqueries.
 Read exemptions use `module.QueryName table reason…`, retaining both query and
-table matching; no write can be exempted. Duplicate, pending, stale and
-untraceable maintainer exemptions fail through the shared reason validator.
-Production queries need no read exemptions.
+table matching; no write can be exempted. The list lives in the `readExemptions("")`
+literal in `TestProductionOwnership` and is currently empty. Tablecheck's
+`readExemptions` and `checkExemptions` reject duplicate and stale entries;
+the shared `sqlwalk.ReasonRules` rejects empty reasons, pending markers and
+maintainer claims without provenance.
 Only the query functions `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower` are
 accepted: other function bodies can hide table access. Tools tests run uncached
 because Go does not track these inputs outside the tools module.

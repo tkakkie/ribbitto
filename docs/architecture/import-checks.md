@@ -37,11 +37,17 @@ both fail `make check` on a violating import:
 This file, the manifest and `.golangci.yml` must agree; change them together.
 
 The tools-module test [`tablecheck`](../../tools/tablecheck/table_test.go) reads
-the manifest's literal `ownsTables` and parses SQL with PostgreSQL's parser.
+the manifest's literal `ownsTables`. It shares the
+[SQL infrastructure](../database.md#database-development) with scopecheck; ownership
+and organisation scoping remain separate policies.
 It requires every migration-created table to have exactly one owner and every
 owned table to exist in the migrations' Up sections; table drops and renames fail.
 It rejects foreign writes, unapproved foreign reads, unknown tables, unsupported
 SQL/manifest shapes and stale read exemptions, including inside CTEs and subqueries.
+Read exemptions use `module.QueryName table reason…`, retaining both query and
+table matching; no write can be exempted. Duplicate, pending, stale and
+untraceable maintainer exemptions fail through the shared reason validator.
+Production queries need no read exemptions.
 Only the query functions `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower` are
 accepted: other function bodies can hide table access. Tools tests run uncached
 because Go does not track these inputs outside the tools module.

@@ -59,9 +59,9 @@ func TestOwnershipFixtures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			allow := map[exemption]bool{}
 			if tt.reason != "" {
-				allow[exemption{"Q", "account", tt.reason}] = false
+				allow[exemption{"conversation.Q", "account", tt.reason}] = false
 			}
-			err := checkSQL(tt.sql, "conversation", "Q", owners, allow)
+			err := checkSQL(tt.sql, "conversation", "conversation.Q", owners, allow)
 			if err == nil {
 				err = checkExemptions(allow, true)
 			}
@@ -74,23 +74,23 @@ func TestOwnershipFixtures(t *testing.T) {
 
 func TestExemptionReasons(t *testing.T) {
 	for _, reason := range []string{"", " ", "PENDING MAINTAINER: read", "pending_maintainer", " Pending--MAINTAINER: read", "pending/maintainer: read", "Reviewed read; PENDING MAINTAINER: confirm #637", "Maintainer approved"} {
-		if err := checkExemptions(map[exemption]bool{{"Q", "account", reason}: true}, false); err == nil {
+		if err := checkExemptions(map[exemption]bool{{"conversation.Q", "account", reason}: true}, false); err == nil {
 			t.Fatalf("accepted %q", reason)
 		}
 	}
 	for _, reason := range []string{"Reviewed read", "Maintainer approved #637", "Maintainer approved decision 26", "Maintainer approved https://github.com/tkakkie/ribbitto/pull/658#discussion_r123"} {
-		if err := checkExemptions(map[exemption]bool{{"Q", "account", reason}: true}, false); err != nil {
+		if err := checkExemptions(map[exemption]bool{{"conversation.Q", "account", reason}: true}, false); err != nil {
 			t.Fatalf("rejected %q: %v", reason, err)
 		}
 	}
-	if err := checkExemptions(map[exemption]bool{{"Q", "account", "First reason"}: true, {"Q", "account", "Second reason"}: true}, false); err == nil {
+	if err := checkExemptions(map[exemption]bool{{"conversation.Q", "account", "First reason"}: true, {"conversation.Q", "account", "Second reason"}: true}, false); err == nil {
 		t.Fatal("accepted duplicate exemption")
 	}
 }
 
 func TestExemptionQueryScope(t *testing.T) {
-	allow := map[exemption]bool{{"Q", "account", "Reviewed read"}: false}
-	err := checkSQL("SELECT * FROM account", "conversation", "R", map[string]string{"account": "identity"}, allow)
+	allow := map[exemption]bool{{"conversation.Q", "account", "Reviewed read"}: false}
+	err := checkSQL("SELECT * FROM account", "conversation", "conversation.R", map[string]string{"account": "identity"}, allow)
 	if err == nil || !strings.Contains(err.Error(), "foreign table account") {
 		t.Fatalf("exemption leaked to another query: %v", err)
 	}
@@ -162,5 +162,30 @@ func TestMigrationFixtures(t *testing.T) {
 		if tt.want == "" && err != nil || tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)) {
 			t.Fatalf("got %v, want %q", err, tt.want)
 		}
+	}
+}
+
+func TestReadExemptionFormat(t *testing.T) {
+	for _, text := range []string{
+		"conversation/test.sql:Q account Reviewed read",
+		"conversation.Q account",
+		"conversation.Q account Pending Maintainer: #637",
+		"conversation.Q account Maintainer approved",
+		"conversation.Q account Reviewed read\nconversation.Q account Reviewed read",
+		"conversation.Q account First reason\nconversation.Q account Second reason",
+	} {
+		if _, err := readExemptions(text); err == nil {
+			t.Fatalf("accepted %q", text)
+		}
+	}
+	allow, err := readExemptions("conversation.Q account Reviewed read")
+	if err != nil || len(allow) != 1 {
+		t.Fatalf("exemptions: %v, %v", allow, err)
+	}
+	if err := checkSQL("SELECT * FROM account", "conversation", "conversation.Q", map[string]string{"account": "identity"}, allow); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkExemptions(allow, true); err != nil {
+		t.Fatal(err)
 	}
 }

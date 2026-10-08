@@ -186,8 +186,8 @@ func (s Stream) deliver(ctx context.Context, sub Subscription, event Event, send
 	}
 	// Render first, then authorize: a render can wait on the database, and
 	// access lost meanwhile must still stop this event. Renders are shared,
-	// so rendering one that is then denied costs little, and the check stays
-	// one query per event. A render error stops the loop even for an event
+	// so rendering one that is then denied costs little. Authorization checks
+	// a fresh shared access epoch. A render error stops the loop even for an event
 	// that would have been denied, so nothing is ever skipped without a
 	// decision.
 	out, err := s.Renderer.Render(ctx, event)

@@ -202,3 +202,39 @@ func TestMaxStreams(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthorizationCacheCapacity(t *testing.T) {
+	for _, tt := range []struct {
+		name, value string
+		want        int
+	}{
+		{name: "unset", want: 10000},
+		{name: "one", value: "1", want: 1},
+		{name: "custom", value: "7000", want: 7000},
+		{name: "empty", value: ""},
+		{name: "zero", value: "0"},
+		{name: "negative", value: "-1"},
+		{name: "unparsable", value: "invalid"},
+		{name: "fraction", value: "1.5"},
+		{name: "whitespace", value: " 1"},
+		{name: "overflow", value: "999999999999999999999999999999"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("RIBBITTO_AUTHORIZATION_CACHE_CAPACITY", tt.value)
+			if tt.name == "unset" {
+				if err := os.Unsetenv("RIBBITTO_AUTHORIZATION_CACHE_CAPACITY"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := authorizationCacheCapacity()
+			if got != tt.want || (err != nil) != (tt.want == 0) {
+				t.Fatalf("authorizationCacheCapacity() = %d, %v; want %d, invalid=%t", got, err, tt.want, tt.want == 0)
+			}
+			if tt.want == 0 {
+				if err := serve(t.Context(), ""); err == nil || !strings.Contains(err.Error(), "RIBBITTO_AUTHORIZATION_CACHE_CAPACITY") {
+					t.Fatalf("invalid authorization cache capacity did not prevent startup: %v", err)
+				}
+			}
+		})
+	}
+}

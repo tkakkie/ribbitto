@@ -77,8 +77,8 @@ and the failing steps, are in [load results by step](load-results-steps.md).
     (HTTP/1.1) and 4.6 s (HTTP/2).
 
 **What hit the limit first: the server's database pool.**
-- **Queries:** a post costs about one query per open stream, plus about 15.
-  That one query is the membership check each connection makes before
+- **Queries in this run (before #670):** a post cost about one query per open stream, plus about 15.
+  That one query was the membership check each connection made before
   sending each event ([streaming](streaming.md#authorization-and-revocation)).
   At 10,000 streams and 10 posts/s that is about 100,000 queries a second.
 - **Pool:** the mean wait for a connection grows with the stream count.
@@ -140,7 +140,7 @@ what the active steps left behind.
 
 ## Follow-ups
 
-- #622: authorize deliveries without a query per connection per event.
+- #622: cached authorization is implemented by #669 and #670; #671 measures it.
 - #623: a process-wide stream cap (A5), now done; see [stream limits](stream-limits.md).
 - #624: sizing self-hosted machines, including Caddy's per-stream memory.
 

@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -65,6 +66,10 @@ func run() error {
 }
 
 func serve(ctx context.Context, databaseURL string) error {
+	streamCap, err := maxStreams()
+	if err != nil {
+		return err
+	}
 	retention := realtime.DefaultRetention
 	if value := os.Getenv("RIBBITTO_EVENT_RETENTION"); value != "" {
 		var err error
@@ -104,7 +109,7 @@ func serve(ctx context.Context, databaseURL string) error {
 	defer cancelLoads()
 	// One hub per process: posting raises it, streams register their
 	// connections with it, and the metrics read its registry.
-	hub := realtime.NewHub()
+	hub := realtime.NewHubWithMaxStreams(streamCap)
 	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{
 		setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
 		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), hub: hub,
@@ -167,6 +172,19 @@ func serve(ctx context.Context, databaseURL string) error {
 		return err
 	}
 	return nil
+}
+
+// maxStreams distinguishes an unset variable from an explicitly empty value.
+func maxStreams() (int, error) {
+	value, set := os.LookupEnv("RIBBITTO_MAX_STREAMS")
+	if !set {
+		return realtime.DefaultMaxStreams, nil
+	}
+	limit, err := strconv.Atoi(value)
+	if err != nil || limit <= 0 {
+		return 0, fmt.Errorf("RIBBITTO_MAX_STREAMS must be a positive integer")
+	}
+	return limit, nil
 }
 
 // The server's timeouts. Without them net/http sets no deadline once the

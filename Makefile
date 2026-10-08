@@ -170,6 +170,7 @@ $(GOLANGCI_LINT):
 
 # Credentials stay in the inherited admin environment, never in .env.local.
 bin/ai-db: $(wildcard cmd/devdb/*.go) $(wildcard internal/platform/postgres/*.go) $(wildcard db/migrations/*.sql) go.mod go.sum
+	mkdir -p "$(@D)"
 	go build -o $@ ./cmd/devdb
 
 ai-env ai-env-clean ai-health: bin/ai-db

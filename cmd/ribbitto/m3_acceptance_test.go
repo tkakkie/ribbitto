@@ -21,9 +21,9 @@ var pageCursor = regexp.MustCompile(`data-event-cursor="(\d+)"`)
 // and PostgreSQL: a message reaches another member's open stream without a
 // reload, nothing posted between the page and its stream or while
 // disconnected is lost or repeated, and nothing reaches a connection that
-// may not read it. TestEventStream covers the stream's own contract (replay,
+// may not read it. TestStreamEndpoints covers the stream's own contract (replay,
 // Last-Event-ID, session end, removal, 404s); this follows a member's page.
-func TestM3Acceptance(t *testing.T) {
+func testM3Acceptance(t *testing.T) {
 	pool := acceptanceDatabase(t)
 	server, streams := streamServers(t, pool)
 	owner := newAcceptanceBrowser(t, server, "192.0.2.40")

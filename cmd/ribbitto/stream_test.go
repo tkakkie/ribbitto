@@ -104,7 +104,7 @@ func openStreamProto(t *testing.T, b acceptanceBrowser, channelURL, after, lastE
 // connection as a browser losing it would.
 func openStreamIn(ctx context.Context, t *testing.T, b acceptanceBrowser, channelURL, after, lastEventID string) (<-chan sseEvent, int, int) {
 	t.Helper()
-	r, err := http.NewRequestWithContext(ctx, "GET", b.server.URL+channelURL+"/events?after="+after, nil)
+	r, err := http.NewRequestWithContext(ctx, "GET", b.server.URL+streamEndpoint(t, channelURL)+"after="+after, nil)
 	acceptanceOK(t, err)
 	if lastEventID != "" {
 		r.Header.Set("Last-Event-ID", lastEventID)
@@ -208,7 +208,7 @@ func post(t *testing.T, b acceptanceBrowser, channelURL, body string) {
 	}
 }
 
-func TestEventStreamCursorAboveLog(t *testing.T) {
+func testEventStreamCursorAboveLog(t *testing.T) {
 	pool := acceptanceDatabase(t)
 	server, streams := streamServers(t, pool)
 	owner := newAcceptanceBrowser(t, server, "192.0.2.10")
@@ -257,7 +257,7 @@ func TestEventStreamCursorAboveLog(t *testing.T) {
 	}
 }
 
-func TestEventStream(t *testing.T) {
+func testEventStream(t *testing.T) {
 	pool := acceptanceDatabase(t)
 	server, streams := streamServers(t, pool)
 	owner := newAcceptanceBrowser(t, server, "192.0.2.10")
@@ -407,7 +407,7 @@ func TestEventStream(t *testing.T) {
 
 // Over HTTP/1.1 too, signing out ends the session's open stream at once:
 // the interrupted write and its deadline belong to the connection there.
-func TestEventStreamEndsOnSignOutOverHTTP1(t *testing.T) {
+func testEventStreamEndsOnSignOutOverHTTP1(t *testing.T) {
 	pool := acceptanceDatabase(t)
 	server, streams := streamServers(t, pool)
 	owner := newAcceptanceBrowser(t, server, "192.0.2.20")
@@ -437,7 +437,7 @@ func TestEventStreamEndsOnSignOutOverHTTP1(t *testing.T) {
 
 // Shutdown ends open streams first, so it returns at once instead of
 // waiting for them until its deadline.
-func TestShutdownEndsOpenStreams(t *testing.T) {
+func testShutdownEndsOpenStreams(t *testing.T) {
 	pool := acceptanceDatabase(t)
 	hub := realtime.NewHub()
 	handler, _, err := buildHandler(t.Context(), pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
@@ -472,7 +472,7 @@ func TestShutdownEndsOpenStreams(t *testing.T) {
 // A topic view's latest page opens a stream of that topic only: a message
 // posted to another topic of the channel never reaches it, and an unknown
 // topic or another channel's topic is 404 before the stream opens (#304).
-func TestTopicEventStream(t *testing.T) {
+func testTopicEventStream(t *testing.T) {
 	pool := acceptanceDatabase(t)
 	server, streams := streamServers(t, pool)
 	owner := newAcceptanceBrowser(t, server, "192.0.2.10")
@@ -527,4 +527,39 @@ func TestTopicEventStream(t *testing.T) {
 			t.Fatalf("%s: a refused stream emitted an event", url)
 		}
 	}
+}
+
+// Both transports run the same endpoint suites; the subtest selects only the URL.
+func TestStreamEndpoints(t *testing.T) {
+	for _, endpoint := range []string{"per-page", "organisation"} {
+		t.Run(endpoint, func(t *testing.T) {
+			for _, suite := range []struct {
+				name string
+				run  func(*testing.T)
+			}{
+				{"EventStreamCursorAboveLog", testEventStreamCursorAboveLog},
+				{"EventStream", testEventStream},
+				{"EventStreamEndsOnSignOutOverHTTP1", testEventStreamEndsOnSignOutOverHTTP1},
+				{"ShutdownEndsOpenStreams", testShutdownEndsOpenStreams},
+				{"TopicEventStream", testTopicEventStream},
+				{"M3Acceptance", testM3Acceptance},
+				{"BranchingWakesOpenStreams", testBranchingWakesOpenStreams},
+			} {
+				t.Run(suite.name, suite.run)
+			}
+		})
+	}
+}
+
+func streamEndpoint(t *testing.T, page string) string {
+	t.Helper()
+	if !strings.Contains(t.Name(), "/organisation/") {
+		return page + "/events?"
+	}
+	parts := strings.Split(page, "/")
+	endpoint := "/organizations/" + parts[2] + "/events?want=messages&channel=" + parts[4]
+	if len(parts) > 5 {
+		endpoint += "&topic=" + parts[6]
+	}
+	return endpoint + "&"
 }

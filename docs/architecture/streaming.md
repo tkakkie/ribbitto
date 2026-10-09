@@ -6,6 +6,9 @@ One SSE connection per latest channel page (M3) or topic page (#304),
 carrying named events:
 `message`, `messages-moved` and `reset` today. M4 replaces these streams
 with one organisation-wide stream per tab ([stream scope](#stream-scope-planned-m4)).
+The organisation endpoint now exists beside the per-channel and per-topic
+endpoints (#714). Pages still use the per-page endpoints until #715 switches
+them and removes those routes; no page opens an additional stream.
 The browser sends everything else as ordinary POST requests. One
 process serves every stream; several server processes are future work (the
 hub, both stream caps and the watermark are per process).
@@ -80,7 +83,12 @@ gives every page one stream for its organisation, filtered by the page's
 interests; [decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md)
 adds presence and typing as current state ([ephemeral state](realtime.md#ephemeral-state-planned-m4)).
 
-`GET /organizations/{slug}/events` takes:
+`GET /organizations/{slug}/events` already accepts these parameters. Only
+`messages` delivers frames; `sidebar`, `typing` and `presence` are accepted
+but deliver nothing yet (#286, #285). The page connections and remaining
+stream scope below are still planned.
+
+The endpoint takes:
 
 | Parameter | Meaning |
 |---|---|
@@ -97,7 +105,8 @@ adds presence and typing as current state ([ephemeral state](realtime.md#ephemer
 | `?before=` page | `sidebar` with `channel` |
 | Members panel | `sidebar,presence` with `channel` |
 
-Older pages now carry `data-event-cursor` too. Only `message` and
+Older page snapshots already provide a cursor; #715 will put
+`data-event-cursor` on those pages and connect their stream. Only `message` and
 `messages-moved` frames move `Last-Event-ID`; a sidebar frame is a recount,
 sent whole at every connect and after coalesced triggers (decision 30). Typing follows
 the message filter: a feed shows typing in any topic of its channel, a topic

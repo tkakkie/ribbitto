@@ -24,6 +24,12 @@ topic. What changes:
   interest; and per interest the highest sequence evicted (by count or by
   the floor) that touched it. A connection registers its interests when it
   acquires the reader.
+- **No routing topics:** a post without them (an old post) is decided after
+  rendering today (`Subscription.wants` passes it, `wantsRendered` checks
+  the rendered topic). The envelope alone cannot rule a topic interest out,
+  so such an event touches its channel and every topic interest of that
+  channel: in the levels, the index and the eviction marks. A connection it
+  wakes reads and renders it, and decides as today.
 - **Wait:** until the highest level among the connection's interests passes
   its cursor. It is still a level, so no wakeup is lost; #296's ephemeral
   generation is one more level of the same kind.
@@ -79,7 +85,8 @@ showing streams that are already live slowing while others replay.
 ## Implementation issues
 
 Ordered; each about one pull request with its own tests and with the
-documentation of what it changes (`AGENTS.md`), `high` risk
+documentation of what it changes (the architecture and package docs, as
+AGENTS.md requires), `high` risk
 (`internal/realtime/**`). None starts before the maintainer decides to
 build the reader ([Deciding](shared-reader.md#deciding-whether-to-build-it)).
 Production changes only with the fourth; until then a stream without

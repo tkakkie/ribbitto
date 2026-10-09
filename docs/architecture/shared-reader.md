@@ -94,7 +94,7 @@ replay from the log.
   validated by a database snapshot taken after the stream asked for it.
   Each window read is validated when it is copied, without a query:
   `c ≥ lo`, which is at least every committed boundary, and `c ≤ hi`, which
-  is at most the committed `event_seq`. A cursor retention has expired is
+  is at most the committed `event_seq`. A cursor whose events retention has expired is
   below the floor, so it reads the database and gets `reset`, short batch
   or full. Validity is decided at the copy, and delivery may take longer,
   each send up to its write deadline, as with today's batches after their
@@ -159,7 +159,10 @@ is not expected to move the measured limits by itself.
 **Evidence that should decide:**
 
 1. CPU and mutex profiles of `TestStreamCost` at the one-member 30,000 and
-   40,000 steps (`go test -cpuprofile … -mutexprofile …`, no code change):
+   40,000 steps, with no code change: `RIBBITTO_STREAM_COST=1
+   RIBBITTO_STREAM_COST_CACHE=1 RIBBITTO_STREAM_COST_STEPS=30000,40000 go
+   test -count=1 -run 'TestStreamCost$' -timeout 60m -cpuprofile cpu.out
+   -mutexprofile mutex.out ./internal/realtime/`:
    the share in the path the reader removes (`CachedEvents.EventsAfter`,
    the event cache, `Hub.Latest` and `Hub.Wait`) against renders,
    `MayReceive` and sends.

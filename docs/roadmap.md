@@ -36,8 +36,8 @@ M4 is done when a member of an organisation sees:
    read, and branching never changes whether a message is read
    ([`unread.md`](domain/unread.md#topics)).
 2. **Where they left off.** Opening a channel or a topic with unread
-   messages shows a divider above the first one, and it stays put while
-   the member reads.
+   messages shows a divider above the first one when it is on the loaded
+   page, and it stays put while the member reads.
 3. **Who is online.** The channel's members panel marks the members who
    have ribbitto open, and updates live.
 4. **Who is typing.** The channel or topic the member is reading shows who

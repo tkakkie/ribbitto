@@ -53,7 +53,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
 - **DOM ids are a contract.** Templates define every id that `hx-target`,
   `hx-select`, `hx-select-oob` or a script refers to. Renaming one means
   updating every reference in the same pull request. Today's contract ids
-  are `conversation`, `message-list`, `message-items`, `load-older`,
+  are `organization-stream`, `conversation`, `message-list`, `message-items`, `load-older`,
   `message-body`, `message-composer`, `message-help`, `message-status`,
   `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
@@ -72,15 +72,15 @@ htmx does only requests and swaps; the server and templ own the HTML.
   | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
   | `data-event-seq` | each message `<li>` | always | its `event_seq`, which orders an inserted item |
   | `data-source` | each message's checkbox | always | its topic's ID; a selection stays within one source topic |
-- The latest channel/topic page carries `data-event-cursor` on its outer
-  layout div, outside `#conversation` and every swap target, with
-  `hx-ext="sse"` and `sse-connect="<page URL>/events?after=<cursor>"`; a
-  topic's stream sends only that topic's messages (#304). Older pages omit
-  all three. The organisation endpoint exists beside these streams; #715
-  switches pages to it and adds older pages' snapshot cursors to the DOM.
-  M4 plans one stream on every page instead
-  ([stream scope](streaming.md#stream-scope-planned-m4)).
-  `#message-items` receives `message` and `messages-moved` events; moves
+- Every channel/topic page, including `?before=` pages, carries
+  `data-event-cursor` on `#organization-stream`, the outer layout div outside
+  every swap target. It wraps the sidebar and conversation, with `hx-ext="sse"`
+  and `sse-connect="/organizations/<slug>/events?after=<cursor>&want=<interests>&channel=<id>"`
+  (plus `topic=<id>` on latest topic views). Latest pages declare
+  `sidebar,messages,typing`; older pages declare `sidebar` and omit `topic`.
+  See [stream scope](streaming.md#stream-scope). Cursor/reconnect and `reset`
+  handling attach to this container independently of message swaps.
+  Only latest pages' `#message-items` receives `message,messages-moved`; moves
   replace feed IDs or remove/insert topic IDs within the loaded range. Replacements clear selection and refresh
   branch constraints. `LiveMessageItem` shares `MessageItem` markup, adding
   templ-rendered `data-announcement` text only to stream payloads; the

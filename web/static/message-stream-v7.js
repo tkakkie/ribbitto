@@ -29,7 +29,19 @@
     location.reload();
   };
   document.addEventListener("htmx:sseOpen", (event) => {
-    event.detail.source.addEventListener("reset", reset, { once: true });
+    const connection = event.target;
+    if (connection.id !== "organization-stream") return;
+    const source = event.detail.source;
+    source.addEventListener("reset", reset, { once: true });
+    const resume = (message) => {
+      // Native reconnects send Last-Event-ID; htmx recreates CLOSED sources
+      // from this URL. Keep the cursor outside every message swap target.
+      connection.dataset.eventCursor = message.lastEventId;
+      const url = new URL(connection.getAttribute("sse-connect"), location.href);
+      url.searchParams.set("after", message.lastEventId);
+      connection.setAttribute("sse-connect", url.pathname + url.search);
+    };
+    for (const name of ["message", "messages-moved"]) source.addEventListener(name, resume);
   });
   const applyMove = (items, data, payload) => {
     const moved = payload.querySelectorAll("li");
@@ -79,23 +91,13 @@
   document.addEventListener("htmx:sseBeforeMessage", (event) => {
     const items = event.target;
     if (items.id !== "message-items") return;
-    const connection = items.closest("[sse-connect]");
     const payload = new DOMParser().parseFromString(event.detail.data, "text/html");
     const incoming = payload.querySelector("li");
-    if (!connection || !incoming) return;
-    const resume = () => {
-      // A native reconnect sends Last-Event-ID. The extension recreates CLOSED
-      // sources from this attribute, so that path also resumes after delivery.
-      connection.dataset.eventCursor = event.detail.lastEventId;
-      const url = new URL(connection.getAttribute("sse-connect"), location.href);
-      url.searchParams.set("after", event.detail.lastEventId);
-      connection.setAttribute("sse-connect", url.pathname + url.search);
-    };
+    if (!incoming) return;
     if (event.detail.type === "messages-moved") {
       event.preventDefault();
       for (const moves of historyMoves.values()) moves.push(event.detail.data);
       applyMove(items, event.detail.data, payload);
-      resume();
       return;
     }
     const existing = document.getElementById(incoming.id);
@@ -121,6 +123,5 @@
         }
       },
     });
-    resume();
   });
 })();

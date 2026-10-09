@@ -110,7 +110,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	for _, route := range routes {
 		path := "/organizations/acme" + strings.ReplaceAll(route.path, "{$}", "")
 		if strings.Contains(path, "{channelID}") {
-			// Keep what follows the channel, such as /events.
+			// Keep what follows the channel, such as a topic path.
 			path = view.ChannelURL("acme", acmeChannel) + strings.TrimPrefix(route.path, "/channels/{channelID}")
 		}
 		path = strings.ReplaceAll(path, "{topicID}", strings.TrimPrefix(view.ConversationURL("acme", acmeChannel, &defaultTopic.ID), view.ChannelURL("acme", acmeChannel)+"/topics/"))
@@ -148,7 +148,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				if w.Code != 303 || w.Header().Get("Location") != path {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())
 				}
-			case "GET /events", "GET /channels/{channelID}/events", "GET /channels/{channelID}/topics/{topicID}/events":
+			case "GET /events":
 				// This suite runs without Services.Stream, so a member gets the
 				// stream-off 404 after authorisation; the stream itself is
 				// tested through the production wiring in cmd/ribbitto.
@@ -211,7 +211,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 		latest := get("GET", topicURL, aliceToken, now)
 		body := latest.Body.String()
-		if latest.Code != 200 || strings.Count(body, `<li id="message-`) != 50 || strings.Contains(body, "topic-message-00") || !strings.Contains(body, "topic-message-50") || strings.Contains(body, "posted through the page") || !strings.Contains(body, `sse-connect="`+topicURL+`/events?after=`) || strings.Contains(body, `hx-post="`+topicURL+`"`) || !strings.Contains(body, `action="`+topicURL+`"`) {
+		if latest.Code != 200 || strings.Count(body, `<li id="message-`) != 50 || strings.Contains(body, "topic-message-00") || !strings.Contains(body, "topic-message-50") || strings.Contains(body, "posted through the page") || !strings.Contains(body, `sse-connect="/organizations/acme/events?after=`) || strings.Contains(body, `hx-post="`+topicURL+`"`) || !strings.Contains(body, `action="`+topicURL+`"`) {
 			t.Fatalf("latest topic: %d %s", latest.Code, body)
 		}
 		// The open topic, and only it, is the current link (Copilot on #320).

@@ -77,7 +77,8 @@ bounded topic list, the branching endpoint (#305) and its selection UI
   as channel history ([`messages.md`](messages.md#older-pages)). Its plain
   composer posts into that topic and redirects back; invalid bodies preserve
   the draft (422). Its latest page updates live through a stream of that
-  topic only ([replay](../architecture/replay.md)); older pages do not.
+  topic only ([replay](../architecture/replay.md)); older pages hold a sidebar-only
+  organisation stream.
   Moves remove loaded source items and insert destination items by `event_seq`,
   only at or above the loaded range's oldest sequence. The bound is zero when
   no older history remains, including an empty page, admitting every moved item.

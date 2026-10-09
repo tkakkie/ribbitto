@@ -1,8 +1,9 @@
 # 30. One organisation-wide stream per tab, filtered by its interests
 
 **Decided** (#296; supersedes nothing; [decision 31](31-presence-and-typing-are-current-state-with-a-generation.md)
-settles the ephemeral signals it carries). *Planned* for M4; details in
-[streaming](../architecture/streaming.md#stream-scope-planned-m4).
+settles the ephemeral signals it carries). Page streams implemented (#709); sidebar and ephemeral delivery remain planned
+for M4. Details in
+[streaming](../architecture/streaming.md#stream-scope).
 
 - **One stream per tab.** Every page of an organisation holds one
   Server-Sent Events stream, `GET /organizations/{slug}/events`: the feed,

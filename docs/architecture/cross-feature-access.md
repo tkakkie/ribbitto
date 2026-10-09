@@ -35,14 +35,14 @@ across the channel and sidebar, the selected topic and the bounded topic list
 lookups and the topic batch through `conversation.ReadStore.LookupTopics`, plus the
 org's `organization.event_seq` on every channel or topic page, including
 `?before=` pages. It returns `conversation.ChannelPage` with that snapshot cursor;
-older pages do not connect a stream yet.
+older pages connect with only the sidebar interest.
 `conversation.Reader.One` reads one message, its authors and topic in its own snapshot.
 Live labels come from that shared load through the existing render cache, keyed
 by organisation, channel, sequence and language, with no extra read per stream
 per event. `conversation.Reader.Many` reads only a move's message IDs with the same snapshot
 and directory batches; its shared render corrects feed labels and checkbox
 sources and supplies topic-page removals and ordered insertions.
-Malformed topic paging links and the topic stream check the topic through
+Malformed topic paging links and the organisation stream's topic filter check the topic through
 `conversation.Topics.Get`, scoped by the resolved membership, without history;
 topic posts rely on the lookup inside the posting transaction.
 

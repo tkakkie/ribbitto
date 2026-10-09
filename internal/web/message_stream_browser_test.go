@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -186,6 +187,67 @@ func TestMessageStreamBrowser(t *testing.T) {
 				page.MustWait(`() => document.querySelector('#load-older').dataset.oldestSeq === '0'`)
 			})
 		}
+	}
+	for _, name := range []string{"feed", "topic", "older-feed", "older-topic"} {
+		t.Run(name+"/transport", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+			defer cancel()
+			cursor, topic := int64(42), kernel.ID{2}
+			snapshot := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"}, Current: view.Channel{ID: kernel.ID{1}}, EventCursor: &cursor}
+			if strings.Contains(name, "topic") {
+				snapshot.Topic = &view.Topic{ID: topic}
+			}
+			if strings.HasPrefix(name, "older") {
+				snapshot.Before = 7
+			}
+			var pages, streams atomic.Int32
+			mux := http.NewServeMux()
+			mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
+			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/organizations/acme/events" {
+					pages.Add(1)
+					templ.Handler(view.ChannelScreen("/static/css/app.css", snapshot)).ServeHTTP(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+				if streams.Add(1) == 2 {
+					want := "51"
+					if snapshot.Before > 0 {
+						want = "42"
+					}
+					if r.URL.Query().Get("after") != want {
+						t.Errorf("reconnect cursor = %q, want %s", r.URL.Query().Get("after"), want)
+					}
+					_ = sender.Send(r.Context(), realtime.Outgoing{ID: 51, Name: "reset"})
+				} else if snapshot.Before == 0 {
+					_ = sender.Send(r.Context(), realtime.Outgoing{ID: 51, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(streamTestMessages(topic, 51)[0]))})
+				} else {
+					_ = sender.Heartbeat(r.Context())
+				}
+				<-r.Context().Done()
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+			page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+			defer page.MustClose()
+			page.MustEvalOnNewDocument(`document.addEventListener('htmx:sseOpen', e => window.testSource = e.detail.source)`)
+			page.MustNavigate(server.URL).MustWaitLoad()
+			want := "51"
+			if snapshot.Before > 0 {
+				want = "42"
+			}
+			page.MustWait(`cursor => window.testSource && document.querySelector('#organization-stream').dataset.eventCursor === cursor`, want)
+			// Exercise the extension's CLOSED-source retry, which reads sse-connect.
+			page.MustEval(`() => { window.testSource.close(); window.testSource.dispatchEvent(new Event('error')); }`)
+			for pages.Load() < 2 {
+				select {
+				case <-ctx.Done():
+					t.Fatal("reset did not reload", ctx.Err())
+				case <-time.After(10 * time.Millisecond):
+				}
+			}
+		})
 	}
 }
 

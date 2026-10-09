@@ -13,7 +13,7 @@ sequenceDiagram
   B->>W: GET page
   W->>DB: REPEATABLE READ, READ ONLY: page data + event_seq of this organisation
   W-->>B: HTML with cursor = event_seq
-  B->>W: GET /events?after=cursor
+  B->>W: GET /organizations/{slug}/events?after=cursor&want=interests
   W->>C: start
   loop
     C->>DB: one snapshot: replay boundary + event_seq + events after cursor
@@ -66,8 +66,8 @@ sequenceDiagram
   Load older replaces it, so older moved items cannot duplicate or skip history.
   Moves are silent; the notice arrives separately as `message.posted`.
 - **A topic page** subscribes to one topic of the channel
-  (`…/topics/{topicID}/events`, or the organisation endpoint with
-  `want=messages&channel=…&topic=…`; an unknown topic, or another channel's, is
+  (the organisation endpoint with
+  `want=sidebar,messages,typing&channel=…&topic=…`; an unknown topic, or another channel's, is
   404 before the stream opens). It wants an event whose routing `Topics`
   include its topic. A post's routing topic is its persisted posting-time
   topic, even when the render reads a later topic; a move's are its source

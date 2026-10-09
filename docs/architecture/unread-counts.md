@@ -129,3 +129,20 @@ messages adds one range per skipped run (about 100 bytes and an index entry
 each). Steps 1 and 2 read only the first 101; steps 3 and 4 and a topic-view
 write handle all `R`; a feed read merges them back into one, at `O(R)`.
 #283 measures 10,000 ranges before the tables ship.
+
+### Running the benchmark
+
+Export `RIBBITTO_TEST_DATABASE_URL` for disposable loopback PostgreSQL ([database tests](../database-tests.md)); run outside CI:
+
+```sh
+RIBBITTO_UNREAD_BENCH=1 go test -count=1 -run '^TestUnreadBench$' -v -timeout 30m ./internal/conversation/conversationpg
+```
+
+Optional `RIBBITTO_UNREAD_BENCH_*` suffixes (defaults): `POSTS` (`10,100,1000,10000`), `MOVES` (100), `MOVE_SIZE` (100),
+`RANGES` (10000), `TOPICS` (50), `WARMUP` (3), `REPEAT` (20). Use positive integers; `RANGES` and `TOPICS` need at least 2.
+Logs include version, settings, volumes, indexes, `ANALYZE`, plans, row visits, buffers, median and p95.
+Normal/stressed runs alternate; writes roll back. Timings exclude transaction boundaries and plan instrumentation.
+
+## Results
+
+Results come from a full run on a quiet machine and are recorded here; the maintainer then decides go or no-go explicitly. Merging the harness does not approve implementation.

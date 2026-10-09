@@ -42,9 +42,9 @@ func (f *branchFake) CreateTopic(_ context.Context, organizationID, channelID ke
 	}
 	return conversation.Topic{ID: kernel.ID{9}, Name: name}, f.step("create")
 }
-func (f *branchFake) MoveMessages(_ context.Context, organizationID, channelID, from, to kernel.ID, ids []kernel.ID) (int64, error) {
+func (f *branchFake) MoveMessages(_ context.Context, organizationID, channelID, from, to kernel.ID, ids []kernel.ID, movedEventSeq int64) (int64, error) {
 	f.scope(organizationID, channelID)
-	if from != (kernel.ID{4}) || to != (kernel.ID{9}) || !reflect.DeepEqual(ids, []kernel.ID{{5}}) {
+	if movedEventSeq != 41 || from != (kernel.ID{4}) || to != (kernel.ID{9}) || !reflect.DeepEqual(ids, []kernel.ID{{5}}) {
 		f.t.Fatal("wrong move arguments")
 	}
 	count := int64(len(ids))

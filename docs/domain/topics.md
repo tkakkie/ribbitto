@@ -34,7 +34,7 @@ bounded topic list, the branching endpoint (#305) and its selection UI
 |---|---|
 | `topic` | `id` (UUIDv7), `organization_id`, `channel_id`, `name` (NULL only for the default topic), `is_default`, `created_at` |
 | `channel` | adds `default_topic_id`, not null, and `default_topic_is_default`, always true |
-| `message` | adds `topic_id`, not null |
+| `message` | `topic_id`, not null; nullable `moved_event_seq`, the latest move's sequence |
 
 - **Names** are unique per channel, ignoring case, among named topics: a unique
   index on `(organization_id, channel_id, lower(name))`. Validation of the
@@ -100,13 +100,17 @@ A member selects one or more messages in any topic of a channel, the
 default topic included, and moves them to another topic of the same
 channel, a new one or an existing one. In **one transaction**:
 
-1. the destination topic is created if it is new;
-2. the selected messages move into it, keeping their `id` and their
-   original `event_seq`;
-3. a **branch notice** is posted in the source topic, naming the
+1. the organisation's move and notice sequences are taken first, locking
+   the organisation before any topic read or write ([posting](../architecture/posting.md));
+2. the destination topic is created if it is new;
+3. the selected messages move into it: the same UPDATE sets `topic_id` and
+   `moved_event_seq` to the move's sequence, keeping their `id` and original
+   `event_seq`. A later move overwrites `moved_event_seq`; messages never
+   moved keep it NULL;
+4. a **branch notice** is posted in the source topic, naming the
    destination and the number of messages moved. It is an ordinary new
    message, so it appears at the time of branching;
-4. the move and the notice are recorded as new durable events
+5. the move and the notice are recorded as new durable events
    ([decision 5](../decisions/05-one-event-sequence-per-organisation.md)), so live clients see them in
    order and a reconnecting client replays them.
 

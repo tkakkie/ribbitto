@@ -36,7 +36,7 @@ func (s *fakeBranchWriter) CreateTopic(_ context.Context, _, _ kernel.ID, name s
 	}
 	return conversation.Topic{ID: kernel.ID{0x32}, Name: name}, s.err
 }
-func (s *fakeBranchWriter) MoveMessages(_ context.Context, _, _, from, to kernel.ID, ids []kernel.ID) (int64, error) {
+func (s *fakeBranchWriter) MoveMessages(_ context.Context, _, _, from, to kernel.ID, ids []kernel.ID, _ int64) (int64, error) {
 	s.got = conversation.Branch{From: from, To: &to, Messages: ids}
 	if errors.Is(s.err, conversation.ErrBranchConflict) {
 		return 0, nil

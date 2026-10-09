@@ -61,8 +61,8 @@ type Writer interface {
 	// error, so a failure there stays a server error (R2 on #502).
 	InsertNotice(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (Message, error)
 	// MoveMessages moves the given messages still in the source topic of
-	// the channel to the destination and returns how many moved.
-	MoveMessages(ctx context.Context, organizationID, channelID, fromTopicID, toTopicID kernel.ID, messageIDs []kernel.ID) (int64, error)
+	// the channel to the destination, recording the move sequence, and returns how many moved.
+	MoveMessages(ctx context.Context, organizationID, channelID, fromTopicID, toTopicID kernel.ID, messageIDs []kernel.ID, movedEventSeq int64) (int64, error)
 }
 
 // WriterIn binds conversation's writes to the caller's transaction.

@@ -23,10 +23,10 @@ func TestChannelMessageSchema(t *testing.T) {
 	ctx := t.Context()
 	// Raw SQL and queries exercise schema constraints directly, including invalid rows.
 	channels, messages, history := postgres.NewChannelStore(pool), postgres.NewWriterForTest(pool), postgres.NewReadStoreForTest(pool)
-	var nullable int
-	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('channel', 'message') AND is_nullable = 'YES'").Scan(&nullable))
-	if nullable != 0 {
-		t.Fatalf("new tables have %d nullable columns", nullable)
+	var nullable []string
+	requireNoError(t, pool.QueryRow(ctx, "SELECT array_agg(table_name || '.' || column_name ORDER BY table_name, column_name) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('channel', 'message') AND is_nullable = 'YES'").Scan(&nullable))
+	if !slices.Equal(nullable, []string{"message.moved_event_seq"}) {
+		t.Fatalf("nullable columns = %v, want only message.moved_event_seq", nullable)
 	}
 	account := identitytest.Account(t, pool, "a@b", "Author")
 	var orgs []kernel.ID

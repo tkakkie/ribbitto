@@ -163,25 +163,27 @@ func (q *Queries) LookupTopics(ctx context.Context, arg LookupTopicsParams) ([]T
 }
 
 const moveMessages = `-- name: MoveMessages :execrows
-UPDATE message SET topic_id = $1
-WHERE organization_id = $2 AND channel_id = $3
-  AND topic_id = $4 AND id = ANY($5::uuid[])
+UPDATE message SET topic_id = $1, moved_event_seq = $2
+WHERE organization_id = $3 AND channel_id = $4
+  AND topic_id = $5 AND id = ANY($6::uuid[])
 `
 
 type MoveMessagesParams struct {
 	ToTopicID      pgtype.UUID
+	MovedEventSeq  pgtype.Int8
 	OrganizationID pgtype.UUID
 	ChannelID      pgtype.UUID
 	FromTopicID    pgtype.UUID
 	MessageIds     []pgtype.UUID
 }
 
-// Branching moves conversation's own messages by writing message.topic_id.
+// Branching records the destination and latest move together.
 // Only messages still in the expected topic move; the caller compares the
 // count with the selection and rolls back on a mismatch (409).
 func (q *Queries) MoveMessages(ctx context.Context, arg MoveMessagesParams) (int64, error) {
 	result, err := q.db.Exec(ctx, moveMessages,
 		arg.ToTopicID,
+		arg.MovedEventSeq,
 		arg.OrganizationID,
 		arg.ChannelID,
 		arg.FromTopicID,

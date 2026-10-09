@@ -12,6 +12,7 @@
 | event_seq | bigint |  | false |  |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
 | topic_id | uuid |  | false |  | [public.topic](public.topic.md) |  |
+| moved_event_seq | bigint |  | true |  |  |  |
 
 ## Constraints
 
@@ -43,6 +44,7 @@
 | message_organization_id_event_seq_key | CREATE UNIQUE INDEX message_organization_id_event_seq_key ON public.message USING btree (organization_id, event_seq) |
 | message_channel_event_seq_idx | CREATE INDEX message_channel_event_seq_idx ON public.message USING btree (organization_id, channel_id, event_seq) |
 | message_topic_event_seq_idx | CREATE INDEX message_topic_event_seq_idx ON public.message USING btree (organization_id, topic_id, event_seq) |
+| message_moved_event_seq_idx | CREATE INDEX message_moved_event_seq_idx ON public.message USING btree (organization_id, topic_id, moved_event_seq) WHERE (moved_event_seq IS NOT NULL) |
 
 ## Relations
 
@@ -62,6 +64,7 @@ erDiagram
   bigint event_seq
   timestamp_with_time_zone created_at
   uuid topic_id FK
+  bigint moved_event_seq
 }
 "public.member" {
   uuid id

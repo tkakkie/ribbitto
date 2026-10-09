@@ -12,7 +12,9 @@
 // Hub is the process-wide core. Per organisation it keeps the highest
 // committed event sequence it has been told about (Raise) and lets a
 // connection block until that value passes its cursor (Wait) without a
-// lost wakeup. It is also the registry of open connections: Register caps
+// lost wakeup. Level and wake channel are published together atomically,
+// so readers do not take the connection registry lock. It is also the
+// registry of open connections: Register caps
 // connections per process and per account and gives each one a context
 // that CancelAccount or CancelSession ends. Events themselves are never
 // held here; they are read from event_log, so a hub that loses a

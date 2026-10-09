@@ -11,8 +11,8 @@ Today's loop is in [replay](replay.md).
 
 Each connection runs `realtime.Stream.Run`: it reads through
 `CachedEvents`, delivers, and waits on the hub. A post wakes every
-connection of its organisation, and each one takes the hub's process-wide
-lock (`Latest`, `Wait`) and looks up the event cache, joining a shared
+connection of its organisation, and each one reads the hub's atomic
+level/channel snapshot (`Latest`, `Wait`) and looks up the event cache, joining a shared
 read and, for the short batch that holds a new post, a second shared read
 after it. Renders, authorization and sends are per connection.
 
@@ -44,7 +44,8 @@ after it. Renders, authorization and sends are per connection.
   issue records misses and memory, and raises it to 512 or 1,024 if needed.
   No age bound: an idle organisation keeps its last events, which are
   immutable and stay valid through the floor below. `hi` is the reader's watermark; publishing closes and replaces a
-  channel under the reader's lock, like the hub, so a waiter cannot miss it.
+  channel under the reader's lock, so a waiter cannot miss it. Today's hub
+  publishes a level/channel snapshot atomically and closes the old channel.
 - **Floor.** Retention is the only writer of the replay boundary, and runs
   in this process. The wiring wraps org's `RetentionBoundary` so that
   `RaiseBoundary`, which the cleaner calls inside its transaction before
@@ -154,7 +155,7 @@ What #671 measured with cached allows
 **Expected change.** Per post, one event read per organisation instead of
 about four through the shared cache (#227's count). Window reads run no
 query, not even a bounds check. Per connection, a copy under the reader's
-lock replaces the hub's process-wide lock, an event-cache lookup and a joined
+lock replaces the hub's atomic snapshot read, an event-cache lookup and a joined
 second read. Unchanged per connection: a wake for every connection of the
 organisation (until the interest index), the render-cache lookup,
 `MayReceive`, the write and flush, the goroutine and its buffers. Queries

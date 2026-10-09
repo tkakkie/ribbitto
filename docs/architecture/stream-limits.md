@@ -15,6 +15,22 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   their private second load from finishing.
   Joiners wait directly for their result, with one wake: a kept value or
   error from the first load, otherwise the private second load's result.
+  Event-cache callers skip locked leave accounting once both results are
+  published: the load has left the lookup map and its deferred cancellation
+  ends the context. Until then, leaving still updates counts under the lock
+  so the last waiter or last second-read joiner cancels pending work.
+  Lookup, LRU, TTL and loading are unchanged; render caches keep their
+  existing cleanup. Full batches alone are retained, short-batch joiners
+  still get their private fresh second read, keys include the hub level,
+  and every full batch still gets a zero-limit bounds read.
+
+- Hub waiters read the organisation's level and broadcast channel in one
+  immutable atomic snapshot, without the connection registry mutex.
+  Organisation entries are never removed. Concurrent raises use compare
+  and swap to publish only a higher level; the successful publisher alone
+  closes the old channel. A raise between a waiter's snapshot read and its
+  select therefore wakes it, and Latest never regresses. Register and
+  RaiseIfActive still use the registry mutex for caps and active checks.
 
 - Stream authorization caches allows per distinct (account ID, organisation
   slug), not per stream: streams with the same key share an entry. Entries

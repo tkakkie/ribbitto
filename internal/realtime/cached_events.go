@@ -51,6 +51,7 @@ func NewCachedEvents(parent context.Context, events EventReader, hub *Hub, capac
 func newCachedEvents(parent context.Context, events EventReader, hub *Hub, capacity int, ttl, loadTimeout time.Duration) *CachedEvents {
 	c := &CachedEvents{events: events, hub: hub}
 	c.cache = NewCache[eventsKey, []Event](parent, capacity, DefaultCacheLoads, ttl, loadTimeout, fullBatch, time.Now)
+	c.cache.completedLeaves = true
 	return c
 }
 

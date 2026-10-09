@@ -68,3 +68,36 @@ CPU by a quarter to a third. As it shrank, the reader's path grew to 43% of
 the server's blocking, mostly `Hub.Wait`, and to 21% of the benchmark's CPU.
 The shared reader's build decision (held on #696) can be revisited on these
 numbers; it is the maintainer's call.
+
+## The hub and the event cache (#705), 2026-10-09
+
+The maintainer then tried one smaller change before the shared reader. Readers of the hub's level take no lock: the level and the channel that the next raise closes are one atomic snapshot, and a raise publishes the next one with a compare-and-swap. An event-cache call skips its cleanup lock once both the starter's and the joiners' results are published. While the joiners' second load is pending, it still takes the lock. Before is main at `b5e0b51` (#704), and after is this change. Both were measured in one session, under the same settings as above.
+
+**Ceiling, without profiling** (one member, from 20,000 streams up, alternating before and after, twice each), p95:
+
+| Streams | Before (runs 1 / 2) | After (runs 1 / 2) |
+|---|---|---|
+| 30,000 | 168 / 125 ms | 127 / 113 ms |
+| 40,000 | 241 / 248 ms | 220 / 228 ms |
+| 50,000 | 426 / 397 ms | 392 / 375 ms |
+| 60,000 | 1,011 ms, fail / 969 ms | 1,228 ms, fail / 1,064 ms, fail |
+
+From 30,000 to 50,000 streams, the observed p95 is 5–25% lower after the change. At 20,000 streams, the second before run had an outlier p95 of 240 ms, against 84 ms after. 50,000 passed in every run. At 60,000, before passed once and failed once, and after failed twice, with a higher p95 than before each time. These runs therefore show neither a higher ceiling nor a reliably unchanged one; 60,000 remains marginal. In the benchmark, `Hub.Wait` had been only 1–2%. With distinct members, 5,000 and 10,000 passed before and after. That is a lower bound only: the ladder stopped there and found no failing step.
+
+**Profiles, in the same settings as above:**
+
+| Reader's path | Benchmark before | Benchmark after | Server before | Server after |
+|---|---|---|---|---|
+| CPU | 7.2 s (30%) | 8.0 s (33%) | 15.3 s (14%) | 13.5 s (13%) |
+| …of which `EventsAfter` | 6.7 s | 7.2 s | 7.4 s | 7.3 s |
+| Mutex blocking | 173 s (3%) | 136 s (7%) | 4,697 s (30%) | 96 s (1%) |
+| …of which `Hub.Wait` | 68 s | 31 s | 3,959 s (26%) | 34 s (0.5%) |
+| Server p50 / p95 | — | — | 75 / 154 ms | 71 / 138 ms |
+
+On the server, the hub's lock contention is gone, a 98% drop in the reader's path's blocking. The benchmark still shows `EventsAfter` at about 30% of CPU. On the server it is 7%, because the benchmark renders no HTML and writes nothing to a network. After the change, 96% of the server's remaining mutex blocking is the authorizer's `s.mu`, and its total blocking halved (4.29 → 2.07 hours of samples).
+
+**The shared reader's criterion.**
+- After this change, the server's reader's path takes 13% of CPU and 1% of mutex blocking, so it is no hotspot there.
+- The benchmark alone still exceeds the CPU threshold.
+- The criterion needs the same hotspot in both profiles, so it is not met. **#696 stays on hold**, as the maintainer set before this measurement.
+- No further optimisation follows from this issue.

@@ -27,6 +27,10 @@ type Cache[K comparable, V any] struct {
 	now         func() time.Time
 	keep        func(K, V) bool
 
+	// Event loads can discard accounting once both results are published;
+	// render caches retain their existing cleanup path. Set before use.
+	completedLeaves bool
+
 	// afterLoad, nil outside tests, pauses after the first result is accepted
 	// and before retention or the joiners' second load is decided.
 	afterLoad func(context.Context)
@@ -142,6 +146,16 @@ func (c *Cache[K, V]) Get(ctx context.Context, key K, load func(context.Context)
 }
 
 func (c *Cache[K, V]) leave(key K, call *cacheCall[V], joined bool) {
+	if c.completedLeaves {
+		select {
+		case <-call.joined.done:
+			// load removed this call before publishing both results. No
+			// waiter can join it or need to cancel pending work now; load's
+			// deferred cancel ends its context. Counts die with the call.
+			return
+		default:
+		}
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	call.waiters--

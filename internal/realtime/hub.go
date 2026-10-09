@@ -29,29 +29,40 @@ var (
 // concurrent use; the zero value is not usable, so call NewHub.
 //
 // The sequence is a level, not a signal: a connection compares it with its
-// own cursor under the lock before blocking, so a raise that lands between
+// own cursor against an atomic snapshot before blocking, so a raise between
 // the connection's last read and its wait is never lost.
 type Hub struct {
 	maxStreams int
 	mu         sync.Mutex
 	// connections is guarded by mu.
 	connections int
-	orgs        map[kernel.ID]*orgSequence
+	orgs        sync.Map // kernel.ID -> *orgSequence; entries are never removed
 	byAccount   map[kernel.ID]map[*registration]struct{}
 	bySession   map[kernel.ID]map[*registration]struct{}
 	byOrg       map[kernel.ID]map[*registration]struct{}
 	// shutdown, once CancelAll has run, refuses every registration.
 	shutdown bool
+
+	// Test gates, set before use, expose publication and read-to-wait races.
+	afterWaitRead       func()
+	beforeRaise         func(int64)
+	beforeSequenceStore func()
 }
 
 // orgSequence is one organisation's latest sequence. changed is closed and
 // replaced on every raise, which wakes every waiter at once; a buffered
 // per-waiter signal could be dropped.
 type orgSequence struct {
-	latest  int64
-	changed chan struct{}
+	state atomic.Pointer[sequenceState]
 	// waiters counts calls of Wait holding changed; see Waiting.
 	waiters atomic.Int64
+}
+
+// sequenceState pairs the level with the channel a later raise must close.
+// Publishing them separately could strand a waiter on the new channel.
+type sequenceState struct {
+	latest  int64
+	changed chan struct{}
 }
 
 type registration struct {
@@ -74,30 +85,47 @@ func NewHub() *Hub {
 func NewHubWithMaxStreams(maxStreams int) *Hub {
 	return &Hub{
 		maxStreams: maxStreams,
-		orgs:       make(map[kernel.ID]*orgSequence),
 		byAccount:  make(map[kernel.ID]map[*registration]struct{}),
 		bySession:  make(map[kernel.ID]map[*registration]struct{}),
 		byOrg:      make(map[kernel.ID]map[*registration]struct{}),
 	}
 }
 
-// sequence returns the organisation's entry, creating it; the caller holds mu.
+// sequence returns a stable entry, so readers need no registry lock.
 func (h *Hub) sequence(org kernel.ID) *orgSequence {
-	s, ok := h.orgs[org]
-	if !ok {
-		s = &orgSequence{changed: make(chan struct{})}
-		h.orgs[org] = s
+	if s, ok := h.orgs.Load(org); ok {
+		return s.(*orgSequence)
 	}
-	return s
+	s := &orgSequence{}
+	s.state.Store(&sequenceState{changed: make(chan struct{})})
+	if h.beforeSequenceStore != nil {
+		h.beforeSequenceStore()
+	}
+	actual, _ := h.orgs.LoadOrStore(org, s)
+	return actual.(*orgSequence)
 }
 
 // Raise records that the organisation's events up to seq are committed. A
 // value at or below the current one changes nothing, so notifications may
 // arrive late or out of order.
 func (h *Hub) Raise(org kernel.ID, seq int64) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.raise(org, seq)
+	s := h.sequence(org)
+	for {
+		old := s.state.Load()
+		if seq <= old.latest {
+			return
+		}
+		if h.beforeRaise != nil {
+			h.beforeRaise(seq)
+		}
+		next := &sequenceState{latest: seq, changed: make(chan struct{})}
+		if s.state.CompareAndSwap(old, next) {
+			// Only the successful publisher owns this close. A waiter that
+			// captured old before publication still wakes after publication.
+			close(old.changed)
+			return
+		}
+	}
 }
 
 // RaiseIfActive is Raise for an organisation that still has a registered
@@ -107,28 +135,15 @@ func (h *Hub) RaiseIfActive(org kernel.ID, seq int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if len(h.byOrg[org]) > 0 {
-		h.raise(org, seq)
+		h.Raise(org, seq)
 	}
-}
-
-// raise is Raise's body; the caller holds mu.
-func (h *Hub) raise(org kernel.ID, seq int64) {
-	s := h.sequence(org)
-	if seq <= s.latest {
-		return
-	}
-	s.latest = seq
-	close(s.changed)
-	s.changed = make(chan struct{})
 }
 
 // Latest returns the organisation's latest sequence the hub has been told
 // about; 0 if none.
 func (h *Hub) Latest(org kernel.ID) int64 {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if s, ok := h.orgs[org]; ok {
-		return s.latest
+	if s, ok := h.orgs.Load(org); ok {
+		return s.(*orgSequence).state.Load().latest
 	}
 	return 0
 }
@@ -137,24 +152,26 @@ func (h *Hub) Latest(org kernel.ID) int64 {
 // after and returns that sequence, at once if it already is. If ctx has
 // ended or ends first, it returns context.Cause(ctx).
 func (h *Hub) Wait(ctx context.Context, org kernel.ID, after int64) (int64, error) {
+	if ctx.Err() != nil {
+		return 0, context.Cause(ctx)
+	}
+	s := h.sequence(org)
 	for {
 		if ctx.Err() != nil {
 			return 0, context.Cause(ctx)
 		}
-		h.mu.Lock()
-		s := h.sequence(org)
-		if s.latest > after {
-			latest := s.latest
-			h.mu.Unlock()
-			return latest, nil
+		state := s.state.Load()
+		if state.latest > after {
+			return state.latest, nil
 		}
-		changed := s.changed
-		// Counted under mu with changed in hand: from here, any raise wakes
-		// this call. Decremented without mu, to keep wakeups off the lock.
+		if h.afterWaitRead != nil {
+			h.afterWaitRead()
+		}
+		// The snapshot already owns the channel the next raise closes,
+		// even when that raise precedes accounting or the select below.
 		s.waiters.Add(1)
-		h.mu.Unlock()
 		select {
-		case <-changed:
+		case <-state.changed:
 			s.waiters.Add(-1)
 		case <-ctx.Done():
 			s.waiters.Add(-1)
@@ -169,10 +186,8 @@ func (h *Hub) Wait(ctx context.Context, org kernel.ID, after int64) (int64, erro
 // stays counted until it runs its decrement, so read the count only while
 // no raise is in flight.
 func (h *Hub) Waiting(org kernel.ID) int {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if s, ok := h.orgs[org]; ok {
-		return int(s.waiters.Load())
+	if s, ok := h.orgs.Load(org); ok {
+		return int(s.(*orgSequence).waiters.Load())
 	}
 	return 0
 }

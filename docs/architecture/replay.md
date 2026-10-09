@@ -29,7 +29,10 @@ sequenceDiagram
   skipped by the stream.
 - **No lost wakeups.** Waiting means "block until the hub's latest
   sequence for this organisation is greater than my cursor", and that
-  condition is checked under the hub's lock *before* blocking. The hub's
+  condition and wake channel are read from one immutable atomic snapshot
+  *before* blocking. A raise publishes a higher snapshot and closes the
+  old snapshot's channel; a waiter holding that channel wakes even if the
+  raise lands before its select. The hub's
   value is level-triggered: if event 101 is committed after the connection
   read `seq > 100` and found nothing, but before it starts waiting, the hub
   already holds 101, so the wait returns at once and the next read delivers
@@ -86,7 +89,7 @@ sequenceDiagram
   `WatermarkInterval` (5 s) and in one query, the committed `event_seq` of
   the organisations with registered connections (`Hub.ActiveOrganizations`)
   and raises the hub for those still active (`RaiseIfActive`, under the
-  hub's lock). It only wakes streams; they read from their cursor, so
+  registry lock). It only wakes streams; they read from their cursor, so
   `event_log` stays the only truth, and such an event arrives after the next
   successful check. Each check's query has a 2 s timeout; a failed check is
   logged and retried on the next tick; without connections it reads nothing.

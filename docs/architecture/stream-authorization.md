@@ -179,8 +179,8 @@ per organisation **when the checks overlap**, up to `N` when they are
 staggered. Misses reload independently; denies are never cached.
 
 **Measured** (#671, [results](stream-authorization-results.md)):
-- **Stream cost:** queries per post stay flat (16 to 46) instead of `N + 10`
-  up to 10,000 streams; the highest passing step rose from 2,000 to 30,000
+- **Stream cost:** in the unstaggered ladders, queries per post
+  stay at 16 to 46, not `N + 10`, up to 10,000; the highest passing step rose from 2,000 to 30,000
   (one member) and 11,000 (distinct members, past the cache's capacity).
 - **Staggered checks** read 0.72 `N` per post at 1,000 streams with a 100 ms
   window and 0.056 `N` at 10,000; the revisit question is open on #671.

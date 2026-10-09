@@ -144,6 +144,6 @@ organisation and renders once per language; what
 remained per connection was the membership check. #670 implements its
 [freshness protocol](stream-authorization.md#decision). With it (#671's
 [results](stream-authorization-results.md)), queries per post stay near 16
-to 46 up to 10,000 streams. The next limits are the authorization cache's
+to 46 up to 10,000 streams in the unstaggered ladders. The next limits are the authorization cache's
 capacity and, with one member, something the benchmark cannot see (not the
 pool); the per-stream query is gone (#232).

@@ -59,8 +59,9 @@ unless marked.
 Before #670 a post cost about `N + 10` queries and the highest passing step
 was 2,000 ([stream cost](stream-cost.md#with-shared-reads-227-2026-10-01)).
 
-- **Queries per post no longer follow `N`:** about 16 to 19 with one member,
-  and 26 to 46 with distinct members up to 10,000 streams.
+- **Queries per post no longer follow `N`:** in the unstaggered ladders,
+  about 16 to 19 with one member and 26 to 46 with distinct members up to
+  10,000 streams. The distinct rerun's first step, 9,000, made 106.
 - **Overlapping checks share epoch reads:** about 4 to 7 per post at every
   step, so reads per post per stream fall as `N` grows.
 - **Staggered checks read more, but in these runs not `N`:**

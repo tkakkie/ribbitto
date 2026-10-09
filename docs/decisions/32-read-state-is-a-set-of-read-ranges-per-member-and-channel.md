@@ -12,12 +12,14 @@ storage and cost in [unread counts](../architecture/unread-counts.md).
   lock, so the set only grows. Every gap between two ranges holds an
   unread message of the channel.
 - **Two reading scopes.** The feed reads every message of the channel up to
-  the cursor the page has applied; a topic view reads only that topic's
-  messages, except any moved in after that cursor. Only POSTs advance read
-  state: the first is bounded by the page's snapshot, later ones (#710) by
-  what the page has received. Without JavaScript, a *Mark as read* form sends
-  the same POST. Posting reads its page's scope too, and a member's own
-  posts are read for them.
+  the cursor the page has applied and shown; a topic view reads only that
+  topic's messages, except any moved in after that cursor. Only POSTs
+  advance read state: the first is bounded by the page's snapshot, later
+  ones (#710) by what the page has applied and shown. A message the stream
+  has only received, or the sequence in a post's own response, never makes
+  an unshown message read. Without JavaScript, a *Mark as read* form sends
+  the same POST. Posting reads its page's scope up to the same cursor, and a
+  member's own posts are read for them.
 - **Counts.** A channel's count is all its unread messages, the sum over all
   its topics; a topic's is those in that topic. Each list (the sidebar's
   channels, the current channel's topics) takes two statements in the

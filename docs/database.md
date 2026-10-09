@@ -113,7 +113,8 @@ in a follow-up issue.
 CTE reads need no scope; outer joins, derived tables and set operations fail.
 `tools/scopecheck/allowlist.txt` uses `module.QueryName reason…`; stale, unnecessary
 and `PENDING MAINTAINER:` entries fail (case-insensitive, with any non-alphanumeric
-separator between the marker words). Table ownership rules are in
+separator between the marker words). Migration statement/body ownership checks
+and the two reviewed access exemptions are described with table ownership in
 [import checks](architecture/import-checks.md).
 
 ## Development seed data

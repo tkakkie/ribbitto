@@ -113,8 +113,8 @@ func (a *Authorizer) streamMembership(
 	if err != nil {
 		return Membership{}, fmt.Errorf("reading access epoch: %w", err)
 	}
-	// Shutdown can suppress the cache joiners' second read after a successful
-	// first read. Reject that result before it can authorize or populate an entry.
+	// Shutdown may begin after the cache accepts a successful result. Reject
+	// it before it can authorize or populate an entry.
 	if err := context.Cause(s.parent); err != nil {
 		return Membership{}, fmt.Errorf("reading access epoch during shutdown: %w", err)
 	}

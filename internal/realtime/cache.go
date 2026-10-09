@@ -27,6 +27,16 @@ type Cache[K comparable, V any] struct {
 	now         func() time.Time
 	keep        func(K, V) bool
 
+	// afterLoad, nil outside tests, pauses after the first result is accepted
+	// and before retention or the joiners' second load is decided.
+	afterLoad func(context.Context)
+
+	// afterCancellationCheck, nil outside tests, lets cancellation propagate
+	// between result acceptance and the joiners' second-load decision. It
+	// runs under c.mu, after the cancellation check, so it must not call
+	// methods that take the lock (Waiting, Len).
+	afterCancellationCheck func(context.Context)
+
 	// beforeSecondLoad, nil outside tests, runs once a joiners' second load
 	// is set up and before the first load's waiters are released, so tests
 	// can make the last joiner leave at that point.
@@ -68,7 +78,11 @@ const DefaultCacheLoads = 16
 // that started the load gets it; the callers that joined the load while it
 // ran share a second load, started once the first has finished and so
 // after each of them joined, and open to no one else. Without that, a
-// joiner could get a snapshot older than its own call. now is time.Now
+// joiner could get an unkept snapshot older than its own call. If parent
+// ends before that second load can finish, joiners get its cancellation
+// cause instead. Results accepted after parent cancellation are neither
+// returned nor stored, even if keep would accept them. Kept values may
+// intentionally serve later callers until ttl expires. now is time.Now
 // outside tests.
 func NewCache[K comparable, V any](parent context.Context, capacity, maxLoads int, ttl, loadTimeout time.Duration, keep func(K, V) bool, now func() time.Time) *Cache[K, V] {
 	return &Cache[K, V]{
@@ -165,13 +179,22 @@ func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load 
 	defer stop()
 	defer call.cancel(context.Canceled)
 	c.run(ctx, call, load)
+	if c.afterLoad != nil {
+		c.afterLoad(ctx)
+	}
 
 	c.mu.Lock()
 	current := c.loading[key] == call
 	if current {
 		delete(c.loading, key)
 	}
-	kept := current && ctx.Err() == nil && call.err == nil && (c.keep == nil || c.keep(key, call.value))
+	kept := current && call.err == nil && (c.keep == nil || c.keep(key, call.value))
+	if c.rejectCancelled(ctx, call) {
+		kept = false
+	}
+	if c.afterCancellationCheck != nil {
+		c.afterCancellationCheck(ctx)
+	}
 	if kept {
 		c.entries[key] = c.order.PushFront(&cacheEntry[K, V]{key: key, value: call.value, expires: c.now().Add(c.ttl)})
 		for c.order.Len() > c.capacity {
@@ -182,7 +205,7 @@ func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load 
 	}
 	// Only remaining joiners need a fresh snapshot. They keep their wait
 	// registered on the original call until this private second load ends.
-	if ctx.Err() == nil && call.err == nil && !kept && call.joiners > 0 {
+	if call.err == nil && !kept && call.joiners > 0 {
 		call.again = &cacheCall[V]{done: make(chan struct{})}
 	}
 	c.mu.Unlock()
@@ -203,15 +226,18 @@ func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load 
 func (c *Cache[K, V]) run(ctx context.Context, call *cacheCall[V], load func(context.Context) (V, error)) {
 	ctx, cancel := context.WithTimeout(ctx, c.loadTimeout)
 	defer cancel()
+	defer c.rejectCancelled(ctx, call)
+	if c.rejectCancelled(ctx, call) {
+		return
+	}
 	select {
 	case c.slots <- struct{}{}:
 	case <-ctx.Done():
 		call.err = context.Cause(ctx)
 		return
 	}
-	if err := context.Cause(ctx); err != nil {
+	if c.rejectCancelled(ctx, call) {
 		<-c.slots
-		call.err = err
 		return
 	}
 	type result struct {
@@ -233,8 +259,25 @@ func (c *Cache[K, V]) run(ctx context.Context, call *cacheCall[V], load func(con
 	}
 }
 
-// len reports how many entries the cache holds, for tests.
-func (c *Cache[K, V]) len() int {
+// rejectCancelled sets call's value to zero and its error to the cancellation
+// cause, reporting whether the result was rejected. AfterFunc cancels work
+// asynchronously, so check the parent itself and prefer its shutdown cause
+// even if the load's own timeout or last waiter ended it too. Retention and
+// second-load decisions must use this single check, without re-reading ctx.Err.
+func (c *Cache[K, V]) rejectCancelled(ctx context.Context, call *cacheCall[V]) bool {
+	for _, check := range []context.Context{c.parent, ctx} {
+		if err := context.Cause(check); err != nil {
+			var zero V
+			call.value, call.err = zero, err
+			return true
+		}
+	}
+	return false
+}
+
+// Len reports how many entries the cache holds, including expired entries,
+// so tests of its users can observe retention after shutdown.
+func (c *Cache[K, V]) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.order.Len()

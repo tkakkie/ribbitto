@@ -9,6 +9,10 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   can leave sooner through its own context. The last waiter to leave cancels a load, the last joiner its
   second load, and shutdown every load (`cmd/ribbitto` passes the process
   context, through `Streaming` for renders).
+  Results accepted after parent cancellation are not returned or stored,
+  even before cancellation reaches the detached load context. Joiners of
+  unkept results get the parent's cancellation cause if shutdown prevents
+  their private second load from finishing.
 
 - Stream authorization holds at most 10,000 allows per process by default,
   evicting the least recently used. `RIBBITTO_AUTHORIZATION_CACHE_CAPACITY`

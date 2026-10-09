@@ -71,11 +71,13 @@ These flows use the owning modules' injected APIs, never direct foreign-table
 SQL. The [module manifest](../../module_imports_test.go)'s `ownsTables` is the
 authoritative table registry; the table above points there rather than duplicating
 it. [`tools/tablecheck`](../../tools/tablecheck/table_test.go) checks it against
-migration-created tables and every query in `make check`. Foreign reads need a
-query/table exemption with a reviewed reason; unused entries and reasons containing
-"pending maintainer" (case-insensitive, with any non-alphanumeric separator) fail.
+migration-created tables and every production query in `make check`. Query foreign
+reads need a query/table exemption with a reviewed reason; unused entries and
+reasons containing "pending maintainer" (case-insensitive, with any
+non-alphanumeric separator) fail.
 Reasons mentioning the maintainer need an issue, PR comment or decision reference.
-Writes have no exemptions.
+Query writes have no exemptions. The separate [migration gate](import-checks.md)
+checks backfills and trigger routines, with reviewed access exemptions.
 
 Each flow commits in one transaction, to which the injected factories of
 the other modules it writes are bound, so its atomicity and `event_seq`

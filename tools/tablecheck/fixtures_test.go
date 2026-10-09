@@ -137,27 +137,33 @@ func TestMigrationFixtures(t *testing.T) {
 	for _, tt := range []struct{ sql, want string }{
 		{"CREATE TABLE account(id int);", ""},
 		{"CREATE TABLE account(id int); CREATE TABLE orphan(id int);", "migration table has no owner"},
-		{"SELECT 1;", "owned table not created"},
-		{"ALTER TABLE account RENAME TO renamed;", "unsupported migration table"},
-		{"DROP TABLE account;", "unsupported migration table"},
-		{"CREATE TABLE account AS SELECT 1;", "unsupported migration table"},
+		{"CREATE SEQUENCE ids;", "owned table not created"},
+		{"ALTER TABLE account RENAME TO renamed;", "unsupported migration statement RenameStmt"},
+		{"DROP TABLE account;", "unsupported migration statement"},
+		{"CREATE TABLE account AS SELECT 1;", "unsupported migration statement"},
 		{"CREATE TABLE public.account(id int);", "unsupported qualified"},
 		{"CREATE TABLE account(id int); CREATE TABLE account(id int);", "duplicate migration table"},
-		{"DO $$ BEGIN EXECUTE 'CREATE TABLE orphan(id int)'; END $$;", "unsupported migration DO block"},
-		{"DO $$ BEGIN NULL; END $$;", "unsupported migration DO block"},
-		{"CREATE FUNCTION f() RETURNS void LANGUAGE sql AS $body$ DO $$ BEGIN CREATE/**/TABLE orphan(id int); END $$; $body$;", "unsupported migration DO block"},
-		{"CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN CREATE TABLE orphan(id int); END $$;", "unsupported migration routine"},
-		{"CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN eXeCuTe 'SELECT 1'; END $$;", "unsupported migration routine"},
-		{"CREATE PROCEDURE f() LANGUAGE plpgsql AS $$ BEGIN cReAtE tAbLe orphan(id int); END $$;", "unsupported migration routine"},
-		{"CREATE FUNCTION f() RETURNS void LANGUAGE sql AS 'ALTER TABLE account RENAME TO renamed';", "unsupported migration routine"},
-		{"CREATE PROCEDURE f() LANGUAGE sql AS 'drop table account';", "unsupported migration routine"},
-		{"CREATE FUNCTION f() RETURNS void LANGUAGE sql AS 'CREATE/**/TEMPORARY TABLE orphan(id int)';", "unsupported migration routine"},
-		{"CREATE FUNCTION f() RETURNS void LANGUAGE sql AS E'CREA\\x54E TABLE orphan(id int)';", "unsupported migration routine"},
-		{"CREATE FUNCTION f() RETURNS void LANGUAGE sql BEGIN ATOMIC CREATE TABLE orphan(id int); END;", "unsupported migration routine"},
-		{"CREATE PROCEDURE f() LANGUAGE sql BEGIN ATOMIC ALTER TABLE account RENAME TO renamed; END;", "unsupported migration routine"},
+		{"DO $$ BEGIN EXECUTE 'CREATE TABLE orphan(id int)'; END $$;", "DoStmt"},
+		{"DO $$ BEGIN NULL; END $$;", "DoStmt"},
+		{"CREATE FUNCTION f() RETURNS void LANGUAGE sql AS $body$ DO $$ BEGIN CREATE/**/TABLE orphan(id int); END $$; $body$;", "DoStmt"},
+		{"CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN CREATE TABLE orphan(id int); END $$;", "CreateStmt"},
+		{"CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN eXeCuTe 'SELECT 1'; END $$;", "PLpgSQL_stmt_dynexecute"},
+		{"CREATE PROCEDURE f() LANGUAGE plpgsql AS $$ BEGIN cReAtE tAbLe orphan(id int); END $$;", "unsupported migration procedure"},
+		{"CREATE FUNCTION f() RETURNS void LANGUAGE sql AS 'ALTER TABLE account RENAME TO renamed';", "RenameStmt"},
+		{"CREATE PROCEDURE f() LANGUAGE sql AS 'drop table account';", "unsupported migration procedure"},
+		{"CREATE FUNCTION f() RETURNS void LANGUAGE sql AS 'CREATE/**/TEMPORARY TABLE orphan(id int)';", "CreateStmt"},
+		{"CREATE FUNCTION f() RETURNS void LANGUAGE sql AS E'CREA\\x54E TABLE orphan(id int)';", "CreateStmt"},
+		{"CREATE FUNCTION f() RETURNS void LANGUAGE sql BEGIN ATOMIC CREATE TABLE orphan(id int); END;", "CreateStmt"},
+		{"CREATE PROCEDURE f() LANGUAGE sql BEGIN ATOMIC ALTER TABLE account RENAME TO renamed; END;", "unsupported migration procedure"},
 		{"CREATE TABLE account(id int); CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM 1 FROM account; RETURN NULL; END $$;", ""},
 		{"CREATE TABLE account(id int); CREATE FUNCTION f() RETURNS int LANGUAGE sql BEGIN ATOMIC SELECT 1; END;", ""},
 	} {
+		if strings.Contains(tt.sql, "CREATE FUNCTION") {
+			if !strings.Contains(tt.sql, "CREATE TABLE account(") {
+				tt.sql = "CREATE TABLE account(id int); " + tt.sql
+			}
+			tt.sql += " CREATE TRIGGER t AFTER INSERT ON account FOR EACH ROW EXECUTE FUNCTION f();"
+		}
 		err := checkMigrations([]string{"-- +goose Up\n" + tt.sql + "\n-- +goose Down\nDROP TABLE account;"}, map[string]string{"account": "identity"})
 		if tt.want == "" && err != nil || tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)) {
 			t.Fatalf("got %v, want %q", err, tt.want)

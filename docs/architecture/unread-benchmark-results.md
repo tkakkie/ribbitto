@@ -125,10 +125,10 @@ per statement, for comparison.
 
 - **Own posts above a floor:** the 50-topic count (step 4) grew with them:
   medians of 0.33, 0.65, 3.1 and 27.4 ms for 10, 100, 1,000 and 10,000
-  posts, against about 0.3 ms caught up; at 10,000 it visited about 500,000
+  posts, against 0.29–0.56 ms caught up; at 10,000 it visited about 500,000
   rows. The topic-view write grew too, from about 1.05 to 2.07 ms
   (set-based) and from 1.1 to 2.2 ms (per message). Steps 1–3 and the feed
-  write stayed between 0.2 and 0.6 ms.
+  write had medians of about 0.18–0.58 ms.
 - **Moved messages:** with 10,000 read messages moved in since a floor,
   step 4 took about 1.45 ms (0.27 ms caught up) and the set-based
   topic-view write 1.8–2.0 ms (0.8 ms).

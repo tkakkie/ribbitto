@@ -255,6 +255,7 @@ func endStreamsOnShutdown(srv *http.Server, hub *realtime.Hub) {
 // http.ResponseController.SetWriteDeadline. A future route that must read a
 // long request body likewise sets its own read deadline.
 func newServer(addr string, handler http.Handler, timeouts serverTimeouts) *http.Server {
+	// Always pass an explicit handler: pprof's init populates DefaultServeMux.
 	return &http.Server{
 		Addr:              addr,
 		Handler:           handler,

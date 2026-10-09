@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"net/netip"
 	"runtime"
 	"time"
@@ -12,15 +13,15 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
-// Development-only metrics for load tests (#218). They are off unless
-// RIBBITTO_DEV_METRICS_ADDR is set, and then served on their own listener,
+// Development-only metrics and profiles for load tests (#218, #695). They
+// are off unless RIBBITTO_DEV_METRICS_ADDR is set, then served on their own listener,
 // never on the application's mux, so nothing about them is reachable from
 // the public address.
 
 // devMetricsSetup reads RIBBITTO_DEV_METRICS_ADDR. Empty disables metrics:
 // it returns no address and no query counter, so serve starts no listener
-// and installs no tracer. Otherwise the address must be a loopback IP
-// literal with a fixed port (1–65535); a wildcard, a host name (its
+// and installs no tracer or mutex sampling. Otherwise the address must be a
+// loopback IP literal with a fixed port (1–65535); a wildcard, a host name (its
 // resolution could change), port 0 (the kernel would pick one the load test
 // cannot know) or any other address is refused before the database opens.
 func devMetricsSetup(value string) (addr string, queries *platform.QueryCounter, err error) {
@@ -31,8 +32,13 @@ func devMetricsSetup(value string) (addr string, queries *platform.QueryCounter,
 	if err != nil || !ap.Addr().IsLoopback() || ap.Port() == 0 {
 		return "", nil, fmt.Errorf("RIBBITTO_DEV_METRICS_ADDR must be a loopback IP address and a non-zero port, such as 127.0.0.1:9090")
 	}
+	runtime.SetMutexProfileFraction(devMutexProfileFraction)
 	return value, platform.NewQueryCounter(), nil
 }
+
+// Sample one in five mutex contention events to limit profiling overhead
+// while retaining enough samples for the disposable load-test server.
+const devMutexProfileFraction = 5
 
 // devMetrics gathers the snapshot. Every source is read-only.
 type devMetrics struct {
@@ -92,7 +98,9 @@ func (m devMetrics) snapshot() metricsSnapshot {
 	return s
 }
 
-// handler serves the snapshot on a mux of its own.
+// handler serves the snapshot and only the three requested profiles on its
+// own mux. Importing pprof also registers on DefaultServeMux in init; neither
+// server may use that mux, which exposes additional debugging endpoints.
 func (m devMetrics) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
@@ -100,11 +108,15 @@ func (m devMetrics) handler() http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		_ = json.NewEncoder(w).Encode(m.snapshot())
 	})
+	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
+	mux.Handle("GET /debug/pprof/mutex", pprof.Handler("mutex"))
+	mux.Handle("GET /debug/pprof/heap", pprof.Handler("heap"))
 	return mux
 }
 
 // newMetricsServer is the metrics listener's server, with the same bounded
-// timeouts as the application's; the snapshot is small.
+// read/idle timeouts as the application's. pprof extends the 10-second write
+// deadline by the requested capture duration, allowing a 30-second profile.
 func newMetricsServer(addr string, m devMetrics) *http.Server {
 	return newServer(addr, m.handler(), serverTimeouts{
 		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout, write: 10 * time.Second,

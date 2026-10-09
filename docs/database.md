@@ -77,10 +77,10 @@ Messages and unread inputs are never deleted.
 `RIBBITTO_MAX_STREAMS` caps open event streams per process (default `5000`
 when unset). An explicit value must be a positive integer; empty, zero,
 negative, unparsable and overflowing values fail at start. Excess streams
-get 429 before streaming; the per-account cap remains 16. Raising it also
-raises the authorization cache's capacity when
-`RIBBITTO_AUTHORIZATION_CACHE_CAPACITY` is unset; an explicit capacity below
-it is kept and logs a warning at start. See
+get 429 before streaming; the per-account cap remains 16. When
+`RIBBITTO_AUTHORIZATION_CACHE_CAPACITY` is unset, the authorization cache
+holds `max(10,000, this limit)` allows; an explicit capacity below this limit
+is kept and logs a warning at start. See
 [stream resource limits](architecture/stream-limits.md) for the rule and the sizing evidence.
 
 Integration tests, `pgtest` and the module test fixtures are in

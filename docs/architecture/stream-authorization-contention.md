@@ -71,7 +71,7 @@ numbers; it is the maintainer's call.
 
 ## The hub and the event cache (#705), 2026-10-09
 
-The maintainer then tried one smaller change before the shared reader. Readers of the hub's level take no lock: the level and the channel that the next raise closes are one atomic snapshot, and a raise publishes the next one with a compare-and-swap. A completed event-cache call skips its cleanup lock. Before is main at `b5e0b51` (#704), and after is this change. Both were measured in one session, under the same settings as above.
+The maintainer then tried one smaller change before the shared reader. Readers of the hub's level take no lock: the level and the channel that the next raise closes are one atomic snapshot, and a raise publishes the next one with a compare-and-swap. An event-cache call skips its cleanup lock once both the starter's and the joiners' results are published. While the joiners' second load is pending, it still takes the lock. Before is main at `b5e0b51` (#704), and after is this change. Both were measured in one session, under the same settings as above.
 
 **Ceiling, without profiling** (one member, from 20,000 streams up, alternating before and after, twice each), p95:
 
@@ -82,7 +82,7 @@ The maintainer then tried one smaller change before the shared reader. Readers o
 | 50,000 | 426 / 397 ms | 392 / 375 ms |
 | 60,000 | 1,011 ms, fail / 969 ms | 1,228 ms, fail / 1,064 ms, fail |
 
-Up to 50,000 streams the change is 5–25% faster. 60,000 is at the edge both before and after, and passes or fails from run to run. So the benchmark's ceiling, 50,000 to 60,000, did not move: `Hub.Wait` had been only 1–2% of the benchmark. With distinct members, 5,000 and 10,000 passed both before and after.
+From 30,000 to 50,000 streams, the observed p95 is 5–25% lower after the change. At 20,000 streams, the first before run had an outlier p95 of 240 ms, against 84 ms after. 50,000 passed in every run. At 60,000, before passed once and failed once, and after failed twice, with a higher p95 than before each time. These runs therefore show neither a higher ceiling nor a reliably unchanged one; 60,000 remains marginal. In the benchmark, `Hub.Wait` had been only 1–2%. With distinct members, 5,000 and 10,000 passed before and after. That is a lower bound only: the ladder stopped there and found no failing step.
 
 **Profiles, in the same settings as above:**
 

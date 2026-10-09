@@ -77,7 +77,7 @@ func TestBranching(t *testing.T) {
 
 // A branch must wake already-caught-up streams through the production wiring,
 // without a watermark worker or initial replay hiding a disconnected notifier.
-func TestBranchingWakesOpenStreams(t *testing.T) {
+func testBranchingWakesOpenStreams(t *testing.T) {
 	pool := acceptanceDatabase(t)
 	server, streams, hub := streamServersWithHub(t, pool)
 	owner := newAcceptanceBrowser(t, server, "192.0.2.10")

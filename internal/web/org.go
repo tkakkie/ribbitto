@@ -34,6 +34,7 @@ func orgRoutes(pages *pageRenderer, channels Channels, topics TopicLookup, messa
 	}
 	return []orgRoute{
 		{http.MethodGet, "/{$}", handlers.home},
+		{http.MethodGet, "/events", handlers.events},
 		{http.MethodGet, "/channels/{channelID}", handlers.show},
 		{http.MethodGet, "/channels/{channelID}/events", handlers.events},
 		{http.MethodGet, "/channels/{channelID}/topics/{topicID}", handlers.show},

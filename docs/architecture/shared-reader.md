@@ -37,11 +37,13 @@ after it. Renders, authorization and sends are per connection.
   drains full batches before waiting. The hub and the watermark (#237) now
   wake one goroutine per organisation: the reader.
 - **Window.** A contiguous range `(lo, hi]` of event envelopes exactly as
-  read, without renders, bounded by count (initially 1,024 events) and
-  evicting the oldest on append, whoever has not read them. It has no age
-  bound: an idle organisation keeps its last events, which are immutable
-  and stay valid through the floor below, and its memory is bounded by the
-  count. `hi` is the reader's watermark; publishing closes and replaces a
+  read, without renders, bounded by count and evicting the oldest on
+  append, whoever has not read them. It holds 256 events per organisation:
+  today's event cache holds 1,024 entries for the whole process, so the
+  same number per organisation would mean far more memory. The measurement
+  issue records misses and memory, and raises it to 512 or 1,024 if needed.
+  No age bound: an idle organisation keeps its last events, which are
+  immutable and stay valid through the floor below. `hi` is the reader's watermark; publishing closes and replaces a
   channel under the reader's lock, like the hub, so a waiter cannot miss it.
 - **Floor.** Retention is the only writer of the replay boundary, and runs
   in this process. The wiring wraps org's `RetentionBoundary` so that
@@ -51,14 +53,16 @@ after it. Renders, authorization and sends are per connection.
   Raising it evicts every entry at or below it, and appends never go below
   it, so `lo` is at least every boundary already committed. A rolled-back
   batch only leaves a floor too high, which sends reads to the database.
-- **Failure.** A failed start or read, `ErrCursorExpired` or a gap ends
-  that reader: it records the error, wakes its waiters and leaves the
-  registry. Every stream holding it checks that failure before every event,
-  with its cancellation, so it stops before its next event with its cursor
-  unchanged, whichever source that event came from, even inside a copied
-  batch. On reconnecting it acquires a fresh reader. The reader never
-  retries, skips or sends `reset`; each stream decides `reset` from its own
-  cursor.
+- **Failure.** An ordinary start or read error is retried up to three
+  times, with a short backoff of about 2 s in all; meanwhile streams keep
+  their cursors and send heartbeats. `ErrCursorExpired`, a gap, and
+  cancellation or shutdown end the reader at once, without a retry. A
+  reader that ends this way or runs out of retries fails: it records the
+  error, wakes its waiters and leaves the registry. Every stream holding it
+  checks that failure before every event, with its cancellation, so it
+  stops before its next event with its cursor unchanged, even inside a
+  copied batch, and acquires a fresh reader on reconnecting. The reader
+  never skips or sends `reset`; each stream decides that from its cursor.
 
 Decision 23 holds: the window is a cache of `event_log` rows read after
 their commit, like `CachedEvents`, not a fan-out from memory. A missed
@@ -159,17 +163,17 @@ is not expected to move the measured limits by itself.
 **Evidence that should decide:**
 
 1. CPU and mutex profiles of `TestStreamCost` at the one-member 30,000 and
-   40,000 steps, with no code change: `RIBBITTO_STREAM_COST=1
-   RIBBITTO_STREAM_COST_CACHE=1 RIBBITTO_STREAM_COST_STEPS=30000,40000 go
-   test -count=1 -run 'TestStreamCost$' -timeout 60m -cpuprofile cpu.out
-   -mutexprofile mutex.out ./internal/realtime/`:
-   the share in the path the reader removes (`CachedEvents.EventsAfter`,
+   40,000 steps (`_CACHE=1`, `go test … -cpuprofile cpu.out -mutexprofile
+   mutex.out`, no code change): the share in the path the reader removes (`CachedEvents.EventsAfter`,
    the event cache, `Hub.Latest` and `Hub.Wait`) against renders,
    `MayReceive` and sends.
 2. A CPU profile of the server at #216's 15,000 HTTP/1.1 step, separating
-   SSE writes, garbage collection and memory from that path. It needs a
-   profiling endpoint on the [development metrics](dev-metrics.md)
-   listener, which is a separate issue.
+   SSE writes, garbage collection and memory from that path. It needs
+   #695's profiling endpoint on the [development metrics](dev-metrics.md)
+   listener (development only, never production).
 
-Build it when both put a substantial share (the maintainer sets the bar) in
-that path; otherwise #236's other steps come first.
+**Criterion** (maintainer, 2026-10-09). Build it only if that path takes
+at least 20% of the CPU profile or at least 25% of mutex blocking time,
+and both profiles show it as the same hotspot. Under 10% of CPU and not a
+mutex hotspot, do not build it. Between 10% and 20%, hold it and compare
+it with #236's other options.

@@ -87,28 +87,35 @@ showing streams that are already live slowing while others replay.
 Ordered; each about one pull request with its own tests and with the
 documentation of what it changes (the architecture and package docs, as
 AGENTS.md requires), `high` risk
-(`internal/realtime/**`). None starts before the maintainer decides to
-build the reader ([Deciding](shared-reader.md#deciding-whether-to-build-it)).
-Production changes only with the fourth; until then a stream without
+(`internal/realtime/**`). None starts before #695's profiles are taken and
+the maintainer applies the [criterion](shared-reader.md#deciding-whether-to-build-it).
+Each pull request gets its final review from the AI that did not
+implement it.
+Production changes only with the fifth; until then a stream without
 readers runs today's path, which also stays selectable for the benchmark.
 
-1. **The reader and its window:** registry, lifecycle, loop, count bound,
-   floor, failure and shutdown; no stream uses it yet. Package
-   documentation. Tier A.
-2. **Fan-out to caught-up streams:** a stream inside the window reads from
+1. **The reader and its window:** registry, lifecycle, loop, count bound
+   (256), floor, and failure on any error; no stream uses it yet. Package
+   documentation. Codex, tier A.
+2. **Retry and shutdown:** the bounded retry of ordinary errors, with
+   deterministic tests, and the wait for every reader at shutdown. Codex,
+   tier A.
+3. **Fan-out to caught-up streams:** a stream inside the window reads from
    it and waits on the reader; a mixed-language test; #209's rules on that
    path, including a reader failing mid-batch; a slow stream blocks
-   nothing. Tier A.
-3. **The hand-over:** the per-read choice between window and database and
+   nothing. Codex, tier A.
+4. **The hand-over:** the per-read choice between window and database and
    the wait on the reader only, with deterministic gap, duplicate and
-   expired-cursor tests. Tier A.
-4. **Wiring:** `cmd/ribbitto` builds the registry, wraps retention's
+   expired-cursor tests. Claude, tier A.
+5. **Wiring:** `cmd/ribbitto` builds the registry, wraps retention's
    boundary and waits for the readers at shutdown, and streams use it. It
    moves the built parts out of *planned* and updates
    [streaming](streaming.md), [replay](replay.md), [real time](realtime.md),
-   [stream limits](stream-limits.md) and decision 23. Tier A.
-5. **Measurement:** `TestStreamCost` runs on the reader and records its
+   [stream limits](stream-limits.md) and decision 23. Codex, tier A.
+6. **Measurement:** `TestStreamCost` runs on the reader and records its
    results, with the distinct-members case, in [stream cost](stream-cost.md)
-   next to #227's, plus any remaining consolidation. Tier B.
+   next to #227's, with the window's miss rate and memory (raising the
+   bound to 512 or 1,024 if needed), plus any remaining consolidation.
+   Claude, tier B (A if it raises the bound).
 
 The issue numbers are added here once they are filed.

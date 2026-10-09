@@ -69,7 +69,8 @@ read only the first 101 ranges, but topic counts, topic-view writes and the
 feed read that merges them back handle all of them (`O(R)`). Topic counts
 also read the member's own posts made while the stream lagged, without a
 bound. #283 benchmarks both (and stream delay or disconnection, and 10,000
-ranges) before implementation starts, and switches topic counts to gap
-probing if the cost is unacceptable. One row per range, rather than an
+ranges) before implementation starts; the maintainer decided go on
+2026-10-10 ([benchmark results](../architecture/unread-benchmark-results.md#decision)),
+not as a performance guarantee. One row per range, rather than an
 `int8multirange` column, keeps channel counts to the first gaps; the
 statements still need query-gate additions, reviewed in #284.

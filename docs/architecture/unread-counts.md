@@ -162,4 +162,7 @@ step 3 took 2.4 ms, step 4 6.1–6.4 ms, the merging feed read 3.4 ms, and
 the set-based topic-view write of 9,999 messages 87–88 ms (10.5–10.6 s
 one message per statement). Nothing beyond the measured sizes follows.
 
-**Decision:** pending, the maintainer's go or no-go (#283).
+**Decision: go** (maintainer, 2026-10-10): read ranges with the topic-floor
+scan; topic-view writes are set-based. Not a performance guarantee; the
+reasons, limits and when to revisit are in
+[benchmark results](unread-benchmark-results.md#decision).

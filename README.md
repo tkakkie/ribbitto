@@ -63,7 +63,7 @@ ports must match the registry; reruns keep free ports and replace busy ones.
 `make ai-health` checks the shared admin connection without printing credentials.
 `make ai-env-clean` drops this worktree's dev database and releases its ports; it also
 drops the databases and ports of registry entries whose worktrees are gone.
-See [worktree environments](docs/worktree-env.md) for configuration overrides.
+See [worktree environments](docs/worktree-env.md) for configuration overrides and capacity measurement.
 The server never migrates on startup.
 
 Behind a reverse proxy, set `RIBBITTO_TRUSTED_PROXIES` to the address of the
@@ -103,7 +103,8 @@ so local notes and tools do not change the output.
 
 `make check` is what CI runs and what must pass before a pull request: it
 checks formatting (`gofmt` for Go, `templ fmt` for templates), vets, lints,
-builds, runs the Go tests with the race detector, and checks the import
+builds, runs the Go tests with the race detector (at `-p 2` by default; see
+[worktree-env.md](docs/worktree-env.md)), and checks the import
 graph, module API summaries and the documents. `tools/sourcecheck` enforces the
 [product vocabulary](docs/domain/vocabulary.md) and
 [UI colour rules](docs/ui.md#tokens). In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,

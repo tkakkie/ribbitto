@@ -27,6 +27,30 @@ failures and SQL failures without credentials;
 `make check` runs it before tests when DB configuration is set or required.
 `make check-ai-env` tests this tooling.
 
-Capacity measurement and connection settings come in a follow-up pull request
-that closes #636.
+Run `python3 scripts/ai_capacity.py WT1 WT2 PACKAGES PARALLEL` outside the
+sandbox, with this change in both worktrees and `bin/ai-db` built. It reports
+two uncached required-DB checks' exit codes and counts of lines matching
+`53300|too many clients`, sampled peak/initial client backends (including one
+persistent observer connected before checks), server limit, `-p`, `-parallel`
+and pool limits. Each check runs in its own process group, killed on cleanup.
+Output stays in a 0600 `bin/ai-capacity-*.log` in each worktree; logs may contain
+credentials, so do not share them. The report never prints URLs. The runner
+reuses the inherited/default module cache and GOPATH. SQL pools are unbounded
+(0); pgx pools use pgx's default, max(4, CPUs). The admin URL cannot carry
+`pool_max_conns`: pgtest's admin connection is plain pgx, which would send it to
+the server as a setting.
+
+Measured on 2026-10-09 (10 CPUs, pgx pools of 10): two uncached required-DB
+`make check` runs at `-p 2 -parallel 10` both passed, peaking at 49 client
+backends of `max_connections` 100, with no 53300. A second run at that setting
+confirmed it (peak 38/100, no 53300). The shared server therefore keeps
+`max_connections=100` (`compose.yml`), and:
+
+- `make check` runs `go test` at `-p 2` by default (`GO_TEST_FLAGS ?= -p 2` in
+  the `Makefile`). `go test`'s own default, `-p` = CPUs, can exceed the limit.
+  The capacity runner and explicit measurements override it with
+  `GO_TEST_FLAGS`.
+- Run at most two full `make check` at once.
+- To raise `-p` to 4 or more, first re-measure at that setting, then change
+  `max_connections` and the default together.
 

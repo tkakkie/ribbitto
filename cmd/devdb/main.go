@@ -1,6 +1,6 @@
-// Command devdb migrates worktree databases and runs administrative statements.
+// Command devdb migrates worktree databases and observes development capacity.
 // It keeps admin credentials in the environment and suppresses driver errors,
-// which can contain connection strings. Used by ai_env.py.
+// which can contain connection strings. Used by ai_env.py and ai_capacity.py.
 package main
 
 import (
@@ -35,7 +35,7 @@ func run() (int, error) {
 	if err != nil {
 		return 2, fmt.Errorf("parsing admin configuration: %w", err)
 	}
-	if len(os.Args) == 2 {
+	if len(os.Args) == 2 && os.Args[1] != "--observe" {
 		config.Database = os.Args[1]
 		db := stdlib.OpenDB(*config)
 		defer func() { _ = db.Close() }()
@@ -49,6 +49,9 @@ func run() (int, error) {
 		return 3, fmt.Errorf("connecting to admin database: %w", err)
 	}
 	defer func() { _ = conn.Close(context.Background()) }()
+	if len(os.Args) == 2 && os.Args[1] == "--observe" {
+		return 4, observe(conn)
+	}
 	query, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return 4, fmt.Errorf("reading statement: %w", err)
@@ -66,4 +69,45 @@ func run() (int, error) {
 		fmt.Println(values[0])
 	}
 	return 4, rows.Err()
+}
+
+func observe(conn *pgx.Conn) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var limit, peak int
+	if err := conn.QueryRow(ctx, "SELECT current_setting('max_connections')::int, count(*) FROM pg_stat_activity WHERE backend_type = 'client backend'").Scan(&limit, &peak); err != nil {
+		return fmt.Errorf("reading observer baseline: %w", err)
+	}
+	// This handshake proves the observer owns a slot before checks begin.
+	fmt.Printf("{\"max_connections\":%d,\"baseline\":%d}\n", limit, peak)
+	closed := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(io.Discard, os.Stdin)
+		close(closed)
+	}()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-closed:
+			fmt.Println(peak)
+			return nil
+		case <-ticker.C:
+			count, err := clientCount(conn)
+			if err != nil {
+				return err
+			}
+			peak = max(peak, count)
+		}
+	}
+}
+
+func clientCount(conn *pgx.Conn) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var count int
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend'").Scan(&count); err != nil {
+		return 0, fmt.Errorf("sampling client backends: %w", err)
+	}
+	return count, nil
 }

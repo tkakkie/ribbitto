@@ -20,19 +20,23 @@ topic. What changes:
 - **Reader:** per interest, the highest sequence that touches it (from the
   envelope's channel and routing topics; organisation-wide kinds under one
   interest), each with its own close-and-replace channel, instead of one
-  channel for the organisation, and an index of the window's events by
-  interest. A connection registers its interests when it acquires the
-  reader.
+  channel for the organisation; an index of the window's events by
+  interest; and per interest the highest sequence evicted (by count or by
+  the floor) that touched it. A connection registers its interests when it
+  acquires the reader.
 - **Wait:** until the highest level among the connection's interests passes
   its cursor. It is still a level, so no wakeup is lost; #296's ephemeral
   generation is one more level of the same kind.
-- **Read:** a connection that wakes finds, in the index, the first event
-  above its cursor that touches its interests. If that event is still in
-  the window, it moves its cursor to just before it without reading the
-  events in between, which touch none of its interests (today's skip and
-  advance, done from the index); otherwise it reads the database, as
-  before. A connection that sleeps through many other channels' posts
-  therefore does not fall below `lo` for them.
+- **Read:** a connection may skip events without reading them only with a
+  proof that none touches its interests: its cursor is at least the
+  reader's starting sequence, and for each of its interests the highest
+  evicted sequence is at or below the cursor. Then every event of its
+  interests above the cursor is in the index, and it moves its cursor to
+  just before the first one (today's skip and advance). Without the proof
+  (an event of its interests was evicted above the cursor, or the cursor
+  predates the reader) it reads the database, as before. Example: with
+  event 101 of its channel evicted and 200 indexed, a cursor at 100 has no
+  proof, so 101 comes from the database rather than being skipped.
 
 The window, the hand-over, renders, authorization and #209's cursor rules
 do not change. Evidence for it: a `TestStreamCost` variant with posts spread
@@ -49,7 +53,11 @@ events queue behind replay work. What changes:
 - **A limit on concurrent replays:** a process-wide FIFO semaphore taken
   before each database-path read and released once that batch is
   delivered. A connection waiting for a slot holds no pool connection and
-  still sends heartbeats; the reader and window reads never take one.
+  still sends heartbeats. The reader and window reads never take one; they
+  need none, since a window read runs no query, not even a bounds check
+  ([floor](shared-reader.md#the-reader)). A storm of cursors inside the
+  window therefore adds no event reads or bounds checks; its renders go
+  through the render cache, like live ones.
 - **Separate render loaders:** renders of events inside the window load
   from their own budget, so replay renders cannot hold every slot.
 
@@ -59,27 +67,30 @@ showing streams that are already live slowing while others replay.
 
 ## Implementation issues
 
-Ordered; each about one pull request with its own tests, `high` risk
+Ordered; each about one pull request with its own tests and with the
+documentation of what it changes (`AGENTS.md`), `high` risk
 (`internal/realtime/**`). None starts before the maintainer decides to
 build the reader ([Deciding](shared-reader.md#deciding-whether-to-build-it)).
 Production changes only with the fourth; until then a stream without
 readers runs today's path, which also stays selectable for the benchmark.
 
-1. **The reader and its window:** registry, lifecycle, loop, eviction,
-   failure and shutdown; no stream uses it yet. Tier A.
+1. **The reader and its window:** registry, lifecycle, loop, count bound,
+   floor, failure and shutdown; no stream uses it yet. Package
+   documentation. Tier A.
 2. **Fan-out to caught-up streams:** a stream inside the window reads from
    it and waits on the reader; a mixed-language test; #209's rules on that
-   path; a slow stream blocks nothing. Tier A.
+   path, including a reader failing mid-batch; a slow stream blocks
+   nothing. Tier A.
 3. **The hand-over:** the per-read choice between window and database and
-   the wait on the reader only, with deterministic gap and duplicate tests.
-   Tier A.
-4. **Wiring:** `cmd/ribbitto` builds the registry and waits for it at
-   shutdown, and streams use it. Tier A.
-5. **Documentation and measurement:** the design moves out of *planned*
-   into [streaming](streaming.md), [replay](replay.md),
-   [real time](realtime.md), [stream limits](stream-limits.md) and the
-   package documentation; `TestStreamCost` runs on the reader and records
-   its results, with the distinct-members case, in
-   [stream cost](stream-cost.md) next to #227's. Tier B.
+   the wait on the reader only, with deterministic gap, duplicate and
+   expired-cursor tests. Tier A.
+4. **Wiring:** `cmd/ribbitto` builds the registry, wraps retention's
+   boundary and waits for the readers at shutdown, and streams use it. It
+   moves the built parts out of *planned* and updates
+   [streaming](streaming.md), [replay](replay.md), [real time](realtime.md),
+   [stream limits](stream-limits.md) and decision 23. Tier A.
+5. **Measurement:** `TestStreamCost` runs on the reader and records its
+   results, with the distinct-members case, in [stream cost](stream-cost.md)
+   next to #227's, plus any remaining consolidation. Tier B.
 
 The issue numbers are added here once they are filed.

@@ -25,8 +25,8 @@ after it. Renders, authorization and sends are per connection.
   its deferred cleanup: a refused or cancelled registration (429, 503, 404)
   never starts one. The first acquire starts the reader;
   it reads the committed `event_seq` through the watermark's
-  `SequenceReader` and starts its window there, so it never replays
-  history. The last release stops it and drops the window; a later acquire
+  `SequenceReader` and starts its window there (or at the floor below, if
+  higher), so it never replays history. The last release stops it and drops the window; a later acquire
   starts a new one. Readers run under the process context: shutdown ends
   every stream (`Hub.CancelAll`), the releases stop the readers, and
   `cmd/ribbitto` waits for their goroutines before closing the pool.
@@ -37,17 +37,28 @@ after it. Renders, authorization and sends are per connection.
   drains full batches before waiting. The hub and the watermark (#237) now
   wake one goroutine per organisation: the reader.
 - **Window.** A contiguous range `(lo, hi]` of event envelopes exactly as
-  read, without renders, bounded by count (initially 1,024 events) and age
-  (initially one minute). Appending evicts the oldest entries whoever has
-  not read them. `hi` is the reader's watermark; publishing closes and
-  replaces a channel under the reader's lock, like the hub, so a waiter
-  cannot miss it.
+  read, without renders, bounded by count (initially 1,024 events) and
+  evicting the oldest on append, whoever has not read them. It has no age
+  bound: an idle organisation keeps its last events, which are immutable
+  and stay valid through the floor below, and its memory is bounded by the
+  count. `hi` is the reader's watermark; publishing closes and replaces a
+  channel under the reader's lock, like the hub, so a waiter cannot miss it.
+- **Floor.** Retention is the only writer of the replay boundary, and runs
+  in this process. The wiring wraps org's `RetentionBoundary` so that
+  `RaiseBoundary`, which the cleaner calls inside its transaction before
+  committing, first raises the organisation's floor in the registry, which
+  keeps it while the organisation has no reader, too.
+  Raising it evicts every entry at or below it, and appends never go below
+  it, so `lo` is at least every boundary already committed. A rolled-back
+  batch only leaves a floor too high, which sends reads to the database.
 - **Failure.** A failed start or read, `ErrCursorExpired` or a gap ends
   that reader: it records the error, wakes its waiters and leaves the
-  registry. Every connection holding it gets the error at its next read or
-  wait and stops before its next event, cursor unchanged; on reconnecting
-  it acquires a fresh reader. The reader never retries, skips or sends
-  `reset`; each connection decides `reset` from its own cursor.
+  registry. Every stream holding it checks that failure before every event,
+  with its cancellation, so it stops before its next event with its cursor
+  unchanged, whichever source that event came from, even inside a copied
+  batch. On reconnecting it acquires a fresh reader. The reader never
+  retries, skips or sends `reset`; each stream decides `reset` from its own
+  cursor.
 
 Decision 23 holds: the window is a cache of `event_log` rows read after
 their commit, like `CachedEvents`, not a fan-out from memory. A missed
@@ -60,10 +71,10 @@ replay from the log.
 
 - **Read at cursor `c`.** Under the reader's lock the stream takes `lo` and
   `hi`; if `lo ≤ c ≤ hi` it copies the events `(c, min(c + batch, hi)]` and
-  releases the lock. Otherwise — `c < lo` (a replay, or a connection that
-  fell behind), `c > hi` (a reader not started yet or behind the log) — it
-  reads the **database path**, today's `CachedEvents` read with its bounds
-  checks, `reset` and gap detection.
+  releases the lock. Otherwise — `c < lo` (a replay, a connection that fell
+  behind, or a cursor below the floor), `c > hi` (a reader not started yet
+  or behind the log) — it reads the **database path**, today's
+  `CachedEvents` read with its bounds checks, `reset` and gap detection.
 - **Wait only on the reader:** until `hi > c` (a reader still starting
   counts as below every cursor), its failure, or the connection's context;
   heartbeats as today. A connection never waits on
@@ -79,13 +90,15 @@ replay from the log.
   released, so a later eviction cannot change it. If the reader advanced
   during a replay, the switch simply happens at a higher cursor; if
   eviction passed the cursor, the next read goes back to the database.
-- **Cursor validity (decision 24).** The window never serves a partial
-  replay. A full batch served from it gets the zero-limit bounds check that
-  `CachedEvents` runs, so replay through the window resets where the
-  database would. A short (live) batch is not checked: it may hold an event
-  that retention expired after the reader read it, served at most the
-  window's age later, complete and in order, as an in-flight batch can be
-  today.
+- **Cursor validity (decision 24), unchanged.** Today every batch is
+  validated by a database snapshot taken after the stream asked for it.
+  Each window read is validated when it is copied, without a query:
+  `c ≥ lo`, which is at least every committed boundary, and `c ≤ hi`, which
+  is at most the committed `event_seq`. A cursor retention has expired is
+  below the floor, so it reads the database and gets `reset`, short batch
+  or full. Validity is decided at the copy, and delivery may take longer,
+  each send up to its write deadline, as with today's batches after their
+  read. A restore still requires ribbitto to be stopped.
 - **#209's rules are unchanged:** skips advance; a reader (now also the
   shared reader's failure), authorization, render or send error stops the
   loop with the cursor before that event; cancellation is checked before
@@ -133,8 +146,9 @@ What #671 measured with cached allows
   CPU work, serialisation or memory came first.
 
 **Expected change.** Per post, one event read per organisation instead of
-about four through the shared cache (#227's count); per connection, a
-copy under the reader's lock instead of the hub's process-wide lock, an event-cache lookup and a joined
+about four through the shared cache (#227's count). Window reads run no
+query, not even a bounds check. Per connection, a copy under the reader's
+lock replaces the hub's process-wide lock, an event-cache lookup and a joined
 second read. Unchanged per connection: a wake for every connection of the
 organisation (until the interest index), the render-cache lookup,
 `MayReceive`, the write and flush, the goroutine and its buffers. Queries

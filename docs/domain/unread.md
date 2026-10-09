@@ -2,60 +2,109 @@
 
 The inputs are in place since M3: the join transaction, `joined_event_seq`,
 the pairing of each message with its `message.posted` event, and the log
-boundary. Read positions and unread counts are *planned* for M4.
+boundary. Read state and unread counts are *planned* for M4
+([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
+the counting queries and their cost are in
+[unread counts](../architecture/unread-counts.md), the worked examples in
+[unread examples](unread-examples.md).
 
-- *(planned, M4)* **Read position** of a member in a channel is
-  `channel_member.last_read_event_seq` if the row exists, otherwise
-  `member.joined_event_seq`. So messages from before a member joined are
-  never unread, and a channel the member has never opened needs no row.
-- *(planned, M4)* **Unread count**:
-  ```sql
-  SELECT count(*) FROM message
-  WHERE organization_id = $1 AND channel_id = $2 AND event_seq > $3;  -- $3 = read position
-  ```
-  backed by an index on `message (organization_id, channel_id, event_seq)`.
 - *(since M3)* **Joining an organisation is one transaction:** take the next
   `event_seq`, insert the `member` with `joined_event_seq` = that value, and
   insert the `member.joined` event with `data = {"member_id":"<uuid>"}` and
   `audience_member_id = NULL`. Setup's first member follows the same rule.
   Posting similarly pairs `message.event_seq` with `message.posted`.
   Logging starts after `organization.event_log_boundary_seq`; migration sets
-  it to the current counter without backfill. Unread positions survive log retention.
-- *(planned, M4)* **Opening a channel for the first time** creates the `channel_member` row
-  with `last_read_event_seq` = the **cursor of the snapshot that rendered the
-  page**, not the latest sequence at insert time — otherwise messages
-  posted after the page was read, and not yet shown, would be marked read.
-- *(planned, M4)* **The read position never moves backwards.** Several tabs or reordered
-  requests must not lower it:
-  ```sql
-  INSERT INTO channel_member (organization_id, channel_id, member_id, last_read_event_seq)
-  VALUES ($1, $2, $3, $4)
-  ON CONFLICT (organization_id, channel_id, member_id) DO UPDATE
-    SET last_read_event_seq = GREATEST(channel_member.last_read_event_seq, EXCLUDED.last_read_event_seq);
-  ```
+  it to the current counter without backfill. Read state survives log
+  retention: it relies on `message.event_seq`, never on `event_log`.
+
+## Read state *(planned, M4)*
+
+- **Read ranges.** A member's read state in a channel is a set of
+  `event_seq` ranges (`read_range` rows, `lo ≤ event_seq < hi`). A message
+  of the channel is read when its `event_seq` lies in one of them. Without
+  rows the set is `[0, joined_event_seq + 1)`, so messages from before a
+  member joined are never unread.
+- **Moves never change it.** The set names sequences, not topics, and a
+  move keeps `event_seq`, so a branch or any later move leaves every
+  message read or unread as it was, whatever the destination topic's state
+  ([topic tests](#topics)).
+- **It only grows.** Every write is a union, so several tabs and reordered
+  requests never make a read message unread.
+- **Every bounded gap holds an unread message.** A newly read message adds
+  the range from just after the channel's previous message to just before
+  its next one (or to its own sequence plus one when it is the newest).
+  Runs of read messages merge, and each gap between two ranges contains an
+  unread message of the channel, so there are never more such gaps than
+  unread messages. The open gap after the last range may hold none.
+- **Topic floors.** `topic_read_floor.floor_seq` records that every message
+  in that topic up to and including it is read, except messages moved in by
+  a move with a higher sequence (`message.moved_event_seq`). It only tells
+  counting where to start; whether a message is read is always the set's
+  answer.
+
+## Advancing it *(planned, M4)*
+
+Only a POST advances read state; a GET never changes it
+([request flow](../architecture/request-flow.md)). Each POST carries its
+scope and `S`, the newest durable sequence the page has applied and shown:
+
+- **Feed:** every message of the channel with `event_seq ≤ S` becomes read.
+- **Topic view:** every message of that topic with `event_seq ≤ S` becomes
+  read, except one moved in by a move after `S` (`moved_event_seq > S`): the
+  page has not shown it there. Other topics are untouched.
+
+Posting reads the composer's scope up to the page's `S`, as that POST
+would, and adds the new message, in the posting transaction: a member's own
+messages, branch notices included, are never unread for them. A sequence
+the page has only received, or the post's own response, never counts as
+shown.
+
+`S` is the page's snapshot cursor for the POST sent after the page loads,
+and later the newest durable sequence the page has applied and shown
+(#710), which covers both posts and moves. Hidden tabs and `?before=` pages send nothing.
+A cursor above the organisation's committed `event_seq` is refused, so a
+later message is never read in advance. A message that is still unread
+when the POST runs, but has moved out of the topic since the page showed
+it, stays unread: it is no longer there to mark. A message already read
+stays read whatever moves. Without JavaScript, nothing advances on load; the feed and topic view
+offer a *Mark as read* form that sends the same POST with the page's cursor.
+
+## Counts *(planned, M4)*
+
+A channel's unread count is the number of its unread messages, which is the
+sum over **all** its topics, not only the 50 the sidebar lists. A topic's
+count is the channel's unread messages in that topic. Counts are shown
+capped (`99+`). The cap limits how many unread messages a count returns,
+not all the work: a topic count can also read the member's own posts made
+while the stream lagged, and the first unread of a topic reads every message
+moved in since its floor ([unread counts](../architecture/unread-counts.md)).
+
+## The unread divider *(planned, M4)*
+
+The page computes, in its snapshot and before its own POST, the first
+unread message of its scope (the channel for the feed, the topic for a topic
+view) and carries its sequence. The divider sits above that message when it
+is on the loaded page, and *Load older* passes the sequence along, so the
+divider stays where it was for the whole visit while the visit's POSTs
+advance the read state. The next page load computes it afresh (#291). Live
+items never carry it: their renders are shared between members.
 
 ## Topics
 
-Once topics exist ([`topics.md`](topics.md)), the unread design is chosen
-in M4's unread issue, before a topic view affects read state, and must pass
-both tests:
+Any unread design must pass both tests:
 
-1. **Branching never changes whether a message is read.** The per-channel
-   read position above passes, because branching keeps `event_seq`.
+1. **Branching never changes whether a message is read.** Read ranges pass:
+   the set names sequences, and moves keep them.
 2. **Reading one topic never marks another topic's unseen messages read.**
    Topic A has messages 10 and 12, topic B has 11; reading A in the topic
-   view must leave 11 unread. Advancing the per-channel position to 12
-   fails this. A per-topic position alone fails test 1: a read message
-   moved into a topic whose position is lower becomes unread again.
-
-Until then, a topic's unread count is the channel's unread messages in that
-topic.
+   view leaves 11 unread. Read ranges pass: the topic view adds only A's
+   messages, leaving a gap at 11. A single per-channel position fails this,
+   and a per-topic position alone fails test 1.
 
 ## Replies
 
-Opening or paging through a [reply chain](replies.md) leaves the read
-position unchanged. A chain omits other messages in the channel, so
-advancing the channel position would mark unseen messages read. Replies
-are ordinary messages under the same unread rules, with no separate
-unread count. This holds for the per-channel position above and for
-whatever unread model M4 chooses for [topics](#topics).
+Opening or paging through a [reply chain](replies.md) sends no POST and
+leaves read state unchanged. A chain omits other messages in the channel,
+so treating it as a read would mark unseen messages read. Replies are
+ordinary messages under the same unread rules, with no separate unread
+count.

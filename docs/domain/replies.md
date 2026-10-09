@@ -58,8 +58,8 @@ page. Exact limits are left to implementation. Without JavaScript the
 chain is an ordinary page and the same links work; URLs follow
 [decision 17](../decisions/17-full-english-words-and-stable-identifiers-in-page-urls.md) and the enhancement rule in [decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md).
 
-Opening or paging through the chain leaves the read position unchanged
-([`unread.md`](unread.md#replies)), including under M4's future topic rules.
+Opening or paging through the chain leaves read state unchanged
+([`unread.md`](unread.md#replies)).
 
 ## Settled later
 

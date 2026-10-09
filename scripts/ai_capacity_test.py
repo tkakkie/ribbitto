@@ -285,6 +285,12 @@ class CleanupTest(unittest.TestCase):
             ai_capacity.stop_group(worker)
         killpg.assert_not_called()
 
+    def test_session_members_skip_zombies(self):
+        listing = subprocess.CompletedProcess([], 0, stdout="  41 Ss\n  42 Z+\n  43 R\n")
+        with patch.object(ai_capacity.subprocess, "run", return_value=listing), \
+                patch.object(ai_capacity.os, "getsid", return_value=41):
+            self.assertEqual(ai_capacity.session_members(41), [41, 43])
+
     def test_cleanup_is_unconfirmed_when_ps_fails_after_the_leader_is_reaped(self):
         # No group kill is safe once the leader is reaped, so a failed ps must
         # not read as an empty session: members outside the group may survive.

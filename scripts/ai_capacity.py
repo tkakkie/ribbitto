@@ -22,13 +22,18 @@ def session_members(session):
     the session and is not found; the browser test's Chromium does not.
     """
     try:
-        listing = subprocess.run(["ps", "-axo", "pid="], capture_output=True, text=True,
+        listing = subprocess.run(["ps", "-axo", "pid=,stat="], capture_output=True, text=True,
                                  timeout=10, check=True).stdout
     except (OSError, subprocess.SubprocessError):
         return None
     members = []
-    for field in listing.split():
-        pid = int(field)
+    for line in listing.splitlines():
+        fields = line.split()
+        # A zombie keeps its session until its parent reaps it, which may be
+        # never (an init that does not reap); it runs nothing and cannot be killed.
+        if not fields or len(fields) > 1 and fields[1].startswith("Z"):
+            continue
+        pid = int(fields[0])
         try:
             if pid != os.getpid() and os.getsid(pid) == session:
                 members.append(pid)

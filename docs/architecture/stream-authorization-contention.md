@@ -82,7 +82,7 @@ The maintainer then tried one smaller change before the shared reader. Readers o
 | 50,000 | 426 / 397 ms | 392 / 375 ms |
 | 60,000 | 1,011 ms, fail / 969 ms | 1,228 ms, fail / 1,064 ms, fail |
 
-From 30,000 to 50,000 streams, the observed p95 is 5–25% lower after the change. At 20,000 streams, the first before run had an outlier p95 of 240 ms, against 84 ms after. 50,000 passed in every run. At 60,000, before passed once and failed once, and after failed twice, with a higher p95 than before each time. These runs therefore show neither a higher ceiling nor a reliably unchanged one; 60,000 remains marginal. In the benchmark, `Hub.Wait` had been only 1–2%. With distinct members, 5,000 and 10,000 passed before and after. That is a lower bound only: the ladder stopped there and found no failing step.
+From 30,000 to 50,000 streams, the observed p95 is 5–25% lower after the change. At 20,000 streams, the second before run had an outlier p95 of 240 ms, against 84 ms after. 50,000 passed in every run. At 60,000, before passed once and failed once, and after failed twice, with a higher p95 than before each time. These runs therefore show neither a higher ceiling nor a reliably unchanged one; 60,000 remains marginal. In the benchmark, `Hub.Wait` had been only 1–2%. With distinct members, 5,000 and 10,000 passed before and after. That is a lower bound only: the ladder stopped there and found no failing step.
 
 **Profiles, in the same settings as above:**
 

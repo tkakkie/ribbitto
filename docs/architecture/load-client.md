@@ -13,7 +13,9 @@ The dialer checks every resolved address; proxies and origin changes are refused
 Limits: 10 minutes, 100,000 stream attempts, 100 posts/s.
 Accounts and their sessions rotate; all traffic uses the first fixture channel.
 Each invocation runs one step. Unless `-cursor` overrides Last-Event-ID (empty
-exercises HTTP 400), the first token reads the page's `events?after=` cursor once.
+exercises HTTP 400), the first token reads the feed page's `data-event-cursor` once.
+Streams use `/organizations/<slug>/events` with the feed's
+`want=sidebar,messages,typing` and `channel` interests.
 `-dial-concurrency` (default 64, 1–100000) bounds concurrent stream attempts;
 `-setup` (default 30s, >0 through 5m) counts unfinished attempts as failures.
 Observation starts after setup. Posts follow a fixed schedule with at most one

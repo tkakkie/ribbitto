@@ -21,7 +21,7 @@ The `cmd/ribbitto` acceptance tests also start from `pgtest.NewEmpty`, apply
 the platform's `Migrate` as the CLI does, and serve the shared production handler
 on HTTPS with cookie jars. They verify the account flow, request protections,
 organisation isolation and a ten-client setup race, and, over HTTP/2, event
-streams end to end (`TestStreamEndpoints`, against both per-page and organisation endpoints).
+streams end to end (`TestStreamEndpoints`, against the organisation endpoint).
 Do not point this variable at a production server.
 Tests skip only when the variable is unset; an empty or broken value fails.
 `RIBBITTO_REQUIRE_DB=1` also makes an unset URL fail, as required in CI.

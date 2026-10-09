@@ -44,8 +44,7 @@ type ChannelPage struct {
 	Older bool
 	// Before is the event_seq bound of an older page; 0 shows the latest.
 	Before int64
-	// EventCursor starts replay after the page's snapshot; older pages do not
-	// connect a stream yet.
+	// EventCursor starts replay after every page's snapshot, including history.
 	EventCursor *int64
 }
 
@@ -92,6 +91,19 @@ func olderURL(page ChannelPage) string {
 	return fmt.Sprintf("%s?before=%d", conversationURL(page), page.Messages[0].EventSeq)
 }
 
+// streamURL declares the page's interests independently of its history URL.
+func streamURL(page ChannelPage) string {
+	want := "sidebar"
+	if page.Before == 0 {
+		want += ",messages,typing"
+	}
+	endpoint := fmt.Sprintf("/organizations/%s/events?after=%d&want=%s&channel=%s", page.Organization.Slug, *page.EventCursor, want, idValue(page.Current.ID))
+	if page.Before == 0 && page.Topic != nil {
+		endpoint += "&topic=" + idValue(page.Topic.ID)
+	}
+	return endpoint
+}
+
 // ChannelScreen renders the desktop chat layout. The name leaves Channel to
 // the view model.
 templ ChannelScreen(stylesheetURL string, page ChannelPage) {
@@ -101,10 +113,11 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 	}
 	@layout(stylesheetURL, title) {
 		<div
-			if page.EventCursor != nil && page.Before == 0 {
+			id="organization-stream"
+			if page.EventCursor != nil {
 				data-event-cursor={ fmt.Sprint(*page.EventCursor) }
 				hx-ext="sse"
-				sse-connect={ fmt.Sprintf("%s/events?after=%d", conversationURL(page), *page.EventCursor) }
+				sse-connect={ streamURL(page) }
 			}
 			class="flex h-dvh text-body"
 		>
@@ -215,7 +228,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v6.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v7.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

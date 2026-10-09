@@ -102,7 +102,7 @@ func TestRestartHelper(t *testing.T) {
 					_ = os.WriteFile(state+"drain", nil, 0600)
 				}
 			}
-			_, _ = fmt.Fprintf(w, `<div sse-connect="/events?after=%d"></div>`, cursor())
+			_, _ = fmt.Fprintf(w, `<div data-event-cursor="%d"></div>`, cursor())
 			return
 		}
 		cookie, _ := r.Cookie("__Host-session")
@@ -217,7 +217,7 @@ func TestRestart(t *testing.T) {
 				listener, err := net.Listen("tcp", address)
 				failRestartIf(t, err != nil, err)
 				server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					_, _ = fmt.Fprint(w, `<div sse-connect="/events?after=7"></div>`)
+					_, _ = fmt.Fprint(w, `<div data-event-cursor="7"></div>`)
 				})}
 				go func() { _ = server.Serve(listener) }()
 				defer func() { _ = server.Close() }()

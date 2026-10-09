@@ -5,7 +5,7 @@ Results of `TestUnreadBench` (#283), which measures the statement shapes of
 [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)
 before anything is built. How to run it is in
 [unread counts](unread-counts.md#running-the-benchmark). The maintainer
-decides go or no-go from these results; the decision is recorded below.
+decided go on 2026-10-10 from these results (below).
 
 ## Run, 2026-10-10
 

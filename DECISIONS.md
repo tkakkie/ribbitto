@@ -60,3 +60,4 @@ coverage and the normal document size limit for both the index and entries.
 - [29. Test fixtures live with the module that owns their tables](docs/decisions/29-test-fixtures-live-with-the-module-that-owns-their-tables.md)
 - [30. One organisation-wide stream per tab, filtered by its interests](docs/decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md)
 - [31. Presence and typing are current state with a generation](docs/decisions/31-presence-and-typing-are-current-state-with-a-generation.md)
+- [32. Read state is a set of read ranges per member and channel](docs/decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)

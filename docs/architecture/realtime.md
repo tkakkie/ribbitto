@@ -92,7 +92,7 @@ the lock stays bounded. Each batch reads after acquiring the organisation lock,
 so concurrent cleaners see committed progress. Only that organisation's writers
 wait; errors or the one-minute run timeout preserve all committed batches for
 the next hourly tick. Messages,
-their sequences and unread positions are untouched.
+their sequences and read state are untouched.
 A cursor is valid from the boundary through the committed `event_seq`,
 inclusive, even with an empty log; at `event_seq` it waits for new events.
 `EventsAfter` reads both bounds, then the rows, in one read-only snapshot, returning

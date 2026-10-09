@@ -59,7 +59,7 @@ invariant changes. Keep the numbers stable: other documents cite them.
 10. *(planned)* **Replies reference existing messages in the same
     organisation and channel with lower `event_seq`.** A composite foreign
     key enforces scope; immutable references prevent cycles. Chain reads
-    require channel authorization and leave read positions unchanged
+    require channel authorization and leave read state unchanged
     ([`replies.md`](replies.md)).
 
 These are **requirements for all code and migrations**, not a description

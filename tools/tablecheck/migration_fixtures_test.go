@@ -1,11 +1,99 @@
 package tablecheck
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func migrationFixtureOwnership(t *testing.T) map[string]string {
+	t.Helper()
+	source, err := os.ReadFile("../../module_imports_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owners, _, err := ownership(string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return owners
+}
+
+func TestMigrationForeignKeys(t *testing.T) {
+	owners := migrationFixtureOwnership(t)
+	for _, form := range []struct{ name, sql string }{
+		{"create column", "CREATE TABLE message(id uuid, account_id uuid REFERENCES %s(id) %s)"},
+		{"create table", "CREATE TABLE message(id uuid, account_id uuid, CONSTRAINT fk FOREIGN KEY(account_id) REFERENCES %s(id) %s)"},
+		{"add constraint", "CREATE TABLE message(id uuid, account_id uuid); ALTER TABLE message ADD CONSTRAINT fk FOREIGN KEY(account_id) REFERENCES %s(id) %s"},
+		{"add column", "CREATE TABLE message(id uuid); ALTER TABLE message ADD COLUMN account_id uuid REFERENCES %s(id) %s"},
+	} {
+		for _, reference := range []string{"account", "channel"} {
+			for _, tt := range []struct{ action, want string }{
+				{"ON DELETE CASCADE", "ON DELETE CASCADE"},
+				{"ON DELETE SET NULL", "ON DELETE SET NULL"},
+				{"ON DELETE SET DEFAULT", "ON DELETE SET DEFAULT"},
+				{"ON UPDATE CASCADE", "ON UPDATE CASCADE"},
+				{"ON UPDATE SET NULL", "ON UPDATE SET NULL"},
+				{"ON UPDATE SET DEFAULT", "ON UPDATE SET DEFAULT"},
+				{"ON DELETE RESTRICT", ""},
+				{"ON UPDATE RESTRICT", ""},
+				{"ON DELETE NO ACTION", ""},
+				{"ON UPDATE NO ACTION", ""},
+				{"", ""},
+				{"ON DELETE RESTRICT ON UPDATE CASCADE", "ON UPDATE CASCADE"},
+				{"ON DELETE SET NULL ON UPDATE NO ACTION", "ON DELETE SET NULL"},
+				{"ON DELETE CASCADE ON UPDATE SET DEFAULT", "ON DELETE CASCADE"},
+			} {
+				t.Run(form.name+"/"+reference+"/"+tt.action, func(t *testing.T) {
+					modules := map[string]string{"message": owners["message"], reference: owners[reference]}
+					files := []string{"-- +goose Up\nCREATE TABLE " + reference + "(id uuid PRIMARY KEY);", "-- +goose Up\n" + fmt.Sprintf(form.sql, reference, tt.action)}
+					err := checkMigrations(files, modules)
+					if reference == "channel" || tt.want == "" {
+						if err != nil {
+							t.Fatal(err)
+						}
+						return
+					}
+					want := "cross-module foreign key to account (conversation -> identity): " + tt.want + " writes referencing rows"
+					if err == nil || !strings.Contains(err.Error(), want) {
+						t.Fatalf("got %v, want %q", err, want)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestMigrationForeignKeyTargets(t *testing.T) {
+	manifest := migrationFixtureOwnership(t)
+	for _, tt := range []struct{ name, reference, before, after, want string }{
+		{"self", "message", "", "", ""},
+		{"schema", "public.account", "CREATE TABLE account(id int);", "", "unsupported qualified migration foreign key target account"},
+		{"catalog", "app.public.account", "CREATE TABLE account(id int);", "", "unsupported qualified migration foreign key target account"},
+		{"unknown", "absent", "", "", "unknown migration foreign key target absent"},
+		{"uncreated", "account", "", "", "owned table not created by migrations: account"},
+		{"later", "account", "", "CREATE TABLE account(id int);", "unknown migration foreign key target account"},
+		{"unowned", "absent", "CREATE TABLE absent(id int);", "", "migration table has no owner: absent"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			owners := map[string]string{"message": manifest["message"]}
+			if tt.before != "" && tt.name != "unowned" || tt.name == "uncreated" || tt.name == "later" {
+				owners["account"] = manifest["account"]
+			}
+			// Even a non-writing action must resolve; unknown ownership cannot
+			// establish whether a referential action crosses a module boundary.
+			for _, action := range []string{"", "ON DELETE RESTRICT", "ON DELETE CASCADE", "ON UPDATE SET NULL"} {
+				sql := tt.before + "CREATE TABLE message(id int REFERENCES " + tt.reference + "(id) " + action + ");" + tt.after
+				err := checkMigrations([]string{"-- +goose Up\n" + sql}, owners)
+				if tt.want == "" && err != nil || tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)) {
+					t.Fatalf("%s: got %v, want %q", action, err, tt.want)
+				}
+			}
+		})
+	}
+}
 
 func TestMigrationObjects(t *testing.T) {
 	owners := map[string]string{"message": "conversation", "account": "identity", "organization": "org", "member": "org"}
@@ -329,6 +417,7 @@ func TestMigrationExemptions(t *testing.T) {
 	prefix := "CREATE TABLE message(id int); CREATE TABLE account(id int); "
 	bind := " CREATE TRIGGER t AFTER INSERT ON message FOR EACH ROW EXECUTE FUNCTION f();"
 	for _, tt := range []struct{ name, sql, allow, want string }{
+		{"foreign key cannot be exempted", "ALTER TABLE message ADD COLUMN account_id int REFERENCES account(id) ON UPDATE CASCADE", "00001.ddl.statement3 message write Reviewed", "cross-module foreign key to account"},
 		{"backfill cannot exempt routine", "CREATE FUNCTION statement5() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM id FROM account; RETURN NULL; END $$; CREATE TRIGGER t AFTER INSERT ON message FOR EACH ROW EXECUTE FUNCTION statement5(); UPDATE message SET id=(SELECT id FROM account)", "00001.backfill.statement5 account read Maintainer ruling #677: backfill only", "00001.function.statement5: foreign table account"},
 		{"routine cannot exempt backfill", "CREATE FUNCTION statement5() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$; CREATE TRIGGER t AFTER INSERT ON message FOR EACH ROW EXECUTE FUNCTION statement5(); UPDATE message SET id=(SELECT id FROM account)", "00001.function.statement5 account read Reviewed", "00001.backfill.statement5: foreign table account"},
 		{"reviewed write", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO account VALUES(1); RETURN NULL; END $$;" + bind, "00001.function.f account write Maintainer ruling #677", ""},

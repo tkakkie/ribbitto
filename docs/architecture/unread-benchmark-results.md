@@ -148,4 +148,4 @@ per statement, for comparison.
 
 ## Decision
 
-Pending: the maintainer decides go or no-go from these results (#283).
+Pending: the maintainer decides go or no-go from these results (#283); the decision is recorded here and in [unread counts](unread-counts.md#results).

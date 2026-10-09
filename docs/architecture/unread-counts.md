@@ -154,4 +154,12 @@ key's predecessor and the new range's upper end.
 
 ## Results
 
-Results, and the maintainer's go/no-go decision, are in [unread benchmark results](unread-benchmark-results.md). Merging the harness does not approve implementation.
+Two runs on 2026-10-10 (PostgreSQL 18.6; tables in
+[benchmark results](unread-benchmark-results.md)), medians: step 4 took
+0.33–27.4 ms for 10–10,000 own posts above a floor (about 0.3 ms caught
+up) and 1.45 ms with 10,000 moved-in read messages; with 10,000 ranges,
+step 3 took 2.4 ms, step 4 6.1–6.4 ms, the merging feed read 3.4 ms, and
+the set-based topic-view write of 9,999 messages 87–88 ms (10.5 s one
+message per statement). Nothing beyond the measured sizes follows.
+
+**Decision:** pending, the maintainer's go or no-go (#283).

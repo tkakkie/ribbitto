@@ -97,8 +97,9 @@ generated files.
 `make check` runs tools tests uncached (`go -C tools test -race -count=1 ./...`).
 Both use [`tools/internal/sqlwalk`](../tools/internal/sqlwalk/doc.go) for
 `module.QueryName` query loading, unnamed SQL and duplicate rejection, `pg_query_go`
-JSON parsing and statement/CTE/subquery traversal. Organisation scope and table
-ownership policies stay in their respective checkers. Shared reason validation
+JSON parsing, statement/CTE/subquery traversal and the FROM `unnest` permission
+rule. Organisation scope and table ownership policies stay in their respective
+checkers. Shared reason validation
 rejects pending approval and requires issue, PR-comment or numbered decision
 provenance for maintainer claims (not approval verification). The parser needs
 cgo and a C compiler (Xcode locally, GCC on CI).

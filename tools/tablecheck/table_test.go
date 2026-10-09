@@ -128,7 +128,7 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 	unnests := map[float64]bool{}
 	if migration == nil {
 		var err error
-		unnests, err = unnestFrom(stmt, bigints)
+		unnests, err = sqlwalk.UnnestFrom(stmt, bigints)
 		if err != nil {
 			return err
 		}

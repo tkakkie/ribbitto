@@ -1,92 +1,9 @@
 package tablecheck
 
 import (
-	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/tkakkie/ribbitto/tools/internal/sqlwalk"
 )
-
-// Only FROM calls are eligible: function arguments and other expression positions
-// must never inherit permission from a nearby allowed unnest.
-func unnestFrom(tree any, bigints map[float64]bool) (map[float64]bool, error) {
-	calls := map[float64]bool{}
-	var from func(any) error
-	from = func(v any) error {
-		if j := sqlwalk.Node(v, "JoinExpr"); j != nil {
-			if err := from(j["larg"]); err != nil {
-				return err
-			}
-			return from(j["rarg"])
-		}
-		r := sqlwalk.Node(v, "RangeFunction")
-		functions := sqlwalk.List(r["functions"])
-		if len(functions) != 1 {
-			return nil
-		}
-		items := sqlwalk.List(sqlwalk.Node(functions[0], "List")["items"])
-		if len(items) != 2 {
-			return nil
-		}
-		f := sqlwalk.Node(items[0], "FuncCall")
-		if len(sqlwalk.List(f["funcname"])) != 1 || sqlwalk.Names(f["funcname"]) != "unnest" {
-			return nil
-		}
-		if r["lateral"] == true || r["ordinality"] == true || r["is_rowsfrom"] == true || r["coldeflist"] != nil || len(sqlwalk.Object(items[1])) != 0 {
-			return fmt.Errorf("unsupported unnest relation shape")
-		}
-		// Reject call decorations rather than inheriting aggregate or window semantics.
-		if len(f) != 4 || f["funcformat"] != "COERCE_EXPLICIT_CALL" || len(sqlwalk.List(f["args"])) == 0 {
-			return fmt.Errorf("unsupported unnest call shape")
-		}
-		for _, arg := range sqlwalk.List(f["args"]) {
-			cast := sqlwalk.Node(arg, "TypeCast")
-			typ := sqlwalk.Object(cast["typeName"])
-			bounds := sqlwalk.List(typ["arrayBounds"])
-			if len(sqlwalk.List(typ["names"])) != 2 || sqlwalk.Names(typ["names"]) != "pg_catalog.int8" || !bigints[typ["location"].(float64)] ||
-				len(bounds) != 1 || sqlwalk.Node(bounds[0], "Integer")["ival"] != float64(-1) || typ["typmods"] != nil || typ["setof"] == true {
-				return fmt.Errorf("unsupported unnest argument: requires bigint[] sqlc.arg parameter")
-			}
-			parameter := sqlwalk.Node(cast["arg"], "FuncCall")
-			args := sqlwalk.List(parameter["args"])
-			if len(parameter) != 4 || len(sqlwalk.List(parameter["funcname"])) != 2 || sqlwalk.Names(parameter["funcname"]) != "sqlc.arg" ||
-				parameter["funcformat"] != "COERCE_EXPLICIT_CALL" || len(args) != 1 {
-				return fmt.Errorf("unsupported unnest argument: requires bigint[] sqlc.arg parameter")
-			}
-			fields := sqlwalk.List(sqlwalk.Node(args[0], "ColumnRef")["fields"])
-			literal := sqlwalk.Object(sqlwalk.Node(args[0], "A_Const")["sval"])["sval"]
-			if !(len(fields) == 1 && sqlwalk.Node(fields[0], "String")["sval"] != nil) && literal == nil {
-				return fmt.Errorf("unsupported unnest parameter name")
-			}
-		}
-		calls[f["location"].(float64)] = true
-		return nil
-	}
-	err := sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, Visit: func(tag string, n map[string]any, _ sqlwalk.Scope) error {
-		if tag == "SelectStmt" || tag == "UpdateStmt" {
-			for _, ref := range sqlwalk.List(n["fromClause"]) {
-				if err := from(ref); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}})
-	if err != nil {
-		return nil, err
-	}
-	err = sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true, Visit: func(tag string, n map[string]any, _ sqlwalk.Scope) error {
-		if tag == "FuncCall" {
-			parts := sqlwalk.List(n["funcname"])
-			if len(parts) > 0 && sqlwalk.Node(parts[len(parts)-1], "String")["sval"] == "unnest" && !calls[n["location"].(float64)] {
-				return fmt.Errorf("unsupported function unnest: requires unqualified FROM call")
-			}
-		}
-		return nil
-	}})
-	return calls, err
-}
 
 func TestUnnestArguments(t *testing.T) {
 	for _, tc := range []struct{ name, relation, want string }{

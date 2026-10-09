@@ -57,7 +57,7 @@ func check(sql string, tables map[string]string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := unnestFrom(tree, bigints); err != nil {
+	if _, err := sqlwalk.UnnestFrom(tree, bigints); err != nil {
 		return err
 	}
 	for _, raw := range sqlwalk.Statements(tree) {

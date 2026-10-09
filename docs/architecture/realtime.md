@@ -122,11 +122,11 @@ which connections ask for it is [stream scope](streaming.md#stream-scope-planned
   state, boundary and generation together and then raises the hub's
   generation; a read returns all three as of one moment, so a connection
   marks seen only what it read. Typing keeps a summary per channel and per
-  topic, updated with each change: how many are typing, the four latest
-  typists and the generation of its last change. A connection reads only
-  its place's summary (a feed reads its channel's) and drops the viewer
-  from it in constant time, so its work does not grow with typists or
-  topics elsewhere.
+  topic, updated with each change: the set of typists, how many there are,
+  the four latest and the generation of its last change. A connection reads
+  only its place's summary (a feed reads its channel's) and subtracts the
+  viewer, found in that set in constant time, from the names and the count,
+  so its work does not grow with typists or topics elsewhere.
 - **Levels.** Per organisation the hub holds the durable level and one
   generation per kind (`presence`, `typing`), each published as an atomic
   level and channel like the durable level ([stream limits](stream-limits.md)).

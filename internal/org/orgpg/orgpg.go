@@ -31,7 +31,7 @@ func RetentionBoundaryIn(tx platform.Tx) realtime.RetentionBoundary {
 func SequenceIn(tx platform.Tx) postgres.Sequence { return postgres.SequenceIn(tx) }
 
 // EventCursorIn returns the organisation's committed event_seq bound to a
-// reader's snapshot, for the latest page's cursor. Consumers adapt to it
+// reader's snapshot, for every history page's cursor. Consumers adapt to it
 // with a closure too.
 func EventCursorIn(snapshot platform.Snapshot) postgres.EventCursor {
 	return postgres.EventCursorIn(snapshot)

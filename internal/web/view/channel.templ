@@ -44,8 +44,8 @@ type ChannelPage struct {
 	Older bool
 	// Before is the event_seq bound of an older page; 0 shows the latest.
 	Before int64
-	// EventCursor starts replay after the latest page's snapshot, the feed's or
-	// a topic's; nil on older pages.
+	// EventCursor starts replay after the page's snapshot; older pages do not
+	// connect a stream yet.
 	EventCursor *int64
 }
 

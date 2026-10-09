@@ -2,10 +2,26 @@ package realtime
 
 import "slices"
 
-// wants checks connection interest without rendering or authorization: an
-// event of the channel, and for a topic view, one of its routing topics. An
-// event without routing topics is decided after rendering (wantsRendered).
+// Interest identifies output a connection asks to receive, never permission.
+type Interest string
+
+const (
+	// InterestMessages requests posts and moves in the selected channel or topic.
+	InterestMessages Interest = "messages"
+	// InterestSidebar declares sidebar output; no sidebar frames are delivered yet.
+	InterestSidebar Interest = "sidebar"
+)
+
+// wants checks explicit interests and organisation/channel/routing-topic scope
+// before rendering or authorization. Legacy events without routing topics are
+// decided after rendering (wantsRendered).
 func (s Subscription) wants(event Event) bool {
+	if !slices.Contains(s.Interests, InterestMessages) {
+		return false
+	}
+	if event.OrganizationID != s.Organization {
+		return false
+	}
 	if event.ChannelID != s.Channel {
 		return false
 	}

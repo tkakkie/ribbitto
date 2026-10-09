@@ -162,7 +162,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		Renderer:  messageRenderer{messages: p.messages, membership: m, renders: p.renders},
 		Heartbeat: heartbeat,
 	}
-	sub := realtime.Subscription{Organization: m.Organization.ID, OrganizationSlug: m.Organization.Slug, Account: account.ID, Channel: c.ID, Topic: topicID}
+	sub := realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: m.Organization.ID, OrganizationSlug: m.Organization.Slug, Account: account.ID, Channel: c.ID, Topic: topicID}
 	cursor, err := stream.Run(ctx, sub, after, send)
 	if err != nil && ctx.Err() == nil {
 		// Neither the client nor the session went away: delivery failed.

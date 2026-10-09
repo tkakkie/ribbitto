@@ -148,13 +148,10 @@ func TestReaderPaging(t *testing.T) {
 				if !slices.Equal(page.Channels, wantChannels) {
 					t.Fatalf("sidebar channels = %+v, want only acme's channels %+v (globex has %+v)", page.Channels, wantChannels, foreign)
 				}
-				if (page.EventCursor == nil) != (before != nil) {
-					t.Fatalf("cursor presence disagrees with history bound: %+v", page)
+				if page.EventCursor == nil {
+					t.Fatalf("missing snapshot cursor: %+v", page)
 				}
-				wantQueries := 7 // including the sidebar's bounded topic list (#303)
-				if before == nil {
-					wantQueries++
-				}
+				wantQueries := 8 // including the bounded topic list and snapshot cursor
 				if queries != wantQueries || topicQueries != 1 {
 					t.Fatalf("page queries = %d (%d topic), want %d (1 topic)", queries, topicQueries, wantQueries)
 				}
@@ -224,59 +221,68 @@ func (queryHook) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData
 
 func TestChannelPageSnapshot(t *testing.T) {
 	t.Parallel()
-	for _, statement := range []string{"GetChannel", "ListChannels", "ListMessagesBefore", "LookupMembers", "LookupDisplayNames", "LookupTopics", "GetEventSeq"} {
-		t.Run(statement, func(t *testing.T) {
-			pool := pgtest.New(t)
-			ctx := t.Context()
-			fixture := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
-			m := org.Membership{Organization: org.Organization{ID: fixture.OrganizationID}, Member: org.Member{ID: fixture.MemberID}}
-			posting := conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
-			initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")
-			requireNoError(t, err)
-			var concurrent conversation.Message
-			var began bool
-			config := pool.Config()
-			config.ConnConfig.Tracer = queryHook(func(ctx context.Context, sql string) {
-				if sql == "begin isolation level repeatable read read only" {
-					began = true
-				}
-				if !strings.HasPrefix(sql, "-- name: "+statement+" ") || concurrent.EventSeq != 0 {
-					return
-				}
-				// The writer uses another connection and commits before this
-				// snapshot's next statement, including its final cursor read.
-				concurrent, err = posting.Post(ctx, m, fixture.Channel.ID, "concurrent")
-				requireNoError(t, err)
-				_, err = pool.Exec(ctx, "UPDATE channel SET name = 'renamed' WHERE organization_id = $1 AND id = $2", fixture.OrganizationID, fixture.Channel.ID)
-				requireNoError(t, err)
-				_, err = pool.Exec(ctx, "UPDATE member SET handle = 'renamed' WHERE organization_id = $1 AND id = $2", fixture.OrganizationID, fixture.MemberID)
-				requireNoError(t, err)
-				_, err = pool.Exec(ctx, "UPDATE account SET display_name = 'renamed' WHERE id = $1", fixture.AccountID)
-				requireNoError(t, err)
-			})
-			reading, err := pgxpool.NewWithConfig(ctx, config)
-			requireNoError(t, err)
-			t.Cleanup(reading.Close)
-			page, err := (conversationpg.NewReader(reading, lookupMembers, lookupAccounts, eventCursor)).Page(ctx, m, fixture.Channel.ID, nil, nil)
-			requireNoError(t, err)
-			if !began || concurrent.EventSeq == 0 || page.EventCursor == nil {
-				t.Fatalf("missing transaction, concurrent commit or cursor: %+v", page)
-			}
-			visible := slices.ContainsFunc(page.Entries, func(e conversation.Entry) bool { return e.ID == concurrent.ID })
-			if !visible && concurrent.EventSeq <= *page.EventCursor {
-				t.Fatal("concurrent message is neither on the page nor after its cursor")
-			}
-			cursor, count, name, handle, display := initial.EventSeq, 1, "general", "owner", "acme"
-			if statement == "GetChannel" {
-				cursor, count, name, handle, display = concurrent.EventSeq, 2, "renamed", "renamed", "renamed"
-			}
-			if *page.EventCursor != cursor || len(page.Entries) != count || page.Current.Name != name || len(page.Channels) != 1 || page.Channels[0].Name != name {
-				t.Fatalf("page mixed snapshots: %+v, cursor %d", page, *page.EventCursor)
-			}
-			for _, e := range page.Entries {
-				if e.Handle != handle || e.DisplayName != display {
-					t.Fatalf("author mixed snapshots: %+v", e)
-				}
+	for _, older := range []bool{false, true} {
+		t.Run(fmt.Sprintf("older=%t", older), func(t *testing.T) {
+			for _, statement := range []string{"GetChannel", "ListChannels", "ListMessagesBefore", "LookupMembers", "LookupDisplayNames", "LookupTopics", "GetEventSeq"} {
+				t.Run(statement, func(t *testing.T) {
+					pool := pgtest.New(t)
+					ctx := t.Context()
+					fixture := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+					m := org.Membership{Organization: org.Organization{ID: fixture.OrganizationID}, Member: org.Member{ID: fixture.MemberID}}
+					posting := conversationpg.NewPosting(pool, eventSequence, appendEvents, nil)
+					initial, err := posting.Post(ctx, m, fixture.Channel.ID, "initial")
+					requireNoError(t, err)
+					var concurrent conversation.Message
+					var began bool
+					config := pool.Config()
+					config.ConnConfig.Tracer = queryHook(func(ctx context.Context, sql string) {
+						if sql == "begin isolation level repeatable read read only" {
+							began = true
+						}
+						if !strings.HasPrefix(sql, "-- name: "+statement+" ") || concurrent.EventSeq != 0 {
+							return
+						}
+						// The writer uses another connection and commits before this
+						// snapshot's next statement, including its final cursor read.
+						concurrent, err = posting.Post(ctx, m, fixture.Channel.ID, "concurrent")
+						requireNoError(t, err)
+						_, err = pool.Exec(ctx, "UPDATE channel SET name = 'renamed' WHERE organization_id = $1 AND id = $2", fixture.OrganizationID, fixture.Channel.ID)
+						requireNoError(t, err)
+						_, err = pool.Exec(ctx, "UPDATE member SET handle = 'renamed' WHERE organization_id = $1 AND id = $2", fixture.OrganizationID, fixture.MemberID)
+						requireNoError(t, err)
+						_, err = pool.Exec(ctx, "UPDATE account SET display_name = 'renamed' WHERE id = $1", fixture.AccountID)
+						requireNoError(t, err)
+					})
+					reading, err := pgxpool.NewWithConfig(ctx, config)
+					requireNoError(t, err)
+					t.Cleanup(reading.Close)
+					var before *int64
+					if older {
+						bound := int64(100)
+						before = &bound
+					}
+					page, err := (conversationpg.NewReader(reading, lookupMembers, lookupAccounts, eventCursor)).Page(ctx, m, fixture.Channel.ID, nil, before)
+					requireNoError(t, err)
+					if !began || concurrent.EventSeq == 0 || page.EventCursor == nil {
+						t.Fatalf("missing transaction, concurrent commit or cursor: %+v", page)
+					}
+					visible := slices.ContainsFunc(page.Entries, func(e conversation.Entry) bool { return e.ID == concurrent.ID })
+					if !visible && concurrent.EventSeq <= *page.EventCursor {
+						t.Fatal("concurrent message is neither on the page nor after its cursor")
+					}
+					cursor, count, name, handle, display := initial.EventSeq, 1, "general", "owner", "acme"
+					if statement == "GetChannel" {
+						cursor, count, name, handle, display = concurrent.EventSeq, 2, "renamed", "renamed", "renamed"
+					}
+					if *page.EventCursor != cursor || len(page.Entries) != count || page.Current.Name != name || len(page.Channels) != 1 || page.Channels[0].Name != name {
+						t.Fatalf("page mixed snapshots: %+v, cursor %d", page, *page.EventCursor)
+					}
+					for _, e := range page.Entries {
+						if e.Handle != handle || e.DisplayName != display {
+							t.Fatalf("author mixed snapshots: %+v", e)
+						}
+					}
+				})
 			}
 		})
 	}

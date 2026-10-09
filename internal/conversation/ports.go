@@ -136,7 +136,7 @@ type ReadStore interface {
 // ReadStoreIn binds conversation's reads to the caller's snapshot.
 type ReadStoreIn func(platform.Snapshot) ReadStore
 
-// EventCursor is what the latest page needs from org: the organisation's
+// EventCursor is what every history page needs from org: the organisation's
 // committed event_seq in the page's snapshot, where its stream starts. An
 // unknown organisation is org.ErrNotFound.
 type EventCursor interface {

@@ -18,7 +18,11 @@ growth rule):
 
 Ranges are disjoint and never touch. The first starts at 0; its `hi` is
 the **prefix end** `P`: every message below `P` is read. Without rows, the
-read state is `[0, joined_event_seq + 1)`. All keys include
+read state is `[0, joined_event_seq + 1)`: step 1 and step 3 supply that
+range for a channel with no rows, and the first write inserts it before its
+own ranges, so the first range always starts at 0. A topic without a
+`topic_read_floor` row has no floor: its scan starts at `P` and it has no
+moved branch, which step 3 expresses as the floor `P − 1`. All keys include
 `organization_id`, with composite foreign keys to `member`, `channel` and
 `topic`. `conversation` extends `message` with a nullable
 `moved_event_seq`, the sequence of its latest move, written by branching in
@@ -41,7 +45,7 @@ once per channel or per topic.
 |---|---|---|---|---|
 | 1 | `unread` | member, the sidebar's channel IDs | for each channel, its first 101 ranges by `lo` (`LATERAL … ORDER BY lo LIMIT 101`) | `P` and the first gaps per channel |
 | 2 | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted and grouped by channel; the feed's first unread is the first row | channel counts, the feed's first unread |
-| 3 | `unread` | member, current channel, its listed topic IDs plus the selected topic when the list omits it | its ranges at or above `P`, and the topics' floors | the read set above `P` and the floors |
+| 3 | `unread` | member, current channel, its listed topic IDs plus the selected topic when the list omits it | its ranges at or above `P`, and the topics' floors | the read set above `P` and a floor for every topic (`P − 1` without a row) |
 | 4 | `conversation` | the read set as one `int8multirange`, `P`, per-topic `(id, floor)` arrays | per topic: its messages with `event_seq ≥ P` and above its floor, from the topic index in order, that the read set does not contain, at most 100 (`LATERAL … LIMIT 100`); plus its messages with `P ≤ event_seq ≤ floor` and `moved_event_seq > floor`, from the partial index, not contained; counted per topic; for the selected topic only, its lowest unread `event_seq` | topic counts, a topic view's first unread |
 
 Steps 1–2 serve the channel list and steps 3–4 the topic list: two
@@ -111,8 +115,8 @@ later move has a higher sequence than the floor it raises.
 
 Per page load, four statements in the page's snapshot. For a member of 100
 channels, each with fewer than 100 unread messages in one gap and an
-unfragmented read set, step 2 makes about 100 index probes and reads up to
-a few thousand index rows; step 4 adds up to 51 probes and 5,100 rows for
+unfragmented read set, step 2 makes about 100 index probes and reads at
+most 9,900 index rows (99 per channel); step 4 adds up to 51 probes and 5,100 rows for
 the counts, plus, for the first unread, every message moved into the
 selected topic since its floor. Per page view, one POST, plus the visible
 page's coalesced POSTs (#710) and sidebar recounts (#286). Posting costs

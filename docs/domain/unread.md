@@ -63,9 +63,10 @@ shown.
 and later the newest durable sequence the page has applied and shown
 (#710), which covers both posts and moves. Hidden tabs and `?before=` pages send nothing.
 A cursor above the organisation's committed `event_seq` is refused, so a
-later message is never read in advance. A message moved out of the topic
-after `S` stays unread: the page showed it, but it is no longer there to
-mark. Without JavaScript, nothing advances on load; the feed and topic view
+later message is never read in advance. A message that is still unread
+when the POST runs, but has moved out of the topic since the page showed
+it, stays unread: it is no longer there to mark. A message already read
+stays read whatever moves. Without JavaScript, nothing advances on load; the feed and topic view
 offer a *Mark as read* form that sends the same POST with the page's cursor.
 
 ## Counts *(planned, M4)*
@@ -73,8 +74,10 @@ offer a *Mark as read* form that sends the same POST with the page's cursor.
 A channel's unread count is the number of its unread messages, which is the
 sum over **all** its topics, not only the 50 the sidebar lists. A topic's
 count is the channel's unread messages in that topic. Counts are shown
-capped (`99+`), and the queries stop once the cap is reached
-([unread counts](../architecture/unread-counts.md)).
+capped (`99+`). The cap limits how many unread messages a count returns,
+not all the work: a topic count can also read the member's own posts made
+while the stream lagged, and the first unread of a topic reads every message
+moved in since its floor ([unread counts](../architecture/unread-counts.md)).
 
 ## The unread divider *(planned, M4)*
 

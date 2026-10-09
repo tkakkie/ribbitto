@@ -174,7 +174,7 @@ func TestRetentionReplay(t *testing.T) {
 				return nil
 			}}
 			s := realtime.Stream{Hub: hub, Events: events, BatchSize: 1, Authorizer: allowAll{}, Renderer: renderMessages{}}
-			got, err := s.Run(ctx, realtime.Subscription{Organization: f.OrganizationID, Channel: f.Channel.ID}, cursor, &sender)
+			got, err := s.Run(ctx, realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: f.OrganizationID, Channel: f.Channel.ID}, cursor, &sender)
 			if got != wantCursor || sent != len(want) || (err != nil && !errors.Is(err, context.Canceled)) {
 				t.Fatalf("Run = %d, %v; sent %d; want cursor %d, %v", got, err, sent, wantCursor, want)
 			}

@@ -42,14 +42,17 @@ type Sender interface {
 	Heartbeat(ctx context.Context) error
 }
 
-// Subscription is what one connection asked for: an organisation's channel,
-// or one topic in it, on behalf of an account. The organisation and account
-// come from the URL and the session, never from the client's request body.
+// Subscription is one connection's explicit interests in an organisation,
+// scoped to a channel or topic for messages, on behalf of an account. Interests
+// grant no access: every matching event still passes the Authorizer. The
+// organisation and account come from the URL and the session.
 type Subscription struct {
 	Organization     kernel.ID
 	OrganizationSlug string
 	Account          kernel.ID
 	Channel          kernel.ID
+	// Interests is the set of requested output; empty means no message delivery.
+	Interests []Interest
 	// Topic, when set, narrows the channel to one topic (a topic view).
 	Topic *kernel.ID
 }

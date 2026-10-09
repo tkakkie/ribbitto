@@ -223,7 +223,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	}
 	through := notifier.raised(t)
 	stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{log, through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
-	sub := realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID}
+	sub := realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID}
 	delivered := &moveDeliveries{}
 	cursor, err := stream.Run(ctx, sub, 1, delivered)
 	if cursor != through || !errors.Is(err, io.EOF) || len(delivered.events) != 4 {
@@ -396,7 +396,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 			stream := realtime.Stream{Hub: realtime.NewHub(), Events: finiteMoveLog{realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t)), through}, Renderer: renderer, Authorizer: orgpg.NewAuthorizer(pool), BatchSize: 1}
 			delivered := &moveDeliveries{}
-			_, err = stream.Run(ctx, realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID, Topic: &destination.ID}, *page.EventCursor, delivered)
+			_, err = stream.Run(ctx, realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID, Topic: &destination.ID}, *page.EventCursor, delivered)
 			if !errors.Is(err, io.EOF) || len(delivered.events) != 1 {
 				t.Fatalf("destination move: %v, %+v", err, delivered.events)
 			}
@@ -498,7 +498,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 					t.Run([]string{"source", "destination"}[i], func(t *testing.T) {
 						page := &pages[i]
 						delivered := &moveDeliveries{}
-						_, err := stream.Run(ctx, realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID, Topic: &selected.ID}, cursor, delivered)
+						_, err := stream.Run(ctx, realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: f.OrganizationID, OrganizationSlug: "acme", Account: f.AccountID, Channel: f.Channel.ID, Topic: &selected.ID}, cursor, delivered)
 						if !errors.Is(err, io.EOF) {
 							t.Fatal(err)
 						}

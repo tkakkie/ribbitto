@@ -108,7 +108,7 @@ func TestReaderPageSnapshot(t *testing.T) {
 	f.organizationID = membership.Organization.ID
 	before := int64(9)
 	page, err := reader.Page(t.Context(), membership, kernel.ID{2}, nil, &before)
-	if err != nil || page.EventCursor != nil || !reflect.DeepEqual(f.calls, []string{"snapshot", "reads", "channel", "channels", "topics", "members", "accounts", "history"}) {
+	if err != nil || page.EventCursor == nil || *page.EventCursor != 7 || !reflect.DeepEqual(f.calls, []string{"snapshot", "reads", "channel", "channels", "topics", "members", "accounts", "history", "bind cursor", "cursor"}) {
 		t.Fatalf("older page = %+v, %v, calls %v", page, err, f.calls)
 	}
 }

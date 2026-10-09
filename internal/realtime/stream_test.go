@@ -15,7 +15,7 @@ import (
 var (
 	channelA = kernel.ID{0xca}
 	channelB = kernel.ID{0xcb}
-	sub      = Subscription{Organization: orgA, OrganizationSlug: "acme", Account: account1, Channel: channelA}
+	sub      = Subscription{Interests: []Interest{InterestMessages}, Organization: orgA, OrganizationSlug: "acme", Account: account1, Channel: channelA}
 )
 
 // Synthetic kinds: realtime routes on the envelope, so its tests need no

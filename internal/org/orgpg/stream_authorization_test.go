@@ -31,7 +31,7 @@ func streamFixture(t *testing.T) deliveryFixture {
 	member := orgtest.Member(t, pool, id, account, org.RoleMember, "alice", 1)
 	return deliveryFixture{
 		pool:   pool,
-		sub:    realtime.Subscription{Organization: id, OrganizationSlug: "acme", Account: account},
+		sub:    realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: id, OrganizationSlug: "acme", Account: account},
 		member: member,
 	}
 }

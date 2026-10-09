@@ -42,8 +42,8 @@ func (s *Reader) One(ctx context.Context, m org.Membership, channelID kernel.ID,
 	return entry, nil
 }
 
-// Page reads channel or topic history; the latest page of either carries the
-// snapshot's event cursor for its stream, older pages none.
+// Page reads channel or topic history with the snapshot's event cursor,
+// including older pages with a before bound.
 func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, before *int64) (page ChannelPage, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		reads := s.reads(snapshot)
@@ -71,13 +71,11 @@ func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID
 		if err != nil {
 			return err
 		}
-		if before == nil {
-			seq, err := s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
-			if err != nil {
-				return fmt.Errorf("reading page cursor: %w", err)
-			}
-			page.EventCursor = &seq
+		seq, err := s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
+		if err != nil {
+			return fmt.Errorf("reading page cursor: %w", err)
 		}
+		page.EventCursor = &seq
 		return nil
 	})
 	if err != nil {

@@ -21,7 +21,7 @@ type Channel struct // Channel is a conversation identified by ID; Name is only 
 type ChannelPage struct // ChannelPage is a channel, its sidebar and history read in one snapshot.
   field Channels []Channel
   field Current Channel
-  field EventCursor *int64 // EventCursor is the snapshot's organisation sequence; nil on older pages.
+  field EventCursor *int64 // EventCursor is the snapshot's organisation sequence, including on older pages.
   field Page Page
   field Topic *Topic
   field Topics []Topic
@@ -57,7 +57,7 @@ var ErrTopicNotFound error // ErrTopicNotFound means the topic does not exist in
 type EventAppender interface // EventAppender appends conversation's encoded events in the caller's transaction, so each commits with its row and sequence.
   func (EventAppender).Append(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64, kind github.com/tkakkie/ribbitto/internal/realtime.EventKind, audience *github.com/tkakkie/ribbitto/internal/kernel.ID, payload []byte) error
 type EventAppenderIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) EventAppender // EventAppenderIn binds realtime's appender to the caller's transaction.
-type EventCursor interface // EventCursor is what the latest page needs from org: the organisation's committed event_seq in the page's snapshot, where its stream starts.
+type EventCursor interface // EventCursor is what every history page needs from org: the organisation's committed event_seq in the page's snapshot, where its stream starts.
   func (EventCursor).EventSeq(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) (int64, error)
 type EventCursorIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) EventCursor // EventCursorIn binds org's cursor to the caller's snapshot, the one the page is read in.
 type EventSequence interface // EventSequence is what posting and branching need from org in their transaction: the organisation's next event_seq, taken first, whose row lock makes sequence order commit order (decision 5).
@@ -114,7 +114,7 @@ type ReadStoreIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Sna
 type Reader struct // Reader owns the page, single-message and batch snapshots across conversation, org and identity through factories bound to the same read-only snapshot.
   func (*Reader).Many(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, ids []github.com/tkakkie/ribbitto/internal/kernel.ID) (entries []Entry, err error) // Many reads a move's bounded message batch and directories in one snapshot.
   func (*Reader).One(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64) (entry Entry, err error) // One reads one message, its author names and topic in a read-only snapshot.
-  func (*Reader).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64) (page ChannelPage, err error) // Page reads channel or topic history; the latest page of either carries the snapshot's event cursor for its stream, older pages none.
+  func (*Reader).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64) (page ChannelPage, err error) // Page reads channel or topic history with the snapshot's event cursor, including older pages with a before bound.
 func RouteMoved(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteMoved is messages.moved's realtime.Router: the channel and both topics, so a view of either sees the move.
 func RoutePosted(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePosted is message.posted's realtime.Router: the channel and, unless the payload is legacy, the posting-time topic.
 type SnapshotRunner interface // SnapshotRunner runs the page snapshot, One and Many (decision 26): the use case owns the read boundary, and the stores and directories only bind to the Snapshot they are given, so every read sees the same committed state.

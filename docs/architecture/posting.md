@@ -57,9 +57,9 @@ keys also enforce the message's organisation scope.
 The channel page reads its channel, sidebar, history and both author batches
 in one `REPEATABLE READ READ ONLY` transaction owned by `conversation.Reader`
 through its `SnapshotRunner`, wired by `conversationpg.NewReader`.
-The latest page also reads `organization.event_seq` in that snapshot and renders
-it as `data-event-cursor` on the outer layout div, outside every htmx swap.
-Pages with `?before=` omit the cursor; loading older history or replacing the
+Every history page also reads `organization.event_seq` in that snapshot. The
+latest page renders it as `data-event-cursor` on the outer layout div, outside every htmx swap.
+Pages with `?before=` omit the cursor from HTML; loading older history or replacing the
 composer leaves the initial page cursor intact for #159.
 `conversation.Reader.One` uses the same snapshot pattern for an event's
 organisation, channel and `event_seq`, returning the message with current

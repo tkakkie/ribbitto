@@ -52,6 +52,9 @@ type Hub struct // Hub holds, per organisation, the highest committed event sequ
   func (*Hub).Register(parent context.Context, c Connection, limit int) (ctx context.Context, unregister func(), err error) // Register adds a connection unless the process already holds maxStreams connections or its account holds limit connections, returning ErrTooManyConnections and nothing to unregister, or the hub is shutting down (ErrShutdown).
   func (*Hub).Wait(ctx context.Context, org github.com/tkakkie/ribbitto/internal/kernel.ID, after int64) (int64, error) // Wait blocks until the organisation's latest sequence is greater than after and returns that sequence, at once if it already is.
   func (*Hub).Waiting(org github.com/tkakkie/ribbitto/internal/kernel.ID) int // Waiting reports how many calls of Wait for the organisation are counted as blocked, so tests can synchronise on it instead of sleeping.
+type Interest string // Interest identifies output a connection asks to receive, never permission.
+const InterestMessages Interest = "messages" // InterestMessages requests posts and moves in the selected channel or topic.
+const InterestSidebar Interest = "sidebar" // InterestSidebar declares sidebar output; no sidebar frames are delivered yet.
 type Kinds map[EventKind]Router // Kinds registers the Router of each kind a reader fills in; wiring builds it.
 func MergeKinds(registries ...Kinds) (Kinds, error) // MergeKinds combines publisher registries into a fresh map without modifying them.
 func NewCache[K comparable, V any](parent context.Context, capacity int, maxLoads int, ttl time.Duration, loadTimeout time.Duration, keep func(K, V) bool, now func() time.Time) *Cache[K, V] // NewCache returns a cache holding at most capacity entries, each for at most ttl, with at most maxLoads loaders running until they actually return.
@@ -88,9 +91,10 @@ type Stream struct // Stream runs the per-connection delivery loop.
   field Hub *Hub
   field Renderer Renderer
   func (Stream).Run(ctx context.Context, sub Subscription, cursor int64, send Sender) (int64, error) // Run delivers the subscription's events with a sequence above cursor until ctx ends or delivery fails, and returns the last sequence it delivered or skipped, with the reason it stopped.
-type Subscription struct // Subscription is what one connection asked for: an organisation's channel, or one topic in it, on behalf of an account.
+type Subscription struct // Subscription is one connection's explicit interests in an organisation, scoped to a channel or topic for messages, on behalf of an account.
   field Account github.com/tkakkie/ribbitto/internal/kernel.ID
   field Channel github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Interests []Interest // Interests is the set of requested output; empty means no message delivery.
   field Organization github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationSlug string
   field Topic *github.com/tkakkie/ribbitto/internal/kernel.ID // Topic, when set, narrows the channel to one topic (a topic view).

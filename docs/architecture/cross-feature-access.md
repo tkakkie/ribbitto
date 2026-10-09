@@ -27,14 +27,15 @@ own the queries in `org/member.sql` and `identity/account.sql`; conversation nev
 queries those tables. `conversation.Reader` receives both directories through
 conversation's `MemberDirectoryIn` and `AccountDirectoryIn` factories, adapted
 from `orgpg.MembersIn` and `identitypg.AccountsIn` by one-line closures, and
-the latest page's cursor through conversation's `EventCursorIn` (`orgpg.EventCursorIn`), all
+every history page's cursor through conversation's `EventCursorIn` (`orgpg.EventCursorIn`), all
 bound to its snapshot through `SnapshotRunner`. It
 shares one read-only repeatable-read transaction
 across the channel and sidebar, the selected topic and the bounded topic list
 (through its snapshot-bound `ReadStore`), history, both author
 lookups and the topic batch through `conversation.ReadStore.LookupTopics`, plus the
-org's `organization.event_seq` on the latest channel or topic page.
-It returns `conversation.ChannelPage`; older pages have no event cursor.
+org's `organization.event_seq` on every channel or topic page, including
+`?before=` pages. It returns `conversation.ChannelPage` with that snapshot cursor;
+older pages do not connect a stream yet.
 `conversation.Reader.One` reads one message, its authors and topic in its own snapshot.
 Live labels come from that shared load through the existing render cache, keyed
 by organisation, channel, sequence and language, with no extra read per stream

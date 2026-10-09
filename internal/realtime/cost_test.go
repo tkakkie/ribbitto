@@ -93,12 +93,12 @@ func TestStreamCost(t *testing.T) {
 	fixture := conversationtest.OrganizationWithOwner(t, fixturePool, "acme", "general")
 	cached := os.Getenv("RIBBITTO_STREAM_COST_CACHE") == "1"
 	distinct := os.Getenv("RIBBITTO_STREAM_COST_MEMBERS") == "distinct"
-	subs := []realtime.Subscription{{Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: fixture.AccountID, Channel: fixture.Channel.ID}}
+	subs := []realtime.Subscription{{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: fixture.AccountID, Channel: fixture.Channel.ID}}
 	if distinct {
 		for i := 1; i < slices.Max(steps); i++ {
 			account := identitytest.Account(t, fixturePool, fmt.Sprintf("m%05d@example.org", i), fmt.Sprintf("Member %d", i))
 			orgtest.Member(t, fixturePool, fixture.OrganizationID, account, org.RoleMember, fmt.Sprintf("m%05d", i), 1)
-			subs = append(subs, realtime.Subscription{Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: account, Channel: fixture.Channel.ID})
+			subs = append(subs, realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: account, Channel: fixture.Channel.ID})
 		}
 	}
 	// Config returns a copy, pointing at pgtest's database.

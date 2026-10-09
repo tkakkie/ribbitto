@@ -185,4 +185,4 @@ staggered. Misses reload independently; denies are never cached.
 - **Staggered checks** read 0.72 `N` per post at 1,000 streams with a 100 ms
   window and 0.056 `N` at 10,000; the revisit question is open on #671.
 - **#216's active steps:** 10,000 passes with the default pool; at the next
-  limit the pool was not the cause, and CPU was under pressure.
+  limit the pool was not the cause; over HTTP/2 CPU was under pressure.

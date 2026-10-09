@@ -146,4 +146,5 @@ remained per connection was the membership check. #670 implements its
 [results](stream-authorization-results.md)), queries per post stay near 16
 to 46 up to 10,000 streams in the unstaggered ladders. The next limits are the authorization cache's
 capacity and, with one member, something the benchmark cannot see (not the
-pool); the per-stream query is gone (#232).
+pool). Cached allows remove the per-stream query; a cache miss still loads
+one membership per stream (#232).

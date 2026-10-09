@@ -51,9 +51,17 @@ literal in `TestProductionOwnership` and is currently empty. Tablecheck's
 `readExemptions` and `checkExemptions` reject duplicate and stale entries;
 the shared `sqlwalk.ReasonRules` rejects empty reasons, pending markers and
 maintainer claims without provenance.
-Only the query functions `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower` are
-accepted: other function bodies can hide table access. Tools tests run uncached
-because Go does not track these inputs outside the tools module.
+Query expressions accept only `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower`.
+In FROM, both SQL gates also accept unqualified `unnest` with one or more
+`sqlc.arg(name)::bigint[]` parameters (identifier or string names), including in
+CTEs and INSERT SELECT. It supplies candidate range bounds for set-based writes
+(#727), reading parameter values rather than tables. Each cast must use the
+unqualified `bigint` keyword and one unsized array dimension. Other functions,
+argument types, columns, literals, computed arguments and positions still fail;
+LATERAL, ROWS FROM, WITH ORDINALITY and column type definitions are not admitted.
+Table ownership, organisation predicates and the INSERT source restrictions in
+[database development](../database.md#database-development) still apply.
+Tools tests run uncached because Go does not track these inputs outside the tools module.
 Query operators are limited to unqualified `=`, `<`, `>`, `<=` and `+`, and cast
 types to unqualified `uuid`, `bigint` and `jsonb`, as used by production queries.
 Migration Up sections have an explicit statement allowlist: CREATE TABLE,

@@ -36,8 +36,9 @@ in #216's disposable container.
 
 The highest passing step rose from 30,000 to at least 60,000, the ladder's
 last step. With distinct members, 5,000 and 10,000 passed both before and
-after, with p95 37 → 35 ms and 60 → 53 ms. There, the
-[cache's capacity](stream-limits.md) is the limit, not contention.
+after, with p95 37 → 35 ms and 60 → 53 ms. This rerun stopped at 10,000, so
+it did not find the distinct-member ceiling. #671 found that ceiling to be
+the [cache's capacity](stream-limits.md).
 
 **Profiles at the same settings.** For the benchmark, one member at 30,000 streams,
 `-mutexprofilefraction=5`. For the server, #216's HTTP/1.1 active step at 15,000 streams, through

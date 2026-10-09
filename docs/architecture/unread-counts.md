@@ -129,3 +129,37 @@ messages adds one range per skipped run (about 100 bytes and an index entry
 each). Steps 1 and 2 read only the first 101; steps 3 and 4 and a topic-view
 write handle all `R`; a feed read merges them back into one, at `O(R)`.
 #283 measures 10,000 ranges before the tables ship.
+
+### Running the benchmark
+
+Export `RIBBITTO_TEST_DATABASE_URL` for disposable loopback PostgreSQL ([database tests](../database-tests.md)); run outside CI:
+
+```sh
+RIBBITTO_UNREAD_BENCH=1 go test -count=1 -run '^TestUnreadBench$' -v -timeout 30m ./internal/conversation/conversationpg
+```
+
+Optional `RIBBITTO_UNREAD_BENCH_*` suffixes (defaults): `POSTS` (`10,100,1000,10000`), `MOVES` (100), `MOVE_SIZE` (100),
+`RANGES` (10000), `TOPICS` (50), `WARMUP` (3), `REPEAT` (20). Use positive integers; `RANGES` and `TOPICS` need at least 2.
+Logs include version, settings, volumes, indexes, `ANALYZE`, plans, row visits, buffers, median and p95.
+Normal/stressed runs alternate; writes roll back. Timings exclude transaction boundaries and plan instrumentation.
+`topic-write` returns candidate bounds from `conversation` to Go, then passes
+them as arrays to one `unread` statement that coalesces them, merges only
+overlapping or touching existing ranges, and raises the floor, after locking
+and loading the read set in the same transaction. Its statement count does not
+depend on the number of messages read. Write range-count diagnostics run only
+after collecting EXPLAIN totals, outside timings and plan instrumentation.
+`topic-write-per-message` retains one merge statement
+per unread message for comparison. Both bound range lookups by the primary
+key's predecessor and the new range's upper end.
+
+## Results
+
+Two runs on 2026-10-10 (PostgreSQL 18.6; tables in
+[benchmark results](unread-benchmark-results.md)), medians: step 4 took
+0.33–27.4 ms for 10–10,000 own posts above a floor (0.29–0.56 ms
+caught up) and 1.45 ms with 10,000 moved-in read messages; with 10,000 ranges,
+step 3 took 2.4 ms, step 4 6.1–6.4 ms, the merging feed read 3.4 ms, and
+the set-based topic-view write of 9,999 messages 87–88 ms (10.5–10.6 s
+one message per statement). Nothing beyond the measured sizes follows.
+
+**Decision:** pending, the maintainer's go or no-go (#283).

@@ -14,13 +14,26 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   unkept results get the parent's cancellation cause if shutdown prevents
   their private second load from finishing.
 
-- Stream authorization holds at most 10,000 allows per process by default,
-  evicting the least recently used. `RIBBITTO_AUTHORIZATION_CACHE_CAPACITY`
-  accepts a positive integer; unset keeps the default, while empty or invalid
-  explicit values fail at start. The epoch reader uses its own 16-loader
+- Stream authorization caches allows per distinct (account ID, organisation
+  slug), not per stream: streams with the same key share an entry. Entries
+  stay after their streams close, until eviction; eviction is least recently
+  used. When `RIBBITTO_AUTHORIZATION_CACHE_CAPACITY` is unset, `cmd/ribbitto`
+  derives the capacity as `max(10,000, effective stream limit)`. The effective
+  limit is `RIBBITTO_MAX_STREAMS`, or `realtime.DefaultMaxStreams` (5,000)
+  when unset. With both unset, capacity stays 10,000. An explicit capacity
+  must be a positive integer; empty or invalid values fail at start. A capacity
+  below the effective stream limit is kept, with one startup warning naming
+  both values: sharing a key makes a smaller capacity a valid choice (#692).
+  Live keys fit in the derived capacity, but connecting and disconnecting
+  members can still cause eviction and misses.
+  [#671 measured](stream-authorization-results.md#benchmark-2026-10-09)
+  churn past 10,000 distinct entries: hit rate fell to 0.905 at 11,000 and
+  0.647 at 15,000. Each miss loaded a membership, and the pool limited delivery
+  again (15,000 failed with p95 13.9 s).
+  The epoch reader uses its own 16-loader
   limit, with a 5 s timeout and no retained values. `org.Authorizer.Stats`
   reports checks, membership-cache hits and actual epoch reads (including
-  failures), so #671 can measure hit rate and sharing without changing the
+  failures), so hit rate and sharing can be measured without changing the
   authorization rule.
 
 - Each connection reads the log itself (#209), so nothing queues for a slow

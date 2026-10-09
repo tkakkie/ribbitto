@@ -20,10 +20,10 @@ the counting queries and their cost are in
 ## Read state *(planned, M4)*
 
 - **Read ranges.** A member's read state in a channel is a set of
-  `event_seq` ranges, `channel_read.read_seqs` (an `int8multirange`). A
-  message of the channel is read when its `event_seq` lies in the set.
-  Without a row the set is everything up to `joined_event_seq`, so messages
-  from before a member joined are never unread.
+  `event_seq` ranges (`read_range` rows, `lo ≤ event_seq < hi`). A message
+  of the channel is read when its `event_seq` lies in one of them. Without
+  rows the set is `[0, joined_event_seq + 1)`, so messages from before a
+  member joined are never unread.
 - **Moves never change it.** The set names sequences, not topics, and a
   move keeps `event_seq`, so a branch or any later move leaves every
   message read or unread as it was, whatever the destination topic's state
@@ -37,9 +37,10 @@ the counting queries and their cost are in
   message of the channel, so the number of gaps never exceeds the number of
   unread messages.
 - **Topic floors.** `topic_read_floor.floor_seq` records that every message
-  in that topic up to it is read, except messages moved in by a move with a
-  higher sequence (`message.moved_event_seq`). It is a shortcut for
-  counting, derived from the read set and never consulted alone.
+  in that topic up to and including it is read, except messages moved in by
+  a move with a higher sequence (`message.moved_event_seq`). It only tells
+  counting where to start; whether a message is read is always the set's
+  answer.
 
 ## Advancing it *(planned, M4)*
 
@@ -52,9 +53,9 @@ scope and `S`, the durable cursor the page has applied:
   read, except one moved in by a move after `S` (`moved_event_seq > S`): the
   page has not shown it there. Other topics are untouched.
 
-Posting adds the new message to its author's read set in the posting
-transaction, so a member's own messages, branch notices included, are never
-unread for them.
+Posting reads the composer's scope up to the page's cursor, as that POST
+would, and adds the new message, in the posting transaction: a member's own
+messages, branch notices included, are never unread for them.
 
 `S` is the page's snapshot cursor for the POST sent after the page loads,
 and later the newest durable sequence the page has received (#710), which

@@ -5,7 +5,7 @@ Results of `TestUnreadBench` (#283), which measures the statement shapes of
 [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)
 before anything is built. How to run it is in
 [unread counts](unread-counts.md#running-the-benchmark). The maintainer
-decides go or no-go from these results; the decision is recorded below.
+decided go on 2026-10-10 from these results (below).
 
 ## Run, 2026-10-10
 
@@ -148,4 +148,24 @@ per statement, for comparison.
 
 ## Decision
 
-Pending: the maintainer decides go or no-go from these results (#283); the decision is recorded here and in [unread counts](unread-counts.md#results).
+**Go** (maintainer, 2026-10-10, #283): build read ranges with the
+topic-floor scan, as decision 32 and [unread counts](unread-counts.md)
+describe.
+
+- **Why:** caught up, the 50-topic count took 0.29–0.56 ms; with 10,000 own
+  posts above a floor, an extreme case, about 27.4 ms; the set-based
+  topic-view write over 10,000 ranges took 87–88 ms, far below one statement
+  per message. The results support starting the implementation now.
+- **Not a guarantee:** the unbounded costs remain (own posts while the
+  stream lags, `O(R)` work with many ranges). These numbers are not a
+  promise for any other load or size.
+- **Limits of the evidence:** one connection, serial; no concurrent writers;
+  commit durability not measured (writes rolled back, which can leave dead
+  tuples); one channel in steps 1–2; a machine that was not idle.
+- **Conditions for the implementation:** topic-view writes are set-based,
+  with no SQL round trip per message; `unread` and `conversation` keep
+  decision 27's ownership boundary; atomicity with the posting transaction,
+  concurrent updates, never moving backwards, moved messages and refusing
+  non-members stay acceptance criteria.
+- **Revisit:** if counts or read writes show problems under production-like
+  load, reconsider gap probing or another design.

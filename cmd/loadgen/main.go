@@ -321,7 +321,7 @@ func request(ctx context.Context, client *http.Client, method, endpoint, token, 
 		return nil, err
 	}
 	r.AddCookie(&http.Cookie{Name: "__Host-session", Value: token})
-	if method == http.MethodGet && strings.HasSuffix(endpoint, "/events") {
+	if method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/events") {
 		r.Header.Set("Accept", "text/event-stream")
 		r.Header.Set("Last-Event-ID", cursor)
 	} else if method == http.MethodPost {
@@ -692,7 +692,7 @@ func run(args []string, out io.Writer) (runErr error) {
 		if page.ProtoMajor == 2 {
 			c.http2.Store(true)
 		}
-		match := regexp.MustCompile(`sse-connect="[^"\n]*/events\?after=([0-9]+)"`).FindSubmatch(html)
+		match := regexp.MustCompile(`data-event-cursor="([0-9]+)"`).FindSubmatch(html)
 		if err != nil || page.StatusCode != http.StatusOK || len(match) != 2 {
 			return "", fmt.Errorf("invalid channel cursor")
 		}
@@ -782,7 +782,7 @@ func run(args []string, out io.Writer) (runErr error) {
 		wg.Go(func() {
 			select {
 			case slots <- struct{}{}:
-				stream(streamCtx, client, endpoint+"/events", tokenAt(i), *cursor, c, setupCtx, slots, func() { <-slots; ready.Done() }, r.Reconnect, &records[i])
+				stream(streamCtx, client, t.origin.Scheme+"://"+t.origin.Host+"/organizations/"+url.PathEscape(data.Slug)+"/events?want=sidebar,messages,typing&channel="+url.QueryEscape(data.Channels[0]), tokenAt(i), *cursor, c, setupCtx, slots, func() { <-slots; ready.Done() }, r.Reconnect, &records[i])
 			case <-setupCtx.Done():
 				c.failed.Add(1)
 				ready.Done()

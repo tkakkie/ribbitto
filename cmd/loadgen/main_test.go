@@ -152,7 +152,7 @@ func TestStreamsAndPosting(t *testing.T) {
 					}
 					return
 				}
-				if r.Header.Get("Last-Event-ID") != "7" || !strings.HasSuffix(r.URL.Path, "/events") {
+				if r.Header.Get("Last-Event-ID") != "7" || r.URL.Path != "/organizations/test/events" || r.URL.Query().Get("want") != "sidebar,messages,typing" || r.URL.Query().Get("channel") != "one" {
 					t.Error("invalid stream request")
 				}
 				w.Header().Set("Content-Type", "text/event-stream")
@@ -323,7 +323,7 @@ func TestStep(t *testing.T) {
 				}
 				if !strings.HasSuffix(r.URL.Path, "/events") {
 					pageReads.Add(1)
-					_, _ = fmt.Fprint(w, `<div sse-connect="/events?after=7"></div>`)
+					_, _ = fmt.Fprint(w, `<div data-event-cursor="7"></div>`)
 					return
 				}
 				want := "7"
@@ -443,7 +443,7 @@ func TestDrainInterrupted(t *testing.T) {
 					<-r.Context().Done()
 					return
 				}
-				_, _ = fmt.Fprint(w, `<div sse-connect="/events?after=8"></div>`)
+				_, _ = fmt.Fprint(w, `<div data-event-cursor="8"></div>`)
 				close(watermark)
 			}))
 			defer server.Close()
@@ -507,7 +507,7 @@ func TestDiagnostics(t *testing.T) {
 			return
 		}
 		if !strings.HasSuffix(r.URL.Path, "/events") {
-			_, _ = fmt.Fprint(w, `<div sse-connect="/events?after=7"></div>`)
+			_, _ = fmt.Fprint(w, `<div data-event-cursor="7"></div>`)
 			return
 		}
 		open.Add(1)
@@ -759,7 +759,7 @@ func TestReceiptsAndPostRetry(t *testing.T) {
 			if pages.Add(1) > 1 {
 				cursor = 99
 			}
-			_, _ = fmt.Fprintf(w, `<div sse-connect="/events?after=%d"></div>`, cursor)
+			_, _ = fmt.Fprintf(w, `<div data-event-cursor="%d"></div>`, cursor)
 			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")

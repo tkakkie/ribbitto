@@ -86,25 +86,27 @@ adds presence and typing as current state ([ephemeral state](realtime.md#ephemer
 |---|---|
 | `after` | the durable cursor; `Last-Event-ID` wins, as today |
 | `want` | comma-separated interests, each at most once: `sidebar`, `messages`, `typing`, `presence`; anything else is 400 |
-| `channel` | required with `messages` or `typing`, and 400 without them; a channel the member cannot see is 404 |
-| `topic` | optional with `channel`: narrows `messages` and `typing` to one topic; a topic of another channel is 404 |
+| `channel` | the page's channel: required with `messages` or `typing`; with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
+| `topic` | optional with `messages` or `typing`, and 400 without them: narrows both to one topic; a topic of another channel is 404 |
 | `presence-after` | required with `presence`: the process instance and presence generation the page was rendered with |
 
 | Page | `want` |
 |---|---|
 | Feed (latest page) | `sidebar,messages,typing` with `channel` |
 | Topic view (latest page) | `sidebar,messages,typing` with `channel` and `topic` |
-| `?before=` page | `sidebar` |
-| Members panel | `sidebar,presence` |
+| `?before=` page | `sidebar` with `channel` |
+| Members panel | `sidebar,presence` with `channel` |
 
-Older pages now carry `data-event-cursor` too, for the sidebar. Typing follows
+Older pages now carry `data-event-cursor` too. Only `message` and
+`messages-moved` frames move `Last-Event-ID`; a sidebar frame is a recount,
+sent whole at every connect and after coalesced triggers (decision 30). Typing follows
 the message filter: a feed shows typing in any topic of its channel, a topic
 view only in that topic.
 
 | Event | `id:` | Where htmx puts it |
 |---|---|---|
 | `message`, `messages-moved` | the sequence | `#message-items`, as today |
-| `sidebar` | the sequence it reflects | sidebar entries, out of band by their DOM ids (#284) |
+| `sidebar` | none | sidebar entries, out of band by their DOM ids (#284) |
 | `presence` | none | each member's indicator, out of band by its DOM id (#287) |
 | `typing` | none | the content of the page's typing indicator (#288) |
 | `reset` | the cursor | the stream script reloads the page, as today |

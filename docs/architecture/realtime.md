@@ -112,12 +112,16 @@ which connections ask for it is [stream scope](streaming.md#stream-scope-planned
   organisation, from the hub's registrations, and marks a member offline
   about 30 s after their last stream closes. Typing (#288) knows who is
   typing in which channel and topic, until a few seconds after their last
-  signal. Each entry records the generation of its last change; entries
-  that went offline or stopped typing stay for a bounded time, so a change
-  can still be sent, and the oldest change kept is the floor below which a
-  presence token cannot be served. `realtime` defines the interface the
-  owners implement, as it does for `Renderer` and `Authorizer`; `cmd/ribbitto`
-  wires them.
+  signal. `realtime` defines the interface the owners implement, as it does
+  for `Renderer` and `Authorizer`; `cmd/ribbitto` wires them.
+- **Generations.** Each presence entry records the generation of its last
+  change, and entries are kept in that order, so the changes after a
+  generation are a suffix. An entry that went offline stays for a bounded
+  time so the change can still be sent; dropping it raises the
+  organisation's **discard boundary**, a monotonic level. The owner updates
+  state, boundary and generation together and then raises the hub's
+  generation; a read returns all three as of one moment, so a connection
+  marks seen only what it read.
 - **Levels.** Per organisation the hub holds the durable level and one
   generation per kind (`presence`, `typing`), each published as an atomic
   level and channel like the durable level ([stream limits](stream-limits.md)).
@@ -125,22 +129,26 @@ which connections ask for it is [stream scope](streaming.md#stream-scope-planned
   starting or stopping typing. Typing expiry is a change too, raised by its
   owner's own timer, not by clients.
 - **Delivery.** The writer waits on the durable level, the generations of
-  its interests, its heartbeat and its context together, and drains durable
-  events first. Then, per kind whose generation passed what it has seen, it
-  sends one frame without `id:`: presence entries changed since then, or the
-  whole typing indicator of its channel or topic without the viewer's own
-  name, only when it differs from the one last sent. Presence entries render
-  once per member, state and language and are shared; the typing indicator
-  is small and depends on the viewer.
+  its interests, its heartbeat and its context together. After each
+  durable batch, and before waiting, it sends one frame without `id:` per
+  kind whose generation passed what it has seen: the presence entries
+  changed since then, read from the suffix and stopping past the frame's
+  limit (100 entries), or the typing indicator of its channel or topic
+  without the viewer's own name, naming at most three typists, only when it
+  differs from the one last sent. Presence entries render once per member,
+  state and language and are shared.
+- **Reset.** A presence read whose start lies below the discard boundary,
+  from another process's token, or past the frame's limit sends `reset`
+  instead (decision 24), on connect or later; the page reloads and renders
+  presence with a fresh token.
 - **Authorization** runs immediately before each frame, by the rule for an
   organisation-wide event (presence) or one of the frame's channel (typing):
   a deny skips the frame and its generation counts as seen, and a failed
   check stops the stream, as for durable events. Checks per connection are
-  bounded by wakes, at most one per kind each, not by changes; raises are
-  bounded by visible transitions, and typing signals by a per-member limit
-  (#288).
-- **Restore.** At connect, typing sends its current indicator, and presence
-  sends the changes after the page's token, or `reset` when the token is
-  another process's or below the floor (decision 24).
+  bounded by batches and wakes, at most one per kind each, not by changes;
+  raises are bounded by visible transitions, and typing signals by a
+  per-member limit (#288).
+- **Restore.** At connect, typing sends its current indicator, presence the
+  changes after the page's token, and the sidebar a recount (decision 30).
 - **One process.** State and levels are per process; several processes need
   a shared source for both (#236).

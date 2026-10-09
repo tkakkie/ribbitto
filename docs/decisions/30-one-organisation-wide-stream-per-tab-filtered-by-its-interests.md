@@ -28,6 +28,11 @@ settles the ephemeral signals it carries). *Planned* for M4; details in
   on coalesced triggers (page load, a read advance, at most one recount per
   connection per interval), never once per post per connection; its issue
   (#286) measures it with `TestStreamCost` and distinct members.
+- **The sidebar is current state.** Its frames are recounts, sent whole at
+  every connect and after coalesced triggers, and carry no `id:`: only
+  `message` and `messages-moved` frames move `Last-Event-ID`, as today. A
+  recount lost to a disconnect is redone at the reconnect, and a recount
+  never skips the browser past a message it has not received.
 - **Caps.** A tab still holds one stream, so the per-account cap (16) and
   [decision 25](25-production-serves-streams-over-http2.md)'s reason stand;
   pages that held none (older history, the members panel) now hold one,

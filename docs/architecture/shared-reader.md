@@ -54,8 +54,10 @@ after it. Renders, authorization and sends are per connection.
   it, so `lo` is at least every boundary already committed. A rolled-back
   batch only leaves a floor too high, which sends reads to the database.
 - **Failure.** An ordinary start or read error is retried up to three
-  times, with a short backoff of about 2 s in all; meanwhile streams keep
-  their cursors and send heartbeats. `ErrCursorExpired`, a gap, and
+  times within one deadline of about 2 s that covers the attempts as well
+  as the backoff: each attempt's context is bounded by the time left, since
+  the store and sequence readers set no deadline of their own. Meanwhile
+  streams keep their cursors and send heartbeats. `ErrCursorExpired`, a gap, and
   cancellation or shutdown end the reader at once, without a retry. A
   reader that ends this way or runs out of retries fails: it records the
   error, wakes its waiters and leaves the registry. Every stream holding it

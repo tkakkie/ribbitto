@@ -183,6 +183,6 @@ staggered. Misses reload independently; denies are never cached.
   stay at 16 to 46, not `N + 10`, up to 10,000; the highest passing step rose from 2,000 to 30,000
   (one member) and 11,000 (distinct members, past the cache's capacity).
 - **Staggered checks** read 0.72 `N` per post at 1,000 streams with a 100 ms
-  window and 0.056 `N` at 10,000; the revisit question is open on #671.
+  window and 0.056 `N` at 10,000: revisited, and (a2) kept (#671).
 - **#216's active steps:** 10,000 passes with the default pool; at the next
   limit the pool was not the cause; over HTTP/2 CPU was under pressure.

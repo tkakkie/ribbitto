@@ -80,8 +80,18 @@ was 2,000 ([stream cost](stream-cost.md#with-shared-reads-227-2026-10-01)).
   took, not when it started). The 10 ms and 100 ms windows bracket two
   spreads; which one real traffic resembles is open. In the 100 ms case a
   small organisation paid up to 0.72 `N` primary-key reads instead of `N`
-  membership joins. Whether that meets the decision's revisit condition
-  ("reads near `N`") is the maintainer's call, raised on #671.
+  membership joins.
+
+**The revisit condition was exercised; the maintainer reviewed the
+measurements and kept (a2)** (2026-10-09, on #671). 724 reads per post at
+1,000 streams with a 100 ms window (0.72 `N`) is close enough to `N` that
+the condition counts as met. The maintainer kept (a2) for three reasons:
+- 100 ms is more pessimistic than how the hub's wakes spread in practice;
+- with a 10 ms window, the checks shared reads down to 6 to 56 per post;
+- even at 100 ms, reads stayed around 800 per post and did not grow with
+  `N` at the same rate.
+
+The production design does not change.
 
 **What hit the limit first.**
 - **Distinct members: the authorization cache's capacity.**
@@ -90,7 +100,10 @@ was 2,000 ([stream cost](stream-cost.md#with-shared-reads-227-2026-10-01)).
   queries per post rose to 1,060. At 15,000 the hit rate was 0.647, each
   miss loaded a membership, and the pool saturated (529,050 empty
   acquisitions, the first by +100 ms). Both staggered cases failed at 15,000
-  the same way.
+  the same way. Past 10,000 distinct authorization entries, then, the cache
+  churns, the hit rate falls and the pool limits delivery again. The default
+  stream cap (`realtime.DefaultMaxStreams`, 5,000) keeps a process below
+  that, so it does not block #671. How the two settings relate is #692.
 - **One member: not the pool.** At 40,000 no acquisition found the pool
   empty; the first delivery over 1 s came at +4.5 s. The benchmark does not
   see CPU or memory, so it does not show what the limit was.

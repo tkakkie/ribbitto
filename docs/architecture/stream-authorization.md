@@ -178,11 +178,11 @@ About 15 shared queries per post end to end, plus the epoch reads: a few
 per organisation **when the checks overlap**, up to `N` when they are
 staggered. Misses reload independently; denies are never cached.
 
-**It held** (#671, [results](stream-authorization-results.md)):
+**Measured** (#671, [results](stream-authorization-results.md)):
 - **Stream cost:** queries per post stay flat (16 to 46) instead of `N + 10`
   up to 10,000 streams; the highest passing step rose from 2,000 to 30,000
-  (one member) and 10,000 (distinct members, the cache's capacity).
-- **Staggered checks** read up to 0.72 `N` per post at 1,000 streams with a
-  100 ms window, bounded near 800 reads; the revisit question is open on #671.
-- **#216's active steps:** 10,000 passes with the default pool; the next
-  limits were the server's CPU (HTTP/1.1) and Caddy's share of the machine.
+  (one member) and 11,000 (distinct members, past the cache's capacity).
+- **Staggered checks** read 0.72 `N` per post at 1,000 streams with a 100 ms
+  window and 0.056 `N` at 10,000; the revisit question is open on #671.
+- **#216's active steps:** 10,000 passes with the default pool; at the next
+  limit the pool was not the cause, and CPU was under pressure.

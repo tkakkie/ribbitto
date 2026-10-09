@@ -182,6 +182,16 @@ CREATE INDEX message_moved_event_seq_idx ON message (organization_id, topic_id, 
 							}
 							if u.explain {
 								t.Logf("%s state=%d returned_rows=%d relation_rows_visited=%g shared_hits=%g shared_reads=%g (EXPLAIN; rows include filter removals and loops)", operation, state, u.rows, u.scanned, u.hits, u.reads)
+								switch operation {
+								case "feed-write", "topic-write", "topic-write-per-message":
+									// Diagnostics must not add work to timings or plan totals.
+									var after int64
+									err := tx.QueryRow(t.Context(), "SELECT count(*) FROM read_range WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3", u.key...).Scan(&after)
+									if err != nil {
+										t.Fatal(fmt.Errorf("counting unread benchmark ranges: %w", err))
+									}
+									t.Logf("%s range_rows_after=%d", operation, after)
+								}
 							}
 						}()
 					}
@@ -329,7 +339,12 @@ func (u *unreadBenchRun) measure(operation string) {
  FROM unnest(ARRAY[($6::uuid[])[1]],ARRAY[($7::bigint[])[1]]) t(id,floor) CROSS JOIN LATERAL (` + candidates + `) m
  JOIN message shown ON shown.organization_id=$1 AND shown.event_seq=m.event_seq WHERE m.event_seq<=$8 AND (shown.moved_event_seq IS NULL OR shown.moved_event_seq<=$8)`
 			if operation == "topic-write" {
-				u.topicWrite(newRanges)
+				rows := u.query(newRanges, u.ranges, u.prefix, u.topics, u.floors, u.cursor)
+				lo, hi := make([]int64, 0, len(rows)), make([]int64, 0, len(rows))
+				for _, row := range rows {
+					lo, hi = append(lo, row[0].(int64)), append(hi, row[1].(int64))
+				}
+				u.topicWrite(lo, hi)
 			} else {
 				rows := u.query(newRanges, u.ranges, u.prefix, u.topics, u.floors, u.cursor)
 				for _, row := range rows {
@@ -338,10 +353,6 @@ func (u *unreadBenchRun) measure(operation string) {
 				u.query(`INSERT INTO topic_read_floor VALUES ($1,($4::uuid[])[1],$3,$2,$5) ON CONFLICT (organization_id,topic_id,member_id)
  DO UPDATE SET floor_seq=greatest(topic_read_floor.floor_seq,excluded.floor_seq) RETURNING floor_seq`, u.topics, u.cursor)
 			}
-		}
-		after := u.query("SELECT count(*) FROM read_range WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3")[0][0].(int64)
-		if u.explain {
-			u.t.Logf("%s range_rows_after=%d", operation, after)
 		}
 	}
 }
@@ -354,10 +365,11 @@ func (u *unreadBenchRun) merge(lo, hi int64) {
  INSERT INTO read_range SELECT $1,$2,$3,least($4,min(lo)),greatest($5,max(hi)) FROM removed RETURNING lo,hi`, lo, hi)
 }
 
-func (u *unreadBenchRun) topicWrite(newRanges string) {
+func (u *unreadBenchRun) topicWrite(lo, hi []int64) {
+	// Only range values cross from conversation's candidate query to unread.
 	// Coalesce additions first so neighbour probes depend on runs, not messages.
 	// Use DELETE's returned rows to order replacement inserts after deletion.
-	u.query(`WITH additions AS (SELECT range_agg(int8range(lo,hi)) ranges FROM (`+newRanges+`) candidates),
+	u.query(`WITH additions AS (SELECT range_agg(int8range(lo,hi)) ranges FROM unnest($4::bigint[],$5::bigint[]) candidates(lo,hi)),
  new_ranges AS MATERIALIZED (SELECT lower(r) lo,upper(r) hi FROM additions CROSS JOIN LATERAL unnest(ranges) r),
  touched AS MATERIALIZED (SELECT DISTINCT r.lo FROM new_ranges n CROSS JOIN LATERAL (
  SELECT lo FROM read_range WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3
@@ -366,8 +378,8 @@ func (u *unreadBenchRun) topicWrite(newRanges string) {
  removed AS (DELETE FROM read_range r USING touched t WHERE r.organization_id=$1 AND r.channel_id=$2 AND r.member_id=$3 AND r.lo=t.lo RETURNING r.lo,r.hi),
  merged AS (SELECT unnest(range_agg(int8range(lo,hi))) r FROM (SELECT lo,hi FROM new_ranges UNION ALL SELECT lo,hi FROM removed) ranges),
  inserted AS (INSERT INTO read_range SELECT $1,$2,$3,lower(r),upper(r) FROM merged RETURNING lo,hi)
- INSERT INTO topic_read_floor VALUES ($1,($6::uuid[])[1],$3,$2,$8) ON CONFLICT (organization_id,topic_id,member_id)
- DO UPDATE SET floor_seq=greatest(topic_read_floor.floor_seq,excluded.floor_seq) RETURNING floor_seq`, u.ranges, u.prefix, u.topics, u.floors, u.cursor)
+ INSERT INTO topic_read_floor VALUES ($1,$6,$3,$2,$7) ON CONFLICT (organization_id,topic_id,member_id)
+ DO UPDATE SET floor_seq=greatest(topic_read_floor.floor_seq,excluded.floor_seq) RETURNING floor_seq`, lo, hi, u.topics[0], u.cursor)
 }
 
 func unreadBenchScanned(plan map[string]any) float64 {

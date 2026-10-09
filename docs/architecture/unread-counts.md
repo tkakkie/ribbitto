@@ -142,9 +142,13 @@ Optional `RIBBITTO_UNREAD_BENCH_*` suffixes (defaults): `POSTS` (`10,100,1000,10
 `RANGES` (10000), `TOPICS` (50), `WARMUP` (3), `REPEAT` (20). Use positive integers; `RANGES` and `TOPICS` need at least 2.
 Logs include version, settings, volumes, indexes, `ANALYZE`, plans, row visits, buffers, median and p95.
 Normal/stressed runs alternate; writes roll back. Timings exclude transaction boundaries and plan instrumentation.
-`topic-write` coalesces the new ranges, merges only overlapping or touching
-existing ranges, and raises the floor in one statement after locking and
-loading the read set. `topic-write-per-message` retains one merge statement
+`topic-write` returns candidate bounds from `conversation` to Go, then passes
+them as arrays to one `unread` statement that coalesces them, merges only
+overlapping or touching existing ranges, and raises the floor, after locking
+and loading the read set in the same transaction. Its statement count does not
+depend on the number of messages read. Write range-count diagnostics run only
+after collecting EXPLAIN totals, outside timings and plan instrumentation.
+`topic-write-per-message` retains one merge statement
 per unread message for comparison. Both bound range lookups by the primary
 key's predecessor and the new range's upper end.
 

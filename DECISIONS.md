@@ -58,3 +58,5 @@ coverage and the normal document size limit for both the index and entries.
 - [27. Channels, topics and messages are one `conversation` module](docs/decisions/27-channels-topics-and-messages-are-one-conversation-module.md)
 - [28. The concept: fast, nothing gets buried, nothing to learn](docs/decisions/28-the-concept-fast-nothing-gets-buried-nothing-to-learn.md)
 - [29. Test fixtures live with the module that owns their tables](docs/decisions/29-test-fixtures-live-with-the-module-that-owns-their-tables.md)
+- [30. One organisation-wide stream per tab, filtered by its interests](docs/decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md)
+- [31. Presence and typing are current state with a generation](docs/decisions/31-presence-and-typing-are-current-state-with-a-generation.md)

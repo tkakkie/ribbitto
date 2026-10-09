@@ -10,7 +10,7 @@ measurement calls for it; #236 judges the steps after these.
 
 With or without the reader, every advance wakes every connection of the
 organisation, and those following other channels skip the event before
-rendering. #296 gives each tab one organisation-wide stream whose
+rendering. [Decision 30](../decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md) gives each tab one organisation-wide stream whose
 connection declares several interests: the sidebar and unread counts for
 the organisation, presence, and typing and messages for its channel or
 topic. What changes:
@@ -31,8 +31,8 @@ topic. What changes:
   channel: in the levels, the index and the eviction marks. A connection it
   wakes reads and renders it, and decides as today.
 - **Wait:** until the highest level among the connection's interests passes
-  its cursor. It is still a level, so no wakeup is lost; #296's ephemeral
-  generation is one more level of the same kind.
+  its cursor. It is still a level, so no wakeup is lost; [decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md)'s
+  ephemeral generation is one more level of the same kind.
 - **Read:** a connection may skip events without reading them only with a
   proof, checked in the same snapshot of the index as the skip. The proof
   has three parts:

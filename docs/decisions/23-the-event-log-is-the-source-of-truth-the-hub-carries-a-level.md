@@ -18,3 +18,4 @@ reason about (M3, #156–#158, #237).
 **Considered:** fanning events out from memory (lost on a crash or a missed
 notification, and replay would need a second path); per-connection queues
 (memory grows with slow readers).
+**Amended by:** [decision 31](31-presence-and-typing-are-current-state-with-a-generation.md) (the hub also carries a generation per ephemeral kind).

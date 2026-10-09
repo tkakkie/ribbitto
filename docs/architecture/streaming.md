@@ -4,8 +4,9 @@
 
 One SSE connection per latest channel page (M3) or topic page (#304),
 carrying named events:
-`message`, `messages-moved` and `reset` today; `presence`, `typing`
-and `unread` are planned (M4). The browser sends everything else as ordinary POST requests. One
+`message`, `messages-moved` and `reset` today. M4 replaces these streams
+with one organisation-wide stream per tab ([stream scope](#stream-scope-planned-m4)).
+The browser sends everything else as ordinary POST requests. One
 process serves every stream; several server processes are future work (the
 hub, both stream caps and the watermark are per process).
 
@@ -71,3 +72,49 @@ The retention period defaults to seven days; see [database configuration](../dat
 
 Cache-load limits, write deadlines, heartbeats, the process and per-account stream caps,
 shutdown and HTTP/2 are in [`stream-limits.md`](stream-limits.md).
+
+## Stream scope (planned, M4)
+
+[Decision 30](../decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md)
+gives every page one stream for its organisation, filtered by the page's
+interests; [decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md)
+adds presence and typing as current state ([ephemeral state](realtime.md#ephemeral-state-planned-m4)).
+
+`GET /organizations/{slug}/events` takes:
+
+| Parameter | Meaning |
+|---|---|
+| `after` | the durable cursor; `Last-Event-ID` wins, as today |
+| `want` | comma-separated interests, each at most once: `sidebar`, `messages`, `typing`, `presence`; anything else is 400 |
+| `channel` | required with `messages` or `typing`, and 400 without them; a channel the member cannot see is 404 |
+| `topic` | optional with `channel`: narrows `messages` and `typing` to one topic; a topic of another channel is 404 |
+| `presence-after` | required with `presence`: the process instance and presence generation the page was rendered with |
+
+| Page | `want` |
+|---|---|
+| Feed (latest page) | `sidebar,messages,typing` with `channel` |
+| Topic view (latest page) | `sidebar,messages,typing` with `channel` and `topic` |
+| `?before=` page | `sidebar` |
+| Members panel | `sidebar,presence` |
+
+Older pages now carry `data-event-cursor` too, for the sidebar. Typing follows
+the message filter: a feed shows typing in any topic of its channel, a topic
+view only in that topic.
+
+| Event | `id:` | Where htmx puts it |
+|---|---|---|
+| `message`, `messages-moved` | the sequence | `#message-items`, as today |
+| `sidebar` | the sequence it reflects | sidebar entries, out of band by their DOM ids (#284) |
+| `presence` | none | each member's indicator, out of band by its DOM id (#287) |
+| `typing` | none | the content of the page's typing indicator (#288) |
+| `reset` | the cursor | the stream script reloads the page, as today |
+
+The element holding `sse-connect` wraps every live region, because the htmx
+SSE extension attaches an `sse-swap` element to its closest ancestor with a
+source. A whole region (messages, typing) has its own `sse-swap`. Per-entry
+events go to one hidden sink, `sse-swap="sidebar,presence"` with
+`hx-swap="none"`, whose payload holds only `hx-swap-oob` elements: the
+extension swaps through htmx's own swap, which applies out-of-band elements
+even when the main swap is `none`, and an entry not on the page is ignored.
+#285 proves this in a browser test. Opening the members panel is a
+navigation, so its page renders presence and its token from one state.

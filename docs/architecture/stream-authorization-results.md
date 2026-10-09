@@ -141,3 +141,6 @@ did.
 - **HTTP/2:** at 15,000 the VM was 86–88% busy, with Caddy at about 4 CPUs,
   the server 2.6 and the client 2.3: CPU pressure on the shared machine,
   without showing which process limited first.
+
+#703 later halved the authorizer's lock contention; its before and after
+numbers are in [stream authorization contention](stream-authorization-contention.md).

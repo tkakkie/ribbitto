@@ -31,6 +31,7 @@ Read the file for the area you change:
 | [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
 | [`stream-authorization.md`](stream-authorization.md) | keeping deliveries authorized without a query per stream per event: the options and the decision (#622) |
+| [`stream-authorization-contention.md`](stream-authorization-contention.md) | the cached-allow check's lock and wake contention (#703): what changed, and the ceilings and profiles before and after |
 | [`stream-authorization-results.md`](stream-authorization-results.md) | what #670's cached allows cost, measured by #671: epoch reads, hit rate, queries and latency, and what hit the limit first |
 | [`shared-reader.md`](shared-reader.md) | *planned* (#232): one reader per organisation, its window, the hand-over from replay to live, slow connections, and what should decide whether to build it |
 | [`shared-reader-growth.md`](shared-reader-growth.md) | *planned*: how the shared reader grows into a channel interest index and bounded replay, and its implementation issues |

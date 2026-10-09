@@ -94,9 +94,20 @@ func (a *Authorizer) streamMembership(
 	token := &checkToken{}
 	s.mu.Lock()
 	s.latest[key] = token
+	elem := s.entries[key]
+	var cached Membership
+	if elem != nil {
+		cached = elem.Value.(allowEntry).membership
+	}
 	s.mu.Unlock()
+	hit := false
 	defer func() {
 		s.mu.Lock()
+		// The fresh epoch proves the snapshot even if it was evicted meanwhile.
+		// Touch only the same resident entry; never resurrect or touch a replacement.
+		if hit && s.entries[key] == elem {
+			s.order.MoveToFront(elem)
+		}
 		if s.latest[key] == token {
 			delete(s.latest, key)
 		}
@@ -115,11 +126,18 @@ func (a *Authorizer) streamMembership(
 	}
 	// Shutdown may begin after the cache accepts a successful result. Reject
 	// it before it can authorize or populate an entry.
-	if err := context.Cause(s.parent); err != nil {
-		return Membership{}, fmt.Errorf("reading access epoch during shutdown: %w", err)
+	for _, check := range []context.Context{s.parent, ctx} {
+		if err := context.Cause(check); err != nil {
+			return Membership{}, fmt.Errorf("reading access epoch after cancellation: %w", err)
+		}
 	}
 	if epoch == 0 {
 		return Membership{}, ErrNotFound
+	}
+	if elem != nil && cached.Organization.ID == organization && cached.AccessEpoch >= epoch {
+		hit = true
+		s.hits.Add(1)
+		return cached, nil
 	}
 	s.mu.Lock()
 	if elem := s.entries[key]; elem != nil {

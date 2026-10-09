@@ -360,3 +360,99 @@ func TestCancelledMembershipResultIsNotCached(t *testing.T) {
 		t.Fatalf("cancelled membership allow=%v, error=%v, entries=%d", allow, err, len(a.stream.entries))
 	}
 }
+
+func TestCachedAllowSnapshotSurvivesEviction(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		entered, release := make(chan struct{}), make(chan struct{})
+		var reads, queries atomic.Int64
+		store := streamStore{
+			epoch: func(_ context.Context, id kernel.ID) (int64, error) {
+				if id == (kernel.ID{1}) && reads.Add(1) == 2 {
+					close(entered)
+					<-release
+				}
+				return 1, nil
+			},
+			member: func(_ context.Context, _ kernel.ID, slug string) (Membership, error) {
+				queries.Add(1)
+				id := kernel.ID{1}
+				if slug == "other" {
+					id = kernel.ID{2}
+				}
+				return Membership{Organization: Organization{ID: id, Slug: slug}, AccessEpoch: 1}, nil
+			},
+		}
+		a := NewCachedAuthorizer(t.Context(), store, 1)
+		check := func(slug string, organization kernel.ID) {
+			allow, err := a.MayReceive(t.Context(), kernel.ID{3}, slug, realtime.Event{OrganizationID: organization})
+			if !allow || err != nil {
+				t.Errorf("%s: allow=%v, error=%v", slug, allow, err)
+			}
+		}
+		check("acme", kernel.ID{1})
+		done := make(chan struct{})
+		go func() { check("acme", kernel.ID{1}); close(done) }()
+		<-entered                    // token registration captured acme's allow before the fresh read
+		check("other", kernel.ID{2}) // evicts acme while its read is in flight
+		close(release)
+		<-done
+		if queries.Load() != 2 || a.Stats().CacheHits != 1 {
+			t.Fatalf("snapshot reloaded: queries=%d, stats=%+v", queries.Load(), a.Stats())
+		}
+		if len(a.stream.entries) != 1 || a.stream.entries[allowKey{kernel.ID{3}, "other"}] == nil {
+			t.Fatal("snapshot cleanup resurrected an evicted entry or exceeded capacity")
+		}
+	})
+}
+
+func TestCachedAllowSnapshotRefreshesLRU(t *testing.T) {
+	store := streamStore{
+		epoch: func(context.Context, kernel.ID) (int64, error) { return 1, nil },
+		member: func(context.Context, kernel.ID, string) (Membership, error) {
+			return Membership{Organization: Organization{ID: kernel.ID{1}}, AccessEpoch: 1}, nil
+		},
+	}
+	a := NewCachedAuthorizer(t.Context(), store, 2)
+	for _, account := range []kernel.ID{{1}, {2}, {1}, {3}} {
+		allow, err := a.MayReceive(t.Context(), account, "acme", realtime.Event{OrganizationID: kernel.ID{1}})
+		if !allow || err != nil {
+			t.Fatalf("allow=%v, error=%v", allow, err)
+		}
+	}
+	if len(a.stream.entries) != 2 || a.stream.entries[allowKey{kernel.ID{2}, "acme"}] != nil {
+		t.Fatal("snapshot hit did not refresh LRU or exceeded capacity")
+	}
+}
+
+// Withhold the waiter's Done notification so an accepted epoch result reaches
+// org after the caller's cancellation cause is already visible.
+type delayedEpochCaller struct{ context.Context }
+
+func (delayedEpochCaller) Done() <-chan struct{} { return nil }
+
+func TestCachedAllowRejectsCancelledEpochCaller(t *testing.T) {
+	caller, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var cancelRead bool
+	store := streamStore{
+		epoch: func(context.Context, kernel.ID) (int64, error) {
+			if cancelRead {
+				cancel()
+			}
+			return 1, nil
+		},
+		member: func(context.Context, kernel.ID, string) (Membership, error) {
+			return Membership{Organization: Organization{ID: kernel.ID{1}}, AccessEpoch: 1}, nil
+		},
+	}
+	a := NewCachedAuthorizer(t.Context(), store, 1)
+	event := realtime.Event{OrganizationID: kernel.ID{1}}
+	if allow, err := a.MayReceive(t.Context(), kernel.ID{3}, "acme", event); !allow || err != nil {
+		t.Fatalf("warming allow=%v, error=%v", allow, err)
+	}
+	cancelRead = true
+	allow, err := a.MayReceive(delayedEpochCaller{caller}, kernel.ID{3}, "acme", event)
+	if allow || !errors.Is(err, context.Canceled) || a.Stats().CacheHits != 0 || len(a.stream.latest) != 0 {
+		t.Fatalf("cancelled caller allow=%v, error=%v, stats=%+v", allow, err, a.Stats())
+	}
+}

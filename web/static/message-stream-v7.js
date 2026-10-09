@@ -28,20 +28,20 @@
     event.target.close();
     location.reload();
   };
+  const resume = (message) => {
+    // Native reconnects send Last-Event-ID; htmx recreates CLOSED sources
+    // from this URL. Advance only after the page applies the event.
+    const connection = document.getElementById("organization-stream");
+    connection.dataset.eventCursor = message.lastEventId;
+    const url = new URL(connection.getAttribute("sse-connect"), location.href);
+    url.searchParams.set("after", message.lastEventId);
+    connection.setAttribute("sse-connect", url.pathname + url.search);
+  };
   document.addEventListener("htmx:sseOpen", (event) => {
     const connection = event.target;
     if (connection.id !== "organization-stream") return;
     const source = event.detail.source;
     source.addEventListener("reset", reset, { once: true });
-    const resume = (message) => {
-      // Native reconnects send Last-Event-ID; htmx recreates CLOSED sources
-      // from this URL. Keep the cursor outside every message swap target.
-      connection.dataset.eventCursor = message.lastEventId;
-      const url = new URL(connection.getAttribute("sse-connect"), location.href);
-      url.searchParams.set("after", message.lastEventId);
-      connection.setAttribute("sse-connect", url.pathname + url.search);
-    };
-    for (const name of ["message", "messages-moved"]) source.addEventListener(name, resume);
   });
   const applyMove = (items, data, payload) => {
     const moved = payload.querySelectorAll("li");
@@ -98,6 +98,7 @@
       event.preventDefault();
       for (const moves of historyMoves.values()) moves.push(event.detail.data);
       applyMove(items, event.detail.data, payload);
+      resume(event.detail);
       return;
     }
     const existing = document.getElementById(incoming.id);
@@ -110,6 +111,7 @@
       swapStyle: existing ? "outerHTML" : "beforeend", settleDelay: 0,
     }, {
       afterSettleCallback: () => {
+        resume(event.detail);
         if (!scrollPosted(incoming.id) && atBottom) pane.scrollTop = pane.scrollHeight;
         if (existing) document.getElementById("branch-to")?.dispatchEvent(new Event("change", { bubbles: true }));
         // Retain recent additions for replay bursts without growing forever.

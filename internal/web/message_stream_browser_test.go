@@ -249,6 +249,81 @@ func TestMessageStreamBrowser(t *testing.T) {
 			}
 		})
 	}
+	t.Run("failed-move/replay", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+		defer cancel()
+		cursor, source, destination := int64(42), kernel.ID{1}, kernel.ID{2}
+		snapshot := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
+			Current: view.Channel{ID: kernel.ID{1}}, Topic: &view.Topic{ID: destination}, EventCursor: &cursor,
+			Messages: streamTestMessages(destination, 40, 60)}
+		move := realtime.Outgoing{ID: 51, Name: "messages-moved",
+			Data: streamTestMarkup(t, view.MovedMessageItems(streamTestMessages(destination, 50), source, destination))}
+		events := make(chan realtime.Outgoing, 1)
+		requests := make(chan string, 2)
+		mux := http.NewServeMux()
+		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/organizations/acme/events" {
+				templ.Handler(view.ChannelScreen("/static/css/app.css", snapshot)).ServeHTTP(w, r)
+				return
+			}
+			after := r.URL.Query().Get("after")
+			requests <- after
+			w.Header().Set("Content-Type", "text/event-stream")
+			sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+			if err := sender.Heartbeat(r.Context()); err != nil {
+				return
+			}
+			select {
+			case out := <-events:
+				// Replay only when the requested cursor precedes the failed move.
+				if after == "42" {
+					_ = sender.Send(r.Context(), out)
+				}
+			case <-r.Context().Done():
+				return
+			}
+			<-r.Context().Done()
+		})
+		server := httptest.NewServer(mux)
+		defer server.Close()
+		page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+		defer page.MustClose()
+		page.MustEvalOnNewDocument(`document.addEventListener('htmx:sseOpen', e => {
+			window.testSource = e.detail.source;
+			e.detail.source.addEventListener('messages-moved', () => document.body.dataset.delivered = '1');
+		})`)
+		page.MustNavigate(server.URL).MustWaitLoad()
+		page.MustWait(`() => !!window.testSource`)
+		assertRequest := func() {
+			t.Helper()
+			select {
+			case after := <-requests:
+				if after != "42" {
+					t.Fatalf("stream cursor = %q, want 42", after)
+				}
+			case <-ctx.Done():
+				t.Fatal("stream did not connect", ctx.Err())
+			}
+		}
+		assertRequest()
+		page.MustEval(`() => delete document.querySelector('#load-older').dataset.oldestSeq`)
+		events <- move
+		page.MustWait(`() => document.body.dataset.delivered === '1'`)
+		assertBrowserItems(t, page, []int{40, 60})
+		if got := page.MustEval(`() => document.querySelector('#organization-stream').dataset.eventCursor`).Str(); got != "42" {
+			t.Fatalf("failed move advanced cursor to %s, want 42", got)
+		}
+		page.MustEval(`() => {
+			document.querySelector('#load-older').dataset.oldestSeq = '0';
+			window.testSource.close();
+			window.testSource.dispatchEvent(new Event('error'));
+		}`)
+		assertRequest()
+		events <- move
+		page.MustWait(`() => document.querySelector('#organization-stream').dataset.eventCursor === '51'`)
+		assertBrowserItems(t, page, []int{40, 50, 60})
+	})
 }
 
 func browserUnavailable(t *testing.T, reason string) {

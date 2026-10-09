@@ -78,8 +78,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   and `sse-connect="/organizations/<slug>/events?after=<cursor>&want=<interests>&channel=<id>"`
   (plus `topic=<id>` on latest topic views). Latest pages declare
   `sidebar,messages,typing`; older pages declare `sidebar` and omit `topic`.
-  See [stream scope](streaming.md#stream-scope). Cursor/reconnect and `reset`
-  handling attach to this container independently of message swaps.
+  See [stream scope](streaming.md#stream-scope). `reset` handling attaches to
+  this container. Its reconnect cursor advances after an inserted message
+  settles or a move applies successfully.
   Only latest pages' `#message-items` receives `message,messages-moved`; moves
   replace feed IDs or remove/insert topic IDs within the loaded range. Replacements clear selection and refresh
   branch constraints. `LiveMessageItem` shares `MessageItem` markup, adding

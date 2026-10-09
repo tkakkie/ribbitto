@@ -44,7 +44,9 @@ M4 is done when a member of an organisation sees:
    is typing there; the indicator goes away soon after they stop or send.
 
 Each signal reaches only members who may see it, and a reconnect restores
-the current state. How they reach the browser is #296's decision.
+the current state. How they reach the browser is in decisions
+[30](decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md) and
+[31](decisions/31-presence-and-typing-are-current-state-with-a-generation.md).
 
 Left for later: notifications, sounds and a count in the tab title;
 jumping to the first unread message; away, idle and "last seen"; typing in

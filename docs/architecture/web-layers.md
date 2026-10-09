@@ -76,7 +76,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
   layout div, outside `#conversation` and every swap target, with
   `hx-ext="sse"` and `sse-connect="<page URL>/events?after=<cursor>"`; a
   topic's stream sends only that topic's messages (#304). Older pages omit
-  all three.
+  all three. M4 plans one stream on every page instead
+  ([stream scope](streaming.md#stream-scope-planned-m4)).
   `#message-items` receives `message` and `messages-moved` events; moves
   replace feed IDs or remove/insert topic IDs within the loaded range. Replacements clear selection and refresh
   branch constraints. `LiveMessageItem` shares `MessageItem` markup, adding

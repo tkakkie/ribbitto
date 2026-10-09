@@ -102,3 +102,57 @@ both bounds describe a valid batch at the check's snapshot, or require reset.
 Short batches already carry their read's checks of both bounds. Cached rows
 are assumed immutable: a restore happens with ribbitto stopped, so caches and
 the hub start empty ([Restoring a backup](../../README.md#restoring-a-backup)).
+
+## Ephemeral state (planned, M4)
+
+[Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
+which connections ask for it is [stream scope](streaming.md#stream-scope-planned-m4).
+
+- **Owners.** Presence (#287) knows which members have a stream open in the
+  organisation, from the hub's registrations, and marks a member offline
+  about 30 s after their last stream closes. Typing (#288) knows who is
+  typing in which channel and topic, until a few seconds after their last
+  signal. `realtime` defines the interface the owners implement, as it does
+  for `Renderer` and `Authorizer`; `cmd/ribbitto` wires them.
+- **Generations.** Each presence entry records the generation of its last
+  change, and entries are kept in that order, so the changes after a
+  generation are a suffix. An entry that went offline stays for a bounded
+  time so the change can still be sent; dropping it raises the
+  organisation's **discard boundary**, a monotonic level. The owner updates
+  state, boundary and generation together and then raises the hub's
+  generation; a read returns all three as of one moment, so a connection
+  marks seen only what it read. Typing keeps a summary per channel and per
+  topic, updated with each change: the set of typists, how many there are,
+  the four latest and the generation of its last change. A connection reads
+  only its place's summary (a feed reads its channel's) and subtracts the
+  viewer, found in that set in constant time, from the names and the count,
+  so its work does not grow with typists or topics elsewhere.
+- **Levels.** Per organisation the hub holds the durable level and one
+  generation per kind (`presence`, `typing`), each published as an atomic
+  level and channel like the durable level ([stream limits](stream-limits.md)).
+  Only visible changes raise a generation: going online or offline,
+  starting or stopping typing. Typing expiry is a change too, raised by its
+  owner's own timer, not by clients.
+- **Delivery.** The writer waits on the durable level, the generations of
+  its interests, its heartbeat and its context together. After each
+  durable batch, and before waiting, it sends one frame without `id:` per
+  kind whose generation passed what it has seen: the presence entries
+  changed since then, read from the suffix and stopping past the frame's
+  limit (100 entries), or its place's typing indicator (three names at
+  most, then a count) when its summary changed. Presence entries render
+  once per member, state and language and are shared.
+- **Reset.** A presence read whose start lies below the discard boundary,
+  from another process's token, or past the frame's limit sends `reset`
+  instead (decision 24), on connect or later; the page reloads and renders
+  presence with a fresh token.
+- **Authorization** runs immediately before each frame, by the rule for an
+  organisation-wide event (presence) or one of the frame's channel (typing):
+  a deny skips the frame and its generation counts as seen, and a failed
+  check stops the stream, as for durable events. Checks per connection are
+  bounded by batches and wakes, at most one per kind each, not by changes;
+  raises are bounded by visible transitions, and typing signals by a
+  per-member limit (#288).
+- **Restore.** At connect, typing sends its current indicator, presence the
+  changes after the page's token, and the sidebar a recount (decision 30).
+- **One process.** State and levels are per process; several processes need
+  a shared source for both (#236).

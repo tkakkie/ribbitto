@@ -61,7 +61,7 @@ const DefaultMaxStreamsPerAccount = 16
 // the write deadline.
 const DefaultStreamHeartbeat = 20 * time.Second
 
-// events shares transport and visibility checks across organisation and per-page streams.
+// events resolves visibility before opening the organisation stream.
 func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membership) {
 	if p.stream == nil {
 		http.NotFound(w, r)
@@ -73,32 +73,12 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	sub := realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}}
-	organisationEndpoint := r.PathValue("channelID") == ""
-	if organisationEndpoint {
-		var ok bool
-		sub, ok = streamScope(r)
-		if !ok {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-	} else {
-		id, ok := channelID(r)
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		sub.Channel = id
-		if raw := r.PathValue("topicID"); raw != "" {
-			selected, ok := pathID(raw)
-			if !ok {
-				http.NotFound(w, r)
-				return
-			}
-			sub.Topic = &selected
-		}
+	sub, ok := streamScope(r)
+	if !ok {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
 	}
-	if !organisationEndpoint || sub.Channel != (kernel.ID{}) {
+	if sub.Channel != (kernel.ID{}) {
 		_, err := p.channels.Get(r.Context(), m, sub.Channel)
 		if errors.Is(err, conversation.ErrChannelNotFound) {
 			http.NotFound(w, r)

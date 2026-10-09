@@ -12,8 +12,8 @@ occupied addresses. The check binds and closes the port, so another local
 process could claim it before the child does and receive the readiness probe's
 seeded test-account cookie: load runs use a disposable, loopback-only machine,
 and a hostile local process is outside the threat model. Child stderr goes to the caller's stderr. Direct readiness
-requires the first token's channel page to answer 200 with an `events?after=`
-cursor while the child is running; `-target` may point to Caddy. Target readiness
+requires the first token's channel page to answer 200 with a `data-event-cursor`
+while the child is running; `-target` may point to Caddy. Target readiness
 is separate.
 `-server-addr`, `-server-arg`, `-start-deadline` and `-exit-deadline` require
 `-server`. `-start-deadline` bounds each check (default 30s, >0 through 5m).

@@ -96,12 +96,14 @@ queue and commute, and none removes a read message. A newly read message
   `S` (`n`, or `S + 1`), then `[0, n)`: it deletes every range it absorbs,
   so its cost is proportional to the ranges merged, `O(R)` after heavy
   fragmentation and `O(1)` in normal use.
-- **Topic view, cursor `S`:** `conversation` returns the topic's unread
-  messages up to `S` (step 4's shape without its cap, excluding
-  `moved_event_seq > S`) with each one's channel neighbours; `unread` adds a
-  range per message, merging as it goes, and raises the floor to `S` if it
-  is lower, in the same transaction. Cost: `O(R)` for the read set, plus
-  the candidate rows and one neighbour probe per unread message.
+- **Topic view, cursor `S`:** set-based, never one statement per message.
+  `conversation` returns, in one statement, the bounds `[p + 1, n)` of the
+  topic's unread messages up to `S` (step 4's shape without its cap,
+  excluding `moved_event_seq > S`); `unread` passes them as arrays (#727) to
+  one statement that coalesces them, merges only the ranges they overlap or
+  touch (found by the primary key) and raises the floor to `S` if lower, in
+  the same transaction. Cost: `O(R)` for the read set and the candidate
+  rows; 87–88 ms for 9,999 messages over 10,000 ranges in the benchmark.
 - **Posting** with the composer's cursor `S`: the same write as the page's
   scope up to `S`, then a range for the new message; from a topic view the
   floor also rises to the new message when no message of the topic has an
@@ -164,4 +166,7 @@ step 3 took 2.4 ms, step 4 6.1–6.4 ms, the merging feed read 3.4 ms, and
 the set-based topic-view write of 9,999 messages 87–88 ms (10.5–10.6 s
 one message per statement). Nothing beyond the measured sizes follows.
 
-**Decision:** pending, the maintainer's go or no-go (#283).
+**Decision: go** (maintainer, 2026-10-10): read ranges with the topic-floor
+scan; topic-view writes are set-based. Not a performance guarantee; the
+reasons, limits and when to revisit are in
+[benchmark results](unread-benchmark-results.md#decision).

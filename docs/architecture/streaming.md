@@ -2,13 +2,9 @@
 
 ## Server-Sent Events
 
-One SSE connection per latest channel page (M3) or topic page (#304),
-carrying named events:
-`message`, `messages-moved` and `reset` today. M4 replaces these streams
-with one organisation-wide stream per tab ([stream scope](#stream-scope-planned-m4)).
-The organisation endpoint now exists beside the per-channel and per-topic
-endpoints (#714). Pages still use the per-page endpoints until #715 switches
-them and removes those routes; no page opens an additional stream.
+One organisation-wide SSE connection per tab, including directly opened
+older history pages, filtered by the page's [interests](#stream-scope).
+Named events today are `message`, `messages-moved` and `reset`.
 The browser sends everything else as ordinary POST requests. One
 process serves every stream; several server processes are future work (the
 hub, both stream caps and the watermark are per process).
@@ -76,17 +72,16 @@ The retention period defaults to seven days; see [database configuration](../dat
 Cache-load limits, write deadlines, heartbeats, the process and per-account stream caps,
 shutdown and HTTP/2 are in [`stream-limits.md`](stream-limits.md).
 
-## Stream scope (planned, M4)
+## Stream scope
 
 [Decision 30](../decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md)
 gives every page one stream for its organisation, filtered by the page's
 interests; [decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md)
-adds presence and typing as current state ([ephemeral state](realtime.md#ephemeral-state-planned-m4)).
+will add presence and typing as current state ([ephemeral state](realtime.md#ephemeral-state-planned-m4)).
 
-`GET /organizations/{slug}/events` already accepts these parameters. Only
+`GET /organizations/{slug}/events` accepts these parameters. Only
 `messages` delivers frames; `sidebar`, `typing` and `presence` are accepted
-but deliver nothing yet (#286, #285). The page connections and remaining
-stream scope below are still planned.
+but deliver nothing yet (#286, #285).
 
 The endpoint takes:
 
@@ -103,14 +98,15 @@ The endpoint takes:
 | Feed (latest page) | `sidebar,messages,typing` with `channel` |
 | Topic view (latest page) | `sidebar,messages,typing` with `channel` and `topic` |
 | `?before=` page | `sidebar` with `channel` |
-| Members panel | `sidebar,presence` with `channel` |
+| Members panel (planned, #290) | `sidebar,presence` with `channel` |
 
-Older page snapshots already provide a cursor; #715 will put
-`data-event-cursor` on those pages and connect their stream. Only `message` and
-`messages-moved` frames move `Last-Event-ID`; a sidebar frame is a recount,
-sent whole at every connect and after coalesced triggers (decision 30). Typing follows
-the message filter: a feed shows typing in any topic of its channel, a topic
-view only in that topic.
+Every page carries its snapshot cursor on `#organization-stream`, including
+`?before=` pages, which hold a slot under both stream caps. Only `message`
+and `messages-moved` frames advance the browser's durable cursor.
+
+Sidebar and ephemeral delivery remain planned (#286, #285): sidebar frames
+will recount at connect and after coalesced triggers, and typing will follow
+the channel/topic message filter. Their future swap targets are listed below.
 
 | Event | `id:` | Where htmx puts it |
 |---|---|---|
@@ -120,10 +116,10 @@ view only in that topic.
 | `typing` | none | the content of the page's typing indicator (#288) |
 | `reset` | the cursor | the stream script reloads the page, as today |
 
-The element holding `sse-connect` wraps every live region, because the htmx
+`#organization-stream`, holding `sse-connect`, wraps the sidebar and conversation, because the htmx
 SSE extension attaches an `sse-swap` element to its closest ancestor with a
-source. A whole region (messages, typing) has its own `sse-swap`. Per-entry
-events go to one hidden sink, `sse-swap="sidebar,presence"` with
+source. Messages have their own `sse-swap` on latest pages; older pages omit it.
+Planned typing has its own region. Planned per-entry events go to one hidden sink, `sse-swap="sidebar,presence"` with
 `hx-swap="none"`, whose payload holds only `hx-swap-oob` elements: the
 extension swaps through htmx's own swap, which applies out-of-band elements
 even when the main swap is `none`, and an entry not on the page is ignored.

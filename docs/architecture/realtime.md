@@ -106,7 +106,7 @@ the hub start empty ([Restoring a backup](../../README.md#restoring-a-backup)).
 ## Ephemeral state (planned, M4)
 
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
-which connections ask for it is [stream scope](streaming.md#stream-scope-planned-m4).
+every page already holds one organisation stream with [interests](streaming.md#stream-scope).
 
 - **Owners.** Presence (#287) knows which members have a stream open in the
   organisation, from the hub's registrations, and marks a member offline

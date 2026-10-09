@@ -22,6 +22,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
+	"golang.org/x/net/html"
 )
 
 func TestStreamCursor(t *testing.T) {
@@ -383,10 +384,6 @@ func testTopicStreamLookup(t *testing.T) {
 			handler := middleware.Session(oneSession{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { p.events(w, r, membership) }))
 			selected := kernel.ID{3}
 			r := httptest.NewRequest(http.MethodGet, streamEndpoint(t, view.ConversationURL("acme", kernel.ID{1}, &selected))+"after=0", nil)
-			if !strings.Contains(t.Name(), "/organisation/") {
-				r.SetPathValue("channelID", "01000000-0000-0000-0000-000000000000")
-				r.SetPathValue("topicID", "03000000-0000-0000-0000-000000000000")
-			}
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
 			handler.ServeHTTP(w, r)
@@ -464,6 +461,53 @@ func TestOpenStreamCleanup(t *testing.T) {
 // once a slot is freed, the next stream starts.
 func testStreamCapPerAccount(t *testing.T) {
 	testStreamCap(t, realtime.NewHub(), kernel.ID{1})
+}
+
+type quietLog struct{}
+
+func (quietLog) EventsAfter(context.Context, kernel.ID, int64, int) ([]realtime.Event, error) {
+	return nil, nil
+}
+
+// A directly opened older topic page declares sidebar only, but still takes
+// the same account slot as a latest feed or topic page.
+func TestOlderPageStreamCap(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub := realtime.NewHub()
+	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+		s.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Events: quietLog{}, Sessions: oneSession{}, MaxPerAccount: 1}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	page := serveForm(handler, http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/topics/03000000-0000-0000-0000-000000000000?before=7", "live", nil)
+	doc, err := html.Parse(strings.NewReader(page.Body.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint, ok := idAttribute(t, doc, "organization-stream", "sse-connect")
+	if page.Code != 200 || !ok || !strings.Contains(endpoint, "want=sidebar&channel=") || strings.Contains(endpoint, "topic=") {
+		t.Fatalf("older page stream: %d, %q", page.Code, endpoint)
+	}
+	r, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+endpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+	response, err := server.Client().Do(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	latest := serveForm(handler, http.MethodGet, streamEndpoint(t, view.ChannelURL("acme", kernel.ID{1}))+"after=42", "live", nil)
+	if response.StatusCode != 200 || hub.Connections() != 1 || latest.Code != http.StatusTooManyRequests {
+		t.Fatalf("older status %d, slots %d, latest status %d", response.StatusCode, hub.Connections(), latest.Code)
+	}
 }
 
 func testStreamCapPerProcess(t *testing.T) {
@@ -636,9 +680,17 @@ func testStreamCachesEndWithLifetime(t *testing.T) {
 	}
 }
 
-// Both transports run the same endpoint suites; the subtest selects only the URL.
+func TestRemovedPageStreams(t *testing.T) {
+	for _, route := range orgRoutes(nil, nil, nil, nil, nil, nil, nil) {
+		if strings.Contains(route.path, "/channels/") && strings.HasSuffix(route.path, "/events") {
+			t.Fatalf("removed stream still registered: %s", route.path)
+		}
+	}
+}
+
+// Keep every transport guarantee on the organisation endpoint.
 func TestStreamEndpoints(t *testing.T) {
-	for _, endpoint := range []string{"per-page", "organisation"} {
+	for _, endpoint := range []string{"organisation"} {
 		t.Run(endpoint, func(t *testing.T) {
 			for _, suite := range []struct {
 				name string
@@ -663,9 +715,6 @@ func TestStreamEndpoints(t *testing.T) {
 
 func streamEndpoint(t *testing.T, page string) string {
 	t.Helper()
-	if !strings.Contains(t.Name(), "/organisation/") {
-		return page + "/events?"
-	}
 	parts := strings.Split(page, "/")
 	endpoint := "/organizations/" + parts[2] + "/events?want=messages&channel=" + parts[4]
 	if len(parts) > 5 {

@@ -489,11 +489,11 @@ func testTopicEventStream(t *testing.T) {
 
 	_, page := owner.visit(t, "GET", topicURL, nil, 200)
 	match := pageCursor.FindStringSubmatch(page)
-	if len(match) != 2 || !strings.Contains(page, `sse-connect="`+topicURL+`/events?after=`+match[1]+`"`) {
+	if len(match) != 2 || !strings.Contains(page, `sse-connect="/organizations/owner/events?after=`+match[1]+`&amp;want=sidebar,messages,typing&amp;channel=`+strings.Split(topicURL, "/")[4]+`&amp;topic=`+strings.Split(topicURL, "/")[6]+`"`) {
 		t.Fatalf("topic page does not stream its topic: %s", page)
 	}
-	if _, older := owner.visit(t, "GET", topicURL+"?before=1", nil, 200); strings.Contains(older, "sse-connect=") {
-		t.Fatal("an older topic page opened a stream")
+	if _, older := owner.visit(t, "GET", topicURL+"?before=1", nil, 200); !strings.Contains(older, "sse-connect=") {
+		t.Fatal("an older topic page has no stream")
 	}
 
 	events, status := openStream(t, on(owner, streams), topicURL, match[1])
@@ -529,9 +529,9 @@ func testTopicEventStream(t *testing.T) {
 	}
 }
 
-// Both transports run the same endpoint suites; the subtest selects only the URL.
+// Keep every transport guarantee on the organisation endpoint.
 func TestStreamEndpoints(t *testing.T) {
-	for _, endpoint := range []string{"per-page", "organisation"} {
+	for _, endpoint := range []string{"organisation"} {
 		t.Run(endpoint, func(t *testing.T) {
 			for _, suite := range []struct {
 				name string
@@ -553,9 +553,6 @@ func TestStreamEndpoints(t *testing.T) {
 
 func streamEndpoint(t *testing.T, page string) string {
 	t.Helper()
-	if !strings.Contains(t.Name(), "/organisation/") {
-		return page + "/events?"
-	}
 	parts := strings.Split(page, "/")
 	endpoint := "/organizations/" + parts[2] + "/events?want=messages&channel=" + parts[4]
 	if len(parts) > 5 {

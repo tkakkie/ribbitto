@@ -63,10 +63,8 @@ func (f fakeMessages) Page(ctx context.Context, m org.Membership, id kernel.ID, 
 	if topicID != nil {
 		page.Topic = &conversation.Topic{ID: *topicID, Name: "Planning"}
 	}
-	if before == nil {
-		cursor := int64(42)
-		page.EventCursor = &cursor
-	}
+	cursor := int64(42)
+	page.EventCursor = &cursor
 	return page, f.err
 }
 
@@ -122,7 +120,7 @@ func TestMessageListHandler(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if outer := find(doc, atom.Div); attr(outer, "data-event-cursor") != "42" || attr(outer, "sse-connect") != view.ChannelURL("acme", kernel.ID{1})+"/events?after=42" || attr(outer, "hx-ext") != "sse" || outer.Parent.DataAtom != atom.Body {
+			if outer := find(doc, atom.Div); attr(outer, "data-event-cursor") != "42" || attr(outer, "sse-connect") != "/organizations/acme/events?after=42&want=sidebar,messages,typing&channel=01000000-0000-0000-0000-000000000000" || attr(outer, "hx-ext") != "sse" || attr(outer, "id") != "organization-stream" || outer.Parent.DataAtom != atom.Body {
 				t.Fatal("cursor must be on the outer layout, outside every swap target")
 			}
 			if items := find(doc, atom.Ol); attr(items, "sse-swap") != "message,messages-moved" {
@@ -442,18 +440,22 @@ func TestMessagePagingHandler(t *testing.T) {
 			if got, ok := idAttribute(t, page, "message-composer", "hx-post"); got != tt.wantPost || ok != (tt.wantPost != "") {
 				t.Errorf("composer hx-post = %q, %t; want %q", got, ok, tt.wantPost)
 			}
-			if got := strings.Contains(body, `data-event-cursor="42"`); got != (tt.before == 0) {
+			if got := strings.Contains(body, `data-event-cursor="42"`); !got {
 				t.Fatalf("page cursor present = %t, before = %d", got, tt.before)
 			}
+			want := "sidebar"
 			if tt.before == 0 {
-				if !strings.Contains(body, `sse-connect="`+tt.path+`/events?after=42"`) {
-					t.Errorf("latest page must connect to %s/events?after=42", tt.path)
-				}
-				if got, ok := idAttribute(t, page, "message-items", "sse-swap"); !ok || got != "message,messages-moved" {
-					t.Errorf("feed sse-swap = %q, %t; want message,messages-moved", got, ok)
-				}
-			} else if strings.Contains(body, "data-event-cursor") || strings.Contains(body, "sse-connect") || strings.Contains(body, "sse-swap") {
-				t.Fatal("older page has a cursor or stream attributes")
+				want += ",messages,typing"
+			}
+			endpoint := "/organizations/acme/events?after=42&want=" + want + "&channel=01000000-0000-0000-0000-000000000000"
+			if tt.before == 0 && tt.wantTopic != "" {
+				endpoint += "&topic=" + tt.wantTopic
+			}
+			if got, ok := idAttribute(t, page, "organization-stream", "sse-connect"); !ok || got != endpoint {
+				t.Errorf("stream URL = %q, %t; want %q", got, ok, endpoint)
+			}
+			if got, ok := idAttribute(t, page, "message-items", "sse-swap"); ok != (tt.before == 0) || (ok && got != "message,messages-moved") {
+				t.Errorf("message sse-swap = %q, %t, before = %d", got, ok, tt.before)
 			}
 			if tt.before > 0 {
 				doc, err := html.Parse(strings.NewReader(body))

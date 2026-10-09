@@ -41,7 +41,7 @@ once per channel or per topic.
 |---|---|---|---|---|
 | 1 | `unread` | member, the sidebar's channel IDs | for each channel, its first 101 ranges by `lo` (`LATERAL … ORDER BY lo LIMIT 101`) | `P` and the first gaps per channel |
 | 2 | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted and grouped by channel; the feed's first unread is the first row | channel counts, the feed's first unread |
-| 3 | `unread` | member, current channel, its listed topic IDs | its ranges at or above `P`, and the topics' floors | the read set above `P` and the floors |
+| 3 | `unread` | member, current channel, its listed topic IDs plus the selected topic when the list omits it | its ranges at or above `P`, and the topics' floors | the read set above `P` and the floors |
 | 4 | `conversation` | the read set as one `int8multirange`, `P`, per-topic `(id, floor)` arrays | per topic: its messages with `event_seq ≥ P` and above its floor, from the topic index in order, that the read set does not contain, at most 100 (`LATERAL … LIMIT 100`); plus its messages with `P ≤ event_seq ≤ floor` and `moved_event_seq > floor`, from the partial index, not contained; counted per topic, with each topic's lowest unread `event_seq` | topic counts, a topic view's first unread |
 
 Steps 1–2 serve the channel list and steps 3–4 the topic list: two
@@ -54,7 +54,7 @@ its containment operator are outside today's [query gate](import-checks.md):
 
 ## Cost of the reads
 
-`K` channels in the sidebar, `T` ≤ 50 listed topics, `n` messages in an
+`K` channels in the sidebar, `T` ≤ 51 topics (the listed ones and the selected one), `n` messages in an
 index, `R` ranges of the current channel at or above `P`:
 
 - **Step 1:** `O(K · (log n + 101))` range rows.
@@ -65,15 +65,18 @@ index, `R` ranges of the current channel at or above `P`:
 - **Step 3:** `O(R + T)` rows; `R` is 1 in normal use and grows with
   fragmentation (below).
 - **Step 4:** decoding the parameter is `O(R)`, and each candidate row costs
-  `O(log R)` to test. Per topic, the rows read are its unread messages (up
-  to 100), the read messages moved in since its floor (up to 100 per move),
-  and the read messages above its floor: the member's own posts made after
+  `O(log R)` to test. For the count, the rows read per topic are its unread
+  messages (up to 100), the read messages moved in since its floor (up to
+  100 per move), and the read messages above its floor: the member's own posts made after
   an earlier message of the topic that the page had not yet shown. In
   normal use the stream shows a new message before the member's next post,
   so there are few. While the stream lags or is disconnected, every own
   post in that topic adds one, **without a bound**. #283 benchmarks it;
   if the cost is unacceptable, topic counts switch to probing the read
-  set's gaps per topic before implementation starts.
+  set's gaps per topic before implementation starts. The first unread
+  takes no cap: the moved branch is ordered by `moved_event_seq`, so finding
+  its lowest `event_seq` reads every message moved into the topic since its
+  floor, unread or not (1,000 moved messages mean 1,000 rows).
 
 ## Writes
 
@@ -109,10 +112,11 @@ later move has a higher sequence than the floor it raises.
 Per page load, four statements in the page's snapshot. For a member of 100
 channels, each with fewer than 100 unread messages in one gap and an
 unfragmented read set, step 2 makes about 100 index probes and reads up to
-a few thousand index rows; step 4 adds up to 50 probes and 5,000 rows. Per
-page view, one POST, plus the visible page's coalesced POSTs (#710) and
-sidebar recounts (#286). Posting adds a lock and one or two range rows for
-its author.
+a few thousand index rows; step 4 adds up to 51 probes and 5,100 rows for
+the counts, plus, for the first unread, every message moved into the
+selected topic since its floor. Per page view, one POST, plus the visible
+page's coalesced POSTs (#710) and sidebar recounts (#286). Posting costs
+its scope's read (with any merges) and one range row for its author.
 
 ## Fragmentation
 

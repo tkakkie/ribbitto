@@ -16,14 +16,40 @@ day-to-day progress. What the steps aim at is in the [vision](vision.md).
 | **M2 Channels and messages** ✓ done | Public channels, posting, history with paging | Two people can talk (after a reload) |
 | **M3 Real time** ✓ done | Server-Sent Events hub with per-connection authorization and replay | Messages arrive instantly; nothing is lost on reconnect; nothing reaches a connection that may not read it |
 | **Topics** ✓ done | Topics inside channels: the default topic, the feed and topic view, branching ([decision 21](decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)) | A conversation started in the default topic can be branched into its own topic, and both views show it |
-| **M4 Awareness** ← next, after the load tests below | Unread counts, presence, typing indicator | |
+| **M4 Awareness** ← next | Unread counts, presence, typing indicator | The four outcomes under [M4](#m4) below |
 | **M5 Polish** | Dark mode, mobile layout, motion | |
 
 The modular-monolith migration ([decision 26](decisions/26-modules-by-feature-layout-seams-and-order.md),
 [decision 27](decisions/27-channels-topics-and-messages-are-one-conversation-module.md),
 [`modules.md`](architecture/modules.md)) is done: `identity`, `realtime`,
-`org` and `conversation` are modules, and the old layers are gone. Before
-M4 come the load tests (#216, #219).
+`org` and `conversation` are modules, and the old layers are gone. The
+load tests before M4 are done (#216, #219; [results](architecture/load-results.md)).
+
+## M4
+
+M4 is done when a member of an organisation sees:
+
+1. **Unread counts, per topic.** The sidebar shows how many messages the
+   member has not read in each channel and in each topic it links. The
+   counts follow new messages and reading without a reload, in all of the
+   member's tabs. Reading one topic never marks another topic's messages
+   read, and branching never changes whether a message is read
+   ([`unread.md`](domain/unread.md#topics)).
+2. **Where they left off.** Opening a channel or a topic with unread
+   messages shows a divider above the first one when it is on the loaded
+   page, and it stays put while the member reads.
+3. **Who is online.** The channel's members panel marks the members who
+   have ribbitto open, and updates live.
+4. **Who is typing.** The channel or topic the member is reading shows who
+   is typing there; the indicator goes away soon after they stop or send.
+
+Each signal reaches only members who may see it, and a reconnect restores
+the current state. How they reach the browser is #296's decision.
+
+Left for later: notifications, sounds and a count in the tab title;
+jumping to the first unread message; away, idle and "last seen"; typing in
+reply chains; new channels appearing live in the sidebar (#162); the "for
+me" view (#433); presence across several server processes (#236).
 
 ## After the MVP
 

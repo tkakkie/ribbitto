@@ -150,4 +150,4 @@ key's predecessor and the new range's upper end.
 
 ## Results
 
-Results come from a full run on a quiet machine and are recorded here; the maintainer then decides go or no-go explicitly. Merging the harness does not approve implementation.
+Results, and the maintainer's go/no-go decision, are in [unread benchmark results](unread-benchmark-results.md). Merging the harness does not approve implementation.

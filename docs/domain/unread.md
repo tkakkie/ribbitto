@@ -30,12 +30,12 @@ the counting queries and their cost are in
   ([topic tests](#topics)).
 - **It only grows.** Every write is a union, so several tabs and reordered
   requests never make a read message unread.
-- **Every gap holds an unread message.** A newly read message adds the
-  range from just after the channel's previous message to just before its
-  next one (or to its own sequence plus one when it is the newest). Runs of
-  read messages merge, and each gap between ranges starts at an unread
-  message of the channel, so the number of gaps never exceeds the number of
-  unread messages.
+- **Every bounded gap holds an unread message.** A newly read message adds
+  the range from just after the channel's previous message to just before
+  its next one (or to its own sequence plus one when it is the newest).
+  Runs of read messages merge, and each gap between two ranges contains an
+  unread message of the channel, so there are never more such gaps than
+  unread messages. The open gap after the last range may hold none.
 - **Topic floors.** `topic_read_floor.floor_seq` records that every message
   in that topic up to and including it is read, except messages moved in by
   a move with a higher sequence (`message.moved_event_seq`). It only tells
@@ -46,20 +46,22 @@ the counting queries and their cost are in
 
 Only a POST advances read state; a GET never changes it
 ([request flow](../architecture/request-flow.md)). Each POST carries its
-scope and `S`, the durable cursor the page has applied:
+scope and `S`, the newest durable sequence the page has applied and shown:
 
 - **Feed:** every message of the channel with `event_seq ≤ S` becomes read.
 - **Topic view:** every message of that topic with `event_seq ≤ S` becomes
   read, except one moved in by a move after `S` (`moved_event_seq > S`): the
   page has not shown it there. Other topics are untouched.
 
-Posting reads the composer's scope up to the page's cursor, as that POST
+Posting reads the composer's scope up to the page's `S`, as that POST
 would, and adds the new message, in the posting transaction: a member's own
-messages, branch notices included, are never unread for them.
+messages, branch notices included, are never unread for them. A sequence
+the page has only received, or the post's own response, never counts as
+shown.
 
 `S` is the page's snapshot cursor for the POST sent after the page loads,
-and later the newest durable sequence the page has received (#710), which
-covers both posts and moves. Hidden tabs and `?before=` pages send nothing.
+and later the newest durable sequence the page has applied and shown
+(#710), which covers both posts and moves. Hidden tabs and `?before=` pages send nothing.
 A cursor above the organisation's committed `event_seq` is refused, so a
 later message is never read in advance. A message moved out of the topic
 after `S` stays unread: the page showed it, but it is no longer there to

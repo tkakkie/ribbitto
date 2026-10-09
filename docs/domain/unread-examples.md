@@ -3,8 +3,9 @@
 Worked examples of the [unread rules](unread.md) under
 [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md).
 They follow one member, Mio, who joined at sequence 5, in one channel with
-topics A, B and C. Another member, Kai, writes every message and makes
-every move, so each move's notice is Kai's and unread for Mio. Sequences
+topics A, B and C. Another member, Kai, writes every message except Mio's
+own post below and makes every move, so each move's notice is Kai's and
+unread for Mio. Sequences
 are the organisation's, so other channels' events fill the numbers between.
 `R` is Mio's read set and `[x,y)` includes `x` and excludes `y`; `P` is the
 end of its first range.
@@ -77,7 +78,8 @@ read by its POST either, even though its own sequence is lower.
 
 ## Mio posts
 
-From A's view with cursor 42, Mio posts m1 = 43 in A. The posting reads A
+Before the feed sends a POST covering 42, Mio switches to A's view, which
+has applied and shown up to 42, and posts m1 = 43 in A. The posting reads A
 up to 42, adds `[43,44)` for m1 (b4 at 42 is the channel's previous
 message, so the gap at 42 stays), and raises A's floor to 43, since no
 message of A lies between 42 and 43. m1 is never unread for Mio; b4 stays unread in B.

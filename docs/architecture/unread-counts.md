@@ -20,89 +20,104 @@ Ranges are disjoint and never touch. The first starts at 0; its `hi` is
 the **prefix end** `P`: every message below `P` is read. Without rows, the
 read state is `[0, joined_event_seq + 1)`. All keys include
 `organization_id`, with composite foreign keys to `member`, `channel` and
-`topic`.
+`topic`. `conversation` extends `message` with a nullable
+`moved_event_seq`, the sequence of its latest move, written by branching in
+its transaction, with a partial index `(organization_id, topic_id,
+moved_event_seq) WHERE moved_event_seq IS NOT NULL`.
 
-`conversation` extends `message` with a nullable `moved_event_seq`, the
-sequence of its latest move, written by branching in its transaction, and
-a partial index `(organization_id, topic_id, moved_event_seq) WHERE
-moved_event_seq IS NOT NULL`. Its existing indexes on `(organization_id,
-channel_id, event_seq)` and `(organization_id, topic_id, event_seq)` serve
-the rest. `unread` reads messages only through `conversation`'s API, bound
-to the caller's snapshot or transaction; the page snapshot reaches `unread`
-through an injected factory, as it reaches org's and identity's data
-([cross-feature access](cross-feature-access.md)). The queries use only
-comparisons, `count` and `max`, which the [query gate](import-checks.md)
-accepts.
+## The API between the modules
+
+`unread` never reads `message`, and `conversation` never reads `unread`'s
+tables; tablecheck's ownership rule and its fail-closed checks stay as they
+are. The page snapshot (`conversation.Reader`) reaches `unread` through an
+injected, snapshot-bound factory, as it reaches org's and identity's data
+([cross-feature access](cross-feature-access.md)); `unread` in turn calls
+`conversation`'s snapshot-bound message queries. Read sets cross the
+boundary as values: arrays of `(lo, hi)` bounds, or one `int8multirange`
+parameter. Every statement below runs in the page's snapshot, and none runs
+once per channel or per topic.
+
+| Step | Owner | Input | Statement | Output |
+|---|---|---|---|---|
+| 1 | `unread` | member, the sidebar's channel IDs | for each channel, its first 101 ranges by `lo` (`LATERAL … ORDER BY lo LIMIT 101`) | `P` and the first gaps per channel |
+| 2 | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted and grouped by channel; the feed's first unread is the first row | channel counts, the feed's first unread |
+| 3 | `unread` | member, current channel, its listed topic IDs | its ranges at or above `P`, and the topics' floors | the read set above `P` and the floors |
+| 4 | `conversation` | the read set as one `int8multirange`, `P`, per-topic `(id, floor)` arrays | per topic: its messages with `event_seq ≥ P` and above its floor, from the topic index in order, that the read set does not contain, at most 100 (`LATERAL … LIMIT 100`); plus its messages with `P ≤ event_seq ≤ floor` and `moved_event_seq > floor`, from the partial index, not contained; counted per topic, with each topic's lowest unread `event_seq` | topic counts, a topic view's first unread |
+
+Steps 1–2 serve the channel list and steps 3–4 the topic list: two
+statements per list, four per page load, whatever the number of channels or
+topics. The cap applies inside steps 2 and 4, per channel and per topic;
+the first-unread lookups take no cap. `unnest` of parallel arrays,
+`LATERAL`, `ORDER BY … LIMIT`, `>=` and the `int8multirange` parameter and
+its containment operator are outside today's [query gate](import-checks.md):
+#284 asks for each one in its own review.
+
+## Cost of the reads
+
+`K` channels in the sidebar, `T` ≤ 50 listed topics, `n` messages in an
+index, `R` ranges of the current channel at or above `P`:
+
+- **Step 1:** `O(K · (log n + 101))` range rows.
+- **Step 2:** every bounded gap holds an unread message, so each channel
+  needs at most 101 gaps and reads at most 100 message rows:
+  `O(K · (101 · log n + 100))`. A channel with nothing unread costs one
+  empty probe of the open gap after its last range.
+- **Step 3:** `O(R + T)` rows; `R` is 1 in normal use and grows with
+  fragmentation (below).
+- **Step 4:** decoding the parameter is `O(R)`, and each candidate row costs
+  `O(log R)` to test. Per topic, the rows read are its unread messages (up
+  to 100), the read messages moved in since its floor (up to 100 per move),
+  and the read messages above its floor: the member's own posts made after
+  an earlier message of the topic that the page had not yet shown. In
+  normal use the stream shows a new message before the member's next post,
+  so there are few. While the stream lags or is disconnected, every own
+  post in that topic adds one, **without a bound**. #283 benchmarks it;
+  if the cost is unacceptable, topic counts switch to probing the read
+  set's gaps per topic before implementation starts.
 
 ## Writes
 
 Every write first locks the `channel_read` row (inserting it if missing),
-then adds ranges and merges them with their neighbours, so concurrent
-writes queue, commute and never remove a range. A newly read message `m`
-adds `[p + 1, n)`, with `p` the channel's previous message (or 0) and `n`
-its next (or `m + 1`): a gap between ranges therefore always starts at an
-unread message.
+then adds ranges and merges them with their neighbours: concurrent writes
+queue and commute, and none removes a read message. A newly read message
+`m` adds `[p + 1, n)`, with `p` the channel's previous message (or 0) and
+`n` its next (or `m + 1`), so every bounded gap contains an unread message.
 
-- **Feed, cursor `S`:** adds `[0, n)`, `n` being the channel's first
-  message above `S`, or `S + 1`: one probe, then merging.
-- **Topic view, cursor `S`:** reads every unread message of the topic up
-  to `S` (the scans below, without their cap), excluding
-  `moved_event_seq > S`; adds a range for each, with its neighbours from one
-  probe each; then raises the floor to `S` if it is lower. The floor
-  commits with the ranges. Its cost is the topic's unread messages, paid
-  once.
-- **Posting** with the composer's page cursor `S`: the same write as
-  reading the page's scope up to `S`, then a range for the new message, so
-  a member's own posts are read. From a topic view, the floor also rises to
-  the new message when no message of the topic has an `event_seq` or a
-  `moved_event_seq` between `S` and it (two probes).
+- **Feed, cursor `S`:** one probe for the channel's first message above
+  `S` (`n`, or `S + 1`), then `[0, n)`: it deletes every range it absorbs,
+  so its cost is proportional to the ranges merged, `O(R)` after heavy
+  fragmentation and `O(1)` in normal use.
+- **Topic view, cursor `S`:** `conversation` returns the topic's unread
+  messages up to `S` (step 4's shape without its cap, excluding
+  `moved_event_seq > S`) with each one's channel neighbours; `unread` adds a
+  range per message, merging as it goes, and raises the floor to `S` if it
+  is lower, in the same transaction. Cost: `O(R)` for the read set, plus
+  the candidate rows and one neighbour probe per unread message.
+- **Posting** with the composer's cursor `S`: the same write as the page's
+  scope up to `S`, then a range for the new message; from a topic view the
+  floor also rises to the new message when no message of the topic has an
+  `event_seq` or `moved_event_seq` strictly between `S` and it. `S` is the
+  newest durable sequence the page has applied and shown, never a sequence
+  only received or the post's own response, so posting never reads a
+  message the member has not seen.
 
 A cursor above the organisation's committed `event_seq` is refused, so any
 later move has a higher sequence than the floor it raises.
 
-## Reads
-
-Every count stops at 100 (shown as `99+`). Predicates are exact:
-unread means `event_seq ≥ P` and in no range.
-
-- **Channels in the sidebar,** one batch: for each channel, `unread` reads
-  its first 101 ranges at or after `P`; the gaps between them, and after
-  the last, go to one `conversation` statement that counts each channel's
-  messages in its gaps, stopping at 100. Every bounded gap holds an unread
-  message, so a channel reads at most 101 range rows and 100 message rows:
-  `O(min(u, 100) · log n)` for `u` unread messages; a channel with none
-  costs one empty probe of the open gap after the last range.
-- **Topics of the current channel** (at most 50), one batch: for each
-  topic, its messages with `event_seq ≥ P` and above its floor, in order
-  from the topic index, checked against the ranges, until 100 are unread;
-  plus its messages with `P ≤ event_seq ≤ floor_seq` and
-  `moved_event_seq > floor_seq`, from the partial index, checked the same
-  way. Rows read are the unread messages (up to 100) and the read ones
-  above the floor: the member's own posts made while an earlier message of
-  the topic was unread, and read messages moved in since the floor. Both
-  grow only with activity since the member last read the topic, whose next
-  read raises the floor past them.
-- **First unread** (the divider): for the feed, the first message of the
-  first gap; for a topic, the lower of the first unread row from the topic
-  index and the lowest unread `event_seq` among the moved-in rows, which are
-  read in full (they are ordered by `moved_event_seq`, not `event_seq`).
-  Counts' caps never apply here.
-
 ## Expected load
 
-Per page load: the two batches and one first-unread lookup, in the page's
-snapshot. For a member of 100 channels, each with fewer than 100 unread
-messages in one gap, the sidebar reads about 100 range rows and makes 100
-index probes, reading up to a few thousand index rows; topic counts add up
-to 50 probes and 5,000 rows. Per page view, one POST, plus the visible
-page's coalesced POSTs (#710) and sidebar recounts (#286). Posting adds one
-lock and one or two range rows for its author.
+Per page load, four statements in the page's snapshot. For a member of 100
+channels, each with fewer than 100 unread messages in one gap and an
+unfragmented read set, step 2 makes about 100 index probes and reads up to
+a few thousand index rows; step 4 adds up to 50 probes and 5,000 rows. Per
+page view, one POST, plus the visible page's coalesced POSTs (#710) and
+sidebar recounts (#286). Posting adds a lock and one or two range rows for
+its author.
 
-## Limits
+## Fragmentation
 
 A member who reads only topic views while another topic keeps gaining
-messages adds one range per skipped run, about 100 bytes and an index entry
-each, until a feed read merges them into one. Counts and writes stay local
-(each touches the first 101 ranges, or a range and its neighbours), so the
-cost is storage. #283 measures a channel with 10,000 interleaved runs
-(write time, rows, count time) before the tables ship.
+messages adds one range per skipped run (about 100 bytes and an index entry
+each). Steps 1 and 2 read only the first 101; steps 3 and 4 and a topic-view
+write handle all `R`; a feed read merges them back into one, at `O(R)`.
+#283 measures 10,000 ranges before the tables ship.

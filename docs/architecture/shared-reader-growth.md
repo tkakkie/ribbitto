@@ -28,15 +28,26 @@ topic. What changes:
   its cursor. It is still a level, so no wakeup is lost; #296's ephemeral
   generation is one more level of the same kind.
 - **Read:** a connection may skip events without reading them only with a
-  proof that none touches its interests: its cursor is at least the
-  reader's starting sequence, and for each of its interests the highest
-  evicted sequence is at or below the cursor. Then every event of its
-  interests above the cursor is in the index, and it moves its cursor to
-  just before the first one (today's skip and advance). Without the proof
-  (an event of its interests was evicted above the cursor, or the cursor
-  predates the reader) it reads the database, as before. Example: with
-  event 101 of its channel evicted and 200 indexed, a cursor at 100 has no
-  proof, so 101 comes from the database rather than being skipped.
+  proof, checked in the same snapshot of the index as the skip. The proof
+  has three parts:
+  - its original cursor is at least the window's floor, so decision 24
+    still holds and the cursor is not expired;
+  - the cursor is at least the reader's starting sequence;
+  - for each of its interests, the highest evicted sequence is at or below
+    the cursor.
+
+  Then every event of its interests above the cursor is in the index, and
+  it moves its cursor to just before the first one (today's skip and
+  advance). Without the proof it reads the database as before: an expired
+  cursor gets `reset`, and an evicted event of its interests is read again.
+  Examples:
+  - with event 101 of its channel evicted and 200 indexed, a cursor at 100
+    has no proof, so 101 comes from the database;
+  - with the reader started at 100, the cursor at 100 and retention
+    expiring unrelated events through 150, the floor rises above the
+    cursor, so the connection gets `reset` instead of skipping to 200.
+
+  The index's issue owns a deterministic regression test for each case.
 
 The window, the hand-over, renders, authorization and #209's cursor rules
 do not change. Evidence for it: a `TestStreamCost` variant with posts spread

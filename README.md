@@ -103,7 +103,8 @@ so local notes and tools do not change the output.
 
 `make check` is what CI runs and what must pass before a pull request: it
 checks formatting (`gofmt` for Go, `templ fmt` for templates), vets, lints,
-builds, runs the Go tests with the race detector, and checks the import
+builds, runs the Go tests with the race detector (at `-p 2` by default; see
+[worktree-env.md](docs/worktree-env.md)), and checks the import
 graph, module API summaries and the documents. `tools/sourcecheck` enforces the
 [product vocabulary](docs/domain/vocabulary.md) and
 [UI colour rules](docs/ui.md#tokens). In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,

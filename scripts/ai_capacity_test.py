@@ -219,6 +219,26 @@ open("verdict", "w").write(verdict)
                 self.assertEqual(report["exit_codes"], [0, 0])
                 self.assertEqual((roots[1 - fast] / "verdict").read_text(), "early")
 
+    def test_unconfirmed_cleanup_fails_the_run(self):
+        with tempfile.TemporaryDirectory(dir="bin") as scratch:
+            base = Path(scratch).resolve()
+            roots = [base / name for name in ("first", "second")]
+            for root in roots:
+                root.mkdir()
+                (root / "Makefile").write_text("$(GO_TEST_FLAGS)\n")
+            fake_make = base / "make"
+            fake_make.write_text("#!" + sys.executable + "\n")
+            fake_make.chmod(0o700)
+
+            def unconfirmed(worker):
+                worker.wait()
+                return False
+
+            with patch.dict(os.environ, PATH=str(base) + os.pathsep + os.environ["PATH"]), \
+                    patch.object(ai_capacity, "stop_group", side_effect=unconfirmed):
+                with self.assertRaisesRegex(RuntimeError, "could not confirm"):
+                    ai_capacity.measure(roots, 1, 1)
+
 def alive(pid):
     try:
         os.kill(pid, 0)
@@ -236,8 +256,10 @@ class CleanupTest(unittest.TestCase):
         worker = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
         try:
             with patch.object(ai_capacity.subprocess, "run", side_effect=subprocess.TimeoutExpired("ps", 10)):
-                ai_capacity.stop_group(worker)
+                stopped = ai_capacity.stop_group(worker)
             self.assertIsNotNone(worker.returncode)
+            # Members outside the group may survive, so cleanup is unconfirmed.
+            self.assertFalse(stopped)
         finally:
             if worker.poll() is None:
                 worker.kill()
@@ -262,3 +284,13 @@ class CleanupTest(unittest.TestCase):
                 patch.object(ai_capacity, "session_members", return_value=[]):
             ai_capacity.stop_group(worker)
         killpg.assert_not_called()
+
+    def test_cleanup_is_unconfirmed_when_ps_fails_after_the_leader_is_reaped(self):
+        # No group kill is safe once the leader is reaped, so a failed ps must
+        # not read as an empty session: members outside the group may survive.
+        worker = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+        worker.wait()
+        with patch.object(ai_capacity, "session_members", return_value=None):
+            self.assertFalse(ai_capacity.stop_group(worker))
+        with patch.object(ai_capacity, "session_members", return_value=[]):
+            self.assertTrue(ai_capacity.stop_group(worker))

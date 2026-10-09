@@ -15,6 +15,11 @@ CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 # recipe reads it from the environment, unquoted by make.
 LAUNCHER_TESTS_BASE ?= origin/main
 export LAUNCHER_TESTS_BASE
+# The shared PostgreSQL's max_connections=100 was sized from two concurrent
+# checks at -p 2 (#636), so go test runs at most two packages at once by
+# default; go test's own default (-p = CPUs) can exceed it. Override only for
+# measurement, and re-measure before raising it (docs/worktree-env.md).
+GO_TEST_FLAGS ?= -p 2
 
 .PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-ai lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
 

@@ -56,7 +56,8 @@ def stop_group(worker):
     # The make parent may already have exited while a child is still alive.
     # Kill the check's group, then every process left in its session, until
     # none remains: a member can fork before it dies, and its child inherits
-    # the session. If ps fails, the group kill is all that can be done.
+    # the session. Returns whether the session was seen empty; if ps fails,
+    # members outside the group may survive, so the caller must fail the run.
     session = worker.pid
     # Only a leader that has not been reaped still owns its PID; once poll or
     # wait has reaped it, killpg could reach a new group that reused the PID.
@@ -73,6 +74,7 @@ def stop_group(worker):
             kill_member(pid, session)
         time.sleep(0.02)
     worker.wait()
+    return members == []
 
 def measure(roots, packages, parallel):
     cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
@@ -81,12 +83,13 @@ def measure(roots, packages, parallel):
                   # pool_max_conns URL key to the server, so pools keep pgx's default.
                   pgx_pool_max_conns=max(4, cpus),
                   migration_pool_max_open=0, admin_connections_per_pgtest_call=1)
-    workers, outputs, stopped = [], [], set()
+    workers, outputs, stopped, unconfirmed = [], [], set(), []
 
     def stop_once(worker):
         if worker.pid not in stopped:
             stopped.add(worker.pid)
-            stop_group(worker)
+            if not stop_group(worker):
+                unconfirmed.append(worker.pid)
 
     observer = subprocess.Popen([str(ai_env.HELPER), "--observe"], stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
@@ -142,6 +145,8 @@ def measure(roots, packages, parallel):
             observer.terminate()
         observer.wait()
         observer.stdout.close()
+        if unconfirmed:
+            raise RuntimeError("could not confirm that every check process stopped")
 
 
 def exit_on_signal(signum, _frame):

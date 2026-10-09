@@ -41,9 +41,16 @@ reuses the inherited/default module cache and GOPATH. SQL pools are unbounded
 the server as a setting.
 
 Measured on 2026-10-09 (10 CPUs, pgx pools of 10): two uncached required-DB
-`make check` runs at `-p 2` and the default `-parallel` (10) both passed,
-peaking at 49 client backends of `max_connections` 100, with no 53300. The
-shared server therefore keeps `max_connections=100` (`compose.yml`): run at most
-two `make check` at once, at `-p 2`. A second run at that setting confirmed it
-(peak 38, no 53300).
+`make check` runs at `-p 2 -parallel 10` both passed, peaking at 49 client
+backends of `max_connections` 100, with no 53300. A second run at that setting
+confirmed it (peak 38/100, no 53300). The shared server therefore keeps
+`max_connections=100` (`compose.yml`), and:
+
+- `make check` runs `go test` at `-p 2` by default (`GO_TEST_FLAGS ?= -p 2` in
+  the `Makefile`). `go test`'s own default, `-p` = CPUs, can exceed the limit.
+  The capacity runner and explicit measurements override it with
+  `GO_TEST_FLAGS`.
+- Run at most two full `make check` at once.
+- To raise `-p` to 4 or more, first re-measure at that setting, then change
+  `max_connections` and the default together.
 

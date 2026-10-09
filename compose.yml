@@ -1,8 +1,9 @@
 services:
   postgres:
     image: postgres:18
-    # Two uncached required-DB `make check` runs at -p 2 peaked at 49 client
-    # backends (#636), so 100 leaves about twice that: at most two at once.
+    # Two uncached required-DB `make check` runs at -p 2 (the Makefile's
+    # default) peaked at 49 client backends (#636), so 100 leaves about twice
+    # that: at most two at once. Re-measure before raising either.
     command: ["postgres", "-c", "max_connections=100"]
     environment:
       POSTGRES_USER: postgres

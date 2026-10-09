@@ -32,6 +32,8 @@ Read the file for the area you change:
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |
 | [`stream-authorization.md`](stream-authorization.md) | keeping deliveries authorized without a query per stream per event: the options and the decision (#622) |
 | [`stream-authorization-results.md`](stream-authorization-results.md) | what #670's cached allows cost, measured by #671: epoch reads, hit rate, queries and latency, and what hit the limit first |
+| [`shared-reader.md`](shared-reader.md) | *planned* (#232): one reader per organisation, its window, the hand-over from replay to live, slow connections, and what should decide whether to build it |
+| [`shared-reader-growth.md`](shared-reader-growth.md) | *planned*: how the shared reader grows into a channel interest index and bounded replay, and its implementation issues |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |

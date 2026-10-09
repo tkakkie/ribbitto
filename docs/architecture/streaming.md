@@ -10,6 +10,8 @@ process serves every stream; several server processes are future work (the
 hub, both stream caps and the watermark are per process).
 
 Ordering, replay and vanished messages are in [`replay.md`](replay.md).
+A shared reader per organisation, which would replace each connection's
+own reads, is designed but not built (#232): [`shared-reader.md`](shared-reader.md).
 
 ### Retention
 

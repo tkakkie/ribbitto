@@ -5,7 +5,10 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -16,7 +19,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
-// Streaming is what the channel event stream needs besides the message
+// Streaming is what the event streams need besides the message
 // reader: the hub to wait on, the durable event log and the per-event
 // authorization. A nil *Streaming turns the stream off (its route answers
 // 404), which handler tests that do not exercise it rely on.
@@ -58,11 +61,7 @@ const DefaultMaxStreamsPerAccount = 16
 // the write deadline.
 const DefaultStreamHeartbeat = 20 * time.Second
 
-// events serves GET …/channels/{channelID}/events, and …/topics/{topicID}/events
-// for one topic of the channel: its events after the client's cursor, as
-// Server-Sent Events, until the client goes away or delivery fails. The organisation and account come from the URL and the
-// session; the cursor is Last-Event-ID if the browser sends one (it does on
-// its own reconnects), otherwise ?after.
+// events shares transport and visibility checks across organisation and per-page streams.
 func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membership) {
 	if p.stream == nil {
 		http.NotFound(w, r)
@@ -74,30 +73,45 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	id, ok := channelID(r)
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-	c, err := p.channels.Get(r.Context(), m, id)
-	if errors.Is(err, conversation.ErrChannelNotFound) {
-		http.NotFound(w, r)
-		return
-	}
-	if err != nil {
-		serverError(w, r, "finding channel", err)
-		return
-	}
-	// A topic stream checks its topic before anything is sent: an unknown
-	// topic, or one of another channel, is 404 like a non-member.
-	var topicID *kernel.ID
-	if raw := r.PathValue("topicID"); raw != "" {
-		selected, ok := pathID(raw)
+	sub := realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}}
+	organisationEndpoint := r.PathValue("channelID") == ""
+	if organisationEndpoint {
+		var ok bool
+		sub, ok = streamScope(r)
+		if !ok {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+	} else {
+		id, ok := channelID(r)
 		if !ok {
 			http.NotFound(w, r)
 			return
 		}
-		_, err := p.topics.Get(r.Context(), m, c.ID, selected)
+		sub.Channel = id
+		if raw := r.PathValue("topicID"); raw != "" {
+			selected, ok := pathID(raw)
+			if !ok {
+				http.NotFound(w, r)
+				return
+			}
+			sub.Topic = &selected
+		}
+	}
+	if !organisationEndpoint || sub.Channel != (kernel.ID{}) {
+		_, err := p.channels.Get(r.Context(), m, sub.Channel)
+		if errors.Is(err, conversation.ErrChannelNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			serverError(w, r, "finding channel", err)
+			return
+		}
+	}
+	// Interest is no permission: resolve visibility before registering or sending.
+	if sub.Topic != nil {
+		_, err := p.topics.Get(r.Context(), m, sub.Channel, *sub.Topic)
 		if errors.Is(err, conversation.ErrTopicNotFound) {
 			http.NotFound(w, r)
 			return
@@ -106,7 +120,6 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 			serverError(w, r, "finding topic", err)
 			return
 		}
-		topicID = &selected
 	}
 	after, ok := streamCursor(r)
 	if !ok {
@@ -127,7 +140,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 
 	// The server's read timeout does not cut the stream: net/http clears the
 	// read deadline when it starts the background read that watches for the
-	// client going away (TestEventStream idles past it).
+	// client going away (TestStreamEndpoints idles past it).
 	rc := http.NewResponseController(w)
 	timeout := p.stream.WriteTimeout
 	if timeout <= 0 {
@@ -162,7 +175,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		Renderer:  messageRenderer{messages: p.messages, membership: m, renders: p.renders},
 		Heartbeat: heartbeat,
 	}
-	sub := realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: m.Organization.ID, OrganizationSlug: m.Organization.Slug, Account: account.ID, Channel: c.ID, Topic: topicID}
+	sub.Organization, sub.OrganizationSlug, sub.Account = m.Organization.ID, m.Organization.Slug, account.ID
 	cursor, err := stream.Run(ctx, sub, after, send)
 	if err != nil && ctx.Err() == nil {
 		// Neither the client nor the session went away: delivery failed.
@@ -255,4 +268,60 @@ func streamCursor(r *http.Request) (int64, bool) {
 	}
 	cursor, err := strconv.ParseInt(raw, 10, 64)
 	return cursor, err == nil && cursor >= 0
+}
+
+// streamScope parses the organisation endpoint's interests; inactive interests
+// stay explicit so accepting them cannot enable durable message delivery.
+func streamScope(r *http.Request) (realtime.Subscription, bool) {
+	var sub realtime.Subscription
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return sub, false
+	}
+	for key, values := range query {
+		switch key {
+		case "after": // Last-Event-ID takes precedence, including over a broken after.
+		case "want", "channel", "topic", "presence-after":
+			if len(values) != 1 || values[0] == "" {
+				return sub, false
+			}
+		default:
+			return sub, false
+		}
+	}
+	for _, want := range strings.Split(query.Get("want"), ",") {
+		interest := realtime.Interest(want)
+		switch want {
+		case "sidebar", "messages", "typing", "presence":
+		default:
+			return sub, false
+		}
+		if slices.Contains(sub.Interests, interest) {
+			return sub, false
+		}
+		sub.Interests = append(sub.Interests, interest)
+	}
+	scoped := slices.Contains(sub.Interests, realtime.InterestMessages) || slices.Contains(sub.Interests, realtime.Interest("typing"))
+	raw := query.Get("channel")
+	if scoped && raw == "" {
+		return sub, false
+	}
+	if raw != "" {
+		var ok bool
+		sub.Channel, ok = pathID(raw)
+		if !ok || sub.Channel == (kernel.ID{}) {
+			return sub, false
+		}
+	}
+	if raw := query.Get("topic"); raw != "" {
+		selected, ok := pathID(raw)
+		if !scoped || !ok {
+			return sub, false
+		}
+		sub.Topic = &selected
+	}
+	if slices.Contains(sub.Interests, realtime.Interest("presence")) && query.Get("presence-after") == "" {
+		return sub, false
+	}
+	return sub, true
 }

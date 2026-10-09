@@ -168,7 +168,7 @@ for a primary-key read, and the choice should be revisited.
   and a rolled-back write bumps nothing. A revocation committed while a
   membership load is in flight still denies the next event. Gated streams
   also cover warmed SQL removal, rename and same-ID/slug recreation.
-  `TestEventStream` checks removal over SSE: the removed member misses the
+  `TestStreamEndpoints` checks removal over SSE: the removed member misses the
   next event while the owner receives it.
 - **Shutdown:** a gated successful epoch read with a waiting joiner fails
   closed after cancellation; cancelled membership results are never cached.

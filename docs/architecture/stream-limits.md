@@ -75,9 +75,9 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   deadline before waiting (#158) — under HTTP/2 an expired deadline resets
   the stream even while idle. If it cannot flush, the stream ends. The
   server's read timeout does not cut it: net/http clears the read deadline
-  once the request is read. `TestEventStream` idles past all of them.
+  once the request is read. `TestStreamEndpoints` idles past all of them.
 - Middleware that wraps `http.ResponseWriter` implements `Unwrap` so
-  flushing works; compression is not applied to the SSE endpoint.
+  flushing works; compression is not applied to the SSE endpoints.
 - An idle stream writes an SSE comment (`: heartbeat`) once
   `DefaultStreamHeartbeat` (20 s; #160) has passed since its last write,
   however often another channel's events wake it and while it drains a

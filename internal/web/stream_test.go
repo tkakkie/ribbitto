@@ -99,7 +99,7 @@ func (noEvents) EventsAfter(context.Context, kernel.ID, int64, int) ([]realtime.
 // The middleware resolves the session, then it is deleted before the stream
 // registers: nothing would cancel the stream, so the second look must stop it
 // before anything is sent, and the registration must not outlive it.
-func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
+func testStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name  string
@@ -132,7 +132,7 @@ func TestStreamRechecksTheSessionAfterRegistering(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", "live", nil)
+			w := serveForm(handler, http.MethodGet, streamEndpoint(t, view.ChannelURL("acme", kernel.ID{1}))+"after=0", "live", nil)
 			if seen != 1 {
 				t.Fatalf("the second look saw %d registered connections, want 1: register before re-checking", seen)
 			}
@@ -178,7 +178,7 @@ func (w *cancellingWriter) Header() http.Header {
 // The session re-check passed, and the stream is cancelled between it and
 // the first write committing a status: the client still gets 404 (session
 // ended) or 503 (shutdown), never an empty 200.
-func TestStreamCancelledBeforeTheFirstWrite(t *testing.T) {
+func testStreamCancelledBeforeTheFirstWrite(t *testing.T) {
 	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name   string
@@ -202,7 +202,7 @@ func TestStreamCancelledBeforeTheFirstWrite(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", nil)
+			r := httptest.NewRequest(http.MethodGet, streamEndpoint(t, view.ChannelURL("acme", kernel.ID{1}))+"after=0", nil)
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			w := &cancellingWriter{deadlineWriter: &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}, hub: hub, cancel: func() { tt.cancel(hub) }}
 			handler.ServeHTTP(w, r)
@@ -243,7 +243,7 @@ func (w *cancellingConn) Unwrap() http.ResponseWriter { return w.ResponseWriter 
 // cancelled before its status is committed reaches the client. Over HTTP/2
 // an expired write deadline resets the stream, so nothing may expire it
 // before the error is written.
-func TestStreamCancelledBeforeTheFirstWriteOverHTTP(t *testing.T) {
+func testStreamCancelledBeforeTheFirstWriteOverHTTP(t *testing.T) {
 	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name   string
@@ -281,7 +281,7 @@ func testCancelledStreamOverHTTP(t *testing.T, live identity.Session, cancel fun
 	server.EnableHTTP2 = proto == 2
 	server.StartTLS()
 	defer server.Close()
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+streamEndpoint(t, view.ChannelURL("acme", kernel.ID{1}))+"after=0", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +306,7 @@ func testCancelledStreamOverHTTP(t *testing.T, live identity.Session, cancel fun
 	}
 }
 
-func TestStreamFetchSite(t *testing.T) {
+func testStreamFetchSite(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
 		values []string
@@ -336,7 +336,7 @@ func TestStreamFetchSite(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", nil)
+			r := httptest.NewRequest(http.MethodGet, streamEndpoint(t, view.ChannelURL("acme", kernel.ID{1}))+"after=0", nil)
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			for _, value := range tt.values {
 				r.Header.Add("Sec-Fetch-Site", value)
@@ -361,7 +361,7 @@ func TestStreamFetchSite(t *testing.T) {
 // membership and answers its ErrTopicNotFound with 404 before anything is
 // registered or sent. The stream is configured and the session valid, so
 // only the lookup can refuse it; the found case proves the stream would start.
-func TestTopicStreamLookup(t *testing.T) {
+func testTopicStreamLookup(t *testing.T) {
 	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
 		name      string
@@ -382,9 +382,11 @@ func TestTopicStreamLookup(t *testing.T) {
 			membership := org.Membership{Organization: org.Organization{ID: kernel.ID{9}, Slug: "acme"}}
 			handler := middleware.Session(oneSession{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { p.events(w, r, membership) }))
 			selected := kernel.ID{3}
-			r := httptest.NewRequest(http.MethodGet, view.ConversationURL("acme", kernel.ID{1}, &selected)+"/events?after=0", nil)
-			r.SetPathValue("channelID", "01000000-0000-0000-0000-000000000000")
-			r.SetPathValue("topicID", "03000000-0000-0000-0000-000000000000")
+			r := httptest.NewRequest(http.MethodGet, streamEndpoint(t, view.ConversationURL("acme", kernel.ID{1}, &selected))+"after=0", nil)
+			if !strings.Contains(t.Name(), "/organisation/") {
+				r.SetPathValue("channelID", "01000000-0000-0000-0000-000000000000")
+				r.SetPathValue("topicID", "03000000-0000-0000-0000-000000000000")
+			}
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
 			handler.ServeHTTP(w, r)
@@ -460,11 +462,11 @@ func TestOpenStreamCleanup(t *testing.T) {
 
 // An account at its cap is refused with 429 before anything is streamed;
 // once a slot is freed, the next stream starts.
-func TestStreamCapPerAccount(t *testing.T) {
+func testStreamCapPerAccount(t *testing.T) {
 	testStreamCap(t, realtime.NewHub(), kernel.ID{1})
 }
 
-func TestStreamCapPerProcess(t *testing.T) {
+func testStreamCapPerProcess(t *testing.T) {
 	testStreamCap(t, realtime.NewHubWithMaxStreams(1), kernel.ID{2})
 }
 
@@ -483,7 +485,7 @@ func testStreamCap(t *testing.T, hub *realtime.Hub, occupiedAccount kernel.ID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := view.ChannelURL("acme", kernel.ID{1}) + "/events?after=0"
+	url := streamEndpoint(t, view.ChannelURL("acme", kernel.ID{1})) + "after=0"
 	// Occupy either Alice's account slot or the process slot with another
 	// account and organisation, leaving Alice's account slot available.
 	_, unregister, err := hub.Register(t.Context(), realtime.Connection{Organization: kernel.ID{8}, Account: occupiedAccount, Session: kernel.ID{0x52}}, 1)
@@ -515,7 +517,7 @@ func testStreamCap(t *testing.T, hub *realtime.Hub, occupiedAccount kernel.ID) {
 }
 
 // Without a configured cap, DefaultMaxStreamsPerAccount applies.
-func TestStreamDefaultCap(t *testing.T) {
+func testStreamDefaultCap(t *testing.T) {
 	hub := realtime.NewHub()
 	for i := range DefaultMaxStreamsPerAccount {
 		if _, _, err := hub.Register(t.Context(), realtime.Connection{Account: kernel.ID{1}, Session: kernel.ID{byte(i)}}, DefaultMaxStreamsPerAccount); err != nil {
@@ -533,14 +535,14 @@ func TestStreamDefaultCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", "live", nil); w.Code != http.StatusTooManyRequests {
+	if w := serveForm(handler, http.MethodGet, streamEndpoint(t, view.ChannelURL("acme", kernel.ID{1}))+"after=0", "live", nil); w.Code != http.StatusTooManyRequests {
 		t.Fatalf("status %d with %d streams open, want 429", w.Code, DefaultMaxStreamsPerAccount)
 	}
 }
 
 // A stream that reaches registration after shutdown began gets 503, so the
 // browser retries against the next process.
-func TestStreamRefusedDuringShutdown(t *testing.T) {
+func testStreamRefusedDuringShutdown(t *testing.T) {
 	hub := realtime.NewHub()
 	hub.CancelAll()
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
@@ -554,7 +556,7 @@ func TestStreamRefusedDuringShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := serveForm(handler, http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", "live", nil)
+	w := serveForm(handler, http.MethodGet, streamEndpoint(t, view.ChannelURL("acme", kernel.ID{1}))+"after=0", "live", nil)
 	if w.Code != http.StatusServiceUnavailable || seen != -1 {
 		t.Fatalf("status %d (re-check ran: %t), want 503 before anything else", w.Code, seen != -1)
 	}
@@ -582,7 +584,7 @@ func (r lifetimeReads) EventsAfter(ctx context.Context, orgID kernel.ID, _ int64
 	return nil, err
 }
 
-func TestStreamCachesEndWithLifetime(t *testing.T) {
+func testStreamCachesEndWithLifetime(t *testing.T) {
 	for _, render := range []bool{false, true} {
 		t.Run(fmt.Sprintf("render=%t", render), func(t *testing.T) {
 			parent, stop := context.WithCancel(t.Context())
@@ -602,7 +604,7 @@ func TestStreamCachesEndWithLifetime(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", kernel.ID{1})+"/events?after=0", nil)
+			r := httptest.NewRequest(http.MethodGet, streamEndpoint(t, view.ChannelURL("acme", kernel.ID{1}))+"after=0", nil)
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			done := make(chan struct{}, 1)
 			go func() {
@@ -632,4 +634,42 @@ func TestStreamCachesEndWithLifetime(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Both transports run the same endpoint suites; the subtest selects only the URL.
+func TestStreamEndpoints(t *testing.T) {
+	for _, endpoint := range []string{"per-page", "organisation"} {
+		t.Run(endpoint, func(t *testing.T) {
+			for _, suite := range []struct {
+				name string
+				run  func(*testing.T)
+			}{
+				{"StreamRechecksTheSessionAfterRegistering", testStreamRechecksTheSessionAfterRegistering},
+				{"StreamCancelledBeforeTheFirstWrite", testStreamCancelledBeforeTheFirstWrite},
+				{"StreamCancelledBeforeTheFirstWriteOverHTTP", testStreamCancelledBeforeTheFirstWriteOverHTTP},
+				{"StreamFetchSite", testStreamFetchSite},
+				{"TopicStreamLookup", testTopicStreamLookup},
+				{"StreamCapPerAccount", testStreamCapPerAccount},
+				{"StreamCapPerProcess", testStreamCapPerProcess},
+				{"StreamDefaultCap", testStreamDefaultCap},
+				{"StreamRefusedDuringShutdown", testStreamRefusedDuringShutdown},
+				{"StreamCachesEndWithLifetime", testStreamCachesEndWithLifetime},
+			} {
+				t.Run(suite.name, suite.run)
+			}
+		})
+	}
+}
+
+func streamEndpoint(t *testing.T, page string) string {
+	t.Helper()
+	if !strings.Contains(t.Name(), "/organisation/") {
+		return page + "/events?"
+	}
+	parts := strings.Split(page, "/")
+	endpoint := "/organizations/" + parts[2] + "/events?want=messages&channel=" + parts[4]
+	if len(parts) > 5 {
+		endpoint += "&topic=" + parts[6]
+	}
+	return endpoint + "&"
 }

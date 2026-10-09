@@ -148,7 +148,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				if w.Code != 303 || w.Header().Get("Location") != path {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())
 				}
-			case "GET /channels/{channelID}/events", "GET /channels/{channelID}/topics/{topicID}/events":
+			case "GET /events", "GET /channels/{channelID}/events", "GET /channels/{channelID}/topics/{topicID}/events":
 				// This suite runs without Services.Stream, so a member gets the
 				// stream-off 404 after authorisation; the stream itself is
 				// tested through the production wiring in cmd/ribbitto.

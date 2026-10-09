@@ -103,7 +103,9 @@ The production design does not change.
   the same way. Past 10,000 distinct authorization entries, then, the cache
   churns, the hit rate falls and the pool limits delivery again. The default
   stream cap (`realtime.DefaultMaxStreams`, 5,000) keeps a process below
-  that, so it does not block #671. How the two settings relate is #692.
+  that, so it does not block #671. #692 ties the unset capacity to the
+  [effective stream limit](stream-limits.md) and warns on a smaller explicit
+  capacity.
 - **One member: not the pool.** At 40,000 no acquisition found the pool
   empty; the first delivery over 1 s came at +4.5 s. The benchmark does not
   see CPU or memory, so it does not show what the limit was.

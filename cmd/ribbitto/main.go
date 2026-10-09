@@ -66,12 +66,12 @@ func run() error {
 }
 
 func serve(ctx context.Context, databaseURL string) error {
-	authorizationCapacity, err := authorizationCacheCapacity()
+	streamCap, err := maxStreams()
 	if err != nil {
 		return err
 	}
 
-	streamCap, err := maxStreams()
+	authorizationCapacity, err := authorizationCacheCapacity(streamCap)
 	if err != nil {
 		return err
 	}
@@ -180,15 +180,20 @@ func serve(ctx context.Context, databaseURL string) error {
 	return nil
 }
 
-// authorizationCacheCapacity follows the stream cap's explicit-value rule.
-func authorizationCacheCapacity() (int, error) {
+// authorizationCacheCapacity sizes the default for live stream keys while
+// preserving explicit choices: several streams can share one cached allow.
+func authorizationCacheCapacity(streamCap int) (int, error) {
 	value, set := os.LookupEnv("RIBBITTO_AUTHORIZATION_CACHE_CAPACITY")
 	if !set {
-		return org.DefaultAuthorizationCapacity, nil
+		return max(org.DefaultAuthorizationCapacity, streamCap), nil
 	}
 	capacity, err := strconv.Atoi(value)
 	if err != nil || capacity <= 0 {
 		return 0, fmt.Errorf("RIBBITTO_AUTHORIZATION_CACHE_CAPACITY must be a positive integer")
+	}
+	if capacity < streamCap {
+		slog.Warn("authorization cache capacity is below the stream limit; distinct stream keys may cause cache churn",
+			"RIBBITTO_AUTHORIZATION_CACHE_CAPACITY", capacity, "RIBBITTO_MAX_STREAMS", streamCap)
 	}
 	return capacity, nil
 }

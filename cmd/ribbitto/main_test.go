@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -168,6 +171,7 @@ func TestSignupEnabled(t *testing.T) {
 }
 
 func TestMaxStreams(t *testing.T) {
+	t.Setenv("RIBBITTO_AUTHORIZATION_CACHE_CAPACITY", "10000")
 	for _, tt := range []struct {
 		name, value string
 		want        int
@@ -204,6 +208,7 @@ func TestMaxStreams(t *testing.T) {
 }
 
 func TestAuthorizationCacheCapacity(t *testing.T) {
+	t.Setenv("RIBBITTO_MAX_STREAMS", "5000")
 	for _, tt := range []struct {
 		name, value string
 		want        int
@@ -226,7 +231,7 @@ func TestAuthorizationCacheCapacity(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			got, err := authorizationCacheCapacity()
+			got, err := authorizationCacheCapacity(5000)
 			if got != tt.want || (err != nil) != (tt.want == 0) {
 				t.Fatalf("authorizationCacheCapacity() = %d, %v; want %d, invalid=%t", got, err, tt.want, tt.want == 0)
 			}
@@ -234,6 +239,76 @@ func TestAuthorizationCacheCapacity(t *testing.T) {
 				if err := serve(t.Context(), ""); err == nil || !strings.Contains(err.Error(), "RIBBITTO_AUTHORIZATION_CACHE_CAPACITY") {
 					t.Fatalf("invalid authorization cache capacity did not prevent startup: %v", err)
 				}
+			}
+		})
+	}
+}
+
+func TestStreamCapacityConfiguration(t *testing.T) {
+	for _, tt := range []struct {
+		name, streams, capacity   string
+		wantStreams, wantCapacity int
+		warn                      bool
+	}{
+		{name: "both unset", wantStreams: 5000, wantCapacity: 10000},
+		{name: "stream limit below floor", streams: "7000", wantStreams: 7000, wantCapacity: 10000},
+		{name: "stream limit above floor", streams: "20000", wantStreams: 20000, wantCapacity: 20000},
+		{name: "capacity at limit", streams: "20000", capacity: "20000", wantStreams: 20000, wantCapacity: 20000},
+		{name: "capacity above limit", streams: "20000", capacity: "25000", wantStreams: 20000, wantCapacity: 25000},
+		{name: "capacity below limit", streams: "20000", capacity: "10000", wantStreams: 20000, wantCapacity: 10000, warn: true},
+		{name: "capacity below default limit", capacity: "4000", wantStreams: 5000, wantCapacity: 4000, warn: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			for name, value := range map[string]string{
+				"RIBBITTO_MAX_STREAMS":                  tt.streams,
+				"RIBBITTO_AUTHORIZATION_CACHE_CAPACITY": tt.capacity,
+			} {
+				t.Setenv(name, value)
+				if value == "" {
+					if err := os.Unsetenv(name); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			var logs bytes.Buffer
+			logger := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+			t.Cleanup(func() { slog.SetDefault(logger) })
+			streamCap, err := maxStreams()
+			if err != nil || streamCap != tt.wantStreams {
+				t.Fatalf("maxStreams() = %d, %v; want %d", streamCap, err, tt.wantStreams)
+			}
+			capacity, err := authorizationCacheCapacity(streamCap)
+			if err != nil || capacity != tt.wantCapacity {
+				t.Fatalf("authorizationCacheCapacity(%d) = %d, %v; want %d", streamCap, capacity, err, tt.wantCapacity)
+			}
+			// Stop after stream configuration, before any database access, and
+			// capture the warning from the actual startup path.
+			logs.Reset()
+			t.Setenv("RIBBITTO_EVENT_RETENTION", "168h")
+			t.Setenv("RIBBITTO_SIGNUP", "invalid")
+			if err := serve(t.Context(), ""); err == nil || !strings.Contains(err.Error(), "RIBBITTO_SIGNUP") {
+				t.Fatalf("startup did not reach signup validation: %v", err)
+			}
+			if !tt.warn {
+				if logs.Len() != 0 {
+					t.Fatalf("unexpected log: %s", &logs)
+				}
+				return
+			}
+			if bytes.Count(logs.Bytes(), []byte("\n")) != 1 {
+				t.Fatalf("want exactly one warning, got %q", &logs)
+			}
+			var record struct {
+				Level    string `json:"level"`
+				Capacity int    `json:"RIBBITTO_AUTHORIZATION_CACHE_CAPACITY"`
+				Streams  int    `json:"RIBBITTO_MAX_STREAMS"`
+			}
+			if err := json.Unmarshal(logs.Bytes(), &record); err != nil {
+				t.Fatal(err)
+			}
+			if record.Level != "WARN" || record.Capacity != tt.wantCapacity || record.Streams != tt.wantStreams {
+				t.Fatalf("warning did not name both configured values: %s", &logs)
 			}
 		})
 	}

@@ -3,8 +3,8 @@
 What one post costs the delivery loop as open streams grow, measured by
 `TestStreamCost` in `internal/realtime/cost_test.go` (#215). It measures the
 current delivery path. The results below precede #670's cached allows and
-fresh shared epoch reads; #671 will measure the new authorization cost with
-the same benchmark.
+fresh shared epoch reads; #671 measured those with the same benchmark
+([results](stream-authorization-results.md)).
 
 ## Running it
 
@@ -25,8 +25,13 @@ RIBBITTO_STREAM_COST=1 RIBBITTO_STREAM_COST_POOL=10 RIBBITTO_STREAM_COST_STEPS=2
 `RIBBITTO_STREAM_COST_STEPS` (streams per step, default `1,10,100,1000,5000`;
 a run stops at its first failing step), `_RATE` (posts per second, default
 10), `_DURATION` (posting time per step, default `10s`), `_POOL` (pool size,
-default pgx's), `_CACHE=1` (#227's shared reads) and `_MEMBERS=distinct`
-(one member per stream) tune it. The server must be loopback, checked before
+default pgx's), `_CACHE=1` (#227's shared reads), `_MEMBERS=distinct`
+(one member per stream) and `_STAGGER=<window>` (#671) tune it. With a
+window, stream `i` of `N` waits `i × window / N` after its shared render
+returns and before its `MayReceive`, in a per-stream renderer wrapper: in the
+shared render loader it would delay one render, not the checks. It needs
+`_MEMBERS=distinct` (one member's streams share one cached allow) and refuses
+to start without it. The server must be loopback, checked before
 connecting, fallback hosts included. The benchmark works in a database it
 creates from `template0` (`pgtest.NewEmpty`), migrates itself and drops
 afterwards; it touches no other database. Loopback alone does not prove a
@@ -56,11 +61,23 @@ Posts go through `conversation.Posting` with the hub as notifier.
   their per-acquisition mean can exceed half of a 5 ms p95, and without them
   the pool dominates a 30 ms p95 at 100 streams — neither is a ceiling.
 - **Latency** runs from `Post` returning after commit to the in-memory send
-  (a delivery before `Post` returns counts as a negative sample). It is not a
-  commit timestamp.
+  (a delivery before `Post` returns counts as a negative sample), reported as
+  p50, p95 and p99; it includes any stagger wait. It is not a commit
+  timestamp.
+- **Authorization**, in a second table after the step table: epoch reads
+  per post and per post per stream (the trend as `N` grows), a subset of the
+  queries, counted by the `GetAccessEpoch` query name in the benchmark's
+  tracer; checks per post and the cached-allow hit rate from
+  `org.Authorizer.Stats` (the cache lives for the whole run, so later steps
+  start warm); the check's own time (p50, p95, p99) in `MayReceive`, without
+  the stagger wait; and the stagger delays as min/max/step.
 - A step fails when it is underloaded or incomplete, when p95 exceeds 1 s,
   or when a delivery is still missing when the step's deadline (posting
-  time plus 30 s) passes.
+  time plus 30 s) passes. A failing step logs what came first, as offsets
+  from the first post: the first empty pool acquire (sampled every 50 ms)
+  with the empty and cancelled acquire counts, the first delivery over 1 s,
+  and the failed stream loops with the first error. CPU and memory, of this
+  process or PostgreSQL, are not visible to it; watch them outside.
 
 ## Results, 2026-10-01
 
@@ -125,5 +142,9 @@ it does not prove Go adds nothing at higher counts. #227 shares each event read
 (plus one private read for a short batch's joiners) and message read per
 organisation and renders once per language; what
 remained per connection was the membership check. #670 implements its
-[freshness protocol](stream-authorization.md#decision); #671 will supply
-new numbers before further optimization of the reader (#232).
+[freshness protocol](stream-authorization.md#decision). With it (#671's
+[results](stream-authorization-results.md)), queries per post stay near 16
+to 46 up to 10,000 streams in the unstaggered ladders. The next limits are the authorization cache's
+capacity and, with one member, something the benchmark cannot see (not the
+pool). Cached allows remove the per-stream query; a cache miss still loads
+one membership per stream (#232).

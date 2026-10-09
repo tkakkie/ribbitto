@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -45,10 +46,15 @@ import (
 //	                               through the caches of #227
 //	RIBBITTO_STREAM_COST_MEMBERS   distinct: one member per stream, instead
 //	                               of one member for every stream
+//	RIBBITTO_STREAM_COST_STAGGER   a window: stream i of N waits i*window/N
+//	                               after its render, before its check (#671);
+//	                               needs _MEMBERS=distinct
 //
 // Every stream follows the same channel of one organisation. The renderer
 // reads the message with its authors (#206) but renders no HTML: this
-// measures database cost.
+// measures database cost. A second table reports the authorization check:
+// epoch reads (statements classified here), the cached-allow hit rate (from
+// org.Authorizer.Stats) and the check's own latency.
 func TestStreamCost(t *testing.T) {
 	if os.Getenv("RIBBITTO_STREAM_COST") != "1" {
 		t.Skip("set RIBBITTO_STREAM_COST=1 to measure the stream's cost")
@@ -65,6 +71,12 @@ func TestStreamCost(t *testing.T) {
 	duration := envDuration(t, "RIBBITTO_STREAM_COST_DURATION", 10*time.Second)
 	if scheduledPosts(rate, duration) < 1 {
 		t.Fatalf("RIBBITTO_STREAM_COST_RATE=%d for %s schedules no posts; a step must post at least once", rate, duration)
+	}
+	stagger := envDuration(t, "RIBBITTO_STREAM_COST_STAGGER", 0)
+	// One member's streams share one cached allow, so staggering them would
+	// not stagger distinct checks (#671).
+	if stagger > 0 && os.Getenv("RIBBITTO_STREAM_COST_MEMBERS") != "distinct" {
+		t.Fatal("RIBBITTO_STREAM_COST_STAGGER needs RIBBITTO_STREAM_COST_MEMBERS=distinct")
 	}
 
 	// NewEmpty creates a database from template0 and drops only that one
@@ -98,7 +110,7 @@ func TestStreamCost(t *testing.T) {
 		}
 		config.MaxConns = int32(n)
 	}
-	queries := platform.NewQueryCounter()
+	queries := &epochCounter{QueryCounter: platform.NewQueryCounter()}
 	config.ConnConfig.Tracer = queries
 	pool, err := pgxpool.NewWithConfig(t.Context(), config)
 	if err != nil {
@@ -119,15 +131,26 @@ func TestStreamCost(t *testing.T) {
 		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](t.Context(), 4096, realtime.DefaultCacheLoads, time.Minute, 10*time.Second, nil, time.Now)
 	}
 	loopReads := &countingReader{inner: inner}
-	stream := realtime.Stream{Hub: hub, Events: loopReads, Authorizer: orgpg.NewCachedAuthorizer(t.Context(), pool, org.DefaultAuthorizationCapacity), Renderer: renderer}
+	checks := &timingAuthorizer{inner: orgpg.NewCachedAuthorizer(t.Context(), pool, org.DefaultAuthorizationCapacity)}
+	stream := realtime.Stream{Hub: hub, Events: loopReads, Authorizer: checks, Renderer: renderer}
 
-	t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step; cache %t; distinct members %t",
-		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration, cached, distinct)
-	t.Log("| streams | posts scheduled/completed/missed | deliveries | queries/post | tx statements/post | empty reads/post | queries/delivery | tx statements/delivery | empty reads/delivery | mean empty-acquire wait | empty-acquire wait/delivery | p50 | p95 | result |")
-	t.Log("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step; cache %t; distinct members %t; stagger window %s",
+		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration, cached, distinct, stagger)
+	t.Log("| streams | posts scheduled/completed/missed | deliveries | queries/post | tx statements/post | empty reads/post | queries/delivery | tx statements/delivery | empty reads/delivery | mean empty-acquire wait | empty-acquire wait/delivery | p50 | p95 | p99 | result |")
+	t.Log("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	authRows := []string{
+		"| streams | epoch reads/post | epoch reads/post/stream | checks/post | cached-allow hit rate | check p50 | check p95 | check p99 | stagger delays min/max/step |",
+		"|---|---|---|---|---|---|---|---|---|",
+	}
+	// The authorization table follows the step table, failing step included.
+	defer func() {
+		for _, row := range authRows {
+			t.Log(row)
+		}
+	}()
 	highest := 0
 	for _, n := range steps {
-		r := measureStep(t, stream, posting, pool, queries, loopReads, dbReads, m, subs, n, rate, duration)
+		r := measureStep(t, stream, posting, pool, queries, checks, loopReads, dbReads, m, subs, n, rate, duration, stagger)
 		verdict := "pass"
 		switch {
 		case r.missed > 0 || r.completed < r.scheduled:
@@ -138,15 +161,24 @@ func TestStreamCost(t *testing.T) {
 			verdict = "fail: no deliveries to measure"
 		case r.missing > 0:
 			verdict = fmt.Sprintf("fail: %d deliveries missing after the drain", r.missing)
-		case r.p95 > time.Second:
+		case r.latency[1] > latencyLimit:
 			verdict = "fail: p95 over 1 s"
 		}
-		t.Logf("| %d | %d/%d/%d | %d | %.1f | %.1f | %.1f | %.2f | %.2f | %.2f | %s | %s | %s | %s | %s |", n, r.scheduled, r.completed, r.missed, r.deliveries,
+		t.Logf("| %d | %d/%d/%d | %d | %.1f | %.1f | %.1f | %.2f | %.2f | %.2f | %s | %s | %s | %s | %s | %s |", n, r.scheduled, r.completed, r.missed, r.deliveries,
 			per(r.queries, r.completed), per(r.txStatements, r.completed), per(r.emptyReads, r.completed),
 			per(r.queries, r.deliveries), per(r.txStatements, r.deliveries), per(r.emptyReads, r.deliveries),
-			r.meanWait.Round(time.Microsecond), r.waitPerDelivery.Round(time.Microsecond), r.p50.Round(time.Microsecond), r.p95.Round(time.Microsecond), verdict)
+			r.meanWait.Round(time.Microsecond), r.waitPerDelivery.Round(time.Microsecond),
+			r.latency[0].Round(time.Microsecond), r.latency[1].Round(time.Microsecond), r.latency[2].Round(time.Microsecond), verdict)
+		delays := "none"
+		if stagger > 0 {
+			delays = fmt.Sprintf("0s/%s/%s", staggerDelay(n-1, n, stagger), staggerDelay(1, n, stagger))
+		}
+		authRows = append(authRows, fmt.Sprintf("| %d | %.2f | %.4f | %.1f | %.4f | %s | %s | %s | %s |", n,
+			per(r.epochReads, r.completed), per(r.epochReads, r.completed*n), per(r.checks, r.completed), per(r.hits, int(r.checks)),
+			r.check[0].Round(time.Microsecond), r.check[1].Round(time.Microsecond), r.check[2].Round(time.Microsecond), delays))
 		if verdict != "pass" {
 			t.Logf("highest passing step: %d streams; first failing step: %d streams (%s)", highest, n, verdict)
+			t.Logf("step %d, what the benchmark saw (offsets from the first post): %s; not visible here: CPU and memory of this process and of PostgreSQL", n, r.diagnosis)
 			return
 		}
 		highest = n
@@ -157,6 +189,9 @@ func TestStreamCost(t *testing.T) {
 // drainAllowance is how long a step may run past its posting window for
 // posts to complete and deliveries to arrive.
 const drainAllowance = 30 * time.Second
+
+// latencyLimit is the p95 above which a step fails.
+const latencyLimit = time.Second
 
 // scheduledPosts is how many posts a step schedules at rate for duration.
 func scheduledPosts(rate int, duration time.Duration) int {
@@ -170,13 +205,21 @@ type stepResult struct {
 	timedOut                          bool
 	deliveries, missing               int
 	queries, txStatements, emptyReads int64
+	// epochReads are GetAccessEpoch statements; checks and hits come from
+	// org.Authorizer.Stats.
+	epochReads, checks, hits int64
+	// latency runs from Post returning to the send, the stagger wait
+	// included; check is the time spent in MayReceive. Both are p50, p95, p99.
+	latency, check [3]time.Duration
+	// diagnosis is what the step saw first when it fails.
+	diagnosis string
 	// meanWait is the wait per acquisition that found the pool empty;
 	// waitPerDelivery spreads the same total over the deliveries, which is
 	// what the pool adds to a delivery on average. Both explain latency and
 	// fail no step: rare waits (the caches make them rare) can have a large
 	// meanWait while adding little, and a pool that dominates a 30 ms p95 is
 	// not a ceiling. p95 and completeness decide the ceiling.
-	meanWait, waitPerDelivery, p50, p95 time.Duration
+	meanWait, waitPerDelivery time.Duration
 }
 
 func per(n int64, d int) float64 {
@@ -189,8 +232,8 @@ func per(n int64, d int) float64 {
 // measureStep opens n streams from the current sequence, posts at rate for
 // duration, waits for every delivery or a drain deadline, and closes them.
 // Counts cover the posting window and the drain, not the streams' start.
-func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Posting, pool *pgxpool.Pool, queries *platform.QueryCounter,
-	events, dbReads *countingReader, m org.Membership, subs []realtime.Subscription, n, rate int, duration time.Duration) stepResult {
+func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Posting, pool *pgxpool.Pool, queries *epochCounter, checks *timingAuthorizer,
+	events, dbReads *countingReader, m org.Membership, subs []realtime.Subscription, n, rate int, duration, stagger time.Duration) stepResult {
 	t.Helper()
 	sub := subs[0]
 	var cursor int64
@@ -202,8 +245,28 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	sink := &collector{}
 	readsBefore := events.calls.Load()
 	var wg sync.WaitGroup
+	// The first loop error and when it happened; read after wg.Wait.
+	var loopErrs struct {
+		sync.Mutex
+		n     int
+		first error
+		at    time.Time
+	}
 	for i := range n {
-		wg.Go(func() { _, _ = stream.Run(ctx, subs[i%len(subs)], cursor, sink) })
+		s := stream
+		if stagger > 0 {
+			s.Renderer = staggeredRenderer{inner: stream.Renderer, delay: staggerDelay(i, n, stagger)}
+		}
+		wg.Go(func() {
+			// After cancel every loop returns its cause; only earlier errors count.
+			if _, err := s.Run(ctx, subs[i%len(subs)], cursor, sink); err != nil && ctx.Err() == nil {
+				loopErrs.Lock()
+				defer loopErrs.Unlock()
+				if loopErrs.n++; loopErrs.n == 1 {
+					loopErrs.first, loopErrs.at = err, time.Now()
+				}
+			}
+		})
 	}
 	// Every stream has read once (and found nothing) before posting starts.
 	for deadline := time.Now().Add(time.Minute); events.calls.Load()-readsBefore < int64(n); {
@@ -213,7 +276,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	q0, s0, empty0 := queries.Counts(), pool.Stat(), dbReads.empty.Load()
+	q0, s0, empty0, epochs0, a0 := queries.Counts(), pool.Stat(), dbReads.empty.Load(), queries.epochReads.Load(), checks.inner.Stats()
 	// Posts are scheduled at the fixed rate whatever their latency (an open
 	// loop), with at most one second's worth in flight: a post that would
 	// exceed it is counted as missed, and the step as underloaded, rather
@@ -229,6 +292,21 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	interval := time.Second / time.Duration(rate)
 	missed := 0
 	start := time.Now()
+	// Pool stats are cumulative, so sampling finds when the first empty
+	// acquire happened, to within the sampling period.
+	var firstEmpty atomic.Int64
+	sampled := make(chan struct{})
+	go func() {
+		defer close(sampled)
+		for tick := time.Tick(50 * time.Millisecond); pool.Stat().EmptyAcquireCount() == s0.EmptyAcquireCount(); {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick:
+			}
+		}
+		firstEmpty.Store(int64(time.Since(start)))
+	}()
 	// Everything in the step — posting and the drain — ends by this
 	// deadline: a stalled acquisition or statement is cancelled and its post
 	// counted as incomplete, instead of holding the benchmark until the
@@ -266,16 +344,20 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	for sink.count() < want && stepCtx.Err() == nil {
 		time.Sleep(10 * time.Millisecond)
 	}
-	q1, s1, empty1 := queries.Counts(), pool.Stat(), dbReads.empty.Load()
+	q1, s1, empty1, epochs1, a1 := queries.Counts(), pool.Stat(), dbReads.empty.Load(), queries.epochReads.Load(), checks.inner.Stats()
 	// Read before cancel, which would also end stepCtx: only the deadline
 	// passing counts as timing out.
 	timedOut := errors.Is(stepCtx.Err(), context.DeadlineExceeded)
 	cancel()
 	wg.Wait()
+	<-sampled
 
 	r := stepResult{scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: timedOut}
 	r.missing = max(want-r.deliveries, 0)
 	r.queries = q1.Queries - q0.Queries
+	r.epochReads = epochs1 - epochs0
+	r.checks, r.hits = int64(a1.Checks-a0.Checks), int64(a1.CacheHits-a0.CacheHits)
+	r.check = percentiles(checks.take())
 	r.txStatements = (q1.Begins + q1.Commits + q1.Rollbacks) - (q0.Begins + q0.Commits + q0.Rollbacks)
 	r.emptyReads = empty1 - empty0
 	// Only acquisitions that found the pool empty had to wait; averaging
@@ -289,17 +371,113 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	}
 	// A delivery that lands before Post returns is a negative sample.
 	var latencies []time.Duration
+	var firstSlow time.Time
 	for _, d := range sink.all() {
 		if at, ok := returned[d.seq]; ok {
 			latencies = append(latencies, d.at.Sub(at))
+			if d.at.Sub(at) > latencyLimit && (firstSlow.IsZero() || d.at.Before(firstSlow)) {
+				firstSlow = d.at
+			}
 		}
 	}
-	slices.Sort(latencies)
-	if len(latencies) > 0 {
-		r.p50 = latencies[len(latencies)*50/100]
-		r.p95 = latencies[min(len(latencies)*95/100, len(latencies)-1)]
+	r.latency = percentiles(latencies)
+
+	// What a failing step saw, and when. Offsets are from the first post.
+	seen := []string{"no empty acquire", "no delivery over " + latencyLimit.String(), "no stream loop failed"}
+	if at := time.Duration(firstEmpty.Load()); at > 0 {
+		seen[0] = fmt.Sprintf("first empty acquire by +%s (%d empty, %d cancelled acquires)", at.Round(time.Millisecond),
+			s1.EmptyAcquireCount()-s0.EmptyAcquireCount(), s1.CanceledAcquireCount()-s0.CanceledAcquireCount())
 	}
+	if !firstSlow.IsZero() {
+		seen[1] = fmt.Sprintf("first delivery over %s at +%s", latencyLimit, firstSlow.Sub(start).Round(time.Millisecond))
+	}
+	if loopErrs.n > 0 {
+		seen[2] = fmt.Sprintf("%d stream loops failed, the first at +%s: %v", loopErrs.n, loopErrs.at.Sub(start).Round(time.Millisecond), loopErrs.first)
+	}
+	r.diagnosis = strings.Join(seen, "; ")
 	return r
+}
+
+// percentiles returns the p50, p95 and p99 of samples, which it sorts.
+func percentiles(samples []time.Duration) [3]time.Duration {
+	var out [3]time.Duration
+	if len(samples) == 0 {
+		return out
+	}
+	slices.Sort(samples)
+	for i, p := range []int{50, 95, 99} {
+		out[i] = samples[min(len(samples)*p/100, len(samples)-1)]
+	}
+	return out
+}
+
+// staggerDelay is stream i of n's wait for window: i*window/n, so the
+// delays step evenly from zero to just under the window.
+func staggerDelay(i, n int, window time.Duration) time.Duration {
+	return window * time.Duration(i) / time.Duration(n)
+}
+
+// staggeredRenderer waits after the shared render returns, so each stream's
+// MayReceive starts delay later (#671). The wait must stay outside
+// readingRenderer's loader, which is shared by sequence: delaying it would
+// delay one shared render, not the streams' checks.
+type staggeredRenderer struct {
+	inner realtime.Renderer
+	delay time.Duration
+}
+
+func (r staggeredRenderer) Render(ctx context.Context, e realtime.Event) (realtime.Outgoing, error) {
+	out, err := r.inner.Render(ctx, e)
+	if err != nil || r.delay == 0 {
+		return out, err
+	}
+	select {
+	case <-ctx.Done():
+		return realtime.Outgoing{}, context.Cause(ctx)
+	case <-time.After(r.delay):
+		return out, nil
+	}
+}
+
+// timingAuthorizer records how long each MayReceive takes.
+type timingAuthorizer struct {
+	inner *org.Authorizer
+	mu    sync.Mutex
+	times []time.Duration
+}
+
+func (a *timingAuthorizer) MayReceive(ctx context.Context, account kernel.ID, slug string, e realtime.Event) (bool, error) {
+	start := time.Now()
+	ok, err := a.inner.MayReceive(ctx, account, slug, e)
+	took := time.Since(start)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.times = append(a.times, took)
+	return ok, err
+}
+
+// take returns the recorded times and starts a new record.
+func (a *timingAuthorizer) take() []time.Duration {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	times := a.times
+	a.times = nil
+	return times
+}
+
+// epochCounter is the benchmark's query counter, also counting epoch reads.
+// It matches the sqlc query name that GetAccessEpoch's SQL starts with, so
+// production code needs no hook.
+type epochCounter struct {
+	*platform.QueryCounter
+	epochReads atomic.Int64
+}
+
+func (c *epochCounter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	if strings.HasPrefix(data.SQL, "-- name: GetAccessEpoch ") {
+		c.epochReads.Add(1)
+	}
+	return c.QueryCounter.TraceQueryStart(ctx, conn, data)
 }
 
 // countingReader counts reads, and reads that returned nothing.
@@ -439,6 +617,22 @@ func envDuration(t *testing.T, name string, fallback time.Duration) time.Duratio
 		t.Fatalf("%s=%q: want a positive duration", name, raw)
 	}
 	return d
+}
+
+func TestStaggerDelay(t *testing.T) {
+	for _, tt := range []struct {
+		i, n   int
+		window time.Duration
+		want   time.Duration
+	}{
+		{0, 10, 100 * time.Millisecond, 0},
+		{9, 10, 100 * time.Millisecond, 90 * time.Millisecond},
+		{4999, 5000, 10 * time.Millisecond, 9998 * time.Microsecond},
+	} {
+		if got := staggerDelay(tt.i, tt.n, tt.window); got != tt.want {
+			t.Errorf("staggerDelay(%d, %d, %s) = %s, want %s", tt.i, tt.n, tt.window, got, tt.want)
+		}
+	}
 }
 
 func TestScheduledPosts(t *testing.T) {

@@ -140,7 +140,10 @@ what the active steps left behind.
 
 ## Follow-ups
 
-- #622: cached authorization is implemented by #669 and #670; #671 measures it.
+- #622: cached authorization is implemented by #669 and #670. #671 reran the
+  active steps ([results](stream-authorization-results.md#216s-active-steps-rerun-2026-10-09)):
+  10,000 now passes with the default pool and HTTP/1.1 reaches 15,000; the
+  pool was no longer the limit, and the run did not isolate what was.
 - #623: a process-wide stream cap (A5), now done; see [stream limits](stream-limits.md).
 - #624: sizing self-hosted machines, including Caddy's per-stream memory.
 

@@ -31,7 +31,7 @@ events are unchanged). *Planned* for M4; details in
 - **A reconnect restores current state, within bounds.** Typing is sent
   whole (the indicator for the connection's channel or topic, naming at
   most three typists and counting the rest) at every connect and whenever
-  it changes. Presence sends only the entries changed after the token the
+  it changes, read from a per-place summary in constant time. Presence sends only the entries changed after the token the
   page was rendered with (process instance and generation), at most a fixed
   number per frame. A token or connection the process cannot serve gets
   [decision 24](24-a-cursor-that-cannot-be-served-gets-reset.md)'s

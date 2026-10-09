@@ -121,7 +121,12 @@ which connections ask for it is [stream scope](streaming.md#stream-scope-planned
   organisation's **discard boundary**, a monotonic level. The owner updates
   state, boundary and generation together and then raises the hub's
   generation; a read returns all three as of one moment, so a connection
-  marks seen only what it read.
+  marks seen only what it read. Typing keeps a summary per channel and per
+  topic, updated with each change: how many are typing, the four latest
+  typists and the generation of its last change. A connection reads only
+  its place's summary (a feed reads its channel's) and drops the viewer
+  from it in constant time, so its work does not grow with typists or
+  topics elsewhere.
 - **Levels.** Per organisation the hub holds the durable level and one
   generation per kind (`presence`, `typing`), each published as an atomic
   level and channel like the durable level ([stream limits](stream-limits.md)).
@@ -133,10 +138,9 @@ which connections ask for it is [stream scope](streaming.md#stream-scope-planned
   durable batch, and before waiting, it sends one frame without `id:` per
   kind whose generation passed what it has seen: the presence entries
   changed since then, read from the suffix and stopping past the frame's
-  limit (100 entries), or the typing indicator of its channel or topic
-  without the viewer's own name, naming at most three typists, only when it
-  differs from the one last sent. Presence entries render once per member,
-  state and language and are shared.
+  limit (100 entries), or its place's typing indicator (three names at
+  most, then a count) when its summary changed. Presence entries render
+  once per member, state and language and are shared.
 - **Reset.** A presence read whose start lies below the discard boundary,
   from another process's token, or past the frame's limit sends `reset`
   instead (decision 24), on connect or later; the page reloads and renders

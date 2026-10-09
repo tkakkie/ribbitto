@@ -3,8 +3,8 @@
 How a stream keeps #262's guarantee without one database query per
 connection per event (#622). **Decided by the maintainer on 2026-10-08:
 option (a2), with its triggers mandatory** ([Decision](#decision)). It is
-implemented by #669 (epoch) and #670 (delivery); #671 will measure the new
-cost. Current checks use fresh shared epochs and bounded cached allows,
+implemented by #669 (epoch) and #670 (delivery); #671 measured the cost
+([results](stream-authorization-results.md)). Current checks use fresh shared epochs and bounded cached allows,
 reloading memberships independently on misses. Parent cancellation fails
 closed. The comparison preserves the pre-#670 reasoning.
 
@@ -176,15 +176,13 @@ for a primary-key read, and the choice should be revisited.
 
 About 15 shared queries per post end to end, plus the epoch reads: a few
 per organisation **when the checks overlap**, up to `N` when they are
-staggered. Misses reload independently; denies are never cached. #671 will
-measure the cost.
+staggered. Misses reload independently; denies are never cached.
 
-- **Stream cost:** rerun `TestStreamCost` with `_CACHE=1`, with one member
-  and with `_MEMBERS=distinct`, at 1,000 to 5,000 streams and beyond, plus a
-  new option that staggers the streams' checks, reporting epoch reads per
-  post apart. With overlapping checks, queries per post should stay roughly
-  flat instead of `N + 10` and the highest passing step rise above 2,000.
-- **#216's active steps:** queries per post near constant at 7,000 and
-  10,000 (pre-#670: 7,015 and 10,012); 10,000 should pass with the default pool,
-  and the series continues (15,000, 20,000…) to find the next limit, likely
-  CPU (the server used about 3.5 CPUs at 10,000) or Caddy.
+**It held** (#671, [results](stream-authorization-results.md)):
+- **Stream cost:** queries per post stay flat (16 to 46) instead of `N + 10`
+  up to 10,000 streams; the highest passing step rose from 2,000 to 30,000
+  (one member) and 10,000 (distinct members, the cache's capacity).
+- **Staggered checks** read up to 0.72 `N` per post at 1,000 streams with a
+  100 ms window, bounded near 800 reads; the revisit question is open on #671.
+- **#216's active steps:** 10,000 passes with the default pool; the next
+  limits were the server's CPU (HTTP/1.1) and Caddy's share of the machine.

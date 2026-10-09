@@ -38,7 +38,7 @@ type Cache[K comparable, V any] struct {
 	afterCancellationCheck func(context.Context)
 
 	// beforeSecondLoad, nil outside tests, runs once a joiners' second load
-	// is set up and before the first load's waiters are released, so tests
+	// is set up and before the starter is released, so tests
 	// can make the last joiner leave at that point.
 	beforeSecondLoad func(context.Context)
 
@@ -61,6 +61,9 @@ type cacheCall[V any] struct {
 	waiters int
 	joiners int
 	cancel  context.CancelCauseFunc
+	// joined is allocated before registration, so joiners wait once, directly
+	// for their result, rather than waking with the starter and waiting again.
+	joined *cacheCall[V]
 	// again, set before done closes, is the load the joiners get instead
 	// when value is not kept (see NewCache).
 	again *cacheCall[V]
@@ -116,7 +119,8 @@ func (c *Cache[K, V]) Get(ctx context.Context, key K, load func(context.Context)
 	call, joined := c.loading[key]
 	if !joined {
 		loadCtx, cancel := context.WithCancelCause(context.WithoutCancel(ctx))
-		call = &cacheCall[V]{done: make(chan struct{}), cancel: cancel}
+		call = &cacheCall[V]{done: make(chan struct{}), cancel: cancel,
+			joined: &cacheCall[V]{done: make(chan struct{})}}
 		c.loading[key] = call
 		go c.load(loadCtx, key, call, load)
 	} else {
@@ -126,18 +130,15 @@ func (c *Cache[K, V]) Get(ctx context.Context, key K, load func(context.Context)
 	c.mu.Unlock()
 	defer c.leave(key, call, joined)
 
-	if err := wait(ctx, call); err != nil {
+	result := call
+	if joined {
+		result = call.joined
+	}
+	if err := wait(ctx, result); err != nil {
 		var zero V
 		return zero, err
 	}
-	if joined && call.again != nil {
-		call = call.again
-		if err := wait(ctx, call); err != nil {
-			var zero V
-			return zero, err
-		}
-	}
-	return call.value, call.err
+	return result.value, result.err
 }
 
 func (c *Cache[K, V]) leave(key K, call *cacheCall[V], joined bool) {
@@ -206,7 +207,7 @@ func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load 
 	// Only remaining joiners need a fresh snapshot. They keep their wait
 	// registered on the original call until this private second load ends.
 	if call.err == nil && !kept && call.joiners > 0 {
-		call.again = &cacheCall[V]{done: make(chan struct{})}
+		call.again = call.joined
 	}
 	c.mu.Unlock()
 	if call.again != nil && c.beforeSecondLoad != nil {
@@ -215,8 +216,10 @@ func (c *Cache[K, V]) load(ctx context.Context, key K, call *cacheCall[V], load 
 	close(call.done)
 	if call.again != nil {
 		c.run(ctx, call.again, load)
-		close(call.again.done)
+	} else {
+		call.joined.value, call.joined.err = call.value, call.err
 	}
+	close(call.joined.done)
 }
 
 // run runs load into call.value and call.err. The timeout is enforced

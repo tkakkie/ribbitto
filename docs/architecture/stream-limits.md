@@ -13,11 +13,15 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   even before cancellation reaches the detached load context. Joiners of
   unkept results get the parent's cancellation cause if shutdown prevents
   their private second load from finishing.
+  Joiners wait directly for their result, with one wake: a kept value or
+  error from the first load, otherwise the private second load's result.
 
 - Stream authorization caches allows per distinct (account ID, organisation
   slug), not per stream: streams with the same key share an entry. Entries
   stay after their streams close, until eviction; eviction is least recently
-  used. When `RIBBITTO_AUTHORIZATION_CACHE_CAPACITY` is unset, `cmd/ribbitto`
+  used. A hit refreshes LRU at check completion if its captured entry remains
+  resident; an eviction during the fresh epoch read does not resurrect it.
+  When `RIBBITTO_AUTHORIZATION_CACHE_CAPACITY` is unset, `cmd/ribbitto`
   derives the capacity as `max(10,000, effective stream limit)`. The effective
   limit is `RIBBITTO_MAX_STREAMS`, or `realtime.DefaultMaxStreams` (5,000)
   when unset. With both unset, capacity stays 10,000. An explicit capacity
@@ -35,6 +39,15 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   reports checks, membership-cache hits and actual epoch reads (including
   failures), so hit rate and sharing can be measured without changing the
   authorization rule.
+  Token registration captures an immutable cached allow; the subsequent
+  fresh epoch proves that snapshot even if it was evicted. Hits take two
+  authorizer lock acquisitions, refreshing LRU in token cleanup only for
+  the same resident entry. Misses can use a newer resident allow or query
+  independently. Latest tokens still prevent older loads replacing newer
+  results, including a missing-organisation deny. Deterministic #703 tests
+  gate eviction to prove no reload or resurrection, check LRU at capacity,
+  and count context Done evaluations to prove joiners wait once while
+  still getting the fresh second read.
 
 - Each connection reads the log itself (#209), so nothing queues for a slow
   client: its cursor just lags. A client that stops reading is

@@ -144,8 +144,8 @@ several processes. Its gain depends on checks overlapping: if measurements with
 staggered checks show reads near `N`, (a2) only swaps the membership join
 for a primary-key read, and the choice should be revisited.
 
-- **Where it lives:** `org.Authorizer` keeps the cache and the shared read
-  behind `MayReceive`, so `realtime`'s loop and its `Authorizer` interface do
+- **Where it lives:** `org.Authorizer` keeps [cached allows](stream-limits.md)
+  and shared reads behind `MayReceive`; `realtime`'s loop and its `Authorizer` interface do
   not change and `org` remains the only authorization logic.
 - **Settled by the implementation issues:** joins do not bump (#669; only
   allows are cached), and a deny keeps today's skip-and-advance (#670; a
@@ -158,8 +158,9 @@ for a primary-key read, and the choice should be revisited.
 - **Unchanged:** the `realtime` tests above, #207's register-then-recheck
   and session cancellation.
 - **`org`, no database:** an unchanged epoch runs no membership query
-  (counted); a changed one queries and denies; a failed epoch read is an
-  error, never a deny; organisation and audience checks still hold.
+  (counted, even after snapshot eviction); a changed one queries and denies;
+  a failed epoch read is an error, never a deny; organisation and audience
+  checks still hold.
 - **Shared read:** a check that arrives while a read is in flight gets the
   next read, forced with a gated store; two checks in sequence run two reads
   (nothing is retained).

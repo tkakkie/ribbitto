@@ -207,3 +207,18 @@ Run each series as [load client](load-client.md#a-ceiling-search) shows, with
 - *HTTP/2:* use `-target https://localhost:8443 -ca
   /root/caddy-data/caddy/pki/authorities/local/root.crt`, the root certificate
   Caddy created on its first start.
+
+At #216's **15,000-stream HTTP/1.1 active step**, use
+`-streams 15000 -rate 10` and the sources above. Extend `-duration` to 60s
+for profiling so 30s captures fit inside observation. In another shell, poll
+`GET /metrics` until `streams.open` is 15000, then capture:
+
+```sh
+curl -fsS 'http://127.0.0.1:9090/debug/pprof/profile?seconds=30' -o /tmp/server-cpu.pprof &
+curl -fsS 'http://127.0.0.1:9090/debug/pprof/mutex?seconds=30' -o /tmp/server-mutex.pprof &
+curl -fsS 'http://127.0.0.1:9090/debug/pprof/heap' -o /tmp/server-heap.pprof
+wait
+```
+
+Inspect files with `go tool pprof`; [development metrics](dev-metrics.md#capturing-profiles)
+explains sampling and deadlines.

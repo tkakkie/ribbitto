@@ -147,7 +147,7 @@ func TestStreamsAndPosting(t *testing.T) {
 					t.Error("missing session")
 				}
 				if r.Method == "POST" {
-					if !strings.HasPrefix(r.FormValue("body"), "loadgen") || r.Header.Get("Origin") == "" || r.Header.Get("Sec-Fetch-Site") != "same-origin" {
+					if !strings.HasPrefix(r.FormValue("body"), "loadgen") || r.FormValue("cursor") == "" || r.Header.Get("Origin") == "" || r.Header.Get("Sec-Fetch-Site") != "same-origin" {
 						t.Error("invalid post")
 					}
 					return
@@ -855,7 +855,7 @@ func TestPostStatusSurvivesBodyFailure(t *testing.T) {
 				client := server.Client()
 				client.Timeout = 200 * time.Millisecond
 				c := &counts{}
-				got := sendPost(t.Context(), client, server.URL, "secret", marker, c, &reconnectModel{PostAttempts: 3})
+				got := sendPost(t.Context(), client, server.URL, "secret", marker, "0", c, &reconnectModel{PostAttempts: 3})
 				if got != (status == http.StatusOK) {
 					t.Errorf("success = %t, want %t", got, status == http.StatusOK)
 				}
@@ -890,11 +890,11 @@ func TestRetryLimits(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(int(status.Load())) }))
 	defer server.Close()
 	c := &counts{}
-	if sendPost(t.Context(), server.Client(), server.URL, "secret", "loadgenTEST0Z", c, &reconnectModel{PostAttempts: 3}) || c.postAttempts.Load() != 3 {
+	if sendPost(t.Context(), server.Client(), server.URL, "secret", "loadgenTEST0Z", "0", c, &reconnectModel{PostAttempts: 3}) || c.postAttempts.Load() != 3 {
 		t.Fatal("POST did not exhaust exactly three attempts")
 	}
 	status.Store(400)
-	if sendPost(t.Context(), server.Client(), server.URL, "secret", "body", c, &reconnectModel{PostAttempts: 3}) || c.postAttempts.Load() != 4 {
+	if sendPost(t.Context(), server.Client(), server.URL, "secret", "body", "0", c, &reconnectModel{PostAttempts: 3}) || c.postAttempts.Load() != 4 {
 		t.Fatal("4xx POST retried")
 	}
 	status.Store(503)

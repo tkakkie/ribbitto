@@ -311,10 +311,11 @@ func newTransport(target, ca string, c *counts) (transport, error) {
 	return transport{t, u}, nil
 }
 
+// For a POST, cursor carries the encoded form; otherwise it is Last-Event-ID.
 func request(ctx context.Context, client *http.Client, method, endpoint, token, cursor string) (*http.Response, error) {
 	var body io.Reader
 	if method == http.MethodPost {
-		body = strings.NewReader(url.Values{"body": {cursor}}.Encode())
+		body = strings.NewReader(cursor)
 	}
 	r, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
@@ -514,7 +515,9 @@ func stream(ctx context.Context, client *http.Client, endpoint, token, cursor st
 	}
 }
 
-func sendPost(ctx context.Context, client *http.Client, endpoint, token, body string, c *counts, model *reconnectModel) bool {
+// sendPost posts body with the page's cursor, which posting reads up to (#723).
+func sendPost(ctx context.Context, client *http.Client, endpoint, token, body, pageCursor string, c *counts, model *reconnectModel) bool {
+	form := url.Values{"body": {body}, "cursor": {pageCursor}}.Encode()
 	attempts := 1
 	if model != nil {
 		attempts = model.PostAttempts
@@ -522,7 +525,7 @@ func sendPost(ctx context.Context, client *http.Client, endpoint, token, body st
 	for i := 0; i < attempts; i++ {
 		attemptCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		c.postAttempts.Add(1)
-		response, err := request(attemptCtx, client, http.MethodPost, endpoint, token, body)
+		response, err := request(attemptCtx, client, http.MethodPost, endpoint, token, form)
 		status := 0
 		if err == nil {
 			status = response.StatusCode
@@ -881,7 +884,7 @@ func run(args []string, out io.Writer) (runErr error) {
 			c.mu.Lock()
 			p.sent = time.Now()
 			c.mu.Unlock()
-			if sendPost(streamCtx, client, endpoint, tokenAt(int(i)), body, c, r.Reconnect) {
+			if sendPost(streamCtx, client, endpoint, tokenAt(int(i)), body, *cursor, c, r.Reconnect) {
 				c.mu.Lock()
 				p.answered = true
 				c.received.Add(uint64(len(p.latencies)))

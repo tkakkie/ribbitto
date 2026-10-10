@@ -1,5 +1,7 @@
 # Rate limits and reverse proxies
 
+## Authentication network limits
+
 In `internal/web/middleware/ratelimit.go`, `POST /signin`,
 `/signup` and `/setup` are limited with token buckets, per client and, for
 IPv6 clients, also per /48:
@@ -39,11 +41,35 @@ The /48 budget bounds how many client buckets one /48 keeps unevictable.
 Whoever holds that many addresses can still turn new clients away for a
 while; that is accepted. The /48 is this application's choice, not a standard: unrelated
 clients whose smaller prefixes share a /48 share its budget. Limits live in
-memory, per process. Throttling is network-only today; the future design of
-an identity-side layer is tracked in #99.
+memory, per process. These authentication network limits are unchanged by
+the separate member limiter below; an authentication identity-side layer
+is tracked in #99.
 
 The client is the peer's IPv4 address or IPv6 /64, or, behind a trusted
 proxy, the address it forwards (below).
+
+## Member admission for typing
+
+`internal/web/middleware/member_ratelimit.go` supplies `MemberRateLimiter`
+for typing signals: burst 4, then one token per second. Its only key is the
+trusted organisation/member ID pair supplied by the authenticated web
+adapter, never client-submitted identity. One shared instance gives that
+member one budget across channels, topics, sessions and client addresses;
+different members and organisations have separate budgets. It performs no
+authorization, feature-state access or database work. Route integration is
+tracked in #787.
+
+The table holds at most 10,000 buckets. When a new key needs room, only
+fully replenished buckets can be evicted: replacing one with a fresh bucket
+cannot grant extra tokens. A full table with no such bucket refuses new
+keys. Refused requests create no buckets, take no tokens and do not extend
+retention. Admission and eviction are serialized, including concurrent
+requests for the same member.
+
+This limiter also lives in memory per process: share one instance across
+all typing signal callers. Restarting resets the budgets; multiple server
+processes have independent budgets. There are no new configuration settings
+or distributed limits.
 
 ## Reverse proxies
 

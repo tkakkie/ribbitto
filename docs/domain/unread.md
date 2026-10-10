@@ -6,8 +6,9 @@ boundary. Read-state tables, locking, range unions, feed, topic and branch-notic
 reads exist;
 Visible-page reading POSTs, posting writes and the channel and topic count APIs are current; counts on pages and their display are *planned* for M4
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
-the counting queries and their cost are in
-[unread counts](../architecture/unread-counts.md), the writes in
+the counting queries are in
+[unread counts](../architecture/unread-counts.md), their cost in
+[unread count costs](../architecture/unread-count-costs.md), the writes in
 [unread writes](../architecture/unread-writes.md), the worked examples in
 [unread examples](unread-examples.md).
 
@@ -96,7 +97,7 @@ count is the channel's unread messages in that topic. Counts are shown
 capped (`99+`). The cap limits how many unread messages a count returns,
 not all the work: a topic count can also read the member's own posts made
 while the stream lagged, and a topic's first-unread lookup can scan topic
-history ([unread counts](../architecture/unread-counts.md)).
+history ([unread count costs](../architecture/unread-count-costs.md)).
 
 ## The unread divider *(planned, M4)*
 

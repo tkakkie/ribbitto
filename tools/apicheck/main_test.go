@@ -19,7 +19,7 @@ func TestSummaryAndFreshness(t *testing.T) {
 		}
 	}
 	write(filepath.Join(root, "go.mod"), "module fixture\n\ngo 1.27.1\n")
-	for _, name := range []string{"conversation", "identity", "org", "realtime", "presence", "unread"} {
+	for _, name := range []string{"conversation", "identity", "org", "realtime", "presence", "typing", "unread"} {
 		write(filepath.Join(root, "internal", name, "api.go"), "package "+name+"\n")
 	}
 	path := filepath.Join(root, "internal/identity/api.go")
@@ -57,6 +57,9 @@ func New() *Item[string] { return nil }
 `
 	write(path, source)
 	if err := run(root, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.ReadFile(filepath.Join(root, "docs/api/typing.txt")); err != nil {
 		t.Fatal(err)
 	}
 	file := filepath.Join(root, "docs/api/identity.txt")

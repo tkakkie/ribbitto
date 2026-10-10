@@ -99,6 +99,10 @@ linters:
           list-mode: lax
           files: ["**/internal/presence/*.go", "**/internal/presence/**/*.go", "!$test"]
           deny: *module_html
+        typing:
+          list-mode: lax
+          files: ["**/internal/typing/*.go", "**/internal/typing/**/*.go", "!$test"]
+          deny: *module_html
         unread:
           list-mode: lax
           files: ["**/internal/unread/*.go", "**/internal/unread/**/*.go", "!$test"]

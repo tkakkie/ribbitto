@@ -107,6 +107,8 @@ internal/realtime/internal/postgres -> internal/realtime/internal/postgres/sqlcg
 internal/realtime/realtimepg -> internal/platform/postgres
 internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
+internal/typing -> internal/kernel
+internal/typing -> internal/realtime
 internal/unread -> internal/kernel
 internal/unread -> internal/platform/postgres
 internal/unread/internal/postgres -> internal/kernel
@@ -129,6 +131,7 @@ internal/web -> internal/web/middleware
 internal/web -> internal/web/view
 internal/web -> web/static
 internal/web/middleware -> internal/identity
+internal/web/middleware -> internal/kernel
 internal/web/view -> internal/kernel
 internal/web/view -> internal/web/i18n
 ```

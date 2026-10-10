@@ -26,6 +26,7 @@ Read the file for the area you change:
 | [`rate-limits.md`](rate-limits.md) | authentication rate limits and the reverse-proxy contract |
 | [`posting.md`](posting.md) | posting a message: the sequence-first transaction, the hub after commit, the page snapshot |
 | [`realtime.md`](realtime.md) | the durable event log: payloads, routing, replay boundary and retention |
+| [`typing.md`](typing.md) | memory-only typing summaries; planned expiry, ingress and delivery |
 | [`streaming.md`](streaming.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
 | [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream caps, shutdown, HTTP/2 |
@@ -36,7 +37,8 @@ Read the file for the area you change:
 | [`stream-authorization-results.md`](stream-authorization-results.md) | what #670's cached allows cost, measured by #671: epoch reads, hit rate, queries and latency, and what hit the limit first |
 | [`shared-reader.md`](shared-reader.md) | *planned* (#232): one reader per organisation, its window, the hand-over from replay to live, slow connections, and what should decide whether to build it |
 | [`shared-reader-growth.md`](shared-reader-growth.md) | *planned*: how the shared reader grows into a channel interest index and bounded replay, and its implementation issues |
-| [`unread-counts.md`](unread-counts.md) | current read-state storage; planned counts, and what they cost |
+| [`unread-counts.md`](unread-counts.md) | read-state storage and the counting statements between the modules |
+| [`unread-count-costs.md`](unread-count-costs.md) | what the counts cost, expected load, fragmentation and the unread benchmark |
 | [`unread-writes.md`](unread-writes.md) | how read ranges are written: the current feed, topic-view, branch-notice and posting writes |
 | [`unread-benchmark-results.md`](unread-benchmark-results.md) | the read-range benchmark's results (#283) and the go/no-go decision |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
@@ -49,7 +51,7 @@ Read the file for the area you change:
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),
-[org](../api/org.txt), [conversation](../api/conversation.txt) and [unread](../api/unread.txt).
+[org](../api/org.txt), [conversation](../api/conversation.txt), [typing](../api/typing.txt) and [unread](../api/unread.txt).
 Run `make api` after an API or doc-comment change; `make check` compares them
 without rewriting files. Entries and members are sorted by name, with signatures
 and first doc sentences; unexported declarations and their members are omitted.

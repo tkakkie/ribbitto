@@ -39,7 +39,7 @@ func TestUnnestFromArguments(t *testing.T) {
 		{"decorated_parameter", "unnest(sqlc.arg(DISTINCT lo)::bigint[])", argument},
 		{"decorated_call", "unnest(DISTINCT sqlc.arg(lo)::bigint[])", call},
 		{"lateral", "LATERAL unnest(sqlc.arg(lo)::bigint[])", relation},
-		{"ordinality", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY", relation},
+		{"ordinality", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY", "unsupported unnest ordinality: requires alias with two columns"},
 		{"rows_from", "ROWS FROM(unnest(sqlc.arg(lo)::bigint[]))", relation},
 		{"column_definition", "unnest(sqlc.arg(lo)::bigint[]) AS b(lo bigint)", relation},
 	} {
@@ -127,5 +127,68 @@ func checkUnnestFrom(t *testing.T, sql, want string, count int) {
 		return nil
 	}}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestUnnestOrdinalityArguments(t *testing.T) {
+	for _, tc := range []struct{ name, relation, want string }{
+		{"single", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value, n)", ""},
+		{"uuid", "unnest(sqlc.arg('id')::UUID[]) WITH ORDINALITY AS a(value, n)", ""},
+		{"multi_argument", "unnest(sqlc.arg(lo)::bigint[], sqlc.arg(hi)::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest ordinality: requires one argument"},
+		{"no_alias", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY", "unsupported unnest ordinality: requires alias with two columns"},
+		{"zero_columns", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a", "unsupported unnest ordinality: requires alias with two columns"},
+		{"one_column", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value)", "unsupported unnest ordinality: requires alias with two columns"},
+		{"three_columns", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value, n, extra)", "unsupported unnest ordinality: requires alias with two columns"},
+		{"lateral", "LATERAL unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest relation shape"},
+		{"rows_from", "ROWS FROM(unnest(sqlc.arg(lo)::bigint[])) WITH ORDINALITY AS a(value, n)", "unsupported unnest relation shape"},
+		{"column_definition", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value bigint, n bigint)", "unsupported unnest relation shape"},
+		{"column", "unnest(lo::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
+		{"literal", "unnest('{1}'::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
+		{"computed", "unnest(lower(sqlc.arg(lo))::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
+		{"positional", "unnest($1::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
+		{"text", "unnest(sqlc.arg(lo)::text[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
+		{"qualified_uuid", "unnest(sqlc.arg(lo)::pg_catalog.uuid[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
+		{"sized", "unnest(sqlc.arg(lo)::bigint[2]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, sql := range []string{
+				"SELECT * FROM " + tc.relation,
+				"WITH b AS (SELECT * FROM " + tc.relation + ") SELECT * FROM b",
+				"INSERT INTO message(id) SELECT value FROM " + tc.relation,
+			} {
+				checkUnnestFrom(t, sql, tc.want, 1)
+			}
+		})
+	}
+}
+
+func TestUnnestOrdinalityRelations(t *testing.T) {
+	a := "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value, n)"
+	b := "unnest(sqlc.arg('hi')::uuid[]) WITH ORDINALITY AS b(value, n)"
+	joined := a + " JOIN " + b + " ON a.n = b.n"
+	tables := joined + " JOIN message m ON true JOIN member k ON true"
+	for _, tc := range []struct{ name, sql, want string }{
+		{"select_join", "SELECT a.value, b.value FROM " + joined, ""},
+		{"beside_allowed", "SELECT unnest(sqlc.arg(lo)::bigint[]) FROM " + a, "unsupported function unnest: requires unqualified FROM call"},
+		{"CTE_join", "WITH pairs AS (SELECT a.value, b.value AS id FROM " + joined + ") SELECT * FROM pairs", ""},
+		{"insert_CTE_join", "WITH pairs AS (SELECT a.value, b.value AS id FROM " + joined + ") INSERT INTO message(id) SELECT id FROM pairs", ""},
+		{"update_FROM", "UPDATE message m SET id=a.value FROM " + a + " WHERE m.organization_id = $1", ""},
+		{"scoped_tables", "SELECT m.id FROM " + tables + " WHERE m.organization_id = $1 AND k.organization_id = $1", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, arrayType := range []string{"mixed", "bigint", "uuid"} {
+				sql := tc.sql
+				if arrayType == "bigint" {
+					sql = strings.ReplaceAll(sql, "uuid", "bigint")
+				} else if arrayType == "uuid" {
+					sql = strings.ReplaceAll(sql, "bigint", "uuid")
+				}
+				calls := 2
+				if tc.name == "update_FROM" {
+					calls = 1
+				}
+				checkUnnestFrom(t, sql, tc.want, calls)
+			}
+		})
 	}
 }

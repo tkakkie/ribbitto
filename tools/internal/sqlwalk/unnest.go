@@ -5,7 +5,8 @@ import "fmt"
 // UnnestFrom returns the locations of permitted unnest calls and rejects all other
 // unnest shapes. Only SELECT and UPDATE FROM calls with bigint[] or uuid[]
 // sqlc.arg parameters are eligible; expressions cannot inherit permission from
-// a nearby allowed call.
+// a nearby allowed call. WITH ORDINALITY requires one argument and two named
+// output columns, so parallel arrays can be joined by position.
 // Other functions, table ownership and organisation scope remain caller policies.
 func UnnestFrom(tree any, bigints map[float64]bool) (map[float64]bool, error) {
 	calls := map[float64]bool{}
@@ -30,8 +31,16 @@ func UnnestFrom(tree any, bigints map[float64]bool) (map[float64]bool, error) {
 		if len(List(f["funcname"])) != 1 || Names(f["funcname"]) != "unnest" {
 			return nil
 		}
-		if r["lateral"] == true || r["ordinality"] == true || r["is_rowsfrom"] == true || r["coldeflist"] != nil || len(Object(items[1])) != 0 {
+		if r["lateral"] == true || r["is_rowsfrom"] == true || r["coldeflist"] != nil || len(Object(items[1])) != 0 {
 			return fmt.Errorf("unsupported unnest relation shape")
+		}
+		if r["ordinality"] == true {
+			if len(List(f["args"])) != 1 {
+				return fmt.Errorf("unsupported unnest ordinality: requires one argument")
+			}
+			if len(List(Object(r["alias"])["colnames"])) != 2 {
+				return fmt.Errorf("unsupported unnest ordinality: requires alias with two columns")
+			}
 		}
 		// Reject call decorations rather than inheriting aggregate or window semantics.
 		if len(f) != 4 || f["funcformat"] != "COERCE_EXPLICIT_CALL" || len(List(f["args"])) == 0 {

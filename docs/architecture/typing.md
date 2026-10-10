@@ -3,14 +3,31 @@
 `internal/typing` owns memory-only state per process, with no tables, store,
 wiring package, event kinds or HTML. It imports only kernel IDs and realtime's
 interest type for generation notifications. The summary contract is current
-(#784); expiry/stream lifetime (#785), authorized ingress (#787), delivery
+(#784–#785); authorized ingress (#787), delivery
 (#788) and page integration (#789–#790) are subsequent parts of #288.
 
 `Start` takes trusted organisation, channel, nonzero composing topic and member
 identity (display name and handle); callers must resolve and authorize them.
 `Stop` removes exactly that member/topic activity and is idempotent. Repeated
-starts preserve the captured identity and order and raise nothing. No timer,
-stream count, HTTP signal or rendering is implemented here.
+starts extend the five-second deadline, preserving captured identity, order
+and generations. Owner timers expire activity without reads; timer identity
+under the state lock prevents an already-running callback from clearing a
+refresh or a stopped/restarted activity. HTTP ingress and rendering follow.
+
+`Open` counts accepted streams by organisation, member and resolved channel.
+A signal without a matching stream creates no state. Interests and selected
+topic do not affect keeping state; delivery will separately check interest,
+frame scope and authorization (#788). Closing one of up to 16 streams preserves
+activity while another matches; last close immediately stops all that member’s
+topics in that channel. Cleanup is idempotent and shares the signal/timer lock,
+so a racing signal cannot revive activity after last close. Other channels and
+organisations, and presence’s independent organisation counts and 30-second
+grace, are unaffected. Streams with no channel take no typing count.
+
+Web calls `Streaming.StreamOpened` only after registration and the session
+re-check succeed, supplying the resolved channel. `cmd/ribbitto` constructs
+one typing state, exposed through `Streaming.Typing` for subsequent ingress
+and delivery consumers, and shares it with this lifecycle hook.
 
 Each channel feed and topic has a complete distinct-member set, its count,
 four latest visible starts and last-change generation. A member active in two

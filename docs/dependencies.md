@@ -29,6 +29,7 @@ cmd/ribbitto -> internal/platform/postgres
 cmd/ribbitto -> internal/presence
 cmd/ribbitto -> internal/realtime
 cmd/ribbitto -> internal/realtime/realtimepg
+cmd/ribbitto -> internal/typing
 cmd/ribbitto -> internal/unread
 cmd/ribbitto -> internal/unread/unreadpg
 cmd/ribbitto -> internal/web
@@ -125,6 +126,7 @@ internal/web -> internal/kernel
 internal/web -> internal/org
 internal/web -> internal/presence
 internal/web -> internal/realtime
+internal/web -> internal/typing
 internal/web -> internal/unread
 internal/web -> internal/web/i18n
 internal/web -> internal/web/middleware

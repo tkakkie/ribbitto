@@ -28,6 +28,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/presence"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
+	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 	"github.com/tkakkie/ribbitto/internal/web"
@@ -325,8 +326,12 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		// change, so the TTL only bounds memory.
 		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, orgpg.BoundsIn, kinds), config.hub, 1024, time.Minute)
 		state := presence.New(config.hub)
+		typingState := typing.New(config.hub)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout,
-			Presence: state, StreamOpened: state.Open,
+			Presence: state, Typing: typingState, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
+				closePresence, closeTyping := state.Open(organizationID, memberID), typingState.Open(organizationID, memberID, channelID)
+				return func() { closePresence(); closeTyping() }
+			},
 			Owners: map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestPresence: web.NewPresenceOwner(ctx, state)}}
 	}
 	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, postingNotifier)

@@ -20,6 +20,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -427,21 +428,28 @@ func TestOpenStreamCleanup(t *testing.T) {
 				hub.CancelAll()
 			}
 			counts := 0
-			p := channelPages{stream: &Streaming{Lifetime: t.Context(), Hub: hub, Sessions: laterSession{hub: hub, session: live, err: tt.resolveErr, seen: &seen}, StreamOpened: func(organizationID, memberID kernel.ID) func() {
-				if organizationID != (kernel.ID{9}) || memberID != (kernel.ID{3}) {
+			state := typing.New(hub)
+			place, person := typing.Place{Channel: kernel.ID{7}, Topic: kernel.ID{8}}, typing.Typist{Member: kernel.ID{3}}
+			p := channelPages{stream: &Streaming{Lifetime: t.Context(), Hub: hub, Sessions: laterSession{hub: hub, session: live, err: tt.resolveErr, seen: &seen}, Typing: state, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
+				if organizationID != (kernel.ID{9}) || memberID != (kernel.ID{3}) || channelID != place.Channel {
 					t.Fatalf("presence scope: %v/%v", organizationID, memberID)
 				}
 				counts++
-				return sync.OnceFunc(func() { counts-- })
+				closeTyping := state.Open(organizationID, memberID, channelID)
+				return sync.OnceFunc(func() { counts--; closeTyping() })
 			}}}
 			r := httptest.NewRequest(http.MethodGet, "/events?want=sidebar", nil)
 			if tt.cookie {
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			}
 			w := httptest.NewRecorder()
-			ctx, cleanup, ok := p.openStream(w, r, kernel.ID{9}, kernel.ID{1}, kernel.ID{3}, live)
+			ctx, cleanup, ok := p.openStream(w, r, kernel.ID{9}, kernel.ID{1}, kernel.ID{3}, place.Channel, live)
 			if cleanup != nil {
 				t.Cleanup(cleanup)
+			}
+			state.Start(kernel.ID{9}, place, person)
+			if got := state.Read(kernel.ID{9}, place, kernel.ID{}); (len(got.Typists) == 1) != ok {
+				t.Fatalf("typing accepted=%t, snapshot=%+v", ok, got)
 			}
 			if tt.wantStatus != 0 {
 				if ok || ctx != nil || cleanup != nil || w.Code != tt.wantStatus {
@@ -463,6 +471,9 @@ func TestOpenStreamCleanup(t *testing.T) {
 				if !errors.Is(context.Cause(ctx), context.Canceled) {
 					t.Fatalf("cleanup cause = %v, want context.Canceled", context.Cause(ctx))
 				}
+			}
+			if got := state.Read(kernel.ID{9}, place, kernel.ID{}); len(got.Typists) != 0 {
+				t.Fatalf("typing survived cleanup: %+v", got)
 			}
 			if n := hub.Connections(); n != 0 || counts != 0 {
 				t.Fatalf("%d connections, %d presence counts still registered", n, counts)

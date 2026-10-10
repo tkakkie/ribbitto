@@ -114,16 +114,16 @@ without a lost wake-up or registry lock.
 
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
 pages hold one organisation stream with [interests](streaming.md#stream-scope).
-Delivery, sink and presence are current (#736, #737, #766–#768); typing (#288)
-remains planned. Only visible transitions raise generations.
+Delivery, sink, presence and typing state are current; typing signals and
+delivery are planned (#288). Only visible transitions raise generations.
 
 - **Owners.** Presence counts accepted streams through web's lifecycle seam,
   independent of interests, and marks members offline 30 s after the last
   close. A reconnect in that window cancels expiry without a transition.
   Bounded member snapshots return a process/generation token
   from one locked read; transitions publish state before raising
-  the organisation generation. Typing (#288) will keep
-  channel/topic state until a few seconds after the last signal.
+  the organisation generation. Typing state ends 5 s after
+  the last signal or when the last channel stream closes.
   `realtime.EphemeralOwner` returns current state and its represented
   generation; web adapters render feature state. The subscription carries
   the opaque presence token. `cmd/ribbitto` wires one presence state to pages, stream counts and web's adapter.

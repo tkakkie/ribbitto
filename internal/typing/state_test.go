@@ -21,7 +21,7 @@ func TestTransitions(t *testing.T) {
 	var raises int64
 	var selected Place
 	var active bool
-	s = New(generationFunc(func(id kernel.ID, kind realtime.Interest, generation int64) {
+	s = testState(t, generationFunc(func(id kernel.ID, kind realtime.Interest, generation int64) {
 		raises++
 		o := s.organizations[id]
 		p, feed := o.places[selected], o.places[Place{Channel: a.Channel}]
@@ -32,6 +32,7 @@ func TestTransitions(t *testing.T) {
 			t.Fatal("notification preceded publication or raised the wrong level")
 		}
 	}))
+	s.Open(org, person.Member, a.Channel)
 	for _, tt := range []struct {
 		place Place
 		start bool
@@ -74,7 +75,9 @@ func TestScopes(t *testing.T) {
 			case "member":
 				other.Member = kernel.ID{9}
 			}
-			s := New(realtime.NewHub())
+			s := testState(t, realtime.NewHub())
+			s.Open(org, person.Member, place.Channel)
+			s.Open(otherOrg, other.Member, otherPlace.Channel)
 			s.Start(org, place, person)
 			s.Stop(otherOrg, otherPlace, other.Member)
 			before := s.Read(org, place, kernel.ID{})
@@ -105,9 +108,10 @@ func TestScopes(t *testing.T) {
 }
 
 func TestCandidatesAndReadWork(t *testing.T) {
-	s := New(realtime.NewHub())
+	s := testState(t, realtime.NewHub())
 	org, place := kernel.ID{1}, Place{kernel.ID{2}, kernel.ID{3}}
 	for i := byte(1); i <= 6; i++ {
+		s.Open(org, kernel.ID{i}, place.Channel)
 		s.Start(org, place, Typist{Member: kernel.ID{i}, DisplayName: string(rune('A' + i))})
 	}
 	check := func(viewer byte, want []byte, remaining int) Snapshot {
@@ -143,6 +147,7 @@ func TestCandidatesAndReadWork(t *testing.T) {
 	}
 	for i := 1; i <= 10000; i++ {
 		id := kernel.ID{byte(i), byte(i >> 8), 99}
+		s.Open(org, id, id)
 		s.Start(org, Place{Channel: id, Topic: id}, Typist{Member: id})
 		s.organizations[id] = nil
 		s.organizations[org].places[Place{Channel: id}].starts.Front().Value = nil
@@ -150,4 +155,21 @@ func TestCandidatesAndReadWork(t *testing.T) {
 	if after := check(4, []byte{3, 2, 1}, 0); after.Generation != before.Generation+10000 || after.PlaceGeneration != before.PlaceGeneration {
 		t.Fatal("unrelated growth changed selected snapshot")
 	}
+}
+
+// Summary fixtures leave activities alive; stop timers without new transitions
+// against their publication assertions or deliberately poisoned linked lists.
+func testState(t *testing.T, hub GenerationRaiser) *State {
+	t.Helper()
+	s := New(hub)
+	t.Cleanup(func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, streams := range s.streams {
+			for _, timer := range streams.topics {
+				timer.Stop()
+			}
+		}
+	})
+	return s
 }

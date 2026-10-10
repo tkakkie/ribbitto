@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -17,6 +18,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/presence"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
@@ -32,11 +34,13 @@ type Streaming struct {
 	Authorizer realtime.Authorizer
 	// Presence supplies the members page's snapshot, shared with its owner.
 	Presence *presence.State
+	// Typing is shared with subsequent signal and delivery consumers.
+	Typing *typing.State
 	// Owners adapts feature state to current frames.
 	Owners map[realtime.Interest]realtime.EphemeralOwner
 	// StreamOpened counts every accepted stream, regardless of interests.
-	// Its returned cleanup releases that member's count.
-	StreamOpened func(organizationID, memberID kernel.ID) func()
+	// Its returned cleanup releases organisation presence and channel typing counts.
+	StreamOpened func(organizationID, memberID, channelID kernel.ID) func()
 	// Sessions re-resolves the request's session after the stream has
 	// registered (see openStream).
 	Sessions middleware.SessionResolver
@@ -120,7 +124,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		http.NotFound(w, r)
 		return
 	}
-	ctx, cleanup, ok := p.openStream(w, r, m.Organization.ID, account.ID, m.Member.ID, session)
+	ctx, cleanup, ok := p.openStream(w, r, m.Organization.ID, account.ID, m.Member.ID, sub.Channel, session)
 	if !ok {
 		return
 	}
@@ -177,7 +181,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 // openStream keeps the register-then-re-check order that closes the race
 // with sign-out. On success the caller must
 // defer cleanup; on failure it has written the response and freed the slot.
-func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID, memberID kernel.ID, session identity.Session) (ctx context.Context, cleanup func(), ok bool) {
+func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID, memberID, channelID kernel.ID, session identity.Session) (ctx context.Context, cleanup func(), ok bool) {
 	limit := p.stream.MaxPerAccount
 	if limit <= 0 {
 		limit = DefaultMaxStreamsPerAccount
@@ -237,13 +241,13 @@ func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organiz
 	}
 	closed := func() {}
 	if p.stream.StreamOpened != nil {
-		closed = p.stream.StreamOpened(organizationID, memberID)
+		closed = p.stream.StreamOpened(organizationID, memberID, channelID)
 	}
-	return ctx, func() {
+	return ctx, sync.OnceFunc(func() {
 		cancel()
 		unregister()
 		closed()
-	}, true
+	}), true
 }
 
 func streamCancelled(w http.ResponseWriter, r *http.Request, ctx context.Context) {

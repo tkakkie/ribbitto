@@ -35,21 +35,25 @@ type State struct {
 	mu            sync.Mutex
 	hub           GenerationRaiser
 	organizations map[kernel.ID]*organization
+	streams       map[streamKey]*channelStreams
 }
 
 // New constructs memory-only state for the process's hub.
 func New(hub GenerationRaiser) *State {
-	return &State{hub: hub, organizations: make(map[kernel.ID]*organization)}
+	return &State{hub: hub, organizations: make(map[kernel.ID]*organization), streams: make(map[streamKey]*channelStreams)}
 }
 
 // Start adds one member/topic activity using server-resolved scope and identity.
-// Topic must be nonzero. An existing activity preserves its identity and order.
+// Topic must be nonzero and the member must have an accepted channel stream.
+// An existing activity extends expiry without changing its identity or order.
 func (s *State) Start(organizationID kernel.ID, place Place, typist Typist) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if place.Topic == (kernel.ID{}) {
+	streams := s.streams[streamKey{organizationID, typist.Member, place.Channel}]
+	if place.Topic == (kernel.ID{}) || streams == nil {
 		return
 	}
+	s.refresh(organizationID, place, typist.Member, streams)
 	o := s.organizations[organizationID]
 	if o == nil {
 		o = &organization{places: make(map[Place]*summary)}
@@ -71,6 +75,10 @@ func (s *State) Start(organizationID kernel.ID, place Place, typist Typist) {
 func (s *State) Stop(organizationID kernel.ID, place Place, memberID kernel.ID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.stop(organizationID, place, memberID)
+}
+
+func (s *State) stop(organizationID kernel.ID, place Place, memberID kernel.ID) {
 	o := s.organizations[organizationID]
 	if o == nil || place.Topic == (kernel.ID{}) {
 		return
@@ -78,6 +86,10 @@ func (s *State) Stop(organizationID kernel.ID, place Place, memberID kernel.ID) 
 	topic := o.places[place]
 	if topic == nil || topic.members[memberID] == nil {
 		return
+	}
+	if streams := s.streams[streamKey{organizationID, memberID, place.Channel}]; streams != nil {
+		streams.topics[place.Topic].Stop()
+		delete(streams.topics, place.Topic)
 	}
 	o.generation++
 	topic.stop(memberID, o.generation)

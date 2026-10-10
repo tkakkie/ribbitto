@@ -92,7 +92,9 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   the stream without moving the cursor. Presence waits 30 s
   after the last stream closes before marking a member offline (#766;
   delivery/display current in #768), so a reload does
-  not flicker.
+  not flicker. Typing has separate accepted-channel counts: its five-second
+  owner expiry and immediate last-channel-close cleanup have no grace
+  ([typing](typing.md)), independent of interests and selected topic.
 - The hub caps streams across all accounts and organisations in the process
   at `DefaultMaxStreams` (5,000; #623). `cmd/ribbitto` reads
   `RIBBITTO_MAX_STREAMS`: unset keeps that default; an explicit value must

@@ -217,10 +217,17 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 				// invoke user-defined functions with hidden table access.
 				switch name {
 				case "=", "<", ">", "<=", "+":
+				case "@>":
+					if n["kind"] != "AEXPR_OP" || !readSetParameter(n["lexpr"]) || !bigintOperand(n["rexpr"], bigints) {
+						return fmt.Errorf("unsupported containment: requires int8multirange sqlc.arg parameter and bigint expression")
+					}
 				default:
 					return fmt.Errorf("unsupported operator %s", name)
 				}
 			case "TypeCast":
+				if readSetParameter(map[string]any{"TypeCast": n}) {
+					return nil
+				}
 				// Embedded type records have no node tag for the walker.
 				n = n["typeName"].(map[string]any)
 				fallthrough

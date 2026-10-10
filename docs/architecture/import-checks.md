@@ -52,28 +52,31 @@ literal in `TestProductionOwnership` and is currently empty. Tablecheck's
 the shared `sqlwalk.ReasonRules` rejects empty reasons, pending markers and
 maintainer claims without provenance.
 Query expressions accept only `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower`.
-In FROM, both SQL gates also accept unqualified `unnest` with one or more
-`sqlc.arg(name)::bigint[]` or `sqlc.arg(name)::uuid[]` parameters, alone or mixed
-(identifier or string names), including in CTEs and INSERT SELECT. They supply
-candidate range bounds for set-based writes (#727) and channel/topic IDs for
-counts (#740), reading parameter values rather than tables. Each cast must use
-unqualified `bigint` or `uuid` and one unsized array dimension. Other functions,
-argument types, columns, literals, computed arguments and positions still fail;
-explicit LATERAL calls, ROWS FROM and column type definitions are not admitted.
-WITH ORDINALITY (#749) permits exactly one such array parameter and an alias
-naming exactly two columns: `unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)`
-(or `uuid[]`). SELECT and UPDATE FROM, checked CTEs and INSERT SELECT accept it.
-Parallel arrays may be joined on their ordinal columns in SELECT or a checked
-CTE; INSERT SELECT still reads a single source, so its join must be inside a CTE.
-This is needed because pinned sqlc v1.31.1 cannot generate multi-argument
-`unnest`: `function unnest(unknown, unknown) does not exist`. Go callers must check
-that parallel arrays have equal lengths and return an error before the statement
-runs; an ordinal join would otherwise silently drop unmatched positions.
-Table ownership, organisation predicates and the INSERT source restrictions in
-[database development](../database.md#database-development) still apply.
-Tools tests run uncached because Go does not track these inputs outside the tools module.
-Query operators are limited to unqualified `=`, `<`, `>`, `<=` and `+`, and cast
-types to unqualified `uuid`, `bigint` and `jsonb`, as used by production queries.
+Both SQL gates accept unqualified FROM `unnest` of one or more
+`sqlc.arg(name)::bigint[]` or `sqlc.arg(name)::uuid[]` parameters, alone or mixed,
+with identifier/string names, including CTEs and INSERT SELECT. Bounds support
+set-based writes (#727); channel/topic IDs support counts (#740).
+Casts require unqualified types and one unsized array dimension. Other functions,
+argument types, columns, literals, computed arguments and positions fail, as do
+explicit LATERAL, ROWS FROM and column type definitions.
+WITH ORDINALITY (#749) requires one array and an alias naming two columns:
+`unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)` (or `uuid[]`).
+SELECT, UPDATE FROM, CTEs and INSERT SELECT accept it. Parallel arrays
+can join on ordinals; INSERT SELECT's single-source rule puts that join in a CTE.
+Pinned sqlc v1.31.1 refuses multi-argument `unnest`:
+`function unnest(unknown, unknown) does not exist`. Go must reject unequal array
+lengths before execution; ordinal joins drop unmatched positions.
+Ownership, organisation predicates and
+[INSERT restrictions](../database.md#database-development) still apply.
+Query operators allow unqualified `=`, `<`, `>`, `<=`, `+`; casts allow
+unqualified `uuid`, `bigint`, `jsonb`. Tablecheck also accepts scalar
+`sqlc.arg(name)::int8multirange` (#743), with identifier/string names, and `@>`
+only with that exact cast on the left and a column or accepted expression cast
+to scalar `bigint` on the right (sqlc resolves column types). Negating
+`sqlc.arg(read_set)::int8multirange @> m.event_seq` lets #746's topic counts and
+#750's topic-view candidates exclude the read set in one statement.
+Bounds, typmods, qualification, `sqlc.narg`, range constructors/aggregates and
+other range types/operators fail.
 Migration Up sections have an explicit statement allowlist: CREATE TABLE,
 INDEX and SEQUENCE; ALTER TABLE ADD COLUMN, SET NOT NULL and ADD CONSTRAINT;
 UPDATE/INSERT backfills; functions and triggers (including constraint triggers).

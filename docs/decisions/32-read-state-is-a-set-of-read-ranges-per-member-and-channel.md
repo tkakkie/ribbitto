@@ -81,4 +81,4 @@ statements' query-gate additions are reviewed separately in #740–#743 and
 #749: UUID-array `unnest` parameters (#740, accepted), single-array `unnest`
 `WITH ORDINALITY` for parallel arrays (#749, accepted), `LATERAL` and derived
 relations (#741), `UNION ALL` (#742), and `int8multirange` parameters and
-containment (#743). The latter three remain planned.
+containment (#743, accepted). #741 and #742 remain planned.

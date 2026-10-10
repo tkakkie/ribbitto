@@ -20,3 +20,14 @@ RETURNING lo, hi;
 
 -- name: InsertReadRange :exec
 INSERT INTO read_range (organization_id, channel_id, member_id, lo, hi) VALUES ($1, $2, $3, $4, $5);
+
+-- name: FirstChannelReadRanges :many
+SELECT c.id::uuid AS channel_id, r.lo, r.hi
+FROM unnest(sqlc.arg(channel_ids)::uuid[]) AS c(id)
+CROSS JOIN LATERAL (
+  SELECT lo, hi FROM read_range
+  WHERE organization_id = sqlc.arg(organization_id)
+    AND member_id = sqlc.arg(member_id) AND channel_id = c.id
+  ORDER BY lo LIMIT 101
+) AS r
+ORDER BY c.id, r.lo;

@@ -32,8 +32,9 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   closes the old channel. A raise between a waiter's snapshot read and its
   select therefore wakes it, and no level regresses. The stream selects on
   the durable channel, only its declared kinds' generation channels, its
-  heartbeat deadline and context together. No owners raise generations or
-  send frames yet (#736); the hidden sink remains planned (#737). Register and
+  heartbeat deadline and context together. The writer reads owners
+  after each batch, with at most one frame and check per kind; production
+  owners remain planned (#287, #288), as does the hidden sink (#737). Register and
   RaiseIfActive still use the registry mutex for caps and active checks.
 
 - Stream authorization caches allows per distinct (account ID, organisation

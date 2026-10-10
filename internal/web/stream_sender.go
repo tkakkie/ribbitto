@@ -78,7 +78,10 @@ func (s *sseSender) Heartbeat(ctx context.Context) error {
 // the browser joins them with newlines, so a multi-line body survives.
 func (s *sseSender) Send(ctx context.Context, out realtime.Outgoing) error {
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "id: %d\nevent: %s\n", out.ID, out.Name)
+	if !out.Ephemeral {
+		fmt.Fprintf(&b, "id: %d\n", out.ID)
+	}
+	fmt.Fprintf(&b, "event: %s\n", out.Name)
 	data := strings.ReplaceAll(strings.ReplaceAll(string(out.Data), "\r\n", "\n"), "\r", "\n")
 	for _, line := range strings.Split(data, "\n") {
 		b.WriteString("data: ")

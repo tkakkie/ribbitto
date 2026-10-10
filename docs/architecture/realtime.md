@@ -105,26 +105,24 @@ the hub start empty ([Restoring a backup](../../README.md#restoring-a-backup)).
 
 ## Ephemeral generations
 
-The hub publishes a durable level and presence and typing generations per
-organisation as atomic level/channel snapshots with compare-and-swap
-([stream limits](stream-limits.md)). One writer waits on the durable level,
-its declared generations, heartbeat and context without a registry lock or
-lost wake-up. Wakes preserve the cursor and heartbeat deadline. No production
-owner raises generations or sends frames (#736).
+The hub publishes durable, presence and typing levels per organisation as
+atomic level/channel snapshots ([stream limits](stream-limits.md)). The single
+writer waits on the durable cursor, declared generations, heartbeat and context
+without a lost wake-up or registry lock.
 
-## Ephemeral state (planned, M4)
+## Ephemeral state
 
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
-every page already holds one organisation stream with [interests](streaming.md#stream-scope).
-Owners and frames are planned (#736); the sink is #737. Only visible changes
-will raise generations, including typing expiry from the owner's timer.
+each page holds one organisation stream with [interests](streaming.md#stream-scope).
+Delivery is current (#736); owners (#287, #288) and the sink (#737) remain
+planned. Only visible changes raise generations, including typing expiry.
 
-- **Owners.** Presence (#287) knows which members have a stream open in the
-  organisation, from the hub's registrations, and marks a member offline
-  about 30 s after their last stream closes. Typing (#288) knows who is
-  typing in which channel and topic, until a few seconds after their last
-  signal. `realtime` defines the interface the owners implement, as it does
-  for `Renderer` and `Authorizer`; `cmd/ribbitto` wires them.
+- **Owners.** Presence (#287) will read hub registrations and mark members
+  offline about 30 s after their last stream closes. Typing (#288) will keep
+  channel/topic state until a few seconds after the last signal.
+  `realtime.EphemeralOwner` returns current state and its represented
+  generation; web adapters render feature state. The subscription carries
+  the opaque presence token. `cmd/ribbitto` will wire the owners.
 - **Generations.** Each presence entry records the generation of its last
   change, and entries are kept in that order, so the changes after a
   generation are a suffix. An entry that went offline stays for a bounded
@@ -138,11 +136,14 @@ will raise generations, including typing expiry from the owner's timer.
   only its place's summary (a feed reads its channel's) and subtracts the
   viewer, found in that set in constant time, from the names and the count,
   so its work does not grow with typists or topics elsewhere.
-- **Delivery.** Planned (#736): after each durable batch and before waiting,
-  one frame without `id:` per advanced kind: up to 100 presence entries read
+- **Delivery.** After each durable batch and before waiting, at most
+  one frame without `id:` per advanced kind. Durable order and the server
+  cursor are unchanged; a backlog delays changes by at most one batch, and
+  empty or denied wakes preserve the heartbeat deadline since the last write.
+  The planned owners supply: up to 100 presence entries read
   from the changed suffix, or the place's typing indicator (at most three
-  names, then a count) when its summary changed. Presence entries render
-  once per member, state and language and are shared.
+  names, then a count) when its summary changed. Presence entries will
+  share renders per member, state and language.
 - **Reset.** A presence read whose start lies below the discard boundary,
   from another process's token, or past the frame's limit sends `reset`
   instead (decision 24), on connect or later; the page reloads and renders

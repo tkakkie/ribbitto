@@ -142,7 +142,7 @@ other = "Enter a channel name of 1–80 printable characters."
 ["channel.error.name_taken"]
 other = "A channel with this name already exists."
 
-[message.list]
+["message.list"]
 other = "Messages"
 
 ["message.body"]
@@ -204,3 +204,15 @@ other = "A topic with this name already exists. Choose it as the destination or 
 
 ["topic.branch_name_invalid"]
 other = "Enter a topic name of 1–80 printable characters."
+
+["people.title"]
+other = "Channel members"
+
+["people.back"]
+other = "Back to channel"
+
+["people.empty"]
+other = "No members on this page."
+
+["people.next"]
+other = "Next members"

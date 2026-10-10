@@ -132,6 +132,44 @@ func (q *Queries) GetMembershipBySlug(ctx context.Context, arg GetMembershipBySl
 	return i, err
 }
 
+const listMembers = `-- name: ListMembers :many
+SELECT id, account_id, handle FROM member
+WHERE organization_id = $1 AND ($2::uuid IS NULL OR id > $2::uuid)
+ORDER BY id LIMIT $3
+`
+
+type ListMembersParams struct {
+	OrganizationID pgtype.UUID
+	AfterID        pgtype.UUID
+	PageLimit      int32
+}
+
+type ListMembersRow struct {
+	ID        pgtype.UUID
+	AccountID pgtype.UUID
+	Handle    string
+}
+
+func (q *Queries) ListMembers(ctx context.Context, arg ListMembersParams) ([]ListMembersRow, error) {
+	rows, err := q.db.Query(ctx, listMembers, arg.OrganizationID, arg.AfterID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMembersRow
+	for rows.Next() {
+		var i ListMembersRow
+		if err := rows.Scan(&i.ID, &i.AccountID, &i.Handle); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lookupMembers = `-- name: LookupMembers :many
 SELECT id, account_id, handle FROM member
 WHERE organization_id = $1 AND id = ANY($2::uuid[])

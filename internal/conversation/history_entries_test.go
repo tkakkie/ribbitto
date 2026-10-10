@@ -172,3 +172,11 @@ func TestManyIncompleteBatch(t *testing.T) {
 		t.Fatalf("calls = %v, want only the batch read", f.calls)
 	}
 }
+
+func (*singleMessage) ListMembers(context.Context, kernel.ID, *kernel.ID, int32) ([]org.ListedMember, error) {
+	return nil, nil
+}
+
+func (*partialBatch) ListMembers(context.Context, kernel.ID, *kernel.ID, int32) ([]org.ListedMember, error) {
+	return nil, nil
+}

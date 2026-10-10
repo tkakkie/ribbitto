@@ -18,6 +18,10 @@ type Channel struct // Channel is a conversation identified by ID; Name is only 
   field IsDefault bool
   field Name string
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
+type ChannelMember struct // ChannelMember holds a channel member's names for display, never authorization.
+  field DisplayName string
+  field Handle string
+  field ID github.com/tkakkie/ribbitto/internal/kernel.ID
 type ChannelPage struct // ChannelPage is a channel, its sidebar and history read in one snapshot.
   field Channels []Channel
   field Current Channel
@@ -66,9 +70,18 @@ type EventSequenceIn func(github.com/tkakkie/ribbitto/internal/platform/postgres
 const KindMessagesMoved github.com/tkakkie/ribbitto/internal/realtime.EventKind = "messages.moved" // KindMessagesMoved is the kind of a branch's move, which conversation publishes and so owns (decision 26): the messages it moved, their channel, and the topics they left and joined (docs/domain/topics.md).
 const KindPosted github.com/tkakkie/ribbitto/internal/realtime.EventKind = "message.posted" // KindPosted is the kind of a message's posting, which conversation publishes and so owns (decision 26): its message, channel and posting-time topic.
 const MaxBranchMessages untyped int = 100 // MaxBranchMessages bounds how many messages one branch may move, so its transaction and its event payload stay small.
-type MemberDirectory interface // MemberDirectory is the author lookup the page reader needs from org.
+type MemberDirectory interface // MemberDirectory is the author lookup and bounded member listing the page reader needs from org.
+  func (MemberDirectory).ListMembers(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, int32) ([]github.com/tkakkie/ribbitto/internal/org.ListedMember, error) // ListMembers returns a bounded ID-ordered page after the optional member ID.
   func (MemberDirectory).LookupMembers(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberIDs []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]github.com/tkakkie/ribbitto/internal/org.DirectoryEntry, error)
 type MemberDirectoryIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) MemberDirectory // MemberDirectoryIn binds a member directory to the caller's snapshot, so the authors are read in the same snapshot as the messages they wrote.
+const MemberPageSize untyped int = 100 // MemberPageSize bounds the members shown and resolved on each page.
+type MembersPage struct // MembersPage is the channel context, sidebar, members and stream cursor from one snapshot.
+  field Channels []Channel
+  field Current Channel
+  field EventCursor *int64
+  field Members []ChannelMember
+  field Next *github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Topics []Topic
 type Message struct // Message is a plain-text post identified by ID.
   field Body string
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
@@ -113,6 +126,7 @@ type ReadStore interface // ReadStore is conversation's reads in the caller's sn
 type ReadStoreIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) ReadStore // ReadStoreIn binds conversation's reads to the caller's snapshot.
 type Reader struct // Reader owns the page, single-message and batch snapshots across conversation, org and identity through factories bound to the same read-only snapshot.
   func (*Reader).Many(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, ids []github.com/tkakkie/ribbitto/internal/kernel.ID) (entries []Entry, err error) // Many reads a move's bounded message batch and directories in one snapshot.
+  func (*Reader).Members(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, after *github.com/tkakkie/ribbitto/internal/kernel.ID) (page MembersPage, err error) // Members reads a bounded channel membership page.
   func (*Reader).One(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64) (entry Entry, err error) // One reads one message, its author names and topic in a read-only snapshot.
   func (*Reader).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64) (page ChannelPage, err error) // Page reads channel or topic history with the snapshot's event cursor, including older pages with a before bound.
 func RouteMoved(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteMoved is messages.moved's realtime.Router: the channel and both topics, so a view of either sees the move.

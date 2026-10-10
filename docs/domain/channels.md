@@ -20,6 +20,15 @@ example `(organization_id, parent_id, name)`; nothing may rely on a name
 being unique across the organisation. A duplicate name is a user-facing
 error. Every member may create channels: in the MVP all channels are public.
 
+## Channel members
+
+The channel header links to a members page that retains the sidebar and links
+back to the channel. Public channels include every organisation member; one
+channel-members use case keeps that rule ready to narrow for private channels.
+Only organisation members can open it; everyone else gets 404. The list shows
+[display names and handles](names.md), 100 per page in member-ID order with
+plain next-page links. It has no live list updates; presence is separate (#287).
+
 ## The default channel
 
 **Every organisation has exactly one default channel.** It is found by

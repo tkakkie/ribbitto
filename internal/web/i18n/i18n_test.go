@@ -37,6 +37,39 @@ func TestCatalogueParity(t *testing.T) {
 	}
 }
 
+// Templates look messages up by their dotted ID, so every catalogue entry must
+// be a quoted ["id"] table with other = ...: a nested [section] table only
+// resolves by accident of the parser, and the files must stay uniform.
+func TestCatalogueMessagesResolve(t *testing.T) {
+	c, err := New(slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lang := range []string{"en", "ja"} {
+		raw, err := locales.ReadFile("locales/" + lang + ".toml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err := c.bundle.LoadMessageFileFS(locales, "locales/"+lang+".toml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		handler := c.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			for _, message := range file.Messages {
+				if !bytes.Contains(raw, []byte("[\""+message.ID+"\"]\nother = ")) {
+					t.Errorf("%s: %s is not written as [\"%s\"] with other", lang, message.ID, message.ID)
+				}
+				if got := T(r.Context(), message.ID); got != message.Other {
+					t.Errorf("%s: T(%q) = %q, want %q", lang, message.ID, got, message.Other)
+				}
+			}
+		}))
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("Accept-Language", lang)
+		handler.ServeHTTP(httptest.NewRecorder(), r)
+	}
+}
+
 func TestMessageFallback(t *testing.T) {
 	var logs bytes.Buffer
 	c, err := New(slog.New(slog.NewTextHandler(&logs, nil)))

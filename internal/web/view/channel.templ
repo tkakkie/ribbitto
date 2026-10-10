@@ -38,6 +38,7 @@ type ChannelPage struct {
 	Body, BodyError           string
 	BranchError, BranchName   string
 	Messages                  []Message
+	Members                   *MemberPage
 	// PostedMessageID correlates a successful enhanced post with stream delivery.
 	PostedMessageID *kernel.ID
 	// Older reports that messages before Messages[0] exist.
@@ -94,11 +95,11 @@ func olderURL(page ChannelPage) string {
 // streamURL declares the page's interests independently of its history URL.
 func streamURL(page ChannelPage) string {
 	want := "sidebar"
-	if page.Before == 0 {
+	if page.Before == 0 && page.Members == nil {
 		want += ",messages,typing"
 	}
 	endpoint := fmt.Sprintf("/organizations/%s/events?after=%d&want=%s&channel=%s", page.Organization.Slug, *page.EventCursor, want, idValue(page.Current.ID))
-	if page.Before == 0 && page.Topic != nil {
+	if page.Before == 0 && page.Members == nil && page.Topic != nil {
 		endpoint += "&topic=" + idValue(page.Topic.ID)
 	}
 	return endpoint
@@ -108,6 +109,9 @@ func streamURL(page ChannelPage) string {
 // the view model.
 templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 	{{ title := page.Current.Name + " · " + page.Organization.Name }}
+	if page.Members != nil {
+		{{ title = i18n.T(ctx, "people.title") + " · " + title }}
+	}
 	if page.Topic != nil {
 		{{ title = topicName(ctx, *page.Topic) + " · " + title }}
 	}
@@ -135,7 +139,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					<ul class="flex flex-col gap-1">
 						for _, c := range page.Channels {
 							<li>
-								if c.ID == page.Current.ID && page.Topic == nil {
+								if c.ID == page.Current.ID && page.Topic == nil && page.Members == nil {
 									<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, c.ID)) } aria-current="page" class="block break-words rounded-sm border-l-3 border-brand bg-selected px-3 py-2 font-semibold text-on-selected">{ c.Name }</a>
 								} else {
 									<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, c.ID)) } class="block break-words rounded-sm border-l-3 border-transparent px-3 py-2 text-fg hover:bg-surface">{ c.Name }</a>
@@ -179,57 +183,63 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					@SignOutButton()
 				</footer>
 			</aside>
-			<main id="conversation" class="flex min-w-0 flex-1 flex-col bg-bg">
-				<header class="shrink-0 border-b border-border px-6 py-3">
-					<h1 class="break-words text-title font-semibold">
-						if page.Topic != nil {
-							{ topicName(ctx, *page.Topic) }
-						} else {
-							{ page.Current.Name }
-						}
-					</h1>
-				</header>
-				<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="min-h-0 flex-1 overflow-y-auto">
-					// Always present, empty on the oldest page: loading older
-					// messages replaces it out of band with the next control.
-					<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
-						if page.Older {
-							<p class="flex justify-center px-6 pt-4"><a href={ templ.SafeURL(olderURL(page)) } hx-get={ olderURL(page) } hx-target="#message-items" hx-swap="afterbegin" hx-select="#message-items > li" hx-select-oob="#load-older" class="inline-flex min-h-11 items-center rounded-md border border-border-strong px-3 py-2 text-fg hover:bg-surface">{ i18n.T(ctx, "message.load_older") }</a></p>
+			if page.Members != nil {
+				@membersPanel(page)
+			} else {
+				<main id="conversation" class="flex min-w-0 flex-1 flex-col bg-bg">
+					<header class="shrink-0 border-b border-border px-6 py-3">
+						<h1 class="break-words text-title font-semibold">
+							if page.Topic != nil {
+								{ topicName(ctx, *page.Topic) }
+							} else {
+								{ page.Current.Name }
+							}
+						</h1>
+						<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID) + "/members") } class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "people.title") }</a>
+					</header>
+					<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="min-h-0 flex-1 overflow-y-auto">
+						// Always present, empty on the oldest page: loading older
+						// messages replaces it out of band with the next control.
+						<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
+							if page.Older {
+								<p class="flex justify-center px-6 pt-4"><a href={ templ.SafeURL(olderURL(page)) } hx-get={ olderURL(page) } hx-target="#message-items" hx-swap="afterbegin" hx-select="#message-items > li" hx-select-oob="#load-older" class="inline-flex min-h-11 items-center rounded-md border border-border-strong px-3 py-2 text-fg hover:bg-surface">{ i18n.T(ctx, "message.load_older") }</a></p>
+							}
+						</div>
+						<ol
+							id="message-items"
+							if page.Topic != nil {
+								data-topic={ idValue(page.Topic.ID) }
+							}
+							if page.EventCursor != nil && page.Before == 0 {
+								sse-swap="message,messages-moved"
+								hx-swap="beforeend"
+							}
+							class="peer flex flex-col gap-4 px-6 py-4 empty:hidden"
+						>
+							for _, entry := range page.Messages {
+								@MessageItem(entry)
+							}
+						</ol>
+						<div class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
+						if page.Before > 0 {
+							// Only an older page reached without JavaScript shows this.
+							<p class="px-6 pb-4 text-center"><a href={ templ.SafeURL(conversationURL(page)) } class="text-brand underline">{ i18n.T(ctx, "message.newest") }</a></p>
 						}
 					</div>
-					<ol
-						id="message-items"
-						if page.Topic != nil {
-							data-topic={ idValue(page.Topic.ID) }
-						}
-						if page.EventCursor != nil && page.Before == 0 {
-							sse-swap="message,messages-moved"
-							hx-swap="beforeend"
-						}
-						class="peer flex flex-col gap-4 px-6 py-4 empty:hidden"
-					>
-						for _, entry := range page.Messages {
-							@MessageItem(entry)
-						}
-					</ol>
-					<div class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
-					if page.Before > 0 {
-						// Only an older page reached without JavaScript shows this.
-						<p class="px-6 pb-4 text-center"><a href={ templ.SafeURL(conversationURL(page)) } class="text-brand underline">{ i18n.T(ctx, "message.newest") }</a></p>
-					}
-				</div>
-				<div id="message-status" role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
-				@branchForm(page)
-				@MessageComposer(page)
-			</main>
+					<div id="message-status" role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
+					@branchForm(page)
+					@MessageComposer(page)
+				</main>
+			}
 		</div>
-		// Every channel page loads these, outside #conversation: htmx will not
-		// run scripts in swapped fragments.
-		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
+		// Scripts stay outside swap targets; htmx will not run swapped scripts.
+		if page.Members == nil {
+			<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+			<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
+			<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
+			<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
+		}
 		<script defer src="/static/message-stream-v7.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
 

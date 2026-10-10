@@ -60,10 +60,12 @@ Identity is the gate for new names.
 the display name in its own `<bdi>` so right-to-left text cannot reorder the
 text around it. A blank-looking display name — including one stored before
 this rule — is converted to an empty name by web when building the channel
-page and message view models, and shown as `@handle` alone. Channel message
-authors use the same component for the page and stream.
-The page resolves member IDs to handles and account IDs through org, then
-looks up display names through identity, in two batches.
+page, members panel and message view models, and shown as `@handle` alone.
+Channel message authors use the same component for the page and stream.
+The channel page resolves member IDs to handles and account IDs through org,
+then looks up display names through identity, in two batches. The members
+page takes account IDs and handles from org's paged directory, then resolves
+display names through identity in one batch.
 
 ## Handles
 

@@ -116,18 +116,20 @@ column (`organization_id`, or `id` for `organization`). Ownership comes from mig
 columns, with `organization` scoped by `id` and an explicit installation-wide
 list; unknown ownership, scoped list entries (except singleton `setup`) and stale
 entries fail. Plain INSERT VALUES and INSERT SELECT with at most one source pass:
-a same-statement CTE or unqualified FROM `unnest(sqlc.arg(name)::bigint[], ...)`.
-The latter supplies parameter-only candidate bounds for set-based range writes
-(#727); aliases may name its output columns. It is not a table and needs no scope,
-but each table joined to it in a SELECT or UPDATE still needs its own WHERE scope.
+a same-statement CTE or unqualified FROM `unnest` of `sqlc.arg(name)::bigint[]`
+or `sqlc.arg(name)::uuid[]` parameters, alone or mixed. The latter supplies
+parameter-only candidate bounds for set-based range writes (#727) and
+channel/topic IDs for counts (#740); aliases may name its output columns. It is
+not a table and needs no scope, but each table joined to it in a SELECT or UPDATE
+still needs its own WHERE scope.
 CTEs containing it are checked normally. Tablecheck still rejects foreign writes.
 Subqueries in VALUES, RETURNING or the INSERT SELECT remain unsupported, as do
 joins (including comma joins) in that SELECT, physical-table INSERT SELECT reads,
 ON CONFLICT and other INSERT shapes; full INSERT checking belongs in a follow-up.
 CTE reads need no scope; outer joins, derived tables and set operations fail.
-Other function relations, unnest arguments other than `bigint[]` `sqlc.arg`
-parameters and unnest outside FROM fail, as do LATERAL, ROWS FROM, WITH ORDINALITY
-and column type definitions (see [import checks](architecture/import-checks.md)).
+Other function relations, unnest arguments other than unqualified, unsized
+`bigint[]` or `uuid[]` `sqlc.arg` parameters and unnest outside FROM fail, as do
+LATERAL, ROWS FROM, WITH ORDINALITY and column type definitions (see [import checks](architecture/import-checks.md)).
 `tools/scopecheck/allowlist.txt` uses `module.QueryName reason…`; stale, unnecessary
 and `PENDING MAINTAINER:` entries fail (case-insensitive, with any non-alphanumeric
 separator between the marker words). Migration statement/body ownership checks

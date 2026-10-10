@@ -74,4 +74,7 @@ ranges) before implementation starts; the maintainer decided go on
 2026-10-10 ([benchmark results](../architecture/unread-benchmark-results.md#decision)),
 not as a performance guarantee. One row per range, rather than an
 `int8multirange` column, keeps channel counts to the first gaps; the
-statements still need query-gate additions, reviewed in #284.
+statements' query-gate additions are reviewed separately in #740–#743:
+UUID-array `unnest` parameters (#740, accepted), `LATERAL` and derived
+relations (#741), `UNION ALL` (#742), and `int8multirange` parameters and
+containment (#743). The latter three remain planned.

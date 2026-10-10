@@ -6,4 +6,6 @@
 // Reading owns feed and topic transactions through an injected runner.
 // Topic preparation and batch unions retain the channel lock in the caller's
 // transaction; topic floors only rise, including when no new range is added.
+// Sidebar range reads share the caller's snapshot and derive bounded gaps
+// from at most 101 ranges per channel, retaining the join prefix without rows.
 package unread

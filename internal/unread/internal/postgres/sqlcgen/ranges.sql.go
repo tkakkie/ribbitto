@@ -60,6 +60,50 @@ func (q *Queries) DeleteRangeNeighbours(ctx context.Context, arg DeleteRangeNeig
 	return items, nil
 }
 
+const firstChannelReadRanges = `-- name: FirstChannelReadRanges :many
+SELECT c.id::uuid AS channel_id, r.lo, r.hi
+FROM unnest($1::uuid[]) AS c(id)
+CROSS JOIN LATERAL (
+  SELECT lo, hi FROM read_range
+  WHERE organization_id = $2
+    AND member_id = $3 AND channel_id = c.id
+  ORDER BY lo LIMIT 101
+) AS r
+ORDER BY c.id, r.lo
+`
+
+type FirstChannelReadRangesParams struct {
+	ChannelIds     []pgtype.UUID
+	OrganizationID pgtype.UUID
+	MemberID       pgtype.UUID
+}
+
+type FirstChannelReadRangesRow struct {
+	ChannelID pgtype.UUID
+	Lo        int64
+	Hi        int64
+}
+
+func (q *Queries) FirstChannelReadRanges(ctx context.Context, arg FirstChannelReadRangesParams) ([]FirstChannelReadRangesRow, error) {
+	rows, err := q.db.Query(ctx, firstChannelReadRanges, arg.ChannelIds, arg.OrganizationID, arg.MemberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FirstChannelReadRangesRow
+	for rows.Next() {
+		var i FirstChannelReadRangesRow
+		if err := rows.Scan(&i.ChannelID, &i.Lo, &i.Hi); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertChannelRead = `-- name: InsertChannelRead :exec
 INSERT INTO channel_read (organization_id, channel_id, member_id) VALUES ($1, $2, $3)
 `

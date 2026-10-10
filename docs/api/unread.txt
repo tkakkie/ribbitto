@@ -26,6 +26,7 @@ type FeedWriter struct // FeedWriter reads a channel through a cursor in the cal
   func (*FeedWriter).Read(ctx context.Context, tx github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, scope Scope, joinedEventSeq int64, cursor int64) error // Read unions the feed prefix through cursor with the member's persisted join prefix.
 func NewChannelCounts(ranges ChannelRangesIn, messages ChannelCounterIn) *ChannelCounts // NewChannelCounts builds channel counts with snapshot-bound factories.
 func NewFeedWriter(ranges RangeWriterIn, messages ChannelMessagesIn, cursor EventCursorIn) *FeedWriter // NewFeedWriter builds the feed write with transaction-bound factories.
+func NewReading(runner TxRunner, feed *FeedWriter, topic *TopicWriter) *Reading // NewReading builds reading with a runner and transaction-bound writers.
 func NewTopicWriter(prepare TopicPrepareIn, messages TopicMessagesIn, cursor EventCursorIn) *TopicWriter // NewTopicWriter builds the topic write with transaction-bound factories.
 type PreparedTopic interface // PreparedTopic holds read state and the channel lock until the caller completes its transaction.
   func (PreparedTopic).Add(context.Context, []int64, []int64, int64) error // Add unions candidate bounds and raises the floor, including an empty batch.
@@ -36,6 +37,9 @@ type Range struct // Range contains read sequences from Lo inclusive to Hi exclu
 type RangeWriter interface // RangeWriter unions read ranges with the member's persisted join prefix.
   func (RangeWriter).Merge(context.Context, Scope, int64, Range) error
 type RangeWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) RangeWriter // RangeWriterIn binds range writes to the caller's transaction.
+type Reading struct // Reading marks a feed or topic read in its own transaction.
+  func (*Reading).Feed(ctx context.Context, scope Scope, joinedEventSeq int64, cursor int64) error // Feed reads a resolved channel through cursor using org's persisted join sequence.
+  func (*Reading).Topic(ctx context.Context, scope TopicScope, joinedEventSeq int64, cursor int64) error // Topic reads a resolved topic through cursor using org's persisted join sequence.
 type Scope struct // Scope identifies one member's read state in one channel.
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
   field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
@@ -49,3 +53,5 @@ type TopicScope struct // TopicScope identifies one topic within a member's chan
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
 type TopicWriter struct // TopicWriter reads one topic through a cursor in the caller's transaction.
   func (*TopicWriter).Read(ctx context.Context, tx github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, scope TopicScope, joinedEventSeq int64, cursor int64) error // Read validates the cursor, prepares locked read state, queries candidates and unions their bounds while raising the floor.
+type TxRunner interface // TxRunner runs a read-state transaction owned by the use case.
+  func (TxRunner).InTx(context.Context, func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) error) error // InTx commits when fn returns nil and rolls back otherwise, returning fn's error or a failed commit.

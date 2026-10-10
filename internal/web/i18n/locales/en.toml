@@ -216,3 +216,6 @@ other = "No members on this page."
 
 ["people.next"]
 other = "Next members"
+
+["reading.mark"]
+other = "Mark as read"

@@ -103,7 +103,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, method, path, cookie, url.Values{"name": {"新しいチャンネル"}, "body": {"posted through the page"}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -147,6 +147,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			case "POST /channels/{channelID}", "POST /channels/{channelID}/topics/{topicID}":
 				if w.Code != 303 || w.Header().Get("Location") != path {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())
+				}
+			case "POST /channels/{channelID}/read", "POST /channels/{channelID}/topics/{topicID}/read":
+				if w.Code != http.StatusNotFound {
+					t.Fatalf("reading disabled: %d", w.Code)
 				}
 			case "GET /events":
 				// This suite runs without Services.Stream, so a member gets the

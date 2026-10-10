@@ -216,3 +216,6 @@ other = "このページにメンバーはいません。"
 
 ["people.next"]
 other = "次のメンバー"
+
+["reading.mark"]
+other = "既読にする"

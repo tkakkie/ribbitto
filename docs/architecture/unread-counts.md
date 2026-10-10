@@ -119,7 +119,7 @@ index, `R` ranges of the current channel at or above `P`:
   versus 0.070 ms before: enumerating moves sacrifices early exit.
   Above-floor filtering remains unbounded; #747 re-checks page load. Reproduce
   with
-  `RIBBITTO_FIRST_UNREAD_BENCH=1 go test -run '^TestFirstUnreadBench$' -v ./cmd/ribbitto`.
+  `RIBBITTO_FIRST_UNREAD_BENCH=1 go test -count=1 -run '^TestFirstUnreadBench$' -v ./cmd/ribbitto`.
 
 ## Writes
 

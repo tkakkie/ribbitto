@@ -126,7 +126,7 @@ func TestAccessEpochRecreationAndMigration(t *testing.T) {
 	migrator := pgtest.NewMigrator(t, pool)
 	migrator.UpTo(ctx, 9)
 	id := orgtest.Organization(t, pool, "acme", "Acme", 0)
-	migrator.Up(ctx)
+	migrator.UpTo(ctx, 10)
 	before := accessEpoch(t, pool, id)
 	other := orgtest.Organization(t, pool, "other", "Other", 0)
 	latest := accessEpoch(t, pool, other)
@@ -142,13 +142,13 @@ func TestAccessEpochRecreationAndMigration(t *testing.T) {
 	if before <= 0 || after <= latest || after <= before || accessEpoch(t, pool, id) != after {
 		t.Fatalf("recreated epoch=%d, old=%d, latest=%d", after, before, latest)
 	}
-	migrator.Down(ctx)
+	migrator.DownTo(ctx, 9)
 	var removed bool
 	requireNoError(t, pool.QueryRow(ctx, "SELECT to_regclass('organization_access_epoch_seq') IS NULL AND NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name='organization' AND column_name='access_epoch') AND NOT EXISTS (SELECT FROM pg_proc WHERE proname IN ('organization_access_guard','member_access_changed','member_access_truncated'))").Scan(&removed))
 	if !removed {
 		t.Fatal("down left access epoch objects")
 	}
-	migrator.Up(ctx)
+	migrator.UpTo(ctx, 10)
 }
 
 func TestAccessEpochColumnClassification(t *testing.T) {

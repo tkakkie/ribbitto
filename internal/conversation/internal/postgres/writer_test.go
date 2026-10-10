@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -182,7 +183,7 @@ func TestWriterBranchesIn(t *testing.T) {
 			posted.MemberID != f.alice || posted.Body != "moved" || posted.EventSeq != 1 || posted.CreatedAt.IsZero() {
 			t.Fatalf("InsertNotice = %+v, %v", posted, err)
 		}
-		if moved, err := writer.MoveMessages(ctx, f.acme, f.general, f.generalTopic, planning.ID, []kernel.ID{posted.ID}); err != nil || moved != 1 {
+		if moved, err := writer.MoveMessages(ctx, f.acme, f.general, f.generalTopic, planning.ID, []kernel.ID{posted.ID}, 2); err != nil || moved != 1 {
 			t.Fatalf("MoveMessages = %d, %v; want 1", moved, err)
 		}
 		var topic kernel.ID
@@ -210,7 +211,11 @@ func TestWriterMoveMessages(t *testing.T) {
 	planning := conversationtest.Topic(t, pool, f.acme, f.general, "Planning").ID
 	randomChannel := conversationtest.Channel(t, pool, f.acme, "random", false)
 	random, randomTopic := randomChannel.ID, randomChannel.DefaultTopicID
-	before, want := map[kernel.ID]kernel.ID{}, map[kernel.ID]kernel.ID{}
+	type messageState struct {
+		topic kernel.ID
+		moved pgtype.Int8
+	}
+	before, want := map[kernel.ID]messageState{}, map[kernel.ID]messageState{}
 	selected := []kernel.ID{{0xee}} // unknown
 	for i, m := range []struct{ organization, channel, topic, member, after kernel.ID }{
 		{f.acme, f.general, f.generalTopic, f.alice, planning},       // the only one that moves
@@ -221,25 +226,28 @@ func TestWriterMoveMessages(t *testing.T) {
 	} {
 		var id kernel.ID
 		fixture(t, pool, "INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq) VALUES ($1, $2, $3, $4, 'hello', $5) RETURNING id", []any{m.organization, m.channel, m.topic, m.member, i + 1}, &id)
-		before[id], want[id] = m.topic, m.after
+		before[id], want[id] = messageState{topic: m.topic}, messageState{topic: m.after}
+		if i == 0 {
+			want[id] = messageState{topic: m.after, moved: pgtype.Int8{Int64: 10, Valid: true}}
+		}
 		if i != 1 {
 			selected = append(selected, id)
 		}
 	}
-	move := func(organizationID, channelID kernel.ID) (moved int64) {
+	move := func(t *testing.T, organizationID, channelID kernel.ID) (moved int64) {
 		requireNoError(t, platform.InTx(ctx, pool, func(tx platform.Tx) error {
 			var err error
-			moved, err = writerIn(tx).MoveMessages(ctx, organizationID, channelID, f.generalTopic, planning, selected)
+			moved, err = writerIn(tx).MoveMessages(ctx, organizationID, channelID, f.generalTopic, planning, selected, 10)
 			return err
 		}))
 		return moved
 	}
-	topicsAre := func(want map[kernel.ID]kernel.ID, when string) {
+	messagesAre := func(t *testing.T, want map[kernel.ID]messageState, when string) {
 		t.Helper()
-		for id, topic := range want {
-			var got kernel.ID
-			if fixture(t, pool, "SELECT topic_id FROM message WHERE id = $1", []any{id}, &got); got != topic {
-				t.Fatalf("%s: message %v is in topic %v, want %v", when, id, got, topic)
+		for id, state := range want {
+			var got messageState
+			if fixture(t, pool, "SELECT topic_id, moved_event_seq FROM message WHERE id = $1", []any{id}, &got.topic, &got.moved); got != state {
+				t.Fatalf("%s: message %v = %+v, want %+v", when, id, got, state)
 			}
 		}
 	}
@@ -249,13 +257,47 @@ func TestWriterMoveMessages(t *testing.T) {
 		name                  string
 		organization, channel kernel.ID
 	}{{"another organisation", f.globex, f.general}, {"another channel", f.acme, random}} {
-		if moved := move(scope.organization, scope.channel); moved != 0 {
-			t.Fatalf("%s: moved = %d, want 0", scope.name, moved)
+		t.Run(scope.name, func(t *testing.T) {
+			if moved := move(t, scope.organization, scope.channel); moved != 0 {
+				t.Fatalf("%s: moved = %d, want 0", scope.name, moved)
+			}
+			messagesAre(t, before, scope.name)
+		})
+	}
+	t.Run("selected", func(t *testing.T) {
+		if moved := move(t, f.acme, f.general); moved != 1 {
+			t.Fatalf("moved = %d, want 1", moved)
 		}
-		topicsAre(before, scope.name)
+		messagesAre(t, want, "after the move")
+	})
+}
+
+// Up leaves existing messages unmoved; Down removes the column and its index.
+func TestMovedEventSeqMigration(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.NewEmpty(t)
+	ctx := t.Context()
+	migrator := pgtest.NewMigrator(t, pool)
+	migrator.UpTo(ctx, 10)
+	f := newFixtures(t, pool)
+	var id kernel.ID
+	fixture(t, pool, "INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq) VALUES ($1, $2, $3, $4, 'existing', 1) RETURNING id", []any{f.acme, f.general, f.generalTopic, f.alice}, &id)
+	migrator.UpTo(ctx, 11)
+	var moved pgtype.Int8
+	fixture(t, pool, "SELECT moved_event_seq FROM message WHERE id = $1", []any{id}, &moved)
+	if moved.Valid {
+		t.Fatalf("existing message has moved_event_seq %+v, want NULL", moved)
 	}
-	if moved := move(f.acme, f.general); moved != 1 {
-		t.Fatalf("moved = %d, want 1", moved)
+	var nullable, dataType, index string
+	fixture(t, pool, "SELECT is_nullable, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'message' AND column_name = 'moved_event_seq'", nil, &nullable, &dataType)
+	fixture(t, pool, "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'message_moved_event_seq_idx'", nil, &index)
+	if nullable != "YES" || dataType != "bigint" || index != "CREATE INDEX message_moved_event_seq_idx ON public.message USING btree (organization_id, topic_id, moved_event_seq) WHERE (moved_event_seq IS NOT NULL)" {
+		t.Fatalf("move schema: nullable %s, type %s, index %s", nullable, dataType, index)
 	}
-	topicsAre(want, "after the move")
+	migrator.DownTo(ctx, 10)
+	var removed bool
+	fixture(t, pool, "SELECT NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'message' AND column_name = 'moved_event_seq') AND to_regclass('public.message_moved_event_seq_idx') IS NULL", nil, &removed)
+	if !removed {
+		t.Fatal("Down kept the move column or index")
+	}
 }

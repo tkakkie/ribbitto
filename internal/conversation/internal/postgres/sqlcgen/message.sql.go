@@ -12,7 +12,7 @@ import (
 )
 
 const getMessage = `-- name: GetMessage :one
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND event_seq = $3
 `
 
@@ -34,12 +34,13 @@ func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message
 		&i.EventSeq,
 		&i.CreatedAt,
 		&i.TopicID,
+		&i.MovedEventSeq,
 	)
 	return i, err
 }
 
 const getMessages = `-- name: GetMessages :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND id = ANY($3::uuid[])
 ORDER BY event_seq DESC
 `
@@ -68,6 +69,7 @@ func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Mes
 			&i.EventSeq,
 			&i.CreatedAt,
 			&i.TopicID,
+			&i.MovedEventSeq,
 		); err != nil {
 			return nil, err
 		}
@@ -81,7 +83,7 @@ func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Mes
 
 const insertMessage = `-- name: InsertMessage :one
 INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq
 `
 
 type InsertMessageParams struct {
@@ -112,12 +114,13 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 		&i.EventSeq,
 		&i.CreatedAt,
 		&i.TopicID,
+		&i.MovedEventSeq,
 	)
 	return i, err
 }
 
 const listMessagesBefore = `-- name: ListMessagesBefore :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq FROM message
 WHERE organization_id = $1 AND channel_id = $2
   AND ($3::uuid IS NULL OR topic_id = $3::uuid)
   AND ($4::bigint IS NULL OR event_seq < $4::bigint)
@@ -157,6 +160,7 @@ func (q *Queries) ListMessagesBefore(ctx context.Context, arg ListMessagesBefore
 			&i.EventSeq,
 			&i.CreatedAt,
 			&i.TopicID,
+			&i.MovedEventSeq,
 		); err != nil {
 			return nil, err
 		}

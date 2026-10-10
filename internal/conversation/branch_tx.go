@@ -35,7 +35,7 @@ func (s *Brancher) run(ctx context.Context, organizationID, channelID, memberID 
 		if err != nil {
 			return err
 		}
-		moved, err := writer.MoveMessages(ctx, organizationID, channelID, source.ID, destination.ID, b.Messages)
+		moved, err := writer.MoveMessages(ctx, organizationID, channelID, source.ID, destination.ID, b.Messages, moveSeq)
 		if err != nil {
 			return err
 		}

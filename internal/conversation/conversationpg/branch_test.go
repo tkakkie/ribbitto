@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
@@ -50,21 +51,22 @@ func TestBranching(t *testing.T) {
 	if dest.Name != "design" || dest.ChannelID != acme.Channel.ID || !slices.Equal(notifier.raised, []raise{{acme.OrganizationID, before + 2, before + 2}}) || eventSeq(t, pool, acme.OrganizationID) != before+2 {
 		t.Fatalf("branch: %+v raising %+v; event_seq was %d", dest, notifier.raised, before)
 	}
-	rows, err := pool.Query(ctx, "SELECT id, topic_id, event_seq FROM message WHERE organization_id = $1 AND channel_id = $2 ORDER BY event_seq", acme.OrganizationID, acme.Channel.ID)
+	rows, err := pool.Query(ctx, "SELECT id, topic_id, event_seq, moved_event_seq FROM message WHERE organization_id = $1 AND channel_id = $2 ORDER BY event_seq", acme.OrganizationID, acme.Channel.ID)
 	requireNoError(t, err)
 	type row struct {
 		id, topic kernel.ID
 		seq       int64
+		moved     pgtype.Int8
 	}
 	var got []row
 	for rows.Next() {
 		var r row
-		requireNoError(t, rows.Scan(&r.id, &r.topic, &r.seq))
+		requireNoError(t, rows.Scan(&r.id, &r.topic, &r.seq, &r.moved))
 		got = append(got, r)
 	}
 	requireNoError(t, rows.Err())
-	if len(got) != 4 || got[0] != (row{posted[0].ID, dest.ID, posted[0].EventSeq}) || got[1] != (row{posted[1].ID, source, posted[1].EventSeq}) ||
-		got[2] != (row{posted[2].ID, dest.ID, posted[2].EventSeq}) || got[3].topic != source || got[3].seq != before+2 {
+	if len(got) != 4 || got[0] != (row{posted[0].ID, dest.ID, posted[0].EventSeq, pgtype.Int8{Int64: before + 1, Valid: true}}) || got[1] != (row{posted[1].ID, source, posted[1].EventSeq, pgtype.Int8{}}) ||
+		got[2] != (row{posted[2].ID, dest.ID, posted[2].EventSeq, pgtype.Int8{Int64: before + 1, Valid: true}}) || got[3].topic != source || got[3].seq != before+2 || got[3].moved.Valid {
 		t.Fatalf("messages after branching: %+v", got)
 	}
 	var body string
@@ -149,6 +151,15 @@ func TestBranching(t *testing.T) {
 	requireNoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM topic WHERE organization_id = $1 AND channel_id = $2", acme.OrganizationID, acme.Channel.ID).Scan(&listed))
 	if eventSeq(t, pool, acme.OrganizationID) != after || listed != 2 {
 		t.Fatalf("a refused branch changed something: event_seq %d (was %d), %d topics", eventSeq(t, pool, acme.OrganizationID), after, listed)
+	}
+	// A second move replaces the move sequence, never the posting sequence.
+	_, err = brancher.Branch(ctx, member, acme.Channel.ID, conversation.Branch{Messages: []kernel.ID{posted[0].ID}, From: dest.ID, To: &source}, func(conversation.Topic) string { return "moved back" })
+	requireNoError(t, err)
+	var topic kernel.ID
+	var original, moved int64
+	requireNoError(t, pool.QueryRow(ctx, "SELECT topic_id, event_seq, moved_event_seq FROM message WHERE id = $1", posted[0].ID).Scan(&topic, &original, &moved))
+	if topic != source || original != posted[0].EventSeq || moved != after+1 {
+		t.Fatalf("second move: topic %v, event_seq %d, moved_event_seq %d; want %v, %d, %d", topic, original, moved, source, posted[0].EventSeq, after+1)
 	}
 }
 
@@ -286,7 +297,7 @@ func TestBranchingPartlyStaleSelection(t *testing.T) {
 			}
 			before := readBranchState(t, pool, acme.OrganizationID)
 			// MoveMessages updates the valid row before detecting the stale
-			// selection, so refusing must undo that topic_id change too.
+			// selection, so refusing must undo both topic_id and moved_event_seq.
 			_, err = brancher.Branch(ctx, member, acme.Channel.ID, b, notice)
 			if !errors.Is(err, conversation.ErrBranchConflict) {
 				t.Fatalf("partly stale selection: %v, want %v", err, conversation.ErrBranchConflict)
@@ -298,6 +309,7 @@ func TestBranchingPartlyStaleSelection(t *testing.T) {
 
 type branchMessage struct {
 	id, topic kernel.ID
+	moved     pgtype.Int8
 }
 
 type branchState struct {
@@ -312,12 +324,12 @@ func readBranchState(t *testing.T, pool *pgxpool.Pool, org kernel.ID) branchStat
 		(SELECT count(*) FROM event_log WHERE organization_id = $1),
 		(SELECT count(*) FROM topic WHERE organization_id = $1)
 		FROM organization WHERE id = $1`, org).Scan(&state.seq, &state.events, &state.topics))
-	rows, err := pool.Query(t.Context(), "SELECT id, topic_id FROM message WHERE organization_id = $1 ORDER BY id", org)
+	rows, err := pool.Query(t.Context(), "SELECT id, topic_id, moved_event_seq FROM message WHERE organization_id = $1 ORDER BY id", org)
 	requireNoError(t, err)
 	defer rows.Close()
 	for rows.Next() {
 		var m branchMessage
-		requireNoError(t, rows.Scan(&m.id, &m.topic))
+		requireNoError(t, rows.Scan(&m.id, &m.topic, &m.moved))
 		state.messages = append(state.messages, m)
 	}
 	requireNoError(t, rows.Err())

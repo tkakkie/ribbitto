@@ -77,6 +77,7 @@ erDiagram
   bigint event_seq
   timestamp_with_time_zone created_at
   uuid topic_id FK
+  bigint moved_event_seq
 }
 "public.organization" {
   uuid id

@@ -224,7 +224,7 @@ func (*fakePostingWriter) InsertNotice(context.Context, kernel.ID, kernel.ID, ke
 	panic("posting fake: unexpected InsertNotice")
 }
 
-func (*fakePostingWriter) MoveMessages(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, []kernel.ID) (int64, error) {
+func (*fakePostingWriter) MoveMessages(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, []kernel.ID, int64) (int64, error) {
 	panic("posting fake: unexpected MoveMessages")
 }
 

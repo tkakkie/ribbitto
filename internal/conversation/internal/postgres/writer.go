@@ -101,11 +101,12 @@ func (w Writer) CreateTopic(ctx context.Context, organizationID, channelID kerne
 }
 
 // MoveMessages moves the messages still in the source topic, within the
-// organisation and channel, and returns how many moved.
-func (w Writer) MoveMessages(ctx context.Context, organizationID, channelID, fromTopicID, toTopicID kernel.ID, messageIDs []kernel.ID) (int64, error) {
+// organisation and channel, recording their latest move sequence.
+func (w Writer) MoveMessages(ctx context.Context, organizationID, channelID, fromTopicID, toTopicID kernel.ID, messageIDs []kernel.ID, movedEventSeq int64) (int64, error) {
 	moved, err := w.queries.MoveMessages(ctx, sqlcgen.MoveMessagesParams{
 		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID),
 		FromTopicID: uuid(fromTopicID), ToTopicID: uuid(toTopicID), MessageIds: uuids(messageIDs),
+		MovedEventSeq: pgtype.Int8{Int64: movedEventSeq, Valid: true},
 	})
 	if err != nil {
 		return 0, fmt.Errorf("moving messages: %w", err)

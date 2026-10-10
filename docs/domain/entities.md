@@ -41,7 +41,7 @@ erDiagram
 | `channel_read` | planned (M4) | `organization_id`, `channel_id`, `member_id` (one member's lock row in a channel; [`unread.md`](unread.md)) |
 | `read_range` | planned (M4) | `organization_id`, `channel_id`, `member_id`, `lo`, `hi` (read messages: `lo ≤ event_seq < hi`) |
 | `topic_read_floor` | planned (M4) | `organization_id`, `topic_id`, `member_id`, `channel_id`, `floor_seq` |
-| `message` | exists | `id`, `organization_id`, `channel_id`, `topic_id`, `member_id`, `body`, `event_seq`, `created_at`; planned: nullable `reply_to_message_id` ([`replies.md`](replies.md)), nullable `moved_event_seq` (M4, [`unread-counts.md`](../architecture/unread-counts.md)) |
+| `message` | exists | `id`, `organization_id`, `channel_id`, `topic_id`, `member_id`, `body`, `event_seq`, nullable `moved_event_seq` (latest move; [`unread-counts.md`](../architecture/unread-counts.md)), `created_at`; planned: nullable `reply_to_message_id` ([`replies.md`](replies.md)) |
 | `event_log` | exists | `organization_id`, `seq` (composite key), `kind`, nullable `audience_member_id`, IDs-only `data`, `created_at` |
 
 An event's NULL audience means organisation-wide; a non-NULL audience names

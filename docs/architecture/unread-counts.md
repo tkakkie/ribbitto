@@ -2,7 +2,8 @@
 
 *Planned* (M4, [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)):
 how read state is stored, written and counted, and what that costs. The
-rules are in [unread](../domain/unread.md).
+rules are in [unread](../domain/unread.md). The move column and its index
+already exist; the read-state tables and consumers below remain planned.
 
 ## Storage
 
@@ -24,9 +25,10 @@ own ranges, so the first range always starts at 0. A topic without a
 `topic_read_floor` row has no floor: its scan starts at `P` and it has no
 moved branch, which step 3 expresses as the floor `P − 1`. All keys include
 `organization_id`, with composite foreign keys to `member`, `channel` and
-`topic`. `conversation` extends `message` with a nullable
-`moved_event_seq`, the sequence of its latest move, written by branching in
-its transaction, with a partial index `(organization_id, topic_id,
+`topic`. `conversation` already stores nullable `message.moved_event_seq`,
+the sequence of its latest move (NULL until first moved). Branching writes
+it together with `topic_id` in its transaction, overwriting it on every
+move. Its partial index is `(organization_id, topic_id,
 moved_event_seq) WHERE moved_event_seq IS NOT NULL`.
 
 ## The API between the modules

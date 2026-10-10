@@ -128,6 +128,10 @@ func TestReadPost(t *testing.T) {
 		}
 		feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: tc.end}})
 		acceptanceCount(t, pool, 1, "SELECT count(*) FROM channel_read")
+		// The topic POST (run first) raised only its own topic's floor; the
+		// other topic's message 3 stayed outside its [0, 3) range.
+		acceptanceCount(t, pool, 1, "SELECT count(*) FROM topic_read_floor WHERE topic_id=$1 AND floor_seq=3", f.Channel.DefaultTopicID)
+		acceptanceCount(t, pool, 0, "SELECT count(*) FROM topic_read_floor WHERE topic_id=$1", topic.ID)
 		// Refusal after a successful write must preserve existing state as well.
 		w = request("POST", tc.base+"/read", token, "", url.Values{"cursor": {"6"}}, tc.hx)
 		if w.Code != 400 {

@@ -20,7 +20,7 @@ index below for everything else.
 | [`invariants.md`](invariants.md) | rules every piece of code and every migration must keep |
 | [`vocabulary.md`](vocabulary.md) | product labels, ordinary words and Japanese UI vocabulary |
 | [`validation.md`](validation.md) | input validation rules |
-| [`unread.md`](unread.md) | unread rules: read ranges, reading scopes, counts and the divider (storage, feed, topic and branch-notice reads current; HTTP callers, posting and counts planned, M4) |
+| [`unread.md`](unread.md) | unread rules: read ranges, reading scopes, counts and the divider (storage, feed, topic and branch-notice reads and the initial reading POST current; posting and counts planned, M4) |
 | [`unread-examples.md`](unread-examples.md) | worked examples of the unread rules: topic reads, moves, concurrent tabs, late messages; initial reading POSTs current; posting planned, M4 |
 | [`names.md`](names.md) | display names, handles, how members are shown |
 | [`channels.md`](channels.md) | channel identity, names and the default channel |

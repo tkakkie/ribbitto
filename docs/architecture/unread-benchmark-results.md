@@ -4,7 +4,7 @@ Results of `TestUnreadBench` (#283), which measures the statement shapes of
 [unread counts](unread-counts.md) under
 [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)
 before anything is built. How to run it is in
-[unread counts](unread-counts.md#running-the-benchmark). The maintainer
+[unread count costs](unread-count-costs.md#running-the-benchmark). The maintainer
 decided go on 2026-10-10 from these results (below).
 
 ## Run, 2026-10-10

@@ -14,7 +14,7 @@ both fail `make check` on a violating import:
   imports from this module are listed in the table by convention, not
   enforced);
 - the `view` rule forbids `internal/web/view` from importing `internal/identity`, `internal/org` or `internal/conversation`, including sub-packages (see [web layers](web-layers.md));
-- `identity`, `org`, `conversation`, `realtime` and `unread` cannot import
+- `identity`, `org`, `conversation`, `realtime`, `presence`, `typing` and `unread` cannot import
   `github.com/a-h/templ` (including sub-packages) or `html/template`;
 - `kernel` imports nothing internal; `platform` only `kernel`;
   `web` imports a module's root, never its store or wiring;

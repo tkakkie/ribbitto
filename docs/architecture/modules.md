@@ -8,7 +8,7 @@ How a module is built ([decision 26](../decisions/26-modules-by-feature-layout-s
 - `internal/<module>/<module>pg`: wiring;
 - `internal/<module>/<module>test`: test-only raw-SQL fixtures for its own tables.
 
-A memory-only module such as `internal/presence` has just its root, constructed
+A memory-only module such as `internal/presence` or `internal/typing` has just its root, constructed
 directly in `cmd/ribbitto`; it needs no store, wiring or table fixtures.
 
 A wiring package exports its use-case constructors, the `Tx`- and `Snapshot`-bound factories that other modules' consumers take, and `EventKinds`. Its runners and its own module's bindings stay unexported. `orgpg.NewHandleChanger` is a use-case constructor awaiting its handler. Store tests bind through `platform.InTx`/`InSnapshot` and the store's exported bindings; tests of the wiring's runners live in the wiring package. The wiring package's own external tests (`orgpg_test`, `conversationpg_test`) reach its runner through `NewTxRunnerForTest` in its `export_test.go`; no other package can.
@@ -26,6 +26,7 @@ A cross-module flow's root use case owns its transaction through an injected run
 | `org`: organisations, members, authorisation (`Membership`), setup, sign-up | `organization`, `member`, `setup` |
 | `conversation`: channels, topics, branching, posting, history, the page snapshot use case | `channel`, `topic`, `message` |
 | `presence`: per-process online state, grace expiry and ordered changes/reset; web rendering/delivery current (#768) | no tables |
+| `typing`: per-process distinct-member channel/topic summaries and generation publication ([contract](typing.md)); expiry, ingress and delivery follow | no tables |
 | `unread`: feed and topic writes, transaction-bound lock, join prefix, read-range unions and topic floors | `channel_read`, `read_range`, `topic_read_floor` |
 
 `internal/web` stays the UI shell and imports module roots. Its per-kind

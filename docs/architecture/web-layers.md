@@ -75,6 +75,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
 
   | Attribute | On | Present | Meaning |
   |---|---|---|---|
+  | `data-applied-cursor` | `#organization-stream` | after durable application | newest sequence applied to the DOM, including while hidden; reconnects use it |
   | `data-oldest-seq` | `#load-older` | always | `event_seq` of the oldest loaded message, `0` once nothing older remains; a moved item is inserted only at or above it |
   | `data-topic` | `#message-items` | topic pages only | the topic's ID, compared with a move's topics |
   | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
@@ -91,8 +92,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   to 100 names and has no live list swap or live region. Presence entries replace
   individual labeled indicators by stable DOM id.
   See [stream scope](streaming.md#stream-scope). `reset` handling attaches to
-  this container. Its reconnect cursor advances after an inserted message
-  settles or a move applies successfully.
+  this container. Its reconnect cursor and `data-applied-cursor` advance after an inserted message
+  settles or a move applies successfully. `data-event-cursor` advances only while
+  visible, or when a hidden application is subsequently shown.
   Its hidden, non-focusable `#stream-sink` receives `sidebar,presence` with
   `hx-swap="none"`: htmx applies payload entries out of band by DOM id, ignoring
   entries absent from the page. The sink is hidden from assistive technology.
@@ -107,8 +109,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
 - Latest feeds/topics render `#read-form` with the snapshot `cursor`, a plain
   *Mark as read* submit button, and `hx-post` to the conversation URL plus
   `/read`: `POST /organizations/{slug}/channels/{channelID}/read` or
-  `/organizations/{slug}/channels/{channelID}/topics/{topicID}/read`. `hx-trigger="read-visible once, submit"` and `hx-swap="none"` send
-  one automatic POST and manual submissions without swapping history.
+  `/organizations/{slug}/channels/{channelID}/topics/{topicID}/read`. `hx-trigger="read-visible, submit"`, `hx-sync="this:drop"` and `hx-swap="none"`
+  send automatic and manual POSTs without swapping history or overlapping reads.
   Members and `?before=` pages omit it. The endpoint resolves visibility,
   calls the transaction-owning unread use case and returns 204 to htmx or a 303
   for the plain form.
@@ -124,10 +126,13 @@ JavaScript never generates HTML and never owns application state. It is
 limited to UX help that HTML and htmx handle poorly: focus, scroll,
 keyboard, local time, single-source selection constraints, and glue for SSE.
 
-- `read-visibility-v1.js` watches visibility only. On scoped `htmx:load`,
-  it triggers `read-visible` once the form's page is visible, removing the
-  visibility listener. It never reads or updates the stream cursor or sends
-  requests itself; the form retains the page's initial snapshot (#722).
+- `message-stream-v8.js` emits `read-applied` only after successful DOM
+  application is shown while visible, including on return from a hidden tab.
+  `read-visibility-v2.js` initializes on scoped `htmx:load` and watches that
+  event and visibility. It copies the applied cursor (initially the form's
+  snapshot) into htmx's read request. While one request runs, triggers coalesce;
+  after completion it triggers only the newest shown cursor, only if visible.
+  Composer responses and received-but-unapplied events cannot advance it.
 - SSE `reset` closes htmx's event source and reloads the page to obtain a fresh snapshot.
 - **No requests of its own:** no `fetch` or `XMLHttpRequest`. Requests go
   through HTML forms, links and htmx.

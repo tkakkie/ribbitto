@@ -72,7 +72,7 @@ nothing: the read state never moves backwards.
 
 The feed renders with cursor 41, and Kai's b4 = 42 commits before the
 page's POST arrives. The POST covers sequences up to 41, so b4 stays unread
-until the visible page has received it (#710) and posts with cursor 42. In
+until the visible page has applied and shown it and posts with cursor 42. In
 a topic view, a message moved in by a move after the view's cursor is not
 read by its POST either, even though its own sequence is lower.
 

@@ -28,14 +28,26 @@
     event.target.close();
     location.reload();
   };
+  const showApplied = () => {
+    const connection = document.getElementById("organization-stream");
+    if (document.visibilityState !== "visible" || !connection?.dataset.appliedCursor) return;
+    connection.dataset.eventCursor = connection.dataset.appliedCursor;
+    document.dispatchEvent(new Event("read-applied"));
+  };
+  document.addEventListener("visibilitychange", showApplied);
   const resume = (message) => {
     // Native reconnects send Last-Event-ID; htmx recreates CLOSED sources
     // from this URL. Advance only after the page applies the event.
     const connection = document.getElementById("organization-stream");
-    connection.dataset.eventCursor = message.lastEventId;
+    // Hidden applications may resume replay, but reading/composing must wait
+    // until this DOM is shown. Duplicate deliveries cannot lower either cursor.
+    const applied = connection.dataset.appliedCursor || connection.dataset.eventCursor;
+    if (BigInt(message.lastEventId) < BigInt(applied)) return;
+    connection.dataset.appliedCursor = message.lastEventId;
     const url = new URL(connection.getAttribute("sse-connect"), location.href);
     url.searchParams.set("after", message.lastEventId);
     connection.setAttribute("sse-connect", url.pathname + url.search);
+    showApplied();
   };
   document.addEventListener("htmx:sseOpen", (event) => {
     const connection = event.target;

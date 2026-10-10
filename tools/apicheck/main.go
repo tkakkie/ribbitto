@@ -30,7 +30,7 @@ func main() {
 }
 
 func run(root string, check bool) error {
-	patterns := []string{"./internal/conversation", "./internal/identity", "./internal/org", "./internal/realtime", "./internal/presence", "./internal/unread"}
+	patterns := []string{"./internal/conversation", "./internal/identity", "./internal/org", "./internal/realtime", "./internal/presence", "./internal/typing", "./internal/unread"}
 	pkgs, err := packages.Load(&packages.Config{Dir: root, Mode: packages.LoadSyntax,
 		Env: append(os.Environ(), "GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0", "GOFLAGS=")}, patterns...)
 	if err != nil {

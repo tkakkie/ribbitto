@@ -4,7 +4,7 @@ How read state is stored and counted, and what that costs (writes are in
 [unread writes](unread-writes.md))
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
 The move column, read-state tables, range store, feed, topic and branch-notice
-reads, the initial reading POSTs, posting writes and channel and topic counts
+reads, the visible-page reading POSTs, posting writes and channel and topic counts
 are current; page binding is *planned* (M4). The rules are in
 [unread](../domain/unread.md).
 
@@ -68,11 +68,12 @@ prefix starts at zero; every other disjoint, non-touching range lies above `P`.
 
 Step 4 uses `conversationpg.TopicUnreadIn`. Ordinal joins pair IDs and floors;
 Go checks equal lengths, computes `P − 1` and adds `[0, P)` to the multirange.
-Both count and first-unread branches use the same containment test; only the
-above-floor branch has the lower sequence bound. Ordered count branches each
-return at most 100 candidates, then share one ordered cap of 100.
-Only the selected topic probes each branch by `event_seq` for its lowest
-unread, without a candidate cap. `unread.TopicCounts`, wired by `newTopicCounts`,
+All branches exclude read-set containment; only above-floor branches have a
+lower sequence bound. Ordered count branches each cap at 100, then share an
+ordered cap of 100.
+Only the selected topic probes above the floor and materialises its unread
+moved candidates before choosing the lowest `event_seq`, without a candidate
+cap. `unread.TopicCounts`, wired by `newTopicCounts`,
 combines steps 3–4 in the caller's snapshot; page binding remains planned.
 
 Steps 1–2 serve the channel list and steps 3–4 the topic list: two
@@ -99,23 +100,26 @@ index, `R` ranges of the current channel at or above `P`:
   `O(100 · K²)` in-memory work; aggregates never revisit `message`.
 - **Step 3:** `O(R + T)` rows; `R` is 1 in normal use and grows with
   fragmentation (below).
-- **Step 4:** decoding the parameter is `O(R)`, and each candidate row costs
-  `O(log R)` to test. Count work includes unread messages (up to 100 per branch
-  before their shared cap), read messages moved in since the floor (at most 100 per move;
-  `LIMIT 100` bounds only unread ones), and read posts above the floor. Normally the stream shows a new
-  message before the member's next post, so there are few. While the stream
-  lags or is disconnected, own posts add work **without a bound**. #283 benchmarks
-  it; if unacceptable, counts switch to probing read-set gaps per topic.
-  The selected topic's first unread takes no cap. In #746's PostgreSQL 18.6
-  EXPLAIN, with default planner settings,
-  51 topics, 100,000 target history rows and 1,000 moved-in rows, the fixed moved
-  count read only 1,000 moved rows (1 returned, 999 filtered; 32 shared hits for
-  the target). The selected moved first-unread lookup walked the topic index in
-  `event_seq` order: 1 returned and 9,999 history rows filtered, 247 shared hits.
-  Both measurements held with 5,000 read posts above the floor. These are measured
-  rows/buffers under those conditions, not guarantees of a particular index.
-  Above-floor read filtering and first-unread work remain uncapped; #779 tracks
-  bounding the latter, and #747 re-checks it under real page load.
+- **Step 4:** decoding costs `O(R)`; containment costs `O(log R)` per row.
+  Counts cap unread candidates at 100 per branch, then 100 together; read
+  moves (at most 100 messages per move) and own posts above the floor add
+  **unbounded** filtering. #283 benchmarks stream lag; unacceptable costs
+  require per-topic gap probes.
+  First unread is uncapped: a CTE filters `M` rows moved after the selected
+  topic's floor, outputting at most `M`; choosing the lowest sequence costs
+  `O(M)`, plus `O(M log R)` containment.
+  Materialisation blocks the sequence-order limit at the CTE, removing #779's
+  measured history walk, with **no physical `O(M)` guarantee**: PostgreSQL can
+  still scan all history.
+  PostgreSQL 18.6, default planner settings, ANALYZE, second (warm) EXPLAIN:
+  with 1,000 moves and 10k/100k/1M history rows, the old lookup read
+  1k/10k/100k rows; the CTE read 1,000 (1 returned, 999 filtered), 27 shared
+  hits, zero reads throughout. No moves read zero rows; all-read moves read
+  1,000. Dense 100k unread moves cost 26.188 ms for the whole statement
+  versus 0.070 ms before: enumerating moves sacrifices early exit.
+  Above-floor filtering remains unbounded; #747 re-checks page load. Reproduce
+  with
+  `RIBBITTO_FIRST_UNREAD_BENCH=1 go test -count=1 -run '^TestFirstUnreadBench$' -v ./cmd/ribbitto`.
 
 ## Writes
 

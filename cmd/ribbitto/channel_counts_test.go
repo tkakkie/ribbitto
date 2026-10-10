@@ -56,6 +56,27 @@ func TestChannelCounts(t *testing.T) {
 	}
 }
 
+func TestChannelCountsFirstGapBeforeCap(t *testing.T) {
+	pool := pgtest.New(t)
+	f := conversationtest.OrganizationWithOwner(t, pool, "first-gap", "general")
+	_, err := pool.Exec(t.Context(), `INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq)
+ SELECT $1,$2,$3,$4,'unread',s FROM generate_series(2,301) s`, f.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, f.MemberID)
+	feedRequire(t, err)
+	feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
+		return unreadpg.WriterIn(tx).Merge(t.Context(), unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}, 1, unread.Range{Lo: 5, Hi: 41})
+	}))
+	// The three unread messages in the first gap must survive the cap even
+	// though the later gap alone contains more than 100 unread messages.
+	feedRequire(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
+		got, err := newChannelCounts().Read(t.Context(), s, f.OrganizationID, f.MemberID, 1, []kernel.ID{f.Channel.ID})
+		feedRequire(t, err)
+		if got[f.Channel.ID] != (unread.ChannelCount{Count: 100, FirstUnread: 2}) {
+			t.Fatalf("counts=%v", got)
+		}
+		return nil
+	}))
+}
+
 func TestChannelCountsStatementsAndDuplicate(t *testing.T) {
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "statements", "general")

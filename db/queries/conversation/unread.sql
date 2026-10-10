@@ -9,7 +9,7 @@ WITH gaps AS (
     FROM unnest(sqlc.arg(channel_ids)::uuid[]) AS c(channel_id)
     CROSS JOIN LATERAL (
         SELECT m.event_seq
-        FROM (SELECT lo_before, hi FROM gaps WHERE gaps.channel_id = c.channel_id ORDER BY n) g
+        FROM (SELECT lo_before, hi, n FROM gaps WHERE gaps.channel_id = c.channel_id ORDER BY n) g
         CROSS JOIN LATERAL (
             SELECT event_seq FROM message
             WHERE organization_id = sqlc.arg(organization_id)
@@ -17,7 +17,7 @@ WITH gaps AS (
               AND event_seq > g.lo_before AND event_seq < g.hi
             ORDER BY event_seq LIMIT 100
         ) m
-        LIMIT 100
+        ORDER BY g.n, m.event_seq LIMIT 100
     ) messages
 )
 SELECT c.channel_id::uuid AS channel_id,

@@ -54,9 +54,10 @@ Step 1 uses `unreadpg.ChannelRangesIn` in the caller's snapshot. Go derives
 rows retain the supplied join prefix and one open gap. `unread.ChannelCounts`
 deduplicates sidebar IDs and builds gap IDs and bounds together. Step 2 uses
 `conversationpg.ChannelUnreadIn`: ordinal joins pair length-checked arrays;
-Go supplies inclusive lower bounds as their predecessors. Ordered gap probes
-stop after 100 message rows per channel, across all topics, including an
-unread branch notice. Both statements share the caller's snapshot.
+Go supplies inclusive lower bounds as their predecessors. The channel cap orders
+by gap ordinal and message sequence, returning at most 100 rows across all topics,
+including an unread branch notice. Incremental sorting may finish a gap and read
+ahead before stopping. Both statements share the caller's snapshot.
 
 Steps 1–2 serve the channel list and steps 3–4 the topic list: two
 statements per list, four per page load, whatever the number of channels or
@@ -73,9 +74,10 @@ index, `R` ranges of the current channel at or above `P`:
 
 - **Step 1:** `O(K · (log n + 101))` range rows.
 - **Step 2:** every bounded gap holds an unread message, so each channel
-  needs at most 101 gaps and reads at most 100 message rows:
-  `O(K · (101 · log n + 100))`. A channel with nothing unread costs one
-  empty probe of the open gap after its last range.
+  needs at most 100 supplied gaps. Each probe caps message rows at 100;
+  a full sort could consume every probe: `O(K · 100 · (log n + 100))`.
+  Incremental sorting stops earlier but can read beyond the 100 returned rows.
+  A channel with nothing unread costs one empty probe of its open gap.
   These bounds describe stored-row access. Parameter pairing and scanning
   the bounded CTE for each channel's count and first sequence add
   `O(100 · K²)` in-memory work; aggregates never revisit `message`.

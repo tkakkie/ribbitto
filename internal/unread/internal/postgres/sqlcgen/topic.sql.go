@@ -38,6 +38,8 @@ type BatchRangeNeighboursRow struct {
 	Hi int64
 }
 
+// Requires the prefix row (lo = 0) that Prepare creates under the channel lock:
+// without a predecessor the subquery is NULL and the range matches nothing.
 func (q *Queries) BatchRangeNeighbours(ctx context.Context, arg BatchRangeNeighboursParams) ([]BatchRangeNeighboursRow, error) {
 	rows, err := q.db.Query(ctx, batchRangeNeighbours,
 		arg.Los,

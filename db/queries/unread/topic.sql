@@ -8,6 +8,8 @@ SELECT floor_seq FROM topic_read_floor
 WHERE organization_id = $1 AND channel_id = $2 AND member_id = $3 AND topic_id = $4;
 
 -- name: BatchRangeNeighbours :many
+-- Requires the prefix row (lo = 0) that Prepare creates under the channel lock:
+-- without a predecessor the subquery is NULL and the range matches nothing.
 SELECT DISTINCT r.lo, r.hi FROM
 unnest(sqlc.arg(los)::bigint[]) WITH ORDINALITY AS a(lo, n)
 JOIN unnest(sqlc.arg(his)::bigint[]) WITH ORDINALITY AS b(hi, n) ON a.n = b.n

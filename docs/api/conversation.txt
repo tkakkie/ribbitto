@@ -27,6 +27,7 @@ type ChannelPage struct // ChannelPage is a channel, its sidebar and history rea
   field Current Channel
   field EventCursor *int64 // EventCursor is the snapshot's organisation sequence, including on older pages.
   field Page Page
+  field PageCounts PageCounts
   field Topic *Topic
   field Topics []Topic
 type ChannelStore interface // ChannelStore reads and writes channels, always within one organisation.
@@ -84,6 +85,7 @@ type MembersPage struct // MembersPage is the channel context, sidebar, members 
   field EventCursor *int64
   field Members []ChannelMember
   field Next *github.com/tkakkie/ribbitto/internal/kernel.ID
+  field PageCounts PageCounts
   field Topics []Topic
 type Message struct // Message is a plain-text post identified by ID.
   field Body string
@@ -105,13 +107,21 @@ func NewBrancher(runner TxRunner, writer WriterIn, sequences EventSequenceIn, ev
 func NewChannels(store ChannelStore) *Channels // NewChannels returns a Channels.
 func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, notifier Notifier) *Posting // NewPagePosting builds posting with read writes bound to its transaction.
 func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Posting // NewPosting builds posting over transaction-bound factories.
-func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account and cursor factories supplied by the composition root.
+func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account, cursor and count factories supplied by the composition root.
 func NewTopics(reader TopicReader) *Topics // NewTopics returns a Topics.
 type Notifier interface // Notifier records the latest committed event sequence for an organisation, so open streams wake; posting and branching call it only after commit.
   func (Notifier).Raise(organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64)
 type Page struct // Page is one page of a channel's history, oldest first.
   field Entries []Entry
   field Older bool // Older reports that messages before Entries[0] exist; the next page is read before Entries[0].EventSeq.
+type PageCounter interface // PageCounter reads both sidebar lists using org's resolved membership, including its persisted join sequence, in four statements altogether.
+  func (PageCounter).Read(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID) (PageCounts, error)
+type PageCounts struct // PageCounts holds capped sidebar counts and uncapped first unread sequences; zero means the scope has no unread message.
+  field ChannelCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
+  field FeedFirstUnread int64
+  field TopicCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
+  field TopicFirstUnread int64
+type PageCountsIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) PageCounter // PageCountsIn binds unread's count orchestration to the page's snapshot.
 const PageSize untyped int = 50 // PageSize is how many messages one page of history holds.
 type PostReadWriter interface // PostReadWriter reads the page scope and adds the new message's range; floor is the safe topic floor computed by conversation from its own messages.
   func (PostReadWriter).Read(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, *int64, int64, int64, int64) error
@@ -137,7 +147,7 @@ type ReadStore interface // ReadStore is conversation's reads in the caller's sn
   func (ReadStore).ListTopics(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, limit int) ([]Topic, error) // ListTopics returns at most limit topics of the channel: the default first, then by name ignoring case, then by ID.
   func (ReadStore).LookupTopics(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicIDs []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]Topic, error) // LookupTopics resolves the requested topics of the channel in one batch, so a page costs one topic query rather than one per message.
 type ReadStoreIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) ReadStore // ReadStoreIn binds conversation's reads to the caller's snapshot.
-type Reader struct // Reader owns the page, single-message and batch snapshots across conversation, org and identity through factories bound to the same read-only snapshot.
+type Reader struct // Reader owns the page, single-message and batch snapshots across conversation, org, identity and unread through factories bound to the same read-only snapshot.
   func (*Reader).Many(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, ids []github.com/tkakkie/ribbitto/internal/kernel.ID) (entries []Entry, err error) // Many reads a move's bounded message batch and directories in one snapshot.
   func (*Reader).Members(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, after *github.com/tkakkie/ribbitto/internal/kernel.ID) (page MembersPage, err error) // Members reads a bounded channel membership page.
   func (*Reader).One(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64) (entry Entry, err error) // One reads one message, its author names and topic in a read-only snapshot.

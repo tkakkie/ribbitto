@@ -97,3 +97,11 @@ type branchReadWriter struct{ ranges unread.RangeWriter }
 func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
 	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, unread.Range{Lo: lo, Hi: hi})
 }
+
+// These fixtures exercise the reader's existing history and directory behavior.
+type emptyPageCounter struct{}
+
+func emptyPageCountsIn(platform.Snapshot) conversation.PageCounter { return emptyPageCounter{} }
+func (emptyPageCounter) Read(context.Context, org.Membership, kernel.ID, []kernel.ID, []kernel.ID, *kernel.ID) (conversation.PageCounts, error) {
+	return conversation.PageCounts{}, nil
+}

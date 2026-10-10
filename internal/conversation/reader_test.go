@@ -80,13 +80,14 @@ func testReader(t *testing.T, data readerData) (*conversation.Reader, *snapshotF
 		func(s platform.Snapshot) conversation.ReadStore { f.bound(s, "reads"); return f },
 		func(s platform.Snapshot) conversation.MemberDirectory { f.bound(s, "members"); return data },
 		func(s platform.Snapshot) conversation.AccountDirectory { f.bound(s, "accounts"); return data },
-		func(s platform.Snapshot) conversation.EventCursor { f.bound(s, "bind cursor"); return f })
+		func(s platform.Snapshot) conversation.EventCursor { f.bound(s, "bind cursor"); return f },
+		func(s platform.Snapshot) conversation.PageCounter { f.bound(s, "bind counts"); return f })
 	return reader, f
 }
 func TestReaderPageSnapshot(t *testing.T) {
 	membership := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
-	order := []string{"snapshot", "reads", "channel", "channels", "selected", "topics", "members", "accounts", "history", "bind cursor", "cursor"}
-	for _, fail := range []string{"", "channel", "channels", "selected", "topics", "history", "cursor"} {
+	order := []string{"snapshot", "reads", "channel", "channels", "selected", "topics", "members", "accounts", "history", "bind cursor", "cursor", "bind counts", "counts"}
+	for _, fail := range []string{"", "channel", "channels", "selected", "topics", "history", "cursor", "counts"} {
 		t.Run("failure="+fail, func(t *testing.T) {
 			reader, f := testReader(t, fullHistory{})
 			f.fail = fail
@@ -108,15 +109,15 @@ func TestReaderPageSnapshot(t *testing.T) {
 	f.organizationID = membership.Organization.ID
 	before := int64(9)
 	page, err := reader.Page(t.Context(), membership, kernel.ID{2}, nil, &before)
-	if err != nil || page.EventCursor == nil || *page.EventCursor != 7 || !reflect.DeepEqual(f.calls, []string{"snapshot", "reads", "channel", "channels", "topics", "members", "accounts", "history", "bind cursor", "cursor"}) {
+	if err != nil || page.EventCursor == nil || *page.EventCursor != 7 || !reflect.DeepEqual(f.calls, []string{"snapshot", "reads", "channel", "channels", "topics", "members", "accounts", "history", "bind cursor", "cursor", "bind counts", "counts"}) {
 		t.Fatalf("older page = %+v, %v, calls %v", page, err, f.calls)
 	}
 }
 
 func TestReaderMembersSnapshot(t *testing.T) {
 	membership := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
-	order := []string{"snapshot", "reads", "channel", "channels", "topics", "members", "accounts", "bind cursor", "cursor"}
-	for _, fail := range []string{"", "channel", "channels", "topics", "cursor"} {
+	order := []string{"snapshot", "reads", "channel", "channels", "topics", "members", "accounts", "bind cursor", "cursor", "bind counts", "counts"}
+	for _, fail := range []string{"", "channel", "channels", "topics", "cursor", "counts"} {
 		t.Run("failure="+fail, func(t *testing.T) {
 			reader, f := testReader(t, fullHistory{})
 			f.fail, f.organizationID = fail, membership.Organization.ID
@@ -133,4 +134,8 @@ func TestReaderMembersSnapshot(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (f *snapshotFake) Read(context.Context, org.Membership, kernel.ID, []kernel.ID, []kernel.ID, *kernel.ID) (conversation.PageCounts, error) {
+	return conversation.PageCounts{}, f.step("counts")
 }

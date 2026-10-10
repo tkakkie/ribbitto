@@ -190,7 +190,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
+	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
 	renderer := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}
 	log := realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))
 	var ids []kernel.ID
@@ -363,7 +363,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 				ID: topic.ID, OrganizationID: topic.OrganizationID, ChannelID: topic.ChannelID,
 				Name: topic.Name, CreatedAt: topic.CreatedAt,
 			}
-			reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
+			reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
 			var moved []kernel.ID
 			var source kernel.ID
 			for i := range tt.count {
@@ -449,7 +449,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 					ID: topic.ID, OrganizationID: topic.OrganizationID, ChannelID: topic.ChannelID,
 					Name: topic.Name, CreatedAt: topic.CreatedAt,
 				}
-				reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
+				reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
 				var source conversation.Topic
 				var moved []kernel.ID
 				for i := range count {

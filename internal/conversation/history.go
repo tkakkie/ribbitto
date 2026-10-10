@@ -41,6 +41,7 @@ type Page struct {
 
 // ChannelPage is a channel, its sidebar and history read in one snapshot.
 type ChannelPage struct {
+	PageCounts
 	Page
 	Topic    *Topic
 	Topics   []Topic

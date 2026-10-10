@@ -88,6 +88,11 @@ func TestReadPost(t *testing.T) {
 			{"non-member POST", "POST", base + "/read", outsider, "", "3", 404},
 			{"older GET", "GET", base + "?before=3", token, "", "3", 200},
 			{"older POST", "POST", base + "/read?before=3", token, "", "3", 400},
+			{"foreign channel GET", "GET", view.ChannelURL("read", foreign.Channel.ID), token, "", "", 404},
+			{"foreign topic GET", "GET", view.ConversationURL("read", f.Channel.ID, &foreign.Channel.DefaultTopicID), token, "", "", 404},
+			{"other channel topic GET", "GET", view.ConversationURL("read", f.Channel.ID, &other.DefaultTopicID), token, "", "", 404},
+			{"members GET", "GET", feed + "/members", token, "", "", 200},
+			{"non-member members GET", "GET", feed + "/members", outsider, "", "", 404},
 			{"unseen channel", "POST", view.ChannelURL("read", foreign.Channel.ID) + "/read", token, "", "3", 404},
 			{"topic of another channel", "POST", view.ConversationURL("read", f.Channel.ID, &other.DefaultTopicID) + "/read", token, "", "3", 404},
 			{"unknown topic", "POST", view.ConversationURL("read", f.Channel.ID, &kernel.ID{}) + "/read", token, "", "3", 404},
@@ -105,6 +110,13 @@ func TestReadPost(t *testing.T) {
 				acceptanceCount(t, pool, 0, "SELECT count(*) FROM topic_read_floor")
 			})
 		}
+		w := request("GET", base, token, "", nil, false)
+		if w.Code != 200 {
+			t.Fatalf("latest GET: %d %s", w.Code, w.Body.String())
+		}
+		feedRanges(t, pool, scope, []unread.Range{})
+		acceptanceCount(t, pool, 0, "SELECT count(*) FROM channel_read")
+		acceptanceCount(t, pool, 0, "SELECT count(*) FROM topic_read_floor")
 	}
 	// Each successful scope must leave the other channel/member and the future unread.
 	for _, tc := range []struct {

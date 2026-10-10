@@ -20,6 +20,7 @@ type ChannelMember struct {
 
 // MembersPage is the channel context, sidebar, members and stream cursor from one snapshot.
 type MembersPage struct {
+	PageCounts
 	Current     Channel
 	Channels    []Channel
 	Topics      []Topic
@@ -73,7 +74,8 @@ func (s *Reader) Members(ctx context.Context, m org.Membership, channelID kernel
 			return fmt.Errorf("reading members page cursor: %w", err)
 		}
 		page.EventCursor = &seq
-		return nil
+		page.PageCounts, err = s.pageCounts(ctx, snapshot, m, channelID, page.Channels, page.Topics, nil)
+		return err
 	})
 	if err != nil {
 		return MembersPage{}, fmt.Errorf("reading members page snapshot: %w", err)

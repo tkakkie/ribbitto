@@ -59,7 +59,16 @@ candidate range bounds for set-based writes (#727) and channel/topic IDs for
 counts (#740), reading parameter values rather than tables. Each cast must use
 unqualified `bigint` or `uuid` and one unsized array dimension. Other functions,
 argument types, columns, literals, computed arguments and positions still fail;
-LATERAL, ROWS FROM, WITH ORDINALITY and column type definitions are not admitted.
+explicit LATERAL calls, ROWS FROM and column type definitions are not admitted.
+WITH ORDINALITY (#749) permits exactly one such array parameter and an alias
+naming exactly two columns: `unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)`
+(or `uuid[]`). SELECT and UPDATE FROM, checked CTEs and INSERT SELECT accept it.
+Parallel arrays may be joined on their ordinal columns in SELECT or a checked
+CTE; INSERT SELECT still reads a single source, so its join must be inside a CTE.
+This is needed because pinned sqlc v1.31.1 cannot generate multi-argument
+`unnest`: `function unnest(unknown, unknown) does not exist`. Go callers must check
+that parallel arrays have equal lengths and return an error before the statement
+runs; an ordinal join would otherwise silently drop unmatched positions.
 Table ownership, organisation predicates and the INSERT source restrictions in
 [database development](../database.md#database-development) still apply.
 Tools tests run uncached because Go does not track these inputs outside the tools module.

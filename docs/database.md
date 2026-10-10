@@ -122,6 +122,15 @@ parameter-only candidate bounds for set-based range writes (#727) and
 channel/topic IDs for counts (#740); aliases may name its output columns. It is
 not a table and needs no scope, but each table joined to it in a SELECT or UPDATE
 still needs its own WHERE scope.
+A single argument may use WITH ORDINALITY (#749) with an alias naming exactly
+two columns: `unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)`
+(or `uuid[]`). SELECT and UPDATE FROM, checked CTEs and INSERT SELECT accept it.
+Parallel arrays can be joined on their ordinal columns in SELECT or a checked
+CTE. For INSERT, put the join inside the CTE and read that single CTE source.
+Pinned sqlc v1.31.1 cannot generate multi-argument `unnest`:
+`function unnest(unknown, unknown) does not exist`. Go callers must check that
+parallel arrays have equal lengths and return an error before the statement
+runs, since an ordinal join silently drops unmatched positions.
 CTEs containing it are checked normally. Tablecheck still rejects foreign writes.
 Subqueries in VALUES, RETURNING or the INSERT SELECT remain unsupported, as do
 joins (including comma joins) in that SELECT, physical-table INSERT SELECT reads,
@@ -129,7 +138,8 @@ ON CONFLICT and other INSERT shapes; full INSERT checking belongs in a follow-up
 CTE reads need no scope; outer joins, derived tables and set operations fail.
 Other function relations, unnest arguments other than unqualified, unsized
 `bigint[]` or `uuid[]` `sqlc.arg` parameters and unnest outside FROM fail, as do
-LATERAL, ROWS FROM, WITH ORDINALITY and column type definitions (see [import checks](architecture/import-checks.md)).
+explicit LATERAL calls, ROWS FROM, multi-argument WITH ORDINALITY and column type
+definitions (see [import checks](architecture/import-checks.md)).
 `tools/scopecheck/allowlist.txt` uses `module.QueryName reason…`; stale, unnecessary
 and `PENDING MAINTAINER:` entries fail (case-insensitive, with any non-alphanumeric
 separator between the marker words). Migration statement/body ownership checks

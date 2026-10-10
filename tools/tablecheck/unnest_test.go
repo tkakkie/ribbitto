@@ -35,7 +35,7 @@ func TestUnnestArguments(t *testing.T) {
 		{"decorated_parameter", "unnest(sqlc.arg(DISTINCT lo)::bigint[])", "unsupported unnest argument"},
 		{"decorated_call", "unnest(DISTINCT sqlc.arg(lo)::bigint[])", "unsupported unnest call shape"},
 		{"lateral", "LATERAL unnest(sqlc.arg(lo)::bigint[])", "unsupported unnest relation shape"},
-		{"ordinality", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY", "unsupported unnest relation shape"},
+		{"ordinality", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY", "unsupported unnest ordinality: requires alias with two columns"},
 		{"rows_from", "ROWS FROM(unnest(sqlc.arg(lo)::bigint[]))", "unsupported unnest relation shape"},
 		{"column_definition", "unnest(sqlc.arg(lo)::bigint[]) AS b(lo bigint)", "unsupported unnest relation shape"},
 	} {
@@ -95,6 +95,76 @@ func TestUnnestRelations(t *testing.T) {
 					sql = strings.ReplaceAll(sql, "BIGINT", "UUID")
 				}
 				err := checkSQL(sql, "conversation", "conversation.Q", map[string]string{"message": "conversation", "account": "identity"}, nil)
+				if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+					t.Fatalf("%s: want %q, got %v", sql, tc.want, err)
+				}
+			}
+		})
+	}
+}
+
+func TestUnnestOrdinalityArguments(t *testing.T) {
+	for _, tc := range []struct{ name, relation, want string }{
+		{"single", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value, n)", ""},
+		{"uuid", "unnest(sqlc.arg('id')::UUID[]) WITH ORDINALITY AS a(value, n)", ""},
+		{"multi_argument", "unnest(sqlc.arg(lo)::bigint[], sqlc.arg(hi)::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest ordinality: requires one argument"},
+		{"no_alias", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY", "unsupported unnest ordinality: requires alias with two columns"},
+		{"zero_columns", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a", "unsupported unnest ordinality: requires alias with two columns"},
+		{"one_column", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value)", "unsupported unnest ordinality: requires alias with two columns"},
+		{"three_columns", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value, n, extra)", "unsupported unnest ordinality: requires alias with two columns"},
+		{"lateral", "LATERAL unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest relation shape"},
+		{"rows_from", "ROWS FROM(unnest(sqlc.arg(lo)::bigint[])) WITH ORDINALITY AS a(value, n)", "unsupported unnest relation shape"},
+		{"column_definition", "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value bigint, n bigint)", "unsupported unnest relation shape"},
+		{"column", "unnest(lo::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument"},
+		{"literal", "unnest('{1}'::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument"},
+		{"computed", "unnest(lower(sqlc.arg(lo))::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument"},
+		{"positional", "unnest($1::bigint[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument"},
+		{"text", "unnest(sqlc.arg(lo)::text[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument"},
+		{"qualified_uuid", "unnest(sqlc.arg(lo)::pg_catalog.uuid[]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument"},
+		{"sized", "unnest(sqlc.arg(lo)::bigint[2]) WITH ORDINALITY AS a(value, n)", "unsupported unnest argument"},
+		{"other_function", "generate_series(1, 2) WITH ORDINALITY AS a(value, n)", "unsupported FROM function"},
+		{"lateral_other", "LATERAL generate_series(1, 2) AS a(value)", "unsupported FROM function"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, sql := range []string{
+				"SELECT * FROM " + tc.relation,
+				"WITH b AS (SELECT * FROM " + tc.relation + ") SELECT * FROM b",
+				"INSERT INTO message(id) SELECT value FROM " + tc.relation,
+			} {
+				err := checkSQL(sql, "conversation", "conversation.Q", map[string]string{"message": "conversation"}, nil)
+				if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+					t.Fatalf("%s: want %q, got %v", sql, tc.want, err)
+				}
+			}
+		})
+	}
+}
+
+func TestUnnestOrdinalityRelations(t *testing.T) {
+	a := "unnest(sqlc.arg(lo)::bigint[]) WITH ORDINALITY AS a(value, n)"
+	b := "unnest(sqlc.arg('hi')::uuid[]) WITH ORDINALITY AS b(value, n)"
+	joined := a + " JOIN " + b + " ON a.n = b.n"
+	tables := joined + " JOIN message m ON true JOIN member k ON true"
+	for _, tc := range []struct{ name, sql, want string }{
+		{"select_join", "SELECT a.value, b.value FROM " + joined, ""},
+		{"beside_allowed", "SELECT unnest(sqlc.arg(lo)::bigint[]) FROM " + a, "unsupported function unnest: requires unqualified FROM call"},
+		{"CTE_join", "WITH pairs AS (SELECT a.value, b.value AS id FROM " + joined + ") SELECT * FROM pairs", ""},
+		{"insert_CTE_join", "WITH pairs AS (SELECT a.value, b.value AS id FROM " + joined + ") INSERT INTO message(id) SELECT id FROM pairs", ""},
+		{"update_FROM", "UPDATE message m SET id=a.value FROM " + a + " WHERE m.organization_id = $1", ""},
+		{"scoped_tables", "SELECT m.id FROM " + tables + " WHERE m.organization_id = $1 AND k.organization_id = $1", ""},
+		{"foreign_write", "INSERT INTO account(id) SELECT value FROM " + a, "foreign table account (write=true"},
+		{"foreign_CTE_write", "WITH pairs AS (SELECT a.value FROM " + joined + ") INSERT INTO account(id) SELECT value FROM pairs", "foreign table account (write=true"},
+		{"unknown_table", "SELECT x.id FROM " + a + " JOIN absent x ON true", "unknown table absent"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, arrayType := range []string{"mixed", "bigint", "uuid"} {
+				sql := tc.sql
+				if arrayType == "bigint" {
+					sql = strings.ReplaceAll(sql, "uuid", "bigint")
+				} else if arrayType == "uuid" {
+					sql = strings.ReplaceAll(sql, "bigint", "uuid")
+				}
+				err := checkSQL(sql, "conversation", "conversation.Q", map[string]string{"message": "conversation", "member": "conversation", "account": "identity"}, nil)
 				if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
 					t.Fatalf("%s: want %q, got %v", sql, tc.want, err)
 				}

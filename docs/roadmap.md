@@ -17,7 +17,8 @@ day-to-day progress. What the steps aim at is in the [vision](vision.md).
 | **M3 Real time** ✓ done | Server-Sent Events hub with per-connection authorization and replay | Messages arrive instantly; nothing is lost on reconnect; nothing reaches a connection that may not read it |
 | **Topics** ✓ done | Topics inside channels: the default topic, the feed and topic view, branching ([decision 21](decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)) | A conversation started in the default topic can be branched into its own topic, and both views show it |
 | **M4 Awareness** ← next | Unread counts, presence, typing indicator | The four outcomes under [M4](#m4) below |
-| **M5 Polish** | Dark mode, mobile layout, motion | |
+| **M5 UI pass** | The existing pages in a new visual direction, with icons, channel images and motion | The five outcomes under [M5](#m5) below |
+| **M6 Dark mode and mobile** | Dark colours and a mobile layout for M5's design | The three outcomes under [M6](#m6) below |
 
 The modular-monolith migration ([decision 26](decisions/26-modules-by-feature-layout-seams-and-order.md),
 [decision 27](decisions/27-channels-topics-and-messages-are-one-conversation-module.md),
@@ -52,6 +53,52 @@ Left for later: notifications, sounds and a count in the tab title;
 jumping to the first unread message; away, idle and "last seen"; typing in
 reply chains; new channels appearing live in the sidebar (#162); the "for
 me" view (#433); presence across several server processes (#236).
+
+## M5
+
+M5 starts once M4 is done. It gives the pages that exist today one design,
+for a desktop browser: white-based, with a light sidebar of icon-and-label
+rows, a wide reading column and a rounded composer, and on desktop the feel
+of Microsoft's public website. It replaces the "Clear water" direction and
+its colours from #9. M5 is done when:
+
+1. **The direction is written down.** [`ui.md`](ui.md) records the new
+   direction, its tokens with colours chosen anew, and the contrast table;
+   it also says how presentation and placement make the frog labels'
+   meaning clear while they stay names
+   ([vision](vision.md#nothing-to-learn), decisions
+   [20](decisions/20-product-labels-and-ordinary-words.md) and
+   [28](decisions/28-the-concept-fast-nothing-gets-buried-nothing-to-learn.md)).
+2. **Every existing page follows it:** setup, sign-in, sign-up, the
+   channel feed, the topic view, the members pages and the error pages.
+3. **Icons come from one SVG set** kept in the repository with its
+   licence, never from a CDN.
+4. **Channels have images.** A channel shows an image instead of `#` where
+   channels are listed and in its header.
+5. **Motion is small and optional.** It uses shared duration and easing
+   tokens, animates only properties that are cheap to render, and is off
+   under `prefers-reduced-motion`.
+
+The performance rules still hold: images never delay a message's text or
+shift the layout ([`ui.md`](ui.md#planned-directions-from-the-maintainer-9)),
+and a change on a measured path states its effect and any known regression
+([vision](vision.md#fast)).
+
+Left for later: dark mode and the mobile layout (M6); the rich editor and
+the emoji picker.
+
+## M6
+
+M6 is done when, in M5's design:
+
+1. **Dark mode.** Every page has dark colours that follow the system
+   setting and meet the contrast table, checked in a browser.
+2. **Mobile layout.** At phone width, every page is one column, with the
+   conversation at full width and a bottom navigation; tap targets are at
+   least 44 × 44 px and nothing scrolls sideways.
+3. **Motion** behaves the same in dark mode and on a phone.
+
+Left for later: a manual light/dark switch.
 
 ## After the MVP
 

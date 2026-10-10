@@ -49,6 +49,8 @@ func TestDerivedOuterScope(t *testing.T) {
 		{"inner_missing", "SELECT * FROM member n CROSS JOIN LATERAL (SELECT * FROM message m WHERE m.id = n.id) d WHERE n.organization_id = $1", "missing scope: m.organization_id"},
 		{"inner_scope_outside", "SELECT * FROM (SELECT * FROM message m) d WHERE d.organization_id = $1", "missing scope: m.organization_id"},
 		{"shadow_outer_table", "SELECT * FROM message m, (SELECT 1) message WHERE m.organization_id = $1", "derived alias shadows table"},
+		{"lateral_on_false", "SELECT * FROM member n JOIN LATERAL (SELECT * FROM message m WHERE m.organization_id = $1 AND m.id = n.id) d ON false WHERE n.organization_id = $1", "unsupported shape: derived SELECT or LATERAL join"},
+		{"lateral_on_predicate", "SELECT * FROM member n JOIN LATERAL (SELECT * FROM message m WHERE m.organization_id = $1) d ON d.id = n.id WHERE n.organization_id = $1", "unsupported shape: derived SELECT or LATERAL join"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := check(tc.sql, map[string]string{"message": "organization_id", "member": "organization_id"})

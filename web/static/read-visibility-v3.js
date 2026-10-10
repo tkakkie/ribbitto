@@ -30,9 +30,9 @@
     });
     form.addEventListener('htmx:afterRequest', event => {
       inFlight = false;
-      // A failed read waits for another visibility or application trigger.
-      if (!event.detail.successful) return;
-      succeeded = attempted;
+      if (event.detail.successful) succeeded = attempted;
+      // Flush newer shown work after failure without retrying the same cursor.
+      else if (BigInt(cursor()) <= attempted) return;
       // htmx releases its request lock after afterRequest returns. Read the
       // newest cursor then, rather than queueing snapshots of older triggers.
       queueMicrotask(visible);

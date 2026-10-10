@@ -132,8 +132,9 @@ keyboard, local time, single-source selection constraints, and glue for SSE.
   event and visibility. It copies the applied cursor (initially the form's
   snapshot) into htmx's read request. While one request runs, triggers coalesce;
   after success it triggers only the newest shown cursor, only if visible.
-  Only successful completion records a cursor as sent; failure waits for the
-  next visibility or application trigger, which can resend the same cursor.
+  Only successful completion records a cursor as sent; failure flushes a strictly
+  newer shown cursor, but resending the same cursor waits for the next visibility
+  or application trigger.
   Composer responses and received-but-unapplied events cannot advance it.
 - SSE `reset` closes htmx's event source and reloads the page to obtain a fresh snapshot.
 - **No requests of its own:** no `fetch` or `XMLHttpRequest`. Requests go

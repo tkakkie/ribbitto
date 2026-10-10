@@ -21,8 +21,6 @@ import (
 	"github.com/tkakkie/ribbitto/web/static"
 )
 
-//go:generate sh -c "../../bin/templ generate -f testdata/stream_entries.templ -stdout > message_stream_entries_test.go"
-
 func TestMessageStreamBrowser(t *testing.T) {
 	bin, found := launcher.LookPath()
 	if !found {

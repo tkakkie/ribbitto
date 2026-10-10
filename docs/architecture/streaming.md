@@ -134,7 +134,7 @@ extension swaps through htmx's own swap, which applies out-of-band elements
 even when the main swap is `none`, and an entry not on the page is ignored.
 The sink is hidden from assistive technology and takes no focus.
 `TestMessageStreamBrowser` proves replacement and missing-target behavior with
-templ-rendered test entries, and that native `Last-Event-ID` and the page's
+test-only entries rendered with `html/template`, and that native `Last-Event-ID` and the page's
 reconnect cursor stay unchanged after ephemeral frames. Production frames
 remain planned (#286, #287). Opening the members panel is a
 navigation. It lists members without live list updates; #287 will render presence

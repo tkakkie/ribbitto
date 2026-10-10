@@ -131,7 +131,8 @@ old one. Roughly in this order:
    - *Basics:* private channels → direct messages → email (Mailer →
      password reset → email verification) → invitations (#128).
    - *Composer:* reliable sending (no duplicate posts, the text kept when
-     sending fails, the sending state shown) → an input that grows and a
+     sending fails, the sending state shown, and the post shown before the
+     server answers if step 1's decisions allow it) → an input that grows and a
      send-key setting → mentions (#117) → links to one message → quoting,
      including a selection → drafts (#88, revisited after step 1).
 3. **Messages:** reactions, editing and deleting, reply chains

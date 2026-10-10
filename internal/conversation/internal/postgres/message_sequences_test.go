@@ -27,8 +27,8 @@ func TestFirstMessageAfterScope(t *testing.T) {
 	}{
 		{f.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, f.MemberID, 3},
 		{f.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, f.MemberID, 8},
-		{other.OrganizationID, f.Channel.ID, other.Channel.DefaultTopicID, other.MemberID, 4},
-		{f.OrganizationID, sibling.ID, sibling.DefaultTopicID, f.MemberID, 5},
+		{other.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, other.MemberID, 4},
+		{f.OrganizationID, sibling.ID, f.Channel.DefaultTopicID, f.MemberID, 5},
 	} {
 		_, err := writer.InsertMessage(t.Context(), m.org, m.channel, m.topic, m.member, "bounds", m.seq)
 		requireNoError(t, err)

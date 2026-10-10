@@ -50,10 +50,11 @@ branch-notice reads are current.
 
 ## Advancing it
 
-Branch-notice reads, initial reading POSTs and posting writes are current. Only a POST advances read state; a GET never changes it
+Branch-notice reads, visible-page reading POSTs and posting writes are current.
+Only a POST advances read state; a GET never changes it
 ([request flow](../architecture/request-flow.md)). Each reading POST carries its
-scope and `S`, the newest durable sequence the page has applied. `S` bounds the
-scope, not a list of rendered messages: messages of the scope outside the loaded
+scope and `S`, the newest durable sequence the page has applied and shown while
+visible. `S` bounds the scope, not a list of rendered messages: messages of the scope outside the loaded
 window, older history included, are read with it.
 
 - **Feed:** every message of the channel with `event_seq ≤ S` becomes read.
@@ -76,9 +77,10 @@ the page has only received, or the post's own response, never counts as
 applied.
 
 `S` is the page's snapshot cursor for the POST sent after the page loads,
-and later the newest durable sequence the page has applied
-(#710), which covers both posts and moves. Hidden tabs and `?before=` pages send no
-reading POST.
+and later the newest durable sequence the visible page has applied, covering posts
+and moves. An application while hidden counts only once the page becomes visible.
+At most one reading POST is in flight; afterwards it sends the newest shown
+cursor. Hidden tabs and `?before=` pages send no reading POST.
 A cursor above the organisation's committed `event_seq` is refused, so a
 later message is never read in advance. A message that is still unread
 when the POST runs, but has moved out of the topic since the page showed

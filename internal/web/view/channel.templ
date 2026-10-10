@@ -246,13 +246,13 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		</div>
 		// Scripts stay outside swap targets; htmx will not run swapped scripts.
 		if page.Members == nil {
-			<script defer src="/static/read-visibility-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+			<script defer src="/static/read-visibility-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-composer-v4.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		}
-		<script defer src="/static/message-stream-v7.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v8.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
 
@@ -289,9 +289,9 @@ templ MessageComposer(page ChannelPage) {
 	</form>
 }
 
-// The immutable snapshot bounds the initial read even if the stream has advanced.
+// The snapshot bounds plain submissions; htmx uses the cursor of the shown DOM.
 templ readForm(page ChannelPage) {
-	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible once, submit" hx-swap="none">
+	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible, submit" hx-swap="none" hx-sync="this:drop">
 		<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		<button type="submit" class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "reading.mark") }</button>
 	</form>

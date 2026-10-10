@@ -44,3 +44,22 @@ VALUES ($1, $2, $3, $4, $5);
 UPDATE topic_read_floor SET floor_seq = sqlc.arg(floor_seq)
 WHERE organization_id = $1 AND channel_id = $2 AND member_id = $3 AND topic_id = $4
   AND floor_seq < sqlc.arg(floor_seq);
+
+-- name: ReadTopicState :many
+-- Ranges are separate from floors, so each range is returned only once.
+WITH requested AS (
+  SELECT t.id, t.n
+  FROM unnest(sqlc.arg(topic_ids)::uuid[]) WITH ORDINALITY AS t(id, n)
+)
+SELECT 0::bigint AS topic_n, r.lo AS value, r.hi
+FROM read_range r
+WHERE r.organization_id = sqlc.arg(organization_id)
+  AND r.channel_id = sqlc.arg(channel_id) AND r.member_id = sqlc.arg(member_id)
+UNION ALL
+SELECT t.n, f.floor_seq, 0::bigint
+FROM requested t
+JOIN topic_read_floor f ON true
+WHERE f.organization_id = sqlc.arg(organization_id)
+  AND f.channel_id = sqlc.arg(channel_id) AND f.member_id = sqlc.arg(member_id)
+  AND f.topic_id = t.id
+ORDER BY topic_n, value;

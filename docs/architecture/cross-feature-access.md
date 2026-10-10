@@ -66,6 +66,13 @@ before counting, and returns its first unread sequence in the same statement.
 Only organisation and channel filter messages; the author is not the reader.
 The combined list takes two statements; page binding remains planned.
 
+`unreadpg.TopicStateIn` binds current-channel read state to the caller's
+snapshot. One `ReadTopicState` statement combines the scoped channel ranges
+and requested topic floors without a ranges × topics product. Go deduplicates
+listed and selected IDs (at most 51), derives the prefix and supplies missing
+floors as `P − 1`. Counting messages and binding this reader to pages remain
+planned; no foreign-table seam is added.
+
 Unread's store binds to a caller-owned transaction through `unreadpg.WriterIn`.
 It locks or creates `channel_read`, unions the supplied join prefix before
 the new range, and reads/deletes only primary-key-bounded neighbours. A

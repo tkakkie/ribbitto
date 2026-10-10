@@ -4,7 +4,7 @@ The inputs are in place since M3: the join transaction, `joined_event_seq`,
 the pairing of each message with its `message.posted` event, and the log
 boundary. Read-state tables, locking, range unions, feed, topic and branch-notice
 reads exist;
-Initial reading POSTs are current; posting writes and unread counts are *planned* for M4
+Initial reading POSTs and posting writes are current; unread counts are *planned* for M4
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
 the counting queries and their cost are in
 [unread counts](../architecture/unread-counts.md), the writes in
@@ -50,28 +50,35 @@ branch-notice reads are current.
 
 ## Advancing it
 
-Branch-notice reads and initial reading POSTs are current; posting writes remain
-planned for M4. Only a POST advances read state; a GET never changes it
-([request flow](../architecture/request-flow.md)). Each POST carries its
-scope and `S`, the newest durable sequence the page has applied and shown:
+Branch-notice reads, initial reading POSTs and posting writes are current. Only a POST advances read state; a GET never changes it
+([request flow](../architecture/request-flow.md)). Each reading POST carries its
+scope and `S`, the newest durable sequence the page has applied. `S` bounds the
+scope, not a list of rendered messages: messages of the scope outside the loaded
+window, older history included, are read with it.
 
 - **Feed:** every message of the channel with `event_seq ≤ S` becomes read.
 - **Topic view:** every message of that topic with `event_seq ≤ S` becomes
   read, except one moved in by a move after `S` (`moved_event_seq > S`): the
-  page has not shown it there. Other topics are untouched.
+  page's cursor had not reached that move. A message moved in below the
+  loaded window is read by the next topic read whose `S` covers the move,
+  like the older history an initial reading POST reads (decided 2026-10-10,
+  #775). Other topics are untouched.
 
 Posting reads the composer's scope up to the page's `S`, as that POST
 would, and adds the new message, in the posting transaction: a member's own
-messages are never unread for them. Branching already adds its author's notice
+messages are never unread for them. A post from a `?before=` page carries no
+cursor and reads only the author's own message, leaving every other message's
+read state and topic floors unchanged. Branching already adds its author's notice
 as `[p + 1, m + 1)` in its transaction, merged with the persisted join prefix;
 the organisation lock keeps the notice newest in its channel. Moving existing
 messages changes no member's read state. A sequence
 the page has only received, or the post's own response, never counts as
-shown.
+applied.
 
 `S` is the page's snapshot cursor for the POST sent after the page loads,
-and later the newest durable sequence the page has applied and shown
-(#710), which covers both posts and moves. Hidden tabs and `?before=` pages send nothing.
+and later the newest durable sequence the page has applied
+(#710), which covers both posts and moves. Hidden tabs and `?before=` pages send no
+reading POST.
 A cursor above the organisation's committed `event_seq` is refused, so a
 later message is never read in advance. A message that is still unread
 when the POST runs, but has moved out of the topic since the page showed

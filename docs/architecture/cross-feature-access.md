@@ -104,6 +104,15 @@ insert and before its event append, on the branching transaction. Only the
 brancher's notice is added; moved messages and other members' read sets stay put.
 No module imports the other or queries its tables.
 
+Posting from a page uses conversation's `PostReadWriterIn`, wired by
+`postReads` in `cmd/ribbitto`. After taking org's sequence, `PostFromPage`
+validates the page cursor against the pre-post limit and inserts the message.
+Conversation supplies the channel predecessor and checks the topic for posts
+or moves strictly between the cursor and the new sequence. The adapter calls
+`FeedWriter` or `TopicWriter`, then adds the own-message range and safe topic
+floor through unread's writer. Org is locked before `channel_read`; all reads,
+writes and the event append share posting's transaction.
+
 Identity's store creates accounts in the caller's transaction through
 `identitypg.AccountCreatorIn`. Adapters in `cmd/*` and the tests adapt it to
 org's factory and prove that the creator fits `org.AccountCreator`;

@@ -52,7 +52,7 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 			p := channelPages{channels: &fakeChannels{}, posting: testPoster(), topics: fakeTopics{err: tt.lookupErr, lookups: &lookups}}
 			// A nil message reader makes any unnecessary history read fail.
 			path := view.ConversationURL("acme", kernel.ID{1}, &selected)
-			r := httptest.NewRequest(tt.method, path+tt.query, strings.NewReader("body=hello"))
+			r := httptest.NewRequest(tt.method, path+tt.query, strings.NewReader("body=hello&cursor=0"))
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			r.SetPathValue("channelID", "01000000-0000-0000-0000-000000000000")
 			r.SetPathValue("topicID", "03000000-0000-0000-0000-000000000000")

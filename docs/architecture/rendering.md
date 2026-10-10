@@ -52,7 +52,7 @@ rewrite them. Invalid dates retain their fallback, as do all timestamps
 when JavaScript is disabled.
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v3.js` also loads with the response nonce on channel pages.
+`message-composer-v4.js` also loads with the response nonce on channel pages.
 One key-to-command function maps Enter to `send` and Shift+Enter to `newline`,
 ignoring IME composition (`isComposing` or keyCode 229); one submit function
 uses the native form submission path through `requestSubmit`. The latest-page form uses

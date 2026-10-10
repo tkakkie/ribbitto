@@ -231,7 +231,7 @@ func (*fakePostingWriter) MoveMessages(context.Context, kernel.ID, kernel.ID, ke
 type fakeEventSequence struct{}
 
 func (fakeEventSequence) NextEventSeq(context.Context, kernel.ID) (int64, error) {
-	return 1, nil
+	return 43, nil
 }
 
 type fakeEventAppender struct{}
@@ -248,10 +248,10 @@ var (
 )
 
 func testPosting(writer conversation.Writer) *conversation.Posting {
-	return conversation.NewPosting(fakeTxRunner{},
+	return conversation.NewPagePosting(fakeTxRunner{},
 		func(platform.Tx) conversation.Writer { return writer },
 		func(platform.Tx) conversation.EventSequence { return fakeEventSequence{} },
-		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} }, nil)
+		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} }, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, nil)
 }
 
 func testPoster() *conversation.Posting { return testPosting(&fakePostingWriter{}) }
@@ -288,7 +288,7 @@ func TestMessagePostHandler(t *testing.T) {
 					t.Fatal(err)
 				}
 				path := view.ChannelURL("acme", kernel.ID{1})
-				r := httptest.NewRequest("POST", path+"?body=wrong", strings.NewReader(url.Values{"body": {tt.body}, "organization_id": {"other"}, "member_id": {"other"}}.Encode()))
+				r := httptest.NewRequest("POST", path+"?body=wrong", strings.NewReader(url.Values{"cursor": {"0"}, "body": {tt.body}, "organization_id": {"other"}, "member_id": {"other"}}.Encode()))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				if hx {
 					r.Header.Set("HX-Request", "true")
@@ -313,6 +313,9 @@ func TestMessagePostHandler(t *testing.T) {
 				}
 				marker := `data-posted-message="` + view.MessageDOMID(writer.id) + `"`
 				if hx && want == 200 {
+					if !strings.Contains(w.Body.String(), `name="cursor" value="0"`) {
+						t.Fatal("composer must echo submitted cursor, not post sequence")
+					}
 					if !strings.Contains(w.Body.String(), marker) {
 						t.Fatal("success must identify the posted message for stream correlation")
 					}
@@ -440,6 +443,19 @@ func TestMessagePagingHandler(t *testing.T) {
 			if got, ok := idAttribute(t, page, "message-composer", "hx-post"); got != tt.wantPost || ok != (tt.wantPost != "") {
 				t.Errorf("composer hx-post = %q, %t; want %q", got, ok, tt.wantPost)
 			}
+			var hasCursor bool
+			for form := range page.Descendants() {
+				if attr(form, "id") == "message-composer" {
+					for n := range form.Descendants() {
+						if n.DataAtom == atom.Input && attr(n, "name") == "cursor" {
+							hasCursor = true
+						}
+					}
+				}
+			}
+			if hasCursor != (tt.before == 0) {
+				t.Fatalf("composer cursor present = %t, before = %d", hasCursor, tt.before)
+			}
 			if got := strings.Contains(body, `data-event-cursor="42"`); !got {
 				t.Fatalf("page cursor present = %t, before = %d", got, tt.before)
 			}
@@ -560,5 +576,15 @@ func (f fakeMessages) Members(ctx context.Context, m org.Membership, id kernel.I
 }
 
 func (*fakePostingWriter) LastMessageBefore(context.Context, kernel.ID, kernel.ID, int64) (int64, error) {
-	panic("posting fake: unexpected LastMessageBefore")
+	return 0, nil
+}
+
+func (w *fakePostingWriter) TopicChangedBetween(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64) (bool, error) {
+	return false, nil
+}
+
+type fakePostReads struct{}
+
+func (fakePostReads) Read(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64, int64, int64, int64) error {
+	return nil
 }

@@ -210,6 +210,35 @@ func (q *Queries) ListMessagesBefore(ctx context.Context, arg ListMessagesBefore
 	return items, nil
 }
 
+const topicChangedBetween = `-- name: TopicChangedBetween :one
+SELECT EXISTS (SELECT 1 FROM message
+ WHERE organization_id = $1 AND channel_id = $2
+   AND topic_id = $3
+   AND ((event_seq > $4::bigint AND event_seq < $5::bigint)
+     OR (moved_event_seq > $4::bigint AND moved_event_seq < $5::bigint)))
+`
+
+type TopicChangedBetweenParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	TopicID        pgtype.UUID
+	AfterSeq       int64
+	BeforeSeq      int64
+}
+
+func (q *Queries) TopicChangedBetween(ctx context.Context, arg TopicChangedBetweenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, topicChangedBetween,
+		arg.OrganizationID,
+		arg.ChannelID,
+		arg.TopicID,
+		arg.AfterSeq,
+		arg.BeforeSeq,
+	)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const topicUnreadRangeBounds = `-- name: TopicUnreadRangeBounds :many
 SELECT coalesce((SELECT p.event_seq + 1 FROM message p
         WHERE p.organization_id = $1 AND p.channel_id = $2

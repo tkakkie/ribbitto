@@ -202,9 +202,21 @@ func TestMessageStreamBrowser(t *testing.T) {
 				snapshot.Before = 7
 			}
 			var pages, streams atomic.Int32
+			posts := make(chan string, 2)
 			mux := http.NewServeMux()
 			mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
 			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					if err := r.ParseForm(); err != nil {
+						t.Error(err)
+						return
+					}
+					posts <- r.PostForm.Get("cursor")
+					response := snapshot
+					response.EventCursor, response.PostedMessageID = new(int64(999)), &kernel.ID{99}
+					templ.Handler(view.MessageComposer(response)).ServeHTTP(w, r)
+					return
+				}
 				if r.URL.Path != "/organizations/acme/events" {
 					pages.Add(1)
 					templ.Handler(view.ChannelScreen("/static/css/app.css", snapshot)).ServeHTTP(w, r)
@@ -239,6 +251,26 @@ func TestMessageStreamBrowser(t *testing.T) {
 				want = "42"
 			}
 			page.MustWait(`cursor => window.testSource && document.querySelector('#organization-stream').dataset.eventCursor === cursor`, want)
+			if name == "feed" {
+				page.MustEval(`() => { document.addEventListener('htmx:afterSettle', e => {
+     if (e.detail.target.id === 'message-composer') document.body.dataset.posts = String(+(document.body.dataset.posts || 0) + 1);
+    }); }`)
+				for n := 1; n <= 2; n++ {
+					page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+					select {
+					case got := <-posts:
+						if got != "51" {
+							t.Fatalf("composer cursor=%s, want applied cursor 51", got)
+						}
+					case <-ctx.Done():
+						t.Fatal(ctx.Err())
+					}
+					page.MustWait(`n => +document.body.dataset.posts === n`, n)
+					if got := page.MustEval(`() => document.getElementById('organization-stream').dataset.eventCursor`).Str(); got != "51" {
+						t.Fatalf("post response changed cursor to %s", got)
+					}
+				}
+			}
 			// Exercise the extension's CLOSED-source retry, which reads sse-connect.
 			page.MustEval(`() => { window.testSource.close(); window.testSource.dispatchEvent(new Event('error')); }`)
 			for pages.Load() < 2 {

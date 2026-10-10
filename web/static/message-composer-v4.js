@@ -1,4 +1,10 @@
 (() => {
+  document.addEventListener("submit", (event) => {
+    if (event.target.id !== "message-composer") return;
+    const stream = document.getElementById("organization-stream");
+    const cursor = event.target.elements.cursor;
+    if (stream && cursor) cursor.value = stream.dataset.eventCursor;
+  }, true);
   const command = (event) => {
     if (event.isComposing || event.keyCode === 229 || event.key !== "Enter") return;
     return event.shiftKey ? "newline" : "send";

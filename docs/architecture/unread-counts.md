@@ -4,8 +4,8 @@ How read state is stored and counted, and what that costs (writes are in
 [unread writes](unread-writes.md))
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
 The move column, read-state tables, range store, feed, topic and branch-notice
-reads, the initial reading POSTs and channel counts are current; posting
-writes and topic counts are *planned* (M4). The
+reads, the initial reading POSTs, posting writes and channel counts are current;
+topic counts are *planned* (M4). The
 rules are in [unread](../domain/unread.md).
 
 ## Storage

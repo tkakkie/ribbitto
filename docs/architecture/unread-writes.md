@@ -37,13 +37,21 @@ A newly read message
   overlapping or touching ranges and raise the floor, retaining the lock.
   Cost: `O(R)` for the read set and the candidate rows; 87–88 ms for 9,999
   messages over 10,000 ranges in the benchmark.
-- **Posting (planned)** with the composer's cursor `S`: the same write as the page's
+- **Posting (current)** with the composer's cursor `S`: the same write as the page's
   scope up to `S`, then a range for the new message; from a topic view the
   floor also rises to the new message when no message of the topic has an
   `event_seq` or `moved_event_seq` strictly between `S` and it. `S` is the
-  newest durable sequence the page has applied and shown, never a sequence
-  only received or the post's own response, so posting never reads a
-  message the member has not seen.
+  newest durable sequence the page has applied, never a sequence only
+  received or the post's own response, so posting never reads past the
+  page's cursor; like every topic read, it covers the whole topic up to `S`,
+  not only the loaded window. `conversation.Posting.PostFromPage` takes
+  org's sequence first and refuses `S` above the pre-post committed limit.
+  Its injected `PostReadWriterIn`, wired in `cmd/ribbitto`, binds the feed/topic
+  write and own-message union to that transaction. Conversation supplies the
+  predecessor and the scoped post/move guard; unread reads no message table.
+  A post from a `?before=` page has no cursor: posting reads only the author's
+  own message with `[p + 1, m + 1)` in the same transaction, leaving every other
+  message's read state unchanged and raising no topic floor.
 
 **HTTP caller (current):** `POST /organizations/{slug}/channels/{channelID}/read`
 (and `/topics/{topicID}/read`) takes membership from URL authorization,

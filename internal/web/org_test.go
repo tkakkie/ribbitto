@@ -100,7 +100,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 	}
 	get := func(method, path, cookie string, at time.Time) *httptest.ResponseRecorder {
 		clock = at
-		return serveForm(handler, method, path, cookie, url.Values{"name": {"新しいチャンネル"}, "body": {"posted through the page"}})
+		return serveForm(handler, method, path, cookie, url.Values{"name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}})
 	}
 
 	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading)
@@ -208,7 +208,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 		topicURL := view.ConversationURL("acme", acmeChannel, &named.ID)
 		for i := 0; i < 51; i++ {
-			w := serveForm(handler, "POST", topicURL, aliceToken, url.Values{"body": {fmt.Sprintf("topic-message-%02d", i)}})
+			w := serveForm(handler, "POST", topicURL, aliceToken, url.Values{"cursor": {"0"}, "body": {fmt.Sprintf("topic-message-%02d", i)}})
 			if w.Code != 303 || w.Header().Get("Location") != topicURL {
 				t.Fatalf("post: %d %s", w.Code, w.Body.String())
 			}
@@ -252,7 +252,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				t.Errorf("data-oldest-seq = %q; want %s", got, page.oldest)
 			}
 		}
-		invalid := serveForm(handler, "POST", topicURL, aliceToken, url.Values{"body": {""}})
+		invalid := serveForm(handler, "POST", topicURL, aliceToken, url.Values{"cursor": {"0"}, "body": {""}})
 		if invalid.Code != 422 || !strings.Contains(invalid.Body.String(), `action="`+topicURL+`"`) {
 			t.Fatalf("invalid body: %d", invalid.Code)
 		}

@@ -4,7 +4,7 @@
 [decision 21](21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)
 left to M4). Storage, range unions, feed, topic and branch-notice
 reads are implemented;
-Initial reading POSTs are current; posting writes and counts remain *planned* for M4. Rules in [unread](../domain/unread.md),
+Initial reading POSTs and posting writes are current; counts remain *planned* for M4. Rules in [unread](../domain/unread.md),
 storage and cost in [unread counts](../architecture/unread-counts.md), writes in
 [unread writes](../architecture/unread-writes.md).
 
@@ -15,12 +15,13 @@ storage and cost in [unread counts](../architecture/unread-counts.md), writes in
   lock, so the set only grows. Every gap between two ranges holds an
   unread message of the channel.
 - **Two reading scopes.** The feed reads every message of the channel up to
-  the cursor the page has applied and shown; a topic view reads only that
+  the cursor the page has applied (a bound on the scope, not a list of
+  rendered messages); a topic view reads only that
   topic's messages, except any moved in after that cursor. Only POSTs
   advance read state: the first is bounded by the page's snapshot, later
-  ones (#710) by what the page has applied and shown. A message the stream
-  has only received, or the sequence in a post's own response, never makes
-  an unshown message read. Without JavaScript, a *Mark as read* form sends
+  ones (#710) by the cursor the page has applied. A sequence the stream
+  has only received, or the one in a post's own response, never advances
+  that cursor. Without JavaScript, a *Mark as read* form sends
   the same POST. Posting reads its page's scope up to the same cursor, and a
   member's own posts are read for them. Branching currently adds its author's
   notice to the read set in the branching transaction through an injected writer.

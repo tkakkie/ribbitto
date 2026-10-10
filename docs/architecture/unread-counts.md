@@ -55,10 +55,9 @@ Steps 1–2 serve the channel list and steps 3–4 the topic list: two
 statements per list, four per page load, whatever the number of channels or
 topics. The cap applies inside steps 2 and 4, per channel and per topic;
 the first-unread lookups take no cap. The [query gate](import-checks.md) accepts
-FROM `unnest` of `bigint[]` (#727) or `uuid[]` (#740) `sqlc.arg` parameters,
-alone or mixed. Counts' gate additions are reviewed separately in #740–#743.
-`LATERAL` and derived relations (#741), `UNION ALL` (#742), and
-`int8multirange` parameters and containment (#743) remain planned.
+`unnest` of `bigint[]` (#727) and `uuid[]` (#740) parameters, parallel arrays
+joined `WITH ORDINALITY` (#749); `LATERAL` (#741), `UNION ALL` (#742) and
+`int8multirange` (#743) remain planned.
 
 ## Cost of the reads
 

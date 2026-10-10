@@ -35,7 +35,7 @@ Read the file for the area you change:
 | [`stream-authorization-results.md`](stream-authorization-results.md) | what #670's cached allows cost, measured by #671: epoch reads, hit rate, queries and latency, and what hit the limit first |
 | [`shared-reader.md`](shared-reader.md) | *planned* (#232): one reader per organisation, its window, the hand-over from replay to live, slow connections, and what should decide whether to build it |
 | [`shared-reader-growth.md`](shared-reader-growth.md) | *planned*: how the shared reader grows into a channel interest index and bounded replay, and its implementation issues |
-| [`unread-counts.md`](unread-counts.md) | *planned:* how read state is stored, written and counted, and what the counts cost |
+| [`unread-counts.md`](unread-counts.md) | current read-state storage; planned reading flows and counts, and what the counts cost |
 | [`unread-benchmark-results.md`](unread-benchmark-results.md) | the read-range benchmark's results (#283) and the go/no-go decision |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
@@ -47,7 +47,7 @@ Read the file for the area you change:
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),
-[org](../api/org.txt) and [conversation](../api/conversation.txt).
+[org](../api/org.txt), [conversation](../api/conversation.txt) and [unread](../api/unread.txt).
 Run `make api` after an API or doc-comment change; `make check` compares them
 without rewriting files. Entries and members are sorted by name, with signatures
 and first doc sentences; unexported declarations and their members are omitted.

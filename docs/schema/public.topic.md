@@ -4,9 +4,9 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false | [public.channel](public.channel.md) [public.message](public.message.md) |  |  |
-| organization_id | uuid |  | false | [public.channel](public.channel.md) [public.message](public.message.md) | [public.channel](public.channel.md) |  |
-| channel_id | uuid |  | false | [public.channel](public.channel.md) [public.message](public.message.md) | [public.channel](public.channel.md) |  |
+| id | uuid | uuidv7() | false | [public.channel](public.channel.md) [public.message](public.message.md) [public.topic_read_floor](public.topic_read_floor.md) |  |  |
+| organization_id | uuid |  | false | [public.channel](public.channel.md) [public.message](public.message.md) [public.topic_read_floor](public.topic_read_floor.md) | [public.channel](public.channel.md) |  |
+| channel_id | uuid |  | false | [public.channel](public.channel.md) [public.message](public.message.md) [public.topic_read_floor](public.topic_read_floor.md) | [public.channel](public.channel.md) |  |
 | name | text |  | true |  |  |  |
 | is_default | boolean | false | false | [public.channel](public.channel.md) |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
@@ -44,6 +44,7 @@ erDiagram
 
 "public.channel" }o--|| "public.topic" : "FOREIGN KEY (organization_id, id, default_topic_id, default_topic_is_default) REFERENCES topic(organization_id, channel_id, id, is_default) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED"
 "public.message" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
+"public.topic_read_floor" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
 "public.topic" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 
 "public.topic" {
@@ -73,6 +74,13 @@ erDiagram
   timestamp_with_time_zone created_at
   uuid topic_id FK
   bigint moved_event_seq
+}
+"public.topic_read_floor" {
+  uuid organization_id FK
+  uuid topic_id FK
+  uuid member_id FK
+  uuid channel_id FK
+  bigint floor_seq
 }
 ```
 

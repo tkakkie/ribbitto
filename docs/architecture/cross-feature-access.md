@@ -46,6 +46,14 @@ Malformed topic paging links and the organisation stream's topic filter check th
 `conversation.Topics.Get`, scoped by the resolved membership, without history;
 topic posts rely on the lookup inside the posting transaction.
 
+Unread's store binds to a caller-owned transaction through `unreadpg.WriterIn`.
+It locks or creates `channel_read`, unions the supplied join prefix before
+the new range, and reads/deletes only primary-key-bounded neighbours. A
+savepoint around creation recovers a concurrent unique conflict; it never
+completes the caller's transaction. The caller supplies org's persisted join
+sequence; no message or foreign-table query runs in unread. Consumers are
+planned in #726 and #721.
+
 Identity's store creates accounts in the caller's transaction through
 `identitypg.AccountCreatorIn`. Adapters in `cmd/*` and the tests adapt it to
 org's factory and prove that the creator fits `org.AccountCreator`;

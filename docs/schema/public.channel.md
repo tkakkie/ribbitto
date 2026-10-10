@@ -4,8 +4,8 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false | [public.message](public.message.md) [public.topic](public.topic.md) | [public.topic](public.topic.md) |  |
-| organization_id | uuid |  | false | [public.message](public.message.md) [public.topic](public.topic.md) | [public.organization](public.organization.md) [public.topic](public.topic.md) |  |
+| id | uuid | uuidv7() | false | [public.message](public.message.md) [public.topic](public.topic.md) [public.channel_read](public.channel_read.md) | [public.topic](public.topic.md) |  |
+| organization_id | uuid |  | false | [public.message](public.message.md) [public.topic](public.topic.md) [public.channel_read](public.channel_read.md) | [public.organization](public.organization.md) [public.topic](public.topic.md) |  |
 | name | text |  | false |  |  |  |
 | is_default | boolean | false | false |  |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
@@ -49,6 +49,7 @@ erDiagram
 "public.channel" }o--|| "public.topic" : "FOREIGN KEY (organization_id, id, default_topic_id, default_topic_is_default) REFERENCES topic(organization_id, channel_id, id, is_default) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED"
 "public.message" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 "public.topic" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
+"public.channel_read" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 "public.channel" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 
 "public.channel" {
@@ -78,6 +79,11 @@ erDiagram
   timestamp_with_time_zone created_at
   uuid topic_id FK
   bigint moved_event_seq
+}
+"public.channel_read" {
+  uuid organization_id FK
+  uuid channel_id FK
+  uuid member_id FK
 }
 "public.organization" {
   uuid id

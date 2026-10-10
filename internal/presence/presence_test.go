@@ -18,7 +18,7 @@ func TestState(t *testing.T) {
 				var raises atomic.Int64
 				s = New(generationFunc(func(id kernel.ID, kind realtime.Interest, generation int64) {
 					o := s.organizations[id]
-					if kind != realtime.InterestPresence || o.generation != generation || (o.members[kernel.ID{2}] != nil) != (generation == 1) {
+					if kind != realtime.InterestPresence || o.generation != generation || o.members[kernel.ID{2}].entry.Online != (generation == 1) {
 						t.Fatal("generation raised before publishing state")
 					}
 					raises.Add(1)
@@ -90,4 +90,50 @@ type generationFunc func(kernel.ID, realtime.Interest, int64)
 
 func (f generationFunc) RaiseGeneration(id kernel.ID, kind realtime.Interest, generation int64) {
 	f(id, kind, generation)
+}
+
+func TestChanges(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := New(realtime.NewHub())
+		organizationID, a, b := kernel.ID{1}, kernel.ID{2}, kernel.ID{3}
+		page, _ := s.Read(organizationID, nil)
+		closeA := s.Open(organizationID, a)
+		s.Open(organizationID, b)
+		advance := func(d time.Duration) { <-time.After(d); synctest.Wait() }
+		for range 101 { // Generations do not count towards the entry limit.
+			closeA()
+			advance(30 * time.Second)
+			closeA = s.Open(organizationID, a)
+		}
+		got := s.After(organizationID, page.Token)
+		if got.Reset || len(got.Entries) != 2 || got.Entries[0] != (Entry{b, true}) || got.Entries[1] != (Entry{a, true}) {
+			t.Fatalf("coalesced last-change order = %+v", got)
+		}
+		// The same member differs only by organisation, with a valid process token.
+		if other := s.After(kernel.ID{9}, page.Token); other.Reset || len(other.Entries) != 0 {
+			t.Fatalf("other organisation = %+v", other)
+		}
+		closeA()
+		advance(30 * time.Second)
+		offline := s.After(organizationID, got.Token)
+		if offline.Reset || len(offline.Entries) != 1 || offline.Entries[0] != (Entry{a, false}) {
+			t.Fatalf("offline suffix = %+v", offline)
+		}
+		advance(OfflineRetention - time.Nanosecond)
+		if kept := s.After(organizationID, got.Token); kept.Reset || len(kept.Entries) != 1 {
+			t.Fatalf("expired early: %+v", kept)
+		}
+		advance(time.Nanosecond)
+		if expired := s.After(organizationID, got.Token); !expired.Reset || expired.Boundary != offline.Token.Generation || len(expired.Entries) != 0 {
+			t.Fatalf("discard boundary = %+v", expired)
+		}
+		if equal := s.After(organizationID, offline.Token); equal.Reset || len(equal.Entries) != 0 {
+			t.Fatalf("boundary equality = %+v", equal)
+		}
+		s.Open(organizationID, a)()
+		advance(30*time.Second + OfflineRetention)
+		if later := s.After(organizationID, offline.Token); !later.Reset || later.Boundary <= offline.Token.Generation {
+			t.Fatalf("boundary did not advance: %+v", later)
+		}
+	})
 }

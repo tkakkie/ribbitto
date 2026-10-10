@@ -25,7 +25,7 @@ A cross-module flow's root use case owns its transaction through an injected run
 | `realtime`: event log, retention, hub, stream loop, envelope | `event_log` |
 | `org`: organisations, members, authorisation (`Membership`), setup, sign-up | `organization`, `member`, `setup` |
 | `conversation`: channels, topics, branching, posting, history, the page snapshot use case | `channel`, `topic`, `message` |
-| `presence`: per-process online state and grace expiry; delivery/display planned (#767, #768) | no tables |
+| `presence`: per-process online state, grace expiry and ordered changes/reset; rendering/delivery planned (#768) | no tables |
 | `unread`: feed and topic writes, transaction-bound lock, join prefix, read-range unions and topic floors | `channel_read`, `read_range`, `topic_read_floor` |
 
 `internal/web` stays the UI shell and imports module roots. Its per-kind

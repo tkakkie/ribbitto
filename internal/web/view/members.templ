@@ -1,17 +1,44 @@
 package view
 
 import (
+	"encoding/hex"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
 
-// Member holds only the names shown in the members panel.
-type Member struct{ DisplayName, Handle string }
+// Member holds the names and presence shown in the members panel.
+type Member struct {
+	ID                  kernel.ID
+	DisplayName, Handle string
+	Online              bool
+}
 
 // MemberPage is a bounded listing and its optional next-page cursor.
 type MemberPage struct {
-	Items []Member
-	Next  *kernel.ID
+	Items         []Member
+	Next          *kernel.ID
+	PresenceAfter string
+}
+
+// PresenceDOMID identifies the same indicator in page and live markup.
+func PresenceDOMID(id kernel.ID) string { return "presence-" + hex.EncodeToString(id[:]) }
+
+// PresenceIndicator always labels its state; colour is a supplementary cue.
+templ PresenceIndicator(id kernel.ID, online, live bool) {
+	<span
+		id={ PresenceDOMID(id) }
+		class="ms-2 inline-flex items-center gap-1 text-caption text-muted"
+		if live {
+			hx-swap-oob="outerHTML"
+		}
+	>
+		if online {
+			<span class="h-2 w-2 rounded-full bg-success" aria-hidden="true"></span>
+			{ i18n.T(ctx, "people.online") }
+		} else {
+			{ i18n.T(ctx, "people.offline") }
+		}
+	</span>
 }
 
 templ membersPanel(page ChannelPage) {
@@ -24,6 +51,7 @@ templ membersPanel(page ChannelPage) {
 			for _, member := range page.Members.Items {
 				<li class="break-words">
 					@MemberName(member.DisplayName, member.Handle)
+					@PresenceIndicator(member.ID, member.Online, false)
 				</li>
 			}
 		</ul>

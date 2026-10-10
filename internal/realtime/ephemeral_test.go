@@ -42,6 +42,8 @@ func TestEphemeralScopesAndAuthorization(t *testing.T) {
 		{"channel denied", InterestTyping, InterestTyping, orgA, channelA, topicA, true, nil, 1, 0},
 		{"failed check", InterestTyping, InterestTyping, orgA, channelA, topicA, false, failure, 1, 0},
 		{"presence", InterestPresence, InterestPresence, orgA, channelA, topicA, false, nil, 1, 1},
+		{"presence organisation", InterestPresence, InterestPresence, orgB, channelA, topicA, false, nil, 0, 0},
+		{"presence interest", InterestPresence, InterestTyping, orgA, channelA, topicA, false, nil, 0, 0},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {

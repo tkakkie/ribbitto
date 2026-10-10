@@ -15,6 +15,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/presence"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
@@ -29,7 +30,9 @@ type Streaming struct {
 	Hub        *realtime.Hub
 	Events     realtime.EventReader
 	Authorizer realtime.Authorizer
-	// Owners adapts feature state to current frames; none are wired yet.
+	// Presence supplies the members page's snapshot, shared with its owner.
+	Presence *presence.State
+	// Owners adapts feature state to current frames.
 	Owners map[realtime.Interest]realtime.EphemeralOwner
 	// StreamOpened counts every accepted stream, regardless of interests.
 	// Its returned cleanup releases that member's count.

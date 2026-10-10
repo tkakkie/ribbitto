@@ -64,7 +64,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `message-body`, `message-composer`, `message-help`, `message-status`,
   `read-form`, `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
-  checkbox (32 lowercase hex digits). `#message-items` is always present,
+  checkbox, and `presence-<hex>` from `PresenceDOMID` for member indicators
+  (32 lowercase hex digits). `#message-items` is always present,
   including when empty; Load older selects its direct `<li>` children.
 - **The data attributes that scripts read are a contract too,** with the
   same rule for renaming (#351). A missing one fails silently: without
@@ -84,9 +85,11 @@ htmx does only requests and swaps; the server and templ own the HTML.
   every swap target. It wraps the sidebar and conversation or members panel, with `hx-ext="sse"`
   and `sse-connect="/organizations/<slug>/events?after=<cursor>&want=<interests>&channel=<id>"`
   (plus `topic=<id>` on latest topic views). Latest pages declare
-  `sidebar,messages,typing`; older and members pages declare `sidebar` and omit `topic`.
+  `sidebar,messages,typing`; older pages declare `sidebar`; members pages declare `sidebar,presence` with
+  `presence-after` from the same snapshot as their indicators. Both omit `topic`.
   Members navigation and paging use ordinary links; `#members-list` is bounded
-  to 100 names and has no live swap or live region.
+  to 100 names and has no live list swap or live region. Presence entries replace
+  individual labeled indicators by stable DOM id.
   See [stream scope](streaming.md#stream-scope). `reset` handling attaches to
   this container. Its reconnect cursor advances after an inserted message
   settles or a move applies successfully.

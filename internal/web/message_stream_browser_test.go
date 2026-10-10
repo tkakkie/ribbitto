@@ -359,7 +359,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 	})
 }
 
-// The frame source is test-only: no presence owner or sidebar recount is wired.
+// This frame source uses test-only OOB entries instead of feature owners.
 func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()

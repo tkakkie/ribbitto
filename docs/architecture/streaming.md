@@ -63,8 +63,8 @@ The retention period defaults to seven days; see [database configuration](../dat
   re-check count, through `Streaming.StreamOpened` with the resolved
   organisation and member; every interest counts. Presence stays online
   until 30 s after the last close; a reconnect cancels expiry. State, bounded
-  snapshots (#766) and changes/reset (#767) are current; rendering/delivery
-  (#768) remain planned.
+  snapshots (#766), changes/reset (#767) and rendering/delivery
+  (#768) are current.
   Cancellation before the first write answers 404 for an ended session or
   503 for shutdown, without committing SSE headers. The status is
   committed by `WriteHeader` outside the sender, after one more look at the
@@ -91,8 +91,7 @@ delivers durable frames; `typing` and `presence` read their wired
 owners after each durable batch and before waiting, at most one frame and
 one authorization check per kind. Presence checks the organisation, typing
 the frame's channel, immediately before sending. Denies mark the generation
-seen; errors stop the stream. Owner adapters remain planned (#768, #288), so no
-ephemeral frames are sent in production yet. `sidebar` remains planned (#286).
+seen; errors stop the stream. Web's presence adapter is wired in production (#768); typing remains planned (#288). `sidebar` remains planned (#286).
 
 The endpoint takes:
 
@@ -109,7 +108,7 @@ The endpoint takes:
 | Feed (latest page) | `sidebar,messages,typing` with `channel` |
 | Topic view (latest page) | `sidebar,messages,typing` with `channel` and `topic` |
 | `?before=` page | `sidebar` with `channel` |
-| Members panel | `sidebar` with `channel`; #768 adds `presence` and its token |
+| Members panel | `sidebar,presence` with `channel` and `presence-after` |
 
 Every page carries its snapshot cursor on `#organization-stream`, including
 `?before=` pages, which hold a slot under both stream caps. Only `message`
@@ -122,11 +121,10 @@ token: one coalesced entry per member, in last-change order, at most 100.
 Offline entries stay five minutes; discarding one advances a monotonic boundary.
 The state, boundary and generation come from one locked read. Another process's
 token, a start below the boundary or over 100 changes require `reset` on connect
-or later; equality at the boundary is served. The planned adapter (#768) sends
+or later; equality at the boundary is served. The presence adapter sends
 that reset without `id:`, ending the stream so the page reloads.
 Sidebar frames remain planned (#286), recounting at connect and after
-coalesced triggers. Their swap targets are listed below; feature entries and
-the typing region remain planned.
+coalesced triggers. Their swap targets are listed below; the typing region remains planned.
 
 | Event | `id:` | Where htmx puts it |
 |---|---|---|
@@ -147,7 +145,7 @@ even when the main swap is `none`, and an entry not on the page is ignored.
 The sink is hidden from assistive technology and takes no focus.
 `TestMessageStreamBrowser` proves replacement and missing-target behavior with
 test-only entries rendered with `html/template`, and that native `Last-Event-ID` and the page's
-reconnect cursor stay unchanged after ephemeral frames. Production frames
-remain planned (#286, #768). Opening the members panel is a
-navigation. It lists members without live list updates; #768 will render presence
-and its token from one state.
+reconnect cursor stay unchanged after ephemeral frames. Production presence frames share the page's indicator component; sidebar frames remain planned (#286). Opening the members
+panel is a navigation. Its bounded, paged list has no live list updates. One
+presence snapshot supplies every indicator and the page token; changes replace
+only loaded indicators, with visible localized labels and the success dot.

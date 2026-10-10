@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"net/url"
 )
 
 // Organization holds the organisation fields displayed by a channel page.
@@ -99,9 +100,15 @@ func streamURL(page ChannelPage) string {
 	if page.Before == 0 && page.Members == nil {
 		want += ",messages,typing"
 	}
+	if page.Members != nil && page.Members.PresenceAfter != "" {
+		want += ",presence"
+	}
 	endpoint := fmt.Sprintf("/organizations/%s/events?after=%d&want=%s&channel=%s", page.Organization.Slug, *page.EventCursor, want, idValue(page.Current.ID))
 	if page.Before == 0 && page.Members == nil && page.Topic != nil {
 		endpoint += "&topic=" + idValue(page.Topic.ID)
+	}
+	if page.Members != nil && page.Members.PresenceAfter != "" {
+		endpoint += "&presence-after=" + url.QueryEscape(page.Members.PresenceAfter)
 	}
 	return endpoint
 }

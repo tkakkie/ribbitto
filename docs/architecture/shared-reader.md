@@ -15,7 +15,7 @@ connection of its organisation, and each one reads the hub's atomic
 durable level/channel snapshot and looks up the event cache, joining a shared
 read and, for the short batch that holds a new post, a second shared read
 after it. The writer's combined wait also includes its declared ephemeral
-generations, heartbeat and context (#735); production owners are planned (#287, #288).
+generations, heartbeat and context (#735); production presence is current (#768); typing remains planned (#288).
 Renders, authorization and sends are per connection.
 
 ## The reader

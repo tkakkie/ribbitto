@@ -217,5 +217,11 @@ other = "No members on this page."
 ["people.next"]
 other = "Next members"
 
+["people.online"]
+other = "Online"
+
+["people.offline"]
+other = "Offline"
+
 ["reading.mark"]
 other = "Mark as read"

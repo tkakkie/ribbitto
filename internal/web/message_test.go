@@ -572,7 +572,7 @@ func labelLink(entry conversation.Entry) string {
 
 func (f fakeMessages) Members(ctx context.Context, m org.Membership, id kernel.ID, _ *kernel.ID) (conversation.MembersPage, error) {
 	page, err := f.Page(ctx, m, id, nil, nil)
-	return conversation.MembersPage{Current: page.Current, Channels: page.Channels, Topics: page.Topics, EventCursor: page.EventCursor, Members: []conversation.ChannelMember{{DisplayName: "مريم", Handle: "alice"}, {DisplayName: "\u3164", Handle: "legacy"}}, Next: &kernel.ID{7}}, err
+	return conversation.MembersPage{Current: page.Current, Channels: page.Channels, Topics: page.Topics, EventCursor: page.EventCursor, Members: []conversation.ChannelMember{{ID: kernel.ID{1}, DisplayName: "مريم", Handle: "alice"}, {ID: kernel.ID{2}, DisplayName: "\u3164", Handle: "legacy"}}, Next: &kernel.ID{7}}, err
 }
 
 func (*fakePostingWriter) LastMessageBefore(context.Context, kernel.ID, kernel.ID, int64) (int64, error) {

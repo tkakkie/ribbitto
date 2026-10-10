@@ -12,5 +12,6 @@
 // display-name lookup and stream cursor in one snapshot. Member lookups return
 // org's directory entries, not copies. The topic lookup is scoped by a resolved
 // membership so web cannot supply the organisation. The store also implements setup's injected
-// default-channel write and transaction-bound channel message bounds for unread.
+// default-channel write and transaction-bound channel message and topic unread
+// range bounds for unread. Read sets cross as values, never foreign-table reads.
 package conversation

@@ -1,6 +1,7 @@
 # Unread counts
 
-How read state is stored, written and counted, and what that costs
+How read state is stored and counted, and what that costs (writes are in
+[unread writes](unread-writes.md))
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
 The move column, read-state tables, range store, feed write and branch-notice
 reads are current; HTTP callers, topic and posting writes, and counts are *planned* (M4). The
@@ -83,46 +84,8 @@ index, `R` ranges of the current channel at or above `P`:
 
 ## Writes
 
-The current store locks `channel_read` (inserting it if missing), then unions
-the join prefix before the new range. Concurrent writes queue and commute; none
-removes a read message. A savepoint recovers concurrent row creation. A
-primary-key predecessor lookup bounds deletion to overlapping or touching
-rows up to the new upper end, then inserts their union. The caller's
-transaction commits or rolls back all writes.
-
-A newly read message
-`m` adds `[p + 1, n)`, with `p` the channel's previous message (or 0) and
-`n` its next (or `m + 1`), so every bounded gap contains an unread message.
-
-- **Feed, cursor `S` (current):** `unread.FeedWriter` uses injected factories
-  to read org's committed cursor and conversation's next message in the caller's
-  transaction, then unions the prefix. One probe finds the first message above
-  `S` (`n`, or `S + 1`), then `[0, n)`: it deletes every range it absorbs,
-  so its cost is proportional to the ranges merged, `O(R)` after heavy
-  fragmentation and `O(1)` in normal use.
-- **Branch notice (current):** conversation's organisation- and channel-scoped
-  predecessor query returns `p` (or 0). An injected `unreadpg.WriterIn` adapter
-  calls `Writer.Merge` with `[p + 1, m + 1)` and the persisted join prefix after
-  inserting notice `m`, before its append. The organisation lock keeps `m`
-  newest; all writes share branching's transaction. Moves leave read state unchanged.
-- **Topic view, cursor `S` (planned):** set-based, never one statement per message.
-  `conversation` returns, in one statement, the bounds `[p + 1, n)` of the
-  topic's unread messages up to `S` (step 4's shape without its cap,
-  excluding `moved_event_seq > S`); `unread` passes them as arrays (#727) to
-  one statement that coalesces them, merges only the ranges they overlap or
-  touch (found by the primary key) and raises the floor to `S` if lower, in
-  the same transaction. Cost: `O(R)` for the read set and the candidate
-  rows; 87–88 ms for 9,999 messages over 10,000 ranges in the benchmark.
-- **Posting (planned)** with the composer's cursor `S`: the same write as the page's
-  scope up to `S`, then a range for the new message; from a topic view the
-  floor also rises to the new message when no message of the topic has an
-  `event_seq` or `moved_event_seq` strictly between `S` and it. `S` is the
-  newest durable sequence the page has applied and shown, never a sequence
-  only received or the post's own response, so posting never reads a
-  message the member has not seen.
-
-A cursor above the organisation's committed `event_seq` is refused, so any
-later move has a higher sequence than the floor it raises.
+How read ranges are added and merged, flow by flow, is in
+[unread writes](unread-writes.md).
 
 ## Expected load
 
@@ -155,7 +118,7 @@ Optional `RIBBITTO_UNREAD_BENCH_*` suffixes (defaults): `POSTS` (`10,100,1000,10
 `RANGES` (10000), `TOPICS` (50), `WARMUP` (3), `REPEAT` (20). Use positive integers; `RANGES` and `TOPICS` need at least 2.
 Logs include version, settings, volumes, indexes, `ANALYZE`, plans, row visits, buffers, median and p95.
 Normal/stressed runs alternate; writes roll back. Timings exclude transaction boundaries and plan instrumentation.
-`topic-write` measures the set-based flow under Writes; statement count is
+`topic-write` measures the set-based flow in [unread writes](unread-writes.md); statement count is
 independent of messages read. Range-count diagnostics run after EXPLAIN totals,
 outside timings and instrumentation. `topic-write-per-message` retains one merge
 per message for comparison. Both bound lookups by the primary-key predecessor

@@ -5,7 +5,8 @@
 left to M4). Storage, single-range unions, the feed write and branch-notice
 reads are implemented;
 HTTP callers, other reading writes and counts remain *planned* for M4. Rules in [unread](../domain/unread.md),
-storage and cost in [unread counts](../architecture/unread-counts.md).
+storage and cost in [unread counts](../architecture/unread-counts.md), writes in
+[unread writes](../architecture/unread-writes.md).
 
 - **Read ranges.** A member's read state in a channel is a set of
   `message.event_seq` ranges, one row each (`read_range`), starting with

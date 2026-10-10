@@ -7,5 +7,6 @@
 // binds conversation's reads to snapshots over the pool. Their runners and
 // own-module bindings are unexported; EventKinds registers the event routers
 // with realtime. MessageSequencesIn binds channel bounds for unread to
-// its caller's transaction.
+// its caller's transaction; TopicReadCandidatesIn binds topic unread bounds
+// to that transaction.
 package conversationpg

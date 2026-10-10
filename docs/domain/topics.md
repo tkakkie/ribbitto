@@ -110,7 +110,8 @@ channel, a new one or an existing one. In **one transaction**:
    moved keep it NULL;
 4. a **branch notice** is posted in the source topic, naming the
    destination and the number of messages moved. It is an ordinary new
-   message, so it appears at the time of branching;
+   message, so it appears at the time of branching; its author's read set adds
+   just the notice through an injected writer in this same transaction;
 5. the move and the notice are recorded as new durable events
    ([decision 5](../decisions/05-one-event-sequence-per-organisation.md)), so live clients see them in
    order and a reconnecting client replays them.

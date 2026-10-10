@@ -2,7 +2,7 @@
 // that decides who may see an organisation's data. Handlers and the
 // real-time delivery loop call it; they never decide access themselves.
 // Stream allows are bounded and checked against fresh shared access-epoch
-// reads; membership and epoch come from one statement.
+// reads; membership, persisted join sequence and epoch come from one statement.
 //
 // Module: org (feature map in docs/architecture/features.md), which owns the
 // organization, member and setup tables and publishes member.joined.

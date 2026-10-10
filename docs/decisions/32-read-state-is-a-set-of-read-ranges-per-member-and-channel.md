@@ -2,7 +2,8 @@
 
 **Decided** (#282; supersedes nothing; settles the unread model that
 [decision 21](21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)
-left to M4). Storage, single-range unions and the feed write are implemented;
+left to M4). Storage, single-range unions, the feed write and branch-notice
+reads are implemented;
 HTTP callers, other reading writes and counts remain *planned* for M4. Rules in [unread](../domain/unread.md),
 storage and cost in [unread counts](../architecture/unread-counts.md).
 
@@ -20,7 +21,8 @@ storage and cost in [unread counts](../architecture/unread-counts.md).
   has only received, or the sequence in a post's own response, never makes
   an unshown message read. Without JavaScript, a *Mark as read* form sends
   the same POST. Posting reads its page's scope up to the same cursor, and a
-  member's own posts are read for them.
+  member's own posts are read for them. Branching currently adds its author's
+  notice to the read set in the branching transaction through an injected writer.
 - **Counts.** A channel's count is all its unread messages, the sum over all
   its topics; a topic's is those in that topic. Each list (the sidebar's
   channels, the current channel's topics) takes two statements in the

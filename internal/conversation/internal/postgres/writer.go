@@ -113,3 +113,17 @@ func (w Writer) MoveMessages(ctx context.Context, organizationID, channelID, fro
 	}
 	return moved, nil
 }
+
+// LastMessageBefore returns the previous channel message, or zero when absent.
+func (w Writer) LastMessageBefore(ctx context.Context, organizationID, channelID kernel.ID, seq int64) (int64, error) {
+	previous, err := w.queries.LastChannelMessageBefore(ctx, sqlcgen.LastChannelMessageBeforeParams{
+		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), EventSeq: seq,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("finding previous channel message: %w", err)
+	}
+	return previous, nil
+}

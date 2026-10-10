@@ -50,7 +50,8 @@ func testBrancher(writer conversation.Writer) *conversation.Brancher {
 	return conversation.NewBrancher(fakeTxRunner{},
 		func(platform.Tx) conversation.Writer { return writer },
 		func(platform.Tx) conversation.EventSequence { return fakeEventSequence{} },
-		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} }, nil)
+		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} },
+		func(platform.Tx) conversation.ReadRangeWriter { return fakeBranchReads{} }, nil)
 }
 
 func TestBranchSelection(t *testing.T) {
@@ -148,4 +149,14 @@ func TestBranchSelection(t *testing.T) {
 			}
 		}
 	}
+}
+
+func (*fakeBranchWriter) LastMessageBefore(context.Context, kernel.ID, kernel.ID, int64) (int64, error) {
+	return 0, nil
+}
+
+type fakeBranchReads struct{}
+
+func (fakeBranchReads) Merge(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64, int64) error {
+	return nil
 }

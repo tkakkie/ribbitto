@@ -106,7 +106,7 @@ func TestPostingAndBranchingIntoUnknownOrganization(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", conversation.DefaultChannelName)
-	posting, branching := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, nil)
+	posting, branching := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, branchReads, nil)
 	posted, err := posting.Post(ctx, membership(acme.OrganizationID, acme.MemberID), acme.Channel.ID, "kept")
 	requireNoError(t, err)
 	written := func() (counts [4]int64) {

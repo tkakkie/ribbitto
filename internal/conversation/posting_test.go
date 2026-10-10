@@ -184,3 +184,7 @@ func TestPostingNilNotifier(t *testing.T) {
 		t.Fatalf("nil notifier: %v, calls %v", err, f.calls)
 	}
 }
+
+func (f *postingFake) LastMessageBefore(context.Context, kernel.ID, kernel.ID, int64) (int64, error) {
+	panic("unexpected LastMessageBefore")
+}

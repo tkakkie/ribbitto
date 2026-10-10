@@ -42,14 +42,14 @@ func TestBrancherValidates(t *testing.T) {
 
 func TestBrancherRunsAndRaises(t *testing.T) {
 	failure := errors.New("statement or commit failed")
-	m := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}, Member: org.Member{ID: kernel.ID{2}}}
+	m := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}, Member: org.Member{ID: kernel.ID{2}, JoinedEventSeq: 11}}
 	for _, existing := range []bool{false, true} {
 		destination := "create"
 		b := conversation.Branch{Messages: []kernel.ID{{5}}, From: kernel.ID{4}, NewName: "  設計 "}
 		if existing {
 			destination, b.To, b.NewName = "destination", &kernel.ID{9}, ""
 		}
-		order := []string{"begin", "move sequence", "notice sequence", "source", destination, "move", "moved append", "notice", "notice insert", "posted append", "commit", "raise"}
+		order := []string{"begin", "move sequence", "notice sequence", "source", destination, "move", "moved append", "notice", "notice insert", "previous message", "notice read", "posted append", "commit", "raise"}
 		for _, fail := range append([]string{"", "conflict", "nil notifier"}, order[:len(order)-1]...) {
 			if fail == "notice" {
 				continue

@@ -138,6 +138,25 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 	return i, err
 }
 
+const lastChannelMessageBefore = `-- name: LastChannelMessageBefore :one
+SELECT event_seq FROM message
+WHERE organization_id = $1 AND channel_id = $2 AND event_seq < $3
+ORDER BY event_seq DESC LIMIT 1
+`
+
+type LastChannelMessageBeforeParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	EventSeq       int64
+}
+
+func (q *Queries) LastChannelMessageBefore(ctx context.Context, arg LastChannelMessageBeforeParams) (int64, error) {
+	row := q.db.QueryRow(ctx, lastChannelMessageBefore, arg.OrganizationID, arg.ChannelID, arg.EventSeq)
+	var event_seq int64
+	err := row.Scan(&event_seq)
+	return event_seq, err
+}
+
 const listMessagesBefore = `-- name: ListMessagesBefore :many
 SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq FROM message
 WHERE organization_id = $1 AND channel_id = $2

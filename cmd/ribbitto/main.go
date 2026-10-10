@@ -21,6 +21,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -325,7 +326,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
 	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, postingNotifier)
-	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents, postingNotifier)
+	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, postingNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions: sessions,
 		SignIn:   identitypg.NewSignIn(pool, hasher, sessions),
@@ -462,4 +463,15 @@ func newFeedWriter() *unread.FeedWriter {
 		func(tx platform.Tx) unread.ChannelMessages { return conversationpg.MessageSequencesIn(tx) },
 		func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) },
 	)
+}
+
+// branchReads adapts unread's range writer to conversation's consumer interface.
+func branchReads(tx platform.Tx) conversation.ReadRangeWriter {
+	return branchReadWriter{ranges: unreadpg.WriterIn(tx)}
+}
+
+type branchReadWriter struct{ ranges unread.RangeWriter }
+
+func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
+	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, unread.Range{Lo: lo, Hi: hi})
 }

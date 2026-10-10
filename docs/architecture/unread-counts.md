@@ -4,7 +4,8 @@ How read state is stored and counted, and what that costs (writes are in
 [unread writes](unread-writes.md))
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
 The move column, read-state tables, range store, feed, topic and branch-notice
-reads are current; HTTP callers, posting writes and counts are *planned* (M4). The
+reads and the sidebar range loader are current; HTTP callers, posting writes
+and message counts are *planned* (M4). The
 rules are in [unread](../domain/unread.md).
 
 ## Storage
@@ -43,10 +44,14 @@ parameter. These statements share the page snapshot, with none per channel or to
 
 | Step | Owner | Input | Statement | Output |
 |---|---|---|---|---|
-| 1 | `unread` | member, the sidebar's channel IDs | for each channel, its first 101 ranges by `lo` (`LATERAL … ORDER BY lo LIMIT 101`) | `P` and the first gaps per channel |
-| 2 | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted and grouped by channel; the feed's first unread is the first row | channel counts, the feed's first unread |
+| 1 (current) | `unread` | member, the sidebar's channel IDs | for each channel, its first 101 ranges by `lo` (`LATERAL … ORDER BY lo LIMIT 101`) | `P` and the first gaps per channel |
+| 2 (planned) | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted and grouped by channel; the feed's first unread is the first row | channel counts, the feed's first unread |
 | 3 | `unread` | member, current channel, its listed topic IDs plus the selected topic when the list omits it | its ranges at or above `P`, and the topics' floors | the read set above `P` and a floor for every topic (`P − 1` without a row) |
 | 4 | `conversation` | the read set as one `int8multirange`, `P`, per-topic `(id, floor)` arrays | per topic: its messages with `event_seq ≥ P` and above its floor, from the topic index in order, that the read set does not contain, at most 100 (`LATERAL … LIMIT 100`); plus its messages with `P ≤ event_seq ≤ floor` and `moved_event_seq > floor`, from the partial index, not contained; counted per topic; for the selected topic only, its lowest unread `event_seq` | topic counts, a topic view's first unread |
+
+Step 1 uses `unreadpg.ChannelRangesIn` in the caller's snapshot. Go derives
+`P` and at most 100 gaps; range 101 only bounds gap 100. Channels without
+rows retain the supplied join prefix and one open gap.
 
 Steps 1–2 serve the channel list and steps 3–4 the topic list: two
 statements per list, four per page load, whatever the number of channels or

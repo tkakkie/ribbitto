@@ -4,6 +4,12 @@ package github.com/tkakkie/ribbitto/internal/unread
 type ChannelMessages interface // ChannelMessages supplies conversation's next message sequence; zero means none.
   func (ChannelMessages).FirstMessageAfter(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64) (int64, error)
 type ChannelMessagesIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) ChannelMessages // ChannelMessagesIn binds conversation's query to the caller's transaction.
+type ChannelRanges interface // ChannelRanges reads the first ranges of the sidebar's channels in one statement.
+  func (ChannelRanges).Read(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]ChannelReadState, error)
+type ChannelRangesIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) ChannelRanges // ChannelRangesIn binds range reads to the caller's snapshot.
+type ChannelReadState struct // ChannelReadState contains the prefix end and up to 100 unread gaps.
+  field Gaps []Range
+  field Prefix int64
 var ErrInvalidCursor error // ErrInvalidCursor means the cursor is negative, unrepresentable or ahead of committed events.
 type EventCursor interface // EventCursor reads org's committed event sequence.
   func (EventCursor).EventSeq(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID) (int64, error)

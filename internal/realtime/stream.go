@@ -128,8 +128,9 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	if batch <= 0 {
 		batch = DefaultBatchSize
 	}
-	// seen is the highest hub value this loop has already caught up with.
-	var seen int64
+	// No owners or frames exist yet: consume generation wakes without output
+	// so a raised generation cannot spin the writer (#736 adds owner reads).
+	var seen streamLevels
 	// written is when the stream last wrote, which the next heartbeat counts
 	// from: wakeups that write nothing, such as another channel's events,
 	// must not put it off.
@@ -166,7 +167,8 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			}
 			continue
 		}
-		seen, err = s.wait(ctx, sub.Organization, max(cursor, seen), send, &written)
+		seen.durable = max(cursor, seen.durable)
+		seen, err = s.wait(ctx, sub, seen, send, &written)
 		if err != nil {
 			return cursor, err
 		}
@@ -222,21 +224,21 @@ func heartbeat(ctx context.Context, send Sender, written *time.Time) error {
 	return nil
 }
 
-// wait is Hub.Wait, sending a heartbeat whenever Heartbeat has passed since
-// *written first; it moves *written on every heartbeat.
-func (s Stream) wait(ctx context.Context, org kernel.ID, after int64, send Sender, written *time.Time) (int64, error) {
+// wait combines the durable level and requested generations, sending a
+// heartbeat whenever Heartbeat has passed since *written first.
+func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, send Sender, written *time.Time) (streamLevels, error) {
 	if s.Heartbeat <= 0 {
-		return s.Hub.Wait(ctx, org, after)
+		return s.Hub.waitFor(ctx, sub, after)
 	}
 	for {
 		waitCtx, cancel := context.WithDeadlineCause(ctx, written.Add(s.Heartbeat), errHeartbeatDue)
-		seq, err := s.Hub.Wait(waitCtx, org, after)
+		levels, err := s.Hub.waitFor(waitCtx, sub, after)
 		cancel()
 		if due, err := heartbeatDue(ctx, err); !due {
-			return seq, err
+			return levels, err
 		}
 		if err := heartbeat(ctx, send, written); err != nil {
-			return 0, err
+			return streamLevels{}, err
 		}
 	}
 }

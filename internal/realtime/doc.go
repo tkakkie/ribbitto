@@ -12,8 +12,13 @@
 // Hub is the process-wide core. Per organisation it keeps the highest
 // committed event sequence it has been told about (Raise) and lets a
 // connection block until that value passes its cursor (Wait) without a
-// lost wakeup. Level and wake channel are published together atomically,
-// so readers do not take the connection registry lock. It is also the
+// lost wakeup. Presence and typing each have a generation per organisation,
+// raised through the same compare-and-swap publication. Each level and wake
+// channel are published together atomically, without a registry lock on the
+// waiter's path. The single stream writer waits on the durable level, only
+// its declared kinds' generations, its heartbeat and its context together.
+// No owners raise generations in production yet; owner reads and frames
+// remain planned (#736), as does web's hidden sink (#737). It is also the
 // registry of open connections: Register caps
 // connections per process and per account and gives each one a context
 // that CancelAccount or CancelSession ends. Events themselves are never

@@ -81,7 +81,9 @@ will add presence and typing as current state ([ephemeral state](realtime.md#eph
 
 `GET /organizations/{slug}/events` accepts these parameters. Only
 `messages` delivers frames; `sidebar`, `typing` and `presence` are accepted
-but deliver nothing yet (#286, #285).
+but deliver nothing yet (#286, #736). Presence and typing generations
+already participate in the writer's combined wait (#735); no owner raises
+them in production.
 
 The endpoint takes:
 
@@ -104,7 +106,7 @@ Every page carries its snapshot cursor on `#organization-stream`, including
 `?before=` pages, which hold a slot under both stream caps. Only `message`
 and `messages-moved` frames advance the browser's durable cursor.
 
-Sidebar and ephemeral delivery remain planned (#286, #285): sidebar frames
+Sidebar and ephemeral delivery remain planned (#286, #736): sidebar frames
 will recount at connect and after coalesced triggers, and typing will follow
 the channel/topic message filter. Their future swap targets are listed below.
 
@@ -123,6 +125,6 @@ Planned typing has its own region. Planned per-entry events go to one hidden sin
 `hx-swap="none"`, whose payload holds only `hx-swap-oob` elements: the
 extension swaps through htmx's own swap, which applies out-of-band elements
 even when the main swap is `none`, and an entry not on the page is ignored.
-#285 proves this in a browser test. Opening the members panel is a
+#737 proves this in a browser test. Opening the members panel is a
 navigation. It lists members without live list updates; #287 will render presence
 and its token from one state.

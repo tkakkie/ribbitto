@@ -25,8 +25,9 @@ var (
 )
 
 // Hub holds, per organisation, the highest committed event sequence it has
-// been told about, and the registry of open connections. It is safe for
-// concurrent use; the zero value is not usable, so call NewHub.
+// been told about, presence and typing generations, and the registry of open
+// connections. It is safe for concurrent use; the zero value is not usable,
+// so call NewHub.
 //
 // The sequence is a level, not a signal: a connection compares it with its
 // own cursor against an atomic snapshot before blocking, so a raise between
@@ -49,12 +50,14 @@ type Hub struct {
 	beforeSequenceStore func()
 }
 
-// orgSequence is one organisation's latest sequence. changed is closed and
-// replaced on every raise, which wakes every waiter at once; a buffered
+// orgSequence keeps one organisation's durable and ephemeral levels. Each
+// level's changed channel is closed and replaced on a raise; a buffered
 // per-waiter signal could be dropped.
 type orgSequence struct {
-	state atomic.Pointer[sequenceState]
-	// waiters counts calls of Wait holding changed; see Waiting.
+	state    atomic.Pointer[sequenceState]
+	presence atomic.Pointer[sequenceState]
+	typing   atomic.Pointer[sequenceState]
+	// waiters counts durable and combined waits holding changed; see Waiting.
 	waiters atomic.Int64
 }
 
@@ -98,6 +101,8 @@ func (h *Hub) sequence(org kernel.ID) *orgSequence {
 	}
 	s := &orgSequence{}
 	s.state.Store(&sequenceState{changed: make(chan struct{})})
+	s.presence.Store(&sequenceState{changed: make(chan struct{})})
+	s.typing.Store(&sequenceState{changed: make(chan struct{})})
 	if h.beforeSequenceStore != nil {
 		h.beforeSequenceStore()
 	}
@@ -109,9 +114,12 @@ func (h *Hub) sequence(org kernel.ID) *orgSequence {
 // value at or below the current one changes nothing, so notifications may
 // arrive late or out of order.
 func (h *Hub) Raise(org kernel.ID, seq int64) {
-	s := h.sequence(org)
+	h.raise(&h.sequence(org).state, seq)
+}
+
+func (h *Hub) raise(level *atomic.Pointer[sequenceState], seq int64) {
 	for {
-		old := s.state.Load()
+		old := level.Load()
 		if seq <= old.latest {
 			return
 		}
@@ -119,7 +127,7 @@ func (h *Hub) Raise(org kernel.ID, seq int64) {
 			h.beforeRaise(seq)
 		}
 		next := &sequenceState{latest: seq, changed: make(chan struct{})}
-		if s.state.CompareAndSwap(old, next) {
+		if level.CompareAndSwap(old, next) {
 			// Only the successful publisher owns this close. A waiter that
 			// captured old before publication still wakes after publication.
 			close(old.changed)
@@ -180,8 +188,8 @@ func (h *Hub) Wait(ctx context.Context, org kernel.ID, after int64) (int64, erro
 	}
 }
 
-// Waiting reports how many calls of Wait for the organisation are counted
-// as blocked, so tests can synchronise on it instead of sleeping. A call is
+// Waiting reports how many durable or combined waits for the organisation
+// are counted as blocked, so tests can synchronise instead of sleeping. A call is
 // counted once it holds the channel the next raise closes; after a raise it
 // stays counted until it runs its decrement, so read the count only while
 // no raise is in flight.

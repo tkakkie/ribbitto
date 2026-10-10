@@ -103,10 +103,21 @@ Short batches already carry their read's checks of both bounds. Cached rows
 are assumed immutable: a restore happens with ribbitto stopped, so caches and
 the hub start empty ([Restoring a backup](../../README.md#restoring-a-backup)).
 
+## Ephemeral generations
+
+The hub publishes a durable level and presence and typing generations per
+organisation as atomic level/channel snapshots with compare-and-swap
+([stream limits](stream-limits.md)). One writer waits on the durable level,
+its declared generations, heartbeat and context without a registry lock or
+lost wake-up. Wakes preserve the cursor and heartbeat deadline. No production
+owner raises generations or sends frames (#736).
+
 ## Ephemeral state (planned, M4)
 
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
 every page already holds one organisation stream with [interests](streaming.md#stream-scope).
+Owners and frames are planned (#736); the sink is #737. Only visible changes
+will raise generations, including typing expiry from the owner's timer.
 
 - **Owners.** Presence (#287) knows which members have a stream open in the
   organisation, from the hub's registrations, and marks a member offline
@@ -127,19 +138,10 @@ every page already holds one organisation stream with [interests](streaming.md#s
   only its place's summary (a feed reads its channel's) and subtracts the
   viewer, found in that set in constant time, from the names and the count,
   so its work does not grow with typists or topics elsewhere.
-- **Levels.** Per organisation the hub holds the durable level and one
-  generation per kind (`presence`, `typing`), each published as an atomic
-  level and channel like the durable level ([stream limits](stream-limits.md)).
-  Only visible changes raise a generation: going online or offline,
-  starting or stopping typing. Typing expiry is a change too, raised by its
-  owner's own timer, not by clients.
-- **Delivery.** The writer waits on the durable level, the generations of
-  its interests, its heartbeat and its context together. After each
-  durable batch, and before waiting, it sends one frame without `id:` per
-  kind whose generation passed what it has seen: the presence entries
-  changed since then, read from the suffix and stopping past the frame's
-  limit (100 entries), or its place's typing indicator (three names at
-  most, then a count) when its summary changed. Presence entries render
+- **Delivery.** Planned (#736): after each durable batch and before waiting,
+  one frame without `id:` per advanced kind: up to 100 presence entries read
+  from the changed suffix, or the place's typing indicator (at most three
+  names, then a count) when its summary changed. Presence entries render
   once per member, state and language and are shared.
 - **Reset.** A presence read whose start lies below the discard boundary,
   from another process's token, or past the frame's limit sends `reset`

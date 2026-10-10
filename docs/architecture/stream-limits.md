@@ -24,12 +24,16 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   still get their private fresh second read, keys include the hub level,
   and every full batch still gets a zero-limit bounds read.
 
-- Hub waiters read the organisation's level and broadcast channel in one
-  immutable atomic snapshot, without the connection registry mutex.
+- Per organisation the hub publishes the durable level and a generation
+  for each ephemeral kind (presence, typing). Each level and its broadcast
+  channel form one immutable atomic snapshot; waiters take no registry mutex.
   Organisation entries are never removed. Concurrent raises use compare
   and swap to publish only a higher level; the successful publisher alone
   closes the old channel. A raise between a waiter's snapshot read and its
-  select therefore wakes it, and Latest never regresses. Register and
+  select therefore wakes it, and no level regresses. The stream selects on
+  the durable channel, only its declared kinds' generation channels, its
+  heartbeat deadline and context together. No owners raise generations or
+  send frames yet (#736); the hidden sink remains planned (#737). Register and
   RaiseIfActive still use the registry mutex for caps and active checks.
 
 - Stream authorization caches allows per distinct (account ID, organisation

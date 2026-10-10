@@ -134,6 +134,7 @@ linters:
             - github.com/tkakkie/ribbitto/internal/realtime$
             - github.com/tkakkie/ribbitto/internal/unread$
             - github.com/tkakkie/ribbitto/internal/presence$
+            - github.com/tkakkie/ribbitto/internal/typing$
           deny:
             - pkg: github.com/tkakkie/ribbitto/internal/
               desc: Respect the dependency direction in AGENTS.md.

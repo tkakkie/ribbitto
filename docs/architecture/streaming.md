@@ -59,9 +59,11 @@ The retention period defaults to seven days; see [database configuration](../dat
   `openStream` helper owns registration, the re-check and the expiry deadline.
   It frees failed registrations; on success, the handler defers one cleanup
   function that cancels the expiry context, unregisters the stream and
-  releases its presence count. Only a successful registration and session
+  releases its presence and channel typing counts. Only a successful registration and session
   re-check count, through `Streaming.StreamOpened` with the resolved
-  organisation and member; every interest counts. Presence stays online
+  organisation, member and channel; every interest counts.
+  Typing uses separate channel counts: the last matching close clears activity
+  immediately ([typing lifetime](typing.md)); failed opens take no count. Presence stays online
   until 30 s after the last close; a reconnect cancels expiry. State, bounded
   snapshots (#766), changes/reset (#767) and rendering/delivery
   (#768) are current.

@@ -2,7 +2,8 @@
 
 **Decided** (#282; supersedes nothing; settles the unread model that
 [decision 21](21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)
-left to M4). *Planned* for M4; rules in [unread](../domain/unread.md),
+left to M4). Storage and single-range unions are implemented; reading flows
+and counts remain *planned* for M4. Rules in [unread](../domain/unread.md),
 storage and cost in [unread counts](../architecture/unread-counts.md).
 
 - **Read ranges.** A member's read state in a channel is a set of

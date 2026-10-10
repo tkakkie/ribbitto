@@ -30,14 +30,14 @@ func main() {
 }
 
 func run(root string, check bool) error {
-	patterns := []string{"./internal/conversation", "./internal/identity", "./internal/org", "./internal/realtime"}
+	patterns := []string{"./internal/conversation", "./internal/identity", "./internal/org", "./internal/realtime", "./internal/unread"}
 	pkgs, err := packages.Load(&packages.Config{Dir: root, Mode: packages.LoadSyntax,
 		Env: append(os.Environ(), "GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0", "GOFLAGS=")}, patterns...)
 	if err != nil {
 		return fmt.Errorf("loading API: %w", err)
 	}
 	if packages.PrintErrors(pkgs) > 0 || len(pkgs) != len(patterns) {
-		return fmt.Errorf("loading API: expected four valid module roots")
+		return fmt.Errorf("loading API: expected %d valid module roots", len(patterns))
 	}
 	slices.SortFunc(pkgs, func(a, b *packages.Package) int { return strings.Compare(a.PkgPath, b.PkgPath) })
 	for _, p := range pkgs {

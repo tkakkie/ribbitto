@@ -14,6 +14,9 @@
 | [public.message](public.message.md) | 9 |  | BASE TABLE |
 | [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
 | [public.topic](public.topic.md) | 6 |  | BASE TABLE |
+| [public.channel_read](public.channel_read.md) | 3 |  | BASE TABLE |
+| [public.read_range](public.read_range.md) | 5 |  | BASE TABLE |
+| [public.topic_read_floor](public.topic_read_floor.md) | 5 |  | BASE TABLE |
 
 ## Stored procedures and functions
 
@@ -41,6 +44,11 @@ erDiagram
 "public.event_log" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.event_log" }o--|| "public.member" : "FOREIGN KEY (organization_id, audience_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.topic" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
+"public.channel_read" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.channel_read" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
+"public.read_range" }o--|| "public.channel_read" : "FOREIGN KEY (organization_id, channel_id, member_id) REFERENCES channel_read(organization_id, channel_id, member_id) ON DELETE CASCADE"
+"public.topic_read_floor" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
+"public.topic_read_floor" }o--|| "public.channel_read" : "FOREIGN KEY (organization_id, channel_id, member_id) REFERENCES channel_read(organization_id, channel_id, member_id) ON DELETE CASCADE"
 
 "public.goose_db_version" {
   integer id
@@ -120,6 +128,25 @@ erDiagram
   text name
   boolean is_default
   timestamp_with_time_zone created_at
+}
+"public.channel_read" {
+  uuid organization_id FK
+  uuid channel_id FK
+  uuid member_id FK
+}
+"public.read_range" {
+  uuid organization_id FK
+  uuid channel_id FK
+  uuid member_id FK
+  bigint lo
+  bigint hi
+}
+"public.topic_read_floor" {
+  uuid organization_id FK
+  uuid topic_id FK
+  uuid member_id FK
+  uuid channel_id FK
+  bigint floor_seq
 }
 ```
 

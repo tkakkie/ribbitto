@@ -99,6 +99,13 @@ internal/realtime/internal/postgres -> internal/realtime/internal/postgres/sqlcg
 internal/realtime/realtimepg -> internal/platform/postgres
 internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
+internal/unread -> internal/kernel
+internal/unread/internal/postgres -> internal/platform/postgres
+internal/unread/internal/postgres -> internal/platform/postgres/pgxbridge
+internal/unread/internal/postgres -> internal/unread
+internal/unread/internal/postgres -> internal/unread/internal/postgres/sqlcgen
+internal/unread/unreadpg -> internal/platform/postgres
+internal/unread/unreadpg -> internal/unread/internal/postgres
 internal/web -> internal/conversation
 internal/web -> internal/identity
 internal/web -> internal/kernel

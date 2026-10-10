@@ -20,7 +20,7 @@ index below for everything else.
 | [`invariants.md`](invariants.md) | rules every piece of code and every migration must keep |
 | [`vocabulary.md`](vocabulary.md) | product labels, ordinary words and Japanese UI vocabulary |
 | [`validation.md`](validation.md) | input validation rules |
-| [`unread.md`](unread.md) | unread rules: read ranges, reading scopes, counts and the divider (planned, M4; inputs since M3) |
+| [`unread.md`](unread.md) | unread rules: read ranges, reading scopes, counts and the divider (storage current; reading flows and counts planned, M4) |
 | [`unread-examples.md`](unread-examples.md) | worked examples of the unread rules: topic reads, moves, concurrent tabs, late messages (planned, M4) |
 | [`names.md`](names.md) | display names, handles, how members are shown |
 | [`channels.md`](channels.md) | channel identity, names and the default channel |
@@ -40,7 +40,7 @@ index below for everything else.
 | **handle** | A member's organisation-scoped name for people to tell members apart, shown as `Display name @handle`. |
 | **section** *(planned)* | A group of channels in the sidebar; only its label is reserved so far. |
 | **channel** | A named conversation inside an organisation. |
-| **read state** *(planned)* | A member's read ranges in a channel: which of its messages they have read ([`unread.md`](unread.md)). |
+| **read state** | A member's read ranges in a channel: which of its messages they have read ([`unread.md`](unread.md)). |
 | **message** | A post in a channel, written by a member. |
 | **reply** *(planned)* | A message linked to an earlier message it answers in the same channel. |
 | **reply chain** *(planned)* | A selected message's ancestor path and all its descendants, in `event_seq` order. |

@@ -19,7 +19,7 @@ func TestSummaryAndFreshness(t *testing.T) {
 		}
 	}
 	write(filepath.Join(root, "go.mod"), "module fixture\n\ngo 1.27.1\n")
-	for _, name := range []string{"conversation", "identity", "org", "realtime"} {
+	for _, name := range []string{"conversation", "identity", "org", "realtime", "unread"} {
 		write(filepath.Join(root, "internal", name, "api.go"), "package "+name+"\n")
 	}
 	path := filepath.Join(root, "internal/identity/api.go")

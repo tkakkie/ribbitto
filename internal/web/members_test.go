@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -21,6 +22,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
@@ -136,5 +138,21 @@ func TestMembersPageAgainstPostgreSQL(t *testing.T) {
 	w := serveForm(handler, "GET", view.ChannelURL("acme", local.Channel.ID), cookie, nil)
 	if !strings.Contains(w.Body.String(), `href="`+view.ChannelURL("acme", local.Channel.ID)+`/members"`) {
 		t.Fatal("missing channel header link")
+	}
+	// The page's strings resolve in both catalogues instead of falling back to
+	// their message IDs.
+	for _, tt := range []struct{ lang, title, back string }{
+		{"en", "Channel members", "Back to channel"},
+		{"ja", "チャンネルのメンバー", "チャンネルに戻る"},
+	} {
+		r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", local.Channel.ID)+"/members", nil)
+		r.Header.Set("Accept-Language", tt.lang)
+		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: cookie})
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		body := w.Body.String()
+		if !strings.Contains(body, tt.title) || !strings.Contains(body, tt.back) || strings.Contains(body, "people.") {
+			t.Errorf("%s: members page strings did not resolve", tt.lang)
+		}
 	}
 }

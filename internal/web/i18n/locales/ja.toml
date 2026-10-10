@@ -142,7 +142,7 @@ other = "チャンネル名は表示可能な1〜80文字で入力してくだ�
 ["channel.error.name_taken"]
 other = "この名前のチャンネルは既に存在します。"
 
-[message.list]
+["message.list"]
 other = "メッセージ一覧"
 
 ["message.body"]
@@ -205,8 +205,14 @@ other = "この名前のトピックはすでに存在します。移動先と�
 ["topic.branch_name_invalid"]
 other = "トピック名は表示可能な1〜80文字で入力してください。"
 
-[people]
-title = "チャンネルのメンバー"
-back = "チャンネルに戻る"
-empty = "このページにメンバーはいません。"
-next = "次のメンバー"
+["people.title"]
+other = "チャンネルのメンバー"
+
+["people.back"]
+other = "チャンネルに戻る"
+
+["people.empty"]
+other = "このページにメンバーはいません。"
+
+["people.next"]
+other = "次のメンバー"

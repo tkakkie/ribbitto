@@ -339,6 +339,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Topics:        conversationpg.NewTopics(pool),
 		Messages:      conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor),
 		Posting:       posting,
+		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter()),
 		Branching:     branching,
 		Channels:      conversationpg.NewChannels(pool),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
@@ -457,7 +458,7 @@ func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
 // interface.
 func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }
 
-// The read POST will call this use case inside its own transaction (#722).
+// newFeedWriter binds the feed write to reading's transaction.
 func newFeedWriter() *unread.FeedWriter {
 	return unreadpg.NewFeedWriter(
 		func(tx platform.Tx) unread.ChannelMessages { return conversationpg.MessageSequencesIn(tx) },
@@ -465,7 +466,7 @@ func newFeedWriter() *unread.FeedWriter {
 	)
 }
 
-// The topic read POST will call this inside its own transaction (#722).
+// newTopicWriter binds the topic write to reading's transaction.
 func newTopicWriter() *unread.TopicWriter {
 	return unread.NewTopicWriter(
 		func(tx platform.Tx) func(context.Context, unread.TopicScope, int64) (unread.PreparedTopic, error) {

@@ -45,5 +45,17 @@ A newly read message
   only received or the post's own response, so posting never reads a
   message the member has not seen.
 
+**HTTP caller (current):** `POST /organizations/{slug}/channels/{channelID}/read`
+(and `/topics/{topicID}/read`) takes membership from URL authorization,
+resolves the channel and topic through conversation, and calls `unread.Reading`
+with `joined_event_seq` and form `cursor`. Reading owns the transaction through
+an injected runner; `unreadpg` binds the runner to the pool and the writers
+to that transaction.
+Cross-origin protection covers both routes. Invalid cursors and `?before=`
+requests are 400 without writes; invisible channels/topics and non-members
+get 404. Errors roll back the transaction. htmx receives 204; plain forms
+redirect to the same feed or topic. Latest pages carry their snapshot cursor;
+visibility triggers the first automatic POST, with no later advancement (#710).
+
 A cursor above the organisation's committed `event_seq` is refused, so any
 later move has a higher sequence than the floor it raises.

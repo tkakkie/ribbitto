@@ -130,7 +130,7 @@ func TestMembersPageAgainstPostgreSQL(t *testing.T) {
 		t.Fatalf("names or paging lost members: %v", seen)
 	}
 	// Each negative case changes one scope while keeping the other fixed.
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
+	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
 	for _, tt := range []struct {
 		name                  string
 		organization, channel kernel.ID

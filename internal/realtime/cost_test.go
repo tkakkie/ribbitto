@@ -125,7 +125,7 @@ func TestStreamCost(t *testing.T) {
 	// loopReads counts the loops' reads, which the cache may answer.
 	dbReads := &countingReader{inner: realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))}
 	var inner realtime.EventReader = dbReads
-	renderer := readingRenderer{messages: conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor), membership: m}
+	renderer := readingRenderer{messages: conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, nil), membership: m}
 	if cached {
 		inner = realtime.NewCachedEvents(t.Context(), dbReads, hub, 1024, time.Minute)
 		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](t.Context(), 4096, realtime.DefaultCacheLoads, time.Minute, 10*time.Second, nil, time.Now)

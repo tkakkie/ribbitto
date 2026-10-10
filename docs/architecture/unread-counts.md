@@ -6,7 +6,7 @@ How read state is stored and counted (what that costs is in
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
 The move column, read-state tables, range store, feed, topic and branch-notice
 reads, the visible-page reading POSTs, posting writes and channel and topic counts
-are current; page binding is *planned* (M4). The rules are in
+and their page binding are current; display remains *planned* (M4). The rules are in
 [unread](../domain/unread.md).
 
 ## Storage
@@ -37,10 +37,16 @@ moved_event_seq) WHERE moved_event_seq IS NOT NULL`.
 ## The API between the modules
 
 `unread` never reads `message`, and `conversation` never reads `unread`'s
-tables. The planned page snapshot (`conversation.Reader`) reaches `unread` through an
+tables. The page snapshot (`conversation.Reader`) reaches `unread` through an
 injected, snapshot-bound factory, as it reaches org's and identity's data
 ([cross-feature access](cross-feature-access.md)); `unread` in turn calls
-`conversation`'s snapshot-bound message queries. Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
+`conversation`'s snapshot-bound message queries. The composition root supplies conversation's consumer-owned
+`PageCountsIn` factory. `PageCounter` adapts `newChannelCounts` and
+`newTopicCounts` using org's resolved `Membership.Member.JoinedEventSeq`;
+unread never queries `member`. Feed, topic, `?before=` and members pages
+return `PageCounts`: channel and topic count maps, the feed's first unread
+and the selected topic's first unread (zero without a selection).
+Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
 parameter. These statements share the page snapshot, with none per channel or topic.
 
 | Step | Owner | Input | Statement | Output |
@@ -75,7 +81,7 @@ ordered cap of 100.
 Only the selected topic probes above the floor and materialises its unread
 moved candidates before choosing the lowest `event_seq`, without a candidate
 cap. `unread.TopicCounts`, wired by `newTopicCounts`,
-combines steps 3–4 in the caller's snapshot; page binding remains planned.
+combines steps 3–4 in the page snapshot.
 
 Steps 1–2 serve the channel list and steps 3–4 the topic list: two
 statements per list, four per page load, whatever the number of channels or

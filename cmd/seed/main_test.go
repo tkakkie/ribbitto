@@ -181,7 +181,7 @@ func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor)
+	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, seedPageCountsIn)
 	for i, name := range []string{"rooftop-garden", "garden-time"} {
 		var channelID, topicID kernel.ID
 		var total int

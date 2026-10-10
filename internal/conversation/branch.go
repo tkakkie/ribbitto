@@ -39,12 +39,13 @@ type Brancher struct {
 	sequences EventSequenceIn
 	events    EventAppenderIn
 	notifier  Notifier
+	reads     ReadRangeWriterIn
 }
 
 // NewBrancher builds branching over transaction-bound factories. A nil notifier
 // disables commit notifications.
-func NewBrancher(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Brancher {
-	return &Brancher{runner: runner, writer: writer, sequences: sequences, events: events, notifier: notifier}
+func NewBrancher(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads ReadRangeWriterIn, notifier Notifier) *Brancher {
+	return &Brancher{runner: runner, writer: writer, sequences: sequences, events: events, reads: reads, notifier: notifier}
 }
 
 // Branch validates b and runs it in the member's organisation and the
@@ -53,7 +54,7 @@ func (s *Brancher) Branch(ctx context.Context, m org.Membership, channelID kerne
 	if err := validateAndNormalizeBranch(&b); err != nil {
 		return Topic{}, err
 	}
-	destination, seq, err := s.run(ctx, m.Organization.ID, channelID, m.Member.ID, b, notice)
+	destination, seq, err := s.run(ctx, m, channelID, b, notice)
 	if err != nil {
 		return Topic{}, fmt.Errorf("branching: %w", err)
 	}

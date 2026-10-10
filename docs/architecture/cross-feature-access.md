@@ -67,6 +67,15 @@ sqlc query (organisation, channel, strictly above `S`, lowest sequence), and
 The feed refuses `S` above that cursor, then merges `[0, n)` (`S + 1` without
 a next message). Its HTTP caller and the topic-view write remain planned.
 
+Branching receives conversation's consumer-owned `ReadRangeWriterIn` factory,
+adapted from `unreadpg.WriterIn` in the composition roots. Its own previous-message
+query supplies the lower bound; the organisation lock keeps the notice newest,
+so the upper bound is its sequence plus one. Org's resolved membership carries
+the persisted join sequence. The adapter calls `Writer.Merge` after the notice
+insert and before its event append, on the branching transaction. Only the
+brancher's notice is added; moved messages and other members' read sets stay put.
+No module imports the other or queries its tables.
+
 Identity's store creates accounts in the caller's transaction through
 `identitypg.AccountCreatorIn`. Adapters in `cmd/*` and the tests adapt it to
 org's factory and prove that the creator fits `org.AccountCreator`;

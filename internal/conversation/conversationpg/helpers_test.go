@@ -1,6 +1,7 @@
 package conversationpg_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,6 +14,8 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
+	"github.com/tkakkie/ribbitto/internal/unread"
+	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 )
 
 func requireNoError(t *testing.T, err error) {
@@ -83,3 +86,14 @@ func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
 // eventCursor adapts org's committed event_seq to the reader's consumer
 // interface.
 func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }
+
+// branchReads adapts unread's range writer to conversation's consumer interface.
+func branchReads(tx platform.Tx) conversation.ReadRangeWriter {
+	return branchReadWriter{ranges: unreadpg.WriterIn(tx)}
+}
+
+type branchReadWriter struct{ ranges unread.RangeWriter }
+
+func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
+	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, unread.Range{Lo: lo, Hi: hi})
+}

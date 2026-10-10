@@ -216,7 +216,7 @@ func TestMoveReplayCorrectsWarmPostingRender(t *testing.T) {
 		warm = append(warm, out)
 	}
 	notifier := &recordingNotifier{}
-	destination, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, notifier).Branch(ctx, m, f.Channel.ID,
+	destination, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, notifier).Branch(ctx, m, f.Channel.ID,
 		conversation.Branch{From: source, Messages: ids, NewName: "New label"}, func(conversation.Topic) string { return "branch notice" })
 	if err != nil {
 		t.Fatal(err)
@@ -387,7 +387,7 @@ func TestOlderMoveThenLoadOlder(t *testing.T) {
 			boundary := topicPageBoundary(t, destination, page, 0)
 			items := renderedPage(t, page.Entries)
 			notifier := &recordingNotifier{}
-			_, err = conversationpg.NewBrancher(pool, postingSequence, postingEvents, notifier).Branch(ctx, m, f.Channel.ID,
+			_, err = conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, notifier).Branch(ctx, m, f.Channel.ID,
 				conversation.Branch{From: source, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
 			if err != nil {
 				t.Fatal(err)
@@ -486,7 +486,7 @@ func TestMoveCrossesLoadOlder(t *testing.T) {
 					}
 				}
 				notifier := &recordingNotifier{}
-				_, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, notifier).Branch(ctx, m, f.Channel.ID,
+				_, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, notifier).Branch(ctx, m, f.Channel.ID,
 					conversation.Branch{From: source.ID, To: &destination.ID, Messages: moved}, func(conversation.Topic) string { return "notice" })
 				if err != nil {
 					t.Fatal(err)

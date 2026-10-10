@@ -22,6 +22,7 @@ cmd/ribbitto -> internal/conversation
 cmd/ribbitto -> internal/conversation/conversationpg
 cmd/ribbitto -> internal/identity
 cmd/ribbitto -> internal/identity/identitypg
+cmd/ribbitto -> internal/kernel
 cmd/ribbitto -> internal/org
 cmd/ribbitto -> internal/org/orgpg
 cmd/ribbitto -> internal/platform/postgres
@@ -41,6 +42,8 @@ cmd/seed -> internal/org
 cmd/seed -> internal/org/orgpg
 cmd/seed -> internal/platform/postgres
 cmd/seed -> internal/realtime/realtimepg
+cmd/seed -> internal/unread
+cmd/seed -> internal/unread/unreadpg
 internal/conversation -> internal/kernel
 internal/conversation -> internal/org
 internal/conversation -> internal/platform/postgres

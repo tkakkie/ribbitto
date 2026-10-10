@@ -96,7 +96,7 @@ func (q *Queries) GetMemberByOrganizationAndAccount(ctx context.Context, arg Get
 }
 
 const getMembershipBySlug = `-- name: GetMembershipBySlug :one
-SELECT o.id AS organization_id, o.slug, o.name, o.access_epoch, m.id AS member_id, m.role, m.handle
+SELECT o.id AS organization_id, o.slug, o.name, o.access_epoch, m.id AS member_id, m.role, m.handle, m.joined_event_seq
 FROM organization o
 JOIN member m ON m.organization_id = o.id
 WHERE o.slug = $1 AND m.account_id = $2
@@ -115,6 +115,7 @@ type GetMembershipBySlugRow struct {
 	MemberID       pgtype.UUID
 	Role           string
 	Handle         string
+	JoinedEventSeq int64
 }
 
 func (q *Queries) GetMembershipBySlug(ctx context.Context, arg GetMembershipBySlugParams) (GetMembershipBySlugRow, error) {
@@ -128,6 +129,7 @@ func (q *Queries) GetMembershipBySlug(ctx context.Context, arg GetMembershipBySl
 		&i.MemberID,
 		&i.Role,
 		&i.Handle,
+		&i.JoinedEventSeq,
 	)
 	return i, err
 }

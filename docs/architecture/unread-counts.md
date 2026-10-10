@@ -2,14 +2,13 @@
 
 How read state is stored, written and counted, and what that costs
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
-The move column, read-state tables, range store and feed write are current;
-HTTP callers, topic and posting writes, and counts are *planned* (M4). The
+The move column, read-state tables, range store, feed write and branch-notice
+reads are current; HTTP callers, topic and posting writes, and counts are *planned* (M4). The
 rules are in [unread](../domain/unread.md).
 
 ## Storage
 
-The `unread` module owns the current read-state tables and uses
-`conversation`'s API
+`unread` owns the read-state tables and uses `conversation`'s API
 ([decision 27](../decisions/27-channels-topics-and-messages-are-one-conversation-module.md)'s
 growth rule):
 
@@ -35,14 +34,11 @@ moved_event_seq) WHERE moved_event_seq IS NOT NULL`.
 ## The API between the modules
 
 `unread` never reads `message`, and `conversation` never reads `unread`'s
-tables; tablecheck's ownership rule and its fail-closed checks stay as they
-are. The planned page snapshot (`conversation.Reader`) reaches `unread` through an
+tables. The planned page snapshot (`conversation.Reader`) reaches `unread` through an
 injected, snapshot-bound factory, as it reaches org's and identity's data
 ([cross-feature access](cross-feature-access.md)); `unread` in turn calls
-`conversation`'s snapshot-bound message queries. Read sets cross the
-boundary as values: arrays of `(lo, hi)` bounds, or one `int8multirange`
-parameter. Every statement below runs in the page's snapshot, and none runs
-once per channel or per topic.
+`conversation`'s snapshot-bound message queries. Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
+parameter. These statements share the page snapshot, with none per channel or topic.
 
 | Step | Owner | Input | Statement | Output |
 |---|---|---|---|---|
@@ -87,16 +83,14 @@ index, `R` ranges of the current channel at or above `P`:
 
 ## Writes
 
-The current store locks the `channel_read` row (inserting it if missing),
-inserts the join prefix before any other range, and unions one range. A
-savepoint handles concurrent creation without aborting the caller's transaction.
-It finds the primary-key predecessor, deletes only overlapping or touching
-rows between that predecessor and the new upper end, and inserts their union.
-All of this commits or rolls back with the caller.
+The current store locks `channel_read` (inserting it if missing), then unions
+the join prefix before the new range. Concurrent writes queue and commute; none
+removes a read message. A savepoint recovers concurrent row creation. A
+primary-key predecessor lookup bounds deletion to overlapping or touching
+rows up to the new upper end, then inserts their union. The caller's
+transaction commits or rolls back all writes.
 
-Every reading write first locks `channel_read` (inserting it if missing),
-then unions ranges: concurrent writes
-queue and commute, and none removes a read message. A newly read message
+A newly read message
 `m` adds `[p + 1, n)`, with `p` the channel's previous message (or 0) and
 `n` its next (or `m + 1`), so every bounded gap contains an unread message.
 
@@ -106,6 +100,11 @@ queue and commute, and none removes a read message. A newly read message
   `S` (`n`, or `S + 1`), then `[0, n)`: it deletes every range it absorbs,
   so its cost is proportional to the ranges merged, `O(R)` after heavy
   fragmentation and `O(1)` in normal use.
+- **Branch notice (current):** conversation's organisation- and channel-scoped
+  predecessor query returns `p` (or 0). An injected `unreadpg.WriterIn` adapter
+  calls `Writer.Merge` with `[p + 1, m + 1)` and the persisted join prefix after
+  inserting notice `m`, before its append. The organisation lock keeps `m`
+  newest; all writes share branching's transaction. Moves leave read state unchanged.
 - **Topic view, cursor `S` (planned):** set-based, never one statement per message.
   `conversation` returns, in one statement, the bounds `[p + 1, n)` of the
   topic's unread messages up to `S` (step 4's shape without its cap,
@@ -127,14 +126,14 @@ later move has a higher sequence than the floor it raises.
 
 ## Expected load
 
-Per page load, four statements in the page's snapshot. For a member of 100
-channels, each with fewer than 100 unread messages in one gap and an
-unfragmented read set, step 2 makes about 100 index probes and reads at
-most 9,900 index rows (99 per channel); step 4 adds up to 51 probes and 5,100 rows for
-the counts, plus, for the first unread, every message moved into the
-selected topic since its floor. Per page view, one POST, plus the visible
-page's coalesced POSTs (#710) and sidebar recounts (#286). Posting costs
-its scope's read (with any merges) and one range row for its author.
+Four statements run per page snapshot. For 100 channels, each with fewer
+than 100 unread messages in one gap and an unfragmented read set, step 2
+makes about 100 index probes and reads at most 9,900 index rows (99 per
+channel); step 4 adds up to 51 probes and 5,100 rows, plus every message
+moved into the selected topic since its floor for first-unread lookup.
+Each visit sends one POST, then visible-page coalesced POSTs (#710) and
+sidebar recounts (#286). Posting costs its scope's read (with merges)
+and one range row for its author.
 
 ## Fragmentation
 

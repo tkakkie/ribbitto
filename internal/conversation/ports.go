@@ -46,6 +46,8 @@ type TxRunner interface {
 // sequence, taken first, does) and never begins, commits or rolls back: the
 // caller does, also after an error, which leaves the transaction unusable.
 type Writer interface {
+	// LastMessageBefore returns the channel's previous message sequence, or zero.
+	LastMessageBefore(ctx context.Context, organizationID, channelID kernel.ID, seq int64) (int64, error)
 	// GetDefaultTopic returns the channel's default topic; none, as for
 	// another organisation's channel, is ErrTopicNotFound.
 	GetDefaultTopic(ctx context.Context, organizationID, channelID kernel.ID) (Topic, error)
@@ -148,3 +150,12 @@ type EventCursor interface {
 // EventCursorIn binds org's cursor to the caller's snapshot, the one the
 // page is read in.
 type EventCursorIn func(platform.Snapshot) EventCursor
+
+// ReadRangeWriter adds a range to a member's read set, including their persisted join prefix.
+// The implementation owns read-state storage; conversation supplies message bounds.
+type ReadRangeWriter interface {
+	Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joinedEventSeq, lo, hi int64) error
+}
+
+// ReadRangeWriterIn binds read-state writes to branching's transaction.
+type ReadRangeWriterIn func(platform.Tx) ReadRangeWriter

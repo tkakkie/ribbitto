@@ -2,7 +2,8 @@
 
 The inputs are in place since M3: the join transaction, `joined_event_seq`,
 the pairing of each message with its `message.posted` event, and the log
-boundary. Read-state tables, locking, range unions and the feed write exist;
+boundary. Read-state tables, locking, range unions, the feed write and branch-notice
+reads exist;
 HTTP callers, other reading writes and unread counts are *planned* for M4
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
 the counting queries and their cost are in
@@ -20,7 +21,8 @@ the counting queries and their cost are in
 
 ## Read state
 
-Storage, single-range unions and message-derived feed bounds are current.
+Storage, single-range unions, message-derived feed bounds and branch-notice
+reads are current.
 Topic-floor writes remain planned for M4.
 
 - **Read ranges.** A member's read state in a channel is a set of
@@ -46,9 +48,10 @@ Topic-floor writes remain planned for M4.
   counting where to start; whether a message is read is always the set's
   answer.
 
-## Advancing it *(planned, M4)*
+## Advancing it
 
-Only a POST advances read state; a GET never changes it
+Branch-notice reads are current; reading POST callers and posting writes remain
+planned for M4. Only a POST advances read state; a GET never changes it
 ([request flow](../architecture/request-flow.md)). Each POST carries its
 scope and `S`, the newest durable sequence the page has applied and shown:
 
@@ -59,7 +62,10 @@ scope and `S`, the newest durable sequence the page has applied and shown:
 
 Posting reads the composer's scope up to the page's `S`, as that POST
 would, and adds the new message, in the posting transaction: a member's own
-messages, branch notices included, are never unread for them. A sequence
+messages are never unread for them. Branching already adds its author's notice
+as `[p + 1, m + 1)` in its transaction, merged with the persisted join prefix;
+the organisation lock keeps the notice newest in its channel. Moving existing
+messages changes no member's read state. A sequence
 the page has only received, or the post's own response, never counts as
 shown.
 

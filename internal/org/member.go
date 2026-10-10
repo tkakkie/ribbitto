@@ -28,4 +28,6 @@ type Member struct {
 	// Handle helps people tell members apart within the organisation. It
 	// can change, so nothing stores or authorises by it: ID does that.
 	Handle string
+	// JoinedEventSeq is the persisted join boundary for read-state writes.
+	JoinedEventSeq int64
 }

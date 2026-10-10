@@ -50,6 +50,7 @@ type Member struct // Member is an account's membership in one organisation.
   field AccountID github.com/tkakkie/ribbitto/internal/kernel.ID
   field Handle string // Handle helps people tell members apart within the organisation.
   field ID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field JoinedEventSeq int64 // JoinedEventSeq is the persisted join boundary for read-state writes.
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
   field Role Role
 type Membership struct // Membership is a member together with its organisation.

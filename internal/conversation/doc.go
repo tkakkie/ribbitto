@@ -7,8 +7,8 @@
 // and messages.moved.
 //
 // Posting and branching own their transactions so content and events commit
-// together, then notify. History and author lookups share a snapshot so a
-// page cannot mix states; the bounded channel-members page shares its sidebar,
+// together with the brancher's notice read state, then notify. History and
+// author lookups share a snapshot so a page cannot mix states; the bounded channel-members page shares its sidebar,
 // display-name lookup and stream cursor in one snapshot. Member lookups return
 // org's directory entries, not copies. The topic lookup is scoped by a resolved
 // membership so web cannot supply the organisation. The store also implements setup's injected

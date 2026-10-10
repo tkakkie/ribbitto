@@ -510,3 +510,9 @@ type branchReadWriter struct{ ranges unread.RangeWriter }
 func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
 	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, unread.Range{Lo: lo, Hi: hi})
 }
+
+// The page snapshot will call this for sidebar counts (#747).
+func newChannelCounts() *unread.ChannelCounts {
+	return unread.NewChannelCounts(unreadpg.ChannelRangesIn,
+		func(s platform.Snapshot) unread.ChannelCounter { return conversationpg.ChannelUnreadIn(s) })
+}

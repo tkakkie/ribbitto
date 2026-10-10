@@ -33,6 +33,8 @@ type ChannelStore interface // ChannelStore reads and writes channels, always wi
   func (ChannelStore).CreateChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, name string) (Channel, error)
   func (ChannelStore).GetChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error)
   func (ChannelStore).GetDefaultChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error)
+type ChannelUnread interface // ChannelUnread counts messages in supplied, ordered, disjoint channel gaps.
+  func (ChannelUnread).Count(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channels []github.com/tkakkie/ribbitto/internal/kernel.ID, gapChannels []github.com/tkakkie/ribbitto/internal/kernel.ID, los []int64, his []int64) (counts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, first map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, err error) // Count returns counts capped at 100 and first unread sequences (zero if none).
 type Channels struct // Channels runs the channel use cases for a member resolved by org.
   func (*Channels).Create(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, name string) (Channel, error) // Create adds a channel.
   func (*Channels).Default(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership) (Channel, error) // Default returns the member's organisation's default channel.

@@ -57,7 +57,14 @@ topic posts rely on the lookup inside the posting transaction.
 `FirstChannelReadRanges` loads each channel's first 101 ranges in one statement,
 scoped by organisation, member and channel. Go derives the prefix and up to
 100 gaps, retaining the supplied join prefix without rows; the 101st range
-bounds the final gap and never opens one. Message counting remains planned.
+bounds the final gap and never opens one. `unread.ChannelCounts` deduplicates
+sidebar IDs before loading and builds parallel gap IDs and bounds together.
+`newChannelCounts` in `cmd/ribbitto` injects `conversationpg.ChannelUnreadIn`
+through unread's consumer interface, sharing that snapshot. Conversation's
+`CountChannelUnread` probes ordered gaps, caps each channel at 100 messages
+before counting, and returns its first unread sequence in the same statement.
+Only organisation and channel filter messages; the author is not the reader.
+The combined list takes two statements; page binding remains planned.
 
 Unread's store binds to a caller-owned transaction through `unreadpg.WriterIn`.
 It locks or creates `channel_read`, unions the supplied join prefix before

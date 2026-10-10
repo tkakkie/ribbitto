@@ -19,4 +19,6 @@
 // next-channel-message query to unread's caller-owned transaction.
 // TopicReadCandidatesIn returns topic unread range bounds in one statement,
 // with whole-channel neighbours and the supplied read set as one multirange.
+// Snapshot-bound channel counts probe ordered gaps incrementally under a
+// per-channel cap; the same statement returns the first unread sequence.
 package postgres

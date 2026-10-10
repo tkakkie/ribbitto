@@ -25,6 +25,11 @@ type TopicWrite struct {
 	hasFloor      bool
 }
 
+// ReadState returns the prepared prefix, floor and read ranges above the prefix.
+func (p *TopicWrite) ReadState() (int64, int64, []unread.Range) {
+	return p.Prefix, p.Floor, p.Ranges
+}
+
 // Prepare locks the channel, establishes its join prefix and loads the read
 // set above it and the topic floor (Prefix - 1 when absent).
 func (w *Writer) Prepare(ctx context.Context, scope unread.TopicScope, joinedEventSeq int64) (*TopicWrite, error) {

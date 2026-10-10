@@ -3,8 +3,8 @@
 How read state is stored and counted, and what that costs (writes are in
 [unread writes](unread-writes.md))
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
-The move column, read-state tables, range store, feed write and branch-notice
-reads are current; HTTP callers, topic and posting writes, and counts are *planned* (M4). The
+The move column, read-state tables, range store, feed, topic and branch-notice
+reads are current; HTTP callers, posting writes and counts are *planned* (M4). The
 rules are in [unread](../domain/unread.md).
 
 ## Storage
@@ -84,7 +84,7 @@ index, `R` ranges of the current channel at or above `P`:
 
 ## Writes
 
-How read ranges are added and merged, flow by flow, is in
+Feed, topic-view and branch-notice writes are current; their range unions are in
 [unread writes](unread-writes.md).
 
 ## Expected load

@@ -11,6 +11,10 @@ type EventCursorIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.T
 type FeedWriter struct // FeedWriter reads a channel through a cursor in the caller's transaction.
   func (*FeedWriter).Read(ctx context.Context, tx github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, scope Scope, joinedEventSeq int64, cursor int64) error // Read unions the feed prefix through cursor with the member's persisted join prefix.
 func NewFeedWriter(ranges RangeWriterIn, messages ChannelMessagesIn, cursor EventCursorIn) *FeedWriter // NewFeedWriter builds the feed write with transaction-bound factories.
+func NewTopicWriter(prepare TopicPrepareIn, messages TopicMessagesIn, cursor EventCursorIn) *TopicWriter // NewTopicWriter builds the topic write with transaction-bound factories.
+type PreparedTopic interface // PreparedTopic holds read state and the channel lock until the caller completes its transaction.
+  func (PreparedTopic).Add(context.Context, []int64, []int64, int64) error // Add unions candidate bounds and raises the floor, including an empty batch.
+  func (PreparedTopic).ReadState() (prefix int64, floor int64, ranges []Range) // ReadState returns the prefix, floor and read ranges above the prefix.
 type Range struct // Range contains read sequences from Lo inclusive to Hi exclusive.
   field Hi int64
   field Lo int64
@@ -21,6 +25,12 @@ type Scope struct // Scope identifies one member's read state in one channel.
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
   field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
+type TopicMessages interface // TopicMessages supplies unread message bounds through a validated cursor.
+  func (TopicMessages).Ranges(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, int64, int64, []Range) ([]Range, error) // Ranges returns whole-channel neighbour bounds for this topic's unread messages.
+type TopicMessagesIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) TopicMessages // TopicMessagesIn binds conversation's candidate query to the caller's transaction.
+type TopicPrepareIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) func(context.Context, TopicScope, int64) (PreparedTopic, error) // TopicPrepareIn binds locked preparation to the caller's transaction.
 type TopicScope struct // TopicScope identifies one topic within a member's channel read state.
   field Scope Scope
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
+type TopicWriter struct // TopicWriter reads one topic through a cursor in the caller's transaction.
+  func (*TopicWriter).Read(ctx context.Context, tx github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, scope TopicScope, joinedEventSeq int64, cursor int64) error // Read validates the cursor, prepares locked read state, queries candidates and unions their bounds while raising the floor.

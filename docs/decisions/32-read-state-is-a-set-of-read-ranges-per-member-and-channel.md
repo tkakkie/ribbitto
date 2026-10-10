@@ -2,9 +2,9 @@
 
 **Decided** (#282; supersedes nothing; settles the unread model that
 [decision 21](21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)
-left to M4). Storage, single-range unions, the feed write and branch-notice
+left to M4). Storage, range unions, feed, topic and branch-notice
 reads are implemented;
-HTTP callers, other reading writes and counts remain *planned* for M4. Rules in [unread](../domain/unread.md),
+HTTP callers, posting writes and counts remain *planned* for M4. Rules in [unread](../domain/unread.md),
 storage and cost in [unread counts](../architecture/unread-counts.md), writes in
 [unread writes](../architecture/unread-writes.md).
 

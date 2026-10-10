@@ -465,6 +465,41 @@ func newFeedWriter() *unread.FeedWriter {
 	)
 }
 
+// The topic read POST will call this inside its own transaction (#722).
+func newTopicWriter() *unread.TopicWriter {
+	return unread.NewTopicWriter(
+		func(tx platform.Tx) func(context.Context, unread.TopicScope, int64) (unread.PreparedTopic, error) {
+			return func(ctx context.Context, scope unread.TopicScope, joined int64) (unread.PreparedTopic, error) {
+				return unreadpg.WriterIn(tx).Prepare(ctx, scope, joined)
+			}
+		},
+		func(tx platform.Tx) unread.TopicMessages {
+			return topicMessages{conversationpg.TopicReadCandidatesIn(tx)}
+		},
+		func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) },
+	)
+}
+
+type topicMessages struct {
+	candidates conversation.TopicReadCandidates
+}
+
+func (m topicMessages) Ranges(ctx context.Context, organizationID, channelID, topicID kernel.ID, cursor, prefix, floor int64, read []unread.Range) ([]unread.Range, error) {
+	set := make([]conversation.SequenceRange, len(read))
+	for i, r := range read {
+		set[i] = conversation.SequenceRange{Lo: r.Lo, Hi: r.Hi}
+	}
+	bounds, err := m.candidates.Ranges(ctx, organizationID, channelID, topicID, cursor, prefix, floor, set)
+	if err != nil {
+		return nil, err
+	}
+	ranges := make([]unread.Range, len(bounds))
+	for i, r := range bounds {
+		ranges[i] = unread.Range{Lo: r.Lo, Hi: r.Hi}
+	}
+	return ranges, nil
+}
+
 // branchReads adapts unread's range writer to conversation's consumer interface.
 func branchReads(tx platform.Tx) conversation.ReadRangeWriter {
 	return branchReadWriter{ranges: unreadpg.WriterIn(tx)}

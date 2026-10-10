@@ -3,8 +3,9 @@ package sqlwalk
 import "fmt"
 
 // UnnestFrom returns the locations of permitted unnest calls and rejects all other
-// unnest shapes. Only SELECT and UPDATE FROM calls with bigint[] sqlc.arg parameters
-// are eligible; expressions cannot inherit permission from a nearby allowed call.
+// unnest shapes. Only SELECT and UPDATE FROM calls with bigint[] or uuid[]
+// sqlc.arg parameters are eligible; expressions cannot inherit permission from
+// a nearby allowed call.
 // Other functions, table ownership and organisation scope remain caller policies.
 func UnnestFrom(tree any, bigints map[float64]bool) (map[float64]bool, error) {
 	calls := map[float64]bool{}
@@ -40,15 +41,17 @@ func UnnestFrom(tree any, bigints map[float64]bool) (map[float64]bool, error) {
 			cast := Node(arg, "TypeCast")
 			typ := Object(cast["typeName"])
 			bounds := List(typ["arrayBounds"])
-			if len(List(typ["names"])) != 2 || Names(typ["names"]) != "pg_catalog.int8" || !bigints[typ["location"].(float64)] ||
+			bigint := len(List(typ["names"])) == 2 && Names(typ["names"]) == "pg_catalog.int8" && bigints[typ["location"].(float64)]
+			uuid := len(List(typ["names"])) == 1 && Names(typ["names"]) == "uuid"
+			if (!bigint && !uuid) ||
 				len(bounds) != 1 || Node(bounds[0], "Integer")["ival"] != float64(-1) || typ["typmods"] != nil || typ["setof"] == true {
-				return fmt.Errorf("unsupported unnest argument: requires bigint[] sqlc.arg parameter")
+				return fmt.Errorf("unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter")
 			}
 			parameter := Node(cast["arg"], "FuncCall")
 			args := List(parameter["args"])
 			if len(parameter) != 4 || len(List(parameter["funcname"])) != 2 || Names(parameter["funcname"]) != "sqlc.arg" ||
 				parameter["funcformat"] != "COERCE_EXPLICIT_CALL" || len(args) != 1 {
-				return fmt.Errorf("unsupported unnest argument: requires bigint[] sqlc.arg parameter")
+				return fmt.Errorf("unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter")
 			}
 			fields := List(Node(args[0], "ColumnRef")["fields"])
 			literal := Object(Node(args[0], "A_Const")["sval"])["sval"]

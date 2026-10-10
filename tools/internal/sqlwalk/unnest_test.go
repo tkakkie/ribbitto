@@ -1,9 +1,12 @@
 package sqlwalk
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestUnnestFromArguments(t *testing.T) {
-	argument := "unsupported unnest argument: requires bigint[] sqlc.arg parameter"
+	argument := "unsupported unnest argument: requires bigint[] or uuid[] sqlc.arg parameter"
 	parameter := "unsupported unnest parameter name"
 	call := "unsupported unnest call shape"
 	relation := "unsupported unnest relation shape"
@@ -13,9 +16,10 @@ func TestUnnestFromArguments(t *testing.T) {
 		{"qualified", "pg_catalog.unnest(sqlc.arg(lo)::bigint[])", "unsupported function unnest: requires unqualified FROM call"},
 		{"no_arguments", "unnest()", call},
 		{"text_array", "unnest(sqlc.arg(lo)::text[])", argument},
-		{"uuid_array", "unnest(sqlc.arg(lo)::uuid[])", argument},
+		{"mixed", "unnest(sqlc.arg(id)::uuid[], sqlc.arg(lo)::bigint[], sqlc.arg('hi')::BIGINT[])", ""},
 		{"scalar", "unnest(sqlc.arg(lo)::bigint)", argument},
 		{"uncast", "unnest(sqlc.arg(lo))", argument},
+		{"qualified_uuid", "unnest(sqlc.arg(lo)::pg_catalog.uuid[])", argument},
 		{"explicit_type", "unnest(sqlc.arg(lo)::pg_catalog.int8[])", argument},
 		{"type_alias", "unnest(sqlc.arg(lo)::int8[])", argument},
 		{"dimensions", "unnest(sqlc.arg(lo)::bigint[][])", argument},
@@ -40,12 +44,16 @@ func TestUnnestFromArguments(t *testing.T) {
 		{"column_definition", "unnest(sqlc.arg(lo)::bigint[]) AS b(lo bigint)", relation},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			for _, sql := range []string{
-				"SELECT * FROM " + tc.relation,
-				"WITH b AS (SELECT * FROM " + tc.relation + ") SELECT * FROM b",
-				"INSERT INTO message(id) SELECT 1 FROM " + tc.relation,
-			} {
-				checkUnnestFrom(t, sql, tc.want, 1)
+			for _, arrayType := range []string{"bigint", "uuid"} {
+				relation := strings.ReplaceAll(tc.relation, "bigint", arrayType)
+				relation = strings.ReplaceAll(relation, "BIGINT", strings.ToUpper(arrayType))
+				for _, sql := range []string{
+					"SELECT * FROM " + relation,
+					"WITH b AS (SELECT * FROM " + relation + ") SELECT * FROM b",
+					"INSERT INTO message(id) SELECT 1 FROM " + relation,
+				} {
+					checkUnnestFrom(t, sql, tc.want, 1)
+				}
 			}
 		})
 	}
@@ -78,7 +86,16 @@ func TestUnnestFromPositions(t *testing.T) {
 			if !tc.allowed {
 				want = "unsupported function unnest: requires unqualified FROM call"
 			}
-			checkUnnestFrom(t, tc.sql, want, tc.calls)
+			for _, callType := range []string{"bigint", "uuid", "mixed"} {
+				sql := tc.sql
+				if callType == "uuid" {
+					sql = strings.ReplaceAll(sql, "bigint", "uuid")
+					sql = strings.ReplaceAll(sql, "BIGINT", "UUID")
+				} else if callType == "mixed" {
+					sql = strings.ReplaceAll(sql, "BIGINT", "UUID")
+				}
+				checkUnnestFrom(t, sql, want, tc.calls)
+			}
 		})
 	}
 }

@@ -53,10 +53,11 @@ the shared `sqlwalk.ReasonRules` rejects empty reasons, pending markers and
 maintainer claims without provenance.
 Query expressions accept only `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower`.
 In FROM, both SQL gates also accept unqualified `unnest` with one or more
-`sqlc.arg(name)::bigint[]` parameters (identifier or string names), including in
-CTEs and INSERT SELECT. It supplies candidate range bounds for set-based writes
-(#727), reading parameter values rather than tables. Each cast must use the
-unqualified `bigint` keyword and one unsized array dimension. Other functions,
+`sqlc.arg(name)::bigint[]` or `sqlc.arg(name)::uuid[]` parameters, alone or mixed
+(identifier or string names), including in CTEs and INSERT SELECT. They supply
+candidate range bounds for set-based writes (#727) and channel/topic IDs for
+counts (#740), reading parameter values rather than tables. Each cast must use
+unqualified `bigint` or `uuid` and one unsized array dimension. Other functions,
 argument types, columns, literals, computed arguments and positions still fail;
 LATERAL, ROWS FROM, WITH ORDINALITY and column type definitions are not admitted.
 Table ownership, organisation predicates and the INSERT source restrictions in

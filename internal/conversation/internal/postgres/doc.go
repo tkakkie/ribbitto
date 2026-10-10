@@ -21,4 +21,6 @@
 // with whole-channel neighbours and the supplied read set as one multirange.
 // Snapshot-bound channel counts probe ordered gaps incrementally under a
 // per-channel cap; the same statement returns the first unread sequence.
+// Topic counts share a cap across above-floor and moved-in branches; only the
+// selected topic gets uncapped first-unread probes, using supplied read state.
 package postgres

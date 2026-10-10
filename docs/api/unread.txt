@@ -27,6 +27,7 @@ type FeedWriter struct // FeedWriter reads a channel through a cursor in the cal
 func NewChannelCounts(ranges ChannelRangesIn, messages ChannelCounterIn) *ChannelCounts // NewChannelCounts builds channel counts with snapshot-bound factories.
 func NewFeedWriter(ranges RangeWriterIn, messages ChannelMessagesIn, cursor EventCursorIn) *FeedWriter // NewFeedWriter builds the feed write with transaction-bound factories.
 func NewReading(runner TxRunner, feed *FeedWriter, topic *TopicWriter) *Reading // NewReading builds reading with a runner and transaction-bound writers.
+func NewTopicCounts(state TopicStateReaderIn, messages TopicCounterIn) *TopicCounts // NewTopicCounts builds topic counts with snapshot-bound factories.
 func NewTopicWriter(prepare TopicPrepareIn, messages TopicMessagesIn, cursor EventCursorIn) *TopicWriter // NewTopicWriter builds the topic write with transaction-bound factories.
 type PreparedTopic interface // PreparedTopic holds read state and the channel lock until the caller completes its transaction.
   func (PreparedTopic).Add(context.Context, []int64, []int64, int64) error // Add unions candidate bounds and raises the floor, including an empty batch.
@@ -44,6 +45,11 @@ type Scope struct // Scope identifies one member's read state in one channel.
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
   field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
+type TopicCounter interface // TopicCounter counts messages through a snapshot-bound conversation API.
+  func (TopicCounter).Count(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, []github.com/tkakkie/ribbitto/internal/kernel.ID, []int64, [][2]int64, *github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error)
+type TopicCounterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) TopicCounter // TopicCounterIn binds topic counts to the caller's snapshot.
+type TopicCounts struct // TopicCounts combines topic state and message counts in two snapshot statements.
+  func (*TopicCounts).Read(ctx context.Context, s github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, scope Scope, joined int64, listed []github.com/tkakkie/ribbitto/internal/kernel.ID, selected *github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error) // Read returns capped counts and the selected topic's uncapped first unread sequence (zero if none).
 type TopicMessages interface // TopicMessages supplies unread message bounds through a validated cursor.
   func (TopicMessages).Ranges(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, int64, int64, []Range) ([]Range, error) // Ranges returns whole-channel neighbour bounds for this topic's unread messages.
 type TopicMessagesIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) TopicMessages // TopicMessagesIn binds conversation's candidate query to the caller's transaction.

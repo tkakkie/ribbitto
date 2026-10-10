@@ -549,3 +549,9 @@ func newChannelCounts() *unread.ChannelCounts {
 	return unread.NewChannelCounts(unreadpg.ChannelRangesIn,
 		func(s platform.Snapshot) unread.ChannelCounter { return conversationpg.ChannelUnreadIn(s) })
 }
+
+// The page snapshot will call this for topic counts (#747).
+func newTopicCounts() *unread.TopicCounts {
+	return unread.NewTopicCounts(unreadpg.TopicStateIn,
+		func(s platform.Snapshot) unread.TopicCounter { return conversationpg.TopicUnreadIn(s) })
+}

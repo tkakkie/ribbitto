@@ -1,5 +1,5 @@
 // Package realtime is the realtime module's root (decision 26): it delivers
-// durable events to open connections through authorization, rendering,
+// durable events and current ephemeral frames through authorization, rendering,
 // event-reading and sending interfaces; the SSE framing itself is web's.
 //
 // Module: realtime (feature map in docs/architecture/features.md). It
@@ -17,8 +17,9 @@
 // channel are published together atomically, without a registry lock on the
 // waiter's path. The single stream writer waits on the durable level, only
 // its declared kinds' generations, its heartbeat and its context together.
-// No owners raise generations in production yet; owner reads and frames
-// remain planned (#736), as does web's hidden sink (#737). It is also the
+// Owner reads supply bounded frames after each durable batch, authorized
+// immediately before sending without moving the cursor. Production owners
+// remain planned (#287, #288), as does web's hidden sink (#737). It is also the
 // registry of open connections: Register caps
 // connections per process and per account and gives each one a context
 // that CancelAccount or CancelSession ends. Events themselves are never

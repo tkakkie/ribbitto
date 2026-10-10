@@ -10,8 +10,8 @@ import (
 
 // RaiseGeneration publishes a presence or typing generation for an organisation.
 // Values at or below the current generation change nothing. Other interests
-// are ignored. Owners will publish their state before raising its generation;
-// no owner raises generations in production yet (#736).
+// are ignored. Owners publish their state before raising its generation;
+// production owners remain planned (#287, #288).
 func (h *Hub) RaiseGeneration(org kernel.ID, kind Interest, generation int64) {
 	switch kind {
 	case InterestPresence:

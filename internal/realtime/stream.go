@@ -55,14 +55,18 @@ type Subscription struct {
 	Interests []Interest
 	// Topic, when set, narrows the channel to one topic (a topic view).
 	Topic *kernel.ID
+	// PresenceAfter is the opaque page token interpreted by the presence owner.
+	PresenceAfter string
 }
 
 // Outgoing is one event ready to send. ID is the event's sequence, which the
-// client returns as Last-Event-ID when it reconnects.
+// client returns as Last-Event-ID when it reconnects; ephemeral frames omit it.
 type Outgoing struct {
-	ID   int64
-	Name string
-	Data []byte
+	// Ephemeral omits the SSE id field, preserving the durable cursor.
+	Ephemeral bool
+	ID        int64
+	Name      string
+	Data      []byte
 	// Topic is the message's topic as the shared render read it. It is
 	// never sent; legacy posting events without a topic use it for filtering.
 	Topic kernel.ID
@@ -78,6 +82,8 @@ type Stream struct {
 	Events     EventReader
 	Authorizer Authorizer
 	Renderer   Renderer
+	// Owners supplies current frames; nil entries preserve durable-only delivery.
+	Owners map[Interest]EphemeralOwner
 	// BatchSize bounds each read; zero means DefaultBatchSize.
 	BatchSize int
 	// Heartbeat is how long the loop waits on the hub before it sends a
@@ -128,9 +134,8 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	if batch <= 0 {
 		batch = DefaultBatchSize
 	}
-	// No owners or frames exist yet: consume generation wakes without output
-	// so a raised generation cannot spin the writer (#736 adds owner reads).
 	var seen streamLevels
+	connected := false
 	// written is when the stream last wrote, which the next heartbeat counts
 	// from: wakeups that write nothing, such as another channel's events,
 	// must not put it off.
@@ -157,6 +162,11 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			}
 			cursor = event.Seq
 		}
+		reset, err := s.ephemeral(ctx, sub, &seen, !connected, send, &written)
+		if err != nil || reset {
+			return cursor, err
+		}
+		connected = true
 		if len(events) == batch {
 			// Draining a backlog that is all other channels' events writes
 			// nothing either; the heartbeat is still due on time.
@@ -168,7 +178,9 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			continue
 		}
 		seen.durable = max(cursor, seen.durable)
-		seen, err = s.wait(ctx, sub, seen, send, &written)
+		levels, err := s.wait(ctx, sub, seen, send, &written)
+		// Generations count as seen only after the owner returns their state.
+		seen.durable = levels.durable
 		if err != nil {
 			return cursor, err
 		}

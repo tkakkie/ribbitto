@@ -4,7 +4,8 @@
 
 One organisation-wide SSE connection per tab, including directly opened
 older history pages, filtered by the page's [interests](#stream-scope).
-Named events today are `message`, `messages-moved` and `reset`.
+Named durable events are `message`, `messages-moved` and `reset`; wired
+ephemeral owners can also supply `presence` and `typing` without `id:`.
 The browser sends everything else as ordinary POST requests. One
 process serves every stream; several server processes are future work (the
 hub, both stream caps and the watermark are per process).
@@ -77,13 +78,15 @@ shutdown and HTTP/2 are in [`stream-limits.md`](stream-limits.md).
 [Decision 30](../decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md)
 gives every page one stream for its organisation, filtered by the page's
 interests; [decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md)
-will add presence and typing as current state ([ephemeral state](realtime.md#ephemeral-state-planned-m4)).
+delivers presence and typing as current state ([ephemeral state](realtime.md#ephemeral-state)).
 
-`GET /organizations/{slug}/events` accepts these parameters. Only
-`messages` delivers frames; `sidebar`, `typing` and `presence` are accepted
-but deliver nothing yet (#286, #736). Presence and typing generations
-already participate in the writer's combined wait (#735); no owner raises
-them in production.
+`GET /organizations/{slug}/events` accepts these parameters. `messages`
+delivers durable frames; `typing` and `presence` read their wired
+owners after each durable batch and before waiting, at most one frame and
+one authorization check per kind. Presence checks the organisation, typing
+the frame's channel, immediately before sending. Denies mark the generation
+seen; errors stop the stream. Owners remain planned (#287, #288), so no
+ephemeral frames are sent in production yet. `sidebar` remains planned (#286).
 
 The endpoint takes:
 
@@ -106,9 +109,11 @@ Every page carries its snapshot cursor on `#organization-stream`, including
 `?before=` pages, which hold a slot under both stream caps. Only `message`
 and `messages-moved` frames advance the browser's durable cursor.
 
-Sidebar and ephemeral delivery remain planned (#286, #736): sidebar frames
-will recount at connect and after coalesced triggers, and typing will follow
-the channel/topic message filter. Their future swap targets are listed below.
+Ephemeral delivery filters organisation, interest and typing channel/topic
+before authorization, preserving the durable cursor and heartbeat deadlines.
+Owners decide connect output from current state; presence receives the page
+token. Sidebar frames remain planned (#286), recounting at connect and after
+coalesced triggers. Their future swap targets are listed below.
 
 | Event | `id:` | Where htmx puts it |
 |---|---|---|
@@ -116,7 +121,7 @@ the channel/topic message filter. Their future swap targets are listed below.
 | `sidebar` | none | sidebar entries, out of band by their DOM ids (#284) |
 | `presence` | none | each member's indicator, out of band by its DOM id (#287) |
 | `typing` | none | the content of the page's typing indicator (#288) |
-| `reset` | the cursor | the stream script reloads the page, as today |
+| `reset` | the cursor for durable reset; none for owner reset | the stream script reloads the page, as today |
 
 `#organization-stream`, holding `sse-connect`, wraps the sidebar and conversation or members panel, because the htmx
 SSE extension attaches an `sse-swap` element to its closest ancestor with a

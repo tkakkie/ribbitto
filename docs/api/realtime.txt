@@ -20,6 +20,14 @@ const DefaultBatchSize untyped int = 100 // DefaultBatchSize bounds how many eve
 const DefaultCacheLoads untyped int = 16 // DefaultCacheLoads bounds concurrent loaders in each production cache.
 const DefaultMaxStreams untyped int = 5000 // DefaultMaxStreams caps open streams per process, leaving headroom below the measured active-stream ceiling (docs/architecture/load-testing.md).
 const DefaultRetention time.Duration = 604800000000000 // DefaultRetention keeps seven days of replay history.
+type EphemeralFrame struct // EphemeralFrame is one bounded current-state read, including its delivery scope.
+  field Channel github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Generation int64
+  field Organization github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Outgoing Outgoing
+  field Topic *github.com/tkakkie/ribbitto/internal/kernel.ID
+type EphemeralOwner interface // EphemeralOwner reads current state and the generation that state represents.
+  func (EphemeralOwner).Read(ctx context.Context, sub Subscription, after int64) (EphemeralFrame, error)
 var ErrAccountCancelled error // ErrAccountCancelled ends connections cancelled by CancelAccount.
 var ErrCursorExpired error // ErrCursorExpired means the cursor is outside the valid replay range: below the replay boundary or above the committed event_seq.
 var ErrSessionEnded error // ErrSessionEnded ends connections cancelled by CancelSession.
@@ -55,9 +63,9 @@ type Hub struct // Hub holds, per organisation, the highest committed event sequ
   func (*Hub).Waiting(org github.com/tkakkie/ribbitto/internal/kernel.ID) int // Waiting reports how many durable or combined waits for the organisation are counted as blocked, so tests can synchronise instead of sleeping.
 type Interest string // Interest identifies output a connection asks to receive, never permission.
 const InterestMessages Interest = "messages" // InterestMessages requests posts and moves in the selected channel or topic.
-const InterestPresence Interest = "presence" // InterestPresence requests presence changes; no presence frames are delivered yet.
+const InterestPresence Interest = "presence" // InterestPresence requests current presence frames from its owner.
 const InterestSidebar Interest = "sidebar" // InterestSidebar declares sidebar output; no sidebar frames are delivered yet.
-const InterestTyping Interest = "typing" // InterestTyping requests typing changes; no typing frames are delivered yet.
+const InterestTyping Interest = "typing" // InterestTyping requests current typing frames from its owner.
 type Kinds map[EventKind]Router // Kinds registers the Router of each kind a reader fills in; wiring builds it.
 func MergeKinds(registries ...Kinds) (Kinds, error) // MergeKinds combines publisher registries into a fresh map without modifying them.
 func NewCache[K comparable, V any](parent context.Context, capacity int, maxLoads int, ttl time.Duration, loadTimeout time.Duration, keep func(K, V) bool, now func() time.Time) *Cache[K, V] // NewCache returns a cache holding at most capacity entries, each for at most ttl, with at most maxLoads loaders running until they actually return.
@@ -66,6 +74,7 @@ func NewHub() *Hub // NewHub returns an empty hub with DefaultMaxStreams as its 
 func NewHubWithMaxStreams(maxStreams int) *Hub // NewHubWithMaxStreams returns an empty hub with the given process cap.
 type Outgoing struct // Outgoing is one event ready to send.
   field Data []byte
+  field Ephemeral bool // Ephemeral omits the SSE id field, preserving the durable cursor.
   field ID int64
   field Name string
   field Topic github.com/tkakkie/ribbitto/internal/kernel.ID // Topic is the message's topic as the shared render read it.
@@ -92,6 +101,7 @@ type Stream struct // Stream runs the per-connection delivery loop.
   field Events EventReader
   field Heartbeat time.Duration // Heartbeat is how long the loop waits on the hub before it sends a heartbeat and waits again; zero sends none.
   field Hub *Hub
+  field Owners map[Interest]EphemeralOwner // Owners supplies current frames; nil entries preserve durable-only delivery.
   field Renderer Renderer
   func (Stream).Run(ctx context.Context, sub Subscription, cursor int64, send Sender) (int64, error) // Run delivers the subscription's events with a sequence above cursor until ctx ends or delivery fails, and returns the last sequence it delivered or skipped, with the reason it stopped.
 type Subscription struct // Subscription is one connection's explicit interests in an organisation, scoped to a channel or topic for messages, on behalf of an account.
@@ -100,6 +110,7 @@ type Subscription struct // Subscription is one connection's explicit interests 
   field Interests []Interest // Interests is the set of requested output; empty means no message delivery.
   field Organization github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationSlug string
+  field PresenceAfter string // PresenceAfter is the opaque page token interpreted by the presence owner.
   field Topic *github.com/tkakkie/ribbitto/internal/kernel.ID // Topic, when set, narrows the channel to one topic (a topic view).
 type Watermark struct // Watermark raises the hub to each active organisation's committed sequence.
   func (Watermark).Check(ctx context.Context) error // Check reads, in one query, the committed sequences of the organisations with registered connections and raises the hub to those still active; a value that is not ahead changes nothing.

@@ -29,6 +29,8 @@ type Streaming struct {
 	Hub        *realtime.Hub
 	Events     realtime.EventReader
 	Authorizer realtime.Authorizer
+	// Owners adapts feature state to current frames; none are wired yet.
+	Owners map[realtime.Interest]realtime.EphemeralOwner
 	// Sessions re-resolves the request's session after the stream has
 	// registered (see openStream).
 	Sessions middleware.SessionResolver
@@ -152,6 +154,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	stream := realtime.Stream{
 		Hub: p.stream.Hub, Events: p.stream.Events, Authorizer: p.stream.Authorizer,
+		Owners:    p.stream.Owners,
 		Renderer:  messageRenderer{messages: p.messages, membership: m, renders: p.renders},
 		Heartbeat: heartbeat,
 	}
@@ -281,7 +284,7 @@ func streamScope(r *http.Request) (realtime.Subscription, bool) {
 		}
 		sub.Interests = append(sub.Interests, interest)
 	}
-	scoped := slices.Contains(sub.Interests, realtime.InterestMessages) || slices.Contains(sub.Interests, realtime.Interest("typing"))
+	scoped := slices.Contains(sub.Interests, realtime.InterestMessages) || slices.Contains(sub.Interests, realtime.InterestTyping)
 	raw := query.Get("channel")
 	if scoped && raw == "" {
 		return sub, false
@@ -300,8 +303,9 @@ func streamScope(r *http.Request) (realtime.Subscription, bool) {
 		}
 		sub.Topic = &selected
 	}
-	if slices.Contains(sub.Interests, realtime.Interest("presence")) && query.Get("presence-after") == "" {
+	if slices.Contains(sub.Interests, realtime.InterestPresence) && query.Get("presence-after") == "" {
 		return sub, false
 	}
+	sub.PresenceAfter = query.Get("presence-after")
 	return sub, true
 }

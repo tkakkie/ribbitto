@@ -18,7 +18,8 @@ sequenceDiagram
   loop
     C->>DB: one snapshot: replay boundary + event_seq + events after cursor
     C->>C: check interest, render, authorize, send; cursor = last seq read
-    C->>C: wait on org's durable level, declared generations, heartbeat and context
+    C->>C: read current ephemeral owners, filter, authorize, send without id or cursor advance
+    C->>C: if caught up, wait on org's durable level, declared generations, heartbeat and context
   end
 ```
 
@@ -84,7 +85,8 @@ sequenceDiagram
   Cancellation is checked before every event, so an ended session sends
   nothing more. It drains every batch before waiting on the durable level,
   declared ephemeral generations, heartbeat and context together (#735).
-  Generation wakes send no frames yet (#736).
+  Ephemeral owner frames follow each batch without moving the cursor;
+  production owners remain planned (#287, #288).
 - **Missed raises** (#237). Posting raises the hub right after its commit,
   but a writer without a notifier (`cmd/seed`, sign-up's `member.joined`)
   or, later, another process commits without one, and a stream that has

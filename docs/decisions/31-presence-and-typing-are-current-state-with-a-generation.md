@@ -3,8 +3,9 @@
 **Decided** (#296; amends [decision 23](23-the-event-log-is-the-source-of-truth-the-hub-carries-a-level.md):
 the hub carries a level per ephemeral kind besides the durable one; durable
 events are unchanged). Hub generations and the combined writer wait are
-implemented (#735); owners, frames and the sink remain planned (#736, #737). Details in
-[real time](../architecture/realtime.md#ephemeral-state-planned-m4).
+implemented (#735), as is frame delivery (#736); presence/typing owners
+(#287, #288) and the sink (#737) remain planned. Details in
+[real time](../architecture/realtime.md#ephemeral-state).
 
 - **Current state, not events.** Presence (who has a stream open) and
   typing (who is typing where) are in-memory state per organisation and per

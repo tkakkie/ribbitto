@@ -272,3 +272,20 @@ func TestSSESenderHeartbeatFindsAStalledClient(t *testing.T) {
 		t.Fatalf("Heartbeat took %v, want about the write timeout", elapsed)
 	}
 }
+
+func TestSSEEphemeralFrameAndPresenceToken(t *testing.T) {
+	sub, ok := streamScope(httptest.NewRequest("GET", "/?want=presence&presence-after=instance:7", nil))
+	if !ok || sub.PresenceAfter != "instance:7" {
+		t.Fatalf("subscription=%+v valid=%v", sub, ok)
+	}
+	for _, name := range []string{"presence", "typing"} {
+		w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+		s := &sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+		if err := s.Send(t.Context(), realtime.Outgoing{Ephemeral: true, ID: 999, Name: name, Data: []byte("state")}); err != nil {
+			t.Fatal(err)
+		}
+		if got, want := w.Body.String(), "event: "+name+"\ndata: state\n\n"; got != want {
+			t.Fatalf("frame=%q want=%q", got, want)
+		}
+	}
+}

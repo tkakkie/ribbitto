@@ -10,9 +10,9 @@ const (
 	InterestMessages Interest = "messages"
 	// InterestSidebar declares sidebar output; no sidebar frames are delivered yet.
 	InterestSidebar Interest = "sidebar"
-	// InterestPresence requests presence changes; no presence frames are delivered yet.
+	// InterestPresence requests current presence frames from its owner.
 	InterestPresence Interest = "presence"
-	// InterestTyping requests typing changes; no typing frames are delivered yet.
+	// InterestTyping requests current typing frames from its owner.
 	InterestTyping Interest = "typing"
 )
 

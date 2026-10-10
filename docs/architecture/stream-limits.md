@@ -34,7 +34,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   the durable channel, only its declared kinds' generation channels, its
   heartbeat deadline and context together. The writer reads owners
   after each batch, with at most one frame and check per kind; production
-  owners remain planned (#287, #288); web's hidden sink is current (#737). Register and
+  presence owner is current (#768), typing remains planned (#288); web's hidden sink is current (#737). Register and
   RaiseIfActive still use the registry mutex for caps and active checks.
 
 - Stream authorization caches allows per distinct (account ID, organisation
@@ -91,7 +91,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   sends it while waiting on the hub (`Stream.Heartbeat`); a failed one ends
   the stream without moving the cursor. Presence waits 30 s
   after the last stream closes before marking a member offline (#766;
-  delivery/display planned in #768), so a reload does
+  delivery/display current in #768), so a reload does
   not flicker.
 - The hub caps streams across all accounts and organisations in the process
   at `DefaultMaxStreams` (5,000; #623). `cmd/ribbitto` reads

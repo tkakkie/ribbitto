@@ -49,8 +49,21 @@ func (p channelPages) members(w http.ResponseWriter, r *http.Request, m org.Memb
 		Current: viewChannel(result.Current), Channels: viewChannels(result.Channels), Topics: viewTopics(result.Topics), EventCursor: result.EventCursor,
 		Members: &view.MemberPage{Next: result.Next},
 	}
-	for _, member := range result.Members {
-		page.Members.Items = append(page.Members.Items, view.Member{DisplayName: memberDisplayName(member.DisplayName), Handle: member.Handle})
+	ids := make([]kernel.ID, len(result.Members))
+	for i, member := range result.Members {
+		ids[i] = member.ID
+		page.Members.Items = append(page.Members.Items, view.Member{ID: member.ID, DisplayName: memberDisplayName(member.DisplayName), Handle: member.Handle})
+	}
+	if p.stream != nil && p.stream.Presence != nil {
+		snapshot, err := p.stream.Presence.Read(m.Organization.ID, ids)
+		if err != nil {
+			serverError(w, r, "reading presence snapshot", err)
+			return
+		}
+		page.Members.PresenceAfter = presenceToken(snapshot.Token)
+		for i, online := range snapshot.Online {
+			page.Members.Items[i].Online = online
+		}
 	}
 	p.pages.render(w, r, http.StatusOK, func(url string) templ.Component { return view.ChannelScreen(url, page) })
 }

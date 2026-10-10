@@ -2,5 +2,5 @@
 // Every accepted organisation stream counts; the last close has a 30-second
 // grace period. Web owns the lifecycle seam so realtime never imports presence.
 // State is published before the hub generation; ordered changes and reset are
-// current. Rendering remains planned (#768); construction needs no store or wiring.
+// current. Web renders snapshots and live changes; construction needs no store or wiring.
 package presence

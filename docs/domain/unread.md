@@ -7,7 +7,8 @@ reads exist;
 HTTP callers, other reading writes and unread counts are *planned* for M4
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
 the counting queries and their cost are in
-[unread counts](../architecture/unread-counts.md), the worked examples in
+[unread counts](../architecture/unread-counts.md), the writes in
+[unread writes](../architecture/unread-writes.md), the worked examples in
 [unread examples](unread-examples.md).
 
 - *(since M3)* **Joining an organisation is one transaction:** take the next

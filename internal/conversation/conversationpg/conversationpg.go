@@ -94,3 +94,8 @@ func MessageSequencesIn(tx platform.Tx) conversation.MessageSequences {
 func TopicReadCandidatesIn(tx platform.Tx) conversation.TopicReadCandidates {
 	return postgres.TopicReadCandidatesIn(tx)
 }
+
+// ChannelUnreadIn binds capped channel counts to the caller's snapshot.
+func ChannelUnreadIn(s platform.Snapshot) conversation.ChannelUnread {
+	return postgres.ChannelUnreadIn(s)
+}

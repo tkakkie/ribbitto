@@ -150,3 +150,11 @@ func (directoryHistory) GetMessages(context.Context, kernel.ID, kernel.ID, []ker
 func (fullHistory) GetMessages(context.Context, kernel.ID, kernel.ID, []kernel.ID) ([]conversation.Message, error) {
 	return nil, errors.New("unexpected batch read")
 }
+
+func (*directoryHistory) ListMembers(context.Context, kernel.ID, *kernel.ID, int32) ([]org.ListedMember, error) {
+	return nil, nil
+}
+
+func (fullHistory) ListMembers(context.Context, kernel.ID, *kernel.ID, int32) ([]org.ListedMember, error) {
+	return nil, nil
+}

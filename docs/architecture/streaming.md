@@ -98,7 +98,7 @@ The endpoint takes:
 | Feed (latest page) | `sidebar,messages,typing` with `channel` |
 | Topic view (latest page) | `sidebar,messages,typing` with `channel` and `topic` |
 | `?before=` page | `sidebar` with `channel` |
-| Members panel (planned, #290) | `sidebar,presence` with `channel` |
+| Members panel | `sidebar` with `channel`; #287 adds `presence` and its token |
 
 Every page carries its snapshot cursor on `#organization-stream`, including
 `?before=` pages, which hold a slot under both stream caps. Only `message`
@@ -116,7 +116,7 @@ the channel/topic message filter. Their future swap targets are listed below.
 | `typing` | none | the content of the page's typing indicator (#288) |
 | `reset` | the cursor | the stream script reloads the page, as today |
 
-`#organization-stream`, holding `sse-connect`, wraps the sidebar and conversation, because the htmx
+`#organization-stream`, holding `sse-connect`, wraps the sidebar and conversation or members panel, because the htmx
 SSE extension attaches an `sse-swap` element to its closest ancestor with a
 source. Messages have their own `sse-swap` on latest pages; older pages omit it.
 Planned typing has its own region. Planned per-entry events go to one hidden sink, `sse-swap="sidebar,presence"` with
@@ -124,4 +124,5 @@ Planned typing has its own region. Planned per-entry events go to one hidden sin
 extension swaps through htmx's own swap, which applies out-of-band elements
 even when the main swap is `none`, and an entry not on the page is ignored.
 #285 proves this in a browser test. Opening the members panel is a
-navigation, so its page renders presence and its token from one state.
+navigation. It lists members without live list updates; #287 will render presence
+and its token from one state.

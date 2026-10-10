@@ -1,0 +1,37 @@
+package view
+
+import (
+	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
+
+// Member holds only the names shown in the members panel.
+type Member struct{ DisplayName, Handle string }
+
+// MemberPage is a bounded listing and its optional next-page cursor.
+type MemberPage struct {
+	Items []Member
+	Next  *kernel.ID
+}
+
+templ membersPanel(page ChannelPage) {
+	<main id="members-panel" class="flex min-w-0 flex-1 flex-col overflow-y-auto bg-bg">
+		<header class="border-b border-border px-6 py-3">
+			<h1 class="break-words text-title font-semibold">{ i18n.T(ctx, "people.title") + " · " + page.Current.Name }</h1>
+			<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "people.back") }</a>
+		</header>
+		<ul id="members-list" class="flex flex-col gap-4 px-6 py-4">
+			for _, member := range page.Members.Items {
+				<li class="break-words">
+					@MemberName(member.DisplayName, member.Handle)
+				</li>
+			}
+		</ul>
+		if len(page.Members.Items) == 0 {
+			<p class="px-6 py-4 text-muted">{ i18n.T(ctx, "people.empty") }</p>
+		}
+		if page.Members.Next != nil {
+			<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID) + "/members?after=" + idValue(*page.Members.Next)) } class="inline-flex min-h-11 items-center px-6 py-4 text-brand underline">{ i18n.T(ctx, "people.next") }</a>
+		}
+	</main>
+}

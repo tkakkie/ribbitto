@@ -36,6 +36,13 @@ lookups and the topic batch through `conversation.ReadStore.LookupTopics`, plus 
 org's `organization.event_seq` on every channel or topic page, including
 `?before=` pages. It returns `conversation.ChannelPage` with that snapshot cursor;
 older pages connect with only the sidebar interest.
+`conversation.Reader.Members` validates the channel through conversation's scoped
+`GetChannel`, then reads its sidebar, org's ID-ordered `Directory.ListMembers`
+(100 members plus one lookahead), identity's display names in one batch, and
+org's stream cursor in the same snapshot. All public channels include every
+organisation member today. The org query reads only its own member table;
+channel scope stays in conversation. A member-ID cursor only advances the
+organisation-scoped page and grants no access.
 `conversation.Reader.One` reads one message, its authors and topic in its own snapshot.
 Live labels come from that shared load through the existing render cache, keyed
 by organisation, channel, sequence and language, with no extra read per stream

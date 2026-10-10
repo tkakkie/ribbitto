@@ -574,6 +574,7 @@ func TestPagesMarkup(t *testing.T) {
 	}
 	setupForm := url.Values{"token": {"t"}, "organization_name": {"Org"}, "slug": {"org"}, "display_name": {"Owner"}, "handle": {"owner"}, "email": {"a@b"}, "password": {"p"}}
 	cases := []markupCase{
+		{name: "members", route: "GET /organizations/{slug}/channels/{channelID}/members", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", kernel.ID{1}) + "/members", cookie: true},
 		{name: "home signed out", route: "GET /{$}", services: base, method: "GET", path: "/"},
 		{name: "home signed out, sign-up open", route: "GET /{$}", services: withSignUp(true, nil), method: "GET", path: "/"},
 		{name: "home signed out, sign-up closed", route: "GET /{$}", services: withSignUp(false, nil), method: "GET", path: "/"},

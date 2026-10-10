@@ -29,6 +29,7 @@ type Channels interface {
 // MessageReader provides the channel page and cursor from one snapshot, and
 // one message by sequence or a bounded batch by ID for the stream.
 type MessageReader interface {
+	Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error)
 	Many(context.Context, org.Membership, kernel.ID, []kernel.ID) ([]conversation.Entry, error)
 	Page(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64) (conversation.ChannelPage, error)
 	One(context.Context, org.Membership, kernel.ID, int64) (conversation.Entry, error)

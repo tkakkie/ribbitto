@@ -81,3 +81,23 @@ func (s *Directory) LookupMembers(ctx context.Context, organizationID kernel.ID,
 	}
 	return result, nil
 }
+
+// ListMembers reads a keyset page of public member identities in one organisation.
+func (s *Directory) ListMembers(ctx context.Context, organizationID kernel.ID, after *kernel.ID, limit int32) ([]org.ListedMember, error) {
+	if limit < 1 || limit > 101 {
+		return nil, fmt.Errorf("member page limit must be between 1 and 101")
+	}
+	params := sqlcgen.ListMembersParams{OrganizationID: uuid(organizationID), PageLimit: limit}
+	if after != nil {
+		params.AfterID = uuid(*after)
+	}
+	rows, err := s.queries.ListMembers(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("listing members: %w", err)
+	}
+	result := make([]org.ListedMember, len(rows))
+	for i, row := range rows {
+		result[i] = org.ListedMember{ID: row.ID.Bytes, DirectoryEntry: org.DirectoryEntry{AccountID: row.AccountID.Bytes, Handle: row.Handle}}
+	}
+	return result, nil
+}

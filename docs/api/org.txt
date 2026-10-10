@@ -18,7 +18,8 @@ const DefaultAuthorizationCapacity untyped int = 10000 // DefaultAuthorizationCa
 type DefaultChannelCreator interface // DefaultChannelCreator creates an organisation's default channel, with its default topic, in the caller's transaction, so that a completed setup never lacks one.
   func (DefaultChannelCreator).CreateDefaultChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) error
 type DefaultChannelCreatorIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) DefaultChannelCreator // DefaultChannelCreatorIn binds a default-channel creator to the caller's transaction.
-type Directory interface // Directory looks up only the requested member IDs within one organisation.
+type Directory interface // Directory reads public member identities within one organisation.
+  func (Directory).ListMembers(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, int32) ([]ListedMember, error) // ListMembers returns at most limit members in ID order, after the optional ID.
   func (Directory).LookupMembers(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]DirectoryEntry, error)
 type DirectoryEntry struct // DirectoryEntry is a member's public author information.
   field AccountID github.com/tkakkie/ribbitto/internal/kernel.ID
@@ -42,6 +43,9 @@ type HandleStore interface // HandleStore changes a member's handle.
 type Joined struct // Joined is the decoded payload of KindJoined.
   field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
 const KindJoined github.com/tkakkie/ribbitto/internal/realtime.EventKind = "member.joined" // KindJoined is the kind of a member joining an organisation, which org publishes and so owns (decision 26).
+type ListedMember struct // ListedMember is the public identity of one member in a bounded listing.
+  field DirectoryEntry DirectoryEntry
+  field ID github.com/tkakkie/ribbitto/internal/kernel.ID
 type Member struct // Member is an account's membership in one organisation.
   field AccountID github.com/tkakkie/ribbitto/internal/kernel.ID
   field Handle string // Handle helps people tell members apart within the organisation.

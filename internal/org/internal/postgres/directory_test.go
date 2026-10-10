@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"maps"
+	"reflect"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
@@ -41,6 +42,39 @@ func TestDirectoryLookupMembers(t *testing.T) {
 				requireNoError(t, err)
 				if !maps.Equal(got, tc.want) {
 					t.Fatalf("LookupMembers = %v, want %v", got, tc.want)
+				}
+				return nil
+			}))
+		})
+	}
+}
+
+func TestDirectoryListMembers(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	acme := orgtest.Organization(t, pool, "acme", "Acme", 0)
+	globex := orgtest.Organization(t, pool, "globex", "Globex", 0)
+	account := identitytest.Account(t, pool, "same@example.org", "Same")
+	first := orgtest.Member(t, pool, acme, account, org.RoleMember, "local", 1)
+	orgtest.Member(t, pool, globex, account, org.RoleMember, "foreign", 1)
+	account2 := identitytest.Account(t, pool, "next@example.org", "Next")
+	second := orgtest.Member(t, pool, acme, account2, org.RoleMember, "next", 1)
+	for _, tt := range []struct {
+		name  string
+		after *kernel.ID
+		limit int32
+		want  []org.ListedMember
+	}{
+		{"organisation", nil, 101, []org.ListedMember{{ID: first, DirectoryEntry: org.DirectoryEntry{AccountID: account, Handle: "local"}}, {ID: second, DirectoryEntry: org.DirectoryEntry{AccountID: account2, Handle: "next"}}}},
+		{"bounded", nil, 1, []org.ListedMember{{ID: first, DirectoryEntry: org.DirectoryEntry{AccountID: account, Handle: "local"}}}},
+		{"next", &first, 1, []org.ListedMember{{ID: second, DirectoryEntry: org.DirectoryEntry{AccountID: account2, Handle: "next"}}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			requireNoError(t, platform.InSnapshot(t.Context(), pool, func(s platform.Snapshot) error {
+				got, err := postgres.NewDirectoryIn(s).ListMembers(t.Context(), acme, tt.after, tt.limit)
+				requireNoError(t, err)
+				if !reflect.DeepEqual(got, tt.want) {
+					t.Fatalf("members = %v, want %v", got, tt.want)
 				}
 				return nil
 			}))

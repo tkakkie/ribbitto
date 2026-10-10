@@ -204,3 +204,9 @@ other = "A topic with this name already exists. Choose it as the destination or 
 
 ["topic.branch_name_invalid"]
 other = "Enter a topic name of 1–80 printable characters."
+
+[people]
+title = "Channel members"
+back = "Back to channel"
+empty = "No members on this page."
+next = "Next members"

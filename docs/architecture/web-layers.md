@@ -10,7 +10,7 @@ Core functionality works without JavaScript. JavaScript is progressive
 enhancement, not full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
-  a channel or topic and its history (including older pages), posting a message,
+  a channel, its members page or a topic and its history (including older pages), posting a message,
   branching and creating channels. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
@@ -55,7 +55,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   updating every reference in the same pull request. Today's contract ids
   are `organization-stream`, `conversation`, `message-list`, `message-items`, `load-older`,
   `message-body`, `message-composer`, `message-help`, `message-status`,
-  `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
+  `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox (32 lowercase hex digits). `#message-items` is always present,
   including when empty; Load older selects its direct `<li>` children.
@@ -72,12 +72,14 @@ htmx does only requests and swaps; the server and templ own the HTML.
   | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
   | `data-event-seq` | each message `<li>` | always | its `event_seq`, which orders an inserted item |
   | `data-source` | each message's checkbox | always | its topic's ID; a selection stays within one source topic |
-- Every channel/topic page, including `?before=` pages, carries
+- Every channel/topic or members page, including `?before=` pages, carries
   `data-event-cursor` on `#organization-stream`, the outer layout div outside
-  every swap target. It wraps the sidebar and conversation, with `hx-ext="sse"`
+  every swap target. It wraps the sidebar and conversation or members panel, with `hx-ext="sse"`
   and `sse-connect="/organizations/<slug>/events?after=<cursor>&want=<interests>&channel=<id>"`
   (plus `topic=<id>` on latest topic views). Latest pages declare
-  `sidebar,messages,typing`; older pages declare `sidebar` and omit `topic`.
+  `sidebar,messages,typing`; older and members pages declare `sidebar` and omit `topic`.
+  Members navigation and paging use ordinary links; `#members-list` is bounded
+  to 100 names and has no live swap or live region.
   See [stream scope](streaming.md#stream-scope). `reset` handling attaches to
   this container. Its reconnect cursor advances after an inserted message
   settles or a move applies successfully.

@@ -553,3 +553,8 @@ func labelLink(entry conversation.Entry) string {
 	}
 	return `<a href="` + view.ConversationURL("acme", entry.ChannelID, &entry.TopicID) + `" class="text-muted underline"><bdi class="text-caption text-muted">` + label + `</bdi></a>`
 }
+
+func (f fakeMessages) Members(ctx context.Context, m org.Membership, id kernel.ID, _ *kernel.ID) (conversation.MembersPage, error) {
+	page, err := f.Page(ctx, m, id, nil, nil)
+	return conversation.MembersPage{Current: page.Current, Channels: page.Channels, Topics: page.Topics, EventCursor: page.EventCursor, Members: []conversation.ChannelMember{{DisplayName: "مريم", Handle: "alice"}, {DisplayName: "\u3164", Handle: "legacy"}}, Next: &kernel.ID{7}}, err
+}

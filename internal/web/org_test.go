@@ -140,7 +140,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != view.ChannelURL("acme", acmeChannel) {
 					t.Fatalf("default: %d %s", w.Code, w.Header().Get("Location"))
 				}
-			case "GET /channels/{channelID}", "GET /channels/{channelID}/topics/{topicID}":
+			case "GET /channels/{channelID}/members", "GET /channels/{channelID}", "GET /channels/{channelID}/topics/{topicID}":
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") || !strings.Contains(w.Body.String(), "雑談") {
 					t.Fatalf("channel: %d %s", w.Code, w.Body.String())
 				}

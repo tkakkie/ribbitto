@@ -112,3 +112,25 @@ func TestReaderPageSnapshot(t *testing.T) {
 		t.Fatalf("older page = %+v, %v, calls %v", page, err, f.calls)
 	}
 }
+
+func TestReaderMembersSnapshot(t *testing.T) {
+	membership := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
+	order := []string{"snapshot", "reads", "channel", "channels", "topics", "members", "accounts", "bind cursor", "cursor"}
+	for _, fail := range []string{"", "channel", "channels", "topics", "cursor"} {
+		t.Run("failure="+fail, func(t *testing.T) {
+			reader, f := testReader(t, fullHistory{})
+			f.fail, f.organizationID = fail, membership.Organization.ID
+			page, err := reader.Members(t.Context(), membership, kernel.ID{2}, nil)
+			want, wantErr := order, error(nil)
+			if fail != "" {
+				want, wantErr = order[:slices.Index(order, fail)+1], f.err
+			}
+			if !reflect.DeepEqual(f.calls, want) || !errors.Is(err, wantErr) {
+				t.Fatalf("calls/error = %v/%v, want %v/%v", f.calls, err, want, wantErr)
+			}
+			if fail == "" && (page.EventCursor == nil || *page.EventCursor != 7) {
+				t.Fatal("missing members page cursor")
+			}
+		})
+	}
+}

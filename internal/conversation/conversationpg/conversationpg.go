@@ -89,3 +89,8 @@ func readStoreIn(snapshot platform.Snapshot) conversation.ReadStore {
 func MessageSequencesIn(tx platform.Tx) conversation.MessageSequences {
 	return postgres.MessageSequencesIn(tx)
 }
+
+// TopicReadCandidatesIn binds topic unread bounds to the caller's transaction.
+func TopicReadCandidatesIn(tx platform.Tx) conversation.TopicReadCandidates {
+	return postgres.TopicReadCandidatesIn(tx)
+}

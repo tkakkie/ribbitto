@@ -136,6 +136,9 @@ type Reader struct // Reader owns the page, single-message and batch snapshots a
   func (*Reader).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64) (page ChannelPage, err error) // Page reads channel or topic history with the snapshot's event cursor, including older pages with a before bound.
 func RouteMoved(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteMoved is messages.moved's realtime.Router: the channel and both topics, so a view of either sees the move.
 func RoutePosted(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePosted is message.posted's realtime.Router: the channel and, unless the payload is legacy, the posting-time topic.
+type SequenceRange struct // SequenceRange contains message sequences from Lo inclusive to Hi exclusive.
+  field Hi int64
+  field Lo int64
 type SnapshotRunner interface // SnapshotRunner runs the page snapshot, One and Many (decision 26): the use case owns the read boundary, and the stores and directories only bind to the Snapshot they are given, so every read sees the same committed state.
   func (SnapshotRunner).InSnapshot(ctx context.Context, fn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) error) error // InSnapshot runs fn in a new read-only, repeatable-read transaction, returning fn's error as is.
 type Topic struct // Topic is a named conversation inside a channel, identified by ID.
@@ -145,6 +148,8 @@ type Topic struct // Topic is a named conversation inside a channel, identified 
   field IsDefault bool
   field Name string
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
+type TopicReadCandidates interface // TopicReadCandidates supplies unread message bounds without exposing storage.
+  func (TopicReadCandidates).Ranges(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, cursor int64, prefix int64, floor int64, readSet []SequenceRange) ([]SequenceRange, error) // Ranges returns [previous + 1, next) for the topic's unread messages shown through cursor, using whole-channel neighbours (0 or message + 1 if absent).
 type TopicReader interface // TopicReader looks topics up within one organisation and channel.
   func (TopicReader).GetTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error)
 type Topics struct // Topics runs the topic lookups for a member resolved by org.

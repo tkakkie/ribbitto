@@ -105,8 +105,8 @@ Both use [`tools/internal/sqlwalk`](../tools/internal/sqlwalk/doc.go) for
 `module.QueryName` query loading, unnamed SQL and duplicate rejection, `pg_query_go`
 JSON parsing, statement/CTE/subquery traversal and the FROM `unnest` permission
 rule. Organisation scope and table ownership policies stay in their respective
-checkers. Shared reason validation
-rejects pending approval and requires issue, PR-comment or numbered decision
+checkers. Shared reasons
+reject pending approval and require issue, PR-comment or numbered decision
 provenance for maintainer claims (not approval verification). The parser needs
 cgo and a C compiler (Xcode locally, GCC on CI).
 
@@ -117,21 +117,25 @@ columns, with `organization` scoped by `id` and an explicit installation-wide
 list; unknown ownership, scoped list entries (except singleton `setup`) and stale
 entries fail. Plain INSERT VALUES and INSERT SELECT with at most one source pass:
 a same-statement CTE or unqualified FROM `unnest` of `sqlc.arg(name)::bigint[]`
-or `sqlc.arg(name)::uuid[]` parameters, alone or mixed. The latter supplies
-parameter-only candidate bounds for set-based range writes (#727) and
-channel/topic IDs for counts (#740); aliases may name its output columns. It is
-not a table and needs no scope, but each table joined to it in a SELECT or UPDATE
-still needs its own WHERE scope.
-A single argument may use WITH ORDINALITY (#749) with an alias naming exactly
-two columns: `unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)`
-(or `uuid[]`). SELECT and UPDATE FROM, checked CTEs and INSERT SELECT accept it.
-Parallel arrays can be joined on their ordinal columns in SELECT or a checked
-CTE. For INSERT, put the join inside the CTE and read that single CTE source.
-Pinned sqlc v1.31.1 cannot generate multi-argument `unnest`:
-`function unnest(unknown, unknown) does not exist`. Go callers must check that
-parallel arrays have equal lengths and return an error before the statement
-runs, since an ordinal join silently drops unmatched positions.
-CTEs containing it are checked normally. Tablecheck still rejects foreign writes.
+or `sqlc.arg(name)::uuid[]` parameters, alone or mixed. Parameter-only bounds
+support range writes (#727), channel/topic IDs support counts (#740); aliases may
+name output columns. Each table joined in SELECT or UPDATE needs its own scope.
+Tablecheck accepts scalar `sqlc.arg(name)::int8multirange` (#743), with
+identifier/string names, and unqualified `@>` only with that exact cast on the
+left and a column or accepted expression cast to scalar `bigint` on the right
+(sqlc resolves column types). `NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)`
+lets #746's topic counts and #750's topic-view candidates exclude the read set
+in one statement without foreign reads. Qualification, array bounds, typmods,
+`sqlc.narg`, range constructors/aggregates, other range types/operators still fail.
+Ownership and per-table organisation scope still apply.
+WITH ORDINALITY (#749) requires one array and an alias naming two columns:
+`unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)` (or `uuid[]`).
+SELECT, UPDATE FROM, CTEs and INSERT SELECT accept it. Arrays
+can join on ordinals; INSERT requires that join in a CTE.
+sqlc v1.31.1 refuses multi-argument `unnest`:
+`function unnest(unknown, unknown) does not exist`. Go must reject unequal array
+lengths before execution; ordinal joins drop unmatched positions.
+Tablecheck still rejects foreign writes.
 Subqueries in VALUES, RETURNING or the INSERT SELECT remain unsupported, as do
 joins (including comma joins) in that SELECT, physical-table INSERT SELECT reads,
 ON CONFLICT and other INSERT shapes; full INSERT checking belongs in a follow-up.

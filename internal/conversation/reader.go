@@ -10,19 +10,20 @@ import (
 )
 
 // Reader owns the page, single-message and batch snapshots across conversation,
-// org and identity through factories bound to the same read-only snapshot.
+// org, identity and unread through factories bound to the same read-only snapshot.
 type Reader struct {
 	runner   SnapshotRunner
 	reads    ReadStoreIn
 	members  MemberDirectoryIn
 	accounts AccountDirectoryIn
 	cursor   EventCursorIn
+	counts   PageCountsIn
 }
 
 // NewReader builds the snapshot use case with conversation's reads and the
-// member, account and cursor factories supplied by the composition root.
-func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn) *Reader {
-	return &Reader{runner: runner, reads: reads, members: members, accounts: accounts, cursor: cursor}
+// member, account, cursor and count factories supplied by the composition root.
+func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader {
+	return &Reader{runner: runner, reads: reads, members: members, accounts: accounts, cursor: cursor, counts: counts}
 }
 
 func (s *Reader) history(snapshot platform.Snapshot, reads ReadStore) historyReader {
@@ -76,7 +77,8 @@ func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID
 			return fmt.Errorf("reading page cursor: %w", err)
 		}
 		page.EventCursor = &seq
-		return nil
+		page.PageCounts, err = s.pageCounts(ctx, snapshot, m, channelID, page.Channels, page.Topics, topicID)
+		return err
 	})
 	if err != nil {
 		return ChannelPage{}, fmt.Errorf("reading channel page snapshot: %w", err)

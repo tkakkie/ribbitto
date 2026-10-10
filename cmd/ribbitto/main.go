@@ -341,7 +341,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		SetupSessions: sessions,
 		Authz:         authorizer,
 		Topics:        conversationpg.NewTopics(pool),
-		Messages:      conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor),
+		Messages:      conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn),
 		Posting:       posting,
 		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter()),
 		Branching:     branching,

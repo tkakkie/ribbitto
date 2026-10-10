@@ -4,7 +4,7 @@
 [decision 21](21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)
 left to M4). Storage, range unions, feed, topic and branch-notice
 reads are implemented;
-Visible-page reading POSTs, posting writes and the count APIs are current; counts on pages remain *planned* for M4. Rules in [unread](../domain/unread.md),
+Visible-page reading POSTs, posting writes and page counts are current; count display remains *planned* for M4. Rules in [unread](../domain/unread.md),
 storage in [unread counts](../architecture/unread-counts.md), cost in [unread count costs](../architecture/unread-count-costs.md), writes in
 [unread writes](../architecture/unread-writes.md).
 
@@ -39,7 +39,7 @@ storage in [unread counts](../architecture/unread-counts.md), cost in [unread co
   position.
 - **Ownership.** Following decision 27's growth rule, an `unread` module
   owns the read-state tables and reads messages only through
-  `conversation`'s transaction-bound write queries and planned snapshot-bound
+  `conversation`'s transaction-bound write queries and snapshot-bound
   counting API; `conversation` owns
   `message.moved_event_seq`, which extends its messages. The page snapshot
   reaches `unread` through an injected factory.

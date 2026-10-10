@@ -47,8 +47,8 @@ func NewBrancher(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, eve
 }
 
 // NewReader builds the page, single-message and batch use case over the pool.
-func NewReader(pool *pgxpool.Pool, members conversation.MemberDirectoryIn, accounts conversation.AccountDirectoryIn, cursor conversation.EventCursorIn) *conversation.Reader {
-	return conversation.NewReader(newSnapshotRunner(pool), readStoreIn, members, accounts, cursor)
+func NewReader(pool *pgxpool.Pool, members conversation.MemberDirectoryIn, accounts conversation.AccountDirectoryIn, cursor conversation.EventCursorIn, counts conversation.PageCountsIn) *conversation.Reader {
+	return conversation.NewReader(newSnapshotRunner(pool), readStoreIn, members, accounts, cursor, counts)
 }
 
 // DefaultChannelCreatorIn returns the default-channel creator bound to setup's

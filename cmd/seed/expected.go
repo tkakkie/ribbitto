@@ -114,7 +114,7 @@ func writeExpected(ctx context.Context, databaseURL, tokens, output string, afte
 	reader := conversationpg.NewReader(pool,
 		func(s platform.Snapshot) conversation.MemberDirectory { return orgpg.MembersIn(s) },
 		func(s platform.Snapshot) conversation.AccountDirectory { return identitypg.AccountsIn(s) },
-		func(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) })
+		func(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }, seedPageCountsIn)
 	page, err := reader.Page(ctx, m, channel, nil, nil)
 	if err != nil {
 		return fmt.Errorf("reading latest expected page: %w", err)
@@ -142,4 +142,12 @@ func writeExpected(ctx context.Context, databaseURL, tokens, output string, afte
 		return fmt.Errorf("writing expected file: %w", err)
 	}
 	return f.Close()
+}
+
+// Expected files contain history only; sidebar counts are not exported.
+type seedPageCounter struct{}
+
+func seedPageCountsIn(platform.Snapshot) conversation.PageCounter { return seedPageCounter{} }
+func (seedPageCounter) Read(context.Context, org.Membership, kernel.ID, []kernel.ID, []kernel.ID, *kernel.ID) (conversation.PageCounts, error) {
+	return conversation.PageCounts{}, nil
 }

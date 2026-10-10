@@ -35,7 +35,10 @@ across the channel and sidebar, the selected topic and the bounded topic list
 lookups and the topic batch through `conversation.ReadStore.LookupTopics`, plus the
 org's `organization.event_seq` on every channel or topic page, including
 `?before=` pages. It returns `conversation.ChannelPage` with that snapshot cursor;
-older pages connect with only the sidebar interest.
+older pages connect with only the sidebar interest. The injected `PageCountsIn`
+factory also binds unread's two list reads to that snapshot, including older
+history and members pages; their plain results carry both count maps and
+first-unread sequences. Org's membership API supplies the immutable join boundary.
 `conversation.Reader.Members` validates the channel through conversation's scoped
 `GetChannel`, then reads its sidebar, org's ID-ordered `Directory.ListMembers`
 (100 members plus one lookahead), identity's display names in one batch, and
@@ -64,7 +67,7 @@ through unread's consumer interface, sharing that snapshot. Conversation's
 `CountChannelUnread` probes ordered gaps, caps each channel at 100 messages
 before counting, and returns its first unread sequence in the same statement.
 Only organisation and channel filter messages; the author is not the reader.
-The combined list takes two statements; page binding remains planned.
+The combined list takes two statements in the page snapshot.
 
 `unreadpg.TopicStateIn` binds current-channel read state to the caller's
 snapshot. One `ReadTopicState` statement combines the scoped channel ranges
@@ -76,8 +79,7 @@ that state and calls
 `newTopicCounts` in `cmd/ribbitto`. The snapshot-bound counter uses only message
 rows scoped by organisation, channel and topic and the supplied range values.
 Its two branches share a cap of 100; only the selected topic gets an uncapped
-first-unread lookup. The combined list takes two statements; page binding
-remains planned, with no foreign-table seam.
+first-unread lookup. The combined list takes two statements in the page snapshot, with no foreign-table seam.
 
 Unread's store binds to a caller-owned transaction through `unreadpg.WriterIn`.
 It locks or creates `channel_read`, unions the supplied join prefix before

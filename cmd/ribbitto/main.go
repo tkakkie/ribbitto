@@ -26,6 +26,8 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
+	"github.com/tkakkie/ribbitto/internal/unread"
+	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -453,3 +455,11 @@ func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
 // eventCursor adapts org's committed event_seq to the reader's consumer
 // interface.
 func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }
+
+// The read POST will call this use case inside its own transaction (#722).
+func newFeedWriter() *unread.FeedWriter {
+	return unreadpg.NewFeedWriter(
+		func(tx platform.Tx) unread.ChannelMessages { return conversationpg.MessageSequencesIn(tx) },
+		func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) },
+	)
+}

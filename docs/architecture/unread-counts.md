@@ -1,15 +1,15 @@
 # Unread counts
 
-Read-state storage is current; reading flows and counts are *planned* (M4, [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)):
-how read state is stored, written and counted, and what that costs. The
-rules are in [unread](../domain/unread.md). The move column and its index
-already exist, as do the read-state tables and single-range store below.
-Their consumers and the counting queries remain planned.
+How read state is stored, written and counted, and what that costs
+([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
+The move column, read-state tables, range store and feed write are current;
+HTTP callers, topic and posting writes, and counts are *planned* (M4). The
+rules are in [unread](../domain/unread.md).
 
 ## Storage
 
-The `unread` module owns the current read-state tables; planned consumers
-use `conversation`'s API
+The `unread` module owns the current read-state tables and uses
+`conversation`'s API
 ([decision 27](../decisions/27-channels-topics-and-messages-are-one-conversation-module.md)'s
 growth rule):
 
@@ -36,7 +36,7 @@ moved_event_seq) WHERE moved_event_seq IS NOT NULL`.
 
 `unread` never reads `message`, and `conversation` never reads `unread`'s
 tables; tablecheck's ownership rule and its fail-closed checks stay as they
-are. The page snapshot (`conversation.Reader`) reaches `unread` through an
+are. The planned page snapshot (`conversation.Reader`) reaches `unread` through an
 injected, snapshot-bound factory, as it reaches org's and identity's data
 ([cross-feature access](cross-feature-access.md)); `unread` in turn calls
 `conversation`'s snapshot-bound message queries. Read sets cross the
@@ -94,18 +94,19 @@ It finds the primary-key predecessor, deletes only overlapping or touching
 rows between that predecessor and the new upper end, and inserts their union.
 All of this commits or rolls back with the caller.
 
-The following reading flows remain planned. Every write first locks the
-`channel_read` row (inserting it if missing),
-then adds ranges and merges them with their neighbours: concurrent writes
+Every reading write first locks `channel_read` (inserting it if missing),
+then unions ranges: concurrent writes
 queue and commute, and none removes a read message. A newly read message
 `m` adds `[p + 1, n)`, with `p` the channel's previous message (or 0) and
 `n` its next (or `m + 1`), so every bounded gap contains an unread message.
 
-- **Feed, cursor `S`:** one probe for the channel's first message above
+- **Feed, cursor `S` (current):** `unread.FeedWriter` uses injected factories
+  to read org's committed cursor and conversation's next message in the caller's
+  transaction, then unions the prefix. One probe finds the first message above
   `S` (`n`, or `S + 1`), then `[0, n)`: it deletes every range it absorbs,
   so its cost is proportional to the ranges merged, `O(R)` after heavy
   fragmentation and `O(1)` in normal use.
-- **Topic view, cursor `S`:** set-based, never one statement per message.
+- **Topic view, cursor `S` (planned):** set-based, never one statement per message.
   `conversation` returns, in one statement, the bounds `[p + 1, n)` of the
   topic's unread messages up to `S` (step 4's shape without its cap,
   excluding `moved_event_seq > S`); `unread` passes them as arrays (#727) to
@@ -113,7 +114,7 @@ queue and commute, and none removes a read message. A newly read message
   touch (found by the primary key) and raises the floor to `S` if lower, in
   the same transaction. Cost: `O(R)` for the read set and the candidate
   rows; 87–88 ms for 9,999 messages over 10,000 ranges in the benchmark.
-- **Posting** with the composer's cursor `S`: the same write as the page's
+- **Posting (planned)** with the composer's cursor `S`: the same write as the page's
   scope up to `S`, then a range for the new message; from a topic view the
   floor also rises to the new message when no message of the topic has an
   `event_seq` or `moved_event_seq` strictly between `S` and it. `S` is the

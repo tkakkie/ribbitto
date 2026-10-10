@@ -92,3 +92,8 @@ func NewSetup(pool *pgxpool.Pool, hasher *identity.Hasher, token string, account
 func NewCachedAuthorizer(ctx context.Context, pool *pgxpool.Pool, capacity int) *org.Authorizer {
 	return org.NewCachedAuthorizer(ctx, postgres.NewAuthzStore(pool), capacity)
 }
+
+// EventCursorInTx returns org's cursor bound to the caller's transaction.
+func EventCursorInTx(tx platform.Tx) postgres.EventCursor {
+	return postgres.EventCursorInTx(tx)
+}

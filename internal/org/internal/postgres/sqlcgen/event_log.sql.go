@@ -61,7 +61,7 @@ const getEventSeq = `-- name: GetEventSeq :one
 SELECT event_seq FROM organization WHERE id = $1
 `
 
-// Every history page's cursor, read in the page's snapshot.
+// History reads bind this cursor to their snapshot; feed writes to their transaction.
 func (q *Queries) GetEventSeq(ctx context.Context, id pgtype.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, getEventSeq, id)
 	var event_seq int64

@@ -15,5 +15,6 @@
 // binds it to their transaction. ReadStore holds the page snapshot's
 // channel, topic and message reads and no write, delegating the channel
 // lookups and embedding the read-only TopicStore for the topic by ID;
-// ReadStoreIn binds it to Reader's snapshot.
+// ReadStoreIn binds it to Reader's snapshot. MessageSequencesIn binds the
+// next-channel-message query to unread's caller-owned transaction.
 package postgres

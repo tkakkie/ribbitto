@@ -19,5 +19,5 @@ SELECT id, event_seq FROM organization WHERE id = ANY(sqlc.arg(organization_ids)
 UPDATE organization SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq;
 
 -- name: GetEventSeq :one
--- Every history page's cursor, read in the page's snapshot.
+-- History reads bind this cursor to their snapshot; feed writes to their transaction.
 SELECT event_seq FROM organization WHERE id = $1;

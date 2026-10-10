@@ -84,3 +84,8 @@ func (r snapshotRunner) InSnapshot(ctx context.Context, fn func(platform.Snapsho
 func readStoreIn(snapshot platform.Snapshot) conversation.ReadStore {
 	return postgres.ReadStoreIn(snapshot)
 }
+
+// MessageSequencesIn binds conversation's channel bounds to the caller's transaction.
+func MessageSequencesIn(tx platform.Tx) conversation.MessageSequences {
+	return postgres.MessageSequencesIn(tx)
+}

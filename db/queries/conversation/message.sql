@@ -18,3 +18,8 @@ LIMIT sqlc.arg('limit');
 SELECT * FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND id = ANY(sqlc.arg(message_ids)::uuid[])
 ORDER BY event_seq DESC;
+
+-- name: FirstChannelMessageAfter :one
+SELECT event_seq FROM message
+WHERE organization_id = $1 AND channel_id = $2 AND event_seq > $3
+ORDER BY event_seq LIMIT 1;

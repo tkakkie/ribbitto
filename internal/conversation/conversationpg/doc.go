@@ -6,5 +6,6 @@
 // NewBrancher bind their writes to transactions over the pool; NewReader
 // binds conversation's reads to snapshots over the pool. Their runners and
 // own-module bindings are unexported; EventKinds registers the event routers
-// with realtime.
+// with realtime. MessageSequencesIn binds channel bounds for unread to
+// its caller's transaction.
 package conversationpg

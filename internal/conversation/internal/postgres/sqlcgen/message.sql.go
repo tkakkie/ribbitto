@@ -11,6 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const firstChannelMessageAfter = `-- name: FirstChannelMessageAfter :one
+SELECT event_seq FROM message
+WHERE organization_id = $1 AND channel_id = $2 AND event_seq > $3
+ORDER BY event_seq LIMIT 1
+`
+
+type FirstChannelMessageAfterParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	EventSeq       int64
+}
+
+func (q *Queries) FirstChannelMessageAfter(ctx context.Context, arg FirstChannelMessageAfterParams) (int64, error) {
+	row := q.db.QueryRow(ctx, firstChannelMessageAfter, arg.OrganizationID, arg.ChannelID, arg.EventSeq)
+	var event_seq int64
+	err := row.Scan(&event_seq)
+	return event_seq, err
+}
+
 const getMessage = `-- name: GetMessage :one
 SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND event_seq = $3

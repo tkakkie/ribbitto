@@ -324,7 +324,10 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
 		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, orgpg.BoundsIn, kinds), config.hub, 1024, time.Minute)
-		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout, StreamOpened: presence.New(config.hub).Open}
+		state := presence.New(config.hub)
+		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout,
+			Presence: state, StreamOpened: state.Open,
+			Owners: map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestPresence: web.NewPresenceOwner(ctx, state)}}
 	}
 	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, postingNotifier)
 	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, postingNotifier)

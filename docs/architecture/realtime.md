@@ -114,9 +114,8 @@ without a lost wake-up or registry lock.
 
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
 pages hold one organisation stream with [interests](streaming.md#stream-scope).
-Delivery (#736), the sink (#737), presence state (#766) and changes/reset
-(#767) are current; presence rendering/delivery (#768) and typing (#288)
-remain planned. Only visible transitions raise generations.
+Delivery, sink and presence are current (#736, #737, #766–#768); typing (#288)
+remains planned. Only visible transitions raise generations.
 
 - **Owners.** Presence counts accepted streams through web's lifecycle seam,
   independent of interests, and marks members offline 30 s after the last
@@ -127,7 +126,7 @@ remain planned. Only visible transitions raise generations.
   channel/topic state until a few seconds after the last signal.
   `realtime.EphemeralOwner` returns current state and its represented
   generation; web adapters render feature state. The subscription carries
-  the opaque presence token. `cmd/ribbitto` constructs presence; adapters remain planned.
+  the opaque presence token. `cmd/ribbitto` wires one presence state to pages, stream counts and web's adapter.
 - **Generations.** Presence keeps one entry per member, ordered by its last
   change. Changes after a token are a suffix; offline entries stay five minutes.
   Discarding one advances a monotonic boundary to its generation. State, boundary
@@ -141,11 +140,11 @@ remain planned. Only visible transitions raise generations.
   cursor are unchanged; a backlog delays changes by at most one batch, and
   empty or denied wakes preserve the heartbeat deadline since the last write.
   Presence reads at most 100 entries from the changed suffix; typing will
-  supply its place's indicator (at most three names, then a count) when changed. Presence entries will
-  share renders per member, state and language.
+  supply its place's indicator (at most three names, then a count) when changed. Presence entries
+  share bounded renders per member, state and language, replacing stable indicator IDs through the hidden sink.
 - **Reset.** Presence requires `reset` for another process's token, a start below
   the discard boundary, or over 100 changed entries, on connect or later. Equality
-  at the boundary is served. The planned adapter (#768) sends `reset` without
+  at the boundary is served. The web adapter sends `reset` without
   `id:`; the page reloads with fresh state (decision 24).
 - **Authorization** runs immediately before each frame, by the rule for an
   organisation-wide event (presence) or one of the frame's channel (typing):

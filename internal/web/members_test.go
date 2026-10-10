@@ -21,6 +21,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/presence"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -53,11 +55,25 @@ func TestMembersPageAgainstPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := NewHandler("", catalogues, postgresServices(t, pool, sessions, "", false))
+	services := postgresServices(t, pool, sessions, "", false)
+	hub := realtime.NewHub()
+	state := presence.New(hub)
+	services.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Presence: state, Events: quietLog{}, Authorizer: streamAllow(true), Owners: map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestPresence: NewPresenceOwner(t.Context(), state)}}
+	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
 		t.Fatal(err)
 	}
 	path := view.ChannelURL("acme", local.Channel.ID) + "/members"
+	foreignCookie, _, err := sessions.Create(t.Context(), foreign.AccountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, denied := range []string{path, "/organizations/acme/events?after=1&want=presence&presence-after=instance:0"} {
+		w := serveForm(handler, "GET", denied, foreignCookie, nil)
+		if w.Code != 404 || strings.Contains(w.Body.String(), "presence-") || strings.Contains(w.Body.String(), "event:") {
+			t.Fatalf("non-member: %d %s", w.Code, w.Body.String())
+		}
+	}
 	seen := map[string]bool{}
 	for pageNo := range 2 {
 		w := serveForm(handler, "GET", path, cookie, nil)
@@ -71,7 +87,7 @@ func TestMembersPageAgainstPostgreSQL(t *testing.T) {
 		count, next, back := 0, "", false
 		for n := range doc.Descendants() {
 			if n.DataAtom == atom.Li && n.Parent != nil && attr(n.Parent, "id") == "members-list" {
-				value := text(n)
+				value := strings.TrimSpace(strings.TrimSuffix(text(n), "Offline"))
 				if seen[value] {
 					t.Fatalf("duplicate member %q", value)
 				}
@@ -93,7 +109,7 @@ func TestMembersPageAgainstPostgreSQL(t *testing.T) {
 					t.Fatal(err)
 				}
 				q := stream.Query()
-				if stream.Path != "/organizations/acme/events" || q.Get("want") != "sidebar" || q.Get("channel") != strings.TrimPrefix(view.ChannelURL("acme", local.Channel.ID), "/organizations/acme/channels/") || q.Get("after") != "1" || q.Has("topic") {
+				if stream.Path != "/organizations/acme/events" || q.Get("want") != "sidebar,presence" || q.Get("presence-after") == "" || q.Get("channel") != strings.TrimPrefix(view.ChannelURL("acme", local.Channel.ID), "/organizations/acme/channels/") || q.Get("after") != "1" || q.Has("topic") {
 					t.Fatalf("stream scope: %v", stream)
 				}
 			}

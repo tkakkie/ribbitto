@@ -18,8 +18,8 @@
 // waiter's path. The single stream writer waits on the durable level, only
 // its declared kinds' generations, its heartbeat and its context together.
 // Owner reads supply bounded frames after each durable batch, authorized
-// immediately before sending without moving the cursor. Production owners
-// remain planned (#287, #288); web's hidden sink is current (#737). It is also the
+// immediately before sending without moving the cursor. Production presence
+// is current (#768); typing remains planned (#288); web's hidden sink is current (#737). It is also the
 // registry of open connections: Register caps
 // connections per process and per account and gives each one a context
 // that CancelAccount or CancelSession ends. Events themselves are never

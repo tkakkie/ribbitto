@@ -217,5 +217,11 @@ other = "このページにメンバーはいません。"
 ["people.next"]
 other = "次のメンバー"
 
+["people.online"]
+other = "オンライン"
+
+["people.offline"]
+other = "オフライン"
+
 ["reading.mark"]
 other = "既読にする"

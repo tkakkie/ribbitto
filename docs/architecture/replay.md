@@ -12,7 +12,8 @@ sequenceDiagram
   participant C as stream writer
   B->>W: GET page
   W->>DB: REPEATABLE READ, READ ONLY: page data + event_seq of this organisation
-  W-->>B: HTML with cursor = event_seq
+  W->>W: members page: one presence snapshot with token
+  W-->>B: HTML with cursor = event_seq, presence indicators and token
   B->>W: GET /organizations/{slug}/events?after=cursor&want=interests
   W->>C: start
   loop
@@ -86,7 +87,7 @@ sequenceDiagram
   nothing more. It drains every batch before waiting on the durable level,
   declared ephemeral generations, heartbeat and context together (#735).
   Ephemeral owner frames follow each batch without moving the cursor;
-  production owners remain planned (#287, #288).
+  production presence is current (#768); typing remains planned (#288).
 - **Missed raises** (#237). Posting raises the hub right after its commit,
   but a writer without a notifier (`cmd/seed`, sign-up's `member.joined`)
   or, later, another process commits without one, and a stream that has

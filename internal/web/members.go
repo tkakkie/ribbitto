@@ -47,6 +47,7 @@ func (p channelPages) members(w http.ResponseWriter, r *http.Request, m org.Memb
 		Organization: view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name},
 		DisplayName:  memberDisplayName(account.DisplayName), Handle: m.Member.Handle, Role: string(m.Member.Role),
 		Current: viewChannel(result.Current), Channels: viewChannels(result.Channels), Topics: viewTopics(result.Topics), EventCursor: result.EventCursor,
+		ChannelCounts: result.ChannelCounts, TopicCounts: result.TopicCounts,
 		Members: &view.MemberPage{Next: result.Next},
 	}
 	ids := make([]kernel.ID, len(result.Members))

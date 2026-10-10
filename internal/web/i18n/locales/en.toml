@@ -225,3 +225,6 @@ other = "Offline"
 
 ["reading.mark"]
 other = "Mark as read"
+
+["reading.unread_count"]
+other = "Unread messages: {count}"

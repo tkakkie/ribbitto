@@ -65,7 +65,10 @@ sequence; no message or foreign-table query runs in unread's store.
 sqlc query (organisation, channel, strictly above `S`, lowest sequence), and
 `orgpg.EventCursorInTx` binds org's existing cursor query to the same transaction.
 The feed refuses `S` above that cursor, then merges `[0, n)` (`S + 1` without
-a next message). Its HTTP caller and the topic-view write remain planned.
+a next message). Its HTTP caller remains planned.
+`unread.TopicWriter`, wired by `newTopicWriter`, validates org's cursor, then
+prepares the locked prefix, ranges and floor before querying candidates and
+batch-adding their bounds and raising the floor, all in the caller's transaction.
 `conversationpg.TopicReadCandidatesIn` binds `TopicUnreadRangeBounds` to the
 caller's transaction: one statement returns `[p + 1, n)` for the topic's unread
 messages through `S`, excluding moves after `S`. It uses whole-channel

@@ -28,14 +28,15 @@ A newly read message
   calls `Writer.Merge` with `[p + 1, m + 1)` and the persisted join prefix after
   inserting notice `m`, before its append. The organisation lock keeps `m`
   newest; all writes share branching's transaction. Moves leave read state unchanged.
-- **Topic view, cursor `S` (planned):** set-based, never one statement per message.
-  `conversation` returns, in one statement, the bounds `[p + 1, n)` of the
-  topic's unread messages up to `S` ([step 4](unread-counts.md#the-api-between-the-modules)'s shape without its cap,
-  excluding `moved_event_seq > S`); `unread` passes them as arrays (#727) to
-  one statement that coalesces them, merges only the ranges they overlap or
-  touch (found by the primary key) and raises the floor to `S` if lower, in
-  the same transaction. Cost: `O(R)` for the read set and the candidate
-  rows; 87–88 ms for 9,999 messages over 10,000 ranges in the benchmark.
+- **Topic view, cursor `S` (current):** `unread.TopicWriter` validates org's
+  committed cursor, then runs locked preparation, conversation's candidate
+  query and the batch union with floor update, in the caller's transaction.
+  Preparation establishes the join prefix and loads ranges and the floor;
+  `conversation` returns unread bounds `[p + 1, n)` through `S`, excluding
+  moves after `S`. Go coalesces the bounds; fixed statements merge only
+  overlapping or touching ranges and raise the floor, retaining the lock.
+  Cost: `O(R)` for the read set and the candidate rows; 87–88 ms for 9,999
+  messages over 10,000 ranges in the benchmark.
 - **Posting (planned)** with the composer's cursor `S`: the same write as the page's
   scope up to `S`, then a range for the new message; from a topic view the
   floor also rises to the new message when no message of the topic has an

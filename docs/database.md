@@ -116,34 +116,35 @@ column (`organization_id`, or `id` for `organization`). Ownership comes from mig
 columns, with `organization` scoped by `id` and an explicit installation-wide
 list; unknown ownership, scoped list entries (except singleton `setup`) and stale
 entries fail. Plain INSERT VALUES and INSERT SELECT with at most one source pass:
-a same-statement CTE or unqualified FROM `unnest` of `sqlc.arg(name)::bigint[]`
-or `sqlc.arg(name)::uuid[]` parameters, alone or mixed. Parameter-only bounds
-support range writes (#727), channel/topic IDs support counts (#740); aliases may
-name output columns. Each table joined in SELECT or UPDATE needs its own scope.
-Tablecheck accepts scalar `sqlc.arg(name)::int8multirange` (#743), with
-identifier/string names, and unqualified `@>` only with that exact cast on the
+a same-statement CTE or unqualified FROM `unnest` of single/mixed
+`sqlc.arg(name)::bigint[]` or `sqlc.arg(name)::uuid[]` parameters. Names are
+identifiers/strings; output columns may be aliased. Bounds enable writes (#727),
+IDs counts (#740). Each joined table needs its scope.
+Reads accept FROM SELECTs and CROSS JOIN LATERAL or inner JOIN LATERAL
+SELECTs ON true (#741): ORDER BY/LIMIT bounds per-channel/topic counts. Each
+nested table needs its SELECT's WHERE scope, never ON. Derived aliases cannot
+shadow tables; derived INSERT/UPDATE/DELETE sources fail. Tablecheck's ownership walk is unchanged.
+Tablecheck accepts scalar `sqlc.arg(name)::int8multirange` (#743) and unqualified `@>`
+only with that exact cast on the
 left and a column or accepted expression cast to scalar `bigint` on the right
 (sqlc resolves column types). `NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)`
-lets #746's topic counts and #750's topic-view candidates exclude the read set
-in one statement without foreign reads. Qualification, array bounds, typmods,
+excludes the read set for #746's counts and #750's candidates. Qualification, array bounds, typmods,
 `sqlc.narg`, range constructors/aggregates, other range types/operators still fail.
 Ownership and per-table organisation scope still apply.
 WITH ORDINALITY (#749) requires one array and an alias naming two columns:
 `unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)` (or `uuid[]`).
-SELECT, UPDATE FROM, CTEs and INSERT SELECT accept it. Arrays
-can join on ordinals; INSERT requires that join in a CTE.
-sqlc v1.31.1 refuses multi-argument `unnest`:
-`function unnest(unknown, unknown) does not exist`. Go must reject unequal array
-lengths before execution; ordinal joins drop unmatched positions.
+SELECT, UPDATE FROM, CTEs and INSERT SELECT accept it. Arrays join on ordinals;
+INSERT requires that join in a CTE. sqlc v1.31.1 refuses multi-argument `unnest`;
+Go must reject unequal lengths: ordinal joins drop unmatched rows.
 Tablecheck still rejects foreign writes.
-Subqueries in VALUES, RETURNING or the INSERT SELECT remain unsupported, as do
-joins (including comma joins) in that SELECT, physical-table INSERT SELECT reads,
-ON CONFLICT and other INSERT shapes; full INSERT checking belongs in a follow-up.
-CTE reads need no scope; outer joins, derived tables and set operations fail.
-Other function relations, unnest arguments other than unqualified, unsized
-`bigint[]` or `uuid[]` `sqlc.arg` parameters and unnest outside FROM fail, as do
-explicit LATERAL calls, ROWS FROM, multi-argument WITH ORDINALITY and column type
-definitions (see [import checks](architecture/import-checks.md)).
+INSERT refuses subqueries in VALUES, RETURNING or SELECT, joins (including
+comma joins), physical-table SELECT reads, ON CONFLICT and other shapes; full
+checking is a follow-up.
+CTE reads need no scope; LEFT/RIGHT/FULL joins and set operations fail.
+Other FROM functions, unnest arguments except unqualified, unsized `bigint[]`
+or `uuid[]` `sqlc.arg` parameters and unnest outside FROM fail, as do explicitly
+LATERAL function calls, ROWS FROM, multi-argument WITH ORDINALITY and typed
+columns (see [import checks](architecture/import-checks.md)).
 `tools/scopecheck/allowlist.txt` uses `module.QueryName reason…`; stale, unnecessary
 and `PENDING MAINTAINER:` entries fail (case-insensitive, with any non-alphanumeric
 separator between the marker words). Migration statement/body ownership checks

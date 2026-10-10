@@ -120,25 +120,58 @@ func checkStatement(tree any, tables map[string]string) error {
 			return fmt.Errorf("unsupported shape: %s", kind)
 		}
 		aliases := map[string]string{}
-		var relation func(any) error
-		relation = func(v any) error {
+		var relation func(any, bool) error
+		relation = func(v any, lateral bool) error {
 			if j := sqlwalk.Node(v, "JoinExpr"); j != nil {
 				if j["jointype"] != "JOIN_INNER" || j["alias"] != nil || j["isNatural"] == true || j["usingClause"] != nil {
 					return fmt.Errorf("unsupported shape: join")
 				}
-				if err := relation(j["larg"]); err != nil {
+				if err := relation(j["larg"], false); err != nil {
 					return err
 				}
-				return relation(j["rarg"])
+				// CROSS JOIN has no quals; the permitted inner LATERAL spelling is ON true.
+				quals := sqlwalk.Node(j["quals"], "A_Const")
+				return relation(j["rarg"], j["quals"] == nil || sqlwalk.Object(quals["boolval"])["boolval"] == true)
 			}
 			r := sqlwalk.Node(v, "RangeVar")
+			derived := sqlwalk.Node(v, "RangeSubselect")
+			if derived != nil {
+				if kind != "SelectStmt" {
+					return fmt.Errorf("unsupported shape: %s derived source", kind)
+				}
+				if sqlwalk.Node(derived["subquery"], "SelectStmt") == nil || derived["lateral"] == true && !lateral {
+					return fmt.Errorf("unsupported shape: derived SELECT or LATERAL join")
+				}
+				// Anonymous relations still count when rejecting ambiguous unqualified scope.
+				alias := fmt.Sprintf("<derived:%d>", len(aliases))
+				if a := sqlwalk.Object(derived["alias"]); a != nil {
+					alias, _ = a["aliasname"].(string)
+					if _, shadows := tables[alias]; shadows {
+						return fmt.Errorf("unsupported shape: derived alias shadows table")
+					}
+				}
+				// The walker visits this SELECT separately; its tables need its own WHERE.
+				r = map[string]any{"relname": alias, "alias": derived["alias"]}
+			}
+			if f := sqlwalk.Node(v, "RangeFunction"); f != nil && unnestRelation(v) == nil {
+				if f["lateral"] == true {
+					return fmt.Errorf("unsupported shape: LATERAL function")
+				}
+				if f["ordinality"] == true {
+					return fmt.Errorf("unsupported shape: function WITH ORDINALITY")
+				}
+				if f["is_rowsfrom"] == true {
+					return fmt.Errorf("unsupported shape: ROWS FROM")
+				}
+				return fmt.Errorf("unsupported shape: FROM function")
+			}
 			if f := unnestRelation(v); f != nil {
 				r = map[string]any{"relname": "unnest", "alias": f["alias"]}
 			}
 			table, _ := r["relname"].(string)
 			column, known := tables[table]
 			known = known || !(sqlwalk.Scope{CTEs: ctes}).Physical(r)
-			if unnestRelation(v) != nil {
+			if unnestRelation(v) != nil || derived != nil {
 				column, known = "", true
 			}
 			if !known || r["schemaname"] != nil || r["catalogname"] != nil {
@@ -146,7 +179,7 @@ func checkStatement(tree any, tables map[string]string) error {
 			}
 			alias := table
 			if a := sqlwalk.Object(r["alias"]); a != nil {
-				if a["colnames"] != nil && unnestRelation(v) == nil {
+				if a["colnames"] != nil && unnestRelation(v) == nil && derived == nil {
 					return fmt.Errorf("unsupported shape: renamed columns")
 				}
 				alias, _ = a["aliasname"].(string)
@@ -158,7 +191,7 @@ func checkStatement(tree any, tables map[string]string) error {
 			return nil
 		}
 		for _, ref := range refs {
-			if err := relation(ref); err != nil {
+			if err := relation(ref, false); err != nil {
 				return err
 			}
 		}
@@ -186,6 +219,9 @@ func insertCTESelect(s map[string]any, ctes map[string]bool) error {
 		return fmt.Errorf("unsupported shape: INSERT SELECT join")
 	}
 	for _, ref := range fromClause {
+		if sqlwalk.Node(ref, "RangeSubselect") != nil {
+			return fmt.Errorf("unsupported shape: INSERT SELECT derived source")
+		}
 		if unnestRelation(ref) != nil {
 			continue
 		}

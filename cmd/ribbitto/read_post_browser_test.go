@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -60,11 +61,19 @@ func TestReadPostBrowser(t *testing.T) {
 				path += "?before=3"
 			}
 			var posts atomic.Int32
+			compositions := make(chan url.Values, 1)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Supply the real session without making this test about signing in.
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: token})
 				if r.Method == "POST" {
 					posts.Add(1)
+					if !strings.HasSuffix(r.URL.Path, "/read") {
+						if err := r.ParseForm(); err != nil {
+							http.Error(w, err.Error(), http.StatusBadRequest)
+							return
+						}
+						compositions <- r.PostForm
+					}
 				}
 				handler.ServeHTTP(w, r)
 			}))
@@ -95,6 +104,18 @@ func TestReadPostBrowser(t *testing.T) {
 			}
 			if posts.Load() != want {
 				t.Fatalf("read posts=%d, want %d", posts.Load(), want)
+			}
+			if older {
+				page.MustElement("#message-body").MustInput("own history post")
+				page.MustElement("#message-composer button[type=submit]").MustClick()
+				select {
+				case form := <-compositions:
+					if _, present := form["cursor"]; present || form.Get("body") != "own history post" {
+						t.Fatalf("history composer submitted %v", form)
+					}
+				case <-ctx.Done():
+					t.Fatal("history composer did not submit")
+				}
 			}
 		})
 	}

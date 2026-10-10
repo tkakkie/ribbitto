@@ -164,8 +164,9 @@ type ReadRangeWriterIn func(platform.Tx) ReadRangeWriter
 
 // PostReadWriter reads the page scope and adds the new message's range; floor
 // is the safe topic floor computed by conversation from its own messages.
+// A nil cursor reads only the new message and leaves topic floors unchanged.
 type PostReadWriter interface {
-	Read(context.Context, org.Membership, kernel.ID, *kernel.ID, int64, int64, int64, int64) error
+	Read(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64, int64, int64, int64) error
 }
 
 // PostReadWriterIn binds read-state writes to posting's transaction.

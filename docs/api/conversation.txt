@@ -114,7 +114,7 @@ type Page struct // Page is one page of a channel's history, oldest first.
   field Older bool // Older reports that messages before Entries[0] exist; the next page is read before Entries[0].EventSeq.
 const PageSize untyped int = 50 // PageSize is how many messages one page of history holds.
 type PostReadWriter interface // PostReadWriter reads the page scope and adds the new message's range; floor is the safe topic floor computed by conversation from its own messages.
-  func (PostReadWriter).Read(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, int64, int64, int64, int64) error
+  func (PostReadWriter).Read(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, *int64, int64, int64, int64) error
 type PostReadWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) PostReadWriter // PostReadWriterIn binds read-state writes to posting's transaction.
 type Posted struct // Posted is the decoded payload of KindPosted.
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID

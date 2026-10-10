@@ -517,17 +517,20 @@ func postReads(tx platform.Tx) conversation.PostReadWriter { return postReadWrit
 
 type postReadWriter struct{ tx platform.Tx }
 
-func (w postReadWriter) Read(ctx context.Context, m org.Membership, channel kernel.ID, topic *kernel.ID, cursor, lo, hi, floor int64) error {
+func (w postReadWriter) Read(ctx context.Context, m org.Membership, channel kernel.ID, topic *kernel.ID, cursor *int64, lo, hi, floor int64) error {
 	scope := unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}
 	joined := m.Member.JoinedEventSeq
+	if cursor == nil {
+		return unreadpg.WriterIn(w.tx).Merge(ctx, scope, joined, unread.Range{Lo: lo, Hi: hi})
+	}
 	if topic == nil {
-		if err := newFeedWriter().Read(ctx, w.tx, scope, joined, cursor); err != nil {
+		if err := newFeedWriter().Read(ctx, w.tx, scope, joined, *cursor); err != nil {
 			return err
 		}
 		return unreadpg.WriterIn(w.tx).Merge(ctx, scope, joined, unread.Range{Lo: lo, Hi: hi})
 	}
 	ts := unread.TopicScope{Scope: scope, TopicID: *topic}
-	if err := newTopicWriter().Read(ctx, w.tx, ts, joined, cursor); err != nil {
+	if err := newTopicWriter().Read(ctx, w.tx, ts, joined, *cursor); err != nil {
 		return err
 	}
 	prepared, err := unreadpg.WriterIn(w.tx).Prepare(ctx, ts, joined)

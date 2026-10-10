@@ -51,7 +51,7 @@ branch-notice reads are current.
 ## Advancing it
 
 Branch-notice reads, initial reading POSTs and posting writes are current. Only a POST advances read state; a GET never changes it
-([request flow](../architecture/request-flow.md)). Each POST carries its
+([request flow](../architecture/request-flow.md)). Each reading POST carries its
 scope and `S`, the newest durable sequence the page has applied and shown:
 
 - **Feed:** every message of the channel with `event_seq ≤ S` becomes read.
@@ -61,7 +61,9 @@ scope and `S`, the newest durable sequence the page has applied and shown:
 
 Posting reads the composer's scope up to the page's `S`, as that POST
 would, and adds the new message, in the posting transaction: a member's own
-messages are never unread for them. Branching already adds its author's notice
+messages are never unread for them. A post from a `?before=` page carries no
+cursor and reads only the author's own message, leaving every other message's
+read state and topic floors unchanged. Branching already adds its author's notice
 as `[p + 1, m + 1)` in its transaction, merged with the persisted join prefix;
 the organisation lock keeps the notice newest in its channel. Moving existing
 messages changes no member's read state. A sequence
@@ -70,7 +72,8 @@ shown.
 
 `S` is the page's snapshot cursor for the POST sent after the page loads,
 and later the newest durable sequence the page has applied and shown
-(#710), which covers both posts and moves. Hidden tabs and `?before=` pages send nothing.
+(#710), which covers both posts and moves. Hidden tabs and `?before=` pages send no
+reading POST.
 A cursor above the organisation's committed `event_seq` is refused, so a
 later message is never read in advance. A message that is still unread
 when the POST runs, but has moved out of the topic since the page showed

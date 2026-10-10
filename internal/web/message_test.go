@@ -443,6 +443,19 @@ func TestMessagePagingHandler(t *testing.T) {
 			if got, ok := idAttribute(t, page, "message-composer", "hx-post"); got != tt.wantPost || ok != (tt.wantPost != "") {
 				t.Errorf("composer hx-post = %q, %t; want %q", got, ok, tt.wantPost)
 			}
+			var hasCursor bool
+			for form := range page.Descendants() {
+				if attr(form, "id") == "message-composer" {
+					for n := range form.Descendants() {
+						if n.DataAtom == atom.Input && attr(n, "name") == "cursor" {
+							hasCursor = true
+						}
+					}
+				}
+			}
+			if hasCursor != (tt.before == 0) {
+				t.Fatalf("composer cursor present = %t, before = %d", hasCursor, tt.before)
+			}
 			if got := strings.Contains(body, `data-event-cursor="42"`); !got {
 				t.Fatalf("page cursor present = %t, before = %d", got, tt.before)
 			}
@@ -472,11 +485,11 @@ func TestMessagePagingHandler(t *testing.T) {
 					if attr(n, "id") != "message-composer" {
 						continue
 					}
-					posted := serveForm(handler, "POST", attr(n, "action"), "live", url.Values{"cursor": {"0"}, "body": {"from older page"}})
+					posted := serveForm(handler, "POST", attr(n, "action"), "live", url.Values{"body": {"from older page"}})
 					if posted.Code != 303 || posted.Header().Get("Location") != tt.path {
 						t.Fatal("older-page form must redirect to the latest page")
 					}
-					invalid := serveForm(handler, "POST", attr(n, "action"), "live", url.Values{"cursor": {"0"}, "body": {"\n\n"}})
+					invalid := serveForm(handler, "POST", attr(n, "action"), "live", url.Values{"body": {"\n\n"}})
 					if invalid.Code != 422 || !strings.Contains(invalid.Body.String(), "\n\n\n</textarea>") {
 						t.Fatal("older-page form must retain an invalid draft")
 					}
@@ -572,6 +585,6 @@ func (w *fakePostingWriter) TopicChangedBetween(context.Context, kernel.ID, kern
 
 type fakePostReads struct{}
 
-func (fakePostReads) Read(context.Context, org.Membership, kernel.ID, *kernel.ID, int64, int64, int64, int64) error {
+func (fakePostReads) Read(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64, int64, int64, int64) error {
 	return nil
 }

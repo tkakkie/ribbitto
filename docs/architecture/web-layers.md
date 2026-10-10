@@ -45,9 +45,11 @@ htmx does only requests and swaps; the server and templ own the HTML.
   full page with `hx-select` is allowed; Load older does this today.
   Enhanced posts return only the `MessageComposer` fragment. On success its
   `data-posted-message` carries the posted message's DOM id; errors omit it.
-  The composer carries a hidden `cursor`; plain forms use the page snapshot.
+  Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
+  Composers on `?before=` pages omit it, so posting reads only the author's own message.
   `message-composer-v4.js` copies `#organization-stream`'s applied-and-shown
-  `data-event-cursor` on each submit, including after composer replacement.
+  `data-event-cursor` on each submit only when the form has a cursor field,
+  including after composer replacement; it never adds one.
   Fragment responses echo the submitted cursor, never the new post's sequence;
   only successful stream application advances the outer cursor. The action URL
   identifies the feed/topic scope. The stream script consumes that id to scroll once the item is present,

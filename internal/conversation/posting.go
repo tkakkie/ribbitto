@@ -93,13 +93,16 @@ func (p *Posting) post(ctx context.Context, m org.Membership, channelID kernel.I
 		if err != nil {
 			return err
 		}
-		if cursor != nil {
+		if p.reads != nil {
 			previous, err := writer.LastMessageBefore(ctx, organizationID, channelID, seq)
 			if err != nil {
 				return err
 			}
-			floor := *cursor
-			if topicID != nil {
+			var floor int64
+			if cursor != nil {
+				floor = *cursor
+			}
+			if topicID != nil && cursor != nil {
 				intervening, err := writer.TopicChangedBetween(ctx, organizationID, channelID, *topicID, *cursor, seq)
 				if err != nil {
 					return err
@@ -108,7 +111,7 @@ func (p *Posting) post(ctx context.Context, m org.Membership, channelID kernel.I
 					floor = seq
 				}
 			}
-			if err := p.reads(tx).Read(ctx, m, channelID, topicID, *cursor, previous+1, seq+1, floor); err != nil {
+			if err := p.reads(tx).Read(ctx, m, channelID, topicID, cursor, previous+1, seq+1, floor); err != nil {
 				return err
 			}
 		}

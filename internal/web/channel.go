@@ -188,18 +188,27 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	if !parseForm(w, r) {
 		return
 	}
-	cursor, err := strconv.ParseInt(r.PostForm.Get("cursor"), 10, 64)
-	if err != nil || len(r.PostForm["cursor"]) != 1 {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
+	var cursor *int64
+	if raw, present := r.PostForm["cursor"]; present {
+		value, err := strconv.ParseInt(r.PostForm.Get("cursor"), 10, 64)
+		if err != nil || len(raw) != 1 {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		cursor = &value
 	}
 	body := r.PostForm.Get("body")
-	posted, err := p.posting.PostFromPage(r.Context(), m, c.ID, p.topicID, body, cursor)
+	var posted conversation.Message
+	if cursor == nil {
+		posted, err = p.posting.PostToTopic(r.Context(), m, c.ID, p.topicID, body)
+	} else {
+		posted, err = p.posting.PostFromPage(r.Context(), m, c.ID, p.topicID, body, *cursor)
+	}
 	switch {
 	case errors.Is(err, conversation.ErrInvalidPostCursor):
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 	case errors.Is(err, conversation.ErrInvalidBody):
-		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{EventCursor: &cursor, Body: body, BodyError: "message.error.body"})
+		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{EventCursor: cursor, Body: body, BodyError: "message.error.body"})
 	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member.
@@ -207,7 +216,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	case err != nil:
 		serverError(w, r, "posting message", err)
 	case r.Header.Get("HX-Request") == "true" && p.topicID == nil:
-		p.renderComposer(w, r, m, c, http.StatusOK, view.ChannelPage{EventCursor: &cursor, PostedMessageID: &posted.ID})
+		p.renderComposer(w, r, m, c, http.StatusOK, view.ChannelPage{EventCursor: cursor, PostedMessageID: &posted.ID})
 	default:
 		http.Redirect(w, r, view.ConversationURL(m.Organization.Slug, c.ID, p.topicID), http.StatusSeeOther)
 	}

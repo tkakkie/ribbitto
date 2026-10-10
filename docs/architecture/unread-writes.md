@@ -48,6 +48,9 @@ A newly read message
   Its injected `PostReadWriterIn`, wired in `cmd/ribbitto`, binds the feed/topic
   write and own-message union to that transaction. Conversation supplies the
   predecessor and the scoped post/move guard; unread reads no message table.
+  A post from a `?before=` page has no cursor: posting reads only the author's
+  own message with `[p + 1, m + 1)` in the same transaction, leaving every other
+  message's read state unchanged and raising no topic floor.
 
 **HTTP caller (current):** `POST /organizations/{slug}/channels/{channelID}/read`
 (and `/topics/{topicID}/read`) takes membership from URL authorization,

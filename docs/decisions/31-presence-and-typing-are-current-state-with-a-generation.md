@@ -5,7 +5,7 @@ the hub carries a level per ephemeral kind besides the durable one; durable
 events are unchanged). Hub generations and the combined writer wait are
 implemented (#735), as are frame delivery (#736) and the sink (#737);
 presence state, changes and rendering are current (#766–#768; closes #287); typing (#288) remains planned. Details in
-[real time](../architecture/realtime.md#ephemeral-state).
+[ephemeral state](../architecture/ephemeral-state.md#ephemeral-state).
 
 - **Current state, not events.** Presence (who has a stream open) and
   typing (who is typing where) are in-memory state per organisation and per

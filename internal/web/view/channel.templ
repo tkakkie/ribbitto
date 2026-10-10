@@ -125,6 +125,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 			}
 			class="flex h-dvh text-body"
 		>
+			<div id="stream-sink" hidden aria-hidden="true" sse-swap="sidebar,presence" hx-swap="none"></div>
 			<nav aria-label={ i18n.T(ctx, "channel.organizations") } class="w-17 shrink-0 border-r border-border bg-rail p-3">
 				<ul>
 					<li><a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/") } aria-label={ page.Organization.Name } class="flex min-h-11 items-center justify-center rounded-md bg-brand px-2 font-semibold text-on-brand">{ string([]rune(page.Organization.Name)[:1]) }</a></li>

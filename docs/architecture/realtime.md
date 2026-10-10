@@ -114,7 +114,7 @@ without a lost wake-up or registry lock.
 
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
 each page holds one organisation stream with [interests](streaming.md#stream-scope).
-Delivery is current (#736); owners (#287, #288) and the sink (#737) remain
+Delivery (#736) and the sink (#737) are current; owners (#287, #288) remain
 planned. Only visible changes raise generations, including typing expiry.
 
 - **Owners.** Presence (#287) will read hub registrations and mark members

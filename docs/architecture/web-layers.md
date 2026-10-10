@@ -53,7 +53,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
 - **DOM ids are a contract.** Templates define every id that `hx-target`,
   `hx-select`, `hx-select-oob` or a script refers to. Renaming one means
   updating every reference in the same pull request. Today's contract ids
-  are `organization-stream`, `conversation`, `message-list`, `message-items`, `load-older`,
+  are `organization-stream`, `stream-sink`, `conversation`, `message-list`, `message-items`, `load-older`,
   `message-body`, `message-composer`, `message-help`, `message-status`,
   `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
@@ -83,6 +83,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   See [stream scope](streaming.md#stream-scope). `reset` handling attaches to
   this container. Its reconnect cursor advances after an inserted message
   settles or a move applies successfully.
+  Its hidden, non-focusable `#stream-sink` receives `sidebar,presence` with
+  `hx-swap="none"`: htmx applies payload entries out of band by DOM id, ignoring
+  entries absent from the page. The sink is hidden from assistive technology.
   Only latest pages' `#message-items` receives `message,messages-moved`; moves
   replace feed IDs or remove/insert topic IDs within the loaded range. Replacements clear selection and refresh
   branch constraints. `LiveMessageItem` shares `MessageItem` markup, adding

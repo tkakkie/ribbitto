@@ -48,7 +48,7 @@ func TestReadPostBrowser(t *testing.T) {
 	t.Cleanup(launch.Kill)
 	browser := rod.New().ControlURL(control).MustConnect()
 	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
-	for _, kind := range []string{"feed", "topic", "older-feed", "older-topic"} {
+	for _, kind := range []string{"feed", "topic", "older-feed", "older-topic", "retry-feed"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
@@ -69,6 +69,7 @@ func TestReadPostBrowser(t *testing.T) {
 			}
 			var posts, active atomic.Int32
 			var hold atomic.Bool
+			var failNext atomic.Bool
 			reads := make(chan string, 10)
 			release := make(chan struct{}, 10)
 			frames := make(chan string, 10)
@@ -103,6 +104,10 @@ func TestReadPostBrowser(t *testing.T) {
 							return
 						}
 						reads <- r.PostForm.Get("cursor")
+						if failNext.Swap(false) {
+							http.Error(w, "reading failed", http.StatusInternalServerError)
+							return
+						}
 						if hold.Load() {
 							select {
 							case <-release:
@@ -177,6 +182,34 @@ func TestReadPostBrowser(t *testing.T) {
 						feedRequire(t, view.LiveMessageItem(view.Message{ID: m.ID, TopicID: topic, EventSeq: m.EventSeq, Body: m.Body}).Render(ctx, &payload))
 						frames <- fmt.Sprintf("event: message\nid: %d\ndata: %s\n\n", m.EventSeq, payload.String())
 					}
+				}
+				if kind == "retry-feed" {
+					page.MustEval(`() => document.querySelector('#read-form').addEventListener('htmx:afterRequest', e => {
+						document.body.dataset.readStatus = String(e.detail.xhr.status);
+					})`)
+					failNext.Store(true)
+					post(topicID, true)
+					assertRead("7")
+					page.MustWait(`() => document.body.dataset.readStatus === '500'`)
+					// Allow completion callbacks to run before supplying the next trigger.
+					page.MustEval(`() => new Promise(resolve => setTimeout(resolve, 150))`)
+					if posts.Load() != 2 || len(reads) != 0 {
+						t.Fatal("failed reading POST retried without another trigger")
+					}
+					feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 7}})
+					page.MustEval(`() => {
+						window.testVisibility = 'hidden';
+						document.dispatchEvent(new Event('visibilitychange'));
+						window.testVisibility = 'visible';
+						document.dispatchEvent(new Event('visibilitychange'));
+					}`)
+					assertRead("7")
+					page.MustWait(`() => document.body.dataset.readStatus === '204'`)
+					feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 8}})
+					if posts.Load() != 3 || len(reads) != 0 {
+						t.Fatal("visibility did not retry the failed cursor exactly once")
+					}
+					return
 				}
 				// Stop between receiving the frame and applying its server-rendered HTML.
 				page.MustEval(`() => {

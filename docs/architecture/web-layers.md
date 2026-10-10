@@ -128,10 +128,12 @@ keyboard, local time, single-source selection constraints, and glue for SSE.
 
 - `message-stream-v8.js` emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
-  `read-visibility-v2.js` initializes on scoped `htmx:load` and watches that
+  `read-visibility-v3.js` initializes on scoped `htmx:load` and watches that
   event and visibility. It copies the applied cursor (initially the form's
   snapshot) into htmx's read request. While one request runs, triggers coalesce;
-  after completion it triggers only the newest shown cursor, only if visible.
+  after success it triggers only the newest shown cursor, only if visible.
+  Only successful completion records a cursor as sent; failure waits for the
+  next visibility or application trigger, which can resend the same cursor.
   Composer responses and received-but-unapplied events cannot advance it.
 - SSE `reset` closes htmx's event source and reloads the page to obtain a fresh snapshot.
 - **No requests of its own:** no `fetch` or `XMLHttpRequest`. Requests go

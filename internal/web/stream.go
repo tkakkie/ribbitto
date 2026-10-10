@@ -31,6 +31,9 @@ type Streaming struct {
 	Authorizer realtime.Authorizer
 	// Owners adapts feature state to current frames; none are wired yet.
 	Owners map[realtime.Interest]realtime.EphemeralOwner
+	// StreamOpened counts every accepted stream, regardless of interests.
+	// Its returned cleanup releases that member's count.
+	StreamOpened func(organizationID, memberID kernel.ID) func()
 	// Sessions re-resolves the request's session after the stream has
 	// registered (see openStream).
 	Sessions middleware.SessionResolver
@@ -114,7 +117,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		http.NotFound(w, r)
 		return
 	}
-	ctx, cleanup, ok := p.openStream(w, r, m.Organization.ID, account.ID, session)
+	ctx, cleanup, ok := p.openStream(w, r, m.Organization.ID, account.ID, m.Member.ID, session)
 	if !ok {
 		return
 	}
@@ -171,7 +174,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 // openStream keeps the register-then-re-check order that closes the race
 // with sign-out. On success the caller must
 // defer cleanup; on failure it has written the response and freed the slot.
-func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID kernel.ID, session identity.Session) (ctx context.Context, cleanup func(), ok bool) {
+func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID, memberID kernel.ID, session identity.Session) (ctx context.Context, cleanup func(), ok bool) {
 	limit := p.stream.MaxPerAccount
 	if limit <= 0 {
 		limit = DefaultMaxStreamsPerAccount
@@ -224,9 +227,19 @@ func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organiz
 	// The session's expiry ends the stream too; nothing deletes an expired
 	// session's row in time to cancel it.
 	ctx, cancel := context.WithDeadlineCause(ctx, session.ExpiresAt, errSessionExpired)
+	if ctx.Err() != nil {
+		cancel()
+		streamCancelled(w, r, ctx)
+		return nil, nil, false
+	}
+	closed := func() {}
+	if p.stream.StreamOpened != nil {
+		closed = p.stream.StreamOpened(organizationID, memberID)
+	}
 	return ctx, func() {
 		cancel()
 		unregister()
+		closed()
 	}, true
 }
 

@@ -58,7 +58,13 @@ The retention period defaults to seven days; see [database configuration](../dat
   Other sessions of the account stay connected. The handler's private
   `openStream` helper owns registration, the re-check and the expiry deadline.
   It frees failed registrations; on success, the handler defers one cleanup
-  function that cancels the expiry context and unregisters the stream.
+  function that cancels the expiry context, unregisters the stream and
+  releases its presence count. Only a successful registration and session
+  re-check count, through `Streaming.StreamOpened` with the resolved
+  organisation and member; every interest counts. Presence stays online
+  until 30 s after the last close; a reconnect cancels expiry. State and
+  bounded token snapshots are current (#766); changes/reset (#767) and
+  delivery/display (#768) remain planned.
   Cancellation before the first write answers 404 for an ended session or
   503 for shutdown, without committing SSE headers. The status is
   committed by `WriteHeader` outside the sender, after one more look at the
@@ -85,7 +91,7 @@ delivers durable frames; `typing` and `presence` read their wired
 owners after each durable batch and before waiting, at most one frame and
 one authorization check per kind. Presence checks the organisation, typing
 the frame's channel, immediately before sending. Denies mark the generation
-seen; errors stop the stream. Owners remain planned (#287, #288), so no
+seen; errors stop the stream. Owner adapters remain planned (#768, #288), so no
 ephemeral frames are sent in production yet. `sidebar` remains planned (#286).
 
 The endpoint takes:

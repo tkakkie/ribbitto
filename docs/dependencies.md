@@ -26,6 +26,7 @@ cmd/ribbitto -> internal/kernel
 cmd/ribbitto -> internal/org
 cmd/ribbitto -> internal/org/orgpg
 cmd/ribbitto -> internal/platform/postgres
+cmd/ribbitto -> internal/presence
 cmd/ribbitto -> internal/realtime
 cmd/ribbitto -> internal/realtime/realtimepg
 cmd/ribbitto -> internal/unread
@@ -94,6 +95,8 @@ internal/platform/postgres/pgtest -> db/migrations
 internal/platform/postgres/pgtest -> internal/platform/postgres
 internal/platform/postgres/pgxbridge -> internal/platform/postgres
 internal/platform/postgres/pgxbridge -> internal/platform/postgres/internal/handle
+internal/presence -> internal/kernel
+internal/presence -> internal/realtime
 internal/realtime -> internal/kernel
 internal/realtime -> internal/platform/postgres
 internal/realtime/internal/postgres -> internal/kernel

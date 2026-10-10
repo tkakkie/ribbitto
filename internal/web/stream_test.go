@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -411,21 +412,34 @@ func TestOpenStreamCleanup(t *testing.T) {
 		cookie     bool
 		resolveErr error
 		wantStatus int
+		shutdown   bool
 	}{
 		{name: "opened", cookie: true},
+		{name: "registration refused", shutdown: true, wantStatus: http.StatusServiceUnavailable},
+		{name: "session deleted", cookie: true, resolveErr: identity.ErrNoSession, wantStatus: http.StatusNotFound},
 		{name: "missing cookie", wantStatus: http.StatusNotFound},
 		{name: "session lookup failed", cookie: true, resolveErr: errors.New("store unavailable"), wantStatus: http.StatusInternalServerError},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			hub := realtime.NewHub()
 			seen := -1
-			p := channelPages{stream: &Streaming{Lifetime: t.Context(), Hub: hub, Sessions: laterSession{hub: hub, session: live, err: tt.resolveErr, seen: &seen}}}
-			r := httptest.NewRequest(http.MethodGet, "/events", nil)
+			if tt.shutdown {
+				hub.CancelAll()
+			}
+			counts := 0
+			p := channelPages{stream: &Streaming{Lifetime: t.Context(), Hub: hub, Sessions: laterSession{hub: hub, session: live, err: tt.resolveErr, seen: &seen}, StreamOpened: func(organizationID, memberID kernel.ID) func() {
+				if organizationID != (kernel.ID{9}) || memberID != (kernel.ID{3}) {
+					t.Fatalf("presence scope: %v/%v", organizationID, memberID)
+				}
+				counts++
+				return sync.OnceFunc(func() { counts-- })
+			}}}
+			r := httptest.NewRequest(http.MethodGet, "/events?want=sidebar", nil)
 			if tt.cookie {
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			}
 			w := httptest.NewRecorder()
-			ctx, cleanup, ok := p.openStream(w, r, kernel.ID{9}, kernel.ID{1}, live)
+			ctx, cleanup, ok := p.openStream(w, r, kernel.ID{9}, kernel.ID{1}, kernel.ID{3}, live)
 			if cleanup != nil {
 				t.Cleanup(cleanup)
 			}
@@ -440,7 +454,7 @@ func TestOpenStreamCleanup(t *testing.T) {
 				if deadline, set := ctx.Deadline(); !set || !deadline.Equal(live.ExpiresAt) {
 					t.Fatalf("deadline = %v, set=%t; want session expiry %v", deadline, set, live.ExpiresAt)
 				}
-				if ctx.Err() != nil || hub.Connections() != 1 {
+				if ctx.Err() != nil || hub.Connections() != 1 || counts != 1 {
 					t.Fatal("successful open did not keep the stream alive and registered")
 				}
 				cleanup()
@@ -450,8 +464,8 @@ func TestOpenStreamCleanup(t *testing.T) {
 					t.Fatalf("cleanup cause = %v, want context.Canceled", context.Cause(ctx))
 				}
 			}
-			if n := hub.Connections(); n != 0 {
-				t.Fatalf("%d connections still registered", n)
+			if n := hub.Connections(); n != 0 || counts != 0 {
+				t.Fatalf("%d connections, %d presence counts still registered", n, counts)
 			}
 		})
 	}

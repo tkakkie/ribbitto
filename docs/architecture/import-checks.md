@@ -38,7 +38,7 @@ This file, the manifest and `.golangci.yml` must agree; change them together.
 
 The tools-module test [`tablecheck`](../../tools/tablecheck/table_test.go) reads
 the manifest's literal `ownsTables`. It shares the
-[SQL infrastructure](../database.md#database-development) with scopecheck; ownership
+[SQL infrastructure](query-gate.md#shared-infrastructure) with scopecheck; ownership
 and organisation scoping remain separate policies.
 It requires every migration-created table to have exactly one owner and every
 owned table to exist in the migrations' Up sections; table drops and renames fail.
@@ -51,34 +51,8 @@ literal in `TestProductionOwnership` and is currently empty. Tablecheck's
 `readExemptions` and `checkExemptions` reject duplicate and stale entries;
 the shared `sqlwalk.ReasonRules` rejects empty reasons, pending markers and
 maintainer claims without provenance.
-Query expressions accept only `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower`.
-Both gates accept unqualified FROM `unnest` of `sqlc.arg(name)::bigint[]` or
-`sqlc.arg(name)::uuid[]` parameters, single or mixed arrays, in SELECT, CTEs and
-INSERT SELECT. Names are identifiers/strings; casts are unqualified with one
-unsized dimension.
-Bounds enable writes (#727), IDs counts (#740). Other functions, arguments,
-positions, LATERAL functions, ROWS FROM and typed columns fail.
-WITH ORDINALITY (#749): one array, two output-column aliases:
-`unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)` (also `uuid[]`).
-UPDATE FROM accepts it too. Arrays join on ordinals;
-INSERT requires that join in a CTE. sqlc v1.31.1 refuses multi-argument `unnest`;
-Go must reject unequal lengths: ordinal joins drop unmatched rows.
-Scopecheck accepts FROM SELECTs, CROSS JOIN LATERAL and inner JOIN
-LATERAL SELECTs ON true (#741). ORDER BY/LIMIT bounds channel/topic counts.
-Every nested table needs its SELECT's WHERE scope, never ON; derived aliases
-cannot shadow tables. LEFT/RIGHT/FULL joins and derived INSERT/UPDATE/DELETE
-sources fail. Tablecheck's existing ownership walk is unchanged.
-Scope, ownership and
-[INSERT restrictions](../database.md#database-development) still apply.
-Query operators allow unqualified `=`, `<`, `>`, `<=`, `+`; casts allow
-unqualified `uuid`, `bigint`, `jsonb`. Tablecheck accepts scalar
-`sqlc.arg(name)::int8multirange` (#743), with identifier/string names, and `@>`
-only with that exact cast on the left and a column or accepted expression cast
-to scalar `bigint` on the right (sqlc resolves column types).
-`NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)` excludes the read set
-for #746's counts and #750's candidates.
-Bounds, typmods, qualification, `sqlc.narg`, range constructors/aggregates and
-other range types/operators fail.
+The expressions, operators, casts and relation shapes both SQL gates accept in
+production queries, and why, are in [query gate](query-gate.md).
 Migration Up sections have an explicit statement allowlist: CREATE TABLE,
 INDEX and SEQUENCE; ALTER TABLE ADD COLUMN, SET NOT NULL and ADD CONSTRAINT;
 UPDATE/INSERT backfills; functions and triggers (including constraint triggers).

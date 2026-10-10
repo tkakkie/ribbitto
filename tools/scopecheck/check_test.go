@@ -53,6 +53,13 @@ func check(sql string, tables map[string]string) error {
 	if err != nil {
 		return err
 	}
+	bigints, err := sqlwalk.BigintLocations(sql)
+	if err != nil {
+		return err
+	}
+	if _, err := sqlwalk.UnnestFrom(tree, bigints); err != nil {
+		return err
+	}
 	for _, raw := range sqlwalk.Statements(tree) {
 		if err := checkStatement(sqlwalk.Object(raw)["stmt"], tables); err != nil {
 			return err
@@ -125,15 +132,21 @@ func checkStatement(tree any, tables map[string]string) error {
 				return relation(j["rarg"])
 			}
 			r := sqlwalk.Node(v, "RangeVar")
+			if f := unnestRelation(v); f != nil {
+				r = map[string]any{"relname": "unnest", "alias": f["alias"]}
+			}
 			table, _ := r["relname"].(string)
 			column, known := tables[table]
 			known = known || !(sqlwalk.Scope{CTEs: ctes}).Physical(r)
+			if unnestRelation(v) != nil {
+				column, known = "", true
+			}
 			if !known || r["schemaname"] != nil || r["catalogname"] != nil {
 				return fmt.Errorf("unsupported shape: relation %q", table)
 			}
 			alias := table
 			if a := sqlwalk.Object(r["alias"]); a != nil {
-				if a["colnames"] != nil {
+				if a["colnames"] != nil && unnestRelation(v) == nil {
 					return fmt.Errorf("unsupported shape: renamed columns")
 				}
 				alias, _ = a["aliasname"].(string)
@@ -173,6 +186,9 @@ func insertCTESelect(s map[string]any, ctes map[string]bool) error {
 		return fmt.Errorf("unsupported shape: INSERT SELECT join")
 	}
 	for _, ref := range fromClause {
+		if unnestRelation(ref) != nil {
+			continue
+		}
 		r := sqlwalk.Node(ref, "RangeVar")
 		table, _ := r["relname"].(string)
 		if (sqlwalk.Scope{CTEs: ctes}).Physical(r) {
@@ -332,4 +348,23 @@ func TestProductionQueries(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Arguments and position were checked before the scope walk, including opaque
+// INSERT bodies. This relation contributes an alias, but no table or scope column.
+func unnestRelation(v any) map[string]any {
+	r := sqlwalk.Node(v, "RangeFunction")
+	functions := sqlwalk.List(r["functions"])
+	if len(functions) != 1 {
+		return nil
+	}
+	items := sqlwalk.List(sqlwalk.Node(functions[0], "List")["items"])
+	if len(items) != 2 {
+		return nil
+	}
+	f := sqlwalk.Node(items[0], "FuncCall")
+	if len(sqlwalk.List(f["funcname"])) == 1 && sqlwalk.Names(f["funcname"]) == "unnest" {
+		return r
+	}
+	return nil
 }

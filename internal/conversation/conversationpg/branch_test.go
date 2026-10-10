@@ -32,7 +32,7 @@ func TestBranching(t *testing.T) {
 	acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
 	random := conversationtest.Channel(t, pool, acme.OrganizationID, "random", false)
 	notifier := &recordingNotifier{t: t, pool: pool}
-	posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, notifier), membership(acme.OrganizationID, acme.MemberID)
+	posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, branchReads, notifier), membership(acme.OrganizationID, acme.MemberID)
 	var posted []conversation.Message
 	for _, body := range []string{"one", "two", "three"} {
 		m, err := posting.Post(ctx, member, acme.Channel.ID, body)
@@ -213,7 +213,7 @@ func TestBranchingFailingNoticeAppend(t *testing.T) {
 		return failingNotice{EventAppender: appendEvents(tx), moved: &moved}
 	}
 	notifier := &recordingNotifier{t: t, pool: pool}
-	brancher := conversationpg.NewBrancher(pool, eventSequence, events, notifier)
+	brancher := conversationpg.NewBrancher(pool, eventSequence, events, branchReads, notifier)
 	member := membership(acme.OrganizationID, acme.MemberID)
 	before := readBranchState(t, pool, acme.OrganizationID)
 	b := conversation.Branch{Messages: []kernel.ID{posted.ID}, From: acme.Channel.DefaultTopicID, NewName: "design"}
@@ -247,7 +247,7 @@ func TestBranchNoticeInsertFailure(t *testing.T) {
 		return failingNotice{EventAppender: appendEvents(tx), moved: &moved}
 	}
 	notifier := &recordingNotifier{t: t, pool: pool}
-	brancher := conversationpg.NewBrancher(pool, eventSequence, events, notifier)
+	brancher := conversationpg.NewBrancher(pool, eventSequence, events, branchReads, notifier)
 	before := readBranchState(t, pool, acme.OrganizationID)
 	b := conversation.Branch{Messages: []kernel.ID{posted.ID}, From: acme.Channel.DefaultTopicID, NewName: "design"}
 	_, err = brancher.Branch(ctx, membership(acme.OrganizationID, globex.MemberID), acme.Channel.ID, b, func(d conversation.Topic) string { return "moved to " + d.Name })
@@ -280,7 +280,7 @@ func TestBranchingPartlyStaleSelection(t *testing.T) {
 			pool := pgtest.New(t)
 			ctx := t.Context()
 			acme := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
-			posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, nil), membership(acme.OrganizationID, acme.MemberID)
+			posting, brancher, member := newPosting(pool), conversationpg.NewBrancher(pool, eventSequence, appendEvents, branchReads, nil), membership(acme.OrganizationID, acme.MemberID)
 			valid, err := posting.Post(ctx, member, acme.Channel.ID, "still in source")
 			requireNoError(t, err)
 			stale, err := posting.Post(ctx, member, acme.Channel.ID, "already moved")

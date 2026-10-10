@@ -23,10 +23,13 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
+	"github.com/tkakkie/ribbitto/internal/unread"
+	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 )
 
 //go:embed conversations.json
@@ -247,7 +250,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 	}
 	if !loadTest {
-		branches := conversationpg.NewBrancher(pool, postingSequence, postingEvents, nil)
+		branches := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil)
 		if err := seedTopics(ctx, posts, branches, members, general, generalMessages); err != nil {
 			return fmt.Errorf("seeding topics: %w", err)
 		}
@@ -280,3 +283,14 @@ func postingEvents(tx platform.Tx) conversation.EventAppender { return realtimep
 
 // postingSequence binds org's sequence to conversation's posting and branching transaction.
 func postingSequence(tx platform.Tx) conversation.EventSequence { return orgpg.SequenceIn(tx) }
+
+// branchReads adapts unread's range writer to conversation's consumer interface.
+func branchReads(tx platform.Tx) conversation.ReadRangeWriter {
+	return branchReadWriter{ranges: unreadpg.WriterIn(tx)}
+}
+
+type branchReadWriter struct{ ranges unread.RangeWriter }
+
+func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
+	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, unread.Range{Lo: lo, Hi: hi})
+}

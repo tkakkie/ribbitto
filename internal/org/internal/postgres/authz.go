@@ -42,6 +42,7 @@ func (s *AuthzStore) Membership(ctx context.Context, accountID kernel.ID, slug s
 			AccountID:      accountID,
 			Role:           org.Role(row.Role),
 			Handle:         row.Handle,
+			JoinedEventSeq: row.JoinedEventSeq,
 		},
 	}, nil
 }

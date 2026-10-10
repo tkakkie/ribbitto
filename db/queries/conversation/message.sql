@@ -23,3 +23,8 @@ ORDER BY event_seq DESC;
 SELECT event_seq FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND event_seq > $3
 ORDER BY event_seq LIMIT 1;
+
+-- name: LastChannelMessageBefore :one
+SELECT event_seq FROM message
+WHERE organization_id = $1 AND channel_id = $2 AND event_seq < $3
+ORDER BY event_seq DESC LIMIT 1;

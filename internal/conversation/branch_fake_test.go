@@ -96,5 +96,22 @@ func (f *branchFake) brancher(notifier conversation.Notifier) *conversation.Bran
 	return conversation.NewBrancher(f,
 		func(tx platform.Tx) conversation.Writer { f.bound(tx); return f },
 		func(tx platform.Tx) conversation.EventSequence { f.bound(tx); return f },
-		func(tx platform.Tx) conversation.EventAppender { f.bound(tx); return f }, notifier)
+		func(tx platform.Tx) conversation.EventAppender { f.bound(tx); return f },
+		func(tx platform.Tx) conversation.ReadRangeWriter { f.bound(tx); return f }, notifier)
+}
+
+func (f *branchFake) LastMessageBefore(_ context.Context, organizationID, channelID kernel.ID, seq int64) (int64, error) {
+	f.scope(organizationID, channelID)
+	if seq != 42 {
+		f.t.Fatal("wrong notice sequence")
+	}
+	return 39, f.step("previous message")
+}
+
+func (f *branchFake) Merge(_ context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
+	f.scope(organizationID, channelID)
+	if memberID != (kernel.ID{2}) || joined != 11 || lo != 40 || hi != 43 {
+		f.t.Fatal("wrong notice read bounds or member")
+	}
+	return f.step("notice read")
 }

@@ -301,3 +301,34 @@ func TestMovedEventSeqMigration(t *testing.T) {
 		t.Fatal("Down kept the move column or index")
 	}
 }
+
+func TestLastChannelMessageBeforeScopes(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	f := newFixtures(t, pool)
+	other := conversationtest.Channel(t, pool, f.acme, "other", false)
+	requireNoError(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
+		w := writerIn(tx)
+		_, err := w.InsertNotice(t.Context(), f.acme, f.general, f.generalTopic, f.alice, "message", 5)
+		requireNoError(t, err)
+		for _, tc := range []struct {
+			name                      string
+			organizationID, channelID kernel.ID
+			seq, want                 int64
+		}{
+			{"previous", f.acme, f.general, 6, 5},
+			{"strictly before", f.acme, f.general, 5, 0},
+			// Each negative changes just one scope from the positive query.
+			{"organisation", f.globex, f.general, 6, 0},
+			{"channel", f.acme, other.ID, 6, 0},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				got, err := w.LastMessageBefore(t.Context(), tc.organizationID, tc.channelID, tc.seq)
+				if err != nil || got != tc.want {
+					t.Fatalf("previous=%d, %v; want %d", got, err, tc.want)
+				}
+			})
+		}
+		return nil
+	}))
+}

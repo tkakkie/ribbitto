@@ -4,10 +4,12 @@ import (
 	"context"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
-func (s *Brancher) run(ctx context.Context, organizationID, channelID, memberID kernel.ID, b Branch, notice func(Topic) string) (Topic, int64, error) {
+func (s *Brancher) run(ctx context.Context, m org.Membership, channelID kernel.ID, b Branch, notice func(Topic) string) (Topic, int64, error) {
+	organizationID, memberID := m.Organization.ID, m.Member.ID
 	var destination Topic
 	var noticeSeq int64
 	err := s.runner.InTx(ctx, func(tx platform.Tx) error {
@@ -51,6 +53,15 @@ func (s *Brancher) run(ctx context.Context, organizationID, channelID, memberID 
 		// server error, unlike posting's mapped insert (R2 on #502).
 		posted, err := writer.InsertNotice(ctx, organizationID, channelID, source.ID, memberID, notice(destination), noticeSeq)
 		if err != nil {
+			return err
+		}
+		previous, err := writer.LastMessageBefore(ctx, organizationID, channelID, noticeSeq)
+		if err != nil {
+			return err
+		}
+		// The organisation lock keeps the notice newest. Its read range stops
+		// before any future message and preserves the gap at the previous one.
+		if err := s.reads(tx).Merge(ctx, organizationID, channelID, memberID, m.Member.JoinedEventSeq, previous+1, noticeSeq+1); err != nil {
 			return err
 		}
 		return events.Append(ctx, organizationID, noticeSeq, KindPosted, nil, EncodePosted(channelID, posted.ID, posted.TopicID))

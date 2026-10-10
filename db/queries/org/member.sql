@@ -1,5 +1,5 @@
 -- name: GetMembershipBySlug :one
-SELECT o.id AS organization_id, o.slug, o.name, o.access_epoch, m.id AS member_id, m.role, m.handle
+SELECT o.id AS organization_id, o.slug, o.name, o.access_epoch, m.id AS member_id, m.role, m.handle, m.joined_event_seq
 FROM organization o
 JOIN member m ON m.organization_id = o.id
 WHERE o.slug = $1 AND m.account_id = $2;

@@ -536,3 +536,9 @@ func (w postReadWriter) Read(ctx context.Context, m org.Membership, channel kern
 	}
 	return prepared.Add(ctx, []int64{lo}, []int64{hi}, floor)
 }
+
+// The page snapshot will call this for sidebar counts (#747).
+func newChannelCounts() *unread.ChannelCounts {
+	return unread.NewChannelCounts(unreadpg.ChannelRangesIn,
+		func(s platform.Snapshot) unread.ChannelCounter { return conversationpg.ChannelUnreadIn(s) })
+}

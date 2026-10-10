@@ -4,8 +4,8 @@ How read state is stored and counted, and what that costs (writes are in
 [unread writes](unread-writes.md))
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
 The move column, read-state tables, range store, feed, topic and branch-notice
-reads, initial reading POSTs, posting writes and sidebar range loader are current;
-message counts are *planned* (M4). The
+reads, the initial reading POSTs, posting writes and channel counts are current;
+topic counts are *planned* (M4). The
 rules are in [unread](../domain/unread.md).
 
 ## Storage
@@ -45,13 +45,19 @@ parameter. These statements share the page snapshot, with none per channel or to
 | Step | Owner | Input | Statement | Output |
 |---|---|---|---|---|
 | 1 (current) | `unread` | member, the sidebar's channel IDs | for each channel, its first 101 ranges by `lo` (`LATERAL … ORDER BY lo LIMIT 101`) | `P` and the first gaps per channel |
-| 2 (planned) | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted and grouped by channel; the feed's first unread is the first row | channel counts, the feed's first unread |
+| 2 (current) | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted per channel; `ORDER BY … LIMIT 1` returns its first unread | channel counts, the feed's first unread |
 | 3 | `unread` | member, current channel, its listed topic IDs plus the selected topic when the list omits it | its ranges at or above `P`, and the topics' floors | the read set above `P` and a floor for every topic (`P − 1` without a row) |
 | 4 | `conversation` | the read set as one `int8multirange`, `P`, per-topic `(id, floor)` arrays | per topic: its messages with `event_seq ≥ P` and above its floor, from the topic index in order, that the read set does not contain, at most 100 (`LATERAL … LIMIT 100`); plus its messages with `P ≤ event_seq ≤ floor` and `moved_event_seq > floor`, from the partial index, not contained; counted per topic; for the selected topic only, its lowest unread `event_seq` | topic counts, a topic view's first unread |
 
 Step 1 uses `unreadpg.ChannelRangesIn` in the caller's snapshot. Go derives
 `P` and at most 100 gaps; range 101 only bounds gap 100. Channels without
-rows retain the supplied join prefix and one open gap.
+rows retain the supplied join prefix and one open gap. `unread.ChannelCounts`
+deduplicates sidebar IDs and builds gap IDs and bounds together. Step 2 uses
+`conversationpg.ChannelUnreadIn`: ordinal joins pair length-checked arrays;
+Go supplies inclusive lower bounds as their predecessors. The channel cap orders
+by gap ordinal and message sequence, returning at most 100 rows across all topics,
+including an unread branch notice. Incremental sorting may finish a gap and read
+ahead before stopping. Both statements share the caller's snapshot.
 
 Steps 1–2 serve the channel list and steps 3–4 the topic list: two
 statements per list, four per page load, whatever the number of channels or
@@ -68,9 +74,13 @@ index, `R` ranges of the current channel at or above `P`:
 
 - **Step 1:** `O(K · (log n + 101))` range rows.
 - **Step 2:** every bounded gap holds an unread message, so each channel
-  needs at most 101 gaps and reads at most 100 message rows:
-  `O(K · (101 · log n + 100))`. A channel with nothing unread costs one
-  empty probe of the open gap after its last range.
+  needs at most 100 supplied gaps. Each probe caps message rows at 100;
+  a full sort could consume every probe: `O(K · 100 · (log n + 100))`.
+  Incremental sorting stops earlier but can read beyond the 100 returned rows.
+  A channel with nothing unread costs one empty probe of its open gap.
+  These bounds describe stored-row access. Parameter pairing and scanning
+  the bounded CTE for each channel's count and first sequence add
+  `O(100 · K²)` in-memory work; aggregates never revisit `message`.
 - **Step 3:** `O(R + T)` rows; `R` is 1 in normal use and grows with
   fragmentation (below).
 - **Step 4:** decoding the parameter is `O(R)`, and each candidate row costs

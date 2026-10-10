@@ -35,6 +35,11 @@ func NewPosting(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, even
 	return conversation.NewPosting(newTxRunner(pool), writerIn, sequences, events, notifier)
 }
 
+// NewPagePosting binds posting and its read-state factory to the same transaction.
+func NewPagePosting(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, reads conversation.PostReadWriterIn, notifier conversation.Notifier) *conversation.Posting {
+	return conversation.NewPagePosting(newTxRunner(pool), writerIn, sequences, events, reads, notifier)
+}
+
 // NewBrancher builds branching with org's sequence, realtime's appender and
 // read-state factories bound to its transaction. A nil notifier disables notifications.
 func NewBrancher(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, reads conversation.ReadRangeWriterIn, notifier conversation.Notifier) *conversation.Brancher {

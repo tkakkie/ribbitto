@@ -123,7 +123,7 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 		for i := range bodies {
 			bodies[i] = fmt.Sprintf("%s message %03d", channel.name, i)
 			person := people[i%len(people)]
-			w := request("POST", channel.path, person.cookie, url.Values{"body": {bodies[i]}}, http.StatusSeeOther)
+			w := request("POST", channel.path, person.cookie, url.Values{"cursor": {"0"}, "body": {bodies[i]}}, http.StatusSeeOther)
 			redirect(w, channel.path)
 		}
 		secrets = append(secrets, bodies...)

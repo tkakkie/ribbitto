@@ -45,7 +45,12 @@ htmx does only requests and swaps; the server and templ own the HTML.
   full page with `hx-select` is allowed; Load older does this today.
   Enhanced posts return only the `MessageComposer` fragment. On success its
   `data-posted-message` carries the posted message's DOM id; errors omit it.
-  The stream script consumes that id to scroll once the item is present,
+  The composer carries a hidden `cursor`; plain forms use the page snapshot.
+  `message-composer-v4.js` copies `#organization-stream`'s applied-and-shown
+  `data-event-cursor` on each submit, including after composer replacement.
+  Fragment responses echo the submitted cursor, never the new post's sequence;
+  only successful stream application advances the outer cursor. The action URL
+  identifies the feed/topic scope. The stream script consumes that id to scroll once the item is present,
   regardless of response/delivery order or a reconnect.
 - A unit that M3's SSE needs becomes an explicit templ fragment or
   component, rendered by the same code as the full page. `MessageItem`

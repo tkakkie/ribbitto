@@ -127,3 +127,14 @@ func (w Writer) LastMessageBefore(ctx context.Context, organizationID, channelID
 	}
 	return previous, nil
 }
+
+// TopicChangedBetween checks posts and moves in the composer's topic since its cursor.
+func (w Writer) TopicChangedBetween(ctx context.Context, organizationID, channelID, topicID kernel.ID, after, before int64) (bool, error) {
+	changed, err := w.queries.TopicChangedBetween(ctx, sqlcgen.TopicChangedBetweenParams{
+		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), TopicID: uuid(topicID), AfterSeq: after, BeforeSeq: before,
+	})
+	if err != nil {
+		return false, fmt.Errorf("checking intervening topic messages: %w", err)
+	}
+	return changed, nil
+}

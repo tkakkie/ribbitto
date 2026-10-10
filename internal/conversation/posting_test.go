@@ -188,3 +188,7 @@ func TestPostingNilNotifier(t *testing.T) {
 func (f *postingFake) LastMessageBefore(context.Context, kernel.ID, kernel.ID, int64) (int64, error) {
 	panic("unexpected LastMessageBefore")
 }
+
+func (f *postingFake) TopicChangedBetween(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64) (bool, error) {
+	panic("unexpected TopicChangedBetween")
+}

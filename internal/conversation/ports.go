@@ -58,6 +58,8 @@ type Writer interface {
 	// (GetDefaultTopic or GetTopic). Another organisation's channel is
 	// ErrChannelNotFound and another organisation's member org.ErrNotFound.
 	InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (Message, error)
+	// TopicChangedBetween reports a topic post or move strictly between two sequences.
+	TopicChangedBetween(context.Context, kernel.ID, kernel.ID, kernel.ID, int64, int64) (bool, error)
 	// CreateTopic creates a named topic. A name the channel already has is
 	// ErrTopicNameTaken; one the database rejects is ErrInvalidTopicName.
 	CreateTopic(ctx context.Context, organizationID, channelID kernel.ID, name string) (Topic, error)
@@ -159,3 +161,12 @@ type ReadRangeWriter interface {
 
 // ReadRangeWriterIn binds read-state writes to branching's transaction.
 type ReadRangeWriterIn func(platform.Tx) ReadRangeWriter
+
+// PostReadWriter reads the page scope and adds the new message's range; floor
+// is the safe topic floor computed by conversation from its own messages.
+type PostReadWriter interface {
+	Read(context.Context, org.Membership, kernel.ID, *kernel.ID, int64, int64, int64, int64) error
+}
+
+// PostReadWriterIn binds read-state writes to posting's transaction.
+type PostReadWriterIn func(platform.Tx) PostReadWriter

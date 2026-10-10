@@ -199,7 +199,7 @@ func streamEndsWithin(t *testing.T, events <-chan sseEvent, within time.Duration
 // post sends the composer form without JavaScript (303 back to the channel).
 func post(t *testing.T, b acceptanceBrowser, channelURL, body string) {
 	t.Helper()
-	response, err := b.client.Do(b.request(t, "POST", channelURL, url.Values{"body": {body}}))
+	response, err := b.client.Do(b.request(t, "POST", channelURL, url.Values{"cursor": {"0"}, "body": {body}}))
 	acceptanceOK(t, err)
 	_, _ = io.Copy(io.Discard, response.Body)
 	acceptanceOK(t, response.Body.Close())

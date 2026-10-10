@@ -325,7 +325,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, orgpg.BoundsIn, kinds), config.hub, 1024, time.Minute)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
 	}
-	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, postingNotifier)
+	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, postingNotifier)
 	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, postingNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions: sessions,
@@ -510,4 +510,29 @@ type branchReadWriter struct{ ranges unread.RangeWriter }
 
 func (w branchReadWriter) Merge(ctx context.Context, organizationID, channelID, memberID kernel.ID, joined, lo, hi int64) error {
 	return w.ranges.Merge(ctx, unread.Scope{OrganizationID: organizationID, ChannelID: channelID, MemberID: memberID}, joined, unread.Range{Lo: lo, Hi: hi})
+}
+
+// postReads binds the page and own-message writes to posting's transaction.
+func postReads(tx platform.Tx) conversation.PostReadWriter { return postReadWriter{tx: tx} }
+
+type postReadWriter struct{ tx platform.Tx }
+
+func (w postReadWriter) Read(ctx context.Context, m org.Membership, channel kernel.ID, topic *kernel.ID, cursor, lo, hi, floor int64) error {
+	scope := unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}
+	joined := m.Member.JoinedEventSeq
+	if topic == nil {
+		if err := newFeedWriter().Read(ctx, w.tx, scope, joined, cursor); err != nil {
+			return err
+		}
+		return unreadpg.WriterIn(w.tx).Merge(ctx, scope, joined, unread.Range{Lo: lo, Hi: hi})
+	}
+	ts := unread.TopicScope{Scope: scope, TopicID: *topic}
+	if err := newTopicWriter().Read(ctx, w.tx, ts, joined, cursor); err != nil {
+		return err
+	}
+	prepared, err := unreadpg.WriterIn(w.tx).Prepare(ctx, ts, joined)
+	if err != nil {
+		return err
+	}
+	return prepared.Add(ctx, []int64{lo}, []int64{hi}, floor)
 }

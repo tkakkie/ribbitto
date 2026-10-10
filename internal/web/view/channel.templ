@@ -242,11 +242,19 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 			<script defer src="/static/read-visibility-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-			<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
+			<script defer src="/static/message-composer-v4.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		}
 		<script defer src="/static/message-stream-v7.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
+}
+
+// Fragment responses echo the submitted cursor; only the outer stream advances it.
+func postCursor(page ChannelPage) int64 {
+	if page.EventCursor != nil {
+		return *page.EventCursor
+	}
+	return 0
 }
 
 // MessageComposer renders the posting form, alone for enhanced submissions.
@@ -267,6 +275,7 @@ templ MessageComposer(page ChannelPage) {
 		}
 		class="flex shrink-0 flex-col gap-2 border-t border-border p-4"
 	>
+		<input type="hidden" name="cursor" value={ fmt.Sprint(postCursor(page)) }/>
 		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
 		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md border border-border-strong bg-input px-3 py-2 text-fg">{ "\n" + page.Body }</textarea>

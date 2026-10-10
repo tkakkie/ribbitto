@@ -36,12 +36,22 @@ table needs its scope. INSERT refuses subqueries in VALUES, RETURNING or SELECT,
 joins (including comma joins), physical-table SELECT reads, ON CONFLICT and other
 shapes; full checking is a follow-up.
 
-CTE reads need no scope; LEFT/RIGHT/FULL joins and set operations fail.
+CTE reads need no scope; LEFT/RIGHT/FULL joins fail.
 Reads accept FROM SELECTs and CROSS JOIN LATERAL or inner JOIN LATERAL
 SELECTs ON true (#741): ORDER BY/LIMIT bounds per-channel/topic counts. Each
 nested table needs its SELECT's WHERE scope, never ON. Derived aliases cannot
 shadow tables; derived INSERT/UPDATE/DELETE sources fail. Tablecheck's
 ownership walk is unchanged for them.
+
+Read SELECTs accept `UNION ALL` at the top level and inside derived relations
+(#742). Step 3 combines ranges and topic floors in one statement; step 4
+combines two disjoint message branches under one cap. Every branch's tables
+need that branch's own WHERE scope, never ON or an outer predicate. `UNION`
+(distinct), `INTERSECT` and `EXCEPT` (including ALL) fail with named errors.
+Any set operation in a statement containing INSERT, UPDATE or DELETE,
+including CTE sources or writes, also fails; this permission applies only
+to reads. Tablecheck's ownership
+walk and both gates' other refusals are unchanged.
 
 `tools/scopecheck/allowlist.txt` uses `module.QueryName reason…`; stale, unnecessary
 and `PENDING MAINTAINER:` entries fail (case-insensitive, with any non-alphanumeric

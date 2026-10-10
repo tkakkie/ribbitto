@@ -81,5 +81,5 @@ not as a performance guarantee. One row per range, rather than an
 statements' query-gate additions are reviewed separately in #740–#743 and
 #749: UUID-array `unnest` parameters (#740, accepted), single-array `unnest`
 `WITH ORDINALITY` for parallel arrays (#749, accepted), `LATERAL` and derived
-relations (#741, accepted), `UNION ALL` (#742), and `int8multirange` parameters
-and containment (#743, accepted). #742 remains planned.
+relations (#741, accepted), `UNION ALL` (#742, accepted), and `int8multirange` parameters
+and containment (#743, accepted).

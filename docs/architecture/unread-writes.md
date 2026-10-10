@@ -63,7 +63,10 @@ Cross-origin protection covers both routes. Invalid cursors and `?before=`
 requests are 400 without writes; invisible channels/topics and non-members
 get 404. Errors roll back the transaction. htmx receives 204; plain forms
 redirect to the same feed or topic. Latest pages carry their snapshot cursor;
-visibility triggers the first automatic POST, with no later advancement (#710).
+visibility triggers the first automatic POST and subsequent DOM applications
+advance it while visible. Hidden applications wait until visibility returns.
+htmx sends one reading POST at a time, then the newest shown cursor; the same
+writers union reordered requests from several tabs without losing read state.
 
 A cursor above the organisation's committed `event_seq` is refused, so any
 later move has a higher sequence than the floor it raises.

@@ -21,7 +21,7 @@ index below for everything else.
 | [`vocabulary.md`](vocabulary.md) | product labels, ordinary words and Japanese UI vocabulary |
 | [`validation.md`](validation.md) | input validation rules |
 | [`unread.md`](unread.md) | unread rules: read ranges, reading scopes, counts and the divider (storage, feed, topic and branch-notice reads and the initial reading POST current; posting current; counts planned, M4) |
-| [`unread-examples.md`](unread-examples.md) | worked examples of the unread rules: topic reads, moves, concurrent tabs, late messages; initial reading POSTs and posting current; counts planned, M4 |
+| [`unread-examples.md`](unread-examples.md) | worked examples of the unread rules: topic reads, moves, concurrent tabs, late messages; visible-page reading POSTs and posting current; counts on pages planned, M4 |
 | [`names.md`](names.md) | display names, handles, how members are shown |
 | [`channels.md`](channels.md) | channel identity, names and the default channel |
 | [`topics.md`](topics.md) | topics, the default topic, the feed and branching |

@@ -100,54 +100,10 @@ Every entry sets `omit_unused_structs`, so a table no query uses gets no struct.
 Commit the pgx/v5 output; CI rejects generation changes to committed files. Never edit
 generated files.
 
-`make check` runs tools tests uncached (`go -C tools test -race -count=1 ./...`).
-Both use [`tools/internal/sqlwalk`](../tools/internal/sqlwalk/doc.go) for
-`module.QueryName` query loading, unnamed SQL and duplicate rejection, `pg_query_go`
-JSON parsing, statement/CTE/subquery traversal and the FROM `unnest` permission
-rule. Organisation scope and table ownership policies stay in their respective
-checkers. Shared reasons
-reject pending approval and require issue, PR-comment or numbered decision
-provenance for maintainer claims (not approval verification). The parser needs
-cgo and a C compiler (Xcode locally, GCC on CI).
-
-Scopecheck requires each owned table's own WHERE scope in SELECT, UPDATE and DELETE,
-including CTE bodies; joins never carry scope. UPDATE may not assign the scope
-column (`organization_id`, or `id` for `organization`). Ownership comes from migration
-columns, with `organization` scoped by `id` and an explicit installation-wide
-list; unknown ownership, scoped list entries (except singleton `setup`) and stale
-entries fail. Plain INSERT VALUES and INSERT SELECT with at most one source pass:
-a same-statement CTE or unqualified FROM `unnest` of single/mixed
-`sqlc.arg(name)::bigint[]` or `sqlc.arg(name)::uuid[]` parameters. Names are
-identifiers/strings; output columns may be aliased. Bounds enable writes (#727),
-IDs counts (#740). Each joined table needs its scope.
-Reads accept FROM SELECTs and CROSS JOIN LATERAL or inner JOIN LATERAL
-SELECTs ON true (#741): ORDER BY/LIMIT bounds per-channel/topic counts. Each
-nested table needs its SELECT's WHERE scope, never ON. Derived aliases cannot
-shadow tables; derived INSERT/UPDATE/DELETE sources fail. Tablecheck's ownership walk is unchanged.
-Tablecheck accepts scalar `sqlc.arg(name)::int8multirange` (#743) and unqualified `@>`
-only with that exact cast on the
-left and a column or accepted expression cast to scalar `bigint` on the right
-(sqlc resolves column types). `NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)`
-excludes the read set for #746's counts and #750's candidates. Qualification, array bounds, typmods,
-`sqlc.narg`, range constructors/aggregates, other range types/operators still fail.
-Ownership and per-table organisation scope still apply.
-WITH ORDINALITY (#749) requires one array and an alias naming two columns:
-`unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)` (or `uuid[]`).
-SELECT, UPDATE FROM, CTEs and INSERT SELECT accept it. Arrays join on ordinals;
-INSERT requires that join in a CTE. sqlc v1.31.1 refuses multi-argument `unnest`;
-Go must reject unequal lengths: ordinal joins drop unmatched rows.
-Tablecheck still rejects foreign writes.
-INSERT refuses subqueries in VALUES, RETURNING or SELECT, joins (including
-comma joins), physical-table SELECT reads, ON CONFLICT and other shapes; full
-checking is a follow-up.
-CTE reads need no scope; LEFT/RIGHT/FULL joins and set operations fail.
-Other FROM functions, unnest arguments except unqualified, unsized `bigint[]`
-or `uuid[]` `sqlc.arg` parameters and unnest outside FROM fail, as do explicitly
-LATERAL function calls, ROWS FROM, multi-argument WITH ORDINALITY and typed
-columns (see [import checks](architecture/import-checks.md)).
-`tools/scopecheck/allowlist.txt` uses `module.QueryName reason…`; stale, unnecessary
-and `PENDING MAINTAINER:` entries fail (case-insensitive, with any non-alphanumeric
-separator between the marker words). Migration statement/body ownership checks
+Two tools-module tests check every production query: tablecheck (ownership
+and expressions) and scopecheck (organisation scope). Their rules are in
+[query gate](architecture/query-gate.md).
+Migration statement/body ownership checks
 and the two reviewed access exemptions are described with table ownership in
 [import checks](architecture/import-checks.md).
 

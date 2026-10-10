@@ -10,4 +10,6 @@
 // from at most 101 ranges per channel, retaining the join prefix without rows.
 // Channel counts deduplicate sidebar IDs and call conversation through an
 // injected counter in that snapshot, using two statements for the whole list.
+// Topic state loads the prefix, all ranges above it and requested floors in
+// one snapshot statement, without multiplying ranges by topics.
 package unread

@@ -167,6 +167,64 @@ func (q *Queries) RaiseTopicReadFloor(ctx context.Context, arg RaiseTopicReadFlo
 	return err
 }
 
+const readTopicState = `-- name: ReadTopicState :many
+WITH requested AS (
+  SELECT t.id, t.n
+  FROM unnest($1::uuid[]) WITH ORDINALITY AS t(id, n)
+)
+SELECT 0::bigint AS topic_n, r.lo AS value, r.hi
+FROM read_range r
+WHERE r.organization_id = $2
+  AND r.channel_id = $3 AND r.member_id = $4
+UNION ALL
+SELECT t.n, f.floor_seq, 0::bigint
+FROM requested t
+JOIN topic_read_floor f ON true
+WHERE f.organization_id = $2
+  AND f.channel_id = $3 AND f.member_id = $4
+  AND f.topic_id = t.id
+ORDER BY topic_n, value
+`
+
+type ReadTopicStateParams struct {
+	TopicIds       []pgtype.UUID
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	MemberID       pgtype.UUID
+}
+
+type ReadTopicStateRow struct {
+	TopicN int64
+	Value  int64
+	Hi     int64
+}
+
+// Ranges are separate from floors, so each range is returned only once.
+func (q *Queries) ReadTopicState(ctx context.Context, arg ReadTopicStateParams) ([]ReadTopicStateRow, error) {
+	rows, err := q.db.Query(ctx, readTopicState,
+		arg.TopicIds,
+		arg.OrganizationID,
+		arg.ChannelID,
+		arg.MemberID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReadTopicStateRow
+	for rows.Next() {
+		var i ReadTopicStateRow
+		if err := rows.Scan(&i.TopicN, &i.Value, &i.Hi); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const topicReadFloor = `-- name: TopicReadFloor :one
 SELECT floor_seq FROM topic_read_floor
 WHERE organization_id = $1 AND channel_id = $2 AND member_id = $3 AND topic_id = $4

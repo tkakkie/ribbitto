@@ -26,6 +26,9 @@ func WriterIn(tx platform.Tx) *postgres.Writer { return postgres.WriterIn(tx) }
 // ChannelRangesIn binds sidebar range reads to the caller's snapshot.
 func ChannelRangesIn(s platform.Snapshot) unread.ChannelRanges { return postgres.ChannelRangesIn(s) }
 
+// TopicStateIn binds channel ranges and requested topic floors to the caller's snapshot.
+func TopicStateIn(s platform.Snapshot) unread.TopicStateReader { return postgres.TopicStateIn(s) }
+
 // NewFeedWriter builds the feed use case with injected message and cursor factories.
 func NewFeedWriter(messages unread.ChannelMessagesIn, cursor unread.EventCursorIn) *unread.FeedWriter {
 	return unread.NewFeedWriter(func(tx platform.Tx) unread.RangeWriter { return WriterIn(tx) }, messages, cursor)

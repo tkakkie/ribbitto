@@ -46,7 +46,7 @@ parameter. These statements share the page snapshot, with none per channel or to
 |---|---|---|---|---|
 | 1 (current) | `unread` | member, the sidebar's channel IDs | for each channel, its first 101 ranges by `lo` (`LATERAL … ORDER BY lo LIMIT 101`) | `P` and the first gaps per channel |
 | 2 (current) | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted per channel; `ORDER BY … LIMIT 1` returns its first unread | channel counts, the feed's first unread |
-| 3 | `unread` | member, current channel, its listed topic IDs plus the selected topic when the list omits it | its ranges at or above `P`, and the topics' floors | the read set above `P` and a floor for every topic (`P − 1` without a row) |
+| 3 (current) | `unread` | member, current channel, its listed topic IDs plus the selected topic when the list omits it | its ranges at or above `P`, and the topics' floors | the read set above `P` and a floor for every topic (`P − 1` without a row) |
 | 4 | `conversation` | the read set as one `int8multirange`, `P`, per-topic `(id, floor)` arrays | per topic: its messages with `event_seq ≥ P` and above its floor, from the topic index in order, that the read set does not contain, at most 100 (`LATERAL … LIMIT 100`); plus its messages with `P ≤ event_seq ≤ floor` and `moved_event_seq > floor`, from the partial index, not contained; counted per topic; for the selected topic only, its lowest unread `event_seq` | topic counts, a topic view's first unread |
 
 Step 1 uses `unreadpg.ChannelRangesIn` in the caller's snapshot. Go derives
@@ -58,6 +58,13 @@ Go supplies inclusive lower bounds as their predecessors. The channel cap orders
 by gap ordinal and message sequence, returning at most 100 rows across all topics,
 including an unread branch notice. Incremental sorting may finish a gap and read
 ahead before stopping. Both statements share the caller's snapshot.
+
+Step 3 uses `unreadpg.TopicStateIn` in the caller's snapshot. `ReadTopicState`
+combines channel ranges and requested floors with `UNION ALL`, returning each
+range once. Go separates the prefix, retains the join prefix without rows and
+supplies `P − 1` for missing floors. Listed and selected topic IDs are
+deduplicated before the statement, with at most 51 distinct IDs. The stored
+prefix starts at zero; every other disjoint, non-touching range lies above `P`.
 
 Steps 1–2 serve the channel list and steps 3–4 the topic list: two
 statements per list, four per page load, whatever the number of channels or

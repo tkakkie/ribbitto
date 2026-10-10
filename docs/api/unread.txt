@@ -48,9 +48,16 @@ type TopicMessages interface // TopicMessages supplies unread message bounds thr
   func (TopicMessages).Ranges(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, int64, int64, []Range) ([]Range, error) // Ranges returns whole-channel neighbour bounds for this topic's unread messages.
 type TopicMessagesIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) TopicMessages // TopicMessagesIn binds conversation's candidate query to the caller's transaction.
 type TopicPrepareIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) func(context.Context, TopicScope, int64) (PreparedTopic, error) // TopicPrepareIn binds locked preparation to the caller's transaction.
+type TopicReadState struct // TopicReadState contains the prefix end, read ranges above it and topic floors.
+  field Floors map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
+  field Prefix int64
+  field Ranges []Range
 type TopicScope struct // TopicScope identifies one topic within a member's channel read state.
   field Scope Scope
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
+type TopicStateReader interface // TopicStateReader loads a channel's read state in one snapshot statement.
+  func (TopicStateReader).Read(ctx context.Context, scope Scope, joined int64, listed []github.com/tkakkie/ribbitto/internal/kernel.ID, selected *github.com/tkakkie/ribbitto/internal/kernel.ID) (TopicReadState, error) // Read deduplicates listed topics and the optional selected topic, accepting at most 51 distinct IDs.
+type TopicStateReaderIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) TopicStateReader // TopicStateReaderIn binds topic read-state loading to the caller's snapshot.
 type TopicWriter struct // TopicWriter reads one topic through a cursor in the caller's transaction.
   func (*TopicWriter).Read(ctx context.Context, tx github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, scope TopicScope, joinedEventSeq int64, cursor int64) error // Read validates the cursor, prepares locked read state, queries candidates and unions their bounds while raising the floor.
 type TxRunner interface // TxRunner runs a read-state transaction owned by the use case.

@@ -41,9 +41,10 @@ A newly read message
   scope up to `S`, then a range for the new message; from a topic view the
   floor also rises to the new message when no message of the topic has an
   `event_seq` or `moved_event_seq` strictly between `S` and it. `S` is the
-  newest durable sequence the page has applied and shown, never a sequence
-  only received or the post's own response, so posting never reads a
-  message the member has not seen. `conversation.Posting.PostFromPage` takes
+  newest durable sequence the page has applied, never a sequence only
+  received or the post's own response, so posting never reads past the
+  page's cursor; like every topic read, it covers the whole topic up to `S`,
+  not only the loaded window. `conversation.Posting.PostFromPage` takes
   org's sequence first and refuses `S` above the pre-post committed limit.
   Its injected `PostReadWriterIn`, wired in `cmd/ribbitto`, binds the feed/topic
   write and own-message union to that transaction. Conversation supplies the

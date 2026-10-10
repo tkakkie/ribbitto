@@ -79,7 +79,7 @@ read by its POST either, even though its own sequence is lower.
 ## Mio posts
 
 Before the feed sends a POST covering 42, Mio switches to A's view, which
-has applied and shown up to 42, and posts m1 = 43 in A. The posting reads A
+has applied up to 42, and posts m1 = 43 in A. The posting reads A
 up to 42, adds `[43,44)` for m1 (b4 at 42 is the channel's previous
 message, so the gap at 42 stays), and raises A's floor to 43, since no
 message of A lies between 42 and 43. m1 is never unread for Mio; b4 stays unread in B.

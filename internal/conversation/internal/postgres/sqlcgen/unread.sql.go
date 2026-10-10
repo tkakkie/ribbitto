@@ -84,6 +84,14 @@ WITH topics AS (
     SELECT ids.topic_id, floors.floor
     FROM unnest($6::uuid[]) WITH ORDINALITY AS ids(topic_id, n)
     JOIN unnest($7::bigint[]) WITH ORDINALITY AS floors(floor, n) ON floors.n = ids.n
+), moved AS MATERIALIZED (
+    -- Keep the sequence-order LIMIT outside the message scan: it otherwise
+    -- walks old topic history before finding an unread move.
+    SELECT m.event_seq FROM topics t CROSS JOIN message m
+    WHERE m.organization_id = $1 AND m.channel_id = $2 AND m.topic_id = t.topic_id
+      AND t.topic_id = $5::uuid
+      AND m.event_seq <= t.floor AND m.moved_event_seq > t.floor
+      AND NOT ($4::int8multirange @> m.event_seq)
 )
 SELECT t.topic_id::uuid AS topic_id,
     (SELECT count(*) FROM (
@@ -109,12 +117,7 @@ SELECT t.topic_id::uuid AS topic_id,
            AND NOT ($4::int8multirange @> m.event_seq)
          ORDER BY m.event_seq LIMIT 1)
         UNION ALL
-        (SELECT m.event_seq FROM message m
-         WHERE m.organization_id = $1 AND m.channel_id = $2 AND m.topic_id = t.topic_id
-           AND t.topic_id = $5::uuid
-           AND m.event_seq <= t.floor AND m.moved_event_seq > t.floor
-           AND NOT ($4::int8multirange @> m.event_seq)
-         ORDER BY m.event_seq LIMIT 1)
+        (SELECT event_seq FROM moved WHERE t.topic_id = $5::uuid ORDER BY event_seq LIMIT 1)
     ) first_candidates ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
 FROM topics t
 `

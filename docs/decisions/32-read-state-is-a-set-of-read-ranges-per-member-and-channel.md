@@ -4,7 +4,7 @@
 [decision 21](21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)
 left to M4). Storage, range unions, feed, topic and branch-notice
 reads are implemented;
-Initial reading POSTs and posting writes are current; counts remain *planned* for M4. Rules in [unread](../domain/unread.md),
+Initial reading POSTs, posting writes and the count APIs are current; counts on pages remain *planned* for M4. Rules in [unread](../domain/unread.md),
 storage and cost in [unread counts](../architecture/unread-counts.md), writes in
 [unread writes](../architecture/unread-writes.md).
 

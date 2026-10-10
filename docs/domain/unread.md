@@ -4,7 +4,7 @@ The inputs are in place since M3: the join transaction, `joined_event_seq`,
 the pairing of each message with its `message.posted` event, and the log
 boundary. Read-state tables, locking, range unions, feed, topic and branch-notice
 reads exist;
-Initial reading POSTs and posting writes are current; unread counts are *planned* for M4
+Initial reading POSTs, posting writes and the channel and topic count APIs are current; counts on pages and their display are *planned* for M4
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
 the counting queries and their cost are in
 [unread counts](../architecture/unread-counts.md), the writes in
@@ -86,7 +86,7 @@ it, stays unread: it is no longer there to mark. A message already read
 stays read whatever moves. Without JavaScript, nothing advances on load; the feed and topic view
 offer a *Mark as read* form that sends the same POST with the page's cursor.
 
-## Counts *(planned, M4)*
+## Counts *(computed; shown on pages: planned, M4)*
 
 A channel's unread count is the number of its unread messages, which is the
 sum over **all** its topics, not only the 50 the sidebar lists. A topic's

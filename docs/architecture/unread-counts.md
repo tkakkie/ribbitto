@@ -101,8 +101,8 @@ index, `R` ranges of the current channel at or above `P`:
   fragmentation (below).
 - **Step 4:** decoding the parameter is `O(R)`, and each candidate row costs
   `O(log R)` to test. Count work includes unread messages (up to 100 per branch
-  before their shared cap), read messages moved in since the floor (up to 100
-  per move), and read posts above the floor. Normally the stream shows a new
+  before their shared cap), read messages moved in since the floor (at most 100 per move;
+  `LIMIT 100` bounds only unread ones), and read posts above the floor. Normally the stream shows a new
   message before the member's next post, so there are few. While the stream
   lags or is disconnected, own posts add work **without a bound**. #283 benchmarks
   it; if unacceptable, counts switch to probing read-set gaps per topic.

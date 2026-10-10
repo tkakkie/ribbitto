@@ -53,6 +53,12 @@ Malformed topic paging links and the organisation stream's topic filter check th
 `conversation.Topics.Get`, scoped by the resolved membership, without history;
 topic posts rely on the lookup inside the posting transaction.
 
+`unreadpg.ChannelRangesIn` binds sidebar range reads to the caller's snapshot.
+`FirstChannelReadRanges` loads each channel's first 101 ranges in one statement,
+scoped by organisation, member and channel. Go derives the prefix and up to
+100 gaps, retaining the supplied join prefix without rows; the 101st range
+bounds the final gap and never opens one. Message counting remains planned.
+
 Unread's store binds to a caller-owned transaction through `unreadpg.WriterIn`.
 It locks or creates `channel_read`, unions the supplied join prefix before
 the new range, and reads/deletes only primary-key-bounded neighbours. A
@@ -65,7 +71,7 @@ sequence; no message or foreign-table query runs in unread's store.
 sqlc query (organisation, channel, strictly above `S`, lowest sequence), and
 `orgpg.EventCursorInTx` binds org's existing cursor query to the same transaction.
 The feed refuses `S` above that cursor, then merges `[0, n)` (`S + 1` without
-a next message). Its HTTP caller remains planned.
+a next message). The read POST owns that transaction (see [unread writes](unread-writes.md)).
 `unread.TopicWriter`, wired by `newTopicWriter`, validates org's cursor, then
 prepares the locked prefix, ranges and floor before querying candidates and
 batch-adding their bounds and raising the floor, all in the caller's transaction.

@@ -612,7 +612,7 @@ func TestPagesMarkup(t *testing.T) {
 		cases = append(cases, markupCase{name: "topic " + method, route: method + " /organizations/{slug}/channels/{channelID}/topics/{topicID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: method, path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}), cookie: true, form: url.Values{"body": {""}}, status: status, alerts: alerts})
 	}
 	cases = append(cases, markupCase{name: "branch invalid", route: "POST /organizations/{slug}/channels/{channelID}/branch", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/branch", cookie: true, status: 422, alerts: 1})
-	noPage := []string{"GET /organizations/{slug}/events", "POST /signout", "GET /organizations/{slug}/{$}"}
+	noPage := []string{"POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "GET /organizations/{slug}/{$}"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
 	if err != nil {

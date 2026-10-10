@@ -11,7 +11,7 @@ enhancement, not full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
   a channel, its members page or a topic and its history (including older pages), posting a message,
-  branching and creating channels. Plain forms and links work alone;
+  branching, marking a feed or topic read, and creating channels. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
   keyboard shortcuts (Enter to send), and local-time display. Without
@@ -55,7 +55,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   updating every reference in the same pull request. Today's contract ids
   are `organization-stream`, `stream-sink`, `conversation`, `message-list`, `message-items`, `load-older`,
   `message-body`, `message-composer`, `message-help`, `message-status`,
-  `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
+  `read-form`, `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox (32 lowercase hex digits). `#message-items` is always present,
   including when empty; Load older selects its direct `<li>` children.
@@ -94,6 +94,14 @@ htmx does only requests and swaps; the server and templ own the HTML.
   including Load older, omit it.
   `#message-status` retains only the latest 10 announcements; history itself
   is never a live region.
+- Latest feeds/topics render `#read-form` with the snapshot `cursor`, a plain
+  *Mark as read* submit button, and `hx-post` to the conversation URL plus
+  `/read`: `POST /organizations/{slug}/channels/{channelID}/read` or
+  `/organizations/{slug}/channels/{channelID}/topics/{topicID}/read`. `hx-trigger="read-visible once, submit"` and `hx-swap="none"` send
+  one automatic POST and manual submissions without swapping history.
+  Members and `?before=` pages omit it. The endpoint resolves visibility,
+  calls the transaction-owning unread use case and returns 204 to htmx or a 303
+  for the plain form.
 - The layout's `htmx-config` meta tag holds htmx's security settings and
   `responseHandling` ([`rendering.md`](rendering.md)). It keeps the three
   defaults, adding global 409/422 swaps (`error: false`) before `[45]..`.
@@ -106,6 +114,10 @@ JavaScript never generates HTML and never owns application state. It is
 limited to UX help that HTML and htmx handle poorly: focus, scroll,
 keyboard, local time, single-source selection constraints, and glue for SSE.
 
+- `read-visibility-v1.js` watches visibility only. On scoped `htmx:load`,
+  it triggers `read-visible` once the form's page is visible, removing the
+  visibility listener. It never reads or updates the stream cursor or sends
+  requests itself; the form retains the page's initial snapshot (#722).
 - SSE `reset` closes htmx's event source and reloads the page to obtain a fresh snapshot.
 - **No requests of its own:** no `fetch` or `XMLHttpRequest`. Requests go
   through HTML forms, links and htmx.

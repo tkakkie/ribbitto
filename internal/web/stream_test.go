@@ -695,7 +695,7 @@ func testStreamCachesEndWithLifetime(t *testing.T) {
 }
 
 func TestRemovedPageStreams(t *testing.T) {
-	for _, route := range orgRoutes(nil, nil, nil, nil, nil, nil, nil) {
+	for _, route := range orgRoutes(nil, nil, nil, nil, nil, nil, nil, nil) {
 		if strings.Contains(route.path, "/channels/") && strings.HasSuffix(route.path, "/events") {
 			t.Fatalf("removed stream still registered: %s", route.path)
 		}

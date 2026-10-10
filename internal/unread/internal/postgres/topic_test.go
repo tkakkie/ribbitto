@@ -108,6 +108,21 @@ func TestTopicBatch(t *testing.T) {
 	}
 }
 
+// An absent floor reads as Prefix - 1; a cursor below it must not lower it.
+func TestTopicFloorFallback(t *testing.T) {
+	pool := pgtest.New(t)
+	f := conversationtest.OrganizationWithOwner(t, pool, "fallback", "general")
+	s, topic := scopeOf(f), f.Channel.DefaultTopicID
+	require(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
+		p, err := WriterIn(tx).Prepare(t.Context(), unread.TopicScope{Scope: s, TopicID: topic}, 5)
+		require(t, err)
+		return p.Add(t.Context(), nil, nil, 2)
+	}))
+	if got := floorValue(t, pool, s, topic); got != 5 {
+		t.Fatalf("floor=%d, want the fallback 5", got)
+	}
+}
+
 func TestTopicBatchScope(t *testing.T) {
 	for _, dimension := range []string{"organization", "channel", "member", "topic"} {
 		for _, existing := range []bool{false, true} {

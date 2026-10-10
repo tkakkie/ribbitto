@@ -92,7 +92,10 @@ func (p *TopicWrite) Add(ctx context.Context, los, his []int64, cursor int64) er
 	if err = p.w.queries.InsertBatchRanges(ctx, sqlcgen.InsertBatchRangesParams{OrganizationID: s.OrganizationID, ChannelID: s.ChannelID, MemberID: s.MemberID, Los: los, His: his}); err != nil {
 		return fmt.Errorf("inserting batch read ranges: %w", err)
 	}
-	floor := sqlcgen.InsertTopicReadFloorParams{OrganizationID: s.OrganizationID, ChannelID: s.ChannelID, MemberID: s.MemberID, TopicID: p.topic, FloorSeq: cursor}
+	// An absent floor reads as Prefix - 1, so an older cursor must not store a
+	// lower one: the effective floor only rises.
+	p.Floor = max(p.Floor, cursor)
+	floor := sqlcgen.InsertTopicReadFloorParams{OrganizationID: s.OrganizationID, ChannelID: s.ChannelID, MemberID: s.MemberID, TopicID: p.topic, FloorSeq: p.Floor}
 	if p.hasFloor {
 		err = p.w.queries.RaiseTopicReadFloor(ctx, sqlcgen.RaiseTopicReadFloorParams(floor))
 	} else {

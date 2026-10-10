@@ -5,7 +5,7 @@
 left to M4). Storage, range unions, feed, topic and branch-notice
 reads are implemented;
 Visible-page reading POSTs, posting writes and the count APIs are current; counts on pages remain *planned* for M4. Rules in [unread](../domain/unread.md),
-storage and cost in [unread counts](../architecture/unread-counts.md), writes in
+storage in [unread counts](../architecture/unread-counts.md), cost in [unread count costs](../architecture/unread-count-costs.md), writes in
 [unread writes](../architecture/unread-writes.md).
 
 - **Read ranges.** A member's read state in a channel is a set of

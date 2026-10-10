@@ -246,7 +246,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		</div>
 		// Scripts stay outside swap targets; htmx will not run swapped scripts.
 		if page.Members == nil {
-			<script defer src="/static/read-visibility-v2.js" nonce={ templ.GetNonce(ctx) }></script>
+			<script defer src="/static/read-visibility-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-composer-v4.js" nonce={ templ.GetNonce(ctx) }></script>

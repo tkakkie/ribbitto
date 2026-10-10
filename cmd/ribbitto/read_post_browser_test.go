@@ -48,7 +48,7 @@ func TestReadPostBrowser(t *testing.T) {
 	t.Cleanup(launch.Kill)
 	browser := rod.New().ControlURL(control).MustConnect()
 	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
-	for _, kind := range []string{"feed", "topic", "older-feed", "older-topic"} {
+	for _, kind := range []string{"feed", "topic", "older-feed", "older-topic", "retry-feed", "retry-in-flight-feed"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
@@ -69,6 +69,8 @@ func TestReadPostBrowser(t *testing.T) {
 			}
 			var posts, active atomic.Int32
 			var hold atomic.Bool
+			var failNext atomic.Bool
+			var failReads atomic.Bool
 			reads := make(chan string, 10)
 			release := make(chan struct{}, 10)
 			frames := make(chan string, 10)
@@ -102,13 +104,21 @@ func TestReadPostBrowser(t *testing.T) {
 							http.Error(w, err.Error(), http.StatusBadRequest)
 							return
 						}
-						reads <- r.PostForm.Get("cursor")
+						select {
+						case reads <- r.PostForm.Get("cursor"):
+						case <-r.Context().Done():
+							return
+						}
 						if hold.Load() {
 							select {
 							case <-release:
 							case <-r.Context().Done():
 								return
 							}
+						}
+						if failNext.Swap(false) || failReads.Load() {
+							http.Error(w, "reading failed", http.StatusInternalServerError)
+							return
 						}
 					}
 					if !strings.HasSuffix(r.URL.Path, "/read") {
@@ -177,6 +187,66 @@ func TestReadPostBrowser(t *testing.T) {
 						feedRequire(t, view.LiveMessageItem(view.Message{ID: m.ID, TopicID: topic, EventSeq: m.EventSeq, Body: m.Body}).Render(ctx, &payload))
 						frames <- fmt.Sprintf("event: message\nid: %d\ndata: %s\n\n", m.EventSeq, payload.String())
 					}
+				}
+				if kind == "retry-feed" {
+					page.MustEval(`() => document.querySelector('#read-form').addEventListener('htmx:afterRequest', e => {
+						document.body.dataset.readStatus = String(e.detail.xhr.status);
+					})`)
+					failNext.Store(true)
+					post(topicID, true)
+					assertRead("7")
+					page.MustWait(`() => document.body.dataset.readStatus === '500'`)
+					// Allow completion callbacks to run before supplying the next trigger.
+					page.MustEval(`() => new Promise(resolve => setTimeout(resolve, 150))`)
+					if posts.Load() != 2 || len(reads) != 0 {
+						t.Fatal("failed reading POST retried without another trigger")
+					}
+					feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 7}})
+					page.MustEval(`() => {
+						window.testVisibility = 'hidden';
+						document.dispatchEvent(new Event('visibilitychange'));
+						window.testVisibility = 'visible';
+						document.dispatchEvent(new Event('visibilitychange'));
+					}`)
+					assertRead("7")
+					page.MustWait(`() => document.body.dataset.readStatus === '204'`)
+					feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 8}})
+					if posts.Load() != 3 || len(reads) != 0 {
+						t.Fatal("visibility did not retry the failed cursor exactly once")
+					}
+					return
+				}
+				if kind == "retry-in-flight-feed" {
+					page.MustEval(`() => document.querySelector('#read-form').addEventListener('htmx:afterRequest', e => {
+						document.body.dataset.readStatus = String(e.detail.xhr.status);
+					})`)
+					hold.Store(true)
+					post(topicID, true)
+					assertRead("7")
+					post(topicID, true)
+					page.MustWait(`() => document.querySelector('#organization-stream').dataset.eventCursor === '8'`)
+					if posts.Load() != 2 {
+						t.Fatal("a second read started while the first was in flight")
+					}
+					failNext.Store(true)
+					hold.Store(false)
+					release <- struct{}{}
+					assertRead("8")
+					page.MustWait(`() => document.body.dataset.readStatus === '204'`)
+					feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 9}})
+					if posts.Load() != 3 || len(reads) != 0 {
+						t.Fatal("failed reading did not flush the newer shown cursor exactly once")
+					}
+					failReads.Store(true)
+					post(topicID, true)
+					assertRead("9")
+					page.MustWait(`() => document.body.dataset.readStatus === '500'`)
+					page.MustEval(`() => new Promise(resolve => setTimeout(resolve, 150))`)
+					if posts.Load() != 4 || len(reads) != 0 {
+						t.Fatal("persistently failed cursor retried without another trigger")
+					}
+					feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 9}})
+					return
 				}
 				// Stop between receiving the frame and applying its server-rendered HTML.
 				page.MustEval(`() => {

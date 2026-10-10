@@ -65,8 +65,10 @@ get 404. Errors roll back the transaction. htmx receives 204; plain forms
 redirect to the same feed or topic. Latest pages carry their snapshot cursor;
 visibility triggers the first automatic POST and subsequent DOM applications
 advance it while visible. Hidden applications wait until visibility returns.
-htmx sends one reading POST at a time, then the newest shown cursor; the same
-writers union reordered requests from several tabs without losing read state.
+htmx sends one reading POST at a time, then after success the newest shown cursor.
+Failure also sends a strictly newer shown cursor; resending the same cursor
+waits for the next visibility or application trigger. The same writers union
+reordered requests from several tabs without losing read state.
 
 A cursor above the organisation's committed `event_seq` is refused, so any
 later move has a higher sequence than the floor it raises.

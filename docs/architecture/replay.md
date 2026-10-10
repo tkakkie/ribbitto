@@ -9,7 +9,7 @@ sequenceDiagram
   participant B as Browser
   participant W as web
   participant DB as PostgreSQL
-  participant C as connection goroutine
+  participant C as stream writer
   B->>W: GET page
   W->>DB: REPEATABLE READ, READ ONLY: page data + event_seq of this organisation
   W-->>B: HTML with cursor = event_seq
@@ -18,7 +18,7 @@ sequenceDiagram
   loop
     C->>DB: one snapshot: replay boundary + event_seq + events after cursor
     C->>C: check interest, render, authorize, send; cursor = last seq read
-    C->>C: wait until hub's latest sequence of org > cursor (no wait if already)
+    C->>C: wait on org's durable level, declared generations, heartbeat and context
   end
 ```
 
@@ -27,8 +27,8 @@ sequenceDiagram
   statement sees a new snapshot, so a message committed between reading the
   messages and reading `event_seq` would be missing from the page *and*
   skipped by the stream.
-- **No lost wakeups.** Waiting means "block until the hub's latest
-  sequence for this organisation is greater than my cursor", and that
+- **No lost wakeups.** The durable part of the combined wait means "block until
+  the hub's latest sequence for this organisation is greater than my cursor", and that
   condition and wake channel are read from one immutable atomic snapshot
   *before* blocking. A raise publishes a higher snapshot and closes the
   old snapshot's channel; a waiter holding that channel wakes even if the
@@ -82,7 +82,9 @@ sequenceDiagram
   membership lookup is never a deny. A render error stops the loop even for
   an event the check would have denied, since the check comes after it.
   Cancellation is checked before every event, so an ended session sends
-  nothing more. It drains every batch before waiting.
+  nothing more. It drains every batch before waiting on the durable level,
+  declared ephemeral generations, heartbeat and context together (#735).
+  Generation wakes send no frames yet (#736).
 - **Missed raises** (#237). Posting raises the hub right after its commit,
   but a writer without a notifier (`cmd/seed`, sign-up's `member.joined`)
   or, later, another process commits without one, and a stream that has

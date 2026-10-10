@@ -12,9 +12,11 @@ Today's loop is in [replay](replay.md).
 Each connection runs `realtime.Stream.Run`: it reads through
 `CachedEvents`, delivers, and waits on the hub. A post wakes every
 connection of its organisation, and each one reads the hub's atomic
-level/channel snapshot (`Latest`, `Wait`) and looks up the event cache, joining a shared
+durable level/channel snapshot and looks up the event cache, joining a shared
 read and, for the short batch that holds a new post, a second shared read
-after it. Renders, authorization and sends are per connection.
+after it. The writer's combined wait also includes its declared ephemeral
+generations, heartbeat and context (#735); no owners raise generations yet.
+Renders, authorization and sends are per connection.
 
 ## The reader
 

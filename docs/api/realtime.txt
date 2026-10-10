@@ -40,7 +40,7 @@ type EventKind string // EventKind identifies a durable change.
 type EventReader interface // EventReader reads an organisation's durable events with a sequence above after, in sequence order, at most limit of them.
   func (EventReader).EventsAfter(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, after int64, limit int) ([]Event, error)
 func FormatPayloadID(id github.com/tkakkie/ribbitto/internal/kernel.ID) string // FormatPayloadID returns id as canonical UUID text (8-4-4-4-12, lowercase), the form PostgreSQL's uuid type prints, so payloads keep one shape whichever writer stored them.
-type Hub struct // Hub holds, per organisation, the highest committed event sequence it has been told about, and the registry of open connections.
+type Hub struct // Hub holds, per organisation, the highest committed event sequence it has been told about, presence and typing generations, and the registry of open connections.
   func (*Hub).ActiveOrganizations() []github.com/tkakkie/ribbitto/internal/kernel.ID // ActiveOrganizations returns the organisations with at least one registered connection, in no particular order.
   func (*Hub).CancelAccount(account github.com/tkakkie/ribbitto/internal/kernel.ID) // CancelAccount ends the contexts of all the account's connections, for example when the account signs out everywhere.
   func (*Hub).CancelAll() // CancelAll ends the contexts of every registered connection and refuses every later registration with ErrShutdown, for a server shutting down: an open stream never goes idle, so the server would otherwise wait for it until its shutdown deadline, and a request already accepted could still register after this ran.
@@ -48,13 +48,16 @@ type Hub struct // Hub holds, per organisation, the highest committed event sequ
   func (*Hub).Connections() int // Connections returns how many connections are registered, for the development-only metrics listener.
   func (*Hub).Latest(org github.com/tkakkie/ribbitto/internal/kernel.ID) int64 // Latest returns the organisation's latest sequence the hub has been told about; 0 if none.
   func (*Hub).Raise(org github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64) // Raise records that the organisation's events up to seq are committed.
+  func (*Hub).RaiseGeneration(org github.com/tkakkie/ribbitto/internal/kernel.ID, kind Interest, generation int64) // RaiseGeneration publishes a presence or typing generation for an organisation.
   func (*Hub).RaiseIfActive(org github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64) // RaiseIfActive is Raise for an organisation that still has a registered connection, checked under the same lock, so a value read while its last connection went away does not raise it.
   func (*Hub).Register(parent context.Context, c Connection, limit int) (ctx context.Context, unregister func(), err error) // Register adds a connection unless the process already holds maxStreams connections or its account holds limit connections, returning ErrTooManyConnections and nothing to unregister, or the hub is shutting down (ErrShutdown).
   func (*Hub).Wait(ctx context.Context, org github.com/tkakkie/ribbitto/internal/kernel.ID, after int64) (int64, error) // Wait blocks until the organisation's latest sequence is greater than after and returns that sequence, at once if it already is.
-  func (*Hub).Waiting(org github.com/tkakkie/ribbitto/internal/kernel.ID) int // Waiting reports how many calls of Wait for the organisation are counted as blocked, so tests can synchronise on it instead of sleeping.
+  func (*Hub).Waiting(org github.com/tkakkie/ribbitto/internal/kernel.ID) int // Waiting reports how many durable or combined waits for the organisation are counted as blocked, so tests can synchronise instead of sleeping.
 type Interest string // Interest identifies output a connection asks to receive, never permission.
 const InterestMessages Interest = "messages" // InterestMessages requests posts and moves in the selected channel or topic.
+const InterestPresence Interest = "presence" // InterestPresence requests presence changes; no presence frames are delivered yet.
 const InterestSidebar Interest = "sidebar" // InterestSidebar declares sidebar output; no sidebar frames are delivered yet.
+const InterestTyping Interest = "typing" // InterestTyping requests typing changes; no typing frames are delivered yet.
 type Kinds map[EventKind]Router // Kinds registers the Router of each kind a reader fills in; wiring builds it.
 func MergeKinds(registries ...Kinds) (Kinds, error) // MergeKinds combines publisher registries into a fresh map without modifying them.
 func NewCache[K comparable, V any](parent context.Context, capacity int, maxLoads int, ttl time.Duration, loadTimeout time.Duration, keep func(K, V) bool, now func() time.Time) *Cache[K, V] // NewCache returns a cache holding at most capacity entries, each for at most ttl, with at most maxLoads loaders running until they actually return.

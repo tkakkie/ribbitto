@@ -2,7 +2,8 @@
 
 **Decided** (#296; amends [decision 23](23-the-event-log-is-the-source-of-truth-the-hub-carries-a-level.md):
 the hub carries a level per ephemeral kind besides the durable one; durable
-events are unchanged). *Planned* for M4; details in
+events are unchanged). Hub generations and the combined writer wait are
+implemented (#735); owners, frames and the sink remain planned (#736, #737). Details in
 [real time](../architecture/realtime.md#ephemeral-state-planned-m4).
 
 - **Current state, not events.** Presence (who has a stream open) and

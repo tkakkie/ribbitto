@@ -114,28 +114,28 @@ without a lost wake-up or registry lock.
 
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
 each page holds one organisation stream with [interests](streaming.md#stream-scope).
-Delivery (#736) and the sink (#737) are current; owners (#287, #288) remain
-planned. Only visible changes raise generations, including typing expiry.
+Delivery (#736), the sink (#737) and presence state (#766) are current;
+Changes/reset (#767), presence delivery/display (#768) and typing (#288)
+remain planned. Only visible transitions raise generations.
 
-- **Owners.** Presence (#287) will read hub registrations and mark members
-  offline about 30 s after their last stream closes. Typing (#288) will keep
+- **Owners.** Presence counts accepted streams through web's lifecycle seam,
+  independent of interests, and marks members offline 30 s after the last
+  close. A reconnect in that window cancels expiry without a transition.
+  Bounded member snapshots return a process/generation token
+  from one locked read; transitions publish state before raising
+  the organisation generation. Typing (#288) will keep
   channel/topic state until a few seconds after the last signal.
   `realtime.EphemeralOwner` returns current state and its represented
   generation; web adapters render feature state. The subscription carries
-  the opaque presence token. `cmd/ribbitto` will wire the owners.
-- **Generations.** Each presence entry records the generation of its last
-  change, and entries are kept in that order, so the changes after a
-  generation are a suffix. An entry that went offline stays for a bounded
-  time so the change can still be sent; dropping it raises the
-  organisation's **discard boundary**, a monotonic level. The owner updates
-  state, boundary and generation together and then raises the hub's
-  generation; a read returns all three as of one moment, so a connection
-  marks seen only what it read. Typing keeps a summary per channel and per
-  topic, updated with each change: the set of typists, how many there are,
-  the four latest and the generation of its last change. A connection reads
-  only its place's summary (a feed reads its channel's) and subtracts the
-  viewer, found in that set in constant time, from the names and the count,
-  so its work does not grow with typists or topics elsewhere.
+  the opaque presence token. `cmd/ribbitto` constructs presence; adapters remain planned.
+- **Generations (planned, #767).** Presence entries will be ordered by their
+  last-change generation. Changes after a token are a suffix; offline entries
+  stay for a bounded time, and dropping one advances a monotonic discard
+  boundary. State, boundary and generation are published together before
+  raising the hub; reads return all three together. Typing will keep each
+  channel/topic's typist set, count, four latest and last-change generation.
+  A read uses only its place's summary (the channel for a feed), subtracting
+  the viewer in constant time; work never grows with other places' state.
 - **Delivery.** After each durable batch and before waiting, at most
   one frame without `id:` per advanced kind. Durable order and the server
   cursor are unchanged; a backlog delays changes by at most one batch, and

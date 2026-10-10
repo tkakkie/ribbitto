@@ -2,11 +2,14 @@
 
 How a module is built ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md), with [decision 27](../decisions/27-channels-topics-and-messages-are-one-conversation-module.md)'s `conversation` module), the modules, what they own and what they may import; [the feature map](features.md) maps features to their code.
 
-**Construction.** Each module consists of three parts, and a module that owns tables may add an optional fourth ([decision 29](../decisions/29-test-fixtures-live-with-the-module-that-owns-their-tables.md)):
+**Construction.** A persistent module consists of three parts, and may add an optional fourth ([decision 29](../decisions/29-test-fixtures-live-with-the-module-that-owns-their-tables.md)):
 - `internal/<module>`: types, errors, use cases and consumer interfaces;
 - `internal/<module>/internal/postgres`: its store and `sqlcgen`;
 - `internal/<module>/<module>pg`: wiring;
 - `internal/<module>/<module>test`: test-only raw-SQL fixtures for its own tables.
+
+A memory-only module such as `internal/presence` has just its root, constructed
+directly in `cmd/ribbitto`; it needs no store, wiring or table fixtures.
 
 A wiring package exports its use-case constructors, the `Tx`- and `Snapshot`-bound factories that other modules' consumers take, and `EventKinds`. Its runners and its own module's bindings stay unexported. `orgpg.NewHandleChanger` is a use-case constructor awaiting its handler. Store tests bind through `platform.InTx`/`InSnapshot` and the store's exported bindings; tests of the wiring's runners live in the wiring package. The wiring package's own external tests (`orgpg_test`, `conversationpg_test`) reach its runner through `NewTxRunnerForTest` in its `export_test.go`; no other package can.
 
@@ -22,6 +25,7 @@ A cross-module flow's root use case owns its transaction through an injected run
 | `realtime`: event log, retention, hub, stream loop, envelope | `event_log` |
 | `org`: organisations, members, authorisation (`Membership`), setup, sign-up | `organization`, `member`, `setup` |
 | `conversation`: channels, topics, branching, posting, history, the page snapshot use case | `channel`, `topic`, `message` |
+| `presence`: per-process online state and grace expiry; delivery/display planned (#767, #768) | no tables |
 | `unread`: feed and topic writes, transaction-bound lock, join prefix, read-range unions and topic floors | `channel_read`, `read_range`, `topic_read_floor` |
 
 `internal/web` stays the UI shell and imports module roots. Its per-kind

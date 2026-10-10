@@ -29,6 +29,7 @@ func moduleManifest() []module {
 			fixture: "internal/org/orgtest", mayImport: []string{"identity", "realtime"}, ownsTables: []string{"organization", "member", "setup"}},
 		{root: "internal/conversation", store: "internal/conversation/internal/postgres", wiring: "internal/conversation/conversationpg",
 			fixture: "internal/conversation/conversationtest", mayImport: []string{"identity", "org", "realtime"}, fixtureRoots: []string{"org"}, ownsTables: []string{"channel", "topic", "message"}},
+		{root: "internal/presence", mayImport: []string{"realtime"}, ownsTables: []string{}},
 		{root: "internal/unread", store: "internal/unread/internal/postgres", wiring: "internal/unread/unreadpg", ownsTables: []string{"channel_read", "read_range", "topic_read_floor"}},
 	}
 }
@@ -39,8 +40,8 @@ func validateManifest(modules []module, exists func(string) bool, candidates []s
 	paths, names := map[string]bool{}, map[string]bool{}
 	for _, m := range modules {
 		name := filepath.Base(m.root)
-		if names[name] || m.root == "" || m.store == "" || m.wiring == "" {
-			return fmt.Errorf("%q: duplicate module name or missing root, store or wiring", m.root)
+		if names[name] || m.root == "" || (m.store == "") != (m.wiring == "") || (m.store == "" && len(m.ownsTables) != 0) {
+			return fmt.Errorf("%q: duplicate module name or missing root, paired store/wiring or table storage", m.root)
 		}
 		names[name] = true
 		for _, path := range []string{m.root, m.store, m.wiring, m.fixture} {
@@ -69,10 +70,10 @@ func importAllowed(modules []module, from, file, to string) bool {
 	test := strings.HasSuffix(file, "_test.go")
 	for _, m := range modules {
 		// Depguard's inbound denies used raw prefixes, including similar names.
-		if strings.HasPrefix(to, m.store) && from != m.wiring && !within(from, m.store) {
+		if m.store != "" && strings.HasPrefix(to, m.store) && from != m.wiring && !within(from, m.store) {
 			return false
 		}
-		if strings.HasPrefix(to, m.wiring) && !test && !strings.HasPrefix(from, "cmd/") {
+		if m.wiring != "" && strings.HasPrefix(to, m.wiring) && !test && !strings.HasPrefix(from, "cmd/") {
 			return false
 		}
 		if m.fixture != "" && strings.HasPrefix(to, m.fixture) && !test {
@@ -250,14 +251,17 @@ func TestModuleImportFixtures(t *testing.T) {
 			pairs := [][4]string{
 				{m.root, "internal/kernel", m.root, "internal/web"},
 				{m.root, m.root + "/child", m.root, "internal/kernel/child"},
-				{m.wiring, m.store, m.root, m.store},
-				{m.store, m.store + "/sqlcgen", m.wiring + "/child", m.store},
-				{m.store, m.store + "/sqlcgen", m.root, m.store + "/sqlcgen"},
-				{m.store + "@test", m.store + "/sqlcgen", m.root + "@test", m.store + "/sqlcgen"},
-				{"cmd/server", m.wiring, m.root, m.wiring},
-				{m.root + "@test", m.wiring, m.root, m.wiring + "extra"},
 				{m.root + "@test", "internal/web", m.root, "internal/web"},
-				{m.store + "@test", m.store, m.root + "@test", m.store},
+			}
+			if m.store != "" {
+				pairs = append(pairs,
+					[4]string{m.wiring, m.store, m.root, m.store},
+					[4]string{m.store, m.store + "/sqlcgen", m.wiring + "/child", m.store},
+					[4]string{m.store, m.store + "/sqlcgen", m.root, m.store + "/sqlcgen"},
+					[4]string{m.store + "@test", m.store + "/sqlcgen", m.root + "@test", m.store + "/sqlcgen"},
+					[4]string{"cmd/server", m.wiring, m.root, m.wiring},
+					[4]string{m.root + "@test", m.wiring, m.root, m.wiring + "extra"},
+					[4]string{m.store + "@test", m.store, m.root + "@test", m.store})
 			}
 			if m.fixture != "" {
 				pairs = append(pairs,
@@ -283,6 +287,25 @@ func TestModuleImportFixtures(t *testing.T) {
 						t.Errorf("%s %s -> %s: allowed=%v", from, file, pair[i+1], got)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestMemoryOnlyManifest(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		module module
+		valid  bool
+	}{
+		{"memory only", module{root: "internal/presence"}, true},
+		{"missing wiring", module{root: "internal/presence", store: "store"}, false},
+		{"missing store", module{root: "internal/presence", wiring: "wiring"}, false},
+		{"tables need storage", module{root: "internal/presence", ownsTables: []string{"member"}}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validateManifest([]module{tt.module}, func(string) bool { return true }, nil); (err == nil) != tt.valid {
+				t.Fatalf("validateManifest = %v; valid = %t", err, tt.valid)
 			}
 		})
 	}

@@ -25,6 +25,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/presence"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 	"github.com/tkakkie/ribbitto/internal/unread"
@@ -323,7 +324,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		// Streams at the same cursor share each event read (#227); events never
 		// change, so the TTL only bounds memory.
 		events := realtime.NewCachedEvents(ctx, realtimepg.NewReader(pool, orgpg.BoundsIn, kinds), config.hub, 1024, time.Minute)
-		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout}
+		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout, StreamOpened: presence.New(config.hub).Open}
 	}
 	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, postingNotifier)
 	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, postingNotifier)

@@ -26,9 +26,8 @@ own ranges, so the first range always starts at 0. A topic without a
 moved branch, which step 3 expresses as the floor `P − 1`. All keys include
 `organization_id`, with composite foreign keys to `member`, `channel` and
 `topic`. `conversation` already stores nullable `message.moved_event_seq`,
-the sequence of its latest move (NULL until first moved). Branching writes
-it together with `topic_id` in its transaction, overwriting it on every
-move. Its partial index is `(organization_id, topic_id,
+the sequence of its latest move, which branching writes with `topic_id` in
+its transaction. Its partial index is `(organization_id, topic_id,
 moved_event_seq) WHERE moved_event_seq IS NOT NULL`.
 
 ## The API between the modules

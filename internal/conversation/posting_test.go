@@ -100,7 +100,7 @@ func (f *postingFake) CreateTopic(context.Context, kernel.ID, kernel.ID, string)
 func (f *postingFake) InsertNotice(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, string, int64) (conversation.Message, error) {
 	panic("unexpected InsertNotice")
 }
-func (f *postingFake) MoveMessages(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, []kernel.ID) (int64, error) {
+func (f *postingFake) MoveMessages(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, []kernel.ID, int64) (int64, error) {
 	panic("unexpected MoveMessages")
 }
 

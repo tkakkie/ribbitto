@@ -10,10 +10,10 @@ INSERT INTO topic (organization_id, channel_id, name, is_default)
 VALUES ($1, $2, $3, false) RETURNING *;
 
 -- name: MoveMessages :execrows
--- Branching moves conversation's own messages by writing message.topic_id.
+-- Branching records the destination and latest move together.
 -- Only messages still in the expected topic move; the caller compares the
 -- count with the selection and rolls back on a mismatch (409).
-UPDATE message SET topic_id = sqlc.arg(to_topic_id)
+UPDATE message SET topic_id = sqlc.arg(to_topic_id), moved_event_seq = sqlc.arg(moved_event_seq)
 WHERE organization_id = sqlc.arg(organization_id) AND channel_id = sqlc.arg(channel_id)
   AND topic_id = sqlc.arg(from_topic_id) AND id = ANY(sqlc.arg(message_ids)::uuid[]);
 

@@ -125,6 +125,14 @@ func checkOwnedSQL(sql, module, query string, owners map[string]string, allow ma
 }
 
 func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allow map[exemption]bool, migration *migrationPolicy, bigints map[float64]bool) error {
+	unnests := map[float64]bool{}
+	if migration == nil {
+		var err error
+		unnests, err = sqlwalk.UnnestFrom(stmt, bigints)
+		if err != nil {
+			return err
+		}
+	}
 	access := func(table string, write bool) error {
 		owner := owners[table]
 		if owner == "" {
@@ -167,6 +175,20 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 					return fmt.Errorf("unsupported SELECT INTO")
 				}
 			case "RangeVar":
+			case "RangeFunction":
+				functions := sqlwalk.List(n["functions"])
+				if len(functions) != 1 {
+					return fmt.Errorf("unsupported FROM function list")
+				}
+				items := sqlwalk.List(sqlwalk.Node(functions[0], "List")["items"])
+				if len(items) != 2 {
+					return fmt.Errorf("unsupported FROM function shape")
+				}
+				f := sqlwalk.Node(items[0], "FuncCall")
+				location, ok := f["location"].(float64)
+				if !ok || !unnests[location] {
+					return fmt.Errorf("unsupported FROM function %s", sqlwalk.Names(f["funcname"]))
+				}
 			case "FuncCall":
 				parts := []string{}
 				for _, part := range n["funcname"].([]any) {
@@ -176,6 +198,7 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 				// Function bodies can hide reads and writes from this walker.
 				switch {
 				case len(parts) == 2 && parts[0] == "sqlc" && (parts[1] == "arg" || parts[1] == "narg"):
+				case len(parts) == 1 && name == "unnest" && unnests[n["location"].(float64)]:
 				case len(parts) == 1 && (name == "count" || name == "max" || name == "lower"):
 				default:
 					return fmt.Errorf("unsupported function %s", name)

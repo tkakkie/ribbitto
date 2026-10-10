@@ -11,7 +11,7 @@
 | [public.member](public.member.md) | 7 |  | BASE TABLE |
 | [public.setup](public.setup.md) | 3 |  | BASE TABLE |
 | [public.channel](public.channel.md) | 7 |  | BASE TABLE |
-| [public.message](public.message.md) | 8 |  | BASE TABLE |
+| [public.message](public.message.md) | 9 |  | BASE TABLE |
 | [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
 | [public.topic](public.topic.md) | 6 |  | BASE TABLE |
 
@@ -103,6 +103,7 @@ erDiagram
   bigint event_seq
   timestamp_with_time_zone created_at
   uuid topic_id FK
+  bigint moved_event_seq
 }
 "public.event_log" {
   uuid organization_id FK

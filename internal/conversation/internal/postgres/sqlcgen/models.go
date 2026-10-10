@@ -27,6 +27,7 @@ type Message struct {
 	EventSeq       int64
 	CreatedAt      pgtype.Timestamptz
 	TopicID        pgtype.UUID
+	MovedEventSeq  pgtype.Int8
 }
 
 type Topic struct {

@@ -1,8 +1,8 @@
 // Package sqlwalk loads named production queries and walks PostgreSQL JSON ASTs
 // for the SQL gates. It owns parsing, node access, statement traversal and CTE
-// visibility and exemption-reason validation. BigintLocations provides token
-// locations for tablecheck's type policy; callers own node acceptance,
-// organisation scope and table ownership.
+// visibility, exemption-reason validation and the shared FROM unnest permission
+// rule. BigintLocations provides token locations for the bigint keyword policy;
+// callers own other node acceptance, organisation scope and table ownership.
 //
 // Options preserve scopecheck's collected CTE names and opaque INSERT bodies,
 // while tablecheck uses sequential, lexical CTE scopes. Walk always passes write

@@ -87,10 +87,7 @@ CREATE TABLE topic_read_floor (
  organization_id uuid, topic_id uuid, member_id uuid, channel_id uuid NOT NULL, floor_seq bigint NOT NULL,
  PRIMARY KEY (organization_id, topic_id, member_id),
  FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic (organization_id, channel_id, id),
- FOREIGN KEY (organization_id, member_id) REFERENCES member (organization_id, id));
-ALTER TABLE message ADD COLUMN moved_event_seq bigint;
-CREATE INDEX message_moved_event_seq_idx ON message (organization_id, topic_id, moved_event_seq)
- WHERE moved_event_seq IS NOT NULL;`)
+ FOREIGN KEY (organization_id, member_id) REFERENCES member (organization_id, id));`)
 	var version string
 	requireNoError(t, pool.QueryRow(t.Context(), "SELECT version()").Scan(&version))
 	t.Logf("%s; client=%s %s/%s CPUs=%d; warmup=%d repeat=%d; single connection, serial execution", version, runtime.Version(), runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), warmup, repeat)

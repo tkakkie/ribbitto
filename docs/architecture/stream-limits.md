@@ -34,7 +34,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   the durable channel, only its declared kinds' generation channels, its
   heartbeat deadline and context together. The writer reads owners
   after each batch, with at most one frame and check per kind; production
-  owners remain planned (#287, #288), as does the hidden sink (#737). Register and
+  owners remain planned (#287, #288); web's hidden sink is current (#737). Register and
   RaiseIfActive still use the registry mutex for caps and active checks.
 
 - Stream authorization caches allows per distinct (account ID, organisation

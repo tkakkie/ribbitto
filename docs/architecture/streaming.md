@@ -113,7 +113,8 @@ Ephemeral delivery filters organisation, interest and typing channel/topic
 before authorization, preserving the durable cursor and heartbeat deadlines.
 Owners decide connect output from current state; presence receives the page
 token. Sidebar frames remain planned (#286), recounting at connect and after
-coalesced triggers. Their future swap targets are listed below.
+coalesced triggers. Their swap targets are listed below; feature entries and
+the typing region remain planned.
 
 | Event | `id:` | Where htmx puts it |
 |---|---|---|
@@ -126,10 +127,15 @@ coalesced triggers. Their future swap targets are listed below.
 `#organization-stream`, holding `sse-connect`, wraps the sidebar and conversation or members panel, because the htmx
 SSE extension attaches an `sse-swap` element to its closest ancestor with a
 source. Messages have their own `sse-swap` on latest pages; older pages omit it.
-Planned typing has its own region. Planned per-entry events go to one hidden sink, `sse-swap="sidebar,presence"` with
+Planned typing has its own region. Per-entry events go to the hidden
+`#stream-sink` inside this container, `sse-swap="sidebar,presence"` with
 `hx-swap="none"`, whose payload holds only `hx-swap-oob` elements: the
 extension swaps through htmx's own swap, which applies out-of-band elements
 even when the main swap is `none`, and an entry not on the page is ignored.
-#737 proves this in a browser test. Opening the members panel is a
+The sink is hidden from assistive technology and takes no focus.
+`TestMessageStreamBrowser` proves replacement and missing-target behavior with
+test-only entries rendered with `html/template`, and that native `Last-Event-ID` and the page's
+reconnect cursor stay unchanged after ephemeral frames. Production frames
+remain planned (#286, #287). Opening the members panel is a
 navigation. It lists members without live list updates; #287 will render presence
 and its token from one state.

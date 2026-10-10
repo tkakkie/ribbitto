@@ -38,6 +38,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 	t.Cleanup(launch.Kill)
 	browser := rod.New().ControlURL(url).MustConnect()
 	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {
 		for _, mode := range []string{"before", "stale", "fresh", "abort", "4xx"} {
 			t.Run(side+"/"+mode, func(t *testing.T) {
@@ -324,6 +325,115 @@ func TestMessageStreamBrowser(t *testing.T) {
 		page.MustWait(`() => document.querySelector('#organization-stream').dataset.eventCursor === '51'`)
 		assertBrowserItems(t, page, []int{40, 50, 60})
 	})
+}
+
+// The frame source is test-only: no presence owner or sidebar recount is wired.
+func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	cursor, topic := int64(42), kernel.ID{2}
+	snapshot := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
+		Current: view.Channel{ID: kernel.ID{1}}, EventCursor: &cursor}
+	type request struct{ after, lastID string }
+	requests := make(chan request, 3)
+	// A nil frame ends the response to exercise native EventSource reconnect.
+	frames := make(chan *realtime.Outgoing)
+	mux := http.NewServeMux()
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/organizations/acme/events" {
+			templ.Handler(view.ChannelScreen("/static/css/app.css", snapshot)).ServeHTTP(w, r)
+			return
+		}
+		select {
+		case requests <- request{r.URL.Query().Get("after"), r.Header.Get("Last-Event-ID")}:
+		case <-r.Context().Done():
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+		if err := sender.Heartbeat(r.Context()); err != nil {
+			return
+		}
+		for {
+			select {
+			case out := <-frames:
+				if out == nil || sender.Send(r.Context(), *out) != nil {
+					return
+				}
+			case <-r.Context().Done():
+				return
+			}
+		}
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+	defer page.MustClose()
+	page.MustEvalOnNewDocument(`document.addEventListener('htmx:sseOpen', e => window.testSource = e.detail.source);
+		document.addEventListener('htmx:sseMessage', e => {
+			if (e.target.id === 'stream-sink') {
+				document.body.dataset.frame = e.detail.type;
+				document.body.dataset.lastId = e.detail.lastEventId;
+			}
+		});`)
+	page.MustNavigate(server.URL).MustWaitLoad()
+	assertRequest := func(after, lastID string) {
+		t.Helper()
+		select {
+		case got := <-requests:
+			if got != (request{after, lastID}) {
+				t.Fatalf("stream request = %+v, want after=%s Last-Event-ID=%s", got, after, lastID)
+			}
+		case <-ctx.Done():
+			t.Fatal("stream did not connect", ctx.Err())
+		}
+	}
+	send := func(out *realtime.Outgoing) {
+		t.Helper()
+		select {
+		case frames <- out:
+		case <-ctx.Done():
+			t.Fatal("stream did not receive frame", ctx.Err())
+		}
+	}
+	assertRequest("42", "")
+	page.MustWait(`() => !!window.testSource`)
+	if !page.MustEval(`() => {
+		const sink = document.getElementById('stream-sink');
+		return sink.parentElement.id === 'organization-stream' && sink.hidden &&
+			sink.getAttribute('aria-hidden') === 'true' && sink.tabIndex === -1 &&
+			sink.getAttribute('sse-swap') === 'sidebar,presence' && sink.getAttribute('hx-swap') === 'none';
+	}`).Bool() {
+		t.Fatal("sink does not meet the delivery and accessibility contract")
+	}
+	// Seed both browser cursors with a real durable delivery, not the page URL.
+	send(&realtime.Outgoing{ID: 51, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(streamTestMessages(topic, 51)[0]))})
+	page.MustWait(`() => document.getElementById('organization-stream').dataset.eventCursor === '51'`)
+	for _, name := range []string{"sidebar", "presence"} {
+		page.MustEval(`() => window.testEntries = ['message-help', 'message-status'].map(id => document.getElementById(id))`)
+		// Put the missing target first: it must not prevent the later replacements.
+		send(&realtime.Outgoing{Ephemeral: true, ID: 999, Name: name,
+			Data: streamTestMarkup(t, streamBrowserEntries([]string{"stream-test-absent", "message-help", "message-status"}, name))})
+		page.MustWait(`name => document.body.dataset.frame === name &&
+			window.testEntries.every(old => document.getElementById(old.id) !== old &&
+				document.getElementById(old.id).textContent === name)`, name)
+		if !page.MustEval(`() => document.body.dataset.lastId === '51' &&
+			document.getElementById('organization-stream').dataset.eventCursor === '51' &&
+			new URL(document.getElementById('organization-stream').getAttribute('sse-connect'), location.href).searchParams.get('after') === '51' &&
+			!document.getElementById('stream-test-absent') && !document.getElementById('stream-sink').hasChildNodes() &&
+			window.testEntries.every(old => document.querySelectorAll('#' + old.id).length === 1)`).Bool() {
+			t.Fatal("ephemeral delivery changed a cursor, duplicated an entry or inserted an absent target")
+		}
+		assertBrowserItems(t, page, []int{51})
+	}
+	// Native retry retains the original URL and sends its durable Last-Event-ID.
+	send(nil)
+	assertRequest("42", "51")
+	page.MustWait(`() => window.testSource.readyState === EventSource.OPEN`)
+	// The extension recreates a CLOSED source from the page's updated URL.
+	page.MustEval(`() => { window.testSource.close(); window.testSource.dispatchEvent(new Event('error')); }`)
+	assertRequest("51", "")
 }
 
 func browserUnavailable(t *testing.T, reason string) {

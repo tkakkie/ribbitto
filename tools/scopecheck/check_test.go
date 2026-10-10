@@ -53,6 +53,9 @@ func check(sql string, tables map[string]string) error {
 	if err != nil {
 		return err
 	}
+	if err := tagSetBranches(tree); err != nil {
+		return err
+	}
 	bigints, err := sqlwalk.BigintLocations(sql)
 	if err != nil {
 		return err
@@ -68,7 +71,29 @@ func check(sql string, tables map[string]string) error {
 	return nil
 }
 
+// The parser embeds larg/rarg as untagged SelectStmt records. Tag them in this
+// private tree so every branch receives statement and FROM-unnest validation.
+func tagSetBranches(tree any) error {
+	return sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true,
+		Visit: func(kind string, s map[string]any, _ sqlwalk.Scope) error {
+			if kind == "SelectStmt" && s["op"] != "SETOP_NONE" {
+				for _, key := range []string{"larg", "rarg"} {
+					branch := sqlwalk.Object(s[key])
+					if branch == nil {
+						return fmt.Errorf("unsupported shape: SELECT branch")
+					}
+					s[key] = map[string]any{"SelectStmt": branch}
+				}
+			}
+			return nil
+		},
+	})
+}
+
 func checkStatement(tree any, tables map[string]string) error {
+	if err := noWriteSetOperations(tree); err != nil {
+		return err
+	}
 	ctes, err := sqlwalk.CollectCTEs(tree)
 	if err != nil {
 		return err
@@ -85,9 +110,21 @@ func checkStatement(tree any, tables map[string]string) error {
 		var refs []any
 		switch kind {
 		case "SelectStmt":
-			if s["op"] != "SETOP_NONE" || s["valuesLists"] != nil || s["intoClause"] != nil {
+			switch s["op"] {
+			case "SETOP_NONE":
+			case "SETOP_UNION":
+				if s["all"] != true {
+					return fmt.Errorf("unsupported shape: SELECT UNION (distinct)")
+				}
+			case "SETOP_INTERSECT", "SETOP_EXCEPT":
+				return fmt.Errorf("unsupported shape: SELECT %s", strings.TrimPrefix(fmt.Sprint(s["op"]), "SETOP_"))
+			default:
 				return fmt.Errorf("unsupported shape: SELECT operation")
 			}
+			if s["valuesLists"] != nil || s["intoClause"] != nil {
+				return fmt.Errorf("unsupported shape: SELECT operation")
+			}
+			// UNION ALL's children are visited separately, each with its own WHERE.
 			refs = sqlwalk.List(s["fromClause"])
 		case "UpdateStmt":
 			table, _ := sqlwalk.Object(s["relation"])["relname"].(string)
@@ -205,6 +242,31 @@ func checkStatement(tree any, tables map[string]string) error {
 			}
 		}
 		return nil
+	})
+}
+
+// Inspect the whole statement before the opaque INSERT walk. CTE sources may
+// sit outside a nested write's subtree; only statements without writes qualify.
+func noWriteSetOperations(tree any) error {
+	var write string
+	err := sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true,
+		Visit: func(kind string, _ map[string]any, _ sqlwalk.Scope) error {
+			if kind == "InsertStmt" || kind == "UpdateStmt" || kind == "DeleteStmt" {
+				write = kind
+			}
+			return nil
+		},
+	})
+	if err != nil || write == "" {
+		return err
+	}
+	return sqlwalk.Walk(tree, sqlwalk.Scope{}, sqlwalk.Options{NodesOnly: true,
+		Visit: func(kind string, s map[string]any, _ sqlwalk.Scope) error {
+			if kind == "SelectStmt" && s["op"] != "SETOP_NONE" {
+				return fmt.Errorf("unsupported shape: %s set operation source", write)
+			}
+			return nil
+		},
 	})
 }
 

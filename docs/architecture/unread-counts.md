@@ -54,7 +54,7 @@ topics. The cap applies inside steps 2 and 4, per channel and per topic;
 the first-unread lookups take no cap. The [query gate](query-gate.md) accepts
 `unnest` of `bigint[]` (#727) and `uuid[]` (#740) parameters, parallel arrays
 joined `WITH ORDINALITY` (#749), `int8multirange` `@>` (#743) and `LATERAL`
-(#741); `UNION ALL` (#742) remains planned.
+(#741) and `UNION ALL` (#742).
 
 ## Cost of the reads
 

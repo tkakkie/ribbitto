@@ -1,5 +1,5 @@
 // Package postgres is org's store (decision 26): organization's event
-// sequence and page cursor, committed sequences, replay boundary and
+// sequence and transaction- or snapshot-bound cursor, committed sequences, replay boundary and
 // retention lock, memberships with their access epoch, fresh epoch reads, home slug, handles, the snapshot-bound member
 // directory and paged member listing, and setup's and sign-up's registration writes and setup state,
 // in db/queries/org on their own sqlc entry. Only orgpg and this package's

@@ -42,8 +42,7 @@ func EventCursorIn(snapshot platform.Snapshot) EventCursor {
 	return EventCursor{queries: sqlcgen.New(pgxbridge.Snapshot(snapshot))}
 }
 
-// EventCursor reads organization's committed event_seq in a reader's
-// snapshot, the cursor of a page read in that snapshot.
+// EventCursor reads organization's committed event_seq through a bound handle.
 type EventCursor struct{ queries *sqlcgen.Queries }
 
 // EventSeq returns the organisation's committed event_seq. An unknown
@@ -57,4 +56,9 @@ func (c EventCursor) EventSeq(ctx context.Context, organizationID kernel.ID) (in
 		return 0, fmt.Errorf("reading the event cursor: %w", err)
 	}
 	return seq, nil
+}
+
+// EventCursorInTx binds the existing cursor query to the caller's transaction.
+func EventCursorInTx(tx platform.Tx) EventCursor {
+	return EventCursor{queries: sqlcgen.New(pgxbridge.Tx(tx))}
 }

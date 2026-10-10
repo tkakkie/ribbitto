@@ -22,7 +22,7 @@ A cross-module flow's root use case owns its transaction through an injected run
 | `realtime`: event log, retention, hub, stream loop, envelope | `event_log` |
 | `org`: organisations, members, authorisation (`Membership`), setup, sign-up | `organization`, `member`, `setup` |
 | `conversation`: channels, topics, branching, posting, history, the page snapshot use case | `channel`, `topic`, `message` |
-| `unread`: transaction-bound lock, join prefix and read-range unions | `channel_read`, `read_range`, `topic_read_floor` |
+| `unread`: feed write, transaction-bound lock, join prefix and read-range unions | `channel_read`, `read_range`, `topic_read_floor` |
 
 `internal/web` stays the UI shell and imports module roots. Its per-kind
 stream renderers are adapters for the payloads that `conversation`

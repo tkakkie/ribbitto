@@ -58,8 +58,14 @@ It locks or creates `channel_read`, unions the supplied join prefix before
 the new range, and reads/deletes only primary-key-bounded neighbours. A
 savepoint around creation recovers a concurrent unique conflict; it never
 completes the caller's transaction. The caller supplies org's persisted join
-sequence; no message or foreign-table query runs in unread. Consumers are
-planned in #726 and #721.
+sequence; no message or foreign-table query runs in unread's store.
+`unread.FeedWriter` takes consumer-owned transaction factories, injected by
+`newFeedWriter` in `cmd/ribbitto`: `conversationpg.MessageSequencesIn` supplies
+`FirstMessageAfter` through conversation's own `FirstChannelMessageAfter`
+sqlc query (organisation, channel, strictly above `S`, lowest sequence), and
+`orgpg.EventCursorInTx` binds org's existing cursor query to the same transaction.
+The feed refuses `S` above that cursor, then merges `[0, n)` (`S + 1` without
+a next message). Its HTTP caller and the topic-view write remain planned.
 
 Identity's store creates accounts in the caller's transaction through
 `identitypg.AccountCreatorIn`. Adapters in `cmd/*` and the tests adapt it to

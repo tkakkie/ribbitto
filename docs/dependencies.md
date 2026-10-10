@@ -27,6 +27,8 @@ cmd/ribbitto -> internal/org/orgpg
 cmd/ribbitto -> internal/platform/postgres
 cmd/ribbitto -> internal/realtime
 cmd/ribbitto -> internal/realtime/realtimepg
+cmd/ribbitto -> internal/unread
+cmd/ribbitto -> internal/unread/unreadpg
 cmd/ribbitto -> internal/web
 cmd/ribbitto -> internal/web/i18n
 cmd/ribbitto -> internal/web/middleware
@@ -100,11 +102,13 @@ internal/realtime/realtimepg -> internal/platform/postgres
 internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
 internal/unread -> internal/kernel
+internal/unread -> internal/platform/postgres
 internal/unread/internal/postgres -> internal/platform/postgres
 internal/unread/internal/postgres -> internal/platform/postgres/pgxbridge
 internal/unread/internal/postgres -> internal/unread
 internal/unread/internal/postgres -> internal/unread/internal/postgres/sqlcgen
 internal/unread/unreadpg -> internal/platform/postgres
+internal/unread/unreadpg -> internal/unread
 internal/unread/unreadpg -> internal/unread/internal/postgres
 internal/web -> internal/conversation
 internal/web -> internal/identity

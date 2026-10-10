@@ -2,8 +2,8 @@
 
 **Decided** (#282; supersedes nothing; settles the unread model that
 [decision 21](21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)
-left to M4). Storage and single-range unions are implemented; reading flows
-and counts remain *planned* for M4. Rules in [unread](../domain/unread.md),
+left to M4). Storage, single-range unions and the feed write are implemented;
+HTTP callers, other reading writes and counts remain *planned* for M4. Rules in [unread](../domain/unread.md),
 storage and cost in [unread counts](../architecture/unread-counts.md).
 
 - **Read ranges.** A member's read state in a channel is a set of
@@ -34,7 +34,8 @@ storage and cost in [unread counts](../architecture/unread-counts.md).
   position.
 - **Ownership.** Following decision 27's growth rule, an `unread` module
   owns the read-state tables and reads messages only through
-  `conversation`'s snapshot-bound API; `conversation` owns
+  `conversation`'s transaction-bound write queries and planned snapshot-bound
+  counting API; `conversation` owns
   `message.moved_event_seq`, which extends its messages. The page snapshot
   reaches `unread` through an injected factory.
 

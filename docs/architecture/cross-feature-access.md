@@ -66,6 +66,11 @@ sqlc query (organisation, channel, strictly above `S`, lowest sequence), and
 `orgpg.EventCursorInTx` binds org's existing cursor query to the same transaction.
 The feed refuses `S` above that cursor, then merges `[0, n)` (`S + 1` without
 a next message). Its HTTP caller and the topic-view write remain planned.
+`conversationpg.TopicReadCandidatesIn` binds `TopicUnreadRangeBounds` to the
+caller's transaction: one statement returns `[p + 1, n)` for the topic's unread
+messages through `S`, excluding moves after `S`. It uses whole-channel
+neighbours, the prefix and topic floor, and one multirange built from supplied
+read-range values; it never reads unread's tables.
 
 Branching receives conversation's consumer-owned `ReadRangeWriterIn` factory,
 adapted from `unreadpg.WriterIn` in the composition roots. Its own previous-message

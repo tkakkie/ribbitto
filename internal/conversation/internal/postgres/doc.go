@@ -17,4 +17,6 @@
 // lookups and embedding the read-only TopicStore for the topic by ID;
 // ReadStoreIn binds it to Reader's snapshot. MessageSequencesIn binds the
 // next-channel-message query to unread's caller-owned transaction.
+// TopicReadCandidatesIn returns topic unread range bounds in one statement,
+// with whole-channel neighbours and the supplied read set as one multirange.
 package postgres

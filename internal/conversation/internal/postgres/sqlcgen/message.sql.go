@@ -209,3 +209,65 @@ func (q *Queries) ListMessagesBefore(ctx context.Context, arg ListMessagesBefore
 	}
 	return items, nil
 }
+
+const topicUnreadRangeBounds = `-- name: TopicUnreadRangeBounds :many
+SELECT coalesce((SELECT p.event_seq + 1 FROM message p
+        WHERE p.organization_id = $1 AND p.channel_id = $2
+          AND p.event_seq < m.event_seq ORDER BY p.event_seq DESC LIMIT 1), 1)::bigint AS lo,
+       coalesce((SELECT n.event_seq FROM message n
+        WHERE n.organization_id = $1 AND n.channel_id = $2
+          AND n.event_seq > m.event_seq ORDER BY n.event_seq LIMIT 1), m.event_seq + 1)::bigint AS hi
+FROM message m
+WHERE m.organization_id = $1 AND m.channel_id = $2
+  AND m.topic_id = $3
+  AND m.event_seq > $4::bigint
+  AND (m.event_seq > $5::bigint
+       OR (m.event_seq <= $5::bigint AND m.moved_event_seq > $5::bigint))
+  AND m.event_seq <= $6::bigint
+  AND (m.moved_event_seq IS NULL OR m.moved_event_seq <= $6::bigint)
+  AND NOT ($7::int8multirange @> m.event_seq)
+ORDER BY m.event_seq
+`
+
+type TopicUnreadRangeBoundsParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	TopicID        pgtype.UUID
+	PrefixBefore   int64
+	Floor          int64
+	Cursor         int64
+	ReadSet        pgtype.Multirange[pgtype.Range[pgtype.Int8]]
+}
+
+type TopicUnreadRangeBoundsRow struct {
+	Lo int64
+	Hi int64
+}
+
+func (q *Queries) TopicUnreadRangeBounds(ctx context.Context, arg TopicUnreadRangeBoundsParams) ([]TopicUnreadRangeBoundsRow, error) {
+	rows, err := q.db.Query(ctx, topicUnreadRangeBounds,
+		arg.OrganizationID,
+		arg.ChannelID,
+		arg.TopicID,
+		arg.PrefixBefore,
+		arg.Floor,
+		arg.Cursor,
+		arg.ReadSet,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TopicUnreadRangeBoundsRow
+	for rows.Next() {
+		var i TopicUnreadRangeBoundsRow
+		if err := rows.Scan(&i.Lo, &i.Hi); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

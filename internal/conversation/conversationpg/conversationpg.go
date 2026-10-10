@@ -104,3 +104,8 @@ func TopicReadCandidatesIn(tx platform.Tx) conversation.TopicReadCandidates {
 func ChannelUnreadIn(s platform.Snapshot) conversation.ChannelUnread {
 	return postgres.ChannelUnreadIn(s)
 }
+
+// TopicUnreadIn binds topic counts to the caller's snapshot.
+func TopicUnreadIn(s platform.Snapshot) conversation.TopicUnread {
+	return postgres.TopicUnreadIn(s)
+}

@@ -93,8 +93,8 @@ sum over **all** its topics, not only the 50 the sidebar lists. A topic's
 count is the channel's unread messages in that topic. Counts are shown
 capped (`99+`). The cap limits how many unread messages a count returns,
 not all the work: a topic count can also read the member's own posts made
-while the stream lagged, and the first unread of a topic reads every message
-moved in since its floor ([unread counts](../architecture/unread-counts.md)).
+while the stream lagged, and a topic's first-unread lookup can scan topic
+history ([unread counts](../architecture/unread-counts.md)).
 
 ## The unread divider *(planned, M4)*
 

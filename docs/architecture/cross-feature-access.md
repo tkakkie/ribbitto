@@ -70,8 +70,14 @@ The combined list takes two statements; page binding remains planned.
 snapshot. One `ReadTopicState` statement combines the scoped channel ranges
 and requested topic floors without a ranges × topics product. Go deduplicates
 listed and selected IDs (at most 51), derives the prefix and supplies missing
-floors as `P − 1`. Counting messages and binding this reader to pages remain
-planned; no foreign-table seam is added.
+floors as `P − 1`. `unread.TopicCounts` builds ID/floor arrays together from
+that state and calls
+`conversationpg.TopicUnreadIn` through its consumer interface, injected by
+`newTopicCounts` in `cmd/ribbitto`. The snapshot-bound counter uses only message
+rows scoped by organisation, channel and topic and the supplied range values.
+Its two branches share a cap of 100; only the selected topic gets an uncapped
+first-unread lookup. The combined list takes two statements; page binding
+remains planned, with no foreign-table seam.
 
 Unread's store binds to a caller-owned transaction through `unreadpg.WriterIn`.
 It locks or creates `channel_read`, unions the supplied join prefix before

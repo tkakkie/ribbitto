@@ -78,3 +78,87 @@ func (q *Queries) CountChannelUnread(ctx context.Context, arg CountChannelUnread
 	}
 	return items, nil
 }
+
+const countTopicUnread = `-- name: CountTopicUnread :many
+WITH topics AS (
+    SELECT ids.topic_id, floors.floor
+    FROM unnest($6::uuid[]) WITH ORDINALITY AS ids(topic_id, n)
+    JOIN unnest($7::bigint[]) WITH ORDINALITY AS floors(floor, n) ON floors.n = ids.n
+)
+SELECT t.topic_id::uuid AS topic_id,
+    (SELECT count(*) FROM (
+        SELECT event_seq FROM (
+            (SELECT m.event_seq FROM message m
+             WHERE m.organization_id = $1 AND m.channel_id = $2 AND m.topic_id = t.topic_id
+               AND m.event_seq > $3 AND m.event_seq > t.floor
+               AND NOT ($4::int8multirange @> m.event_seq)
+             ORDER BY m.event_seq LIMIT 100)
+            UNION ALL
+            (SELECT m.event_seq FROM message m
+             WHERE m.organization_id = $1 AND m.channel_id = $2 AND m.topic_id = t.topic_id
+               AND m.event_seq <= t.floor AND m.moved_event_seq > t.floor
+               AND NOT ($4::int8multirange @> m.event_seq)
+             ORDER BY m.moved_event_seq LIMIT 100)
+        ) candidates ORDER BY event_seq LIMIT 100
+    ) capped) AS unread_count,
+    coalesce((SELECT event_seq FROM (
+        (SELECT m.event_seq FROM message m
+         WHERE m.organization_id = $1 AND m.channel_id = $2 AND m.topic_id = t.topic_id
+           AND t.topic_id = $5::uuid
+           AND m.event_seq > $3 AND m.event_seq > t.floor
+           AND NOT ($4::int8multirange @> m.event_seq)
+         ORDER BY m.event_seq LIMIT 1)
+        UNION ALL
+        (SELECT m.event_seq FROM message m
+         WHERE m.organization_id = $1 AND m.channel_id = $2 AND m.topic_id = t.topic_id
+           AND t.topic_id = $5::uuid
+           AND m.event_seq <= t.floor AND m.moved_event_seq > t.floor
+           AND NOT ($4::int8multirange @> m.event_seq)
+         ORDER BY m.event_seq LIMIT 1)
+    ) first_candidates ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
+FROM topics t
+`
+
+type CountTopicUnreadParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	PrefixBefore   int64
+	ReadSet        pgtype.Multirange[pgtype.Range[pgtype.Int8]]
+	Selected       pgtype.UUID
+	TopicIds       []pgtype.UUID
+	Floors         []int64
+}
+
+type CountTopicUnreadRow struct {
+	TopicID     pgtype.UUID
+	UnreadCount int64
+	FirstUnread int64
+}
+
+func (q *Queries) CountTopicUnread(ctx context.Context, arg CountTopicUnreadParams) ([]CountTopicUnreadRow, error) {
+	rows, err := q.db.Query(ctx, countTopicUnread,
+		arg.OrganizationID,
+		arg.ChannelID,
+		arg.PrefixBefore,
+		arg.ReadSet,
+		arg.Selected,
+		arg.TopicIds,
+		arg.Floors,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountTopicUnreadRow
+	for rows.Next() {
+		var i CountTopicUnreadRow
+		if err := rows.Scan(&i.TopicID, &i.UnreadCount, &i.FirstUnread); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

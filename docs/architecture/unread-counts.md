@@ -4,9 +4,9 @@ How read state is stored and counted, and what that costs (writes are in
 [unread writes](unread-writes.md))
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
 The move column, read-state tables, range store, feed, topic and branch-notice
-reads, the initial reading POSTs, posting writes and channel counts are current;
-topic counts are *planned* (M4). The
-rules are in [unread](../domain/unread.md).
+reads, the visible-page reading POSTs, posting writes and channel and topic counts
+are current; page binding is *planned* (M4). The rules are in
+[unread](../domain/unread.md).
 
 ## Storage
 
@@ -47,7 +47,7 @@ parameter. These statements share the page snapshot, with none per channel or to
 | 1 (current) | `unread` | member, the sidebar's channel IDs | for each channel, its first 101 ranges by `lo` (`LATERAL … ORDER BY lo LIMIT 101`) | `P` and the first gaps per channel |
 | 2 (current) | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted per channel; `ORDER BY … LIMIT 1` returns its first unread | channel counts, the feed's first unread |
 | 3 (current) | `unread` | member, current channel, its listed topic IDs plus the selected topic when the list omits it | its ranges at or above `P`, and the topics' floors | the read set above `P` and a floor for every topic (`P − 1` without a row) |
-| 4 | `conversation` | the read set as one `int8multirange`, `P`, per-topic `(id, floor)` arrays | per topic: its messages with `event_seq ≥ P` and above its floor, from the topic index in order, that the read set does not contain, at most 100 (`LATERAL … LIMIT 100`); plus its messages with `P ≤ event_seq ≤ floor` and `moved_event_seq > floor`, from the partial index, not contained; counted per topic; for the selected topic only, its lowest unread `event_seq` | topic counts, a topic view's first unread |
+| 4 (current) | `conversation` | the read set including `[0, P)` as one `int8multirange`, `P`, per-topic `(id, floor)` arrays | per topic: messages above `P − 1` and its floor, plus messages at or below its floor with `moved_event_seq > floor`; both exclude read-set containment and share an ordered cap of 100; only the selected topic returns its lowest unread `event_seq`, uncapped | topic counts, a topic view's first unread |
 
 Step 1 uses `unreadpg.ChannelRangesIn` in the caller's snapshot. Go derives
 `P` and at most 100 gaps; range 101 only bounds gap 100. Channels without
@@ -65,6 +65,15 @@ range once. Go separates the prefix, retains the join prefix without rows and
 supplies `P − 1` for missing floors. Listed and selected topic IDs are
 deduplicated before the statement, with at most 51 distinct IDs. The stored
 prefix starts at zero; every other disjoint, non-touching range lies above `P`.
+
+Step 4 uses `conversationpg.TopicUnreadIn`. Ordinal joins pair IDs and floors;
+Go checks equal lengths, computes `P − 1` and adds `[0, P)` to the multirange.
+Both count and first-unread branches use the same containment test; only the
+above-floor branch has the lower sequence bound. Ordered count branches each
+return at most 100 candidates, then share one ordered cap of 100.
+Only the selected topic probes each branch by `event_seq` for its lowest
+unread, without a candidate cap. `unread.TopicCounts`, wired by `newTopicCounts`,
+combines steps 3–4 in the caller's snapshot; page binding remains planned.
 
 Steps 1–2 serve the channel list and steps 3–4 the topic list: two
 statements per list, four per page load, whatever the number of channels or
@@ -91,18 +100,22 @@ index, `R` ranges of the current channel at or above `P`:
 - **Step 3:** `O(R + T)` rows; `R` is 1 in normal use and grows with
   fragmentation (below).
 - **Step 4:** decoding the parameter is `O(R)`, and each candidate row costs
-  `O(log R)` to test. For the count, the rows read per topic are its unread
-  messages (up to 100), the read messages moved in since its floor (up to
-  100 per move), and the read messages above its floor: the member's own posts made after
-  an earlier message of the topic that the page had not yet shown. In
-  normal use the stream shows a new message before the member's next post,
-  so there are few. While the stream lags or is disconnected, every own
-  post in that topic adds one, **without a bound**. #283 benchmarks it;
-  if the cost is unacceptable, topic counts switch to probing the read
-  set's gaps per topic before implementation starts. The first unread
-  takes no cap: the moved branch is ordered by `moved_event_seq`, so finding
-  its lowest `event_seq` reads every message moved into the topic since its
-  floor, unread or not (1,000 moved messages mean 1,000 rows).
+  `O(log R)` to test. Count work includes unread messages (up to 100 per branch
+  before their shared cap), read messages moved in since the floor (at most 100 per move;
+  `LIMIT 100` bounds only unread ones), and read posts above the floor. Normally the stream shows a new
+  message before the member's next post, so there are few. While the stream
+  lags or is disconnected, own posts add work **without a bound**. #283 benchmarks
+  it; if unacceptable, counts switch to probing read-set gaps per topic.
+  The selected topic's first unread takes no cap. In #746's PostgreSQL 18.6
+  EXPLAIN, with default planner settings,
+  51 topics, 100,000 target history rows and 1,000 moved-in rows, the fixed moved
+  count read only 1,000 moved rows (1 returned, 999 filtered; 32 shared hits for
+  the target). The selected moved first-unread lookup walked the topic index in
+  `event_seq` order: 1 returned and 9,999 history rows filtered, 247 shared hits.
+  Both measurements held with 5,000 read posts above the floor. These are measured
+  rows/buffers under those conditions, not guarantees of a particular index.
+  Above-floor read filtering and first-unread work remain uncapped; #779 tracks
+  bounding the latter, and #747 re-checks it under real page load.
 
 ## Writes
 
@@ -114,8 +127,9 @@ Feed, topic-view and branch-notice writes are current; their range unions are in
 Four statements run per page snapshot. For 100 channels, each with fewer
 than 100 unread messages in one gap and an unfragmented read set, step 2
 makes about 100 index probes and reads at most 9,900 index rows (99 per
-channel); step 4 adds up to 51 probes and 5,100 rows, plus every message
-moved into the selected topic since its floor for first-unread lookup.
+channel); step 4 returns at most 5,100 candidates across 51 topics
+(with up to 100 per branch before the shared cap), plus uncapped read filtering
+and the selected topic's first-unread work described above.
 Each visit sends one POST, then visible-page coalesced POSTs (#710) and
 sidebar recounts (#286). Posting costs its scope's read (with merges)
 and one range row for its author.

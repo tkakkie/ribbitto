@@ -24,3 +24,42 @@ SELECT c.channel_id::uuid AS channel_id,
     (SELECT count(*) FROM bounded WHERE bounded.channel_id = c.channel_id) AS unread_count,
     coalesce((SELECT event_seq FROM bounded WHERE bounded.channel_id = c.channel_id ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
 FROM unnest(sqlc.arg(channel_ids)::uuid[]) AS c(channel_id);
+
+-- name: CountTopicUnread :many
+WITH topics AS (
+    SELECT ids.topic_id, floors.floor
+    FROM unnest(sqlc.arg(topic_ids)::uuid[]) WITH ORDINALITY AS ids(topic_id, n)
+    JOIN unnest(sqlc.arg(floors)::bigint[]) WITH ORDINALITY AS floors(floor, n) ON floors.n = ids.n
+)
+SELECT t.topic_id::uuid AS topic_id,
+    (SELECT count(*) FROM (
+        SELECT event_seq FROM (
+            (SELECT m.event_seq FROM message m
+             WHERE m.organization_id = sqlc.arg(organization_id) AND m.channel_id = sqlc.arg(channel_id) AND m.topic_id = t.topic_id
+               AND m.event_seq > sqlc.arg(prefix_before) AND m.event_seq > t.floor
+               AND NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)
+             ORDER BY m.event_seq LIMIT 100)
+            UNION ALL
+            (SELECT m.event_seq FROM message m
+             WHERE m.organization_id = sqlc.arg(organization_id) AND m.channel_id = sqlc.arg(channel_id) AND m.topic_id = t.topic_id
+               AND m.event_seq <= t.floor AND m.moved_event_seq > t.floor
+               AND NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)
+             ORDER BY m.moved_event_seq LIMIT 100)
+        ) candidates ORDER BY event_seq LIMIT 100
+    ) capped) AS unread_count,
+    coalesce((SELECT event_seq FROM (
+        (SELECT m.event_seq FROM message m
+         WHERE m.organization_id = sqlc.arg(organization_id) AND m.channel_id = sqlc.arg(channel_id) AND m.topic_id = t.topic_id
+           AND t.topic_id = sqlc.arg(selected)::uuid
+           AND m.event_seq > sqlc.arg(prefix_before) AND m.event_seq > t.floor
+           AND NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)
+         ORDER BY m.event_seq LIMIT 1)
+        UNION ALL
+        (SELECT m.event_seq FROM message m
+         WHERE m.organization_id = sqlc.arg(organization_id) AND m.channel_id = sqlc.arg(channel_id) AND m.topic_id = t.topic_id
+           AND t.topic_id = sqlc.arg(selected)::uuid
+           AND m.event_seq <= t.floor AND m.moved_event_seq > t.floor
+           AND NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)
+         ORDER BY m.event_seq LIMIT 1)
+    ) first_candidates ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
+FROM topics t;

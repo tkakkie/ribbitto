@@ -4,7 +4,7 @@ The inputs are in place since M3: the join transaction, `joined_event_seq`,
 the pairing of each message with its `message.posted` event, and the log
 boundary. Read-state tables, locking, range unions, feed, topic and branch-notice
 reads exist;
-HTTP callers, posting writes and unread counts are *planned* for M4
+Initial reading POSTs are current; posting writes and unread counts are *planned* for M4
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
 the counting queries and their cost are in
 [unread counts](../architecture/unread-counts.md), the writes in
@@ -50,7 +50,7 @@ branch-notice reads are current.
 
 ## Advancing it
 
-Branch-notice reads are current; reading POST callers and posting writes remain
+Branch-notice reads and initial reading POSTs are current; posting writes remain
 planned for M4. Only a POST advances read state; a GET never changes it
 ([request flow](../architecture/request-flow.md)). Each POST carries its
 scope and `S`, the newest durable sequence the page has applied and shown:

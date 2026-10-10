@@ -119,6 +119,7 @@ internal/web -> internal/identity
 internal/web -> internal/kernel
 internal/web -> internal/org
 internal/web -> internal/realtime
+internal/web -> internal/unread
 internal/web -> internal/web/i18n
 internal/web -> internal/web/middleware
 internal/web -> internal/web/view

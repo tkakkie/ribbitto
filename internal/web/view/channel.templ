@@ -28,6 +28,7 @@ type Topic struct {
 
 // ChannelPage holds the sidebar, conversation and channel creation form.
 type ChannelPage struct {
+	Reading                   bool // Whether read POSTs are wired.
 	Organization              Organization
 	DisplayName, Handle, Role string
 	Topic                     *Topic
@@ -197,6 +198,9 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							}
 						</h1>
 						<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID) + "/members") } class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "people.title") }</a>
+						if page.Reading && page.Before == 0 && page.EventCursor != nil {
+							@readForm(page)
+						}
 					</header>
 					<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="min-h-0 flex-1 overflow-y-auto">
 						// Always present, empty on the oldest page: loading older
@@ -235,6 +239,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		</div>
 		// Scripts stay outside swap targets; htmx will not run swapped scripts.
 		if page.Members == nil {
+			<script defer src="/static/read-visibility-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-composer-v3.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -271,5 +276,13 @@ templ MessageComposer(page ChannelPage) {
 			<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
 		}
 		<button type="submit" class="min-h-11 self-end rounded-md bg-brand px-4 py-2 font-semibold text-on-brand">{ i18n.T(ctx, "message.send") }</button>
+	</form>
+}
+
+// The immutable snapshot bounds the initial read even if the stream has advanced.
+templ readForm(page ChannelPage) {
+	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible once, submit" hx-swap="none">
+		<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
+		<button type="submit" class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "reading.mark") }</button>
 	</form>
 }

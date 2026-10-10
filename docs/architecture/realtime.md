@@ -113,9 +113,9 @@ without a lost wake-up or registry lock.
 ## Ephemeral state
 
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
-each page holds one organisation stream with [interests](streaming.md#stream-scope).
-Delivery (#736), the sink (#737) and presence state (#766) are current;
-Changes/reset (#767), presence delivery/display (#768) and typing (#288)
+pages hold one organisation stream with [interests](streaming.md#stream-scope).
+Delivery (#736), the sink (#737), presence state (#766) and changes/reset
+(#767) are current; presence rendering/delivery (#768) and typing (#288)
 remain planned. Only visible transitions raise generations.
 
 - **Owners.** Presence counts accepted streams through web's lifecycle seam,
@@ -128,26 +128,25 @@ remain planned. Only visible transitions raise generations.
   `realtime.EphemeralOwner` returns current state and its represented
   generation; web adapters render feature state. The subscription carries
   the opaque presence token. `cmd/ribbitto` constructs presence; adapters remain planned.
-- **Generations (planned, #767).** Presence entries will be ordered by their
-  last-change generation. Changes after a token are a suffix; offline entries
-  stay for a bounded time, and dropping one advances a monotonic discard
-  boundary. State, boundary and generation are published together before
-  raising the hub; reads return all three together. Typing will keep each
-  channel/topic's typist set, count, four latest and last-change generation.
+- **Generations.** Presence keeps one entry per member, ordered by its last
+  change. Changes after a token are a suffix; offline entries stay five minutes.
+  Discarding one advances a monotonic boundary to its generation. State, boundary
+  and generation are read under one lock; transitions publish before raising
+  the hub. Typing will keep each channel/topic's typist set, count, four latest
+  and last-change generation.
   A read uses only its place's summary (the channel for a feed), subtracting
   the viewer in constant time; work never grows with other places' state.
 - **Delivery.** After each durable batch and before waiting, at most
   one frame without `id:` per advanced kind. Durable order and the server
   cursor are unchanged; a backlog delays changes by at most one batch, and
   empty or denied wakes preserve the heartbeat deadline since the last write.
-  The planned owners supply: up to 100 presence entries read
-  from the changed suffix, or the place's typing indicator (at most three
-  names, then a count) when its summary changed. Presence entries will
+  Presence reads at most 100 entries from the changed suffix; typing will
+  supply its place's indicator (at most three names, then a count) when changed. Presence entries will
   share renders per member, state and language.
-- **Reset.** A presence read whose start lies below the discard boundary,
-  from another process's token, or past the frame's limit sends `reset`
-  instead (decision 24), on connect or later; the page reloads and renders
-  presence with a fresh token.
+- **Reset.** Presence requires `reset` for another process's token, a start below
+  the discard boundary, or over 100 changed entries, on connect or later. Equality
+  at the boundary is served. The planned adapter (#768) sends `reset` without
+  `id:`; the page reloads with fresh state (decision 24).
 - **Authorization** runs immediately before each frame, by the rule for an
   organisation-wide event (presence) or one of the frame's channel (typing):
   a deny skips the frame and its generation counts as seen, and a failed

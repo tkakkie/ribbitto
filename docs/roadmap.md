@@ -102,30 +102,70 @@ Left for later: a manual light/dark switch.
 
 ## After the MVP
 
-Roughly in this order: private channels → direct messages → invitations →
-reactions → editing and deleting → PostgreSQL row-level security →
-multiple organisations → file uploads → search.
+ribbitto is a hobby project. The repository is public, but a release — a
+container image and a Compose file with PostgreSQL and Caddy
+([decision 7](decisions/07-rental-vps-and-containers.md)) — comes later,
+when the maintainer chooses, once more is built. Until then the code,
+security and documents stay ready to release.
 
-The "for me" view (#433) follows once mentions (#117) and replies exist.
+The [vision](vision.md)'s principles stay. The technical constraints set to
+finish the MVP may change after M6 where a need is shown, each through a new
+decision that records why and what changes, never by quietly breaking an
+old one. Roughly in this order:
 
-Deleting messages, and moving them to another channel, first need the
-stream's rule for [vanished messages](architecture/replay.md#vanished-messages)
-(#352).
+1. **Revisit the constraints (short).** Measure in the browser, starting in
+   M5: input latency, INP, switching, initial JavaScript, memory. Then
+   decide, each in its own issue and on measurements or a prototype: the
+   front end's roles, including whether Svelte islands serve client-state UI
+   such as the composer (decisions
+   [2](decisions/02-server-rendered-html-with-htmx-not-an-spa.md) and
+   [19](decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)),
+   tried first in one composer prototype with a size and INP budget; what
+   browser storage may hold, by use
+   ([web layers](architecture/web-layers.md#javascript)); a message format
+   and safe Markdown rendering
+   ([decision 18](decisions/18-stored-message-formats-never-change-meaning.md),
+   no `templ.Raw`); the URL of one message. Nothing here is adopted until
+   its decision is made.
+2. **Two tracks in parallel.** The composer track never blocks the basics.
+   - *Basics:* private channels → direct messages → email (Mailer →
+     password reset → email verification) → invitations (#128).
+   - *Composer:* reliable sending (no duplicate posts, the text kept when
+     sending fails, the sending state shown) → an input that grows and a
+     send-key setting → mentions (#117) → links to one message → quoting,
+     including a selection → drafts (#88, revisited after step 1).
+3. **Messages:** reactions, editing and deleting, reply chains
+   ([decision 22](decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md)),
+   file uploads.
+4. **Topics:** resolving a topic with its conclusion, following and muting
+   topics, an inbox of unread topics with keyboard navigation and jumping to
+   the first unread message, the "for me" view (#433, once mentions and
+   replies exist), starting a topic from a quoted selection (unlike
+   branching, it moves no message), search that handles Japanese, a quick
+   switcher.
+5. **Integrations and operations,** mostly for a release: webhooks and bots
+   that post into topics, Web Push, import and export, deactivating
+   members, PostgreSQL row-level security, multiple organisations.
 
-Email delivery and email verification are not part of M1 to M3 (accounts
-still sign in with an email address). Delivery arrives with self-hosting after M3
-or when invitations become concrete, whichever comes first, starting with a
-Mailer over SMTP ([decision 16](decisions/16-email-goes-through-an-external-smtp-server.md)). The default order is Mailer →
-password reset → email verification → invitations, adjusted to when
-invitations are scheduled (#128).
+The rule for [vanished messages](architecture/replay.md#vanished-messages)
+is settled (#352); the first feature that deletes a message or moves one to
+another channel implements it.
+
+Email delivery and email verification are not part of the MVP (accounts
+still sign in with an email address). Delivery arrives with the basics track
+in step 2, starting with a Mailer over SMTP
+([decision 16](decisions/16-email-goes-through-an-external-smtp-server.md));
+#128 holds the plan and its requirements.
 
 Bulk onboarding of an organisation's people goes through invitations and
 provisioning, never through the public `/signup` form.
-
-Self-hosting (container image on GHCR, Compose file with PostgreSQL and
-Caddy) becomes a release goal once M3 works.
 
 ## Not planned
 
 Native mobile apps, federation, voice and video. These may be revisited,
 but nothing in the design should be bent for them now.
+
+Not planned for now either: turning the front end into a Svelte
+single-page app (the message list, sidebar and counts stay server-rendered),
+caching messages in IndexedDB for offline reading, read receipts per
+message, and tasks.

@@ -40,7 +40,23 @@ func TestMigrations(t *testing.T) {
 		handle   bool
 		messages bool
 		topics   bool
-	}{{"up", true, "applied", true, true, true, true, true}, {"down", true, "applied", true, true, true, true, true}, {"down", true, "applied", true, true, true, true, true}, {"down", true, "applied", true, true, true, true, true}, {"down", true, "applied", true, true, true, true, false}, {"down", true, "applied", true, true, true, true, false}, {"down", true, "applied", true, true, true, true, false}, {"down", true, "applied", true, true, true, false, false}, {"down", true, "applied", true, true, false, false, false}, {"down", true, "applied", true, false, false, false, false}, {"down", true, "applied", false, false, false, false, false}, {"down", false, "pending", false, false, false, false, false}, {"up", true, "applied", true, true, true, true, true}} {
+		unread   bool
+	}{
+		{"up", true, "applied", true, true, true, true, true, true},
+		{"down", true, "applied", true, true, true, true, true, false},
+		{"down", true, "applied", true, true, true, true, true, false},
+		{"down", true, "applied", true, true, true, true, true, false},
+		{"down", true, "applied", true, true, true, true, true, false},
+		{"down", true, "applied", true, true, true, true, false, false},
+		{"down", true, "applied", true, true, true, true, false, false},
+		{"down", true, "applied", true, true, true, true, false, false},
+		{"down", true, "applied", true, true, true, false, false, false},
+		{"down", true, "applied", true, true, false, false, false, false},
+		{"down", true, "applied", true, false, false, false, false, false},
+		{"down", true, "applied", false, false, false, false, false, false},
+		{"down", false, "pending", false, false, false, false, false, false},
+		{"up", true, "applied", true, true, true, true, true, true},
+	} {
 		if err := postgres.Migrate(ctx, db, step.command, io.Discard); err != nil {
 			t.Fatal(err)
 		}
@@ -70,6 +86,11 @@ func TestMigrations(t *testing.T) {
 		}
 		if err := db.QueryRowContext(ctx, "SELECT to_regclass('public.topic') IS NOT NULL").Scan(&present); err != nil || present != step.topics {
 			t.Fatalf("after %s: topic present = %t, want %t: %v", step.command, present, step.topics, err)
+		}
+		for _, table := range []string{"channel_read", "read_range", "topic_read_floor"} {
+			if err := db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", "public."+table).Scan(&present); err != nil || present != step.unread {
+				t.Fatalf("after %s: %s present = %t, want %t: %v", step.command, table, present, step.unread, err)
+			}
 		}
 		if err := postgres.Migrate(ctx, db, "status", &status); err != nil {
 			t.Fatal(err)

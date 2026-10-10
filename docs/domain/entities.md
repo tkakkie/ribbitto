@@ -22,11 +22,11 @@ erDiagram
   channel ||--o{ topic : "groups into"
   topic ||--o{ message : "holds"
   member ||--o{ message : "writes"
-  channel ||--o{ channel_read : "tracks (planned)"
-  member ||--o{ channel_read : "has (planned)"
-  channel_read ||--o{ read_range : "holds (planned)"
-  topic ||--o{ topic_read_floor : "tracks (planned)"
-  member ||--o{ topic_read_floor : "has (planned)"
+  channel ||--o{ channel_read : "tracks"
+  member ||--o{ channel_read : "has"
+  channel_read ||--o{ read_range : "holds"
+  topic ||--o{ topic_read_floor : "tracks"
+  member ||--o{ topic_read_floor : "has"
 ```
 
 | Entity | Status | Key columns |
@@ -38,9 +38,9 @@ erDiagram
 | `member` | exists | `organization_id`, `account_id`, role (`owner` or `member`), `joined_event_seq`, `handle` (unique per organisation) |
 | `channel` | exists | `id`, `organization_id`, `name`, `is_default`, `created_at`, `default_topic_id`, `default_topic_is_default` |
 | `topic` | exists | `id`, `organization_id`, `channel_id`, `name` (NULL for the default topic), `is_default`, `created_at` ([`topics.md`](topics.md)) |
-| `channel_read` | planned (M4) | `organization_id`, `channel_id`, `member_id` (one member's lock row in a channel; [`unread.md`](unread.md)) |
-| `read_range` | planned (M4) | `organization_id`, `channel_id`, `member_id`, `lo`, `hi` (read messages: `lo ≤ event_seq < hi`) |
-| `topic_read_floor` | planned (M4) | `organization_id`, `topic_id`, `member_id`, `channel_id`, `floor_seq` |
+| `channel_read` | exists | `organization_id`, `channel_id`, `member_id` (one member's lock row in a channel; [`unread.md`](unread.md)) |
+| `read_range` | exists | `organization_id`, `channel_id`, `member_id`, `lo`, `hi` (read messages: `lo ≤ event_seq < hi`) |
+| `topic_read_floor` | exists | `organization_id`, `topic_id`, `member_id`, `channel_id`, `floor_seq` |
 | `message` | exists | `id`, `organization_id`, `channel_id`, `topic_id`, `member_id`, `body`, `event_seq`, nullable `moved_event_seq` (latest move; [`unread-counts.md`](../architecture/unread-counts.md)), `created_at`; planned: nullable `reply_to_message_id` ([`replies.md`](replies.md)) |
 | `event_log` | exists | `organization_id`, `seq` (composite key), `kind`, nullable `audience_member_id`, IDs-only `data`, `created_at` |
 

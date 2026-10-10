@@ -1,13 +1,15 @@
 # Unread counts
 
-*Planned* (M4, [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)):
+Read-state storage is current; reading flows and counts are *planned* (M4, [decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)):
 how read state is stored, written and counted, and what that costs. The
 rules are in [unread](../domain/unread.md). The move column and its index
-already exist; the read-state tables and consumers below remain planned.
+already exist, as do the read-state tables and single-range store below.
+Their consumers and the counting queries remain planned.
 
 ## Storage
 
-An `unread` module owns the read state and depends on `conversation`'s API
+The `unread` module owns the current read-state tables; planned consumers
+use `conversation`'s API
 ([decision 27](../decisions/27-channels-topics-and-messages-are-one-conversation-module.md)'s
 growth rule):
 
@@ -86,7 +88,15 @@ index, `R` ranges of the current channel at or above `P`:
 
 ## Writes
 
-Every write first locks the `channel_read` row (inserting it if missing),
+The current store locks the `channel_read` row (inserting it if missing),
+inserts the join prefix before any other range, and unions one range. A
+savepoint handles concurrent creation without aborting the caller's transaction.
+It finds the primary-key predecessor, deletes only overlapping or touching
+rows between that predecessor and the new upper end, and inserts their union.
+All of this commits or rolls back with the caller.
+
+The following reading flows remain planned. Every write first locks the
+`channel_read` row (inserting it if missing),
 then adds ranges and merges them with their neighbours: concurrent writes
 queue and commute, and none removes a read message. A newly read message
 `m` adds `[p + 1, n)`, with `p` the channel's previous message (or 0) and
@@ -132,7 +142,7 @@ A member who reads only topic views while another topic keeps gaining
 messages adds one range per skipped run (about 100 bytes and an index entry
 each). Steps 1 and 2 read only the first 101; steps 3 and 4 and a topic-view
 write handle all `R`; a feed read merges them back into one, at `O(R)`.
-#283 measures 10,000 ranges before the tables ship.
+#283 measured 10,000 ranges before the tables shipped.
 
 ### Running the benchmark
 
@@ -146,25 +156,16 @@ Optional `RIBBITTO_UNREAD_BENCH_*` suffixes (defaults): `POSTS` (`10,100,1000,10
 `RANGES` (10000), `TOPICS` (50), `WARMUP` (3), `REPEAT` (20). Use positive integers; `RANGES` and `TOPICS` need at least 2.
 Logs include version, settings, volumes, indexes, `ANALYZE`, plans, row visits, buffers, median and p95.
 Normal/stressed runs alternate; writes roll back. Timings exclude transaction boundaries and plan instrumentation.
-`topic-write` returns candidate bounds from `conversation` to Go, then passes
-them as arrays to one `unread` statement that coalesces them, merges only
-overlapping or touching existing ranges, and raises the floor, after locking
-and loading the read set in the same transaction. Its statement count does not
-depend on the number of messages read. Write range-count diagnostics run only
-after collecting EXPLAIN totals, outside timings and plan instrumentation.
-`topic-write-per-message` retains one merge statement
-per unread message for comparison. Both bound range lookups by the primary
-key's predecessor and the new range's upper end.
+`topic-write` measures the set-based flow under Writes; statement count is
+independent of messages read. Range-count diagnostics run after EXPLAIN totals,
+outside timings and instrumentation. `topic-write-per-message` retains one merge
+per message for comparison. Both bound lookups by the primary-key predecessor
+and the new upper end.
 
 ## Results
 
-Two runs on 2026-10-10 (PostgreSQL 18.6; tables in
-[benchmark results](unread-benchmark-results.md)), medians: step 4 took
-0.33–27.4 ms for 10–10,000 own posts above a floor (0.29–0.56 ms
-caught up) and 1.45 ms with 10,000 moved-in read messages; with 10,000 ranges,
-step 3 took 2.4 ms, step 4 6.1–6.4 ms, the merging feed read 3.4 ms, and
-the set-based topic-view write of 9,999 messages 87–88 ms (10.5–10.6 s
-one message per statement). Nothing beyond the measured sizes follows.
+The two PostgreSQL 18.6 runs on 2026-10-10, their medians and measured
+limits are in [benchmark results](unread-benchmark-results.md).
 
 **Decision: go** (maintainer, 2026-10-10): read ranges with the topic-floor
 scan; topic-view writes are set-based. Not a performance guarantee; the

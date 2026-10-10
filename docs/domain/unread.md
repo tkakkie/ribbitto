@@ -2,7 +2,8 @@
 
 The inputs are in place since M3: the join transaction, `joined_event_seq`,
 the pairing of each message with its `message.posted` event, and the log
-boundary. Read state and unread counts are *planned* for M4
+boundary. Read-state tables, locking and range unions exist; their reading
+flows and unread counts are *planned* for M4
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
 the counting queries and their cost are in
 [unread counts](../architecture/unread-counts.md), the worked examples in
@@ -17,7 +18,10 @@ the counting queries and their cost are in
   it to the current counter without backfill. Read state survives log
   retention: it relies on `message.event_seq`, never on `event_log`.
 
-## Read state *(planned, M4)*
+## Read state
+
+Storage and single-range unions are current. Message-derived bounds and
+topic-floor writes remain planned for M4.
 
 - **Read ranges.** A member's read state in a channel is a set of
   `event_seq` ranges (`read_range` rows, `lo ≤ event_seq < hi`). A message

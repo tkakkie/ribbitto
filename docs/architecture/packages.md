@@ -28,6 +28,7 @@ this module to reuse the migration runner; credentials stay in the environment.
 | `internal/realtime` | The `realtime` module's root, real-time delivery (M3): the hub's latest sequences and connection registry with process and per-account caps, the per-connection delivery loop, shared reads, the watermark check and event retention; presence is planned. Declares the durable event types. Receives authorization, rendering and org's cursor bounds as interfaces it defines itself. Its store, `internal/realtime/internal/postgres`, reads, appends and expires `event_log` on its own `sqlcgen` (`db/queries/realtime/`), with org's retention lock and boundary injected (`RetentionBoundary`); its wiring, `realtimepg`, builds the reader and the cleaner (`NewCleaner`) and binds the appender to a writer's transaction (`AppenderIn`). See [`docs/api/realtime.txt`](../api/realtime.txt) for identifiers. | [manifest](../../module_imports_test.go) |
 | `internal/org` | The `org` module: organisations, memberships, the **only** authorization logic, name/slug/handle rules and handle changes, the author directory, `member.joined`, event sequence and cursor/retention bounds, first-run setup and sign-up owning their transactions. Its store, `internal/org/internal/postgres`, runs `db/queries/org/` on its own `sqlcgen`; its wiring, `orgpg`, builds use cases and binds stores to callers' transactions or snapshots. See [`docs/api/org.txt`](../api/org.txt) for identifiers. `orgpg.SequenceIn` serves conversation's posting and branching transactions; `MembersIn` and `EventCursorIn` serve its snapshot. | [manifest](../../module_imports_test.go) |
 | `internal/conversation` | The `conversation` module: channels, topics and messages with their rules and errors, the membership-scoped topic lookup, posting and branching owning their transactions, history and the page snapshot owning its snapshot, and the `message.posted` and `messages.moved` kinds it publishes. Owns `channel`, `topic` and `message`. Its store, `internal/conversation/internal/postgres`, runs `db/queries/conversation/` on its own `sqlcgen`; its wiring, `conversationpg`, builds use cases, binds stores to callers' transactions or snapshots and registers its routers. See [`docs/api/conversation.txt`](../api/conversation.txt) for identifiers. `conversationpg.DefaultChannelCreatorIn` serves setup's transaction. | [manifest](../../module_imports_test.go) |
+| `internal/unread` | Owns read state (decision 32). Its store locks a member/channel row, inserts the join prefix and unions a range with primary-key-bounded neighbours in the caller's transaction; `unreadpg.WriterIn` binds it. No message reads. See [API](../api/unread.txt). | [manifest](../../module_imports_test.go) |
 | `internal/web` | HTTP routing, handlers, middleware, templ components (`internal/web/view`), the SSE endpoints. The only package that produces HTML. | `kernel`, `identity`, `org`, `conversation`, `realtime`, `web/static` |
 | `db/migrations` | Embedded goose SQL migrations. | — |
 | `web/static` | Embedded CSS, application JavaScript and vendored JavaScript. | — |
@@ -60,6 +61,9 @@ flowchart LR
   identity[internal/identity] --> kernel & platform
   identitypg --> identity & store[identity/internal/postgres] & platform
   store --> identity & platform & kernel
+  unread[internal/unread] --> kernel
+  unreadpg[unread/unreadpg] --> ustore[unread/internal/postgres] & platform
+  ustore --> unread & platform
   platform --> kernel[internal/kernel] & migrations[db/migrations]
 ```
 

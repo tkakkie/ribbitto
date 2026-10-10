@@ -60,7 +60,7 @@ func TestUnreadBench(t *testing.T) {
 		t.Fatal("RANGES and TOPICS must be at least 2")
 	}
 	pool := pgtest.NewEmpty(t)
-	pgtest.NewMigrator(t, pool).Up(t.Context())
+	pgtest.NewMigrator(t, pool).UpTo(t.Context(), 11)
 	f := conversationtest.OrganizationWithOwner(t, pool, "bench", "general")
 	account := identitytest.Account(t, pool, "normal@example.org", "Normal")
 	normal := orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, "normal", 1)

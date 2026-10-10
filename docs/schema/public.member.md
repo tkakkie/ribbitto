@@ -4,8 +4,8 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | uuid | uuidv7() | false | [public.message](public.message.md) [public.event_log](public.event_log.md) |  |  |
-| organization_id | uuid |  | false | [public.message](public.message.md) [public.event_log](public.event_log.md) | [public.organization](public.organization.md) |  |
+| id | uuid | uuidv7() | false | [public.message](public.message.md) [public.event_log](public.event_log.md) [public.channel_read](public.channel_read.md) |  |  |
+| organization_id | uuid |  | false | [public.message](public.message.md) [public.event_log](public.event_log.md) [public.channel_read](public.channel_read.md) | [public.organization](public.organization.md) |  |
 | account_id | uuid |  | false |  | [public.account](public.account.md) |  |
 | role | text |  | false |  |  |  |
 | joined_event_seq | bigint |  | false |  |  |  |
@@ -57,6 +57,7 @@ erDiagram
 
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.event_log" }o--|| "public.member" : "FOREIGN KEY (organization_id, audience_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.channel_read" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.member" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.member" }o--|| "public.account" : "FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE RESTRICT"
 
@@ -87,6 +88,11 @@ erDiagram
   uuid audience_member_id FK
   jsonb data
   timestamp_with_time_zone created_at
+}
+"public.channel_read" {
+  uuid organization_id FK
+  uuid channel_id FK
+  uuid member_id FK
 }
 "public.organization" {
   uuid id

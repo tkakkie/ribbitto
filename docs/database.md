@@ -55,6 +55,11 @@ because they can lower the epoch or bypass the triggers on which the guarantee
 depends; for restore, [stop ribbitto first](../README.md#restoring-a-backup)
 to clear caches.
 
+Migration 00012 adds unread's `channel_read` lock rows, `read_range` bounds
+and `topic_read_floor`. Composite foreign keys include `organization_id`
+and enforce the member, channel and topic relationships; ranges and floors
+reference their channel lock row. Down drops the three tables.
+
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations
@@ -88,7 +93,8 @@ Integration tests, `pgtest` and the module test fixtures are in
 
 `make generate` runs sqlc, pinned in `tools/go.mod`, against `db/migrations/`.
 `sqlc.yaml` has one entry per module: `db/queries/identity/`,
-`db/queries/realtime/`, `db/queries/org/` and `db/queries/conversation/` each
+`db/queries/realtime/`, `db/queries/org/`, `db/queries/conversation/` and
+`db/queries/unread/` each
 generate their store's `sqlcgen`. No query files sit directly in `db/queries/`.
 Every entry sets `omit_unused_structs`, so a table no query uses gets no struct.
 Commit the pgx/v5 output; CI rejects generation changes to committed files. Never edit

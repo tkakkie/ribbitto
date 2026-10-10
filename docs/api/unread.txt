@@ -21,3 +21,6 @@ type Scope struct // Scope identifies one member's read state in one channel.
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
   field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
+type TopicScope struct // TopicScope identifies one topic within a member's channel read state.
+  field Scope Scope
+  field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID

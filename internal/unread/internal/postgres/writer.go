@@ -34,7 +34,21 @@ func (w *Writer) Merge(ctx context.Context, scope unread.Scope, joinedEventSeq i
 	if joinedEventSeq < 0 || joinedEventSeq == math.MaxInt64 || added.Lo < 0 || added.Hi <= added.Lo {
 		return fmt.Errorf("merging read range: invalid bounds or join sequence")
 	}
-	params := sqlcgen.LockChannelReadParams{OrganizationID: pgtype.UUID{Bytes: scope.OrganizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: scope.ChannelID, Valid: true}, MemberID: pgtype.UUID{Bytes: scope.MemberID, Valid: true}}
+	params := scopeParams(scope)
+	if err := w.lock(ctx, params); err != nil {
+		return err
+	}
+	if err := w.merge(ctx, params, unread.Range{Lo: 0, Hi: joinedEventSeq + 1}); err != nil {
+		return err
+	}
+	return w.merge(ctx, params, added)
+}
+
+func scopeParams(scope unread.Scope) sqlcgen.LockChannelReadParams {
+	return sqlcgen.LockChannelReadParams{OrganizationID: pgtype.UUID{Bytes: scope.OrganizationID, Valid: true}, ChannelID: pgtype.UUID{Bytes: scope.ChannelID, Valid: true}, MemberID: pgtype.UUID{Bytes: scope.MemberID, Valid: true}}
+}
+
+func (w *Writer) lock(ctx context.Context, params sqlcgen.LockChannelReadParams) error {
 	if _, err := w.queries.LockChannelRead(ctx, params); errors.Is(err, pgx.ErrNoRows) {
 		// ON CONFLICT is outside the query gate. A savepoint protects the outer
 		// transaction when another writer creates this same key first.
@@ -60,10 +74,7 @@ func (w *Writer) Merge(ctx context.Context, scope unread.Scope, joinedEventSeq i
 	} else if err != nil {
 		return fmt.Errorf("locking channel read: %w", err)
 	}
-	if err := w.merge(ctx, params, unread.Range{Lo: 0, Hi: joinedEventSeq + 1}); err != nil {
-		return err
-	}
-	return w.merge(ctx, params, added)
+	return nil
 }
 
 func (w *Writer) merge(ctx context.Context, scope sqlcgen.LockChannelReadParams, added unread.Range) error {

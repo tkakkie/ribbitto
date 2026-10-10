@@ -52,29 +52,31 @@ literal in `TestProductionOwnership` and is currently empty. Tablecheck's
 the shared `sqlwalk.ReasonRules` rejects empty reasons, pending markers and
 maintainer claims without provenance.
 Query expressions accept only `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower`.
-Both SQL gates accept unqualified FROM `unnest` of one or more
-`sqlc.arg(name)::bigint[]` or `sqlc.arg(name)::uuid[]` parameters, alone or mixed,
-with identifier/string names, including CTEs and INSERT SELECT. Bounds support
-set-based writes (#727); channel/topic IDs support counts (#740).
-Casts require unqualified types and one unsized array dimension. Other functions,
-argument types, columns, literals, computed arguments and positions fail, as do
-explicit LATERAL, ROWS FROM and column type definitions.
-WITH ORDINALITY (#749) requires one array and an alias naming two columns:
-`unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)` (or `uuid[]`).
-SELECT, UPDATE FROM, CTEs and INSERT SELECT accept it. Parallel arrays
-can join on ordinals; INSERT SELECT's single-source rule puts that join in a CTE.
-Pinned sqlc v1.31.1 refuses multi-argument `unnest`:
-`function unnest(unknown, unknown) does not exist`. Go must reject unequal array
-lengths before execution; ordinal joins drop unmatched positions.
-Ownership, organisation predicates and
+Both gates accept unqualified FROM `unnest` of `sqlc.arg(name)::bigint[]` or
+`sqlc.arg(name)::uuid[]` parameters, single or mixed arrays, in SELECT, CTEs and
+INSERT SELECT. Names are identifiers/strings; casts are unqualified with one
+unsized dimension.
+Bounds enable writes (#727), IDs counts (#740). Other functions, arguments,
+positions, LATERAL functions, ROWS FROM and typed columns fail.
+WITH ORDINALITY (#749): one array, two output-column aliases:
+`unnest(sqlc.arg(x)::bigint[]) WITH ORDINALITY AS a(value, n)` (also `uuid[]`).
+UPDATE FROM accepts it too. Arrays join on ordinals;
+INSERT requires that join in a CTE. sqlc v1.31.1 refuses multi-argument `unnest`;
+Go must reject unequal lengths: ordinal joins drop unmatched rows.
+Scopecheck accepts FROM SELECTs, CROSS JOIN LATERAL and inner JOIN
+LATERAL SELECTs ON true (#741). ORDER BY/LIMIT bounds channel/topic counts.
+Every nested table needs its SELECT's WHERE scope, never ON; derived aliases
+cannot shadow tables. LEFT/RIGHT/FULL joins and derived INSERT/UPDATE/DELETE
+sources fail. Tablecheck's existing ownership walk is unchanged.
+Scope, ownership and
 [INSERT restrictions](../database.md#database-development) still apply.
 Query operators allow unqualified `=`, `<`, `>`, `<=`, `+`; casts allow
-unqualified `uuid`, `bigint`, `jsonb`. Tablecheck also accepts scalar
+unqualified `uuid`, `bigint`, `jsonb`. Tablecheck accepts scalar
 `sqlc.arg(name)::int8multirange` (#743), with identifier/string names, and `@>`
 only with that exact cast on the left and a column or accepted expression cast
-to scalar `bigint` on the right (sqlc resolves column types). Negating
-`sqlc.arg(read_set)::int8multirange @> m.event_seq` lets #746's topic counts and
-#750's topic-view candidates exclude the read set in one statement.
+to scalar `bigint` on the right (sqlc resolves column types).
+`NOT (sqlc.arg(read_set)::int8multirange @> m.event_seq)` excludes the read set
+for #746's counts and #750's candidates.
 Bounds, typmods, qualification, `sqlc.narg`, range constructors/aggregates and
 other range types/operators fail.
 Migration Up sections have an explicit statement allowlist: CREATE TABLE,

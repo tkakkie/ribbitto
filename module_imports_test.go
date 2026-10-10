@@ -30,6 +30,7 @@ func moduleManifest() []module {
 		{root: "internal/conversation", store: "internal/conversation/internal/postgres", wiring: "internal/conversation/conversationpg",
 			fixture: "internal/conversation/conversationtest", mayImport: []string{"identity", "org", "realtime"}, fixtureRoots: []string{"org"}, ownsTables: []string{"channel", "topic", "message"}},
 		{root: "internal/presence", mayImport: []string{"realtime"}, ownsTables: []string{}},
+		{root: "internal/typing", mayImport: []string{"realtime"}, ownsTables: []string{}},
 		{root: "internal/unread", store: "internal/unread/internal/postgres", wiring: "internal/unread/unreadpg", ownsTables: []string{"channel_read", "read_range", "topic_read_floor"}},
 	}
 }

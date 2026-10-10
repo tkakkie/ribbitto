@@ -26,6 +26,7 @@ Read the file for the area you change:
 | [`rate-limits.md`](rate-limits.md) | authentication rate limits and the reverse-proxy contract |
 | [`posting.md`](posting.md) | posting a message: the sequence-first transaction, the hub after commit, the page snapshot |
 | [`realtime.md`](realtime.md) | the durable event log: payloads, routing, replay boundary and retention |
+| [`typing.md`](typing.md) | memory-only typing summaries; planned expiry, ingress and delivery |
 | [`streaming.md`](streaming.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
 | [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream caps, shutdown, HTTP/2 |
@@ -49,7 +50,7 @@ Read the file for the area you change:
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),
-[org](../api/org.txt), [conversation](../api/conversation.txt) and [unread](../api/unread.txt).
+[org](../api/org.txt), [conversation](../api/conversation.txt), [typing](../api/typing.txt) and [unread](../api/unread.txt).
 Run `make api` after an API or doc-comment change; `make check` compares them
 without rewriting files. Entries and members are sorted by name, with signatures
 and first doc sentences; unexported declarations and their members are omitted.

@@ -107,6 +107,8 @@ internal/realtime/internal/postgres -> internal/realtime/internal/postgres/sqlcg
 internal/realtime/realtimepg -> internal/platform/postgres
 internal/realtime/realtimepg -> internal/realtime
 internal/realtime/realtimepg -> internal/realtime/internal/postgres
+internal/typing -> internal/kernel
+internal/typing -> internal/realtime
 internal/unread -> internal/kernel
 internal/unread -> internal/platform/postgres
 internal/unread/internal/postgres -> internal/kernel

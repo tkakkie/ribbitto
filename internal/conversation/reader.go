@@ -48,25 +48,12 @@ func (s *Reader) One(ctx context.Context, m org.Membership, channelID kernel.ID,
 func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, before *int64) (page ChannelPage, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		reads := s.reads(snapshot)
-		page.Current, err = reads.GetChannel(ctx, m.Organization.ID, channelID)
-		if err != nil {
-			return fmt.Errorf("finding channel: %w", err)
-		}
-		page.Channels, err = reads.ListChannels(ctx, m.Organization.ID)
-		if err != nil {
-			return fmt.Errorf("listing channels: %w", err)
-		}
-		if topicID != nil {
-			selected, err := reads.GetTopic(ctx, m.Organization.ID, channelID, *topicID)
-			if err != nil {
-				return err
-			}
-			page.Topic = &selected
-		}
-		page.Topics, err = reads.ListTopics(ctx, m.Organization.ID, channelID, sidebarTopics)
+		loaded, err := loadSidebarContext(ctx, reads, m.Organization.ID, channelID, topicID)
 		if err != nil {
 			return err
 		}
+		page.Current, page.Channels, page.Topics = loaded.current, loaded.channels, loaded.topics
+		page.Topic = loaded.topic
 		reader := s.history(snapshot, reads)
 		page.Page, err = reader.Before(ctx, m, channelID, topicID, before)
 		if err != nil {

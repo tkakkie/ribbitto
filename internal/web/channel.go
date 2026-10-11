@@ -183,9 +183,12 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		page.Messages[i] = viewMessage(m.Organization.Slug, entry)
 	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
-		page.Organization, page.DisplayName, page.Handle, page.Role = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
-		page.Current, page.Channels, page.Older = viewChannel(history.Current), viewChannels(history.Channels), history.Older
-		page.ChannelCounts, page.TopicCounts = history.ChannelCounts, history.TopicCounts
+		page = sidebarView(page, m, conversation.SidebarSnapshot{
+			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics,
+			ChannelCounts: history.ChannelCounts, TopicCounts: history.TopicCounts,
+		})
+		page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
+		page.Older = history.Older
 		page.FirstUnread = history.FeedFirstUnread
 		if history.Topic != nil {
 			page.FirstUnread = history.TopicFirstUnread
@@ -194,7 +197,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			page.FirstUnread = *firstUnread
 		}
 		page.Reading = p.reading != nil
-		page.EventCursor, page.Topic, page.Topics = history.EventCursor, viewTopicPtr(history.Topic), viewTopics(history.Topics)
+		page.EventCursor = history.EventCursor
 		return view.ChannelScreen(url, page)
 	})
 }

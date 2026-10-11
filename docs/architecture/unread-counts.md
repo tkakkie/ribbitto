@@ -47,8 +47,15 @@ unread never queries `member`. Feed, topic, `?before=` and members pages
 return `PageCounts`: channel and topic count maps, the feed's first unread
 and the selected topic's first unread (zero without a selection).
 
-`Reader.Sidebar` independently reads the current channel, all channels in name/ID
-order, and its first 50 topics (default first, then case-insensitive name/ID),
+`Reader.Page`, `Reader.Members` and `Reader.Sidebar` share one private context
+loader for the current channel, all channels in name/ID order, the optional
+selected topic and the first 50 topics (default first, then case-insensitive
+name/ID). The loader uses reads bound to the caller's snapshot and does not
+count. Page and members callers keep counts after their history or members and
+cursor reads; the independent sidebar caller counts immediately after context.
+Snapshot ownership and query order stay unchanged.
+
+`Reader.Sidebar` independently reads that context,
 with both count maps in the same read-only repeatable-read snapshot. It validates
 the selected topic in that organisation/channel and returns it separately,
 including when unlisted, counting at most 51 topics without extending the list. Each call uses
@@ -61,8 +68,10 @@ Production streams bind the already-resolved membership, channel, selected topic
 and members-panel selection to one `cmd/ribbitto` sidebar source (#819). Posts
 and moves trigger independent snapshots through this same page-count adapter,
 including for the author and when another channel changes. Web's `RenderSidebar`
-uses page components for whole lists and the selected heading (#818); member-dependent
-output bypasses the shared message cache. Realtime retains its render-then-authorize
+shares one sidebar view builder with channel/topic and members pages, preserving
+the feed, topic and members selection. It uses page components for whole lists
+and the selected heading (#818); member-dependent output bypasses the shared
+message cache. Realtime retains its render-then-authorize
 order immediately before sending, coalescing and cursor/heartbeat rules (#810).
 Every connect recounts without `id:`, so reconnecting at a delivered message's ID
 recovers a recount lost after that message. Production stream tests compare

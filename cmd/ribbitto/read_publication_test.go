@@ -120,7 +120,7 @@ func TestReadPublicationConcurrent(t *testing.T) {
 }
 
 // Guard the composition boundary too: a private publication in either adapter
-// bypasses Reading's commit contract even if production's publisher is nil.
+// bypasses Reading's commit contract and duplicates the durable notification.
 func TestReadAdaptersDoNotPublish(t *testing.T) {
 	file, err := parser.ParseFile(token.NewFileSet(), "main.go", nil, 0)
 	feedRequire(t, err)

@@ -7,8 +7,8 @@ implemented (#735), as are frame delivery (#736) and the sink (#737);
 presence state, changes and rendering are current (#766–#768; closes #287); typing state, composer signals, delivery and page status regions are implemented (#784–#790, #813, #833; closes #288). Details in
 [ephemeral state](../architecture/ephemeral-state.md#ephemeral-state).
 Member read invalidation extends this contract (#711, option B): registry and
-optional sidebar delivery are implemented (#829); production activation, HTTP
-acceptance and measurements remain in #711.
+sidebar delivery are wired in production; core HTTP acceptance is implemented.
+Remaining acceptance and measurements follow under #711.
 
 - **Current state, not events.** Presence (who has a stream open) and
   typing (who is typing where) are in-memory state per organisation and per

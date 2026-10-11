@@ -315,9 +315,12 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	authorizer := orgpg.NewCachedAuthorizer(ctx, pool, config.authorizationCapacity)
 	// A nil hub must stay a nil Notifier, not a typed nil in the interface.
 	var postingNotifier conversation.Notifier
+	var readPublisher unread.ReadPublisher
 	var stream *web.Streaming
 	if config.hub != nil {
 		postingNotifier = config.hub
+		changes := &unread.Changes{}
+		readPublisher = changes
 		kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
 		if err != nil {
 			return nil, nil, fmt.Errorf("merging event kinds: %w", err)
@@ -328,7 +331,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		state := presence.New(config.hub)
 		typingState := typing.New(config.hub)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout,
-			Sidebar:  sidebarSource(conversationpg.NewReader(pool, nil, nil, nil, pageCountsIn)),
+			Sidebar:  sidebarSource(conversationpg.NewReader(pool, nil, nil, nil, pageCountsIn), changes),
 			Presence: state, Typing: typingState, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
 				closePresence, closeTyping := state.Open(organizationID, memberID), typingState.Open(organizationID, memberID, channelID)
 				return func() { closePresence(); closeTyping() }
@@ -353,7 +356,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Topics:        conversationpg.NewTopics(pool),
 		Messages:      conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn),
 		Posting:       posting,
-		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil),
+		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), readPublisher),
 		Branching:     branching,
 		Channels:      conversationpg.NewChannels(pool),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),

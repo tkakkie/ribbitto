@@ -130,13 +130,13 @@ token, a start below the boundary or over 100 changes require `reset` on connect
 or later; equality at the boundary is served. The presence adapter sends
 that reset without `id:`, ending the stream so the page reloads.
 Sidebar sources recount on connect and organisation-scoped posts/moves,
-regardless of message interest or place. Optional member watches (#829)
+regardless of message interest or place. Production member watches (#711)
 subscribe before recounting and release on exit. Capture the generation before
 each fresh snapshot; send or deny covers only that generation. Changes dirty
 one [fixed deadline](stream-limits.md) checked between batches and in the combined
 wait. Authorize organisation and bound member after rendering, immediately before
 sending. Frames omit `id:`; errors stop delivery. Reconnect recounts. Watches are
-single-process; activation is #711. Multiple processes need shared invalidation
+single-process, wired to Reading. Multiple processes need shared invalidation
 and coordination; bounded recovery needs revisions/replay
 ([contract](ephemeral-state.md#member-read-change-watches)).
 Swap targets:

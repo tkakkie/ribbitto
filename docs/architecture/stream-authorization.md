@@ -148,8 +148,8 @@ for a primary-key read, and the choice should be revisited.
   and shared reads behind `MayReceive`; `realtime`'s loop and its `Authorizer` interface do
   not change and `org` remains the only authorization logic.
 - **Settled by the implementation issues:** joins do not bump (#669; only
-  allows are cached), and a deny keeps today's skip-and-advance (#670; a
-  removed member's open stream still queries per skipped event).
+  allows are cached); a deny skipped and advanced (#670) until #852 made a
+  deny of the stream's own member end the stream.
 - Recorded here and in streaming.md; decision 23 covers the event log and
   hub. #669, #670 and #671 are high risk; #669 and #670 are tier A.
 

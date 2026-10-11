@@ -36,7 +36,7 @@ rendering remain pending. Atomic capture in the combined wait prevents a lost
 wake; advancing observation while throttled prevents spinning on already observed work.
 Recounts and authorisation retain per-tab costs; wakes/log reads are not throttled.
 Sidebar frames render before checking both organisation and bound member, omit
-`id:` and preserve the cursor; denied frames do not restart heartbeat deadlines.
+`id:` and preserve the cursor; a deny ends the stream (#852).
 
 This registry is single-process. Reconnect recounts persisted state; an omitted
 notification has no bounded repair without reconnect. Multiple processes need
@@ -75,7 +75,7 @@ Delivery, sink, presence and typing state, signals and delivery are current
 - **Delivery.** After each durable batch and before waiting, at most
   one frame without `id:` per advanced kind. Durable order and the server
   cursor are unchanged; a backlog delays changes by at most one batch, and
-  empty or denied wakes preserve the heartbeat deadline since the last write.
+  empty wakes preserve the heartbeat deadline since the last write.
   Presence reads at most 100 entries from the changed suffix; typing
   supplies its place's indicator (at most three names, then a count) when changed. Presence entries
   share bounded renders per member, state and language, replacing stable indicator IDs through the hidden sink.
@@ -84,9 +84,10 @@ Delivery, sink, presence and typing state, signals and delivery are current
   at the boundary is served. The web adapter sends `reset` without
   `id:`; the page reloads with fresh state (decision 24).
 - **Authorization** runs immediately before each frame, by the rule for an
-  organisation-wide event (presence) or one of the frame's channel (typing):
-  a deny skips the frame and its generation counts as seen, and a failed
-  check stops the stream, as for durable events. Checks per connection are
+  organisation-wide event (presence) or one of the frame's channel (typing),
+  bound to the stream's member: a deny means that membership was removed or
+  replaced and ends the stream (#852), and a failed check stops it, as for
+  durable events. Checks per connection are
   bounded by batches and wakes, at most one per kind each, not by changes;
   raises are bounded by visible transitions, and typing signals by a
   per-member limit (#288).

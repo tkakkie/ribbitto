@@ -25,7 +25,9 @@ The result describes uncommitted writes: a rollback discards them. Reading
 synchronously calls its injected, context-free publisher with organisation and
 member only after a successful transaction return and only when changed.
 Rollback and failed commit publish nothing; cancellation immediately after commit
-cannot suppress publication. Production passes nil until #711 activates delivery.
+cannot suppress publication, and the commit itself runs detached from request
+cancellation (`platform.InTxDetachedCommit`), so a cancel while `COMMIT` is in
+flight cannot persist a read yet report failure (Grok on #837). Production passes nil until #711 activates delivery.
 Concurrent feed/topic reads share the channel lock, including lock-row creation,
 so the same unread message cannot cause two publications. Posting discards the
 result and retains its existing

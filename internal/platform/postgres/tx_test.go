@@ -92,6 +92,45 @@ func TestInTx(t *testing.T) {
 	})
 }
 
+// A cancellation after fn succeeds cannot fail the commit: InTx would roll
+// back and report it, InTxDetachedCommit commits and reports success.
+func TestInTxDetachedCommit(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	for _, tc := range []struct {
+		name, slug string
+		run        func(context.Context, *pgxpool.Pool, func(postgres.Tx) error) error
+		commit     bool
+	}{
+		{"InTx", "cancelled-intx", postgres.InTx, false},
+		{"InTxDetachedCommit", "cancelled-detached", postgres.InTxDetachedCommit, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			slug := tc.slug
+			err := tc.run(ctx, pool, func(tx postgres.Tx) error {
+				requireNoError(t, insertOrganization(ctx, tx, slug))
+				cancel() // The request ends after the write, before COMMIT.
+				return nil
+			})
+			if n := organizations(t, pool, slug); (err == nil) != tc.commit || (n == 1) != tc.commit {
+				t.Fatalf("error %v with %d rows, want committed=%t reported as such", err, n, tc.commit)
+			}
+		})
+	}
+	t.Run("callback error still rolls back", func(t *testing.T) {
+		failure := errors.New("callback failed")
+		err := postgres.InTxDetachedCommit(t.Context(), pool, func(tx postgres.Tx) error {
+			requireNoError(t, insertOrganization(t.Context(), tx, "detached-failed"))
+			return failure
+		})
+		if err != failure || organizations(t, pool, "detached-failed") != 0 {
+			t.Fatalf("InTxDetachedCommit = %v, want the callback's error and no row", err)
+		}
+	})
+}
+
 func TestInSnapshot(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)

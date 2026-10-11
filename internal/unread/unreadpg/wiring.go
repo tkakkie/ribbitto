@@ -14,10 +14,12 @@ func NewReading(pool *pgxpool.Pool, feed *unread.FeedWriter, topic *unread.Topic
 	return unread.NewReading(txRunner{pool: pool}, feed, topic, publisher)
 }
 
+// txRunner detaches only the commit from request cancellation, so a read the
+// server committed is always reported as committed and published.
 type txRunner struct{ pool *pgxpool.Pool }
 
 func (r txRunner) InTx(ctx context.Context, fn func(platform.Tx) error) error {
-	return platform.InTx(ctx, r.pool, fn)
+	return platform.InTxDetachedCommit(ctx, r.pool, fn)
 }
 
 // WriterIn binds the read-range writer to the caller's transaction.

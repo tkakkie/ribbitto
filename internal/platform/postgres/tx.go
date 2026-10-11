@@ -25,6 +25,24 @@ func InTx(ctx context.Context, pool *pgxpool.Pool, fn func(Tx) error) error {
 	return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error { return fn(handle.NewTx(tx)) })
 }
 
+// InTxDetachedCommit is InTx, except that once fn succeeds the commit runs
+// without ctx's cancellation. A request cancelled while COMMIT is in flight
+// could otherwise get an error for a commit the server already finished, and
+// a caller that acts only on success (Reading's post-commit publication)
+// would skip it for good. fn and the rollbacks still follow ctx.
+func InTxDetachedCommit(ctx context.Context, pool *pgxpool.Pool, fn func(Tx) error) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	// After a commit this is a no-op; on an error or a panic it rolls back.
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	if err := fn(handle.NewTx(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(context.WithoutCancel(ctx))
+}
+
 // InSnapshot runs fn in a new read-only, repeatable-read transaction on pool,
 // with InTx's error and panic behaviour. Writes through it fail.
 func InSnapshot(ctx context.Context, pool *pgxpool.Pool, fn func(Snapshot) error) error {

@@ -139,7 +139,7 @@ than combine both sides, it needs a normal review. Either way, if the diff
 from the last adversarially reviewed head to the merge result matches tier
 A or B, the pull request's tier, recomputed at the merge result, is
 reviewed again under the completion rule (Muse Code after a completed Grok
-report, unless the merge adds tier A behaviour) before it is marked ready
+report, unless the resolution adds tier A behaviour) before it is marked ready
 ([completion](adversarial-review.md#which-review-runs)); a pull request
 already marked ready is converted back to a draft until then.
 

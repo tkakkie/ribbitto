@@ -11,6 +11,30 @@ atomic level/channel snapshots ([stream limits](stream-limits.md)). The single
 writer waits on the durable cursor, declared generations, heartbeat and context
 without a lost wake-up or registry lock.
 
+## Member read-change watches
+
+`unread.Changes` owns process-local generations keyed by organisation and member
+(#829, registry foundation). Active watches share a generation and wake channel;
+publication closes/replaces that channel under the same mutex as subscription,
+snapshot capture and release. Publication without a watch retains no entry, and
+the last idempotent release deletes it. A reopened entry starts at zero; generations
+are comparable only within one subscription lifetime. No queue or worker is added.
+
+Callers subscribe, then capture the generation/channel pair **before** each
+persisted read, the initial one included, and wait on that captured channel. A
+commit before capture is in the read; one after it closes the channel, even during
+the read, so the next recount covers it. A pair captured after the read would
+miss a commit in between, until the member's next change or a reconnect.
+Publication costs one lookup/update and wakes only that member's waiting tabs;
+memory tracks active subscriptions, bounded by stream caps when wired. Production
+publication and stream delivery remain unwired here, for #828, #829's delivery PR
+and #711. Recounts and authorisation retain their existing per-tab costs.
+
+This registry is single-process. Reconnect recounts persisted state; an omitted
+notification has no bounded repair without reconnect. Multiple processes need
+cross-process member invalidation and a subscription/reconnect handshake; bounded
+missed-notification recovery additionally needs durable revisions or replay.
+
 ## Ephemeral state
 
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);

@@ -15,4 +15,7 @@
 // Topic state loads the prefix, all ranges above it and requested floors in
 // one snapshot statement, without multiplying ranges by topics. Topic counts
 // combine it with an injected message counter in the same snapshot.
+// Process-local member change generations share wake channels only among active
+// watches of one organisation/member; releasing the last watch removes its state.
+// Persisted read state remains authoritative across subscription lifetimes.
 package unread

@@ -36,6 +36,7 @@ type ChannelStore interface // ChannelStore reads and writes channels, always wi
   func (ChannelStore).GetDefaultChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error)
 type ChannelUnread interface // ChannelUnread counts messages in supplied, ordered, disjoint channel gaps.
   func (ChannelUnread).Count(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channels []github.com/tkakkie/ribbitto/internal/kernel.ID, gapChannels []github.com/tkakkie/ribbitto/internal/kernel.ID, los []int64, his []int64) (counts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, first map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, err error) // Count returns counts capped at 100 and first unread sequences (zero if none).
+  func (ChannelUnread).CountWithFirstUnread(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channels []github.com/tkakkie/ribbitto/internal/kernel.ID, gapChannels []github.com/tkakkie/ribbitto/internal/kernel.ID, los []int64, his []int64, firstUnread bool) (counts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, first map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, err error) // CountWithFirstUnread explicitly chooses whether to compute first unread.
 type Channels struct // Channels runs the channel use cases for a member resolved by org.
   func (*Channels).Create(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, name string) (Channel, error) // Create adds a channel.
   func (*Channels).Default(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership) (Channel, error) // Default returns the member's organisation's default channel.
@@ -117,7 +118,7 @@ type Page struct // Page is one page of a channel's history, oldest first.
   field Older bool // Older reports that messages before Entries[0] exist; the next page is read before Entries[0].EventSeq.
 type PageCounter interface // PageCounter reads both sidebar lists using org's resolved membership, including its persisted join sequence, in four statements altogether.
   func (PageCounter).Read(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID) (PageCounts, error)
-type PageCounts struct // PageCounts holds capped sidebar counts and uncapped first unread sequences; zero means the scope has no unread message.
+type PageCounts struct // PageCounts holds capped sidebar counts and uncapped first unread sequences; First sequences are zero when absent or disabled.
   field ChannelCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field FeedFirstUnread int64
   field TopicCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
@@ -159,6 +160,8 @@ func RoutePosted(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID
 type SequenceRange struct // SequenceRange contains message sequences from Lo inclusive to Hi exclusive.
   field Hi int64
   field Lo int64
+type SidebarCounter interface // SidebarCounter is the counts-only extension used by independent recounts.
+  func (SidebarCounter).ReadCounts(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID) (PageCounts, error) // ReadCounts returns both count maps without computing first unread.
 type SidebarSnapshot struct // SidebarSnapshot holds fresh sidebar lists and explicit counts, including zero.
   field ChannelCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field Channels []Channel
@@ -181,6 +184,7 @@ type TopicReader interface // TopicReader looks topics up within one organisatio
   func (TopicReader).GetTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error)
 type TopicUnread interface // TopicUnread counts messages using supplied read state, never foreign tables.
   func (TopicUnread).Count(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, prefix int64, topics []github.com/tkakkie/ribbitto/internal/kernel.ID, floors []int64, readSet [][2]int64, selected *github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error) // Count returns per-topic counts capped at 100 and the selected topic's uncapped first unread sequence (zero if none).
+  func (TopicUnread).CountWithFirstUnread(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, prefix int64, topics []github.com/tkakkie/ribbitto/internal/kernel.ID, floors []int64, readSet [][2]int64, selected *github.com/tkakkie/ribbitto/internal/kernel.ID, firstUnread bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error) // CountWithFirstUnread explicitly chooses whether to compute first unread.
 type Topics struct // Topics runs the topic lookups for a member resolved by org.
   func (*Topics).Get(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // Get returns a topic of the channel in the member's organisation, or ErrTopicNotFound.
 type TxRunner interface // TxRunner runs posting's and branching's transaction (decision 26): the use case owns the boundary, the writers only bind to the Tx they are given.

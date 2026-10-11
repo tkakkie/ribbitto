@@ -20,6 +20,10 @@ func TopicUnreadIn(s platform.Snapshot) conversation.TopicUnread {
 type topicUnread struct{ queries *sqlcgen.Queries }
 
 func (r topicUnread) Count(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet [][2]int64, selected *kernel.ID) (map[kernel.ID]int64, int64, error) {
+	return r.CountWithFirstUnread(ctx, organizationID, channelID, prefix, topics, floors, readSet, selected, true)
+}
+
+func (r topicUnread) CountWithFirstUnread(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet [][2]int64, selected *kernel.ID, firstUnread bool) (map[kernel.ID]int64, int64, error) {
 	if len(topics) != len(floors) {
 		return nil, 0, fmt.Errorf("counting topic unread: unequal topic arrays")
 	}
@@ -37,7 +41,7 @@ func (r topicUnread) Count(ctx context.Context, organizationID, channelID kernel
 	if selected != nil {
 		selection = uuid(*selected)
 	}
-	rows, err := r.queries.CountTopicUnread(ctx, sqlcgen.CountTopicUnreadParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), PrefixBefore: prefix - 1, TopicIds: ids, Floors: floors, ReadSet: ranges, Selected: selection})
+	rows, err := r.queries.CountTopicUnread(ctx, sqlcgen.CountTopicUnreadParams{WithFirstUnread: firstUnread, OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), PrefixBefore: prefix - 1, TopicIds: ids, Floors: floors, ReadSet: ranges, Selected: selection})
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting topic unread: %w", err)
 	}

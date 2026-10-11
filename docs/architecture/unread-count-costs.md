@@ -16,7 +16,7 @@ index, `R` ranges of the current channel at or above `P`:
   Incremental sorting stops earlier but can read beyond the 100 returned rows.
   A channel with nothing unread costs one empty probe of its open gap.
   These bounds describe stored-row access. Parameter pairing and scanning
-  the bounded CTE for each channel's count and first sequence add
+  the bounded CTE for each channel's count and optional first sequence add
   `O(100 · K²)` in-memory work; aggregates never revisit `message`.
 - **Step 3:** `O(R + T)` rows; `R` is 1 in normal use and grows with
   fragmentation (below).
@@ -25,7 +25,7 @@ index, `R` ranges of the current channel at or above `P`:
   moves (at most 100 messages per move) and own posts above the floor add
   **unbounded** filtering. #283 benchmarks stream lag; unacceptable costs
   require per-topic gap probes.
-  First unread is uncapped: a CTE filters `M` rows moved after the selected
+  On normal pages, first unread is uncapped: a CTE filters `M` rows moved after the selected
   topic's floor, outputting at most `M`; choosing the lowest sequence costs
   `O(M)`, plus `O(M log R)` containment.
   Materialisation blocks the sequence-order limit at the CTE, removing #779's
@@ -40,6 +40,45 @@ index, `R` ranges of the current channel at or above `P`:
   Above-floor filtering remains unbounded; #747 re-checks page load. Reproduce
   with
   `RIBBITTO_FIRST_UNREAD_BENCH=1 go test -count=1 -run '^TestFirstUnreadBench$' -v ./cmd/ribbitto`.
+
+## Counts-only sidebar recounts (#854, unit 2)
+
+Production recounts disable first unread independently of selection. Four count
+statements still run: feed recounts use 7 total, listed and unlisted topic
+recounts 8, in one begin/commit pair. Normal pages remain 12 feed, 13 topic,
+10 members. No execution saving is claimed.
+
+Measured on local PostgreSQL 18.6, default planner settings, ANALYZE and second
+(warm) EXPLAIN on 2026-10-12: 10k history messages, 1k unread moves below floor
+20,000 and one message above it; join prefix 2. Listed uses one topic, unlisted
+uses 50 links plus the selected topic. Both selected counts remain capped at 100.
+
+| Selection | Topic shared hits before → after | Topic statement ms before → after |
+|---|---:|---:|
+| Listed | 37 → 7 | 0.291 → 0.047 |
+| Unlisted | 11,337 → 11,307 | 29.801 → 29.485 |
+
+Before, `CTE moved → Nested Loop` returned 1,000 rows, loops=1, with 27 shared
+hits; after, that node and its message scans say `never executed` for both
+selections. The selected above-floor first probe also stops; capped count
+probes remain. Channel first-sequence scan/sort disappears; message access
+and its 4 shared hits remain. All plans had zero shared reads. The unlisted
+fixture's empty-topic count filtering still dominates: these single warm plans
+show skipped work, not a throughput or end-to-end latency guarantee.
+
+Reproduce with the database and worktree caches exported as in the task:
+
+```sh
+RIBBITTO_RECOUNT_MEASURE=1 go test -count=1 -run '^TestSidebarSkipsFirstUnread$' -v ./cmd/ribbitto
+```
+
+The test traces the actual recount's two message-count statements and parameters,
+replays each with `EXPLAIN (ANALYZE, BUFFERS)`, guards zero first-unread output and
+non-execution of moved materialisation, and compares counts with a normal page.
+The before run used the same fixture/test with production files restored from
+`codex/sidebar-assembly`; its zero-first assertions failed as expected. Normal
+page first unread remained 2/2 in both runs. Commands and plan excerpts are in
+the local PR handoff.
 
 ## Expected load
 

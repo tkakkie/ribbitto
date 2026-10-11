@@ -43,6 +43,7 @@ Read the file for the area you change:
 | [`unread-writes.md`](unread-writes.md) | how read ranges are written: the current feed, topic-view, branch-notice and posting writes |
 | [`unread-benchmark-results.md`](unread-benchmark-results.md) | the read-range benchmark's results (#283) and the go/no-go decision |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
+| [`read-advance-results.md`](read-advance-results.md) | short read-advance costs, member isolation, matched posting/branching unions and #711 acceptance |
 | [`stream-sidebar-results.md`](stream-sidebar-results.md) | measured cost of live sidebar recounts per stream with distinct members (#812) |
 | [`stream-sidebar-bottleneck-results.md`](stream-sidebar-bottleneck-results.md) | where live sidebar latency goes at thousands of streams, and two test-only experiments (#826) |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |

@@ -70,7 +70,13 @@ recounts with reload targets, distinguish members with the same join sequence,
 and revoke access during a gated recount. `TestLiveSidebarBranchDisplacement`
 checks a real mixed-read branch displacing the selected source from 50 links;
 `TestLiveSidebarBrowser` checks production replacement, retained-link focus and
-the unlisted heading against a reload (#811). Cost measurement remains in #812.
+the unlisted heading against a reload (#811). Post/move costs are in [sidebar results](stream-sidebar-results.md).
+Read advances now trigger this same full snapshot only for the same member and
+organisation: reading A clears A and reduces the channel while preserving B;
+reading the feed clears its related displayed topics in every tab. Posting's
+read writes use the existing durable trigger, without a duplicate read signal.
+[Read results and acceptance](read-advance-results.md) cover the per-tab cost;
+no count is incrementally patched in memory.
 
 Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
 parameter. These statements share the page or sidebar snapshot that runs them, with none per channel or topic.

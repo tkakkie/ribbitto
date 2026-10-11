@@ -87,6 +87,11 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   reads are not rate-limited by the recount interval. This is single-process:
   shared member invalidation and subscription/reconnect coordination are needed
   across processes; bounded recovery additionally needs revisions or replay.
+  [Short measurements](read-advance-results.md) isolate matching tabs from total
+  connections: unrelated members do no read-induced work. They do not establish
+  a ceiling. Publication has no subscriber queue; zero-subscriber reads still
+  pay transaction cost but retain no registry entry. Unknown-COMMIT recounts
+  may precede persistence; [reconnect limits](unread-writes.md) still apply.
 
 - Each connection reads the log itself (#209), so nothing queues for a slow
   client: its cursor just lags. A client that stops reading is

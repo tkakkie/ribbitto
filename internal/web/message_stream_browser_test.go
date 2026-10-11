@@ -19,6 +19,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"github.com/tkakkie/ribbitto/web/static"
 )
@@ -40,6 +41,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 	t.Cleanup(launch.Kill)
 	browser := rod.New().ControlURL(url).MustConnect()
 	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	t.Run("typing/indicator", func(t *testing.T) { testTypingIndicatorBrowser(t, browser) })
 	t.Run("composer/typing", func(t *testing.T) { testTypingComposerBrowser(t, browser) })
 	t.Run("composer/no-javascript", func(t *testing.T) { testComposerWithoutJavaScript(t, browser) })
 	t.Run("unread-divider", func(t *testing.T) { testUnreadDividerBrowser(t, browser) })
@@ -434,7 +436,7 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 	defer page.MustClose()
 	page.MustEvalOnNewDocument(`document.addEventListener('htmx:sseOpen', e => window.testSource = e.detail.source);
 		document.addEventListener('htmx:sseMessage', e => {
-			if (e.target.id === 'stream-sink') {
+			if (e.target.id === 'stream-sink' || e.target.id === 'typing-status') {
 				document.body.dataset.frame = e.detail.type;
 				document.body.dataset.lastId = e.detail.lastEventId;
 			}
@@ -507,6 +509,18 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 			!document.getElementById('stream-sink').hasChildNodes() && document.querySelectorAll('#sidebar-topics > li').length === 1`).Bool() {
 			t.Fatal("real sidebar payload changed the cursor, sink or fresh list")
 		}
+	}
+	for _, people := range [][]typing.Typist{{{DisplayName: "Alice", Handle: "alice"}}, nil} {
+		send(&realtime.Outgoing{Ephemeral: true, ID: 999, Name: "typing",
+			Data: streamTestMarkup(t, view.TypingIndicator(typing.Snapshot{Typists: people}))})
+		page.MustWait(`empty => document.body.dataset.frame === 'typing' &&
+			(document.getElementById('typing-status').textContent === '') === empty`, len(people) == 0)
+		if !page.MustEval(`() => document.body.dataset.lastId === '51' &&
+			document.getElementById('organization-stream').dataset.eventCursor === '51' &&
+			new URL(document.getElementById('organization-stream').getAttribute('sse-connect'), location.href).searchParams.get('after') === '51'`).Bool() {
+			t.Fatal("typing changed native or page durable cursor")
+		}
+		assertBrowserItems(t, page, []int{51})
 	}
 	// Native retry retains the original URL and sends its durable Last-Event-ID.
 	send(nil)

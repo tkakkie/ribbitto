@@ -252,3 +252,6 @@ other = "が入力中…"
 
 ["activity.multiple"]
 other = "が入力中…"
+
+["activity.label"]
+other = "入力状況"

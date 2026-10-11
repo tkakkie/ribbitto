@@ -252,3 +252,6 @@ other = " is typing…"
 
 ["activity.multiple"]
 other = " are typing…"
+
+["activity.label"]
+other = "Typing activity"

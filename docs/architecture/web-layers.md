@@ -1,8 +1,6 @@
 # Web layers: handlers, templ, htmx and JavaScript
 
-What each browser-facing layer is responsible for, decided by the
-maintainer on 2026-09-30 ([decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)). Follow
-it for every page, fragment and script; M3's SSE work builds on it.
+Browser-facing responsibilities, decided on 2026-09-30 ([decision 19](../decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)).
 
 ## Progressive enhancement
 
@@ -27,8 +25,7 @@ to view models, and choose the status, component and full page or fragment. They
 
 ## templ
 
-Components render view models defined in `internal/web/view`. They do not
-receive module or use-case types: handlers convert those. View
+Components render view models defined in `internal/web/view`. Handlers convert module results; components never receive them. View
 models own their `Organization` (`Slug`, `Name`), `Channel` (`ID`, `DefaultTopicID`, `Name`)
 and `Topic` (`ID`, `Name`, `IsDefault`). Views import neither `org` nor
 `conversation`. From `kernel`
@@ -41,8 +38,7 @@ formatting, choosing an i18n message ID) belongs in them.
 
 htmx does only requests and swaps; the server and templ own the HTML.
 
-- A normal request gets a full page. Selecting part of a full page with
-  `hx-select` is allowed (Load older).
+- A normal request gets a full page. `hx-select` can select part of it (Load older).
   Enhanced posts return `MessageComposer`: the message form plus a hidden
   `typing-form`, refreshed out of band with the same generation (only there: Load
   older would install an unclosed one). Signals use the
@@ -55,17 +51,15 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `message-composer-v5.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one.
-  Fragments echo the submitted cursor; only stream application advances it. The action URL
-  identifies the feed/topic scope. The stream script consumes that id to scroll once the item is present,
+  Fragments echo the submitted cursor; only stream application advances it. The action URL identifies the feed/topic. The stream script consumes that id to scroll once the item is present,
   regardless of response/delivery order or a reconnect.
-- A unit that M3's SSE needs becomes an explicit templ fragment or
-  component, rendered by the same code as the full page. `MessageItem`
+- SSE uses explicit fragments shared with full-page rendering. `MessageItem`
   takes a `view.Message` and renders one `<li>` on its own or in the page.
 - **DOM ids are a contract.** Templates define every id that `hx-target`,
   `hx-select`, `hx-select-oob` or a script refers to. Renaming one means
   updating every reference in the same pull request. Today's contract ids
   are `organization-stream`, `stream-sink`, `conversation`, `message-list`, `message-items`, `load-older`,
-  `typing-form`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
+  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
   `read-form`, `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
@@ -73,7 +67,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `link-topic-<hex>` ids for focus restoration, `sidebar-channels`,
   `sidebar-topics` for whole lists and `topic-heading-count` for every topic heading, and `presence-<hex>` from `PresenceDOMID` for member indicators
   (32 lowercase hex digits). Load older selects `#message-items > li`.
-- **The data attributes that scripts read are a contract too,** with the
+- **Script-read data attributes are a contract too,** with the
   same renaming rule (#351). Besides `data-event-cursor`,
   `data-posted-message` and `data-announcement` (described in this section):
 
@@ -113,7 +107,10 @@ htmx does only requests and swaps; the server and templ own the HTML.
   render cache stores those live items, attribute included. History pages,
   including Load older, omit it.
   `#message-status` retains only the latest 10 announcements; history itself
-  is never a live region.
+  is never a live region. Latest feeds/topics receive `typing` on the stable
+  `#typing-status` outside the composer, replacing only localized polite status
+  content (`hx-swap="innerHTML"`). Empty reconnect frames clear stale content;
+  typing changes neither focus nor durable cursors.
 - Latest feeds/topics render `#read-form` with the snapshot `cursor`, a plain
   *Mark as read* submit button, and `hx-post` to the conversation URL plus
   `/read`: `POST /organizations/{slug}/channels/{channelID}/read` or
@@ -130,8 +127,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
 
 ## JavaScript
 
-JavaScript never generates HTML and never owns application state. It is
-limited to UX help that HTML and htmx handle poorly: focus, scroll,
+JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
 keyboard, local time, selection constraints, and htmx/SSE input glue.
 
 - `message-stream-v9.js` emits `read-applied` only after successful DOM
@@ -159,7 +155,7 @@ keyboard, local time, selection constraints, and htmx/SSE input glue.
   ([`rendering.md`](rendering.md)). Vendored libraries (htmx, idiomorph)
   keep their own globals and upstream file names ([a11y]).
 - **htmx events:** an `htmx:load` handler works only on the inserted element
-  and its descendants, never the whole document (#168).
+  and descendants, never the whole document (#168).
 
 Move/history regression tests use an installed headless browser through
 go-rod (#349); see the [checks](web-layers-checks.md).

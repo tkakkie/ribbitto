@@ -1,6 +1,8 @@
 package view
 
 import (
+	"context"
+
 	"strconv"
 
 	"github.com/tkakkie/ribbitto/internal/typing"
@@ -8,25 +10,46 @@ import (
 )
 
 // TypingIndicator supplies content replacement; the page owns its status region.
+// templ.Join keeps the pieces adjacent: templ turns a line break between them
+// into a space, which Japanese shows around 、 and before が入力中.
 templ TypingIndicator(snapshot typing.Snapshot) {
-	if len(snapshot.Typists) > 0 {
-		for index, person := range snapshot.Typists {
-			if index > 0 && index == len(snapshot.Typists)-1 && snapshot.Remaining == 0 {
-				{ i18n.T(ctx, "activity.last_separator") }
-			} else if index > 0 {
-				{ i18n.T(ctx, "activity.separator") }
-			}
-			@MemberName(person.DisplayName, person.Handle)
-		}
-		if snapshot.Remaining == 1 {
-			{ i18n.T(ctx, "activity.more") + "1" + i18n.T(ctx, "activity.other") }
-		} else if snapshot.Remaining > 1 {
-			{ i18n.T(ctx, "activity.more") + strconv.Itoa(snapshot.Remaining) + i18n.T(ctx, "activity.others") }
-		}
-		if len(snapshot.Typists) == 1 && snapshot.Remaining == 0 {
-			{ i18n.T(ctx, "activity.single") }
-		} else {
-			{ i18n.T(ctx, "activity.multiple") }
-		}
+	for index, person := range snapshot.Typists {
+		@templ.Join(typingText(typingSeparator(ctx, snapshot, index)), MemberName(person.DisplayName, person.Handle), typingText(typingSuffix(ctx, snapshot, index)))
 	}
+}
+
+templ typingText(text string) {
+	{{
+		// Same staticcheck SA4006 workaround as MemberName (member.templ).
+		_ = ctx
+	}}
+	{ text }
+}
+
+func typingSeparator(ctx context.Context, snapshot typing.Snapshot, index int) string {
+	switch {
+	case index == 0:
+		return ""
+	case index == len(snapshot.Typists)-1 && snapshot.Remaining == 0:
+		return i18n.T(ctx, "activity.last_separator")
+	default:
+		return i18n.T(ctx, "activity.separator")
+	}
+}
+
+// typingSuffix ends the sentence after the last shown name.
+func typingSuffix(ctx context.Context, snapshot typing.Snapshot, index int) string {
+	if index < len(snapshot.Typists)-1 {
+		return ""
+	}
+	more := ""
+	if snapshot.Remaining == 1 {
+		more = i18n.T(ctx, "activity.more") + "1" + i18n.T(ctx, "activity.other")
+	} else if snapshot.Remaining > 1 {
+		more = i18n.T(ctx, "activity.more") + strconv.Itoa(snapshot.Remaining) + i18n.T(ctx, "activity.others")
+	}
+	if len(snapshot.Typists) == 1 && snapshot.Remaining == 0 {
+		return more + i18n.T(ctx, "activity.single")
+	}
+	return more + i18n.T(ctx, "activity.multiple")
 }

@@ -120,7 +120,7 @@ and `messages-moved` frames advance the browser's durable cursor.
 Ephemeral delivery filters organisation, interest and typing channel/topic
 before authorization, preserving the durable cursor and heartbeat deadlines.
 Typing receives server-resolved member identity and after=-1 on connect,
-restoring even empty content. Later reads acknowledge the organisation level
+restoring current content, even empty, in `#typing-status`. Later reads acknowledge the organisation level
 without repeating unchanged places ([owner contract](typing.md#production-delivery)).
 Presence receives the page
 token: one coalesced entry per member, in last-change order, at most 100.
@@ -138,20 +138,20 @@ batches during a backlog. The [fixed minimum interval](stream-limits.md) coalesc
 bursts. Recounts render full state, then authorize the organisation immediately
 before sending without `id:`; errors stop delivery, denies discard the frame.
 Reconnect always recounts, including after a message whose recount was lost.
-Their swap targets are listed below; the typing region remains planned.
+Swap targets:
 
 | Event | `id:` | Where htmx puts it |
 |---|---|---|
 | `message`, `messages-moved` | the sequence | `#message-items`, as today |
 | `sidebar` | none | whole sidebar lists and selected heading count, out of band (#818) |
 | `presence` | none | each member's indicator, out of band by its DOM id (#768) |
-| `typing` | none | the content of the page's typing indicator (#288) |
+| `typing` | none | `#typing-status` content replacement on latest feeds/topics (#790) |
 | `reset` | the cursor for durable reset; none for owner reset | the stream script reloads the page, as today |
 
 `#organization-stream`, holding `sse-connect`, wraps the sidebar and conversation or members panel, because the htmx
 SSE extension attaches an `sse-swap` element to its closest ancestor with a
 source. Messages have their own `sse-swap` on latest pages; older pages omit it.
-Planned typing has its own region. Per-entry events go to the hidden
+Typing replaces content outside the composer. Per-entry events go to the hidden
 `#stream-sink` inside this container, `sse-swap="sidebar,presence"` with
 `hx-swap="none"`, whose payload holds only `hx-swap-oob` elements: the
 extension swaps through htmx's own swap, which applies out-of-band elements

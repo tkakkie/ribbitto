@@ -12,7 +12,13 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/input"
+	"github.com/go-rod/rod/lib/proto"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -175,6 +181,221 @@ func testTypingComposerBrowser(t *testing.T, browser *rod.Browser) {
 }`)
 			if signals.Load() != 3 || posts.Load() != int32(wantPosts) || len(state.Read(member.Organization.ID, place, kernel.ID{99}).Typists) != 1 {
 				t.Fatal("fresh input refused or unexpected queued request/post")
+			}
+		})
+	}
+}
+
+// Production handlers, lifecycle, owner and writer; membership/history/storage are DB-free fixtures.
+func testTypingIndicatorBrowser(t *testing.T, browser *rod.Browser) {
+	for _, lang := range []string{"en", "ja"} {
+		t.Run(lang, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 35*time.Second)
+			defer cancel()
+			hub := realtime.NewHub()
+			state := typing.New(hub)
+			closed := make(chan kernel.ID, 16)
+			signaled := make(chan struct{}, 8)
+			type connection struct {
+				cancel        context.CancelFunc
+				after, lastID string
+			}
+			type screen struct {
+				page     *rod.Page
+				requests chan connection
+			}
+			open := func(member byte, topic *kernel.ID) screen {
+				t.Helper()
+				requests := make(chan connection, 4)
+				handler, _, m, place := composerHandler(t, true, func(s *Services) {
+					m := org.Membership{Organization: org.Organization{ID: kernel.ID{7}, Slug: "acme"}, Member: org.Member{ID: kernel.ID{member}, Handle: "alice"}}
+					s.Authz, s.Typing = composerMember{membership: m}, state
+					snapshot := conversation.ChannelPage{Current: conversation.Channel{ID: kernel.ID{1}, DefaultTopicID: kernel.ID{2}}, EventCursor: new(int64(42))}
+					if topic != nil {
+						snapshot.Topic = &conversation.Topic{ID: *topic}
+					}
+					s.Messages = sidebarReader{page: snapshot}
+					s.Stream = &Streaming{Lifetime: t.Context(), Hub: hub, Events: quietLog{}, Authorizer: streamAllow(true), Sessions: s.Sessions,
+						Owners: map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestTyping: NewTypingOwner(state)},
+						StreamOpened: func(o, m, c kernel.ID) func() {
+							closeStream := state.Open(o, m, c)
+							return func() { closeStream(); closed <- m }
+						}}
+				})
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+					r.Header.Set("Accept-Language", lang)
+					if strings.HasSuffix(r.URL.Path, "/events") {
+						ctx, cancel := context.WithCancel(r.Context())
+						defer cancel()
+						requests <- connection{cancel, r.URL.Query().Get("after"), r.Header.Get("Last-Event-ID")}
+						r = r.WithContext(ctx)
+					}
+					handler.ServeHTTP(w, r)
+					if strings.HasSuffix(r.URL.Path, "/typing") {
+						signaled <- struct{}{}
+					}
+				}))
+				t.Cleanup(server.Close)
+				page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+				t.Cleanup(func() { page.Context(context.Background()).Timeout(5 * time.Second).MustClose() })
+				page.MustEvalOnNewDocument(`document.addEventListener('htmx:sseOpen', e => window.testSource = e.detail.source);
+ document.addEventListener('htmx:sseMessage', e => {
+  if (e.target.id === 'typing-status') document.body.dataset.typingFrames = String(+(document.body.dataset.typingFrames || 0) + 1);
+ });`)
+				url := server.URL + view.ConversationURL(m.Organization.Slug, place.Channel, topic)
+				page.MustNavigate(url).MustWaitLoad()
+				page.MustWait(`() => +document.body.dataset.typingFrames > 0`)
+				return screen{page, requests}
+			}
+			next := func(s screen) connection {
+				t.Helper()
+				select {
+				case c := <-s.requests:
+					if c.after != "42" || c.lastID != "" {
+						t.Fatalf("typing changed reconnect cursor: %+v", c)
+					}
+					return c
+				case <-ctx.Done():
+					t.Fatal("stream did not connect", ctx.Err())
+					return connection{}
+				}
+			}
+			a, b := kernel.ID{3}, kernel.ID{4}
+			typist, feed, topicA, topicB := open(8, &a), open(9, nil), open(9, &a), open(9, &b)
+			next(typist)
+			feedConnection := next(feed)
+			next(topicA)
+			next(topicB)
+			extra := open(8, &a)
+			next(extra)
+			// Key and input actions wait for a repaint, which a background tab never does.
+			feed.page.MustActivate()
+			feed.page.MustElement("#message-body").MustType(input.Tab)
+			if !feed.page.MustEval(`() => document.activeElement === document.querySelector('#message-composer button')`).Bool() {
+				t.Fatal("typing introduced a keyboard stop")
+			}
+			feed.page.MustElement("#message-body").MustFocus()
+			feed.page.MustEval(`() => window.statusBefore = document.getElementById('typing-status')`)
+			signalInput := func() {
+				typist.page.MustActivate()
+				typist.page.MustElement("#message-body").MustInput("draft")
+				select {
+				case <-signaled:
+				case <-ctx.Done():
+					t.Fatal("input did not signal", ctx.Err())
+				}
+			}
+			expect := func(s screen, want string) {
+				t.Helper()
+				// Compare the rendered text: template whitespace collapses on screen.
+				s.page.MustWait(`want => document.getElementById('typing-status').textContent.replace(/\s+/g, ' ').trim() === want`, want)
+			}
+			one := "Alice @alice is typing…"
+			if lang == "ja" {
+				one = "Alice @aliceが入力中…"
+			}
+			signalInput()
+			expect(feed, one)
+			expect(topicA, one)
+			reconnect := func(s screen) string {
+				t.Helper()
+				// Stale content survives the disconnect and must be replaced even
+				// when this place has never had a nonzero generation.
+				s.page.MustEval(`() => {
+ document.getElementById('typing-status').textContent = 'stale';
+ window.testSource.close();
+ window.testSource.dispatchEvent(new Event('error'));
+}`)
+				next(s)
+				s.page.MustWait(`() => document.getElementById('typing-status').textContent !== 'stale'`)
+				return s.page.MustEval(`() => document.getElementById('typing-status').textContent.trim()`).String()
+			}
+			// Check the reconnect frame itself: waiting for empty would also pass
+			// once the typist's activity expires.
+			if got := reconnect(topicB); got != "" {
+				t.Fatalf("topic B shows topic A's typing after reconnect: %q", got)
+			}
+			if got := reconnect(typist); got != "" {
+				t.Fatalf("typist sees their own typing after reconnect: %q", got)
+			}
+			if !feed.page.MustEval(`() => {
+ const status = document.getElementById('typing-status');
+ return status === window.statusBefore && status.getAttribute('role') === 'status' &&
+  status.getAttribute('aria-live') === 'polite' && status.getAttribute('aria-atomic') === 'true' &&
+  document.activeElement.id === 'message-body' && !status.hasAttribute('tabindex') &&
+  !document.querySelector('#message-list [aria-live]') && !document.getElementById('message-list').hasAttribute('aria-live') &&
+  document.getElementById('organization-stream').dataset.eventCursor === '42';
+}`).Bool() {
+				t.Fatal("typing replacement moved focus, status or durable cursor")
+			}
+			expect(feed, "")
+			expect(topicA, "")
+			signalInput()
+			expect(feed, one)
+			navigated := typist.page.WaitNavigation(proto.PageLifecycleEventNameLoad)
+			typist.page.MustActivate()
+			typist.page.MustElement("#message-body").MustType(input.Enter)
+			navigated()
+			if len(state.Read(kernel.ID{7}, typing.Place{Channel: kernel.ID{1}, Topic: a}, kernel.ID{9}).Typists) != 0 {
+				t.Fatal("send did not clear typing")
+			}
+			expect(feed, "")
+			expect(topicA, "")
+			next(typist)
+			typist.page.MustWait(`() => +document.body.dataset.typingFrames > 0`)
+			signalInput()
+			expect(feed, one)
+			// Native retry restores current content; next checks its durable cursor.
+			feed.page.MustEval(`() => document.getElementById('typing-status').textContent = 'stale'`)
+			feedConnection.cancel()
+			next(feed)
+			expect(feed, one)
+			signalInput() // Renew after the native retry before checking stream closes.
+			closeOne := func(s screen) {
+				t.Helper()
+				s.page.MustEval(`() => window.testSource.close()`)
+				for {
+					select {
+					case member := <-closed:
+						if member == (kernel.ID{8}) {
+							return
+						}
+					case <-ctx.Done():
+						t.Fatal("stream did not close", ctx.Err())
+					}
+				}
+			}
+			// Drain completed reconnect cleanups before testing matching closes.
+			for len(closed) > 0 {
+				<-closed
+			}
+			closeOne(extra)
+			if len(state.Read(kernel.ID{7}, typing.Place{Channel: kernel.ID{1}, Topic: a}, kernel.ID{9}).Typists) != 1 {
+				t.Fatal("one of several streams cleared activity")
+			}
+			expect(feed, one)
+			closeOne(typist)
+			if len(state.Read(kernel.ID{7}, typing.Place{Channel: kernel.ID{1}, Topic: a}, kernel.ID{9}).Typists) != 0 {
+				t.Fatal("last close did not clear typing")
+			}
+			expect(feed, "")
+			expect(topicA, "")
+			reconnect(feed)
+			expect(feed, "")
+			wants := map[string]map[int]string{
+				"en": {1: "@Name1 is typing…", 3: "@Name3, @Name2 and @Name1 are typing…", 5: "@Name5, @Name4, @Name3 and 2 others are typing…"},
+				"ja": {1: "@Name1が入力中…", 3: "@Name3、@Name2、@Name1が入力中…", 5: "@Name5、@Name4、@Name3、ほか2人が入力中…"},
+			}
+			for count := 1; count <= 5; count++ {
+				id := kernel.ID{byte(20 + count)}
+				t.Cleanup(state.Open(kernel.ID{7}, id, kernel.ID{1}))
+				state.Start(kernel.ID{7}, typing.Place{Channel: kernel.ID{1}, Topic: a},
+					typing.Typist{Member: id, Handle: fmt.Sprintf("Name%d", count)})
+				if want := wants[lang][count]; want != "" {
+					expect(feed, want)
+					expect(topicA, want)
+				}
 			}
 		})
 	}

@@ -240,7 +240,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					</div>
 					<div id="message-status" role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
 					@branchForm(page)
-					@MessageComposer(page)
+					@messageComposer(page, false)
 				</main>
 			}
 		</div>
@@ -270,6 +270,13 @@ templ unreadDivider(seq, firstUnread int64) {
 
 // MessageComposer refreshes both sibling forms after enhanced submissions.
 templ MessageComposer(page ChannelPage) {
+	@messageComposer(page, true)
+}
+
+// Only the enhanced fragment replaces the signal form out of band. htmx
+// applies out-of-band swaps from any response, including the history page
+// Load older fetches, which would install a generation no post ever closes.
+templ messageComposer(page ChannelPage, oob bool) {
 	<form
 		id="message-composer"
 		if page.PostedMessageID != nil {
@@ -308,7 +315,9 @@ templ MessageComposer(page ChannelPage) {
 		hidden
 		method="post"
 		action={ typingURL(page) }
-		hx-swap-oob="outerHTML"
+		if oob {
+			hx-swap-oob="outerHTML"
+		}
 		if page.Composer != nil {
 			hx-post={ typingURL(page) }
 			hx-trigger="typing-input throttle:2s queue:none"

@@ -41,10 +41,11 @@ formatting, choosing an i18n message ID) belongs in them.
 
 htmx does only requests and swaps; the server and templ own the HTML.
 
-- A normal request gets a full page. Selecting part of a server-rendered
-  full page with `hx-select` is allowed; Load older does this today.
-  Enhanced posts return `MessageComposer`: the message form plus hidden sibling
-  `typing-form`, refreshed out of band with the same generation. Signals use the
+- A normal request gets a full page. Selecting part of a full page with
+  `hx-select` is allowed (Load older).
+  Enhanced posts return `MessageComposer`: the message form plus a hidden
+  `typing-form`, refreshed out of band with the same generation (only there: Load
+  older would install an unclosed one). Signals use the
   actual posting topic's `/typing` POST, `typing-input throttle:2s queue:none`,
   independent `this:drop` synchronization and no swap. Input/IME glue only triggers
   htmx. On success the message form's

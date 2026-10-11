@@ -280,8 +280,8 @@ func TestTypingComposerMarkup(t *testing.T) {
 					}
 				}
 				want := view.ConversationURL("acme", place.Channel, &place.Topic) + "/typing"
-				if signal == nil || message == nil || signal.Parent != message.Parent || attr(signal, "hx-post") != want || attr(signal, "hx-trigger") != "typing-input throttle:2s queue:none" || attr(signal, "hx-sync") != "this:drop" || attr(signal, "hx-swap-oob") != "outerHTML" {
-					t.Fatal("wrong signal scope, replacement or request coordination")
+				if signal == nil || message == nil || signal.Parent != message.Parent || attr(signal, "hx-post") != want || attr(signal, "hx-trigger") != "typing-input throttle:2s queue:none" || attr(signal, "hx-sync") != "this:drop" || attr(signal, "hx-swap-oob") != "" {
+					t.Fatal("wrong signal scope, out-of-band replacement on a full page or request coordination")
 				}
 				if _, hidden := attrOK(signal, "hidden"); !hidden || attr(find(signal, atom.Input), "value") != controls.Get("composer") || find(signal, atom.Textarea) != nil || find(signal, atom.Button) != nil {
 					t.Fatal("signal form exposed controls or a different generation")
@@ -291,6 +291,27 @@ func TestTypingComposerMarkup(t *testing.T) {
 				}
 				for _, lang := range []string{"en", "ja"} {
 					checkHTMXRequests(t, h, doc, lang, true)
+				}
+				// Topic composers submit plainly and reload the whole page.
+				if !topic {
+					action, posted := composerForm(t, w)
+					posted.Set("body", "fragment")
+					fragment, err := html.Parse(composerRequest(h, action, posted, true).Body)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var renewed int
+					for n := range fragment.Descendants() {
+						if attr(n, "id") == "typing-form" {
+							renewed++
+							if attr(n, "hx-swap-oob") != "outerHTML" {
+								t.Fatal("enhanced fragment does not replace the signal form")
+							}
+						}
+					}
+					if renewed != 1 {
+						t.Fatalf("enhanced fragment rendered %d signal forms", renewed)
+					}
 				}
 			})
 		}

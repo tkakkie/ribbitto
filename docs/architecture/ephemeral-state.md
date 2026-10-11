@@ -26,9 +26,9 @@ commit before capture is in the read; one after it closes the channel, even duri
 the read, so the next recount covers it. A pair captured after the read would
 miss a commit in between, until the member's next change or a reconnect.
 Publication costs one lookup/update and wakes only that member's waiting tabs;
-memory tracks active subscriptions, bounded by stream caps when wired. Optional
-`realtime.SidebarWatcher` delivery is implemented (#829); production publication
-and activation remain for #828 and #711. The stream acquires before its initial
+memory tracks active subscriptions, bounded by production stream caps.
+`cmd/ribbitto` shares one registry between Reading and the live sidebar
+`realtime.SidebarWatcher` adapter (#711). The stream acquires before its initial
 recount and defers release immediately. Observed generations dirty the existing
 coalescer without moving its deadline; only a successful send or explicit denial
 acknowledges the generation captured before the persisted read. Changes during

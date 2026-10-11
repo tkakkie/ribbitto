@@ -43,7 +43,9 @@ spurious (the read did not commit; a retried read may publish again), it may
 reach tabs **before** the commit completes on the server, so their recount can
 still miss it, and a process that dies between commit and publication publishes
 nothing. Recovery in those cases is the recount every stream does on
-(re)connect: option B has no bounded repair without reconnect (#711). Production passes nil until #711 activates delivery.
+(re)connect: option B has no bounded repair without reconnect (#711).
+Production wires one `unread.Changes` registry to Reading and sidebar watches;
+without a hub the publisher remains nil.
 Concurrent feed/topic reads share the channel lock, including lock-row creation,
 so the same unread message cannot cause two publications. Posting discards the
 result and retains its existing

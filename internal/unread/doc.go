@@ -8,8 +8,9 @@
 // owns their transactions and synchronously calls a context-free publisher only
 // after a successful commit with changed=true, or when the commit's outcome is
 // unknown (a recount is right either way); never after a rollback or an error reply.
-// Production passes nil until #711 activates delivery; committed reads must survive
-// request cancellation. Posting and branching use only transaction-bound writers
+// Production shares one Changes registry with sidebar streams when the hub is wired;
+// without a hub the publisher is nil. Committed reads survive request cancellation.
+// Posting and branching use only transaction-bound writers
 // and their durable message.posted notification, never the reading publisher.
 // Topic preparation and batch unions retain the channel lock in the caller's
 // transaction; topic floors only rise, including when no new range is added.

@@ -79,7 +79,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   combined wait. Recounts never change the cursor; only successful writes
   restart the heartbeat deadline. Production streams supply a per-connection
   source (#819); its composition is in [unread counts](unread-counts.md).
-  Optional member watches (#829) feed this same coalescer; activation is #711.
+  Production member watches (#711) feed this same coalescer.
   Each active read publication costs one locked lookup/update and replacement
   channel; wake work scales with that member's waiting tabs. Registry memory
   follows active member entries and watches; last release removes the entry.

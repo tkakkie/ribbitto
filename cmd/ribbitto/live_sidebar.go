@@ -7,6 +7,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/web"
 )
 
@@ -16,12 +17,19 @@ type liveSidebar struct {
 	channel    kernel.ID
 	topic      *kernel.ID
 	members    bool
+	changes    *unread.Changes
 }
 
-func sidebarSource(reader *conversation.Reader) func(org.Membership, kernel.ID, *kernel.ID, bool) realtime.SidebarSource {
+var _ realtime.SidebarWatcher = liveSidebar{}
+
+func sidebarSource(reader *conversation.Reader, changes *unread.Changes) func(org.Membership, kernel.ID, *kernel.ID, bool) realtime.SidebarSource {
 	return func(m org.Membership, channel kernel.ID, topic *kernel.ID, members bool) realtime.SidebarSource {
-		return liveSidebar{reader, m, channel, topic, members}
+		return liveSidebar{reader, m, channel, topic, members, changes}
 	}
+}
+
+func (s liveSidebar) Watch(organizationID, memberID kernel.ID) realtime.SidebarWatch {
+	return s.changes.Watch(organizationID, memberID)
 }
 
 func (s liveSidebar) Trigger(event realtime.Event) bool {

@@ -133,7 +133,7 @@ JavaScript never generates HTML and never owns application state. It is
 limited to UX help that HTML and htmx handle poorly: focus, scroll,
 keyboard, local time, single-source selection constraints, and glue for SSE.
 
-- `message-stream-v8.js` emits `read-applied` only after successful DOM
+- `message-stream-v9.js` emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
   `read-visibility-v3.js` initializes on scoped `htmx:load` and watches that
   event and visibility. It copies the applied cursor (initially the form's

@@ -43,7 +43,11 @@ func TestMessageStreamBrowser(t *testing.T) {
 	t.Run("unread-divider", func(t *testing.T) { testUnreadDividerBrowser(t, browser) })
 	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {
-		for _, mode := range []string{"before", "stale", "fresh", "abort", "4xx"} {
+		modes := []string{"before", "stale", "fresh", "abort", "4xx"}
+		if side == "source" {
+			modes = append(modes, "divider-first", "divider-other")
+		}
+		for _, mode := range modes {
 			t.Run(side+"/"+mode, func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 				defer cancel()
@@ -57,6 +61,11 @@ func TestMessageStreamBrowser(t *testing.T) {
 				snapshot := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"},
 					Topic: &view.Topic{ID: selected}, EventCursor: new(int64), Older: true}
 				snapshot.Messages = streamTestMessages(selected, initial...)
+				divider := 0
+				if strings.HasPrefix(mode, "divider-") {
+					divider = 50
+					snapshot.FirstUnread = int64(divider)
+				}
 				events := make(chan realtime.Outgoing, 1)
 				requests := make(chan browserHistory)
 				mux := http.NewServeMux()
@@ -114,15 +123,18 @@ func TestMessageStreamBrowser(t *testing.T) {
 					});
 				}`)
 				deliveries, completed := 0, 0
-				move := func(from, to kernel.ID, want []int) {
+				move := func(from, to kernel.ID, want []int, seqs ...int) {
 					t.Helper()
+					if len(seqs) == 0 {
+						seqs = []int{10, 30, 50}
+					}
 					out := realtime.Outgoing{ID: 100 + int64(deliveries), Name: "messages-moved",
-						Data: streamTestMarkup(t, view.MovedMessageItems(streamTestMessages(to, 10, 30, 50), from, to))}
+						Data: streamTestMarkup(t, view.MovedMessageItems(streamTestMessages(to, seqs...), from, to))}
 					for range 2 { // Identical event IDs and payloads exercise duplicate replay.
 						events <- out
 						deliveries++
 						page.MustWait(`n => +document.body.dataset.delivered === n`, deliveries)
-						assertBrowserItems(t, page, want)
+						assertBrowserItemsWithDivider(t, page, want, divider)
 					}
 				}
 				begin := func(bound int) browserHistory {
@@ -149,7 +161,16 @@ func TestMessageStreamBrowser(t *testing.T) {
 					response.Messages = streamTestMessages(selected, ids...)
 					return streamTestMarkup(t, view.ChannelScreen("/static/css/app.css", response))
 				}
-				assertBrowserItems(t, page, initial)
+				assertBrowserItemsWithDivider(t, page, initial, divider)
+				if strings.HasPrefix(mode, "divider-") {
+					if mode == "divider-first" {
+						divider = 0
+						move(source, destination, []int{61}, 50)
+					} else {
+						move(source, destination, []int{50}, 61)
+					}
+					return
+				}
 				if mode == "before" {
 					move(source, destination, afterMove)
 				}
@@ -527,12 +548,27 @@ func streamTestMarkup(t *testing.T, component templ.Component) []byte {
 
 func assertBrowserItems(t *testing.T, page *rod.Page, seqs []int) {
 	t.Helper()
+	assertBrowserItemsWithDivider(t, page, seqs, 0)
+}
+
+func assertBrowserItemsWithDivider(t *testing.T, page *rod.Page, seqs []int, divider int) {
+	t.Helper()
 	var ids []string
 	for _, seq := range seqs {
+		if seq == divider {
+			ids = append(ids, "unread-divider")
+		}
 		ids = append(ids, view.MessageDOMID(kernel.ID{byte(seq)}))
 	}
 	got := page.MustEval(`() => Array.from(document.querySelector('#message-items').children, e => e.id).join(',')`).Str()
 	if want := strings.Join(ids, ","); got != want {
 		t.Fatalf("items = %s, want %s (sequences %v)", got, want, seqs)
+	}
+	if !page.MustEval(`seq => {
+		const dividers = document.querySelectorAll('#unread-divider');
+		return seq === '0' ? dividers.length === 0 : dividers.length === 1 &&
+			dividers[0].dataset.eventSeq === seq && dividers[0].nextElementSibling?.dataset.eventSeq === seq;
+	}`, fmt.Sprint(divider)).Bool() {
+		t.Fatalf("unexpected unread divider (want sequence %d)", divider)
 	}
 }

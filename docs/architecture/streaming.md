@@ -101,7 +101,7 @@ The endpoint takes:
 |---|---|
 | `after` | the durable cursor; `Last-Event-ID` wins, as today |
 | `want` | comma-separated interests, each at most once: `sidebar`, `messages`, `typing`, `presence`; anything else is 400 |
-| `channel` | the page's channel: required with `messages` or `typing`; with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
+| `channel` | the page's channel: required with `messages`, `typing` or `sidebar` (every page sends it; the sidebar's recount source is bound to it, so a sidebar stream without one would get no initial recount and is 400); with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
 | `topic` | optional with `messages`, `typing` or `sidebar`; requires `channel`, narrows messages/typing and retains sidebar selection; another organisation or channel is 404 |
 | `panel` | optional `members`, suppressing feed selection on the members sidebar |
 | `presence-after` | required with `presence`: the process instance and presence generation the page was rendered with |

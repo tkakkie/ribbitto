@@ -43,9 +43,9 @@ func TestStreamSidebarBinding(t *testing.T) {
 			handler := middleware.Session(oneSession{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { p.events(w, r, m) }))
 			endpoint := streamEndpoint(t, view.ConversationURL("acme", channel, &topic))
 			query := "after=0&" + strings.Replace(strings.TrimPrefix(endpoint, "/organizations/acme/events?"), "want=messages", "want=sidebar", 1)
-			wantCalls := 1
+			wantCalls, wantStatus := 1, 200
 			if scope == "no channel" {
-				query, wantCalls = "after=0&want=sidebar", 0
+				query, wantCalls, wantStatus = "after=0&want=sidebar", 0, 400
 			}
 			if scope == "members" {
 				query += "&panel=members"
@@ -54,7 +54,7 @@ func TestStreamSidebarBinding(t *testing.T) {
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
 			handler.ServeHTTP(w, r)
-			if w.Code != 200 || calls != wantCalls || hub.Connections() != 0 {
+			if w.Code != wantStatus || calls != wantCalls || hub.Connections() != 0 {
 				t.Fatalf("status=%d bindings=%d connections=%d", w.Code, calls, hub.Connections())
 			}
 		})

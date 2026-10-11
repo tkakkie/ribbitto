@@ -26,7 +26,7 @@ const streamTopic = "06000000-0000-0000-0000-000000000000"
 func TestOrganisationStreamValidation(t *testing.T) {
 	for _, query := range []string{
 		"", "want=unknown", "want=sidebar,sidebar", "want=", "want=sidebar&want=messages",
-		"want=messages", "want=typing", "want=sidebar&topic=" + streamTopic,
+		"want=messages", "want=typing", "want=sidebar", "want=sidebar&panel=members", "want=sidebar&topic=" + streamTopic,
 		"want=presence&presence-after=instance:0&channel=" + streamChannel + "&topic=" + streamTopic,
 		"want=sidebar&channel=" + streamChannel + "&topic=bad", "want=sidebar&panel=other",
 		"want=presence", "want=presence&presence-after=", "want=sidebar&channel=bad",
@@ -42,7 +42,7 @@ func TestOrganisationStreamValidation(t *testing.T) {
 			organisationStream(t, query, realtime.Event{}, false, conversation.ErrChannelNotFound, 404, false, 0)
 		})
 	}
-	for _, query := range []string{"want=sidebar", "want=sidebar&panel=members", "want=sidebar&channel=" + streamChannel + "&topic=" + streamTopic, "want=presence&presence-after=instance:0", "want=sidebar,messages,typing&channel=" + streamChannel} {
+	for _, query := range []string{"want=sidebar&channel=" + streamChannel, "want=sidebar&channel=" + streamChannel + "&panel=members", "want=sidebar&channel=" + streamChannel + "&topic=" + streamTopic, "want=presence&presence-after=instance:0", "want=sidebar,messages,typing&channel=" + streamChannel} {
 		t.Run(query, func(t *testing.T) { organisationStream(t, query, realtime.Event{}, false, nil, 200, false, 0) })
 	}
 }

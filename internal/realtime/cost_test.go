@@ -403,9 +403,14 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	}
 	slices.Sort(seqs)
 	for _, c := range connections {
-		r.recounts += len(c.snapshots)
+		// The streams have stopped (wg.Wait above); the lock keeps the read
+		// obviously safe should a late frame ever reach the collector.
+		c.mu.Lock()
+		snapshots := slices.Clone(c.snapshots)
+		c.mu.Unlock()
+		r.recounts += len(snapshots)
 		for i, seq := range seqs {
-			for _, snapshot := range c.snapshots {
+			for _, snapshot := range snapshots {
 				if snapshot.covers(c.initial + int64(i+1)) {
 					delays = append(delays, snapshot.at.Sub(returned[seq]))
 					break

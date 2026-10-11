@@ -45,10 +45,11 @@ change there, behaviour-preserving moves included, is tier B, by Muse Code
     generations, caches, subscriptions) or the ordering contract its callers
     rely on; changes **which writes share a transaction or the order they
     run in**, or logic whose correctness rests on a lock or the
-    transaction's isolation (decisions made under a lock); changes browser
-    state handling (the SSE scripts, or htmx swaps, out-of-band ones
+    transaction's isolation (decisions made under a lock); changes the
+    behaviour of a script in `web/static` (what it sends, when, with which
+    cursor, its retries and visibility state), htmx swaps, out-of-band ones
     included, that replace live forms or state, or what those forms carry
-    across replacements); or changes
+    across replacements; or changes
     the delivery contract: who is authorised for what (organisation and
     member), the organisation scope, which streams or members receive a
     frame, or where authorisation runs before a send;
@@ -96,10 +97,9 @@ code imports or invokes it. A defect there skews only a developer's
 measurement. Each
 qualifying path is listed here with its evidence:
 
-- `cmd/loadgen`, the load generator. It imports no other ribbitto package
-  (`go list -deps ./cmd/loadgen`), and nothing imports it. No `Makefile`
-  target, CI job, deployment file or migration runs it; `make check` runs
-  only its own tests.
+- `cmd/loadgen`, the load generator: it imports no other ribbitto package
+  (`go list -deps`), nothing imports it, and only `make check` runs it, for
+  its own tests.
 
 `scripts/deps.sh` is not listed: CI's `ci` job and `make check` run it.
 The exception changes nothing else: production commands, migrations,
@@ -139,7 +139,8 @@ diff's, and reviewed again:
 - a tier A pull request with a completed Grok report gets **Grok again**
   when the commits since the **last Grok-reviewed head** — however many
   Muse Code re-reviews came between — add anything of A's first item
-  beyond what a fix of a reported finding needs (after the adversarial
+  beyond what a fix of a reported finding needs, or change anything A's
+  second item covers (after the adversarial
   follow-up check in [reviewing](reviewing.md)), or the maintainer asks;
   otherwise **Muse Code**: fixes, answers to Copilot or the cross-review,
   merges of `main` (what `main` brings was reviewed in its own pull
@@ -172,9 +173,9 @@ launcher, its security boundary and its limits are in
 
 ## Muse Code
 
-Muse Code (#330, from the trial in #246) is tier B's reviewer, tier A's
-re-reviewer after a completed Grok report (#840) and tier A's fallback when
-Grok is unavailable, under the completion rule above. It may
+Muse Code (#330, from #246's trial) is tier B's reviewer and, under the
+completion rule, tier A's re-reviewer after Grok (#840) and fallback when
+Grok is unavailable. It may
 also review any other pull request as an optional, extra adversarial
 reviewer; an extra run never satisfies or waives a requirement (the
 required tier's review, the Claude ↔ Codex rounds, Copilot's follow-up, the

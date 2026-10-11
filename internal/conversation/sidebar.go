@@ -24,26 +24,12 @@ type SidebarSnapshot struct {
 // is resolved by org; the channel and optional topic are checked in the snapshot.
 func (s *Reader) Sidebar(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID) (sidebar SidebarSnapshot, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
-		reads := s.reads(snapshot)
-		sidebar.Current, err = reads.GetChannel(ctx, m.Organization.ID, channelID)
+		loaded, err := loadSidebarContext(ctx, s.reads(snapshot), m.Organization.ID, channelID, topicID)
 		if err != nil {
-			return fmt.Errorf("finding channel: %w", err)
+			return err
 		}
-		sidebar.Channels, err = reads.ListChannels(ctx, m.Organization.ID)
-		if err != nil {
-			return fmt.Errorf("listing channels: %w", err)
-		}
-		if topicID != nil {
-			selected, err := reads.GetTopic(ctx, m.Organization.ID, channelID, *topicID)
-			if err != nil {
-				return fmt.Errorf("finding topic: %w", err)
-			}
-			sidebar.Topic = &selected
-		}
-		sidebar.Topics, err = reads.ListTopics(ctx, m.Organization.ID, channelID, sidebarTopics)
-		if err != nil {
-			return fmt.Errorf("listing topics: %w", err)
-		}
+		sidebar.Current, sidebar.Channels = loaded.current, loaded.channels
+		sidebar.Topic, sidebar.Topics = loaded.topic, loaded.topics
 		counts, err := s.pageCounts(ctx, snapshot, m, channelID, sidebar.Channels, sidebar.Topics, topicID)
 		if err != nil {
 			return err
@@ -53,6 +39,38 @@ func (s *Reader) Sidebar(ctx context.Context, m org.Membership, channelID kernel
 	})
 	if err != nil {
 		return SidebarSnapshot{}, fmt.Errorf("reading sidebar snapshot: %w", err)
+	}
+	return sidebar, nil
+}
+
+// sidebarContext excludes counts so callers can read history or members and
+// their cursor before counting, all within the snapshot they already own.
+type sidebarContext struct {
+	current  Channel
+	channels []Channel
+	topic    *Topic
+	topics   []Topic
+}
+
+func loadSidebarContext(ctx context.Context, reads ReadStore, organizationID, channelID kernel.ID, topicID *kernel.ID) (sidebar sidebarContext, err error) {
+	sidebar.current, err = reads.GetChannel(ctx, organizationID, channelID)
+	if err != nil {
+		return sidebarContext{}, fmt.Errorf("finding channel: %w", err)
+	}
+	sidebar.channels, err = reads.ListChannels(ctx, organizationID)
+	if err != nil {
+		return sidebarContext{}, fmt.Errorf("listing channels: %w", err)
+	}
+	if topicID != nil {
+		selected, err := reads.GetTopic(ctx, organizationID, channelID, *topicID)
+		if err != nil {
+			return sidebarContext{}, fmt.Errorf("finding topic: %w", err)
+		}
+		sidebar.topic = &selected
+	}
+	sidebar.topics, err = reads.ListTopics(ctx, organizationID, channelID, sidebarTopics)
+	if err != nil {
+		return sidebarContext{}, fmt.Errorf("listing topics: %w", err)
 	}
 	return sidebar, nil
 }

@@ -43,13 +43,13 @@ func (p channelPages) members(w http.ResponseWriter, r *http.Request, m org.Memb
 		return
 	}
 	account, _ := middleware.Account(r.Context())
-	page := view.ChannelPage{
-		Organization: view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name},
-		DisplayName:  memberDisplayName(account.DisplayName), Handle: m.Member.Handle, Role: string(m.Member.Role),
-		Current: viewChannel(result.Current), Channels: viewChannels(result.Channels), Topics: viewTopics(result.Topics), EventCursor: result.EventCursor,
+	page := sidebarView(view.ChannelPage{
+		DisplayName: memberDisplayName(account.DisplayName), Handle: m.Member.Handle, Role: string(m.Member.Role),
+		EventCursor: result.EventCursor, Members: &view.MemberPage{Next: result.Next},
+	}, m, conversation.SidebarSnapshot{
+		Current: result.Current, Channels: result.Channels, Topics: result.Topics,
 		ChannelCounts: result.ChannelCounts, TopicCounts: result.TopicCounts,
-		Members: &view.MemberPage{Next: result.Next},
-	}
+	})
 	ids := make([]kernel.ID, len(result.Members))
 	for i, member := range result.Members {
 		ids[i] = member.ID

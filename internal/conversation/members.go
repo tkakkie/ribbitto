@@ -34,18 +34,11 @@ type MembersPage struct {
 func (s *Reader) Members(ctx context.Context, m org.Membership, channelID kernel.ID, after *kernel.ID) (page MembersPage, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		reads := s.reads(snapshot)
-		page.Current, err = reads.GetChannel(ctx, m.Organization.ID, channelID)
+		loaded, err := loadSidebarContext(ctx, reads, m.Organization.ID, channelID, nil)
 		if err != nil {
-			return fmt.Errorf("finding channel: %w", err)
+			return err
 		}
-		page.Channels, err = reads.ListChannels(ctx, m.Organization.ID)
-		if err != nil {
-			return fmt.Errorf("listing channels: %w", err)
-		}
-		page.Topics, err = reads.ListTopics(ctx, m.Organization.ID, channelID, sidebarTopics)
-		if err != nil {
-			return fmt.Errorf("listing topics: %w", err)
-		}
+		page.Current, page.Channels, page.Topics = loaded.current, loaded.channels, loaded.topics
 		members, err := s.members(snapshot).ListMembers(ctx, m.Organization.ID, after, MemberPageSize+1)
 		if err != nil {
 			return fmt.Errorf("listing channel members: %w", err)

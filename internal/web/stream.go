@@ -38,6 +38,8 @@ type Streaming struct {
 	Typing *typing.State
 	// Owners adapts feature state to current frames.
 	Owners map[realtime.Interest]realtime.EphemeralOwner
+	// Sidebar binds resolved membership and page selection to uncached recounts.
+	Sidebar func(org.Membership, kernel.ID, *kernel.ID, bool) realtime.SidebarSource
 	// StreamOpened counts every accepted stream, regardless of interests.
 	// Its returned cleanup releases organisation presence and channel typing counts.
 	StreamOpened func(organizationID, memberID, channelID kernel.ID) func()
@@ -167,6 +169,9 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		Owners:    p.stream.Owners,
 		Renderer:  messageRenderer{messages: p.messages, membership: m, renders: p.renders},
 		Heartbeat: heartbeat,
+	}
+	if p.stream.Sidebar != nil {
+		stream.Sidebar = p.stream.Sidebar(m, sub.Channel, sub.Topic, r.URL.Query().Get("panel") == "members")
 	}
 	sub.Organization, sub.OrganizationSlug, sub.Account = m.Organization.ID, m.Organization.Slug, account.ID
 	cursor, err := stream.Run(ctx, sub, after, send)
@@ -306,7 +311,10 @@ func streamScope(r *http.Request) (realtime.Subscription, bool) {
 	}
 	scoped := slices.Contains(sub.Interests, realtime.InterestMessages) || slices.Contains(sub.Interests, realtime.InterestTyping)
 	raw := query.Get("channel")
-	if scoped && raw == "" {
+	// Every page names its channel; a sidebar recount needs it to bind the
+	// connection's source, so a sidebar stream without one is refused rather
+	// than accepted with no initial recount.
+	if (scoped || slices.Contains(sub.Interests, realtime.InterestSidebar)) && raw == "" {
 		return sub, false
 	}
 	if raw != "" {

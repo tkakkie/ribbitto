@@ -76,7 +76,8 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   Connect always recounts. A dirty flag retains later triggers without moving
   the deadline; the writer checks it between batches and includes it in the
   combined wait. Recounts never change the cursor; only successful writes
-  restart the heartbeat deadline. Production rendering/wiring is left to #811.
+  restart the heartbeat deadline. Production streams supply a per-connection
+  source (#819); its composition is in [unread counts](unread-counts.md).
 
 - Each connection reads the log itself (#209), so nothing queues for a slow
   client: its cursor just lags. A client that stops reading is

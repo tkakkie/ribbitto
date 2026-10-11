@@ -55,8 +55,20 @@ including when unlisted, counting at most 51 topics without extending the list. 
 fresh lists: a displaced non-selected topic disappears. Channel totals still
 cover all topics; both maps include zero, so whole-list replacement clears badges.
 It uses the same `PageCounter` and persisted member join sequence as page reads,
-with no history, author directory, cursor read or writes. Delivery and rendering
-follow in #810 and #811.
+with no history, author directory, cursor read or writes.
+
+Production streams bind the already-resolved membership, channel, selected topic
+and members-panel selection to one `cmd/ribbitto` sidebar source (#819). Posts
+and moves trigger independent snapshots through this same page-count adapter,
+including for the author and when another channel changes. Web's `RenderSidebar`
+uses page components for whole lists and the selected heading (#818); member-dependent
+output bypasses the shared message cache. Realtime retains its render-then-authorize
+order immediately before sending, coalescing and cursor/heartbeat rules (#810).
+Every connect recounts without `id:`, so reconnecting at a delivered message's ID
+recovers a recount lost after that message. Production stream tests compare
+recounts with reload targets, distinguish members with the same join sequence,
+and revoke access during a gated recount. Real-branch displacement and production
+browser acceptance remain in #811; cost measurement remains in #812.
 
 Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
 parameter. These statements share the page or sidebar snapshot that runs them, with none per channel or topic.

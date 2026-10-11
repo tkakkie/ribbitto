@@ -15,7 +15,7 @@ type TxRunner interface {
 	InTx(context.Context, func(platform.Tx) error) error
 }
 
-// ReadPublisher receives effective reads after commit, independently of request cancellation.
+// ReadPublisher receives count invalidations, independently of request cancellation.
 type ReadPublisher interface {
 	// ReadChanged asks the member's sidebars to recount persisted state. It
 	// is a recount request, not proof that a read committed: after a COMMIT

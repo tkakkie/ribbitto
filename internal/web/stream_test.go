@@ -433,7 +433,7 @@ func TestOpenStreamCleanup(t *testing.T) {
 			counts := 0
 			state := typing.New(hub)
 			place, person := typing.Place{Channel: kernel.ID{7}, Topic: kernel.ID{8}}, typing.Typist{Member: kernel.ID{3}}
-			p := channelPages{stream: &Streaming{Lifetime: t.Context(), Hub: hub, Sessions: laterSession{hub: hub, session: live, err: tt.resolveErr, seen: &seen}, Typing: state, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
+			p := channelPages{stream: &Streaming{Lifetime: t.Context(), Hub: hub, Sessions: laterSession{hub: hub, session: live, err: tt.resolveErr, seen: &seen}, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
 				if organizationID != (kernel.ID{9}) || memberID != (kernel.ID{3}) || channelID != place.Channel {
 					t.Fatalf("presence scope: %v/%v", organizationID, memberID)
 				}

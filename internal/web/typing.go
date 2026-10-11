@@ -1,11 +1,9 @@
 package web
 
 import (
-	"errors"
 	"net/http"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/typing"
@@ -29,16 +27,7 @@ func (p channelPages) signal(w http.ResponseWriter, r *http.Request, m org.Membe
 		http.NotFound(w, r)
 		return
 	}
-	_, err := p.channels.Get(r.Context(), m, channel)
-	if err == nil {
-		_, err = p.topics.Get(r.Context(), m, channel, topic)
-	}
-	switch {
-	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, conversation.ErrTopicNotFound), errors.Is(err, org.ErrNotFound):
-		http.NotFound(w, r)
-		return
-	case err != nil:
-		serverError(w, r, "resolving typing scope", err)
+	if _, ok := p.resolvePlace(w, r, m, channel, r.PathValue("topicID")); !ok {
 		return
 	}
 	if !parseForm(w, r) {

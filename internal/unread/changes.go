@@ -49,7 +49,8 @@ func (c *Changes) Watch(organizationID, memberID kernel.ID) *ChangeWatch {
 }
 
 // ReadChanged synchronously advances and wakes only this member's active watches.
-// Call after a successful commit; without subscribers it retains nothing.
+// This is a count invalidation, not proof of commit: ReadPublisher permits an unknown
+// COMMIT outcome (docs/architecture/unread-writes.md). Without subscribers it retains nothing.
 func (c *Changes) ReadChanged(organizationID, memberID kernel.ID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

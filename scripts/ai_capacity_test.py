@@ -71,6 +71,8 @@ sys.exit(7 if os.getcwd().endswith("second") else 0)
             self.assertEqual(events, ["handshake", "check", "check"])
             self.assertEqual(report["exit_codes"], [0, 7])
             self.assertEqual(report["too_many_clients_lines"], [2, 2])
+            # pgtest fixes its pools' limit (pgtest.MaxConns, #849).
+            self.assertEqual(report["pgx_pool_max_conns"], 16)
             self.assertGreaterEqual(report["peak_connections"], report["baseline"])
             self.assertNotIn("postgres://", json.dumps(report))
             self.assertNotIn("credential-canary", json.dumps(report))

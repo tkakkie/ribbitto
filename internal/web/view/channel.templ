@@ -6,6 +6,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"net/url"
+	"strings"
 )
 
 // Organization holds the organisation fields displayed by a channel page.
@@ -29,18 +30,19 @@ type Topic struct {
 
 // ChannelPage holds the sidebar, conversation and channel creation form.
 type ChannelPage struct {
-	Reading                   bool // Whether read POSTs are wired.
-	Organization              Organization
-	DisplayName, Handle, Role string
-	Topic                     *Topic
-	Topics                    []Topic
-	Current                   Channel
-	Channels                  []Channel
-	Name, Error               string
-	Body, BodyError           string
-	BranchError, BranchName   string
-	Messages                  []Message
-	Members                   *MemberPage
+	Reading                    bool // Whether read POSTs are wired.
+	Organization               Organization
+	DisplayName, Handle, Role  string
+	Topic                      *Topic
+	Topics                     []Topic
+	Current                    Channel
+	Channels                   []Channel
+	ChannelCounts, TopicCounts map[kernel.ID]int64
+	Name, Error                string
+	Body, BodyError            string
+	BranchError, BranchName    string
+	Messages                   []Message
+	Members                    *MemberPage
 	// PostedMessageID correlates a successful enhanced post with stream delivery.
 	PostedMessageID *kernel.ID
 	// Older reports that messages before Messages[0] exist.
@@ -147,13 +149,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					<p class="px-3 pb-2 text-caption font-semibold text-muted">{ i18n.T(ctx, "channel.list") }</p>
 					<ul class="flex flex-col gap-1">
 						for _, c := range page.Channels {
-							<li>
-								if c.ID == page.Current.ID && page.Topic == nil && page.Members == nil {
-									<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, c.ID)) } aria-current="page" class="block break-words rounded-sm border-l-3 border-brand bg-selected px-3 py-2 font-semibold text-on-selected">{ c.Name }</a>
-								} else {
-									<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, c.ID)) } class="block break-words rounded-sm border-l-3 border-transparent px-3 py-2 text-fg hover:bg-surface">{ c.Name }</a>
-								}
-							</li>
+							@ChannelEntry(page.Organization.Slug, c, c.ID == page.Current.ID && page.Topic == nil && page.Members == nil, page.ChannelCounts[c.ID])
 						}
 					</ul>
 				</nav>
@@ -161,13 +157,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					<p class="px-3 pb-2 text-caption font-semibold text-muted">{ i18n.T(ctx, "topic.list") }</p>
 					<ul>
 						for _, topic := range page.Topics {
-							<li>
-								if page.Topic != nil && page.Topic.ID == topic.ID {
-									<a href={ templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)) } aria-current="page" class="block min-h-11 break-words rounded-sm border-l-3 border-brand bg-selected px-3 py-2 font-semibold text-on-selected">{ topicName(ctx, topic) }</a>
-								} else {
-									<a href={ templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)) } class="block min-h-11 break-words px-3 py-2 text-brand underline">{ topicName(ctx, topic) }</a>
-								}
-							</li>
+							@TopicEntry(page.Organization.Slug, page.Current.ID, topic, page.Topic != nil && page.Topic.ID == topic.ID, page.TopicCounts[topic.ID])
 						}
 					</ul>
 				</nav>
@@ -200,6 +190,11 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						<h1 class="break-words text-title font-semibold">
 							if page.Topic != nil {
 								{ topicName(ctx, *page.Topic) }
+								if !selectedTopicListed(page) && page.TopicCounts[page.Topic.ID] > 0 {
+									<span class="ml-2">
+										@unreadBadge(page.TopicCounts[page.Topic.ID])
+									</span>
+								}
 							} else {
 								{ page.Current.Name }
 							}
@@ -295,4 +290,71 @@ templ readForm(page ChannelPage) {
 		<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		<button type="submit" class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "reading.mark") }</button>
 	</form>
+}
+
+// ChannelDOMID identifies a replaceable sidebar channel entry.
+func ChannelDOMID(id kernel.ID) string {
+	return fmt.Sprintf("channel-%x", id)
+}
+
+// TopicDOMID identifies a replaceable sidebar topic entry.
+func TopicDOMID(id kernel.ID) string {
+	return fmt.Sprintf("topic-%x", id)
+}
+
+func selectedTopicListed(page ChannelPage) bool {
+	for _, topic := range page.Topics {
+		if page.Topic != nil && topic.ID == page.Topic.ID {
+			return true
+		}
+	}
+	return false
+}
+
+func unreadText(count int64) string {
+	if count > 99 {
+		return "99+"
+	}
+	return fmt.Sprint(count)
+}
+
+// ChannelEntry renders the whole sidebar entry for replacement by its stable ID.
+templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
+	<li id={ ChannelDOMID(channel.ID) }>
+		<a
+			href={ templ.SafeURL(ChannelURL(slug, channel.ID)) }
+			if selected {
+				aria-current="page"
+			}
+			class={ "flex min-h-11 items-center gap-2 break-words rounded-sm border-l-3 px-3 py-2", templ.KV("border-brand bg-selected font-semibold text-on-selected", selected), templ.KV("border-transparent text-fg hover:bg-surface", !selected), templ.KV("font-semibold", !selected && count > 0) }
+		>
+			<span dir="auto" class="min-w-0 flex-1">{ channel.Name }</span>
+			@unreadBadge(count)
+		</a>
+	</li>
+}
+
+// TopicEntry renders the whole sidebar entry for replacement by its stable ID.
+templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, count int64) {
+	<li id={ TopicDOMID(topic.ID) }>
+		<a
+			href={ templ.SafeURL(ConversationURL(slug, channelID, &topic.ID)) }
+			if selected {
+				aria-current="page"
+			}
+			class={ "flex min-h-11 items-center gap-2 break-words px-3 py-2", templ.KV("rounded-sm border-l-3 border-brand bg-selected font-semibold text-on-selected", selected), templ.KV("text-brand underline", !selected), templ.KV("font-semibold", !selected && count > 0) }
+		>
+			<span dir="auto" class="min-w-0 flex-1">{ topicName(ctx, topic) }</span>
+			@unreadBadge(count)
+		</a>
+	</li>
+}
+
+templ unreadBadge(count int64) {
+	if count > 0 {
+		<span class="inline-flex shrink-0 rounded-sm bg-accent px-1 text-caption font-semibold text-on-accent">
+			<span aria-hidden="true">{ unreadText(count) }</span>
+			<span class="sr-only">{ " " + strings.ReplaceAll(i18n.T(ctx, "reading.unread_count"), "{count}", unreadText(count)) }</span>
+		</span>
+	}
 }

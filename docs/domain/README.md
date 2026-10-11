@@ -20,8 +20,8 @@ index below for everything else.
 | [`invariants.md`](invariants.md) | rules every piece of code and every migration must keep |
 | [`vocabulary.md`](vocabulary.md) | product labels, ordinary words and Japanese UI vocabulary |
 | [`validation.md`](validation.md) | input validation rules |
-| [`unread.md`](unread.md) | unread rules: read ranges, reading scopes, counts and the divider (storage, reads, visible-page reading POSTs, posting and counts in the page snapshot current; their display and the divider planned, M4) |
-| [`unread-examples.md`](unread-examples.md) | worked examples of the unread rules: topic reads, moves, concurrent tabs, late messages; visible-page reading POSTs, posting and counts in the page snapshot current; their display planned, M4 |
+| [`unread.md`](unread.md) | unread rules: read ranges, reading scopes, counts and the divider (storage, reads, visible-page reading POSTs, posting and counts in the page snapshot and the sidebar current; live counts and the divider planned, M4) |
+| [`unread-examples.md`](unread-examples.md) | worked examples of the unread rules: topic reads, moves, concurrent tabs, late messages; visible-page reading POSTs, posting and counts in the page snapshot and the sidebar current; live counts planned, M4 |
 | [`names.md`](names.md) | display names, handles, how members are shown |
 | [`channels.md`](channels.md) | channel identity, names and the default channel |
 | [`topics.md`](topics.md) | topics, the default topic, the feed and branching |

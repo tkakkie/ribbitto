@@ -169,6 +169,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		page.Organization, page.DisplayName, page.Handle, page.Role = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
 		page.Current, page.Channels, page.Older = viewChannel(history.Current), viewChannels(history.Channels), history.Older
+		page.ChannelCounts, page.TopicCounts = history.ChannelCounts, history.TopicCounts
 		page.Reading = p.reading != nil
 		page.EventCursor, page.Topic, page.Topics = history.EventCursor, viewTopicPtr(history.Topic), viewTopics(history.Topics)
 		return view.ChannelScreen(url, page)

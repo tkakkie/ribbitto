@@ -4,7 +4,7 @@ The inputs are in place since M3: the join transaction, `joined_event_seq`,
 the pairing of each message with its `message.posted` event, and the log
 boundary. Read-state tables, locking, range unions, feed, topic and branch-notice
 reads exist;
-Visible-page reading POSTs, posting writes and snapshot-bound page counts are current; their display is *planned* for M4
+Visible-page reading POSTs, posting writes and snapshot-bound sidebar counts are current
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md));
 the counting queries are in
 [unread counts](../architecture/unread-counts.md), their cost in
@@ -89,12 +89,15 @@ it, stays unread: it is no longer there to mark. A message already read
 stays read whatever moves. Without JavaScript, nothing advances on load; the feed and topic view
 offer a *Mark as read* form that sends the same POST with the page's cursor.
 
-## Counts *(page results current; display planned, M4)*
+## Counts
 
 A channel's unread count is the number of its unread messages, which is the
 sum over **all** its topics, not only the 50 the sidebar lists. A topic's
 count is the channel's unread messages in that topic. Counts are shown
-capped (`99+`). The cap limits how many unread messages a count returns,
+as 1–99 or capped (`99+`); zero shows nothing. Feed, topic, older history
+and members pages show them on the sidebar links, with semibold labels and
+a count badge. An unlisted selected topic shows its count beside the heading,
+keeping the sidebar at most 50 topic links. The cap limits how many unread messages a count returns,
 not all the work: a topic count can also read the member's own posts made
 while the stream lagged, and a topic's first-unread lookup can scan topic
 history ([unread count costs](../architecture/unread-count-costs.md)).

@@ -64,7 +64,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `message-body`, `message-composer`, `message-help`, `message-status`,
   `read-form`, `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
-  checkbox, and `presence-<hex>` from `PresenceDOMID` for member indicators
+  checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
+  `TopicDOMID` for sidebar `<li>` entries, and `presence-<hex>` from `PresenceDOMID` for member indicators
   (32 lowercase hex digits). `#message-items` is always present,
   including when empty; Load older selects its direct `<li>` children.
 - **The data attributes that scripts read are a contract too,** with the

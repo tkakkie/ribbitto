@@ -59,7 +59,7 @@ with no history, author directory, cursor read or writes. Delivery and rendering
 follow in #810 and #811.
 
 Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
-parameter. These statements share the page snapshot, with none per channel or topic.
+parameter. These statements share the page or sidebar snapshot that runs them, with none per channel or topic.
 
 | Step | Owner | Input | Statement | Output |
 |---|---|---|---|---|

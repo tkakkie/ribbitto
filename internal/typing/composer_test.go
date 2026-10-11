@@ -64,6 +64,55 @@ func TestComposerOrdering(t *testing.T) {
 	}
 }
 
+// A double submit posts twice with one generation: the second success restarts
+// the retention, and the first post's timer must not end it early.
+func TestComposerRepeatedPost(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := New(realtime.NewHub())
+		org, place, person := kernel.ID{1}, Place{kernel.ID{2}, kernel.ID{3}}, Typist{Member: kernel.ID{4}}
+		defer s.Open(org, person.Member, place.Channel)()
+		generation := s.IssueComposer(org, place, person.Member)
+		s.Posted(org, place, person.Member, generation)
+		time.Sleep(ClosedRetention - time.Second)
+		s.Posted(org, place, person.Member, generation)
+		time.Sleep(2 * time.Second) // Past the first post's retention.
+		synctest.Wait()
+		if closedCount(s) != 1 || s.Signal(org, place, person, generation, time.Now()) {
+			t.Fatal("the first post's timer ended the renewed closure")
+		}
+		time.Sleep(ClosedRetention - 2*time.Second - time.Nanosecond)
+		synctest.Wait()
+		if closedCount(s) != 1 || s.Signal(org, place, person, generation, time.Now()) {
+			t.Fatal("closure lost before the second post's retention boundary")
+		}
+		time.Sleep(time.Nanosecond)
+		synctest.Wait()
+		if closedCount(s) != 0 {
+			t.Fatal("renewed closure not removed at the second post's boundary")
+		}
+	})
+}
+
+// A replaced timer can fire just before the renewing post and then wait for
+// the lock; synctest cannot hold that interleaving (mutex waits are not
+// durable), so the test runs the stale callback after the renewal directly.
+func TestComposerRepostAfterTimerFired(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := New(realtime.NewHub())
+		org, place, person := kernel.ID{1}, Place{kernel.ID{2}, kernel.ID{3}}, Typist{Member: kernel.ID{4}}
+		generation := s.IssueComposer(org, place, person.Member)
+		s.Posted(org, place, person.Member, generation)
+		s.mu.Lock()
+		stale := s.closed[generation]
+		s.mu.Unlock()
+		s.Posted(org, place, person.Member, generation)
+		s.reopen(generation, stale)
+		if closedCount(s) != 1 {
+			t.Fatal("a fired, replaced timer deleted the renewed closure")
+		}
+	})
+}
+
 func TestComposerRetention(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := New(realtime.NewHub())

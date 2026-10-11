@@ -33,8 +33,10 @@ composer rendered after success can start typing again. A failed submission must
 not call `Posted`: its 422 re-render carries the submitted generation unchanged,
 so the successful retry closes signals sent before the failure (#787 → #789).
 
-Closures stay for `ClosedRetention` (one minute after the successful post), then
-owner timers remove them without viewer reads. This bounds storage to recent
+Closures stay for `ClosedRetention` (one minute after the latest successful post
+with that generation: a double submit restarts it, and a replaced timer that
+already fired leaves the renewed closure), then owner timers remove them without
+viewer reads. This bounds storage to recent
 posts rather than every composer ever rendered. `SignalDeadline` is ten seconds
 from handling start to acceptance, checked under the mutation lock, including
 time waiting for it; equality is accepted, later or future-start signals change

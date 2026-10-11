@@ -61,16 +61,34 @@ func (s *State) Signal(organizationID kernel.ID, place Place, typist Typist, gen
 
 // Posted stops the member in the actual successfully posted scope and closes its
 // issued composer under the signal lock. Missing/invalid generations still stop
-// activity, allowing posting before composers carry generations.
+// activity, allowing posting before composers carry generations. Another
+// successful post with the same generation (a double submit) restarts
+// ClosedRetention from that post.
 func (s *State) Posted(organizationID kernel.ID, place Place, memberID kernel.ID, generation string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed[generation] == nil && s.issued(organizationID, place, memberID, generation) {
-		s.closed[generation] = time.AfterFunc(ClosedRetention, func() {
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			delete(s.closed, generation)
-		})
+	if s.issued(organizationID, place, memberID, generation) {
+		if old := s.closed[generation]; old != nil {
+			old.timer.Stop()
+		}
+		c := &closure{}
+		c.timer = time.AfterFunc(ClosedRetention, func() { s.reopen(generation, c) })
+		s.closed[generation] = c
 	}
 	s.stop(organizationID, place, memberID)
+}
+
+// closure is one successful post's closing of a generation. Its pointer, not
+// the timer, identifies it, so a callback compares it without reading timer.
+type closure struct{ timer *time.Timer }
+
+// reopen ends a closure when its retention passes. A replaced timer can have
+// fired already and be waiting for the lock while a repeated post renews the
+// closure; it must not delete the renewed one, so it checks its own identity.
+func (s *State) reopen(generation string, c *closure) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed[generation] == c {
+		delete(s.closed, generation)
+	}
 }

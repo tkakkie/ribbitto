@@ -40,7 +40,7 @@ type State struct {
 	streams       map[streamKey]*channelStreams
 	now           func() time.Time
 	signingKey    []byte
-	closed        map[string]*time.Timer
+	closed        map[string]*closure
 }
 
 // New constructs memory-only state for the process's hub.
@@ -52,7 +52,7 @@ func New(hub GenerationRaiser) *State {
 // Owner timers use time's clock (virtual inside testing/synctest).
 func NewWithClock(hub GenerationRaiser, now func() time.Time) *State {
 	return &State{hub: hub, organizations: make(map[kernel.ID]*organization), streams: make(map[streamKey]*channelStreams),
-		now: now, signingKey: []byte(rand.Text()), closed: make(map[string]*time.Timer)}
+		now: now, signingKey: []byte(rand.Text()), closed: make(map[string]*closure)}
 }
 
 // Start adds one member/topic activity using server-resolved scope and identity.

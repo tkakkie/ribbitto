@@ -125,8 +125,8 @@ there is no Python lint/format gate.
 regenerates templates, SQL and CSS and fails if that changes any file, then
 checks the API and dependency manifests, document sizes and lint, stopping at
 the first failure. It does not run Go or templ formatting, the `doc.go` check,
-`go vet`, `sourcecheck`, the tests, the schema docs or `make vuln`; `make check`
-and CI still do.
+`go vet`, `sourcecheck` or the tests, which `make check` keeps, nor the schema
+docs or `make vuln`, which CI runs separately.
 
 The AI launchers' self-tests, most of its time, run
 only when the change since `LAUNCHER_TESTS_BASE` (default `origin/main`;

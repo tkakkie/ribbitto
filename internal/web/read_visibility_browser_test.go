@@ -115,9 +115,15 @@ func testReadRecoveryBrowser(t *testing.T, browser *rod.Browser) {
 		}
 	}
 	pages := make(map[string]*rod.Page)
+	var contexts []*rod.Browser
 	open := func(t *testing.T, id string, topic bool) *rod.Page {
 		t.Helper()
-		page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+		// Each page gets its own browser context and so its own connection
+		// pool: Chrome allows six connections per host, and gated read POSTs
+		// would otherwise keep the seventh page from loading.
+		own := browser.MustIncognito()
+		contexts = append(contexts, own)
+		page := own.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
 		pages[id] = page
 		// Close pages before the server waits for any outstanding request gates.
 		page.MustEvalOnNewDocument(readBrowserClock + fmt.Sprintf(";window.readTest.id = %q;", id))
@@ -131,6 +137,9 @@ func testReadRecoveryBrowser(t *testing.T, browser *rod.Browser) {
 	defer func() {
 		for _, page := range pages {
 			_ = page.Context(context.WithoutCancel(ctx)).Timeout(5 * time.Second).Close()
+		}
+		for _, own := range contexts {
+			_ = own.Close()
 		}
 	}()
 	finish := func(t *testing.T, request readBrowserRequest, status int, after string, completed int) {
@@ -230,6 +239,8 @@ func testReadRecoveryBrowser(t *testing.T, browser *rod.Browser) {
 		request := next(t)
 		page.MustEval(`() => {
             const old = document.querySelector('#read-form'), form = old.cloneNode(true);
+            // Detached, the old form's afterRequest no longer reaches document.
+            old.addEventListener('htmx:afterRequest', () => { readTest.completed++; readTest.active--; });
             form.elements.cursor.value = '210'; old.replaceWith(form);
             htmx.process(form); htmx.trigger(form, 'htmx:load', {elt: form});
         }`)

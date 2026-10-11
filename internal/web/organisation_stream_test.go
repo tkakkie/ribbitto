@@ -28,7 +28,7 @@ func TestOrganisationStreamValidation(t *testing.T) {
 		"", "want=unknown", "want=sidebar,sidebar", "want=", "want=sidebar&want=messages",
 		"want=messages", "want=typing", "want=sidebar", "want=sidebar&panel=members", "want=sidebar&topic=" + streamTopic,
 		"want=presence&presence-after=instance:0&channel=" + streamChannel + "&topic=" + streamTopic,
-		"want=sidebar&channel=" + streamChannel + "&topic=bad", "want=sidebar&panel=other",
+		"want=sidebar&channel=" + streamChannel + "&topic=bad", "want=sidebar&channel=" + streamChannel + "&panel=other",
 		"want=presence", "want=presence&presence-after=", "want=sidebar&channel=bad",
 		"want=messages&channel=" + streamChannel + "&topic=bad", "want=sidebar&channel=" + streamChannel + "&channel=" + streamChannel,
 		"want=sidebar&after=%zz", "want=sidebar&after=0;broken", "want=sidebar&unexpected=1",

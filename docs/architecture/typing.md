@@ -51,4 +51,4 @@ lock held through notification. A notifier must not call back into state.
 An unrelated place's change may advance the returned organisation generation
 without changing the selected place generation, allowing subsequent delivery
 to acknowledge the wake without repeating an indicator. Durable cursors and
-[ephemeral transport](realtime.md#ephemeral-state) remain unchanged.
+[ephemeral transport](ephemeral-state.md#ephemeral-state) remain unchanged.

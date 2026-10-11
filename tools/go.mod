@@ -9,7 +9,7 @@ tool (
 )
 
 require (
-	github.com/pganalyze/pg_query_go/v6 v6.2.2
+	github.com/pganalyze/pg_query_go/v6 v6.2.5
 	github.com/yuin/goldmark v1.8.6
 	golang.org/x/tools v0.51.0
 )

@@ -139,3 +139,32 @@ func TestReaderMembersSnapshot(t *testing.T) {
 func (f *snapshotFake) Read(context.Context, org.Membership, kernel.ID, []kernel.ID, []kernel.ID, *kernel.ID) (conversation.PageCounts, error) {
 	return conversation.PageCounts{}, f.step("counts")
 }
+
+func TestReaderSidebarSnapshot(t *testing.T) {
+	membership := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
+	for _, selected := range []*kernel.ID{nil, {7}} {
+		order := []string{"snapshot", "reads", "channel", "channels"}
+		if selected != nil {
+			order = append(order, "selected")
+		}
+		order = append(order, "topics", "bind counts", "counts")
+		failures := []string{"", "channel", "channels", "topics", "counts"}
+		if selected != nil {
+			failures = append(failures, "selected")
+		}
+		for _, fail := range failures {
+			t.Run("failure="+fail, func(t *testing.T) {
+				reader, f := testReader(t, nil)
+				f.fail, f.organizationID = fail, membership.Organization.ID
+				_, err := reader.Sidebar(t.Context(), membership, kernel.ID{2}, selected)
+				want, wantErr := order, error(nil)
+				if fail != "" {
+					want, wantErr = order[:slices.Index(order, fail)+1], f.err
+				}
+				if !reflect.DeepEqual(f.calls, want) || !errors.Is(err, wantErr) {
+					t.Fatalf("calls/error = %v/%v, want %v/%v", f.calls, err, want, wantErr)
+				}
+			})
+		}
+	}
+}

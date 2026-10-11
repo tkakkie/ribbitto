@@ -37,8 +37,8 @@ moved_event_seq) WHERE moved_event_seq IS NOT NULL`.
 ## The API between the modules
 
 `unread` never reads `message`, and `conversation` never reads `unread`'s
-tables. The page snapshot (`conversation.Reader`) reaches `unread` through an
-injected, snapshot-bound factory, as it reaches org's and identity's data
+tables. Page and independent sidebar snapshots (`conversation.Reader`) reach
+`unread` through an injected, snapshot-bound factory. Pages also reach org's and identity's data
 ([cross-feature access](cross-feature-access.md)); `unread` in turn calls
 `conversation`'s snapshot-bound message queries. The composition root supplies conversation's consumer-owned
 `PageCountsIn` factory. `PageCounter` adapts `newChannelCounts` and
@@ -46,6 +46,18 @@ injected, snapshot-bound factory, as it reaches org's and identity's data
 unread never queries `member`. Feed, topic, `?before=` and members pages
 return `PageCounts`: channel and topic count maps, the feed's first unread
 and the selected topic's first unread (zero without a selection).
+
+`Reader.Sidebar` independently reads the current channel, all channels in name/ID
+order, and its first 50 topics (default first, then case-insensitive name/ID),
+with both count maps in the same read-only repeatable-read snapshot. It validates
+the selected topic in that organisation/channel and returns it separately,
+including when unlisted, counting at most 51 topics without extending the list. Each call uses
+fresh lists: a displaced non-selected topic disappears. Channel totals still
+cover all topics; both maps include zero, so whole-list replacement clears badges.
+It uses the same `PageCounter` and persisted member join sequence as page reads,
+with no history, author directory, cursor read or writes. Delivery and rendering
+follow in #810 and #811.
+
 Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
 parameter. These statements share the page snapshot, with none per channel or topic.
 

@@ -22,7 +22,7 @@ type PageCounter interface {
 	Read(context.Context, org.Membership, kernel.ID, []kernel.ID, []kernel.ID, *kernel.ID) (PageCounts, error)
 }
 
-// PageCountsIn binds unread's count orchestration to the page's snapshot.
+// PageCountsIn binds unread's count orchestration to a page or sidebar snapshot.
 type PageCountsIn func(platform.Snapshot) PageCounter
 
 func (s *Reader) pageCounts(ctx context.Context, snapshot platform.Snapshot, m org.Membership, channelID kernel.ID, channels []Channel, topics []Topic, selected *kernel.ID) (PageCounts, error) {

@@ -100,7 +100,7 @@ type Notifier interface {
 	Raise(organizationID kernel.ID, seq int64)
 }
 
-// SnapshotRunner runs the page snapshot, One and Many (decision 26): the use
+// SnapshotRunner runs page/sidebar snapshots, One and Many (decision 26): the use
 // case owns the read boundary, and the stores and directories only bind to
 // the Snapshot they are given, so every read sees the same committed state.
 type SnapshotRunner interface {

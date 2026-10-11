@@ -9,7 +9,7 @@ import (
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 )
 
-// Reader owns the page, single-message and batch snapshots across conversation,
+// Reader owns page, sidebar, single-message and batch snapshots across conversation,
 // org, identity and unread through factories bound to the same read-only snapshot.
 type Reader struct {
 	runner   SnapshotRunner

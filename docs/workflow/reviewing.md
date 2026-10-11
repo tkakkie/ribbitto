@@ -102,7 +102,8 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
 3. All pass → the initial adversarial review runs on the new head, at the
    pull request's tier recomputed over its whole diff, still as a draft,
    with every finding disposed of; a follow-up after that review needs it
-   again only if the follow-up's diff matches tier A or B
+   again only if the follow-up's diff matches tier A or B, after a
+   completed Grok report usually by Muse Code
    ([completion](adversarial-review.md#which-review-runs)). Then
    `ai-reviewed`, ready for review and the normal merge decision. Copilot is not
    re-requested; if Copilot reviews again anyway, handle it the same way
@@ -110,12 +111,35 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
    specification decision, a failed check or a new blocking finding → ask
    the maintainer.
 
+**Adversarial follow-up check** (pull requests only; after a fix for a
+finding of the adversarial review; not a review round, so the two-round
+limit is untouched). A fix to a Grok or Muse Code finding would otherwise
+reach the re-review, often Muse Code's, without either AI checking it:
+
+1. Apply only the fix, with a regression test that fails without it (or
+   the reason no test can); the pull request is a draft.
+2. The AI that did not write the fix (Claude ↔ Codex) checks that the diff
+   since the reviewed head contains only that fix, that it answers the
+   original finding and that the test fails without it, and reports:
+
+   ```
+   **Adversarial follow-up check — <Claude|Codex>** (at <SHA>)
+   Compared: <reviewed SHA>..<SHA>
+   - ✅ | ❌ finding — the fix, and the test that fails without it
+   ```
+
+3. All pass → the re-review the
+   [completion rule](adversarial-review.md#which-review-runs) names. Any
+   other change, a failed check, or a fix needing a design or specification
+   decision → ask the maintainer.
+
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
 than combine both sides, it needs a normal review. Either way, if the diff
 from the last adversarially reviewed head to the merge result matches tier
 A or B, the pull request's tier, recomputed at the merge result, is
-reviewed again before it is marked ready
+reviewed again under the completion rule (Muse Code after a completed Grok
+report, unless the merge adds tier A behaviour) before it is marked ready
 ([completion](adversarial-review.md#which-review-runs)); a pull request
 already marked ready is converted back to a draft until then.
 

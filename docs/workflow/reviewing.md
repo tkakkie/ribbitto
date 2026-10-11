@@ -102,9 +102,8 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
 3. All pass → the initial adversarial review runs on the new head, at the
    pull request's tier recomputed over its whole diff, still as a draft,
    with every finding disposed of; a follow-up after that review needs it
-   again only if the follow-up's diff matches tier A or B, after a
-   completed Grok report usually by Muse Code
-   ([completion](adversarial-review.md#which-review-runs)). Then
+   again only if the follow-up's diff matches tier A or B, by the reviewer
+   the [completion rule](adversarial-review.md#which-review-runs) names. Then
    `ai-reviewed`, ready for review and the normal merge decision. Copilot is not
    re-requested; if Copilot reviews again anyway, handle it the same way
    once, then ask the maintainer. A change needing a design or
@@ -138,8 +137,9 @@ listing the files and how they were resolved; if the resolution does more
 than combine both sides, it needs a normal review. Either way, if the diff
 from the last adversarially reviewed head to the merge result matches tier
 A or B, the pull request's tier, recomputed at the merge result, is
-reviewed again under the completion rule (Muse Code after a completed Grok
-report, unless the resolution adds tier A behaviour) before it is marked ready
+reviewed again by the reviewer the completion rule names, counting this
+pull request's own commits since the last Grok-reviewed head, not only the
+resolution, before it is marked ready
 ([completion](adversarial-review.md#which-review-runs)); a pull request
 already marked ready is converted back to a draft until then.
 

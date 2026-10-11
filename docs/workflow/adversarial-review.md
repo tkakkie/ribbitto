@@ -28,9 +28,9 @@ A tier follows what the change does; a past review without findings is
 never a reason for a lower one.
 
 **Precedence: A, then B, then C.** **When in doubt, the higher tier.** In
-A's code areas Grok is for the changes A's first item lists; any other
-change there, behaviour-preserving moves included, is tier B, by Muse Code
-(a move still gets one review: #427's had a defect).
+A's code areas Grok is for any change to what the code does or its order,
+except B's narrow carve-out; a change there that keeps both is tier B, by
+Muse Code (a move still gets one review: #427's had a defect).
 
 - **A — Grok required:**
   - in A's code areas — concurrency, caches or background work (goroutines,
@@ -39,20 +39,18 @@ change there, behaviour-preserving moves included, is tier B, by Muse Code
     `internal/web`, the event log's queries and readers) or in the browser
     (`web/static`), and transactions whose order matters (the
     organisation's `event_seq` and the realtime append in posting,
-    branching, setup and sign-up; read-state and cursor writes) — a change
-    that adds, removes or reorders goroutines, locks, timers or background
-    work; adds or changes long-lived in-memory state (registries,
-    generations, caches, subscriptions) or the ordering contract its callers
-    rely on; changes **which writes share a transaction or the order they
-    run in**, or logic whose correctness rests on a lock or the
-    transaction's isolation (decisions made under a lock); changes the
-    behaviour of a script in `web/static` (what it sends, when, with which
-    cursor, its retries and visibility state), htmx swaps, out-of-band ones
-    included, that replace live forms or state, or what those forms carry
-    across replacements; or changes
-    the delivery contract: who is authorised for what (organisation and
-    member), the organisation scope, which streams or members receive a
-    frame, or where authorisation runs before a send;
+    branching, setup and sign-up; read-state and cursor writes) — any change
+    to behaviour or order outside B's carve-out, including: goroutines,
+    locks, timers and background work; long-lived in-memory state and its
+    ordering contract; which writes share a transaction, their order, and
+    logic resting on a lock or the transaction's isolation; the stream
+    loop's gaps, cursor and event-log reads; retention's deletion; what a
+    `web/static` script sends, when and with which cursor, its retries and
+    visibility state, and htmx swaps of live forms or state; output kept in
+    a cache shared across members; and the delivery contract — who is
+    authorised for what (organisation and member), the organisation scope,
+    which streams or members receive a frame, and authorisation before each
+    send;
   - any change to the rules that guard these areas and the AI and CI
     tooling: the AI launchers in `scripts/ai/**`; the trusted prompts and
     review instructions in `.github/prompts/**` and
@@ -67,9 +65,10 @@ change there, behaviour-preserving moves included, is tier B, by Muse Code
   - a change in A's code areas that keeps behaviour and order: moves,
     extractions, new seams and their closures, and tests (including new
     tests of races or of the event log);
-  - any other behaviour change in A's code areas that matches none of A's
-    first item: server stream wiring, renderers and ingress handlers that
-    match none of those triggers;
+  - the carve-out: a behaviour change confined to server stream wiring,
+    renderers or ingress handlers that touches nothing A's first item
+    names (a renderer whose output a shared cache keeps may vary only by
+    that cache's key);
   - **any** code change, behaviour-preserving moves included, in
     authentication, authorisation, sessions or organisation scoping: who is
     signed in, who is a member, what a member may see or do, and how a
@@ -138,11 +137,11 @@ diff's, and reviewed again:
   A one without a completed Grok report gets Grok;
 - a tier A pull request with a completed Grok report gets **Grok again**
   when the commits since the **last Grok-reviewed head** — however many
-  Muse Code re-reviews came between — add anything of A's first item
-  beyond what a fix of a reported finding needs, or change anything A's
-  second item covers (after the adversarial
-  follow-up check in [reviewing](reviewing.md)), or the maintainer asks;
-  otherwise **Muse Code**: fixes, answers to Copilot or the cross-review,
+  Muse Code re-reviews came between — change anything A's second item
+  covers, add anything of A's first item beyond what a fix of a reported
+  finding needs, or the maintainer asks; otherwise **Muse Code**: fixes
+  (after the follow-up check in [reviewing](reviewing.md)), answers to
+  Copilot or the cross-review,
   merges of `main` (what `main` brings was reviewed in its own pull
   request; a conflict resolution beyond combining both sides counts as
   this pull request's change) and tier B additions. When in doubt, Grok;

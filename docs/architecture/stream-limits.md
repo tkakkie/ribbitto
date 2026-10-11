@@ -79,6 +79,14 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   combined wait. Recounts never change the cursor; only successful writes
   restart the heartbeat deadline. Production streams supply a per-connection
   source (#819); its composition is in [unread counts](unread-counts.md).
+  Optional member watches (#829) feed this same coalescer; activation is #711.
+  Each active read publication costs one locked lookup/update and replacement
+  channel; wake work scales with that member's waiting tabs. Registry memory
+  follows active member entries and watches; last release removes the entry.
+  Recounts remain per connection and interval-limited; wakes and event-log
+  reads are not rate-limited by the recount interval. This is single-process:
+  shared member invalidation and subscription/reconnect coordination are needed
+  across processes; bounded recovery additionally needs revisions or replay.
 
 - Each connection reads the log itself (#209), so nothing queues for a slow
   client: its cursor just lags. A client that stops reading is

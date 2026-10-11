@@ -20,9 +20,14 @@
 // Owner reads supply bounded frames after each durable batch, authorized
 // immediately before sending without moving the cursor. Sidebar sources supply
 // full recounts at connect and on consumer-defined organisation-wide triggers.
+// Optional member watches subscribe before the first recount and release on exit.
+// Generations captured before fresh snapshots are covered only after send or
+// denial; later publications dirty the same coalescer and join the combined wait.
+// This is process-local; activation and cross-process recovery are separate work.
 // A dirty flag and fixed deadline coalesce recounts between batches; neither a
 // quiet period nor a backlog loses pending work. Rendering precedes authorization,
-// and sidebar frames preserve the durable cursor. Production presence and
+// and sidebar frames check the organisation and bound member, preserving the
+// durable cursor. Production presence and
 // typing are implemented; web renders their indicators.
 // Web's hidden sink receives sidebar/presence payloads. The hub is also the
 // registry of open connections: Register caps

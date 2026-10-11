@@ -129,15 +129,16 @@ The state, boundary and generation come from one locked read. Another process's
 token, a start below the boundary or over 100 changes require `reset` on connect
 or later; equality at the boundary is served. The presence adapter sends
 that reset without `id:`, ending the stream so the page reloads.
-Production sidebar delivery uses `realtime.SidebarSource` (#810, #819). Every interested connection
-recounts after its first durable batch, even at a current cursor. The consumer's
-trigger recognises posts and moves; realtime checks organisation scope before
-calling it, independently of message interest, channel and topic. Triggers set
-one dirty flag; a pending deadline wakes a quiet stream, and recounts run between
-batches during a backlog. The [fixed minimum interval](stream-limits.md) coalesces
-bursts. Recounts render full state, then authorize the organisation immediately
-before sending without `id:`; errors stop delivery, denies discard the frame.
-Reconnect always recounts, including after a message whose recount was lost.
+Sidebar sources recount on connect and organisation-scoped posts/moves,
+regardless of message interest or place. Optional member watches (#829)
+subscribe before recounting and release on exit. Capture the generation before
+each fresh snapshot; send or deny covers only that generation. Changes dirty
+one [fixed deadline](stream-limits.md) checked between batches and in the combined
+wait. Authorize organisation and bound member after rendering, immediately before
+sending. Frames omit `id:`; errors stop delivery. Reconnect recounts. Watches are
+single-process; activation is #711. Multiple processes need shared invalidation
+and coordination; bounded recovery needs revisions/replay
+([contract](ephemeral-state.md#member-read-change-watches)).
 Swap targets:
 
 | Event | `id:` | Where htmx puts it |

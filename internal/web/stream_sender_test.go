@@ -278,7 +278,7 @@ func TestSSEEphemeralFrameAndPresenceToken(t *testing.T) {
 	if !ok || sub.PresenceAfter != "instance:7" {
 		t.Fatalf("subscription=%+v valid=%v", sub, ok)
 	}
-	for _, name := range []string{"presence", "typing"} {
+	for _, name := range []string{"presence", "typing", "sidebar"} {
 		w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
 		s := &sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
 		if err := s.Send(t.Context(), realtime.Outgoing{Ephemeral: true, ID: 999, Name: name, Data: []byte("state")}); err != nil {

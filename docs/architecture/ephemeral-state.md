@@ -14,7 +14,7 @@ without a lost wake-up or registry lock.
 ## Member read-change watches
 
 `unread.Changes` owns process-local generations keyed by organisation and member
-(#829, registry foundation). Active watches share a generation and wake channel;
+(#829). Active watches share a generation and wake channel;
 publication closes/replaces that channel under the same mutex as subscription,
 snapshot capture and release. Publication without a watch retains no entry, and
 the last idempotent release deletes it. A reopened entry starts at zero; generations
@@ -26,9 +26,17 @@ commit before capture is in the read; one after it closes the channel, even duri
 the read, so the next recount covers it. A pair captured after the read would
 miss a commit in between, until the member's next change or a reconnect.
 Publication costs one lookup/update and wakes only that member's waiting tabs;
-memory tracks active subscriptions, bounded by stream caps when wired. Production
-publication and stream delivery remain unwired here, for #828, #829's delivery PR
-and #711. Recounts and authorisation retain their existing per-tab costs.
+memory tracks active subscriptions, bounded by stream caps when wired. Optional
+`realtime.SidebarWatcher` delivery is implemented (#829); production publication
+and activation remain for #828 and #711. The stream acquires before its initial
+recount and defers release immediately. Observed generations dirty the existing
+coalescer without moving its deadline; only a successful send or explicit denial
+acknowledges the generation captured before the persisted read. Changes during
+rendering remain pending. Atomic capture in the combined wait prevents a lost
+wake; advancing observation while throttled prevents spinning on already observed work.
+Recounts and authorisation retain per-tab costs; wakes/log reads are not throttled.
+Sidebar frames render before checking both organisation and bound member, omit
+`id:` and preserve the cursor; denied frames do not restart heartbeat deadlines.
 
 This registry is single-process. Reconnect recounts persisted state; an omitted
 notification has no bounded repair without reconnect. Multiple processes need

@@ -146,6 +146,12 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	// must not put it off.
 	written := time.Now()
 	sidebar := sidebarDelivery{dirty: s.Sidebar != nil && slices.Contains(sub.Interests, InterestSidebar)}
+	if sidebar.dirty {
+		if source, ok := s.Sidebar.(SidebarWatcher); ok {
+			sidebar.watch = source.Watch(sub.Organization, sub.Member)
+			defer sidebar.watch.Release()
+		}
+	}
 	for {
 		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
 		if errors.Is(err, ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
@@ -194,7 +200,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		if sidebar.dirty {
 			deadline = sidebar.next
 		}
-		levels, err := s.wait(ctx, sub, seen, send, &written, deadline)
+		levels, err := s.wait(ctx, sub, seen, send, &written, deadline, sidebar.watch, sidebar.observed)
 		// Generations count as seen only after the owner returns their state.
 		seen.durable = levels.durable
 		if err != nil {
@@ -254,9 +260,9 @@ func heartbeat(ctx context.Context, send Sender, written *time.Time) error {
 
 // wait combines durable and generation wakes with a pending recount deadline,
 // sending heartbeats counted from *written, even while the recount is pending.
-func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, send Sender, written *time.Time, recount time.Time) (streamLevels, error) {
+func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, send Sender, written *time.Time, recount time.Time, watch SidebarWatch, observed uint64) (streamLevels, error) {
 	if s.Heartbeat <= 0 && recount.IsZero() {
-		return s.Hub.waitFor(ctx, sub, after)
+		return s.Hub.waitFor(ctx, sub, after, watch, observed)
 	}
 	for {
 		deadline, cause := recount, errSidebarDue
@@ -264,7 +270,7 @@ func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, 
 			deadline, cause = written.Add(s.Heartbeat), errHeartbeatDue
 		}
 		waitCtx, cancel := context.WithDeadlineCause(ctx, deadline, cause)
-		levels, err := s.Hub.waitFor(waitCtx, sub, after)
+		levels, err := s.Hub.waitFor(waitCtx, sub, after, watch, observed)
 		cancel()
 		if ctx.Err() == nil && errors.Is(err, errSidebarDue) {
 			return after, nil

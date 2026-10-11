@@ -67,8 +67,10 @@ order immediately before sending, coalescing and cursor/heartbeat rules (#810).
 Every connect recounts without `id:`, so reconnecting at a delivered message's ID
 recovers a recount lost after that message. Production stream tests compare
 recounts with reload targets, distinguish members with the same join sequence,
-and revoke access during a gated recount. Real-branch displacement and production
-browser acceptance remain in #811; cost measurement remains in #812.
+and revoke access during a gated recount. `TestLiveSidebarBranchDisplacement`
+checks a real mixed-read branch displacing the selected source from 50 links;
+`TestLiveSidebarBrowser` checks production replacement, retained-link focus and
+the unlisted heading against a reload (#811). Cost measurement remains in #812.
 
 Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
 parameter. These statements share the page or sidebar snapshot that runs them, with none per channel or topic.

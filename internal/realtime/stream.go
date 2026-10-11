@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -84,6 +85,8 @@ type Stream struct {
 	Renderer   Renderer
 	// Owners supplies current frames; nil entries preserve durable-only delivery.
 	Owners map[Interest]EphemeralOwner
+	// Sidebar supplies coalesced recounts; nil leaves sidebar delivery unwired.
+	Sidebar SidebarSource
 	// BatchSize bounds each read; zero means DefaultBatchSize.
 	BatchSize int
 	// Heartbeat is how long the loop waits on the hub before it sends a
@@ -140,6 +143,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	// from: wakeups that write nothing, such as another channel's events,
 	// must not put it off.
 	written := time.Now()
+	sidebar := sidebarDelivery{dirty: s.Sidebar != nil && slices.Contains(sub.Interests, InterestSidebar)}
 	for {
 		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
 		if errors.Is(err, ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
@@ -152,6 +156,9 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			return cursor, fmt.Errorf("reading events after %d: %w", cursor, err)
 		}
 		for _, event := range events {
+			if s.Sidebar != nil && slices.Contains(sub.Interests, InterestSidebar) && event.OrganizationID == sub.Organization && s.Sidebar.Trigger(event) {
+				sidebar.dirty = true
+			}
 			sent, err := s.deliver(ctx, sub, event, send)
 			if err != nil {
 				return cursor, err
@@ -167,6 +174,9 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			return cursor, err
 		}
 		connected = true
+		if err := s.recount(ctx, sub, &sidebar, send, &written); err != nil {
+			return cursor, err
+		}
 		if len(events) == batch {
 			// Draining a backlog that is all other channels' events writes
 			// nothing either; the heartbeat is still due on time.
@@ -178,7 +188,11 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			continue
 		}
 		seen.durable = max(cursor, seen.durable)
-		levels, err := s.wait(ctx, sub, seen, send, &written)
+		deadline := time.Time{}
+		if sidebar.dirty {
+			deadline = sidebar.next
+		}
+		levels, err := s.wait(ctx, sub, seen, send, &written, deadline)
 		// Generations count as seen only after the owner returns their state.
 		seen.durable = levels.durable
 		if err != nil {
@@ -236,16 +250,23 @@ func heartbeat(ctx context.Context, send Sender, written *time.Time) error {
 	return nil
 }
 
-// wait combines the durable level and requested generations, sending a
-// heartbeat whenever Heartbeat has passed since *written first.
-func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, send Sender, written *time.Time) (streamLevels, error) {
-	if s.Heartbeat <= 0 {
+// wait combines durable and generation wakes with a pending recount deadline,
+// sending heartbeats counted from *written, even while the recount is pending.
+func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, send Sender, written *time.Time, recount time.Time) (streamLevels, error) {
+	if s.Heartbeat <= 0 && recount.IsZero() {
 		return s.Hub.waitFor(ctx, sub, after)
 	}
 	for {
-		waitCtx, cancel := context.WithDeadlineCause(ctx, written.Add(s.Heartbeat), errHeartbeatDue)
+		deadline, cause := recount, errSidebarDue
+		if s.Heartbeat > 0 && (deadline.IsZero() || written.Add(s.Heartbeat).Before(deadline)) {
+			deadline, cause = written.Add(s.Heartbeat), errHeartbeatDue
+		}
+		waitCtx, cancel := context.WithDeadlineCause(ctx, deadline, cause)
 		levels, err := s.Hub.waitFor(waitCtx, sub, after)
 		cancel()
+		if ctx.Err() == nil && errors.Is(err, errSidebarDue) {
+			return after, nil
+		}
 		if due, err := heartbeatDue(ctx, err); !due {
 			return levels, err
 		}

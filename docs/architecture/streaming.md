@@ -93,7 +93,7 @@ delivers durable frames; `typing` and `presence` read their wired
 owners after each durable batch and before waiting, at most one frame and
 one authorization check per kind. Presence checks the organisation, typing
 the frame's channel, immediately before sending. Denies mark the generation
-seen; errors stop the stream. Web's presence adapter is wired in production (#768); typing remains planned (#288). `sidebar` remains planned (#286).
+seen; errors stop the stream. Web's presence adapter is wired in production (#768); typing remains planned (#288). Sidebar production rendering/wiring remains planned (#811).
 
 The endpoint takes:
 
@@ -125,8 +125,17 @@ The state, boundary and generation come from one locked read. Another process's
 token, a start below the boundary or over 100 changes require `reset` on connect
 or later; equality at the boundary is served. The presence adapter sends
 that reset without `id:`, ending the stream so the page reloads.
-Sidebar frames remain planned (#286), recounting at connect and after
-coalesced triggers. Their swap targets are listed below; the typing region remains planned.
+Sidebar delivery is available through `realtime.SidebarSource` (#810), with
+production rendering and wiring left to #811. Every interested connection
+recounts after its first durable batch, even at a current cursor. The consumer's
+trigger recognises posts and moves; realtime checks organisation scope before
+calling it, independently of message interest, channel and topic. Triggers set
+one dirty flag; a pending deadline wakes a quiet stream, and recounts run between
+batches during a backlog. The [fixed minimum interval](stream-limits.md) coalesces
+bursts. Recounts render full state, then authorize the organisation immediately
+before sending without `id:`; errors stop delivery, denies discard the frame.
+Reconnect always recounts, including after a message whose recount was lost.
+Their swap targets are listed below; the typing region remains planned.
 
 | Event | `id:` | Where htmx puts it |
 |---|---|---|

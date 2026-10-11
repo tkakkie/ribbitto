@@ -48,7 +48,8 @@ Muse Code (a move still gets one review: #427's had a defect).
     asks for (cursor, interests, channel, topic, `presence-after`);
     retention's deletion; what a
     `web/static` script sends, when and with which cursor, its retries and
-    visibility state, and htmx swaps of live forms or state; output kept in
+    visibility state; htmx or SSE swaps of live forms or state (`sse-swap`,
+    `hx-*`), in scripts or templates; output kept in
     a cache shared across members; and the delivery contract — who is
     authorised for what (organisation and member), the organisation scope,
     which streams or members receive a frame, and authorisation before each
@@ -63,7 +64,7 @@ Muse Code (a move still gets one review: #427's had a defect).
     in `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does
     not exempt a change from this item.
 - **B — one review by Muse Code, run by its launcher** (Antigravity may add
-  an extra review, which never satisfies a tier):
+  a review that never satisfies a tier):
   - a change in A's code areas that keeps behaviour and order: moves,
     extractions, new seams and their closures, and tests (including new
     tests of races or of the event log);
@@ -168,9 +169,8 @@ git fetch origin main &&
   bash -c "$launcher" grok-review <pr-number>
 ```
 
-Never run a pull request's copy of `scripts/ai/grok-review.sh`. The
-launcher, its security boundary and its limits are in
-[`running-grok.md`](running-grok.md).
+Never run a pull request's copy of the launcher; its security boundary and
+limits are in [`running-grok.md`](running-grok.md).
 
 ## Muse Code
 

@@ -128,13 +128,16 @@ reach the re-review, often Muse Code's, without either AI checking it:
    ```
 
 3. All pass → the re-review the
-   [completion rule](adversarial-review.md#which-review-runs) names. Any
-   other change, a failed check, or a fix needing a design or specification
-   decision → ask the maintainer.
+   [completion rule](adversarial-review.md#which-review-runs) names, at the
+   checked SHA; a push before it starts this check again. Any other change,
+   a failed check, or a fix needing a design or specification decision →
+   ask the maintainer.
 
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
-than combine both sides, it needs a normal review. Either way, if the diff
+than combine both sides, it needs a normal review. A combination that
+changes lock or transaction order or the delivery contract (tier A's first
+item) does more than combine, even when every line came from one side. Either way, if the diff
 from the last adversarially reviewed head to the merge result matches tier
 A or B, the pull request's tier, recomputed at the merge result, is
 reviewed again by the reviewer the completion rule names, counting this

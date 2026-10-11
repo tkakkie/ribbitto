@@ -777,7 +777,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if page.Members == nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<script defer src=\"/static/read-visibility-v3.js\" nonce=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<script defer src=\"/static/read-visibility-v4.js\" nonce=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

@@ -44,6 +44,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 	t.Run("typing/indicator", func(t *testing.T) { testTypingIndicatorBrowser(t, browser) })
 	t.Run("composer/typing", func(t *testing.T) { testTypingComposerBrowser(t, browser) })
 	t.Run("composer/no-javascript", func(t *testing.T) { testComposerWithoutJavaScript(t, browser) })
+	t.Run("read-recovery", func(t *testing.T) { testReadRecoveryBrowser(t, browser) })
 	t.Run("unread-divider", func(t *testing.T) { testUnreadDividerBrowser(t, browser) })
 	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {

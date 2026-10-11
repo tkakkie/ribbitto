@@ -99,6 +99,11 @@ const SidebarInterval time.Duration = 1000000000 // SidebarInterval bounds recou
 type SidebarSource interface // SidebarSource recognises recount triggers and renders full current state.
   func (SidebarSource).Recount(context.Context, Subscription) (Outgoing, error)
   func (SidebarSource).Trigger(Event) bool
+type SidebarWatch interface // SidebarWatch tracks changes within one active subscription lifetime.
+  func (SidebarWatch).Release() // Release ends the watch; repeated calls are harmless.
+  func (SidebarWatch).Snapshot() (uint64, <-chan struct{}) // Snapshot atomically captures the generation and channel before a recount.
+type SidebarWatcher interface // SidebarWatcher optionally extends SidebarSource with member-scoped wakes.
+  func (SidebarWatcher).Watch(organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID) SidebarWatch // Watch returns a non-nil watch before the initial recount; Run owns release.
 type Stream struct // Stream runs the per-connection delivery loop.
   field Authorizer Authorizer
   field BatchSize int // BatchSize bounds each read; zero means DefaultBatchSize.

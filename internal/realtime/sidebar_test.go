@@ -161,11 +161,21 @@ func TestSidebarReconnectAfterMessageBeforeRecount(t *testing.T) {
 }
 
 func TestSidebarContinuingBacklog(t *testing.T) {
+	testSidebarContinuingBacklog(t, false)
+}
+
+func TestSidebarReadChangeBacklog(t *testing.T) {
+	testSidebarContinuingBacklog(t, true)
+}
+
+func testSidebarContinuingBacklog(t *testing.T, readChanges bool) {
+	t.Helper()
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		selected := sub
 		selected.Interests = []Interest{InterestSidebar}
+		w := newSidebarWatch()
 		var times []time.Time
 		stream := Stream{Hub: NewHub(), Events: slowFilteredLog{SidebarInterval / 4}, BatchSize: 1,
 			Authorizer: authorizerFunc(allowAll), Sidebar: sidebarSource{sidebarTrigger,
@@ -173,6 +183,16 @@ func TestSidebarContinuingBacklog(t *testing.T) {
 					times = append(times, time.Now())
 					return Outgoing{}, nil
 				}}}
+		if readChanges {
+			stream.Sidebar = watchedSidebar{sidebarSource{func(Event) bool { return false }, stream.Sidebar.(sidebarSource).recount}, func(kernel.ID, kernel.ID) SidebarWatch { return w }}
+			stream.Events = sidebarReader(func(ctx context.Context, org kernel.ID, after int64, limit int) ([]Event, error) {
+				if after >= 12 {
+					return nil, errTooManyReads
+				}
+				w.publish()
+				return (slowFilteredLog{SidebarInterval / 4}).EventsAfter(ctx, org, after, limit)
+			})
+		}
 		cursor, err := stream.Run(ctx, selected, 0, frameSender{func(Outgoing) error {
 			if len(times) == 3 {
 				cancel()
@@ -186,7 +206,7 @@ func TestSidebarContinuingBacklog(t *testing.T) {
 }
 
 func TestSidebarDeliverySafety(t *testing.T) {
-	for _, name := range []string{"deny after render", "authorization error", "send failure", "cancel during render", "cancel during authorization"} {
+	for _, name := range []string{"deny after render", "replacement during render", "authorization error", "send failure", "cancel during render", "cancel during authorization"} {
 		t.Run(name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
@@ -194,6 +214,10 @@ func TestSidebarDeliverySafety(t *testing.T) {
 				failure, rendered, checks := errors.New("delivery failed"), false, 0
 				selected, send := sub, newRecorder()
 				selected.Interests = []Interest{InterestSidebar}
+				selected.Member = kernel.ID{1}
+				member := selected.Member
+				gate, resume := make(chan struct{}), make(chan struct{})
+				w := newSidebarWatch()
 				send.failOn = -1
 				if name == "send failure" {
 					send.failOn, send.err = 0, failure
@@ -201,14 +225,16 @@ func TestSidebarDeliverySafety(t *testing.T) {
 				stream := Stream{Hub: NewHub(), Events: &fakeLog{}, Heartbeat: 2 * SidebarInterval,
 					Sidebar: sidebarSource{sidebarTrigger, func(context.Context, Subscription) (Outgoing, error) {
 						rendered = true
+						close(gate)
+						<-resume
 						if name == "cancel during render" {
 							cancel()
 						}
 						return Outgoing{}, nil
 					}}, Authorizer: authorizerFunc(func(e Event) (bool, error) {
 						checks++
-						if !rendered || e.OrganizationID != selected.Organization || e.ChannelID != (kernel.ID{}) {
-							t.Error("authorization must follow rendering and use organisation scope")
+						if !rendered || e.OrganizationID != selected.Organization || e.ChannelID != (kernel.ID{}) || e.AudienceMemberID == nil || *e.AudienceMemberID != selected.Member {
+							t.Error("authorization must follow rendering and use organisation/member scope")
 						}
 						if name == "authorization error" {
 							return false, failure
@@ -216,10 +242,19 @@ func TestSidebarDeliverySafety(t *testing.T) {
 						if name == "cancel during authorization" {
 							cancel()
 						}
-						return name != "deny after render", nil
+						return member != (kernel.ID{}) && (e.AudienceMemberID == nil || *e.AudienceMemberID == member), nil
 					})}
+				stream.Sidebar = watchedSidebar{stream.Sidebar.(sidebarSource), func(kernel.ID, kernel.ID) SidebarWatch { return w }}
 				done := make(chan result, 1)
 				go func() { c, err := stream.Run(ctx, selected, 7, send); done <- result{c, err} }()
+				<-gate
+				if name == "deny after render" {
+					member = kernel.ID{}
+				}
+				if name == "replacement during render" {
+					member = kernel.ID{2}
+				}
+				close(resume)
 				synctest.Wait()
 				if name == "deny after render" {
 					time.Sleep(2 * SidebarInterval)
@@ -237,7 +272,7 @@ func TestSidebarDeliverySafety(t *testing.T) {
 				if name == "cancel during render" {
 					wantChecks = 0
 				}
-				if got.cursor != 7 || !errors.Is(got.err, want) || checks != wantChecks || len(send.ids()) != 0 {
+				if got.cursor != 7 || !errors.Is(got.err, want) || checks != wantChecks || len(send.ids()) != 0 || w.releases != 1 {
 					t.Fatalf("Run=%+v checks=%d sent=%v", got, checks, send.ids())
 				}
 			})

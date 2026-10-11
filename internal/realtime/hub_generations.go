@@ -35,7 +35,7 @@ func interestedState(level *atomic.Pointer[sequenceState], interests []Interest,
 
 // waitFor reads every requested level/channel pair before one combined wait.
 // A raise closes the captured channel even if it lands before the select.
-func (h *Hub) waitFor(ctx context.Context, sub Subscription, after streamLevels) (streamLevels, error) {
+func (h *Hub) waitFor(ctx context.Context, sub Subscription, after streamLevels, watch SidebarWatch, observed uint64) (streamLevels, error) {
 	s := h.sequence(sub.Organization)
 	for {
 		if ctx.Err() != nil {
@@ -44,8 +44,13 @@ func (h *Hub) waitFor(ctx context.Context, sub Subscription, after streamLevels)
 		durable := s.state.Load()
 		presence := interestedState(&s.presence, sub.Interests, InterestPresence)
 		typing := interestedState(&s.typing, sub.Interests, InterestTyping)
+		var generation uint64
+		var changed <-chan struct{}
+		if watch != nil {
+			generation, changed = watch.Snapshot()
+		}
 		latest := streamLevels{durable.latest, presence.latest, typing.latest}
-		if latest.durable > after.durable || latest.presence > after.presence || latest.typing > after.typing {
+		if latest.durable > after.durable || latest.presence > after.presence || latest.typing > after.typing || generation > observed {
 			return latest, nil
 		}
 		if h.afterWaitRead != nil {
@@ -56,6 +61,7 @@ func (h *Hub) waitFor(ctx context.Context, sub Subscription, after streamLevels)
 		case <-durable.changed:
 		case <-presence.changed:
 		case <-typing.changed:
+		case <-changed:
 		case <-ctx.Done():
 		}
 		s.waiters.Add(-1)

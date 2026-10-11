@@ -6,6 +6,9 @@ events are unchanged). Hub generations and the combined writer wait are
 implemented (#735), as are frame delivery (#736) and the sink (#737);
 presence state, changes and rendering are current (#766–#768; closes #287); typing state, composer signals, delivery and page status regions are implemented (#784–#790, #813, #833; closes #288). Details in
 [ephemeral state](../architecture/ephemeral-state.md#ephemeral-state).
+Member read invalidation extends this contract (#711, option B): registry and
+optional sidebar delivery are implemented (#829); production activation, HTTP
+acceptance and measurements remain in #711.
 
 - **Current state, not events.** Presence (who has a stream open) and
   typing (who is typing where) are in-memory state per organisation and per
@@ -61,3 +64,36 @@ per-connection queue decision 23 rejected); logging presence and typing as
 durable events (replayed noise, retention churn, the organisation's lock on
 every keystroke); sending the whole presence list on every change or
 connect (its cost grows with online members times connections).
+
+## Member read invalidation
+
+Read state stays persisted; `unread.Changes` owns a process-local generation and
+channel per active organisation/member, separate from the hub's kind levels.
+Changes publish only after commit, allocate nothing without a subscriber and
+wake only that member's waiting tabs. Last release removes the entry; generations
+are comparable only within one active subscription lifetime.
+
+Through optional interfaces beside `SidebarSource`, the single writer acquires
+its watch before the initial recount and immediately defers release on every exit,
+including errors and panics. It captures the generation before each fresh
+persisted snapshot, then acknowledges only that captured generation after send
+or explicit denial. Publication during recount remains pending for a later one.
+Observed and covered generations stay separate: observing while throttled avoids
+spinning without claiming coverage. Atomic generation/channel capture in the
+combined wait covers publication before or after entering the wait.
+
+Read changes dirty the existing sidebar coalescer, adding no loop or queue and
+never moving its fixed deadline. Recounts run between batches; backlog, heartbeat,
+cancellation and durable-cursor rules still apply. Rendering precedes authorization
+with both `OrganizationID` and `AudienceMemberID` bound to the subscription's
+member, rejecting revocation or replacement membership; frames carry no `id:`.
+
+Notification costs one locked lookup/update and replacement channel per active
+publication; wakes scale with matching waiting tabs. Memory follows active member
+entries and watches. Recounts stay per connection and interval-limited; wakes and
+event-log reads do not share that rate limit.
+
+Healthy published changes converge to fresh counts; reconnect repairs omissions
+by recounting persisted state. The registry is single-process. Multiple processes
+need shared member invalidation and subscription/reconnect coordination; bounded
+missed-notification recovery additionally needs durable revisions or replay.

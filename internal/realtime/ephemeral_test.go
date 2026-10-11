@@ -75,7 +75,7 @@ func TestEphemeralScopesAndAuthorization(t *testing.T) {
 					if tt.kind == InterestPresence {
 						channel = kernel.ID{}
 					}
-					if reads != checks || e.OrganizationID != orgA || e.ChannelID != channel {
+					if reads != checks || e.OrganizationID != orgA || e.ChannelID != channel || e.AudienceMemberID == nil || *e.AudienceMemberID != selected.Member {
 						t.Error("authorization did not follow the scoped owner read")
 					}
 					return !tt.deny, tt.err
@@ -90,6 +90,9 @@ func TestEphemeralScopesAndAuthorization(t *testing.T) {
 				synctest.Wait()
 				cancel()
 				got := <-done
+				if tt.deny && !errors.Is(got.err, ErrMembershipRevoked) {
+					t.Fatalf("denied bound member did not end Run: %+v", got)
+				}
 				if got.cursor != 0 || (tt.err != nil && !errors.Is(got.err, tt.err)) || checks != tt.checks || len(send.ids()) != tt.frames || log.readCount() != max(1, tt.checks) {
 					t.Fatalf("Run=%+v checks=%d frames=%v reads=%d", got, checks, send.ids(), log.readCount())
 				}
@@ -179,7 +182,13 @@ func TestEphemeralEmptyWakesKeepHeartbeatDeadline(t *testing.T) {
 						name = "typing"
 					}
 					return EphemeralFrame{orgA, channelA, nil, generation, Outgoing{Name: name}}, nil
-				})}, Authorizer: authorizerFunc(func(Event) (bool, error) { checks++; return checks == 1, nil })}
+				})}, Authorizer: authorizerFunc(func(e Event) (bool, error) {
+					if e.ChannelID == (kernel.ID{}) {
+						return true, nil
+					}
+					checks++
+					return checks == 1, nil
+				})}
 			ctx, cancel := context.WithCancel(t.Context())
 			done := make(chan result, 1)
 			go func() { cursor, err := stream.Run(ctx, selected, 12, send); done <- result{cursor, err} }()
@@ -189,6 +198,14 @@ func TestEphemeralEmptyWakesKeepHeartbeatDeadline(t *testing.T) {
 				<-time.After(time.Second)
 				h.RaiseGeneration(orgA, InterestTyping, generation)
 				synctest.Wait()
+				if denied {
+					got := <-done
+					if !errors.Is(got.err, ErrMembershipRevoked) || got.cursor != 12 || len(send.ids()) != 1 || send.heartbeatCount() != 0 || checks != 2 {
+						t.Fatalf("revoked ephemeral wake: Run=%+v frames=%v heartbeats=%d checks=%d", got, send.ids(), send.heartbeatCount(), checks)
+					}
+					cancel()
+					return
+				}
 				if send.heartbeatCount() != int(generation/5) {
 					t.Fatal("empty wake postponed heartbeat")
 				}

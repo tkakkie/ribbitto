@@ -154,7 +154,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	sub.Organization, sub.OrganizationSlug, sub.Account, sub.Member = m.Organization.ID, m.Organization.Slug, account.ID, m.Member.ID
 	cursor, err := stream.Run(ctx, sub, after, send)
-	if err != nil && ctx.Err() == nil {
+	if err != nil && ctx.Err() == nil && !errors.Is(err, realtime.ErrMembershipRevoked) {
 		// Neither the client nor the session went away: delivery failed.
 		// The browser reconnects with the last id it received, which is
 		// cursor or less.

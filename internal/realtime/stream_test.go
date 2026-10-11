@@ -219,6 +219,7 @@ func TestStreamReplaysThenDeliversLive(t *testing.T) {
 // it waits, and skipped events must still move the cursor.
 func TestStreamDrainsBatchesOnAColdHub(t *testing.T) {
 	denied := posted(5, channelA)
+	denied.AudienceMemberID = &kernel.ID{2}
 	log := &fakeLog{events: []Event{
 		posted(1, channelA),
 		posted(2, channelB), // another channel
@@ -228,7 +229,9 @@ func TestStreamDrainsBatchesOnAColdHub(t *testing.T) {
 		posted(6, channelA),
 		posted(7, channelA),
 	}}
-	authorize := func(e Event) (bool, error) { return e.Seq != denied.Seq, nil }
+	authorize := func(e Event) (bool, error) {
+		return e.AudienceMemberID == nil || *e.AudienceMemberID == sub.Member, nil
+	}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
 	done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render), BatchSize: 2}, 0, send)
@@ -268,12 +271,12 @@ func TestStreamRechecksAccessBeforeEachSend(t *testing.T) {
 	send.waitFor(t, 1)
 	// Cancel only once event 2 has been checked: the loop checks
 	// cancellation before every event, so cancelling earlier would stop it
-	// before event 2 and leave the cursor at 1.
+	// before event 2 and hide the revocation sentinel.
 	<-denied
+	got := receive(t, done)
 	cancel()
-	got := <-done
-	if got.cursor != 2 || !slices.Equal(send.ids(), []int64{1}) {
-		t.Fatalf("Run = %d, sent %v; want cursor 2 and only event 1", got.cursor, send.ids())
+	if got.cursor != 1 || !errors.Is(got.err, ErrMembershipRevoked) || !slices.Equal(send.ids(), []int64{1}) {
+		t.Fatalf("Run = %d, %v, sent %v; want cursor 1, revocation and only event 1", got.cursor, got.err, send.ids())
 	}
 }
 
@@ -305,12 +308,10 @@ func TestStreamDeniesAccessLostWhileRendering(t *testing.T) {
 	member = false // the membership is removed while event 2 renders
 	mu.Unlock()
 	close(release)
-	send.waitFor(t, 1, 3)
-
-	cancel()
 	got := <-done
-	if got.cursor != 3 || !slices.Equal(send.ids(), []int64{1, 3}) {
-		t.Fatalf("Run = %d, sent %v; want cursor 3 and events 1 and 3", got.cursor, send.ids())
+	cancel()
+	if got.cursor != 1 || !errors.Is(got.err, ErrMembershipRevoked) || !slices.Equal(send.ids(), []int64{1}) {
+		t.Fatalf("Run = %d, %v, sent %v; want cursor 1, revocation and only event 1", got.cursor, got.err, send.ids())
 	}
 }
 
@@ -741,5 +742,63 @@ func TestStreamTopicSubscriptionSkipsOtherTopics(t *testing.T) {
 	}
 	if !slices.Equal(authorized, []int64{1, 3}) {
 		t.Fatalf("authorized %v, want only the topic's events", authorized)
+	}
+}
+
+func TestStreamReplacementDeliveryAndIsolation(t *testing.T) {
+	for _, kind := range []Interest{InterestMessages, InterestPresence, InterestTyping} {
+		t.Run(string(kind), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				h, log, member := NewHub(), &fakeLog{}, kernel.ID{1}
+				selected := sub
+				selected.Member, selected.Interests = member, []Interest{kind}
+				stream := Stream{Hub: h, Events: log, Renderer: rendererFunc(render), Heartbeat: time.Hour,
+					Authorizer: authorizerFunc(func(e Event) (bool, error) {
+						return e.AudienceMemberID == nil || *e.AudienceMemberID == member || *e.AudienceMemberID == (kernel.ID{9}), nil
+					}),
+					Owners: map[Interest]EphemeralOwner{kind: ownerFunc(func(Subscription, int64) (EphemeralFrame, error) {
+						return EphemeralFrame{Organization: orgA, Channel: channelA, Generation: max(2, h.sequence(orgA).presence.Load().latest, h.sequence(orgA).typing.Load().latest), Outgoing: Outgoing{Name: string(kind)}}, nil
+					})}}
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				start := func(s Subscription) (*recorder, <-chan result) {
+					send, done := newRecorder(), make(chan result, 1)
+					send.failOn = -1
+					go func() { c, err := stream.Run(ctx, s, 0, send); done <- result{c, err} }()
+					return send, done
+				}
+				old, done := start(selected)
+				selected.Member, selected.Account = kernel.ID{9}, account2
+				peer, peerDone := start(selected)
+				synctest.Wait()
+				before := len(old.ids())
+				member = kernel.ID{2}
+				log.append(posted(1, channelA))
+				if kind == InterestMessages {
+					h.Raise(orgA, 1)
+				} else {
+					h.RaiseGeneration(orgA, kind, 3)
+				}
+				synctest.Wait()
+				select {
+				case got := <-done:
+					if got.cursor != map[bool]int64{true: 0, false: 1}[kind == InterestMessages] || !errors.Is(got.err, ErrMembershipRevoked) {
+						t.Fatalf("replacement Run=%+v", got)
+					}
+				default:
+					t.Fatal("replacement stream did not end")
+				}
+				if len(old.ids()) != before {
+					t.Fatal("replacement delivered to old member")
+				}
+				if len(peer.ids()) != before+1 || h.Waiting(orgA) != 1 {
+					t.Fatal("another member's stream stopped or missed delivery")
+				}
+				cancel()
+				if got := <-peerDone; !errors.Is(got.err, context.Canceled) {
+					t.Fatalf("peer Run=%+v", got)
+				}
+			})
+		})
 	}
 }

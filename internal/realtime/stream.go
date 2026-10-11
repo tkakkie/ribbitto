@@ -51,7 +51,7 @@ type Subscription struct {
 	Organization     kernel.ID
 	OrganizationSlug string
 	Account          kernel.ID
-	// Member is server-resolved identity for viewer-filtered ephemeral state.
+	// Member binds the stream to its server-resolved membership.
 	Member  kernel.ID
 	Channel kernel.ID
 	// Interests is the set of requested output; empty means no message delivery.
@@ -98,6 +98,9 @@ type Stream struct {
 	Heartbeat time.Duration
 }
 
+// ErrMembershipRevoked ends a stream whose bound member is no longer authorized.
+var ErrMembershipRevoked = errors.New("realtime: stream membership revoked")
+
 // errHeartbeatDue ends one wait on the hub when a heartbeat is due.
 var errHeartbeatDue = errors.New("realtime: heartbeat due")
 
@@ -108,7 +111,7 @@ var errHeartbeatDue = errors.New("realtime: heartbeat due")
 // Cursor rules:
 //   - An event outside the subscription, of a kind this stream does not deliver
 //     (including an unregistered kind, whose envelope the reader keeps with no
-//     channel), or explicitly denied by the
+//     channel), or denied for its event audience by the
 //     Authorizer is skipped, and the cursor moves past it, so a filtered
 //     event cannot keep the loop spinning.
 //   - Cancellation of ctx is checked before every event, so nothing is sent
@@ -128,6 +131,8 @@ var errHeartbeatDue = errors.New("realtime: heartbeat due")
 // so once caught up the loop waits for a sequence above both its cursor and
 // the last value the hub reported; otherwise it would read the same empty
 // range again and again.
+// A denied bound membership ends Run with ErrMembershipRevoked, without
+// advancing the cursor. Heartbeats re-check that membership even while idle.
 // A negative cursor is refused. Every event is authorized after it is
 // rendered and immediately before it is sent, including ones read in an
 // earlier batch, since access may have been lost in between.
@@ -157,6 +162,9 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		if errors.Is(err, ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
 			if ctx.Err() != nil {
 				return cursor, context.Cause(ctx)
+			}
+			if err := s.checkMember(ctx, sub, Event{OrganizationID: sub.Organization}); err != nil {
+				return cursor, err
 			}
 			return cursor, send.Send(ctx, Outgoing{ID: cursor, Name: "reset"})
 		}
@@ -189,7 +197,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			// Draining a backlog that is all other channels' events writes
 			// nothing either; the heartbeat is still due on time.
 			if s.Heartbeat > 0 && time.Since(written) >= s.Heartbeat {
-				if err := heartbeat(ctx, send, &written); err != nil {
+				if err := s.heartbeat(ctx, sub, send, &written); err != nil {
 					return cursor, err
 				}
 			}
@@ -236,9 +244,17 @@ func (s Stream) deliver(ctx context.Context, sub Subscription, event Event, send
 	if !sub.wantsRendered(event, out) {
 		return false, nil
 	}
-	allowed, err := s.Authorizer.MayReceive(ctx, sub.Account, sub.OrganizationSlug, event)
-	if err != nil {
-		return false, fmt.Errorf("authorizing event %d: %w", event.Seq, err)
+	// Own-audience and organisation-wide events need only the bound check.
+	// Check another audience first so the bound check remains last before send.
+	allowed := true
+	if event.AudienceMemberID != nil && *event.AudienceMemberID != sub.Member {
+		allowed, err = s.Authorizer.MayReceive(ctx, sub.Account, sub.OrganizationSlug, event)
+		if err != nil {
+			return false, fmt.Errorf("authorizing event %d: %w", event.Seq, err)
+		}
+	}
+	if err := s.checkMember(ctx, sub, event); err != nil {
+		return false, err
 	}
 	if !allowed {
 		return false, nil
@@ -249,8 +265,28 @@ func (s Stream) deliver(ctx context.Context, sub Subscription, event Event, send
 	return true, nil
 }
 
-// heartbeat sends a heartbeat and records it as the last write.
-func heartbeat(ctx context.Context, send Sender, written *time.Time) error {
+// checkMember keeps event scope while binding authorization to this stream,
+// independently of the event's audience. Rendering must precede this check.
+func (s Stream) checkMember(ctx context.Context, sub Subscription, event Event) error {
+	event.AudienceMemberID = &sub.Member
+	allowed, err := s.Authorizer.MayReceive(ctx, sub.Account, sub.OrganizationSlug, event)
+	if err != nil {
+		return fmt.Errorf("authorizing stream membership: %w", err)
+	}
+	if ctx.Err() != nil {
+		return context.Cause(ctx)
+	}
+	if !allowed {
+		return ErrMembershipRevoked
+	}
+	return nil
+}
+
+// heartbeat checks idle membership before writing and recording the last write.
+func (s Stream) heartbeat(ctx context.Context, sub Subscription, send Sender, written *time.Time) error {
+	if err := s.checkMember(ctx, sub, Event{OrganizationID: sub.Organization}); err != nil {
+		return err
+	}
 	if err := send.Heartbeat(ctx); err != nil {
 		return fmt.Errorf("sending heartbeat: %w", err)
 	}
@@ -278,7 +314,7 @@ func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, 
 		if due, err := heartbeatDue(ctx, err); !due {
 			return levels, err
 		}
-		if err := heartbeat(ctx, send, written); err != nil {
+		if err := s.heartbeat(ctx, sub, send, written); err != nil {
 			return streamLevels{}, err
 		}
 	}

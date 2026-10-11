@@ -72,7 +72,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   still getting the fresh second read.
 
 - Sidebar recounts use `realtime.SidebarInterval`: one second after each
-  completed recount attempt, including a deny. This fixed minimum coalesces
+  completed recount attempt (a deny ends the stream, #852). This fixed minimum coalesces
   bursts while keeping counts responsive; #812 measures production query cost.
   Connect always recounts. A dirty flag retains later triggers without moving
   the deadline; the writer checks it between batches and includes it in the

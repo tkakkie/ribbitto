@@ -256,16 +256,15 @@ func TestSidebarDeliverySafety(t *testing.T) {
 				}
 				close(resume)
 				synctest.Wait()
-				if name == "deny after render" {
-					time.Sleep(2 * SidebarInterval)
-					synctest.Wait()
-					if send.heartbeatCount() != 1 {
-						t.Fatal("denied recount postponed the heartbeat")
-					}
-				}
 				cancel()
 				got := <-done
 				want, wantChecks := error(context.Canceled), 1
+				if name == "deny after render" || name == "replacement during render" {
+					want = ErrMembershipRevoked
+					if send.heartbeatCount() != 0 {
+						t.Fatal("revoked recount sent a heartbeat")
+					}
+				}
 				if name == "authorization error" || name == "send failure" {
 					want = failure
 				}

@@ -56,9 +56,9 @@ sequenceDiagram
   interest checks on the envelope alone, with no kind names: other
   channels, unrouted kinds (no channel) and events whose routing topics do
   not include a topic page's topic are skipped before rendering or
-  authorization (#261 B6). Explicit
-  denies from `org.Authorizer.MayReceive` are skipped after rendering. All skips advance
-  the cursor. `messages.moved` reaches feeds and its source/destination topics
+  authorization (#261 B6). A deny of another member's event audience
+  by `org.Authorizer.MayReceive` is skipped after rendering. All skips advance
+  the cursor; a deny of the stream's own member ends it without advancing (#852). `messages.moved` reaches feeds and its source/destination topics
   as `messages-moved`, with one shared batch render and per-connection
   authorization. Other topics skip before either. Feeds replace loaded IDs;
   source topics remove them, destinations insert by `event_seq` within the

@@ -64,7 +64,7 @@ type Hub struct // Hub holds, per organisation, the highest committed event sequ
 type Interest string // Interest identifies output a connection asks to receive, never permission.
 const InterestMessages Interest = "messages" // InterestMessages requests posts and moves in the selected channel or topic.
 const InterestPresence Interest = "presence" // InterestPresence requests current presence frames from its owner.
-const InterestSidebar Interest = "sidebar" // InterestSidebar declares sidebar output; no sidebar frames are delivered yet.
+const InterestSidebar Interest = "sidebar" // InterestSidebar requests full current recounts from the supplied source.
 const InterestTyping Interest = "typing" // InterestTyping requests current typing frames from its owner.
 type Kinds map[EventKind]Router // Kinds registers the Router of each kind a reader fills in; wiring builds it.
 func MergeKinds(registries ...Kinds) (Kinds, error) // MergeKinds combines publisher registries into a fresh map without modifying them.
@@ -95,6 +95,10 @@ type Sender interface // Sender writes to the connection: an outgoing event, or 
   func (Sender).Send(ctx context.Context, out Outgoing) error
 type SequenceReader interface // SequenceReader reads organisations' committed event sequences (org's organization.event_seq).
   func (SequenceReader).CommittedSequences(ctx context.Context, organizations []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, error)
+const SidebarInterval time.Duration = 1000000000 // SidebarInterval bounds recounts to once per second per connection, allowing bursts to coalesce while keeping current counts responsive.
+type SidebarSource interface // SidebarSource recognises recount triggers and renders full current state.
+  func (SidebarSource).Recount(context.Context, Subscription) (Outgoing, error)
+  func (SidebarSource).Trigger(Event) bool
 type Stream struct // Stream runs the per-connection delivery loop.
   field Authorizer Authorizer
   field BatchSize int // BatchSize bounds each read; zero means DefaultBatchSize.
@@ -104,6 +108,7 @@ type Stream struct // Stream runs the per-connection delivery loop.
   field Owners map[Interest]EphemeralOwner // Owners supplies current frames; nil entries preserve durable-only delivery.
   field Renderer Renderer
   func (Stream).Run(ctx context.Context, sub Subscription, cursor int64, send Sender) (int64, error) // Run delivers the subscription's events with a sequence above cursor until ctx ends or delivery fails, and returns the last sequence it delivered or skipped, with the reason it stopped.
+  field Sidebar SidebarSource // Sidebar supplies coalesced recounts; nil leaves sidebar delivery unwired.
 type Subscription struct // Subscription is one connection's explicit interests in an organisation, scoped to a channel or topic for messages, on behalf of an account.
   field Account github.com/tkakkie/ribbitto/internal/kernel.ID
   field Channel github.com/tkakkie/ribbitto/internal/kernel.ID

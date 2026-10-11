@@ -70,6 +70,14 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   and count context Done evaluations to prove joiners wait once while
   still getting the fresh second read.
 
+- Sidebar recounts use `realtime.SidebarInterval`: one second after each
+  completed recount attempt, including a deny. This fixed minimum coalesces
+  bursts while keeping counts responsive; #812 measures production query cost.
+  Connect always recounts. A dirty flag retains later triggers without moving
+  the deadline; the writer checks it between batches and includes it in the
+  combined wait. Recounts never change the cursor; only successful writes
+  restart the heartbeat deadline. Production rendering/wiring is left to #811.
+
 - Each connection reads the log itself (#209), so nothing queues for a slow
   client: its cursor just lags. A client that stops reading is
   disconnected when a write, event or heartbeat, misses its deadline

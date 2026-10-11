@@ -26,7 +26,10 @@ RIBBITTO_STREAM_COST=1 RIBBITTO_STREAM_COST_POOL=10 RIBBITTO_STREAM_COST_STEPS=2
 a run stops at its first failing step), `_RATE` (posts per second, default
 10), `_DURATION` (posting time per step, default `10s`), `_POOL` (pool size,
 default pgx's), `_CACHE=1` (#227's shared reads), `_MEMBERS=distinct`
-(one member per stream) and `_STAGGER=<window>` (#671) tune it. With a
+(one member per stream) and `_STAGGER=<window>` (#671) tune it. `_SIDEBAR=1` adds live member counts (needs distinct members and at most
+99 scheduled posts per step; set duration/rate explicitly). Its measured
+results and commands are in [sidebar cost results](stream-sidebar-results.md).
+With a
 window, stream `i` of `N` waits `i × window / N` after its shared render
 returns and before its `MayReceive`, in a per-stream renderer wrapper: in the
 shared render loader it would delay one render, not the checks. It needs
@@ -39,7 +42,7 @@ server is disposable: it can be a tunnel.
 
 ## What is measured
 
-Per step: `N` streams of one member in one organisation, all following one
+Per step: `N` streams of one member (or distinct members) in one organisation, all following one
 channel, run the real loop (#209), event reader (#208), `org.Authorizer.MayReceive` and
 one-message read (#206); the renderer reads the message but renders no HTML.
 Posts go through `conversation.Posting` with the hub as notifier.
@@ -78,6 +81,27 @@ Posts go through `conversation.Posting` with the hub as notifier.
   with the empty and cancelled acquire counts, the first delivery over 1 s,
   and the failed stream loops with the first error. CPU and memory, of this
   process or PostgreSQL, are not visible to it; watch them outside.
+
+## Sidebar mode (#812)
+
+Test adapters assemble `Reader.Sidebar` with the same exported channel and
+current-channel topic count factories as production; no production wiring moves.
+Each connection binds its own membership and read ranges. Before each step,
+prior posts are marked read; alternating members retain one unread seed.
+The initial snapshot must match that member's two count totals before counters
+start. Initial recounts, seeds and read writes are excluded.
+
+Messages are collected separately. Drain requires each member's delivery of
+every posted sequence and a sent snapshot with both totals covering every
+completed post. At most 99 posts plus the seed keep totals within the 100 cap;
+timing alone cannot prove freshness. Snapshot bytes replace HTML; sidebar
+output bypasses the shared message render cache. The four count statements are
+classified by sqlc names, separately from list queries and transaction statements.
+Reports include absolute SQL totals, recounts, elapsed posting plus drain time,
+recounts/connection/second, count statements/recount and /post, pool wait totals
+and acquisitions, and message and recount p50/p95/p99. Recount delay is from
+`Post` returning to the first sent snapshot covering that post, one sample per
+post per member; coalescing means one snapshot can cover many samples.
 
 ## Results, 2026-10-01
 

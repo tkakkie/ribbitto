@@ -2,7 +2,9 @@ package web
 
 import (
 	"context"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -33,6 +35,7 @@ func testServices(overrides ...func(*Services)) Services {
 		Messages: fakeMessages{},
 		Posting:  testPoster(),
 	}
+	s.ReadLimits = middleware.NewReadRateLimiter(time.Now)
 	s.Branching = testBrancher(&fakeBranchWriter{})
 	for _, override := range overrides {
 		override(&s)
@@ -67,6 +70,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Posting:   conversationpg.NewPagePosting(pool, postingSequence, postingEvents, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, nil),
 		Branching: conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil),
 	}
+	s.ReadLimits = middleware.NewReadRateLimiter(time.Now)
 	if setupToken != "" {
 		s.Setup, s.SetupSessions = orgpg.NewSetup(pool, hasher, setupToken,
 			accountCreator,

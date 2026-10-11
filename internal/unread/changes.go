@@ -30,7 +30,7 @@ type ChangeWatch struct {
 	released bool // Protected by changes.mu, including concurrent releases.
 }
 
-// Watch subscribes before the caller's initial snapshot of persisted read state.
+// Watch subscribes before the caller's initial read of persisted state.
 // Generations start at zero for each new subscription lifetime, not each watch.
 func (c *Changes) Watch(organizationID, memberID kernel.ID) *ChangeWatch {
 	c.mu.Lock()
@@ -62,8 +62,9 @@ func (c *Changes) ReadChanged(organizationID, memberID kernel.ID) {
 	entry.changed = make(chan struct{})
 }
 
-// Snapshot atomically captures a generation and its wake channel.
-// A later publication closes that channel even before the caller begins waiting.
+// Snapshot atomically captures a generation and its wake channel. Capture it
+// before each persisted read and wait on that channel: a publication after the
+// capture closes it, even during the read; a capture after the read would miss one.
 // Only use snapshots for delivery until Release; they contain no persisted state.
 func (w *ChangeWatch) Snapshot() (uint64, <-chan struct{}) {
 	w.changes.mu.Lock()

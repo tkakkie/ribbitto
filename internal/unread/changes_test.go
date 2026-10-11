@@ -119,6 +119,26 @@ func TestChangesSubscribePublishOrder(t *testing.T) {
 	}
 }
 
+// The contract's order: capture the pair, read persisted state, wait on the
+// captured channel. A commit published during the read closes it; a pair
+// captured only after the read would look current and miss that commit.
+func TestChangesPublicationDuringRead(t *testing.T) {
+	var c Changes
+	org, member := kernel.ID{1}, kernel.ID{2}
+	watch := c.Watch(org, member)
+	defer watch.Release()
+	covered, changed := watch.Snapshot()
+	read := func() { c.ReadChanged(org, member) } // Another tab commits mid-read.
+	read()
+	if !changeClosed(changed) {
+		t.Fatal("publication during the read did not wake the pair captured before it")
+	}
+	late, lateChanged := watch.Snapshot()
+	if late != covered+1 || changeClosed(lateChanged) {
+		t.Fatalf("late capture: generation=%d closed=%t, want %d and open (the trap)", late, changeClosed(lateChanged), covered+1)
+	}
+}
+
 func TestChangesConcurrentSubscribePublish(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var c Changes

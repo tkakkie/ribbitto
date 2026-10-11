@@ -6,7 +6,7 @@ type ChangeWatch struct // ChangeWatch is one subscription to a member's read ch
   func (*ChangeWatch).Snapshot() (uint64, <-chan struct{}) // Snapshot atomically captures a generation and its wake channel.
 type Changes struct // Changes holds process-local read-change watches for actively subscribed members.
   func (*Changes).ReadChanged(organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID) // ReadChanged synchronously advances and wakes only this member's active watches.
-  func (*Changes).Watch(organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID) *ChangeWatch // Watch subscribes before the caller's initial snapshot of persisted read state.
+  func (*Changes).Watch(organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID) *ChangeWatch // Watch subscribes before the caller's initial read of persisted state.
 type ChannelCount struct // ChannelCount contains a capped unread count and first unread sequence (zero if none).
   field Count int64
   field FirstUnread int64

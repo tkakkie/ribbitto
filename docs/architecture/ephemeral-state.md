@@ -20,9 +20,11 @@ snapshot capture and release. Publication without a watch retains no entry, and
 the last idempotent release deletes it. A reopened entry starts at zero; generations
 are comparable only within one subscription lifetime. No queue or worker is added.
 
-Callers must subscribe before their initial persisted read snapshot and capture
-the generation/channel pair before waiting. A commit before subscription is covered
-by that initial snapshot; later publication cannot be lost between capture and wait.
+Callers subscribe, then capture the generation/channel pair **before** each
+persisted read, the initial one included, and wait on that captured channel. A
+commit before capture is in the read; one after it closes the channel, even during
+the read, so the next recount covers it. A pair captured after the read would
+miss a commit in between, until the member's next change or a reconnect.
 Publication costs one lookup/update and wakes only that member's waiting tabs;
 memory tracks active subscriptions, bounded by stream caps when wired. Production
 publication and stream delivery remain unwired here, for #828, #829's delivery PR

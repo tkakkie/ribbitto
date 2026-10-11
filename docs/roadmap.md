@@ -16,8 +16,8 @@ day-to-day progress. What the steps aim at is in the [vision](vision.md).
 | **M2 Channels and messages** ✓ done | Public channels, posting, history with paging | Two people can talk (after a reload) |
 | **M3 Real time** ✓ done | Server-Sent Events hub with per-connection authorization and replay | Messages arrive instantly; nothing is lost on reconnect; nothing reaches a connection that may not read it |
 | **Topics** ✓ done | Topics inside channels: the default topic, the feed and topic view, branching ([decision 21](decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)) | A conversation started in the default topic can be branched into its own topic, and both views show it |
-| **M4 Awareness** ← next | Unread counts, presence, typing indicator | The four outcomes under [M4](#m4) below |
-| **M5 UI pass** | The existing pages in a new visual direction, with icons, channel images and motion | The five outcomes under [M5](#m5) below |
+| **M4 Awareness** ✓ done | Unread counts, presence, typing indicator | The four outcomes under [M4](#m4) below |
+| **M5 UI pass** ← next | The existing pages in a new visual direction, with icons, channel images and motion | The five outcomes under [M5](#m5) below |
 | **M6 Dark mode and mobile** | Dark colours and a mobile layout for M5's design | The three outcomes under [M6](#m6) below |
 
 The modular-monolith migration ([decision 26](decisions/26-modules-by-feature-layout-seams-and-order.md),
@@ -28,7 +28,10 @@ load tests before M4 are done (#216, #219; [results](architecture/load-results.m
 
 ## M4
 
-M4 is done when a member of an organisation sees:
+M4 is done (2026-10-12): unread counts per channel and topic that follow
+posts, moves and reads in all of a member's tabs (#286, #711), the unread
+divider (#291), presence on the members panel (#285) and the typing
+indicator (#288). M4 was done when a member of an organisation sees:
 
 1. **Unread counts, per topic.** The sidebar shows how many messages the
    member has not read in each channel and in each topic it links. The

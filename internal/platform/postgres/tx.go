@@ -31,17 +31,18 @@ func InTx(ctx context.Context, pool *pgxpool.Pool, fn func(Tx) error) error {
 
 // ErrCommitUnknown wraps a commit error after which the server may or may not
 // have committed: COMMIT was sent and no reply arrived (a timeout or a broken
-// connection). A server's error reply (a rollback) and a failure before COMMIT
-// was sent (never applied) are returned unwrapped.
+// connection). A server's error or ROLLBACK reply (a rollback) and a failure
+// before COMMIT was sent (never applied) are returned unwrapped.
 var ErrCommitUnknown = errors.New("commit outcome unknown")
 
 // InTxDetachedCommit is InTx, except that once fn succeeds COMMIT runs under
 // its own limit instead of ctx's cancellation and deadline. A request
 // cancelled while COMMIT is in flight could otherwise get an error for a
 // commit the server already finished, and a caller that acts only on success
-// (Reading's post-commit publication) would skip it for good. The limit keeps
-// an unresponsive server from holding the connection: on expiry pgx closes it,
-// the pool discards it, and the error wraps ErrCommitUnknown. A rollback after
+// (Reading's post-commit publication) would skip it for good. The limit bounds
+// how long the call waits for an unresponsive server: on expiry it returns an
+// error wrapping ErrCommitUnknown, and pgx closes the connection, which the pool
+// then discards in the background (pgx's own cleanup limits apply there). A rollback after
 // an error or a panic runs under the same kind of limit. fn follows ctx.
 func InTxDetachedCommit(ctx context.Context, pool *pgxpool.Pool, limit time.Duration, fn func(Tx) error) error {
 	tx, err := pool.Begin(ctx)
@@ -60,13 +61,14 @@ func InTxDetachedCommit(ctx context.Context, pool *pgxpool.Pool, limit time.Dura
 	commit, cancel := context.WithTimeout(context.WithoutCancel(ctx), limit)
 	defer cancel()
 	if err := tx.Commit(commit); err != nil {
-		// A server's error reply means the transaction rolled back; an error
-		// before COMMIT was sent means it was never applied. Only a COMMIT
-		// sent without a reply leaves the outcome unknown.
+		// A server's error reply or a ROLLBACK reply means the transaction
+		// rolled back; a closed transaction or an error before COMMIT was
+		// sent means it was never applied. Only a COMMIT sent without a reply
+		// leaves the outcome unknown.
 		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 			return pgErr
 		}
-		if pgconn.SafeToRetry(err) {
+		if errors.Is(err, pgx.ErrTxCommitRollback) || errors.Is(err, pgx.ErrTxClosed) || pgconn.SafeToRetry(err) {
 			return err
 		}
 		return fmt.Errorf("%w: %w", ErrCommitUnknown, err)

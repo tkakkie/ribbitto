@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -219,6 +220,16 @@ CREATE CONSTRAINT TRIGGER commit_probe AFTER INSERT ON commit_probe
 			if time.Now().After(until) {
 				t.Fatal("the unanswered COMMIT never committed on the server")
 			}
+		}
+	})
+	t.Run("a ROLLBACK reply is not unknown", func(t *testing.T) {
+		// A failed statement aborts the transaction; COMMIT then gets ROLLBACK.
+		err := postgres.InTxDetachedCommit(t.Context(), pool, time.Minute, func(tx postgres.Tx) error {
+			_, _ = pgxbridge.Tx(tx).Exec(t.Context(), "SELECT 1/0")
+			return nil
+		})
+		if !errors.Is(err, pgx.ErrTxCommitRollback) || errors.Is(err, postgres.ErrCommitUnknown) {
+			t.Fatalf("aborted commit = %v, want pgx.ErrTxCommitRollback, not unknown", err)
 		}
 	})
 	t.Run("a commit the server rejects is not unknown", func(t *testing.T) {

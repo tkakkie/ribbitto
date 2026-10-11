@@ -50,9 +50,9 @@ func TestReadingPublication(t *testing.T) {
 	unknown := fmt.Errorf("%w: %w", platform.ErrCommitUnknown, failure)
 	for _, kind := range []string{"feed", "topic"} {
 		for _, tc := range []struct {
-			name                               string
-			changed, cancel, disabled, outcome bool
-			writeErr, txErr                    error
+			name                                          string
+			changed, cancel, disabled, outcome, committed bool
+			writeErr, txErr                               error
 		}{
 			{name: "changed", changed: true},
 			{name: "unchanged"},
@@ -62,8 +62,9 @@ func TestReadingPublication(t *testing.T) {
 			{name: "cancel after commit", changed: true, cancel: true},
 			{name: "nil publisher", changed: true, disabled: true},
 			// The server may have committed: a recount is right either way.
-			{name: "commit outcome unknown", changed: true, txErr: unknown, outcome: true},
-			{name: "unchanged, commit outcome unknown", txErr: unknown, outcome: true},
+			{name: "commit outcome unknown, committed", changed: true, txErr: unknown, outcome: true, committed: true},
+			{name: "commit outcome unknown, not committed", changed: true, txErr: unknown, outcome: true},
+			{name: "unchanged, commit outcome unknown", txErr: unknown, outcome: true, committed: true},
 		} {
 			t.Run(kind+"/"+tc.name, func(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
@@ -75,7 +76,7 @@ func TestReadingPublication(t *testing.T) {
 						return err
 					}
 					if tc.txErr != nil {
-						committed = tc.outcome
+						committed = tc.committed
 						return tc.txErr
 					}
 					committed = true
@@ -87,7 +88,7 @@ func TestReadingPublication(t *testing.T) {
 				scope := Scope{OrganizationID: kernel.ID{1}, MemberID: kernel.ID{2}, ChannelID: kernel.ID{3}}
 				var publisher ReadPublisher = readPublisher(func(org, member kernel.ID) {
 					calls++
-					if !committed {
+					if !committed && !tc.outcome {
 						t.Error("publication preceded successful commit")
 					}
 					if org != scope.OrganizationID || member != scope.MemberID {

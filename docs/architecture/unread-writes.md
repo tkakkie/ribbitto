@@ -23,14 +23,15 @@ it. Topic detection reuses the locked unread candidates. Repeated, older,
 empty, floor-only, join-prefix-only and identical-range writes report false.
 The result describes uncommitted writes: a rollback discards them. Reading
 synchronously calls its injected, context-free publisher with organisation and
-member only after a successful transaction return and only when changed.
-Rollback and failed commit publish nothing; cancellation immediately after commit
-cannot suppress publication. The commit, and any rollback, run under their
-own five-second limit instead of the request's cancellation and deadline
-(`platform.InTxDetachedCommit`; within the ten-second shutdown grace), so a
-cancel while `COMMIT` is in flight cannot persist a read yet report failure
-(Grok on #837), and an unresponsive server holds the connection no longer than
-the limit before pgx closes it. A server's error reply (rollback), a COMMIT
+member only when changed, after a successful transaction return or the one
+exception below. A known rollback or commit failure publishes nothing;
+cancellation immediately after commit cannot suppress publication. The commit,
+and any rollback, run under their own five-second limit instead of the
+request's cancellation and deadline (`platform.InTxDetachedCommit`; within the
+ten-second shutdown grace), so request cancellation alone no longer turns a
+commit in flight into a reported failure (Grok on #837), and a call to an unresponsive server returns within the limit;
+pgx then closes that connection and the pool discards it in the background,
+under pgx's own cleanup limits. A server's error or `ROLLBACK` reply, a COMMIT
 never sent, and any failure while beginning or writing publish nothing. Only a
 COMMIT sent without a reply within the limit (`platform.ErrCommitUnknown`) of a
 read with `changed=true` publishes anyway, once, to the same organisation and

@@ -93,7 +93,12 @@ A newly read message
   not only the loaded window. `conversation.Posting.PostFromPage` takes
   org's sequence first and refuses `S` above the pre-post committed limit.
   Its injected `PostReadWriterIn`, wired in `cmd/ribbitto`, binds the feed/topic
-  write and own-message union to that transaction. Conversation supplies the
+  write and own-message union to that transaction. For a topic post with a
+  cursor, the adapter captures the page write's prepared topic after cursor
+  validation and reuses it for the own-message `Add` and final floor update.
+  Preparation runs once; both unions and the event append still commit or
+  roll back together, with no prepared state surviving the transaction.
+  Conversation supplies the
   predecessor and the scoped post/move guard; unread reads no message table.
   A post from a `?before=` page has no cursor: posting reads only the author's
   own message with `[p + 1, m + 1)` in the same transaction, leaving every other

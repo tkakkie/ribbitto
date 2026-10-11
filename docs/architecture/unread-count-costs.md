@@ -51,7 +51,14 @@ channel); step 4 returns at most 5,100 candidates across 51 topics
 and the selected topic's first-unread work described above.
 Each visit sends one POST, then visible-page coalesced POSTs (#710) and
 sidebar recounts (#286). Posting costs its scope's read (with merges)
-and one range row for its author.
+and one range row for its author. A topic post with a cursor prepares read
+state once and reuses it for the own-message union and final floor update.
+`TestPostingRead` measures 29 → 23 SQL statements (31 → 25 including BEGIN
+and COMMIT) with an existing channel lock row, for clear, intervening-post
+and moved-message cases. Each now executes one `LockChannelRead`, one
+`TopicReadRanges` and one `TopicReadFloor`; creating a missing lock row adds
+its savepoint, insert and retry. This removes executions; no cheaper SQL plan
+or posting latency is claimed. Stored ranges and floors remain identical.
 
 ## Fragmentation
 

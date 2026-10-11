@@ -121,6 +121,13 @@ they describe history; their Markdown links and anchors are still checked.
 Worktree tooling uses Python 3 standard-library unittests (`make check-ai-env`);
 there is no Python lint/format gate.
 
+`make prepush` is a quick subset to run before pushing a follow-up commit: it
+regenerates templates, SQL and CSS and fails if that changes any file, then
+checks the API and dependency manifests, document sizes and lint, stopping at
+the first failure. It does not run Go or templ formatting, the `doc.go` check,
+`go vet`, `sourcecheck`, the tests, the schema docs or `make vuln`; `make check`
+and CI still do.
+
 The AI launchers' self-tests, most of its time, run
 only when the change since `LAUNCHER_TESTS_BASE` (default `origin/main`;
 commits, staged, unstaged and untracked files) touches `scripts/ai/`,

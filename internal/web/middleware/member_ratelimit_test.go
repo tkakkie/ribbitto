@@ -170,3 +170,80 @@ func TestMemberRateLimiterConcurrentAdmission(t *testing.T) {
 		now = now.Add(time.Second)
 	}
 }
+
+func TestReadRateLimiter(t *testing.T) {
+	now := time.Unix(1, 0)
+	l := NewReadRateLimiter(func() time.Time { return now })
+	for _, tt := range []struct {
+		advance time.Duration
+		allowed int
+	}{{0, 16}, {250*time.Millisecond - time.Nanosecond, 0}, {time.Nanosecond, 1}, {time.Second, 4}, {10 * time.Second, 16}} {
+		now = now.Add(tt.advance)
+		for range tt.allowed {
+			release, ok := l.Admit(kernel.ID{1}, kernel.ID{2})
+			if !ok {
+				t.Fatalf("read refused within budget %d", tt.allowed)
+			}
+			release()
+		}
+		if release, ok := l.Admit(kernel.ID{1}, kernel.ID{2}); ok {
+			release()
+			t.Fatalf("read exceeded budget %d", tt.allowed)
+		}
+	}
+	for _, key := range []memberLimitKey{{kernel.ID{3}, kernel.ID{2}}, {kernel.ID{1}, kernel.ID{3}}} {
+		for range 16 {
+			release, ok := l.Admit(key.organizationID, key.memberID)
+			if !ok {
+				t.Fatal("read scopes share budget")
+			}
+			release()
+		}
+	}
+}
+
+func TestReadActiveRetention(t *testing.T) {
+	now := time.Unix(1, 0)
+	l := NewReadRateLimiter(func() time.Time { return now })
+	var releases []func()
+	for range 4 {
+		release, ok := l.Admit(kernel.ID{}, kernel.ID{})
+		if !ok {
+			t.Fatal("active slot refused")
+		}
+		releases = append(releases, release)
+	}
+	active := l.buckets[memberLimitKey{}]
+	for i := 1; i < memberMaxBuckets; i++ {
+		var id kernel.ID
+		binary.BigEndian.PutUint64(id[:8], uint64(i))
+		release, ok := l.Admit(kernel.ID{}, id)
+		if !ok {
+			t.Fatal("table capacity refused")
+		}
+		release()
+	}
+	if _, ok := l.Admit(kernel.ID{9}, kernel.ID{}); ok || len(l.buckets) != memberMaxBuckets {
+		t.Fatal("full table grew or partially full bucket evicted")
+	}
+	now = now.Add(4 * time.Second)
+	release, ok := l.Admit(kernel.ID{9}, kernel.ID{})
+	if !ok {
+		t.Fatal("idle bucket not evicted")
+	}
+	release()
+	if l.buckets[memberLimitKey{}] != active {
+		t.Fatal("active bucket evicted")
+	}
+	if _, ok := l.Admit(kernel.ID{}, kernel.ID{}); ok {
+		t.Fatal("active member received fresh concurrency budget")
+	}
+	for _, release := range releases {
+		release()
+	}
+	release, ok = l.Admit(kernel.ID{}, kernel.ID{})
+	if !ok {
+		t.Fatal("released slot unavailable")
+	}
+	release()
+}

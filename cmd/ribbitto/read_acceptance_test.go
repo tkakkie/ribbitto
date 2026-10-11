@@ -24,6 +24,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 	"github.com/tkakkie/ribbitto/internal/web"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
@@ -76,7 +77,8 @@ func TestReadSidebarConcurrentHTTP(t *testing.T) {
 	g := &readLockGate{sidebarGate: sidebarGate{started: make(chan struct{}), release: make(chan struct{})}, locks: make(chan struct{}, 16)}
 	unblock := sync.OnceFunc(func() { close(g.release) })
 	defer unblock()
-	f := newReadSidebarFixture(t, readTracedPool(t, pool, g))
+	// This persistence test deliberately holds five reads at the database lock.
+	f := newReadSidebarFixture(t, readTracedPool(t, pool, g), middleware.NewMemberRateLimiterWithBudget(time.Now, 4, 16, 5))
 	// Establish the lock row without reading any message.
 	request := f.reader.request(t, "POST", f.feed+"/read", url.Values{"cursor": {"1"}})
 	request.Header.Set("HX-Request", "true")
@@ -173,7 +175,7 @@ func readFaultServer(t *testing.T, pool *pgxpool.Pool, p *readPublicationSpy) *h
 	kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
 	acceptanceOK(t, err)
 	handler, err := web.NewHandler("", cat, web.Services{
-		Sessions: sessions, SignIn: identitypg.NewSignIn(pool, nil, sessions), Authz: auth,
+		Sessions: sessions, SignIn: identitypg.NewSignIn(pool, nil, sessions), Authz: auth, ReadLimits: middleware.NewReadRateLimiter(time.Now),
 		Channels: conversationpg.NewChannels(pool), Topics: conversationpg.NewTopics(pool),
 		Messages: conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn),
 		Posting:  conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, hub),

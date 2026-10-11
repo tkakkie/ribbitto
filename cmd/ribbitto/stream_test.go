@@ -44,12 +44,16 @@ func streamServers(t *testing.T, pool *pgxpool.Pool) (api, streams *httptest.Ser
 
 // streamServersWithHub also exposes the hub so tests can wait for catch-up.
 // No watermark worker runs: only the wired use cases can wake these streams.
-func streamServersWithHub(t *testing.T, pool *pgxpool.Pool) (api, streams *httptest.Server, hub *realtime.Hub) {
+func streamServersWithHub(t *testing.T, pool *pgxpool.Pool, limits ...*middleware.MemberRateLimiter) (api, streams *httptest.Server, hub *realtime.Hub) {
 	t.Helper()
 	hub = realtime.NewHub()
-	handler, _, err := buildHandler(t.Context(), pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
+	config := handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
 		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
-		hub:            hub, streamWriteTimeout: testStreamWrite})
+		hub:            hub, streamWriteTimeout: testStreamWrite}
+	if len(limits) != 0 {
+		config.readLimits = limits[0]
+	}
+	handler, _, err := buildHandler(t.Context(), pool, config)
 	acceptanceOK(t, err)
 	start := func(timeouts serverTimeouts) *httptest.Server {
 		server := httptest.NewUnstartedServer(handler)

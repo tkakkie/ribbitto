@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -58,7 +59,9 @@ func TestReadPost(t *testing.T) {
 	_, err := pool.Exec(ctx, "UPDATE organization SET event_seq=100,event_log_boundary_seq=100 WHERE id=$1", foreign.OrganizationID)
 	feedRequire(t, err)
 	hub := realtime.NewHub()
-	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{hub: hub})
+	// Validation sequences intentionally exceed the production read burst.
+	clock := time.Unix(1, 0)
+	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{hub: hub, readLimits: middleware.NewReadRateLimiter(func() time.Time { clock = clock.Add(time.Second); return clock })})
 	feedRequire(t, err)
 	token, _, err := sessions.Create(ctx, f.AccountID)
 	feedRequire(t, err)

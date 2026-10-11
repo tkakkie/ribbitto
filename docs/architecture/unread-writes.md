@@ -104,6 +104,17 @@ A newly read message
   own message with `[p + 1, m + 1)` in the same transaction, leaving every other
   message's read state unchanged and raising no topic floor.
 
+Read POSTs use an independent per-member admission budget after session and
+membership resolution, before channel/topic lookups, parsing and Reading:
+initial, unmeasured 4 requests/s, burst 16, at most four concurrent requests.
+Refusals immediately return 429 with `Retry-After: 1`; admitted slots are
+released on every exit, including panic and cancellation. Limits are in memory
+per process ([retention](rate-limits.md#member-admission-for-reads)). PR #860's
+client retries 429s until success or the page no longer needs the read. Some
+of 16 simultaneous tabs are refused; under healthy service and subsiding
+competing load, their read state converges without another user action.
+Sustained overload has no success guarantee.
+
 **HTTP caller (current):** `POST /organizations/{slug}/channels/{channelID}/read`
 (and `/topics/{topicID}/read`) takes membership from URL authorization,
 resolves the channel and topic through conversation, and calls `unread.Reading`

@@ -282,6 +282,7 @@ type handlerConfig struct {
 	// streamWriteTimeout bounds each stream write; zero keeps the default.
 	// Tests shorten it.
 	streamWriteTimeout time.Duration
+	readLimits         *middleware.MemberRateLimiter // nil uses the production budget
 }
 
 // buildHandler shares production wiring with the HTTPS acceptance test.
@@ -292,6 +293,9 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		// Deleting a session (sign-out, or a sign-in replacing it) ends its
 		// open event streams at once.
 		canceller = config.hub
+	}
+	if config.readLimits == nil {
+		config.readLimits = middleware.NewReadRateLimiter(time.Now)
 	}
 	sessions := identitypg.NewSessions(pool, time.Now, canceller)
 	// One hasher for the whole process: its slots are the cap on concurrent
@@ -360,6 +364,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Stream:        stream,
 		Typing:        typingState,
 		SignalLimits:  middleware.NewMemberRateLimiter(time.Now),
+		ReadLimits:    config.readLimits,
 	})
 	if err != nil {
 		return nil, nil, err

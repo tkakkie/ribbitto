@@ -42,7 +42,7 @@ Whoever holds that many addresses can still turn new clients away for a
 while; that is accepted. The /48 is this application's choice, not a standard: unrelated
 clients whose smaller prefixes share a /48 share its budget. Limits live in
 memory, per process. These authentication network limits are unchanged by
-the separate member limiter below; an authentication identity-side layer
+the separate member limiters below; an authentication identity-side layer
 is tracked in #99.
 
 The client is the peer's IPv4 address or IPv6 /64, or, behind a trusted
@@ -73,6 +73,23 @@ This limiter also lives in memory per process: share one instance across
 all typing signal callers. Restarting resets the budgets; multiple server
 processes have independent budgets. There are no new configuration settings
 or distributed limits.
+
+## Member admission for reads
+
+Read POSTs use a separate `MemberRateLimiter`: initial, unmeasured 4 requests/s,
+burst 16 and four concurrent requests per trusted organisation/member pair.
+Typing keeps its existing independent budget. Admission follows session and
+membership resolution (non-members still get 404), before channel/topic lookups,
+form parsing and the read transaction. Refusal is immediate 429 with
+`Retry-After: 1`; a defer releases each admitted slot on success, error, panic
+or cancellation. The 10,000-bucket bound and full-refill eviction rule also
+apply here, but a bucket with an active slot is never evicted. Refusals take
+no tokens or slots and do not extend retention. State is in memory, per
+process; restart resets it and multiple processes have independent budgets.
+PR #860's client retries 429s until success or no longer needed. Some of 16
+tabs revealing together can be refused. With healthy service and subsiding
+competing load, all pending pages converge without another user action;
+there is no success guarantee under sustained overload.
 
 ## Reverse proxies
 

@@ -19,6 +19,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
@@ -32,7 +33,7 @@ type readSidebarFixture struct {
 	feed, topicA  string
 }
 
-func newReadSidebarFixture(t *testing.T, pool *pgxpool.Pool) readSidebarFixture {
+func newReadSidebarFixture(t *testing.T, pool *pgxpool.Pool, limits ...*middleware.MemberRateLimiter) readSidebarFixture {
 	t.Helper()
 	f := conversationtest.OrganizationWithOwner(t, pool, "read", "general")
 	a := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "A")
@@ -46,7 +47,7 @@ func newReadSidebarFixture(t *testing.T, pool *pgxpool.Pool) readSidebarFixture 
 		_, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &topic, "unread")
 		acceptanceOK(t, err)
 	}
-	api, streams, _ := streamServersWithHub(t, pool)
+	api, streams, _ := streamServersWithHub(t, pool, limits...)
 	return readSidebarFixture{sidebarBrowser(t, pool, api, account), streams, f.OrganizationID, member, account, f.Channel.ID, a.ID, b.ID,
 		view.ChannelURL("read", f.Channel.ID), view.ConversationURL("read", f.Channel.ID, &a.ID)}
 }

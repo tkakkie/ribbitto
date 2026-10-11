@@ -45,6 +45,7 @@ type TopicLookup interface {
 type channelPages struct {
 	typing    *typing.State
 	limiter   *middleware.MemberRateLimiter
+	readLimit *middleware.MemberRateLimiter
 	reading   Reading
 	branching Branching
 	topics    TopicLookup

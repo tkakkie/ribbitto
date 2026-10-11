@@ -15,6 +15,7 @@
 // is scoped by a resolved
 // membership so web cannot supply the organisation. The store also implements setup's injected
 // default-channel write and transaction-bound channel message and topic unread
-// range bounds for unread, plus snapshot-bound capped channel and topic counts. Read sets
+// range bounds and batched message existence for unread, plus snapshot-bound
+// capped channel and topic counts. Read sets
 // cross as values, never foreign-table reads.
 package conversation

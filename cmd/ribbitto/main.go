@@ -540,13 +540,13 @@ func (w postReadWriter) Read(ctx context.Context, m org.Membership, channel kern
 		return unreadpg.WriterIn(w.tx).Merge(ctx, scope, joined, unread.Range{Lo: lo, Hi: hi})
 	}
 	if topic == nil {
-		if err := newFeedWriter().Read(ctx, w.tx, scope, joined, *cursor); err != nil {
+		if _, err := newFeedWriter().Read(ctx, w.tx, scope, joined, *cursor); err != nil {
 			return err
 		}
 		return unreadpg.WriterIn(w.tx).Merge(ctx, scope, joined, unread.Range{Lo: lo, Hi: hi})
 	}
 	ts := unread.TopicScope{Scope: scope, TopicID: *topic}
-	if err := newTopicWriter().Read(ctx, w.tx, ts, joined, *cursor); err != nil {
+	if _, err := newTopicWriter().Read(ctx, w.tx, ts, joined, *cursor); err != nil {
 		return err
 	}
 	prepared, err := unreadpg.WriterIn(w.tx).Prepare(ctx, ts, joined)

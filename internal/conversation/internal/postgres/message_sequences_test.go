@@ -42,6 +42,24 @@ func TestFirstMessageAfterScope(t *testing.T) {
 				t.Fatalf("after %d=%d, want %d", tc.cursor, got, tc.want)
 			}
 		}
+		for _, tc := range []struct {
+			lo, hi int64
+			want   bool
+		}{{3, 4, true}, {4, 6, false}, {8, 9, true}, {9, 10, false}} {
+			got, err := bounds.HasMessages(t.Context(), f.OrganizationID, f.Channel.ID, []int64{tc.lo}, []int64{tc.hi})
+			requireNoError(t, err)
+			if got != tc.want {
+				t.Fatalf("messages in [%d,%d)=%t, want %t", tc.lo, tc.hi, got, tc.want)
+			}
+		}
+		got, err := bounds.HasMessages(t.Context(), f.OrganizationID, f.Channel.ID, []int64{4, 8}, []int64{6, 9})
+		requireNoError(t, err)
+		if !got {
+			t.Fatal("second interval's message was missed")
+		}
+		if _, err := bounds.HasMessages(t.Context(), f.OrganizationID, f.Channel.ID, []int64{3}, nil); err == nil {
+			t.Fatal("unequal bounds accepted")
+		}
 		return nil
 	}))
 }

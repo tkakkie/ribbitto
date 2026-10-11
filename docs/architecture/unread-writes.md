@@ -13,6 +13,20 @@ primary-key predecessor lookup bounds deletion to overlapping or touching
 rows up to the new upper end, then inserts their union. The caller's
 transaction commits or rolls back all writes.
 
+Feed and topic writers return `(changed, error)` in the caller's transaction:
+`changed` is true only when an actual unread message became read, and false on
+error. Feed subtraction uses the returned neighbours under the same
+organisation/member/channel lock, after establishing the implicit join prefix.
+Only newly covered intervals enter conversation's transaction-bound, scoped
+message-existence query, batched as one multirange; an empty difference skips
+it. Topic detection reuses the locked unread candidates. Repeated, older,
+empty, floor-only, join-prefix-only and identical-range writes report false.
+The result describes uncommitted writes: a rollback discards them. Reading
+currently consumes it without publication; post-commit publication is the
+second part of #828. Posting discards the result and retains its existing
+transaction order and durable event notification; branching keeps `Merge`'s
+error-only entry point over the same locked union.
+
 A newly read message
 `m` adds `[p + 1, n)`, with `p` the channel's previous message (or 0) and
 `n` its next (or `m + 1`), so every bounded gap contains an unread message.
@@ -21,8 +35,8 @@ A newly read message
   to read org's committed cursor and conversation's next message in the caller's
   transaction, then unions the prefix. One probe finds the first message above
   `S` (`n`, or `S + 1`), then `[0, n)`: it deletes every range it absorbs,
-  so its cost is proportional to the ranges merged, `O(R)` after heavy
-  fragmentation and `O(1)` in normal use.
+  so detection sorts returned neighbours for subtraction (`O(R log R)`),
+  plus the batched existence probe, and stays `O(1)` in normal use.
 - **Branch notice (current):** conversation's organisation- and channel-scoped
   predecessor query returns `p` (or 0). An injected `unreadpg.WriterIn` adapter
   calls `Writer.Merge` with `[p + 1, m + 1)` and the persisted join prefix after

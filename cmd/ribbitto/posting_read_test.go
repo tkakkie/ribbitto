@@ -100,7 +100,7 @@ func TestHistoryPostingRead(t *testing.T) {
 			feedRequire(t, err)
 			// Keep an existing read message and topic floor as well as unread gaps.
 			feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-				return newTopicWriter().Read(t.Context(), tx, unread.TopicScope{Scope: scope, TopicID: topic}, 1, 2)
+				return checkedRead(t, true)(newTopicWriter().Read(t.Context(), tx, unread.TopicScope{Scope: scope, TopicID: topic}, 1, 2))
 			}))
 			handler, sessions, err := buildHandler(t.Context(), pool, handlerConfig{})
 			feedRequire(t, err)

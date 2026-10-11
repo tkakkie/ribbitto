@@ -11,6 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const channelHasMessages = `-- name: ChannelHasMessages :one
+SELECT EXISTS (SELECT 1 FROM message
+ WHERE organization_id = $1 AND channel_id = $2
+   AND $3::int8multirange @> event_seq)
+`
+
+type ChannelHasMessagesParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	CoveredSet     pgtype.Multirange[pgtype.Range[pgtype.Int8]]
+}
+
+func (q *Queries) ChannelHasMessages(ctx context.Context, arg ChannelHasMessagesParams) (bool, error) {
+	row := q.db.QueryRow(ctx, channelHasMessages, arg.OrganizationID, arg.ChannelID, arg.CoveredSet)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const firstChannelMessageAfter = `-- name: FirstChannelMessageAfter :one
 SELECT event_seq FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND event_seq > $3

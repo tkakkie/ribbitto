@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -31,4 +32,19 @@ func (m messageSequences) FirstMessageAfter(ctx context.Context, organizationID,
 		return 0, fmt.Errorf("finding next channel message: %w", err)
 	}
 	return seq, nil
+}
+
+func (m messageSequences) HasMessages(ctx context.Context, organizationID, channelID kernel.ID, los, his []int64) (bool, error) {
+	if len(los) != len(his) {
+		return false, fmt.Errorf("checking channel messages: unequal bound lengths")
+	}
+	ranges := make(pgtype.Multirange[pgtype.Range[pgtype.Int8]], len(los))
+	for i, lo := range los {
+		ranges[i] = pgtype.Range[pgtype.Int8]{Lower: pgtype.Int8{Int64: lo, Valid: true}, Upper: pgtype.Int8{Int64: his[i], Valid: true}, LowerType: pgtype.Inclusive, UpperType: pgtype.Exclusive, Valid: true}
+	}
+	exists, err := m.queries.ChannelHasMessages(ctx, sqlcgen.ChannelHasMessagesParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), CoveredSet: ranges})
+	if err != nil {
+		return false, fmt.Errorf("checking channel messages: %w", err)
+	}
+	return exists, nil
 }

@@ -121,16 +121,19 @@ check-ai:
 	bash scripts/ai/launcher-tests.sh
 
 # A quick subset of make check to run before pushing a follow-up commit
-# (#848): generated files and CSS are current, the API and dependency
+# (#848): generated files and CSS are current (tracked diffs and untracked
+# files' contents compared before and after), the API and dependency
 # manifests and document sizes match, and lint passes. Each check is its own
 # recipe line, so make stops at the first non-zero status; nothing pipes a
 # check's output, which once hid a docscheck failure. It does not run Go or
 # templ formatting, the doc.go check, go vet, sourcecheck, the tests, the
 # schema docs or make vuln: make check and CI do.
 prepush: $(TEMPL) $(TAILWIND)
-	@set -eu; before=$$(git status --porcelain=v1; git diff); \
+	@set -eu; snapshot() { git diff; git ls-files -o --exclude-standard | \
+		while IFS= read -r f; do shasum "$$f"; done; }; \
+	before=$$(snapshot); \
 	$(MAKE) generate; $(MAKE) css; \
-	if [ "$$(git status --porcelain=v1; git diff)" != "$$before" ]; then \
+	if [ "$$(snapshot)" != "$$before" ]; then \
 		echo "make generate or make css changed files; commit them:"; \
 		git status --short; \
 		exit 1; \

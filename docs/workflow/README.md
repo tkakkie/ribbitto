@@ -44,7 +44,7 @@ disagree, fix the disagreement in a pull request.
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
 | Copilot | Reviews each pull request **once**, at **Lite**, guided by `.github/instructions/code-review.instructions.md`. The orchestrating AI requests that review by hand on the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), after the cross-review approves and `main` is merged, and before the initial adversarial review. The `main` ruleset does not request it on ready, and drafts and new pushes do not trigger it; re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
 | Grok | Adversarial review of tier A pull requests (#339, #498), run with `scripts/ai/grok-review.sh`. Advisory. |
-| Muse Code | Adversarial review of tier B pull requests, re-reviews of tier A ones after a completed Grok report (#840), and tier A ones while Grok is unavailable (#330, #498). Advisory. |
+| Muse Code | Adversarial review of tier B pull requests, re-reviews of tier A ones after a completed Grok report unless the completion rule sends them back to Grok (#840), and tier A ones while Grok is unavailable (#330, #498). Advisory. |
 | Antigravity | Optional: the occasional documentation audit (below), UI screenshot review, experiments, an extra adversarial review that never satisfies a tier. |
 
 Claude and Codex should end up with roughly equal shares of implementation.
@@ -175,7 +175,7 @@ in [`.github/prompts/audit.md`](../../.github/prompts/audit.md) (#116).
 
 | Label | Set by | Meaning |
 |---|---|---|
-| `ai-reviewed` | the orchestrating AI, after the reviewer approves (for a pull request, after Copilot's review is answered and the initial adversarial review its tier requires has completed) | The cross-review is done. A pull request is marked ready with it, and the maintainer can be asked. |
+| `ai-reviewed` | the orchestrating AI, after the reviewer approves (for a pull request, after Copilot's review is answered and the initial adversarial review its tier requires has completed; after a fix for its finding, also the follow-up check and the re-review the completion rule names) | The cross-review is done. A pull request is marked ready with it, and the maintainer can be asked. |
 | `ready` | maintainer only | Issue approved; implementation may start. |
 | `process` | template | Workflow improvement. |
 | `bug` | template | Something is broken. |

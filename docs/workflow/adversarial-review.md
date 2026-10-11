@@ -44,7 +44,9 @@ Muse Code (a move still gets one review: #427's had a defect).
     locks, timers and background work; long-lived in-memory state and its
     ordering contract; which writes share a transaction, their order, and
     logic resting on a lock or the transaction's isolation; the stream
-    loop's gaps, cursor and event-log reads; retention's deletion; what a
+    loop's gaps, cursor and event-log reads; what a page's `sse-connect`
+    asks for (cursor, interests, channel, topic, `presence-after`);
+    retention's deletion; what a
     `web/static` script sends, when and with which cursor, its retries and
     visibility state, and htmx swaps of live forms or state; output kept in
     a cache shared across members; and the delivery contract — who is

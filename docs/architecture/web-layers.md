@@ -65,7 +65,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `read-form`, `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
-  `TopicDOMID` for sidebar `<li>` entries, and `presence-<hex>` from `PresenceDOMID` for member indicators
+  `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and
+  `link-topic-<hex>` ids for focus restoration, `sidebar-channels`,
+  `sidebar-topics` for whole lists and `topic-heading-count` for every topic heading, and `presence-<hex>` from `PresenceDOMID` for member indicators
   (32 lowercase hex digits). `#message-items` is always present,
   including when empty; Load older selects its direct `<li>` children.
 - **The data attributes that scripts read are a contract too,** with the
@@ -86,9 +88,10 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `data-event-cursor` on `#organization-stream`, the outer layout div outside
   every swap target. It wraps the sidebar and conversation or members panel, with `hx-ext="sse"`
   and `sse-connect="/organizations/<slug>/events?after=<cursor>&want=<interests>&channel=<id>"`
-  (plus `topic=<id>` on latest topic views). Latest pages declare
+  (plus `topic=<id>` on all topic views). Latest pages declare
   `sidebar,messages,typing`; older pages declare `sidebar`; members pages declare `sidebar,presence` with
-  `presence-after` from the same snapshot as their indicators. Both omit `topic`.
+  `presence-after` from the same snapshot as their indicators and `panel=members`
+  to suppress feed selection. Older topic pages retain `topic`.
   Members navigation and paging use ordinary links; `#members-list` is bounded
   to 100 names and has no live list swap or live region. Presence entries replace
   individual labeled indicators by stable DOM id.
@@ -98,7 +101,10 @@ htmx does only requests and swaps; the server and templ own the HTML.
   visible, or when a hidden application is subsequently shown.
   Its hidden, non-focusable `#stream-sink` receives `sidebar,presence` with
   `hx-swap="none"`: htmx applies payload entries out of band by DOM id, ignoring
-  entries absent from the page. The sink is hidden from assistive technology.
+  entries absent from the page. Sidebar recounts use the page's list components,
+  replacing both lists whole and keeping an unlisted selection at its heading,
+  outside the 50 topic links. Member-dependent counts bypass the message cache.
+  The sink is hidden from assistive technology.
   Only latest pages' `#message-items` receives `message,messages-moved`; moves
   replace feed IDs or remove/insert topic IDs within the loaded range. Replacements clear selection and refresh
   branch constraints. `LiveMessageItem` shares `MessageItem` markup, adding

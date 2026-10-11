@@ -102,15 +102,16 @@ The endpoint takes:
 | `after` | the durable cursor; `Last-Event-ID` wins, as today |
 | `want` | comma-separated interests, each at most once: `sidebar`, `messages`, `typing`, `presence`; anything else is 400 |
 | `channel` | the page's channel: required with `messages` or `typing`; with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
-| `topic` | optional with `messages` or `typing`, and 400 without them: narrows both to one topic; a topic of another channel is 404 |
+| `topic` | optional with `messages`, `typing` or `sidebar`; requires `channel`, narrows messages/typing and retains sidebar selection; another organisation or channel is 404 |
+| `panel` | optional `members`, suppressing feed selection on the members sidebar |
 | `presence-after` | required with `presence`: the process instance and presence generation the page was rendered with |
 
 | Page | `want` |
 |---|---|
 | Feed (latest page) | `sidebar,messages,typing` with `channel` |
 | Topic view (latest page) | `sidebar,messages,typing` with `channel` and `topic` |
-| `?before=` page | `sidebar` with `channel` |
-| Members panel | `sidebar,presence` with `channel` and `presence-after` |
+| `?before=` page | `sidebar` with `channel` and, on topic pages, `topic` |
+| Members panel | `sidebar,presence` with `channel`, `panel=members` and `presence-after` |
 
 Every page carries its snapshot cursor on `#organization-stream`, including
 `?before=` pages, which hold a slot under both stream caps. Only `message`
@@ -140,7 +141,7 @@ Their swap targets are listed below; the typing region remains planned.
 | Event | `id:` | Where htmx puts it |
 |---|---|---|
 | `message`, `messages-moved` | the sequence | `#message-items`, as today |
-| `sidebar` | none | sidebar entries, out of band by their DOM ids (#284) |
+| `sidebar` | none | whole sidebar lists and selected heading count, out of band (#818) |
 | `presence` | none | each member's indicator, out of band by its DOM id (#768) |
 | `typing` | none | the content of the page's typing indicator (#288) |
 | `reset` | the cursor for durable reset; none for owner reset | the stream script reloads the page, as today |

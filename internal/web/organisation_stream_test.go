@@ -27,6 +27,8 @@ func TestOrganisationStreamValidation(t *testing.T) {
 	for _, query := range []string{
 		"", "want=unknown", "want=sidebar,sidebar", "want=", "want=sidebar&want=messages",
 		"want=messages", "want=typing", "want=sidebar&topic=" + streamTopic,
+		"want=presence&presence-after=instance:0&channel=" + streamChannel + "&topic=" + streamTopic,
+		"want=sidebar&channel=" + streamChannel + "&topic=bad", "want=sidebar&panel=other",
 		"want=presence", "want=presence&presence-after=", "want=sidebar&channel=bad",
 		"want=messages&channel=" + streamChannel + "&topic=bad", "want=sidebar&channel=" + streamChannel + "&channel=" + streamChannel,
 		"want=sidebar&after=%zz", "want=sidebar&after=0;broken", "want=sidebar&unexpected=1",
@@ -40,7 +42,7 @@ func TestOrganisationStreamValidation(t *testing.T) {
 			organisationStream(t, query, realtime.Event{}, false, conversation.ErrChannelNotFound, 404, false, 0)
 		})
 	}
-	for _, query := range []string{"want=sidebar", "want=presence&presence-after=instance:0", "want=sidebar,messages,typing&channel=" + streamChannel} {
+	for _, query := range []string{"want=sidebar", "want=sidebar&panel=members", "want=sidebar&channel=" + streamChannel + "&topic=" + streamTopic, "want=presence&presence-after=instance:0", "want=sidebar,messages,typing&channel=" + streamChannel} {
 		t.Run(query, func(t *testing.T) { organisationStream(t, query, realtime.Event{}, false, nil, 200, false, 0) })
 	}
 }
@@ -86,6 +88,7 @@ func TestOrganisationStreamScopes(t *testing.T) {
 		{"organisation", "messages", kernel.ID{9}, kernel.ID{1}, kernel.ID{6}, false, false, 0},
 		{"channel", "messages", kernel.ID{}, kernel.ID{2}, kernel.ID{6}, false, false, 0},
 		{"topic", "messages", kernel.ID{}, kernel.ID{1}, kernel.ID{7}, false, false, 0},
+		{"sidebar selection", "sidebar", kernel.ID{}, kernel.ID{1}, kernel.ID{6}, false, false, 0},
 		{"interest", "sidebar", kernel.ID{}, kernel.ID{1}, kernel.ID{6}, false, false, 0},
 		{"typing", "typing", kernel.ID{}, kernel.ID{1}, kernel.ID{6}, false, false, 0},
 		{"presence", "presence&presence-after=instance:0", kernel.ID{}, kernel.ID{1}, kernel.ID{6}, false, false, 0},
@@ -93,7 +96,7 @@ func TestOrganisationStreamScopes(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			query := "want=" + tt.want + "&channel=" + streamChannel
-			if (tt.want == "messages" && tt.name != "matching feed") || tt.want == "typing" {
+			if tt.name == "sidebar selection" || (tt.want == "messages" && tt.name != "matching feed") || tt.want == "typing" {
 				query += "&topic=" + streamTopic
 			}
 			e := realtime.Event{OrganizationID: tt.organization, ChannelID: tt.channel, Topics: []kernel.ID{tt.topic}, Seq: 1, Kind: conversation.KindPosted}
@@ -130,5 +133,47 @@ func organisationStream(t *testing.T, query string, event realtime.Event, deny b
 	}
 	if status != 200 && (seen != -1 || strings.HasPrefix(w.Header().Get("Content-Type"), "text/event-stream")) {
 		t.Fatal("refused request registered or sent SSE headers")
+	}
+}
+
+// Scope fixtures differ in one field; the allowing channel fake cannot mask a
+// topic lookup that loses the organisation, channel or selected-topic scope.
+type sidebarScopeTopics struct{ scope [3]kernel.ID }
+
+func (f sidebarScopeTopics) Get(_ context.Context, m org.Membership, channel, topic kernel.ID) (conversation.Topic, error) {
+	if [3]kernel.ID{m.Organization.ID, channel, topic} != f.scope {
+		return conversation.Topic{}, conversation.ErrTopicNotFound
+	}
+	return conversation.Topic{ID: topic}, nil
+}
+
+func TestSidebarStreamScope(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		scope  [3]kernel.ID
+		status int
+	}{
+		{"matching", [3]kernel.ID{{9}, {1}, {6}}, 200},
+		{"organisation", [3]kernel.ID{{8}, {1}, {6}}, 404},
+		{"channel", [3]kernel.ID{{9}, {2}, {6}}, 404},
+		{"topic", [3]kernel.ID{{9}, {1}, {7}}, 404},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			hub, seen := realtime.NewHub(), -1
+			var reads atomic.Int32
+			p := channelPages{channels: &fakeChannels{}, topics: sidebarScopeTopics{tt.scope},
+				stream: &Streaming{Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Sessions: laterSession{
+					hub: hub, session: identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, seen: &seen}}}
+			handler := middleware.Session(oneSession{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				p.events(w, r, org.Membership{Organization: org.Organization{ID: kernel.ID{9}, Slug: "acme"}})
+			}))
+			r := httptest.NewRequest("GET", "/events?after=0&want=sidebar&channel="+streamChannel+"&topic="+streamTopic, nil)
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+			handler.ServeHTTP(w, r)
+			if w.Code != tt.status || (tt.status == 404 && (seen != -1 || reads.Load() != 0)) || hub.Connections() != 0 {
+				t.Fatalf("status %d, registered %d, reads %d; want %d before any registration or delivery on refusal", w.Code, seen, reads.Load(), tt.status)
+			}
+		})
 	}
 }

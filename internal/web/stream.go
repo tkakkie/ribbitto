@@ -284,7 +284,7 @@ func streamScope(r *http.Request) (realtime.Subscription, bool) {
 	for key, values := range query {
 		switch key {
 		case "after": // Last-Event-ID takes precedence, including over a broken after.
-		case "want", "channel", "topic", "presence-after":
+		case "want", "channel", "topic", "presence-after", "panel":
 			if len(values) != 1 || values[0] == "" {
 				return sub, false
 			}
@@ -318,12 +318,15 @@ func streamScope(r *http.Request) (realtime.Subscription, bool) {
 	}
 	if raw := query.Get("topic"); raw != "" {
 		selected, ok := pathID(raw)
-		if !scoped || !ok {
+		if (!scoped && !slices.Contains(sub.Interests, realtime.InterestSidebar)) || sub.Channel == (kernel.ID{}) || !ok {
 			return sub, false
 		}
 		sub.Topic = &selected
 	}
 	if slices.Contains(sub.Interests, realtime.InterestPresence) && query.Get("presence-after") == "" {
+		return sub, false
+	}
+	if panel := query.Get("panel"); panel != "" && panel != "members" {
 		return sub, false
 	}
 	sub.PresenceAfter = query.Get("presence-after")

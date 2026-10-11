@@ -106,8 +106,11 @@ func streamURL(page ChannelPage) string {
 		want += ",presence"
 	}
 	endpoint := fmt.Sprintf("/organizations/%s/events?after=%d&want=%s&channel=%s", page.Organization.Slug, *page.EventCursor, want, idValue(page.Current.ID))
-	if page.Before == 0 && page.Members == nil && page.Topic != nil {
+	if page.Topic != nil {
 		endpoint += "&topic=" + idValue(page.Topic.ID)
+	}
+	if page.Members != nil {
+		endpoint += "&panel=members"
 	}
 	if page.Members != nil && page.Members.PresenceAfter != "" {
 		endpoint += "&presence-after=" + url.QueryEscape(page.Members.PresenceAfter)
@@ -147,19 +150,11 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 				</header>
 				<nav aria-label={ i18n.T(ctx, "channel.list") } class="p-3">
 					<p class="px-3 pb-2 text-caption font-semibold text-muted">{ i18n.T(ctx, "channel.list") }</p>
-					<ul class="flex flex-col gap-1">
-						for _, c := range page.Channels {
-							@ChannelEntry(page.Organization.Slug, c, c.ID == page.Current.ID && page.Topic == nil && page.Members == nil, page.ChannelCounts[c.ID])
-						}
-					</ul>
+					@ChannelList(page, false)
 				</nav>
 				<nav aria-label={ i18n.T(ctx, "topic.list") } class="p-3">
 					<p class="px-3 pb-2 text-caption font-semibold text-muted">{ i18n.T(ctx, "topic.list") }</p>
-					<ul>
-						for _, topic := range page.Topics {
-							@TopicEntry(page.Organization.Slug, page.Current.ID, topic, page.Topic != nil && page.Topic.ID == topic.ID, page.TopicCounts[topic.ID])
-						}
-					</ul>
+					@TopicList(page, false)
 				</nav>
 				<form method="post" action={ "/organizations/" + page.Organization.Slug + "/channels" } class="flex flex-col gap-2 border-t border-border p-4">
 					<label for="channel-name" class="font-semibold">{ i18n.T(ctx, "channel.name") }</label>
@@ -190,11 +185,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						<h1 class="break-words text-title font-semibold">
 							if page.Topic != nil {
 								{ topicName(ctx, *page.Topic) }
-								if !selectedTopicListed(page) && page.TopicCounts[page.Topic.ID] > 0 {
-									<span class="ml-2">
-										@unreadBadge(page.TopicCounts[page.Topic.ID])
-									</span>
-								}
+								@TopicHeadingCount(page, false)
 							} else {
 								{ page.Current.Name }
 							}
@@ -292,6 +283,59 @@ templ readForm(page ChannelPage) {
 	</form>
 }
 
+// SidebarLists replaces fresh lists whole, so topic displacement matches a reload.
+templ SidebarLists(page ChannelPage) {
+	@ChannelList(page, true)
+	@TopicList(page, true)
+	if page.Topic != nil {
+		@TopicHeadingCount(page, true)
+	}
+}
+
+// ChannelList is shared by pages and member-dependent recounts.
+templ ChannelList(page ChannelPage, oob bool) {
+	<ul
+		id="sidebar-channels"
+		class="flex flex-col gap-1"
+		if oob {
+			hx-swap-oob="true"
+		}
+	>
+		for _, c := range page.Channels {
+			@ChannelEntry(page.Organization.Slug, c, c.ID == page.Current.ID && page.Topic == nil && page.Members == nil, page.ChannelCounts[c.ID])
+		}
+	</ul>
+}
+
+// TopicList preserves the snapshot's bounded list, including its order.
+templ TopicList(page ChannelPage, oob bool) {
+	<ul
+		id="sidebar-topics"
+		if oob {
+			hx-swap-oob="true"
+		}
+	>
+		for _, topic := range page.Topics {
+			@TopicEntry(page.Organization.Slug, page.Current.ID, topic, page.Topic != nil && page.Topic.ID == topic.ID, page.TopicCounts[topic.ID])
+		}
+	</ul>
+}
+
+// TopicHeadingCount keeps a target even while the selection is listed or at zero.
+templ TopicHeadingCount(page ChannelPage, oob bool) {
+	<span
+		id="topic-heading-count"
+		class="ml-2"
+		if oob {
+			hx-swap-oob="true"
+		}
+	>
+		if !selectedTopicListed(page) {
+			@unreadBadge(page.TopicCounts[page.Topic.ID])
+		}
+	</span>
+}
+
 // ChannelDOMID identifies a replaceable sidebar channel entry.
 func ChannelDOMID(id kernel.ID) string {
 	return fmt.Sprintf("channel-%x", id)
@@ -322,6 +366,7 @@ func unreadText(count int64) string {
 templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
 	<li id={ ChannelDOMID(channel.ID) }>
 		<a
+			id={ "link-" + ChannelDOMID(channel.ID) }
 			href={ templ.SafeURL(ChannelURL(slug, channel.ID)) }
 			if selected {
 				aria-current="page"
@@ -338,6 +383,7 @@ templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
 templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, count int64) {
 	<li id={ TopicDOMID(topic.ID) }>
 		<a
+			id={ "link-" + TopicDOMID(topic.ID) }
 			href={ templ.SafeURL(ConversationURL(slug, channelID, &topic.ID)) }
 			if selected {
 				aria-current="page"

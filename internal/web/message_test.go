@@ -499,7 +499,7 @@ func TestMessagePagingHandler(t *testing.T) {
 				want += ",messages,typing"
 			}
 			endpoint := "/organizations/acme/events?after=42&want=" + want + "&channel=01000000-0000-0000-0000-000000000000"
-			if tt.before == 0 && tt.wantTopic != "" {
+			if tt.wantTopic != "" {
 				endpoint += "&topic=" + tt.wantTopic
 			}
 			if got, ok := idAttribute(t, page, "organization-stream", "sse-connect"); !ok || got != endpoint {

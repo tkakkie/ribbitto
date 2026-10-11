@@ -367,13 +367,16 @@ func testStreamFetchSite(t *testing.T) {
 func testTopicStreamLookup(t *testing.T) {
 	live := identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)} // oneSession's
 	for _, tt := range []struct {
-		name      string
-		lookupErr error
-		status    int
+		name, want string
+		lookupErr  error
+		status     int
 	}{
-		{"found", nil, http.StatusOK},
-		{"not found", conversation.ErrTopicNotFound, http.StatusNotFound},
-		{"lookup failure", errors.New("offline"), http.StatusInternalServerError},
+		{"found", "messages", nil, http.StatusOK},
+		{"sidebar found", "sidebar", nil, http.StatusOK},
+		{"sidebar not found", "sidebar", conversation.ErrTopicNotFound, http.StatusNotFound},
+		{"sidebar lookup failure", "sidebar", errors.New("offline"), http.StatusInternalServerError},
+		{"not found", "messages", conversation.ErrTopicNotFound, http.StatusNotFound},
+		{"lookup failure", "messages", errors.New("offline"), http.StatusInternalServerError},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			hub := realtime.NewHub()
@@ -385,7 +388,7 @@ func testTopicStreamLookup(t *testing.T) {
 			membership := org.Membership{Organization: org.Organization{ID: kernel.ID{9}, Slug: "acme"}}
 			handler := middleware.Session(oneSession{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { p.events(w, r, membership) }))
 			selected := kernel.ID{3}
-			r := httptest.NewRequest(http.MethodGet, streamEndpoint(t, view.ConversationURL("acme", kernel.ID{1}, &selected))+"after=0", nil)
+			r := httptest.NewRequest(http.MethodGet, "/events?after=0&want="+tt.want+"&channel="+streamChannel+"&topic="+fmt.Sprintf("%x-%x-%x-%x-%x", selected[:4], selected[4:6], selected[6:8], selected[8:10], selected[10:]), nil)
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
 			handler.ServeHTTP(w, r)
@@ -516,7 +519,7 @@ func TestOlderPageStreamCap(t *testing.T) {
 		t.Fatal(err)
 	}
 	endpoint, ok := idAttribute(t, doc, "organization-stream", "sse-connect")
-	if page.Code != 200 || !ok || !strings.Contains(endpoint, "want=sidebar&channel=") || strings.Contains(endpoint, "topic=") {
+	if page.Code != 200 || !ok || !strings.Contains(endpoint, "want=sidebar&channel=") || !strings.Contains(endpoint, "topic=03000000-0000-0000-0000-000000000000") {
 		t.Fatalf("older page stream: %d, %q", page.Code, endpoint)
 	}
 	r, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+endpoint, nil)

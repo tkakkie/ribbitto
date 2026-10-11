@@ -56,6 +56,12 @@ func TestReadSidebarBrowser(t *testing.T) {
 		page.MustWait(`() => window.recounts === 1 && !document.querySelector('.htmx-settling')`)
 		pages = append(pages, page)
 	}
+	// Before any reveal, neither hidden page has sent a read, initial recount included.
+	for _, page := range pages {
+		if page.MustEval(`() => window.reads`).Int() != 0 {
+			t.Fatal("a hidden page read before it was revealed")
+		}
+	}
 	pages[0].MustActivate().MustElement("#message-body").MustInput("retain draft selection")
 	pages[0].MustEval(`() => document.getElementById('message-body').setSelectionRange(2, 8)`)
 	pages[1].MustActivate().MustEval(`id => document.getElementById('link-' + id).focus()`, view.ChannelDOMID(f.channel))

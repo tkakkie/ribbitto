@@ -115,16 +115,23 @@ finding of the adversarial review; not a review round, so the two-round
 limit is untouched). A fix to a Grok or Muse Code finding would otherwise
 reach the re-review, often Muse Code's, without either AI checking it:
 
-1. Apply only the fix, with a regression test that fails without it (or
-   the reason no test can); the pull request is a draft.
+1. Apply only the fix, with a regression test that fails without it; the
+   pull request is a draft. Only when no automated test can reproduce the
+   finding (a rule or documentation fix, or a race no existing harness can
+   gate) record instead why, and the alternative verification done: a
+   scripted or manual reproduction, a mutation showing the guard matters,
+   or the exact text change. Effort or time is never such a reason.
 2. The AI that did not write the fix (Claude ↔ Codex) checks that the diff
    since the reviewed head contains only that fix, that it answers the
-   original finding and that the test fails without it, and reports:
+   original finding, and that the test fails without it — or that the
+   recorded reason holds and the alternative verification was done; a
+   reason it does not accept is ❌. It reports:
 
    ```
    **Adversarial follow-up check — <Claude|Codex>** (at <SHA>)
    Compared: <reviewed SHA>..<SHA>
    - ✅ | ❌ finding — the fix, and the test that fails without it
+     (or: no test — the reason, and the alternative verification)
    ```
 
 3. All pass → the re-review the

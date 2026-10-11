@@ -128,19 +128,8 @@ check-ai:
 # check's output, which once hid a docscheck failure. It does not run Go or
 # templ formatting, the doc.go check, go vet, sourcecheck or the tests
 # (make check does), nor the schema docs or make vuln (CI does).
-#
-# scripts/fingerprint.sh fingerprints uncommitted changes before and after
-# generation, so changes already uncommitted do not fail it; each run's own
-# status is checked (Grok on #855).
 prepush: $(TEMPL) $(TAILWIND)
-	@set -eu; before=$$(bash scripts/fingerprint.sh) || exit 1; \
-	$(MAKE) generate; $(MAKE) css; \
-	after=$$(bash scripts/fingerprint.sh) || exit 1; \
-	if [ "$$after" != "$$before" ]; then \
-		echo "make generate or make css changed files; commit them:"; \
-		git status --short; \
-		exit 1; \
-	fi
+	bash scripts/check-unchanged.sh $(MAKE) generate css
 	go -C tools run ./apicheck -check ..
 	bash scripts/deps.sh --check
 	go -C tools run ./docscheck ..

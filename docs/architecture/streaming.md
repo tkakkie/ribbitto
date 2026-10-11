@@ -86,7 +86,7 @@ shutdown and HTTP/2 are in [`stream-limits.md`](stream-limits.md).
 [Decision 30](../decisions/30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md)
 gives every page one stream for its organisation, filtered by the page's
 interests; [decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md)
-delivers presence and typing as current state ([ephemeral state](realtime.md#ephemeral-state)).
+delivers presence and typing as current state ([ephemeral state](ephemeral-state.md#ephemeral-state)).
 
 `GET /organizations/{slug}/events` accepts these parameters. `messages`
 delivers durable frames; `typing` and `presence` read their wired

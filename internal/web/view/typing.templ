@@ -11,12 +11,16 @@ import (
 templ TypingIndicator(snapshot typing.Snapshot) {
 	if len(snapshot.Typists) > 0 {
 		for index, person := range snapshot.Typists {
-			if index > 0 {
+			if index > 0 && index == len(snapshot.Typists)-1 && snapshot.Remaining == 0 {
+				{ i18n.T(ctx, "activity.last_separator") }
+			} else if index > 0 {
 				{ i18n.T(ctx, "activity.separator") }
 			}
 			@MemberName(person.DisplayName, person.Handle)
 		}
-		if snapshot.Remaining > 0 {
+		if snapshot.Remaining == 1 {
+			{ i18n.T(ctx, "activity.more") + "1" + i18n.T(ctx, "activity.other") }
+		} else if snapshot.Remaining > 1 {
 			{ i18n.T(ctx, "activity.more") + strconv.Itoa(snapshot.Remaining) + i18n.T(ctx, "activity.others") }
 		}
 		if len(snapshot.Typists) == 1 && snapshot.Remaining == 0 {

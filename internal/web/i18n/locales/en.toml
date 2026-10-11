@@ -235,8 +235,14 @@ other = "New messages"
 ["activity.separator"]
 other = ", "
 
+["activity.last_separator"]
+other = " and "
+
 ["activity.more"]
 other = " and "
+
+["activity.other"]
+other = " other"
 
 ["activity.others"]
 other = " others"

@@ -27,7 +27,7 @@ Read the file for the area you change:
 | [`posting.md`](posting.md) | posting a message: the sequence-first transaction, the hub after commit, the page snapshot |
 | [`realtime.md`](realtime.md) | the durable event log: payloads, routing, replay boundary and retention |
 | [`ephemeral-state.md`](ephemeral-state.md) | presence and typing as current state: generations, owners, delivery and reset |
-| [`typing.md`](typing.md) | memory-only typing summaries, lifetime, composer ordering and signal ingress; planned delivery |
+| [`typing.md`](typing.md) | memory-only typing summaries, lifetime, composer ordering, signal ingress and delivery; page region planned |
 | [`streaming.md`](streaming.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
 | [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream caps, shutdown, HTTP/2 |

@@ -105,6 +105,10 @@ func TestTypingOwnerRendering(t *testing.T) {
 					if count == 2 && lang == "en" {
 						suffix = " is typing…"
 					}
+					// Two names join with "and"; one remaining typist is singular.
+					if lang == "en" && ((count == 3 && !strings.Contains(body, "</span> and ")) || (count == 5 && (!strings.Contains(body, " and 1 other ") || strings.Contains(body, "others")))) {
+						t.Fatalf("count %d English wording: %s", count, body)
+					}
 					if frame.Outgoing.Name != "typing" || frame.Generation != int64(count) || (body == "") != (count <= 1) || strings.Contains(body, "<Name") || strings.Contains(body, "handle1") || strings.Count(body, "<bdi") != min(3, max(0, count-1)) || (count > 1 && !strings.Contains(body, suffix)) || (count == 6 && !strings.Contains(body, more)) {
 						t.Fatalf("count %d rendering: %+v %s", count, frame, body)
 					}

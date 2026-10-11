@@ -23,7 +23,7 @@
 // A dirty flag and fixed deadline coalesce recounts between batches; neither a
 // quiet period nor a backlog loses pending work. Rendering precedes authorization,
 // and sidebar frames preserve the durable cursor. Production presence
-// is current (#768); typing remains planned (#288); web's hidden sink is current (#737). It is also the
+// is current (#768); typing delivery is current (#788), its page region planned (#790); web's hidden sink is current (#737). It is also the
 // registry of open connections: Register caps
 // connections per process and per account and gives each one a context
 // that CancelAccount or CancelSession ends. Events themselves are never

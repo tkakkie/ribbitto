@@ -4,7 +4,7 @@
 the hub carries a level per ephemeral kind besides the durable one; durable
 events are unchanged). Hub generations and the combined writer wait are
 implemented (#735), as are frame delivery (#736) and the sink (#737);
-presence state, changes and rendering are current (#766–#768; closes #287); typing's state and signal ingress are current (#784–#787, #813), its delivery and page (#788–#790) remain planned. Details in
+presence state, changes and rendering are current (#766–#768; closes #287); typing's state, signal ingress and delivery are current (#784–#788, #813), its composer signals and page (#789–#790) remain planned. Details in
 [ephemeral state](../architecture/ephemeral-state.md#ephemeral-state).
 
 - **Current state, not events.** Presence (who has a stream open) and

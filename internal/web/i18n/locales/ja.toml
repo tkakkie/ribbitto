@@ -235,8 +235,14 @@ other = "ここから未読メッセージ"
 ["activity.separator"]
 other = "、"
 
+["activity.last_separator"]
+other = "、"
+
 ["activity.more"]
 other = "、ほか"
+
+["activity.other"]
+other = "人"
 
 ["activity.others"]
 other = "人"

@@ -12,4 +12,6 @@ import (
 type ChannelUnread interface {
 	// Count returns counts capped at 100 and first unread sequences (zero if none).
 	Count(ctx context.Context, organizationID kernel.ID, channels, gapChannels []kernel.ID, los, his []int64) (counts, first map[kernel.ID]int64, err error)
+	// CountWithFirstUnread explicitly chooses whether to compute first unread.
+	CountWithFirstUnread(ctx context.Context, organizationID kernel.ID, channels, gapChannels []kernel.ID, los, his []int64, firstUnread bool) (counts, first map[kernel.ID]int64, err error)
 }

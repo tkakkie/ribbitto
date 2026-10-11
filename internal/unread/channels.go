@@ -25,7 +25,7 @@ type ChannelRangesIn func(platform.Snapshot) ChannelRanges
 
 // ChannelCounter counts messages through a snapshot-bound conversation API.
 type ChannelCounter interface {
-	Count(context.Context, kernel.ID, []kernel.ID, []kernel.ID, []int64, []int64) (map[kernel.ID]int64, map[kernel.ID]int64, error)
+	CountWithFirstUnread(context.Context, kernel.ID, []kernel.ID, []kernel.ID, []int64, []int64, bool) (map[kernel.ID]int64, map[kernel.ID]int64, error)
 }
 
 // ChannelCounterIn binds message counts to the caller's snapshot.
@@ -48,6 +48,12 @@ func NewChannelCounts(ranges ChannelRangesIn, messages ChannelCounterIn) *Channe
 // Read counts the sidebar's channels across all topics. The caller supplies
 // resolved scope and org's persisted join sequence in the same snapshot.
 func (c *ChannelCounts) Read(ctx context.Context, s platform.Snapshot, organizationID, memberID kernel.ID, joined int64, channels []kernel.ID) (map[kernel.ID]ChannelCount, error) {
+	return c.ReadWithFirstUnread(ctx, s, organizationID, memberID, joined, channels, true)
+}
+
+// ReadWithFirstUnread retains selection and state loading while explicitly choosing
+// whether the message counter also computes first unread.
+func (c *ChannelCounts) ReadWithFirstUnread(ctx context.Context, s platform.Snapshot, organizationID, memberID kernel.ID, joined int64, channels []kernel.ID, firstUnread bool) (map[kernel.ID]ChannelCount, error) {
 	ids := make([]kernel.ID, 0, len(channels))
 	seen := make(map[kernel.ID]bool, len(channels))
 	for _, id := range channels {
@@ -67,7 +73,7 @@ func (c *ChannelCounts) Read(ctx context.Context, s platform.Snapshot, organizat
 			los, his = append(los, gap.Lo), append(his, gap.Hi)
 		}
 	}
-	counts, first, err := c.messages(s).Count(ctx, organizationID, ids, gapChannels, los, his)
+	counts, first, err := c.messages(s).CountWithFirstUnread(ctx, organizationID, ids, gapChannels, los, his, firstUnread)
 	if err != nil {
 		return nil, fmt.Errorf("reading channel counts: %w", err)
 	}

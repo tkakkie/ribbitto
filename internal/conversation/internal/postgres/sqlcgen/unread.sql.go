@@ -14,18 +14,18 @@ import (
 const countChannelUnread = `-- name: CountChannelUnread :many
 WITH gaps AS (
     SELECT ids.channel_id, los.lo_before, his.hi, ids.n
-    FROM unnest($2::uuid[]) WITH ORDINALITY AS ids(channel_id, n)
-    JOIN unnest($3::bigint[]) WITH ORDINALITY AS los(lo_before, n) ON los.n = ids.n
-    JOIN unnest($4::bigint[]) WITH ORDINALITY AS his(hi, n) ON his.n = ids.n
+    FROM unnest($3::uuid[]) WITH ORDINALITY AS ids(channel_id, n)
+    JOIN unnest($4::bigint[]) WITH ORDINALITY AS los(lo_before, n) ON los.n = ids.n
+    JOIN unnest($5::bigint[]) WITH ORDINALITY AS his(hi, n) ON his.n = ids.n
 ), bounded AS (
     SELECT c.channel_id, messages.event_seq
-    FROM unnest($1::uuid[]) AS c(channel_id)
+    FROM unnest($2::uuid[]) AS c(channel_id)
     CROSS JOIN LATERAL (
         SELECT m.event_seq
         FROM (SELECT lo_before, hi, n FROM gaps WHERE gaps.channel_id = c.channel_id ORDER BY n) g
         CROSS JOIN LATERAL (
             SELECT event_seq FROM message
-            WHERE organization_id = $5
+            WHERE organization_id = $6
               AND channel_id = c.channel_id
               AND event_seq > g.lo_before AND event_seq < g.hi
             ORDER BY event_seq LIMIT 100
@@ -35,16 +35,17 @@ WITH gaps AS (
 )
 SELECT c.channel_id::uuid AS channel_id,
     (SELECT count(*) FROM bounded WHERE bounded.channel_id = c.channel_id) AS unread_count,
-    coalesce((SELECT event_seq FROM bounded WHERE bounded.channel_id = c.channel_id ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
-FROM unnest($1::uuid[]) AS c(channel_id)
+    coalesce((SELECT event_seq FROM bounded WHERE bounded.channel_id = c.channel_id AND $1 = true ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
+FROM unnest($2::uuid[]) AS c(channel_id)
 `
 
 type CountChannelUnreadParams struct {
-	ChannelIds     []pgtype.UUID
-	GapChannelIds  []pgtype.UUID
-	GapLosBefore   []int64
-	GapHis         []int64
-	OrganizationID pgtype.UUID
+	WithFirstUnread interface{}
+	ChannelIds      []pgtype.UUID
+	GapChannelIds   []pgtype.UUID
+	GapLosBefore    []int64
+	GapHis          []int64
+	OrganizationID  pgtype.UUID
 }
 
 type CountChannelUnreadRow struct {
@@ -55,6 +56,7 @@ type CountChannelUnreadRow struct {
 
 func (q *Queries) CountChannelUnread(ctx context.Context, arg CountChannelUnreadParams) ([]CountChannelUnreadRow, error) {
 	rows, err := q.db.Query(ctx, countChannelUnread,
+		arg.WithFirstUnread,
 		arg.ChannelIds,
 		arg.GapChannelIds,
 		arg.GapLosBefore,
@@ -82,8 +84,8 @@ func (q *Queries) CountChannelUnread(ctx context.Context, arg CountChannelUnread
 const countTopicUnread = `-- name: CountTopicUnread :many
 WITH topics AS (
     SELECT ids.topic_id, floors.floor
-    FROM unnest($6::uuid[]) WITH ORDINALITY AS ids(topic_id, n)
-    JOIN unnest($7::bigint[]) WITH ORDINALITY AS floors(floor, n) ON floors.n = ids.n
+    FROM unnest($7::uuid[]) WITH ORDINALITY AS ids(topic_id, n)
+    JOIN unnest($8::bigint[]) WITH ORDINALITY AS floors(floor, n) ON floors.n = ids.n
 ), moved AS MATERIALIZED (
     -- Keep the sequence-order LIMIT outside the message scan: it otherwise
     -- walks old topic history before finding an unread move.
@@ -118,18 +120,19 @@ SELECT t.topic_id::uuid AS topic_id,
          ORDER BY m.event_seq LIMIT 1)
         UNION ALL
         (SELECT event_seq FROM moved WHERE t.topic_id = $5::uuid ORDER BY event_seq LIMIT 1)
-    ) first_candidates ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
+    ) first_candidates WHERE $6 = true ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
 FROM topics t
 `
 
 type CountTopicUnreadParams struct {
-	OrganizationID pgtype.UUID
-	ChannelID      pgtype.UUID
-	PrefixBefore   int64
-	ReadSet        pgtype.Multirange[pgtype.Range[pgtype.Int8]]
-	Selected       pgtype.UUID
-	TopicIds       []pgtype.UUID
-	Floors         []int64
+	OrganizationID  pgtype.UUID
+	ChannelID       pgtype.UUID
+	PrefixBefore    int64
+	ReadSet         pgtype.Multirange[pgtype.Range[pgtype.Int8]]
+	Selected        pgtype.UUID
+	WithFirstUnread interface{}
+	TopicIds        []pgtype.UUID
+	Floors          []int64
 }
 
 type CountTopicUnreadRow struct {
@@ -145,6 +148,7 @@ func (q *Queries) CountTopicUnread(ctx context.Context, arg CountTopicUnreadPara
 		arg.PrefixBefore,
 		arg.ReadSet,
 		arg.Selected,
+		arg.WithFirstUnread,
 		arg.TopicIds,
 		arg.Floors,
 	)

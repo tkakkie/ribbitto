@@ -20,6 +20,10 @@ func ChannelUnreadIn(s platform.Snapshot) conversation.ChannelUnread {
 type channelUnread struct{ queries *sqlcgen.Queries }
 
 func (r channelUnread) Count(ctx context.Context, organizationID kernel.ID, channels, gapChannels []kernel.ID, los, his []int64) (map[kernel.ID]int64, map[kernel.ID]int64, error) {
+	return r.CountWithFirstUnread(ctx, organizationID, channels, gapChannels, los, his, true)
+}
+
+func (r channelUnread) CountWithFirstUnread(ctx context.Context, organizationID kernel.ID, channels, gapChannels []kernel.ID, los, his []int64, firstUnread bool) (map[kernel.ID]int64, map[kernel.ID]int64, error) {
 	if len(gapChannels) != len(los) || len(los) != len(his) {
 		return nil, nil, fmt.Errorf("counting channel unread: unequal gap arrays")
 	}
@@ -35,7 +39,7 @@ func (r channelUnread) Count(ctx context.Context, organizationID kernel.ID, chan
 		gaps[i], before[i] = uuid(id), los[i]-1
 	}
 	rows, err := r.queries.CountChannelUnread(ctx, sqlcgen.CountChannelUnreadParams{
-		OrganizationID: uuid(organizationID), ChannelIds: ids, GapChannelIds: gaps, GapLosBefore: before, GapHis: his,
+		WithFirstUnread: firstUnread, OrganizationID: uuid(organizationID), ChannelIds: ids, GapChannelIds: gaps, GapLosBefore: before, GapHis: his,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("counting channel unread: %w", err)

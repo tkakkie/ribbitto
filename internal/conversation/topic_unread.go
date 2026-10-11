@@ -13,4 +13,6 @@ type TopicUnread interface {
 	// IDs and floors must be built together. Prefix is exclusive; readSet holds
 	// [lo, hi) ranges above it. No member/author filter applies.
 	Count(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet [][2]int64, selected *kernel.ID) (map[kernel.ID]int64, int64, error)
+	// CountWithFirstUnread explicitly chooses whether to compute first unread.
+	CountWithFirstUnread(ctx context.Context, organizationID, channelID kernel.ID, prefix int64, topics []kernel.ID, floors []int64, readSet [][2]int64, selected *kernel.ID, firstUnread bool) (map[kernel.ID]int64, int64, error)
 }

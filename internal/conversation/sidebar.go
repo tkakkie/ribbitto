@@ -30,7 +30,7 @@ func (s *Reader) Sidebar(ctx context.Context, m org.Membership, channelID kernel
 		}
 		sidebar.Current, sidebar.Channels = loaded.current, loaded.channels
 		sidebar.Topic, sidebar.Topics = loaded.topic, loaded.topics
-		counts, err := s.pageCounts(ctx, snapshot, m, channelID, sidebar.Channels, sidebar.Topics, topicID)
+		counts, err := s.readCounts(ctx, snapshot, m, channelID, sidebar.Channels, sidebar.Topics, topicID, false)
 		if err != nil {
 			return err
 		}

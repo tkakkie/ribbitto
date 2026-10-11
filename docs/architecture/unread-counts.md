@@ -62,7 +62,11 @@ including when unlisted, counting at most 51 topics without extending the list. 
 fresh lists: a displaced non-selected topic disappears. Channel totals still
 cover all topics; both maps include zero, so whole-list replacement clears badges.
 It uses the same `PageCounter` and persisted member join sequence as page reads,
-with no history, author directory, cursor read or writes.
+with no history, author directory, cursor read or writes. Production's
+counts-only `SidebarCounter.ReadCounts` extension explicitly disables first
+unread; selection still reaches step 3 and step 4. Legacy injected
+`PageCounter` adapters retain `Read` as a compatibility fallback. Normal
+page entry points still enable first unread, preserving the unread divider.
 
 Production streams bind the already-resolved membership, channel, selected topic
 and members-panel selection to one `cmd/ribbitto` sidebar source (#819). Posts
@@ -93,9 +97,9 @@ parameter. These statements share the page or sidebar snapshot that runs them, w
 | Step | Owner | Input | Statement | Output |
 |---|---|---|---|---|
 | 1 (current) | `unread` | member, the sidebar's channel IDs | for each channel, its first 101 ranges by `lo` (`LATERAL … ORDER BY lo LIMIT 101`) | `P` and the first gaps per channel |
-| 2 (current) | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted per channel; `ORDER BY … LIMIT 1` returns its first unread | channel counts, the feed's first unread |
+| 2 (current) | `conversation` | parallel arrays of channel ID, gap `lo`, gap `hi` | for each channel, its messages in its gaps in order, at most 100 rows per channel (a `LATERAL` per channel over its gaps, `LIMIT 100`), counted per channel; `ORDER BY … LIMIT 1` returns its first unread when requested | channel counts, the feed's first unread |
 | 3 (current) | `unread` | member, current channel, its listed topic IDs plus the selected topic when the list omits it | its ranges at or above `P`, and the topics' floors | the read set above `P` and a floor for every topic (`P − 1` without a row) |
-| 4 (current) | `conversation` | the read set including `[0, P)` as one `int8multirange`, `P`, per-topic `(id, floor)` arrays | per topic: messages above `P − 1` and its floor, plus messages at or below its floor with `moved_event_seq > floor`; both exclude read-set containment and share an ordered cap of 100; only the selected topic returns its lowest unread `event_seq`, uncapped | topic counts, a topic view's first unread |
+| 4 (current) | `conversation` | the read set including `[0, P)` as one `int8multirange`, `P`, per-topic `(id, floor)` arrays | per topic: messages above `P − 1` and its floor, plus messages at or below its floor with `moved_event_seq > floor`; both exclude read-set containment and share an ordered cap of 100; when requested, only the selected topic returns its lowest unread `event_seq`, uncapped | topic counts, a topic view's first unread |
 
 Step 1 uses `unreadpg.ChannelRangesIn` in the caller's snapshot. Go derives
 `P` and at most 100 gaps; range 101 only bounds gap 100. Channels without
@@ -119,10 +123,14 @@ Go checks equal lengths, computes `P − 1` and adds `[0, P)` to the multirange.
 All branches exclude read-set containment; only above-floor branches have a
 lower sequence bound. Ordered count branches each cap at 100, then share an
 ordered cap of 100.
-Only the selected topic probes above the floor and materialises its unread
+When first unread is enabled, only the selected topic probes above the floor and materialises its unread
 moved candidates before choosing the lowest `event_seq`, without a candidate
 cap. `unread.TopicCounts`, wired by `newTopicCounts`,
-combines steps 3–4 in the page snapshot.
+combines steps 3–4 in the page snapshot. The channel first-sequence expression
+and topic first-unread expression each have an explicit boolean SQL guard.
+Recounts pass false, so the extra channel bounded-CTE scan/sort and both topic
+first-unread branches (including the moved CTE) do not execute. The count
+branches, caps, four statements and their order are unchanged.
 
 Steps 1–2 serve the channel list and steps 3–4 the topic list: two
 statements per list, four per page load, whatever the number of channels or

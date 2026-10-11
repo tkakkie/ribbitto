@@ -22,7 +22,7 @@ WITH gaps AS (
 )
 SELECT c.channel_id::uuid AS channel_id,
     (SELECT count(*) FROM bounded WHERE bounded.channel_id = c.channel_id) AS unread_count,
-    coalesce((SELECT event_seq FROM bounded WHERE bounded.channel_id = c.channel_id ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
+    coalesce((SELECT event_seq FROM bounded WHERE bounded.channel_id = c.channel_id AND sqlc.arg(with_first_unread) = true ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
 FROM unnest(sqlc.arg(channel_ids)::uuid[]) AS c(channel_id);
 
 -- name: CountTopicUnread :many
@@ -64,5 +64,5 @@ SELECT t.topic_id::uuid AS topic_id,
          ORDER BY m.event_seq LIMIT 1)
         UNION ALL
         (SELECT event_seq FROM moved WHERE t.topic_id = sqlc.arg(selected)::uuid ORDER BY event_seq LIMIT 1)
-    ) first_candidates ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
+    ) first_candidates WHERE sqlc.arg(with_first_unread) = true ORDER BY event_seq LIMIT 1), 0)::bigint AS first_unread
 FROM topics t;

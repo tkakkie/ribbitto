@@ -67,6 +67,7 @@ Limits: single short runs, growing warm authorization caches, no controlled host
 load or CPU/memory sampling. No HTTP, HTML, network, slow clients, presence,
 typing, read advancement or production post-read writes; baseline has no unread
 seed, sidebar adds one excluded seed per step. No fragmented ranges, many lists,
-moves or deep history. The <=99-post guard keeps snapshot counts within the 100
-cap so both totals prove inclusion of the last post. Recount output is per member
+moves or deep history. These historical runs used a <=99-post guard so both totals proved freshness
+within the 100 cap. The [#832 harness](stream-sidebar-pool-results.md) replaces
+that guard with a same-snapshot sequence witness for longer runs. Recount output is per member
 and never shared; this does not guarantee performance for larger data sets.

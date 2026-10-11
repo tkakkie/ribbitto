@@ -12,6 +12,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/unread"
@@ -21,6 +22,8 @@ import (
 // These adapters mirror cmd/ribbitto's public count composition without moving
 // production wiring. Only HTML rendering is replaced by a snapshot witness.
 type costPageCounter struct{ snapshot platform.Snapshot }
+
+type costWitnessKey struct{}
 
 func costPageCountsIn(s platform.Snapshot) conversation.PageCounter { return costPageCounter{s} }
 
@@ -36,15 +39,23 @@ func (c costPageCounter) Read(ctx context.Context, m org.Membership, channel ker
 	}
 	result.TopicCounts, result.TopicFirstUnread, err = unread.NewTopicCounts(unreadpg.TopicStateIn,
 		func(s platform.Snapshot) unread.TopicCounter { return conversationpg.TopicUnreadIn(s) }).Read(ctx, c.snapshot, unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, topics, selected)
+	if witness, ok := ctx.Value(costWitnessKey{}).(*int64); ok && err == nil {
+		// Read in the counts' snapshot, never from the hub or a later transaction.
+		// This extra test-only statement is included in SQL and timing totals.
+		*witness, err = orgpg.EventCursorIn(c.snapshot).EventSeq(ctx, m.Organization.ID)
+	}
 	return result, err
 }
 
 type costSnapshot struct {
-	counts [2]int64
-	at     time.Time
+	counts  [2]int64
+	through int64
+	at      time.Time
 }
 
-func (s costSnapshot) covers(want int64) bool { return s.counts[0] >= want && s.counts[1] >= want }
+func (s costSnapshot) covers(want, seq int64) bool {
+	return s.through >= seq && s.counts[0] >= min(want, 100) && s.counts[1] >= min(want, 100)
+}
 
 type costConnection struct {
 	reader         *conversation.Reader
@@ -77,12 +88,14 @@ func (c *costConnection) Recount(ctx context.Context, _ realtime.Subscription) (
 	c.timings.add(costGate, start, nil)
 	start = time.Now()
 	ctx = context.WithValue(ctx, costRoleKey{}, costSidebar)
+	var through int64
+	ctx = context.WithValue(ctx, costWitnessKey{}, &through)
 	s, err := c.reader.Sidebar(ctx, c.member, c.channel, nil)
 	c.timings.add(costWhole, start, err)
 	if err != nil {
 		return realtime.Outgoing{}, err
 	}
-	data, err := json.Marshal([2]int64{s.ChannelCounts[c.channel], s.TopicCounts[c.topic]})
+	data, err := json.Marshal([3]int64{s.ChannelCounts[c.channel], s.TopicCounts[c.topic], through})
 	return realtime.Outgoing{Data: data}, err
 }
 
@@ -93,11 +106,11 @@ func (c *costConnection) Send(ctx context.Context, out realtime.Outgoing) error 
 	defer c.mu.Unlock()
 	switch out.Name {
 	case "sidebar":
-		var counts [2]int64
+		var counts [3]int64
 		if err := json.Unmarshal(out.Data, &counts); err != nil {
 			return err
 		}
-		c.snapshots = append(c.snapshots, costSnapshot{counts, time.Now()})
+		c.snapshots = append(c.snapshots, costSnapshot{counts: [2]int64{counts[0], counts[1]}, through: counts[2], at: time.Now()})
 	case "message":
 		c.sequences[out.ID] = true
 		return c.messages.Send(ctx, out)
@@ -124,9 +137,13 @@ func costInitial(connections []*costConnection) bool {
 }
 
 func costComplete(connections []*costConnection, returned map[int64]time.Time) bool {
+	var last int64
+	for seq := range returned {
+		last = max(last, seq)
+	}
 	for _, c := range connections {
 		c.mu.Lock()
-		ready := len(c.snapshots) > 0 && c.snapshots[len(c.snapshots)-1].covers(c.initial+int64(len(returned)))
+		ready := len(c.snapshots) > 0 && c.snapshots[len(c.snapshots)-1].covers(c.initial+int64(len(returned)), last)
 		for seq := range returned {
 			ready = ready && c.sequences[seq]
 		}
@@ -147,7 +164,7 @@ func costConnections(t *testing.T, pool *pgxpool.Pool, posting *conversation.Pos
 	connections := make([]*costConnection, len(members))
 	for i, m := range members {
 		// All prior steps are read; alternating members retain one unread seed.
-		// This keeps totals <=100 and makes shared member output observable.
+		// This makes shared member output observable even before the count cap.
 		initial := int64(i % 2)
 		err := platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
 			return unreadpg.WriterIn(tx).Merge(t.Context(), unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, unread.Range{Lo: 0, Hi: seed.EventSeq + 1 - initial})
@@ -175,7 +192,7 @@ func TestCostCompletion(t *testing.T) {
 		{"message missing", [2]int64{2, 2}, false, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			c := &costConnection{initial: 1, snapshots: []costSnapshot{{counts: tt.counts, at: time.Now()}}, sequences: map[int64]bool{7: tt.delivered}}
+			c := &costConnection{initial: 1, snapshots: []costSnapshot{{counts: tt.counts, through: 7, at: time.Now()}}, sequences: map[int64]bool{7: tt.delivered}}
 			if got := costComplete([]*costConnection{c}, returned); got != tt.want {
 				t.Fatalf("completion = %t, want %t", got, tt.want)
 			}
@@ -205,20 +222,21 @@ func TestCostInitialAndEachConnection(t *testing.T) {
 		t.Fatal("initial recounts did not complete")
 	}
 	first.snapshots[0].counts = [2]int64{1, 1}
+	first.snapshots[0].through = 7
 	first.sequences = map[int64]bool{7: true}
 	if costComplete([]*costConnection{first, second}, map[int64]time.Time{7: time.Now()}) {
 		t.Fatal("one connection satisfied another's drain")
 	}
 }
 
-func validCostSidebar(distinct bool, posts int) bool { return distinct && posts <= 99 }
+func validCostSidebar(distinct bool, posts int) bool { return distinct && posts > 0 }
 
 func TestCostSidebarConfiguration(t *testing.T) {
 	for _, tt := range []struct {
 		distinct bool
 		posts    int
 		want     bool
-	}{{true, 99, true}, {false, 20, false}, {true, 100, false}} {
+	}{{true, 99, true}, {false, 20, false}, {true, 100, true}, {true, 1200, true}, {true, 0, false}} {
 		if got := validCostSidebar(tt.distinct, tt.posts); got != tt.want {
 			t.Errorf("distinct=%t posts=%d: valid=%t, want %t", tt.distinct, tt.posts, got, tt.want)
 		}

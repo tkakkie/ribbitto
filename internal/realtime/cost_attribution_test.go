@@ -32,6 +32,7 @@ const (
 	costGetChannel
 	costListChannels
 	costListTopics
+	costWitness
 	costBegin
 	costCommit
 	costRollback
@@ -40,7 +41,7 @@ const (
 	costKinds
 )
 
-var costNames = [costKinds]string{"acquire-other", "acquire-sidebar", "acquire-events", "acquire-auth", "FirstChannelReadRanges", "CountChannelUnread", "ReadTopicState", "CountTopicUnread", "GetChannel", "ListChannels", "ListTopics", "BEGIN", "COMMIT", "ROLLBACK", "whole-sidebar", "recount-slot"}
+var costNames = [costKinds]string{"acquire-other", "acquire-sidebar", "acquire-events", "acquire-auth", "FirstChannelReadRanges", "CountChannelUnread", "ReadTopicState", "CountTopicUnread", "GetChannel", "ListChannels", "ListTopics", "GetEventSeq", "BEGIN", "COMMIT", "ROLLBACK", "whole-sidebar", "recount-slot"}
 
 type costRoleKey struct{}
 type costAcquireKey struct{}
@@ -112,16 +113,28 @@ func (c *epochCounter) TraceAcquireStart(ctx context.Context, _ *pgxpool.Pool, _
 }
 
 func (c *epochCounter) TraceAcquireEnd(ctx context.Context, _ *pgxpool.Pool, data pgxpool.TraceAcquireEndData) {
+	if data.Err == nil {
+		n := c.active.Add(1)
+		for old := c.peak.Load(); n > old; old = c.peak.Load() {
+			if c.peak.CompareAndSwap(old, n) {
+				break
+			}
+		}
+	}
 	if start, ok := ctx.Value(costAcquireKey{}).(costStart); ok {
 		c.timings.add(start.kind, start.at, data.Err)
 	}
+}
+
+func (c *epochCounter) TraceRelease(_ *pgxpool.Pool, _ pgxpool.TraceReleaseData) {
+	c.active.Add(-1)
 }
 
 func (c *costTimings) queryStart(ctx context.Context, sql string) context.Context {
 	if c == nil || ctx.Value(costRoleKey{}) != costSidebar {
 		return ctx
 	}
-	for kind := costRanges; kind <= costListTopics; kind++ {
+	for kind := costRanges; kind <= costWitness; kind++ {
 		if strings.HasPrefix(sql, "-- name: "+costNames[kind]+" ") {
 			return context.WithValue(ctx, costQueryKey{}, costStart{kind, time.Now()})
 		}
@@ -225,8 +238,11 @@ func TestCostAttributionDatabase(t *testing.T) {
 	if allowed, err := a.MayReceive(t.Context(), f.AccountID, "acme", realtime.Event{OrganizationID: f.OrganizationID}); err != nil || !allowed {
 		t.Fatalf("authorization: %t, %v", allowed, err)
 	}
+	if counter.active.Load() != 0 || counter.peak.Load() != 1 {
+		t.Fatal("successful acquire/release peak accounting wrong")
+	}
 	measured := counter.timings.take()
-	for _, kind := range []int{costSidebar, costEvents, costRanges, costChannelCount, costTopicState, costTopicCount, costGetChannel, costListChannels, costListTopics, costBegin, costCommit, costWhole} {
+	for _, kind := range []int{costSidebar, costEvents, costRanges, costChannelCount, costTopicState, costTopicCount, costGetChannel, costListChannels, costListTopics, costWitness, costBegin, costCommit, costWhole} {
 		if len(measured.samples[kind]) != 1 {
 			t.Fatalf("%s: want one real operation, got %d", costNames[kind], len(measured.samples[kind]))
 		}

@@ -26,8 +26,7 @@ RIBBITTO_STREAM_COST=1 RIBBITTO_STREAM_COST_POOL=10 RIBBITTO_STREAM_COST_STEPS=2
 a run stops at its first failing step), `_RATE` (posts per second, default
 10), `_DURATION` (posting time per step, default `10s`), `_POOL` (pool size,
 default pgx's), `_CACHE=1` (#227's shared reads), `_MEMBERS=distinct`
-(one member per stream) and `_STAGGER=<window>` (#671) tune it. `_SIDEBAR=1` adds live member counts (needs distinct members and at most
-99 scheduled posts per step; set duration/rate explicitly). Its measured
+(one member per stream) and `_STAGGER=<window>` (#671) tune it. `_SIDEBAR=1` adds live member counts (needs distinct members; set duration/rate explicitly). Its measured
 results and commands are in [sidebar cost results](stream-sidebar-results.md).
 `_ATTRIBUTION=1` times pool acquisitions and every sidebar statement;
 `_RECOUNTS=<n>` bounds concurrent recounts in tests only. The comparisons and
@@ -95,9 +94,9 @@ The initial snapshot must match that member's two count totals before counters
 start. Initial recounts, seeds and read writes are excluded.
 
 Messages are collected separately. Drain requires each member's delivery of
-every posted sequence and a sent snapshot with both totals covering every
-completed post. At most 99 posts plus the seed keep totals within the 100 cap;
-timing alone cannot prove freshness. Snapshot bytes replace HTML; sidebar
+every posted sequence and a sent snapshot with both capped totals and a
+same-snapshot committed sequence covering every completed post. The test-only
+freshness witness supports runs beyond 99 posts; timing alone cannot prove freshness. Snapshot bytes replace HTML; sidebar
 output bypasses the shared message render cache. The four count statements are
 classified by sqlc names, separately from list queries and transaction statements.
 Reports include absolute SQL totals, recounts, elapsed posting plus drain time,
@@ -105,6 +104,9 @@ recounts/connection/second, count statements/recount and /post, pool wait totals
 and acquisitions, and message and recount p50/p95/p99. Recount delay is from
 `Post` returning to the first sent snapshot covering that post, one sample per
 post per member; coalescing means one snapshot can cover many samples.
+The [long-run protocol](stream-sidebar-pool-results.md) adds posting latency,
+scheduled-post-to-delivery latency and acquire/release peak connections, and
+provides the opt-in controlled pool ladder for #832.
 
 ## Results, 2026-10-01
 

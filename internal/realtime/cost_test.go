@@ -47,7 +47,7 @@ import (
 //	RIBBITTO_STREAM_COST_MEMBERS   distinct: one member per stream, instead
 //	                               of one member for every stream
 //	RIBBITTO_STREAM_COST_SIDEBAR   1: per-member live counts; needs distinct
-//	                               members and at most 99 posts per step
+//	                               members; same-snapshot freshness witness
 //	RIBBITTO_STREAM_COST_ATTRIBUTION 1: acquire, statement and snapshot timing
 //	RIBBITTO_STREAM_COST_RECOUNTS  positive shared concurrent recount limit;
 //	                               unset is unbounded, needs sidebar mode
@@ -64,6 +64,8 @@ func TestStreamCost(t *testing.T) {
 	if os.Getenv("RIBBITTO_STREAM_COST") != "1" {
 		t.Skip("set RIBBITTO_STREAM_COST=1 to measure the stream's cost")
 	}
+	invocationStart := time.Now()
+	t.Cleanup(func() { t.Logf("cost invocation wall=%s", time.Since(invocationStart)) })
 	// Checked before anything connects. pgtest then creates a database of
 	// its own on that server and drops it afterwards; nothing else on the
 	// server is touched. A loopback address does not prove the server is
@@ -93,7 +95,7 @@ func TestStreamCost(t *testing.T) {
 		recountSlots = make(chan struct{}, envInts(t, "RIBBITTO_STREAM_COST_RECOUNTS", nil)[0])
 	}
 	if sidebar && !validCostSidebar(os.Getenv("RIBBITTO_STREAM_COST_MEMBERS") == "distinct", scheduledPosts(rate, duration)) {
-		t.Fatal("sidebar measurement needs distinct members and at most 99 posts per step (uncapped drain proof)")
+		t.Fatal("sidebar measurement needs distinct members and at least one post")
 	}
 
 	// NewEmpty creates a database from template0 and drops only that one
@@ -162,6 +164,13 @@ func TestStreamCost(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("PostgreSQL %s; sidebar %t; interval %s", postgresVersion, sidebar, realtime.SidebarInterval)
+	for _, setting := range []string{"max_connections", "superuser_reserved_connections", "reserved_connections"} {
+		var value string
+		if err := pool.QueryRow(t.Context(), "SELECT current_setting($1, true)", setting).Scan(&value); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("PostgreSQL %s=%s", setting, value)
+	}
 	t.Logf("attribution %t; concurrent recount limit %d (0=unbounded)", queries.timings != nil, cap(recountSlots))
 	t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step; cache %t; distinct members %t; stagger window %s",
 		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration, cached, distinct, stagger)
@@ -186,7 +195,8 @@ func TestStreamCost(t *testing.T) {
 				c.timings, c.slots = queries.timings, recountSlots
 			}
 		}
-		r := measureStep(t, stream, posting, pool, queries, checks, loopReads, dbReads, m, subs, n, rate, duration, stagger, connections)
+		r := measureStep(t, stream, posting, pool, queries, checks, loopReads, dbReads, m, subs, n, rate, duration, stagger, connections, invocationStart)
+		t.Logf("progress: streams=%d posting-p50/p95/p99=%v scheduled-to-delivery-p50/p95/p99=%v peak-acquired=%d loop-errors=%d provisional-target=%t", n, r.posting, r.scheduledLatency, r.peakAcquired, r.loopErrors, costTargets(r))
 		if sidebar {
 			t.Logf("sidebar: streams=%d queries=%d tx=%d count-statements=%d recounts=%d elapsed=%s recounts/stream/s=%.3f count/recount=%.2f count/post=%.2f delay p50/p95/p99=%s/%s/%s pool-empty=%d pool-wait-total=%s", n,
 				r.queries, r.txStatements, r.countStatements, r.recounts, r.elapsed.Round(time.Millisecond), float64(r.recounts)/float64(n)/r.elapsed.Seconds(), per(r.countStatements, r.recounts), per(r.countStatements, r.completed), r.recountDelay[0].Round(time.Microsecond), r.recountDelay[1].Round(time.Microsecond), r.recountDelay[2].Round(time.Microsecond), r.poolEmpty, r.poolWait.Round(time.Microsecond))
@@ -243,6 +253,8 @@ type stepResult struct {
 	scheduled, completed, missed int
 	recounts                     int
 	countStatements, poolEmpty   int64
+	peakAcquired, loopErrors     int64
+	posting, scheduledLatency    [3]time.Duration
 	elapsed, poolWait            time.Duration
 	recountDelay                 [3]time.Duration
 	// timedOut reports that the step's deadline passed before every post
@@ -278,7 +290,7 @@ func per(n int64, d int) float64 {
 // duration, waits for every delivery or a drain deadline, and closes them.
 // Counts cover the posting window and the drain, not the streams' start.
 func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Posting, pool *pgxpool.Pool, queries *epochCounter, checks *timingAuthorizer,
-	events, dbReads *countingReader, m org.Membership, subs []realtime.Subscription, n, rate int, duration, stagger time.Duration, connections []*costConnection) stepResult {
+	events, dbReads *countingReader, m org.Membership, subs []realtime.Subscription, n, rate int, duration, stagger time.Duration, connections []*costConnection, invocationStart time.Time) stepResult {
 	t.Helper()
 	sub := subs[0]
 	var cursor int64
@@ -334,32 +346,38 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	queries.timings.reset()
 	counts0 := queries.countStatements.Load()
 	q0, s0, empty0, epochs0, a0 := queries.Counts(), pool.Stat(), dbReads.empty.Load(), queries.epochReads.Load(), checks.inner.Stats()
+	queries.peak.Store(queries.active.Load())
 	// Posts are scheduled at the fixed rate whatever their latency (an open
 	// loop), with at most one second's worth in flight: a post that would
 	// exceed it is counted as missed, and the step as underloaded, rather
 	// than silently lowering the offered load.
 	var (
-		mu       sync.Mutex
-		returned = map[int64]time.Time{}
-		failed   error
-		posters  sync.WaitGroup
+		mu        sync.Mutex
+		returned  = map[int64]time.Time{}
+		due       = map[int64]time.Time{}
+		postTimes []time.Duration
+		failed    error
+		posters   sync.WaitGroup
 	)
 	inFlight := make(chan struct{}, rate)
 	scheduled := scheduledPosts(rate, duration)
 	interval := time.Second / time.Duration(rate)
 	missed := 0
 	start := time.Now()
+	t.Logf("wall: streams=%d setup=%s window=%s drain-allowance=%s", n, start.Sub(invocationStart), duration, drainAllowance)
 	// Pool stats are cumulative, so sampling finds when the first empty
 	// acquire happened, to within the sampling period.
 	var firstEmpty atomic.Int64
 	sampled := make(chan struct{})
 	go func() {
 		defer close(sampled)
-		for tick := time.Tick(50 * time.Millisecond); pool.Stat().EmptyAcquireCount() == s0.EmptyAcquireCount(); {
+		tick := time.NewTicker(50 * time.Millisecond)
+		defer tick.Stop()
+		for pool.Stat().EmptyAcquireCount() == s0.EmptyAcquireCount() {
 			select {
 			case <-ctx.Done():
 				return
-			case <-tick:
+			case <-tick.C:
 			}
 		}
 		firstEmpty.Store(int64(time.Since(start)))
@@ -371,7 +389,8 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	stepCtx, stopStep := context.WithDeadline(ctx, start.Add(duration+drainAllowance))
 	defer stopStep()
 	for i := range scheduled {
-		time.Sleep(time.Until(start.Add(time.Duration(i) * interval)))
+		scheduledAt := start.Add(time.Duration(i) * interval)
+		time.Sleep(time.Until(scheduledAt))
 		select {
 		case inFlight <- struct{}{}:
 		default:
@@ -380,6 +399,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 		}
 		posters.Go(func() {
 			defer func() { <-inFlight }()
+			began := time.Now()
 			posted, err := posting.Post(stepCtx, m, sub.Channel, "cost")
 			at := time.Now()
 			mu.Lock()
@@ -391,6 +411,8 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 				return
 			}
 			returned[posted.EventSeq] = at
+			due[posted.EventSeq] = scheduledAt
+			postTimes = append(postTimes, at.Sub(began))
 		})
 	}
 	posters.Wait()
@@ -402,9 +424,11 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 		time.Sleep(10 * time.Millisecond)
 	}
 	end := time.Now()
+	t.Logf("wall: streams=%d posting-plus-drain=%s drain-after-window=%s", n, end.Sub(start), max(time.Duration(0), end.Sub(start)-duration))
 	timings := queries.timings.take()
 	counts1 := queries.countStatements.Load()
 	q1, s1, empty1, epochs1, a1 := queries.Counts(), pool.Stat(), dbReads.empty.Load(), queries.epochReads.Load(), checks.inner.Stats()
+	peak1 := queries.peak.Load()
 	// Read before cancel, which would also end stepCtx: only the deadline
 	// passing counts as timing out.
 	timedOut := errors.Is(stepCtx.Err(), context.DeadlineExceeded)
@@ -413,7 +437,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	<-sampled
 	timings.report(t, n)
 
-	r := stepResult{scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: timedOut}
+	r := stepResult{scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: timedOut, peakAcquired: peak1, loopErrors: int64(loopErrs.n), posting: percentiles(postTimes)}
 	r.elapsed, r.countStatements = end.Sub(start), counts1-counts0
 	r.poolWait, r.poolEmpty = s1.EmptyAcquireWaitTime()-s0.EmptyAcquireWaitTime(), s1.EmptyAcquireCount()-s0.EmptyAcquireCount()
 	var delays []time.Duration
@@ -431,7 +455,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 		r.recounts += len(snapshots)
 		for i, seq := range seqs {
 			for _, snapshot := range snapshots {
-				if snapshot.covers(c.initial + int64(i+1)) {
+				if snapshot.covers(c.initial+int64(i+1), seq) {
 					delays = append(delays, snapshot.at.Sub(returned[seq]))
 					break
 				}
@@ -457,16 +481,19 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	}
 	// A delivery that lands before Post returns is a negative sample.
 	var latencies []time.Duration
+	var scheduledLatencies []time.Duration
 	var firstSlow time.Time
 	for _, d := range sink.all() {
 		if at, ok := returned[d.seq]; ok {
 			latencies = append(latencies, d.at.Sub(at))
+			scheduledLatencies = append(scheduledLatencies, d.at.Sub(due[d.seq]))
 			if d.at.Sub(at) > latencyLimit && (firstSlow.IsZero() || d.at.Before(firstSlow)) {
 				firstSlow = d.at
 			}
 		}
 	}
 	r.latency = percentiles(latencies)
+	r.scheduledLatency = percentiles(scheduledLatencies)
 
 	// What a failing step saw, and when. Offsets are from the first post.
 	seen := []string{"no empty acquire", "no delivery over " + latencyLimit.String(), "no stream loop failed"}
@@ -559,6 +586,7 @@ type epochCounter struct {
 	timings         *costTimings
 	epochReads      atomic.Int64
 	countStatements atomic.Int64
+	active, peak    atomic.Int64
 }
 
 func (c *epochCounter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {

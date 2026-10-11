@@ -136,16 +136,15 @@ diff's, and reviewed again:
 
 - a tier C pull request lifted to B or A gets its first review, and a tier
   A one without a completed Grok report gets Grok;
-- a tier A pull request with a completed Grok report gets **Muse Code**
-  when every commit since the **last Grok-reviewed head** only fixes
-  reported findings (after the adversarial follow-up check in
-  [reviewing](reviewing.md)), answers Copilot or the cross-review, or
-  merges `main` (what `main` brings was reviewed in its own pull request;
-  a conflict resolution beyond combining both sides counts as this pull
-  request's change); it gets **Grok again** when those commits — counted from
-  the last Grok review, however many Muse Code re-reviews came between —
-  add anything of A's first item beyond what a fix needs, or the
-  maintainer asks for Grok. When in doubt, Grok;
+- a tier A pull request with a completed Grok report gets **Grok again**
+  when the commits since the **last Grok-reviewed head** — however many
+  Muse Code re-reviews came between — add anything of A's first item
+  beyond what a fix of a reported finding needs (after the adversarial
+  follow-up check in [reviewing](reviewing.md)), or the maintainer asks;
+  otherwise **Muse Code**: fixes, answers to Copilot or the cross-review,
+  merges of `main` (what `main` brings was reviewed in its own pull
+  request; a conflict resolution beyond combining both sides counts as
+  this pull request's change) and tier B additions. When in doubt, Grok;
 - a tier B pull request gets Muse Code again.
 
 A pull request already marked ready is converted back to a draft until that

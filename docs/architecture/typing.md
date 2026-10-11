@@ -2,8 +2,8 @@
 
 `internal/typing` owns memory-only state per process, with no tables, store,
 wiring package, event kinds or HTML. It imports only kernel IDs and realtime's
-interest type for generation notifications. The summary contract is current
-(#784–#785); authorized ingress (#787), delivery
+interest type for generation notifications. Summaries and composer ordering are
+current (#784–#785, #813); authorized ingress (#787), delivery
 (#788) and page integration (#789–#790) are subsequent parts of #288.
 
 `Start` takes trusted organisation, channel, nonzero composing topic and member
@@ -12,7 +12,43 @@ identity (display name and handle); callers must resolve and authorize them.
 starts extend the five-second deadline, preserving captured identity, order
 and generations. Owner timers expire activity without reads; timer identity
 under the state lock prevents an already-running callback from clearing a
-refresh or a stopped/restarted activity. HTTP ingress and rendering follow.
+refresh or a stopped/restarted activity. HTTP ingress uses `Signal`, not `Start`.
+
+`IssueComposer` returns an opaque string signed with HMAC-SHA256 over the
+organisation, member, channel, topic and a fresh random nonce. Each rendered
+composer gets its own generation; issuance stores nothing. A random signing key
+is created with the state, held only in memory, never configured, logged or
+persisted. Invalid signatures and reuse in any other scope are refused. Tokens
+from before a process restart are refused; typing state is lost then anyway.
+The token is ordering evidence, not authorization: scope and identity are trusted
+server-resolved inputs, and callers still authorize them.
+
+`Signal` takes the generation and the caller's handling-start time. `Posted`
+takes the returned successful message's actual scope and its composer's
+generation. Under the same state lock, it closes that generation and stops the
+member's activity in exactly that organisation/member/channel/topic. Missing or
+invalid generations still stop that scope (posting can precede #789), but cannot
+close another scope's composer. Another tab's composer remains usable, and a new
+composer rendered after success can start typing again. A failed submission must
+not call `Posted`: its 422 re-render carries the submitted generation unchanged,
+so the successful retry closes signals sent before the failure (#787 → #789).
+
+Closures stay for `ClosedRetention` (one minute after the successful post), then
+owner timers remove them without viewer reads. This bounds storage to recent
+posts rather than every composer ever rendered. `SignalDeadline` is ten seconds
+from handling start to acceptance, checked under the mutation lock, including
+time waiting for it; equality is accepted, later or future-start signals change
+no activity, expiry deadline or visible generation. Ten seconds allows normal
+short handler work and rejects stalled processing; one minute gives a margin
+six times longer for post/signal reordering. `NewWithClock` injects the acceptance
+clock; owner timers use time's clock, virtual in `testing/synctest` tests.
+
+**Limit:** closed generations are refused only while retained. Once removed,
+an old correctly signed composer can signal again. This keeps long-open idle
+composers working without an age cutoff or periodic re-render. A pre-post request
+held outside the server for longer than a minute can therefore begin handling
+after cleanup and show typing until the five-second expiry. A request already
+being handled that long is refused by the shorter acceptance deadline.
 
 `Open` counts accepted streams by organisation, member and resolved channel.
 A signal without a matching stream creates no state. Interests and selected

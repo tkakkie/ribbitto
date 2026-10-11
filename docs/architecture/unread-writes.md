@@ -30,14 +30,19 @@ own five-second limit instead of the request's cancellation and deadline
 (`platform.InTxDetachedCommit`; within the ten-second shutdown grace), so a
 cancel while `COMMIT` is in flight cannot persist a read yet report failure
 (Grok on #837), and an unresponsive server holds the connection no longer than
-the limit before pgx closes it. A server's error reply means rollback: nothing
-is published. No reply within the limit (`platform.ErrCommitUnknown`) leaves
-the outcome unknown: Reading publishes anyway, since tabs only recount
-persisted state, and returns the error. Limits: such a publication may be
-spurious (one extra recount; a retried read may publish again), and a process
-that dies between commit and publication publishes nothing. Recovery is then
-the recount every stream does on (re)connect: option B has no bounded repair
-without reconnect (#711). Production passes nil until #711 activates delivery.
+the limit before pgx closes it. A server's error reply (rollback), a COMMIT
+never sent, and any failure while beginning or writing publish nothing. Only a
+COMMIT sent without a reply within the limit (`platform.ErrCommitUnknown`) of a
+read with `changed=true` publishes anyway, once, to the same organisation and
+member — the exception to #828's commit-then-publish rule, approved by the
+maintainer. That publication is a **recount request**, not a successful read:
+the request still fails with the error, and the tabs only recount persisted
+state, which is right whether or not the read committed. Limits: it may be
+spurious (the read did not commit; a retried read may publish again), it may
+reach tabs **before** the commit completes on the server, so their recount can
+still miss it, and a process that dies between commit and publication publishes
+nothing. Recovery in those cases is the recount every stream does on
+(re)connect: option B has no bounded repair without reconnect (#711). Production passes nil until #711 activates delivery.
 Concurrent feed/topic reads share the channel lock, including lock-row creation,
 so the same unread message cannot cause two publications. Posting discards the
 result and retains its existing

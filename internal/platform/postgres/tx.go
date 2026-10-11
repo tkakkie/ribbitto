@@ -30,9 +30,9 @@ func InTx(ctx context.Context, pool *pgxpool.Pool, fn func(Tx) error) error {
 }
 
 // ErrCommitUnknown wraps a commit error after which the server may or may not
-// have committed: no reply arrived (a timeout or a broken connection). A
-// server's own error reply means the transaction rolled back and is returned
-// unwrapped.
+// have committed: COMMIT was sent and no reply arrived (a timeout or a broken
+// connection). A server's error reply (a rollback) and a failure before COMMIT
+// was sent (never applied) are returned unwrapped.
 var ErrCommitUnknown = errors.New("commit outcome unknown")
 
 // InTxDetachedCommit is InTx, except that once fn succeeds COMMIT runs under
@@ -60,8 +60,14 @@ func InTxDetachedCommit(ctx context.Context, pool *pgxpool.Pool, limit time.Dura
 	commit, cancel := context.WithTimeout(context.WithoutCancel(ctx), limit)
 	defer cancel()
 	if err := tx.Commit(commit); err != nil {
+		// A server's error reply means the transaction rolled back; an error
+		// before COMMIT was sent means it was never applied. Only a COMMIT
+		// sent without a reply leaves the outcome unknown.
 		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 			return pgErr
+		}
+		if pgconn.SafeToRetry(err) {
+			return err
 		}
 		return fmt.Errorf("%w: %w", ErrCommitUnknown, err)
 	}

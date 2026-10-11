@@ -17,6 +17,10 @@ type TxRunner interface {
 
 // ReadPublisher receives effective reads after commit, independently of request cancellation.
 type ReadPublisher interface {
+	// ReadChanged asks the member's sidebars to recount persisted state. It
+	// is a recount request, not proof that a read committed: after a COMMIT
+	// with an unknown outcome it may describe a read that never committed,
+	// or arrive before the commit completes on the server.
 	ReadChanged(organization, member kernel.ID)
 }
 
@@ -57,11 +61,13 @@ func (r *Reading) Topic(ctx context.Context, scope TopicScope, joinedEventSeq, c
 	return err
 }
 
-// publish reports a changed read after a successful commit, and also when the
-// commit's outcome is unknown: the member's tabs then recount persisted state,
-// which is right whether or not the read committed, while silence could leave
-// them stale until they reconnect. A rollback or a server's error reply
-// publishes nothing.
+// publish requests a recount once per read: after a successful commit with
+// changed=true, and also when that COMMIT was sent and its outcome is unknown,
+// because the member's tabs recount persisted state, which is right whether or
+// not the read committed, while silence could leave them stale until they
+// reconnect. A rollback, a server's error reply, a COMMIT never sent and any
+// failure while beginning or writing publish nothing; the error is returned
+// as is, so the request still fails.
 func (r *Reading) publish(err error, changed bool, scope Scope) {
 	if changed && r.publisher != nil && (err == nil || errors.Is(err, platform.ErrCommitUnknown)) {
 		r.publisher.ReadChanged(scope.OrganizationID, scope.MemberID)

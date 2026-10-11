@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
@@ -85,12 +86,29 @@ func (w postReadWriter) Read(ctx context.Context, m org.Membership, channel kern
 		return unreadpg.WriterIn(w.tx).Merge(ctx, scope, joined, unread.Range{Lo: lo, Hi: hi})
 	}
 	ts := unread.TopicScope{Scope: scope, TopicID: *topic}
-	if _, err := newTopicWriter().Read(ctx, w.tx, ts, joined, *cursor); err != nil {
+	// Capture preparation only after TopicWriter validates the cursor. Both
+	// unions retain the same channel lock in this posting transaction.
+	var prepared unread.PreparedTopic
+	writer := unread.NewTopicWriter(
+		func(tx platform.Tx) func(context.Context, unread.TopicScope, int64) (unread.PreparedTopic, error) {
+			return func(ctx context.Context, scope unread.TopicScope, joined int64) (unread.PreparedTopic, error) {
+				p, err := unreadpg.WriterIn(tx).Prepare(ctx, scope, joined)
+				prepared = p
+				return p, err
+			}
+		},
+		func(tx platform.Tx) unread.TopicMessages {
+			return topicMessages{conversationpg.TopicReadCandidatesIn(tx)}
+		},
+		func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) },
+	)
+	if _, err := writer.Read(ctx, w.tx, ts, joined, *cursor); err != nil {
 		return err
 	}
-	prepared, err := unreadpg.WriterIn(w.tx).Prepare(ctx, ts, joined)
-	if err != nil {
-		return err
+	// TopicWriter.Read prepares before every successful return; fail rather
+	// than panic if that ever changes.
+	if prepared == nil {
+		return errors.New("posting topic read: page write returned without preparing")
 	}
 	return prepared.Add(ctx, []int64{lo}, []int64{hi}, floor)
 }

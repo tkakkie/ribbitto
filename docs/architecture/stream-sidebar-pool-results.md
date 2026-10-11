@@ -174,6 +174,7 @@ do not establish writer independence.
 
 PR 3 must explain the test-local loop's production gaps and mutation-check
 same-stream progress, stale-result rejection, cancellation, pre-send authorization,
-message IDs/order and id-free sidebar frames. PR 2 covers member fairness. Recommendation
+message IDs/order and id-free sidebar frames. PR 2 covers per-stream FIFO fairness;
+member-level fairness (several streams each) waits for PR 3. Recommendation
 requires controlled latency, posting progress and bounded-backlog evidence.
 The implementation issue remains a local Markdown draft.

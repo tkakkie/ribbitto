@@ -99,7 +99,7 @@ The endpoint takes:
 
 | Parameter | Meaning |
 |---|---|
-| `after` | the durable cursor; `Last-Event-ID` wins, as today |
+| `after` | the durable cursor; `Last-Event-ID` wins |
 | `want` | comma-separated interests, each at most once: `sidebar`, `messages`, `typing`, `presence`; anything else is 400 |
 | `channel` | the page's channel: required with `messages`, `typing` or `sidebar` (every page sends it; the sidebar's recount source is bound to it, so a sidebar stream without one would get no initial recount and is 400); with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
 | `topic` | optional with `messages`, `typing` or `sidebar`; requires `channel`, narrows messages/typing and retains sidebar selection; another organisation or channel is 404 |
@@ -129,25 +129,25 @@ The state, boundary and generation come from one locked read. Another process's
 token, a start below the boundary or over 100 changes require `reset` on connect
 or later; equality at the boundary is served. The presence adapter sends
 that reset without `id:`, ending the stream so the page reloads.
-Sidebar sources recount on connect and organisation-scoped posts/moves,
-regardless of message interest or place. Production member watches (#711)
-subscribe before recounting and release on exit. Capture the generation before
-each fresh snapshot; send or deny covers only that generation. Changes dirty
-one [fixed deadline](stream-limits.md) checked between batches and in the combined
-wait. Authorize organisation and bound member after rendering, immediately before
-sending. Frames omit `id:`; errors stop delivery. Reconnect recounts. Watches are
-single-process, wired to Reading. Multiple processes need shared invalidation
-and coordination; bounded recovery needs revisions/replay
-([contract](ephemeral-state.md#member-read-change-watches)).
+Sidebars recount on connect, posts/moves and the member's read advances,
+regardless of message interests. With a hub, Reading and watches share
+one `unread.Changes`; otherwise the publisher is nil. Subscribe before recounting;
+release on exit. Capture generations before each snapshot; send or deny covers
+only that generation. Changes dirty a [fixed deadline](stream-limits.md) checked
+between batches and in the combined wait. Authorize organisation and bound member
+after rendering, before sending. Frames omit `id:`; errors stop delivery. Reconnect recounts.
+[Short results](read-advance-results.md) record costs and acceptance. The
+[single-process contract](ephemeral-state.md#member-read-change-watches) and
+[unknown-COMMIT exception](unread-writes.md) limit recovery.
 Swap targets:
 
 | Event | `id:` | Where htmx puts it |
 |---|---|---|
-| `message`, `messages-moved` | the sequence | `#message-items`, as today |
+| `message`, `messages-moved` | the sequence | `#message-items` |
 | `sidebar` | none | whole sidebar lists and selected heading count, out of band (#818) |
 | `presence` | none | each member's indicator, out of band by its DOM id (#768) |
 | `typing` | none | `#typing-status` content replacement on latest feeds/topics (#790) |
-| `reset` | the cursor for durable reset; none for owner reset | the stream script reloads the page, as today |
+| `reset` | the cursor for durable reset; none for owner reset | the stream script reloads the page |
 
 `#organization-stream`, holding `sse-connect`, wraps the sidebar and conversation or members panel, because the htmx
 SSE extension attaches an `sse-swap` element to its closest ancestor with a

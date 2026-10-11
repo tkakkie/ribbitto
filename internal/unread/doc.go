@@ -9,7 +9,9 @@
 // after a successful commit with changed=true, or when the commit's outcome is
 // unknown (a recount is right either way); never after a rollback or an error reply.
 // Production shares one Changes registry with sidebar streams when the hub is wired;
-// without a hub the publisher is nil. Committed reads survive request cancellation.
+// without a hub the publisher is nil. Transaction completion has an independent
+// limit; an unknown-commit recount may precede persistence, so reconnect remains
+// the repair for that race or a lost process-local publication.
 // Posting and branching use only transaction-bound writers
 // and their durable message.posted notification, never the reading publisher.
 // Topic preparation and batch unions retain the channel lock in the caller's
@@ -23,5 +25,7 @@
 // combine it with an injected message counter in the same snapshot.
 // Process-local member change generations share wake channels only among active
 // watches of one organisation/member; releasing the last watch removes its state.
-// Persisted read state remains authoritative across subscription lifetimes.
+// Publication wakes only matching tabs; their full recounts retain per-tab costs.
+// Persisted read state remains authoritative across subscription lifetimes;
+// multiple processes need shared invalidation and subscription coordination.
 package unread

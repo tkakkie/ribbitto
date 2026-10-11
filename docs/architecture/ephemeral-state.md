@@ -1,6 +1,6 @@
 # Ephemeral state and generations
 
-How presence and typing reach streams as current state with a generation
+How presence, typing and member read invalidations reach streams with generations
 ([decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md));
 durable events are in [real time](realtime.md).
 
@@ -42,6 +42,10 @@ This registry is single-process. Reconnect recounts persisted state; an omitted
 notification has no bounded repair without reconnect. Multiple processes need
 cross-process member invalidation and a subscription/reconnect handshake; bounded
 missed-notification recovery additionally needs durable revisions or replay.
+The [short read measurements and acceptance](read-advance-results.md) attribute
+work to organisation/member keys. Healthy delivery converges by generation;
+unknown-COMMIT recounts and process loss retain the [reconnect exception](unread-writes.md).
+The durable watermark worker cannot repair a missing member invalidation.
 
 ## Ephemeral state
 

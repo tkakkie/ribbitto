@@ -53,8 +53,11 @@ transaction order and durable event notification; branching keeps `Merge`'s
 error-only entry point over the same locked union. Neither adapter calls the
 reading publisher; both retain their durable `message.posted` notification.
 `Merge` still delegates to `MergeCovered`: posting and branching also sort ranges
-and build the difference. #711's read/post cost measurements must compare this
-with #832's posting latency (the non-blocking note on #828).
+and build the difference. [Short matched measurements](read-advance-results.md)
+compare real posting/branching transactions and fragmented unions with the
+pre-coverage baseline (the non-blocking note on #828). Sorting/subtraction adds
+allocations without extra SQL. #832's overnight posting/delivery comparison
+follows separately; short measurements suffice for #711, not latency equivalence.
 
 A newly read message
 `m` adds `[p + 1, n)`, with `p` the channel's previous message (or 0) and

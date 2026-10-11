@@ -61,7 +61,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `hx-select`, `hx-select-oob` or a script refers to. Renaming one means
   updating every reference in the same pull request. Today's contract ids
   are `organization-stream`, `stream-sink`, `conversation`, `message-list`, `message-items`, `load-older`,
-  `message-body`, `message-composer`, `message-help`, `message-status`,
+  `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
   `read-form`, `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
@@ -69,7 +69,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `link-topic-<hex>` ids for focus restoration, `sidebar-channels`,
   `sidebar-topics` for whole lists and `topic-heading-count` for every topic heading, and `presence-<hex>` from `PresenceDOMID` for member indicators
   (32 lowercase hex digits). `#message-items` is always present,
-  including when empty; Load older selects its direct `<li>` children.
+  even when empty; Load older selects its direct `<li>` children.
 - **The data attributes that scripts read are a contract too,** with the
   same rule for renaming (#351). A missing one fails silently: without
   `data-oldest-seq`, the move handler throws after cancelling the SSE event,
@@ -133,7 +133,7 @@ JavaScript never generates HTML and never owns application state. It is
 limited to UX help that HTML and htmx handle poorly: focus, scroll,
 keyboard, local time, single-source selection constraints, and glue for SSE.
 
-- `message-stream-v8.js` emits `read-applied` only after successful DOM
+- `message-stream-v9.js` emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
   `read-visibility-v3.js` initializes on scoped `htmx:load` and watches that
   event and visibility. It copies the applied cursor (initially the form's

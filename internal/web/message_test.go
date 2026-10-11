@@ -404,10 +404,10 @@ func TestMessagePagingHandler(t *testing.T) {
 		wantTopic   string
 		wantPost    string
 	}{
-		{"latest with older", "", true, 200, 0, []string{`href="` + channelURL + `?before=7"`, `hx-get="` + channelURL + `?before=7"`, `hx-select-oob="#load-older"`, `id="load-older"`}, []string{"Jump to the newest"}, false, channelURL, "", channelURL},
+		{"latest with older", "", true, 200, 0, []string{`href="` + channelURL + `?before=7&amp;unread=0"`, `hx-get="` + channelURL + `?before=7&amp;unread=0"`, `hx-select-oob="#load-older"`, `id="load-older"`}, []string{"Jump to the newest"}, false, channelURL, "", channelURL},
 		{"latest without older", "", false, 200, 0, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before=", "Jump to the newest"}, false, channelURL, "", channelURL},
-		{"older page", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil, false, channelURL, "", ""},
-		{"older page with HX", "?before=40", true, 200, 40, []string{`?before=7"`, `>Jump to the newest messages</a>`}, nil, true, channelURL, "", ""},
+		{"older page", "?before=40", true, 200, 40, []string{`?before=7&amp;unread=0"`, `>Jump to the newest messages</a>`}, nil, false, channelURL, "", ""},
+		{"older page with HX", "?before=40", true, 200, 40, []string{`?before=7&amp;unread=0"`, `>Jump to the newest messages</a>`}, nil, true, channelURL, "", ""},
 		{"oldest page", "?before=8", false, 200, 8, []string{`>Jump to the newest messages</a>`, `<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before="}, false, channelURL, "", ""},
 		{"oldest page with HX", "?before=8", false, 200, 8, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before="}, true, channelURL, "", ""},
 		{"zero", "?before=0", false, 400, -1, nil, nil, false, channelURL, "", ""},
@@ -418,8 +418,8 @@ func TestMessagePagingHandler(t *testing.T) {
 		{"overflow", "?before=9223372036854775808", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"malformed escape", "?before=%ZZ", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"repeated with a malformed escape", "?before=5&before=%ZZ", false, 400, -1, nil, nil, false, channelURL, "", ""},
-		{"latest topic", "", true, 200, 0, []string{`href="` + topicURL + `?before=7"`, `hx-get="` + topicURL + `?before=7"`}, []string{"Jump to the newest"}, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
-		{"older topic", "?before=40", true, 200, 40, []string{`href="` + topicURL + `?before=7"`, `hx-get="` + topicURL + `?before=7"`, `>Jump to the newest messages</a>`}, nil, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
+		{"latest topic", "", true, 200, 0, []string{`href="` + topicURL + `?before=7&amp;unread=0"`, `hx-get="` + topicURL + `?before=7&amp;unread=0"`}, []string{"Jump to the newest"}, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
+		{"older topic", "?before=40", true, 200, 40, []string{`href="` + topicURL + `?before=7&amp;unread=0"`, `hx-get="` + topicURL + `?before=7&amp;unread=0"`, `>Jump to the newest messages</a>`}, nil, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64

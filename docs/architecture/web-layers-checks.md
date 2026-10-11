@@ -50,12 +50,13 @@ that a component makes no authorisation decision.
 ### Executed stream tests
 
 `TestMessageStreamBrowser` in `internal/web/message_stream_browser_test.go`
-runs the embedded `message-stream-v8.js`, vendored htmx and SSE extension
+runs the embedded `message-stream-v9.js`, vendored htmx and SSE extension
 in headless Chrome through go-rod. An HTTP test server renders real
 `ChannelScreen` and `MovedMessageItems` components without a database. Controlled
 SSE deliveries and history responses cover both topic sides, bounded
 insertion, duplicate replay, moves before/during Load older, stale/fresh
-swaps, and abort/400 followed by another request. Exact ordered ID lists
+swaps, removal of the moved first-unread message's divider, preservation on
+other moves, and abort/400 followed by another request. Exact ordered ID lists
 detect duplicates and gaps; waits use DOM/lifecycle conditions, not sleeps.
 
 Run `go test ./internal/web -run TestMessageStreamBrowser -v` with Chrome
@@ -110,7 +111,7 @@ application script in `web/static` was read against these rules, first on
 |---|---|---|
 | `view/channel.templ`: `ChannelPage.Messages` | The handler now converts app entries to `view.Message` values | #194; depguard `view` rule |
 | Composer script's `htmx:beforeSwap` made 422 responses swap | JavaScript decided what htmx swaps | #198: layout's htmx config |
-| `message-stream-v8.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
+| `message-stream-v9.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
 
 Everything else conforms:
 

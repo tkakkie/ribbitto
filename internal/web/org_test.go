@@ -247,8 +247,8 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		if err := pool.QueryRow(ctx, "SELECT event_seq FROM message WHERE organization_id = $1 AND topic_id = $2 AND body = 'topic-message-01'", acme, named.ID).Scan(&before); err != nil {
 			t.Fatal(err)
 		}
-		olderURL := fmt.Sprintf("%s?before=%d", topicURL, before)
-		if !strings.Contains(body, `href="`+olderURL+`"`) {
+		olderURL := fmt.Sprintf("%s?before=%d&unread=0", topicURL, before)
+		if !strings.Contains(body, `href="`+strings.ReplaceAll(olderURL, "&", "&amp;")+`"`) {
 			t.Fatal("paging link lost topic")
 		}
 		older := get("GET", olderURL, aliceToken, now)

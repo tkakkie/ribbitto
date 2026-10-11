@@ -101,7 +101,17 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		page.Before = before
 	}
-	p.render(w, r, m, id, http.StatusOK, page)
+	// An older-history link carries the visit's divider so its read POSTs cannot move it.
+	var firstUnread *int64
+	if raw, ok := query["unread"]; ok {
+		seq, err := strconv.ParseInt(raw[0], 10, 64)
+		if len(raw) != 1 || err != nil || seq < 0 || page.Before == 0 {
+			p.invalidQuery(w, r, m, id)
+			return
+		}
+		firstUnread = &seq
+	}
+	p.render(w, r, m, id, http.StatusOK, page, firstUnread)
 }
 
 // Preserve channel lookup errors ahead of malformed paging links, without a
@@ -147,10 +157,10 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 		serverError(w, r, "finding default channel", err)
 		return
 	}
-	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message})
+	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message}, nil)
 }
 
-func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage) {
+func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage, firstUnread *int64) {
 	var before *int64
 	if page.Before > 0 {
 		before = &page.Before
@@ -173,6 +183,13 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		page.Organization, page.DisplayName, page.Handle, page.Role = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
 		page.Current, page.Channels, page.Older = viewChannel(history.Current), viewChannels(history.Channels), history.Older
 		page.ChannelCounts, page.TopicCounts = history.ChannelCounts, history.TopicCounts
+		page.FirstUnread = history.FeedFirstUnread
+		if history.Topic != nil {
+			page.FirstUnread = history.TopicFirstUnread
+		}
+		if firstUnread != nil {
+			page.FirstUnread = *firstUnread
+		}
 		page.Reading = p.reading != nil
 		page.EventCursor, page.Topic, page.Topics = history.EventCursor, viewTopicPtr(history.Topic), viewTopics(history.Topics)
 		return view.ChannelScreen(url, page)
@@ -236,7 +253,7 @@ func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m o
 		templ.Handler(view.MessageComposer(page), templ.WithStatus(status)).ServeHTTP(w, r)
 		return
 	}
-	p.render(w, r, m, c.ID, status, page)
+	p.render(w, r, m, c.ID, status, page, nil)
 }
 
 // channelID parses the {channelID} path segment: the UUID in its canonical

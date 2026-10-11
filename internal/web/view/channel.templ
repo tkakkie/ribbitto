@@ -43,6 +43,8 @@ type ChannelPage struct {
 	BranchError, BranchName    string
 	Messages                   []Message
 	Members                    *MemberPage
+	// Composer preserves absence separately from an empty submitted value.
+	Composer *string
 	// PostedMessageID correlates a successful enhanced post with stream delivery.
 	PostedMessageID *kernel.ID
 	// Older reports that messages before Messages[0] exist.
@@ -275,6 +277,9 @@ templ MessageComposer(page ChannelPage) {
 		}
 		class="flex shrink-0 flex-col gap-2 border-t border-border p-4"
 	>
+		if page.Composer != nil {
+			<input type="hidden" name="composer" value={ *page.Composer }/>
+		}
 		if page.Before == 0 && page.EventCursor != nil {
 			<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		}

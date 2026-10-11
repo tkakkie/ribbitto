@@ -57,7 +57,14 @@ One key-to-command function maps Enter to `send` and Shift+Enter to `newline`,
 ignoring IME composition (`isComposing` or keyCode 229); one submit function
 uses the native form submission path through `requestSubmit`. The latest-page form uses
 htmx to replace only `#message-composer`, disabling its controls in flight.
-Older pages use a plain form. The script scrolls to the newest entry on load
+Older pages use a plain form. Every feed/topic composer, including older pages,
+submits a hidden server-issued `composer` generation scoped to the resolved
+organisation/member/channel and actual posting topic. A failed message post
+keeps that exact control value (or its absence) in both 422 fragments and full
+pages; successful replacement or redirect rendering issues a fresh generation.
+The post closes the submitted generation using the returned message's scope
+([`typing.md`](typing.md)). Input signaling follows in #789.
+The script scrolls to the newest entry on load
 and focuses the composer after its replacement. Scripts
 stay outside the replaced section; CSP and htmx evaluation remain unchanged.
 

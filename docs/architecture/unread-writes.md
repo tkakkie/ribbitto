@@ -116,9 +116,16 @@ get 404. Errors roll back the transaction. htmx receives 204; plain forms
 redirect to the same feed or topic. Latest pages carry their snapshot cursor;
 visibility triggers the first automatic POST and subsequent DOM applications
 advance it while visible. Hidden applications wait until visibility returns.
-htmx sends one reading POST at a time, then after success the newest shown cursor.
-Failure also sends a strictly newer shown cursor; resending the same cursor
-waits for the next visibility or application trigger. The same writers union
+htmx sends one reading POST at a time; newer applied cursors coalesce without
+queuing old requests. A 429 retries until success or hide, form removal or
+navigation, with one retry timer per page. Exponential backoff uses jitter and
+an initial, unmeasured 8-second cap; `Retry-After` (seconds or HTTP date) is a
+minimum even when longer. Success resets backoff and flushes newer shown work.
+Other failures still flush only a strictly newer cursor; the same cursor waits
+for another visibility or application trigger. Cleanup clears timers. With a
+healthy network/server and competing read load subsiding, visible pages converge
+without another user action, including after repeated refusals across 16 tabs;
+sustained overload has no convergence guarantee. The same writers union
 reordered requests from several tabs without losing read state.
 
 A cursor above the organisation's committed `event_seq` is refused, so any

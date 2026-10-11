@@ -49,6 +49,7 @@ Read the file for the area you change:
 | [`stream-sidebar-pool-results.md`](stream-sidebar-pool-results.md) | #832 part 1: long-run protocol, freshness and synchronous writer witness, connection budget; controlled measurements pending |
 | [`stream-sidebar-queue-results.md`](stream-sidebar-queue-results.md) | #832 PR 2: bounded fair scheduler, cancellation, completion mailbox and mutation evidence; test-only writer composition in PR 3 |
 | [`stream-sidebar-writer-results.md`](stream-sidebar-writer-results.md) | #832 PR 3: test-only single-writer composition, delivery between batches, audience/cursor safety, revocation and mutation evidence; production gaps |
+| [`stream-sidebar-arms-results.md`](stream-sidebar-arms-results.md) | #832 PR 4: fixed-budget comparison arms, aggregate pool/queue telemetry and backlog exclusion; controlled results pending |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |

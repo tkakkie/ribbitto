@@ -18,7 +18,9 @@ and `#id > tag`, including comma-separated lists; new syntax needs explicit
 test support. Non-id targets `this`, `closest …` and `find …` are allowed;
 any ids they name are still checked in the page. The composer's
 `hx-disabled-elt="find textarea, find button"` and `hx-sync="this:drop"`
-are not swap selectors.
+are not swap selectors. The real sibling typing form is checked for its POST
+route, matching action/method, generation-only controls, no-swap and empty 204;
+other requests retain the existing response and fallback checks.
 
 The data attributes in the DOM contract are asserted on the elements that
 own them, where they are produced (#351): `TestMessagePagingHandler` on full
@@ -58,6 +60,11 @@ insertion, duplicate replay, moves before/during Load older, stale/fresh
 swaps, removal of the moved first-unread message's divider, preservation on
 other moves, and abort/400 followed by another request. Exact ordered ID lists
 detect duplicates and gaps; waits use DOM/lifecycle conditions, not sleeps.
+
+Composer cases run real signal/post handlers with request and DOM gates: IME,
+input throttling, draft isolation, independent in-flight signals, 422/retry,
+replacement, closed/fresh generations and plain feed/topic posts (latest/older).
+The harness controls only the two-second throttle timer, without sleeps.
 
 Run `go test ./internal/web -run TestMessageStreamBrowser -v` with Chrome
 installed. No browser is downloaded. Missing or unlaunchable browsers skip

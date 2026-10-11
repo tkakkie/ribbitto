@@ -29,12 +29,12 @@ to view models, and choose the status, component and full page or fragment. They
 
 Components render view models defined in `internal/web/view`. They do not
 receive module or use-case types: handlers convert those. View
-models own their `Organization` (`Slug`, `Name`), `Channel` (`ID`, `Name`)
-and `Topic` (`ID`, `Name`, `IsDefault`); handlers convert from `org` and the
-use cases, and views import neither `org` nor `conversation`. From `kernel`
+models own their `Organization` (`Slug`, `Name`), `Channel` (`ID`, `DefaultTopicID`, `Name`)
+and `Topic` (`ID`, `Name`, `IsDefault`). Views import neither `org` nor
+`conversation`. From `kernel`
 they hold only `kernel.ID`, which carries no behaviour a template could
 misuse. Components do no I/O and
-make no authorisation decisions; presentation logic (building URLs,
+make no authorisation decisions; display logic (building URLs,
 formatting, choosing an i18n message ID) belongs in them.
 
 ## htmx
@@ -43,15 +43,18 @@ htmx does only requests and swaps; the server and templ own the HTML.
 
 - A normal request gets a full page. Selecting part of a server-rendered
   full page with `hx-select` is allowed; Load older does this today.
-  Enhanced posts return only the `MessageComposer` fragment. On success its
+  Enhanced posts return `MessageComposer`: the message form plus hidden sibling
+  `typing-form`, refreshed out of band with the same generation. Signals use the
+  actual posting topic's `/typing` POST, `typing-input throttle:2s queue:none`,
+  independent `this:drop` synchronization and no swap. Input/IME glue only triggers
+  htmx. On success the message form's
   `data-posted-message` carries the posted message's DOM id; errors omit it.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
-  `message-composer-v4.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v5.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one.
-  Fragment responses echo the submitted cursor, never the new post's sequence;
-  only successful stream application advances the outer cursor. The action URL
+  Fragments echo the submitted cursor; only stream application advances it. The action URL
   identifies the feed/topic scope. The stream script consumes that id to scroll once the item is present,
   regardless of response/delivery order or a reconnect.
 - A unit that M3's SSE needs becomes an explicit templ fragment or
@@ -61,19 +64,16 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `hx-select`, `hx-select-oob` or a script refers to. Renaming one means
   updating every reference in the same pull request. Today's contract ids
   are `organization-stream`, `stream-sink`, `conversation`, `message-list`, `message-items`, `load-older`,
-  `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
+  `typing-form`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
   `read-form`, `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
   `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and
   `link-topic-<hex>` ids for focus restoration, `sidebar-channels`,
   `sidebar-topics` for whole lists and `topic-heading-count` for every topic heading, and `presence-<hex>` from `PresenceDOMID` for member indicators
-  (32 lowercase hex digits). `#message-items` is always present,
-  even when empty; Load older selects its direct `<li>` children.
+  (32 lowercase hex digits). Load older selects `#message-items > li`.
 - **The data attributes that scripts read are a contract too,** with the
-  same rule for renaming (#351). A missing one fails silently: without
-  `data-oldest-seq`, the move handler throws after cancelling the SSE event,
-  so the move is neither applied nor swapped. Besides `data-event-cursor`,
+  same renaming rule (#351). Besides `data-event-cursor`,
   `data-posted-message` and `data-announcement` (described in this section):
 
   | Attribute | On | Present | Meaning |
@@ -131,7 +131,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
 
 JavaScript never generates HTML and never owns application state. It is
 limited to UX help that HTML and htmx handle poorly: focus, scroll,
-keyboard, local time, single-source selection constraints, and glue for SSE.
+keyboard, local time, selection constraints, and htmx/SSE input glue.
 
 - `message-stream-v9.js` emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.

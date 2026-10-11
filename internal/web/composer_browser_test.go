@@ -67,6 +67,9 @@ func testComposerWithoutJavaScript(t *testing.T, browser *rod.Browser) {
 				if token == nil || *token == "" {
 					t.Fatal("missing browser generation")
 				}
+				if signal := page.MustElement(`#typing-form input[name="composer"]`).MustAttribute("value"); signal == nil || *signal != *token {
+					t.Fatal("plain page's sibling form has a different generation")
+				}
 				page.MustElement("#message-body").MustInput("plain browser post")
 				if signals.Load() != 0 {
 					t.Fatal("input sent a typing request")

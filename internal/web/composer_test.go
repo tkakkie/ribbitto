@@ -84,6 +84,15 @@ func composerForm(t *testing.T, w *httptest.ResponseRecorder) (string, url.Value
 				values.Add(attr(n, "name"), text(n))
 			}
 		}
+		for signal := range doc.Descendants() {
+			if attr(signal, "id") != "typing-form" {
+				continue
+			}
+			control := find(signal, atom.Input)
+			if (control != nil) != values.Has("composer") || (control != nil && attr(control, "value") != values.Get("composer")) {
+				t.Fatal("sibling signal generation differs from post controls")
+			}
+		}
 		return attr(form, "action"), values
 	}
 	t.Fatal("missing composer form")
@@ -239,6 +248,51 @@ func TestComposerPostLifecycle(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+func TestTypingComposerMarkup(t *testing.T) {
+	for _, topic := range []bool{false, true} {
+		for _, older := range []bool{false, true} {
+			t.Run(fmt.Sprintf("topic=%t/older=%t", topic, older), func(t *testing.T) {
+				h, _, _, place := composerHandler(t, topic)
+				path := view.ConversationURL("acme", place.Channel, nil)
+				if topic {
+					path = view.ConversationURL("acme", place.Channel, &place.Topic)
+				}
+				if older {
+					path += "?before=40"
+				}
+				w := serveForm(h, "GET", path, "live", nil)
+				_, controls := composerForm(t, w)
+				doc, err := html.Parse(strings.NewReader(w.Body.String()))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var signal, message *html.Node
+				for n := range doc.Descendants() {
+					switch attr(n, "id") {
+					case "typing-form":
+						signal = n
+					case "message-composer":
+						message = n
+					}
+				}
+				want := view.ConversationURL("acme", place.Channel, &place.Topic) + "/typing"
+				if signal == nil || message == nil || signal.Parent != message.Parent || attr(signal, "hx-post") != want || attr(signal, "hx-trigger") != "typing-input throttle:2s queue:none" || attr(signal, "hx-sync") != "this:drop" || attr(signal, "hx-swap-oob") != "outerHTML" {
+					t.Fatal("wrong signal scope, replacement or request coordination")
+				}
+				if _, hidden := attrOK(signal, "hidden"); !hidden || attr(find(signal, atom.Input), "value") != controls.Get("composer") || find(signal, atom.Textarea) != nil || find(signal, atom.Button) != nil {
+					t.Fatal("signal form exposed controls or a different generation")
+				}
+				for _, problem := range checkFallbackURLs(doc) {
+					t.Error(problem)
+				}
+				for _, lang := range []string{"en", "ja"} {
+					checkHTMXRequests(t, h, doc, lang, true)
+				}
+			})
 		}
 	}
 }

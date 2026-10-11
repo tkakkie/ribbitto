@@ -110,7 +110,9 @@ loaded scope, with no additional queries. Latest and older pages submit the
 hidden `composer` control. A 422 fragment or full page keeps the submitted value
 exactly, including empty/invalid values; a missing control stays absent. Success
 issues a fresh generation in the enhanced replacement or plain redirect's page.
-Input sends no typing requests yet (#789); both forms work without JavaScript.
+The hidden sibling signal form uses the same generation and actual posting topic.
+Versioned input glue triggers htmx, throttled to two seconds without queued signals.
+Message posting works without JavaScript; input then sends no signals.
 Production shares the stream state and one limiter.
 
 ## Production delivery

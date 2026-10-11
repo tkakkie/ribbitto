@@ -15,6 +15,13 @@
     event.preventDefault();
     if (!event.repeat && !event.target.disabled) submit(event.target.form);
   });
+  const signal = (event) => {
+    if (event.target.id !== "message-body" || event.isComposing) return;
+    const form = document.getElementById("typing-form");
+    if (form && event.target.value.trim()) htmx.trigger(form, "typing-input");
+  };
+  document.addEventListener("input", signal);
+  document.addEventListener("compositionend", signal);
   const newest = () => {
     const list = document.getElementById("message-list");
     if (list) list.scrollTop = list.scrollHeight;

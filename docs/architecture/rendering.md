@@ -52,7 +52,7 @@ rewrite them. Invalid dates retain their fallback, as do all timestamps
 when JavaScript is disabled.
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v4.js` also loads with the response nonce on channel pages.
+`message-composer-v5.js` also loads with the response nonce on channel pages.
 One key-to-command function maps Enter to `send` and Shift+Enter to `newline`,
 ignoring IME composition (`isComposing` or keyCode 229); one submit function
 uses the native form submission path through `requestSubmit`. The latest-page form uses
@@ -63,7 +63,15 @@ organisation/member/channel and actual posting topic. A failed message post
 keeps that exact control value (or its absence) in both 422 fragments and full
 pages; successful replacement or redirect rendering issues a fresh generation.
 The post closes the submitted generation using the returned message's scope
-([`typing.md`](typing.md)). Input signaling follows in #789.
+([`typing.md`](typing.md)). The hidden sibling `#typing-form` carries only that
+generation to the resolved posting topic's `/typing` route, with matching plain/enhanced POST URLs,
+`hx-trigger="typing-input throttle:2s queue:none"`, `hx-sync="this:drop"` and
+`hx-swap="none"`. Composer responses replace it out of band alongside the message
+form, keeping their generations equal. Each form coordinates its own requests;
+signals cannot disable the message controls or block submission. Delegated input
+and composition-end listeners trigger htmx for nonblank drafts, suppressing
+composing input. They survive replacement without storing drafts or sending
+requests themselves. Without scripts, this hidden form sends nothing.
 The script scrolls to the newest entry on load
 and focuses the composer after its replacement. Scripts
 stay outside the replaced section; CSP and htmx evaluation remain unchanged.

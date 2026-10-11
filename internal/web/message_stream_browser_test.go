@@ -40,6 +40,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 	t.Cleanup(launch.Kill)
 	browser := rod.New().ControlURL(url).MustConnect()
 	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	t.Run("composer/typing", func(t *testing.T) { testTypingComposerBrowser(t, browser) })
 	t.Run("composer/no-javascript", func(t *testing.T) { testComposerWithoutJavaScript(t, browser) })
 	t.Run("unread-divider", func(t *testing.T) { testUnreadDividerBrowser(t, browser) })
 	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
@@ -277,8 +278,12 @@ func TestMessageStreamBrowser(t *testing.T) {
 			}
 			page.MustWait(`cursor => window.testSource && document.querySelector('#organization-stream').dataset.eventCursor === cursor`, want)
 			if name == "feed" {
-				page.MustEval(`() => { document.addEventListener('htmx:afterSettle', e => {
-     if (e.detail.target.id === 'message-composer') document.body.dataset.posts = String(+(document.body.dataset.posts || 0) + 1);
+				// The composer response also swaps its sibling typing form out of band,
+				// which settles a second time for the same request: count requests.
+				page.MustEval(`() => { const settled = new WeakSet(); document.addEventListener('htmx:afterSettle', e => {
+     if (e.detail.target.id !== 'message-composer' || settled.has(e.detail.xhr)) return;
+     settled.add(e.detail.xhr);
+     document.body.dataset.posts = String(+(document.body.dataset.posts || 0) + 1);
     }); }`)
 				for n := 1; n <= 2; n++ {
 					page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)

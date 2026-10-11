@@ -17,8 +17,9 @@ type Organization struct {
 
 // Channel holds the channel fields a channel page displays.
 type Channel struct {
-	ID   kernel.ID
-	Name string
+	ID             kernel.ID
+	DefaultTopicID kernel.ID
+	Name           string
 }
 
 // Topic holds the topic fields a channel page displays.
@@ -78,6 +79,14 @@ func conversationURL(page ChannelPage) string {
 		id = &page.Topic.ID
 	}
 	return ConversationURL(page.Organization.Slug, page.Current.ID, id)
+}
+
+func typingURL(page ChannelPage) string {
+	topic := page.Current.DefaultTopicID
+	if page.Topic != nil {
+		topic = page.Topic.ID
+	}
+	return ConversationURL(page.Organization.Slug, page.Current.ID, &topic) + "/typing"
 }
 
 func topicName(ctx context.Context, topic Topic) string {
@@ -240,7 +249,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 			<script defer src="/static/read-visibility-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-			<script defer src="/static/message-composer-v4.js" nonce={ templ.GetNonce(ctx) }></script>
+			<script defer src="/static/message-composer-v5.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		}
 		<script defer src="/static/message-stream-v9.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -259,7 +268,7 @@ templ unreadDivider(seq, firstUnread int64) {
 	}
 }
 
-// MessageComposer renders the posting form, alone for enhanced submissions.
+// MessageComposer refreshes both sibling forms after enhanced submissions.
 templ MessageComposer(page ChannelPage) {
 	<form
 		id="message-composer"
@@ -292,6 +301,24 @@ templ MessageComposer(page ChannelPage) {
 			<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
 		}
 		<button type="submit" class="min-h-11 self-end rounded-md bg-brand px-4 py-2 font-semibold text-on-brand">{ i18n.T(ctx, "message.send") }</button>
+	</form>
+	// A sibling isolates signal controls and synchronization from submission.
+	<form
+		id="typing-form"
+		hidden
+		method="post"
+		action={ typingURL(page) }
+		hx-swap-oob="outerHTML"
+		if page.Composer != nil {
+			hx-post={ typingURL(page) }
+			hx-trigger="typing-input throttle:2s queue:none"
+			hx-sync="this:drop"
+			hx-swap="none"
+		}
+	>
+		if page.Composer != nil {
+			<input type="hidden" name="composer" value={ *page.Composer }/>
+		}
 	</form>
 }
 

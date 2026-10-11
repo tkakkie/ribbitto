@@ -17,6 +17,11 @@ global caching. Cleanup closes the pool before dropping the database with
 `WITH (FORCE)`. `pgtest.NewEmpty(t)` clones `template0` for migration tests,
 and `pgtest.NewMigrator(t, pool)` moves it to a version with `UpTo`, `Up`,
 `Down` and `DownTo`, failing the test on any error.
+Both pools allow `pgtest.MaxConns` (16) connections, fixed rather than
+pgxpool's CPU-dependent default (at least 4), so a test behaves the same on a
+two-CPU CI runner as locally (#849); connections still open on demand. A test
+that needs more copies `pool.Config()`, sets `MaxConns` and builds its own pool
+with `pgxpool.NewWithConfig`; a pool built from `pool.Config()` inherits 16.
 The `cmd/ribbitto` acceptance tests also start from `pgtest.NewEmpty`, apply
 the platform's `Migrate` as the CLI does, and serve the shared production handler
 on HTTPS with cookie jars. They verify the account flow, request protections,

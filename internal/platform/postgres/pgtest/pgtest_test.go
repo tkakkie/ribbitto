@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestIsolationAndCleanup(t *testing.T) {
@@ -163,5 +164,24 @@ func assertPublished(t *testing.T, admin *pgx.Conn, name string) {
 	require(t, admin.QueryRow(t.Context(), "SELECT datistemplate, datallowconn FROM pg_database WHERE datname = $1", name).Scan(&template, &allow))
 	if !template || allow {
 		t.Fatalf("template flags: datistemplate=%t datallowconn=%t", template, allow)
+	}
+}
+
+// Both helpers' pools, and a pool built from their Config, have the fixed limit
+// whatever the machine's CPU count.
+func TestPoolMaxConns(t *testing.T) {
+	for name, newPool := range map[string]func(*testing.T) *pgxpool.Pool{"New": New, "NewEmpty": NewEmpty} {
+		t.Run(name, func(t *testing.T) {
+			pool := newPool(t)
+			if pool.Config().MaxConns != MaxConns || pool.Stat().MaxConns() != MaxConns {
+				t.Fatalf("Config().MaxConns=%d Stat().MaxConns()=%d, want %d", pool.Config().MaxConns, pool.Stat().MaxConns(), MaxConns)
+			}
+			derived, err := pgxpool.NewWithConfig(t.Context(), pool.Config())
+			require(t, err)
+			defer derived.Close()
+			if derived.Stat().MaxConns() != MaxConns {
+				t.Fatalf("derived pool MaxConns=%d, want %d", derived.Stat().MaxConns(), MaxConns)
+			}
+		})
 	}
 }

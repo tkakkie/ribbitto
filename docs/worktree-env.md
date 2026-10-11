@@ -36,11 +36,12 @@ and pool limits. Each check runs in its own process group, killed on cleanup.
 Output stays in a 0600 `bin/ai-capacity-*.log` in each worktree; logs may contain
 credentials, so do not share them. The report never prints URLs. The runner
 reuses the inherited/default module cache and GOPATH. SQL pools are unbounded
-(0); pgx pools use pgx's default, max(4, CPUs). The admin URL cannot carry
+(0); `pgtest` pools allow a fixed 16 (`pgtest.MaxConns`, #849), and other pgx
+pools use pgx's default, max(4, CPUs). The admin URL cannot carry
 `pool_max_conns`: pgtest's admin connection is plain pgx, which would send it to
 the server as a setting.
 
-Measured on 2026-10-09 (10 CPUs, pgx pools of 10): two uncached required-DB
+Measured on 2026-10-09, before #849 (10 CPUs, pgx pools of 10): two uncached required-DB
 `make check` runs at `-p 2 -parallel 10` both passed, peaking at 49 client
 backends of `max_connections` 100, with no 53300. A second run at that setting
 confirmed it (peak 38/100, no 53300). The shared server therefore keeps

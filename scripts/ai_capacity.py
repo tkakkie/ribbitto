@@ -82,11 +82,11 @@ def stop_group(worker):
     return members == []
 
 def measure(roots, packages, parallel):
-    cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
     report = dict(packages=packages, parallel=parallel, count=1, require_db=1,
-                  # pgtest's admin connection is plain pgx, which would send a
-                  # pool_max_conns URL key to the server, so pools keep pgx's default.
-                  pgx_pool_max_conns=max(4, cpus),
+                  # pgtest fixes its pools' limit in code (pgtest.MaxConns, #849);
+                  # the admin URL cannot carry pool_max_conns, which plain pgx
+                  # would send to the server as a setting.
+                  pgx_pool_max_conns=16,
                   migration_pool_max_open=0, admin_connections_per_pgtest_call=1)
     workers, outputs, stopped, unconfirmed = [], [], set(), []
 

@@ -22,6 +22,13 @@ import (
 
 const templateLock = 0x726962626974746f
 
+// MaxConns is every test pool's connection limit, fixed instead of pgxpool's
+// default (the CPU count, at least 4): CI's two-CPU runners got 4, so a test
+// holding five connections waited until it timed out (#844, #849). Pools open
+// connections on demand, so an ordinary test still uses one or two. A test
+// that needs more copies its pool's Config and sets MaxConns there.
+const MaxConns = 16
+
 // New returns a pool on a fresh clone of the migrated template.
 func New(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -140,6 +147,7 @@ func newDatabase(t *testing.T, migrated bool) *pgxpool.Pool {
 	config, err := pgxpool.ParseConfig(admin.Config().ConnString())
 	require(t, err)
 	config.ConnConfig.Database = name
+	config.MaxConns = MaxConns
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	require(t, err)
 	// Cleanup is LIFO: close all pool connections before dropping the database.

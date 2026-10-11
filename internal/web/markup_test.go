@@ -481,6 +481,12 @@ func checkHTMXRequests(t *testing.T, handler http.Handler, page *html.Node, lang
 						}
 						w := httptest.NewRecorder()
 						handler.ServeHTTP(w, r)
+						if attr(element, "id") == "typing-form" {
+							if method != "POST" || !strings.HasSuffix(path, "/typing") || element.DataAtom != atom.Form || attr(element, "method") != "post" || attr(element, "action") != path || attr(element, "hx-swap") != "none" || len(form) != 1 || len(form["composer"]) != 1 || form.Get("composer") == "" || w.Code != 204 || w.Body.Len() != 0 {
+								t.Fatalf("invalid typing form/no-swap response: %s, %v, %d", path, form, w.Code)
+							}
+							return
+						}
 						// Only the composer's unsubmitted draft POST may be invalid (422);
 						// paging GETs and valid posts must succeed.
 						draftPost := method == "POST" && !submit

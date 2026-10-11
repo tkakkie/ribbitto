@@ -48,6 +48,9 @@ import (
 //	                               of one member for every stream
 //	RIBBITTO_STREAM_COST_SIDEBAR   1: per-member live counts; needs distinct
 //	                               members and at most 99 posts per step
+//	RIBBITTO_STREAM_COST_ATTRIBUTION 1: acquire, statement and snapshot timing
+//	RIBBITTO_STREAM_COST_RECOUNTS  positive shared concurrent recount limit;
+//	                               unset is unbounded, needs sidebar mode
 //	RIBBITTO_STREAM_COST_STAGGER   a window: stream i of N waits i*window/N
 //	                               after its render, before its check (#671);
 //	                               needs _MEMBERS=distinct
@@ -82,6 +85,13 @@ func TestStreamCost(t *testing.T) {
 	}
 
 	sidebar := os.Getenv("RIBBITTO_STREAM_COST_SIDEBAR") == "1"
+	var recountSlots chan struct{}
+	if os.Getenv("RIBBITTO_STREAM_COST_RECOUNTS") != "" {
+		if !sidebar {
+			t.Fatal("RIBBITTO_STREAM_COST_RECOUNTS needs sidebar mode")
+		}
+		recountSlots = make(chan struct{}, envInts(t, "RIBBITTO_STREAM_COST_RECOUNTS", nil)[0])
+	}
 	if sidebar && !validCostSidebar(os.Getenv("RIBBITTO_STREAM_COST_MEMBERS") == "distinct", scheduledPosts(rate, duration)) {
 		t.Fatal("sidebar measurement needs distinct members and at most 99 posts per step (uncapped drain proof)")
 	}
@@ -120,6 +130,9 @@ func TestStreamCost(t *testing.T) {
 		config.MaxConns = int32(n)
 	}
 	queries := &epochCounter{QueryCounter: platform.NewQueryCounter()}
+	if os.Getenv("RIBBITTO_STREAM_COST_ATTRIBUTION") == "1" {
+		queries.timings = &costTimings{}
+	}
 	config.ConnConfig.Tracer = queries
 	pool, err := pgxpool.NewWithConfig(t.Context(), config)
 	if err != nil {
@@ -132,7 +145,7 @@ func TestStreamCost(t *testing.T) {
 	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, hub)
 	// dbReads counts reads that reach the database (empty ones included);
 	// loopReads counts the loops' reads, which the cache may answer.
-	dbReads := &countingReader{inner: realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t))}
+	dbReads := &countingReader{inner: realtimepg.NewReader(pool, orgpg.BoundsIn, eventKinds(t)), trace: true}
 	var inner realtime.EventReader = dbReads
 	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, costPageCountsIn)
 	renderer := readingRenderer{messages: reader, membership: m}
@@ -149,6 +162,7 @@ func TestStreamCost(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("PostgreSQL %s; sidebar %t; interval %s", postgresVersion, sidebar, realtime.SidebarInterval)
+	t.Logf("attribution %t; concurrent recount limit %d (0=unbounded)", queries.timings != nil, cap(recountSlots))
 	t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step; cache %t; distinct members %t; stagger window %s",
 		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration, cached, distinct, stagger)
 	t.Log("| streams | posts scheduled/completed/missed | deliveries | queries/post | tx statements/post | empty reads/post | queries/delivery | tx statements/delivery | empty reads/delivery | mean empty-acquire wait | empty-acquire wait/delivery | p50 | p95 | p99 | result |")
@@ -168,6 +182,9 @@ func TestStreamCost(t *testing.T) {
 		var connections []*costConnection
 		if sidebar {
 			connections = costConnections(t, pool, posting, reader, members[:n], subs[0].Channel, fixture.Channel.DefaultTopicID)
+			for _, c := range connections {
+				c.timings, c.slots = queries.timings, recountSlots
+			}
 		}
 		r := measureStep(t, stream, posting, pool, queries, checks, loopReads, dbReads, m, subs, n, rate, duration, stagger, connections)
 		if sidebar {
@@ -314,6 +331,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	for _, c := range connections {
 		c.reset()
 	}
+	queries.timings.reset()
 	counts0 := queries.countStatements.Load()
 	q0, s0, empty0, epochs0, a0 := queries.Counts(), pool.Stat(), dbReads.empty.Load(), queries.epochReads.Load(), checks.inner.Stats()
 	// Posts are scheduled at the fixed rate whatever their latency (an open
@@ -384,6 +402,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 		time.Sleep(10 * time.Millisecond)
 	}
 	end := time.Now()
+	timings := queries.timings.take()
 	counts1 := queries.countStatements.Load()
 	q1, s1, empty1, epochs1, a1 := queries.Counts(), pool.Stat(), dbReads.empty.Load(), queries.epochReads.Load(), checks.inner.Stats()
 	// Read before cancel, which would also end stepCtx: only the deadline
@@ -392,6 +411,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	cancel()
 	wg.Wait()
 	<-sampled
+	timings.report(t, n)
 
 	r := stepResult{scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: timedOut}
 	r.elapsed, r.countStatements = end.Sub(start), counts1-counts0
@@ -514,7 +534,7 @@ type timingAuthorizer struct {
 
 func (a *timingAuthorizer) MayReceive(ctx context.Context, account kernel.ID, slug string, e realtime.Event) (bool, error) {
 	start := time.Now()
-	ok, err := a.inner.MayReceive(ctx, account, slug, e)
+	ok, err := a.inner.MayReceive(context.WithValue(ctx, costRoleKey{}, costAuth), account, slug, e)
 	took := time.Since(start)
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -536,11 +556,13 @@ func (a *timingAuthorizer) take() []time.Duration {
 // production code needs no hook.
 type epochCounter struct {
 	*platform.QueryCounter
+	timings         *costTimings
 	epochReads      atomic.Int64
 	countStatements atomic.Int64
 }
 
 func (c *epochCounter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	ctx = c.timings.queryStart(ctx, data.SQL)
 	if strings.HasPrefix(data.SQL, "-- name: GetAccessEpoch ") {
 		c.epochReads.Add(1)
 	}
@@ -555,10 +577,14 @@ func (c *epochCounter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data
 // countingReader counts reads, and reads that returned nothing.
 type countingReader struct {
 	inner        realtime.EventReader
+	trace        bool
 	calls, empty atomic.Int64
 }
 
 func (c *countingReader) EventsAfter(ctx context.Context, org kernel.ID, after int64, limit int) ([]realtime.Event, error) {
+	if c.trace {
+		ctx = context.WithValue(ctx, costRoleKey{}, costEvents)
+	}
 	events, err := c.inner.EventsAfter(ctx, org, after, limit)
 	c.calls.Add(1)
 	if err == nil && len(events) == 0 {

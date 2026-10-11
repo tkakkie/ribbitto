@@ -73,11 +73,15 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 }
 
 type fakeChannels struct {
+	channels                               []conversation.Channel
 	createErr, defaultErr, getErr, listErr error
 	created                                string
 }
 
 func (f *fakeChannels) list(context.Context, org.Membership) ([]conversation.Channel, error) {
+	if f.channels != nil {
+		return f.channels, f.listErr
+	}
 	return []conversation.Channel{{ID: kernel.ID{1}, Name: "雑談 <script>alert(1)</script>", IsDefault: true}, {ID: kernel.ID{2}, Name: "Other"}}, f.listErr
 }
 func (f *fakeChannels) Get(ctx context.Context, m org.Membership, id kernel.ID) (conversation.Channel, error) {

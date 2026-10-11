@@ -15,6 +15,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -42,6 +43,8 @@ type TopicLookup interface {
 }
 
 type channelPages struct {
+	typing    *typing.State
+	limiter   *middleware.MemberRateLimiter
 	reading   Reading
 	branching Branching
 	topics    TopicLookup
@@ -204,6 +207,9 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		posted, err = p.posting.PostToTopic(r.Context(), m, c.ID, p.topicID, body)
 	} else {
 		posted, err = p.posting.PostFromPage(r.Context(), m, c.ID, p.topicID, body, *cursor)
+	}
+	if err == nil && p.typing != nil {
+		p.typing.Posted(posted.OrganizationID, typing.Place{Channel: posted.ChannelID, Topic: posted.TopicID}, posted.MemberID, r.PostForm.Get("composer"))
 	}
 	switch {
 	case errors.Is(err, conversation.ErrInvalidPostCursor):

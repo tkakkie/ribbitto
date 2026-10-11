@@ -13,6 +13,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
@@ -56,7 +57,8 @@ func TestReadPost(t *testing.T) {
 	// A different organisation's higher committed sequence must not permit S=6.
 	_, err := pool.Exec(ctx, "UPDATE organization SET event_seq=100,event_log_boundary_seq=100 WHERE id=$1", foreign.OrganizationID)
 	feedRequire(t, err)
-	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{})
+	hub := realtime.NewHub()
+	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{hub: hub})
 	feedRequire(t, err)
 	token, _, err := sessions.Create(ctx, f.AccountID)
 	feedRequire(t, err)
@@ -76,6 +78,17 @@ func TestReadPost(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, r)
 		return w
+	}
+	// Production route callers share one budget even across channels and topics.
+	for i, place := range [][2]kernel.ID{{f.Channel.ID, f.Channel.DefaultTopicID}, {other.ID, other.DefaultTopicID}, {f.Channel.ID, topic.ID}, {other.ID, other.DefaultTopicID}, {f.Channel.ID, topic.ID}} {
+		w := request("POST", view.ConversationURL("read", place[0], &place[1])+"/typing", token, "", url.Values{"composer": {"invalid"}}, i%2 == 0)
+		want := 204
+		if i == 4 {
+			want = 429
+		}
+		if w.Code != want || w.Body.Len() != 0 {
+			t.Fatalf("production typing caller %d: %d %s", i, w.Code, w.Body.String())
+		}
 	}
 	for _, base := range []string{feed, topicURL} {
 		for _, tc := range []struct {

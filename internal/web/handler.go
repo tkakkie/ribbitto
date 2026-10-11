@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -8,10 +9,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -20,6 +23,8 @@ import (
 
 // Services are the use cases the handlers call.
 type Services struct {
+	Typing        *typing.State
+	SignalLimits  *middleware.MemberRateLimiter
 	Sessions      middleware.SessionResolver
 	SignIn        SignInService
 	SignUp        SignUpService
@@ -55,6 +60,9 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	}
 	if services.Stream != nil && services.Stream.Lifetime == nil {
 		return nil, nil, errors.New("web: Streaming.Lifetime is required")
+	}
+	if services.Typing != nil && services.SignalLimits == nil {
+		return nil, nil, errors.New("web: Services.SignalLimits is required with Typing")
 	}
 	assets := static.FS()
 	if devAssets != "" {
@@ -109,7 +117,7 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	registerSignIn(routes, pages, services.SignIn, services.SignUp, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignIn }))
 	registerSetup(routes, pages, services.Setup, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.Setup }))
 	registerSignUp(routes, pages, services.SignUp, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignUp }))
-	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading))
+	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading, services.Typing, services.SignalLimits))
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -177,7 +185,12 @@ type sessionMux struct {
 // Handle registers handler for pattern behind the session middleware.
 func (m sessionMux) Handle(pattern string, handler http.Handler) {
 	*m.patterns = append(*m.patterns, pattern)
-	m.ServeMux.Handle(pattern, middleware.Session(m.sessions, handler))
+	session := middleware.Session(m.sessions, handler)
+	m.ServeMux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Include session and authorization work in typing acceptance deadlines.
+		r = r.WithContext(context.WithValue(r.Context(), handlingStartKey{}, time.Now()))
+		session.ServeHTTP(w, r)
+	}))
 }
 
 // HandleFuncWithoutSession registers an HTML route that must decide whether

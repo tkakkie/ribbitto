@@ -56,8 +56,11 @@ trusted organisation/member ID pair supplied by the authenticated web
 adapter, never client-submitted identity. One shared instance gives that
 member one budget across channels, topics, sessions and client addresses;
 different members and organisations have separate budgets. It performs no
-authorization, feature-state access or database work. Route integration is
-tracked in #787.
+authorization, feature-state access or database work. The topic-scoped
+[typing POST](typing.md#http-ingress-and-posting) checks CSRF and resolves session
+and organisation membership first, then admits against this budget before
+channel/topic lookups or form parsing. A refusal is empty 429 and changes no
+typing state, deadline or generation; an admitted signal is empty 204.
 
 The table holds at most 10,000 buckets. When a new key needs room, only
 fully replenished buckets can be evicted: replacing one with a fresh bucket

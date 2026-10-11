@@ -2,7 +2,8 @@
 
 Part 1 extends #826 and proves a synchronous recount stops the same stream's
 writer. It selects no pool size and proves no writer independence. The
-asynchronous/fair comparison, safety tests and queue telemetry belong to part 2.
+[PR 2 scheduler](stream-sidebar-queue-results.md) covers queue safety only;
+writer integration and comparison arms remain PRs 3 and 4.
 
 ## Evidence and measurement status
 
@@ -134,7 +135,7 @@ anything; target success does not establish a production ceiling.
 
 Report controlled SQL/count/recount/wait totals, peak leases,
 scheduled/completed/missed and latency percentiles, with median and min–max
-across accepted repetitions. Part 2 adds queue length, oldest waiting age,
+across accepted repetitions. PR 4 samples queue length, oldest waiting age,
 coalesced/cancelled work over time; growing backlog disqualifies a recommendation
 regardless of latency. Part 1 has no new application queue.
 
@@ -161,18 +162,18 @@ An asynchronous queue using the shared pool costs the same connection budget
 as pool K, but must bound admitted/active work separately. Separate normal N and
 recount B pools require P*(N+B)+20; a fair queue alone adds no connections.
 For example N=10/B=30 has the same total 40 as pool40, so compare them at equal
-total budgets in part 2. Splitting a synchronous source's pool is neither writer
+total budgets in PR 4. Splitting a synchronous source's pool is neither writer
 independence nor fewer connections. Do not adopt pool30 from historical results.
 
 ## Recommendation and remaining work
 
-Keep production configuration undecided. Part 2 evaluates a bounded fair queue
-with cancellation/coalescing, returning completions to one writer that continues
-messages while waiting. Compare equal total connection budgets first, then
-partitioning. Larger pools alone do not establish writer independence.
+Keep production configuration undecided. PR 2 adds the bounded fair scheduler;
+PR 3 must integrate one writer that continues messages while recounts wait.
+PR 4 compares equal total budgets first, then partitioning. Larger pools alone
+do not establish writer independence.
 
-Part 2 must explain the test-local prototype's production gaps and mutation-check
+PR 3 must explain the test-local loop's production gaps and mutation-check
 same-stream progress, stale-result rejection, cancellation, pre-send authorization,
-message IDs/order, id-free sidebar frames and member fairness. Recommendation
+message IDs/order and id-free sidebar frames. PR 2 covers member fairness. Recommendation
 requires controlled latency, posting progress and bounded-backlog evidence.
 The implementation issue remains a local Markdown draft.

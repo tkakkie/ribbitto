@@ -44,32 +44,33 @@ func NewTopicWriter(prepare TopicPrepareIn, messages TopicMessagesIn, cursor Eve
 // Read validates the cursor, prepares locked read state, queries candidates and
 // unions their bounds while raising the floor. The caller supplies resolved
 // scope and org's persisted join sequence, and must roll back tx on error.
-func (w *TopicWriter) Read(ctx context.Context, tx platform.Tx, scope TopicScope, joinedEventSeq, cursor int64) error {
+// Changed is true only when the locked candidate query found unread messages.
+func (w *TopicWriter) Read(ctx context.Context, tx platform.Tx, scope TopicScope, joinedEventSeq, cursor int64) (bool, error) {
 	if cursor < 0 || cursor == math.MaxInt64 {
-		return ErrInvalidCursor
+		return false, ErrInvalidCursor
 	}
 	committed, err := w.cursor(tx).EventSeq(ctx, scope.OrganizationID)
 	if err != nil {
-		return fmt.Errorf("reading topic cursor limit: %w", err)
+		return false, fmt.Errorf("reading topic cursor limit: %w", err)
 	}
 	if cursor > committed {
-		return ErrInvalidCursor
+		return false, ErrInvalidCursor
 	}
 	p, err := w.prepare(tx)(ctx, scope, joinedEventSeq)
 	if err != nil {
-		return fmt.Errorf("preparing topic read: %w", err)
+		return false, fmt.Errorf("preparing topic read: %w", err)
 	}
 	prefix, floor, read := p.ReadState()
 	ranges, err := w.messages(tx).Ranges(ctx, scope.OrganizationID, scope.ChannelID, scope.TopicID, cursor, prefix, floor, read)
 	if err != nil {
-		return fmt.Errorf("finding topic read candidates: %w", err)
+		return false, fmt.Errorf("finding topic read candidates: %w", err)
 	}
 	los, his := make([]int64, len(ranges)), make([]int64, len(ranges))
 	for i, r := range ranges {
 		los[i], his[i] = r.Lo, r.Hi
 	}
 	if err := p.Add(ctx, los, his, cursor); err != nil {
-		return fmt.Errorf("reading topic: %w", err)
+		return false, fmt.Errorf("reading topic: %w", err)
 	}
-	return nil
+	return len(ranges) > 0, nil
 }

@@ -16,7 +16,7 @@
 // channel, topic and message reads and no write, delegating the channel
 // lookups and embedding the read-only TopicStore for the topic by ID;
 // ReadStoreIn binds it to Reader's snapshot. MessageSequencesIn binds the
-// next-channel-message query to unread's caller-owned transaction.
+// next-channel-message and batched message-existence queries to unread's transaction.
 // TopicReadCandidatesIn returns topic unread range bounds in one statement,
 // with whole-channel neighbours and the supplied read set as one multirange.
 // Snapshot-bound channel counts probe ordered gaps incrementally under a

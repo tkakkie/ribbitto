@@ -16,6 +16,8 @@ var ErrInvalidCursor = errors.New("invalid read cursor")
 // RangeWriter unions read ranges with the member's persisted join prefix.
 type RangeWriter interface {
 	Merge(context.Context, Scope, int64, Range) error
+	// MergeCovered returns only newly covered intervals, excluding the join prefix.
+	MergeCovered(context.Context, Scope, int64, Range) ([]Range, error)
 }
 
 // RangeWriterIn binds range writes to the caller's transaction.
@@ -24,6 +26,8 @@ type RangeWriterIn func(platform.Tx) RangeWriter
 // ChannelMessages supplies conversation's next message sequence; zero means none.
 type ChannelMessages interface {
 	FirstMessageAfter(context.Context, kernel.ID, kernel.ID, int64) (int64, error)
+	// HasMessages probes parallel half-open bounds in one scoped statement.
+	HasMessages(context.Context, kernel.ID, kernel.ID, []int64, []int64) (bool, error)
 }
 
 // ChannelMessagesIn binds conversation's query to the caller's transaction.
@@ -51,27 +55,40 @@ func NewFeedWriter(ranges RangeWriterIn, messages ChannelMessagesIn, cursor Even
 
 // Read unions the feed prefix through cursor with the member's persisted join
 // prefix. The caller supplies resolved scope and joinedEventSeq from org and
-// must roll back tx on error; Read never completes the transaction.
-func (f *FeedWriter) Read(ctx context.Context, tx platform.Tx, scope Scope, joinedEventSeq, cursor int64) error {
+// must roll back tx on error; Read never completes the transaction. It reports
+// whether an actual message became read under the member/channel lock.
+func (f *FeedWriter) Read(ctx context.Context, tx platform.Tx, scope Scope, joinedEventSeq, cursor int64) (bool, error) {
 	if cursor < 0 || cursor == math.MaxInt64 {
-		return ErrInvalidCursor
+		return false, ErrInvalidCursor
 	}
 	committed, err := f.cursor(tx).EventSeq(ctx, scope.OrganizationID)
 	if err != nil {
-		return fmt.Errorf("reading feed cursor limit: %w", err)
+		return false, fmt.Errorf("reading feed cursor limit: %w", err)
 	}
 	if cursor > committed {
-		return ErrInvalidCursor
+		return false, ErrInvalidCursor
 	}
 	next, err := f.messages(tx).FirstMessageAfter(ctx, scope.OrganizationID, scope.ChannelID, cursor)
 	if err != nil {
-		return fmt.Errorf("finding next feed message: %w", err)
+		return false, fmt.Errorf("finding next feed message: %w", err)
 	}
 	if next == 0 {
 		next = cursor + 1
 	}
-	if err := f.ranges(tx).Merge(ctx, scope, joinedEventSeq, Range{Lo: 0, Hi: next}); err != nil {
-		return fmt.Errorf("reading feed: %w", err)
+	covered, err := f.ranges(tx).MergeCovered(ctx, scope, joinedEventSeq, Range{Lo: 0, Hi: next})
+	if err != nil {
+		return false, fmt.Errorf("reading feed: %w", err)
 	}
-	return nil
+	if len(covered) == 0 {
+		return false, nil
+	}
+	los, his := make([]int64, len(covered)), make([]int64, len(covered))
+	for i, r := range covered {
+		los[i], his[i] = r.Lo, r.Hi
+	}
+	changed, err := f.messages(tx).HasMessages(ctx, scope.OrganizationID, scope.ChannelID, los, his)
+	if err != nil {
+		return false, fmt.Errorf("checking newly read feed messages: %w", err)
+	}
+	return changed, nil
 }

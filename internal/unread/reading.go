@@ -28,13 +28,15 @@ func NewReading(runner TxRunner, feed *FeedWriter, topic *TopicWriter) *Reading 
 // Feed reads a resolved channel through cursor using org's persisted join sequence.
 func (r *Reading) Feed(ctx context.Context, scope Scope, joinedEventSeq, cursor int64) error {
 	return r.runner.InTx(ctx, func(tx platform.Tx) error {
-		return r.feed.Read(ctx, tx, scope, joinedEventSeq, cursor)
+		_, err := r.feed.Read(ctx, tx, scope, joinedEventSeq, cursor)
+		return err
 	})
 }
 
 // Topic reads a resolved topic through cursor using org's persisted join sequence.
 func (r *Reading) Topic(ctx context.Context, scope TopicScope, joinedEventSeq, cursor int64) error {
 	return r.runner.InTx(ctx, func(tx platform.Tx) error {
-		return r.topic.Read(ctx, tx, scope, joinedEventSeq, cursor)
+		_, err := r.topic.Read(ctx, tx, scope, joinedEventSeq, cursor)
+		return err
 	})
 }

@@ -1,10 +1,12 @@
 package postgres
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -31,17 +33,24 @@ func WriterIn(tx platform.Tx) *Writer {
 // unions added with only its overlapping or touching neighbours.
 // joinedEventSeq is the member's persisted join sequence supplied by org.
 func (w *Writer) Merge(ctx context.Context, scope unread.Scope, joinedEventSeq int64, added unread.Range) error {
+	_, err := w.MergeCovered(ctx, scope, joinedEventSeq, added)
+	return err
+}
+
+// MergeCovered performs the same locked union and returns added minus stored
+// coverage after establishing the implicit join prefix. The lock lasts until tx ends.
+func (w *Writer) MergeCovered(ctx context.Context, scope unread.Scope, joinedEventSeq int64, added unread.Range) ([]unread.Range, error) {
 	if joinedEventSeq < 0 || joinedEventSeq == math.MaxInt64 || added.Lo < 0 || added.Hi <= added.Lo {
-		return fmt.Errorf("merging read range: invalid bounds or join sequence")
+		return nil, fmt.Errorf("merging read range: invalid bounds or join sequence")
 	}
 	params := scopeParams(scope)
 	if err := w.lock(ctx, params); err != nil {
-		return err
+		return nil, err
 	}
 	if err := w.merge(ctx, params, unread.Range{Lo: 0, Hi: joinedEventSeq + 1}); err != nil {
-		return err
+		return nil, err
 	}
-	return w.merge(ctx, params, added)
+	return w.mergeCovered(ctx, params, added)
 }
 
 func scopeParams(scope unread.Scope) sqlcgen.LockChannelReadParams {
@@ -78,17 +87,35 @@ func (w *Writer) lock(ctx context.Context, params sqlcgen.LockChannelReadParams)
 }
 
 func (w *Writer) merge(ctx context.Context, scope sqlcgen.LockChannelReadParams, added unread.Range) error {
+	_, err := w.mergeCovered(ctx, scope, added)
+	return err
+}
+
+func (w *Writer) mergeCovered(ctx context.Context, scope sqlcgen.LockChannelReadParams, added unread.Range) ([]unread.Range, error) {
 	lower := added.Lo
 	previous, err := w.queries.RangePredecessor(ctx, sqlcgen.RangePredecessorParams{OrganizationID: scope.OrganizationID, ChannelID: scope.ChannelID, MemberID: scope.MemberID, Lo: added.Lo})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("finding read range predecessor: %w", err)
+		return nil, fmt.Errorf("finding read range predecessor: %w", err)
 	}
 	if err == nil {
 		lower = previous.Lo
 	}
 	removed, err := w.queries.DeleteRangeNeighbours(ctx, sqlcgen.DeleteRangeNeighboursParams{OrganizationID: scope.OrganizationID, ChannelID: scope.ChannelID, MemberID: scope.MemberID, LowerLo: lower, Lo: added.Lo, Hi: added.Hi})
 	if err != nil {
-		return fmt.Errorf("removing read range neighbours: %w", err)
+		return nil, fmt.Errorf("removing read range neighbours: %w", err)
+	}
+	// DELETE RETURNING has no order. Subtract before widening added to the union.
+	slices.SortFunc(removed, func(a, b sqlcgen.DeleteRangeNeighboursRow) int { return cmp.Compare(a.Lo, b.Lo) })
+	var covered []unread.Range
+	lo := added.Lo
+	for _, r := range removed {
+		if lo < r.Lo {
+			covered = append(covered, unread.Range{Lo: lo, Hi: min(r.Lo, added.Hi)})
+		}
+		lo = max(lo, r.Hi)
+	}
+	if lo < added.Hi {
+		covered = append(covered, unread.Range{Lo: lo, Hi: added.Hi})
 	}
 	// Existing ranges never touch, so expanding to the last neighbour's Hi
 	// cannot reach another range beyond the original upper bound.
@@ -97,7 +124,7 @@ func (w *Writer) merge(ctx context.Context, scope sqlcgen.LockChannelReadParams,
 		added.Hi = max(added.Hi, r.Hi)
 	}
 	if err = w.queries.InsertReadRange(ctx, sqlcgen.InsertReadRangeParams{OrganizationID: scope.OrganizationID, ChannelID: scope.ChannelID, MemberID: scope.MemberID, Lo: added.Lo, Hi: added.Hi}); err != nil {
-		return fmt.Errorf("inserting merged read range: %w", err)
+		return nil, fmt.Errorf("inserting merged read range: %w", err)
 	}
-	return nil
+	return covered, nil
 }

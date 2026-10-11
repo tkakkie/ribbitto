@@ -167,6 +167,8 @@ func TestReadSidebarHTTPIsolationAndNoop(t *testing.T) {
 	actor := readSidebarConnect(t, f.reader, f.streams, f.feed)
 	f.badges(t, actor, 2, 3, 5)
 	unaffected := []<-chan sseEvent{readSidebarConnect(t, other, f.streams, f.feed),
+		readSidebarConnect(t, other, f.streams, f.topicA),
+		readSidebarConnect(t, outsider, f.streams, view.ChannelURL("foreign", foreign.Channel.ID)),
 		readSidebarConnect(t, outsider, f.streams, view.ChannelURL("foreign", foreign.Channel.ID))}
 	for _, events := range unaffected {
 		readSidebarFrame(t, events)
@@ -208,7 +210,7 @@ func TestReadSidebarHTTPIsolationAndNoop(t *testing.T) {
 	}
 	counter.mu.Lock()
 	defer counter.mu.Unlock()
-	for key, want := range map[[2]kernel.ID]int{{f.organization, f.member}: 3, {f.organization, member}: 1, {foreign.OrganizationID, foreign.MemberID}: 1} {
+	for key, want := range map[[2]kernel.ID]int{{f.organization, f.member}: 3, {f.organization, member}: 2, {foreign.OrganizationID, foreign.MemberID}: 2} {
 		if got := counter.counts[key]; got != want {
 			t.Errorf("org/member %v recounts = %d; want %d (isolation/no-op)", key, got, want)
 		}

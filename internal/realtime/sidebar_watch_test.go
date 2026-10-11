@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -55,12 +56,22 @@ func TestSidebarWatchRaces(t *testing.T) {
 				selected := sub
 				selected.Member, selected.Interests = kernel.ID{0x11}, []Interest{InterestSidebar}
 				acquired, counts := false, []uint64{}
+				// Persisted state and the watch are separate: a commit before
+				// any subscriber publishes nothing (the registry keeps no entry)
+				// and only the initial recount's persisted read can cover it.
+				var persisted atomic.Uint64
+				commit := func() {
+					persisted.Add(1)
+					if acquired {
+						w.publish()
+					}
+				}
 				gate, resume := make(chan struct{}), make(chan struct{})
 				source := watchedSidebar{sidebarSource{sidebarTrigger, func(context.Context, Subscription) (Outgoing, error) {
 					if !acquired {
 						t.Error("recount preceded subscription")
 					}
-					value, _ := w.Snapshot() // Persisted snapshot stand-in, captured before rendering.
+					value := persisted.Load() // The persisted read, before rendering.
 					counts = append(counts, value)
 					if phase == "snapshot" && len(counts) == 1 {
 						close(gate)
@@ -73,12 +84,12 @@ func TestSidebarWatchRaces(t *testing.T) {
 					}
 					acquired = true
 					if phase == "after subscribe" {
-						w.publish()
+						commit()
 					}
 					return w
 				}}
 				if phase == "before subscribe" {
-					w.publish()
+					commit()
 				}
 				if phase == "wait capture" {
 					h.afterWaitRead = sync.OnceFunc(func() { close(gate); <-resume })
@@ -92,7 +103,7 @@ func TestSidebarWatchRaces(t *testing.T) {
 					c, err := stream.Run(ctx, selected, 7, frameSender{func(out Outgoing) error {
 						frames = append(frames, out)
 						if phase == "send" && len(frames) == 1 {
-							w.publish()
+							commit()
 						}
 						return nil
 					}})
@@ -100,12 +111,12 @@ func TestSidebarWatchRaces(t *testing.T) {
 				}()
 				if phase == "snapshot" || phase == "wait capture" {
 					<-gate
-					w.publish()
+					commit()
 					close(resume)
 				}
 				synctest.Wait()
 				if phase == "blocked" {
-					w.publish()
+					commit()
 					synctest.Wait()
 				}
 				later := phase != "before subscribe" && phase != "after subscribe"

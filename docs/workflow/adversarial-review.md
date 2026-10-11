@@ -14,8 +14,8 @@ reviewed again under the completion rule.
 ## Which review runs
 
 The tier follows what the change alters, **wherever the code lives**
-(handlers, use cases, stores, `db/queries/**`, `db/migrations/**`, scripts),
-not its risk class, which only decides how much the maintainer reads. Grok's
+(handlers, use cases, stores, queries, migrations, scripts), not its risk
+class, which only decides how much the maintainer reads. Grok's
 findings have come from concurrency, long-lived state and the gates
 themselves: up to #497, 8 of its 74 reviews (#334, #427 and #431 in real
 time and retention, #336 and #347 in launchers, #338, #340 and #364 in
@@ -23,15 +23,14 @@ gates), and none of step 3's org, identity and web refactors (#339, #498).
 In #760–#839,
 Grok's 23 first reviews found defects in 4 — #775 (read writes in posting's
 transaction), #795 (browser retry state), #833 (an htmx swap of a live form),
-#835 (a watch's ordering contract) — and its 7 re-runs none new (#840). A tier follows what the change does; a past review without findings
-is never a reason for a lower one.
+#835 (a watch's ordering contract) — and its 7 re-runs none new (#840).
+A tier follows what the change does; a past review without findings is
+never a reason for a lower one.
 
 **Precedence: A, then B, then C.** **When in doubt, the higher tier.** In
-the code areas of A (concurrency, real-time delivery, ordered transactions),
-Grok is for changes to **what the code does or the order it does it in**; a
-change there that keeps both is tier B, once, by Muse Code (#427 moved
-retention into realtime's store and Grok found a defect, so such moves still
-get one adversarial review).
+A's code areas Grok is for the changes A's first item lists; any other
+change there, behaviour-preserving moves included, is tier B, by Muse Code
+(a move still gets one review: #427's had a defect).
 
 - **A — Grok required:**
   - in A's code areas — concurrency, caches or background work (goroutines,
@@ -45,8 +44,11 @@ get one adversarial review).
     work; adds or changes long-lived in-memory state (registries,
     generations, caches, subscriptions) or the ordering contract its callers
     rely on; changes **which writes share a transaction or the order they
-    run in**; changes browser state handling (the SSE scripts, or htmx swaps,
-    out-of-band ones included, that replace live forms or state); or changes
+    run in**, or logic whose correctness rests on a lock or the
+    transaction's isolation (decisions made under a lock); changes browser
+    state handling (the SSE scripts, or htmx swaps, out-of-band ones
+    included, that replace live forms or state, or what those forms carry
+    across replacements); or changes
     the delivery contract: who is authorised for what (organisation and
     member), the organisation scope, which streams or members receive a
     frame, or where authorisation runs before a send;
@@ -66,8 +68,7 @@ get one adversarial review).
     tests of races or of the event log);
   - any other behaviour change in A's code areas that matches none of A's
     first item: server stream wiring, renderers and ingress handlers that
-    add no concurrency or long-lived state, change no transaction, no
-    browser state and no delivery contract;
+    match none of those triggers;
   - **any** code change, behaviour-preserving moves included, in
     authentication, authorisation, sessions or organisation scoping: who is
     signed in, who is a member, what a member may see or do, and how a
@@ -91,8 +92,8 @@ ordered transactions) is tier B when it lies wholly in demonstrably isolated
 development tooling. Such tooling is a command or script that runs only when
 a developer invokes it: never in production, in deployment, in migrations or
 in a CI job (its own tests in `make check` aside), and no production or CI
-code imports or invokes it. A defect there skews a measurement on a
-developer's machine; it cannot leak data or lose events in production. Each
+code imports or invokes it. A defect there skews only a developer's
+measurement. Each
 qualifying path is listed here with its evidence:
 
 - `cmd/loadgen`, the load generator. It imports no other ribbitto package
@@ -139,7 +140,9 @@ diff's, and reviewed again:
   when every commit since the **last Grok-reviewed head** only fixes
   reported findings (after the adversarial follow-up check in
   [reviewing](reviewing.md)), answers Copilot or the cross-review, or
-  merges `main`; it gets **Grok again** when those commits — counted from
+  merges `main` (what `main` brings was reviewed in its own pull request;
+  a conflict resolution beyond combining both sides counts as this pull
+  request's change); it gets **Grok again** when those commits — counted from
   the last Grok review, however many Muse Code re-reviews came between —
   add anything of A's first item beyond what a fix needs, or the
   maintainer asks for Grok. When in doubt, Grok;

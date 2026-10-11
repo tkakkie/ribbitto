@@ -253,6 +253,30 @@ func testReadRecoveryBrowser(t *testing.T, browser *rod.Browser) {
 		finish(t, request, 204, "", 2)
 		assertState(t, page, 0, 2)
 	})
+	t.Run("long-retry-after", func(t *testing.T) {
+		// Beyond 2^31 - 1 ms, setTimeout would fire at once (Grok on #860).
+		page := open(t, "long", false)
+		finish(t, next(t), 429, "2592000", 1)
+		assertDelay(t, page, 2147483647, 2147483647)
+		page.MustEval(`() => readTest.advance()`)
+		finish(t, next(t), 429, "Thu, 14 Nov 2024 22:13:20 GMT", 2)
+		assertDelay(t, page, 2147483647, 2147483647)
+	})
+	t.Run("mark-as-read", func(t *testing.T) {
+		// Mark as read replaces a pending retry instead of being dropped (Grok on #860).
+		page := open(t, "mark", false)
+		finish(t, next(t), 429, "3", 1)
+		assertState(t, page, 1, 1)
+		page.MustEval(`() => readTest.apply('300')`)
+		page.MustEval(`() => document.querySelector('#read-form button[type=submit]').click()`)
+		request := next(t)
+		if request.cursor != "300" {
+			t.Fatalf("mark-as-read cursor=%s, want 300", request.cursor)
+		}
+		assertState(t, page, 0, 2)
+		finish(t, request, 204, "", 2)
+		assertState(t, page, 0, 2)
+	})
 	t.Run("cleanup", func(t *testing.T) {
 		for _, action := range []string{"hide", "remove", "navigation"} {
 			page := open(t, action, false)

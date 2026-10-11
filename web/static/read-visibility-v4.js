@@ -30,6 +30,9 @@
       event.detail.parameters.cursor = cursor();
     });
     form.addEventListener('htmx:beforeRequest', event => {
+      // Mark as read is the newest intent: it replaces a pending retry rather
+      // than waiting behind it, since leaving the page would drop that retry.
+      if (event.detail.requestConfig?.triggeringEvent?.type === 'submit' && needed() && !inFlight) clearRetry();
       if (!needed() || inFlight || timer !== null) {
         event.preventDefault();
         return;
@@ -54,7 +57,9 @@
         const after = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header) - Date.now();
         // The initial cap bounds our backoff; a server's longer minimum wins.
         const cap = Math.min(8000, 1000 * 2 ** Math.min(failures++, 3));
-        const delay = Math.max(cap * (0.5 + Math.random() / 2), after || 0);
+        // setTimeout treats a delay above 2^31 - 1 ms as zero, which would
+        // retry at once instead of honouring a very long Retry-After.
+        const delay = Math.min(Math.max(cap * (0.5 + Math.random() / 2), after || 0), 2147483647);
         clearRetry();
         timer = setTimeout(() => {
           timer = null;

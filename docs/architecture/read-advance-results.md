@@ -105,10 +105,8 @@ Both arms run identical real committed transactions on restored fragmented range
 The test-local baseline uses the union from `c283544^` (before #834), with the
 same queries, lock and join prefix but no sorting/difference construction.
 One sparse message follows the prefix; non-message event rows fill a sequence gap.
-Both posting's own-message range and branching's own-notice range absorb all
-fragments. The posting arm is a post from a history page, which sends no page
-cursor (nil), so only the author's own-message range is merged; a latest-page
-post with a cursor also merges its read scope, which this arm does not measure. Feed/topic page writes are measured above;
+Posting's own-message range (a history-page post: nil page cursor, so no read
+scope, which this arm omits) and branching's own-notice range absorb all fragments. Feed/topic page writes are measured above;
 this is a deliberately fragmented union stress case, not typical dense history.
 The persisted union is checked after every arm. Two warmups, ten samples per arm,
 alternating order; setup/restoration excluded. Bytes are process TotalAlloc deltas,

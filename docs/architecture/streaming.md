@@ -93,7 +93,7 @@ delivers durable frames; `typing` and `presence` read their wired
 owners after each durable batch and before waiting, at most one frame and
 one authorization check per kind. Presence checks the organisation, typing
 the frame's channel, immediately before sending. Denies mark the generation
-seen; errors stop the stream. Web's presence adapter is wired in production (#768); typing remains planned (#288). Sidebar production rendering/wiring remains planned (#811).
+seen; errors stop the stream. Web's presence adapter is wired in production (#768); typing remains planned (#288). Sidebar recounts are wired in production (#819); composition details are in [unread counts](unread-counts.md).
 
 The endpoint takes:
 
@@ -126,8 +126,7 @@ The state, boundary and generation come from one locked read. Another process's
 token, a start below the boundary or over 100 changes require `reset` on connect
 or later; equality at the boundary is served. The presence adapter sends
 that reset without `id:`, ending the stream so the page reloads.
-Sidebar delivery is available through `realtime.SidebarSource` (#810), with
-production rendering and wiring left to #811. Every interested connection
+Production sidebar delivery uses `realtime.SidebarSource` (#810, #819). Every interested connection
 recounts after its first durable batch, even at a current cursor. The consumer's
 trigger recognises posts and moves; realtime checks organisation scope before
 calling it, independently of message interest, channel and topic. Triggers set
@@ -157,7 +156,7 @@ even when the main swap is `none`, and an entry not on the page is ignored.
 The sink is hidden from assistive technology and takes no focus.
 `TestMessageStreamBrowser` proves replacement and missing-target behavior with
 test-only entries rendered with `html/template`, and that native `Last-Event-ID` and the page's
-reconnect cursor stay unchanged after ephemeral frames. Production presence frames share the page's indicator component; realtime delivers sidebar recounts (#810), and their production frames remain planned (#811). Opening the members
+reconnect cursor stay unchanged after ephemeral frames. Production presence and sidebar frames share the page components (#768, #818, #819). Opening the members
 panel is a navigation. Its bounded, paged list has no live list updates. One
 presence snapshot supplies every indicator and the page token; changes replace
 only loaded indicators, with visible localized labels and the success dot.

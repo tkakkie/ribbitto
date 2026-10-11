@@ -104,7 +104,12 @@ func openStreamProto(t *testing.T, b acceptanceBrowser, channelURL, after, lastE
 // connection as a browser losing it would.
 func openStreamIn(ctx context.Context, t *testing.T, b acceptanceBrowser, channelURL, after, lastEventID string) (<-chan sseEvent, int, int) {
 	t.Helper()
-	r, err := http.NewRequestWithContext(ctx, "GET", b.server.URL+streamEndpoint(t, channelURL)+"after="+after, nil)
+	return openEndpointIn(ctx, t, b, streamEndpoint(t, channelURL), after, lastEventID)
+}
+
+func openEndpointIn(ctx context.Context, t *testing.T, b acceptanceBrowser, endpoint, after, lastEventID string) (<-chan sseEvent, int, int) {
+	t.Helper()
+	r, err := http.NewRequestWithContext(ctx, "GET", b.server.URL+endpoint+"after="+after, nil)
 	acceptanceOK(t, err)
 	if lastEventID != "" {
 		r.Header.Set("Last-Event-ID", lastEventID)

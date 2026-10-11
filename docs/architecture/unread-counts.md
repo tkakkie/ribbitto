@@ -6,7 +6,7 @@ How read state is stored and counted (what that costs is in
 ([decision 32](../decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)).
 The move column, read-state tables, range store, feed, topic and branch-notice
 reads, the visible-page reading POSTs, posting writes and channel and topic counts
-and their page binding are current; display remains *planned* (M4). The rules are in
+and their sidebar display are current. The rules are in
 [unread](../domain/unread.md).
 
 ## Storage

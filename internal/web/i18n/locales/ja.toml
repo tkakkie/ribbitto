@@ -225,3 +225,6 @@ other = "オフライン"
 
 ["reading.mark"]
 other = "既読にする"
+
+["reading.unread_count"]
+other = "未読メッセージ {count} 件"

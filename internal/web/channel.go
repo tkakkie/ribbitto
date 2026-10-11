@@ -175,6 +175,9 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		return
 	}
 	account, _ := middleware.Account(r.Context())
+	if page.BodyError == "" {
+		page.Composer = p.issueComposer(m, history.Current, history.Topic)
+	}
 	page.Messages = make([]view.Message, len(history.Entries))
 	for i, entry := range history.Entries {
 		page.Messages[i] = viewMessage(m.Organization.Slug, entry)
@@ -219,6 +222,10 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		cursor = &value
 	}
 	body := r.PostForm.Get("body")
+	var composer *string
+	if _, present := r.PostForm["composer"]; present {
+		composer = new(r.PostForm.Get("composer"))
+	}
 	var posted conversation.Message
 	if cursor == nil {
 		posted, err = p.posting.PostToTopic(r.Context(), m, c.ID, p.topicID, body)
@@ -232,7 +239,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	case errors.Is(err, conversation.ErrInvalidPostCursor):
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 	case errors.Is(err, conversation.ErrInvalidBody):
-		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{EventCursor: cursor, Body: body, BodyError: "message.error.body"})
+		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.body"})
 	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member.
@@ -249,11 +256,26 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 // Enhanced posts never replace history or the connection's snapshot cursor.
 func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, status int, page view.ChannelPage) {
 	if r.Header.Get("HX-Request") == "true" && p.topicID == nil {
+		if page.BodyError == "" {
+			page.Composer = p.issueComposer(m, c, nil)
+		}
 		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, viewChannel(c)
 		templ.Handler(view.MessageComposer(page), templ.WithStatus(status)).ServeHTTP(w, r)
 		return
 	}
 	p.render(w, r, m, c.ID, status, page, nil)
+}
+
+// Reuse resolved scope: issuance needs no channel or topic lookup of its own.
+func (p channelPages) issueComposer(m org.Membership, c conversation.Channel, topic *conversation.Topic) *string {
+	if p.typing == nil {
+		return nil
+	}
+	topicID := c.DefaultTopicID
+	if topic != nil {
+		topicID = topic.ID
+	}
+	return new(p.typing.IssueComposer(m.Organization.ID, typing.Place{Channel: c.ID, Topic: topicID}, m.Member.ID))
 }
 
 // channelID parses the {channelID} path segment: the UUID in its canonical

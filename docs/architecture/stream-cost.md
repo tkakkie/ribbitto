@@ -29,6 +29,9 @@ default pgx's), `_CACHE=1` (#227's shared reads), `_MEMBERS=distinct`
 (one member per stream) and `_STAGGER=<window>` (#671) tune it. `_SIDEBAR=1` adds live member counts (needs distinct members and at most
 99 scheduled posts per step; set duration/rate explicitly). Its measured
 results and commands are in [sidebar cost results](stream-sidebar-results.md).
+`_ATTRIBUTION=1` times pool acquisitions and every sidebar statement;
+`_RECOUNTS=<n>` bounds concurrent recounts in tests only. The comparisons and
+protocol are in [bottleneck results](stream-sidebar-bottleneck-results.md).
 With a
 window, stream `i` of `N` waits `i × window / N` after its shared render
 returns and before its `MayReceive`, in a per-stream renderer wrapper: in the

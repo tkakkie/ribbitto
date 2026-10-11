@@ -60,6 +60,9 @@ first failing step 5,000; they establish no production ceiling. Pool waits and
 sidebar SQL increased together; investigating that contention needs a follow-up.
 No optimisation or interval change was made.
 
+The test-only attribution and candidate comparisons for #826 are in
+[sidebar bottleneck results](stream-sidebar-bottleneck-results.md).
+
 Limits: single short runs, growing warm authorization caches, no controlled host
 load or CPU/memory sampling. No HTTP, HTML, network, slow clients, presence,
 typing, read advancement or production post-read writes; baseline has no unread

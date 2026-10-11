@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -24,6 +26,17 @@ func feedRequire(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func checkedRead(t *testing.T, want bool) func(bool, error) error {
+	t.Helper()
+	return func(changed bool, err error) error {
+		t.Helper()
+		if (err == nil && changed != want) || (err != nil && changed) {
+			return fmt.Errorf("changed=%t, want %t (error=%v)", changed, want, err)
+		}
+		return err
 	}
 }
 
@@ -71,7 +84,7 @@ func TestFeedRead(t *testing.T) {
 			account := identitytest.Account(t, pool, "reader@example.org", "Reader")
 			scope.MemberID = orgtest.Member(t, pool, scope.OrganizationID, account, org.RoleMember, "reader", tc.joined)
 			feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-				return newFeedWriter().Read(t.Context(), tx, scope, tc.joined, tc.cursor)
+				return checkedRead(t, tc.cursor > tc.joined)(newFeedWriter().Read(t.Context(), tx, scope, tc.joined, tc.cursor))
 			}))
 			feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: tc.end}})
 		})
@@ -82,15 +95,15 @@ func TestFeedReadReorderedAndRollback(t *testing.T) {
 	t.Parallel()
 	pool, scope := feedFixture(t)
 	feed := newFeedWriter()
-	for _, cursor := range []int64{5, 3, 1, 5} {
+	for i, cursor := range []int64{5, 3, 1, 5} {
 		feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-			return feed.Read(t.Context(), tx, scope, 1, cursor)
+			return checkedRead(t, i == 0)(feed.Read(t.Context(), tx, scope, 1, cursor))
 		}))
 		feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 6}})
 	}
 	rollback := errors.New("caller rollback")
 	err := platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-		if err := feed.Read(t.Context(), tx, scope, 1, 6); err != nil {
+		if err := checkedRead(t, true)(feed.Read(t.Context(), tx, scope, 1, 6)); err != nil {
 			return err
 		}
 		return rollback
@@ -107,7 +120,7 @@ func TestFeedReadRefusesFutureCursor(t *testing.T) {
 	// A second organisation has a higher cursor; it must not authorize this one.
 	orgtest.Organization(t, pool, "other", "Other", 100)
 	err := platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-		return newFeedWriter().Read(t.Context(), tx, scope, 1, 7)
+		return checkedRead(t, false)(newFeedWriter().Read(t.Context(), tx, scope, 1, 7))
 	})
 	if !errors.Is(err, unread.ErrInvalidCursor) {
 		t.Fatalf("future cursor: %v", err)
@@ -117,14 +130,14 @@ func TestFeedReadRefusesFutureCursor(t *testing.T) {
 
 func TestFeedReadConcurrent(t *testing.T) {
 	t.Parallel()
-	for _, cursors := range [][2]int64{{3, 5}, {5, 3}} {
+	for _, cursors := range [][2]int64{{3, 5}, {5, 3}, {5, 5}} {
 		for _, exists := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%d then %d existing=%t", cursors[0], cursors[1], exists), func(t *testing.T) {
 				pool, scope := feedFixture(t)
 				feed := newFeedWriter()
 				if exists {
 					feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
-						return feed.Read(t.Context(), tx, scope, 1, 1)
+						return checkedRead(t, false)(feed.Read(t.Context(), tx, scope, 1, 1))
 					}))
 				}
 				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
@@ -141,7 +154,7 @@ func TestFeedReadConcurrent(t *testing.T) {
 				}()
 				go func() {
 					first <- platform.InTx(ctx, pool, func(tx platform.Tx) error {
-						if err := feed.Read(ctx, tx, scope, 1, cursors[0]); err != nil {
+						if err := checkedRead(t, true)(feed.Read(ctx, tx, scope, 1, cursors[0])); err != nil {
 							return err
 						}
 						close(locked)
@@ -160,7 +173,7 @@ func TestFeedReadConcurrent(t *testing.T) {
 				}
 				go func() {
 					second <- platform.InTx(ctx, pool, func(tx platform.Tx) error {
-						return feed.Read(ctx, tx, scope, 1, cursors[1])
+						return checkedRead(t, cursors[1] > cursors[0])(feed.Read(ctx, tx, scope, 1, cursors[1]))
 					})
 				}()
 				// Release only when PostgreSQL proves the second feed transaction waits
@@ -182,5 +195,147 @@ func TestFeedReadConcurrent(t *testing.T) {
 				feedRanges(t, pool, scope, []unread.Range{{Lo: 0, Hi: 6}})
 			})
 		}
+	}
+}
+
+func TestEffectiveReadNoopsAndStatements(t *testing.T) {
+	for _, kind := range []string{"feed", "topic"} {
+		for _, tc := range []struct {
+			name                         string
+			joined, first, cursor, floor int64
+			stored                       bool
+		}{
+			{"empty", 1, 0, 5, -1, false},
+			{"before first message", 1, 0, 5, -1, false},
+			{"join prefix", 10, 0, 10, 0, false},
+			{"join prefix fresh", 10, 0, 10, -1, false},
+			{"repeated", 1, 10, 10, -1, false},
+			{"older", 1, 20, 5, -1, false},
+			{"event only extension", 1, 10, 20, -1, false},
+			{"identical range", 1, 0, 10, 0, true},
+			{"floor only", 1, 0, 20, 10, false},
+		} {
+			if kind == "feed" && tc.name == "floor only" {
+				continue
+			}
+			t.Run(kind+"/"+tc.name, func(t *testing.T) {
+				pool := pgtest.New(t)
+				f := conversationtest.OrganizationWithOwner(t, pool, "noops", "general")
+				s := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
+				_, err := pool.Exec(t.Context(), "UPDATE organization SET event_seq=30,event_log_boundary_seq=30 WHERE id=$1", f.OrganizationID)
+				feedRequire(t, err)
+				if tc.name != "empty" {
+					_, err = pool.Exec(t.Context(), "INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq) VALUES ($1,$2,$3,$4,'read',10)", s.OrganizationID, s.ChannelID, f.Channel.DefaultTopicID, s.MemberID)
+					feedRequire(t, err)
+				}
+				if tc.floor >= 0 {
+					_, err = pool.Exec(t.Context(), "INSERT INTO channel_read (organization_id,channel_id,member_id) VALUES ($1,$2,$3)", s.OrganizationID, s.ChannelID, s.MemberID)
+					feedRequire(t, err)
+					_, err = pool.Exec(t.Context(), "INSERT INTO topic_read_floor (organization_id,channel_id,member_id,topic_id,floor_seq) VALUES ($1,$2,$3,$4,$5)", s.OrganizationID, s.ChannelID, s.MemberID, f.Channel.DefaultTopicID, tc.floor)
+					feedRequire(t, err)
+				}
+				if tc.stored {
+					_, err = pool.Exec(t.Context(), "INSERT INTO read_range (organization_id,channel_id,member_id,lo,hi) VALUES ($1,$2,$3,10,11)", s.OrganizationID, s.ChannelID, s.MemberID)
+					feedRequire(t, err)
+				}
+				counter := platform.NewQueryCounter()
+				config := pool.Config()
+				config.ConnConfig.Tracer = counter
+				traced, err := pgxpool.NewWithConfig(t.Context(), config)
+				feedRequire(t, err)
+				defer traced.Close()
+				read := func(cursor int64, want bool) {
+					feedRequire(t, platform.InTx(t.Context(), traced, func(tx platform.Tx) error {
+						before := counter.Counts().Queries
+						if kind == "feed" {
+							err = checkedRead(t, want)(newFeedWriter().Read(t.Context(), tx, s, tc.joined, cursor))
+						} else {
+							err = checkedRead(t, want)(newTopicWriter().Read(t.Context(), tx, unread.TopicScope{Scope: s, TopicID: f.Channel.DefaultTopicID}, tc.joined, cursor))
+						}
+						if err != nil {
+							return err
+						}
+						got, wantStatements := counter.Counts().Queries-before, int64(12)
+						if kind == "feed" {
+							wantStatements = 10
+							if !want && tc.name != "empty" && tc.name != "before first message" && tc.name != "event only extension" && tc.name != "identical range" {
+								wantStatements = 9
+							}
+						}
+						if tc.floor < 0 && (tc.first == 0 || want) {
+							wantStatements += 4
+						}
+						if got != wantStatements {
+							t.Fatalf("statements=%d, want %d", got, wantStatements)
+						}
+						t.Logf("cursor=%d changed=%t statements=%d", cursor, want, got)
+						return err
+					}))
+				}
+				if tc.first > 0 {
+					read(tc.first, true)
+				}
+				read(tc.cursor, false)
+			})
+		}
+	}
+}
+
+func TestFeedReadFragmentedCost(t *testing.T) {
+	for _, match := range []bool{false, true} {
+		t.Run(fmt.Sprint(match), func(t *testing.T) {
+			pool := pgtest.New(t)
+			f := conversationtest.OrganizationWithOwner(t, pool, "fragmented", "general")
+			s := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
+			for _, query := range []string{
+				"UPDATE organization SET event_seq=20000,event_log_boundary_seq=20000 WHERE id=$1",
+				"INSERT INTO channel_read (organization_id,channel_id,member_id) VALUES ($1,$2,$3)",
+				"INSERT INTO read_range (organization_id,channel_id,member_id,lo,hi) SELECT $1,$2,$3,i,i+1 FROM generate_series(2,20000,2) i",
+			} {
+				args := []any{s.OrganizationID, s.ChannelID, s.MemberID}
+				if strings.HasPrefix(query, "UPDATE") {
+					args = args[:1]
+				}
+				_, err := pool.Exec(t.Context(), query, args...)
+				feedRequire(t, err)
+			}
+			_, err := pool.Exec(t.Context(), "INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq) SELECT $1,$2,$3,$4,'read',i FROM generate_series(2,20000,2) i", s.OrganizationID, s.ChannelID, f.Channel.DefaultTopicID, s.MemberID)
+			feedRequire(t, err)
+			if match {
+				_, err = pool.Exec(t.Context(), "INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq) VALUES ($1,$2,$3,$4,'unread',19999)", s.OrganizationID, s.ChannelID, f.Channel.DefaultTopicID, s.MemberID)
+				feedRequire(t, err)
+			}
+			_, err = pool.Exec(t.Context(), "ANALYZE message")
+			feedRequire(t, err)
+			var set pgtype.Multirange[pgtype.Range[pgtype.Int8]]
+			for lo := int64(3); lo < 20000; lo += 2 {
+				set = append(set, pgtype.Range[pgtype.Int8]{Lower: pgtype.Int8{Int64: lo, Valid: true}, Upper: pgtype.Int8{Int64: lo + 1, Valid: true}, LowerType: pgtype.Inclusive, UpperType: pgtype.Exclusive, Valid: true})
+			}
+			rows, err := pool.Query(t.Context(), "EXPLAIN (ANALYZE, BUFFERS) SELECT EXISTS (SELECT 1 FROM message WHERE organization_id=$1 AND channel_id=$2 AND $3::int8multirange @> event_seq)", s.OrganizationID, s.ChannelID, set)
+			feedRequire(t, err)
+			plan, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			feedRequire(t, err)
+			for _, line := range plan {
+				if !strings.Contains(line, "Filter:") {
+					t.Log(line)
+				}
+			}
+			counter := platform.NewQueryCounter()
+			config := pool.Config()
+			config.ConnConfig.Tracer = counter
+			traced, err := pgxpool.NewWithConfig(t.Context(), config)
+			feedRequire(t, err)
+			defer traced.Close()
+			feedRequire(t, platform.InTx(t.Context(), traced, func(tx platform.Tx) error {
+				before := counter.Counts().Queries
+				if err := checkedRead(t, match)(newFeedWriter().Read(t.Context(), tx, s, 1, 20000)); err != nil {
+					return err
+				}
+				if got := counter.Counts().Queries - before; got != 10 {
+					t.Fatalf("fragmented read statements=%d, want 10", got)
+				}
+				return nil
+			}))
+		})
 	}
 }

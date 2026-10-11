@@ -55,6 +55,8 @@ type costConnection struct {
 	mu             sync.Mutex
 	snapshots      []costSnapshot
 	sequences      map[int64]bool
+	timings        *costTimings
+	slots          chan struct{}
 }
 
 func (c *costConnection) Trigger(e realtime.Event) bool {
@@ -62,7 +64,21 @@ func (c *costConnection) Trigger(e realtime.Event) bool {
 }
 
 func (c *costConnection) Recount(ctx context.Context, _ realtime.Subscription) (realtime.Outgoing, error) {
+	start := time.Now()
+	if c.slots != nil {
+		select {
+		case c.slots <- struct{}{}:
+			defer func() { <-c.slots }()
+		case <-ctx.Done():
+			c.timings.add(costGate, start, ctx.Err())
+			return realtime.Outgoing{}, context.Cause(ctx)
+		}
+	}
+	c.timings.add(costGate, start, nil)
+	start = time.Now()
+	ctx = context.WithValue(ctx, costRoleKey{}, costSidebar)
 	s, err := c.reader.Sidebar(ctx, c.member, c.channel, nil)
+	c.timings.add(costWhole, start, err)
 	if err != nil {
 		return realtime.Outgoing{}, err
 	}

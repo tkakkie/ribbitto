@@ -3,8 +3,8 @@
 `internal/typing` owns memory-only state per process, with no tables, store,
 wiring package, event kinds or HTML. It imports only kernel IDs and realtime's
 interest type for generation notifications. Summaries and composer ordering are
-current (#784–#787, #813); production delivery is current (#788). Composer
-controls and page attachment (#789–#790) remain subsequent parts of #288.
+current (#784–#787, #813); production delivery is current (#788). Posting forms
+carry composer generations (#827); input signals and page attachment (#789–#790) remain subsequent parts of #288.
 
 `Start` takes trusted organisation, channel, nonzero composing topic and member
 identity (display name and handle); callers must resolve and authorize them.
@@ -27,11 +27,11 @@ server-resolved inputs, and callers still authorize them.
 takes the returned successful message's actual scope and its composer's
 generation. Under the same state lock, it closes that generation and stops the
 member's activity in exactly that organisation/member/channel/topic. Missing or
-invalid generations still stop that scope (posting can precede #789), but cannot
-close another scope's composer. Another tab's composer remains usable, and a new
+invalid generations still stop that scope, but cannot close another scope's
+composer. Another tab's composer remains usable, and a new
 composer rendered after success can start typing again. A failed submission must
 not call `Posted`: its 422 re-render carries the submitted generation unchanged,
-so the successful retry closes signals sent before the failure (#787 → #789).
+so the successful retry closes signals sent before the failure (#787, #827).
 
 Closures stay for `ClosedRetention` (one minute after the latest successful post
 with that generation: a double submit restarts it, and a replaced timer that
@@ -104,8 +104,14 @@ overdue generations. Refusals change no activity, deadline or generation.
 
 Feed/topic posts, plain or enhanced, pass optional `composer` to `Posted` only on
 success, using every scope ID from the returned message. Failure preserves activity
-and ordering. #789 renders generations and keeps them on validation failure;
-production shares the stream state and one limiter.
+and ordering. Feed composers issue for the snapshot channel's `DefaultTopicID`;
+topic composers use the snapshot's resolved selected topic ID. Issuance reuses
+loaded scope, with no additional queries. Latest and older pages submit the
+hidden `composer` control. A 422 fragment or full page keeps the submitted value
+exactly, including empty/invalid values; a missing control stays absent. Success
+issues a fresh generation in the enhanced replacement or plain redirect's page.
+Input sends no typing requests yet (#789); both forms work without JavaScript.
+Production shares the stream state and one limiter.
 
 ## Production delivery
 

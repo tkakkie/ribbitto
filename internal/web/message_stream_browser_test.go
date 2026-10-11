@@ -40,6 +40,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 	t.Cleanup(launch.Kill)
 	browser := rod.New().ControlURL(url).MustConnect()
 	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	t.Run("composer/no-javascript", func(t *testing.T) { testComposerWithoutJavaScript(t, browser) })
 	t.Run("unread-divider", func(t *testing.T) { testUnreadDividerBrowser(t, browser) })
 	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {

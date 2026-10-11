@@ -46,9 +46,11 @@ func TestTopicReadExamples(t *testing.T) {
 		_, err := pool.Exec(t.Context(), "INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq) SELECT $1,$2,$3,$4,'example',unnest($5::bigint[])", f.OrganizationID, f.Channel.ID, topics[topic], f.MemberID, seqs)
 		feedRequire(t, err)
 	}
-	read := func(t *testing.T, topic string, cursor int64) {
+	read := func(t *testing.T, topic string, cursor int64, changed bool) {
 		s := unread.TopicScope{Scope: scope, TopicID: topics[topic]}
-		feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error { return newTopicWriter().Read(t.Context(), tx, s, 5, cursor) }))
+		feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
+			return checkedRead(t, changed)(newTopicWriter().Read(t.Context(), tx, s, 5, cursor))
+		}))
 		topicFloor(t, pool, s, cursor)
 	}
 	brancher := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil)
@@ -74,7 +76,7 @@ func TestTopicReadExamples(t *testing.T) {
 	insert(t, "c", 16)
 	advance(t, 18)
 	t.Run("Reading one topic (topic test 2)", func(t *testing.T) {
-		read(t, "a", 18)
+		read(t, "a", 18, true)
 		check(t, unread.Range{Lo: 0, Hi: 11}, unread.Range{Lo: 12, Hi: 13}, unread.Range{Lo: 14, Hi: 16})
 	})
 	t.Run("Branching (topic test 1)", func(t *testing.T) {
@@ -84,9 +86,9 @@ func TestTopicReadExamples(t *testing.T) {
 	})
 	t.Run("Moving an unread message into a topic read further; A message that arrives after the snapshot", func(t *testing.T) {
 		advance(t, 24)
-		read(t, "b", 24)
+		read(t, "b", 24, true)
 		move(t, "c", "b", 16)
-		read(t, "b", 24)
+		read(t, "b", 24, false)
 		check(t, unread.Range{Lo: 0, Hi: 16})
 	})
 	t.Run("Moving a message more than once", func(t *testing.T) {
@@ -121,7 +123,7 @@ func TestTopicReadStatementsAndRollback(t *testing.T) {
 	for _, cursor := range []int64{1, 2, 301} {
 		err = platform.InTx(t.Context(), traced, func(tx platform.Tx) error {
 			before := counter.Counts().Queries
-			if err := newTopicWriter().Read(t.Context(), tx, s, 1, cursor); err != nil {
+			if err := checkedRead(t, cursor > 1)(newTopicWriter().Read(t.Context(), tx, s, 1, cursor)); err != nil {
 				return err
 			}
 			got := counter.Counts().Queries - before
@@ -142,7 +144,9 @@ func TestTopicReadStatementsAndRollback(t *testing.T) {
 	}
 	other := conversationtest.OrganizationWithOwner(t, pool, "other", "general")
 	s = unread.TopicScope{Scope: unread.Scope{OrganizationID: other.OrganizationID, ChannelID: other.Channel.ID, MemberID: other.MemberID}, TopicID: other.Channel.DefaultTopicID}
-	err = platform.InTx(t.Context(), pool, func(tx platform.Tx) error { return newTopicWriter().Read(t.Context(), tx, s, 1, 2) })
+	err = platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
+		return checkedRead(t, false)(newTopicWriter().Read(t.Context(), tx, s, 1, 2))
+	})
 	if !errors.Is(err, unread.ErrInvalidCursor) {
 		t.Fatalf("future cursor: %v", err)
 	}
@@ -151,7 +155,7 @@ func TestTopicReadStatementsAndRollback(t *testing.T) {
 
 func TestTopicAndFeedReadConcurrentAndReordered(t *testing.T) {
 	for _, kinds := range [][2]string{{"topic", "topic"}, {"topic", "feed"}, {"feed", "topic"}} {
-		for _, cursors := range [][2]int64{{3, 5}, {5, 3}} {
+		for _, cursors := range [][2]int64{{3, 5}, {5, 3}, {3, 3}} {
 			t.Run("Two tabs at once/"+fmt.Sprint(kinds, cursors), func(t *testing.T) {
 				pool, scope := feedFixture(t)
 				var topic kernel.ID
@@ -161,14 +165,17 @@ func TestTopicAndFeedReadConcurrentAndReordered(t *testing.T) {
 				_, err := pool.Exec(t.Context(), "UPDATE message SET topic_id=$2 WHERE organization_id=$1 AND event_seq=4", scope.OrganizationID, other.ID)
 				feedRequire(t, err)
 				want := []unread.Range{{Lo: 0, Hi: 4}, {Lo: 5, Hi: 6}}
+				if cursors == [2]int64{3, 3} {
+					want = []unread.Range{{Lo: 0, Hi: 4}}
+				}
 				if (kinds[0] == "feed" && cursors[0] == 5) || (kinds[1] == "feed" && cursors[1] == 5) {
 					want = []unread.Range{{Lo: 0, Hi: 6}}
 				}
-				write := func(ctx context.Context, tx platform.Tx, kind string, cursor int64) error {
+				write := func(ctx context.Context, tx platform.Tx, kind string, cursor int64, changed bool) error {
 					if kind == "feed" {
-						return newFeedWriter().Read(ctx, tx, scope, 1, cursor)
+						return checkedRead(t, changed)(newFeedWriter().Read(ctx, tx, scope, 1, cursor))
 					}
-					return newTopicWriter().Read(ctx, tx, s, 1, cursor)
+					return checkedRead(t, changed)(newTopicWriter().Read(ctx, tx, s, 1, cursor))
 				}
 				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 				defer cancel()
@@ -178,7 +185,7 @@ func TestTopicAndFeedReadConcurrentAndReordered(t *testing.T) {
 				defer func() { unblock(); feedRequire(t, <-first) }()
 				go func() {
 					first <- platform.InTx(ctx, pool, func(tx platform.Tx) error {
-						if err := write(ctx, tx, kinds[0], cursors[0]); err != nil {
+						if err := write(ctx, tx, kinds[0], cursors[0], true); err != nil {
 							return err
 						}
 						close(locked)
@@ -196,7 +203,7 @@ func TestTopicAndFeedReadConcurrentAndReordered(t *testing.T) {
 					t.Fatal(ctx.Err())
 				}
 				go func() {
-					second <- platform.InTx(ctx, pool, func(tx platform.Tx) error { return write(ctx, tx, kinds[1], cursors[1]) })
+					second <- platform.InTx(ctx, pool, func(tx platform.Tx) error { return write(ctx, tx, kinds[1], cursors[1], cursors[1] > cursors[0]) })
 				}()
 				for {
 					var blocked bool
@@ -220,7 +227,7 @@ func TestTopicAndFeedReadConcurrentAndReordered(t *testing.T) {
 				}
 				topicFloor(t, pool, s, floor)
 				for _, kind := range []string{"topic", "feed", "topic"} {
-					feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error { return write(t.Context(), tx, kind, 1) }))
+					feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error { return write(t.Context(), tx, kind, 1, false) }))
 					feedRanges(t, pool, scope, want)
 					topicFloor(t, pool, s, floor)
 				}

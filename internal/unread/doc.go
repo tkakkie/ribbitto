@@ -3,7 +3,9 @@
 // read state. A per-member, per-channel lock serialises unions; a join prefix
 // makes pre-membership messages read. Feed and topic reads use injected transaction-bound
 // conversation and org queries; this module never reads message directly.
-// Reading owns feed and topic transactions through an injected runner.
+// Feed and topic writers report actual newly read messages under that lock,
+// excluding implicit prefixes, empty coverage and floor-only writes. Reading
+// owns their transactions through an injected runner; publication is not wired.
 // Topic preparation and batch unions retain the channel lock in the caller's
 // transaction; topic floors only rise, including when no new range is added.
 // Sidebar range reads share the caller's snapshot and derive bounded gaps

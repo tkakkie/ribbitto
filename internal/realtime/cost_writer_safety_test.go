@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -23,18 +24,27 @@ type costWriterProbe struct {
 	seq        int64
 	deny       atomic.Bool
 	renderGate chan struct{}
+	renderAt   int64
+	audiences  map[int64]*kernel.ID
+	checks     []kernel.ID
+	afters     []int64
 }
 
-func (p *costWriterProbe) EventsAfter(_ context.Context, _ kernel.ID, after int64, _ int) ([]realtime.Event, error) {
+func (p *costWriterProbe) EventsAfter(_ context.Context, _ kernel.ID, after int64, limit int) ([]realtime.Event, error) {
+	p.afters = append(p.afters, after)
 	var events []realtime.Event
-	for seq := after + 1; seq <= p.seq; seq++ {
-		events = append(events, realtime.Event{OrganizationID: p.sub.Organization, ChannelID: p.sub.Channel, Seq: seq, AudienceMemberID: &p.sub.Account})
+	for seq := after + 1; seq <= p.seq && len(events) < limit; seq++ {
+		audience, ok := p.audiences[seq]
+		if !ok {
+			audience = &p.sub.Member
+		}
+		events = append(events, realtime.Event{OrganizationID: p.sub.Organization, ChannelID: p.sub.Channel, Seq: seq, AudienceMemberID: audience})
 	}
 	return events, nil
 }
 func (p *costWriterProbe) Render(_ context.Context, e realtime.Event) (realtime.Outgoing, error) {
 	p.last = "render"
-	if p.renderGate != nil {
+	if p.renderGate != nil && (p.renderAt == 0 || e.Seq == p.renderAt) {
 		<-p.renderGate
 	}
 	return realtime.Outgoing{ID: e.Seq, Name: "message"}, nil
@@ -44,11 +54,14 @@ func (p *costWriterProbe) MayReceive(_ context.Context, account kernel.ID, slug 
 		p.t.Error("authorization lost stream scope")
 	}
 	p.last = "audience"
+	if e.AudienceMemberID != nil {
+		p.checks = append(p.checks, *e.AudienceMemberID)
+	}
 	if e.AudienceMemberID != nil && *e.AudienceMemberID == p.sub.Member {
 		p.last = "bound"
 		return !p.deny.Load(), nil
 	}
-	return true, nil
+	return false, nil
 }
 func (p *costWriterProbe) Send(_ context.Context, out realtime.Outgoing) error {
 	if p.last != "bound" {
@@ -70,12 +83,17 @@ func (s costWriterSource) Recount(ctx context.Context, _ realtime.Subscription) 
 	return s(ctx)
 }
 
+// Unrelated durable events must not invalidate the recount held by the backlog test.
+type costWriterQuietSource struct{ realtime.SidebarSource }
+
+func (costWriterQuietSource) Trigger(realtime.Event) bool { return false }
+
 type costWriterExit struct {
 	cursor int64
 	err    error
 }
 
-func startCostWriter(t *testing.T, q *costQueue, g costQueueGate, heartbeat time.Duration) (costWriter, *costWriterProbe, context.CancelFunc, <-chan costWriterExit) {
+func startCostWriter(t *testing.T, q *costQueue, g costQueueGate, heartbeat time.Duration, configure ...func(*costWriter, *costWriterProbe)) (costWriter, *costWriterProbe, context.CancelFunc, <-chan costWriterExit) {
 	p := &costWriterProbe{t: t, sub: realtime.Subscription{Organization: kernel.ID{1}, Channel: kernel.ID{2}, Member: kernel.ID{3}, Account: kernel.ID{4}, OrganizationSlug: "acme", Interests: []realtime.Interest{realtime.InterestMessages, realtime.InterestSidebar}}}
 	n := int64(0)
 	source := costWriterSource(func(context.Context) (realtime.Outgoing, error) {
@@ -85,6 +103,9 @@ func startCostWriter(t *testing.T, q *costQueue, g costQueueGate, heartbeat time
 		return realtime.Outgoing{ID: 99, Name: "untrusted", Data: []byte(fmt.Sprint(n))}, nil
 	})
 	w := costWriter{realtime.Stream{Hub: realtime.NewHub(), Events: p, Renderer: p, Authorizer: p, Sidebar: source, Heartbeat: heartbeat}, q, q.register()}
+	for _, configure := range configure {
+		configure(&w, p)
+	}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan costWriterExit, 1)
 	go func() { cursor, err := w.run(ctx, p.sub, 0, p); done <- costWriterExit{cursor, err} }()
@@ -125,6 +146,110 @@ func TestCostWriterProgress(t *testing.T) {
 				cancel()
 				if got := <-done; got.cursor != 3 || !errors.Is(got.err, context.Canceled) {
 					t.Fatalf("disconnect cursor/cause: %+v", got)
+				}
+			})
+		})
+	}
+}
+
+func TestCostWriterBacklogCompletion(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q, g := newCostQueue(1, 1), costQueueGate{make(chan int64, 16), make(chan struct{}, 16)}
+		defer q.shutdown()
+		defer close(g.release)
+		renderGate := make(chan struct{})
+		release := sync.OnceFunc(func() { close(renderGate) })
+		defer release()
+		w, p, cancel, done := startCostWriter(t, q, g, 0, func(w *costWriter, p *costWriterProbe) {
+			w.stream.Sidebar = costWriterQuietSource{w.stream.Sidebar}
+			p.renderGate, p.renderAt = renderGate, realtime.DefaultBatchSize
+		})
+		defer cancel()
+		g.want(t, 1)
+		p.seq = realtime.DefaultBatchSize + 3
+		w.stream.Hub.Raise(p.sub.Organization, p.seq)
+		synctest.Wait()
+		if len(p.frames) != realtime.DefaultBatchSize-1 {
+			t.Fatalf("backlog did not stop at first batch gate: %v", p.frames)
+		}
+		g.release <- struct{}{}
+		synctest.Wait()
+		if len(w.work.done) != 1 {
+			t.Fatal("recount completion did not arrive during first batch")
+		}
+		release()
+		synctest.Wait()
+		cancel()
+		got := <-done
+		if got.cursor != p.seq || !errors.Is(got.err, context.Canceled) || !slices.Contains(p.afters, realtime.DefaultBatchSize) {
+			t.Fatalf("backlog batch cursor/cause: %+v, reads=%v", got, p.afters)
+		}
+		if len(p.frames) != int(p.seq)+1 || p.frames[realtime.DefaultBatchSize].Name != "sidebar" {
+			t.Fatal("recount completion was not sent between batches before backlog drained")
+		}
+		seq := int64(0)
+		for i, frame := range p.frames {
+			if i == realtime.DefaultBatchSize {
+				if frame.ID != 0 || !frame.Ephemeral || string(frame.Data) != "1" {
+					t.Fatalf("backlog sidebar flags/payload changed: %+v", frame)
+				}
+				continue
+			}
+			seq++
+			if frame.ID != seq || frame.Name != "message" || frame.Ephemeral {
+				t.Fatalf("backlog durable IDs/order changed at frame %d: %+v", i, frame)
+			}
+		}
+	})
+}
+
+func TestCostWriterAudiences(t *testing.T) {
+	other := kernel.ID{5}
+	for _, audience := range []string{"own", "other", "organization"} {
+		t.Run(audience, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				q, g := newCostQueue(1, 1), costQueueGate{make(chan int64, 16), make(chan struct{}, 16)}
+				defer q.shutdown()
+				defer close(g.release)
+				w, p, cancel, done := startCostWriter(t, q, g, 0)
+				defer cancel()
+				g.want(t, 1)
+				p.audiences = map[int64]*kernel.ID{}
+				wantChecks, wantFrames := []kernel.ID{p.sub.Member}, 1
+				switch audience {
+				case "other":
+					p.audiences[1] = &other
+					wantChecks, wantFrames = []kernel.ID{other, p.sub.Member}, 0
+				case "organization":
+					p.audiences[1] = nil
+				}
+				p.seq = 1
+				w.stream.Hub.Raise(p.sub.Organization, 1)
+				synctest.Wait()
+				if len(p.frames) != wantFrames {
+					t.Errorf("audience %s sent %d frames, want %d", audience, len(p.frames), wantFrames)
+				}
+				if !slices.Equal(p.checks, wantChecks) {
+					t.Errorf("audience %s authorization path: %v, want %v", audience, p.checks, wantChecks)
+				}
+				// A subsequent broadcast must read from the skipped event's cursor too.
+				p.audiences[2], p.seq = nil, 2
+				w.stream.Hub.Raise(p.sub.Organization, 2)
+				synctest.Wait()
+				if !slices.Contains(p.afters, 1) {
+					t.Errorf("audience %s did not advance live cursor: reads=%v", audience, p.afters)
+				}
+				cancel()
+				if got := <-done; got.cursor != 2 || !errors.Is(got.err, context.Canceled) {
+					t.Fatalf("audience %s cursor/cause: %+v", audience, got)
+				}
+				if len(p.frames) != wantFrames+1 {
+					t.Fatalf("audience %s blocked subsequent broadcast: %v", audience, p.frames)
+				}
+				for i, frame := range p.frames {
+					if frame.ID != int64(2-wantFrames+i) || frame.Name != "message" || frame.Ephemeral {
+						t.Fatalf("audience %s durable frame changed: %+v", audience, frame)
+					}
 				}
 			})
 		})

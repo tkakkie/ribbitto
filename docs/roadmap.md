@@ -28,7 +28,7 @@ load tests before M4 are done (#216, #219; [results](architecture/load-results.m
 
 ## M4
 
-M4 is done (2026-10-12): unread counts per channel and topic that follow
+M4 is done: unread counts per channel and topic that follow
 posts, moves and reads in all of a member's tabs (#286, #711), the unread
 divider (#291), presence on the members panel (#287) and the typing
 indicator (#288). The completed outcomes are:

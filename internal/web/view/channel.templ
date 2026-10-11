@@ -183,11 +183,11 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 				</form>
 				<footer class="mt-auto flex flex-col gap-2 border-t border-border p-4">
 					<p class="break-words text-caption text-muted">
-						// templ drops the white space around a component call, so the
-						// spaces are part of the text.
+						// templ drops the white space before a component call but keeps
+						// it after one, so only the first space is part of the text.
 						{ i18n.T(ctx, "hello.signed_in_as") + " " }
 						@MemberName(page.DisplayName, page.Handle)
-						{ " · " + i18n.T(ctx, "org.role." + page.Role) }
+						{ "· " + i18n.T(ctx, "org.role." + page.Role) }
 					</p>
 					@SignOutButton()
 				</footer>

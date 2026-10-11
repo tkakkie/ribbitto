@@ -109,6 +109,7 @@ check: $(TEMPL) db-health
 	go -C tools run ./apicheck -check ..
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
+	bash scripts/fingerprint_test.sh
 	go -C tools vet ./...
 	go -C tools test -race -count=1 ./...
 	go -C tools run ./docscheck ..
@@ -128,20 +129,13 @@ check-ai:
 # templ formatting, the doc.go check, go vet, sourcecheck or the tests
 # (make check does), nor the schema docs or make vuln (CI does).
 #
-# The fingerprint is the tracked diff plus hashes of the untracked file
-# list and of each untracked file, taken before and after generation, so
-# changes already uncommitted do not fail it. Paths travel NUL-separated,
-# through a file rather than a pipe, and after --, so a quoted name, a file
-# named "-" or a failed hash fails the recipe instead of dropping out of the
-# comparison (Grok on #855).
+# scripts/fingerprint.sh fingerprints uncommitted changes before and after
+# generation, so changes already uncommitted do not fail it; each run's own
+# status is checked (Grok on #855).
 prepush: $(TEMPL) $(TAILWIND)
-	@set -eu; list=$$(mktemp); trap 'rm -f "$$list"' EXIT; \
-	fingerprint() { git diff --binary --no-ext-diff && \
-		git ls-files -z -o --exclude-standard >"$$list" && git hash-object -- "$$list" && \
-		if [ -s "$$list" ]; then xargs -0 git hash-object -- <"$$list"; fi; }; \
-	before=$$(fingerprint) || exit 1; \
+	@set -eu; before=$$(bash scripts/fingerprint.sh) || exit 1; \
 	$(MAKE) generate; $(MAKE) css; \
-	after=$$(fingerprint) || exit 1; \
+	after=$$(bash scripts/fingerprint.sh) || exit 1; \
 	if [ "$$after" != "$$before" ]; then \
 		echo "make generate or make css changed files; commit them:"; \
 		git status --short; \

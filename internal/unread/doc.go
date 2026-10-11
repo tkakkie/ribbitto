@@ -5,7 +5,11 @@
 // conversation and org queries; this module never reads message directly.
 // Feed and topic writers report actual newly read messages under that lock,
 // excluding implicit prefixes, empty coverage and floor-only writes. Reading
-// owns their transactions through an injected runner; publication is not wired.
+// owns their transactions and synchronously calls a context-free publisher only
+// after a successful commit with changed=true, never after rollback or commit failure.
+// Production passes nil until #711 activates delivery; committed reads must survive
+// request cancellation. Posting and branching use only transaction-bound writers
+// and their durable message.posted notification, never the reading publisher.
 // Topic preparation and batch unions retain the channel lock in the caller's
 // transaction; topic floors only rise, including when no new range is added.
 // Sidebar range reads share the caller's snapshot and derive bounded gaps

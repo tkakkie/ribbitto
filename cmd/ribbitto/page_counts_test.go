@@ -64,7 +64,7 @@ func TestPageCountsSnapshot(t *testing.T) {
 					scope := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
 					wantCount, wantFirst := int64(2), int64(2)
 					if n > 1 {
-						feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter()).Feed(t.Context(), scope, m.Member.JoinedEventSeq, initial.EventSeq))
+						feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, initial.EventSeq))
 						wantCount, wantFirst = 1, 3
 					}
 					trace := &pageTrace{QueryCounter: platform.NewQueryCounter(), names: map[string]int{}}
@@ -77,7 +77,7 @@ func TestPageCountsSnapshot(t *testing.T) {
 						post, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &selected, "concurrent")
 						feedRequire(t, err)
 						scope := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
-						feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter()).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
+						feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
 						_, err = conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil).Branch(t.Context(), m, f.Channel.ID,
 							conversation.Branch{From: selected, Messages: []kernel.ID{initial.ID}, NewName: "moved"}, func(conversation.Topic) string { return "notice" })
 						feedRequire(t, err)

@@ -27,7 +27,7 @@ type FeedWriter struct // FeedWriter reads a channel through a cursor in the cal
   func (*FeedWriter).Read(ctx context.Context, tx github.com/tkakkie/ribbitto/internal/platform/postgres.Tx, scope Scope, joinedEventSeq int64, cursor int64) (bool, error) // Read unions the feed prefix through cursor with the member's persisted join prefix.
 func NewChannelCounts(ranges ChannelRangesIn, messages ChannelCounterIn) *ChannelCounts // NewChannelCounts builds channel counts with snapshot-bound factories.
 func NewFeedWriter(ranges RangeWriterIn, messages ChannelMessagesIn, cursor EventCursorIn) *FeedWriter // NewFeedWriter builds the feed write with transaction-bound factories.
-func NewReading(runner TxRunner, feed *FeedWriter, topic *TopicWriter) *Reading // NewReading builds reading with a runner and transaction-bound writers.
+func NewReading(runner TxRunner, feed *FeedWriter, topic *TopicWriter, publisher ReadPublisher) *Reading // NewReading builds reading with transaction-bound writers and an optional publisher.
 func NewTopicCounts(state TopicStateReaderIn, messages TopicCounterIn) *TopicCounts // NewTopicCounts builds topic counts with snapshot-bound factories.
 func NewTopicWriter(prepare TopicPrepareIn, messages TopicMessagesIn, cursor EventCursorIn) *TopicWriter // NewTopicWriter builds the topic write with transaction-bound factories.
 type PreparedTopic interface // PreparedTopic holds read state and the channel lock until the caller completes its transaction.
@@ -40,6 +40,8 @@ type RangeWriter interface // RangeWriter unions read ranges with the member's p
   func (RangeWriter).Merge(context.Context, Scope, int64, Range) error
   func (RangeWriter).MergeCovered(context.Context, Scope, int64, Range) ([]Range, error) // MergeCovered returns only newly covered intervals, excluding the join prefix.
 type RangeWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) RangeWriter // RangeWriterIn binds range writes to the caller's transaction.
+type ReadPublisher interface // ReadPublisher receives effective reads after commit, independently of request cancellation.
+  func (ReadPublisher).ReadChanged(organization github.com/tkakkie/ribbitto/internal/kernel.ID, member github.com/tkakkie/ribbitto/internal/kernel.ID)
 type Reading struct // Reading marks a feed or topic read in its own transaction.
   func (*Reading).Feed(ctx context.Context, scope Scope, joinedEventSeq int64, cursor int64) error // Feed reads a resolved channel through cursor using org's persisted join sequence.
   func (*Reading).Topic(ctx context.Context, scope TopicScope, joinedEventSeq int64, cursor int64) error // Topic reads a resolved topic through cursor using org's persisted join sequence.

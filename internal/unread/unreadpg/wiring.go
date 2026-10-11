@@ -10,8 +10,8 @@ import (
 )
 
 // NewReading builds reading with a pool-backed transaction runner.
-func NewReading(pool *pgxpool.Pool, feed *unread.FeedWriter, topic *unread.TopicWriter) *unread.Reading {
-	return unread.NewReading(txRunner{pool: pool}, feed, topic)
+func NewReading(pool *pgxpool.Pool, feed *unread.FeedWriter, topic *unread.TopicWriter, publisher unread.ReadPublisher) *unread.Reading {
+	return unread.NewReading(txRunner{pool: pool}, feed, topic, publisher)
 }
 
 type txRunner struct{ pool *pgxpool.Pool }

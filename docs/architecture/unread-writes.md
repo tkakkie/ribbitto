@@ -22,10 +22,19 @@ message-existence query, batched as one multirange; an empty difference skips
 it. Topic detection reuses the locked unread candidates. Repeated, older,
 empty, floor-only, join-prefix-only and identical-range writes report false.
 The result describes uncommitted writes: a rollback discards them. Reading
-currently consumes it without publication; post-commit publication is the
-second part of #828. Posting discards the result and retains its existing
+synchronously calls its injected, context-free publisher with organisation and
+member only after a successful transaction return and only when changed.
+Rollback and failed commit publish nothing; cancellation immediately after commit
+cannot suppress publication. Production passes nil until #711 activates delivery.
+Concurrent feed/topic reads share the channel lock, including lock-row creation,
+so the same unread message cannot cause two publications. Posting discards the
+result and retains its existing
 transaction order and durable event notification; branching keeps `Merge`'s
-error-only entry point over the same locked union.
+error-only entry point over the same locked union. Neither adapter calls the
+reading publisher; both retain their durable `message.posted` notification.
+`Merge` still delegates to `MergeCovered`: posting and branching also sort ranges
+and build the difference. #711's read/post cost measurements must compare this
+with #832's posting latency (the non-blocking note on #828).
 
 A newly read message
 `m` adds `[p + 1, n)`, with `p` the channel's previous message (or 0) and

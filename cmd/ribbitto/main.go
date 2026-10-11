@@ -353,7 +353,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Topics:        conversationpg.NewTopics(pool),
 		Messages:      conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn),
 		Posting:       posting,
-		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter()),
+		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil),
 		Branching:     branching,
 		Channels:      conversationpg.NewChannels(pool),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),

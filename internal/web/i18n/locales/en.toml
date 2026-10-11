@@ -231,3 +231,18 @@ other = "Unread messages: {count}"
 
 ["reading.new_messages"]
 other = "New messages"
+
+["activity.separator"]
+other = ", "
+
+["activity.more"]
+other = " and "
+
+["activity.others"]
+other = " others"
+
+["activity.single"]
+other = " is typing…"
+
+["activity.multiple"]
+other = " are typing…"

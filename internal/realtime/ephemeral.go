@@ -11,6 +11,7 @@ import (
 
 // EphemeralOwner reads current state and the generation that state represents.
 // Read runs once at connect, then when the hub generation advances. The owner
+// receives after=-1 for typing on connect (presence starts at zero),
 // decides connect output, interprets Subscription.PresenceAfter, and returns an
 // empty Outgoing.Name when nothing changed for this place, or "reset" when the
 // token cannot be served. State must be published before RaiseGeneration.
@@ -56,7 +57,12 @@ func (s Stream) ephemeral(ctx context.Context, sub Subscription, seen *streamLev
 		if ctx.Err() != nil {
 			return false, context.Cause(ctx)
 		}
-		frame, err := owner.Read(ctx, sub, *entry.seen)
+		after := *entry.seen
+		if connect && entry.kind == InterestTyping {
+			// Restore empty state too, without putting negative levels into waits.
+			after = -1
+		}
+		frame, err := owner.Read(ctx, sub, after)
 		if err != nil {
 			return false, fmt.Errorf("reading %s state: %w", entry.kind, err)
 		}

@@ -1,0 +1,28 @@
+package view
+
+import (
+	"strconv"
+
+	"github.com/tkakkie/ribbitto/internal/typing"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
+
+// TypingIndicator supplies content replacement; the page owns its status region.
+templ TypingIndicator(snapshot typing.Snapshot) {
+	if len(snapshot.Typists) > 0 {
+		for index, person := range snapshot.Typists {
+			if index > 0 {
+				{ i18n.T(ctx, "activity.separator") }
+			}
+			@MemberName(person.DisplayName, person.Handle)
+		}
+		if snapshot.Remaining > 0 {
+			{ i18n.T(ctx, "activity.more") + strconv.Itoa(snapshot.Remaining) + i18n.T(ctx, "activity.others") }
+		}
+		if len(snapshot.Typists) == 1 && snapshot.Remaining == 0 {
+			{ i18n.T(ctx, "activity.single") }
+		} else {
+			{ i18n.T(ctx, "activity.multiple") }
+		}
+	}
+}

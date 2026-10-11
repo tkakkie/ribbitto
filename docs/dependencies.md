@@ -135,5 +135,6 @@ internal/web -> web/static
 internal/web/middleware -> internal/identity
 internal/web/middleware -> internal/kernel
 internal/web/view -> internal/kernel
+internal/web/view -> internal/typing
 internal/web/view -> internal/web/i18n
 ```

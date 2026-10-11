@@ -329,6 +329,7 @@ func testTypingIndicatorBrowser(t *testing.T, browser *rod.Browser) {
 }`).Bool() {
 				t.Fatal("typing replacement moved focus, status or durable cursor")
 			}
+			// Nothing posts or closes a stream here: only owner expiry empties both views.
 			expect(feed, "")
 			expect(topicA, "")
 			signalInput()

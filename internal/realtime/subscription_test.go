@@ -67,7 +67,11 @@ func TestStreamSubscriptionInterest(t *testing.T) {
 			}
 			send := newRecorder()
 			cursor, err := s.Run(t.Context(), selected, 0, send)
-			if cursor != 1 || !errors.Is(err, errTooManyReads) || !slices.Equal(calls, tt.wantCalls) || !slices.Equal(send.ids(), tt.wantSent) {
+			wantCursor, wantErr := int64(1), errTooManyReads
+			if tt.deny || tt.revoke {
+				wantCursor, wantErr = 0, ErrMembershipRevoked
+			}
+			if cursor != wantCursor || !errors.Is(err, wantErr) || !slices.Equal(calls, tt.wantCalls) || !slices.Equal(send.ids(), tt.wantSent) {
 				t.Fatalf("Run = %d, %v; calls %v, sent %v; want cursor 1, calls %v, sent %v", cursor, err, calls, send.ids(), tt.wantCalls, tt.wantSent)
 			}
 		})
@@ -118,7 +122,11 @@ func TestStreamSubscriptionScopes(t *testing.T) {
 					if len(send.ids()) != 0 {
 						calls = append(calls, "send")
 					}
-					if err != nil || sent != tt.wantSent || !slices.Equal(calls, tt.wantCalls) {
+					var wantErr error
+					if tt.deny {
+						wantErr = ErrMembershipRevoked
+					}
+					if !errors.Is(err, wantErr) || sent != tt.wantSent || !slices.Equal(calls, tt.wantCalls) {
 						t.Fatalf("deliver = %t, %v; calls %v; want sent %t, calls %v", sent, err, calls, tt.wantSent, tt.wantCalls)
 					}
 				})

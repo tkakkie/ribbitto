@@ -31,7 +31,7 @@ func streamFixture(t *testing.T) deliveryFixture {
 	member := orgtest.Member(t, pool, id, account, org.RoleMember, "alice", 1)
 	return deliveryFixture{
 		pool:   pool,
-		sub:    realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: id, OrganizationSlug: "acme", Account: account},
+		sub:    realtime.Subscription{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: id, OrganizationSlug: "acme", Account: account, Member: member},
 		member: member,
 	}
 }
@@ -98,11 +98,15 @@ func deliver(t *testing.T, f deliveryFixture, a *org.Authorizer, n int, render d
 func rendered(_ context.Context, e realtime.Event) (realtime.Outgoing, error) {
 	return realtime.Outgoing{ID: e.Seq}, nil
 }
-func awaitDelivery(t *testing.T, result <-chan deliveryResult, cursor int64, sent int) {
+func awaitDelivery(t *testing.T, result <-chan deliveryResult, cursor int64, sent int, wantError ...error) {
 	t.Helper()
+	var wantErr error
+	if len(wantError) > 0 {
+		wantErr = wantError[0]
+	}
 	select {
 	case r := <-result:
-		if r.err != nil || r.cursor != cursor || len(r.sent) != sent {
+		if !errors.Is(r.err, wantErr) || r.cursor != cursor || len(r.sent) != sent {
 			t.Fatalf("delivery=%+v, want cursor=%d sends=%d", r, cursor, sent)
 		}
 	case <-time.After(5 * time.Second):
@@ -161,8 +165,8 @@ func TestStreamCachedAllowRevocation(t *testing.T) {
 				requireNoError(t, tx.Commit(t.Context()))
 			}
 			close(release)
-			awaitDelivery(t, result, 3, 1)
-			awaitDelivery(t, deliver(t, f, a, 1, rendered), 1, 0)
+			awaitDelivery(t, result, 1, 1, realtime.ErrMembershipRevoked)
+			awaitDelivery(t, deliver(t, f, a, 1, rendered), 0, 0, realtime.ErrMembershipRevoked)
 		})
 	}
 }
@@ -200,10 +204,10 @@ func TestStreamStaleInflightMembership(t *testing.T) {
 		"DELETE FROM member WHERE organization_id=$1 AND id=$2", f.sub.Organization, f.member)
 	requireNoError(t, err)
 	// Check 2 finishes while check 1's pre-revocation result is still gated.
-	awaitDelivery(t, deliver(t, f, a, 1, rendered), 1, 0)
+	awaitDelivery(t, deliver(t, f, a, 1, rendered), 0, 0, realtime.ErrMembershipRevoked)
 	close(gate.release)
 	awaitDelivery(t, first, 1, 1) // Its snapshot preceded the commit: the accepted window.
-	awaitDelivery(t, deliver(t, f, a, 1, rendered), 1, 0)
+	awaitDelivery(t, deliver(t, f, a, 1, rendered), 0, 0, realtime.ErrMembershipRevoked)
 	if a.Stats().CacheHits != 0 {
 		t.Fatalf("stale allow was cached: %+v", a.Stats())
 	}

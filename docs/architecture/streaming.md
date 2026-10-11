@@ -29,15 +29,13 @@ The retention period defaults to seven days; see [database configuration](../dat
 
 ### Authorization and revocation
 
-- Before registration, the handler rejects a present `Sec-Fetch-Site` other
-  than a single `same-origin` value with 403, including `same-site`,
-  `cross-site` and `none`; it takes no stream slot. An absent header remains
-  allowed for older clients and tools. This supplements
-  `http.CrossOriginProtection`, which exempts GET requests.
+- Before registration, `Sec-Fetch-Site` must be absent or a single
+  `same-origin` value; otherwise the handler returns 403 without a slot.
+  This supplements `http.CrossOriginProtection`, which exempts GET.
 - Every event is authorized for the connection's member **after it is
   rendered and immediately before sending**, including events already
-  queued: access may have been lost in between, also while a render waits on
-  the database (#262). `org.Authorizer.MayReceive` first reads a fresh
+  queued: access may have been lost in between, including while rendering (#262).
+  `org.Authorizer.MayReceive` first reads a fresh
   access epoch, sharing reads only with overlapping checks and retaining no
   epoch values. A bounded allow cache keyed by (account, slug) may supply the
   membership only when its epoch is at least that fresh epoch; otherwise an
@@ -45,9 +43,14 @@ The retention period defaults to seven days; see [database configuration](../dat
   A later check prevents an older in-flight result from entering the cache.
   The installation-wide sequence and database triggers invalidate allows
   across direct SQL revocations, renames and organisation recreation (#669).
-  Missing rows deny; read errors stop the stream. Denies are not cached;
-  they skip the event and advance its cursor. Organisation and audience
-  checks still apply to every event. A denied render is discarded.
+  Missing rows deny; read errors stop the stream. Durable, sidebar, presence
+  and typing delivery also check `AudienceMemberID == sub.Member`.
+  A bound-member deny ends `Run` with `ErrMembershipRevoked`; another
+  member's event audience still only skips and advances the cursor.
+  Heartbeats re-check membership, ending idle revocation within one interval.
+  Removal reconnects get 404; replacement reconnects bind the new member.
+  Cleanup releases old presence and typing counts; other streams continue.
+  Denies are not cached; denied renders are discarded.
   Only the write remains between the check and the connection; a revocation
   after the epoch snapshot can still let that event through. This implements
   [option (a2)](stream-authorization.md#decision) (#670).
@@ -64,9 +67,7 @@ The retention period defaults to seven days; see [database configuration](../dat
   organisation, member and channel; every interest counts.
   Typing uses separate channel counts: the last matching close clears activity
   immediately ([typing lifetime](typing.md)); failed opens take no count. Presence stays online
-  until 30 s after the last close; a reconnect cancels expiry. State, bounded
-  snapshots (#766), changes/reset (#767) and rendering/delivery
-  (#768) are current.
+  until 30 s after the last close; a reconnect cancels expiry.
   Cancellation before the first write answers 404 for an ended session or
   503 for shutdown, without committing SSE headers. The status is
   committed by `WriteHeader` outside the sender, after one more look at the
@@ -90,10 +91,9 @@ delivers presence and typing as current state ([ephemeral state](ephemeral-state
 
 `GET /organizations/{slug}/events` accepts these parameters. `messages`
 delivers durable frames; `typing` and `presence` read their wired
-owners after each durable batch and before waiting, at most one frame and
-one authorization check per kind. Presence checks the organisation, typing
-the frame's channel, immediately before sending. Denies mark the generation
-seen; errors stop the stream. Web's presence (#768) and viewer-filtered typing (#788) adapters are wired in production. Sidebar recounts are wired in production (#819); composition details are in [unread counts](unread-counts.md).
+owners after each durable batch and before waiting, at most one frame per
+kind. Presence checks the organisation, typing
+the frame's channel, immediately before sending. Bound-member denies and errors stop the stream. Web's presence (#768) and viewer-filtered typing (#788) adapters are wired in production. Sidebar recounts are wired in production (#819); composition details are in [unread counts](unread-counts.md).
 
 The endpoint takes:
 
@@ -101,7 +101,7 @@ The endpoint takes:
 |---|---|
 | `after` | the durable cursor; `Last-Event-ID` wins |
 | `want` | comma-separated interests, each at most once: `sidebar`, `messages`, `typing`, `presence`; anything else is 400 |
-| `channel` | the page's channel: required with `messages`, `typing` or `sidebar` (every page sends it; the sidebar's recount source is bound to it, so a sidebar stream without one would get no initial recount and is 400); with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
+| `channel` | the page's channel: required with `messages`, `typing` or `sidebar` (for its initial recount); with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
 | `topic` | optional with `messages`, `typing` or `sidebar`; requires `channel`, narrows messages/typing and retains sidebar selection; another organisation or channel is 404 |
 | `panel` | optional `members`, suppressing feed selection on the members sidebar |
 | `presence-after` | required with `presence`: the process instance and presence generation the page was rendered with |

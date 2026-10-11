@@ -54,8 +54,8 @@ type sidebarDelivery struct {
 	observed, covered uint64
 }
 
-// recount runs between batches so a backlog cannot starve it. Denied frames
-// also consume the interval; only a successful write changes the heartbeat.
+// recount runs between batches so a backlog cannot starve it. Only a
+// successful write changes the heartbeat; a revoked membership ends delivery.
 func (s Stream) recount(ctx context.Context, sub Subscription, pending *sidebarDelivery, send Sender, written *time.Time) error {
 	if pending.watch != nil {
 		pending.observed, _ = pending.watch.Snapshot()
@@ -76,19 +76,13 @@ func (s Stream) recount(ctx context.Context, sub Subscription, pending *sidebarD
 		return context.Cause(ctx)
 	}
 	out.ID, out.Name, out.Ephemeral = 0, "sidebar", true
-	allowed, err := s.Authorizer.MayReceive(ctx, sub.Account, sub.OrganizationSlug, Event{OrganizationID: sub.Organization, AudienceMemberID: &sub.Member})
-	if err != nil {
+	if err := s.checkMember(ctx, sub, Event{OrganizationID: sub.Organization}); err != nil {
 		return fmt.Errorf("authorizing sidebar frame: %w", err)
 	}
-	if ctx.Err() != nil {
-		return context.Cause(ctx)
+	if err := send.Send(ctx, out); err != nil {
+		return fmt.Errorf("sending sidebar frame: %w", err)
 	}
-	if allowed {
-		if err := send.Send(ctx, out); err != nil {
-			return fmt.Errorf("sending sidebar frame: %w", err)
-		}
-		*written = time.Now()
-	}
+	*written = time.Now()
 	pending.covered = covered
 	pending.dirty, pending.next = false, time.Now().Add(SidebarInterval)
 	return nil

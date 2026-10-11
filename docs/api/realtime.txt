@@ -30,6 +30,7 @@ type EphemeralOwner interface // EphemeralOwner reads current state and the gene
   func (EphemeralOwner).Read(ctx context.Context, sub Subscription, after int64) (EphemeralFrame, error)
 var ErrAccountCancelled error // ErrAccountCancelled ends connections cancelled by CancelAccount.
 var ErrCursorExpired error // ErrCursorExpired means the cursor is outside the valid replay range: below the replay boundary or above the committed event_seq.
+var ErrMembershipRevoked error // ErrMembershipRevoked ends a stream whose bound member is no longer authorized.
 var ErrSessionEnded error // ErrSessionEnded ends connections cancelled by CancelSession.
 var ErrShutdown error // ErrShutdown ends every connection when the server shuts down.
 var ErrTooManyConnections error // ErrTooManyConnections refuses a registration over either stream limit.
@@ -118,7 +119,7 @@ type Subscription struct // Subscription is one connection's explicit interests 
   field Account github.com/tkakkie/ribbitto/internal/kernel.ID
   field Channel github.com/tkakkie/ribbitto/internal/kernel.ID
   field Interests []Interest // Interests is the set of requested output; empty means no message delivery.
-  field Member github.com/tkakkie/ribbitto/internal/kernel.ID // Member is server-resolved identity for viewer-filtered ephemeral state.
+  field Member github.com/tkakkie/ribbitto/internal/kernel.ID // Member binds the stream to its server-resolved membership.
   field Organization github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationSlug string
   field PresenceAfter string // PresenceAfter is the opaque page token interpreted by the presence owner.

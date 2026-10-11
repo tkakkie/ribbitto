@@ -79,19 +79,16 @@ func (s Stream) ephemeral(ctx context.Context, sub Subscription, seen *streamLev
 		if entry.kind == InterestTyping {
 			event.ChannelID = frame.Channel
 		}
-		allowed, err := s.Authorizer.MayReceive(ctx, sub.Account, sub.OrganizationSlug, event)
-		if err != nil {
+		if err := s.checkMember(ctx, sub, event); err != nil {
 			return false, fmt.Errorf("authorizing %s frame: %w", entry.kind, err)
 		}
-		if allowed {
-			frame.Outgoing.ID, frame.Outgoing.Ephemeral = 0, true
-			if err := send.Send(ctx, frame.Outgoing); err != nil {
-				return false, fmt.Errorf("sending %s frame: %w", entry.kind, err)
-			}
-			*written = time.Now()
+		frame.Outgoing.ID, frame.Outgoing.Ephemeral = 0, true
+		if err := send.Send(ctx, frame.Outgoing); err != nil {
+			return false, fmt.Errorf("sending %s frame: %w", entry.kind, err)
 		}
+		*written = time.Now()
 		*entry.seen = max(*entry.seen, frame.Generation)
-		if allowed && frame.Outgoing.Name == "reset" {
+		if frame.Outgoing.Name == "reset" {
 			return true, nil
 		}
 	}

@@ -304,24 +304,15 @@ func TestSidebarWatchHeartbeat(t *testing.T) {
 		done := make(chan result, 1)
 		go func() { c, err := stream.Run(ctx, selected, 7, send); done <- result{c, err} }()
 		synctest.Wait()
-		for range 4 {
-			w.publish()
-			synctest.Wait()
-			time.Sleep(SidebarInterval / 4)
-			synctest.Wait()
-		}
-		if counts != 2 || send.heartbeatCount() != 2 || len(send.ids()) != 0 || log.readCount() != 6 {
-			t.Fatalf("read wakes/denies changed deadlines: recounts=%d heartbeats=%d frames=%v log reads=%d", counts, send.heartbeatCount(), send.ids(), log.readCount())
-		}
-		h.Raise(selected.Organization, 8) // An empty durable wake must not repeat a covered deny.
+		w.publish()
 		synctest.Wait()
-		time.Sleep(SidebarInterval)
+		time.Sleep(SidebarInterval) // Virtual time proves revoked streams do no later work.
 		synctest.Wait()
-		if counts != 2 || send.heartbeatCount() != 4 || log.readCount() != 7 {
-			t.Fatalf("covered deny repeated or heartbeat stalled: recounts=%d heartbeats=%d reads=%d", counts, send.heartbeatCount(), log.readCount())
+		if counts != 1 || send.heartbeatCount() != 0 || len(send.ids()) != 0 || log.readCount() != 1 {
+			t.Fatalf("revoked stream kept recounting or writing: recounts=%d heartbeats=%d frames=%v reads=%d", counts, send.heartbeatCount(), send.ids(), log.readCount())
 		}
 		cancel()
-		if got := <-done; got.cursor != 7 || !errors.Is(got.err, context.Canceled) || w.releases != 1 {
+		if got := <-done; got.cursor != 7 || !errors.Is(got.err, ErrMembershipRevoked) || w.releases != 1 {
 			t.Fatalf("Run=%+v releases=%d", got, w.releases)
 		}
 	})

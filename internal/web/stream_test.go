@@ -9,16 +9,19 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/presence"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -749,4 +752,115 @@ func streamEndpoint(t *testing.T, page string) string {
 		endpoint += "&topic=" + parts[6]
 	}
 	return endpoint + "&"
+}
+
+// The lock also orders mutations before future heartbeat timer callbacks.
+type revocationStore struct {
+	mu     sync.Mutex
+	member kernel.ID
+	epoch  int64
+}
+
+func (s *revocationStore) Membership(context.Context, kernel.ID, string) (org.Membership, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.member == (kernel.ID{}) {
+		return org.Membership{}, org.ErrNotFound
+	}
+	return org.Membership{Organization: org.Organization{Slug: "acme"}, Member: org.Member{ID: s.member}, AccessEpoch: s.epoch}, nil
+}
+func (s *revocationStore) AccessEpoch(context.Context, kernel.ID) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.epoch, nil
+}
+func (*revocationStore) HomeSlug(context.Context, kernel.ID) (string, error) { return "acme", nil }
+
+func TestStreamMembershipRevocationReconnect(t *testing.T) {
+	for _, mode := range []string{"active removal", "idle removal", "active replacement", "idle replacement"} {
+		t.Run(mode, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				hub, old, channel := realtime.NewHub(), kernel.ID{3}, kernel.ID{1}
+				store := &revocationStore{member: old, epoch: 1}
+				auth := org.NewCachedAuthorizer(t.Context(), store, 8)
+				state, activity := presence.New(hub), typing.New(hub)
+				page, _ := state.Read(kernel.ID{}, nil)
+				var opened []kernel.ID
+				stream := &Streaming{Lifetime: t.Context(), Hub: hub, Events: quietLog{}, Authorizer: auth, Heartbeat: time.Second,
+					Owners:   map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestPresence: NewPresenceOwner(t.Context(), state)},
+					Sessions: laterSession{hub: hub, session: identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, seen: new(int)},
+					StreamOpened: func(o, m, c kernel.ID) func() {
+						opened = append(opened, m)
+						closePresence, closeTyping := state.Open(o, m), activity.Open(o, m, c)
+						return func() { closePresence(); closeTyping() }
+					}}
+				catalogues, err := i18n.New(slog.Default())
+				if err != nil {
+					t.Fatal(err)
+				}
+				handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Authz, s.Stream = auth, stream }))
+				if err != nil {
+					t.Fatal(err)
+				}
+				start := func() (*deadlineWriter, <-chan struct{}, context.CancelFunc) {
+					r := httptest.NewRequest(http.MethodGet, "/organizations/acme/events?after=0&want=presence&channel="+streamChannel+"&presence-after="+presenceToken(page.Token), nil)
+					r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+					ctx, cancel := context.WithCancel(r.Context())
+					w, done := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}, make(chan struct{})
+					go func() { handler.ServeHTTP(w, r.WithContext(ctx)); close(done) }()
+					synctest.Wait()
+					return w, done, cancel
+				}
+				w, done, cancel := start()
+				defer cancel()
+				place := typing.Place{Channel: channel, Topic: kernel.ID{6}}
+				activity.Start(kernel.ID{}, place, typing.Typist{Member: old})
+				if w.Code != 200 || hub.Connections() != 1 || len(activity.Read(kernel.ID{}, place, kernel.ID{}).Typists) != 1 {
+					t.Fatal("stream did not open with typing activity")
+				}
+				before := w.Body.String()
+				store.mu.Lock()
+				store.member, store.epoch = kernel.ID{}, 2
+				if mode == "active replacement" || mode == "idle replacement" {
+					store.member = kernel.ID{4}
+				}
+				store.mu.Unlock()
+				if mode == "active removal" || mode == "active replacement" {
+					closePeer := state.Open(kernel.ID{}, kernel.ID{9})
+					defer closePeer()
+				} else {
+					<-time.After(time.Second) // Advance the heartbeat, not synchronization.
+				}
+				synctest.Wait()
+				select {
+				case <-done:
+				default:
+					t.Fatal("revoked handler did not end at delivery/heartbeat")
+				}
+				if hub.Connections() != 0 || w.Body.String() != before {
+					t.Fatal("revoked stream retained a slot or wrote a frame")
+				}
+				activity.Start(kernel.ID{}, place, typing.Typist{Member: old})
+				if len(activity.Read(kernel.ID{}, place, kernel.ID{}).Typists) != 0 {
+					t.Fatal("old member retained typing activity or its stream count")
+				}
+				reconnect, again, stop := start()
+				if store.member == (kernel.ID{}) {
+					if reconnect.Code != 404 || len(opened) != 1 {
+						t.Fatal("removed member reconnect did not get 404")
+					}
+				} else if reconnect.Code != 200 || !slices.Equal(opened, []kernel.ID{old, store.member}) || hub.Connections() != 1 {
+					t.Fatal("replacement reconnect did not bind the new member")
+				}
+				stop()
+				<-again
+				<-time.After(30 * time.Second)
+				synctest.Wait()
+				snapshot, err := state.Read(kernel.ID{}, []kernel.ID{old})
+				if err != nil || snapshot.Online[0] {
+					t.Fatal("old member presence did not expire after close")
+				}
+			})
+		})
+	}
 }

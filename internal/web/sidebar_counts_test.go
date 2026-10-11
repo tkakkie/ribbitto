@@ -13,6 +13,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -30,7 +31,7 @@ func (s sidebarReader) Page(context.Context, org.Membership, kernel.ID, *kernel.
 }
 
 func (s sidebarReader) Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error) {
-	return conversation.MembersPage{Current: s.page.Current, Channels: s.page.Channels, Topics: s.page.Topics, PageCounts: s.page.PageCounts}, nil
+	return conversation.MembersPage{Current: s.page.Current, Channels: s.page.Channels, Topics: s.page.Topics, PageCounts: s.page.PageCounts, EventCursor: s.page.EventCursor}, nil
 }
 
 func TestSidebarCountsMarkup(t *testing.T) {
@@ -41,7 +42,7 @@ func TestSidebarCountsMarkup(t *testing.T) {
 	for _, lang := range []string{"en", "ja"} {
 		for _, kind := range []string{"feed", "feed older", "topic", "topic older", "unlisted", "unlisted older", "members"} {
 			t.Run(lang+"/"+kind, func(t *testing.T) {
-				page := conversation.ChannelPage{PageCounts: conversation.PageCounts{
+				page := conversation.ChannelPage{EventCursor: new(int64(42)), PageCounts: conversation.PageCounts{
 					ChannelCounts: map[kernel.ID]int64{}, TopicCounts: map[kernel.ID]int64{},
 				}}
 				counts := []int64{0, 1, 99, 100}
@@ -92,6 +93,24 @@ func TestSidebarCountsMarkup(t *testing.T) {
 				if problems := checkMarkup(doc, true); len(problems) != 0 {
 					t.Fatal(problems)
 				}
+				endpoint, _ := idAttribute(t, doc, "organization-stream", "sse-connect")
+				sub, valid := streamScope(httptest.NewRequest("GET", endpoint, nil))
+				if !valid || (sub.Topic == nil) != (page.Topic == nil) || (sub.Topic != nil && *sub.Topic != page.Topic.ID) ||
+					strings.Contains(endpoint, "panel=members") != (kind == "members") ||
+					strings.Contains(endpoint, "messages") != (kind != "members" && !strings.HasSuffix(kind, "older")) {
+					t.Fatalf("page selection or interests lost: %s", endpoint)
+				}
+				var frame realtime.Outgoing
+				catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+					frame, err = RenderSidebar(r.Context(), org.Membership{Organization: org.Organization{Slug: "acme"}}, conversation.SidebarSnapshot{
+						Current: page.Current, Channels: page.Channels, Topics: page.Topics, Topic: page.Topic,
+						ChannelCounts: page.ChannelCounts, TopicCounts: page.TopicCounts,
+					}, kind == "members")
+				})).ServeHTTP(httptest.NewRecorder(), r)
+				if err != nil {
+					t.Fatal(err)
+				}
+				assertSidebarMatchesPage(t, doc, frame)
 				channels, topics := 0, 0
 				for n := range doc.Descendants() {
 					id := attr(n, "id")
@@ -116,7 +135,7 @@ func TestSidebarCountsMarkup(t *testing.T) {
 						continue
 					}
 					link := find(n, atom.A)
-					if link == nil || attr(link, "href") == "" || (attr(link, "aria-current") == "page") != selected {
+					if link == nil || attr(link, "id") != "link-"+id || attr(link, "href") == "" || (attr(link, "aria-current") == "page") != selected {
 						t.Fatal("link or selection lost")
 					}
 					if count > 0 && !strings.Contains(attr(link, "class"), "font-semibold") {
@@ -126,6 +145,11 @@ func TestSidebarCountsMarkup(t *testing.T) {
 				}
 				if channels != 4 || topics != 50 {
 					t.Fatalf("entries: channels=%d topics=%d", channels, topics)
+				}
+				if page.Topic != nil {
+					if _, ok := idAttribute(t, doc, "topic-heading-count", "class"); !ok {
+						t.Fatal("topic heading target missing")
+					}
 				}
 				if kind != "members" {
 					count := int64(0)

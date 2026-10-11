@@ -15,7 +15,9 @@ import (
 	"github.com/a-h/templ"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"github.com/tkakkie/ribbitto/web/static"
@@ -359,7 +361,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 	})
 }
 
-// This frame source uses test-only OOB entries instead of feature owners.
+// Exercise both test-only OOB entries and the real sidebar renderer through htmx.
 func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
@@ -458,6 +460,25 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 			t.Fatal("ephemeral delivery changed a cursor, duplicated an entry or inserted an absent target")
 		}
 		assertBrowserItems(t, page, []int{51})
+	}
+	state := conversation.SidebarSnapshot{Current: conversation.Channel{ID: snapshot.Current.ID, Name: "general"},
+		Channels: []conversation.Channel{{ID: snapshot.Current.ID, Name: "general"}},
+		Topics:   []conversation.Topic{{ID: topic, Name: "retained"}}, ChannelCounts: map[kernel.ID]int64{snapshot.Current.ID: 9}}
+	for _, focused := range []string{"link-" + view.ChannelDOMID(snapshot.Current.ID), "link-" + view.TopicDOMID(topic)} {
+		frame, err := RenderSidebar(ctx, org.Membership{Organization: org.Organization{Slug: "acme"}}, state, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page.MustEval(`() => window.sidebarBefore = document.getElementById('sidebar-topics')`)
+		send(&frame)
+		page.MustWait(`id => !!document.getElementById(id) && document.getElementById('sidebar-topics') !== window.sidebarBefore`, focused)
+		page.MustEval(`id => { document.getElementById(id).focus(); window.focusedLink = document.activeElement; }`, focused)
+		send(&frame)
+		page.MustWait(`id => document.activeElement.id === id && document.activeElement !== window.focusedLink`, focused)
+		if !page.MustEval(`() => document.getElementById('organization-stream').dataset.eventCursor === '51' &&
+			!document.getElementById('stream-sink').hasChildNodes() && document.querySelectorAll('#sidebar-topics > li').length === 1`).Bool() {
+			t.Fatal("real sidebar payload changed the cursor, sink or fresh list")
+		}
 	}
 	// Native retry retains the original URL and sends its durable Last-Event-ID.
 	send(nil)

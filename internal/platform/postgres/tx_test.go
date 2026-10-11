@@ -293,7 +293,7 @@ func newReplyDropper(t *testing.T, direct *pgxpool.Pool) *replyDropper {
 			}
 			go func() { _, _ = io.Copy(server, client); _ = server.Close() }()
 			go func() {
-				defer client.Close()
+				defer func() { _ = client.Close() }()
 				buf := make([]byte, 32<<10)
 				for {
 					n, err := server.Read(buf)

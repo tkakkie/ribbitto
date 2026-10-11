@@ -49,6 +49,8 @@ type ChannelPage struct {
 	Older bool
 	// Before is the event_seq bound of an older page; 0 shows the latest.
 	Before int64
+	// FirstUnread stays the same for the whole visit; zero means nothing was unread.
+	FirstUnread int64
 	// EventCursor starts replay after every page's snapshot, including history.
 	EventCursor *int64
 }
@@ -93,7 +95,7 @@ func oldestSequence(page ChannelPage) int64 {
 
 // olderURL links to the page before the oldest message shown.
 func olderURL(page ChannelPage) string {
-	return fmt.Sprintf("%s?before=%d", conversationURL(page), page.Messages[0].EventSeq)
+	return fmt.Sprintf("%s?before=%d&unread=%d", conversationURL(page), page.Messages[0].EventSeq, page.FirstUnread)
 }
 
 // streamURL declares the page's interests independently of its history URL.
@@ -215,6 +217,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							class="peer flex flex-col gap-4 px-6 py-4 empty:hidden"
 						>
 							for _, entry := range page.Messages {
+								@unreadDivider(entry.EventSeq, page.FirstUnread)
 								@MessageItem(entry)
 							}
 						</ol>
@@ -238,7 +241,19 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 			<script defer src="/static/message-composer-v4.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		}
-		<script defer src="/static/message-stream-v8.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v9.js" nonce={ templ.GetNonce(ctx) }></script>
+	}
+}
+
+// A separate page-only item survives shared live replacements. Its sequence
+// lets move insertion order it alongside messages without special JavaScript.
+templ unreadDivider(seq, firstUnread int64) {
+	if firstUnread > 0 && seq == firstUnread {
+		<li id="unread-divider" data-event-seq={ fmt.Sprint(firstUnread) } class="flex items-center gap-3">
+			<span aria-hidden="true" class="flex-1 border-t border-border"></span>
+			<p class="rounded-sm bg-accent px-2 py-1 text-caption font-semibold text-on-accent">{ i18n.T(ctx, "reading.new_messages") }</p>
+			<span aria-hidden="true" class="flex-1 border-t border-border"></span>
+		</li>
 	}
 }
 

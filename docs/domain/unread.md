@@ -104,15 +104,17 @@ not all the work: a topic count can also read the member's own posts made
 while the stream lagged, and a topic's first-unread lookup can scan topic
 history ([unread count costs](../architecture/unread-count-costs.md)).
 
-## The unread divider *(planned, M4)*
+## The unread divider
 
 The page computes, in its snapshot and before its own POST, the first
 unread message of its scope (the channel for the feed, the topic for a topic
 view) and carries its sequence. The divider sits above that message when it
 is on the loaded page, and *Load older* passes the sequence along, so the
 divider stays where it was for the whole visit while the visit's POSTs
-advance the read state. The next page load computes it afresh (#291). Live
-items never carry it: their renders are shared between members.
+advance the read state. The next page load computes it afresh. A direct
+older-history URL without a carried sequence also uses its snapshot. Zero
+is carried explicitly when nothing was unread. Live items never carry it:
+their renders are shared between members.
 
 ## Topics
 

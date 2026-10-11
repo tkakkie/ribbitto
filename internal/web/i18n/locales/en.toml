@@ -228,3 +228,6 @@ other = "Mark as read"
 
 ["reading.unread_count"]
 other = "Unread messages: {count}"
+
+["reading.new_messages"]
+other = "New messages"

@@ -65,6 +65,8 @@
     for (const item of moved) {
       const target = document.getElementById(item.id);
       if (topic === routing.fromTopic) {
+        const divider = document.getElementById("unread-divider");
+        if (target && divider?.dataset.eventSeq === target.dataset.eventSeq) divider.remove();
         target?.remove();
         continue;
       }

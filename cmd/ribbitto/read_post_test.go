@@ -22,7 +22,7 @@ import (
 
 func TestReadingRollback(t *testing.T) {
 	pool, scope := feedFixture(t)
-	reading := unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter())
+	reading := unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil)
 	for _, existing := range []bool{false, true} {
 		want := []unread.Range{}
 		if existing {

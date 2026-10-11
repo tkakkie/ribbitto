@@ -47,7 +47,7 @@ func newSidebarBranchFixture(t *testing.T) sidebarBranchFixture {
 	unreadPost, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &source, "unread moves")
 	acceptanceOK(t, err)
 	scope := unread.TopicScope{Scope: unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: member}, TopicID: source}
-	acceptanceOK(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter()).Topic(t.Context(), scope, 1, read.EventSeq))
+	acceptanceOK(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Topic(t.Context(), scope, 1, read.EventSeq))
 	var messages []string
 	for _, id := range []kernel.ID{read.ID, unreadPost.ID} {
 		messages = append(messages, fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]))

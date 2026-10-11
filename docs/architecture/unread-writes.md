@@ -22,10 +22,37 @@ message-existence query, batched as one multirange; an empty difference skips
 it. Topic detection reuses the locked unread candidates. Repeated, older,
 empty, floor-only, join-prefix-only and identical-range writes report false.
 The result describes uncommitted writes: a rollback discards them. Reading
-currently consumes it without publication; post-commit publication is the
-second part of #828. Posting discards the result and retains its existing
+synchronously calls its injected, context-free publisher with organisation and
+member only when changed, after a successful transaction return or the one
+exception below. A known rollback or commit failure publishes nothing;
+cancellation immediately after commit cannot suppress publication. The commit,
+and any rollback, run under their own five-second limit instead of the
+request's cancellation and deadline (`platform.InTxDetachedCommit`; within the
+ten-second shutdown grace), so request cancellation alone no longer turns a
+commit in flight into a reported failure (Grok on #837), and a call to an unresponsive server returns within the limit;
+pgx then closes that connection and the pool discards it in the background,
+under pgx's own cleanup limits. A server's error or `ROLLBACK` reply, a COMMIT
+never sent, and any failure while beginning or writing publish nothing. Only a
+COMMIT sent without a reply within the limit (`platform.ErrCommitUnknown`) of a
+read with `changed=true` publishes anyway, once, to the same organisation and
+member — the exception to #828's commit-then-publish rule, approved by the
+maintainer. That publication is a **recount request**, not a successful read:
+the request still fails with the error, and the tabs only recount persisted
+state, which is right whether or not the read committed. Limits: it may be
+spurious (the read did not commit; a retried read may publish again), it may
+reach tabs **before** the commit completes on the server, so their recount can
+still miss it, and a process that dies between commit and publication publishes
+nothing. Recovery in those cases is the recount every stream does on
+(re)connect: option B has no bounded repair without reconnect (#711). Production passes nil until #711 activates delivery.
+Concurrent feed/topic reads share the channel lock, including lock-row creation,
+so the same unread message cannot cause two publications. Posting discards the
+result and retains its existing
 transaction order and durable event notification; branching keeps `Merge`'s
-error-only entry point over the same locked union.
+error-only entry point over the same locked union. Neither adapter calls the
+reading publisher; both retain their durable `message.posted` notification.
+`Merge` still delegates to `MergeCovered`: posting and branching also sort ranges
+and build the difference. #711's read/post cost measurements must compare this
+with #832's posting latency (the non-blocking note on #828).
 
 A newly read message
 `m` adds `[p + 1, n)`, with `p` the channel's previous message (or 0) and

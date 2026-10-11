@@ -63,7 +63,7 @@ func TestSidebarSnapshot(t *testing.T) {
 					post, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &selected, "concurrent")
 					feedRequire(t, err)
 					scope := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: f.MemberID}
-					feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter()).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
+					feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
 					branch, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil).Branch(t.Context(), m, f.Channel.ID,
 						conversation.Branch{From: selected, Messages: []kernel.ID{initial.ID}, NewName: "aaa"}, func(conversation.Topic) string { return "notice" })
 					feedRequire(t, err)
@@ -153,7 +153,7 @@ func TestSidebarScopes(t *testing.T) {
 		account := identitytest.Account(t, pool, "other@example.org", "other")
 		member := orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, "other", m.Member.JoinedEventSeq)
 		scope := unread.Scope{OrganizationID: f.OrganizationID, ChannelID: f.Channel.ID, MemberID: member}
-		feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter()).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
+		feedRequire(t, unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), nil).Feed(t.Context(), scope, m.Member.JoinedEventSeq, post.EventSeq))
 		sidebar, err := reader.Sidebar(t.Context(), m, f.Channel.ID, nil)
 		feedRequire(t, err)
 		if sidebar.ChannelCounts[f.Channel.ID] != 1 || sidebar.TopicCounts[f.Channel.DefaultTopicID] != 1 {

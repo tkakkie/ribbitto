@@ -122,5 +122,5 @@ func (p channelPages) branchError(w http.ResponseWriter, r *http.Request, m org.
 		p.topicID = &selected
 	}
 	before, _ := strconv.ParseInt(r.PostForm.Get("before"), 10, 64)
-	p.render(w, r, m, id, status, view.ChannelPage{Before: before, BranchError: key, BranchName: r.PostForm.Get("name")})
+	p.render(w, r, m, id, status, view.ChannelPage{Before: before, BranchError: key, BranchName: r.PostForm.Get("name")}, nil)
 }

@@ -106,4 +106,5 @@ the hub start empty ([Restoring a backup](../../README.md#restoring-a-backup)).
 ## Ephemeral state
 
 Presence and typing travel as current state with a generation, not as events:
-[ephemeral state](ephemeral-state.md).
+[ephemeral state](ephemeral-state.md). Production typing replaces a stable,
+polite status region on latest feeds/topics without changing durable cursors.

@@ -10,5 +10,6 @@
 // preserving long-open pages but allowing a delayed request five seconds of typing.
 // Failed-submission renders reuse their generation; other composers stay usable.
 // The random in-memory signing key changes on restart, refusing pre-restart tokens.
-// Authorized ingress and web rendering/delivery are subsequent parts.
+// Web authorizes signals and renders localized, viewer-filtered status content
+// on latest feeds/topics through the organisation stream; no durable cursor moves.
 package typing

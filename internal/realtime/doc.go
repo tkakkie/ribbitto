@@ -22,8 +22,9 @@
 // full recounts at connect and on consumer-defined organisation-wide triggers.
 // A dirty flag and fixed deadline coalesce recounts between batches; neither a
 // quiet period nor a backlog loses pending work. Rendering precedes authorization,
-// and sidebar frames preserve the durable cursor. Production presence
-// is current (#768); typing delivery is current (#788), its page region planned (#790); web's hidden sink is current (#737). It is also the
+// and sidebar frames preserve the durable cursor. Production presence and
+// typing are implemented; web renders their indicators.
+// Web's hidden sink receives sidebar/presence payloads. The hub is also the
 // registry of open connections: Register caps
 // connections per process and per account and gives each one a context
 // that CancelAccount or CancelSession ends. Events themselves are never

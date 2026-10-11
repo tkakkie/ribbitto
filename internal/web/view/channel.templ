@@ -239,6 +239,9 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						}
 					</div>
 					<div id="message-status" role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
+					if page.Before == 0 && page.EventCursor != nil {
+						<div id="typing-status" sse-swap="typing" hx-swap="innerHTML" role="status" aria-live="polite" aria-atomic="true" aria-label={ i18n.T(ctx, "activity.label") } class="min-h-6 shrink-0 px-4 text-caption text-muted"></div>
+					}
 					@branchForm(page)
 					@messageComposer(page, false)
 				</main>

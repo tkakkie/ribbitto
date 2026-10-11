@@ -64,7 +64,11 @@ detect duplicates and gaps; waits use DOM/lifecycle conditions, not sleeps.
 Composer cases run real signal/post handlers with request and DOM gates: IME,
 input throttling, draft isolation, independent in-flight signals, 422/retry,
 replacement, closed/fresh generations and plain feed/topic posts (latest/older).
-The harness controls only the two-second throttle timer, without sleeps.
+The composer harness controls only the two-second throttle timer, without sleeps.
+Typing indicator cases use production handlers, stream lifecycle, owner and writer
+for A/feed/B scope, self-exclusion, English/Japanese counts, expiry, send, multiple
+streams/last close and current/empty reconnects. Transport cases assert native
+Last-Event-ID and the page cursor after populated and empty typing frames.
 
 Run `go test ./internal/web -run TestMessageStreamBrowser -v` with Chrome
 installed. No browser is downloaded. Missing or unlaunchable browsers skip

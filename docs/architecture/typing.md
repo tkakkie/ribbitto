@@ -3,8 +3,8 @@
 `internal/typing` owns memory-only state per process, with no tables, store,
 wiring package, event kinds or HTML. It imports only kernel IDs and realtime's
 interest type for generation notifications. Summaries and composer ordering are
-current (#784–#787, #813); production delivery is current (#788). Posting forms
-carry composer generations (#827); input signals and page attachment (#789–#790) remain subsequent parts of #288.
+implemented, including production delivery, composer signals and the stable
+page status region (#784–#790, #813, #827, #833; closes #288).
 
 `Start` takes trusted organisation, channel, nonzero composing topic and member
 identity (display name and handle); callers must resolve and authorize them.
@@ -121,7 +121,11 @@ Web resolves `Subscription.Member` from stream membership, never the query.
 `NewTypingOwner` reads that viewer's selected summary and renders escaped templ
 content using captured signal-time identity, without membership or directory
 queries. English/Japanese content names at most three others and counts the rest;
-a lone viewer receives empty content. The page will own the status region (#790).
+a lone viewer receives empty content. Latest feeds/topics own a stable
+`#typing-status` under `#organization-stream`, outside composer replacement and
+message history. htmx replaces its content on `typing`; its localized polite,
+atomic status never moves focus. Members and directly opened older pages
+keep their interests and have no typing region.
 
 The writer supplies after=-1 for typing's initial owner read. Connect/reconnect
 always returns the complete indicator, including empty generation-zero state.

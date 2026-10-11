@@ -59,6 +59,9 @@ The empty `#message-status` has `role="status"`, `aria-live="polite"` and
 `aria-relevant="additions"`. History and paging stay outside live regions.
 Only live appends announce stream-only text. History, prepends and duplicate
 replacements stay silent. The status keeps the latest 10 entries; pruning is silent.
+Latest feeds/topics have a separate visible `#typing-status`, localized and
+polite with `aria-atomic="true"`. Content replacement keeps the region and focus;
+it stays outside history and composer replacement, with no keyboard stop.
 The textarea keeps invalid drafts and links errors with `aria-describedby`;
 htmx submissions return focus to it. "Load older messages"
 is a plain link without JavaScript; after a prepend, the reading position

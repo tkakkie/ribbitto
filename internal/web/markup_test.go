@@ -709,7 +709,7 @@ func TestPagesMarkup(t *testing.T) {
 						if _, ok := attrOK(n, "data-announcement"); ok {
 							t.Error("history must not carry announcement text")
 						}
-						if attr(n, "role") == "status" {
+						if attr(n, "role") == "status" && attr(n, "id") != "typing-status" {
 							statusCount++
 							if attr(n, "id") != "message-status" || attr(n, "aria-live") != "polite" || attr(n, "aria-relevant") != "additions" || attr(n, "aria-atomic") != "false" || text(n) != "" {
 								t.Error("live status must start empty and polite")

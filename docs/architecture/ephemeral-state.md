@@ -40,7 +40,7 @@ missed-notification recovery additionally needs durable revisions or replay.
 [Decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md);
 pages hold one organisation stream with [interests](streaming.md#stream-scope).
 Delivery, sink, presence and typing state, signals and delivery are current
-(#784–#788, #813); the page's typing region is planned (#790). Only visible transitions raise generations.
+(#784–#790, #813, #833), including the page's typing status region. Only visible transitions raise generations.
 
 - **Owners.** Presence counts accepted streams through web's lifecycle seam,
   independent of interests, and marks members offline 30 s after the last

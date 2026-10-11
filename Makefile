@@ -121,19 +121,28 @@ check-ai:
 	bash scripts/ai/launcher-tests.sh
 
 # A quick subset of make check to run before pushing a follow-up commit
-# (#848): generated files and CSS are current (tracked diffs and untracked
-# files' contents compared before and after), the API and dependency
+# (#848): generated files and CSS are current, the API and dependency
 # manifests and document sizes match, and lint passes. Each check is its own
 # recipe line, so make stops at the first non-zero status; nothing pipes a
 # check's output, which once hid a docscheck failure. It does not run Go or
-# templ formatting, the doc.go check, go vet, sourcecheck, the tests, the
-# schema docs or make vuln: make check and CI do.
+# templ formatting, the doc.go check, go vet, sourcecheck or the tests
+# (make check does), nor the schema docs or make vuln (CI does).
+#
+# The fingerprint is the tracked diff plus hashes of the untracked file
+# list and of each untracked file, taken before and after generation, so
+# changes already uncommitted do not fail it. Paths travel NUL-separated,
+# through a file rather than a pipe, and after --, so a quoted name, a file
+# named "-" or a failed hash fails the recipe instead of dropping out of the
+# comparison (Grok on #855).
 prepush: $(TEMPL) $(TAILWIND)
-	@set -eu; snapshot() { git diff; git ls-files -o --exclude-standard | \
-		while IFS= read -r f; do shasum "$$f"; done; }; \
-	before=$$(snapshot); \
+	@set -eu; list=$$(mktemp); trap 'rm -f "$$list"' EXIT; \
+	fingerprint() { git diff --binary --no-ext-diff && \
+		git ls-files -z -o --exclude-standard >"$$list" && git hash-object -- "$$list" && \
+		if [ -s "$$list" ]; then xargs -0 git hash-object -- <"$$list"; fi; }; \
+	before=$$(fingerprint) || exit 1; \
 	$(MAKE) generate; $(MAKE) css; \
-	if [ "$$(snapshot)" != "$$before" ]; then \
+	after=$$(fingerprint) || exit 1; \
+	if [ "$$after" != "$$before" ]; then \
 		echo "make generate or make css changed files; commit them:"; \
 		git status --short; \
 		exit 1; \

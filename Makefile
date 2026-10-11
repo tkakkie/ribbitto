@@ -21,7 +21,7 @@ export LAUNCHER_TESTS_BASE
 # measurement, and re-measure before raising it (docs/worktree-env.md).
 GO_TEST_FLAGS ?= -p 2
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-ai lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-ai prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -109,6 +109,7 @@ check: $(TEMPL) db-health
 	go -C tools run ./apicheck -check ..
 	bash scripts/deps.sh --check
 	bash scripts/deps_test.sh
+	bash scripts/fingerprint_test.sh
 	go -C tools vet ./...
 	go -C tools test -race -count=1 ./...
 	go -C tools run ./docscheck ..
@@ -119,6 +120,20 @@ check: $(TEMPL) db-health
 # Always runs the AI launchers' self-tests, whatever changed.
 check-ai:
 	bash scripts/ai/launcher-tests.sh
+
+# A quick subset of make check to run before pushing a follow-up commit
+# (#848): generated files and CSS are current, the API and dependency
+# manifests and document sizes match, and lint passes. Each check is its own
+# recipe line, so make stops at the first non-zero status; nothing pipes a
+# check's output, which once hid a docscheck failure. It does not run Go or
+# templ formatting, the doc.go check, go vet, sourcecheck or the tests
+# (make check does), nor the schema docs or make vuln (CI does).
+prepush: $(TEMPL) $(TAILWIND)
+	bash scripts/check-unchanged.sh $(MAKE) generate css
+	go -C tools run ./apicheck -check ..
+	bash scripts/deps.sh --check
+	go -C tools run ./docscheck ..
+	$(MAKE) lint
 
 # Needs the Go vulnerability database over the network, so it runs in CI
 # next to make check rather than inside it. Scans the application module.

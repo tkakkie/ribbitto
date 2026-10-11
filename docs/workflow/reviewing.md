@@ -140,6 +140,12 @@ reach the re-review, often Muse Code's, without either AI checking it:
    a failed check, or a fix needing a design or specification decision →
    ask the maintainer.
 
+**Before every follow-up push** — a Copilot or adversarial follow-up, a fix
+for a failing check, a merge of `main` — run `make prepush`
+([Checks](../../README.md#checks)) and push only if it passes: it regenerates
+files and checks the manifests, document sizes and lint, keeping each exit
+status. Ad-hoc command chains have hidden a failure before (#848).
+
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
 than combine both sides, it needs a normal review. A combination that

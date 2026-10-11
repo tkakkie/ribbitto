@@ -2,8 +2,12 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/internal/handle"
 )
@@ -25,22 +29,43 @@ func InTx(ctx context.Context, pool *pgxpool.Pool, fn func(Tx) error) error {
 	return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error { return fn(handle.NewTx(tx)) })
 }
 
-// InTxDetachedCommit is InTx, except that once fn succeeds the commit runs
-// without ctx's cancellation. A request cancelled while COMMIT is in flight
-// could otherwise get an error for a commit the server already finished, and
-// a caller that acts only on success (Reading's post-commit publication)
-// would skip it for good. fn and the rollbacks still follow ctx.
-func InTxDetachedCommit(ctx context.Context, pool *pgxpool.Pool, fn func(Tx) error) error {
+// ErrCommitUnknown wraps a commit error after which the server may or may not
+// have committed: no reply arrived (a timeout or a broken connection). A
+// server's own error reply means the transaction rolled back and is returned
+// unwrapped.
+var ErrCommitUnknown = errors.New("commit outcome unknown")
+
+// InTxDetachedCommit is InTx, except that once fn succeeds COMMIT runs under
+// its own limit instead of ctx's cancellation and deadline. A request
+// cancelled while COMMIT is in flight could otherwise get an error for a
+// commit the server already finished, and a caller that acts only on success
+// (Reading's post-commit publication) would skip it for good. The limit keeps
+// an unresponsive server from holding the connection: on expiry pgx closes it,
+// the pool discards it, and the error wraps ErrCommitUnknown. A rollback after
+// an error or a panic runs under the same kind of limit. fn follows ctx.
+func InTxDetachedCommit(ctx context.Context, pool *pgxpool.Pool, limit time.Duration, fn func(Tx) error) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	// After a commit this is a no-op; on an error or a panic it rolls back.
-	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	defer func() {
+		rollback, cancel := context.WithTimeout(context.WithoutCancel(ctx), limit)
+		defer cancel()
+		_ = tx.Rollback(rollback)
+	}()
 	if err := fn(handle.NewTx(tx)); err != nil {
 		return err
 	}
-	return tx.Commit(context.WithoutCancel(ctx))
+	commit, cancel := context.WithTimeout(context.WithoutCancel(ctx), limit)
+	defer cancel()
+	if err := tx.Commit(commit); err != nil {
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
+			return pgErr
+		}
+		return fmt.Errorf("%w: %w", ErrCommitUnknown, err)
+	}
+	return nil
 }
 
 // InSnapshot runs fn in a new read-only, repeatable-read transaction on pool,

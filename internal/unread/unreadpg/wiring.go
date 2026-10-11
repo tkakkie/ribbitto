@@ -2,6 +2,7 @@ package unreadpg
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -14,12 +15,16 @@ func NewReading(pool *pgxpool.Pool, feed *unread.FeedWriter, topic *unread.Topic
 	return unread.NewReading(txRunner{pool: pool}, feed, topic, publisher)
 }
 
+// commitLimit bounds a read's COMMIT or ROLLBACK independently of the request,
+// within the server's ten-second shutdown grace.
+const commitLimit = 5 * time.Second
+
 // txRunner detaches only the commit from request cancellation, so a read the
-// server committed is always reported as committed and published.
+// server committed is reported as committed and published.
 type txRunner struct{ pool *pgxpool.Pool }
 
 func (r txRunner) InTx(ctx context.Context, fn func(platform.Tx) error) error {
-	return platform.InTxDetachedCommit(ctx, r.pool, fn)
+	return platform.InTxDetachedCommit(ctx, r.pool, commitLimit, fn)
 }
 
 // WriterIn binds the read-range writer to the caller's transaction.

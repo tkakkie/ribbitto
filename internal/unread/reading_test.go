@@ -3,6 +3,7 @@ package unread
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -46,11 +47,12 @@ func (s readingState) Ranges(context.Context, kernel.ID, kernel.ID, kernel.ID, i
 
 func TestReadingPublication(t *testing.T) {
 	failure := errors.New("transaction failed")
+	unknown := fmt.Errorf("%w: %w", platform.ErrCommitUnknown, failure)
 	for _, kind := range []string{"feed", "topic"} {
 		for _, tc := range []struct {
-			name                      string
-			changed, cancel, disabled bool
-			writeErr, txErr           error
+			name                               string
+			changed, cancel, disabled, outcome bool
+			writeErr, txErr                    error
 		}{
 			{name: "changed", changed: true},
 			{name: "unchanged"},
@@ -59,6 +61,9 @@ func TestReadingPublication(t *testing.T) {
 			{name: "commit failure", changed: true, txErr: failure},
 			{name: "cancel after commit", changed: true, cancel: true},
 			{name: "nil publisher", changed: true, disabled: true},
+			// The server may have committed: a recount is right either way.
+			{name: "commit outcome unknown", changed: true, txErr: unknown, outcome: true},
+			{name: "unchanged, commit outcome unknown", txErr: unknown, outcome: true},
 		} {
 			t.Run(kind+"/"+tc.name, func(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
@@ -70,6 +75,7 @@ func TestReadingPublication(t *testing.T) {
 						return err
 					}
 					if tc.txErr != nil {
+						committed = tc.outcome
 						return tc.txErr
 					}
 					committed = true
@@ -111,7 +117,7 @@ func TestReadingPublication(t *testing.T) {
 				if errors.Is(err, failure) != wantError {
 					t.Fatalf("error=%v, want failure=%t", err, wantError)
 				}
-				want := tc.changed && !wantError && !tc.disabled
+				want := tc.changed && !tc.disabled && (!wantError || tc.outcome)
 				if (calls == 1) != want || calls > 1 || completed != want {
 					t.Fatalf("publication calls=%d completed=%t before return, want published=%t", calls, completed, want)
 				}

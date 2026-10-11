@@ -2,6 +2,7 @@ package unread
 
 import (
 	"context"
+	"errors"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
@@ -40,9 +41,7 @@ func (r *Reading) Feed(ctx context.Context, scope Scope, joinedEventSeq, cursor 
 		changed, err = r.feed.Read(ctx, tx, scope, joinedEventSeq, cursor)
 		return err
 	})
-	if err == nil && changed && r.publisher != nil {
-		r.publisher.ReadChanged(scope.OrganizationID, scope.MemberID)
-	}
+	r.publish(err, changed, scope)
 	return err
 }
 
@@ -54,8 +53,17 @@ func (r *Reading) Topic(ctx context.Context, scope TopicScope, joinedEventSeq, c
 		changed, err = r.topic.Read(ctx, tx, scope, joinedEventSeq, cursor)
 		return err
 	})
-	if err == nil && changed && r.publisher != nil {
+	r.publish(err, changed, scope.Scope)
+	return err
+}
+
+// publish reports a changed read after a successful commit, and also when the
+// commit's outcome is unknown: the member's tabs then recount persisted state,
+// which is right whether or not the read committed, while silence could leave
+// them stale until they reconnect. A rollback or a server's error reply
+// publishes nothing.
+func (r *Reading) publish(err error, changed bool, scope Scope) {
+	if changed && r.publisher != nil && (err == nil || errors.Is(err, platform.ErrCommitUnknown)) {
 		r.publisher.ReadChanged(scope.OrganizationID, scope.MemberID)
 	}
-	return err
 }

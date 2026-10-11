@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -97,13 +98,16 @@ func TestInTx(t *testing.T) {
 func TestInTxDetachedCommit(t *testing.T) {
 	t.Parallel()
 	pool := pgtest.New(t)
+	detached := func(ctx context.Context, p *pgxpool.Pool, fn func(postgres.Tx) error) error {
+		return postgres.InTxDetachedCommit(ctx, p, time.Minute, fn)
+	}
 	for _, tc := range []struct {
 		name, slug string
 		run        func(context.Context, *pgxpool.Pool, func(postgres.Tx) error) error
 		commit     bool
 	}{
 		{"InTx", "cancelled-intx", postgres.InTx, false},
-		{"InTxDetachedCommit", "cancelled-detached", postgres.InTxDetachedCommit, true},
+		{"InTxDetachedCommit", "cancelled-detached", detached, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
@@ -121,12 +125,59 @@ func TestInTxDetachedCommit(t *testing.T) {
 	}
 	t.Run("callback error still rolls back", func(t *testing.T) {
 		failure := errors.New("callback failed")
-		err := postgres.InTxDetachedCommit(t.Context(), pool, func(tx postgres.Tx) error {
+		err := postgres.InTxDetachedCommit(t.Context(), pool, time.Minute, func(tx postgres.Tx) error {
 			requireNoError(t, insertOrganization(t.Context(), tx, "detached-failed"))
 			return failure
 		})
 		if err != failure || organizations(t, pool, "detached-failed") != 0 {
 			t.Fatalf("InTxDetachedCommit = %v, want the callback's error and no row", err)
+		}
+	})
+
+	// A deferred trigger runs at COMMIT: id 1 stalls it, id 2 makes the server
+	// reject it.
+	_, err := pool.Exec(t.Context(), `CREATE TABLE commit_probe (id int);
+CREATE FUNCTION commit_probe() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	IF NEW.id = 1 THEN PERFORM pg_sleep(2); END IF;
+	IF NEW.id = 2 THEN RAISE EXCEPTION 'rejected at commit'; END IF;
+	RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER commit_probe AFTER INSERT ON commit_probe
+	DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION commit_probe();`)
+	requireNoError(t, err)
+	probe := func(ctx context.Context, id int, limit time.Duration) error {
+		return postgres.InTxDetachedCommit(ctx, pool, limit, func(tx postgres.Tx) error {
+			_, err := pgxbridge.Tx(tx).Exec(ctx, "INSERT INTO commit_probe VALUES ($1)", id)
+			return err
+		})
+	}
+	rows := func(id int) int {
+		var n int
+		requireNoError(t, pool.QueryRow(t.Context(), "SELECT count(*) FROM commit_probe WHERE id = $1", id).Scan(&n))
+		return n
+	}
+	t.Run("an unanswered commit is bounded, frees its connection and is unknown", func(t *testing.T) {
+		started := time.Now()
+		err := probe(t.Context(), 1, 200*time.Millisecond)
+		if !errors.Is(err, postgres.ErrCommitUnknown) || time.Since(started) > time.Second {
+			t.Fatalf("stalled commit = %v after %s, want ErrCommitUnknown within the limit", err, time.Since(started))
+		}
+		// pgx closes the timed-out connection and the pool destroys it in
+		// the background, so it is released shortly after the error.
+		for released := time.Now().Add(2 * time.Second); pool.Stat().AcquiredConns() != 0; time.Sleep(10 * time.Millisecond) {
+			if time.Now().After(released) {
+				t.Fatalf("%d connections still acquired after the limit", pool.Stat().AcquiredConns())
+			}
+		}
+		// Whether the server went on to commit is unknown by design; Reading
+		// publishes either way, and a recount reads whatever was persisted.
+	})
+	t.Run("a commit the server rejects is not unknown", func(t *testing.T) {
+		err := probe(t.Context(), 2, time.Minute)
+		var pgErr *pgconn.PgError
+		if errors.Is(err, postgres.ErrCommitUnknown) || !errors.As(err, &pgErr) || rows(2) != 0 {
+			t.Fatalf("rejected commit = %v, want the server's error and no row", err)
 		}
 	})
 }

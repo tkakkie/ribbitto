@@ -25,9 +25,19 @@ The result describes uncommitted writes: a rollback discards them. Reading
 synchronously calls its injected, context-free publisher with organisation and
 member only after a successful transaction return and only when changed.
 Rollback and failed commit publish nothing; cancellation immediately after commit
-cannot suppress publication, and the commit itself runs detached from request
-cancellation (`platform.InTxDetachedCommit`), so a cancel while `COMMIT` is in
-flight cannot persist a read yet report failure (Grok on #837). Production passes nil until #711 activates delivery.
+cannot suppress publication. The commit, and any rollback, run under their
+own five-second limit instead of the request's cancellation and deadline
+(`platform.InTxDetachedCommit`; within the ten-second shutdown grace), so a
+cancel while `COMMIT` is in flight cannot persist a read yet report failure
+(Grok on #837), and an unresponsive server holds the connection no longer than
+the limit before pgx closes it. A server's error reply means rollback: nothing
+is published. No reply within the limit (`platform.ErrCommitUnknown`) leaves
+the outcome unknown: Reading publishes anyway, since tabs only recount
+persisted state, and returns the error. Limits: such a publication may be
+spurious (one extra recount; a retried read may publish again), and a process
+that dies between commit and publication publishes nothing. Recovery is then
+the recount every stream does on (re)connect: option B has no bounded repair
+without reconnect (#711). Production passes nil until #711 activates delivery.
 Concurrent feed/topic reads share the channel lock, including lock-row creation,
 so the same unread message cannot cause two publications. Posting discards the
 result and retains its existing

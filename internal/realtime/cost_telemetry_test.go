@@ -92,7 +92,7 @@ func costQueueGrowing(series []costQueueSample) bool {
 		}
 	}
 	if end < 30*time.Second {
-		return len(series) > 0 // Short or missing series cannot qualify an async arm.
+		return len(series) > 0 // Empty telemetry is checked separately against the selected arm.
 	}
 	var sums [3][2]float64
 	var counts [3]int
@@ -159,6 +159,46 @@ func TestCostQueueGrowthDisqualifies(t *testing.T) {
 		if !costRecommendable(r) {
 			t.Fatal("stable queue rejected")
 		}
+	}
+}
+
+func TestCostRecommendationRequiresTelemetry(t *testing.T) {
+	stable := []costQueueSample{
+		{at: 0, phase: "posting"}, {at: 10 * time.Second, phase: "posting"},
+		{at: 20 * time.Second, phase: "posting"}, {at: 30 * time.Second, phase: "posting"},
+	}
+	for _, arm := range []string{"sync40", "async40", "async10+30"} {
+		for _, tt := range []struct {
+			name   string
+			series []costQueueSample
+			want   bool
+		}{
+			{"nil", nil, false}, {"empty", []costQueueSample{}, false},
+			{"short", stable[:3], false},
+			{"drain-only", []costQueueSample{{at: 60 * time.Second, phase: "drain"}}, false},
+			{"missing-bucket", []costQueueSample{stable[0], stable[2], stable[3]}, false},
+			{"stable", stable, true},
+		} {
+			t.Run(arm+"/"+tt.name, func(t *testing.T) {
+				r := stepResult{arm: arm, queue: tt.series, scheduled: 300, completed: 300, deliveries: 300}
+				if !costTargets(r) {
+					t.Fatal("telemetry changed the separate latency verdict")
+				}
+				if got := costRecommendable(r); got != tt.want {
+					t.Fatalf("recommendation eligibility = %t, want %t for %s arm telemetry", got, tt.want, tt.name)
+				}
+			})
+		}
+	}
+	for _, reference := range []string{"10", "20", "30", "40", "gate10"} {
+		t.Run(reference, func(t *testing.T) {
+			for _, series := range [][]costQueueSample{nil, {}} {
+				r := stepResult{queue: series, scheduled: 300, completed: 300, deliveries: 300}
+				if !costRecommendable(r) {
+					t.Fatal("synchronous reference without a queue rejected")
+				}
+			}
+		})
 	}
 }
 

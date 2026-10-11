@@ -1,9 +1,9 @@
 # Sidebar comparison arms and queue telemetry (#832, PR 4)
 
-Part of #832, based on `codex/recount-writer` at d786856 (PR 3, review pending),
+Part of #832, based on `codex/recount-writer` at 287001e (PR #863, PR 3),
 above PR #838 and PR #836. Only realtime's external tests and results/index
 change. Production code, wiring, import edges and `realtime.SidebarInterval`
-remain unchanged. PR 3 review changes require rebasing this branch.
+remain unchanged. The base includes PR 3's batch-limit and audience review tests.
 
 ## Arms and protocol
 
@@ -66,7 +66,10 @@ acquire-role/whole-recount attribution include both pools. A shared atomic
 acquire/release counter records concurrent aggregate peak leases; independently
 observed peaks are never added. Empty acquire count, cancelled acquire count
 and empty-wait duration are summed across distinct pools and counted once for
-shared pools. The first-empty sampler also watches the aggregate.
+shared pools. The normal per-step sidebar line reports `pool-cancelled`, the
+cancelled-acquire total during posting and drain across both pools (once for a
+shared pool), beside `pool-empty` and `pool-wait-total`.
+The first-empty sampler also watches the aggregate.
 
 PR 2 mutex-protected scheduler snapshots are sampled at posting start, once a
 second across posting and drain, immediately before disconnect, and after all
@@ -84,8 +87,10 @@ Latency targets remain a separate verdict. `recommendation-eligible` additionall
 rejects sustained queue growth: average length **or** oldest age increases
 strictly across each of three ten-second buckets in the last thirty seconds
 of observed posting. Age detects a bounded queue whose length has plateaued.
-Drain cannot undo that rejection. A short series or an empty bucket also
-disqualifies a queue arm. This is a deterministic exclusion, not proof of
+Drain cannot undo that rejection. Nil/empty telemetry, a short series or an
+empty bucket disqualifies any selected queue arm, including sync40. Plain
+synchronous pools 10–40 and gate10 need no queue telemetry.
+This is a deterministic exclusion, not proof of
 stability: inspect the entire time series for trends hidden by oscillations,
 and compare posting progress/latency with the corresponding reference before
 any recommendation. Final production limits/reservations, process count and
@@ -122,6 +127,9 @@ length, drain age, replacement/coalescing, cancellation and final values are
 asserted without timing synchronization. Growth guards synthesize increasing
 length and increasing age independently with latency targets already passing,
 then append an empty drain; stable queues still pass.
+Eligibility tests reject nil/empty, short, drain-only and missing-bucket telemetry
+for all three queue arms, accept complete stable telemetry, and preserve plain
+pool/gate10 eligibility without a queue.
 
 ```sh
 go test -race -count=1 -run '^TestCost' -timeout 2m ./internal/realtime/
@@ -132,6 +140,16 @@ The second command was run with two isolated defects, each exiting 1 at
 `growing backlog accepted despite passing latency`: remove the growth condition
 from `costRecommendable`; then consider only length, ignoring age. Both were
 restored and the normal suite passed. No existing assertion was weakened.
+The Copilot follow-up removed `(r.arm == "" || len(r.queue) > 0)` from
+`costRecommendable`, treating empty arm telemetry as stable:
+
+```sh
+go test -race -count=1 -run '^TestCostRecommendationRequiresTelemetry/(sync40|async40|async10[+]30)/empty$' -timeout 10s ./internal/realtime
+```
+
+It exited 1 for all three arms at the actual assertion
+`recommendation eligibility = true, want false for empty arm telemetry`.
+The guard was restored and the normal suite passed.
 Claude cross-review and tier A / Grok remain for the external orchestrator.
 
 ## Controlled results: 5 posts/s, 1,000 streams

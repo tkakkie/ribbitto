@@ -21,7 +21,9 @@ type SidebarSource interface {
 }
 
 // SidebarWatcher optionally extends SidebarSource with member-scoped wakes.
-// Persisted changes must commit before publication; Recount must read fresh state.
+// Wakes invalidate counts; Recount must read fresh persisted state. Publication
+// normally follows commit, with the unknown-outcome exception described by
+// unread.ReadPublisher and docs/architecture/unread-writes.md.
 type SidebarWatcher interface {
 	// Watch returns a non-nil watch before the initial recount; Run owns release.
 	Watch(organizationID, memberID kernel.ID) SidebarWatch
@@ -39,7 +41,8 @@ type SidebarWatch interface {
 
 // SidebarInterval bounds recounts to once per second per connection, allowing
 // bursts to coalesce while keeping current counts responsive. Reconnects always
-// recount; production query cost is measured separately in #812.
+// recount; production query cost was measured in #812
+// (docs/architecture/stream-sidebar-results.md).
 const SidebarInterval = time.Second
 
 var errSidebarDue = errors.New("realtime: sidebar recount due")

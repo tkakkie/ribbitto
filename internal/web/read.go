@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -29,22 +28,8 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 		http.NotFound(w, r)
 		return
 	}
-	_, err := p.channels.Get(r.Context(), m, id)
-	if raw := r.PathValue("topicID"); err == nil && raw != "" {
-		selected, valid := pathID(raw)
-		if !valid {
-			http.NotFound(w, r)
-			return
-		}
-		_, err = p.topics.Get(r.Context(), m, id, selected)
-		p.topicID = &selected
-	}
-	switch {
-	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, conversation.ErrTopicNotFound), errors.Is(err, org.ErrNotFound):
-		http.NotFound(w, r)
-		return
-	case err != nil:
-		serverError(w, r, "resolving read scope", err)
+	p.topicID, ok = p.resolvePlace(w, r, m, id, r.PathValue("topicID"))
+	if !ok {
 		return
 	}
 	if !parseForm(w, r) {

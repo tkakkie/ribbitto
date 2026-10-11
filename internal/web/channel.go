@@ -117,18 +117,10 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 // Preserve channel lookup errors ahead of malformed paging links, without a
 // separate channel read on successfully rendered pages.
 func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID) {
-	_, err := p.channels.Get(r.Context(), m, id)
-	if err == nil && p.topicID != nil {
-		_, err = p.topics.Get(r.Context(), m, id, *p.topicID)
+	if _, ok := p.resolvePlace(w, r, m, id, r.PathValue("topicID")); !ok {
+		return
 	}
-	switch {
-	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, conversation.ErrTopicNotFound):
-		http.NotFound(w, r)
-	case err != nil:
-		serverError(w, r, "finding channel", err)
-	default:
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-	}
+	http.Error(w, "Bad Request", http.StatusBadRequest)
 }
 
 func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membership) {

@@ -12,13 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/identity"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/presence"
 	"github.com/tkakkie/ribbitto/internal/realtime"
-	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
@@ -34,8 +32,6 @@ type Streaming struct {
 	Authorizer realtime.Authorizer
 	// Presence supplies the members page's snapshot, shared with its owner.
 	Presence *presence.State
-	// Typing is shared with signal ingress and its delivery owner.
-	Typing *typing.State
 	// Owners adapts feature state to current frames.
 	Owners map[realtime.Interest]realtime.EphemeralOwner
 	// Sidebar binds resolved membership and page selection to uncached recounts.
@@ -93,25 +89,8 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		return
 	}
 	if sub.Channel != (kernel.ID{}) {
-		_, err := p.channels.Get(r.Context(), m, sub.Channel)
-		if errors.Is(err, conversation.ErrChannelNotFound) {
-			http.NotFound(w, r)
-			return
-		}
-		if err != nil {
-			serverError(w, r, "finding channel", err)
-			return
-		}
-	}
-	// Interest is no permission: resolve visibility before registering or sending.
-	if sub.Topic != nil {
-		_, err := p.topics.Get(r.Context(), m, sub.Channel, *sub.Topic)
-		if errors.Is(err, conversation.ErrTopicNotFound) {
-			http.NotFound(w, r)
-			return
-		}
-		if err != nil {
-			serverError(w, r, "finding topic", err)
+		// Interest is no permission: resolve visibility before registering or sending.
+		if _, ok := p.resolvePlace(w, r, m, sub.Channel, r.URL.Query().Get("topic")); !ok {
 			return
 		}
 	}

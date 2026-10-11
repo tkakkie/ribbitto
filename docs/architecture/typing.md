@@ -64,7 +64,7 @@ grace, are unaffected. Streams with no channel take no typing count.
 
 Web calls `Streaming.StreamOpened` only after registration and the session
 re-check succeed, supplying the resolved channel. `cmd/ribbitto` constructs
-one typing state shared by `Streaming.Typing`, signal ingress, the lifecycle
+one local typing state shared by `Services.Typing`, signal ingress, the lifecycle
 hook and `web.NewTypingOwner`.
 
 Each channel feed and topic has a complete distinct-member set, its count,

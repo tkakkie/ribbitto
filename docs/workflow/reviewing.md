@@ -102,20 +102,54 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
 3. All pass → the initial adversarial review runs on the new head, at the
    pull request's tier recomputed over its whole diff, still as a draft,
    with every finding disposed of; a follow-up after that review needs it
-   again only if the follow-up's diff matches tier A or B
-   ([completion](adversarial-review.md#which-review-runs)). Then
+   again only if the follow-up's diff matches tier A or B, by the reviewer
+   the [completion rule](adversarial-review.md#which-review-runs) names. Then
    `ai-reviewed`, ready for review and the normal merge decision. Copilot is not
    re-requested; if Copilot reviews again anyway, handle it the same way
    once, then ask the maintainer. A change needing a design or
    specification decision, a failed check or a new blocking finding → ask
    the maintainer.
 
+**Adversarial follow-up check** (pull requests only; after a fix for a
+finding of the adversarial review; not a review round, so the two-round
+limit is untouched). A fix to a Grok or Muse Code finding would otherwise
+reach the re-review, often Muse Code's, without either AI checking it:
+
+1. Apply only the fix, with a regression test that fails without it; the
+   pull request is a draft. Only when no automated test can reproduce the
+   finding (a rule or documentation fix, or a race no existing harness can
+   gate) record instead why, and the alternative verification done: a
+   scripted or manual reproduction, a mutation showing the guard matters,
+   or the exact text change. Effort or time is never such a reason.
+2. The AI that did not write the fix (Claude ↔ Codex) checks that the diff
+   since the reviewed head contains only that fix, that it answers the
+   original finding, and that the test fails without it — or that the
+   recorded reason holds and the alternative verification was done; a
+   reason it does not accept is ❌. It reports:
+
+   ```
+   **Adversarial follow-up check — <Claude|Codex>** (at <SHA>)
+   Compared: <reviewed SHA>..<SHA>
+   - ✅ | ❌ finding — the fix, and the test that fails without it
+     (or: no test — the reason, and the alternative verification)
+   ```
+
+3. All pass → the re-review the
+   [completion rule](adversarial-review.md#which-review-runs) names, at the
+   checked SHA; a push before it starts this check again. Any other change,
+   a failed check, or a fix needing a design or specification decision →
+   ask the maintainer.
+
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more
-than combine both sides, it needs a normal review. Either way, if the diff
+than combine both sides, it needs a normal review. A combination that
+changes lock or transaction order or the delivery contract (tier A's first
+item) does more than combine, even when every line came from one side. Either way, if the diff
 from the last adversarially reviewed head to the merge result matches tier
 A or B, the pull request's tier, recomputed at the merge result, is
-reviewed again before it is marked ready
+reviewed again by the reviewer the completion rule names, counting this
+pull request's own commits since the last Grok-reviewed head, not only the
+resolution, before it is marked ready
 ([completion](adversarial-review.md#which-review-runs)); a pull request
 already marked ready is converted back to a draft until then.
 

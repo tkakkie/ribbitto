@@ -156,12 +156,11 @@ everything the review needs, as the examples above do:
 
 ## Running Muse Code
 
-Tier B's reviewer and tier A's fallback
-([`adversarial-review.md`](adversarial-review.md#muse-code)),
-with the invocation tested in
+Tier B's reviewer, tier A's re-reviewer after Grok and its fallback
+([`adversarial-review.md`](adversarial-review.md#muse-code)), invocation tested in
 [#246's preflight](https://github.com/tkakkie/ribbitto/issues/246#issuecomment-5932976563).
-It must name a Standard model (`muse-spark-1.3`): Meta states that
-Standard-tier prompts and completions are not used to train its models,
+It must name a Standard model (`muse-spark-1.3`): Meta does not
+train on Standard-tier prompts and completions,
 while a `-contributor` model grants that permission, so never use one. It reads only the workspace:
 writing, the shell, web tools and the network are off.
 

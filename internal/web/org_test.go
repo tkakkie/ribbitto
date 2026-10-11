@@ -25,6 +25,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org/orgpg"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -66,7 +68,8 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 
 	acmeFixture := conversationtest.Channel(t, pool, acme, "雑談", true)
 	acmeChannel := acmeFixture.ID
-	globexChannel := conversationtest.Channel(t, pool, globex, "雑談", true).ID
+	globexFixture := conversationtest.Channel(t, pool, globex, "雑談", true)
+	globexChannel := globexFixture.ID
 	defaultTopic := conversation.Topic{ID: acmeFixture.DefaultTopicID}
 	var now time.Time
 	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&now); err != nil {
@@ -94,16 +97,26 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	services := postgresServices(t, pool, sessions, "", false)
+	state := typing.New(realtime.NewHub())
+	services.Typing = state
+	budgetTime := now
+	services.SignalLimits = middleware.NewMemberRateLimiter(func() time.Time { budgetTime = budgetTime.Add(time.Second); return budgetTime })
+	membership, err := services.Authz.Member(ctx, &identity.Account{ID: alice}, "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	place := typing.Place{Channel: acmeChannel, Topic: defaultTopic.ID}
+	defer state.Open(acme, membership.Member.ID, acmeChannel)()
 	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
 		t.Fatal(err)
 	}
 	get := func(method, path, cookie string, at time.Time) *httptest.ResponseRecorder {
 		clock = at
-		return serveForm(handler, method, path, cookie, url.Values{"name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}})
+		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading, services.Typing, services.SignalLimits)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -126,7 +139,11 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			{"expired session", aliceToken, now.Add(identity.SessionLifetime)},
 		} {
 			t.Run(route.method+" "+path+" "+tt.name, func(t *testing.T) {
+				before := state.Read(acme, place, kernel.ID{})
 				w := get(route.method, path, tt.cookie, tt.at)
+				if got := state.Read(acme, place, kernel.ID{}); got.Generation != before.Generation {
+					t.Fatal("unauthorized request changed typing")
+				}
 				body := w.Body.String()
 				if w.Code != http.StatusNotFound || strings.Contains(body, "Acme") || strings.Contains(body, "Globex") {
 					t.Fatalf("status %d, body %q", w.Code, body)
@@ -147,6 +164,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			case "POST /channels/{channelID}", "POST /channels/{channelID}/topics/{topicID}":
 				if w.Code != 303 || w.Header().Get("Location") != path {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())
+				}
+			case "POST /channels/{channelID}/topics/{topicID}/typing":
+				if w.Code != 204 || w.Body.Len() != 0 {
+					t.Fatalf("typing: %d", w.Code)
 				}
 			case "POST /channels/{channelID}/read", "POST /channels/{channelID}/topics/{topicID}/read":
 				if w.Code != http.StatusNotFound {
@@ -265,6 +286,40 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 	})
 
+	for _, scope := range []struct {
+		name           string
+		channel, topic kernel.ID
+	}{
+		{"channel organisation", globexChannel, globexFixture.DefaultTopicID},
+		{"topic organisation", globexChannel, globexFixture.DefaultTopicID},
+		{"channel", acmeChannel, conversationtest.Channel(t, pool, acme, "Other", false).DefaultTopicID},
+		{"topic", acmeChannel, kernel.ID{99}},
+	} {
+		t.Run("typing/"+scope.name, func(t *testing.T) {
+			isolated := services
+			// Let the other lookup succeed, leaving exactly one predicate under test.
+			if scope.name == "channel organisation" {
+				isolated.Topics = typingTopics(func(ctx context.Context, m org.Membership, channel, topic kernel.ID) (conversation.Topic, error) {
+					m.Organization.ID = globex
+					return services.Topics.Get(ctx, m, channel, topic)
+				})
+			}
+			if scope.name == "topic organisation" {
+				isolated.Channels = &fakeChannels{channels: []conversation.Channel{{ID: globexChannel}}}
+			}
+			h, err := NewHandler("", catalogues, isolated)
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := typing.Place{Channel: scope.channel, Topic: scope.topic}
+			defer state.Open(acme, membership.Member.ID, scope.channel)()
+			token := state.IssueComposer(acme, target, membership.Member.ID)
+			w := serveForm(h, "POST", view.ConversationURL("acme", scope.channel, &scope.topic)+"/typing", aliceToken, url.Values{"composer": {fmt.Sprint(token)}})
+			if w.Code != 404 || w.Body.String() != "404 page not found\n" || len(state.Read(acme, target, kernel.ID{}).Typists) != 0 {
+				t.Fatalf("scope %s: %d", scope.name, w.Code)
+			}
+		})
+	}
 	t.Run("member cannot read another organisation's channel under own URL", func(t *testing.T) {
 		w := get(http.MethodGet, view.ChannelURL("acme", globexChannel), aliceToken, now)
 		if w.Code != http.StatusNotFound || w.Body.String() != "404 page not found\n" {

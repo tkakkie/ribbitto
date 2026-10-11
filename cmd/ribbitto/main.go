@@ -334,6 +334,10 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 			},
 			Owners: map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestPresence: web.NewPresenceOwner(ctx, state)}}
 	}
+	var signalState *typing.State
+	if stream != nil {
+		signalState = stream.Typing
+	}
 	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, postingNotifier)
 	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, postingNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
@@ -353,6 +357,8 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Channels:      conversationpg.NewChannels(pool),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
 		Stream:        stream,
+		Typing:        signalState,
+		SignalLimits:  middleware.NewMemberRateLimiter(time.Now),
 	})
 	if err != nil {
 		return nil, nil, err

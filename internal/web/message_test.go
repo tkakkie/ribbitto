@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/typing"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -193,6 +195,7 @@ func (fakeTxRunner) InTx(_ context.Context, fn func(platform.Tx) error) error {
 }
 
 type fakePostingWriter struct {
+	returned             *conversation.Message
 	id                   kernel.ID
 	err                  error
 	body                 string
@@ -211,6 +214,9 @@ func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic
 	w.org, w.channel, w.member, w.body = org, channel, member, body
 	if w.err != nil {
 		return conversation.Message{}, w.err
+	}
+	if w.returned != nil {
+		return *w.returned, nil
 	}
 	return conversation.Message{ID: w.id, OrganizationID: org, ChannelID: channel, TopicID: topic, MemberID: member, Body: body, EventSeq: seq}, nil
 }
@@ -275,20 +281,35 @@ func TestMessagePostHandler(t *testing.T) {
 		{"membership gone", "hello", org.ErrNotFound, 404},
 		{"failure", "hello", errors.New("offline"), 500},
 	} {
-		for _, hx := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/htmx=%t", tt.name, hx), func(t *testing.T) {
+		for _, mode := range []struct{ hx, topic bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
+			hx := mode.hx
+			t.Run(fmt.Sprintf("%s/htmx=%t/topic=%t", tt.name, hx, mode.topic), func(t *testing.T) {
 				writer := &fakePostingWriter{id: kernel.ID{37}, err: tt.storeErr}
+				state := typing.New(realtime.NewHub())
+				actual := conversation.Message{ID: writer.id, OrganizationID: kernel.ID{7}, ChannelID: kernel.ID{8}, TopicID: kernel.ID{6}, MemberID: kernel.ID{5}}
+				writer.returned = &actual
+				place := typing.Place{Channel: actual.ChannelID, Topic: actual.TopicID}
+				other := typing.Place{Channel: place.Channel, Topic: kernel.ID{3}}
+				defer state.Open(actual.OrganizationID, actual.MemberID, place.Channel)()
+				token := state.IssueComposer(actual.OrganizationID, place, actual.MemberID)
+				state.Signal(actual.OrganizationID, place, typing.Typist{Member: actual.MemberID}, token, time.Now())
+				state.Start(actual.OrganizationID, other, typing.Typist{Member: actual.MemberID})
+				before := state.Read(actual.OrganizationID, place, kernel.ID{})
 				var reads []*int64
 				h, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
 					reader := populatedMessages()
 					reader.before = &reads
 					s.Messages, s.Posting = reader, testPosting(writer)
+					s.Typing, s.SignalLimits = state, middleware.NewMemberRateLimiter(time.Now)
 				}))
 				if err != nil {
 					t.Fatal(err)
 				}
 				path := view.ChannelURL("acme", kernel.ID{1})
-				r := httptest.NewRequest("POST", path+"?body=wrong", strings.NewReader(url.Values{"cursor": {"0"}, "body": {tt.body}, "organization_id": {"other"}, "member_id": {"other"}}.Encode()))
+				if mode.topic {
+					path = view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2})
+				}
+				r := httptest.NewRequest("POST", path+"?body=wrong", strings.NewReader(url.Values{"composer": {token}, "cursor": {"0"}, "body": {tt.body}, "organization_id": {"other"}, "member_id": {"other"}}.Encode()))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				if hx {
 					r.Header.Set("HX-Request", "true")
@@ -297,11 +318,25 @@ func TestMessagePostHandler(t *testing.T) {
 				w := httptest.NewRecorder()
 				h.ServeHTTP(w, r)
 				want := tt.status
-				if hx && want == 303 {
+				if hx && !mode.topic && want == 303 {
 					want = 200
 				}
 				if w.Code != want {
 					t.Fatalf("status %d: %s", w.Code, w.Body.String())
+				}
+				if tt.status != 303 && !reflect.DeepEqual(before, state.Read(actual.OrganizationID, place, kernel.ID{})) {
+					t.Fatal("failed post changed activity before another signal")
+				}
+				state.Signal(actual.OrganizationID, place, typing.Typist{Member: actual.MemberID}, token, time.Now())
+				if got := state.Read(actual.OrganizationID, place, kernel.ID{9}); (len(got.Typists) == 0) != (tt.status == 303) {
+					t.Fatal("post-success stop or stale-signal ordering failed")
+				}
+				if len(state.Read(actual.OrganizationID, typing.Place{Channel: place.Channel}, kernel.ID{9}).Typists) != 1 {
+					t.Fatal("post cleared another active topic")
+				}
+				state.Signal(actual.OrganizationID, place, typing.Typist{Member: actual.MemberID}, state.IssueComposer(actual.OrganizationID, place, actual.MemberID), time.Now())
+				if len(state.Read(actual.OrganizationID, place, kernel.ID{9}).Typists) != 1 {
+					t.Fatal("new composer cannot start typing")
 				}
 				if tt.status == 303 {
 					if writer.body != "hello\nworld" || writer.org != (kernel.ID{}) || writer.member != (kernel.ID{}) || writer.channel != (kernel.ID{1}) {
@@ -312,7 +347,7 @@ func TestMessagePostHandler(t *testing.T) {
 					}
 				}
 				marker := `data-posted-message="` + view.MessageDOMID(writer.id) + `"`
-				if hx && want == 200 {
+				if hx && !mode.topic && want == 200 {
 					if !strings.Contains(w.Body.String(), `name="cursor" value="0"`) {
 						t.Fatal("composer must echo submitted cursor, not post sequence")
 					}
@@ -325,7 +360,7 @@ func TestMessagePostHandler(t *testing.T) {
 				if want != 422 && want != 200 {
 					return
 				}
-				if hx {
+				if hx && !mode.topic {
 					if len(reads) != 0 || strings.Contains(w.Body.String(), `id="conversation"`) || !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) {
 						t.Fatal("enhanced post must render only the composer without reading history")
 					}

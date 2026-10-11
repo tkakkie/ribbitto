@@ -3,8 +3,8 @@
 `internal/typing` owns memory-only state per process, with no tables, store,
 wiring package, event kinds or HTML. It imports only kernel IDs and realtime's
 interest type for generation notifications. Summaries and composer ordering are
-current (#784–#785, #813); authorized ingress (#787), delivery
-(#788) and page integration (#789–#790) are subsequent parts of #288.
+current (#784–#787, #813); delivery (#788) and page integration
+(#789–#790) are subsequent parts of #288.
 
 `Start` takes trusted organisation, channel, nonzero composing topic and member
 identity (display name and handle); callers must resolve and authorize them.
@@ -90,3 +90,19 @@ An unrelated place's change may advance the returned organisation generation
 without changing the selected place generation, allowing subsequent delivery
 to acknowledge the wake without repeating an indicator. Durable cursors and
 [ephemeral transport](ephemeral-state.md#ephemeral-state) remain unchanged.
+
+## HTTP ingress and posting
+
+`POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing`
+inherits CSRF, body limits, sessions and organisation authorization. Handling start
+precedes session lookup. After membership, the shared limiter precedes scope parsing
+and exported membership-scoped channel/topic lookups (bad scope/denial: 404; errors:
+500). Then form parsing requires one nonempty opaque `composer` generation (400
+otherwise). Only URL organisation and resolved member/account identity reach state.
+Empty 429 means limited; empty 204 means no swap, including invalid, closed or
+overdue generations. Refusals change no activity, deadline or generation.
+
+Feed/topic posts, plain or enhanced, pass optional `composer` to `Posted` only on
+success, using every scope ID from the returned message. Failure preserves activity
+and ordering. #789 renders generations and keeps them on validation failure;
+production shares the stream state and one limiter.

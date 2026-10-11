@@ -2,7 +2,7 @@
 
 **Decided** (#296; supersedes nothing; [decision 31](31-presence-and-typing-are-current-state-with-a-generation.md)
 settles the ephemeral signals it carries). Page streams implemented (#709); ephemeral delivery implemented (#736);
-presence rendering/delivery implemented (#768); sidebar recounts are delivered in production (#809, #810, #818, #819); typing delivery remains planned for M4. Details in
+presence rendering/delivery implemented (#768); sidebar recounts are delivered in production (#809, #810, #818, #819); typing delivery is current (#788) and its page region remains planned for M4 (#790). Details in
 [streaming](../architecture/streaming.md#stream-scope).
 
 - **One stream per tab.** Every page of an organisation holds one

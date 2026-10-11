@@ -34,7 +34,7 @@ type Streaming struct {
 	Authorizer realtime.Authorizer
 	// Presence supplies the members page's snapshot, shared with its owner.
 	Presence *presence.State
-	// Typing is shared with subsequent signal and delivery consumers.
+	// Typing is shared with signal ingress and its delivery owner.
 	Typing *typing.State
 	// Owners adapts feature state to current frames.
 	Owners map[realtime.Interest]realtime.EphemeralOwner
@@ -173,7 +173,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 	if p.stream.Sidebar != nil {
 		stream.Sidebar = p.stream.Sidebar(m, sub.Channel, sub.Topic, r.URL.Query().Get("panel") == "members")
 	}
-	sub.Organization, sub.OrganizationSlug, sub.Account = m.Organization.ID, m.Organization.Slug, account.ID
+	sub.Organization, sub.OrganizationSlug, sub.Account, sub.Member = m.Organization.ID, m.Organization.Slug, account.ID, m.Member.ID
 	cursor, err := stream.Run(ctx, sub, after, send)
 	if err != nil && ctx.Err() == nil {
 		// Neither the client nor the session went away: delivery failed.

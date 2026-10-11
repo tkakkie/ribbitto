@@ -231,3 +231,24 @@ other = "未読メッセージ {count} 件"
 
 ["reading.new_messages"]
 other = "ここから未読メッセージ"
+
+["activity.separator"]
+other = "、"
+
+["activity.last_separator"]
+other = "、"
+
+["activity.more"]
+other = "、ほか"
+
+["activity.other"]
+other = "人"
+
+["activity.others"]
+other = "人"
+
+["activity.single"]
+other = "が入力中…"
+
+["activity.multiple"]
+other = "が入力中…"

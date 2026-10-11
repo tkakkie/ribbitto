@@ -87,7 +87,7 @@ sequenceDiagram
   nothing more. It drains every batch before waiting on the durable level,
   declared ephemeral generations, heartbeat and context together (#735).
   Ephemeral owner frames follow each batch without moving the cursor;
-  production presence is current (#768); typing remains planned (#288).
+  production presence is current (#768); typing delivery is current (#788); its page region is planned (#790).
 - **Missed raises** (#237). Posting raises the hub right after its commit,
   but a writer without a notifier (`cmd/seed`, sign-up's `member.joined`)
   or, later, another process commits without one, and a stream that has

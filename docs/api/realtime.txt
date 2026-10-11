@@ -113,6 +113,7 @@ type Subscription struct // Subscription is one connection's explicit interests 
   field Account github.com/tkakkie/ribbitto/internal/kernel.ID
   field Channel github.com/tkakkie/ribbitto/internal/kernel.ID
   field Interests []Interest // Interests is the set of requested output; empty means no message delivery.
+  field Member github.com/tkakkie/ribbitto/internal/kernel.ID // Member is server-resolved identity for viewer-filtered ephemeral state.
   field Organization github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationSlug string
   field PresenceAfter string // PresenceAfter is the opaque page token interpreted by the presence owner.

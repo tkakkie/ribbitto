@@ -3,8 +3,8 @@
 `internal/typing` owns memory-only state per process, with no tables, store,
 wiring package, event kinds or HTML. It imports only kernel IDs and realtime's
 interest type for generation notifications. Summaries and composer ordering are
-current (#784–#787, #813); delivery (#788) and page integration
-(#789–#790) are subsequent parts of #288.
+current (#784–#787, #813); production delivery is current (#788). Composer
+controls and page attachment (#789–#790) remain subsequent parts of #288.
 
 `Start` takes trusted organisation, channel, nonzero composing topic and member
 identity (display name and handle); callers must resolve and authorize them.
@@ -54,7 +54,7 @@ being handled that long is refused by the shorter acceptance deadline.
 
 `Open` counts accepted streams by organisation, member and resolved channel.
 A signal without a matching stream creates no state. Interests and selected
-topic do not affect keeping state; delivery will separately check interest,
+topic do not affect keeping state; delivery separately checks interest,
 frame scope and authorization (#788). Closing one of up to 16 streams preserves
 activity while another matches; last close immediately stops all that member’s
 topics in that channel. Cleanup is idempotent and shares the signal/timer lock,
@@ -64,8 +64,8 @@ grace, are unaffected. Streams with no channel take no typing count.
 
 Web calls `Streaming.StreamOpened` only after registration and the session
 re-check succeed, supplying the resolved channel. `cmd/ribbitto` constructs
-one typing state, exposed through `Streaming.Typing` for subsequent ingress
-and delivery consumers, and shares it with this lifecycle hook.
+one typing state shared by `Streaming.Typing`, signal ingress, the lifecycle
+hook and `web.NewTypingOwner`.
 
 Each channel feed and topic has a complete distinct-member set, its count,
 four latest visible starts and last-change generation. A member active in two
@@ -106,3 +106,21 @@ Feed/topic posts, plain or enhanced, pass optional `composer` to `Posted` only o
 success, using every scope ID from the returned message. Failure preserves activity
 and ordering. #789 renders generations and keeps them on validation failure;
 production shares the stream state and one limiter.
+
+## Production delivery
+
+Web resolves `Subscription.Member` from stream membership, never the query.
+`NewTypingOwner` reads that viewer's selected summary and renders escaped templ
+content using captured signal-time identity, without membership or directory
+queries. English/Japanese content names at most three others and counts the rest;
+a lone viewer receives empty content. The page will own the status region (#790).
+
+The writer supplies after=-1 for typing's initial owner read. Connect/reconnect
+always returns the complete indicator, including empty generation-zero state.
+Later reads emit only when `PlaceGeneration > after`, but return the consistently
+read organisation generation even for unchanged places. Raises during rendering
+remain pending for the next batch; an unrelated topic's wake is acknowledged
+without repeated frames or a busy loop. Existing interest, organisation and
+channel/topic filters precede per-frame authorization after rendering immediately
+before sending; a denial acknowledges the read, an error stops the stream. Frames
+carry no SSE ID and leave durable replay and its cursor unchanged.

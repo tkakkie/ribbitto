@@ -51,7 +51,9 @@ type Subscription struct {
 	Organization     kernel.ID
 	OrganizationSlug string
 	Account          kernel.ID
-	Channel          kernel.ID
+	// Member is server-resolved identity for viewer-filtered ephemeral state.
+	Member  kernel.ID
+	Channel kernel.ID
 	// Interests is the set of requested output; empty means no message delivery.
 	Interests []Interest
 	// Topic, when set, narrows the channel to one topic (a topic view).

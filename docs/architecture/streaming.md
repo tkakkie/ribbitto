@@ -93,7 +93,7 @@ delivers durable frames; `typing` and `presence` read their wired
 owners after each durable batch and before waiting, at most one frame and
 one authorization check per kind. Presence checks the organisation, typing
 the frame's channel, immediately before sending. Denies mark the generation
-seen; errors stop the stream. Web's presence adapter is wired in production (#768); typing remains planned (#288). Sidebar recounts are wired in production (#819); composition details are in [unread counts](unread-counts.md).
+seen; errors stop the stream. Web's presence (#768) and viewer-filtered typing (#788) adapters are wired in production. Sidebar recounts are wired in production (#819); composition details are in [unread counts](unread-counts.md).
 
 The endpoint takes:
 
@@ -119,7 +119,10 @@ and `messages-moved` frames advance the browser's durable cursor.
 
 Ephemeral delivery filters organisation, interest and typing channel/topic
 before authorization, preserving the durable cursor and heartbeat deadlines.
-Owners decide connect output from current state; presence receives the page
+Typing receives server-resolved member identity and after=-1 on connect,
+restoring even empty content. Later reads acknowledge the organisation level
+without repeating unchanged places ([owner contract](typing.md#production-delivery)).
+Presence receives the page
 token: one coalesced entry per member, in last-change order, at most 100.
 Offline entries stay five minutes; discarding one advances a monotonic boundary.
 The state, boundary and generation come from one locked read. Another process's

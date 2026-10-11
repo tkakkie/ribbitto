@@ -333,7 +333,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 				closePresence, closeTyping := state.Open(organizationID, memberID), typingState.Open(organizationID, memberID, channelID)
 				return func() { closePresence(); closeTyping() }
 			},
-			Owners: map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestPresence: web.NewPresenceOwner(ctx, state)}}
+			Owners: map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestPresence: web.NewPresenceOwner(ctx, state), realtime.InterestTyping: web.NewTypingOwner(typingState)}}
 	}
 	var signalState *typing.State
 	if stream != nil {

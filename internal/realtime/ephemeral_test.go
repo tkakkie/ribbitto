@@ -55,7 +55,11 @@ func TestEphemeralScopesAndAuthorization(t *testing.T) {
 				stream := Stream{Hub: h, Events: log, Owners: map[Interest]EphemeralOwner{
 					tt.kind: ownerFunc(func(s Subscription, after int64) (EphemeralFrame, error) {
 						reads++
-						if s.PresenceAfter != "instance:7" || after != int64((reads-1)*9) {
+						wantAfter := int64((reads - 1) * 9)
+						if reads == 1 && tt.kind == InterestTyping {
+							wantAfter = -1
+						}
+						if s.PresenceAfter != "instance:7" || after != wantAfter {
 							t.Error("connect did not pass the token and initial generation")
 						}
 						generation := int64(9)
@@ -110,7 +114,14 @@ func TestEphemeralBetweenDurableBatches(t *testing.T) {
 	for _, kind := range []Interest{InterestPresence, InterestTyping} {
 		owners[kind] = ownerFunc(func(_ Subscription, after int64) (EphemeralFrame, error) {
 			reads++
-			if (reads <= 2 && after != 0) || (reads > 2 && after != 2) {
+			wantAfter := int64(2)
+			if reads <= 2 {
+				wantAfter = 0
+				if kind == InterestTyping {
+					wantAfter = -1
+				}
+			}
+			if after != wantAfter {
 				t.Errorf("after=%d reads=%d", after, reads)
 			}
 			generation := int64(2)

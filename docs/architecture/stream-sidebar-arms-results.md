@@ -1,9 +1,9 @@
 # Sidebar comparison arms and queue telemetry (#832, PR 4)
 
-Part of #832, based on `codex/recount-writer` at a68d61c (PR #863, PR 3),
-above PR #838 and PR #836. Only realtime's external tests and results/index
-change. Production code, wiring, import edges and `realtime.SidebarInterval`
-remain unchanged. The base includes PR 3's batch-limit and audience review tests.
+Part of #832, building on PR #836 (ladder), PR #838 (scheduler) and PR #863
+(single writer, including its batch-limit, audience and progress tests). Only
+realtime's external tests and results/index change. Production code, wiring,
+import edges and `realtime.SidebarInterval` remain unchanged.
 
 ## Arms and protocol
 

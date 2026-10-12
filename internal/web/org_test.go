@@ -157,7 +157,8 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != view.ChannelURL("acme", acmeChannel) {
 					t.Fatalf("default: %d %s", w.Code, w.Header().Get("Location"))
 				}
-			case "GET /channels/{channelID}/members", "GET /channels/{channelID}", "GET /channels/{channelID}/topics/{topicID}", "GET /channels/{channelID}/topics/{topicID}/members":
+			case "GET /channels/{channelID}/members", "GET /channels/{channelID}/overview", "GET /channels/{channelID}", "GET /channels/{channelID}/topics/{topicID}",
+				"GET /channels/{channelID}/topics/{topicID}/members", "GET /channels/{channelID}/topics/{topicID}/overview":
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") || !strings.Contains(w.Body.String(), "雑談") {
 					t.Fatalf("channel: %d %s", w.Code, w.Body.String())
 				}
@@ -207,14 +208,16 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		clock = now
 		named := conversationtest.Topic(t, pool, acme, acmeChannel, "Planning")
 		other := conversationtest.Channel(t, pool, acme, "other", false)
-		// The members panel resolves the conversation's scope; each path changes one (#874).
+		// Panels resolve the conversation's scope; each path changes one (#874).
 		for _, path := range []string{
 			view.ChannelURL("acme", globexChannel),                           // organisation
 			view.ChannelURL("acme", kernel.ID{0xee}),                         // channel
 			view.ConversationURL("acme", acmeChannel, &other.DefaultTopicID), // topic
 		} {
-			if w := get("GET", path+"/members", aliceToken, now); w.Code != 404 || strings.Contains(w.Body.String(), "Globex") {
-				t.Errorf("panel %s/members: %d", path, w.Code)
+			for _, panel := range []string{"/members", "/overview"} {
+				if w := get("GET", path+panel, aliceToken, now); w.Code != 404 || strings.Contains(w.Body.String(), "Globex") {
+					t.Errorf("panel %s%s: %d", path, panel, w.Code)
+				}
 			}
 		}
 		var initialCount int

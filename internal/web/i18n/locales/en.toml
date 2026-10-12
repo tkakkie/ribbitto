@@ -211,6 +211,12 @@ other = "Members"
 ["panel.close"]
 other = "Close panel"
 
+["overview.title"]
+other = "Channel overview"
+
+["overview.created"]
+other = "Created"
+
 ["people.empty"]
 other = "No members on this page."
 

@@ -75,5 +75,8 @@ stays put; focus moves to the next link, or the pane at the start.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
 when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's
-header control has `aria-current="true"`; the panel's close link returns to
-the conversation.
+header control has `aria-current="true"`. Its close link, and Escape through
+`side-panel-v1.js`, return to the conversation; Escape acts only with focus
+in the panel or on nothing and no popover open, so it never discards a
+draft. After that close, focus returns to the control that opened the panel:
+its id crosses the page load in `sessionStorage`.

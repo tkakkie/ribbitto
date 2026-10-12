@@ -7,6 +7,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // Organization holds the organisation fields displayed by a channel page.
@@ -21,6 +22,7 @@ type Channel struct {
 	DefaultTopicID kernel.ID
 	Name           string
 	ImageURL       string
+	Created        time.Time
 }
 
 // Topic holds the topic fields a channel page displays.
@@ -139,8 +141,8 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 	if page.Topic != nil {
 		{{ title = topicName(ctx, *page.Topic) + " · " + title }}
 	}
-	if page.Panel == PanelMembers {
-		{{ title = i18n.T(ctx, "people.title") + " · " + title }}
+	if page.Panel != "" {
+		{{ title = i18n.T(ctx, panelTitle(page.Panel)) + " · " + title }}
 	}
 	@layout(stylesheetURL, title) {
 		<div
@@ -255,6 +257,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v5.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/side-panel-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v9.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

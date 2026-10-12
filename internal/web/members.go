@@ -10,10 +10,15 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
-// members renders the conversation with the members panel open, so opening
-// and closing a panel are ordinary page loads.
+// members and overview render the conversation with that panel open, so
+// opening, switching and closing a panel are ordinary page loads.
 func (p channelPages) members(w http.ResponseWriter, r *http.Request, m org.Membership) {
 	p.panel = view.PanelMembers
+	p.show(w, r, m)
+}
+
+func (p channelPages) overview(w http.ResponseWriter, r *http.Request, m org.Membership) {
+	p.panel = view.PanelOverview
 	p.show(w, r, m)
 }
 

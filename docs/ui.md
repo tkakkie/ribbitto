@@ -16,8 +16,10 @@ The mock-ups are a direction, not a specification.
 
 - **Blocks on a base.** The page ground is the tinted `base`. The app bar,
   the conversation, and a side panel when one is open, are white rounded
-  blocks; the channel sidebar sits directly on the base, so its edges are
-  the blocks' edges and it needs no divider.
+  blocks (12 px radius, 8 px gaps, one light shadow); the channel sidebar
+  sits directly on the base, so its edges are the blocks' edges and it
+  needs no divider. The current navigation row shows a short rounded
+  (pill) indicator in `brand`, as Fluent 2 does.
 - **Neutrals lean toward the brand.** Every grey carries a trace of the
   brand hue (OKLCH hue about 180, chroma at most 0.012), so greys and teal
   look like one family. Blocks stay pure white, so they lift off the base
@@ -117,7 +119,7 @@ covers them.
 
 - **Desktop:** the app bar block (logo, Home, the account menu) · the
   channel sidebar on the base · the conversation block · a side panel block
-  when one is open. Blocks have 8 px gaps and one light shadow.
+  when one is open.
 - **Conversation:** a thin header; a centred reading column about 760 px
   wide with 15 px text; a rounded composer block at the bottom.
 - **Mobile** (M6): one column — channel header, messages, composer, bottom

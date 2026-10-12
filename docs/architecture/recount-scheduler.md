@@ -57,6 +57,14 @@ start unrelated work; another worker's return does. The cancelled successor
 never starts. Mutation commands and assertion evidence are in the part 1b PR
 description; no production activation or shutdown behavior is claimed.
 
+Part 1e reruns delivery cases with a non-nil scheduler: message and owner
+scope filters, organisation-wide sidebar triggers, cold-hub batches, replay
+resets and error/cancellation cursor rules retain their synchronous assertions.
+Gates prove presence and typing continue while a recount is queued and running;
+owner connect tokens/generations and later owner resets preserve the cursor.
+Sidebar, presence and typing frames omit IDs. Future-cursor resets also check
+configured read limits. Watch and authorization race coverage remains part 1f.
+
 Scheduler instrumentation is deferred to a separate unit in original PR 2 of
 #865, before production wiring or activation: queue length and oldest pending
 age over time, running/waiting worker counts, processing time, and cancellation,

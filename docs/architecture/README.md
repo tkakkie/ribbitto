@@ -47,6 +47,7 @@ Read the file for the area you change:
 | [`stream-sidebar-results.md`](stream-sidebar-results.md) | measured cost of live sidebar recounts per stream with distinct members (#812) |
 | [`stream-sidebar-bottleneck-results.md`](stream-sidebar-bottleneck-results.md) | where live sidebar latency goes at thousands of streams, and two test-only experiments (#826) |
 | [`stream-sidebar-pool-results.md`](stream-sidebar-pool-results.md) | #832 part 1: long-run protocol, freshness and synchronous writer witness, connection budget; controlled measurements pending |
+| [`stream-sidebar-queue-results.md`](stream-sidebar-queue-results.md) | #832 PR 2: bounded fair scheduler, cancellation, completion mailbox and mutation evidence; writer integration remains PR 3 |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |

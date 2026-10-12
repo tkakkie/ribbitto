@@ -1,0 +1,113 @@
+head c706260cb598fca847dc4b003188ba804e594906
+2026-10-12T16:51:07Z
+{ 1.85 2.16 2.64 }
+10
+ 1162  33.5 05:25:50 Claude Helper (Renderer)
+  791  29.0 05:26:01 Claude Helper
+  402  18.7 05:26:06 WindowServer
+14142   3.7    06:47 claude
+  514   1.9 05:26:05 com.apple.DriverKit-AppleBCMWLAN com.apple.bcmwl
+  470   1.3 05:26:05 airportd
+  647   0.5 05:26:03 Google Chrome
+  662   0.4 05:26:03 ControlCenter
+ribbitto-claude-pg 0.01%
+ribbitto-codex-pg2 0.00%
+ribbitto-codex-pg 0.00%
+2026-10-12T17:53:34Z
+{ 5.85 6.66 6.41 }
+10
+  791   6.9 06:28:28 Claude Helper
+12629   4.4 04:38:21 
+  402   1.8 06:28:33 WindowServer
+ 1162   1.0 06:28:17 Claude Helper (Renderer)
+14142   0.2 01:09:14 claude
+  956   0.1 06:28:24 Code Helper (Rendere
+  662   0.1 06:28:30 ControlCenter
+  656   0.1 06:28:30 Code
+ribbitto-claude-pg 0.66%
+ribbitto-codex-pg2 0.01%
+ribbitto-codex-pg 0.00%
+2026-10-12T17:53:36Z
+{ 5.54 6.59 6.39 }
+10
+  791  27.2 06:28:30 Claude Helper
+ 1162   7.9 06:28:19 Claude Helper (Renderer)
+  402   4.6 06:28:35 WindowServer
+12629   3.5 04:38:23 
+  817   1.3 06:28:30 Go
+12645   0.9 04:38:23 Con
+12638   0.8 04:38:23 MacOS
+  360   0.7 06:28:35 mds
+ribbitto-claude-pg 0.04%
+ribbitto-codex-pg2 0.62%
+ribbitto-codex-pg 0.00%
+2026-10-12T19:04:43Z
+{ 13.87 14.35 13.33 }
+10
+12629  15.3 05:49:30 
+  791   6.7 07:39:37 Claude Helper
+ 1162   1.3 07:39:26 Claude Helper (Renderer)
+  402   1.2 07:39:42 WindowServer
+  665   0.9 07:39:39 Finder
+  395   0.5 07:39:42 bluetoothd
+14142   0.1 02:20:23 claude
+12596   0.1 05:49:31 com.docker.backend services
+ribbitto-claude-pg 0.03%
+ribbitto-codex-pg2 0.00%
+ribbitto-codex-pg 0.00%
+2026-10-12T19:04:44Z
+{ 13.87 14.35 13.33 }
+10
+  791  31.2 07:39:38 Claude Helper
+ 1162   9.8 07:39:27 Claude Helper (Renderer)
+  402   5.2 07:39:43 WindowServer
+12629   1.2 05:49:31 
+14142   0.8 02:20:24 claude
+  956   0.7 07:39:34 Code Helper (Rendere
+ 1533   0.3 07:37:12 claude
+  647   0.2 07:39:40 Google Chrome
+ribbitto-claude-pg 0.08%
+ribbitto-codex-pg2 0.00%
+ribbitto-codex-pg 0.01%
+2026-10-12T20:10:03Z
+{ 7.17 6.44 6.40 }
+10
+12629  24.0 06:54:50 
+  791   5.6 08:44:57 Claude Helper
+12645   5.0 06:54:50 Con
+12596   1.7 06:54:51 com.docker.backend services
+ 1162   1.5 08:44:46 Claude Helper (Renderer)
+  402   1.4 08:45:02 WindowServer
+12638   0.5 06:54:50 MacOS
+  406   0.2 08:45:02 loginwindow console
+ribbitto-claude-pg 0.03%
+ribbitto-codex-pg2 0.57%
+ribbitto-codex-pg 0.00%
+2026-10-12T20:10:04Z
+{ 7.17 6.44 6.40 }
+10
+  791  27.1 08:44:58 Claude Helper
+ 1162   9.6 08:44:47 Claude Helper (Renderer)
+12629   6.0 06:54:51 
+  402   3.9 08:45:03 WindowServer
+  383   2.2 08:45:03 dasd
+12596   2.1 06:54:52 com.docker.backend services
+14142   0.9 03:25:44 claude
+ 1533   0.8 08:42:32 claude
+ribbitto-claude-pg 0.00%
+ribbitto-codex-pg2 0.00%
+ribbitto-codex-pg 0.02%
+2026-10-12T21:21:35Z
+{ 9.27 12.62 13.06 }
+10
+12629  25.5 08:06:22 
+  791   5.9 09:56:29 Claude Helper
+ 1162   1.7 09:56:18 Claude Helper (Renderer)
+  402   1.1 09:56:34 WindowServer
+21275   0.6    00:02 mdworker_
+ 2395   0.6 09:09:42 Go
+12596   0.5 08:06:23 com.docker.backend services
+  360   0.4 09:56:34 mds
+ribbitto-claude-pg 1.10%
+ribbitto-codex-pg2 0.00%
+ribbitto-codex-pg 0.01%

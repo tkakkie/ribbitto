@@ -90,8 +90,8 @@ messages' height, then moves focus to the next control, or to the pane once
 the oldest message is shown.
 
 The page-only unread divider is a separate `<li>` immediately above the
-snapshot's first unread message, using `accent` / `on-accent` tokens and a
-localised label. Load older carries `unread=<sequence>` alongside `before`,
+snapshot's first unread message, using `accent` / `on-accent` for its
+localised label and decorative `accent-line` rules. Load older carries `unread=<sequence>` alongside `before`,
 including zero for no unread message; its responses reuse that sequence
 after the visit's reading POSTs. Without a carried value, pages compute it
 afresh. The parameter is accepted only on older-history URLs and affects

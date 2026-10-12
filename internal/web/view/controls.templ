@@ -13,6 +13,8 @@ const (
 	buttonPrimary buttonKind = iota
 	// buttonSecondary is an outlined, less prominent action.
 	buttonSecondary
+	// buttonSecondaryIcon adds a decorative child to the secondary look.
+	buttonSecondaryIcon
 	// buttonLink looks like a link but submits its form, so it stays a
 	// button: it changes state, which a link must never do.
 	buttonLink
@@ -22,8 +24,11 @@ const (
 // is a message ID. Navigation is a link (<a href>), never this component.
 templ submitButton(kind buttonKind, label string) {
 	switch kind {
-		case buttonSecondary:
-			<button type="submit" class="min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover">{ i18n.T(ctx, label) }</button>
+		case buttonSecondary, buttonSecondaryIcon:
+			<button type="submit" class={ "min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover", templ.KV("inline-flex items-center justify-center gap-2 whitespace-nowrap", kind == buttonSecondaryIcon) }>
+				{ children... }
+				{ i18n.T(ctx, label) }
+			</button>
 		case buttonLink:
 			<button type="submit" class="inline-flex min-h-11 items-center text-body text-brand underline">{ i18n.T(ctx, label) }</button>
 		default:

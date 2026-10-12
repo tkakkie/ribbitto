@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/a-h/templ"
+	"github.com/tkakkie/ribbitto/internal/conversation"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
@@ -32,6 +35,38 @@ func TestMemberName(t *testing.T) {
 			if tt.fallback {
 				if strings.Count(got, "@alice") != 1 || strings.Contains(got, tt.displayName) {
 					t.Fatalf("fallback shows the blank name or repeats the handle: %s", got)
+				}
+			}
+		})
+	}
+}
+
+func TestMessageAuthorAvatar(t *testing.T) {
+	for _, tt := range []struct{ name, displayName, want string }{
+		{"display name", "田中", "田"},
+		{"empty name", "", "a"},
+		{"legacy blank name", "ㅤ", "a"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := conversation.Entry{Message: conversation.Message{
+				ID: kernel.ID{9}, MemberID: kernel.ID{4}, Body: "message text first",
+			}, DisplayName: tt.displayName, Handle: "alice"}
+			model := viewMessage("acme", entry)
+			if model.MemberID != entry.MemberID {
+				t.Fatal("author's member ID was lost in the view mapping")
+			}
+			for _, component := range []templ.Component{view.MessageItem(model), view.LiveMessageItem(model)} {
+				var b strings.Builder
+				if err := component.Render(t.Context(), &b); err != nil {
+					t.Fatal(err)
+				}
+				got := b.String()
+				avatar := strings.Index(got, `<span aria-hidden="true" class="flex size-9`)
+				if avatar < 0 || !strings.Contains(got[avatar:], "bg-pastel-5 text-on-pastel-5") || !strings.Contains(got[avatar:], "<bdi>"+tt.want+"</bdi>") {
+					t.Fatalf("missing fixed-size, hidden avatar with the author's initial and colour: %s", got)
+				}
+				if body := strings.Index(got, `>message text first</p>`); body < 0 || body > avatar {
+					t.Fatal("message text must precede the avatar in page and live markup")
 				}
 			}
 		})

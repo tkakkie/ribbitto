@@ -332,7 +332,7 @@ func viewTopics(topics []conversation.Topic) []view.Topic {
 // link to the topic view.
 func viewMessage(slug string, entry conversation.Entry) view.Message {
 	return view.Message{
-		ID: entry.ID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
+		ID: entry.ID, MemberID: entry.MemberID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
 		TopicID: entry.TopicID, TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
 		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID),

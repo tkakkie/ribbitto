@@ -90,7 +90,9 @@ func (w costWriter) run(parent context.Context, sub realtime.Subscription, curso
 			result := *completed
 			completed = nil
 			active, next = false, time.Now().Add(realtime.SidebarInterval)
-			if result.version == version && result.version > sent {
+			// Newer-than-sent results make progress even under continuous invalidation;
+			// requiring the desired version starved sends in #832's controlled run.
+			if result.version > sent {
 				if result.err != nil {
 					return cursor, fmt.Errorf("recounting prototype sidebar: %w", result.err)
 				}
@@ -102,7 +104,8 @@ func (w costWriter) run(parent context.Context, sub realtime.Subscription, curso
 				if err := send.Send(ctx, out); err != nil {
 					return cursor, fmt.Errorf("sending prototype sidebar: %w", err)
 				}
-				sent, dirty, written = result.version, false, time.Now()
+				// Keep later triggers pending without rolling back the last sent frame.
+				sent, dirty, written = result.version, version > result.version, time.Now()
 			}
 		}
 		if dirty && !active && !time.Now().Before(next) {

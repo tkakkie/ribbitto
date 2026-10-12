@@ -203,6 +203,69 @@ func TestCostWriterBacklogCompletion(t *testing.T) {
 	})
 }
 
+func TestCostWriterRecountProgress(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q, g := newCostQueue(1, 2), costQueueGate{make(chan int64, 16), make(chan struct{}, 16)}
+		defer q.shutdown()
+		defer close(g.release)
+		blocker := q.register()
+		q.submit(blocker, g.request(100))
+		g.want(t, 100)
+		w, p, cancel, done := startCostWriter(t, q, g, 0)
+		defer cancel()
+		completedAt := time.Now()
+		for recount := int64(1); recount <= 3; recount++ {
+			if recount > 1 {
+				q.submit(blocker, g.request(100+recount))
+				g.want(t, 100+recount)
+				// Advance only the interval deadline; gates synchronize all work.
+				time.Sleep(realtime.SidebarInterval - time.Nanosecond)
+				synctest.Wait()
+				if q.stats().queued != 0 {
+					t.Fatal("recount started before minimum interval")
+				}
+				time.Sleep(time.Nanosecond)
+			}
+			synctest.Wait()
+			if q.stats().queued != 1 {
+				t.Fatalf("recount %d was not queued at next interval after outdated frame", recount)
+			}
+			// Every request is invalidated both while queued and while running.
+			p.seq++
+			w.stream.Hub.Raise(p.sub.Organization, p.seq)
+			synctest.Wait()
+			g.release <- struct{}{}
+			g.want(t, recount)
+			p.seq++
+			w.stream.Hub.Raise(p.sub.Organization, p.seq)
+			synctest.Wait()
+			g.release <- struct{}{}
+			synctest.Wait()
+			var sidebars []realtime.Outgoing
+			for _, frame := range p.frames {
+				if frame.Name == "sidebar" {
+					sidebars = append(sidebars, frame)
+				}
+			}
+			if len(sidebars) != int(recount) {
+				t.Fatalf("recount %d completion made no sidebar progress: got %d frames, want %d", recount, len(sidebars), recount)
+			}
+			frame := sidebars[recount-1]
+			if string(frame.Data) != fmt.Sprint(recount) || frame.ID != 0 || !frame.Ephemeral {
+				t.Fatalf("recount %d frame did not preserve completion payload/flags: %+v", recount, frame)
+			}
+			if recount > 1 && time.Since(completedAt) != realtime.SidebarInterval {
+				t.Fatalf("recount %d did not send at next interval: %s", recount, time.Since(completedAt))
+			}
+			completedAt = time.Now()
+		}
+		cancel()
+		if got := <-done; got.cursor != p.seq || !errors.Is(got.err, context.Canceled) {
+			t.Fatalf("recount progress cursor/cause: %+v", got)
+		}
+	})
+}
+
 func TestCostWriterAudiences(t *testing.T) {
 	other := kernel.ID{5}
 	for _, audience := range []string{"own", "other", "organization"} {
@@ -269,8 +332,8 @@ func TestCostWriterNoRollback(t *testing.T) {
 		synctest.Wait()
 		g.release <- struct{}{}
 		synctest.Wait()
-		if len(p.frames) != 1 {
-			t.Fatal("stale completion was sent")
+		if len(p.frames) != 2 || string(p.frames[1].Data) != "1" || p.frames[1].ID != 0 || !p.frames[1].Ephemeral || p.frames[1].Name != "sidebar" {
+			t.Fatalf("outdated completion newer than last sent frame lost: %v", p.frames)
 		}
 		// Fake time tests the fixed minimum; gates, not sleeps, order computation.
 		time.Sleep(realtime.SidebarInterval - time.Nanosecond)
@@ -282,14 +345,14 @@ func TestCostWriterNoRollback(t *testing.T) {
 		g.want(t, 2)
 		g.release <- struct{}{}
 		synctest.Wait()
-		if len(p.frames) != 2 || string(p.frames[1].Data) != "2" || p.frames[1].ID != 0 || !p.frames[1].Ephemeral || p.frames[1].Name != "sidebar" {
+		if len(p.frames) != 3 || string(p.frames[2].Data) != "2" || p.frames[2].ID != 0 || !p.frames[2].Ephemeral || p.frames[2].Name != "sidebar" {
 			t.Fatalf("quiet completion lost or sidebar carried durable ID: %v", p.frames)
 		}
 		// Inject delayed/duplicate results beyond the scheduler's serialization.
 		for _, version := range []int64{1, 2} {
 			w.work.done <- costQueueResult{version: version, out: realtime.Outgoing{Data: []byte("old")}}
 			synctest.Wait()
-			if len(p.frames) != 2 {
+			if len(p.frames) != 3 {
 				t.Fatal("completed recount rolled back or duplicated a newer frame")
 			}
 		}

@@ -1,73 +1,76 @@
 # Sidebar single-writer prototype (#832, PR 3)
 
-Part of #832, based on `codex/recount-queue` (PR #838), above PR #836.
-Delivery-safety evidence in realtime's external test package only; production is
-unchanged. The [scheduler contract](stream-sidebar-queue-results.md) and
-[pool protocol](stream-sidebar-pool-results.md) are separate evidence.
-PR 4 adds performance comparisons and queue telemetry; measurements, a
+Part of #832, based on PR #838 above PR #836; test-only, production unchanged.
+See the [scheduler](stream-sidebar-queue-results.md) and
+[pool protocol](stream-sidebar-pool-results.md). PR 4 adds comparisons/telemetry.
+Its controlled results exposed the liveness defect below; corrected performance,
 recommendation and production configuration remain outstanding.
 
 ## Prototype contract
 
-`internal/realtime/cost_writer_test.go` composes the PR 2 scheduler with exported
-stream interfaces: one slot per writer, canceled on every exit. Workers recount
-and publish versioned payloads/errors; only the writer renders durable events,
-authorizes, sends and advances the cursor.
+`internal/realtime/cost_writer_test.go` composes the PR 2 scheduler: one slot per
+writer, canceled on exit. Workers publish versioned recounts/errors; only the
+writer renders events, authorizes, sends and advances the cursor.
 
-The writer drains ordered event batches while its own recount is queued or
-running. It consumes completions between batches and in its idle select, so
-neither a durable backlog nor absence of a durable wake strands a completion.
-A joined bridge adapts `Hub.Wait` to bounded selectable wakes with an independent
-cursor; the event reader remains the truth. Exit cancels/joins it and cancels the
-registration. Uncooperative computations retain slots until return; late
-completions are suppressed (PR 2).
+Ordered event batches progress during queued/running recounts. Completions are
+consumed between batches and in the idle select, avoiding backlog/quiet starvation.
+A joined `Hub.Wait` bridge supplies bounded wakes with an independent cursor;
+the event reader remains the truth. Exit cancels/joins the bridge and cancels
+registration. Uncooperative computations retain slots until return (PR 2).
 
 Connect starts dirty. Each durable recount trigger increments the desired
-version, including triggers outside message delivery interests. One outstanding request retains later invalidations in a dirty flag.
-Only the desired version above the last sent version can send. Dropping a
-superseded or duplicate result occurs before authorization; newer work stays dirty. A fixed minimum of
-`realtime.SidebarInterval` starts when the writer consumes each completed attempt,
-including a discarded result; it is conservative if consumption was delayed.
-Triggers never move that deadline. Sustained invalidation can repeatedly discard
-snapshots; freshness and backlog under load are unmeasured and remain PR 4 work.
+version, including triggers outside message delivery interests. One outstanding
+request retains later invalidations in a dirty flag. A completion newer than
+the last sent frame sends its own payload even if the desired version has moved
+on. After sending, `version > result.version` keeps the writer dirty for the
+next interval. Older/duplicate results are dropped before authorization.
+The minimum `realtime.SidebarInterval` starts on consuming each attempt, including
+discarded results; delayed consumption is conservative. Triggers never move it.
+This allows progress under continuous invalidation without rollback, but does
+not guarantee a snapshot is current at send.
 
-Every send retains #859's rule: render/compute first, authorize the stream's
-account, slug and own member last, then send. Another audience is checked first;
-its deny skips. A bound-member deny returns `realtime.ErrMembershipRevoked`
-without advancing past that event. Authorization errors stop delivery;
-cancellation wins over deny and prevents send. Revocation after the check's
+The [#832 results](https://github.com/tkakkie/ribbitto/issues/832), 2026-10-12,
+reported 0.3–0.5 s completion scheduling delay at 5,000 streams: desired-version
+equality dropped nearly all completions. Per 60 s, workers computed about
+230,000–250,000 recounts but writers sent 6,000–10,000; recount delay p95 was
+about 57 s, frames mostly following posting. At 1,000 streams p99 doubled
+against sync. These are maintainer-provided pre-fix results; deterministic tests
+below establish liveness only, with no new timed measurements/performance verdict.
+
+Every send retains #859: render/compute, authorize account/slug/own member, send.
+Another audience is checked first; its deny skips. Bound-member deny returns
+`realtime.ErrMembershipRevoked` without advancing past that event. Authorization
+errors stop delivery; cancellation wins over deny. Revocation after the check's
 snapshot retains production's unavoidable window.
 
-Heartbeats measure time since the last write, progress during recounts and
-re-check membership; denial ends idle writers too. Exit cancels pending/running
-work and drains completions through the scheduler, preventing late frames.
-Send/recount/read/render errors stop delivery; superseded errors are discarded.
-Durable output preserves rendered message IDs and order; successful or skipped
-durable events advance the cursor. Sidebar output is always `Name="sidebar"`,
-`ID=0`, `Ephemeral=true`, irrespective of the source envelope: flags that omit
-SSE `id:`. Wire encoding is not modeled.
+Heartbeats follow time since last write, progress during recounts and re-check
+membership; deny ends idle writers too. Exit cancels work and drains completions,
+preventing late frames. Send/recount/read/render errors stop delivery; errors at
+versions no newer than sent are discarded. Durable IDs/order are preserved;
+successful/skipped events advance the cursor. Sidebar flags always become
+`Name="sidebar"`, `ID=0`, `Ephemeral=true` (no SSE `id:`); wire encoding is unmodeled.
 
 ## Deterministic evidence
 
 `internal/realtime/cost_writer_safety_test.go` uses channel gates and
 `testing/synctest`. Fake-time sleeps exercise interval/heartbeat deadlines only;
-`Wait` and channel gates synchronize work. Atomic revocation/send witnesses also stay safe under mutations.
+`Wait`/gates synchronize work; atomic revocation/send witnesses tolerate mutations.
 
-- Progress gates another stream to prove queued progress, then this stream to
-  prove running progress. Both deliver IDs 1,2,3 before releasing any recount.
-- BacklogCompletion gates the last render in a 100-event batch. A real recount
-  completes there; its sidebar sends before IDs 101–103, preserving durable order.
-- NoRollback rejects an invalidated completion, proves the minimum interval and
-  sends fresh state without a durable wake. Injected older/duplicate completions
-  independently exercise the writer guard beyond scheduler serialization.
-- Stops holds an uncooperative recount and pending successor. Disconnect,
-  cancellation/revocation during render, sidebar revocation and idle heartbeat
-  revocation return the expected cause and unchanged cursor. Late work adds no
-  frame or retained registration/completion. An allowed heartbeat precedes deny.
-- The sender asserts the immediately preceding operation was the bound-member
-  check; the authorizer checks account, slug, organization and audience scope.
-  Audiences covers own-member (bound only), other-member (deny, no send, cursor
-  advances) and organization-wide delivery. A later broadcast verifies progress.
+- Progress gates queued/running work; both deliver IDs 1,2,3 before any recount.
+- BacklogCompletion gates render 100; a recount completes there and sends before
+  IDs 101–103, preserving order.
+- RecountProgress gates three consecutive recounts, invalidating each while
+  queued and running. Each sends its own payload; later invalidations request
+  another recount exactly at the next minimum interval, without a new wake.
+- NoRollback sends invalidated/newer state, proves the minimum interval and
+  progress without a durable wake. Injected older/duplicate completions test
+  the writer guard beyond scheduler serialization.
+- Stops gates an uncooperative recount and successor. Disconnect, render/sidebar
+  and heartbeat revocation return the expected cause/cursor; late work leaves no
+  frames/registration/completion. An allowed heartbeat precedes deny.
+- The sender requires bound-member authorization immediately before sending;
+  the authorizer checks scope. Audiences covers own/other members and broadcasts,
+  skipped-event cursor advancement and subsequent progress.
 
 ## Mutation commands and observed assertions
 
@@ -77,32 +80,23 @@ Export the worktree-local caches from the
 The restored normal suite passes:
 
 ```sh
-go test -race -count=1 -run '^TestCost' -timeout 2m ./internal/realtime
+go test -race -count=3 -run '^TestCost' ./internal/realtime
 ```
 
-The 22 original and three follow-up mutations exited 1 at assertions, without
-compile failure, race, panic or timeout, then were restored. Existing tests remain.
-Table keys name the commands:
+The historical 22 original/three follow-up mutations failed assertions and were
+restored, without compile failure, race, panic or timeout. The former
+desired-version-equality mutation (`stale completion was sent`) is superseded.
+
+Historical command form (substitute the suffix mapped below for `$case`):
 
 ```sh
-# Q: queued; R: running; P: both progress cases
-go test -race -count=1 -run '^TestCostWriterProgress/true$' -timeout 10s ./internal/realtime
-go test -race -count=1 -run '^TestCostWriterProgress/false$' -timeout 10s ./internal/realtime
-go test -race -count=1 -run '^TestCostWriterProgress$' -timeout 10s ./internal/realtime
-# N: no rollback; H: heartbeat; D: durable revocation; S: all stop cases
-go test -race -count=1 -run '^TestCostWriterNoRollback$' -timeout 10s ./internal/realtime
-go test -race -count=1 -run '^TestCostWriterStops/heartbeat$' -timeout 10s ./internal/realtime
-go test -race -count=1 -run '^TestCostWriterStops/durable$' -timeout 10s ./internal/realtime
-go test -race -count=1 -run '^TestCostWriterStops$' -timeout 10s ./internal/realtime
-# C: render cancellation; X: idle disconnect; B: sidebar revocation
-go test -race -count=1 -run '^TestCostWriterStops/render-disconnect$' -timeout 10s ./internal/realtime
-go test -race -count=1 -run '^TestCostWriterStops/disconnect$' -timeout 10s ./internal/realtime
-go test -race -count=1 -run '^TestCostWriterStops/sidebar$' -timeout 10s ./internal/realtime
-# L: backlog completion; O: other audience; M: own member
-go test -race -count=1 -run '^TestCostWriterBacklogCompletion$' -timeout 10s ./internal/realtime
-go test -race -count=1 -run '^TestCostWriterAudiences/other$' -timeout 10s ./internal/realtime
-go test -race -count=1 -run '^TestCostWriterAudiences/own$' -timeout 10s ./internal/realtime
+go test -race -count=1 -run "^TestCostWriter${case}$" -timeout 10s ./internal/realtime
 ```
+
+Q=`Progress/true`, R=`Progress/false`, P=`Progress`, N=`NoRollback`,
+H=`Stops/heartbeat`, D=`Stops/durable`, S=`Stops`, C=`Stops/render-disconnect`,
+X=`Stops/disconnect`, B=`Stops/sidebar`, L=`BacklogCompletion`,
+O=`Audiences/other`, M=`Audiences/own`.
 
 | Command | Deliberate defect | Actual failing assertion |
 |---|---|---|
@@ -111,7 +105,6 @@ go test -race -count=1 -run '^TestCostWriterAudiences/own$' -timeout 10s ./inter
 | P | Increment rendered message ID before send | `durable IDs/order changed`, IDs 2,3,4 |
 | P | Reverse event iteration | `durable IDs/order changed`, IDs 3,2,1 |
 | P | Set durable Ephemeral=true | `durable IDs/order changed`, ephemeral IDs 1,2,3 |
-| N | Remove desired-version equality | `stale completion was sent` |
 | N | Remove last-sent guard (retain variable with a true expression) | `completed recount rolled back or duplicated a newer frame` (duplicate) |
 | N | Bypass version guards once sent>0 | Same assertion (older completion after newer frame) |
 | N | Set next deadline to now | `recount started before minimum interval` |
@@ -132,31 +125,48 @@ go test -race -count=1 -run '^TestCostWriterAudiences/own$' -timeout 10s ./inter
 | O | Send when `allowed || event.AudienceMemberID != nil` | `audience other sent 1 frames, want 0` |
 | M | Bound-check only nil or other-member audiences | `send was not immediately preceded by bound-member authorization` |
 
-Initial deadlocked/racy trials are excluded: the final blocking mutation retains
-cancellation; atomic witnesses and cancellation before inspection remove the race.
+Initial deadlocked/racy trials are excluded; final trials retain cancellation
+and use atomic witnesses/cancellation before inspection.
+
+The liveness correction changes NoRollback's first assertion from one durable
+frame only (`stale completion was sent`) to two frames, including completion
+payload `1` with sidebar flags. The later payload `2` assertion moves from
+index 1/count 2 to index 2/count 3; older/duplicate checks retain count 3.
+The interval, payload/flags and rollback checks remain.
+
+Each new mutation below was applied alone and restored, exiting 1 at the shown
+assertion without compile failure, race, panic or timeout. Commands:
+
+```sh
+# RP: repeated recount progress; N: no rollback
+go test -race -count=1 -run '^TestCostWriterRecountProgress$' -timeout 10s ./internal/realtime
+go test -race -count=1 -run '^TestCostWriterNoRollback$' -timeout 10s ./internal/realtime
+```
+
+| Command | Deliberate defect | Actual failing assertion |
+|---|---|---|
+| RP | Restore `result.version == version && result.version > sent` | `recount 1 completion made no sidebar progress: got 0 frames, want 1` |
+| RP | Set dirty to false after sending | `recount 2 was not queued at next interval after outdated frame` |
+| N | Use `result.version >= sent` | `completed recount rolled back or duplicated a newer frame` (duplicate version 2) |
+| N | Use `result.version > 0 && sent >= 0` | Same assertion (older version 1) |
+| RP | Replace completion data with `[]byte("wrong")` | `recount 1 frame did not preserve completion payload/flags`, Data=`[119 114 111 110 103]` |
 
 ## Production gaps
 
-This ordered-message scheduling experiment is not a port of `Stream.Run`.
-Integration must retain subscription kind/topic and
-rendered-topic filtering, organization-scoped triggers, replay bounds/gap resets,
-negative-cursor validation, configurable batches and all cursor/error rules.
-Only organization/channel/message-interest filtering is modeled here. It must
-integrate presence/typing owners and generations, member sidebar watches
-subscribed before initial recount, captured/covered watch generations and release.
-The wake bridge must be replaced by the production combined wait, incorporating
-completion, heartbeat and recount deadlines without lost wakes or unbounded
-helper goroutines. Reusable timers, backlog heartbeat behavior, loader limits,
-write deadlines and slow-client behavior need production verification.
+This is not a port of `Stream.Run`: only organization/channel/message-interest
+filtering is modeled. Integration must retain kind/topic/rendered-topic filtering,
+organization-scoped triggers, replay bounds/gap resets, negative-cursor validation,
+configurable batches and cursor/error rules. It needs presence/typing owners and
+generations, member watches subscribed before initial recount, captured/covered
+watch generations and release. Replace the bridge with production's combined wait
+for completion/heartbeat/recount deadlines without lost wakes or unbounded helpers.
+Verify reusable timers, backlog heartbeats, loaders, write deadlines/slow clients.
 
-Composition-root design must cover admission/capacity refusal, context propagation,
-shutdown joining, registration ownership and member/account fairness. Production
-must prevent duplicate slots and startup leaks. Item bounds do not bound bytes.
-Supersession's freshness cost and error policy need validation. These tests
-establish no HTTP/HTML, count-query, browser or multi-member workload result.
+Wiring needs admission/capacity refusal, context propagation, shutdown joining,
+registration ownership and member/account fairness, without duplicate slots or
+startup leaks. Item bounds do not bound bytes. Validate snapshot lag/error policy.
+These tests establish no HTTP/HTML, count-query, browser or multi-member results.
 
-PR 4 compares sync shared40 with async shared40, then async shared40 with normal10
-plus recount30, changing one variable per comparison. It adds queue/backlog and
-aggregate pool telemetry; growing backlog disqualifies. Controlled overnight
-measurements, connection-budget inputs and the implementation-issue recommendation
-remain outstanding under #832.
+PR 4 compares sync/async shared40, then async shared40/normal10+recount30, one
+variable per comparison, with queue/backlog/pool telemetry; growth disqualifies.
+Corrected controlled measurements, budget inputs and recommendation remain #832 work.

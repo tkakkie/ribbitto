@@ -60,10 +60,13 @@ me" view (#433); presence across several server processes (#236).
 ## M5
 
 M5 starts once M4 is done. It gives the pages that exist today one design,
-for a desktop browser: white-based, with a light sidebar of icon-and-label
-rows, a wide reading column and a rounded composer, and on desktop the feel
-of Microsoft's public website. It replaces the "Clear water" direction and
-its colours from #9. M5 is done when:
+for a desktop browser: white rounded blocks on a lightly tinted base — an
+app bar, the conversation and side panels — with the sidebar of
+icon-and-label rows on the base, a wide reading column and a rounded
+composer, and on desktop the feel of Microsoft's Fluent 2. It replaces the
+"Clear water" direction and its colours from #9. M5 is light only: the old
+dark theme is removed, and M6 designs dark colours for the new direction.
+M5 is done when:
 
 1. **The direction is written down.** [`ui.md`](ui.md) records the new
    direction, its tokens with colours chosen anew, and the contrast table;
@@ -73,7 +76,9 @@ its colours from #9. M5 is done when:
    [20](decisions/20-product-labels-and-ordinary-words.md) and
    [28](decisions/28-the-concept-fast-nothing-gets-buried-nothing-to-learn.md)).
 2. **Every existing page follows it:** setup, sign-in, sign-up, the
-   channel feed, the topic view, the members pages and the error pages.
+   channel feed, the topic view, the members pages and the existing error
+   page (too many attempts). 404 and 500 stay plain-text responses; M5 adds
+   no new error pages.
 3. **Icons come from one SVG set** kept in the repository with its
    licence, never from a CDN.
 4. **Channels have images.** A channel shows an image instead of `#` where

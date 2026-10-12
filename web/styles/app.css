@@ -4,69 +4,65 @@
 @source "./*.css";
 
 /*
- * Design tokens (direction "B · Clear water", see docs/ui.md).
- * Colours are semantic CSS variables so dark mode is one override block;
+ * Design tokens (the M5 direction, see docs/ui.md).
+ * Colours are semantic CSS variables so a theme is one override block;
  * Tailwind's @theme cannot sit inside a media query, so @theme inline maps
  * utilities (bg-surface, text-muted, …) onto these variables.
+ * Light only until M6 designs dark colours for this direction (docs/ui.md),
+ * so there is no prefers-color-scheme override here.
  * Contrast ratios for every pair are listed in docs/ui.md — recheck them
  * there when you change a value here.
  */
 :root {
   color-scheme: light;
+  --rb-base: #edf4f2;
   --rb-bg: #ffffff;
-  --rb-rail: #f1f3f2;
-  --rb-sidebar: #f7f8f7;
+  --rb-rail: #ffffff;
+  --rb-sidebar: #edf4f2;
+  --rb-panel: #f5f9f8;
   --rb-surface: #ffffff;
-  --rb-input: #f7f8f7;
-  --rb-border: #e3e6e4;
-  --rb-border-strong: #8a9096;
-  --rb-fg: #16181a;
-  --rb-muted: #595f66;
-  --rb-brand: #4a7a0f;
+  --rb-input: #ffffff;
+  --rb-hover: #e4edeb;
+  --rb-border: #e1e8e6;
+  --rb-border-strong: #7f8986;
+  --rb-fg: #171c1b;
+  --rb-muted: #545d5b;
+  --rb-brand: #0f766e;
   --rb-on-brand: #ffffff;
-  --rb-selected: #e9f1de;
-  --rb-on-selected: #2f4f08;
-  --rb-accent: #fbf3d5;
-  --rb-on-accent: #5c4a0c;
-  --rb-success: #0e7490;
+  --rb-selected: #d5f1ea;
+  --rb-on-selected: #0b4d48;
+  --rb-accent: #fff0e6;
+  --rb-on-accent: #8a3a12;
+  --rb-accent-line: #f2a37b;
+  --rb-success: #3a9742;
   --rb-warning: #8a5300;
   --rb-danger: #b42318;
   --rb-on-danger: #ffffff;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --rb-bg: #0f1112;
-    --rb-rail: #0a0b0c;
-    --rb-sidebar: #141718;
-    --rb-surface: #171a1b;
-    --rb-input: #141718;
-    --rb-border: #26292b;
-    --rb-border-strong: #6b7278;
-    --rb-fg: #e6e8ea;
-    --rb-muted: #9aa1a8;
-    --rb-brand: #9ccc5a;
-    --rb-on-brand: #10170a;
-    --rb-selected: #1f2a14;
-    --rb-on-selected: #d6ecb8;
-    --rb-accent: #3a3316;
-    --rb-on-accent: #fbf3d5;
-    --rb-success: #5fc3dc;
-    --rb-warning: #f0b35a;
-    --rb-danger: #ff8a7a;
-    --rb-on-danger: #1a0806;
-  }
+  --rb-pastel-1: #dcebff;
+  --rb-on-pastel-1: #1f5aa6;
+  --rb-pastel-2: #fff3c4;
+  --rb-on-pastel-2: #7a5d00;
+  --rb-pastel-3: #d9f2e6;
+  --rb-on-pastel-3: #1d6b47;
+  --rb-pastel-4: #ffe4d6;
+  --rb-on-pastel-4: #9a4a1f;
+  --rb-pastel-5: #ebe3ff;
+  --rb-on-pastel-5: #5b3fa8;
+  --rb-pastel-6: #ffe0ea;
+  --rb-on-pastel-6: #a3284f;
 }
 
 @theme inline {
   /* Only our tokens: no stray palette colours in templates. */
   --color-*: initial;
+  --color-base: var(--rb-base);
   --color-bg: var(--rb-bg);
   --color-rail: var(--rb-rail);
   --color-sidebar: var(--rb-sidebar);
+  --color-panel: var(--rb-panel);
   --color-surface: var(--rb-surface);
   --color-input: var(--rb-input);
+  --color-hover: var(--rb-hover);
   --color-border: var(--rb-border);
   --color-border-strong: var(--rb-border-strong);
   --color-fg: var(--rb-fg);
@@ -77,10 +73,23 @@
   --color-on-selected: var(--rb-on-selected);
   --color-accent: var(--rb-accent);
   --color-on-accent: var(--rb-on-accent);
+  --color-accent-line: var(--rb-accent-line);
   --color-success: var(--rb-success);
   --color-warning: var(--rb-warning);
   --color-danger: var(--rb-danger);
   --color-on-danger: var(--rb-on-danger);
+  --color-pastel-1: var(--rb-pastel-1);
+  --color-on-pastel-1: var(--rb-on-pastel-1);
+  --color-pastel-2: var(--rb-pastel-2);
+  --color-on-pastel-2: var(--rb-on-pastel-2);
+  --color-pastel-3: var(--rb-pastel-3);
+  --color-on-pastel-3: var(--rb-on-pastel-3);
+  --color-pastel-4: var(--rb-pastel-4);
+  --color-on-pastel-4: var(--rb-on-pastel-4);
+  --color-pastel-5: var(--rb-pastel-5);
+  --color-on-pastel-5: var(--rb-on-pastel-5);
+  --color-pastel-6: var(--rb-pastel-6);
+  --color-on-pastel-6: var(--rb-on-pastel-6);
   --color-transparent: transparent;
   --color-current: currentColor;
 }
@@ -91,7 +100,7 @@
     "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Type scale: dense, like direction B. */
+  /* Type scale: compact; the reading column sets its own size (docs/ui.md). */
   --text-caption: 0.75rem;
   --text-caption--line-height: 1rem;
   --text-body: 0.875rem;

@@ -73,6 +73,7 @@ func NewCache[K comparable, V any](parent context.Context, capacity int, maxLoad
 func NewCachedEvents(parent context.Context, events EventReader, hub *Hub, capacity int, ttl time.Duration) *CachedEvents // NewCachedEvents wraps events.
 func NewHub() *Hub // NewHub returns an empty hub with DefaultMaxStreams as its process cap.
 func NewHubWithMaxStreams(maxStreams int) *Hub // NewHubWithMaxStreams returns an empty hub with the given process cap.
+func NewRecountScheduler(workers int, registrations int) *RecountScheduler // NewRecountScheduler requires positive worker and registration limits.
 type Outgoing struct // Outgoing is one event ready to send.
   field Data []byte
   field Ephemeral bool // Ephemeral omits the SSE id field, preserving the durable cursor.
@@ -80,6 +81,17 @@ type Outgoing struct // Outgoing is one event ready to send.
   field Name string
   field Topic github.com/tkakkie/ribbitto/internal/kernel.ID // Topic is the message's topic as the shared render read it.
 func ParsePayloadID(value string) (github.com/tkakkie/ribbitto/internal/kernel.ID, error) // ParsePayloadID parses a payload ID in the canonical 8-4-4-4-12 layout.
+type RecountCompletion struct // RecountCompletion carries computation output, without authorizing or sending it.
+  field Err error // Err is the computation error; the scheduler never retries it.
+  field Outgoing Outgoing // Outgoing is computation output for the writer to authorize before sending.
+  field Version uint64 // Version identifies the submitted request, not a scheduler sequence.
+type RecountRegistration struct // RecountRegistration owns one running and one replaceable pending computation.
+  func (*RecountRegistration).Cancel() // Cancel removes eligibility, cancels computation and drops buffered/late results.
+  func (*RecountRegistration).Completions() <-chan RecountCompletion // Completions is a one-slot mailbox; an unread result is replaced on completion.
+  func (*RecountRegistration).Submit(version uint64, compute func(context.Context) (Outgoing, error)) bool // Submit replaces pending work without changing its eligibility position.
+type RecountScheduler struct // RecountScheduler bounds concurrent computations and registered streams.
+  func (*RecountScheduler).Close() // Close refuses new work, cancels registrations and waits for actual returns.
+  func (*RecountScheduler).Register() *RecountRegistration // Register returns nil when capacity is retained or the scheduler is closed.
 type Renderer interface // Renderer turns an event the subscription wants into what the stream sends; the stream does the subscription's filtering, so a render depends only on the event.
   func (Renderer).Render(ctx context.Context, event Event) (Outgoing, error)
 type Retention struct // Retention expires replay history at start and on each tick; messages and unread state remain.

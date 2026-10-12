@@ -3,7 +3,8 @@
 Part 1 extends #826 and proves a synchronous recount stops the same stream's
 writer. It selects no pool size and proves no writer independence. The
 [PR 2 scheduler](stream-sidebar-queue-results.md) covers queue safety only;
-writer integration and comparison arms remain PRs 3 and 4.
+[PR 3 writer](stream-sidebar-writer-results.md) and
+[PR 4 arms/telemetry](stream-sidebar-arms-results.md) now complete the test-local comparison setup.
 
 ## Evidence and measurement status
 
@@ -44,28 +45,28 @@ matrix. The orchestrator runs these outside the sandbox, using port 55435:
 export GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
 export GOLANGCI_LINT_CACHE=$PWD/bin/.cache/lint GOPATH=$PWD/bin/.cache/gopath
 export RIBBITTO_REQUIRE_DB=1 RIBBITTO_STREAM_COST_LONG=1
-RIBBITTO_STREAM_COST_LONG_GROUP=5/1000 go test -count=1 -run '^TestStreamCostPoolLadder$' -v -timeout 2h ./internal/realtime/
-RIBBITTO_STREAM_COST_LONG_GROUP=5/5000 go test -count=1 -run '^TestStreamCostPoolLadder$' -v -timeout 2h ./internal/realtime/
-RIBBITTO_STREAM_COST_LONG_GROUP=20/1000 go test -count=1 -run '^TestStreamCostPoolLadder$' -v -timeout 2h ./internal/realtime/
-RIBBITTO_STREAM_COST_LONG_GROUP=20/5000 go test -count=1 -run '^TestStreamCostPoolLadder$' -v -timeout 2h ./internal/realtime/
+RIBBITTO_STREAM_COST_LONG_GROUP=5/1000 go test -count=1 -run '^TestStreamCostPoolLadder$' -v -timeout 3h ./internal/realtime/
+RIBBITTO_STREAM_COST_LONG_GROUP=5/5000 go test -count=1 -run '^TestStreamCostPoolLadder$' -v -timeout 3h ./internal/realtime/
+RIBBITTO_STREAM_COST_LONG_GROUP=20/1000 go test -count=1 -run '^TestStreamCostPoolLadder$' -v -timeout 3h ./internal/realtime/
+RIBBITTO_STREAM_COST_LONG_GROUP=20/5000 go test -count=1 -run '^TestStreamCostPoolLadder$' -v -timeout 3h ./internal/realtime/
 # Optional all-groups invocation; an empty selector runs all four groups.
-RIBBITTO_STREAM_COST_LONG_GROUP= go test -count=1 -run '^TestStreamCostPoolLadder$' -v -timeout 8h ./internal/realtime/
+RIBBITTO_STREAM_COST_LONG_GROUP= go test -count=1 -run '^TestStreamCostPoolLadder$' -v -timeout 12h ./internal/realtime/
 ```
 
-The opt-in test fixes 60 s, rates 5/20, streams 1,000/5,000, pool sizes
-10/20/30/40 and three rounds. Each (rate, streams) group alternates references
-and candidates: 10,20,10,30,10,40 in rounds 1/3; 10,40,10,30,10,20 in round 2.
-Thus each larger pool has three repetitions, pool 10 nine. A selected group has
-18 windows (18 minutes of posting, plus fresh-database setup, up to 30 s drain
-per window and load waits). Two hours per group is a planning allowance, not a
-guarantee: load waits have no fixed ceiling. Use logged wall times to revise it.
-The optional full matrix has 72 windows, visits 5/1000, 5/5000, 20/1000, 20/5000
-in that order in each round, and uses eight hours. Invalid selectors fail before fixtures or marker creation. Part 1 has no independent writer.
+The opt-in test fixes 60 s, rates 5/20, streams 1,000/5,000 and three rounds.
+PR 4 retains plain synchronous pools 10/20/30/40 and pool10/gate10, adding
+queue-backed sync40, async40 and async10+30. Each group now has 39 windows:
+13 per round, with pool10 interleaved and reversed order in round 2.
+The [arms protocol](stream-sidebar-arms-results.md) specifies exact order,
+fixed scheduler parameters and telemetry. Three hours per group and twelve
+for the optional 156-window matrix are timeout allowances, not run-time claims;
+load waits remain unbounded. Invalid selectors fail before marker creation.
 
 Every window uses a new migrated disposable database, one organisation,
 one channel/default topic, distinct members, unfragmented ranges and alternating
 initial totals 0/1, shared event/message caches, authorization capacity 10,000,
-batch 100, no stagger or recount concurrency gate. Only pool size varies.
+batch 100 and no stagger. Plain sizing varies only pool size; the gate and
+queue comparisons have the explicitly isolated variables in the arms protocol.
 Fixtures and initial recounts are excluded from measured metrics. HTTP/HTML,
 network/slow clients, presence/typing, moves/reads, fragmented ranges, large
 sidebars and deep history are absent.
@@ -102,7 +103,8 @@ RIBBITTO_STREAM_COST=1 RIBBITTO_STREAM_COST_MEMBERS=distinct \
 ## Metrics and comparability
 
 The test-only count adapter reads org's committed event sequence through its
-exported snapshot-bound cursor after the four count statements. It adds exactly
+exported snapshot-bound cursor after the four count statements. PR 4 uses production
+counts-only recounts (#861), disabling first-unread probes. It adds exactly
 one `GetEventSeq` statement per recount, classified separately by attribution
 and included in SQL and whole-sidebar elapsed totals. The witness and both
 counts share the lists' read-only repeatable-read transaction. Production would
@@ -130,12 +132,12 @@ A separate provisional verdict requires all scheduled posts completed, zero
 misses, no missing messages/final-snapshot timeout or loop errors, message p95
 <=250 ms, recount p95 <=2 s and p99 <=5 s. The historical 1 s ladder verdict is
 still logged independently. Test exit success alone is not target success.
-Posting must be compared with the same-load pool10 reference before recommending
-anything; target success does not establish a production ceiling.
+Posting must be compared with the same-load reference for each comparison
+before recommending anything; target success does not establish a production ceiling.
 
 Report controlled SQL/count/recount/wait totals, peak leases,
 scheduled/completed/missed and latency percentiles, with median and min–max
-across accepted repetitions. PR 4 samples queue length, oldest waiting age,
+across accepted repetitions. PR 4 now samples queue length, oldest waiting age,
 coalesced/cancelled work over time; growing backlog disqualifies a recommendation
 regardless of latency. Part 1 has no new application queue.
 
@@ -167,14 +169,12 @@ independence nor fewer connections. Do not adopt pool30 from historical results.
 
 ## Recommendation and remaining work
 
-Keep production configuration undecided. PR 2 adds the bounded fair scheduler;
-PR 3 must integrate one writer that continues messages while recounts wait.
-PR 4 compares equal total budgets first, then partitioning. Larger pools alone
-do not establish writer independence.
-
-PR 3 must explain the test-local loop's production gaps and mutation-check
-same-stream progress, stale-result rejection, cancellation, pre-send authorization,
-message IDs/order and id-free sidebar frames. PR 2 covers per-stream FIFO fairness;
-member-level fairness (several streams each) waits for PR 3. Recommendation
-requires controlled latency, posting progress and bounded-backlog evidence.
-The implementation issue remains a local Markdown draft.
+The [controlled results](stream-sidebar-arms-measured.md) identify a
+single writer per stream with a bounded, fair, cancellable recount queue as a
+promising candidate, pending a stability criterion decided in advance and
+validation with production wiring. Plain pool sizing alone fails the measured
+5,000-stream targets. Shared and partitioned pools trade message latency against
+recount freshness/throughput; production pool size and layout remain open.
+The [scheduler](stream-sidebar-queue-results.md),
+[single writer](stream-sidebar-writer-results.md) and
+[comparison arms](stream-sidebar-arms-results.md) remain test-only evidence.

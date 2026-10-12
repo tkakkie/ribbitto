@@ -20,6 +20,11 @@ func costTargets(r stepResult) bool {
 		r.latency[1] <= 250*time.Millisecond && r.recountDelay[1] <= 2*time.Second && r.recountDelay[2] <= 5*time.Second
 }
 
+// Eligibility still needs the controlled run and a posting-baseline comparison.
+func costRecommendable(r stepResult) bool {
+	return costTargets(r) && ((r.arm == "" && len(r.queue) == 0) || !costQueueGrowing(r.queue, r.postingDuration))
+}
+
 func TestCostTargetsRequireCompleteWorkload(t *testing.T) {
 	complete := stepResult{scheduled: 300, completed: 300, deliveries: 1500000}
 	if !costTargets(complete) {
@@ -167,21 +172,33 @@ func TestStreamCostPoolLadder(t *testing.T) {
 		"RIBBITTO_STREAM_COST_MEMBERS": "distinct", "RIBBITTO_STREAM_COST_CACHE": "1",
 		"RIBBITTO_STREAM_COST_DURATION": "60s", "RIBBITTO_STREAM_COST_ATTRIBUTION": "1",
 		"RIBBITTO_STREAM_COST_RECOUNTS": "", "RIBBITTO_STREAM_COST_STAGGER": "",
+		"RIBBITTO_STREAM_COST_SMOKE": "",
 	} {
 		t.Setenv(key, value)
 	}
 	for round := range 3 {
-		pools := []int{10, 20, 10, 30, 10, 40}
+		arms := []string{"10", "20", "10", "30", "10", "40", "sync40", "async40", "async10+30", "async40", "sync40", "10", "gate10"}
 		if round%2 == 1 {
-			pools = []int{10, 40, 10, 30, 10, 20}
+			arms = []string{"10", "gate10", "10", "40", "sync40", "async40", "async10+30", "async40", "sync40", "10", "30", "10", "20"}
 		}
 		for _, group := range groups {
-			for run, pool := range pools {
+			for run, arm := range arms {
 				err := costLoadWindow(t.Context(), func() bool { return costHost(t.Context(), t) }, func() bool {
-					return t.Run(fmt.Sprintf("round%d/rate%d/streams%d/run%d/pool%d", round+1, group.rate, group.streams, run+1, pool), func(t *testing.T) {
+					return t.Run(fmt.Sprintf("round%d/rate%d/streams%d/run%d/%s", round+1, group.rate, group.streams, run+1, arm), func(t *testing.T) {
 						t.Setenv("RIBBITTO_STREAM_COST_RATE", strconv.Itoa(group.rate))
 						t.Setenv("RIBBITTO_STREAM_COST_STEPS", strconv.Itoa(group.streams))
-						t.Setenv("RIBBITTO_STREAM_COST_POOL", strconv.Itoa(pool))
+						t.Setenv("RIBBITTO_STREAM_COST_ARM", "")
+						t.Setenv("RIBBITTO_STREAM_COST_RECOUNTS", "")
+						pool := arm
+						switch arm {
+						case "sync40", "async40", "async10+30":
+							t.Setenv("RIBBITTO_STREAM_COST_ARM", arm)
+							pool = "40"
+						case "gate10":
+							t.Setenv("RIBBITTO_STREAM_COST_RECOUNTS", "10")
+							pool = "10"
+						}
+						t.Setenv("RIBBITTO_STREAM_COST_POOL", pool)
 						TestStreamCost(t)
 					})
 				})

@@ -28,8 +28,16 @@ type costWitnessKey struct{}
 func costPageCountsIn(s platform.Snapshot) conversation.PageCounter { return costPageCounter{s} }
 
 func (c costPageCounter) Read(ctx context.Context, m org.Membership, channel kernel.ID, channels, topics []kernel.ID, selected *kernel.ID) (conversation.PageCounts, error) {
+	return c.read(ctx, m, channel, channels, topics, selected, true)
+}
+
+func (c costPageCounter) ReadCounts(ctx context.Context, m org.Membership, channel kernel.ID, channels, topics []kernel.ID, selected *kernel.ID) (conversation.PageCounts, error) {
+	return c.read(ctx, m, channel, channels, topics, selected, false)
+}
+
+func (c costPageCounter) read(ctx context.Context, m org.Membership, channel kernel.ID, channels, topics []kernel.ID, selected *kernel.ID, firstUnread bool) (conversation.PageCounts, error) {
 	counts, err := unread.NewChannelCounts(unreadpg.ChannelRangesIn,
-		func(s platform.Snapshot) unread.ChannelCounter { return conversationpg.ChannelUnreadIn(s) }).Read(ctx, c.snapshot, m.Organization.ID, m.Member.ID, m.Member.JoinedEventSeq, channels)
+		func(s platform.Snapshot) unread.ChannelCounter { return conversationpg.ChannelUnreadIn(s) }).ReadWithFirstUnread(ctx, c.snapshot, m.Organization.ID, m.Member.ID, m.Member.JoinedEventSeq, channels, firstUnread)
 	if err != nil {
 		return conversation.PageCounts{}, err
 	}
@@ -38,7 +46,7 @@ func (c costPageCounter) Read(ctx context.Context, m org.Membership, channel ker
 		result.ChannelCounts[id] = count.Count
 	}
 	result.TopicCounts, result.TopicFirstUnread, err = unread.NewTopicCounts(unreadpg.TopicStateIn,
-		func(s platform.Snapshot) unread.TopicCounter { return conversationpg.TopicUnreadIn(s) }).Read(ctx, c.snapshot, unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, topics, selected)
+		func(s platform.Snapshot) unread.TopicCounter { return conversationpg.TopicUnreadIn(s) }).ReadWithFirstUnread(ctx, c.snapshot, unread.Scope{OrganizationID: m.Organization.ID, ChannelID: channel, MemberID: m.Member.ID}, m.Member.JoinedEventSeq, topics, selected, firstUnread)
 	if witness, ok := ctx.Value(costWitnessKey{}).(*int64); ok && err == nil {
 		// Read in the counts' snapshot, never from the hub or a later transaction.
 		// This extra test-only statement is included in SQL and timing totals.

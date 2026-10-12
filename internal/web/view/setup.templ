@@ -11,7 +11,7 @@ type SetupForm struct {
 // Setup renders the first-run setup form.
 templ Setup(stylesheetURL string, form SetupForm) {
 	@layout(stylesheetURL, i18n.T(ctx, "setup.page_title")) {
-		<main class="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-8">
+		@welcomeLayout() {
 			<h1 class="text-heading font-bold text-fg">{ i18n.T(ctx, "setup.title") }</h1>
 			<form method="post" action="/setup" class="flex flex-col gap-4">
 				for _, field := range []struct{ name, kind, autocomplete string }{
@@ -27,6 +27,6 @@ templ Setup(stylesheetURL string, form SetupForm) {
 				}
 				@submitButton(buttonPrimary, "setup.submit")
 			</form>
-		</main>
+		}
 	}
 }

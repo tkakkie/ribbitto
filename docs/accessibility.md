@@ -22,7 +22,8 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   linked from the input with `aria-describedby`, and use `role="alert"`
   after a submit. Setup and sign-up use the shared `textField` component:
   ✓ invalid inputs have `aria-invalid="true"` and an error description;
-  valid inputs omit both attributes. Sign-in keeps one form-level alert.
+  valid inputs omit both attributes. Sign-in uses `textField` with empty
+  field errors and keeps one form-level alert.
 - **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and
   `aria-labelledby` targets exist in the rendered document or fragment.
 - **Timestamps.** ✓ `<time datetime>` values are valid HTML global dates

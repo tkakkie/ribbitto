@@ -17,8 +17,9 @@ Today's shared controls:
 | Component | File | Use |
 |---|---|---|
 | `submitButton` | `internal/web/view/controls.templ` | a form's submit button, labelled by a message ID: `buttonPrimary` (the main action), `buttonSecondary` (outlined), `buttonLink` (looks like a link, still submits) |
-| `textInput` | `internal/web/view/controls.templ` | a single-line text input; the caller supplies its label |
-| `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up) |
+| `textInput` | `internal/web/view/controls.templ` | a single-line text input with a control border and a brand underline on focus, alongside the focus outline; the caller supplies its label |
+| `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up); sign-in passes empty field errors and keeps its form-level alert |
+| `welcomeLayout`, `welcomeLink` | `internal/web/view/welcome.templ` | the shared brand and content columns for setup, sign-in, sign-up, home and rate-limit pages, and their navigation links |
 | `unreadBadge` | `internal/web/view/channel.templ` | an unread count with its screen-reader text |
 | `Icon` | `internal/web/view/icon.templ` | a decorative Fluent icon from the vendored sprite ([Icons](#icons)) |
 

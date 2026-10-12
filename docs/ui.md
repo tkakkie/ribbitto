@@ -93,32 +93,6 @@ The layout widths (`w-rail`, `w-sidebar`, `w-panel`, `max-w-reading`),
 the shared components and how templates and styles are written are in
 [`ui-code.md`](ui-code.md); motion tokens come with #878.
 
-## Channel illustrations
-
-The repository's own SVG artwork in `web/static/channel-images-v1` is
-covered by the repository licence. All twelve are square (120 × 120),
-under 2 KB, and use only the pastel pairs above and `bg` white:
-
-| Pair | Keys / scenes |
-|---|---|
-| 1 | `lake`, `sail` |
-| 2 | `sunrise`, `kite` |
-| 3 | `hills`, `leaf`, `cactus` |
-| 4 | `cup`, `shell` |
-| 5 | `moon`, `mountain` |
-| 6 | `flowers` |
-
-To add one, draw a simple silhouette that reads at 24 px and 120 px,
-save an SVG under 2 KB using these colours, and add its neutral key to
-the registry in `internal/web/channel_image.go` and its asset test.
-Use no external references, scripts or text. When changing artwork,
-create a new versioned directory and update both the embed declaration
-and URL resolver; never change a file at an immutable URL. Keep registry
-order stable: NULL and unknown keys select by SHA-256 of the channel ID,
-modulo the set size. Adding a key may change these fallback assignments;
-stored known keys keep their image. Choosing an image comes with #876;
-the overview banner comes with #874.
-
 ## Contrast (WCAG 2.2 AA)
 
 Normal text, including button labels, links and typed text, needs 4.5:1;
@@ -191,7 +165,7 @@ The logo is at least 16 px, with clear space of a quarter of its size, in
 brand teal, white on a teal tile, or `currentColor` only. The mascot
 appears on welcome pages, empty states and while loading or sending; it is
 decorative (`alt=""`) and never the only carrier of information. Files,
-poses and details are in [`brand.md`](brand.md).
+poses, the channel illustrations and details are in [`brand.md`](brand.md).
 
 ## Markup and accessibility
 

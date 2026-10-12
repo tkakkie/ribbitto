@@ -1,6 +1,7 @@
 # Brand
 
-ribbitto's logo and mascot, chosen by the maintainer on 2026-10-12 (#883).
+ribbitto's logo and mascot, chosen by the maintainer on 2026-10-12 (#883),
+and the channel illustrations (#875).
 How the rest of the UI looks is in [`ui.md`](ui.md).
 
 **Keep it current:** update this file in the same pull request when a brand
@@ -20,3 +21,29 @@ file or one of these rules changes.
   carrier of information.
 - A changed brand file gets a new version suffix, since static files are
   cached as immutable.
+
+## Channel illustrations
+
+The repository's own SVG artwork in `web/static/channel-images-v1` is
+covered by the repository licence. All twelve are square (120 × 120),
+under 2 KB, and use only the pastel pairs in [`ui.md`](ui.md#tokens) and `bg` white:
+
+| Pair | Keys / scenes |
+|---|---|
+| 1 | `lake`, `sail` |
+| 2 | `sunrise`, `kite` |
+| 3 | `hills`, `leaf`, `cactus` |
+| 4 | `cup`, `shell` |
+| 5 | `moon`, `mountain` |
+| 6 | `flowers` |
+
+To add one, draw a simple silhouette that reads at 24 px and 120 px,
+save an SVG under 2 KB using these colours, and add its neutral key to
+the registry in `internal/web/channel_image.go` and its asset test.
+Use no external references, scripts or text. When changing artwork,
+create a new versioned directory and update both the embed declaration
+and URL resolver; never change a file at an immutable URL. Keep registry
+order stable: NULL and unknown keys select by SHA-256 of the channel ID,
+modulo the set size. Adding a key may change these fallback assignments;
+stored known keys keep their image. Choosing an image comes with #876;
+the overview banner comes with #874.

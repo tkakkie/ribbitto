@@ -157,8 +157,10 @@ Which strings use a label is applied in #879.
 
 ## Brand
 
-The speech-bubble frog logo and the flat frog mascot, with their files and
-rules, are in [`brand.md`](brand.md).
+The logo is at least 16 px, with clear space of a quarter of its size, in
+brand teal, white on a teal tile, or `currentColor` only. The mascot is
+decorative (`alt=""`) and never the only carrier of information. Files,
+poses and details are in [`brand.md`](brand.md).
 
 ## Markup and accessibility
 

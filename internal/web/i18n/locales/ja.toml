@@ -118,9 +118,6 @@ other = "試行回数が多すぎます"
 ["ratelimit.message"]
 other = "しばらく待ってから、もう一度お試しください。"
 
-["channel.organizations"]
-other = "組織"
-
 ["channel.list"]
 other = "チャンネル"
 
@@ -255,3 +252,12 @@ other = "が入力中…"
 
 ["activity.label"]
 other = "入力状況"
+
+["app.navigation"]
+other = "アプリ"
+
+["app.home"]
+other = "ホーム"
+
+["account.menu"]
+other = "アカウントメニュー"

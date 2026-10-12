@@ -19,6 +19,7 @@ Today's shared controls:
 | `submitButton` | `internal/web/view/controls.templ` | a form's submit button, labelled by a message ID: `buttonPrimary` (the main action), `buttonSecondary` (outlined), `buttonLink` (looks like a link, still submits) |
 | `textInput` | `internal/web/view/controls.templ` | a single-line text input with a control border and a brand underline on focus, alongside the focus outline; the caller supplies its label |
 | `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up); sign-in passes empty field errors and keeps its form-level alert |
+| `iconButton` | `internal/web/view/controls.templ` | a button that shows only an icon (its child) and has an accessible name; can open a popover |
 | `welcomeLayout`, `welcomeLink` | `internal/web/view/welcome.templ` | the shared brand and content columns for setup, sign-in, sign-up, home and rate-limit pages, and their navigation links |
 | `unreadBadge` | `internal/web/view/channel.templ` | an unread count with its screen-reader text |
 | `Icon` | `internal/web/view/icon.templ` | a decorative Fluent icon from the vendored sprite ([Icons](#icons)) |
@@ -29,8 +30,7 @@ Today's shared controls:
 - **Components take small inputs** — a label, a kind, a props struct —
   and decide nothing about permissions or data; handlers prepare view
   models (`docs/architecture/web-layers.md`).
-- **A new component arrives with its first user.** The rounded block, the
-  icon-only button and the account menu come with #872, the avatar with
+- **A new component arrives with its first user.** The account menu came with #872 (`appBar`, using an HTML popover), the avatar with
   #873, the panel with #874, the channel image with #875. When a page is
   restyled, its repeated looks (links, for example) become components too.
 

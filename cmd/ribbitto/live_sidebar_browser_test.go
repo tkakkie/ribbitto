@@ -63,8 +63,17 @@ func TestLiveSidebarBrowser(t *testing.T) {
 	page.MustEval(`(source, channel, retained) => {
 		for (const id of [source, channel, retained]) {
 			const link = document.getElementById('link-' + id);
-			let badge = link.querySelector('[aria-hidden]');
-			if (!badge) { badge = document.createElement('span'); badge.setAttribute('aria-hidden', 'true'); link.append(badge); }
+			// A badge is its hidden count next to its screen-reader text; the
+			// row's other decorative parts are not it.
+			let badge = link.querySelector('.sr-only')?.previousElementSibling;
+			if (!badge) {
+				const wrap = document.createElement('span'), label = document.createElement('span');
+				badge = document.createElement('span');
+				badge.setAttribute('aria-hidden', 'true');
+				label.className = 'sr-only';
+				wrap.append(badge, label);
+				link.append(wrap);
+			}
 			badge.textContent = '999';
 		}
 		document.getElementById('link-' + channel).focus();
@@ -76,11 +85,13 @@ func TestLiveSidebarBrowser(t *testing.T) {
 	page.MustWait(`id => document.getElementById(id) && document.getElementById('sidebar-topics') !== window.previousList &&
 		!document.querySelector('.htmx-settling')`, destinationID)
 	if !page.MustEval(`(source, channel, retained, destination) => {
-		const badge = id => document.getElementById(id).querySelector('[aria-hidden]')?.textContent || '';
+		// Scoped to the row's own link: a channel row also holds its topic rows.
+		const count = node => node.querySelector('.sr-only')?.previousElementSibling?.textContent || '';
+		const badge = id => count(document.getElementById('link-' + id));
 		const ids = Array.from(document.querySelectorAll('[id]'), e => e.id);
 		return document.activeElement.id === 'link-' + channel && document.activeElement !== window.focusedLink &&
 			new Set(ids).size === ids.length && document.querySelectorAll('#sidebar-topics > li').length === 50 &&
-			!document.getElementById(source) && badge('topic-heading-count') === '' && badge(channel) === '1' &&
+			!document.getElementById(source) && count(document.getElementById('topic-heading-count')) === '' && badge(channel) === '1' &&
 			badge(destination) === '1' && badge(retained) === '' && !document.getElementById('stream-sink').hasChildNodes();
 	}`, source, channel, retained, destinationID).Bool() {
 		t.Fatal("production branch recount lost focus, retained stale counts/ids or exceeded the topic bound")

@@ -118,9 +118,6 @@ other = "Too many attempts"
 ["ratelimit.message"]
 other = "Please wait a while before trying again."
 
-["channel.organizations"]
-other = "Organisations"
-
 ["channel.list"]
 other = "Channels"
 
@@ -255,3 +252,12 @@ other = " are typing…"
 
 ["activity.label"]
 other = "Typing activity"
+
+["app.navigation"]
+other = "App"
+
+["app.home"]
+other = "Home"
+
+["account.menu"]
+other = "Account menu"

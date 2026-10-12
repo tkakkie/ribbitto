@@ -134,7 +134,7 @@ func membersPanel(page ChannelPage) templ.Component {
 			templ_7745c5c3_Var5 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<main id=\"members-panel\" class=\"flex min-w-0 flex-1 flex-col overflow-y-auto bg-bg\"><header class=\"border-b border-border px-6 py-3\"><h1 class=\"break-words text-title font-semibold\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<main id=\"members-panel\" class=\"flex min-w-0 flex-1 flex-col overflow-y-auto rounded-xl bg-bg shadow-block\"><header class=\"border-b border-border px-6 py-3\"><h1 class=\"break-words text-title font-semibold\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

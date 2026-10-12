@@ -149,51 +149,33 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 				hx-ext="sse"
 				sse-connect={ streamURL(page) }
 			}
-			class="flex h-dvh text-body"
+			class="flex h-dvh gap-2 bg-base p-2 text-body"
 		>
 			<div id="stream-sink" hidden aria-hidden="true" sse-swap="sidebar,presence" hx-swap="none"></div>
-			<nav aria-label={ i18n.T(ctx, "channel.organizations") } class="w-17 shrink-0 border-r border-border bg-rail p-3">
-				<ul>
-					<li><a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/") } aria-label={ page.Organization.Name } class="flex min-h-11 items-center justify-center rounded-md bg-brand px-2 font-semibold text-on-brand">{ string([]rune(page.Organization.Name)[:1]) }</a></li>
-				</ul>
-			</nav>
-			<aside class="flex w-68 shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar">
-				<header class="border-b border-border px-4 py-3">
-					<p class="break-words text-title font-semibold">{ page.Organization.Name }</p>
-				</header>
-				<nav aria-label={ i18n.T(ctx, "channel.list") } class="p-3">
-					<p class="px-3 pb-2 text-caption font-semibold text-muted">{ i18n.T(ctx, "channel.list") }</p>
+			@appBar(page)
+			<aside class="flex w-sidebar shrink-0 flex-col overflow-y-auto px-1 py-2">
+				<p class="break-words px-3 pb-3 pt-1 text-title font-semibold">{ page.Organization.Name }</p>
+				<nav aria-label={ i18n.T(ctx, "channel.list") }>
+					<div class="flex items-center justify-between gap-2 pb-1 pl-3">
+						<p class="text-caption font-semibold text-muted">{ i18n.T(ctx, "channel.list") }</p>
+						@iconButton("channel.create", "channel-create") {
+							@Icon("add-regular", 20)
+						}
+					</div>
 					@ChannelList(page, false)
 				</nav>
-				<nav aria-label={ i18n.T(ctx, "topic.list") } class="p-3">
-					<p class="px-3 pb-2 text-caption font-semibold text-muted">{ i18n.T(ctx, "topic.list") }</p>
-					@TopicList(page, false)
-				</nav>
-				<form method="post" action={ "/organizations/" + page.Organization.Slug + "/channels" } class="flex flex-col gap-2 border-t border-border p-4">
-					<label for="channel-name" class="font-semibold">{ i18n.T(ctx, "channel.name") }</label>
-					@textInput(inputProps{ID: "channel-name", Name: "name", Value: page.Name, Required: true, Invalid: fmt.Sprint(page.Error != ""), DescribedBy: "channel-name-help"})
-					if page.Error != "" {
-						<p id="channel-name-help" role="alert" class="text-danger">{ i18n.T(ctx, page.Error) }</p>
-					} else {
-						<p id="channel-name-help" class="text-caption text-muted">{ i18n.T(ctx, "channel.name_help") }</p>
-					}
-					@submitButton(buttonPrimary, "channel.create")
-				</form>
-				<footer class="mt-auto flex flex-col gap-2 border-t border-border p-4">
-					<p class="break-words text-caption text-muted">
-						// templ drops the white space before a component call but keeps
-						// it after one, so only the first space is part of the text.
-						{ i18n.T(ctx, "hello.signed_in_as") + " " }
-						@MemberName(page.DisplayName, page.Handle)
-						{ "· " + i18n.T(ctx, "org.role." + page.Role) }
-					</p>
-					@SignOutButton()
-				</footer>
+				// A failed submit shows the form in place, so its error is visible and
+				// focusable without JavaScript; otherwise it opens from the add button.
+				if page.Error != "" {
+					@channelCreateForm(page, false)
+				} else {
+					@channelCreateForm(page, true)
+				}
 			</aside>
 			if page.Members != nil {
 				@membersPanel(page)
 			} else {
-				<main id="conversation" class="flex min-w-0 flex-1 flex-col bg-bg">
+				<main id="conversation" class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block">
 					<header class="shrink-0 border-b border-border px-6 py-3">
 						<h1 class="break-words text-title font-semibold">
 							if page.Topic != nil {
@@ -351,8 +333,8 @@ templ readForm(page ChannelPage) {
 
 // SidebarLists replaces fresh lists whole, so topic displacement matches a reload.
 templ SidebarLists(page ChannelPage) {
+	// The topic list is nested in the channel list, so it is replaced with it.
 	@ChannelList(page, true)
-	@TopicList(page, true)
 	if page.Topic != nil {
 		@TopicHeadingCount(page, true)
 	}
@@ -368,15 +350,37 @@ templ ChannelList(page ChannelPage, oob bool) {
 		}
 	>
 		for _, c := range page.Channels {
-			@ChannelEntry(page.Organization.Slug, c, c.ID == page.Current.ID && page.Topic == nil && page.Members == nil, page.ChannelCounts[c.ID])
+			@ChannelEntry(page.Organization.Slug, c, c.ID == page.Current.ID && page.Topic == nil && page.Members == nil, page.ChannelCounts[c.ID]) {
+				if c.ID == page.Current.ID {
+					@TopicList(page, false)
+				}
+			}
+		}
+		if !currentChannelListed(page) {
+			<li>
+				@TopicList(page, false)
+			</li>
 		}
 	</ul>
+}
+
+// currentChannelListed reports whether the current channel has its own row,
+// under which its topics are nested.
+func currentChannelListed(page ChannelPage) bool {
+	for _, c := range page.Channels {
+		if c.ID == page.Current.ID {
+			return true
+		}
+	}
+	return false
 }
 
 // TopicList preserves the snapshot's bounded list, including its order.
 templ TopicList(page ChannelPage, oob bool) {
 	<ul
 		id="sidebar-topics"
+		aria-label={ i18n.T(ctx, "topic.list") }
+		class="mb-1 ml-6 mt-0.5 flex flex-col gap-0.5 border-l border-border pl-2"
 		if oob {
 			hx-swap-oob="true"
 		}
@@ -437,11 +441,17 @@ templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
 			if selected {
 				aria-current="page"
 			}
-			class={ "flex min-h-11 items-center gap-2 break-words rounded-sm border-l-3 px-3 py-2", templ.KV("border-brand bg-selected font-semibold text-on-selected", selected), templ.KV("border-transparent text-fg hover:bg-surface", !selected), templ.KV("font-semibold", !selected && count > 0) }
+			class={ "relative flex min-h-9 items-center gap-2.5 break-words rounded-lg px-3 py-1.5", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-fg hover:bg-hover", !selected), templ.KV("font-semibold", !selected && count > 0) }
 		>
+			if selected {
+				@selectionPill()
+			}
+			// The channel image replaces this neutral tile (#875).
+			<span aria-hidden="true" class="flex size-6 shrink-0 items-center justify-center rounded-md bg-hover text-caption font-semibold text-muted">{ initial(channel.Name) }</span>
 			<span dir="auto" class="min-w-0 flex-1">{ channel.Name }</span>
 			@unreadBadge(count)
 		</a>
+		{ children... }
 	</li>
 }
 
@@ -454,17 +464,27 @@ templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, c
 			if selected {
 				aria-current="page"
 			}
-			class={ "flex min-h-11 items-center gap-2 break-words px-3 py-2", templ.KV("rounded-sm border-l-3 border-brand bg-selected font-semibold text-on-selected", selected), templ.KV("text-brand underline", !selected), templ.KV("font-semibold", !selected && count > 0) }
+			class={ "relative flex min-h-8 items-center gap-2 break-words rounded-md px-2.5 py-1", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-muted hover:bg-hover hover:text-fg", !selected), templ.KV("font-semibold text-fg", !selected && count > 0) }
 		>
+			if selected {
+				@selectionPill()
+			}
 			<span dir="auto" class="min-w-0 flex-1">{ topicName(ctx, topic) }</span>
 			@unreadBadge(count)
 		</a>
 	</li>
 }
 
+// selectionPill is the brand indicator of the current row; the row's text
+// colour and weight say the same without colour (docs/ui.md).
+templ selectionPill() {
+	{{ _ = ctx }}
+	<span aria-hidden="true" class="absolute left-0 top-1/2 h-4 w-0.75 -translate-y-1/2 rounded-full bg-brand"></span>
+}
+
 templ unreadBadge(count int64) {
 	if count > 0 {
-		<span class="inline-flex shrink-0 rounded-sm bg-accent px-1 text-caption font-semibold text-on-accent">
+		<span class="inline-flex min-w-5 shrink-0 justify-center rounded-full bg-brand px-1.5 text-caption font-semibold text-on-brand">
 			<span aria-hidden="true">{ unreadText(count) }</span>
 			<span class="sr-only">{ " " + strings.ReplaceAll(i18n.T(ctx, "reading.unread_count"), "{count}", unreadText(count)) }</span>
 		</span>

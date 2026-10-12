@@ -73,8 +73,8 @@ and members-panel selection to one `cmd/ribbitto` sidebar source (#819). Posts
 and moves trigger independent snapshots through this same page-count adapter,
 including for the author and when another channel changes. Web's `RenderSidebar`
 shares one sidebar view builder with channel/topic and members pages, preserving
-the feed, topic and members selection. It uses page components for whole lists
-and the selected heading (#818); member-dependent output bypasses the shared
+the feed, topic and members selection. It uses page components for the whole channel
+list, with the current channel's topics nested (#872), and the selected heading (#818); member-dependent output bypasses the shared
 message cache. Realtime retains its render-then-authorize
 order immediately before sending, coalescing and cursor/heartbeat rules (#810).
 Every connect recounts without `id:`, so reconnecting at a delivered message's ID

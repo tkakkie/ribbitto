@@ -127,7 +127,7 @@ covers them.
 - **Welcome pages:** setup, sign-in, sign-up, home and the rate-limit page
   share a rounded card on the base. On desktop, the logo and tagline sit
   on the pale `selected` brand tint beside the white content column; a
-  decorative composition of channel images joins them with #875.
+  decorative row of four channel illustrations sits below them.
 - **Desktop:** the app bar block (logo, Home, the account menu) · the
   channel sidebar on the base · the conversation block · a side panel block
   when one is open.

@@ -42,8 +42,8 @@ save an SVG under 2 KB using these colours, and add its neutral key to
 the registry in `internal/web/channel_image.go` and its asset test.
 Use no external references, scripts or text. When changing artwork,
 create a new versioned directory and update both the embed declaration
-and URL resolver; never change a file at an immutable URL. Keep registry
+and `view.ChannelImageURL`; never change a file at an immutable URL. Keep registry
 order stable: NULL and unknown keys select by SHA-256 of the channel ID,
 modulo the set size. Adding a key may change these fallback assignments;
-stored known keys keep their image. Choosing an image comes with #876;
+stored known keys keep their image. The welcome card shows four of them (`welcomeImages`). Choosing an image comes with #876;
 the overview banner comes with #874.

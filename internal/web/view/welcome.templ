@@ -15,9 +15,7 @@ templ welcomeLayout() {
 					<p class="text-display font-bold tracking-tight text-on-selected">{ i18n.T(ctx, "app.title") }</p>
 				</div>
 				<p class="text-title text-on-selected">{ i18n.T(ctx, "hello.tagline") }</p>
-				<div aria-hidden="true">
-					// TODO(#875): add the decorative channel-image composition here once its assets land.
-				</div>
+				@welcomeComposition()
 			</div>
 			<div class="flex flex-col justify-center gap-6 p-8 lg:p-12">
 				{ children... }

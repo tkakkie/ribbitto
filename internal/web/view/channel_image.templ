@@ -2,6 +2,12 @@ package view
 
 import "fmt"
 
+// ChannelImageURL is the versioned URL of a channel illustration key. A new
+// artwork version changes this one place (docs/brand.md).
+func ChannelImageURL(key string) string {
+	return "/static/channel-images-v1/" + key + ".svg"
+}
+
 // The header is above the fold; sidebar entries may scroll out of view.
 templ channelImage(src string, header bool) {
 	// The pinned generator clears children even for context-free components.
@@ -21,4 +27,25 @@ templ channelImage(src string, header bool) {
 		decoding="async"
 		class="inline-block shrink-0 rounded-md align-middle"
 	/>
+}
+
+// welcomeImages is the welcome card's decorative set: four scenes, one per
+// corner of the palette, so the brand side shows what channels look like.
+var welcomeImages = [...]string{"lake", "flowers", "moon", "kite"}
+
+// welcomeComposition shows a few channel illustrations on the brand side.
+templ welcomeComposition() {
+	{{ _ = ctx }}
+	<div aria-hidden="true" class="flex flex-wrap gap-3">
+		for i, key := range welcomeImages {
+			<img
+				src={ ChannelImageURL(key) }
+				width="64"
+				height="64"
+				alt=""
+				decoding="async"
+				class={ "size-16 rounded-xl bg-bg shadow-block", templ.KV("mt-4", i%2 == 1) }
+			/>
+		}
+	</div>
 }

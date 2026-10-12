@@ -84,15 +84,31 @@ func sampleCostQueue(ctx context.Context, q *costQueue, start time.Time, duratio
 // Reject increasing ten-second means in either length or age over the last
 // thirty seconds of posting. Age catches a bounded queue stuck at capacity;
 // eventual drain cannot erase the overload observed while posting continued.
-func costQueueGrowing(series []costQueueSample) bool {
+// Missing one-second telemetry also disqualifies an arm, never proving stability.
+func costQueueGrowing(series []costQueueSample, duration time.Duration) bool {
+	// Allow one lost tick plus scheduling jitter at either posting boundary,
+	// but do not let drain samples replace missing posting coverage.
+	const tolerance = 2 * time.Second
 	var end time.Duration
+	var first, previous time.Duration
+	posting := 0
 	for _, s := range series {
 		if s.phase == "posting" {
+			if posting == 0 {
+				first = s.at
+			} else if s.at <= previous || s.at-previous > 2*time.Second {
+				return true
+			}
+			posting++
+			previous = s.at
 			end = max(end, s.at)
 		}
 	}
+	if posting == 0 || first < 0 || first > tolerance || end < duration-tolerance || end > duration+tolerance {
+		return true
+	}
 	if end < 30*time.Second {
-		return len(series) > 0 // Empty telemetry is checked separately against the selected arm.
+		return true
 	}
 	var sums [3][2]float64
 	var counts [3]int
@@ -108,8 +124,8 @@ func costQueueGrowing(series []costQueueSample) bool {
 		}
 	}
 	for _, count := range counts {
-		if count == 0 {
-			return true // Incomplete telemetry cannot establish stability.
+		if count < 8 {
+			return true // Each ten-second bucket needs at least eight one-second samples.
 		}
 	}
 	for metric := range 2 {
@@ -121,7 +137,7 @@ func costQueueGrowing(series []costQueueSample) bool {
 	return false
 }
 
-func reportCostQueue(t *testing.T, series []costQueueSample) {
+func reportCostQueue(t *testing.T, series []costQueueSample, duration time.Duration) {
 	if len(series) == 0 {
 		return
 	}
@@ -132,12 +148,12 @@ func reportCostQueue(t *testing.T, series []costQueueSample) {
 		}
 		t.Logf("queue: at=%s phase=%s length=%d oldest=%s coalesced=%d cancelled=%d", s.at, s.phase, s.values[0], time.Duration(s.values[1]), s.values[2], s.values[3])
 	}
-	t.Logf("queue summary [length oldest-ns coalesced cancelled]: min=%v max=%v final=%v growing=%t", low, high, series[len(series)-1].values, costQueueGrowing(series))
+	t.Logf("queue summary [length oldest-ns coalesced cancelled]: min=%v max=%v final=%v growing=%t", low, high, series[len(series)-1].values, costQueueGrowing(series, duration))
 }
 
 func TestCostQueueGrowthDisqualifies(t *testing.T) {
 	for _, metric := range []int{0, 1} {
-		r := stepResult{scheduled: 300, completed: 300, deliveries: 300}
+		r := stepResult{postingDuration: 60 * time.Second, scheduled: 300, completed: 300, deliveries: 300}
 		for second := range 61 {
 			s := costQueueSample{at: time.Duration(second) * time.Second, phase: "posting", values: [4]int64{10, 10}}
 			s.values[metric] = int64(second + 1)
@@ -163,24 +179,63 @@ func TestCostQueueGrowthDisqualifies(t *testing.T) {
 }
 
 func TestCostRecommendationRequiresTelemetry(t *testing.T) {
-	stable := []costQueueSample{
+	sparse := []costQueueSample{
 		{at: 0, phase: "posting"}, {at: 10 * time.Second, phase: "posting"},
 		{at: 20 * time.Second, phase: "posting"}, {at: 30 * time.Second, phase: "posting"},
 	}
+	var stable []costQueueSample
+	for second := range 60 {
+		stable = append(stable, costQueueSample{at: time.Duration(second) * time.Second, phase: "posting"})
+	}
+	stable = append(stable, costQueueSample{at: 60 * time.Second, phase: "drain"})
+	negativeStart := append([]costQueueSample(nil), stable...)
+	negativeStart[0].at = -time.Second
+	duplicate := append([]costQueueSample{stable[0]}, stable...)
+	reordered := append([]costQueueSample(nil), stable...)
+	reordered[10], reordered[11] = reordered[11], reordered[10]
+	var overrun []costQueueSample
+	for second := range 65 {
+		overrun = append(overrun, costQueueSample{at: time.Duration(second) * time.Second, phase: "posting"})
+	}
+	without := func(skip func(int) bool) []costQueueSample {
+		var series []costQueueSample
+		for i, s := range stable {
+			if !skip(i) {
+				series = append(series, s)
+			}
+		}
+		return series
+	}
 	for _, arm := range []string{"sync40", "async40", "async10+30"} {
 		for _, tt := range []struct {
-			name   string
-			series []costQueueSample
-			want   bool
+			name     string
+			series   []costQueueSample
+			duration time.Duration
+			want     bool
 		}{
-			{"nil", nil, false}, {"empty", []costQueueSample{}, false},
-			{"short", stable[:3], false},
-			{"drain-only", []costQueueSample{{at: 60 * time.Second, phase: "drain"}}, false},
-			{"missing-bucket", []costQueueSample{stable[0], stable[2], stable[3]}, false},
-			{"stable", stable, true},
+			{"nil", nil, 60 * time.Second, false}, {"empty", []costQueueSample{}, 60 * time.Second, false},
+			{"short", sparse[:3], 30 * time.Second, false},
+			{"drain-only", []costQueueSample{{at: 60 * time.Second, phase: "drain"}}, 60 * time.Second, false},
+			{"missing-bucket", []costQueueSample{sparse[0], sparse[2], sparse[3]}, 30 * time.Second, false},
+			{"four-points", sparse, 30 * time.Second, false},
+			{"missing-duration", stable, 0, false},
+			{"negative-start", negativeStart, 60 * time.Second, false},
+			{"late-start", stable[3:], 60 * time.Second, false},
+			{"early-stop", without(func(i int) bool { return i > 40 && i < 60 }), 60 * time.Second, false},
+			{"posting-overrun", overrun, 60 * time.Second, false},
+			{"duplicate", duplicate, 60 * time.Second, false},
+			{"reordered", reordered, 60 * time.Second, false},
+			{"missing-stretch", without(func(i int) bool { return i >= 10 && i < 25 }), 60 * time.Second, false},
+			// These isolated omissions keep gaps at two seconds but leave only
+			// seven samples in the first guard bucket [29s,39s).
+			{"thin-bucket", without(func(i int) bool { return i == 31 || i == 33 || i == 35 }), 60 * time.Second, false},
+			{"stable", stable, 60 * time.Second, true},
+			{"tolerated-start", stable[2:], 60 * time.Second, true},
+			{"tolerated-end", without(func(i int) bool { return i == 59 }), 60 * time.Second, true},
+			{"tolerated-gaps-and-bucket", without(func(i int) bool { return i == 31 || i == 33 }), 60 * time.Second, true},
 		} {
 			t.Run(arm+"/"+tt.name, func(t *testing.T) {
-				r := stepResult{arm: arm, queue: tt.series, scheduled: 300, completed: 300, deliveries: 300}
+				r := stepResult{arm: arm, queue: tt.series, postingDuration: tt.duration, scheduled: 300, completed: 300, deliveries: 300}
 				if !costTargets(r) {
 					t.Fatal("telemetry changed the separate latency verdict")
 				}

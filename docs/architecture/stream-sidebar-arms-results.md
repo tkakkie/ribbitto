@@ -83,12 +83,26 @@ PR 3 normally coalesces invalidations in its dirty flag rather than repeatedly
 submitting; zero scheduler coalesced totals are valid and do not count those
 writer-level invalidations.
 
-Latency targets remain a separate verdict. `recommendation-eligible` additionally
-rejects sustained queue growth: average length **or** oldest age increases
+Latency targets remain a separate verdict. Queue-arm eligibility first requires
+complete telemetry against the planned posting duration carried in the step
+result, never a duration inferred from the observed samples. The sampler takes
+an initial posting point, one point per second, and a final drain point.
+Posting samples must start within two seconds of posting start and end within
+two seconds of the planned posting end; offsets cannot be negative and must
+strictly increase, with no consecutive posting gap above two seconds. Each of
+the three ten-second guard buckets below must contain at least eight samples
+(nominally ten at the sampler's cadence). The two-second boundary tolerance
+allows one lost tick plus scheduling jitter; bucket counts prevent repeated
+isolated losses from masquerading as complete telemetry. Drain or disconnect
+points cannot fill posting gaps or conceal early stopping.
+
+`recommendation-eligible` also rejects sustained queue growth: average length
+**or** oldest age increases
 strictly across each of three ten-second buckets in the last thirty seconds
 of observed posting. Age detects a bounded queue whose length has plateaued.
-Drain cannot undo that rejection. Nil/empty telemetry, a short series or an
-empty bucket disqualifies any selected queue arm, including sync40. Plain
+The growth rule and thresholds are unchanged. Drain cannot undo that rejection.
+Nil/empty, short, sparse, gappy or early-stopping telemetry disqualifies any
+selected queue arm, including sync40; it never establishes stability. Plain
 synchronous pools 10–40 and gate10 need no queue telemetry.
 This is a deterministic exclusion, not proof of
 stability: inspect the entire time series for trends hidden by oscillations,
@@ -130,9 +144,13 @@ length, drain age, replacement/coalescing, cancellation and final values are
 asserted without timing synchronization. Growth guards synthesize increasing
 length and increasing age independently with latency targets already passing,
 then append an empty drain; stable queues still pass.
-Eligibility tests reject nil/empty, short, drain-only and missing-bucket telemetry
-for all three queue arms, accept complete stable telemetry, and preserve plain
-pool/gate10 eligibility without a queue.
+Eligibility tests reject nil/empty, short, drain-only, missing-bucket and the old
+four-point (0/10/20/30-second) telemetry for all three queue arms. They also reject
+missing planned duration, late/negative starts, posting overruns, duplicate or
+reordered points, stopping at 40 seconds of a planned 60, a missing 15-second
+stretch and a seven-sample guard bucket whose gaps still stay within two seconds.
+Complete one-second telemetry and the stated tolerance boundaries pass; plain
+pool/gate10 eligibility without a queue is preserved.
 
 ```sh
 go test -race -count=1 -run '^TestCost' -timeout 2m ./internal/realtime/

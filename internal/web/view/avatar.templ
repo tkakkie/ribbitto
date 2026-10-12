@@ -1,0 +1,37 @@
+package view
+
+import (
+	"github.com/rivo/uniseg"
+	"github.com/tkakkie/ribbitto/internal/kernel"
+)
+
+// Avatar renders a decorative initial beside the author's visible name.
+templ Avatar(memberID kernel.ID, displayName, handle string) {
+	{{ _ = ctx }}
+	<span aria-hidden="true" class={ "flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-title font-semibold", avatarColour(memberID) }>
+		<bdi>{ avatarInitial(displayName, handle) }</bdi>
+	</span>
+}
+
+func avatarInitial(displayName, handle string) string {
+	if displayName == "" {
+		displayName = handle
+	}
+	// A rune would split combining accents, emoji modifiers and flags.
+	cluster, _, _, _ := uniseg.FirstGraphemeClusterInString(displayName, -1)
+	return cluster
+}
+
+func avatarColour(id kernel.ID) string {
+	// Fold every byte so neither a renamed author nor UUID version bits
+	// determine the colour. Literal pairs also let Tailwind discover them.
+	var bucket int
+	for _, b := range id {
+		bucket = (bucket*31 + int(b)) % 6
+	}
+	return [...]string{
+		"bg-pastel-1 text-on-pastel-1", "bg-pastel-2 text-on-pastel-2",
+		"bg-pastel-3 text-on-pastel-3", "bg-pastel-4 text-on-pastel-4",
+		"bg-pastel-5 text-on-pastel-5", "bg-pastel-6 text-on-pastel-6",
+	}[bucket]
+}

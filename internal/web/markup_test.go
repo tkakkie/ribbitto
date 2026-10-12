@@ -911,6 +911,7 @@ func TestComponentsMarkup(t *testing.T) {
 		})},
 		{"SignOutButton", view.SignOutButton()},
 		{"MemberName", view.MemberName("مريم", "author")},
+		{"Avatar", view.Avatar(kernel.ID{1}, "田中", "author")},
 		{"MemberName blank fallback", view.MemberName(memberDisplayName("\u3164"), "legacy")},
 	} {
 		for _, lang := range []string{"en", "ja"} {

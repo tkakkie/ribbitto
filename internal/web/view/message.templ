@@ -11,6 +11,7 @@ import (
 // Message holds the conversation fields rendered by a message item.
 type Message struct {
 	ID                  kernel.ID
+	MemberID            kernel.ID
 	TopicID             kernel.ID
 	DisplayName, Handle string
 	CreatedAt           time.Time
@@ -45,18 +46,16 @@ templ messageItem(entry Message, announcement string) {
 		if announcement != "" {
 			data-announcement={ announcement }
 		}
+		class="relative flex flex-col gap-1 pl-12"
 	>
-		<div class="flex flex-wrap items-baseline gap-2">
-			// Every checkbox shows the same label, so its message's body describes it.
-			<label class="inline-flex min-h-11 min-w-11 items-center gap-2 text-caption text-muted">
-				<input type="checkbox" id={ "select-" + MessageDOMID(entry.ID) } form="branch-form" name="message" value={ idValue(entry.ID) + "/" + idValue(entry.TopicID) } data-source={ idValue(entry.TopicID) } aria-describedby={ "body-" + MessageDOMID(entry.ID) }/>
-				{ i18n.T(ctx, "topic.branch_select") }
-			</label>
-			<span>
+		<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-body">
+			<span class="min-w-0 break-words">
 				@MemberName(entry.DisplayName, entry.Handle)
 			</span>
-			<a href={ templ.SafeURL(entry.TopicURL) } class="text-muted underline">
-				<bdi class="text-caption text-muted">
+			<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
+			<a href={ templ.SafeURL(entry.TopicURL) } class="inline-flex items-center gap-1 text-caption text-muted hover:text-brand">
+				@Icon("branch-regular", 20)
+				<bdi>
 					if entry.DefaultTopic {
 						{ i18n.T(ctx, "topic.default") }
 					} else {
@@ -64,9 +63,18 @@ templ messageItem(entry Message, announcement string) {
 					}
 				</bdi>
 			</a>
-			<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
+			// Every checkbox shows the same label, so its message's body describes it.
+			<label class="ml-auto inline-flex min-h-9 items-center gap-2 rounded-md px-2 text-caption text-muted hover:bg-hover">
+				<input type="checkbox" id={ "select-" + MessageDOMID(entry.ID) } form="branch-form" name="message" value={ idValue(entry.ID) + "/" + idValue(entry.TopicID) } data-source={ idValue(entry.TopicID) } aria-describedby={ "body-" + MessageDOMID(entry.ID) }/>
+				{ i18n.T(ctx, "topic.branch_select") }
+			</label>
 		</div>
-		<p id={ "body-" + MessageDOMID(entry.ID) } dir="auto" class="whitespace-pre-wrap break-words">{ entry.Body }</p>
+		// Text precedes the avatar, whose fixed gutter reserves its space
+		// without waiting for an image or font request.
+		<p id={ "body-" + MessageDOMID(entry.ID) } dir="auto" class="whitespace-pre-wrap break-words text-title">{ entry.Body }</p>
+		<div class="absolute left-0 top-0">
+			@Avatar(entry.MemberID, entry.DisplayName, entry.Handle)
+		</div>
 	</li>
 }
 

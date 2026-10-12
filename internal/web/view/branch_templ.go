@@ -65,7 +65,7 @@ func branchForm(page ChannelPage) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" hx-target=\"#branch-feedback\" hx-swap=\"outerHTML\" hx-sync=\"this:drop\" class=\"flex shrink-0 flex-wrap items-center gap-2 border-t border-border p-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" hx-target=\"#branch-feedback\" hx-swap=\"outerHTML\" hx-sync=\"this:drop\" class=\"mx-auto flex w-full max-w-reading shrink-0 flex-wrap items-center gap-2 px-6 py-3 text-body\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

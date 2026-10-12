@@ -406,9 +406,9 @@ func TestMessagePagingHandler(t *testing.T) {
 	}{
 		{"latest with older", "", true, 200, 0, []string{`href="` + channelURL + `?before=7&amp;unread=0"`, `hx-get="` + channelURL + `?before=7&amp;unread=0"`, `hx-select-oob="#load-older"`, `id="load-older"`}, []string{"Jump to the newest"}, false, channelURL, "", channelURL},
 		{"latest without older", "", false, 200, 0, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before=", "Jump to the newest"}, false, channelURL, "", channelURL},
-		{"older page", "?before=40", true, 200, 40, []string{`?before=7&amp;unread=0"`, `>Jump to the newest messages</a>`}, nil, false, channelURL, "", ""},
-		{"older page with HX", "?before=40", true, 200, 40, []string{`?before=7&amp;unread=0"`, `>Jump to the newest messages</a>`}, nil, true, channelURL, "", ""},
-		{"oldest page", "?before=8", false, 200, 8, []string{`>Jump to the newest messages</a>`, `<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before="}, false, channelURL, "", ""},
+		{"older page", "?before=40", true, 200, 40, []string{`?before=7&amp;unread=0"`, `Jump to the newest messages</a>`}, nil, false, channelURL, "", ""},
+		{"older page with HX", "?before=40", true, 200, 40, []string{`?before=7&amp;unread=0"`, `Jump to the newest messages</a>`}, nil, true, channelURL, "", ""},
+		{"oldest page", "?before=8", false, 200, 8, []string{`Jump to the newest messages</a>`, `<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before="}, false, channelURL, "", ""},
 		{"oldest page with HX", "?before=8", false, 200, 8, []string{`<div id="load-older" data-oldest-seq="0"></div>`}, []string{"?before="}, true, channelURL, "", ""},
 		{"zero", "?before=0", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"negative", "?before=-3", false, 400, -1, nil, nil, false, channelURL, "", ""},
@@ -419,7 +419,7 @@ func TestMessagePagingHandler(t *testing.T) {
 		{"malformed escape", "?before=%ZZ", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"repeated with a malformed escape", "?before=5&before=%ZZ", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"latest topic", "", true, 200, 0, []string{`href="` + topicURL + `?before=7&amp;unread=0"`, `hx-get="` + topicURL + `?before=7&amp;unread=0"`}, []string{"Jump to the newest"}, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
-		{"older topic", "?before=40", true, 200, 40, []string{`href="` + topicURL + `?before=7&amp;unread=0"`, `hx-get="` + topicURL + `?before=7&amp;unread=0"`, `>Jump to the newest messages</a>`}, nil, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
+		{"older topic", "?before=40", true, 200, 40, []string{`href="` + topicURL + `?before=7&amp;unread=0"`, `hx-get="` + topicURL + `?before=7&amp;unread=0"`, `Jump to the newest messages</a>`}, nil, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64
@@ -514,7 +514,7 @@ func TestMessagePagingHandler(t *testing.T) {
 					t.Fatal(err)
 				}
 				for n := range doc.Descendants() {
-					if n.DataAtom == atom.A && text(n) == "Jump to the newest messages" && attr(n, "href") != tt.path {
+					if n.DataAtom == atom.A && strings.TrimSpace(text(n)) == "Jump to the newest messages" && attr(n, "href") != tt.path {
 						t.Errorf("newest-page link = %q; want %q", attr(n, "href"), tt.path)
 					}
 					if attr(n, "id") != "message-composer" {
@@ -563,14 +563,12 @@ func TestFeedTopicLabels(t *testing.T) {
 				w := httptest.NewRecorder()
 				handler.ServeHTTP(w, req)
 				body := w.Body.String()
-				if w.Code != 200 || !strings.Contains(body, `<bdi class="text-caption text-muted">&lt;design&gt;مرحبا</bdi>`) || !strings.Contains(body, `<bdi class="text-caption text-muted">chorus</bdi>`) {
+				if w.Code != 200 {
 					t.Fatalf("feed labels: %d, %s", w.Code, body)
 				}
 				// Each label links to its topic view (#303).
 				for _, entry := range populatedMessages().entries {
-					if link := labelLink(entry); !strings.Contains(body, link) {
-						t.Fatalf("feed label link %s missing: %s", link, body)
-					}
+					assertMessageTopicLink(t, body, entry)
 				}
 				catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 					for _, entry := range populatedMessages().entries {
@@ -578,16 +576,7 @@ func TestFeedTopicLabels(t *testing.T) {
 						if err := view.LiveMessageItem(viewMessage("acme", entry)).Render(r.Context(), &live); err != nil {
 							t.Fatal(err)
 						}
-						want := "&lt;design&gt;مرحبا"
-						if entry.DefaultTopic {
-							want = "chorus"
-						}
-						if !strings.Contains(live.String(), `<bdi class="text-caption text-muted">`+want+`</bdi>`) {
-							t.Fatalf("live label: %s", live.String())
-						}
-						if link := labelLink(entry); !strings.Contains(live.String(), link) {
-							t.Fatalf("live label link %s missing: %s", link, live.String())
-						}
+						assertMessageTopicLink(t, live.String(), entry)
 					}
 				})).ServeHTTP(httptest.NewRecorder(), req)
 			})
@@ -595,14 +584,26 @@ func TestFeedTopicLabels(t *testing.T) {
 	}
 }
 
-// labelLink is the markup of entry's topic label linking to its own topic
-// view in organisation acme: each label must point at its message's topic.
-func labelLink(entry conversation.Entry) string {
-	label := "&lt;design&gt;مرحبا"
+// Labels must point at their message's topic even when an icon precedes them.
+func assertMessageTopicLink(t *testing.T, markup string, entry conversation.Entry) {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(markup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := "<design>مرحبا"
 	if entry.DefaultTopic {
 		label = "chorus"
 	}
-	return `<a href="` + view.ConversationURL("acme", entry.ChannelID, &entry.TopicID) + `" class="text-muted underline"><bdi class="text-caption text-muted">` + label + `</bdi></a>`
+	url := view.ConversationURL("acme", entry.ChannelID, &entry.TopicID)
+	for n := range doc.Descendants() {
+		if n.DataAtom == atom.A && attr(n, "href") == url {
+			if name := find(n, atom.Bdi); name != nil && text(name) == label {
+				return
+			}
+		}
+	}
+	t.Fatalf("topic label %q must link to %s", label, url)
 }
 
 func (f fakeMessages) Members(ctx context.Context, m org.Membership, id kernel.ID, _ *kernel.ID) (conversation.MembersPage, error) {

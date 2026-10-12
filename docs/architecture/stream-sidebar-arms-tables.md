@@ -14,8 +14,8 @@ per member. Initial setup is excluded. [Accounting totals](stream-sidebar-arms-a
 include posting plus drain. L is the pre-fix ladder at e7879c5; R is the corrected
 60-second re-run at d0252bc; F is the five-minute async40 run at d0252bc.
 
-Sources: the operator's local ladder, re-run and five-minute logs (not in the
-repository; see the [summary](stream-sidebar-arms-measured.md)).
+Sources: branch `measurements/832-2026-10-12` at e76cb4c (`ladder/`, `rerun/`,
+`five-minute/`; see its README and SHA256SUMS).
 
 ## L: 5 posts/s, 1,000 streams
 

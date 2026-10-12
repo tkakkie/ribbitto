@@ -2,16 +2,16 @@
 
 Claude ran these on darwin/arm64 with 10 CPUs, Go 1.27.2 and
 PostgreSQL 18.6 in Docker (`max_connections` 100), using the
-[arms protocol](stream-sidebar-arms-results.md). The raw logs stayed on the
-operator's machine; the [tables](stream-sidebar-arms-tables.md) and
-[accounting](stream-sidebar-arms-accounting.md) carry their numbers:
+[arms protocol](stream-sidebar-arms-results.md). The raw logs, with sanitized
+host records, SHA-256 sums and how to reproduce them, are archived on branch
+`measurements/832-2026-10-12` at e76cb4c (never merged into `main`):
 
-- `measure832/group-{5-1000,5-5000,20-1000,20-5000}.log`: 156 ladder
+- `ladder/group-{5-1000,5-5000,20-1000,20-5000}.log`: 156 ladder
   windows at e7879c5, each 60 seconds, across four rate/stream groups.
-- `measure832b/w-*.log`: 30 corrected 60-second windows at d0252bc,
+- `rerun/w-*.log`: 30 corrected 60-second windows at d0252bc,
   after the writer fix in a68d61c; sync40/async40/async10+30 at 5,000 streams.
-- `measure832c/w-*.log`: six five-minute async40 windows at d0252bc,
-  three per rate, at 5,000 streams. Each has `host.log`.
+- `five-minute/w-*.log`: six five-minute async40 windows at d0252bc,
+  three per rate, at 5,000 streams. Each directory has `host.log`.
 
 The pre-window gate required one-minute load at most half the CPU count.
 The ladder host log contains intermittent load, process and container snapshots;
@@ -61,7 +61,7 @@ include posting plus drain.
 The ladder scheduled/completed/missed totals are **117,000/115,809/1,191**.
 **25 windows missed posts.**
 All misses are at 5,000 streams. The table identifies every such window in
-`group-<rate>-5000.log`; entries are `run: missed`, and completed is scheduled
+`ladder/group-<rate>-5000.log`; entries are `run: missed`, and completed is scheduled
 minus missed. Scheduled per window is 300 at 5 posts/s and 1,200 at 20 posts/s.
 
 | Rate | Round | Arm | Run: missed |
@@ -135,7 +135,7 @@ All six windows pass the targets. Median post-return-to-send p95 is
 at 5/20 posts/s. Median freshness p95/p99 is **1224.77/1293.05 ms** at 5 posts/s
 and **1476.25/1576.19 ms** at 20; full spreads are in the latency tables.
 
-The guard rejects `w-5-2.log` and `w-5-3.log`, accepting `w-5-1.log` and all
+The guard rejects `five-minute/w-5-2.log` and `w-5-3.log`, accepting `w-5-1.log` and all
 three `w-20-*.log` windows. It tests three consecutive ten-second means within
 `[last posting sample − 30 s, last posting sample)`, excluding the endpoint.
 Here that is approximately seconds 269–299, with actual nanosecond offsets

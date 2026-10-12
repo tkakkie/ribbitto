@@ -244,8 +244,8 @@ func TestStreamCost(t *testing.T) {
 			t.Logf("functional smoke passed: arm=%q streams=%d; all posts/messages/final snapshots and telemetry checked", arm, n)
 			continue
 		}
-		reportCostQueue(t, r.queue, r.postingDuration)
-		t.Logf("progress: streams=%d posting-p50/p95/p99=%v scheduled-to-delivery-p50/p95/p99=%v peak-acquired=%d loop-errors=%d provisional-target=%t recommendation-eligible=%t", n, r.posting, r.scheduledLatency, r.peakAcquired, r.loopErrors, costTargets(r), costRecommendable(r))
+		reportCostQueue(t, r.queue, r.postingDuration, r.queueBound)
+		t.Logf("progress: streams=%d posting-p50/p95/p99=%v scheduled-to-delivery-p50/p95/p99=%v peak-acquired=%d loop-errors=%d provisional-target=%t window-eligible=%t; recommendation requires all three independent stage-1 matrix windows to pass (part 3 aggregates them)", n, r.posting, r.scheduledLatency, r.peakAcquired, r.loopErrors, costTargets(r), costRecommendable(r))
 		if sidebar {
 			t.Logf("sidebar: streams=%d queries=%d tx=%d count-statements=%d recounts=%d elapsed=%s recounts/stream/s=%.3f count/recount=%.2f count/post=%.2f delay p50/p95/p99=%s/%s/%s pool-empty=%d pool-cancelled=%d pool-wait-total=%s", n,
 				r.queries, r.txStatements, r.countStatements, r.recounts, r.elapsed.Round(time.Millisecond), float64(r.recounts)/float64(n)/r.elapsed.Seconds(), per(r.countStatements, r.recounts), per(r.countStatements, r.completed), r.recountDelay[0].Round(time.Microsecond), r.recountDelay[1].Round(time.Microsecond), r.recountDelay[2].Round(time.Microsecond), r.poolEmpty, r.poolCancelled, r.poolWait.Round(time.Microsecond))
@@ -306,6 +306,7 @@ type stepResult struct {
 	scheduled, completed, missed int
 	queue                        []costQueueSample
 	postingDuration              time.Duration
+	queueBound                   int
 	recounts                     int
 	countStatements, poolEmpty   int64
 	poolCancelled                int64
@@ -523,7 +524,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 		timings.report(t, n)
 	}
 
-	r := stepResult{arm: os.Getenv("RIBBITTO_STREAM_COST_ARM"), queue: series, postingDuration: duration, scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: timedOut, peakAcquired: peak1, loopErrors: int64(loopErrs.n), posting: percentiles(postTimes)}
+	r := stepResult{arm: os.Getenv("RIBBITTO_STREAM_COST_ARM"), queue: series, postingDuration: duration, queueBound: n, scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: timedOut, peakAcquired: peak1, loopErrors: int64(loopErrs.n), posting: percentiles(postTimes)}
 	r.elapsed, r.countStatements = end.Sub(start), counts1-counts0
 	r.poolWait, r.poolEmpty = s1.EmptyAcquireWaitTime()-s0.EmptyAcquireWaitTime(), s1.EmptyAcquireCount()-s0.EmptyAcquireCount()
 	r.poolCancelled = s1.CanceledAcquireCount() - s0.CanceledAcquireCount()

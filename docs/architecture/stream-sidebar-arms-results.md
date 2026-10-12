@@ -5,7 +5,13 @@ Part of #832, building on PR #836 (ladder), PR #838 (scheduler) and PR #863
 realtime's external tests and results/index change. Production code, wiring,
 import edges and `realtime.SidebarInterval` remain unchanged.
 
-## Arms and protocol
+## Historical arms and protocol
+
+The 60-second ladder protocol and its linked reproduction commands produced the
+recorded results. They cannot evaluate the new 600-second stability criterion:
+every queue arm reports `inconclusive` and is ineligible under it. Part 3 of the
+stability work must update the runner and reproduction instructions before new
+criterion measurements.
 
 Use the [pool protocol](stream-sidebar-pool-results.md#reproduce) for all four
 updated group commands, inherited database/caches, host gates, marker and
@@ -89,32 +95,27 @@ result, never a duration inferred from the observed samples. The sampler takes
 an initial posting point, one point per second, and a final drain point.
 Posting samples must start within two seconds of posting start and end within
 two seconds of the planned posting end; offsets cannot be negative and must
-strictly increase, with no consecutive posting gap above two seconds. Each of
-the three ten-second guard buckets below must contain at least eight samples
-(nominally ten at the sampler's cadence). The two-second boundary tolerance
-allows one lost tick plus scheduling jitter; bucket counts prevent repeated
-isolated losses from masquerading as complete telemetry. Drain or disconnect
-points cannot fill posting gaps or conceal early stopping.
+strictly increase, with no consecutive posting gap above two seconds. Each
+planned ten-second posting bucket needs at least eight samples; the 1aeb479
+completeness rule now covers the entire planned window. Drain or
+disconnect points cannot fill gaps. The two-second tolerance allows one lost
+tick plus scheduling jitter at either boundary.
 
-`recommendation-eligible` also rejects sustained queue growth: average length
-**or** oldest age increases
-strictly across each of three ten-second buckets in the last thirty seconds
-of observed posting. Age detects a bounded queue whose length has plateaued.
-The growth rule and thresholds are unchanged. Drain cannot undo that rejection.
-Nil/empty, short, sparse, gappy or early-stopping telemetry disqualifies any
-selected queue arm, including sync40; it never establishes stability. Plain
-synchronous pools 10–40 and gate10 need no queue telemetry.
-This is a deterministic exclusion, not proof of
-stability: inspect the entire time series for trends hidden by oscillations,
-and compare posting progress/latency with the corresponding reference before
-any recommendation. Final production limits/reservations, process count and
+For new runs, [the fixed stability criterion](stream-sidebar-stability.md)
+supersedes the last-thirty-second strict-growth guard used for the recorded
+results. Complete windows shorter than 600 seconds are inconclusive, never
+eligible. After 60 seconds of warm-up, adjacent two-minute means slide by 60
+seconds; minutes 2–4 are also compared with 8–10. Either length or age exceeding
+its tolerance rejects the window. Spikes are logged without a separate veto.
+Plain synchronous pools 10–40 and gate10 need no queue telemetry.
+Final production limits/reservations, process count and
 normal-work headroom remain maintainer inputs; the pool protocol's sensitivity
 analysis is illustrative. The [completed controlled results](stream-sidebar-arms-measured.md)
 identify the single-writer bounded-queue design as a promising candidate, pending
-a stability criterion decided in advance and production-wiring validation.
+validation of the fixed criterion and production wiring.
 Production pool size and layout remain open.
 
-## Functional evidence and mutation
+## Historical functional evidence and mutation
 
 Short functional smokes ran and passed at one and 1,000 streams for all eight
 arms (plain 10/20/30/40, gate10, sync40, async40, async10+30).

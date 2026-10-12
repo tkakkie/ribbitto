@@ -135,8 +135,8 @@ All six windows pass the targets. Median post-return-to-send p95 is
 at 5/20 posts/s. Median freshness p95/p99 is **1224.77/1293.05 ms** at 5 posts/s
 and **1476.25/1576.19 ms** at 20; full spreads are in the latency tables.
 
-The guard rejects `five-minute/w-5-2.log` and `w-5-3.log`, accepting `w-5-1.log` and all
-three `w-20-*.log` windows. It tests three consecutive ten-second means within
+The historical terminal guard rejects `five-minute/w-5-2.log` and `w-5-3.log`,
+accepting `w-5-1.log` and all three `w-20-*.log` windows. It tests three consecutive ten-second means within
 `[last posting sample − 30 s, last posting sample)`, excluding the endpoint.
 Here that is approximately seconds 269–299, with actual nanosecond offsets
 controlling bucket membership; buckets can contain different sample counts.
@@ -152,8 +152,8 @@ rise cannot be dismissed as noise. Minute averages can hide that shorter trend;
 the logs do not resolve whether it is transient or persists beyond the window.
 The guard's rejection remains a bar to recommendation, even with target passes.
 Any revised stability criterion must be decided in advance of validation, with
-an explicit horizon and acceptable growth; these results cannot retrospectively
-waive the guard.
+an explicit horizon and acceptable growth; these verdicts remain unchanged.
+New runs use the [fixed criterion](stream-sidebar-stability.md).
 
 ## What the comparisons support
 
@@ -185,8 +185,8 @@ A **single writer per stream with a bounded, fair, cancellable recount queue**
 is a promising candidate. Shared40 is a useful prototype reference; pool layout
 and production size remain open. Preserve newer-than-last-sent completion checks,
 dirty state for later invalidations and bound-member authorization before sends.
-Production recommendation remains pending a stability criterion decided in
-advance and validation with [production wiring](stream-sidebar-writer-results.md#production-gaps),
+Production recommendation remains pending validation of the fixed criterion
+and [production wiring](stream-sidebar-writer-results.md#production-gaps),
 including the real wait, normal-work headroom and representative workloads.
 Completed controlled measurements do not close those decisions or the observed
 growth-guard failures.

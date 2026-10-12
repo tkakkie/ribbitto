@@ -54,6 +54,7 @@ Read the file for the area you change:
 | [`stream-sidebar-arms-measured.md`](stream-sidebar-arms-measured.md) | #832 controlled results: completion, writer fix, five-minute queue evidence, pool tradeoff and candidate pending stability/production validation |
 | [`stream-sidebar-arms-tables.md`](stream-sidebar-arms-tables.md) | #832 all arm/group workload totals, latency medians and min–max spreads, target/eligibility passes |
 | [`stream-sidebar-arms-accounting.md`](stream-sidebar-arms-accounting.md) | #832 all arm/group SQL/count/recount/acquisition/wait totals, peak leases, elapsed time and throughput |
+| [`stream-sidebar-stability.md`](stream-sidebar-stability.md) | #832 stability work part 1: pre-registered queue stability criterion and mutation evidence |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |

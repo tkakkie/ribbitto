@@ -28,8 +28,8 @@ A reply will remain an ordinary message in the stream, linked to the
 message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
 
-Channel pins reference the current message, with proposed permissions,
-limits and lifecycle rules in [`pins.md`](pins.md) (#880, not agreed yet).
+Channel pins reference the current message; their permissions, limits
+and lifecycle rules are in [`pins.md`](pins.md) (*planned*, #880).
 
 ## Accepted bodies
 

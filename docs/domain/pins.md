@@ -1,17 +1,17 @@
-# Pinned messages *(proposal, #880)*
+# Pinned messages *(planned, #880)*
 
 Pins keep important messages within reach in a channel's overview panel
-(#874). They are post-M6 message work, not M5 or M6 polish. Nothing here is
-implemented or agreed yet. **Decision needed** marks maintainer choices;
-the implementation split assumes the recommendations are accepted first.
+(#874). They are post-M6 message work, not M5 or M6 polish. The maintainer agreed
+these rules on 2026-10-12 (#880); nothing is implemented yet, and the
+work follows M6.
 Message permalinks (roadmap steps 1–2) precede the jump from a pin.
 
 ## Permissions and limits
 
-**Decision needed — permissions.** Recommend that every member who may
+**Permissions.** Every member who may
 write in a channel may pin any of its messages and unpin any pin, including
 another member's. This matches [branching](topics.md#branching) and lets
-members curate shared information. Alternatives: only owners may manage
+members curate shared information. Considered and rejected: only owners may manage
 pins (bottleneck); everyone may pin, but only the pinner or an owner may
 unpin (stale pins can outlive the available pinner).
 
@@ -21,9 +21,9 @@ session. A non-member, inaccessible channel or message outside that
 organisation/channel returns 404. An interest or message ID grants nothing.
 Private-channel and direct-message work must preserve these checks.
 
-**Decision needed — limit.** Recommend **50 pins per channel**, across all
+**Limit.** **50 pins per channel**, across all
 its topics, with no per-member quota. A bounded overview stays readable and
-cheap to refresh. Alternatives: 20 (stricter curation), 100 (more capacity),
+cheap to refresh. Considered and rejected: 20 (stricter curation), 100 (more capacity),
 or unlimited with paging (a larger feature). At the limit a new pin fails
 with 409 and a localized explanation; nothing is evicted automatically.
 Concurrent requests cannot exceed the limit.
@@ -37,10 +37,10 @@ members individually.
 
 ## What a pin shows
 
-**Decision needed — presentation.** Recommend newest pin first, with a
+**Presentation.** Newest pin first, with a
 stable message-ID tie-break, and an excerpt of at most **200 Unicode code
 points**, collapsing whitespace and appending an ellipsis when shortened.
-Alternatives: oldest first (stable reference order), full bodies (large
+Considered and rejected: oldest first (stable reference order), full bodies (large
 panel), or manual ordering (additional state and controls).
 
 Each entry shows the current message excerpt, its author, its current topic,
@@ -61,19 +61,18 @@ is stored as pin content and no `templ.Raw` is used.
 
 ## When the message changes
 
-| Change | Recommended result |
+| Change | Result |
 |---|---|
 | Move to another topic in the same channel | Keep the pin, pinner and time; show the current topic and keep the stable message link. Branching keeps message identity (decision 21). |
 | Move to another channel | Remove the source pin atomically with the move. Do not create a destination pin or expose the destination through the source overview. A destination member may pin it anew. |
 | Edit | Show the current excerpt; retain the pinner and time. A pin is a reference, not an endorsement of a frozen version. |
 | Delete | Remove the pin atomically with deletion, freeing its slot. Keep no excerpt or deleted-message placeholder in the pins section. |
 
-**Decision needed — lifecycle.** Recommend these four rules. Alternatives:
+**Lifecycle.** These four rules apply. Considered and rejected:
 unpin on every topic move (loses useful references); transfer a pin on a
 channel move (changes the destination's curated list and may exceed its
 limit); unpin on edit (requires curation again). Retaining deleted text or
-a frozen excerpt would require a separate retention design and is not
-recommended. A reply's deleted-parent placeholder belongs to the reply
+a frozen excerpt would require a separate retention design. A reply's deleted-parent placeholder belongs to the reply
 chain, not to pins ([replies](replies.md)).
 
 Pin writes serialize with message moves/deletion, so a stale source-channel
@@ -87,13 +86,13 @@ and send errors remain failures.
 
 ## Storage, ownership and delivery
 
-**Decision needed — model.** Recommend nullable `pinned_by_member_id` and
+**Model.** Nullable `pinned_by_member_id` and
 `pinned_at` on `message`, both null or both present, with an
 organisation-scoped member reference. The channel is the message's current
 channel; the lifecycle rules clear these fields on a cross-channel move.
 This extends message state and belongs in `conversation` under
 [decision 27](../decisions/27-channels-topics-and-messages-are-one-conversation-module.md).
-It adds no table or module-import edge. Alternatives: a separate pin table
+It adds no table or module-import edge. Considered and rejected: a separate pin table
 that only references messages/channels belongs to a new `pins` module
 depending on `conversation`'s API; split any accompanying message behaviour
 into `conversation`. That alternative needs transaction-bound injections
@@ -108,8 +107,9 @@ The read API returns plain
 structs from one snapshot; only web renders HTML. Existing member-directory
 APIs supply names, never direct foreign-table queries.
 
-The [delivery proposal](../architecture/pins.md) records the durable
+The [delivery design](../architecture/pins.md) records the durable
 invalidation kind, current-state frames, reconnect rules and alternatives
-against decisions 23, 30 and 31. Editing, deletion and channel-move issues
-must include the pin lifecycle and refresh triggers when those features
-become reachable; this plan does not implement them ahead of their issues.
+against decisions 23, 30 and 31. When editing, deletion and moving messages
+to another channel are implemented, their issues update or remove the pin
+in the same transaction as the message change, and add the refresh
+triggers; the pin issues do not implement those features ahead of them.

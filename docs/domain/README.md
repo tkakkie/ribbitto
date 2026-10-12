@@ -27,7 +27,7 @@ index below for everything else.
 | [`topics.md`](topics.md) | topics, the default topic, the feed and branching |
 | [`messages.md`](messages.md) | message identity, accepted bodies and rendering |
 | [`replies.md`](replies.md) | reply references and the reply-chain view (planned) |
-| [`pins.md`](pins.md) | channel pins: permissions, limits, previews and message changes (proposal, #880) |
+| [`pins.md`](pins.md) | channel pins: permissions, limits, previews and message changes (planned, #880) |
 | [`setup-and-signup.md`](../architecture/setup-and-signup.md) | first-run setup and sign-up |
 
 ## Glossary

@@ -1,12 +1,13 @@
-# Pin delivery *(proposal, #880)*
+# Pin delivery *(planned, #880)*
 
-The [domain proposal](../domain/pins.md) recommends pin metadata on messages,
-owned by `conversation`. Nothing here changes the current stream contract
-until the maintainer accepts it and the split issues implement it.
+The [domain rules](../domain/pins.md) put pin metadata on messages, owned
+by `conversation`. The maintainer agreed this design on 2026-10-12 (#880);
+nothing here changes the current stream contract until the split issues
+implement it after M6.
 
 ## Durable invalidation, current display
 
-**Decision needed — delivery.** Recommend a durable `pins.changed` kind
+**Delivery.** A durable `pins.changed` kind
 owned, encoded and routed by `conversation`, with IDs-only payload
 `{"channel_id","message_id"}` and a null audience. Pin/unpin state and its
 event commit together; the writer raises the hub only after commit. The
@@ -62,12 +63,12 @@ within a refresh round; never reuse an event-sequence cache entry as current
 pin state. No member-specific controls enter shared output. Measure the
 bounded refresh cost with distinct connections in the live-delivery issue.
 
-**Alternatives:** replay pin/unpin deltas as new frames with `id:` (adds
+**Considered and rejected:** replay pin/unpin deltas as new frames with `id:` (adds
 ordering and vanished-target cases, and needs an explicit extension to
 decision 30's message-cursor contract); use only a process-local generation
 and persisted snapshots (as member read invalidation in
 [decision 31](../decisions/31-presence-and-typing-are-current-state-with-a-generation.md),
 but needs separate missed-notification recovery); polling (extra delay and
-requests). The recommendation uses durable triggers for persisted changes,
+requests). The design uses durable triggers for persisted changes,
 with current-state display as the sidebar does. Pins are not ephemeral
 presence/typing, so decision 31's memory-only owners remain unchanged.

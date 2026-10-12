@@ -60,6 +60,10 @@ and `topic_read_floor`. Composite foreign keys include `organization_id`
 and enforce the member, channel and topic relationships; ranges and floors
 reference their channel lock row. Down drops the three tables.
 
+Migration 00013 adds nullable `channel.image` (text), an illustration key.
+Existing rows stay NULL; web picks a stable image from the channel ID for
+NULL or unknown keys. Down drops the column.
+
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations

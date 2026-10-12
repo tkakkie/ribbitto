@@ -15,6 +15,7 @@ import (
 type ChannelFixture struct {
 	ID, OrganizationID, DefaultTopicID kernel.ID
 	Name                               string
+	Image                              string // Creation leaves image NULL, represented as empty.
 	IsDefault                          bool
 	CreatedAt                          time.Time
 }

@@ -165,7 +165,7 @@ The logo is at least 16 px, with clear space of a quarter of its size, in
 brand teal, white on a teal tile, or `currentColor` only. The mascot
 appears on welcome pages, empty states and while loading or sending; it is
 decorative (`alt=""`) and never the only carrier of information. Files,
-poses and details are in [`brand.md`](brand.md).
+poses, the channel illustrations and details are in [`brand.md`](brand.md).
 
 ## Markup and accessibility
 

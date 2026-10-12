@@ -35,6 +35,14 @@ func TestChannelStore(t *testing.T) {
 	requireNoError(t, err)
 	foreign, err := store.CreateDefaultChannelForTest(ctx, other, "開発")
 	requireNoError(t, err)
+	for _, c := range []*conversation.Channel{&defaultChannel, &channel} {
+		if c.Image != "" {
+			t.Fatalf("new channel image = %q, want NULL mapped to empty", c.Image)
+		}
+		c.Image = "leaf"
+		_, err := pool.Exec(ctx, "UPDATE channel SET image = $3 WHERE organization_id = $1 AND id = $2", c.OrganizationID, c.ID, c.Image)
+		requireNoError(t, err)
+	}
 	for _, want := range []conversation.Channel{defaultChannel, channel, foreign} {
 		if want.ID == (kernel.ID{}) || want.DefaultTopicID == (kernel.ID{}) || want.CreatedAt.IsZero() {
 			t.Fatalf("incomplete created channel: %+v", want)

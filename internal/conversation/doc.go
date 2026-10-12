@@ -5,6 +5,8 @@
 // Module: conversation (feature map in docs/architecture/features.md), which
 // owns the channel, topic and message tables and publishes message.posted
 // and messages.moved.
+// Channel.image holds a nullable illustration key; web resolves missing or
+// unknown keys to a stable image from the channel ID without a backfill.
 //
 // Posting and branching own their transactions so content and events commit
 // together with page-post and branch-notice read state, then notify. History and

@@ -12,6 +12,7 @@ import (
 type Channel struct {
 	ID, OrganizationID, DefaultTopicID kernel.ID
 	Name                               string
+	Image                              string // Illustration key; empty when the stored value is NULL.
 	IsDefault                          bool
 	CreatedAt                          time.Time
 }

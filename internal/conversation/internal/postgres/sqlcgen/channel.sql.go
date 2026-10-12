@@ -14,12 +14,12 @@ import (
 const createChannel = `-- name: CreateChannel :one
 WITH created AS (
   INSERT INTO channel (organization_id, name, is_default)
-  VALUES ($1, $2, $3) RETURNING id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default
+  VALUES ($1, $2, $3) RETURNING id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default, image
 ), default_topic AS (
   INSERT INTO topic (id, organization_id, channel_id, is_default)
   SELECT default_topic_id, organization_id, id, true FROM created
 )
-SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default FROM created
+SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default, image FROM created
 `
 
 type CreateChannelParams struct {
@@ -36,6 +36,7 @@ type CreateChannelRow struct {
 	CreatedAt             pgtype.Timestamptz
 	DefaultTopicID        pgtype.UUID
 	DefaultTopicIsDefault bool
+	Image                 pgtype.Text
 }
 
 // Conversation owns both tables: creating a channel also writes its default
@@ -53,12 +54,13 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (C
 		&i.CreatedAt,
 		&i.DefaultTopicID,
 		&i.DefaultTopicIsDefault,
+		&i.Image,
 	)
 	return i, err
 }
 
 const getChannel = `-- name: GetChannel :one
-SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default FROM channel WHERE organization_id = $1 AND id = $2
+SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default, image FROM channel WHERE organization_id = $1 AND id = $2
 `
 
 type GetChannelParams struct {
@@ -77,12 +79,13 @@ func (q *Queries) GetChannel(ctx context.Context, arg GetChannelParams) (Channel
 		&i.CreatedAt,
 		&i.DefaultTopicID,
 		&i.DefaultTopicIsDefault,
+		&i.Image,
 	)
 	return i, err
 }
 
 const getDefaultChannel = `-- name: GetDefaultChannel :one
-SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default FROM channel WHERE organization_id = $1 AND is_default
+SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default, image FROM channel WHERE organization_id = $1 AND is_default
 `
 
 func (q *Queries) GetDefaultChannel(ctx context.Context, organizationID pgtype.UUID) (Channel, error) {
@@ -96,12 +99,13 @@ func (q *Queries) GetDefaultChannel(ctx context.Context, organizationID pgtype.U
 		&i.CreatedAt,
 		&i.DefaultTopicID,
 		&i.DefaultTopicIsDefault,
+		&i.Image,
 	)
 	return i, err
 }
 
 const listChannels = `-- name: ListChannels :many
-SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default FROM channel WHERE organization_id = $1 ORDER BY name, id
+SELECT id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default, image FROM channel WHERE organization_id = $1 ORDER BY name, id
 `
 
 func (q *Queries) ListChannels(ctx context.Context, organizationID pgtype.UUID) ([]Channel, error) {
@@ -121,6 +125,7 @@ func (q *Queries) ListChannels(ctx context.Context, organizationID pgtype.UUID) 
 			&i.CreatedAt,
 			&i.DefaultTopicID,
 			&i.DefaultTopicIsDefault,
+			&i.Image,
 		); err != nil {
 			return nil, err
 		}

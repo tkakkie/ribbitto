@@ -20,6 +20,7 @@ type Channel struct {
 	ID             kernel.ID
 	DefaultTopicID kernel.ID
 	Name           string
+	ImageURL       string
 }
 
 // Topic holds the topic fields a channel page displays.
@@ -177,8 +178,8 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 			} else {
 				<main id="conversation" class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block">
 					<header class="flex shrink-0 items-center gap-3 border-b border-border px-6 py-2">
-						// The channel image will precede this path (#875).
 						<div class="flex min-w-0 flex-1 items-center gap-2">
+							@channelImage(page.Current.ImageURL, true)
 							if page.Topic != nil {
 								<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="min-w-0 truncate text-title text-muted hover:text-brand">{ page.Current.Name }</a>
 								@Icon("chevron-right-regular", 20)
@@ -479,8 +480,7 @@ templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
 			if selected {
 				@selectionPill()
 			}
-			// The channel image replaces this neutral tile (#875).
-			<span aria-hidden="true" class="flex size-6 shrink-0 items-center justify-center rounded-md bg-hover text-caption font-semibold text-muted">{ initial(channel.Name) }</span>
+			@channelImage(channel.ImageURL, false)
 			<span dir="auto" class="min-w-0 flex-1">{ channel.Name }</span>
 			@unreadBadge(count)
 		</a>

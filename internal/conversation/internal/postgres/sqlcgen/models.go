@@ -16,6 +16,7 @@ type Channel struct {
 	CreatedAt             pgtype.Timestamptz
 	DefaultTopicID        pgtype.UUID
 	DefaultTopicIsDefault bool
+	Image                 pgtype.Text
 }
 
 type Message struct {

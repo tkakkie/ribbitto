@@ -1,0 +1,105 @@
+=== RUN   TestStreamCost
+    cost_test.go:198: PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2); sidebar true; interval 1s
+    cost_test.go:204: PostgreSQL max_connections=100
+    cost_test.go:204: PostgreSQL superuser_reserved_connections=3
+    cost_test.go:204: PostgreSQL reserved_connections=0
+    cost_test.go:206: arm="async40" workers=40 normal-max=40 recount-max=40 (shared when equal pool)
+    cost_test.go:207: attribution true; concurrent recount limit 0 (0=unbounded)
+    cost_test.go:208: darwin/arm64, 10 CPUs, go1.27.2; pool max 40; batch 100; 5 posts/s for 1m0s per step; cache true; distinct members true; stagger window 0s
+    cost_test.go:210: | streams | posts scheduled/completed/missed | deliveries | queries/post | tx statements/post | empty reads/post | queries/delivery | tx statements/delivery | empty reads/delivery | mean empty-acquire wait | empty-acquire wait/delivery | p50 | p95 | p99 | result |
+    cost_test.go:211: |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+    cost_test.go:235: wall: streams=5000 setup=14.584345083s window=1m0s drain-allowance=30s
+    cost_test.go:235: wall: streams=5000 posting-plus-drain=1m1.06316225s drain-after-window=1.06316225s
+    cost_attribution_test.go:103: attribution: streams=5000 kind=acquire-other samples=600 errors=0 total=417.322ms p50/p95/p99=611µs/1.515ms/2.475ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=acquire-sidebar samples=244456 errors=0 total=2m1.357544s p50/p95/p99=419µs/1.173ms/2.059ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=acquire-events samples=27546 errors=0 total=16.13645s p50/p95/p99=477µs/1.397ms/3.38ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=acquire-auth samples=29502 errors=0 total=18.435196s p50/p95/p99=508µs/1.513ms/3.582ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=FirstChannelReadRanges samples=244442 errors=0 total=3m50.543337s p50/p95/p99=830µs/1.568ms/3.89ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=CountChannelUnread samples=244441 errors=0 total=4m47.840486s p50/p95/p99=1.034ms/2.064ms/4.19ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=ReadTopicState samples=244432 errors=0 total=3m49.042444s p50/p95/p99=819µs/1.602ms/3.868ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=CountTopicUnread samples=244427 errors=0 total=4m53.127279s p50/p95/p99=1.05ms/2.13ms/4.219ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=GetChannel samples=244450 errors=0 total=3m28.81186s p50/p95/p99=750µs/1.403ms/3.796ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=ListChannels samples=244445 errors=0 total=3m34.228832s p50/p95/p99=768µs/1.443ms/3.857ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=ListTopics samples=244443 errors=0 total=3m33.201186s p50/p95/p99=767µs/1.432ms/3.795ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=GetEventSeq samples=244422 errors=0 total=3m42.301484s p50/p95/p99=795µs/1.548ms/3.833ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=BEGIN samples=244454 errors=0 total=3m27.49018s p50/p95/p99=737µs/1.411ms/3.904ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=COMMIT samples=244418 errors=0 total=3m30.32947s p50/p95/p99=756µs/1.423ms/3.796ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=ROLLBACK samples=0 errors=0 total=0s p50/p95/p99=0s/0s/0s
+    cost_attribution_test.go:103: attribution: streams=5000 kind=whole-sidebar samples=244418 errors=0 total=40m40.939696s p50/p95/p99=9.308ms/15.264ms/19.053ms
+    cost_attribution_test.go:103: attribution: streams=5000 kind=recount-slot samples=244458 errors=0 total=24.194ms p50/p95/p99=0s/0s/0s
+    cost_telemetry_test.go:133: queue: at=135.5µs phase=posting length=0 oldest=0s coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=1.00023725s phase=posting length=706 oldest=165.364792ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=2.000244208s phase=posting length=913 oldest=226.720625ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=3.000286167s phase=posting length=777 oldest=198.317291ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=4.000237417s phase=posting length=779 oldest=191.828917ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=5.000460833s phase=posting length=669 oldest=157.844917ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=6.000277625s phase=posting length=713 oldest=159.970625ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=7.000320458s phase=posting length=832 oldest=190.737583ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=8.000441458s phase=posting length=879 oldest=209.931958ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=9.000230708s phase=posting length=772 oldest=190.821958ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=10.000263417s phase=posting length=882 oldest=217.0055ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=11.000493125s phase=posting length=1092 oldest=278.621625ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=12.000254458s phase=posting length=972 oldest=246.736375ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=13.000228708s phase=posting length=1026 oldest=274.472292ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=14.000229375s phase=posting length=717 oldest=167.697666ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=15.000257833s phase=posting length=1024 oldest=239.483375ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=16.000292417s phase=posting length=926 oldest=232.890375ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=17.000492667s phase=posting length=1068 oldest=271.399167ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=18.000249583s phase=posting length=1127 oldest=291.272666ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=19.000484375s phase=posting length=1143 oldest=311.728708ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=20.000458208s phase=posting length=1156 oldest=302.299917ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=21.000249042s phase=posting length=1033 oldest=300.534ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=22.000277s phase=posting length=1175 oldest=281.34475ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=23.0002705s phase=posting length=1095 oldest=318.641625ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=24.000240417s phase=posting length=862 oldest=221.600375ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=25.0002665s phase=posting length=764 oldest=175.964958ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=26.000253125s phase=posting length=866 oldest=210.84225ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=27.000274542s phase=posting length=886 oldest=208.05225ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=28.000266167s phase=posting length=880 oldest=218.774833ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=29.000419542s phase=posting length=859 oldest=214.539208ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=30.000450792s phase=posting length=849 oldest=207.549375ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=31.000489292s phase=posting length=778 oldest=201.775ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=32.000394208s phase=posting length=868 oldest=222.835625ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=33.000253958s phase=posting length=859 oldest=210.754792ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=34.000256042s phase=posting length=746 oldest=198.000875ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=35.000226333s phase=posting length=798 oldest=174.206042ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=36.000235s phase=posting length=927 oldest=226.225542ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=37.00022175s phase=posting length=779 oldest=204.1425ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=38.000272125s phase=posting length=805 oldest=190.082542ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=39.000241667s phase=posting length=831 oldest=220.909542ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=40.000307458s phase=posting length=959 oldest=236.890291ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=41.000251958s phase=posting length=873 oldest=216.283792ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=42.00027975s phase=posting length=844 oldest=191.988916ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=43.000323375s phase=posting length=855 oldest=216.848083ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=44.000305333s phase=posting length=964 oldest=233.798208ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=45.000272625s phase=posting length=855 oldest=219.503541ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=46.000257708s phase=posting length=868 oldest=231.707791ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=47.000269458s phase=posting length=976 oldest=240.951167ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=48.000244375s phase=posting length=956 oldest=249.435667ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=49.000278708s phase=posting length=1030 oldest=267.447958ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=50.000247708s phase=posting length=1050 oldest=270.047ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=51.000452125s phase=posting length=926 oldest=243.372458ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=52.000250375s phase=posting length=1024 oldest=263.270834ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=53.000251958s phase=posting length=1036 oldest=252.209417ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=54.000300083s phase=posting length=838 oldest=212.322875ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=55.000227583s phase=posting length=946 oldest=250.862416ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=56.000268542s phase=posting length=988 oldest=253.44825ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=57.000260833s phase=posting length=998 oldest=251.509792ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=58.000237917s phase=posting length=1010 oldest=252.917958ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=59.000246542s phase=posting length=913 oldest=243.15525ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=1m0.000241375s phase=drain length=1021 oldest=253.738125ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=1m1.000247958s phase=drain length=723 oldest=207.145875ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=1m1.063295667s phase=drain length=703 oldest=179.86375ms coalesced=0 cancelled=0
+    cost_telemetry_test.go:133: queue: at=1m1.068225292s phase=disconnect length=0 oldest=0s coalesced=0 cancelled=754
+    cost_telemetry_test.go:135: queue summary [length oldest-ns coalesced cancelled]: min=[0 0 0 0] max=[1175 318641625 0 754] final=[0 0 0 754] growing=true
+    cost_test.go:244: progress: streams=5000 posting-p50/p95/p99=[8.276042ms 13.620167ms 17.213333ms] scheduled-to-delivery-p50/p95/p99=[29.341542ms 37.780917ms 41.895333ms] peak-acquired=40 loop-errors=0 provisional-target=true recommendation-eligible=false
+    cost_test.go:246: sidebar: streams=5000 queries=2042526 tx=545169 count-statements=977758 recounts=244377 elapsed=1m1.063s recounts/stream/s=0.800 count/recount=4.00 count/post=3259.19 delay p50/p95/p99=648.885ms/1.214505s/1.27842s pool-empty=300949 pool-cancelled=0 pool-wait-total=2m36.214023s
+    cost_test.go:249: totals: streams=5000 queries=2042526 tx=545169 elapsed=1m1.063s pool-empty=300949 pool-wait-total=2m36.214023s
+    cost_test.go:263: | 5000 | 300/300/0 | 1500000 | 6808.4 | 1817.2 | 87.5 | 1.36 | 0.36 | 0.02 | 519µs | 104µs | 20.832ms | 26.419ms | 29.73ms | pass |
+    cost_test.go:285: every measured step passed, through 5000 streams under these conditions; no production ceiling established
+    cost_test.go:223: | streams | epoch reads/post | epoch reads/post/stream | checks/post | cached-allow hit rate | check p50 | check p95 | check p99 | stagger delays min/max/step |
+    cost_test.go:223: |---|---|---|---|---|---|---|---|---|
+    cost_test.go:223: | 5000 | 98.34 | 0.0197 | 5814.6 | 1.0000 | 5.301ms | 9.321ms | 12.23ms | none |
+    cost_test.go:76: cost invocation wall=1m16.115069375s
+--- PASS: TestStreamCost (76.12s)
+PASS

@@ -1,0 +1,121 @@
+head e7879c5979688f643784d410a1290d665836275f
+2026-10-11T21:49:26Z
+{ 2.50 1.85 2.08 }
+10
+74079 183.6 04-11:02:04 com.apple.Virtualization.VirtualMachine.x
+69031  53.8 04-21:19:27 com.docker.backend services
+53623   6.8 09-15:02:40 Google Chrome
+  532   4.5 12-21:35:36 fseven
+  902   1.9 12-21:35:27 mds_st
+  556   1.1 12-21:35:36 mds
+71128   0.8    02:44:31 networkserviceproxy
+53630   0.6 09-15:02:37 Helpers
+ribbitto-codex-pg3 0.61%
+ribbitto-codex-pg 0.00%
+ribbitto-load 0.00%
+ribbitto-codex-pg2 0.56%
+2026-10-11T22:39:38Z
+{ 2.43 4.23 4.59 }
+10
+74079 238.4 04-11:52:16 com.apple.Virtualization.VirtualMachine.x
+69031  72.2 04-22:09:39 com.docker.backend services
+10305  10.2 06-21:53:02 Wi-Fi
+  657   7.0 12-22:25:48 airportd
+23625   3.8       00:00 docker stats
+23624   1.6       00:01 mdwork
+78538   0.9 02-01:49:37 claude
+  713   0.6 12-22:25:47 com.apple.DriverKit-AppleBCMWLAN com.apple.bc
+ribbitto-codex-pg3 0.03%
+ribbitto-codex-pg 0.00%
+ribbitto-load 0.00%
+ribbitto-codex-pg2 0.72%
+2026-10-11T22:39:40Z
+{ 2.43 4.23 4.59 }
+10
+ 6898  57.7 12-22:07:32 Code Helper (Rend
+74079  10.2 04-11:52:18 com.apple.Virtualization.VirtualMachine.x
+69031   4.5 04-22:09:41 com.docker.backend services
+ 6912   1.4 12-22:07:32 Code Helper (Plugin
+21995   0.9       51:23 measure8
+78538   0.7 02-01:49:39 claude
+50015   0.5    09:33:31 Helpers
+69110   0.4 04-22:09:39 
+ribbitto-codex-pg3 0.02%
+ribbitto-codex-pg 0.00%
+ribbitto-load 0.00%
+ribbitto-codex-pg2 0.60%
+2026-10-12T00:07:23Z
+{ 8.46 7.38 7.38 }
+10
+74079 104.6 04-13:20:01 com.apple.Virtualization.VirtualMachine.x
+69031  34.3 04-23:37:24 com.docker.backend services
+26555   1.3       00:20 Helpers
+69110   0.4 04-23:37:22 
+53623   0.3 09-17:20:37 Google Chrome
+10305   0.2 06-23:20:47 Wi-Fi
+78538   0.1 02-03:17:22 claude
+78388   0.1 02-03:18:04 Claude
+ribbitto-codex-pg3 0.01%
+ribbitto-codex-pg 0.00%
+ribbitto-load 0.01%
+ribbitto-codex-pg2 0.59%
+2026-10-12T00:07:25Z
+{ 8.46 7.38 7.38 }
+10
+74079   4.3 04-13:20:03 com.apple.Virtualization.VirtualMachine.x
+ 6912   2.7 12-23:35:17 Code Helper (Plugin
+10305   0.7 06-23:20:49 Wi-Fi
+  657   0.5 12-23:53:35 airportd
+78538   0.4 02-03:17:24 claude
+  713   0.3 12-23:53:34 com.apple.DriverKit-AppleBCMWLAN com.apple.bc
+50022   0.1    11:01:16 Helpers
+50015   0.1    11:01:16 Helpers
+ribbitto-codex-pg3 0.03%
+ribbitto-codex-pg 0.01%
+ribbitto-load 0.00%
+ribbitto-codex-pg2 0.60%
+2026-10-12T00:58:21Z
+{ 6.66 5.59 5.28 }
+10
+74079  82.3 04-14:10:59 com.apple.Virtualization.VirtualMachine.x
+69031  20.0 05-00:28:22 com.docker.backend services
+78538   0.1 02-04:08:20 claude
+ 1292   0.1 13-00:44:03 ControlCenter
+  655   0.1 13-00:44:31 clocksyncd
+  579   0.1 13-00:44:31 dasd
+99371   0.0 06-00:38:59 PasswordBreachAgent
+95724   0.0    17:33:06 Claude Helper
+ribbitto-codex-pg3 0.02%
+ribbitto-codex-pg 0.00%
+ribbitto-load 0.03%
+ribbitto-codex-pg2 1.13%
+2026-10-12T00:58:23Z
+{ 6.66 5.59 5.28 }
+10
+ 6912  36.6 13-00:26:15 Code Helper (Plugin
+74079  12.2 04-14:11:01 com.apple.Virtualization.VirtualMachine.x
+  657   7.3 13-00:44:33 airportd
+69110   4.2 05-00:28:22 
+  575   2.9 13-00:44:33 locationd
+69031   2.6 05-00:28:24 com.docker.backend services
+  713   1.4 13-00:44:32 com.apple.DriverKit-AppleBCMWLAN com.apple.bc
+28037   0.5       04:19 mdwork
+ribbitto-codex-pg3 0.02%
+ribbitto-codex-pg 0.58%
+ribbitto-load 0.00%
+ribbitto-codex-pg2 0.59%
+2026-10-12T02:27:54Z
+{ 8.35 7.31 7.24 }
+10
+74079  10.9 04-15:40:32 com.apple.Virtualization.VirtualMachine.x
+69110   1.9 05-01:57:53 
+69031   0.1 05-01:57:55 com.docker.backend services
+ 1292   0.1 13-02:13:36 ControlCenter
+  655   0.1 13-02:14:04 clocksyncd
+99371   0.0 06-02:08:32 PasswordBreachAgent
+95724   0.0    19:02:39 Claude Helper
+95334   0.0    19:05:03 ScreenTimeAgent
+ribbitto-codex-pg3 0.02%
+ribbitto-codex-pg 0.48%
+ribbitto-load 0.00%
+ribbitto-codex-pg2 0.53%

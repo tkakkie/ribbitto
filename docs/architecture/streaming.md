@@ -79,6 +79,8 @@ The retention period defaults to seven days; see [database configuration](../dat
 
 ### Resource limits
 
+Unwired [scheduler core](recount-scheduler.md).
+
 Cache-load limits, write deadlines, heartbeats, the process and per-account stream caps,
 shutdown and HTTP/2 are in [`stream-limits.md`](stream-limits.md).
 

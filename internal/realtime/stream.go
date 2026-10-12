@@ -208,7 +208,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		if sidebar.dirty {
 			deadline = sidebar.next
 		}
-		levels, err := s.wait(ctx, sub, seen, send, &written, deadline, sidebar.watch, sidebar.observed)
+		levels, _, err := s.wait(ctx, sub, seen, send, &written, deadline, sidebar.watch, sidebar.observed, nil)
 		// Generations count as seen only after the owner returns their state.
 		seen.durable = levels.durable
 		if err != nil {
@@ -296,9 +296,17 @@ func (s Stream) heartbeat(ctx context.Context, sub Subscription, send Sender, wr
 
 // wait combines durable and generation wakes with a pending recount deadline,
 // sending heartbeats counted from *written, even while the recount is pending.
-func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, send Sender, written *time.Time, recount time.Time, watch SidebarWatch, observed uint64) (streamLevels, error) {
+// A non-nil completion belongs to the writer; receiving it changes no deadline.
+// It is returned even when the parent context ends, then with that cause.
+func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, send Sender, written *time.Time, recount time.Time, watch SidebarWatch, observed uint64, completions <-chan RecountCompletion) (streamLevels, *RecountCompletion, error) {
 	if s.Heartbeat <= 0 && recount.IsZero() {
-		return s.Hub.waitFor(ctx, sub, after, watch, observed)
+		levels, completion, err := s.Hub.waitFor(ctx, sub, after, watch, observed, completions)
+		// The hub returns a received completion without an error; report a
+		// parent that ended as the deadline path does through heartbeatDue.
+		if completion != nil && ctx.Err() != nil {
+			err = context.Cause(ctx)
+		}
+		return levels, completion, err
 	}
 	for {
 		deadline, cause := recount, errSidebarDue
@@ -306,16 +314,16 @@ func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, 
 			deadline, cause = written.Add(s.Heartbeat), errHeartbeatDue
 		}
 		waitCtx, cancel := context.WithDeadlineCause(ctx, deadline, cause)
-		levels, err := s.Hub.waitFor(waitCtx, sub, after, watch, observed)
+		levels, completion, err := s.Hub.waitFor(waitCtx, sub, after, watch, observed, completions)
 		cancel()
 		if ctx.Err() == nil && errors.Is(err, errSidebarDue) {
-			return after, nil
+			return after, nil, nil
 		}
 		if due, err := heartbeatDue(ctx, err); !due {
-			return levels, err
+			return levels, completion, err
 		}
 		if err := s.heartbeat(ctx, sub, send, written); err != nil {
-			return streamLevels{}, err
+			return streamLevels{}, nil, err
 		}
 	}
 }

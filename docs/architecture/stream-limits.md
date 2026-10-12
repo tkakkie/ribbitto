@@ -38,6 +38,18 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   receives sidebar/presence payloads. Register and
   RaiseIfActive still use the registry mutex for caps and active checks.
 
+  The combined wait also accepts an optional recount completion mailbox (#865,
+  part 1c). The writer receives one result directly and returns it to its caller;
+  no bridge goroutine, scheduling, authorization or delivery is added. Buffered
+  results survive level capture; a consumed result cannot wake again. Once
+  received, a completion returns from the hub with no error even if its wait
+  context ended. The stream wait returns it together with the parent's cause;
+  the writer checks its parent context before delivery. A closed
+  mailbox is disabled inside the wait. Completion wakes change neither the last
+  write nor the fixed recount deadline. `Stream.Run` passes nil, preserving
+  synchronous production delivery; [scheduler integration](recount-scheduler.md)
+  is separate work.
+
 - Stream authorization caches allows per distinct (account ID, organisation
   slug), not per stream: streams with the same key share an entry. Entries
   stay after their streams close, until eviction; eviction is least recently

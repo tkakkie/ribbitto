@@ -22,7 +22,7 @@ func costTargets(r stepResult) bool {
 
 // Eligibility still needs the controlled run and a posting-baseline comparison.
 func costRecommendable(r stepResult) bool {
-	return costTargets(r) && ((r.arm == "" && len(r.queue) == 0) || !costQueueGrowing(r.queue, r.postingDuration))
+	return costTargets(r) && ((r.arm == "" && len(r.queue) == 0) || costQueueStability(r.queue, r.postingDuration, r.queueBound) == "pass")
 }
 
 func TestCostTargetsRequireCompleteWorkload(t *testing.T) {

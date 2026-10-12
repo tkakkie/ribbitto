@@ -81,11 +81,8 @@ func sampleCostQueue(ctx context.Context, q *costQueue, start time.Time, duratio
 	}
 }
 
-// Reject increasing ten-second means in either length or age over the last
-// thirty seconds of posting. Age catches a bounded queue stuck at capacity;
-// eventual drain cannot erase the overload observed while posting continued.
-// Missing one-second telemetry also disqualifies an arm, never proving stability.
-func costQueueGrowing(series []costQueueSample, duration time.Duration) bool {
+// Completeness is independent of trend: drain cannot replace posting samples.
+func costQueueComplete(series []costQueueSample, duration time.Duration) bool {
 	// Allow one lost tick plus scheduling jitter at either posting boundary,
 	// but do not let drain samples replace missing posting coverage.
 	const tolerance = 2 * time.Second
@@ -97,7 +94,7 @@ func costQueueGrowing(series []costQueueSample, duration time.Duration) bool {
 			if posting == 0 {
 				first = s.at
 			} else if s.at <= previous || s.at-previous > 2*time.Second {
-				return true
+				return false
 			}
 			posting++
 			previous = s.at
@@ -105,39 +102,26 @@ func costQueueGrowing(series []costQueueSample, duration time.Duration) bool {
 		}
 	}
 	if posting == 0 || first < 0 || first > tolerance || end < duration-tolerance || end > duration+tolerance {
-		return true
+		return false
 	}
-	if end < 30*time.Second {
-		return true
+	if duration <= 0 {
+		return false
 	}
-	var sums [3][2]float64
-	var counts [3]int
-	for _, s := range series {
-		offset := s.at - (end - 30*time.Second)
-		if s.phase != "posting" || offset < 0 || offset >= 30*time.Second {
-			continue
+	for start := time.Duration(0); start+10*time.Second <= duration; start += 10 * time.Second {
+		count := 0
+		for _, s := range series {
+			if s.phase == "posting" && s.at >= start && s.at < start+10*time.Second {
+				count++
+			}
 		}
-		bucket := int(offset / (10 * time.Second))
-		counts[bucket]++
-		for metric := range 2 {
-			sums[bucket][metric] += float64(s.values[metric])
-		}
-	}
-	for _, count := range counts {
 		if count < 8 {
-			return true // Each ten-second bucket needs at least eight one-second samples.
+			return false
 		}
 	}
-	for metric := range 2 {
-		if sums[0][metric]/float64(counts[0]) < sums[1][metric]/float64(counts[1]) &&
-			sums[1][metric]/float64(counts[1]) < sums[2][metric]/float64(counts[2]) {
-			return true
-		}
-	}
-	return false
+	return true
 }
 
-func reportCostQueue(t *testing.T, series []costQueueSample, duration time.Duration) {
+func reportCostQueue(t *testing.T, series []costQueueSample, duration time.Duration, bound int) {
 	if len(series) == 0 {
 		return
 	}
@@ -148,15 +132,28 @@ func reportCostQueue(t *testing.T, series []costQueueSample, duration time.Durat
 		}
 		t.Logf("queue: at=%s phase=%s length=%d oldest=%s coalesced=%d cancelled=%d", s.at, s.phase, s.values[0], time.Duration(s.values[1]), s.values[2], s.values[3])
 	}
-	t.Logf("queue summary [length oldest-ns coalesced cancelled]: min=%v max=%v final=%v growing=%t", low, high, series[len(series)-1].values, costQueueGrowing(series, duration))
+	t.Logf("queue summary [length oldest-ns coalesced cancelled]: min=%v max=%v final=%v stability=%s", low, high, series[len(series)-1].values, costQueueStability(series, duration, bound))
+	for start := 60 * time.Second; start+240*time.Second <= duration; start += 60 * time.Second {
+		t.Logf("queue sliding: earlier=[%s,%s) mean=%v later=[%s,%s) mean=%v", start, start+120*time.Second, costQueueMean(series, start, start+120*time.Second), start+120*time.Second, start+240*time.Second, costQueueMean(series, start+120*time.Second, start+240*time.Second))
+	}
+	if duration >= 600*time.Second {
+		t.Logf("queue cumulative: earlier=[1m,4m) mean=%v later=[7m,10m) mean=%v bound=%d", costQueueMean(series, 60*time.Second, 240*time.Second), costQueueMean(series, 420*time.Second, 600*time.Second), bound)
+	}
+	for _, width := range []time.Duration{10 * time.Second, 30 * time.Second} {
+		rise, at := costQueueSpike(series, duration, width)
+		t.Logf("queue spike: width=%s rise[length oldest-ns]=%v earlier-offsets=%v", width, rise, at)
+	}
 }
 
 func TestCostQueueGrowthDisqualifies(t *testing.T) {
 	for _, metric := range []int{0, 1} {
-		r := stepResult{postingDuration: 60 * time.Second, scheduled: 300, completed: 300, deliveries: 300}
-		for second := range 61 {
+		r := stepResult{postingDuration: 600 * time.Second, queueBound: 1000, scheduled: 300, completed: 300, deliveries: 300}
+		for second := range 601 {
 			s := costQueueSample{at: time.Duration(second) * time.Second, phase: "posting", values: [4]int64{10, 10}}
 			s.values[metric] = int64(second + 1)
+			if metric == 1 {
+				s.values[metric] *= int64(time.Millisecond)
+			}
 			r.queue = append(r.queue, s)
 		}
 		if !costTargets(r) {
@@ -165,7 +162,7 @@ func TestCostQueueGrowthDisqualifies(t *testing.T) {
 		if costRecommendable(r) {
 			t.Fatal("growing backlog accepted despite passing latency")
 		}
-		r.queue = append(r.queue, costQueueSample{at: 70 * time.Second, phase: "drain"})
+		r.queue = append(r.queue, costQueueSample{at: 610 * time.Second, phase: "drain"})
 		if costRecommendable(r) {
 			t.Fatal("eventual drain erased sustained posting growth")
 		}
@@ -184,17 +181,17 @@ func TestCostRecommendationRequiresTelemetry(t *testing.T) {
 		{at: 20 * time.Second, phase: "posting"}, {at: 30 * time.Second, phase: "posting"},
 	}
 	var stable []costQueueSample
-	for second := range 60 {
+	for second := range 600 {
 		stable = append(stable, costQueueSample{at: time.Duration(second) * time.Second, phase: "posting"})
 	}
-	stable = append(stable, costQueueSample{at: 60 * time.Second, phase: "drain"})
+	stable = append(stable, costQueueSample{at: 600 * time.Second, phase: "drain"})
 	negativeStart := append([]costQueueSample(nil), stable...)
 	negativeStart[0].at = -time.Second
 	duplicate := append([]costQueueSample{stable[0]}, stable...)
 	reordered := append([]costQueueSample(nil), stable...)
 	reordered[10], reordered[11] = reordered[11], reordered[10]
 	var overrun []costQueueSample
-	for second := range 65 {
+	for second := range 605 {
 		overrun = append(overrun, costQueueSample{at: time.Duration(second) * time.Second, phase: "posting"})
 	}
 	without := func(skip func(int) bool) []costQueueSample {
@@ -213,29 +210,29 @@ func TestCostRecommendationRequiresTelemetry(t *testing.T) {
 			duration time.Duration
 			want     bool
 		}{
-			{"nil", nil, 60 * time.Second, false}, {"empty", []costQueueSample{}, 60 * time.Second, false},
+			{"nil", nil, 600 * time.Second, false}, {"empty", []costQueueSample{}, 600 * time.Second, false},
 			{"short", sparse[:3], 30 * time.Second, false},
-			{"drain-only", []costQueueSample{{at: 60 * time.Second, phase: "drain"}}, 60 * time.Second, false},
+			{"drain-only", []costQueueSample{{at: 600 * time.Second, phase: "drain"}}, 600 * time.Second, false},
 			{"missing-bucket", []costQueueSample{sparse[0], sparse[2], sparse[3]}, 30 * time.Second, false},
 			{"four-points", sparse, 30 * time.Second, false},
 			{"missing-duration", stable, 0, false},
-			{"negative-start", negativeStart, 60 * time.Second, false},
-			{"late-start", stable[3:], 60 * time.Second, false},
-			{"early-stop", without(func(i int) bool { return i > 40 && i < 60 }), 60 * time.Second, false},
-			{"posting-overrun", overrun, 60 * time.Second, false},
-			{"duplicate", duplicate, 60 * time.Second, false},
-			{"reordered", reordered, 60 * time.Second, false},
-			{"missing-stretch", without(func(i int) bool { return i >= 10 && i < 25 }), 60 * time.Second, false},
+			{"negative-start", negativeStart, 600 * time.Second, false},
+			{"late-start", stable[3:], 600 * time.Second, false},
+			{"early-stop", without(func(i int) bool { return i > 400 && i < 600 }), 600 * time.Second, false},
+			{"posting-overrun", overrun, 600 * time.Second, false},
+			{"duplicate", duplicate, 600 * time.Second, false},
+			{"reordered", reordered, 600 * time.Second, false},
+			{"missing-stretch", without(func(i int) bool { return i >= 10 && i < 25 }), 600 * time.Second, false},
 			// These isolated omissions keep gaps at two seconds but leave only
-			// seven samples in the first guard bucket [29s,39s).
-			{"thin-bucket", without(func(i int) bool { return i == 31 || i == 33 || i == 35 }), 60 * time.Second, false},
-			{"stable", stable, 60 * time.Second, true},
-			{"tolerated-start", stable[2:], 60 * time.Second, true},
-			{"tolerated-end", without(func(i int) bool { return i == 59 }), 60 * time.Second, true},
-			{"tolerated-gaps-and-bucket", without(func(i int) bool { return i == 31 || i == 33 }), 60 * time.Second, true},
+			// seven samples in the planned bucket [30s,40s).
+			{"thin-bucket", without(func(i int) bool { return i == 31 || i == 33 || i == 35 }), 600 * time.Second, false},
+			{"stable", stable, 600 * time.Second, true},
+			{"tolerated-start", stable[2:], 600 * time.Second, true},
+			{"tolerated-end", without(func(i int) bool { return i == 599 }), 600 * time.Second, true},
+			{"tolerated-gaps-and-bucket", without(func(i int) bool { return i == 31 || i == 33 }), 600 * time.Second, true},
 		} {
 			t.Run(arm+"/"+tt.name, func(t *testing.T) {
-				r := stepResult{arm: arm, queue: tt.series, postingDuration: tt.duration, scheduled: 300, completed: 300, deliveries: 300}
+				r := stepResult{arm: arm, queue: tt.series, postingDuration: tt.duration, queueBound: 1000, scheduled: 300, completed: 300, deliveries: 300}
 				if !costTargets(r) {
 					t.Fatal("telemetry changed the separate latency verdict")
 				}

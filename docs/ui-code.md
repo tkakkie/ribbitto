@@ -20,6 +20,7 @@ Today's shared controls:
 | `textInput` | `internal/web/view/controls.templ` | a single-line text input; the caller supplies its label |
 | `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up) |
 | `unreadBadge` | `internal/web/view/channel.templ` | an unread count with its screen-reader text |
+| `Icon` | `internal/web/view/icon.templ` | a decorative Fluent icon from the vendored sprite ([Icons](#icons)) |
 
 - **Links navigate, buttons act.** Going somewhere is an `<a href>`;
   anything that changes state is a submit button in a form, even when it
@@ -69,3 +70,19 @@ The fixed widths of the desktop layout, and the block shape
 built-in utilities, so no z-index tokens are added: `z-10` for something
 sticky inside a block, `z-20` for a panel over content, `z-30` for menus
 and popovers, `z-40` for dialogs.
+
+## Icons
+
+Use the shared `Icon` templ component in `internal/web/view/icon.templ`:
+`@Icon("arrow-up-regular", 20)`. Names are string literals, checked against
+the embedded sprite even in templates not rendered by page fixtures. The
+size is in CSS pixels; width and height reserve the space before loading.
+Icons inherit text colour through `currentColor` and never need inline CSS.
+Use Regular at 20 px normally; Filled is reserved for a selected state.
+The available names, pinned source, licence and rebuild steps are in
+[`web/static/vendor/README.md`](../web/static/vendor/README.md).
+
+Icons are decorative (`aria-hidden="true"`, `focusable="false"`). Keep a
+control's text label, or give an icon-only button an `aria-label`; the icon
+never supplies its accessible name. “Load older messages” uses the arrow-up
+icon and keeps its text and paging contract.

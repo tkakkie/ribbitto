@@ -8,7 +8,7 @@ the hash is recomputed per request, so rebuilt CSS appears without a
 restart.
 
 Fluent icons use a versioned, same-origin SVG sprite in `web/static/vendor`
-through the shared `Icon` templ component ([UI convention](../ui.md#icons)).
+through the shared `Icon` templ component ([UI convention](../ui-code.md#icons)).
 The sprite is embedded and served like the other assets; its external `<use>`
 references require no change to the Content Security Policy below.
 

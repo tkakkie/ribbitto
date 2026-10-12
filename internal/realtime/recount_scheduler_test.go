@@ -40,6 +40,18 @@ func schedulerStarts(t *testing.T, starts chan int, want ...int) {
 	}
 }
 
+func schedulerClosedMailbox(t *testing.T, r *realtime.RecountRegistration) {
+	t.Helper()
+	select {
+	case result, ok := <-r.Completions():
+		if ok {
+			t.Fatalf("cancelled mailbox delivered %+v, want ok == false", result)
+		}
+	default:
+		t.Fatal("cancelled mailbox is still open, want receive with ok == false")
+	}
+}
+
 func TestRecountSchedulerFIFOAndMailbox(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		q := realtime.NewRecountScheduler(1, 3)
@@ -79,6 +91,8 @@ func TestRecountSchedulerFIFOAndMailbox(t *testing.T) {
 		if result.Version != 3 || string(result.Outgoing.Data) != "computed" || result.Err == nil {
 			t.Fatalf("completion = %+v, want latest version 3 with output and error", result)
 		}
+		b.Cancel() // Its unread completion must be discarded before closure.
+		schedulerClosedMailbox(t, b)
 	})
 }
 
@@ -120,11 +134,13 @@ func TestRecountSchedulerCancel(t *testing.T) {
 		if computeCtx.Err() != context.Canceled {
 			t.Fatal("Cancel must cancel computation context")
 		}
+		schedulerClosedMailbox(t, r)
+		if q.Register() != nil {
+			t.Fatal("cancelled computation must retain registration capacity until return")
+		}
 		gate.open()
 		synctest.Wait()
-		if result, ok := <-r.Completions(); ok {
-			t.Fatalf("cancelled mailbox delivered %+v", result)
-		}
+		schedulerClosedMailbox(t, r)
 		if r.Submit(2, func(context.Context) (realtime.Outgoing, error) { return realtime.Outgoing{}, nil }) {
 			t.Fatal("cancelled registration accepted work")
 		}
@@ -132,6 +148,54 @@ func TestRecountSchedulerCancel(t *testing.T) {
 			t.Fatal("returned computation must release registration capacity")
 		}
 		q.Close()
+		if q.Register() != nil {
+			t.Fatal("closed scheduler accepted registration")
+		}
+	})
+}
+
+func TestRecountSchedulerCloseWaitsForComputation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := realtime.NewRecountScheduler(1, 1)
+		t.Cleanup(q.Close)
+		r := q.Register()
+		starts := make(chan int, 1)
+		gate := schedulerGate(t, starts, 1)
+		var computeCtx context.Context
+		r.Submit(1, func(ctx context.Context) (realtime.Outgoing, error) {
+			computeCtx = ctx
+			return gate.compute(ctx) // Ignores cancellation until explicitly released.
+		})
+		schedulerStarts(t, starts, 1)
+		if q.Register() != nil {
+			t.Fatal("blocked computation must occupy registration capacity")
+		}
+		closed := make(chan struct{})
+		go func() {
+			q.Close()
+			close(closed)
+		}()
+		synctest.Wait()
+		if computeCtx.Err() != context.Canceled {
+			t.Fatal("Close must cancel computation context")
+		}
+		select {
+		case <-closed:
+			t.Fatal("Close returned before blocked computation returned")
+		default:
+		}
+		if q.Register() != nil {
+			t.Fatal("closing scheduler accepted registration while computation was blocked")
+		}
+		schedulerClosedMailbox(t, r)
+		gate.open()
+		synctest.Wait()
+		select {
+		case <-closed:
+		default:
+			t.Fatal("Close did not return after computation returned")
+		}
+		schedulerClosedMailbox(t, r)
 		if q.Register() != nil {
 			t.Fatal("closed scheduler accepted registration")
 		}

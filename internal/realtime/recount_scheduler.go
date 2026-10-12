@@ -90,7 +90,9 @@ func (r *RecountRegistration) Submit(version uint64, compute func(context.Contex
 }
 
 // Completions is a one-slot mailbox; an unread result is replaced on completion.
-// Cancel drains and closes it. A result already received remains caller-owned.
+// Cancel or scheduler Close drains and closes it, suppressing late results:
+// subsequent receives return a zero RecountCompletion and ok == false.
+// A result already received remains caller-owned.
 func (r *RecountRegistration) Completions() <-chan RecountCompletion { return r.done }
 
 func (q *RecountScheduler) work() {

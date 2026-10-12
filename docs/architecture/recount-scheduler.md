@@ -26,8 +26,11 @@ version acceptance and authorization immediately before sending.
 
 `Cancel` is idempotent: it removes pending work and queued eligibility, cancels
 the computation context, drains and closes the mailbox, and suppresses late
-results. A result already received belongs to the caller. A running computation
-retains both worker and registration capacity until actual return, even if it
-ignores cancellation. `Close` refuses new work, cancels every registration and
-waits for actual returns; uncooperative computations can delay it. These lifecycle
-operations support deterministic cleanup; application shutdown is separate work.
+results. After `Cancel` or scheduler `Close` drains and closes the mailbox,
+receives return a zero `RecountCompletion` with `ok == false`, even if a
+computation finishes later. A result already received belongs to the caller.
+A running computation retains both worker and registration capacity until actual
+return, even if it ignores cancellation. `Close` refuses new work, cancels every
+registration and waits for actual returns; uncooperative computations can delay
+it. These lifecycle operations support deterministic cleanup; application shutdown
+is separate work.

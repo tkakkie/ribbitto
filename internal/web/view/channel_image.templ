@@ -1,0 +1,24 @@
+package view
+
+import "fmt"
+
+// The header is above the fold; sidebar entries may scroll out of view.
+templ channelImage(src string, header bool) {
+	// The pinned generator clears children even for context-free components.
+	{{ _ = ctx }}
+	{{ size := 24 }}
+	if header {
+		{{ size = 32 }}
+	}
+	<img
+		src={ src }
+		width={ fmt.Sprint(size) }
+		height={ fmt.Sprint(size) }
+		alt=""
+		if !header {
+			loading="lazy"
+		}
+		decoding="async"
+		class="inline-block shrink-0 rounded-md align-middle"
+	/>
+}

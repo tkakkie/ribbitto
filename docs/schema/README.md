@@ -10,7 +10,7 @@
 | [public.session](public.session.md) | 5 |  | BASE TABLE |
 | [public.member](public.member.md) | 7 |  | BASE TABLE |
 | [public.setup](public.setup.md) | 3 |  | BASE TABLE |
-| [public.channel](public.channel.md) | 7 |  | BASE TABLE |
+| [public.channel](public.channel.md) | 8 |  | BASE TABLE |
 | [public.message](public.message.md) | 9 |  | BASE TABLE |
 | [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
 | [public.topic](public.topic.md) | 6 |  | BASE TABLE |
@@ -101,6 +101,7 @@ erDiagram
   timestamp_with_time_zone created_at
   uuid default_topic_id FK
   boolean default_topic_is_default FK
+  text image
 }
 "public.message" {
   uuid id

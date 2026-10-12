@@ -12,6 +12,12 @@ through the shared `Icon` templ component ([UI convention](../ui-code.md#icons))
 The sprite is embedded and served like the other assets; its external `<use>`
 references require no change to the Content Security Policy below.
 
+Channel illustrations ship from the embedded `channel-images-v1` directory
+with versioned URLs. Handlers resolve stored keys or choose a stable
+ID-based fallback for NULL or unknown keys, then pass the URL to the shared
+view component. It reserves 24 px in sidebar rows and 32 px in the header,
+uses empty alt text and asynchronous decoding, and lazy-loads sidebar images.
+
 ## Content Security Policy
 
 HTML routes are registered on the `routes` mux

@@ -6,9 +6,9 @@ import (
 	"io/fs"
 )
 
-//go:embed css vendor brand *.js
+//go:embed css vendor brand *.js channel-images-v1
 var files embed.FS
 
 // FS returns the embedded assets including CSS, vendored libraries, brand
-// images and application scripts.
+// images, channel illustrations and application scripts.
 func FS() fs.FS { return files }

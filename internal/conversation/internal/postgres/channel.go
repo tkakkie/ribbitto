@@ -79,5 +79,5 @@ func (s *ChannelStore) GetDefaultChannel(ctx context.Context, organizationID ker
 }
 
 func channelFromRow(row sqlcgen.Channel) conversation.Channel {
-	return conversation.Channel{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, DefaultTopicID: row.DefaultTopicID.Bytes, Name: row.Name, IsDefault: row.IsDefault, CreatedAt: row.CreatedAt.Time}
+	return conversation.Channel{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, DefaultTopicID: row.DefaultTopicID.Bytes, Name: row.Name, Image: row.Image.String, IsDefault: row.IsDefault, CreatedAt: row.CreatedAt.Time}
 }

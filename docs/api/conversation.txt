@@ -15,6 +15,7 @@ type Channel struct // Channel is a conversation identified by ID; Name is only 
   field CreatedAt time.Time
   field DefaultTopicID github.com/tkakkie/ribbitto/internal/kernel.ID
   field ID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Image string
   field IsDefault bool
   field Name string
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID

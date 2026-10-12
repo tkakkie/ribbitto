@@ -63,6 +63,7 @@ erDiagram
   timestamp_with_time_zone created_at
   uuid default_topic_id FK
   boolean default_topic_is_default FK
+  text image
 }
 "public.message" {
   uuid id

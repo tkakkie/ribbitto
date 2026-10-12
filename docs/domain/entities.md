@@ -36,7 +36,7 @@ erDiagram
 | `session` | exists | SHA-256 hash of the session token, expiry |
 | `setup` | exists | boolean key fixed to `true`, `organization_id`, `completed_at` |
 | `member` | exists | `organization_id`, `account_id`, role (`owner` or `member`), `joined_event_seq`, `handle` (unique per organisation) |
-| `channel` | exists | `id`, `organization_id`, `name`, `is_default`, `created_at`, `default_topic_id`, `default_topic_is_default` |
+| `channel` | exists | `id`, `organization_id`, `name`, nullable `image` (illustration key; NULL or unknown keys use a stable ID-based image), `is_default`, `created_at`, `default_topic_id`, `default_topic_is_default` |
 | `topic` | exists | `id`, `organization_id`, `channel_id`, `name` (NULL for the default topic), `is_default`, `created_at` ([`topics.md`](topics.md)) |
 | `channel_read` | exists | `organization_id`, `channel_id`, `member_id` (one member's lock row in a channel; [`unread.md`](unread.md)) |
 | `read_range` | exists | `organization_id`, `channel_id`, `member_id`, `lo`, `hi` (read messages: `lo ≤ event_seq < hi`) |

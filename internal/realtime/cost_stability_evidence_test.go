@@ -136,65 +136,101 @@ func TestCostStabilityArchiveReplay(t *testing.T) {
 	if dir == "" {
 		t.Skip("set RIBBITTO_STABILITY_ARCHIVE to the archived five-minute directory")
 	}
-	for _, rate := range []int{5, 20} {
-		for round := 1; round <= 3; round++ {
-			name := fmt.Sprintf("w-%d-%d.log", rate, round)
-			t.Run(name, func(t *testing.T) {
-				f, err := os.Open(filepath.Join(dir, name))
+	type spike struct {
+		rise [2]float64
+		at   [2]time.Duration
+	}
+	// The documented rises round entries and milliseconds to three decimals.
+	// Allow half the last decimal plus float rounding; offsets remain exact.
+	tolerance := [2]float64{0.000500001, 500.001}
+	for _, tt := range []struct {
+		name   string
+		spikes [2]spike // 10-second, then 30-second; each is length, oldest age (ns).
+	}{
+		{"w-5-1.log", [2]spike{
+			{[2]float64{237.300, 71.661e6}, [2]time.Duration{210 * time.Second, 210 * time.Second}},
+			{[2]float64{120.333, 36.775e6}, [2]time.Duration{130 * time.Second, 130 * time.Second}},
+		}},
+		{"w-5-2.log", [2]spike{
+			{[2]float64{274.600, 78.341e6}, [2]time.Duration{156 * time.Second, 156 * time.Second}},
+			{[2]float64{194.167, 59.282e6}, [2]time.Duration{191 * time.Second, 191 * time.Second}},
+		}},
+		{"w-5-3.log", [2]spike{
+			{[2]float64{237.600, 73.836e6}, [2]time.Duration{122 * time.Second, 122 * time.Second}},
+			{[2]float64{149.133, 42.078e6}, [2]time.Duration{146 * time.Second, 146 * time.Second}},
+		}},
+		{"w-20-1.log", [2]spike{
+			{[2]float64{285.700, 114.357e6}, [2]time.Duration{90 * time.Second, 91 * time.Second}},
+			{[2]float64{208.267, 88.803e6}, [2]time.Duration{71 * time.Second, 71 * time.Second}},
+		}},
+		{"w-20-2.log", [2]spike{
+			{[2]float64{296.100, 136.591e6}, [2]time.Duration{280 * time.Second, 280 * time.Second}},
+			{[2]float64{153.433, 88.772e6}, [2]time.Duration{203 * time.Second, 203 * time.Second}},
+		}},
+		{"w-20-3.log", [2]spike{
+			{[2]float64{350.800, 118.017e6}, [2]time.Duration{244 * time.Second, 124 * time.Second}},
+			{[2]float64{233.133, 85.651e6}, [2]time.Duration{224 * time.Second, 216 * time.Second}},
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := os.Open(filepath.Join(dir, tt.name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := f.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
+			var series []costQueueSample
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				_, line, found := strings.Cut(scanner.Text(), "queue: at=")
+				if !found {
+					continue
+				}
+				var offset, age string
+				var s costQueueSample
+				if n, err := fmt.Sscanf(line, "%s phase=%s length=%d oldest=%s coalesced=%d cancelled=%d", &offset, &s.phase, &s.values[0], &age, &s.values[2], &s.values[3]); err != nil || n != 6 {
+					t.Fatalf("invalid queue record: %q: %v", line, err)
+				}
+				s.at, err = time.ParseDuration(offset)
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer func() {
-					if err := f.Close(); err != nil {
-						t.Error(err)
-					}
-				}()
-				var series []costQueueSample
-				scanner := bufio.NewScanner(f)
-				for scanner.Scan() {
-					_, line, found := strings.Cut(scanner.Text(), "queue: at=")
-					if !found {
-						continue
-					}
-					var offset, age string
-					var s costQueueSample
-					if n, err := fmt.Sscanf(line, "%s phase=%s length=%d oldest=%s coalesced=%d cancelled=%d", &offset, &s.phase, &s.values[0], &age, &s.values[2], &s.values[3]); err != nil || n != 6 {
-						t.Fatalf("invalid queue record: %q: %v", line, err)
-					}
-					s.at, err = time.ParseDuration(offset)
-					if err != nil {
-						t.Fatal(err)
-					}
-					oldest, err := time.ParseDuration(age)
-					if err != nil {
-						t.Fatal(err)
-					}
-					s.values[1] = int64(oldest)
-					series = append(series, s)
-				}
-				if err := scanner.Err(); err != nil {
+				oldest, err := time.ParseDuration(age)
+				if err != nil {
 					t.Fatal(err)
 				}
-				if !costQueueComplete(series, 300*time.Second) {
-					t.Fatal("archive lacks complete 300s posting coverage")
-				}
-				if got := costQueueStability(series, 300*time.Second, 5000); got != "inconclusive" {
-					t.Fatalf("archived 300s stability = %s, want inconclusive", got)
-				}
-				r := stepResult{arm: "async40", queue: series, postingDuration: 300 * time.Second, queueBound: 5000, scheduled: 300, completed: 300, deliveries: 300}
-				if costRecommendable(r) {
-					t.Fatal("archived short window became recommendation-eligible")
-				}
-				for _, width := range []time.Duration{10 * time.Second, 30 * time.Second} {
-					rise, at := costQueueSpike(series, 300*time.Second, width)
-					for metric := range rise {
-						if math.IsNaN(rise[metric]) || rise[metric] <= 0 || at[metric] < 60*time.Second || at[metric]+2*width > 300*time.Second {
-							t.Fatalf("invalid archived spike: width=%s rise=%v offsets=%v", width, rise, at)
-						}
+				s.values[1] = int64(oldest)
+				series = append(series, s)
+			}
+			if err := scanner.Err(); err != nil {
+				t.Fatal(err)
+			}
+			if !costQueueComplete(series, 300*time.Second) {
+				t.Fatal("archive lacks complete 300s posting coverage")
+			}
+			if got := costQueueStability(series, 300*time.Second, 5000); got != "inconclusive" {
+				t.Fatalf("archived 300s stability = %s, want inconclusive", got)
+			}
+			r := stepResult{arm: "async40", queue: series, postingDuration: 300 * time.Second, queueBound: 5000, scheduled: 300, completed: 300, deliveries: 300}
+			if costRecommendable(r) {
+				t.Fatal("archived short window became recommendation-eligible")
+			}
+			for i, width := range []time.Duration{10 * time.Second, 30 * time.Second} {
+				rise, at := costQueueSpike(series, 300*time.Second, width)
+				for metric, label := range []string{"length", "oldest-ns"} {
+					want := tt.spikes[i]
+					if math.IsNaN(rise[metric]) || math.Abs(rise[metric]-want.rise[metric]) > tolerance[metric] {
+						t.Errorf("width=%s %s rise=%g, want %g ± %g", width, label, rise[metric], want.rise[metric], tolerance[metric])
 					}
-					t.Logf("stability=inconclusive width=%s rise[length oldest-ns]=%v earlier-offsets=%v", width, rise, at)
+					if at[metric] != want.at[metric] {
+						t.Errorf("width=%s %s offset=%s, want %s", width, label, at[metric], want.at[metric])
+					}
 				}
-			})
-		}
+				t.Logf("stability=inconclusive width=%s rise[length oldest-ns]=%v earlier-offsets=%v", width, rise, at)
+			}
+		})
 	}
 }

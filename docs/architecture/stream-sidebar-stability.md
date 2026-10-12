@@ -111,12 +111,12 @@ RIBBITTO_STABILITY_ARCHIVE="$archive_dir" go test -race -count=1 -v \
 rm -rf "$archive_dir"
 ```
 
-Replay ran with the prescribed repository-local Go caches and logs extracted
-into `bin/stability-scratch`. The opt-in replay preserves offsets/phases,
-requires complete 300-second coverage and asserts inconclusive/ineligibility.
-All six passed, without extending the logs or tuning thresholds.
-The largest positive adjacent-mean rises follow; ages in ms, rounded to three
-decimals. Each offset pair is length / age, at the earlier period's start.
+Replay passed all six logs with repository-local Go caches, both from extracted
+logs and the read-only measurement archive. It preserves offsets/phases and
+asserts complete 300-second coverage, inconclusive/ineligibility and every rise
+and offset below. Ages are in ms; rises round to three decimals. Absolute rise
+tolerances are 0.000500001 entries / 500.001 ns (half the last decimal plus float
+rounding). Offsets match exactly: length / age, at the earlier period's start.
 
 | Window | 10 s rise length / age | Offsets | 30 s rise length / age | Offsets |
 |---|---|---|---|---|
@@ -153,6 +153,8 @@ Selectors in this table have the prefix `^TestCostStability` and suffix `$`.
 | `EvidenceBoundaries/age-floor` | Age `>` → `>=` | `delta=0 stability = reject, want pass` |
 | `EvidenceCoverage` | Short window returns pass | `duration=0s stability = pass, want inconclusive` |
 | `ArchiveReplay` | Minimum duration 300 s | `archived 300s stability = pass, want inconclusive` |
+| `ArchiveReplay` | Spike width +1 s | `width=10s length offset=3m29s, want 3m30s` (`w-5-1`) |
+| `ArchiveReplay` | Spike slide 1 s → 2 s | `width=30s length offset=3m10s, want 3m11s` (`w-5-2`) |
 | `EvidenceCoverage/warm-up-gap` | Bypass completeness | `incomplete stability = pass, want reject` |
 | `EvidenceCoverage/invalid-bound` | Remove positive-bound check | `incomplete stability = pass, want reject` |
 

@@ -12,6 +12,10 @@ func TestAvatarInitial(t *testing.T) {
 		{"English", "Alice", "alice", "A"},
 		{"Japanese", "田中", "tanaka", "田"},
 		{"handle fallback", "", "alice", "a"},
+		{"combining accent", "A\u0301lice", "alice", "A\u0301"},
+		{"emoji modifier", "👍🏽friend", "friend", "👍🏽"},
+		{"flag", "🇯🇵friend", "friend", "🇯🇵"},
+		{"joined emoji", "", "👩‍💻dev", "👩‍💻"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := avatarInitial(tt.displayName, tt.handle); got != tt.want {

@@ -46,6 +46,7 @@ func TestMessageAuthorAvatar(t *testing.T) {
 		{"display name", "田中", "田"},
 		{"empty name", "", "a"},
 		{"legacy blank name", "ㅤ", "a"},
+		{"multi-code-point initial", "A\u0301lice", "A\u0301"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			entry := conversation.Entry{Message: conversation.Message{

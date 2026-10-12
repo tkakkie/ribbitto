@@ -1,6 +1,9 @@
 package view
 
-import "github.com/tkakkie/ribbitto/internal/kernel"
+import (
+	"github.com/rivo/uniseg"
+	"github.com/tkakkie/ribbitto/internal/kernel"
+)
 
 // Avatar renders a decorative initial beside the author's visible name.
 templ Avatar(memberID kernel.ID, displayName, handle string) {
@@ -14,9 +17,9 @@ func avatarInitial(displayName, handle string) string {
 	if displayName == "" {
 		displayName = handle
 	}
-	// The first rune, as the app bar and the channel tiles use: the avatar is
-	// decorative, so a split emoji is not worth a dependency.
-	return initial(displayName)
+	// A rune would split combining accents, emoji modifiers and flags.
+	cluster, _, _, _ := uniseg.FirstGraphemeClusterInString(displayName, -1)
+	return cluster
 }
 
 func avatarColour(id kernel.ID) string {

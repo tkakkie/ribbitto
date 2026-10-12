@@ -36,7 +36,7 @@ Today's shared controls:
   #873, the panel with #874, the channel image with #875. When a page is
   restyled, its repeated looks (links, for example) become components too.
 
-Message avatars use the first character of the display name,
+Message avatars use the first grapheme of the display name (via `uniseg`),
 falling back to the handle when the web layer blanks a legacy name. Text
 precedes the avatar in both page and live markup; a fixed gutter reserves
 its space without loading an image or web font.

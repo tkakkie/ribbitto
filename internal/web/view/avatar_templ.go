@@ -8,7 +8,10 @@ package view
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "github.com/tkakkie/ribbitto/internal/kernel"
+import (
+	"github.com/rivo/uniseg"
+	"github.com/tkakkie/ribbitto/internal/kernel"
+)
 
 // Avatar renders a decorative initial beside the author's visible name.
 func Avatar(memberID kernel.ID, displayName, handle string) templ.Component {
@@ -58,7 +61,7 @@ func Avatar(memberID kernel.ID, displayName, handle string) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(avatarInitial(displayName, handle))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/avatar.templ`, Line: 9, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/avatar.templ`, Line: 12, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -76,9 +79,9 @@ func avatarInitial(displayName, handle string) string {
 	if displayName == "" {
 		displayName = handle
 	}
-	// The first rune, as the app bar and the channel tiles use: the avatar is
-	// decorative, so a split emoji is not worth a dependency.
-	return initial(displayName)
+	// A rune would split combining accents, emoji modifiers and flags.
+	cluster, _, _, _ := uniseg.FirstGraphemeClusterInString(displayName, -1)
+	return cluster
 }
 
 func avatarColour(id kernel.ID) string {

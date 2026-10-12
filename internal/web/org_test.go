@@ -504,10 +504,16 @@ func TestChannelRendering(t *testing.T) {
 				if n.DataAtom != atom.A || attr(n, "href") != view.ChannelURL("acme", kernel.ID{1}) {
 					t.Fatal("wrong current channel link")
 				}
-				for _, class := range []string{"text-on-selected", "border-l-3", "border-brand"} {
-					if !slices.Contains(strings.Fields(attr(n, "class")), class) {
-						t.Errorf("selected link lacks %s", class)
-					}
+				if !slices.Contains(strings.Fields(attr(n, "class")), "text-on-selected") {
+					t.Error("selected link lacks text-on-selected")
+				}
+				// The brand pill marks the current row besides its text colour.
+				pill := false
+				for c := range n.Descendants() {
+					pill = pill || c.DataAtom == atom.Span && slices.Contains(strings.Fields(attr(c, "class")), "bg-brand")
+				}
+				if !pill {
+					t.Error("selected link lacks the brand selection pill")
 				}
 			}
 		}

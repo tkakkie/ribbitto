@@ -1,0 +1,92 @@
+package view
+
+import (
+	"fmt"
+
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
+
+// appBar is the app's own navigation block: the logo, Home and, at the
+// bottom, the signed-in member's account menu. Items for features that do
+// not exist yet arrive with those features.
+templ appBar(page ChannelPage) {
+	<nav aria-label={ i18n.T(ctx, "app.navigation") } class="flex w-rail shrink-0 flex-col items-center gap-1 rounded-xl bg-rail py-3 shadow-block">
+		<span class="mb-3">
+			@brandLogo(36, "")
+		</span>
+		// Home marks the current section (aria-current="true"); "page" stays
+		// with the one conversation link in the sidebar.
+		<ul class="flex w-full flex-col items-center">
+			<li>
+				<a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/") } aria-current="true" class="flex w-16 flex-col items-center gap-1 py-1 text-caption font-semibold text-on-selected">
+					<span class="flex h-8 w-11 items-center justify-center rounded-lg bg-selected text-brand">
+						@Icon("home-filled", 20)
+					</span>
+					{ i18n.T(ctx, "app.home") }
+				</a>
+			</li>
+		</ul>
+		<div class="mt-auto">
+			// The menu is an HTML popover: it opens, closes on Escape and on an
+			// outside click, and returns focus without JavaScript.
+			<button type="button" popovertarget="account-menu" aria-label={ i18n.T(ctx, "account.menu") } class="flex size-11 items-center justify-center rounded-full hover:bg-hover">
+				<span aria-hidden="true" class="flex size-9 items-center justify-center rounded-full bg-selected text-title font-semibold text-on-selected">{ initial(accountName(page)) }</span>
+			</button>
+			<div id="account-menu" popover class="inset-auto bottom-3 left-24 m-0 w-64 rounded-xl border border-border bg-surface p-3 text-body text-fg shadow-popover">
+				<p class="break-words text-caption text-muted">
+					// templ drops the white space before a component call but keeps
+					// it after one, so only the first space is part of the text.
+					{ i18n.T(ctx, "hello.signed_in_as") + " " }
+					@MemberName(page.DisplayName, page.Handle)
+					{ "· " + i18n.T(ctx, "org.role." + page.Role) }
+				</p>
+				<div class="mt-3">
+					@SignOutButton()
+				</div>
+			</div>
+		</div>
+	</nav>
+}
+
+// channelCreateForm opens from the sidebar's add button as a popover; after a
+// failed submit it is rendered in place instead, so the error shows and can
+// be reached without JavaScript.
+templ channelCreateForm(page ChannelPage, popover bool) {
+	<form
+		id="channel-create"
+		method="post"
+		action={ "/organizations/" + page.Organization.Slug + "/channels" }
+		if popover {
+			popover
+		}
+		// A display utility would override the browser's hiding of a closed
+		// popover, so the popover form is flex only while open.
+		class={ "flex-col gap-2 text-body text-fg", templ.KV("hidden open:flex inset-auto left-24 top-20 m-0 w-72 rounded-xl border border-border bg-surface p-4 shadow-popover", popover), templ.KV("flex mx-1 mt-3 rounded-xl bg-surface p-3 shadow-block", !popover) }
+	>
+		<label for="channel-name" class="font-semibold">{ i18n.T(ctx, "channel.name") }</label>
+		@textInput(inputProps{ID: "channel-name", Name: "name", Value: page.Name, Required: true, Invalid: fmt.Sprint(page.Error != ""), DescribedBy: "channel-name-help"})
+		if page.Error != "" {
+			<p id="channel-name-help" role="alert" class="text-danger">{ i18n.T(ctx, page.Error) }</p>
+		} else {
+			<p id="channel-name-help" class="text-caption text-muted">{ i18n.T(ctx, "channel.name_help") }</p>
+		}
+		@submitButton(buttonPrimary, "channel.create")
+	</form>
+}
+
+// accountName is what the account button's initial comes from: the display
+// name, or the handle when the name is empty.
+func accountName(page ChannelPage) string {
+	if page.DisplayName != "" {
+		return page.DisplayName
+	}
+	return page.Handle
+}
+
+// initial is the first character of a name, for a placeholder tile.
+func initial(name string) string {
+	for _, r := range name {
+		return string(r)
+	}
+	return ""
+}

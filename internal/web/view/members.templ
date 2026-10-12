@@ -42,7 +42,7 @@ templ PresenceIndicator(id kernel.ID, online, live bool) {
 }
 
 templ membersPanel(page ChannelPage) {
-	<main id="members-panel" class="flex min-w-0 flex-1 flex-col overflow-y-auto bg-bg">
+	<main id="members-panel" class="flex min-w-0 flex-1 flex-col overflow-y-auto rounded-xl bg-bg shadow-block">
 		<header class="border-b border-border px-6 py-3">
 			<h1 class="break-words text-title font-semibold">{ i18n.T(ctx, "people.title") + " · " + page.Current.Name }</h1>
 			<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "people.back") }</a>

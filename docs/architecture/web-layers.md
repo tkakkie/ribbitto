@@ -97,8 +97,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
   Its hidden, non-focusable `#stream-sink` receives `sidebar,presence` with
   `hx-swap="none"`: htmx applies payload entries out of band by DOM id, ignoring
   entries absent from the page. Sidebar recounts use the page's list components,
-  replacing both lists whole and keeping an unlisted selection at its heading,
-  outside the 50 topic links. Member-dependent counts bypass the message cache.
+  replacing the channel list, topics nested, whole and keeping an unlisted selection at its heading,
+  outside the 50 topic links. Counts bypass the message cache.
   The sink is hidden from assistive technology.
   Only latest pages' `#message-items` receives `message,messages-moved`; moves
   replace feed IDs or remove/insert topic IDs within the loaded range. Replacements clear selection and refresh

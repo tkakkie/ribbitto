@@ -141,7 +141,8 @@ func TestSidebarCountsMarkup(t *testing.T) {
 					if count > 0 && !strings.Contains(attr(link, "class"), "font-semibold") {
 						t.Fatal("unread entry has no weight distinction")
 					}
-					assertUnreadBadge(t, n, lang, count)
+					// The entry's own link: a channel row also nests its topic rows.
+					assertUnreadBadge(t, link, lang, count)
 				}
 				if channels != 4 || topics != 50 {
 					t.Fatalf("entries: channels=%d topics=%d", channels, topics)
@@ -167,7 +168,9 @@ func assertUnreadBadge(t *testing.T, node *html.Node, lang string, count int64) 
 	t.Helper()
 	visible, accessible := "", ""
 	for n := range node.Descendants() {
-		if n.DataAtom == atom.Span && attr(n, "aria-hidden") == "true" {
+		// The badge pairs a hidden count with its screen-reader text; other
+		// decorative spans (the row's tile, the selection pill) are not it.
+		if n.DataAtom == atom.Span && attr(n, "aria-hidden") == "true" && hasSROnlyChild(n.Parent) {
 			if n.FirstChild != nil {
 				visible += n.FirstChild.Data
 			}
@@ -190,4 +193,13 @@ func assertUnreadBadge(t *testing.T, node *html.Node, lang string, count int64) 
 	if visible != want || accessible != label {
 		t.Fatalf("badge: visible=%q label=%q, want %q %q", visible, accessible, want, label)
 	}
+}
+
+func hasSROnlyChild(n *html.Node) bool {
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.DataAtom == atom.Span && attr(c, "class") == "sr-only" {
+			return true
+		}
+	}
+	return false
 }

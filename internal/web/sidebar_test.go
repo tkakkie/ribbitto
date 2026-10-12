@@ -17,6 +17,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 func assertSidebarMatchesPage(t *testing.T, page *html.Node, frame realtime.Outgoing) {
@@ -53,7 +54,20 @@ func assertSidebarMatchesPage(t *testing.T, page *html.Node, frame realtime.Outg
 			t.Fatalf("%s recount differs from reload: %s; want %s", id, &got, &want)
 		}
 	}
-	expected := 2
+	// The channel list carries the nested topic list (#872), so one target
+	// replaces both, and the topics must arrive inside it.
+	expected := 1
+	nested := false
+	for n := range doc.Descendants() {
+		if attr(n, "id") == "sidebar-topics" {
+			for p := n.Parent; p != nil; p = p.Parent {
+				nested = nested || attr(p, "id") == "sidebar-channels"
+			}
+		}
+	}
+	if !nested {
+		t.Fatal("sidebar frame lacks the topic list inside the channel list")
+	}
 	for n := range page.Descendants() {
 		if attr(n, "id") == "topic-heading-count" {
 			expected++
@@ -102,7 +116,8 @@ func TestSidebarRendererFreshLists(t *testing.T) {
 				ids = append(ids, id)
 			}
 			if id == view.ChannelDOMID(snapshot.Current.ID) || id == view.TopicDOMID(selected.ID) {
-				assertUnreadBadge(t, n, "en", count)
+				// The entry's own link: the channel row also nests its topics.
+				assertUnreadBadge(t, find(n, atom.A), "en", count)
 			}
 			if id == "topic-heading-count" {
 				headingFound = true

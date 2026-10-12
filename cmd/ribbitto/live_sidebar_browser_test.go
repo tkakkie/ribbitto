@@ -63,8 +63,17 @@ func TestLiveSidebarBrowser(t *testing.T) {
 	page.MustEval(`(source, channel, retained) => {
 		for (const id of [source, channel, retained]) {
 			const link = document.getElementById('link-' + id);
-			let badge = link.querySelector('[aria-hidden]');
-			if (!badge) { badge = document.createElement('span'); badge.setAttribute('aria-hidden', 'true'); link.append(badge); }
+			// A badge is its hidden count next to its screen-reader text; the
+			// row's other decorative parts are not it.
+			let badge = link.querySelector('.sr-only')?.previousElementSibling;
+			if (!badge) {
+				const wrap = document.createElement('span'), label = document.createElement('span');
+				badge = document.createElement('span');
+				badge.setAttribute('aria-hidden', 'true');
+				label.className = 'sr-only';
+				wrap.append(badge, label);
+				link.append(wrap);
+			}
 			badge.textContent = '999';
 		}
 		document.getElementById('link-' + channel).focus();
@@ -76,7 +85,7 @@ func TestLiveSidebarBrowser(t *testing.T) {
 	page.MustWait(`id => document.getElementById(id) && document.getElementById('sidebar-topics') !== window.previousList &&
 		!document.querySelector('.htmx-settling')`, destinationID)
 	if !page.MustEval(`(source, channel, retained, destination) => {
-		const badge = id => document.getElementById(id).querySelector('[aria-hidden]')?.textContent || '';
+		const badge = id => document.getElementById(id).querySelector('.sr-only')?.previousElementSibling?.textContent || '';
 		const ids = Array.from(document.querySelectorAll('[id]'), e => e.id);
 		return document.activeElement.id === 'link-' + channel && document.activeElement !== window.focusedLink &&
 			new Set(ids).size === ids.length && document.querySelectorAll('#sidebar-topics > li').length === 50 &&

@@ -46,9 +46,9 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   context ended. The stream wait returns it together with the parent's cause;
   the writer checks its parent context before delivery. A closed
   mailbox is disabled inside the wait. Completion wakes change neither the last
-  write nor the fixed recount deadline. `Stream.Run` passes nil, preserving
-  synchronous production delivery; [scheduler integration](recount-scheduler.md)
-  is separate work.
+  write nor the fixed recount deadline. `Stream.Recounts` optionally supplies
+  completions; nil preserves synchronous production delivery
+  ([scheduler integration](recount-scheduler.md)).
 
 - Stream authorization caches allows per distinct (account ID, organisation
   slug), not per stream: streams with the same key share an entry. Entries

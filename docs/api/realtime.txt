@@ -31,6 +31,7 @@ type EphemeralOwner interface // EphemeralOwner reads current state and the gene
 var ErrAccountCancelled error // ErrAccountCancelled ends connections cancelled by CancelAccount.
 var ErrCursorExpired error // ErrCursorExpired means the cursor is outside the valid replay range: below the replay boundary or above the committed event_seq.
 var ErrMembershipRevoked error // ErrMembershipRevoked ends a stream whose bound member is no longer authorized.
+var ErrRecountRefused error // ErrRecountRefused ends a stream when its configured scheduler refuses work.
 var ErrSessionEnded error // ErrSessionEnded ends connections cancelled by CancelSession.
 var ErrShutdown error // ErrShutdown ends every connection when the server shuts down.
 var ErrTooManyConnections error // ErrTooManyConnections refuses a registration over either stream limit.
@@ -124,6 +125,7 @@ type Stream struct // Stream runs the per-connection delivery loop.
   field Heartbeat time.Duration // Heartbeat is how long the loop waits on the hub before it sends a heartbeat and waits again; zero sends none.
   field Hub *Hub
   field Owners map[Interest]EphemeralOwner // Owners supplies current frames; nil entries preserve durable-only delivery.
+  field Recounts *RecountScheduler // Recounts optionally schedules sidebar computation; nil keeps synchronous delivery.
   field Renderer Renderer
   func (Stream).Run(ctx context.Context, sub Subscription, cursor int64, send Sender) (int64, error) // Run delivers the subscription's events with a sequence above cursor until ctx ends or delivery fails, and returns the last sequence it delivered or skipped, with the reason it stopped.
   field Sidebar SidebarSource // Sidebar supplies coalesced recounts; nil leaves sidebar delivery unwired.

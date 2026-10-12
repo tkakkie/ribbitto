@@ -89,6 +89,8 @@ type Stream struct {
 	Owners map[Interest]EphemeralOwner
 	// Sidebar supplies coalesced recounts; nil leaves sidebar delivery unwired.
 	Sidebar SidebarSource
+	// Recounts optionally schedules sidebar computation; nil keeps synchronous delivery.
+	Recounts *RecountScheduler
 	// BatchSize bounds each read; zero means DefaultBatchSize.
 	BatchSize int
 	// Heartbeat is how long the loop waits on the hub before it sends a
@@ -157,6 +159,16 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			defer sidebar.watch.Release()
 		}
 	}
+	var scheduled *scheduledSidebar
+	if sidebar.dirty && s.Recounts != nil {
+		registration := s.Recounts.Register()
+		if registration == nil {
+			return cursor, ErrRecountRefused
+		}
+		scheduled = &scheduledSidebar{registration: registration, pending: &sidebar, version: 1}
+		defer scheduled.cancel()
+	}
+	var completion *RecountCompletion
 	for {
 		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
 		if errors.Is(err, ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
@@ -174,6 +186,9 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		for _, event := range events {
 			if s.Sidebar != nil && slices.Contains(sub.Interests, InterestSidebar) && event.OrganizationID == sub.Organization && s.Sidebar.Trigger(event) {
 				sidebar.dirty = true
+				if scheduled != nil {
+					scheduled.version++
+				}
 			}
 			sent, err := s.deliver(ctx, sub, event, send)
 			if err != nil {
@@ -190,7 +205,13 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			return cursor, err
 		}
 		connected = true
-		if err := s.recount(ctx, sub, &sidebar, send, &written); err != nil {
+		if scheduled != nil {
+			err = s.scheduledRecount(ctx, sub, scheduled, completion, send, &written)
+			completion = nil
+		} else {
+			err = s.recount(ctx, sub, &sidebar, send, &written)
+		}
+		if err != nil {
 			return cursor, err
 		}
 		if len(events) == batch {
@@ -205,10 +226,15 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		}
 		seen.durable = max(cursor, seen.durable)
 		deadline := time.Time{}
-		if sidebar.dirty {
+		if sidebar.dirty && (scheduled == nil || !scheduled.active) {
 			deadline = sidebar.next
 		}
-		levels, _, err := s.wait(ctx, sub, seen, send, &written, deadline, sidebar.watch, sidebar.observed, nil)
+		var completions <-chan RecountCompletion
+		if scheduled != nil {
+			completions = scheduled.registration.Completions()
+		}
+		levels, received, err := s.wait(ctx, sub, seen, send, &written, deadline, sidebar.watch, sidebar.observed, completions)
+		completion = received
 		// Generations count as seen only after the owner returns their state.
 		seen.durable = levels.durable
 		if err != nil {

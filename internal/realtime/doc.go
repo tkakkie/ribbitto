@@ -21,8 +21,8 @@
 // immediately before sending without moving the cursor. Sidebar sources supply
 // full recounts at connect and on consumer-defined organisation-wide triggers.
 // Optional member watches subscribe before the first recount and release on exit.
-// RecountScheduler bounds computations and registrations independently; it is
-// not wired into the stream yet (docs/architecture/recount-scheduler.md).
+// Optional RecountScheduler bounds computations and registrations; the writer
+// alone sends completions (docs/architecture/recount-scheduler.md).
 // Generations captured before fresh snapshots are covered only after send or
 // denial; later publications dirty the same coalescer and join the combined wait.
 // This is process-local; activation and cross-process recovery are separate work.

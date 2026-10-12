@@ -2,6 +2,8 @@ package realtime
 
 import (
 	"context"
+	"fmt"
+	"runtime/debug"
 	"slices"
 	"sync"
 )
@@ -40,7 +42,8 @@ type RecountCompletion struct {
 	Version uint64
 	// Outgoing is computation output for the writer to authorize before sending.
 	Outgoing Outgoing
-	// Err is the computation error; the scheduler never retries it.
+	// Err is the computation error, or a recovered panic with its stack trace.
+	// The scheduler never retries it; a panic does not retire the worker.
 	Err error
 }
 
@@ -110,7 +113,7 @@ func (q *RecountScheduler) work() {
 		request := r.pending
 		r.pending, r.running = nil, true
 		q.mu.Unlock()
-		out, err := request.compute(r.ctx)
+		out, err := request.run(r.ctx)
 		q.mu.Lock()
 		r.running = false
 		if r.closed {
@@ -129,6 +132,17 @@ func (q *RecountScheduler) work() {
 			q.wake.Signal()
 		}
 	}
+}
+
+func (request *recountRequest) run(ctx context.Context) (out Outgoing, err error) {
+	// Recover at the computation boundary so worker bookkeeping still runs.
+	defer func() {
+		if value := recover(); value != nil {
+			out = Outgoing{}
+			err = fmt.Errorf("recount computation panicked: %v\n%s", value, debug.Stack())
+		}
+	}()
+	return request.compute(ctx)
 }
 
 // Cancel removes eligibility, cancels computation and drops buffered/late results.

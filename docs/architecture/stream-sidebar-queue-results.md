@@ -6,6 +6,10 @@ independence, performance result, production design or pool configuration.
 The [pool protocol and earlier evidence](stream-sidebar-pool-results.md) remain
 the baseline. The maintainer approved PRs 2–4 as separate units under #832.
 
+PR 3 now records the [single-writer contract and delivery evidence](stream-sidebar-writer-results.md),
+including #859 membership revocation and the remaining production gaps.
+The remaining-integration section below records PR 2's original handoff.
+
 ## Contract
 
 `internal/realtime/cost_queue_test.go` is in realtime's external test package.

@@ -128,6 +128,22 @@ covers them.
 - **Text first.** A message is readable before anything around it (avatars,
   images) has loaded.
 
+## Icons
+
+Use the shared `Icon` templ component in `internal/web/view/icon.templ`:
+`@Icon("arrow-up-regular", 20)`. Names are string literals, checked against
+the embedded sprite even in templates not rendered by page fixtures. The
+size is in CSS pixels; width and height reserve the space before loading.
+Icons inherit text colour through `currentColor` and never need inline CSS.
+Use Regular at 20 px normally; Filled is reserved for a selected state.
+The available names, pinned source, licence and rebuild steps are in
+[`web/static/vendor/README.md`](../web/static/vendor/README.md).
+
+Icons are decorative (`aria-hidden="true"`, `focusable="false"`). Keep a
+control's text label, or give an icon-only button an `aria-label`; the icon
+never supplies its accessible name. “Load older messages” uses the arrow-up
+icon and keeps its text and paging contract.
+
 ## Product labels
 
 The frog labels (`docs/domain/vocabulary.md`) are names. Their meaning

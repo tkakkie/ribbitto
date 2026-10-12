@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +23,6 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
-	"github.com/tkakkie/ribbitto/web/static"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -731,32 +729,8 @@ func TestPagesMarkup(t *testing.T) {
 				for _, problem := range checkFallbackURLs(doc) {
 					t.Error(problem)
 				}
-				for n := range doc.Descendants() {
-					var assetURL string
-					switch n.DataAtom {
-					case atom.Script:
-						assetURL = attr(n, "src")
-					case atom.Link:
-						if slices.Contains(strings.Fields(strings.ToLower(attr(n, "rel"))), "stylesheet") {
-							assetURL = attr(n, "href")
-						}
-					}
-					if !strings.HasPrefix(assetURL, "/static/") {
-						continue
-					}
-					u, err := url.Parse(assetURL)
-					if err != nil {
-						t.Errorf("invalid asset URL %q: %v", assetURL, err)
-						continue
-					}
-					// Match the server: the stylesheet hash is a query, not
-					// part of the path looked up in the embedded filesystem.
-					info, err := fs.Stat(static.FS(), strings.TrimPrefix(u.Path, "/static/"))
-					if err != nil {
-						t.Errorf("asset %q: %v", assetURL, err)
-					} else if info.IsDir() {
-						t.Errorf("asset %q is a directory, want a file", assetURL)
-					}
+				for _, problem := range checkAssets(doc) {
+					t.Error(problem)
 				}
 				if want, ok := titles[c.name+"/"+lang]; ok {
 					title := find(doc, atom.Title)

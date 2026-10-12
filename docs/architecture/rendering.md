@@ -7,6 +7,11 @@ of the embedded CSS, so assets can be cached as immutable. In development
 the hash is recomputed per request, so rebuilt CSS appears without a
 restart.
 
+Fluent icons use a versioned, same-origin SVG sprite in `web/static/vendor`
+through the shared `Icon` templ component ([UI convention](../ui.md#icons)).
+The sprite is embedded and served like the other assets; its external `<use>`
+references require no change to the Content Security Policy below.
+
 ## Content Security Policy
 
 HTML routes are registered on the `routes` mux

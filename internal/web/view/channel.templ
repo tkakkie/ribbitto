@@ -213,7 +213,12 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						// messages replaces it out of band with the next control.
 						<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
 							if page.Older {
-								<p class="flex justify-center px-6 pt-4"><a href={ templ.SafeURL(olderURL(page)) } hx-get={ olderURL(page) } hx-target="#message-items" hx-swap="afterbegin" hx-select="#message-items > li" hx-select-oob="#load-older" class="inline-flex min-h-11 items-center rounded-md border border-border-strong px-3 py-2 text-fg hover:bg-surface">{ i18n.T(ctx, "message.load_older") }</a></p>
+								<p class="flex justify-center px-6 pt-4">
+									<a href={ templ.SafeURL(olderURL(page)) } hx-get={ olderURL(page) } hx-target="#message-items" hx-swap="afterbegin" hx-select="#message-items > li" hx-select-oob="#load-older" class="inline-flex min-h-11 items-center gap-2 rounded-md border border-border-strong px-3 py-2 text-fg hover:bg-surface">
+										@Icon("arrow-up-regular", 20)
+										{ i18n.T(ctx, "message.load_older") }
+									</a>
+								</p>
 							}
 						</div>
 						<ol

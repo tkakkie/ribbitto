@@ -13,25 +13,19 @@ type SignInForm struct {
 // SignIn renders the sign-in page.
 templ SignIn(stylesheetURL string, form SignInForm) {
 	@layout(stylesheetURL, i18n.T(ctx, "signin.page_title")) {
-		<main class="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-8">
+		@welcomeLayout() {
 			<h1 class="text-heading font-bold text-fg">{ i18n.T(ctx, "signin.title") }</h1>
 			if form.Error != "" {
 				<p role="alert" class="text-body text-danger">{ i18n.T(ctx, form.Error) }</p>
 			}
 			<form method="post" action="/signin" class="flex flex-col gap-4">
-				<label class="flex flex-col gap-1 text-body text-fg">
-					{ i18n.T(ctx, "signin.email") }
-					@textInput(inputProps{Type: "email", Name: "email", Value: form.Email, Autocomplete: "username", Required: true})
-				</label>
-				<label class="flex flex-col gap-1 text-body text-fg">
-					{ i18n.T(ctx, "signin.password") }
-					@textInput(inputProps{Type: "password", Name: "password", Autocomplete: "current-password", Required: true})
-				</label>
+				@textField("email", "email", "username", form.Email, "signin.email", "")
+				@textField("password", "password", "current-password", "", "signin.password", "")
 				@submitButton(buttonPrimary, "signin.submit")
 			</form>
 			if form.SignUpOpen {
-				<a href="/signup" class="flex min-h-11 items-center text-body text-brand">{ i18n.T(ctx, "signup.title") }</a>
+				@welcomeLink("/signup", "signup.title")
 			}
-		</main>
+		}
 	}
 }

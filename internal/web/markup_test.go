@@ -568,6 +568,7 @@ func TestPagesMarkup(t *testing.T) {
 	}
 	limited := func() Services {
 		s := withSignUp(true, nil)()
+		s.Setup = &fakeSetup{open: true, err: org.ErrSetupToken}
 		now := func() time.Time { return time.Unix(0, 0) }
 		s.Limits = &middleware.AuthLimits{
 			SignIn: middleware.NewRateLimiter(middleware.Limit{Burst: 1, Every: time.Hour}, now),
@@ -586,13 +587,16 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "sign-in", route: "GET /signin", services: base, method: "GET", path: "/signin"},
 		{name: "sign-in, sign-up open", route: "GET /signin", services: withSignUp(true, nil), method: "GET", path: "/signin"},
 		{name: "sign-in, sign-up closed", route: "GET /signin", services: withSignUp(false, nil), method: "GET", path: "/signin"},
-		{name: "sign-in failed", route: "POST /signin", services: func() Services { s := base(); s.SignIn = &fakeSignIn{err: identity.ErrInvalidCredentials}; return s }, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, status: http.StatusUnprocessableEntity},
+		{name: "sign-in failed", route: "POST /signin", services: func() Services { s := base(); s.SignIn = &fakeSignIn{err: identity.ErrInvalidCredentials}; return s }, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, status: http.StatusUnprocessableEntity, alerts: 1},
+		{name: "sign-in, required fields", route: "POST /signin", services: func() Services { s := base(); s.SignIn = &fakeSignIn{err: identity.ErrInvalidInput}; return s }, method: "POST", path: "/signin", status: http.StatusUnprocessableEntity, alerts: 1},
 		{name: "sign-in rate-limited", route: "POST /signin", services: limited, method: "POST", path: "/signin", form: url.Values{"email": {"a@b"}, "password": {"p"}}, repeat: 2, status: http.StatusTooManyRequests},
 		{name: "setup", route: "GET /setup", services: withSetup(nil), method: "GET", path: "/setup"},
 		{name: "setup, every field invalid", route: "POST /setup", services: withSetup(fieldErrors), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 6, invalidFields: []string{"organization_name", "slug", "display_name", "handle", "email", "password"}},
 		{name: "setup, wrong token", route: "POST /setup", services: withSetup(org.ErrSetupToken), method: "POST", path: "/setup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 1, invalidFields: []string{"token"}},
+		{name: "setup rate-limited", route: "POST /setup", services: limited, method: "POST", path: "/setup", form: setupForm, repeat: 2, status: http.StatusTooManyRequests},
 		{name: "sign-up", route: "GET /signup", services: withSignUp(true, nil), method: "GET", path: "/signup"},
 		{name: "sign-up, every field invalid", route: "POST /signup", services: withSignUp(true, fieldErrors), method: "POST", path: "/signup", form: setupForm, status: http.StatusUnprocessableEntity, alerts: 4, invalidFields: []string{"display_name", "handle", "email", "password"}},
+		{name: "sign-up rate-limited", route: "POST /signup", services: limited, method: "POST", path: "/signup", form: setupForm, repeat: 2, status: http.StatusTooManyRequests},
 		{name: "channel", route: "GET /organizations/{slug}/channels/{channelID}", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true},
 		{name: "channel with messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "GET", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true},
 		{name: "channel with older messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true},
@@ -746,12 +750,23 @@ func TestPagesMarkup(t *testing.T) {
 						t.Errorf("title not escaped as %q", html.EscapeString(want))
 					}
 				}
-				if c.path == "/setup" || c.path == "/signup" {
+				if (c.path == "/setup" || c.path == "/signup") && w.Code != http.StatusTooManyRequests {
 					r := httptest.NewRequest(c.method, c.path, nil)
 					r.Header.Set("Accept-Language", lang)
 					catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 						checkTextFields(t, r.Context(), doc, c)
 					})).ServeHTTP(httptest.NewRecorder(), r)
+				}
+				if c.path == "/signin" {
+					for n := range doc.Descendants() {
+						if n.DataAtom == atom.Input {
+							for _, key := range []string{"aria-invalid", "aria-describedby"} {
+								if _, ok := attrOK(n, key); ok {
+									t.Errorf("sign-in input has %s; errors belong to the form-level alert", key)
+								}
+							}
+						}
+					}
 				}
 				// Every invalid field's error is rendered, so each is checked too.
 				if c.alerts > 0 {
@@ -762,7 +777,7 @@ func TestPagesMarkup(t *testing.T) {
 						}
 					}
 					if alerts != c.alerts {
-						t.Errorf("%d field errors rendered, want %d", alerts, c.alerts)
+						t.Errorf("%d alerts rendered, want %d", alerts, c.alerts)
 					}
 				}
 			})

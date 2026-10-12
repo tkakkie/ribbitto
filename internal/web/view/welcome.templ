@@ -1,0 +1,32 @@
+package view
+
+import "github.com/tkakkie/ribbitto/internal/web/i18n"
+
+// welcomeLayout keeps the pages before entering an organisation consistent.
+// The page owns its heading and content; the brand side introduces the app.
+templ welcomeLayout() {
+	<main class="flex min-h-screen items-center justify-center bg-base p-4 lg:p-8">
+		<div class="grid w-full max-w-5xl overflow-hidden rounded-xl bg-surface shadow-block lg:grid-cols-2">
+			<div class="flex flex-col justify-center gap-8 bg-selected p-8 lg:p-12">
+				<div class="flex items-center gap-3">
+					<div class="p-3">
+						@brandLogo(48, "")
+					</div>
+					<p class="text-display font-bold tracking-tight text-on-selected">{ i18n.T(ctx, "app.title") }</p>
+				</div>
+				<p class="text-title text-on-selected">{ i18n.T(ctx, "hello.tagline") }</p>
+				<div aria-hidden="true">
+					// TODO(#875): add the decorative channel-image composition here once its assets land.
+				</div>
+			</div>
+			<div class="flex flex-col justify-center gap-6 p-8 lg:p-12">
+				{ children... }
+			</div>
+		</div>
+	</main>
+}
+
+// welcomeLink gives navigation between welcome pages a shared visible affordance.
+templ welcomeLink(href, label string) {
+	<a href={ templ.SafeURL(href) } class="inline-flex min-h-11 items-center text-body font-semibold text-brand underline">{ i18n.T(ctx, label) }</a>
+}

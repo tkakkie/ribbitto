@@ -12,13 +12,10 @@ type Viewer struct {
 // Hello renders the initial page inside the shared layout.
 templ Hello(stylesheetURL string, viewer Viewer) {
 	@layout(stylesheetURL, i18n.T(ctx, "hello.page_title")) {
-		<main class="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-2 p-8">
-			@brandLogo(48, "")
+		@welcomeLayout() {
 			<h1 class="text-display font-bold tracking-tight text-fg">{ i18n.T(ctx, "hello.title") }</h1>
-			<p class="text-title text-muted">{ i18n.T(ctx, "hello.tagline") }</p>
-			<div aria-hidden="true" class="mt-4 h-1 w-12 rounded-sm bg-accent"></div>
 			if viewer.SignedIn {
-				<div class="mt-6 flex flex-wrap items-center gap-3">
+				<div class="flex flex-wrap items-center gap-3">
 					<p class="text-body text-muted">
 						{ i18n.T(ctx, "hello.signed_in_as") }
 						<span class="font-semibold text-fg">{ viewer.DisplayName }</span>
@@ -26,14 +23,14 @@ templ Hello(stylesheetURL string, viewer Viewer) {
 					@SignOutButton()
 				</div>
 			} else {
-				<div class="mt-6 flex flex-wrap gap-6">
-					<a href="/signin" class="inline-flex min-h-11 items-center text-body font-semibold text-brand underline">{ i18n.T(ctx, "hello.sign_in") }</a>
+				<div class="flex flex-wrap gap-6">
+					@welcomeLink("/signin", "hello.sign_in")
 					if viewer.SignUpOpen {
-						<a href="/signup" class="inline-flex min-h-11 items-center text-body text-brand underline">{ i18n.T(ctx, "signup.title") }</a>
+						@welcomeLink("/signup", "signup.title")
 					}
 				</div>
 			}
-		</main>
+		}
 	}
 }
 

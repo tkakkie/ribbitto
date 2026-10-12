@@ -93,13 +93,12 @@ htmx does only requests and swaps; the server and templ own the HTML.
   See [stream scope](streaming.md#stream-scope). `reset` handling attaches to
   this container. Its reconnect cursor and `data-applied-cursor` advance after an inserted message
   settles or a move applies successfully. `data-event-cursor` advances only while
-  visible, or when a hidden application is subsequently shown.
+  visible, or when a hidden application is shown again.
   Its hidden, non-focusable `#stream-sink` receives `sidebar,presence` with
   `hx-swap="none"`: htmx applies payload entries out of band by DOM id, ignoring
   entries absent from the page. Sidebar recounts use the page's list components,
-  replacing the channel list, topics nested, whole and keeping an unlisted selection at its heading,
-  outside the 50 topic links. Counts bypass the message cache.
-  The sink is hidden from assistive technology.
+  replacing the whole channel list, whose current channel nests its topics; an
+  unlisted selection stays at its heading, outside the 50 topic links. Counts bypass the message cache.
   Only latest pages' `#message-items` receives `message,messages-moved`; moves
   replace feed IDs or remove/insert topic IDs within the loaded range. Replacements clear selection and refresh
   branch constraints. `LiveMessageItem` shares `MessageItem` markup, adding

@@ -12,7 +12,10 @@ no last-30-s or last-60-s automatic rejection.
 
 ## New window rule and telemetry
 
-Three independent 600-second windows must all pass. Each window excludes `[0,60s)`
+Recommendation requires all three independent 600-second windows of the stage-1
+matrix to pass; part 3 aggregates them. `TestStreamCost` logs only per-window
+`window-stable=pass|reject|inconclusive` and `window-eligible=true|false`, which
+cannot establish recommendation eligibility alone. Each window excludes `[0,60s)`
 from trend judgement. Compare adjacent two-minute means `[s,s+120s)` and
 `[s+120s,s+240s)`, starting at 60 seconds and sliding by 60 seconds while both
 fit the planned posting duration. Compare minutes 2–4 (`[60s,240s)`) with

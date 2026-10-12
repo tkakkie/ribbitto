@@ -132,7 +132,7 @@ func reportCostQueue(t *testing.T, series []costQueueSample, duration time.Durat
 		}
 		t.Logf("queue: at=%s phase=%s length=%d oldest=%s coalesced=%d cancelled=%d", s.at, s.phase, s.values[0], time.Duration(s.values[1]), s.values[2], s.values[3])
 	}
-	t.Logf("queue summary [length oldest-ns coalesced cancelled]: min=%v max=%v final=%v stability=%s", low, high, series[len(series)-1].values, costQueueStability(series, duration, bound))
+	t.Logf("queue summary [length oldest-ns coalesced cancelled]: min=%v max=%v final=%v window-stable=%s", low, high, series[len(series)-1].values, costQueueStability(series, duration, bound))
 	for start := 60 * time.Second; start+240*time.Second <= duration; start += 60 * time.Second {
 		t.Logf("queue sliding: earlier=[%s,%s) mean=%v later=[%s,%s) mean=%v", start, start+120*time.Second, costQueueMean(series, start, start+120*time.Second), start+120*time.Second, start+240*time.Second, costQueueMean(series, start+120*time.Second, start+240*time.Second))
 	}

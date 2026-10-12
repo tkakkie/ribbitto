@@ -20,7 +20,9 @@ func costTargets(r stepResult) bool {
 		r.latency[1] <= 250*time.Millisecond && r.recountDelay[1] <= 2*time.Second && r.recountDelay[2] <= 5*time.Second
 }
 
-// Eligibility still needs the controlled run and a posting-baseline comparison.
+// This is per-window eligibility only. Recommendation needs all three independent
+// stage-1 matrix windows (aggregated in part 3), plus the controlled run and
+// posting-baseline comparison.
 func costRecommendable(r stepResult) bool {
 	return costTargets(r) && ((r.arm == "" && len(r.queue) == 0) || costQueueStability(r.queue, r.postingDuration, r.queueBound) == "pass")
 }

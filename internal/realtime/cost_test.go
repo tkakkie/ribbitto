@@ -245,7 +245,7 @@ func TestStreamCost(t *testing.T) {
 			continue
 		}
 		reportCostQueue(t, r.queue, r.postingDuration, r.queueBound)
-		t.Logf("progress: streams=%d posting-p50/p95/p99=%v scheduled-to-delivery-p50/p95/p99=%v peak-acquired=%d loop-errors=%d provisional-target=%t recommendation-eligible=%t", n, r.posting, r.scheduledLatency, r.peakAcquired, r.loopErrors, costTargets(r), costRecommendable(r))
+		t.Logf("progress: streams=%d posting-p50/p95/p99=%v scheduled-to-delivery-p50/p95/p99=%v peak-acquired=%d loop-errors=%d provisional-target=%t window-eligible=%t; recommendation requires all three independent stage-1 matrix windows to pass (part 3 aggregates them)", n, r.posting, r.scheduledLatency, r.peakAcquired, r.loopErrors, costTargets(r), costRecommendable(r))
 		if sidebar {
 			t.Logf("sidebar: streams=%d queries=%d tx=%d count-statements=%d recounts=%d elapsed=%s recounts/stream/s=%.3f count/recount=%.2f count/post=%.2f delay p50/p95/p99=%s/%s/%s pool-empty=%d pool-cancelled=%d pool-wait-total=%s", n,
 				r.queries, r.txStatements, r.countStatements, r.recounts, r.elapsed.Round(time.Millisecond), float64(r.recounts)/float64(n)/r.elapsed.Seconds(), per(r.countStatements, r.recounts), per(r.countStatements, r.completed), r.recountDelay[0].Round(time.Microsecond), r.recountDelay[1].Round(time.Microsecond), r.recountDelay[2].Round(time.Microsecond), r.poolEmpty, r.poolCancelled, r.poolWait.Round(time.Microsecond))

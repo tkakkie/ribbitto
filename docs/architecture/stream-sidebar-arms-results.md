@@ -5,7 +5,13 @@ Part of #832, building on PR #836 (ladder), PR #838 (scheduler) and PR #863
 realtime's external tests and results/index change. Production code, wiring,
 import edges and `realtime.SidebarInterval` remain unchanged.
 
-## Arms and protocol
+## Historical arms and protocol
+
+The 60-second ladder protocol and its linked reproduction commands produced the
+recorded results. They cannot evaluate the new 600-second stability criterion:
+every queue arm reports `inconclusive` and is ineligible under it. Part 3 of the
+stability work must update the runner and reproduction instructions before new
+criterion measurements.
 
 Use the [pool protocol](stream-sidebar-pool-results.md#reproduce) for all four
 updated group commands, inherited database/caches, host gates, marker and

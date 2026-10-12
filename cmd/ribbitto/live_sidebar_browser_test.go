@@ -85,11 +85,13 @@ func TestLiveSidebarBrowser(t *testing.T) {
 	page.MustWait(`id => document.getElementById(id) && document.getElementById('sidebar-topics') !== window.previousList &&
 		!document.querySelector('.htmx-settling')`, destinationID)
 	if !page.MustEval(`(source, channel, retained, destination) => {
-		const badge = id => document.getElementById(id).querySelector('.sr-only')?.previousElementSibling?.textContent || '';
+		// Scoped to the row's own link: a channel row also holds its topic rows.
+		const count = node => node.querySelector('.sr-only')?.previousElementSibling?.textContent || '';
+		const badge = id => count(document.getElementById('link-' + id));
 		const ids = Array.from(document.querySelectorAll('[id]'), e => e.id);
 		return document.activeElement.id === 'link-' + channel && document.activeElement !== window.focusedLink &&
 			new Set(ids).size === ids.length && document.querySelectorAll('#sidebar-topics > li').length === 50 &&
-			!document.getElementById(source) && badge('topic-heading-count') === '' && badge(channel) === '1' &&
+			!document.getElementById(source) && count(document.getElementById('topic-heading-count')) === '' && badge(channel) === '1' &&
 			badge(destination) === '1' && badge(retained) === '' && !document.getElementById('stream-sink').hasChildNodes();
 	}`, source, channel, retained, destinationID).Bool() {
 		t.Fatal("production branch recount lost focus, retained stale counts/ids or exceeded the topic bound")

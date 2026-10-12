@@ -26,8 +26,8 @@ templ branchForm(page ChannelPage) {
 			}
 		</select>
 		<label for="branch-name">{ i18n.T(ctx, "topic.branch_new") }</label>
-		<input id="branch-name" name="name" value={ page.BranchName } class="min-h-11 min-w-0 rounded-md border border-border-strong bg-input px-3 text-fg"/>
-		<button type="submit" class="min-h-11 rounded-md bg-brand px-3 py-2 font-semibold text-on-brand">{ i18n.T(ctx, "topic.branch_submit") }</button>
+		@textInput(inputProps{ID: "branch-name", Name: "name", Value: page.BranchName})
+		@submitButton(buttonPrimary, "topic.branch_submit")
 		@BranchFeedback(page.BranchError)
 	</form>
 }

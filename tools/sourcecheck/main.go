@@ -137,6 +137,9 @@ func check(root string) ([]string, error) {
 				reportColour := func(value string) { report("docs/ui.md", "raw colour in template: "+value) }
 				if attr[1] == "class" {
 					classColours(attr[2], reportColour)
+					arbitraryClasses(attr[2], func(class string) {
+						report("docs/ui-code.md", "arbitrary value in template class: "+class)
+					})
 				} else {
 					cssColours(attr[2], reportColour)
 				}
@@ -241,6 +244,30 @@ func classColours(source string, report func(string)) {
 		}
 		if rawColour(value) {
 			report(value)
+		}
+	}
+}
+
+var goStrings = regexp.MustCompile("`[^`]*`|\"(?:\\\\.|[^\"\\\\])*\"")
+
+// arbitraryClasses reports utilities with an arbitrary value or variant
+// (anything in square brackets): sizes and colours come from tokens, so a
+// one-off value gets a token instead (docs/ui-code.md). In a dynamic class
+// expression only its string literals are checked; computed names are not
+// evaluated.
+func arbitraryClasses(source string, report func(string)) {
+	values := []string{source[1 : len(source)-1]}
+	if strings.HasPrefix(source, "{") {
+		values = nil
+		for _, literal := range goStrings.FindAllString(source, -1) {
+			values = append(values, literal[1:len(literal)-1])
+		}
+	}
+	for _, value := range values {
+		for _, class := range strings.Fields(value) {
+			if strings.Contains(class, "[") {
+				report(class)
+			}
 		}
 	}
 }

@@ -4,22 +4,20 @@ import "github.com/tkakkie/ribbitto/internal/web/i18n"
 
 // textField keeps submit errors out of the label, so they describe rather
 // than name the input. Each name must be unique on the page.
+// fieldInput sets the error description only while there is an error, so
+// valid inputs omit aria-invalid and aria-describedby.
+func fieldInput(name, kind, autocomplete, value, message string) inputProps {
+	p := inputProps{ID: name, Name: name, Type: kind, Value: value, Autocomplete: autocomplete, Required: true}
+	if message != "" {
+		p.Invalid, p.DescribedBy = "true", name+"-error"
+	}
+	return p
+}
+
 templ textField(name, kind, autocomplete, value, label, message string) {
 	<div class="flex flex-col gap-1 text-body text-fg">
 		<label for={ name }>{ i18n.T(ctx, label) }</label>
-		<input
-			id={ name }
-			type={ kind }
-			name={ name }
-			value={ value }
-			autocomplete={ autocomplete }
-			required
-			if message != "" {
-				aria-invalid="true"
-				aria-describedby={ name + "-error" }
-			}
-			class="min-h-11 rounded-md border border-border-strong bg-input px-3 py-2 text-body text-fg"
-		/>
+		@textInput(fieldInput(name, kind, autocomplete, value, message))
 		if message != "" {
 			<span id={ name + "-error" } role="alert" class="text-body text-danger">{ i18n.T(ctx, message) }</span>
 		}

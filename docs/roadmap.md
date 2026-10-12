@@ -143,7 +143,8 @@ old one. Roughly in this order:
      server answers if step 1's decisions allow it) → an input that grows and a
      send-key setting → mentions (#117) → links to one message → quoting,
      including a selection → drafts (#88, revisited after step 1).
-3. **Messages:** reactions, editing and deleting, reply chains
+3. **Messages:** reactions, editing and deleting, [pins](domain/pins.md)
+   (#880; rules proposed, implementation after M6), reply chains
    ([decision 22](decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md)),
    file uploads.
 4. **Topics:** resolving a topic with its conclusion, following and muting

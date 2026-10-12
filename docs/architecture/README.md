@@ -31,6 +31,7 @@ Read the file for the area you change:
 | [`streaming.md`](streaming.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
 | [`recount-scheduler.md`](recount-scheduler.md) | bounded scheduler core, eligibility, completion mailbox and cancellation; not wired into production |
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
+| [`pins.md`](pins.md) | proposed pin ownership and live/reconnect delivery (#880) |
 | [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream caps, shutdown, HTTP/2 |
 | [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |

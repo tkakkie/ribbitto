@@ -82,7 +82,7 @@ type Outgoing struct // Outgoing is one event ready to send.
   field Topic github.com/tkakkie/ribbitto/internal/kernel.ID // Topic is the message's topic as the shared render read it.
 func ParsePayloadID(value string) (github.com/tkakkie/ribbitto/internal/kernel.ID, error) // ParsePayloadID parses a payload ID in the canonical 8-4-4-4-12 layout.
 type RecountCompletion struct // RecountCompletion carries computation output, without authorizing or sending it.
-  field Err error // Err is the computation error; the scheduler never retries it.
+  field Err error // Err is the computation error, or a recovered panic with its stack trace.
   field Outgoing Outgoing // Outgoing is computation output for the writer to authorize before sending.
   field Version uint64 // Version identifies the submitted request, not a scheduler sequence.
 type RecountRegistration struct // RecountRegistration owns one running and one replaceable pending computation.

@@ -3,6 +3,7 @@ package realtime_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -13,6 +14,146 @@ import (
 type recountGate struct {
 	open    func()
 	compute func(context.Context) (realtime.Outgoing, error)
+}
+
+func TestRecountSchedulerCancelBeforeStart(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := realtime.NewRecountScheduler(1, 2)
+		t.Cleanup(q.Close)
+		busy, queued := q.Register(), q.Register()
+		starts := make(chan int, 10)
+		first := schedulerGate(t, starts, 1)
+		busy.Submit(1, first.compute)
+		schedulerStarts(t, starts, 1)
+		queued.Submit(2, schedulerGate(t, starts, 2).compute)
+		queued.Submit(3, schedulerGate(t, starts, 3).compute)
+		queued.Cancel()
+		schedulerClosedMailbox(t, queued)
+		if queued.Submit(4, schedulerGate(t, starts, 4).compute) {
+			t.Fatal("cancelled queued registration accepted work")
+		}
+		replacement := q.Register()
+		if replacement == nil {
+			t.Fatal("cancelled queued registration must release admission immediately")
+		}
+		next := schedulerGate(t, starts, 5)
+		replacement.Submit(5, next.compute)
+		schedulerStarts(t, starts)
+		first.open()
+		schedulerStarts(t, starts, 5)
+		schedulerClosedMailbox(t, queued)
+	})
+}
+
+func TestRecountSchedulerCancelDuringRun(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := realtime.NewRecountScheduler(2, 3)
+		t.Cleanup(q.Close)
+		a, b, unrelated := q.Register(), q.Register(), q.Register()
+		starts := make(chan int, 10)
+		first, second, third := schedulerGate(t, starts, 1), schedulerGate(t, starts, 2), schedulerGate(t, starts, 3)
+		var computeCtx context.Context
+		a.Submit(1, func(ctx context.Context) (realtime.Outgoing, error) {
+			computeCtx = ctx
+			return first.compute(ctx) // Deliberately ignores cancellation.
+		})
+		schedulerStarts(t, starts, 1)
+		b.Submit(2, second.compute)
+		schedulerStarts(t, starts, 2)
+		a.Submit(9, schedulerGate(t, starts, 9).compute)
+		unrelated.Submit(3, third.compute)
+		a.Cancel()
+		a.Cancel()
+		if computeCtx.Err() != context.Canceled {
+			t.Fatal("Cancel must cancel running computation context immediately")
+		}
+		schedulerClosedMailbox(t, a)
+		if q.Register() != nil {
+			t.Fatal("replacement admission reused cancelled running registration capacity")
+		}
+		schedulerStarts(t, starts) // Cancellation alone frees neither worker.
+		second.open()
+		schedulerStarts(t, starts, 3) // Only b's actual return permits unrelated work.
+		if q.Register() != nil {
+			t.Fatal("unrelated progress must not release cancelled running registration")
+		}
+		first.open()
+		schedulerStarts(t, starts) // The cancelled successor must never run.
+		schedulerClosedMailbox(t, a)
+		replacement := q.Register()
+		if replacement == nil {
+			t.Fatal("actual return must release cancelled registration capacity")
+		}
+		last := schedulerGate(t, starts, 4)
+		replacement.Submit(4, last.compute)
+		schedulerStarts(t, starts, 4)
+	})
+}
+
+func TestRecountSchedulerCompletionCancellationRace(t *testing.T) {
+	for _, order := range []string{"completion-first", "cancellation-first", "concurrent"} {
+		t.Run(order, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				q := realtime.NewRecountScheduler(1, 1)
+				t.Cleanup(q.Close)
+				r := q.Register()
+				starts := make(chan int, 1)
+				gate := schedulerGate(t, starts, 1)
+				r.Submit(7, gate.compute)
+				schedulerStarts(t, starts, 1)
+				switch order {
+				case "completion-first":
+					gate.open()
+					synctest.Wait()
+					if len(r.Completions()) != 1 {
+						t.Fatal("completion must be buffered before cancellation")
+					}
+					r.Cancel()
+				case "cancellation-first":
+					r.Cancel()
+					schedulerClosedMailbox(t, r)
+					gate.open()
+				case "concurrent":
+					race := make(chan struct{})
+					go func() { <-race; r.Cancel() }()
+					go func() { <-race; gate.open() }()
+					close(race)
+				}
+				synctest.Wait()
+				schedulerClosedMailbox(t, r)
+				if q.Register() == nil {
+					t.Fatal("completion/cancellation race leaked registration capacity")
+				}
+			})
+		})
+	}
+}
+
+func TestRecountSchedulerPanicKeepsWorker(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := realtime.NewRecountScheduler(1, 2)
+		t.Cleanup(q.Close)
+		a, b := q.Register(), q.Register()
+		starts := make(chan int, 2)
+		gate := schedulerGate(t, starts, 1)
+		a.Submit(7, func(ctx context.Context) (realtime.Outgoing, error) {
+			_, _ = gate.compute(ctx)
+			panic("broken recount")
+		})
+		schedulerStarts(t, starts, 1)
+		a.Submit(8, schedulerGate(t, starts, 3).compute)
+		other := schedulerGate(t, starts, 2)
+		b.Submit(9, other.compute)
+		gate.open()
+		schedulerStarts(t, starts, 2)
+		result := <-a.Completions()
+		if result.Version != 7 || result.Err == nil || !strings.Contains(result.Err.Error(), "broken recount") ||
+			!strings.Contains(result.Err.Error(), "runtime/debug.Stack") || len(result.Outgoing.Data) != 0 {
+			t.Fatalf("panic completion = %+v, want version 7, empty output and panic error with stack", result)
+		}
+		other.open()
+		schedulerStarts(t, starts, 3) // Both another registration and a's successor survive.
+	})
 }
 
 func schedulerGate(t *testing.T, starts chan int, id int) recountGate {

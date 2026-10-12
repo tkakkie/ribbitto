@@ -38,12 +38,14 @@ import (
 // runs only with RIBBITTO_STREAM_COST=1, never in CI, and reports through
 // t.Log (run with -v). Tunables, all optional:
 //
-//	RIBBITTO_STREAM_COST_ARM       sync40, async40 or async10+30; unset: sync
+//	RIBBITTO_STREAM_COST_ARM       sync40, async40, async10+30 or async; unset: sync
 //	RIBBITTO_STREAM_COST_SMOKE     1: functional checks only, no timing logs
 //	RIBBITTO_STREAM_COST_STEPS     streams per step, default 1,10,100,1000,5000
 //	RIBBITTO_STREAM_COST_RATE      posts per second, default 10
 //	RIBBITTO_STREAM_COST_DURATION  posting time per step, default 10s
 //	RIBBITTO_STREAM_COST_POOL      pool size, default pgxpool's max(4, CPUs)
+//	RIBBITTO_STREAM_COST_WORKERS   async workers, default 40
+//	RIBBITTO_STREAM_COST_RECOUNT_POOL async separate recount pool; unset: shared
 //	RIBBITTO_STREAM_COST_CACHE     1: share event reads and message reads
 //	                               through the caches of #227
 //	RIBBITTO_STREAM_COST_MEMBERS   distinct: one member per stream, instead
@@ -63,11 +65,15 @@ import (
 // epoch reads (statements classified here), the cached-allow hit rate (from
 // org.Authorizer.Stats) and the check's own latency.
 func TestStreamCost(t *testing.T) {
+	runStreamCost(t, nil)
+}
+
+func runStreamCost(t *testing.T, record func(stepResult)) {
 	if os.Getenv("RIBBITTO_STREAM_COST") != "1" {
 		t.Skip("set RIBBITTO_STREAM_COST=1 to measure the stream's cost")
 	}
 	arm := os.Getenv("RIBBITTO_STREAM_COST_ARM")
-	if arm != "" && arm != "sync40" && arm != "async40" && arm != "async10+30" {
+	if arm != "" && arm != "sync40" && arm != "async40" && arm != "async10+30" && arm != "async" {
 		t.Fatalf("unknown comparison arm %q", arm)
 	}
 	smoke := os.Getenv("RIBBITTO_STREAM_COST_SMOKE") == "1"
@@ -144,12 +150,8 @@ func TestStreamCost(t *testing.T) {
 		}
 		config.MaxConns = int32(n)
 	}
-	if arm != "" {
-		config.MaxConns = 40
-		if arm == "async10+30" {
-			config.MaxConns = 10
-		}
-	}
+	normal, recount, workers := costSizing(t, arm, int(config.MaxConns))
+	config.MaxConns = int32(normal)
 	queries := &epochCounter{QueryCounter: platform.NewQueryCounter()}
 	if os.Getenv("RIBBITTO_STREAM_COST_ATTRIBUTION") == "1" {
 		queries.timings = &costTimings{}
@@ -162,9 +164,9 @@ func TestStreamCost(t *testing.T) {
 	t.Cleanup(pool.Close)
 
 	recountPool := pool
-	if arm == "async10+30" {
+	if recount > 0 {
 		separate := config.Copy()
-		separate.MaxConns = 30
+		separate.MaxConns = int32(recount)
 		recountPool, err = pgxpool.NewWithConfig(t.Context(), separate)
 		if err != nil {
 			t.Fatal(err)
@@ -203,7 +205,6 @@ func TestStreamCost(t *testing.T) {
 			}
 			t.Logf("PostgreSQL %s=%s", setting, value)
 		}
-		t.Logf("arm=%q workers=40 normal-max=%d recount-max=%d (shared when equal pool)", arm, pool.Config().MaxConns, recountPool.Config().MaxConns)
 		t.Logf("attribution %t; concurrent recount limit %d (0=unbounded)", queries.timings != nil, cap(recountSlots))
 		t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step; cache %t; distinct members %t; stagger window %s",
 			runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration, cached, distinct, stagger)
@@ -228,6 +229,9 @@ func TestStreamCost(t *testing.T) {
 	// count from the end of the previous one, not from the invocation.
 	setupStart := invocationStart
 	for _, n := range steps {
+		if !smoke {
+			t.Logf("arm=%q workers=%d normal-max=%d recount-max=%d shared=%t", arm, workers, pool.Config().MaxConns, recountPool.Config().MaxConns, pool == recountPool)
+		}
 		var connections []*costConnection
 		if sidebar {
 			connections = costConnections(t, pool, posting, sidebarReader, members[:n], subs[0].Channel, fixture.Channel.DefaultTopicID)
@@ -236,6 +240,9 @@ func TestStreamCost(t *testing.T) {
 			}
 		}
 		r := measureStep(t, stream, posting, pool, recountPool, queries, checks, loopReads, dbReads, m, subs, n, rate, duration, stagger, connections, setupStart)
+		if record != nil {
+			record(r)
+		}
 		setupStart = time.Now()
 		if smoke {
 			if r.completed != r.scheduled || r.missed != 0 || r.timedOut || r.missing != 0 || r.loopErrors != 0 || r.deliveries != n*r.scheduled || (arm != "" && len(r.queue) < 2) {
@@ -245,7 +252,7 @@ func TestStreamCost(t *testing.T) {
 			continue
 		}
 		reportCostQueue(t, r.queue, r.postingDuration, r.queueBound)
-		t.Logf("progress: streams=%d posting-p50/p95/p99=%v scheduled-to-delivery-p50/p95/p99=%v peak-acquired=%d loop-errors=%d provisional-target=%t window-eligible=%t; recommendation requires all three independent stage-1 matrix windows to pass (part 3 aggregates them)", n, r.posting, r.scheduledLatency, r.peakAcquired, r.loopErrors, costTargets(r), costRecommendable(r))
+		t.Logf("progress: streams=%d posting-p50/p95/p99=%v scheduled-to-delivery-p50/p95/p99=%v peak-acquired=%d loop-errors=%d provisional-target=%t window-eligible=%t; recommendation requires all three independent stage-1 matrix windows to pass (TestStreamCostStage1 aggregates them)", n, r.posting, r.scheduledLatency, r.peakAcquired, r.loopErrors, costTargets(r), costRecommendable(r))
 		if sidebar {
 			t.Logf("sidebar: streams=%d queries=%d tx=%d count-statements=%d recounts=%d elapsed=%s recounts/stream/s=%.3f count/recount=%.2f count/post=%.2f delay p50/p95/p99=%s/%s/%s pool-empty=%d pool-cancelled=%d pool-wait-total=%s", n,
 				r.queries, r.txStatements, r.countStatements, r.recounts, r.elapsed.Round(time.Millisecond), float64(r.recounts)/float64(n)/r.elapsed.Seconds(), per(r.countStatements, r.recounts), per(r.countStatements, r.completed), r.recountDelay[0].Round(time.Microsecond), r.recountDelay[1].Round(time.Microsecond), r.recountDelay[2].Round(time.Microsecond), r.poolEmpty, r.poolCancelled, r.poolWait.Round(time.Microsecond))
@@ -361,7 +368,8 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	var wg sync.WaitGroup
 	var queue *costQueue
 	if os.Getenv("RIBBITTO_STREAM_COST_ARM") != "" {
-		queue = newCostQueue(40, n)
+		_, _, workers := costSizing(t, os.Getenv("RIBBITTO_STREAM_COST_ARM"), int(pool.Config().MaxConns))
+		queue = newCostQueue(workers, n)
 		defer queue.shutdown()
 	}
 	defer func() { cancel(); wg.Wait() }()

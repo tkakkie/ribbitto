@@ -21,7 +21,7 @@ func costTargets(r stepResult) bool {
 }
 
 // This is per-window eligibility only. Recommendation needs all three independent
-// stage-1 matrix windows (aggregated in part 3), plus the controlled run and
+// stage-1 matrix windows (TestStreamCostStage1), plus the controlled run and
 // posting-baseline comparison.
 func costRecommendable(r stepResult) bool {
 	return costTargets(r) && ((r.arm == "" && len(r.queue) == 0) || costQueueStability(r.queue, r.postingDuration, r.queueBound) == "pass")

@@ -9,9 +9,9 @@ import edges and `realtime.SidebarInterval` remain unchanged.
 
 The 60-second ladder protocol and its linked reproduction commands produced the
 recorded results. They cannot evaluate the new 600-second stability criterion:
-every queue arm reports `inconclusive` and is ineligible under it. Part 3 of the
-stability work must update the runner and reproduction instructions before new
-criterion measurements.
+every queue arm is inconclusive and ineligible. The new
+[stage-1 runner](stream-sidebar-stage1.md#matrix-and-commands) supplies 600-second
+commands; the ladder below remains historical.
 
 Use the [pool protocol](stream-sidebar-pool-results.md#reproduce) for all four
 updated group commands, inherited database/caches, host gates, marker and

@@ -15,8 +15,8 @@ file or one of these rules changes.
   least 16 px, with clear space of a quarter of its size; no other colours.
 - **Mascot:** a flat frog without outlines in three poses —
   `mascot-hello-v1.svg` (welcome), `mascot-sleeping-v1.svg` (empty states)
-  and `mascot-typing-v1.svg` (loading, sending). Its greens belong to the
-  artwork, not the tokens. It is decorative (`alt=""`) and never the only
+  and `mascot-typing-v1.svg` (loading, sending). Its colours are the
+  illustration colours listed in [`ui.md`](ui.md#tokens). It is decorative (`alt=""`) and never the only
   carrier of information.
 - A changed brand file gets a new version suffix, since static files are
   cached as immutable.

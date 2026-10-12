@@ -256,8 +256,8 @@ func classColours(source string, report func(string)) {
 }
 
 // goExpression returns the brace-delimited Go expression at the start of
-// source, skipping braces inside string, raw string and rune literals. An
-// unbalanced expression runs to the end of source.
+// source, skipping braces inside comments and string, raw string and rune
+// literals. An unbalanced expression runs to the end of source.
 func goExpression(source string) string {
 	depth := 0
 	for i := 0; i < len(source); i++ {
@@ -278,6 +278,20 @@ func goExpression(source string) string {
 			}
 		case '`':
 			for i++; i < len(source) && source[i] != '`'; i++ {
+			}
+		case '/':
+			if strings.HasPrefix(source[i:], "//") {
+				if end := strings.IndexByte(source[i:], '\n'); end >= 0 {
+					i += end
+				} else {
+					i = len(source)
+				}
+			} else if strings.HasPrefix(source[i:], "/*") {
+				if end := strings.Index(source[i+2:], "*/"); end >= 0 {
+					i += end + 3
+				} else {
+					i = len(source)
+				}
 			}
 		}
 	}

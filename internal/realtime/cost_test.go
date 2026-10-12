@@ -187,6 +187,9 @@ func TestStreamCost(t *testing.T) {
 		}
 	}()
 	highest := 0
+	// The first step's setup includes the database and fixtures; later steps
+	// count from the end of the previous one, not from the invocation.
+	setupStart := invocationStart
 	for _, n := range steps {
 		var connections []*costConnection
 		if sidebar {
@@ -195,7 +198,8 @@ func TestStreamCost(t *testing.T) {
 				c.timings, c.slots = queries.timings, recountSlots
 			}
 		}
-		r := measureStep(t, stream, posting, pool, queries, checks, loopReads, dbReads, m, subs, n, rate, duration, stagger, connections, invocationStart)
+		r := measureStep(t, stream, posting, pool, queries, checks, loopReads, dbReads, m, subs, n, rate, duration, stagger, connections, setupStart)
+		setupStart = time.Now()
 		t.Logf("progress: streams=%d posting-p50/p95/p99=%v scheduled-to-delivery-p50/p95/p99=%v peak-acquired=%d loop-errors=%d provisional-target=%t", n, r.posting, r.scheduledLatency, r.peakAcquired, r.loopErrors, costTargets(r))
 		if sidebar {
 			t.Logf("sidebar: streams=%d queries=%d tx=%d count-statements=%d recounts=%d elapsed=%s recounts/stream/s=%.3f count/recount=%.2f count/post=%.2f delay p50/p95/p99=%s/%s/%s pool-empty=%d pool-wait-total=%s", n,
@@ -290,7 +294,7 @@ func per(n int64, d int) float64 {
 // duration, waits for every delivery or a drain deadline, and closes them.
 // Counts cover the posting window and the drain, not the streams' start.
 func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Posting, pool *pgxpool.Pool, queries *epochCounter, checks *timingAuthorizer,
-	events, dbReads *countingReader, m org.Membership, subs []realtime.Subscription, n, rate int, duration, stagger time.Duration, connections []*costConnection, invocationStart time.Time) stepResult {
+	events, dbReads *countingReader, m org.Membership, subs []realtime.Subscription, n, rate int, duration, stagger time.Duration, connections []*costConnection, setupStart time.Time) stepResult {
 	t.Helper()
 	sub := subs[0]
 	var cursor int64
@@ -364,7 +368,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	interval := time.Second / time.Duration(rate)
 	missed := 0
 	start := time.Now()
-	t.Logf("wall: streams=%d setup=%s window=%s drain-allowance=%s", n, start.Sub(invocationStart), duration, drainAllowance)
+	t.Logf("wall: streams=%d setup=%s window=%s drain-allowance=%s", n, start.Sub(setupStart), duration, drainAllowance)
 	// Pool stats are cumulative, so sampling finds when the first empty
 	// acquire happened, to within the sampling period.
 	var firstEmpty atomic.Int64

@@ -132,6 +132,9 @@ func TestStreamWaitCompletionAtContextEnd(t *testing.T) {
 					if (wake == "heartbeat" || wake == "recount") && err != nil {
 						t.Fatalf("deadline wait returned error: %v", err)
 					}
+					if (wake == "parent" || wake == "parent without deadline") && !errors.Is(err, context.Canceled) {
+						t.Fatalf("parent cancellation returned error %v, want context.Canceled", err)
+					}
 					if h.Waiting(orgA) != 0 {
 						t.Fatal("completion/context wake leaked a waiter")
 					}

@@ -43,7 +43,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   no bridge goroutine, scheduling, authorization or delivery is added. Buffered
   results survive level capture; a consumed result cannot wake again. Once
   received, a completion returns from the hub with no error even if its wait
-  context ended. The stream wait preserves it when reporting parent cancellation;
+  context ended. The stream wait returns it together with the parent's cause;
   the writer checks its parent context before delivery. A closed
   mailbox is disabled inside the wait. Completion wakes change neither the last
   write nor the fixed recount deadline. `Stream.Run` passes nil, preserving

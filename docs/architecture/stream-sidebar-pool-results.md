@@ -169,9 +169,8 @@ independence nor fewer connections. Do not adopt pool30 from historical results.
 
 ## Recommendation and remaining work
 
-Keep production configuration undecided. The [scheduler](stream-sidebar-queue-results.md),
+The [controlled results](stream-sidebar-arms-measured.md) recommend a single
+writer per stream with recounts on a bounded queue over the shared pool; plain
+pool sizing alone fails at 5,000 streams. The [scheduler](stream-sidebar-queue-results.md),
 [single writer](stream-sidebar-writer-results.md) and
-[comparison arms](stream-sidebar-arms-results.md) are test-only evidence.
-Controlled latency, posting progress and backlog results, connection-budget
-inputs, cross-review and tier A / Grok remain necessary before a recommendation.
-The implementation issue remains a provisional local draft.
+[comparison arms](stream-sidebar-arms-results.md) remain test-only evidence.

@@ -150,14 +150,8 @@ go test -race -count=1 -run '^TestCostRecommendationRequiresTelemetry/(sync40|as
 It exited 1 for all three arms at the actual assertion
 `recommendation eligibility = true, want false for empty arm telemetry`.
 The guard was restored and the normal suite passed.
-Claude cross-review and tier A / Grok remain for the external orchestrator.
 
-## Controlled results: 5 posts/s, 1,000 streams
+## Controlled results and recommendation
 
-## Controlled results: 5 posts/s, 5,000 streams
-
-## Controlled results: 20 posts/s, 1,000 streams
-
-## Controlled results: 20 posts/s, 5,000 streams
-
-## Recommendation after controlled results
+The controlled run, the writer fix it led to, the re-run and a five-minute
+stability check are in [controlled results](stream-sidebar-arms-measured.md).

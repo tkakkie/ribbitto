@@ -87,6 +87,7 @@ func TestSources(t *testing.T) {
 		{"arbitrary after a brace in a string", "sample.templ", `<p class={ "}", "w-[760px]" }>`, "docs/ui-code.md"},
 		{"arbitrary after a brace in a block comment", "sample.templ", `<p class={ /* } */ "w-[760px]" }>`, "docs/ui-code.md"},
 		{"arbitrary after a brace in a line comment", "sample.templ", "<p class={ \"flex\", // }\n\"w-[760px]\" }>", "docs/ui-code.md"},
+		{"arbitrary value only in comments", "sample.templ", "<p class={ /* \"w-[760px]\" */ \"flex\" // \"w-[1px]\"\n }>", ""},
 		{"comments without arbitrary values", "sample.templ", "<p class={ /* } */ \"flex\", // }\n\"w-sidebar\" }>", ""},
 		{"nested braces without arbitrary values", "sample.templ", `<p class={ []string{"flex"}, "w-sidebar", map[string]bool{"}": true} }>`, ""},
 		{"token css", "web/styles/app.css", `@source "./*.css"; /* tokens */ :root { --rb-bg: #fff; } @media (x) { :root { --rb-bg: #000; } } @theme { --shadow-card: 0 0 1px black; } .x { color: var(--rb-bg); }`, ""},

@@ -139,7 +139,7 @@ func check(root string) ([]string, error) {
 				// The pattern stops a {…} value at its first brace; read the
 				// whole Go expression so later literals are checked too.
 				if strings.HasPrefix(attr[2], "{") {
-					attr[2] = goExpression(source[loc[4]:])
+					attr[2], _ = goExpression(source[loc[4]:])
 				}
 				reportColour := func(value string) { report("docs/ui.md", "raw colour in template: "+value) }
 				if attr[1] == "class" {
@@ -256,9 +256,12 @@ func classColours(source string, report func(string)) {
 }
 
 // goExpression returns the brace-delimited Go expression at the start of
-// source, skipping braces inside comments and string, raw string and rune
-// literals. An unbalanced expression runs to the end of source.
-func goExpression(source string) string {
+// source and the contents of its string and raw string literals, skipping
+// comments and rune literals, so braces and text inside them neither end
+// the expression nor count as classes. An unbalanced expression runs to the
+// end of source.
+func goExpression(source string) (string, []string) {
+	var literals []string
 	depth := 0
 	for i := 0; i < len(source); i++ {
 		switch source[i] {
@@ -267,17 +270,17 @@ func goExpression(source string) string {
 		case '}':
 			depth--
 			if depth == 0 {
-				return source[:i+1]
+				return source[:i+1], literals
 			}
-		case '"', '\'':
-			quote := source[i]
+		case '"', '\'', '`':
+			quote, from := source[i], i+1
 			for i++; i < len(source) && source[i] != quote; i++ {
-				if source[i] == '\\' {
+				if source[i] == '\\' && quote != '`' {
 					i++
 				}
 			}
-		case '`':
-			for i++; i < len(source) && source[i] != '`'; i++ {
+			if quote != '\'' {
+				literals = append(literals, source[from:min(i, len(source))])
 			}
 		case '/':
 			if strings.HasPrefix(source[i:], "//") {
@@ -295,10 +298,8 @@ func goExpression(source string) string {
 			}
 		}
 	}
-	return source
+	return source, literals
 }
-
-var goStrings = regexp.MustCompile("`[^`]*`|\"(?:\\\\.|[^\"\\\\])*\"")
 
 // arbitraryClasses reports utilities with an arbitrary value or variant
 // (anything in square brackets): sizes and colours come from tokens, so a
@@ -308,10 +309,7 @@ var goStrings = regexp.MustCompile("`[^`]*`|\"(?:\\\\.|[^\"\\\\])*\"")
 func arbitraryClasses(source string, report func(string)) {
 	values := []string{source[1 : len(source)-1]}
 	if strings.HasPrefix(source, "{") {
-		values = nil
-		for _, literal := range goStrings.FindAllString(source, -1) {
-			values = append(values, literal[1:len(literal)-1])
-		}
+		_, values = goExpression(source)
 	}
 	for _, value := range values {
 		for _, class := range strings.Fields(value) {

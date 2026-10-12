@@ -83,6 +83,9 @@ func TestSources(t *testing.T) {
 		{"ordinary utilities", "sample.templ", `<p class="hover:bg-hover peer-empty:flex focus-visible:outline-2 -mt-1 w-1/2 min-h-11 max-w-reading sr-only">`, ""},
 		{"dynamic class", "sample.templ", `<p class={ templ.KV("hidden", hidden), "text-muted", name }>`, ""},
 		{"computed class", "sample.templ", `<p class={ classesFor(kind) }>`, ""},
+		{"arbitrary after a nested brace", "sample.templ", `<p class={ []string{"flex"}, "w-[760px]" }>`, "docs/ui-code.md"},
+		{"arbitrary after a brace in a string", "sample.templ", `<p class={ "}", "w-[760px]" }>`, "docs/ui-code.md"},
+		{"nested braces without arbitrary values", "sample.templ", `<p class={ []string{"flex"}, "w-sidebar", map[string]bool{"}": true} }>`, ""},
 		{"token css", "web/styles/app.css", `@source "./*.css"; /* tokens */ :root { --rb-bg: #fff; } @media (x) { :root { --rb-bg: #000; } } @theme { --shadow-card: 0 0 1px black; } .x { color: var(--rb-bg); }`, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

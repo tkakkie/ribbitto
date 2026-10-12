@@ -133,7 +133,14 @@ func check(root string) ([]string, error) {
 		case ".sql":
 			sqlVocabulary(string(data), vocabulary)
 		case ".templ":
-			for _, attr := range attributes.FindAllStringSubmatch(string(data), -1) {
+			source := string(data)
+			for _, loc := range attributes.FindAllStringSubmatchIndex(source, -1) {
+				attr := []string{"", source[loc[2]:loc[3]], source[loc[4]:loc[5]]}
+				// The pattern stops a {…} value at its first brace; read the
+				// whole Go expression so later literals are checked too.
+				if strings.HasPrefix(attr[2], "{") {
+					attr[2] = goExpression(source[loc[4]:])
+				}
 				reportColour := func(value string) { report("docs/ui.md", "raw colour in template: "+value) }
 				if attr[1] == "class" {
 					classColours(attr[2], reportColour)
@@ -246,6 +253,35 @@ func classColours(source string, report func(string)) {
 			report(value)
 		}
 	}
+}
+
+// goExpression returns the brace-delimited Go expression at the start of
+// source, skipping braces inside string, raw string and rune literals. An
+// unbalanced expression runs to the end of source.
+func goExpression(source string) string {
+	depth := 0
+	for i := 0; i < len(source); i++ {
+		switch source[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return source[:i+1]
+			}
+		case '"', '\'':
+			quote := source[i]
+			for i++; i < len(source) && source[i] != quote; i++ {
+				if source[i] == '\\' {
+					i++
+				}
+			}
+		case '`':
+			for i++; i < len(source) && source[i] != '`'; i++ {
+			}
+		}
+	}
+	return source
 }
 
 var goStrings = regexp.MustCompile("`[^`]*`|\"(?:\\\\.|[^\"\\\\])*\"")

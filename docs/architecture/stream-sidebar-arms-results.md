@@ -95,7 +95,10 @@ stability: inspect the entire time series for trends hidden by oscillations,
 and compare posting progress/latency with the corresponding reference before
 any recommendation. Final production limits/reservations, process count and
 normal-work headroom remain maintainer inputs; the pool protocol's sensitivity
-analysis is illustrative. No production size or design is selected.
+analysis is illustrative. The [completed controlled results](stream-sidebar-arms-measured.md)
+identify the single-writer bounded-queue design as a promising candidate, pending
+a stability criterion decided in advance and production-wiring validation.
+Production pool size and layout remain open.
 
 ## Functional evidence and mutation
 
@@ -153,5 +156,8 @@ The guard was restored and the normal suite passed.
 
 ## Controlled results and recommendation
 
-The controlled run, the writer fix it led to, the re-run and a five-minute
-stability check are in [controlled results](stream-sidebar-arms-measured.md).
+The completed controlled run, writer fix, corrected re-run and five-minute
+queue evidence are in [controlled results](stream-sidebar-arms-measured.md), with
+full [latency/workload](stream-sidebar-arms-tables.md) and
+[accounting](stream-sidebar-arms-accounting.md) tables. Growth-guard failures
+remain; production validation and the stability decision are open.

@@ -169,8 +169,12 @@ independence nor fewer connections. Do not adopt pool30 from historical results.
 
 ## Recommendation and remaining work
 
-The [controlled results](stream-sidebar-arms-measured.md) recommend a single
-writer per stream with recounts on a bounded queue over the shared pool; plain
-pool sizing alone fails at 5,000 streams. The [scheduler](stream-sidebar-queue-results.md),
+The [controlled results](stream-sidebar-arms-measured.md) identify a
+single writer per stream with a bounded, fair, cancellable recount queue as a
+promising candidate, pending a stability criterion decided in advance and
+validation with production wiring. Plain pool sizing alone fails the measured
+5,000-stream targets. Shared and partitioned pools trade message latency against
+recount freshness/throughput; production pool size and layout remain open.
+The [scheduler](stream-sidebar-queue-results.md),
 [single writer](stream-sidebar-writer-results.md) and
 [comparison arms](stream-sidebar-arms-results.md) remain test-only evidence.

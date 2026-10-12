@@ -3,8 +3,9 @@
 Part of #832, based on PR #838 above PR #836; test-only, production unchanged.
 See the [scheduler](stream-sidebar-queue-results.md) and
 [pool protocol](stream-sidebar-pool-results.md). PR 4 adds comparisons/telemetry.
-Its controlled results exposed the liveness defect below; corrected performance,
-recommendation and production configuration remain outstanding.
+[Corrected measurements](stream-sidebar-arms-measured.md) are complete after the
+liveness fix below; the candidate needs an advance stability criterion and
+production-wiring validation before recommendation.
 
 ## Prototype contract
 
@@ -29,13 +30,11 @@ discarded results; delayed consumption is conservative. Triggers never move it.
 This allows progress under continuous invalidation without rollback, but does
 not guarantee a snapshot is current at send.
 
-The [#832 results](https://github.com/tkakkie/ribbitto/issues/832), 2026-10-12,
-reported 0.3–0.5 s completion scheduling delay at 5,000 streams: desired-version
-equality dropped nearly all completions. Per 60 s, workers computed about
-230,000–250,000 recounts but writers sent 6,000–10,000; recount delay p95 was
-about 57 s, frames mostly following posting. At 1,000 streams p99 doubled
-against sync. These are maintainer-provided pre-fix results; deterministic tests
-below establish liveness only, with no new timed measurements/performance verdict.
+The pre-fix ladder computed many recounts but sent few at 5,000 streams,
+consistent with desired-version-equality starvation. Samples measure oldest
+pending age, not completion wait; freshness does not locate individual sends.
+[Controlled results](stream-sidebar-arms-measured.md#writer-starvation-found-by-the-ladder)
+give pre/post-fix ranges by rate/arm. Tests below establish liveness separately.
 
 Every send retains #859: render/compute, authorize account/slug/own member, send.
 Another audience is checked first; its deny skips. Bound-member deny returns
@@ -167,6 +166,6 @@ registration ownership and member/account fairness, without duplicate slots or
 startup leaks. Item bounds do not bound bytes. Validate snapshot lag/error policy.
 These tests establish no HTTP/HTML, count-query, browser or multi-member results.
 
-PR 4 compares sync/async shared40, then async shared40/normal10+recount30, one
-variable per comparison, with queue/backlog/pool telemetry; growth disqualifies.
-Corrected controlled measurements, budget inputs and recommendation remain #832 work.
+PR 4's completed comparisons isolate scheduling and pool partitioning; growth
+disqualifies. The [candidate](stream-sidebar-arms-measured.md) still needs
+production budgets, an advance stability criterion and real-wiring validation.

@@ -46,11 +46,13 @@ Read the file for the area you change:
 | [`read-advance-results.md`](read-advance-results.md) | short read-advance costs, member isolation, matched posting/branching unions and #711 acceptance |
 | [`stream-sidebar-results.md`](stream-sidebar-results.md) | measured cost of live sidebar recounts per stream with distinct members (#812) |
 | [`stream-sidebar-bottleneck-results.md`](stream-sidebar-bottleneck-results.md) | where live sidebar latency goes at thousands of streams, and two test-only experiments (#826) |
-| [`stream-sidebar-pool-results.md`](stream-sidebar-pool-results.md) | #832 part 1: long-run protocol, freshness and synchronous writer witness, connection budget; controlled measurements pending |
+| [`stream-sidebar-pool-results.md`](stream-sidebar-pool-results.md) | #832 part 1: protocol, freshness and synchronous writer witness, connection budget; controlled results linked, production validation open |
 | [`stream-sidebar-queue-results.md`](stream-sidebar-queue-results.md) | #832 PR 2: bounded fair scheduler, cancellation, completion mailbox and mutation evidence; test-only writer composition in PR 3 |
 | [`stream-sidebar-writer-results.md`](stream-sidebar-writer-results.md) | #832 PR 3: test-only single-writer composition, delivery between batches, audience/cursor safety, revocation and mutation evidence; production gaps |
 | [`stream-sidebar-arms-results.md`](stream-sidebar-arms-results.md) | #832 PR 4: fixed-budget comparison arms, aggregate pool/queue telemetry and backlog exclusion |
-| [`stream-sidebar-arms-measured.md`](stream-sidebar-arms-measured.md) | #832 controlled results: every arm at 1,000/5,000 streams, the writer fix, five-minute queue plateau and the recommendation |
+| [`stream-sidebar-arms-measured.md`](stream-sidebar-arms-measured.md) | #832 controlled results: completion, writer fix, five-minute queue evidence, pool tradeoff and candidate pending stability/production validation |
+| [`stream-sidebar-arms-tables.md`](stream-sidebar-arms-tables.md) | #832 all arm/group workload totals, latency medians and min–max spreads, target/eligibility passes |
+| [`stream-sidebar-arms-accounting.md`](stream-sidebar-arms-accounting.md) | #832 all arm/group SQL/count/recount/acquisition/wait totals, peak leases, elapsed time and throughput |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |

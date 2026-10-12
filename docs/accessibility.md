@@ -42,8 +42,9 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   rules are in [`architecture/rendering.md`](architecture/rendering.md).
 - **Icons are decorative.** The shared `Icon` component hides its SVG from
   assistive technology and keyboard focus; icon-only buttons need `aria-label`.
-- **Assets exist.** ✓ Every `/static/` script, stylesheet and SVG `<use>` URL
-  resolves to an embedded file, ignoring queries and fragments. SVG fragments
+- **Assets exist.** ✓ Every `/static/` script, stylesheet, icon link, image
+  and SVG `<use>` URL resolves to an embedded file, ignoring queries and
+  fragments. SVG fragments
   must name a symbol in that sprite. `TestTemplateIcons` also checks every
   literal `Icon` call in templates, including ones outside the page fixtures.
 

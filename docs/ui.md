@@ -149,6 +149,11 @@ beside them (decisions 20 and 28):
 
 Which strings use a label is applied in #879.
 
+## Brand
+
+The speech-bubble frog logo and the flat frog mascot, with their files and
+rules, are in [`brand.md`](brand.md).
+
 ## Markup and accessibility
 
 The markup and accessibility rules, which `TestPagesMarkup` checks, and how to check a UI

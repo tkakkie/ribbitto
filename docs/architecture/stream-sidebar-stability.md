@@ -1,9 +1,8 @@
 # Sidebar queue stability criterion and evidence (#832, parts 1–2 of 3)
 
 Fixed before new measurement by the maintainer on 2026-10-12. This changes only
-the test harness. Part 2 completes the regression evidence below. Part 3
-(stage-1 configuration and plan) must follow before measurement; no activation
-is implied.
+the test harness. Part 2 completes the regression evidence below. The [part-3 stage-1 plan](stream-sidebar-stage1.md) adds configurations and the
+runner; all three parts must land before measurement. No activation is implied.
 
 The [recorded results](stream-sidebar-arms-measured.md) were decided by the old
 terminal guard: three strictly increasing ten-second means in the last thirty
@@ -14,7 +13,8 @@ no last-30-s or last-60-s automatic rejection.
 ## New window rule and telemetry
 
 Recommendation requires all three independent 600-second windows of the stage-1
-matrix to pass; part 3 aggregates them. `TestStreamCost` logs only per-window
+matrix to pass; the [stage-1 runner](stream-sidebar-stage1.md#matrix-and-commands)
+aggregates them. `TestStreamCost` logs only per-window
 `window-stable=pass|reject|inconclusive` and `window-eligible=true|false`, which
 cannot establish recommendation eligibility alone. Each window excludes `[0,60s)`
 from trend judgement. Compare adjacent two-minute means `[s,s+120s)` and

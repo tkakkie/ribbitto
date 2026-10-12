@@ -9,7 +9,7 @@ these rules change.
 ## Identity and format
 
 A message is identified by its `id` (UUIDv7) — in the DOM, and later in
-permalinks, reactions, editing and deleting. `event_seq` orders messages
+permalinks, reactions, pins, editing and deleting. `event_seq` orders messages
 and drives paging and unread counts (unique per organisation). An event
 reads its message by organisation, channel and `event_seq`; the message's
 stable identifier for the DOM and links remains `id`.
@@ -27,6 +27,9 @@ changing its `id` or `event_seq`.
 A reply will remain an ordinary message in the stream, linked to the
 message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
+
+Channel pins reference the current message; their permissions, limits
+and lifecycle rules are in [`pins.md`](pins.md) (*planned*, #880).
 
 ## Accepted bodies
 

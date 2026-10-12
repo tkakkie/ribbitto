@@ -40,8 +40,12 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   JavaScript is external, in `web/static`, and defines no globals. Vendored
   libraries (htmx, idiomorph) keep theirs. The nonce and external-script
   rules are in [`architecture/rendering.md`](architecture/rendering.md).
-- **Assets exist.** ✓ Every `/static/` script and stylesheet URL resolves
-  to a file in the embedded assets, using its path without the query string.
+- **Icons are decorative.** The shared `Icon` component hides its SVG from
+  assistive technology and keyboard focus; icon-only buttons need `aria-label`.
+- **Assets exist.** ✓ Every `/static/` script, stylesheet and SVG `<use>` URL
+  resolves to an embedded file, ignoring queries and fragments. SVG fragments
+  must name a symbol in that sprite. `TestTemplateIcons` also checks every
+  literal `Icon` call in templates, including ones outside the page fixtures.
 
 **Checking a UI change in a browser**, before the pull request says what
 was checked: use it with the keyboard only (Tab order, Enter and Space,

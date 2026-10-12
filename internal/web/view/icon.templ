@@ -1,0 +1,14 @@
+package view
+
+import "strconv"
+
+// Icon draws a decorative Fluent symbol at the given size in CSS pixels.
+templ Icon(name string, size int) {
+	{{
+		// Static markup does not otherwise use templ's generated context.
+		_ = ctx
+	}}
+	<svg aria-hidden="true" focusable="false" width={ strconv.Itoa(size) } height={ strconv.Itoa(size) } fill="currentColor" class="inline-block shrink-0">
+		<use href={ "/static/vendor/fluent-icons-1.1.344.svg#" + name }></use>
+	</svg>
+}

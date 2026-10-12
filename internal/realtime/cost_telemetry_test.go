@@ -122,6 +122,7 @@ func costQueueComplete(series []costQueueSample, duration time.Duration) bool {
 }
 
 func reportCostQueue(t *testing.T, series []costQueueSample, duration time.Duration, bound int) {
+	t.Logf("queue telemetry: complete=%t duration=%s bound=%d", costQueueComplete(series, duration), duration, bound)
 	if len(series) == 0 {
 		return
 	}

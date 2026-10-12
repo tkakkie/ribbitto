@@ -74,6 +74,12 @@ vendored assets are excluded. The pattern check does not evaluate dynamic expres
 | `danger` / `on-danger` | `#b42318` / `#ffffff` | error text; destructive buttons |
 | `pastel-1`…`pastel-6` / `on-pastel-1`…`on-pastel-6` | `#dcebff`/`#1f5aa6`, `#fff3c4`/`#7a5d00`, `#d9f2e6`/`#1d6b47`, `#ffe4d6`/`#9a4a1f`, `#ebe3ff`/`#5b3fa8`, `#ffe0ea`/`#a3284f` | channel images and avatar fills / their initials |
 
+**Illustration colours** belong to the brand artwork only
+([`brand.md`](brand.md)), never to CSS: the mascot's body `#4cc9a0`, shade
+`#2f9e83`, belly `#e9fbf3`, eyes `#1b2a2f`, cheeks `#ff9fb0` and mouth
+`#b2384f`, the lily pad `#6cc59a` and sleep marks `#8a9a95`, with white,
+black shadows and the `selected` and `brand` tokens.
+
 | Other token | Value |
 |---|---|
 | Fonts | `font-sans`: system UI fonts with Japanese fallbacks (Hiragino Sans, Noto Sans JP, Yu Gothic, Meiryo); `font-mono` for code. No web fonts (self-hosting and privacy). |
@@ -148,6 +154,14 @@ beside them (decisions 20 and 28):
   Latin-script word.
 
 Which strings use a label is applied in #879.
+
+## Brand
+
+The logo is at least 16 px, with clear space of a quarter of its size, in
+brand teal, white on a teal tile, or `currentColor` only. The mascot
+appears on welcome pages, empty states and while loading or sending; it is
+decorative (`alt=""`) and never the only carrier of information. Files,
+poses and details are in [`brand.md`](brand.md).
 
 ## Markup and accessibility
 

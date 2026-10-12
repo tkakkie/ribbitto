@@ -29,9 +29,12 @@ func checkAssets(doc *html.Node) []string {
 		case "script":
 			assetURL = attr(n, "src")
 		case "link":
-			if slices.Contains(strings.Fields(strings.ToLower(attr(n, "rel"))), "stylesheet") {
+			rel := strings.Fields(strings.ToLower(attr(n, "rel")))
+			if slices.Contains(rel, "stylesheet") || slices.Contains(rel, "icon") {
 				assetURL = attr(n, "href")
 			}
+		case "img":
+			assetURL = attr(n, "src")
 		case "use":
 			assetURL = attr(n, "href")
 		}

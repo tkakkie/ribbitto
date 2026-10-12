@@ -6,8 +6,9 @@ import (
 	"io/fs"
 )
 
-//go:embed css vendor *.js
+//go:embed css vendor brand *.js
 var files embed.FS
 
-// FS returns the embedded assets including CSS, vendored libraries and application scripts.
+// FS returns the embedded assets including CSS, vendored libraries, brand
+// images and application scripts.
 func FS() fs.FS { return files }

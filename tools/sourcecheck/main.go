@@ -143,9 +143,19 @@ func check(root string) ([]string, error) {
 				}
 				reportColour := func(value string) { report("docs/ui.md", "raw colour in template: "+value) }
 				if attr[1] == "class" {
-					classColours(attr[2], reportColour)
+					// Only real class text is checked (a dynamic expression's
+					// literals, not its comments), and each bracketed class is
+					// reported once: under the colour rule when it holds a raw
+					// colour, otherwise under the arbitrary-value rule.
 					arbitraryClasses(attr[2], func(class string) {
-						report("docs/ui-code.md", "arbitrary value in template class: "+class)
+						colour := false
+						classColours(class, func(value string) {
+							colour = true
+							reportColour(value)
+						})
+						if !colour {
+							report("docs/ui-code.md", "arbitrary value in template class: "+class)
+						}
 					})
 				} else {
 					cssColours(attr[2], reportColour)

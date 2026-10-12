@@ -39,8 +39,10 @@ Today's shared controls:
   value or variant (anything in square brackets, such as `w-[760px]` or
   `[&>li]:p-1`) is never used: add a token and document it instead.
   `tools/sourcecheck` rejects square brackets in template class
-  attributes, including string literals in dynamic class expressions;
-  computed class names are not evaluated, so reviewers check those.
+  attributes, including string literals in dynamic class expressions
+  (comments are skipped), and reports each such class once — under the
+  colour rule in [`ui.md`](ui.md) when it holds a raw colour; computed
+  class names are not evaluated, so reviewers check those.
 - **`web/styles/app.css` holds only** the tokens (`:root` colours and
   `@theme`), base styles, and what utilities cannot express: `@keyframes`,
   view transitions and the reduced-motion rule. No component classes and
@@ -63,6 +65,7 @@ The fixed widths of the desktop layout, and the block shape
 | `shadow-block` | a 1 px ring and a soft drop | blocks and cards |
 | `shadow-popover` | a deeper drop | menus, popovers and dialogs |
 
-**Layers.** Only four `z-index` values are used: `z-10` for something
+**Layers.** Only four `z-index` values are used, through Tailwind's
+built-in utilities, so no z-index tokens are added: `z-10` for something
 sticky inside a block, `z-20` for a panel over content, `z-30` for menus
 and popovers, `z-40` for dialogs.

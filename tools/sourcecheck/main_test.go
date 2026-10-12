@@ -87,6 +87,9 @@ func TestSources(t *testing.T) {
 		{"arbitrary after a brace in a string", "sample.templ", `<p class={ "}", "w-[760px]" }>`, "docs/ui-code.md"},
 		{"arbitrary after a brace in a block comment", "sample.templ", `<p class={ /* } */ "w-[760px]" }>`, "docs/ui-code.md"},
 		{"arbitrary after a brace in a line comment", "sample.templ", "<p class={ \"flex\", // }\n\"w-[760px]\" }>", "docs/ui-code.md"},
+		{"colour only in a block comment", "sample.templ", `<p class={ /* "bg-[#fff]" */ "flex" }>`, ""},
+		{"colour only in a line comment", "sample.templ", "<p class={ // \"text-[red]\"\n\"flex\" }>", ""},
+		{"colour after a comment", "sample.templ", `<p class={ /* } */ "flex", "bg-[#fff]" }>`, "docs/ui.md"},
 		{"arbitrary value only in comments", "sample.templ", "<p class={ /* \"w-[760px]\" */ \"flex\" // \"w-[1px]\"\n }>", ""},
 		{"comments without arbitrary values", "sample.templ", "<p class={ /* } */ \"flex\", // }\n\"w-sidebar\" }>", ""},
 		{"nested braces without arbitrary values", "sample.templ", `<p class={ []string{"flex"}, "w-sidebar", map[string]bool{"}": true} }>`, ""},
@@ -125,6 +128,37 @@ func TestSources(t *testing.T) {
 				t.Fatalf("problems %q, want only the arbitrary-value rule", got)
 			}
 		})
+	}
+}
+
+// A bracketed class is one problem, never one per rule.
+func TestOneReportPerClass(t *testing.T) {
+	labels, err := os.ReadFile("../../docs/domain/vocabulary.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{
+		`<p class="bg-[#fff]">`,
+		`<p class={ "flex", "bg-[#fff]" }>`,
+		`<p class="w-[760px]">`,
+	} {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "docs/domain"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "docs/domain/vocabulary.md"), labels, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "sample.templ"), []byte(source), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		problems, err := check(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(problems) != 1 {
+			t.Errorf("%s: problems %q, want exactly one", source, problems)
+		}
 	}
 }
 

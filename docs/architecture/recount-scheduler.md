@@ -1,7 +1,7 @@
 # Bounded recount scheduler
 
-Parts 1a–1b of #865 implement `realtime.RecountScheduler`, but neither
-`Stream.Run` nor `cmd/ribbitto` uses it. Production keeps synchronous
+Parts 1a–1d of #865 implement `realtime.RecountScheduler` and optional
+`Stream.Recounts`; `cmd/ribbitto` leaves it nil. Production keeps synchronous
 sidebar delivery and the unchanged `SidebarInterval` ([streaming](streaming.md)).
 This core adds no database access, deployment capacity or shutdown wiring.
 
@@ -25,8 +25,17 @@ unchanged, without retry. A computation panic is recovered into the completion's
 `Err`, including the panic value and stack trace, with empty output; the scheduler
 does not log it. The worker stays alive and dispatches further eligible work,
 including that registration's pending successor. This recovery covers the
-computation on the worker, not goroutines started by it. The future writer owns error policy, generation capture,
-version acceptance and authorization immediately before sending.
+computation on the worker, not goroutines started by it. The writer stops on
+completion errors (including panics), wrapping them as synchronous recount errors.
+
+The writer registers once, cancels on every exit and releases its watch on refusal
+with `ErrRecountRefused`. It consumes completions while idle and between batches,
+accepting only versions newer than the last sent; later invalidations stay dirty.
+Each completed attempt starts the unchanged `SidebarInterval`. Computations capture
+the watch generation at their boundary, guarded against access after release;
+only that generation is covered by delivery. The writer checks parent cancellation,
+then bound membership immediately before each id-free sidebar frame. Durable
+delivery and heartbeats continue during queued/running work; late results cannot send.
 
 `Cancel` is idempotent: it removes pending work and queued eligibility, cancels
 the computation context, drains and closes the mailbox, and suppresses late

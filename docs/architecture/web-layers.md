@@ -8,7 +8,7 @@ Core functionality works without JavaScript. JavaScript is progressive
 enhancement, not full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
-  a channel, its members page or a topic and its history (including older pages), posting a message,
+  a channel or topic with its history (including older pages) and its members panel, posting a message,
   branching, marking a feed or topic read, and creating channels. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
@@ -60,7 +60,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   updating every reference in the same pull request. Today's contract ids
   are `organization-stream`, `stream-sink`, `conversation`, `message-list`, `message-items`, `load-older`,
   `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
-  `read-form`, `members-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
+  `read-form`, `side-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
   `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and
@@ -79,15 +79,14 @@ htmx does only requests and swaps; the server and templ own the HTML.
   | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
   | `data-event-seq` | each message `<li>` | always | its `event_seq`, which orders an inserted item |
   | `data-source` | each message's checkbox | always | its topic's ID; a selection stays within one source topic |
-- Every channel/topic or members page, including `?before=` pages, carries
+- Every channel/topic page, including `?before=` and panel pages, carries
   `data-event-cursor` on `#organization-stream`, the outer layout div outside
-  every swap target. It wraps the sidebar and conversation or members panel, with `hx-ext="sse"`
+  every swap target. It wraps the sidebar, conversation and any panel, with `hx-ext="sse"`
   and `sse-connect="/organizations/<slug>/events?after=<cursor>&want=<interests>&channel=<id>"`
   (plus `topic=<id>` on all topic views). Latest pages declare
-  `sidebar,messages,typing`; older pages declare `sidebar`; members pages declare `sidebar,presence` with
-  `presence-after` from the same snapshot as their indicators and `panel=members`
-  to suppress feed selection. Older topic pages retain `topic`.
-  Members navigation and paging use ordinary links; `#members-list` is bounded
+  `sidebar,messages,typing`; older pages declare `sidebar`; the members panel adds `presence` with
+  `presence-after` from the same snapshot as its indicators. Older topic pages retain `topic`.
+  Panels open, page and close with ordinary links (#874); `#members-list` is bounded
   to 100 names and has no live list swap or live region. Presence entries replace
   individual labeled indicators by stable DOM id.
   See [stream scope](streaming.md#stream-scope). `reset` handling attaches to
@@ -115,7 +114,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `/read`: `POST /organizations/{slug}/channels/{channelID}/read` or
   `/organizations/{slug}/channels/{channelID}/topics/{topicID}/read`. `hx-trigger="read-visible, submit"`, `hx-sync="this:drop"` and `hx-swap="none"`
   send automatic and manual POSTs without swapping history or overlapping reads.
-  Members and `?before=` pages omit it. The endpoint resolves visibility,
+  `?before=` pages omit it. The endpoint resolves visibility,
   calls the transaction-owning unread use case and returns 204 to htmx or a 303
   for the plain form.
 - The layout's `htmx-config` meta tag holds htmx's security settings and

@@ -21,13 +21,13 @@ templ SignIn(stylesheetURL string, form SignInForm) {
 			<form method="post" action="/signin" class="flex flex-col gap-4">
 				<label class="flex flex-col gap-1 text-body text-fg">
 					{ i18n.T(ctx, "signin.email") }
-					<input type="email" name="email" value={ form.Email } autocomplete="username" required class="min-h-11 rounded-md border border-border-strong bg-input px-3 py-2 text-body text-fg"/>
+					@textInput(inputProps{Type: "email", Name: "email", Value: form.Email, Autocomplete: "username", Required: true})
 				</label>
 				<label class="flex flex-col gap-1 text-body text-fg">
 					{ i18n.T(ctx, "signin.password") }
-					<input type="password" name="password" autocomplete="current-password" required class="min-h-11 rounded-md border border-border-strong bg-input px-3 py-2 text-body text-fg"/>
+					@textInput(inputProps{Type: "password", Name: "password", Autocomplete: "current-password", Required: true})
 				</label>
-				<button type="submit" class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand">{ i18n.T(ctx, "signin.submit") }</button>
+				@submitButton(buttonPrimary, "signin.submit")
 			</form>
 			if form.SignUpOpen {
 				<a href="/signup" class="flex min-h-11 items-center text-body text-brand">{ i18n.T(ctx, "signup.title") }</a>

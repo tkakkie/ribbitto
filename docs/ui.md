@@ -79,12 +79,13 @@ vendored assets are excluded. The pattern check does not evaluate dynamic expres
 | Fonts | `font-sans`: system UI fonts with Japanese fallbacks (Hiragino Sans, Noto Sans JP, Yu Gothic, Meiryo); `font-mono` for code. No web fonts (self-hosting and privacy). |
 | Type scale | `text-caption` 12/16 · `text-body` 14/22 · `text-title` 15/22 · `text-heading` 20/28 · `text-display` 28/36 (px, size/line height) |
 | Spacing | `--spacing: 0.25rem` — a 4 px grid (`p-1` = 4 px, `p-4` = 16 px) |
-| Radius | `rounded-sm` 4 px · `rounded-md` 6 px · `rounded-lg` 10 px |
-| Shadow | `shadow-card` (subtle lift) · `shadow-popover` (menus, dialogs) |
+| Radius | `rounded-sm` 4 px · `rounded-md` 6 px · `rounded-lg` 10 px · `rounded-xl` 12 px (blocks) |
+| Shadow | `shadow-block` (blocks, cards) · `shadow-popover` (menus, dialogs) |
 | Focus | 2 px `brand` outline, 2 px offset, on `:focus-visible` |
 
-Dimension tokens for the blocks, panel and reading column come with the
-shared components (#882); motion tokens with #878.
+The layout widths (`w-rail`, `w-sidebar`, `w-panel`, `max-w-reading`),
+the shared components and how templates and styles are written are in
+[`ui-code.md`](ui-code.md); motion tokens come with #878.
 
 ## Contrast (WCAG 2.2 AA)
 

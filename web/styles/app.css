@@ -118,9 +118,18 @@
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;
+  /* The rounded blocks: app bar, conversation, side panel (docs/ui.md). */
+  --radius-xl: 12px;
 
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 1px rgb(0 0 0 / 0.04);
-  --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.12);
+  /* Two levels only: blocks and cards, then menus and dialogs. */
+  --shadow-block: 0 0 0 1px rgb(0 0 0 / 0.05), 0 1px 3px rgb(0 0 0 / 0.06);
+  --shadow-popover: 0 0 2px rgb(0 0 0 / 0.12), 0 8px 16px rgb(0 0 0 / 0.14);
+
+  /* Fixed widths of the desktop layout (w-rail, w-sidebar, w-panel, max-w-reading). */
+  --container-rail: 4.75rem;
+  --container-sidebar: 16.5rem;
+  --container-panel: 21.25rem;
+  --container-reading: 47.5rem;
 }
 
 @layer base {

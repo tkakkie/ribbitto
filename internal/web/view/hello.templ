@@ -40,6 +40,6 @@ templ Hello(stylesheetURL string, viewer Viewer) {
 // a POST.
 templ SignOutButton() {
 	<form method="post" action="/signout">
-		<button type="submit" class="min-h-11 rounded-md border border-border-strong px-3 py-1 text-body text-fg">{ i18n.T(ctx, "signout.submit") }</button>
+		@submitButton(buttonSecondary, "signout.submit")
 	</form>
 }

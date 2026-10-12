@@ -53,14 +53,15 @@ func TestSources(t *testing.T) {
 		{"arbitrary property", "sample.templ", `<p class="[color:red]">`, "docs/ui.md"},
 		{"ordinary class", "sample.templ", `<p class="red white-space">`, ""},
 		{"style property", "sample.templ", `<p style="white-space: nowrap">`, ""},
-		{"class property", "sample.templ", `<p class="[white-space:pre]">`, ""},
+		{"class property", "web/styles/app.css", `.x { @apply [white-space:pre]; }`, ""},
 		{"css function", "web/styles/app.css", `.x { rotate: calc(tan(1deg) * 1turn); }`, ""},
 		{"css spaced function", "web/styles/app.css", `.x { rotate: tan (1deg); }`, ""},
 		{"css quoted", "web/styles/app.css", `.x { font-family: "Navy Sans"; }`, ""},
 		{"apply quoted", "web/styles/app.css", `.x { content: "@apply bg-[#fff]"; }`, ""},
 		{"style quoted", "sample.templ", `<p style='font-family: "Navy Sans"'>`, ""},
 		{"data attribute", "sample.templ", `<p data-style="red" data-class="bg-[#fff]">`, ""},
-		{"colour reference", "sample.templ", `<p class="text-[var(--white)]" style="color: var(--red)">`, ""},
+		{"colour reference", "sample.templ", `<p style="color: var(--red)">`, ""},
+		{"colour reference class", "web/styles/app.css", `.x { @apply text-[var(--white)]; }`, ""},
 		{"agent worktree", ".claude/worktrees/pond/sample.go", "package pond", ""},
 		{"neutral go", "sample.go", `package ribbitto; var pondering, marshalled, Ponding int; var label = "pond" // ribbit`, ""},
 		{"neutral sql", "sample.sql", "-- pond\n/* marsh */ SELECT pondering, 'ribbit', $$lilypad$$, $tag$chorus$tag$;", ""},
@@ -69,9 +70,29 @@ func TestSources(t *testing.T) {
 		{"docs", "docs/pond.go", "package pond", ""},
 		{"vendor", "web/static/vendor/pond.go", "package pond", ""},
 		{"generated css", "web/static/css/app.css", `.x { color: red; }`, ""},
-		{"image class", "sample.templ", `<p class="bg-[url('/images/red.svg')]">`, ""},
-		{"unquoted image class", "sample.templ", `<p class="bg-[url(https://example.com/red.svg)]">`, ""},
-		{"token classes", "sample.templ", `<p class="bg-brand text-[var(--color-fg)] bg-[transparent] text-[currentColor] text-[14px]" style="color: var(--rb-fg); background: transparent; border-color: currentColor">`, ""},
+		{"image class", "web/styles/app.css", `.x { @apply bg-[url('/images/red.svg')]; }`, ""},
+		{"unquoted image class", "sample.templ", `<p class="bg-[url(https://example.com/red.svg)]">`, "docs/ui-code.md"},
+		{"token classes", "web/styles/app.css", `.x { @apply bg-brand text-[var(--color-fg)] bg-[transparent] text-[currentColor] text-[14px]; }`, ""},
+		{"token styles", "sample.templ", `<p class="bg-brand" style="color: var(--rb-fg); background: transparent; border-color: currentColor">`, ""},
+		{"arbitrary size", "sample.templ", `<p class="p-4 w-[760px]">`, "docs/ui-code.md"},
+		{"arbitrary token reference", "sample.templ", `<p class="text-[var(--color-fg)]">`, "docs/ui-code.md"},
+		{"arbitrary in dynamic class", "sample.templ", `<p class={ "flex", "max-w-[47rem]" }>`, "docs/ui-code.md"},
+		{"arbitrary in raw string", "sample.templ", "<p class={ `grid-cols-[1fr_2fr]` }>", "docs/ui-code.md"},
+		{"arbitrary variant", "sample.templ", `<ul class="[&>li]:p-1">`, "docs/ui-code.md"},
+		{"arbitrary data variant", "sample.templ", `<p class="data-[open]:flex">`, "docs/ui-code.md"},
+		{"ordinary utilities", "sample.templ", `<p class="hover:bg-hover peer-empty:flex focus-visible:outline-2 -mt-1 w-1/2 min-h-11 max-w-reading sr-only">`, ""},
+		{"dynamic class", "sample.templ", `<p class={ templ.KV("hidden", hidden), "text-muted", name }>`, ""},
+		{"computed class", "sample.templ", `<p class={ classesFor(kind) }>`, ""},
+		{"arbitrary after a nested brace", "sample.templ", `<p class={ []string{"flex"}, "w-[760px]" }>`, "docs/ui-code.md"},
+		{"arbitrary after a brace in a string", "sample.templ", `<p class={ "}", "w-[760px]" }>`, "docs/ui-code.md"},
+		{"arbitrary after a brace in a block comment", "sample.templ", `<p class={ /* } */ "w-[760px]" }>`, "docs/ui-code.md"},
+		{"arbitrary after a brace in a line comment", "sample.templ", "<p class={ \"flex\", // }\n\"w-[760px]\" }>", "docs/ui-code.md"},
+		{"colour only in a block comment", "sample.templ", `<p class={ /* "bg-[#fff]" */ "flex" }>`, ""},
+		{"colour only in a line comment", "sample.templ", "<p class={ // \"text-[red]\"\n\"flex\" }>", ""},
+		{"colour after a comment", "sample.templ", `<p class={ /* } */ "flex", "bg-[#fff]" }>`, "docs/ui.md"},
+		{"arbitrary value only in comments", "sample.templ", "<p class={ /* \"w-[760px]\" */ \"flex\" // \"w-[1px]\"\n }>", ""},
+		{"comments without arbitrary values", "sample.templ", "<p class={ /* } */ \"flex\", // }\n\"w-sidebar\" }>", ""},
+		{"nested braces without arbitrary values", "sample.templ", `<p class={ []string{"flex"}, "w-sidebar", map[string]bool{"}": true} }>`, ""},
 		{"token css", "web/styles/app.css", `@source "./*.css"; /* tokens */ :root { --rb-bg: #fff; } @media (x) { :root { --rb-bg: #000; } } @theme { --shadow-card: 0 0 1px black; } .x { color: var(--rb-bg); }`, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -101,7 +122,43 @@ func TestSources(t *testing.T) {
 			if tt.rule == "" && got != "" || tt.rule != "" && (!strings.Contains(got, wantPath) || !strings.Contains(got, tt.rule)) {
 				t.Fatalf("problems %q, want file %q and rule %q", got, tt.path, tt.rule)
 			}
+			// An arbitrary value is reported once, by its own rule; the colour
+			// check must not misfire on it as well.
+			if tt.rule == "docs/ui-code.md" && strings.Contains(got, "(docs/ui.md)") {
+				t.Fatalf("problems %q, want only the arbitrary-value rule", got)
+			}
 		})
+	}
+}
+
+// A bracketed class is one problem, never one per rule.
+func TestOneReportPerClass(t *testing.T) {
+	labels, err := os.ReadFile("../../docs/domain/vocabulary.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{
+		`<p class="bg-[#fff]">`,
+		`<p class={ "flex", "bg-[#fff]" }>`,
+		`<p class="w-[760px]">`,
+	} {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "docs/domain"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "docs/domain/vocabulary.md"), labels, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "sample.templ"), []byte(source), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		problems, err := check(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(problems) != 1 {
+			t.Errorf("%s: problems %q, want exactly one", source, problems)
+		}
 	}
 }
 

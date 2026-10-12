@@ -1,0 +1,71 @@
+# UI code
+
+How templates and styles are written so that pages built by different
+people and AIs still look like one product ([decision 33](decisions/33-ui-code-shared-components-and-token-utilities-only.md)).
+What the UI looks like is in [`ui.md`](ui.md); markup and accessibility
+rules are in [`accessibility.md`](accessibility.md).
+
+**Keep it current:** update this file in the same pull request when a
+shared component, a dimension token or one of these rules changes.
+
+## Shared components
+
+A look used in two places becomes a component in `internal/web/view`, and
+pages compose components instead of repeating a control's class string.
+Today's shared controls:
+
+| Component | File | Use |
+|---|---|---|
+| `submitButton` | `internal/web/view/controls.templ` | a form's submit button, labelled by a message ID: `buttonPrimary` (the main action), `buttonSecondary` (outlined), `buttonLink` (looks like a link, still submits) |
+| `textInput` | `internal/web/view/controls.templ` | a single-line text input; the caller supplies its label |
+| `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up) |
+| `unreadBadge` | `internal/web/view/channel.templ` | an unread count with its screen-reader text |
+
+- **Links navigate, buttons act.** Going somewhere is an `<a href>`;
+  anything that changes state is a submit button in a form, even when it
+  should look like a link (`buttonLink`).
+- **Components take small inputs** — a label, a kind, a props struct —
+  and decide nothing about permissions or data; handlers prepare view
+  models (`docs/architecture/web-layers.md`).
+- **A new component arrives with its first user.** The rounded block, the
+  icon-only button and the account menu come with #872, the avatar with
+  #873, the panel with #874, the channel image with #875. When a page is
+  restyled, its repeated looks (links, for example) become components too.
+
+## Styles
+
+- **Templates use token utilities only.** Colours, sizes, radii and shadows
+  come from tokens in `web/styles/app.css`. A utility with an arbitrary
+  value or variant (anything in square brackets, such as `w-[760px]` or
+  `[&>li]:p-1`) is never used: add a token and document it instead.
+  `tools/sourcecheck` rejects square brackets in template class
+  attributes, including string literals in dynamic class expressions
+  (comments are skipped), and reports each such class once — under the
+  colour rule in [`ui.md`](ui.md) when it holds a raw colour; computed
+  class names are not evaluated, so reviewers check those.
+- **`web/styles/app.css` holds only** the tokens (`:root` colours and
+  `@theme`), base styles, and what utilities cannot express: `@keyframes`,
+  view transitions and the reduced-motion rule. No component classes and
+  no `@apply` for components; no `style` attributes in templates.
+- **Spacing** follows the 4 px grid; a container sets the space between
+  its children with `gap`, rather than margins on each child.
+
+## Dimension tokens
+
+The fixed widths of the desktop layout, and the block shape
+([`ui.md`](ui.md#layout-principles)):
+
+| Utility | Value | Use |
+|---|---|---|
+| `w-rail` | 76 px | the app bar block |
+| `w-sidebar` | 264 px | the channel sidebar |
+| `w-panel` | 340 px | a side panel (#874); room for an overview banner and a members list with names and handles |
+| `max-w-reading` | 760 px | the conversation's reading column |
+| `rounded-xl` | 12 px | the rounded blocks |
+| `shadow-block` | a 1 px ring and a soft drop | blocks and cards |
+| `shadow-popover` | a deeper drop | menus, popovers and dialogs |
+
+**Layers.** Only four `z-index` values are used, through Tailwind's
+built-in utilities, so no z-index tokens are added: `z-10` for something
+sticky inside a block, `z-20` for a panel over content, `z-30` for menus
+and popovers, `z-40` for dialogs.

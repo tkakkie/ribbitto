@@ -1,0 +1,73 @@
+package view
+
+import "github.com/tkakkie/ribbitto/internal/web/i18n"
+
+// Shared controls: each look lives here once, and pages compose these
+// components instead of repeating class strings (docs/ui-code.md).
+
+// buttonKind chooses one of the shared looks of a submit button.
+type buttonKind int
+
+const (
+	// buttonPrimary is the brand-filled main action of a form.
+	buttonPrimary buttonKind = iota
+	// buttonSecondary is an outlined, less prominent action.
+	buttonSecondary
+	// buttonLink looks like a link but submits its form, so it stays a
+	// button: it changes state, which a link must never do.
+	buttonLink
+)
+
+// submitButton is the one place a form's submit button gets its look; label
+// is a message ID. Navigation is a link (<a href>), never this component.
+templ submitButton(kind buttonKind, label string) {
+	switch kind {
+		case buttonSecondary:
+			<button type="submit" class="min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover">{ i18n.T(ctx, label) }</button>
+		case buttonLink:
+			<button type="submit" class="inline-flex min-h-11 items-center text-body text-brand underline">{ i18n.T(ctx, label) }</button>
+		default:
+			<button type="submit" class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand">{ i18n.T(ctx, label) }</button>
+	}
+}
+
+// inputProps holds what differs between text inputs; their look is shared.
+type inputProps struct {
+	ID, Name, Type, Value, Autocomplete string
+	Required                            bool
+	// Invalid becomes aria-invalid when set ("true" or "false"); empty omits it.
+	Invalid string
+	// DescribedBy becomes aria-describedby when set.
+	DescribedBy string
+}
+
+// textInput is the one place a single-line text input gets its look. Its
+// label is the caller's: a wrapping <label> or one pointing at ID.
+templ textInput(p inputProps) {
+	// templ's generated code reassigns ctx in every component; this one
+	// needs no context, so mark it used for staticcheck (SA4006).
+	{{ _ = ctx }}
+	<input
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		if p.Type != "" {
+			type={ p.Type }
+		}
+		name={ p.Name }
+		value={ p.Value }
+		if p.Autocomplete != "" {
+			autocomplete={ p.Autocomplete }
+		}
+		if p.Required {
+			required
+		}
+		if p.Invalid != "" {
+			aria-invalid={ p.Invalid }
+		}
+		if p.DescribedBy != "" {
+			aria-describedby={ p.DescribedBy }
+		}
+		class="min-h-11 min-w-0 rounded-md border border-border-strong bg-input px-3 py-2 text-body text-fg"
+	/>
+}

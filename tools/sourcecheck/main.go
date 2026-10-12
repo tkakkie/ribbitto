@@ -133,10 +133,30 @@ func check(root string) ([]string, error) {
 		case ".sql":
 			sqlVocabulary(string(data), vocabulary)
 		case ".templ":
-			for _, attr := range attributes.FindAllStringSubmatch(string(data), -1) {
+			source := string(data)
+			for _, loc := range attributes.FindAllStringSubmatchIndex(source, -1) {
+				attr := []string{"", source[loc[2]:loc[3]], source[loc[4]:loc[5]]}
+				// The pattern stops a {…} value at its first brace; read the
+				// whole Go expression so later literals are checked too.
+				if strings.HasPrefix(attr[2], "{") {
+					attr[2], _ = goExpression(source[loc[4]:])
+				}
 				reportColour := func(value string) { report("docs/ui.md", "raw colour in template: "+value) }
 				if attr[1] == "class" {
-					classColours(attr[2], reportColour)
+					// Only real class text is checked (a dynamic expression's
+					// literals, not its comments), and each bracketed class is
+					// reported once: under the colour rule when it holds a raw
+					// colour, otherwise under the arbitrary-value rule.
+					arbitraryClasses(attr[2], func(class string) {
+						colour := false
+						classColours(class, func(value string) {
+							colour = true
+							reportColour(value)
+						})
+						if !colour {
+							report("docs/ui-code.md", "arbitrary value in template class: "+class)
+						}
+					})
 				} else {
 					cssColours(attr[2], reportColour)
 				}
@@ -241,6 +261,71 @@ func classColours(source string, report func(string)) {
 		}
 		if rawColour(value) {
 			report(value)
+		}
+	}
+}
+
+// goExpression returns the brace-delimited Go expression at the start of
+// source and the contents of its string and raw string literals, skipping
+// comments and rune literals, so braces and text inside them neither end
+// the expression nor count as classes. An unbalanced expression runs to the
+// end of source.
+func goExpression(source string) (string, []string) {
+	var literals []string
+	depth := 0
+	for i := 0; i < len(source); i++ {
+		switch source[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return source[:i+1], literals
+			}
+		case '"', '\'', '`':
+			quote, from := source[i], i+1
+			for i++; i < len(source) && source[i] != quote; i++ {
+				if source[i] == '\\' && quote != '`' {
+					i++
+				}
+			}
+			if quote != '\'' {
+				literals = append(literals, source[from:min(i, len(source))])
+			}
+		case '/':
+			if strings.HasPrefix(source[i:], "//") {
+				if end := strings.IndexByte(source[i:], '\n'); end >= 0 {
+					i += end
+				} else {
+					i = len(source)
+				}
+			} else if strings.HasPrefix(source[i:], "/*") {
+				if end := strings.Index(source[i+2:], "*/"); end >= 0 {
+					i += end + 3
+				} else {
+					i = len(source)
+				}
+			}
+		}
+	}
+	return source, literals
+}
+
+// arbitraryClasses reports utilities with an arbitrary value or variant
+// (anything in square brackets): sizes and colours come from tokens, so a
+// one-off value gets a token instead (docs/ui-code.md). In a dynamic class
+// expression only its string literals are checked; computed names are not
+// evaluated.
+func arbitraryClasses(source string, report func(string)) {
+	values := []string{source[1 : len(source)-1]}
+	if strings.HasPrefix(source, "{") {
+		_, values = goExpression(source)
+	}
+	for _, value := range values {
+		for _, class := range strings.Fields(value) {
+			if strings.Contains(class, "[") {
+				report(class)
+			}
 		}
 	}
 }

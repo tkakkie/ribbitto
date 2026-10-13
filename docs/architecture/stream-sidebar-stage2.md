@@ -1,6 +1,6 @@
 # Sidebar stage-2 protocol (#865, PR 3)
 
-The [proposal, Claude review and maintainer decisions of 2026-10-13](https://github.com/tkakkie/ribbitto/issues/865) fix this protocol before measurement. **Runs start only on the maintainer's explicit instruction**, after harness review and functional checks. The current slices add the contract, operation measurement primitives and seed fixture; there is no runner yet. 36/26 remains a validation configuration; activation is a separate decision, and #832/#865 remain open.
+The [proposal, Claude review and maintainer decisions of 2026-10-13](https://github.com/tkakkie/ribbitto/issues/865) fix this protocol before measurement. **Runs start only on the maintainer's explicit instruction**, after harness review and functional checks. The current slices add the contract, operation measurement primitives, seed fixture and post/page drivers; there is no runner yet. 36/26 remains a validation configuration; activation is a separate decision, and #832/#865 remain open.
 
 The driver will extend `cmd/loadgen`: its [HTTP-only boundary](packages.md) and [existing transport, complete-frame parser and receipt comparison](load-client.md) support the real authenticated workload without application imports. Stage 2 pins a loopback HTTP target for HTTP/1.1; the existing HTTPS transport negotiates HTTP/2 and must not be used. The old stability evaluator is private `realtime_test` code, not importable; this slice records the [unchanged rule](stream-sidebar-stability.md), without duplicating its evaluator. Extraction/reuse belongs to the evaluator slice.
 
@@ -36,3 +36,8 @@ channel. Its 500 messages split 250 default-topic (including two branch notices)
 all topics once. Version-1 credential metadata identifies members, sessions,
 channels and topics; a fixture seed reproduces semantic content, not credentials
 or generated IDs. No traffic driver or measurement runner is added.
+
+Slice 3-2a validates credential version/seed, channel/topic counts and N distinct
+members/sessions. Metadata cannot attest message counts. Post/page drivers rotate
+members by slot ID and named topics by topic slot, using loopback HTTP/1.1 and
+`stage2HTTP`. Posts carry the caller's page cursor; reads and proof remain 3-2b.

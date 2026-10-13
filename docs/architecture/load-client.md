@@ -167,5 +167,6 @@ Each JSON object names its verdict's reasons: `Slow` (p95 over 1 s),
 `Reset`, `Failed` and `PostFailed`. Latencies are `P50MS`, `P95MS` and
 `MaxMS`, and `Server.Delta` holds the step's database and pool costs.
 
-[Stage-2 seed metadata](../seed-data.md#stage-2-fixture) provides N members/sessions
-and channel/topic IDs. Traffic drivers are a later slice; measurements require approval.
+[Stage-2 credentials](../seed-data.md#stage-2-fixture) supply authenticated
+post/page drivers over loopback HTTP/1.1 (slice 3-2a). Read drivers and the runner
+follow; measurements require approval.

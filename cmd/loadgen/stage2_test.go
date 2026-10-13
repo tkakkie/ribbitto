@@ -16,7 +16,7 @@ func TestStage2Protocol(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Pin the entire pre-registration, including scopes and nonnumeric gates.
-	if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != "662ecf275f2bd7b24bca070457dc49cf45d84b8479e47dc83a6ae1e940a77a6a" {
+	if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != "1911275ad35eae2ccf365dfc022ea3829363254311db8eb0413021f515201215" {
 		t.Fatalf("protocol changed: %s", got)
 	}
 	p.Gates[0].Limits[0] = 999
@@ -35,16 +35,23 @@ func TestStage2Schema(t *testing.T) {
 	gates := []stage2Verdict{{"message-delivery", "inconclusive", map[string]float64{"count": 0}}}
 	w := stage2Window{Version: 1, Kind: "window", Protocol: p, Config: c, Effective: e,
 		Samples: []stage2Sample{{0, "traffic", metrics}}, Operations: []stage2Operation{{Operation: "post", Endpoint: "feed", HTTP: stage2Latency{1, 1, 2, 3}}},
-		Delivery: stage2Delivery{Message: stage2Latency{1, -1, 2, 3}},
+		Delivery: stage2Delivery{Message: stage2ReceiptLatency{100, 1, -5, 1, 2, 3}, PostFreshness: stage2ReceiptLatency{1, 1, -2, -2, -2, -2}, ReadFreshness: stage2ReceiptLatency{1, 1, -3, -3, -3, -3}},
 		Attempts: []stage2Attempt{{Operation: "replacement", LogicalID: 1, Attempt: 2, Status: 503, Outcome: "refused_capacity"}}, Gates: gates}
-	m := stage2Manifest{Version: 1, Kind: "manifest", Protocol: p, Windows: []stage2WindowRef{{"window.json", strings.Repeat("a", 64), c, e}}, Gates: gates}
+	m := stage2Manifest{Version: 1, Kind: "manifest", Protocol: p, Gates: gates}
+	for _, group := range p.Groups {
+		for _, arm := range p.Arms {
+			for round := 1; round <= p.Rounds; round++ {
+				m.Windows = append(m.Windows, stage2WindowRef{"completed", "", "window.json", strings.Repeat("a", 64), stage2Config{group, arm, round, 42, 43}, &stage2Effective{arm, group.Streams, metrics}})
+			}
+		}
+	}
 	for i, record := range []any{w, m} {
 		raw, err := json.Marshal(record)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Fixed examples prevent changing the version-1 wire shape unnoticed.
-		if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != [2]string{"62dbde37e816d74f5d5e1d3f7e8fa650e36b8699e31fee4e3f8510ca9fd0da00", "4291b63345b2d2b0cd4b9d22c365345f0b3677ddc5e3d8c11c74397ae8b83567"}[i] {
+		if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != [2]string{"8cb058e36c929f1360334886440a671b574588d1510a70ab388ce40a370ee441", "26228474dc87c94384e545f134f78583153783faba3b56f1028affd575943f6d"}[i] {
 			t.Errorf("version-1 schema changed: %s", got)
 		}
 		dst := reflect.New(reflect.TypeOf(record)).Interface()
@@ -54,7 +61,13 @@ func TestStage2Schema(t *testing.T) {
 		if !reflect.DeepEqual(record, reflect.ValueOf(dst).Elem().Interface()) {
 			t.Fatal("round trip changed result")
 		}
-		for _, pair := range [][2]string{{`"Version":1`, `"Version":2`}, {`"Round":1`, `"Round":0`}, {`"Streams":1000`, `"Streams":999`}, {`"P95MS":2`, `"P95MS":"bad"`}, {`"Version":1`, `"Version":1,"Version":1`}, {`"State":"inconclusive"`, `"State":"unknown"`}} {
+		for _, pair := range [][2]string{{`"Version":1`, `"Version":2`}, {`"Round":1`, `"Round":0`}, {`"Streams":1000`, `"Streams":999`}, {`"P95MS":2`, `"P95MS":"bad"`}, {`"Version":1`, `"Version":1,"Version":1`}, {`"State":"inconclusive"`, `"State":"unknown"`},
+			{`"Early":1`, `"Early":101`}, {`"Early":1`, `"Early":0`}, {`"MinMS":-5`, `"MinMS":0`}, {`"MinMS":0`, `"MinMS":-1`}, {`"MinMS":0`, `"MinMS":1`},
+			{`"MinMS":-2`, `"MinMS":0`}, {`"MinMS":-3`, `"MinMS":0`},
+			{`"Count":100,"Early":1,"MinMS":-5`, `"Count":0,"Early":0,"MinMS":1`}, {`"Count":100,"Early":1,"MinMS":-5`, `"Count":100,"Early":0,"MinMS":2`},
+			{`"File":"window.json"`, `"File":""`}, {`"SHA256":"` + strings.Repeat("a", 64) + `"`, `"SHA256":"aa"`},
+			{`"SHA256":"` + strings.Repeat("a", 64) + `"`, `"SHA256":"` + strings.Repeat("a", 64) + `zz"`},
+			{`"State":"completed"`, `"State":"unknown"`}, {`"State":"completed"`, `"State":"failed"`}, {`"State":"completed"`, `"State":"unrun"`}, {`"Reason":""`, `"Reason":"unexpected"`}} {
 			bad := strings.Replace(string(raw), pair[0], pair[1], 1)
 			if bad != string(raw) && decodeStage2([]byte(bad), dst) == nil {
 				t.Fatalf("accepted invalid %s", pair[1])
@@ -65,6 +78,55 @@ func TestStage2Schema(t *testing.T) {
 			t.Fatal(err)
 		}
 		stage2MissingFields(t, tree, tree, dst)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*stage2Manifest)
+		valid  bool
+	}{
+		{"failed without evidence", func(m *stage2Manifest) {
+			m.Windows[0] = stage2WindowRef{State: "failed", Reason: "startup failed", Config: m.Windows[0].Config}
+		}, true},
+		{"failed with evidence", func(m *stage2Manifest) { m.Windows[0].State, m.Windows[0].Reason = "failed", "interrupted" }, true},
+		{"unrun", func(m *stage2Manifest) {
+			m.Windows[0] = stage2WindowRef{State: "unrun", Reason: "previous failure", Config: m.Windows[0].Config}
+		}, true},
+		{"missing window", func(m *stage2Manifest) { m.Windows = m.Windows[1:] }, false},
+		{"extra window", func(m *stage2Manifest) { m.Windows = append(m.Windows, m.Windows[0]) }, false},
+		{"duplicate different seeds", func(m *stage2Manifest) { m.Windows[1] = m.Windows[0]; m.Windows[1].Config.TrafficSeed++ }, false},
+		{"completed no effective", func(m *stage2Manifest) { m.Windows[0].Effective = nil }, false},
+		{"failed blank reason", func(m *stage2Manifest) { m.Windows[0].State, m.Windows[0].Reason = "failed", " " }, false},
+		{"failed partial artifact", func(m *stage2Manifest) {
+			m.Windows[0].State, m.Windows[0].Reason, m.Windows[0].File = "failed", "interrupted", ""
+		}, false},
+		{"unrun blank reason", func(m *stage2Manifest) { m.Windows[0] = stage2WindowRef{State: "unrun", Config: m.Windows[0].Config} }, false},
+		{"unrun effective", func(m *stage2Manifest) {
+			m.Windows[0] = stage2WindowRef{State: "unrun", Reason: "stopped", Config: m.Windows[0].Config, Effective: &e}
+		}, false},
+		{"unrun file", func(m *stage2Manifest) {
+			m.Windows[0] = stage2WindowRef{State: "unrun", Reason: "stopped", Config: m.Windows[0].Config, File: "window.json"}
+		}, false},
+		{"unrun hash", func(m *stage2Manifest) {
+			m.Windows[0] = stage2WindowRef{State: "unrun", Reason: "stopped", Config: m.Windows[0].Config, SHA256: strings.Repeat("a", 64)}
+		}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			copy := m
+			copy.Windows = append([]stage2WindowRef(nil), m.Windows...)
+			tc.change(&copy)
+			raw, err := json.Marshal(copy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var decoded stage2Manifest
+			err = decodeStage2(raw, &decoded)
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v, decode error: %v", tc.valid, err)
+			}
+			if tc.valid && !reflect.DeepEqual(copy, decoded) {
+				t.Fatal("round trip changed manifest state/evidence")
+			}
+		})
 	}
 }
 

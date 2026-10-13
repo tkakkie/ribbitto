@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 )
 
 // Version 1 is pre-registered in #865; return fresh slices so callers cannot
@@ -73,7 +75,7 @@ func fixedStage2() stage2Protocol {
 		stage2Gate{"stability", "async; exclude warm-up only from trends", "fraction,bound-fraction,ms", "adjacent 120s means slide 60s; [60,240) vs [420,600); length max(percentage,bound-fraction); age max(percentage,ms)", []float64{.05, .005, 10}},
 		stage2Gate{"complete", "both arms", "count", "missing/missed/timeouts/unexpected statuses/resets/disconnects/live errors/unattributed cancellations/closed admission/underload/telemetry gaps must be zero", []float64{0}})
 	p.Requirements = []string{
-		"real serve, fresh disposable PostgreSQL, authenticated HTTP/1.1 SSE; verify startup settings and metrics",
+		"real serve, fresh disposable PostgreSQL, authenticated HTTP/1.1 SSE via loopback HTTP target (no HTTPS negotiation); verify startup settings and metrics",
 		"N distinct members, one stream each; hot feed interests sidebar,messages,typing; initial snapshots before traffic",
 		"independent schedules; posts/reads/pages each 50:50 feed/topic; changed reads only; rotate members; include posting implicit reads",
 		"churn retains last complete durable cursor; delay plus seeded uniform jitter; never wait for capacity; no POST retries",
@@ -128,8 +130,15 @@ type stage2Refusals struct {
 	CancelledAcquisitions, AttributedCancellations                                        uint64
 	MaxOutageNS                                                                           int64
 }
+
+// Early counts strictly negative response-relative receipts; MinMS stays signed.
+type stage2ReceiptLatency struct {
+	Count, Early               uint64
+	MinMS, P50MS, P95MS, P99MS float64
+}
 type stage2Delivery struct {
-	Message, PostFreshness, ReadFreshness, ScheduledToReceipt, OfflineReplay              stage2Latency
+	Message, PostFreshness, ReadFreshness                                                 stage2ReceiptLatency
+	ScheduledToReceipt, OfflineReplay                                                     stage2Latency
 	Expected, Received, Missing, FinalSnapshotsMissing, Resets, LiveErrors, ReplayMissing uint64
 }
 type stage2Verdict struct {
@@ -150,9 +159,9 @@ type stage2Window struct {
 	Gates      []stage2Verdict
 }
 type stage2WindowRef struct {
-	File, SHA256 string
-	Config       stage2Config
-	Effective    stage2Effective
+	State, Reason, File, SHA256 string
+	Config                      stage2Config
+	Effective                   *stage2Effective
 }
 type stage2Manifest struct {
 	Version  int
@@ -170,6 +179,12 @@ type stage2Manifest struct {
 // Raw metrics preserve the complete server snapshot rather than loadgen's old
 // partial snapshot. Schema validity does not claim a measurement passed.
 func stage2Shape(raw json.RawMessage, typ reflect.Type) error {
+	if typ.Kind() == reflect.Pointer {
+		if string(raw) == "null" {
+			return nil
+		}
+		return stage2Shape(raw, typ.Elem())
+	}
 	if string(raw) == "null" {
 		return fmt.Errorf("null %s", typ)
 	}
@@ -179,17 +194,18 @@ func stage2Shape(raw json.RawMessage, typ reflect.Type) error {
 	}
 	switch typ.Kind() {
 	case reflect.Struct:
-		fields := make([]string, typ.NumField())
-		for i := range fields {
-			fields[i] = typ.Field(i).Name
+		obj, err := requiredObject(raw)
+		if err != nil || len(obj) != typ.NumField() {
+			return fmt.Errorf("invalid record fields: %v", err)
 		}
-		obj, err := requiredObject(raw, fields...)
-		if err != nil {
-			return err
-		}
-		for i, field := range fields {
-			if err := stage2Shape(obj[field], typ.Field(i).Type); err != nil {
-				return fmt.Errorf("%s: %w", field, err)
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			value, ok := obj[field.Name]
+			if !ok {
+				return fmt.Errorf("missing required field %s", field.Name)
+			}
+			if err := stage2Shape(value, field.Type); err != nil {
+				return fmt.Errorf("%s: %w", field.Name, err)
 			}
 		}
 	case reflect.Slice, reflect.Array:
@@ -235,6 +251,11 @@ func decodeStage2(raw []byte, dst any) error {
 	var gates []stage2Verdict
 	switch v := dst.(type) {
 	case *stage2Window:
+		for _, receipt := range []stage2ReceiptLatency{v.Delivery.Message, v.Delivery.PostFreshness, v.Delivery.ReadFreshness} {
+			if receipt.Early > receipt.Count || (receipt.MinMS < 0) != (receipt.Early > 0) || receipt.MinMS > receipt.P50MS || (receipt.Count == 0 && receipt.MinMS != 0) {
+				return fmt.Errorf("invalid signed receipt evidence")
+			}
+		}
 		gates = v.Gates
 		version, protocol, configs = v.Version, v.Protocol, []stage2Config{v.Config}
 		if v.Kind != "window" {
@@ -246,7 +267,35 @@ func decodeStage2(raw []byte, dst any) error {
 		if v.Kind != "manifest" {
 			return fmt.Errorf("expected manifest")
 		}
+		if len(v.Windows) != len(v.Protocol.Groups)*len(v.Protocol.Arms)*v.Protocol.Rounds {
+			return fmt.Errorf("manifest must list all 24 planned windows")
+		}
+		seen := make(map[stage2Config]bool)
 		for _, window := range v.Windows {
+			key := window.Config
+			key.FixtureSeed, key.TrafficSeed = 0, 0 // Seeds do not identify a planned slot.
+			if seen[key] {
+				return fmt.Errorf("duplicate planned window")
+			}
+			seen[key] = true
+			hash, err := hex.DecodeString(window.SHA256)
+			artifact := strings.TrimSpace(window.File) != "" && err == nil && len(hash) == 32
+			switch window.State {
+			case "completed":
+				if !artifact || window.Effective == nil || window.Reason != "" {
+					return fmt.Errorf("completed window needs artifact/effective evidence and no reason")
+				}
+			case "failed":
+				if strings.TrimSpace(window.Reason) == "" || ((window.File != "" || window.SHA256 != "") && !artifact) {
+					return fmt.Errorf("failed window needs reason and valid artifact when present")
+				}
+			case "unrun":
+				if strings.TrimSpace(window.Reason) == "" || window.File != "" || window.SHA256 != "" || window.Effective != nil {
+					return fmt.Errorf("unrun window needs reason and no artifact/effective evidence")
+				}
+			default:
+				return fmt.Errorf("invalid window state")
+			}
 			configs = append(configs, window.Config)
 		}
 	default:

@@ -62,8 +62,22 @@ ranges, unchanged floors on cursorless posts and the floor-only write.
 
 Eight mutation checks are recorded in the pull request.
 
-956b2 retains production moves/branches, mixed read states, move/floor cursors,
-unlisted totals/selection and member/organisation isolation. 956c retains real
+## 956b2: production moves and unlisted scopes
+
+`internal/realtime/unread_counters_moves_test.go` extends the same matrix with
+production branching into existing and new topics, including source notices.
+Transfers preserve differing read sets for two materialised members and a member
+without a bundle. Cases move old messages below a destination's floor, read
+before/at/after move cursors, reorder reads and move a message again. An unlisted
+branch reaches raw 100 (`99+`) then zero; channel totals include an unlisted
+sibling. Full-model comparisons after every operation include bounded lists,
+the unlisted selection, a nonempty other channel and a foreign organisation with
+a nonempty unread sentinel. One account has memberships in both organisations.
+Foreign fixtures supply only metadata; every message/read mutation uses the
+production writers. The branch adapter captures the notice sequence from its
+production read arguments; maintenance still uses the pre-write snapshot.
+
+956c retains real
 PostgreSQL commit orders, rollback and retry with deterministic gates; these
 sequential snapshots prove no concurrency guarantee. #957 still waits. The
 956a cost bounds remain **estimates**; no measurement ran.

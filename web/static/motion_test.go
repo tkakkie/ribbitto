@@ -9,17 +9,17 @@ import (
 
 // TestReducedMotion proves on the built stylesheet that reduced motion stops
 // every motion (docs/ui-code.md#motion): animations and transitions by one
-// universal rule nothing outranks, view transitions and movement on state
-// changes by existing only for no-preference.
+// universal rule nothing outranks, movement on state changes by existing only
+// for no-preference.
 func TestReducedMotion(t *testing.T) {
 	source, err := os.ReadFile("css/app.css")
 	if err != nil {
 		t.Fatal(err)
 	}
 	const reduce, safe = "@media (prefers-reduced-motion:reduce)", "@media (prefers-reduced-motion:no-preference)"
-	property := regexp.MustCompile(`^(animation|transition|scale|rotate|translate|transform|view-transition)(-[a-z-]+)?$`)
+	property := regexp.MustCompile(`^(animation|transition|scale|rotate|translate|transform)(-[a-z-]+)?$`)
 	state := regexp.MustCompile(`:(hover|active|focus)`)
-	reset, navigation, built := false, false, map[string]bool{}
+	reset, built := false, map[string]bool{}
 	for _, rule := range cssRules(string(source)) {
 		context := strings.Join(rule.context, " ")
 		if strings.Contains(context, "@keyframes") || strings.HasPrefix(rule.selector, "@property") {
@@ -30,10 +30,6 @@ func TestReducedMotion(t *testing.T) {
 				strings.Contains(rule.declarations, "animation:none!important") && strings.Contains(rule.declarations, "transition:none!important")
 			continue
 		}
-		if (rule.selector == "@view-transition" || strings.Contains(rule.selector, "::view-transition")) && !strings.Contains(context, safe) {
-			t.Errorf("%s: view transition outside %s", rule.selector, safe)
-		}
-		navigation = navigation || rule.selector == "@view-transition" && rule.declarations == "navigation:auto"
 		for _, declaration := range strings.Split(rule.declarations, ";") {
 			name, value, _ := strings.Cut(declaration, ":")
 			match := property.FindStringSubmatch(name)
@@ -45,7 +41,7 @@ func TestReducedMotion(t *testing.T) {
 				if strings.Contains(value, "!important") {
 					t.Errorf("%s: %s is !important, so reduced motion cannot reset it", rule.selector, name)
 				}
-			case match[1] == "view-transition" || match[1] == "scale" || match[1] == "rotate" ||
+			case match[1] == "scale" || match[1] == "rotate" ||
 				state.MatchString(rule.selector):
 				built[rule.selector] = true
 				if !strings.Contains(context, safe) {
@@ -57,14 +53,24 @@ func TestReducedMotion(t *testing.T) {
 	if !reset {
 		t.Errorf("no %s rule resets animation and transition on every element with !important", reduce)
 	}
-	if !navigation {
-		t.Errorf("no @view-transition { navigation: auto }")
-	}
 	// The motion classes are built, so the checks above cover them.
 	for _, class := range []string{".animate-typing-dot-1", ".animate-typing-dot-3", ".transition", `.motion-safe\:active\:scale-96:active`} {
 		if !built[class] {
 			t.Errorf("motion class %s missing from the stylesheet", class)
 		}
+	}
+}
+
+// TestNoViewTransitions proves the built stylesheet opts into no
+// cross-document view transition: its setup delayed every switch (#921), and
+// the arrival motion runs without it (docs/ui-code.md#motion).
+func TestNoViewTransitions(t *testing.T) {
+	source, err := os.ReadFile("css/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(source), "view-transition") {
+		t.Error("built stylesheet declares a view transition (@view-transition, ::view-transition or a view-transition property)")
 	}
 }
 

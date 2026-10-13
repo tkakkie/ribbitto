@@ -495,7 +495,7 @@ templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
 			class={ "relative flex min-h-9 items-center gap-2.5 break-words rounded-lg px-3 py-1.5 transition motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-fg hover:bg-hover", !selected), templ.KV("font-semibold", !selected && count > 0) }
 		>
 			if selected {
-				@selectionPill(ChannelDOMID(channel.ID))
+				@selectionPill()
 			}
 			@channelImage(channel.ImageURL, false)
 			<span dir="auto" class="min-w-0 flex-1">{ channel.Name }</span>
@@ -517,7 +517,7 @@ templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, c
 			class={ "relative flex min-h-8 items-center gap-2 break-words rounded-md px-2.5 py-1 transition motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-muted hover:bg-hover hover:text-fg", !selected), templ.KV("font-semibold text-fg", !selected && count > 0) }
 		>
 			if selected {
-				@selectionPill(TopicDOMID(topic.ID))
+				@selectionPill()
 			}
 			@Icon("branch-regular", 16)
 			<span dir="auto" class="min-w-0 flex-1">{ topicName(ctx, topic) }</span>
@@ -527,11 +527,11 @@ templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, c
 }
 
 // selectionPill is the brand indicator of the current row; the row's text
-// colour and weight say the same without colour (docs/ui.md). Its id, unique
-// per row, names its view transition: it grows in only when the row changes.
-templ selectionPill(row string) {
+// colour and weight say the same without colour (docs/ui.md). It grows in
+// only on arrival from another place (arrival-v1.js, docs/ui-code.md#motion).
+templ selectionPill() {
 	{{ _ = ctx }}
-	<span id={ "selection-" + row } data-selection-pill aria-hidden="true" class="absolute left-0 top-1/2 h-4 w-0.75 -translate-y-1/2 rounded-full bg-brand"></span>
+	<span data-selection-pill aria-hidden="true" class="absolute left-0 top-1/2 h-4 w-0.75 -translate-y-1/2 rounded-full bg-brand"></span>
 }
 
 templ unreadBadge(count int64) {

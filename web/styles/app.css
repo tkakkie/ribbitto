@@ -172,39 +172,17 @@
   }
 }
 
-/* Navigation: the old page disappears at once and the new one shows from its
-   first frame; only an opening panel and a new row's pill move. Reduced
-   motion never opts in. */
+/* Navigation: no cross-document view transition, whose setup slowed every
+   switch (#921); the new page shows from its first frame. Only an opening
+   panel and a new row's pill move. Reduced motion never opts in. */
 @media (prefers-reduced-motion: no-preference) {
-  @view-transition {
-    navigation: auto;
-  }
-  /* Input reaches the new page during the transition. */
-  ::view-transition {
-    pointer-events: none;
-  }
-  ::view-transition-group(*),
-  ::view-transition-new(*) {
-    animation: none;
-  }
-  ::view-transition-old(*) {
-    display: none;
-  }
-  /* An opening panel, with no partner on the old page, slides in 8 px. */
-  #side-panel {
-    view-transition-name: side-panel;
-  }
-  ::view-transition-new(side-panel):only-child {
-    animation: rb-panel-in var(--duration-fast) var(--ease-decelerate);
-  }
-  /* A name per row: an unchanged row stays still, a new row's pill grows in.
-     Without typed attr() the pill changes with the page. */
-  [data-selection-pill] {
-    view-transition-name: attr(id type(<custom-ident>), none);
-    view-transition-class: selection-pill;
-  }
-  ::view-transition-new(.selection-pill):only-child {
+  /* Set by arrival-v1.js for one run after a push navigation inside the
+     app; content and input never wait for these. */
+  :root[data-arrive-pill] [data-selection-pill] {
     animation: rb-pill-in var(--duration-faster) var(--ease-decelerate);
+  }
+  :root[data-arrive-panel] #side-panel {
+    animation: rb-panel-in var(--duration-fast) var(--ease-decelerate);
   }
 }
 

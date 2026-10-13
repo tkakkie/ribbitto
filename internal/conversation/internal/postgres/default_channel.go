@@ -16,7 +16,7 @@ type DefaultChannelCreator struct{ channels *ChannelStore }
 // DefaultChannelCreatorIn binds a DefaultChannelCreator to tx without
 // managing its lifecycle.
 func DefaultChannelCreatorIn(tx platform.Tx) *DefaultChannelCreator {
-	return &DefaultChannelCreator{channels: NewChannelStore(pgxbridge.Tx(tx))}
+	return &DefaultChannelCreator{channels: NewChannelStore(pgxbridge.Tx(tx), conversation.DefaultMaxChannels)}
 }
 
 // CreateDefaultChannel creates the organisation's default channel, named

@@ -321,3 +321,6 @@ other = "ホーム"
 
 ["account.menu"]
 other = "アカウントメニュー"
+
+["creation.error.limit"]
+other = "この組織のチャンネル数が上限に達しています。"

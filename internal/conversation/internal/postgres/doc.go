@@ -7,7 +7,9 @@
 // commits or rolls one back.
 //
 // ChannelStore (channel reads, creation and image updates) and TopicStore (the topic
-// lookup) use the pool or caller-owned transaction they are given.
+// lookup) use the pool or caller-owned transaction they are given. Production
+// channel creation locks in its caller-owned transaction before the guarded
+// insert; setup creates the sole default channel in its new organisation.
 // DefaultChannelCreator holds setup's default-channel write, and
 // DefaultChannelCreatorIn binds it to org's transaction. Writer holds
 // posting's and branching's writes and maps their constraints to

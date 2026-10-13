@@ -177,6 +177,8 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 		imageMessage = "illustration.error"
 	case errors.Is(err, conversation.ErrInvalidChannelName):
 		message = "channel.error.name"
+	case errors.Is(err, conversation.ErrChannelLimit):
+		message = "creation.error.limit"
 	case errors.Is(err, conversation.ErrChannelNameTaken):
 		message = "channel.error.name_taken"
 	default:

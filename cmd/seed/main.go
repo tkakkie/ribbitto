@@ -218,7 +218,7 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 			return fmt.Errorf("resolving %s: %w", person.Handle, err)
 		}
 	}
-	channels := conversationpg.NewChannels(pool)
+	channels := conversationpg.NewChannels(pool, conversation.DefaultMaxChannels)
 	posts := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
 	var general conversation.Channel
 	var generalMessages []scriptMessage

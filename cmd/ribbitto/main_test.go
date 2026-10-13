@@ -313,3 +313,21 @@ func TestStreamCapacityConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestMaxChannelsConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  int32
+	}{
+		{"", 500}, {"1", 1}, {"0500", 500}, {"2147483647", 2147483647},
+		{"0", 0}, {"-1", 0}, {"+1", 0}, {" 1", 0}, {"1 ", 0}, {"1.0", 0},
+		{"1e3", 0}, {"abc", 0}, {"2147483648", 0}, {"99999999999999999999", 0},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			got, err := maxChannelsConfiguration(tc.value)
+			if got != tc.want || (err == nil) != (tc.want > 0) || (err != nil && !strings.Contains(err.Error(), "RIBBITTO_MAX_CHANNELS")) {
+				t.Fatalf("got %d, %v; want %d", got, err, tc.want)
+			}
+		})
+	}
+}

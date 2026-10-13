@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -61,7 +62,7 @@ func TestReadPost(t *testing.T) {
 	hub := realtime.NewHub()
 	// Validation sequences intentionally exceed the production read burst.
 	clock := time.Unix(1, 0)
-	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{hub: hub, readLimits: middleware.NewReadRateLimiter(func() time.Time { clock = clock.Add(time.Second); return clock })})
+	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, hub: hub, readLimits: middleware.NewReadRateLimiter(func() time.Time { clock = clock.Add(time.Second); return clock })})
 	feedRequire(t, err)
 	token, _, err := sessions.Create(ctx, f.AccountID)
 	feedRequire(t, err)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -96,7 +97,7 @@ func TestDevMetricsApplicationIsolation(t *testing.T) {
 			if _, _, err := devMetricsSetup(value); err != nil {
 				t.Fatal(err)
 			}
-			handler, _, err := buildHandler(t.Context(), lazyPool(t), handlerConfig{})
+			handler, _, err := buildHandler(t.Context(), lazyPool(t), handlerConfig{maxChannels: conversation.DefaultMaxChannels})
 			if err != nil {
 				t.Fatal(err)
 			}

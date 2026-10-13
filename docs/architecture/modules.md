@@ -47,7 +47,10 @@ Inside `conversation`, a channel's default topic, branching's moves and
 notice, and the channel and topic reads of posting and the page snapshot
 are direct calls in one transaction or snapshot (decision 27). Creating a
 channel (`conversation.Channels.Create`) writes its default topic in the
-same statement, so a channel never exists without one (decision 21, #307).
+same guarded statement, so a channel never exists without one (decision 21,
+#307). `Channels` owns the creation transaction: a lock on the default
+channel's stable row precedes that statement so concurrent creators count fresh
+committed rows against the configured cap without accessing another module's tables.
 
 The topic stream's and topic paging links' scope check is decision 26's
 resolver in conversation's root: `conversation.Topics.Get` takes the

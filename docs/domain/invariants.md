@@ -62,6 +62,11 @@ invariant changes. Keep the numbers stable: other documents cite them.
     require channel authorization and leave read state unchanged
     ([`replies.md`](replies.md)).
 
+11. **Channel creation never raises an organisation above its configured cap**
+    (`RIBBITTO_MAX_CHANNELS`, default 500), counting the default channel.
+    Concurrent creations serialize before counting; lowering the cap leaves
+    existing channels intact and blocks further creation.
+
 These are **requirements for all code and migrations**, not a description
 of what is implemented today: `organization`, `account`, `session`,
 `member`, `setup`, `channel`, `message`, `event_log` and `topic` have tables; setup authorization is implemented, and

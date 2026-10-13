@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -47,7 +48,7 @@ func streamServers(t *testing.T, pool *pgxpool.Pool) (api, streams *httptest.Ser
 func streamServersWithHub(t *testing.T, pool *pgxpool.Pool, limits ...*middleware.MemberRateLimiter) (api, streams *httptest.Server, hub *realtime.Hub) {
 	t.Helper()
 	hub = realtime.NewHub()
-	config := handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
+	config := handlerConfig{maxChannels: conversation.DefaultMaxChannels, setupToken: acceptanceToken, signupEnabled: true,
 		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
 		hub:            hub, streamWriteTimeout: testStreamWrite}
 	if len(limits) != 0 {
@@ -451,7 +452,7 @@ func testShutdownEndsOpenStreams(t *testing.T) {
 	hub := realtime.NewHub()
 	lifetime := newServiceLifecycle(t.Context(), hub, nil, func() {})
 	lifetime.grace = 5 * time.Second
-	handler, _, err := buildHandler(lifetime.ctx, pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
+	handler, _, err := buildHandler(lifetime.ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, setupToken: acceptanceToken, signupEnabled: true,
 		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, hub: hub})
 	acceptanceOK(t, err)
 	server := httptest.NewUnstartedServer(handler)

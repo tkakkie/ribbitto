@@ -32,7 +32,7 @@ type AccountDirectory interface {
 // same one the member directory and the messages are read in.
 type AccountDirectoryIn func(platform.Snapshot) AccountDirectory
 
-// TxRunner runs posting's and branching's transaction (decision 26): the use
+// TxRunner runs channel creation, posting and branching (decision 26): the use
 // case owns the boundary, the writers only bind to the Tx they are given.
 type TxRunner interface {
 	// InTx runs fn in a new transaction. It commits when fn returns nil

@@ -27,7 +27,7 @@ func TestDefaultChannelCreatorIn(t *testing.T) {
 	err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
 		requireNoError(t, createDefault(tx).CreateDefaultChannel(ctx, acme))
 		pgxTx := pgxbridge.Tx(tx)
-		got, err := postgres.NewChannelStore(pgxTx).GetDefaultChannel(ctx, acme)
+		got, err := postgres.NewChannelStore(pgxTx, conversation.DefaultMaxChannels).GetDefaultChannel(ctx, acme)
 		requireNoError(t, err)
 		if got.Name != conversation.DefaultChannelName || !got.IsDefault || got.OrganizationID != acme {
 			t.Fatalf("default channel in caller's transaction: %+v", got)

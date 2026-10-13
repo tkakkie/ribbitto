@@ -19,9 +19,12 @@ func EventKinds() realtime.Kinds {
 	}
 }
 
-// NewChannels builds the channel use cases on conversation's pool-bound store.
-func NewChannels(pool *pgxpool.Pool) *conversation.Channels {
-	return conversation.NewChannels(postgres.NewChannelStore(pool))
+// NewChannels builds lookups on the pool and creation in a locked transaction.
+// maxChannels must be positive.
+func NewChannels(pool *pgxpool.Pool, maxChannels int32) *conversation.Channels {
+	return conversation.NewTransactionalChannels(postgres.NewChannelStore(pool, maxChannels), newTxRunner(pool), func(tx platform.Tx) conversation.ChannelCreator {
+		return postgres.ChannelCreatorIn(tx, maxChannels)
+	})
 }
 
 // NewTopics builds the topic lookups on conversation's pool-bound store.
@@ -58,8 +61,8 @@ func DefaultChannelCreatorIn(tx platform.Tx) *postgres.DefaultChannelCreator {
 	return postgres.DefaultChannelCreatorIn(tx)
 }
 
-// newTxRunner returns the transaction runner posting and branching own their
-// transaction through, over pool.
+// newTxRunner supplies the runner for channel creation, posting and branching
+// to own their transaction over pool.
 func newTxRunner(pool *pgxpool.Pool) conversation.TxRunner { return txRunner{pool: pool} }
 
 type txRunner struct{ pool *pgxpool.Pool }

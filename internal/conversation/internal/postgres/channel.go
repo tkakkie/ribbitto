@@ -12,14 +12,32 @@ import (
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
 // ChannelStore persists channels using a pool or a caller-owned transaction.
-type ChannelStore struct{ queries *sqlcgen.Queries }
+type ChannelStore struct {
+	queries     *sqlcgen.Queries
+	maxChannels int32
+}
 
 // NewChannelStore returns a store using db.
-func NewChannelStore(db sqlcgen.DBTX) *ChannelStore {
-	return &ChannelStore{queries: sqlcgen.New(db)}
+func NewChannelStore(db sqlcgen.DBTX, maxChannels int32) *ChannelStore {
+	return &ChannelStore{queries: sqlcgen.New(db), maxChannels: maxChannels}
+}
+
+// ChannelCreatorIn binds capped channel creation to the caller's transaction.
+func ChannelCreatorIn(tx platform.Tx, maxChannels int32) *ChannelStore {
+	return NewChannelStore(pgxbridge.Tx(tx), maxChannels)
+}
+
+// LockCreation must precede creation in the caller's READ COMMITTED transaction.
+func (s *ChannelStore) LockCreation(ctx context.Context, organizationID kernel.ID) error {
+	if _, err := s.queries.LockChannelCreation(ctx, uuid(organizationID)); err != nil {
+		return fmt.Errorf("locking channel creation: %w", err)
+	}
+	return nil
 }
 
 // CreateChannel inserts a non-default channel with an already validated name.
@@ -28,9 +46,11 @@ func (s *ChannelStore) CreateChannel(ctx context.Context, organizationID kernel.
 }
 
 func (s *ChannelStore) createChannel(ctx context.Context, organizationID kernel.ID, name string, isDefault bool, image string) (conversation.Channel, error) {
-	row, err := s.queries.CreateChannel(ctx, sqlcgen.CreateChannelParams{OrganizationID: uuid(organizationID), Name: name, IsDefault: isDefault, Image: pgtype.Text{String: image, Valid: image != ""}})
+	row, err := s.queries.CreateChannel(ctx, sqlcgen.CreateChannelParams{OrganizationID: uuid(organizationID), Name: name, IsDefault: isDefault, MaxChannels: int64(s.maxChannels), Image: pgtype.Text{String: image, Valid: image != ""}})
 	var pgErr *pgconn.PgError
 	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return conversation.Channel{}, conversation.ErrChannelLimit
 	// The unique constraint, not a lookup first, decides between concurrent creators.
 	case errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "channel_organization_id_name_key":
 		return conversation.Channel{}, conversation.ErrChannelNameTaken

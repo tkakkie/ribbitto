@@ -26,6 +26,12 @@ func ValidateChannelName(value string) (string, error) {
 // is only a name: the default is found by its is_default flag.
 const DefaultChannelName = "general"
 
+// DefaultMaxChannels includes the default channel in the organisation cap.
+const DefaultMaxChannels int32 = 500
+
+// ErrChannelLimit means the organisation cannot create another channel.
+var ErrChannelLimit = errors.New("channel limit reached")
+
 // ErrChannelNotFound means the channel does not exist in the caller's organisation,
 // including when it exists in another one.
 var ErrChannelNotFound = errors.New("channel not found")

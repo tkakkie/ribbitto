@@ -88,6 +88,10 @@ func serveWithLifecycle(ctx context.Context, databaseURL string, own func(contex
 	if err != nil {
 		return err
 	}
+	maxChannels, err := maxChannelsConfiguration(os.Getenv("RIBBITTO_MAX_CHANNELS"))
+	if err != nil {
+		return err
+	}
 	retention := realtime.DefaultRetention
 	if value := os.Getenv("RIBBITTO_EVENT_RETENTION"); value != "" {
 		var err error
@@ -140,7 +144,7 @@ func serveWithLifecycle(ctx context.Context, databaseURL string, own func(contex
 	// One hub per process: posting raises it, streams register their
 	// connections with it, and the metrics read its registry.
 	handler, sessions, err := buildHandler(lifetime.ctx, pool, handlerConfig{
-		setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
+		maxChannels: maxChannels, setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
 		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), hub: hub,
 		recounts: scheduler, recountObserver: observer,
 		authorizationCapacity: authorizationCapacity,
@@ -258,6 +262,7 @@ func newServer(addr string, handler http.Handler, timeouts serverTimeouts) *http
 }
 
 type handlerConfig struct {
+	maxChannels           int32
 	authorizationCapacity int
 	setupToken, devAssets string
 	signupEnabled         bool
@@ -349,7 +354,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Posting:       posting,
 		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), readPublisher),
 		Branching:     branching,
-		Channels:      conversationpg.NewChannels(pool),
+		Channels:      conversationpg.NewChannels(pool, config.maxChannels),
 		Limits:        middleware.NewAuthLimits(config.trustedProxies, time.Now),
 		Stream:        stream,
 		Typing:        typingState,
@@ -468,3 +473,19 @@ func lookupAccounts(s platform.Snapshot) conversation.AccountDirectory {
 // eventCursor adapts org's committed event_seq to the reader's consumer
 // interface.
 func eventCursor(s platform.Snapshot) conversation.EventCursor { return orgpg.EventCursorIn(s) }
+
+func maxChannelsConfiguration(value string) (int32, error) {
+	if value == "" {
+		return conversation.DefaultMaxChannels, nil
+	}
+	for _, c := range value {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("RIBBITTO_MAX_CHANNELS must be a positive decimal integer within int32")
+		}
+	}
+	n, err := strconv.ParseInt(value, 10, 32)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("RIBBITTO_MAX_CHANNELS must be a positive decimal integer within int32")
+	}
+	return int32(n), nil
+}

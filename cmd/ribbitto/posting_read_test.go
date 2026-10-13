@@ -172,7 +172,7 @@ func TestHistoryPostingRead(t *testing.T) {
 			feedRequire(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {
 				return checkedRead(t, true)(newTopicWriter().Read(t.Context(), tx, unread.TopicScope{Scope: scope, TopicID: topic}, 1, 2))
 			}))
-			handler, sessions, err := buildHandler(t.Context(), pool, handlerConfig{})
+			handler, sessions, err := buildHandler(t.Context(), pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels})
 			feedRequire(t, err)
 			token, _, err := sessions.Create(t.Context(), account)
 			feedRequire(t, err)

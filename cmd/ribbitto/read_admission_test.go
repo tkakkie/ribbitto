@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -134,7 +135,7 @@ CREATE TRIGGER admission_audit AFTER INSERT OR UPDATE OR DELETE ON topic_read_fl
 			feedRequire(t, err)
 			traced := readTracedPool(t, pool, readAdmissionTrace{})
 			clock := time.Unix(1, 0)
-			handler, sessions, err := buildHandler(ctx, traced, handlerConfig{readLimits: middleware.NewReadRateLimiter(func() time.Time { return clock })})
+			handler, sessions, err := buildHandler(ctx, traced, handlerConfig{maxChannels: conversation.DefaultMaxChannels, readLimits: middleware.NewReadRateLimiter(func() time.Time { return clock })})
 			feedRequire(t, err)
 			token, _, err := sessions.Create(ctx, f.AccountID)
 			feedRequire(t, err)

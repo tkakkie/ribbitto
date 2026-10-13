@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -53,7 +54,7 @@ func TestReadPostBrowser(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
 			pool, scope := feedFixture(t)
-			handler, sessions, err := buildHandler(ctx, pool, handlerConfig{})
+			handler, sessions, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels})
 			feedRequire(t, err)
 			var account, topicID kernel.ID
 			feedRequire(t, pool.QueryRow(ctx, "SELECT m.account_id,c.default_topic_id FROM member m JOIN channel c ON c.organization_id=m.organization_id WHERE m.organization_id=$1 AND m.id=$2 AND c.id=$3", scope.OrganizationID, scope.MemberID, scope.ChannelID).Scan(&account, &topicID))

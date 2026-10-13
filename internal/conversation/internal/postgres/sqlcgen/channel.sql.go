@@ -12,9 +12,13 @@ import (
 )
 
 const createChannel = `-- name: CreateChannel :one
-WITH created AS (
+WITH capacity AS (
+  SELECT count(*) AS total FROM channel c WHERE c.organization_id = $1
+), created AS (
   INSERT INTO channel (organization_id, name, is_default, image)
-  VALUES ($1, $2, $3, $4) RETURNING id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default, image
+  SELECT $1, $2, $3, $4
+  FROM capacity WHERE total < $5::bigint
+  RETURNING id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default, image
 ), default_topic AS (
   INSERT INTO topic (id, organization_id, channel_id, is_default)
   SELECT default_topic_id, organization_id, id, true FROM created
@@ -27,6 +31,7 @@ type CreateChannelParams struct {
 	Name           string
 	IsDefault      bool
 	Image          pgtype.Text
+	MaxChannels    int64
 }
 
 type CreateChannelRow struct {
@@ -50,6 +55,7 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (C
 		arg.Name,
 		arg.IsDefault,
 		arg.Image,
+		arg.MaxChannels,
 	)
 	var i CreateChannelRow
 	err := row.Scan(
@@ -141,6 +147,22 @@ func (q *Queries) ListChannels(ctx context.Context, organizationID pgtype.UUID) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockChannelCreation = `-- name: LockChannelCreation :one
+SELECT id FROM channel WHERE organization_id = $1 AND is_default FOR NO KEY UPDATE
+`
+
+// Every live organisation keeps its default channel: its stable row is the
+// creation lock without reading another module's tables. Count in the next
+// statement for a fresh snapshot after waiting for concurrent creators.
+// NO KEY UPDATE serializes creators without blocking FK checks
+// (FOR KEY SHARE) from message, topic and unread inserts.
+func (q *Queries) LockChannelCreation(ctx context.Context, organizationID pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, lockChannelCreation, organizationID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const setChannelImage = `-- name: SetChannelImage :execrows

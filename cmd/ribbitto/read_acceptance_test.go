@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"log/slog"
 	"net/http/httptest"
 	"net/url"
@@ -176,7 +177,7 @@ func readFaultServer(t *testing.T, pool *pgxpool.Pool, p *readPublicationSpy) *h
 	acceptanceOK(t, err)
 	handler, err := web.NewHandler("", cat, web.Services{
 		Sessions: sessions, SignIn: identitypg.NewSignIn(pool, nil, sessions), Authz: auth, ReadLimits: middleware.NewReadRateLimiter(time.Now),
-		Channels: conversationpg.NewChannels(pool), Topics: conversationpg.NewTopics(pool),
+		Channels: conversationpg.NewChannels(pool, conversation.DefaultMaxChannels), Topics: conversationpg.NewTopics(pool),
 		Messages: conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn),
 		Posting:  conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, hub),
 		Reading:  unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), p),

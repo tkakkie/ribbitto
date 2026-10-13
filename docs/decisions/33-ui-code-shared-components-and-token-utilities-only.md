@@ -5,8 +5,9 @@ a look used in two places becomes a shared templ component, and pages
 compose components instead of repeating class strings; templates style only
 through token utilities, never arbitrary values or variants in square
 brackets, which `tools/sourcecheck` rejects; `web/styles/app.css` holds only
-tokens, base styles and what utilities cannot express. The rules and the
-component list are in [`ui-code.md`](../ui-code.md); decision 2 (no
+tokens, base styles and what utilities cannot express. The rules are in
+[`ui-code.md`](../ui-code.md) and the component list in
+[`ui-components.md`](../ui-components.md); decision 2 (no
 JavaScript or CSS build step beyond the pinned Tailwind CLI) is unchanged.
 **Why:** M5 is built by two implementers across about ten issues; without
 one place per look and a check against one-off values, buttons, fields and

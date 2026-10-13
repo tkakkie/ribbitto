@@ -107,7 +107,7 @@ builds, runs the Go tests with the race detector (at `-p 2` by default; see
 [worktree-env.md](docs/worktree-env.md)), and checks the import
 graph, module API summaries and the documents. `tools/sourcecheck` enforces the
 [product vocabulary](docs/domain/vocabulary.md) and
-[UI colour rules](docs/ui.md#tokens). In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,
+[UI colour rules](docs/ui-colours.md#colour-tokens). In `docs/`, `AGENTS.md`, `README.md` and `DECISIONS.md`,
 repository paths in backticks must exist. Placeholders and globs are skipped;
 brace sets are expanded; `:line` suffixes and trailing slashes are accepted.
 An existing path wins. Otherwise, a final dot-separated element that is a
@@ -170,7 +170,7 @@ cursor above the restored log gets `reset` and reloads the page
 - [Vision](docs/vision.md) — what ribbitto aims to be, and how changes are checked against it
 - [Architecture](docs/architecture/README.md) — packages, allowed imports, request and real-time flow
 - [Domain](docs/domain/README.md) — glossary and index; [entities](docs/domain/entities.md), [invariants](docs/domain/invariants.md), [unread rules](docs/domain/unread.md)
-- [UI](docs/ui.md) — design direction, tokens, contrast; [markup and accessibility](docs/accessibility.md)
+- [UI](docs/ui.md) — design direction, tokens, layout; [colours and contrast](docs/ui-colours.md), [UI code](docs/ui-code.md), [components](docs/ui-components.md), [markup and accessibility](docs/accessibility.md)
 - [Decisions](DECISIONS.md) — what was decided and why
 - [Worktree environments](docs/worktree-env.md) — dev databases, port allocation, health checks and cleanup
 - [Roadmap](docs/roadmap.md) · [AI development workflow](docs/workflow/README.md) · [Database development](docs/database.md) · [Database tests](docs/database-tests.md)

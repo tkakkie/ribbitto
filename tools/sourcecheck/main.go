@@ -1,4 +1,4 @@
-// Command sourcecheck enforces docs/domain/vocabulary.md and docs/ui.md on
+// Command sourcecheck enforces docs/domain/vocabulary.md and docs/ui-colours.md on
 // repository sources. It checks mux patterns as authored, without resolving
 // aliases or evaluating route expressions, and literal CSS values.
 package main
@@ -141,7 +141,7 @@ func check(root string) ([]string, error) {
 				if strings.HasPrefix(attr[2], "{") {
 					attr[2], _ = goExpression(source[loc[4]:])
 				}
-				reportColour := func(value string) { report("docs/ui.md", "raw colour in template: "+value) }
+				reportColour := func(value string) { report("docs/ui-colours.md", "raw colour in template: "+value) }
 				if attr[1] == "class" {
 					// Only real class text is checked (a dynamic expression's
 					// literals, not its comments), and each bracketed class is
@@ -162,7 +162,7 @@ func check(root string) ([]string, error) {
 				}
 			}
 		case ".css":
-			cssColours(string(data), func(value string) { report("docs/ui.md", "raw colour outside token definitions: "+value) })
+			cssColours(string(data), func(value string) { report("docs/ui-colours.md", "raw colour outside token definitions: "+value) })
 		}
 		return nil
 	})

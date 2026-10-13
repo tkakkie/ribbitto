@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
 	"os"
 	"reflect"
 	"strings"
@@ -21,6 +22,7 @@ func (s gatedShutdown) Shutdown(ctx context.Context) error {
 	close(s.expired)
 	return ctx.Err()
 }
+
 func (s gatedShutdown) Close() error { close(s.forced); return nil }
 
 type idleShutdownStream struct{ release chan struct{} }
@@ -191,5 +193,73 @@ func TestServeFailureCleanupOrder(t *testing.T) {
 				t.Fatalf("cleanup order = %v, want %v", order, want)
 			}
 		})
+	}
+}
+
+type failedShutdown struct{ err error }
+
+func (s failedShutdown) Shutdown(context.Context) error { return s.err }
+func (s failedShutdown) Close() error                   { return nil }
+
+func TestServeCollectsServerFailures(t *testing.T) {
+	for _, failed := range []string{"application", "metrics", "both"} {
+		for _, trigger := range []string{"failure", "signal ready", "signal wins", "startup failure", "shutdown failure"} {
+			t.Run(failed+"/"+trigger, func(t *testing.T) {
+				for key, value := range map[string]string{"RIBBITTO_ASYNC_RECOUNTS": "off", "RIBBITTO_DEV_ASSETS": "", "RIBBITTO_DEV_METRICS_ADDR": "", "RIBBITTO_ADDR": "127.0.0.1:0", "RIBBITTO_SIGNUP": "off", "RIBBITTO_SETUP_TOKEN": "", "RIBBITTO_EVENT_RETENTION": "168h"} {
+					t.Setenv(key, value)
+				}
+				if trigger == "startup failure" {
+					t.Setenv("RIBBITTO_DEV_ASSETS", t.TempDir()+"/missing")
+				}
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				failures := map[string]error{"application": errors.New("application failed"), "metrics": errors.New("metrics failed")}
+				shutdownErr := errors.New("shutdown failed")
+				err := serveWithLifecycle(ctx, os.Getenv("RIBBITTO_TEST_DATABASE_URL"), func(ctx context.Context, hub *realtime.Hub, scheduler *realtime.RecountScheduler, closePool func()) *serviceLifecycle {
+					l := newServiceLifecycle(ctx, hub, scheduler, closePool)
+					if trigger == "shutdown failure" {
+						l.servers = append(l.servers, failedShutdown{shutdownErr})
+					}
+					for _, name := range []string{"application", "metrics"} {
+						l.startServer(&http.Server{}, func() error {
+							if name != failed && failed != "both" {
+								<-l.ctx.Done()
+								return http.ErrServerClosed
+							}
+							if trigger == "signal wins" || trigger == "startup failure" {
+								<-l.ctx.Done() // Return only after shutdown has started.
+							}
+							return failures[name]
+						})
+					}
+					if trigger == "signal ready" {
+						// Failure and cancellation are both ready before the select.
+						for i, name := range []string{"application", "metrics"} {
+							if name == failed || failed == "both" {
+								_ = l.serverJoins[i]()
+							}
+						}
+					}
+					if trigger == "signal ready" || trigger == "signal wins" {
+						cancel()
+					}
+					return l
+				})
+				for name, failure := range failures {
+					if want := name == failed || failed == "both"; errors.Is(err, failure) != want {
+						t.Fatalf("serve error = %v, contains %s failure = %t, want %t", err, name, errors.Is(err, failure), want)
+					}
+				}
+				if trigger == "startup failure" && (err == nil || !strings.Contains(err.Error(), "reading stylesheet")) {
+					t.Fatalf("serve error = %v, want startup error too", err)
+				}
+				if trigger == "shutdown failure" && !errors.Is(err, shutdownErr) {
+					t.Fatalf("serve error = %v, want shutdown error too", err)
+				}
+				if errors.Is(err, http.ErrServerClosed) {
+					t.Fatalf("serve error = %v, want normal server closure filtered", err)
+				}
+			})
+		}
 	}
 }

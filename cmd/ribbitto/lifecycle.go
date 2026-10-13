@@ -23,6 +23,8 @@ type serviceLifecycle struct {
 	stopStreams func()
 	scheduler   *realtime.RecountScheduler
 	servers     []shutdownServer
+	serverDone  chan struct{}
+	serverJoins []func() error
 	workers     []func()
 	closePool   func()
 	grace       time.Duration
@@ -31,7 +33,7 @@ type serviceLifecycle struct {
 func newServiceLifecycle(parent context.Context, hub *realtime.Hub, scheduler *realtime.RecountScheduler, closePool func()) *serviceLifecycle {
 	ctx, cancel := context.WithCancel(context.WithoutCancel(parent))
 	return &serviceLifecycle{ctx: ctx, cancel: cancel, stopStreams: hub.CancelAll,
-		scheduler: scheduler, closePool: closePool, grace: 10 * time.Second}
+		scheduler: scheduler, closePool: closePool, grace: 10 * time.Second, serverDone: make(chan struct{}, 1)}
 }
 
 func (l *serviceLifecycle) close() error {
@@ -65,16 +67,31 @@ func (l *serviceLifecycle) close() error {
 	for _, stop := range l.workers {
 		stop()
 	}
+	for _, join := range l.serverJoins {
+		if result := join(); !errors.Is(result, http.ErrServerClosed) {
+			err = errors.Join(err, result)
+		}
+	}
 	l.closePool()
 	return err
 }
 
-func (l *serviceLifecycle) startServer(server *http.Server, serve func() error, errc chan<- error) {
+func (l *serviceLifecycle) startServer(server shutdownServer, serve func() error) {
 	l.servers = append(l.servers, server)
 	done := make(chan struct{})
-	l.workers = append(l.workers, func() { <-done })
+	var result error
+	l.serverJoins = append(l.serverJoins, func() error {
+		<-done
+		return result
+	})
 	go func() {
 		defer close(done)
-		errc <- serve()
+		result = serve()
+		// This only wakes shutdown; the join collects every result even if a
+		// signal wins the select. Coalescing wakes cannot block a server's exit.
+		select {
+		case l.serverDone <- struct{}{}:
+		default:
+		}
 	}()
 }

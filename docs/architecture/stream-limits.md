@@ -154,10 +154,10 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
 
 ## Shutdown
 
-On exit or startup/server failure: `Hub.CancelAll` (503/`ErrShutdown`),
-then service cancellation; HTTP drains and optional scheduler closure concurrently.
-Servers drain for ten seconds, then close connections. Scheduler and
-maintenance returns precede pool closure, even past HTTP grace. Mailbox closure
-cannot wake idle combined waits
-([ownership](recount-scheduler.md)). Browsers reconnect and
-replay; Caddy uses HTTP/2, HTTP/1.1 browsers allow six connections per origin.
+Exit/failure: `Hub.CancelAll` (503/`ErrShutdown`) → lifetime cancel → concurrent
+HTTP shutdown/scheduler close → workers → pool. After HTTP's 10 s grace,
+`Close` force-closes connections. Scheduler/maintenance workers and server
+goroutines are joined; handlers need not have returned, so may still use the
+pool when it closes last. Mailbox closure cannot wake idle waits
+([ownership](recount-scheduler.md)). Browsers reconnect/replay; Caddy uses HTTP/2;
+HTTP/1.1: six connections/origin.

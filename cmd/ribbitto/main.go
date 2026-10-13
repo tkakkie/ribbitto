@@ -149,7 +149,6 @@ func serveWithLifecycle(ctx context.Context, databaseURL string, own func(contex
 		write: writeTimeout,
 	})
 
-	errc := make(chan error, 2)
 	if metricsAddr != "" {
 		// Listen before serving, so a taken port fails the start.
 		ln, err := net.Listen("tcp", metricsAddr)
@@ -157,16 +156,15 @@ func serveWithLifecycle(ctx context.Context, databaseURL string, own func(contex
 			return fmt.Errorf("RIBBITTO_DEV_METRICS_ADDR: %w", err)
 		}
 		metrics := newMetricsServer(metricsAddr, devMetrics{queries: queries, pool: pool, streams: hub})
-		lifetime.startServer(metrics, func() error { return metrics.Serve(ln) }, errc)
+		lifetime.startServer(metrics, func() error { return metrics.Serve(ln) })
 		slog.Warn("development metrics enabled; use only on a disposable machine", "addr", metricsAddr)
 	}
 
 	slog.Info("listening", "addr", addr)
-	lifetime.startServer(srv, srv.ListenAndServe, errc)
+	lifetime.startServer(srv, srv.ListenAndServe)
 
 	select {
-	case err := <-errc:
-		return err
+	case <-lifetime.serverDone:
 	case <-ctx.Done():
 	}
 	return nil

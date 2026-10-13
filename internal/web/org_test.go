@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path"
 	"slices"
 	"strings"
 	"testing"
@@ -425,6 +426,9 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 
 	t.Run("image picker", func(t *testing.T) {
 		clock = now
+		// A sibling showing the same illustration must not count as the
+		// changed channel's own image (#914).
+		sibling := conversationtest.Channel(t, pool, acme, "Sibling", false)
 		for _, denied := range []struct{ path, token string }{
 			{view.ChannelURL("acme", acmeChannel), bobToken},
 			{view.ChannelURL("acme", globexChannel), carolToken},
@@ -461,6 +465,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 							if response.Code != 303 || response.Header().Get("Location") != target {
 								t.Fatalf("return: %d %s", response.Code, response.Header().Get("Location"))
 							}
+							same := strings.TrimSuffix(path.Base(channelImageURL(acmeChannel, key)), ".svg")
+							if _, err := pool.Exec(ctx, "UPDATE channel SET image = $1 WHERE organization_id = $2 AND id = $3", same, acme, sibling.ID); err != nil {
+								t.Fatal(err)
+							}
 							page := serveForm(handler, "GET", target, carolToken, nil)
 							doc, err := html.Parse(page.Body)
 							if err != nil || page.Code != 200 {
@@ -471,12 +479,16 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 								if n.DataAtom == atom.Input && attr(n, "name") == "image" {
 									radios++
 								}
+								// Count only the changed channel's own places: its sidebar
+								// link, the conversation header and the overview outside
+								// the picker form.
 								if n.DataAtom == atom.Img && attr(n, "src") == channelImageURL(acmeChannel, key) {
-									inForm := false
+									own, inForm := false, false
 									for a := n.Parent; a != nil; a = a.Parent {
 										inForm = inForm || a.DataAtom == atom.Form
+										own = own || attr(a, "id") == "link-"+view.ChannelDOMID(acmeChannel) || a.DataAtom == atom.Header || attr(a, "id") == "side-panel"
 									}
-									if !inForm {
+									if own && !inForm {
 										shown++
 									}
 								}

@@ -8,7 +8,7 @@ How the rest of the UI looks is in [`ui.md`](ui.md).
 file or one of these rules changes.
 
 - **Logo:** the speech-bubble frog — a chat bubble with a tail, two eye
-  bumps and three dots for a mouth (the dots #878 plans for typing). Files
+  bumps and three dots for a mouth (echoed by the typing dots). Files
   in `web/static/brand/`: `logo-v1.svg` (brand colour), `logo-mono-v1.svg`
   (`currentColor`) and `logo-tile-v1.svg` (white on brand, for app icons).
   Every page uses it as its favicon and `brandLogo` draws it; both read one

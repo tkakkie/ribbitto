@@ -53,7 +53,7 @@ func submitButton(kind buttonKind, label string) templ.Component {
 		ctx = templ.ClearChildren(ctx)
 		switch kind {
 		case buttonSecondary, buttonSecondaryIcon:
-			var templ_7745c5c3_Var2 = []any{"min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover", templ.KV("inline-flex items-center justify-center gap-2 whitespace-nowrap", kind == buttonSecondaryIcon)}
+			var templ_7745c5c3_Var2 = []any{"min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover transition motion-safe:active:scale-96", templ.KV("inline-flex items-center justify-center gap-2 whitespace-nowrap", kind == buttonSecondaryIcon)}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -93,14 +93,14 @@ func submitButton(kind buttonKind, label string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		case buttonLink:
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<button type=\"submit\" class=\"inline-flex min-h-11 items-center text-body text-brand underline\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<button type=\"submit\" class=\"inline-flex min-h-11 items-center text-body text-brand underline transition motion-safe:active:scale-96\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, label))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 33, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 33, Col: 157}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -111,14 +111,14 @@ func submitButton(kind buttonKind, label string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		default:
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<button type=\"submit\" class=\"min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<button type=\"submit\" class=\"min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand transition motion-safe:active:scale-96\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, label))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 35, Col: 130}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/controls.templ`, Line: 35, Col: 169}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -370,7 +370,7 @@ func iconButton(label, popoverTarget string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, " class=\"flex size-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, " class=\"flex size-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg transition motion-safe:active:scale-96\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

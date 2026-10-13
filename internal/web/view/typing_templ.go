@@ -42,7 +42,40 @@ func TypingIndicator(snapshot typing.Snapshot) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		for index, person := range snapshot.Typists {
-			templ_7745c5c3_Err = templ.Join(typingText(typingSeparator(ctx, snapshot, index)), MemberName(person.DisplayName, person.Handle), typingText(typingSuffix(ctx, snapshot, index))).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = templ.Join(typingDots(index), typingText(typingSeparator(ctx, snapshot, index)), MemberName(person.DisplayName, person.Handle), typingText(typingSuffix(ctx, snapshot, index))).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		return nil
+	})
+}
+
+// typingDots pulses before the first name; an empty status (no one typing) has none.
+func typingDots(index int) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var2 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var2 == nil {
+			templ_7745c5c3_Var2 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		_ = ctx
+		if index == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<span aria-hidden=\"true\" class=\"mr-1.5 inline-flex gap-0.5 align-middle\"><span class=\"size-1 rounded-full bg-muted animate-typing-dot-1\"></span><span class=\"size-1 rounded-full bg-muted animate-typing-dot-2\"></span><span class=\"size-1 rounded-full bg-muted animate-typing-dot-3\"></span></span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -67,19 +100,19 @@ func typingText(text string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var2 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var2 == nil {
-			templ_7745c5c3_Var2 = templ.NopComponent
+		templ_7745c5c3_Var3 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var3 == nil {
+			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		// Same staticcheck SA4006 workaround as MemberName (member.templ).
 		_ = ctx
-		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(text)
+		var templ_7745c5c3_Var4 string
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/typing.templ`, Line: 26, Col: 7}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/typing.templ`, Line: 34, Col: 7}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

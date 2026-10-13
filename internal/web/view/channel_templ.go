@@ -813,7 +813,7 @@ func historyLink(url string, older bool) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, " class=\"inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-body text-muted hover:bg-hover hover:text-fg\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, " class=\"inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-body text-muted hover:bg-hover hover:text-fg transition motion-safe:active:scale-96\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1136,7 +1136,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "\" class=\"flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand disabled:opacity-50\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "\" class=\"flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand transition motion-safe:active:scale-96 disabled:opacity-50\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1621,7 +1621,7 @@ func ChannelEntry(slug string, channel Channel, selected bool, count int64) temp
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var64 = []any{"relative flex min-h-9 items-center gap-2.5 break-words rounded-lg px-3 py-1.5", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-fg hover:bg-hover", !selected), templ.KV("font-semibold", !selected && count > 0)}
+		var templ_7745c5c3_Var64 = []any{"relative flex min-h-9 items-center gap-2.5 break-words rounded-lg px-3 py-1.5 transition motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-fg hover:bg-hover", !selected), templ.KV("font-semibold", !selected && count > 0)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var64...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -1680,7 +1680,7 @@ func ChannelEntry(slug string, channel Channel, selected bool, count int64) temp
 			return templ_7745c5c3_Err
 		}
 		if selected {
-			templ_7745c5c3_Err = selectionPill().Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = selectionPill(ChannelDOMID(channel.ID)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1765,7 +1765,7 @@ func TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, co
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var71 = []any{"relative flex min-h-8 items-center gap-2 break-words rounded-md px-2.5 py-1", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-muted hover:bg-hover hover:text-fg", !selected), templ.KV("font-semibold text-fg", !selected && count > 0)}
+		var templ_7745c5c3_Var71 = []any{"relative flex min-h-8 items-center gap-2 break-words rounded-md px-2.5 py-1 transition motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-muted hover:bg-hover hover:text-fg", !selected), templ.KV("font-semibold text-fg", !selected && count > 0)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var71...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -1824,7 +1824,7 @@ func TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, co
 			return templ_7745c5c3_Err
 		}
 		if selected {
-			templ_7745c5c3_Err = selectionPill().Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = selectionPill(TopicDOMID(topic.ID)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1863,8 +1863,9 @@ func TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, co
 }
 
 // selectionPill is the brand indicator of the current row; the row's text
-// colour and weight say the same without colour (docs/ui.md).
-func selectionPill() templ.Component {
+// colour and weight say the same without colour (docs/ui.md). Its id, unique
+// per row, names its view transition: it grows in only when the row changes.
+func selectionPill(row string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -1886,7 +1887,20 @@ func selectionPill() templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		_ = ctx
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, "<span aria-hidden=\"true\" class=\"absolute left-0 top-1/2 h-4 w-0.75 -translate-y-1/2 rounded-full bg-brand\"></span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 134, "<span id=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var77 string
+		templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.ResolveAttributeValue("selection-" + row)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 525, Col: 30}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var77)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, "\" data-selection-pill aria-hidden=\"true\" class=\"absolute left-0 top-1/2 h-4 w-0.75 -translate-y-1/2 rounded-full bg-brand\"></span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1910,39 +1924,39 @@ func unreadBadge(count int64) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var77 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var77 == nil {
-			templ_7745c5c3_Var77 = templ.NopComponent
+		templ_7745c5c3_Var78 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var78 == nil {
+			templ_7745c5c3_Var78 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if count > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 135, "<span class=\"inline-flex min-w-5 shrink-0 justify-center rounded-full bg-brand px-1.5 text-caption font-semibold text-on-brand\"><span aria-hidden=\"true\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var78 string
-			templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs(unreadText(count))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 530, Col: 47}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, "</span> <span class=\"sr-only\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 136, "<span class=\"inline-flex min-w-5 shrink-0 justify-center rounded-full bg-brand px-1.5 text-caption font-semibold text-on-brand\"><span aria-hidden=\"true\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var79 string
-			templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(" " + strings.ReplaceAll(i18n.T(ctx, "reading.unread_count"), "{count}", unreadText(count)))
+			templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(unreadText(count))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 531, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 531, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, "</span></span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 137, "</span> <span class=\"sr-only\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var80 string
+			templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(" " + strings.ReplaceAll(i18n.T(ctx, "reading.unread_count"), "{count}", unreadText(count)))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 532, Col: 118}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "</span></span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

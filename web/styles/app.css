@@ -94,6 +94,21 @@
   --color-current: currentColor;
 }
 
+/* Motion after Fluent 2 (docs/ui-code.md#motion); only transform, opacity and
+ * colours animate. Static, so every token reaches the built stylesheet even
+ * while no utility uses it yet. */
+@theme static {
+  /* Only these easings exist; Tailwind's defaults are dropped. */
+  --ease-*: initial;
+  --duration-faster: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-gentle: 250ms;
+  --ease-standard: cubic-bezier(0.33, 0, 0.67, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0, 1);
+  --ease-accelerate: cubic-bezier(0.8, 0, 0.78, 1);
+}
+
 @theme {
   /* System fonts only (no web fonts: self-hosting and privacy), with Japanese fallbacks. */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
@@ -130,6 +145,19 @@
   --container-sidebar: 16.5rem;
   --container-panel: 21.25rem;
   --container-reading: 47.5rem;
+
+  /* Hover and press feedback: the transition utility uses these. */
+  --default-transition-duration: var(--duration-faster);
+  --default-transition-timing-function: var(--ease-standard);
+  --animate-*: initial;
+  /* The only loop, staggered per dot; it ends when the typing status empties. */
+  --animate-typing-dot-1: typing-dot 1.2s var(--ease-standard) infinite;
+  --animate-typing-dot-2: typing-dot 1.2s var(--ease-standard) 0.2s infinite;
+  --animate-typing-dot-3: typing-dot 1.2s var(--ease-standard) 0.4s infinite;
+  @keyframes typing-dot {
+    0%, 60%, 100% { opacity: 0.3; }
+    30% { opacity: 1; }
+  }
 }
 
 @layer base {
@@ -141,5 +169,58 @@
   :focus-visible {
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;
+  }
+}
+
+/* Navigation: the old page disappears at once and the new one shows from its
+   first frame; only an opening panel and a new row's pill move. Reduced
+   motion never opts in. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+  /* Input reaches the new page during the transition. */
+  ::view-transition {
+    pointer-events: none;
+  }
+  ::view-transition-group(*),
+  ::view-transition-new(*) {
+    animation: none;
+  }
+  ::view-transition-old(*) {
+    display: none;
+  }
+  /* An opening panel, with no partner on the old page, slides in 8 px. */
+  #side-panel {
+    view-transition-name: side-panel;
+  }
+  ::view-transition-new(side-panel):only-child {
+    animation: rb-panel-in var(--duration-fast) var(--ease-decelerate);
+  }
+  /* A name per row: an unchanged row stays still, a new row's pill grows in.
+     Without typed attr() the pill changes with the page. */
+  [data-selection-pill] {
+    view-transition-name: attr(id type(<custom-ident>), none);
+    view-transition-class: selection-pill;
+  }
+  ::view-transition-new(.selection-pill):only-child {
+    animation: rb-pill-in var(--duration-faster) var(--ease-decelerate);
+  }
+}
+
+@keyframes rb-panel-in {
+  from { transform: translateX(0.5rem); }
+}
+@keyframes rb-pill-in {
+  from { transform: scaleY(0); }
+}
+
+/* Under reduced motion everything stops; states change instantly. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

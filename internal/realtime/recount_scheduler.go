@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"sync"
+	"time"
 )
 
 // RecountScheduler bounds concurrent computations and registered streams.
@@ -18,17 +19,19 @@ type RecountScheduler struct {
 	closed  bool
 	streams map[*RecountRegistration]struct{}
 	ready   []*RecountRegistration
+	stats   RecountStats
 }
 
 // RecountRegistration owns one running and one replaceable pending computation.
 // Call Cancel on every stream exit; all methods are safe for concurrent use.
 type RecountRegistration struct {
-	q               *RecountScheduler
-	ctx             context.Context
-	cancel          context.CancelFunc
-	closed, running bool
-	pending         *recountRequest
-	done            chan RecountCompletion
+	q                          *RecountScheduler
+	ctx                        context.Context
+	cancel                     context.CancelFunc
+	closed, running            bool
+	pending                    *recountRequest
+	pendingSince, runningSince time.Time
+	done                       chan RecountCompletion
 }
 
 type recountRequest struct {
@@ -47,12 +50,77 @@ type RecountCompletion struct {
 	Err error
 }
 
+// RecountStats is a scheduler snapshot; counters accumulate for its lifetime.
+// Ages are zero when no matching work exists, and durations measure dispatch to return.
+type RecountStats struct {
+	// SnapshotAt is sampled under the scheduler mutex.
+	SnapshotAt time.Time
+	// Closed reports whether admission has stopped.
+	Closed bool
+	// Pending includes successors waiting behind running computations.
+	Pending int
+	// Eligible counts pending registrations queued for a worker.
+	Eligible int
+	// OldestPendingAge preserves continuous pending time across replacement.
+	OldestPendingAge time.Duration
+	// RunningWorkers includes cancelled computations until actual return.
+	RunningWorkers int
+	// WaitingWorkers counts workers idle in the scheduler's condition wait.
+	WaitingWorkers int
+	// OldestRunningAge includes unfinished, cancelled computations.
+	OldestRunningAge time.Duration
+	// Registrations includes cancelled registrations retained by running work.
+	Registrations int
+	// WorkerLimit is the configured computation concurrency bound.
+	WorkerLimit int
+	// RegistrationLimit is the configured registration capacity.
+	RegistrationLimit int
+	// Completed counts actual returns, including errors, panics and cancelled work.
+	Completed uint64
+	// ProcessingDuration sums dispatch-to-return durations for Completed.
+	ProcessingDuration time.Duration
+	// DurationBuckets are disjoint counts: <=1ms, <=10ms, <=100ms, <=1s, <=10s, >10s.
+	DurationBuckets [6]uint64
+	// Cancelled counts pending work removed and running work first cancelled.
+	// Replacement and repeated Cancel/Close do not increment it.
+	Cancelled uint64
+	// RefusedCapacity counts Register calls refused by the registration limit.
+	RefusedCapacity uint64
+	// RefusedClosed counts Register calls refused after closure, ahead of capacity.
+	RefusedClosed uint64
+	// RejectedSubmissions counts Submit calls rejected for nil compute or closure.
+	RejectedSubmissions uint64
+	// Errors counts returned errors and recovered panics, even after cancellation.
+	Errors uint64
+}
+
+// Stats copies counters and scans the bounded registrations under the mutex.
+// It allocates no slices or per-request observations and is safe during Close.
+func (q *RecountScheduler) Stats() RecountStats {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	s := q.stats
+	s.SnapshotAt, s.Closed = time.Now(), q.closed
+	s.Registrations, s.Eligible = len(q.streams), len(q.ready)
+	for r := range q.streams {
+		if r.pending != nil {
+			s.Pending++
+			s.OldestPendingAge = max(s.OldestPendingAge, s.SnapshotAt.Sub(r.pendingSince))
+		}
+		if r.running {
+			s.OldestRunningAge = max(s.OldestRunningAge, s.SnapshotAt.Sub(r.runningSince))
+		}
+	}
+	return s
+}
+
 // NewRecountScheduler requires positive worker and registration limits.
 func NewRecountScheduler(workers, registrations int) *RecountScheduler {
 	if workers < 1 || registrations < 1 {
 		panic("realtime: recount scheduler requires positive limits")
 	}
 	q := &RecountScheduler{limit: registrations, streams: make(map[*RecountRegistration]struct{})}
+	q.stats.WorkerLimit, q.stats.RegistrationLimit = workers, registrations
 	q.wake = sync.NewCond(&q.mu)
 	for range workers {
 		q.wg.Go(q.work)
@@ -65,7 +133,12 @@ func NewRecountScheduler(workers, registrations int) *RecountScheduler {
 func (q *RecountScheduler) Register() *RecountRegistration {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if q.closed || len(q.streams) >= q.limit {
+	if q.closed {
+		q.stats.RefusedClosed++
+		return nil
+	}
+	if len(q.streams) >= q.limit {
+		q.stats.RefusedCapacity++
 		return nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -82,10 +155,14 @@ func (r *RecountRegistration) Submit(version uint64, compute func(context.Contex
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if r.closed || q.closed || compute == nil {
+		q.stats.RejectedSubmissions++
 		return false
 	}
-	if r.pending == nil && !r.running {
-		q.ready = append(q.ready, r)
+	if r.pending == nil {
+		r.pendingSince = time.Now()
+		if !r.running {
+			q.ready = append(q.ready, r)
+		}
 	}
 	r.pending = &recountRequest{version, compute}
 	q.wake.Signal()
@@ -103,7 +180,9 @@ func (q *RecountScheduler) work() {
 	defer q.mu.Unlock()
 	for {
 		for len(q.ready) == 0 && !q.closed {
+			q.stats.WaitingWorkers++
 			q.wake.Wait()
+			q.stats.WaitingWorkers--
 		}
 		if q.closed {
 			return
@@ -112,9 +191,27 @@ func (q *RecountScheduler) work() {
 		q.ready = slices.Delete(q.ready, 0, 1)
 		request := r.pending
 		r.pending, r.running = nil, true
+		start := time.Now()
+		r.runningSince = start
+		q.stats.RunningWorkers++
 		q.mu.Unlock()
 		out, err := request.run(r.ctx)
+		duration := time.Since(start)
 		q.mu.Lock()
+		q.stats.RunningWorkers--
+		q.stats.Completed++
+		q.stats.ProcessingDuration += duration
+		bucket := 0
+		for _, bound := range [...]time.Duration{time.Millisecond, 10 * time.Millisecond, 100 * time.Millisecond, time.Second, 10 * time.Second} {
+			if duration <= bound {
+				break
+			}
+			bucket++
+		}
+		q.stats.DurationBuckets[bucket]++
+		if err != nil {
+			q.stats.Errors++
+		}
 		r.running = false
 		if r.closed {
 			delete(q.streams, r)
@@ -158,6 +255,12 @@ func (r *RecountRegistration) cancelLocked() {
 		return
 	}
 	r.closed = true
+	if r.pending != nil {
+		r.q.stats.Cancelled++
+	}
+	if r.running {
+		r.q.stats.Cancelled++
+	}
 	r.cancel()
 	r.pending = nil
 	r.q.ready = slices.DeleteFunc(r.q.ready, func(candidate *RecountRegistration) bool { return candidate == r })

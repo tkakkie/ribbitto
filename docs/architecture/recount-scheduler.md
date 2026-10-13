@@ -80,12 +80,34 @@ audience's deny advances, while bound revocation and check errors preserve the
 affected durable cursor. Pending and late output cannot survive exit.
 Production activation remains original PR 2.
 
-Scheduler instrumentation is deferred to a separate unit in original PR 2 of
-#865, before production wiring or activation: queue length and oldest pending
-age over time, running/waiting worker counts, processing time, and cancellation,
-refusal and error counters. Including their contracts and deterministic tests
-would exceed part 1b's review budget. Queue age must include a pending successor
-behind a running computation, and cancellation must not report retained workers
-as free. PostgreSQL connection and acquisition metrics belong to the wiring
-unit; recount freshness and delivery latency belong to the writer measurements.
-Posting, read and normal page latency belong to mixed-load stage 2 validation.
+Part 2a adds `Stats() RecountStats`, a read-only, allocation-free snapshot
+sampled under the scheduler mutex. It copies lifetime counters and scans the
+bounded registration set; no request histories or observations are retained.
+`SnapshotAt` timestamps its gauges; ages are zero when no matching work exists.
+Pending includes a successor behind running work. Replacement preserves the
+start of continuous pending time, even before eligibility. Eligible counts only
+registrations in the worker queue. Running workers remain occupied after
+cancellation until actual return; waiting workers are idle in the scheduler's
+condition wait (exited workers are neither). Registrations includes capacity
+retained by cancelled running work. Both configured limits and closure are visible.
+
+Completed counts every actual computation return, including cancelled work,
+errors and recovered panics, regardless of mailbox replacement or delivery.
+ProcessingDuration sums dispatch-to-return time, sampled before reacquiring the
+mutex. DurationBuckets holds six disjoint counts with inclusive upper bounds
+of 1ms, 10ms, 100ms, 1s and 10s, then an overflow bucket; their sum is Completed.
+OldestRunningAge includes unfinished and cancelled work, preventing stalled work
+from disappearing from processing summaries.
+
+Cancelled increments once per pending computation removed and once per running
+computation first cancelled. Replacement, buffered-result disposal and repeated
+Cancel/Close add nothing. RefusedCapacity counts full Register calls;
+RefusedClosed counts closed Register calls, taking precedence over capacity.
+RejectedSubmissions counts each Submit refused for a nil computation, cancelled
+registration or closed scheduler. Errors counts each returned error or recovered
+panic, including after cancellation. All counters persist after Close.
+
+Gated synctest tests cover these rules and duration boundaries without sleeps;
+mutation commands and failing assertions are recorded in the part 2a PR body.
+Metrics exposure is part 2b; production remains synchronous. Processing time is
+not recount freshness: delivery timing and mixed-load validation remain later work.

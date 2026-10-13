@@ -76,7 +76,7 @@ func (s *stage2Stream) connect(ctx context.Context, o *stage2Observation, start 
 	status, outcome := 0, "failed"
 	if err == nil {
 		status = r.StatusCode
-		if status == 200 && r.ProtoMajor == 1 && strings.Split(r.Header.Get("Content-Type"), ";")[0] == "text/event-stream" && streamCtx.Err() == nil {
+		if status == 200 && r.ProtoMajor == 1 && r.ProtoMinor == 1 && strings.Split(r.Header.Get("Content-Type"), ";")[0] == "text/event-stream" && streamCtx.Err() == nil {
 			outcome = "succeeded"
 			s.body, s.cancel, s.done = r.Body, cancel, make(chan struct{})
 			s.err = nil

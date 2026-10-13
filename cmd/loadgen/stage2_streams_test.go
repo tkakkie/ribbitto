@@ -126,7 +126,7 @@ func TestStage2Streams(t *testing.T) {
 }
 
 func TestStage2StreamFailures(t *testing.T) {
-	for _, failure := range []string{"page503", "page-empty", "initial503", "429", "500", "bad-type", "reset", "eof", "cancel", "headers-cancel"} {
+	for _, failure := range []string{"page503", "page-empty", "initial503", "429", "500", "bad-type", "http10", "reset", "eof", "cancel", "headers-cancel"} {
 		t.Run(failure, func(t *testing.T) {
 			var connects atomic.Int64
 			headers := make(chan struct{})
@@ -153,6 +153,16 @@ func TestStage2StreamFailures(t *testing.T) {
 					return
 				}
 				if failure == "bad-type" {
+					return
+				}
+				if failure == "http10" {
+					// A correct status and type over HTTP/1.0 is still not an HTTP/1.1 stream.
+					conn, buf, err := w.(http.Hijacker).Hijack()
+					if err == nil {
+						_, _ = buf.WriteString("HTTP/1.0 200 OK\r\nContent-Type: text/event-stream\r\n\r\n")
+						_ = buf.Flush()
+						_ = conn.Close()
+					}
 					return
 				}
 				w.Header().Set("Content-Type", "text/event-stream")
@@ -192,7 +202,7 @@ func TestStage2StreamFailures(t *testing.T) {
 					}
 					t.Fatalf("establishment failure lost or retried: %v %+v", err, attempts)
 				}
-				status := map[string]int{"page503": 503, "page-empty": 200, "initial503": 503, "429": 429, "500": 500, "bad-type": 200}[failure]
+				status := map[string]int{"page503": 503, "page-empty": 200, "initial503": 503, "429": 429, "500": 500, "bad-type": 200, "http10": 200}[failure]
 				if a := attempts[want-1]; a.Status != status || a.Outcome != "failed" && failure != "page-empty" {
 					t.Fatalf("establishment status or outcome: %+v", a)
 				}

@@ -158,8 +158,8 @@ beside them (decisions 20 and 28):
   Latin-script word.
 
 The strings follow this on the conversation screen, where each kind's
-look is present; welcome pages, errors and help text keep ordinary words
-([`vocabulary.md`](domain/vocabulary.md#product-labels)).
+look is present; welcome pages keep ordinary words, and errors, help and
+notices name no thing ([`vocabulary.md`](domain/vocabulary.md#product-labels)).
 
 ## Brand
 

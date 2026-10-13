@@ -145,6 +145,10 @@ rows for them (text, placeholder, control borders and the focus outline).
 - **Conversation:** a thin header; a centred reading column about 760 px
   wide with 15 px text; a rounded composer block at the bottom, whose
   place the move form takes while a message is checked.
+- **Every page** (M6, #966): setup, sign-in, sign-up, home `/`, the
+  channel feed and the topic view with the members and overview panels,
+  the rate-limit page, and the channel list page once it exists. 404 and
+  500 stay plain-text responses.
 - **Widths** (measured for #966): the reading column stays comfortable
   down to 480 px at 15 px text. The frame takes 372 px, and 720 px with a
   side panel, so from 1200 px (75 rem) a panel sits beside the

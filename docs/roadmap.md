@@ -104,9 +104,9 @@ the emoji picker.
 
 M6 is done when, in M5's design:
 
-1. **Dark mode.** Every page (M5 outcome 2's and the channel list; 404
-   and 500 stay plain text) follows the system setting with dark colours
-   that meet the contrast table, checked in a browser.
+1. **Dark mode.** Every page ([listed in `ui.md`](ui.md#layout-principles);
+   404 and 500 stay plain text) follows the system setting with dark
+   colours that meet the contrast table, checked in a browser.
 2. **Mobile layout.** At phone width, every page is one column, with the
    conversation at full width, a bottom navigation on the channel list and
    a back link in a conversation; tap targets are at least 44 × 44 px and

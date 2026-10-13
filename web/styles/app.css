@@ -10,7 +10,7 @@
  * utilities (bg-surface, text-muted, …) onto these variables.
  * Light only until M6 designs dark colours for this direction (docs/ui.md),
  * so there is no prefers-color-scheme override here.
- * Contrast ratios for every pair are listed in docs/ui.md — recheck them
+ * Contrast ratios for every pair are listed in docs/ui-colours.md — recheck them
  * there when you change a value here.
  */
 :root {

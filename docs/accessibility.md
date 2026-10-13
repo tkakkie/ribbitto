@@ -23,7 +23,9 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   after a submit. Setup and sign-up use the shared `textField` component:
   ✓ invalid inputs have `aria-invalid="true"` and an error description;
   valid inputs omit both attributes. Sign-in uses `textField` with empty
-  field errors and keeps one form-level alert.
+  field errors and keeps one form-level alert. A radio group's error (the
+  channel image picker) is its own alert: every radio in the group has
+  `aria-invalid="true"` and is described by it.
 - **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and
   `aria-labelledby` targets exist in the rendered document or fragment.
 - **Timestamps.** ✓ `<time datetime>` values are valid HTML global dates

@@ -579,6 +579,8 @@ func TestPagesMarkup(t *testing.T) {
 	}
 	setupForm := url.Values{"token": {"t"}, "organization_name": {"Org"}, "slug": {"org"}, "display_name": {"Owner"}, "handle": {"owner"}, "email": {"a@b"}, "password": {"p"}}
 	cases := []markupCase{
+		{name: "invalid image", route: "POST /organizations/{slug}/channels/{channelID}/overview", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/overview", cookie: true, form: url.Values{"image": {"unknown"}}, status: 422, alerts: 1},
+		{name: "invalid topic image", route: "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/overview", services: signedIn(oneOrganisation{}), method: "POST", path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}) + "/overview", cookie: true, form: url.Values{"image": {"unknown"}}, status: 422, alerts: 1},
 		{name: "members", route: "GET /organizations/{slug}/channels/{channelID}/members", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", kernel.ID{1}) + "/members", cookie: true},
 		{name: "overview", route: "GET /organizations/{slug}/channels/{channelID}/overview", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelURL("acme", kernel.ID{1}) + "/overview", cookie: true},
 		{name: "topic members, older", route: "GET /organizations/{slug}/channels/{channelID}/topics/{topicID}/members", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}) + "/members?before=40&unread=0", cookie: true},

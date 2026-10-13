@@ -1,6 +1,9 @@
 package view
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
 
 // ChannelImageURL is the versioned URL of a channel illustration key. A new
 // artwork version changes this one place (docs/brand.md).
@@ -48,4 +51,48 @@ templ welcomeComposition() {
 			/>
 		}
 	</div>
+}
+
+// imagePicker shares native radio controls between creation and the overview.
+// An error is the group's own: every radio is invalid and described by it,
+// following the form-error rule in docs/accessibility.md.
+// A fieldset names the group; native inputs keep keyboard and no-script behavior.
+templ imagePicker(keys []string, selected, errorID, errorMsg string) {
+	<fieldset class="flex flex-col gap-2">
+		<legend class="font-semibold">{ i18n.T(ctx, "illustration.title") }</legend>
+		if errorMsg != "" {
+			<p id={ errorID } role="alert" class="text-danger">{ i18n.T(ctx, errorMsg) }</p>
+		}
+		<label class="flex min-h-11 items-center gap-2">
+			<input
+				type="radio"
+				name="image"
+				value=""
+				checked?={ selected == "" }
+				if errorMsg != "" {
+					aria-invalid="true"
+					aria-describedby={ errorID }
+				}
+			/>
+			{ i18n.T(ctx, "illustration.default") }
+		</label>
+		<div class="grid grid-cols-3 gap-2">
+			for _, key := range keys {
+				<label class="flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-border-strong p-1 hover:bg-hover">
+					<input
+						type="radio"
+						name="image"
+						value={ key }
+						checked?={ selected == key }
+						if errorMsg != "" {
+							aria-invalid="true"
+							aria-describedby={ errorID }
+						}
+					/>
+					@channelImage(ChannelImageURL(key), false)
+					<span class="sr-only">{ i18n.T(ctx, "illustration.option." + key) }</span>
+				</label>
+			}
+		</div>
+	</fieldset>
 }

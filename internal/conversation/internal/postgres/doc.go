@@ -1,12 +1,12 @@
 // Package postgres is conversation's store (decisions 26 and 27): channel
-// reads and creation, including the default topic, the topic lookup,
+// reads, image updates and creation, including the default topic, the topic lookup,
 // posting's and branching's writes and the page snapshot's reads, in
 // db/queries/conversation on their own sqlc entry. Only conversationpg and
 // this package's tests import it. It accepts a pool, or unwraps a
 // caller-owned transaction or snapshot through pgxbridge, and never opens,
 // commits or rolls one back.
 //
-// ChannelStore (channel reads and creation) and TopicStore (the topic
+// ChannelStore (channel reads, creation and image updates) and TopicStore (the topic
 // lookup) use the pool or caller-owned transaction they are given.
 // DefaultChannelCreator holds setup's default-channel write, and
 // DefaultChannelCreatorIn binds it to org's transaction. Writer holds

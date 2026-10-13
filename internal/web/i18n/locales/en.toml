@@ -1,3 +1,54 @@
+["illustration.title"]
+other = "Image"
+
+["illustration.default"]
+other = "Use the default image"
+
+["illustration.change"]
+other = "Change image"
+
+["illustration.save"]
+other = "Save image"
+
+["illustration.error"]
+other = "Choose an image from the set."
+
+["illustration.option.lake"]
+other = "Lake"
+
+["illustration.option.hills"]
+other = "Hills"
+
+["illustration.option.leaf"]
+other = "Leaf"
+
+["illustration.option.cup"]
+other = "Cup"
+
+["illustration.option.flowers"]
+other = "Flowers"
+
+["illustration.option.sunrise"]
+other = "Sunrise"
+
+["illustration.option.moon"]
+other = "Moon"
+
+["illustration.option.sail"]
+other = "Sail"
+
+["illustration.option.cactus"]
+other = "Cactus"
+
+["illustration.option.mountain"]
+other = "Mountain"
+
+["illustration.option.shell"]
+other = "Shell"
+
+["illustration.option.kite"]
+other = "Kite"
+
 ["app.title"]
 other = "ribbitto"
 

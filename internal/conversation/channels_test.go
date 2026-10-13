@@ -17,13 +17,13 @@ type channelStore struct {
 	created  []conversation.Channel
 }
 
-func (s *channelStore) CreateChannel(_ context.Context, org kernel.ID, name string) (conversation.Channel, error) {
+func (s *channelStore) CreateChannel(_ context.Context, org kernel.ID, name, image string) (conversation.Channel, error) {
 	for _, c := range s.channels[org] {
 		if c.Name == name {
 			return conversation.Channel{}, conversation.ErrChannelNameTaken
 		}
 	}
-	c := conversation.Channel{ID: kernel.ID{byte(len(s.created) + 10)}, OrganizationID: org, Name: name}
+	c := conversation.Channel{ID: kernel.ID{byte(len(s.created) + 10)}, OrganizationID: org, Name: name, Image: image}
 	s.created = append(s.created, c)
 	s.channels[org] = append(s.channels[org], c)
 	return c, nil
@@ -111,4 +111,14 @@ func TestChannels(t *testing.T) {
 			t.Fatalf("got %v", err)
 		}
 	})
+}
+
+func (s *channelStore) SetChannelImage(_ context.Context, organization, id kernel.ID, image string) error {
+	for i, c := range s.channels[organization] {
+		if c.ID == id {
+			s.channels[organization][i].Image = image
+			return nil
+		}
+	}
+	return conversation.ErrChannelNotFound
 }

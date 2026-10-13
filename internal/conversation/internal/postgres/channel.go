@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/internal/postgres/sqlcgen"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -22,12 +23,12 @@ func NewChannelStore(db sqlcgen.DBTX) *ChannelStore {
 }
 
 // CreateChannel inserts a non-default channel with an already validated name.
-func (s *ChannelStore) CreateChannel(ctx context.Context, organizationID kernel.ID, name string) (conversation.Channel, error) {
-	return s.createChannel(ctx, organizationID, name, false)
+func (s *ChannelStore) CreateChannel(ctx context.Context, organizationID kernel.ID, name, image string) (conversation.Channel, error) {
+	return s.createChannel(ctx, organizationID, name, false, image)
 }
 
-func (s *ChannelStore) createChannel(ctx context.Context, organizationID kernel.ID, name string, isDefault bool) (conversation.Channel, error) {
-	row, err := s.queries.CreateChannel(ctx, sqlcgen.CreateChannelParams{OrganizationID: uuid(organizationID), Name: name, IsDefault: isDefault})
+func (s *ChannelStore) createChannel(ctx context.Context, organizationID kernel.ID, name string, isDefault bool, image string) (conversation.Channel, error) {
+	row, err := s.queries.CreateChannel(ctx, sqlcgen.CreateChannelParams{OrganizationID: uuid(organizationID), Name: name, IsDefault: isDefault, Image: pgtype.Text{String: image, Valid: image != ""}})
 	var pgErr *pgconn.PgError
 	switch {
 	// The unique constraint, not a lookup first, decides between concurrent creators.
@@ -80,4 +81,16 @@ func (s *ChannelStore) GetDefaultChannel(ctx context.Context, organizationID ker
 
 func channelFromRow(row sqlcgen.Channel) conversation.Channel {
 	return conversation.Channel{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, DefaultTopicID: row.DefaultTopicID.Bytes, Name: row.Name, Image: row.Image.String, IsDefault: row.IsDefault, CreatedAt: row.CreatedAt.Time}
+}
+
+// SetChannelImage stores a key, or NULL for the ID-based default, in one scoped write.
+func (s *ChannelStore) SetChannelImage(ctx context.Context, organizationID, id kernel.ID, image string) error {
+	rows, err := s.queries.SetChannelImage(ctx, sqlcgen.SetChannelImageParams{OrganizationID: uuid(organizationID), ID: uuid(id), Image: pgtype.Text{String: image, Valid: image != ""}})
+	if err != nil {
+		return fmt.Errorf("updating channel image: %w", err)
+	}
+	if rows == 0 {
+		return conversation.ErrChannelNotFound
+	}
+	return nil
 }

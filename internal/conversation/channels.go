@@ -12,7 +12,8 @@ import (
 // ChannelStore reads and writes channels, always within one organisation. Lookups
 // return ErrChannelNotFound; CreateChannel returns ErrChannelNameTaken for a duplicate.
 type ChannelStore interface {
-	CreateChannel(ctx context.Context, organizationID kernel.ID, name string) (Channel, error)
+	CreateChannel(ctx context.Context, organizationID kernel.ID, name, image string) (Channel, error)
+	SetChannelImage(ctx context.Context, organizationID, id kernel.ID, image string) error
 	GetChannel(ctx context.Context, organizationID, id kernel.ID) (Channel, error)
 	GetDefaultChannel(ctx context.Context, organizationID kernel.ID) (Channel, error)
 }
@@ -31,11 +32,19 @@ func NewChannels(store ChannelStore) *Channels {
 // public in the MVP); it is never the default, and nothing here deletes a
 // channel or moves the default, so each organisation keeps exactly one.
 func (s *Channels) Create(ctx context.Context, m org.Membership, name string) (Channel, error) {
+	return s.CreateWithImage(ctx, m, name, "")
+}
+
+// CreateWithImage adds a channel with a bundled image, or its ID-based default.
+func (s *Channels) CreateWithImage(ctx context.Context, m org.Membership, name, image string) (Channel, error) {
+	if err := ValidateChannelImage(image); err != nil {
+		return Channel{}, err
+	}
 	name, err := ValidateChannelName(name)
 	if err != nil {
 		return Channel{}, fmt.Errorf("%w: %w", ErrInvalidChannelName, err)
 	}
-	created, err := s.store.CreateChannel(ctx, m.Organization.ID, name)
+	created, err := s.store.CreateChannel(ctx, m.Organization.ID, name, image)
 	if err != nil {
 		return Channel{}, fmt.Errorf("creating channel: %w", err)
 	}
@@ -63,4 +72,16 @@ func (s *Channels) Default(ctx context.Context, m org.Membership) (Channel, erro
 		return Channel{}, fmt.Errorf("finding default channel: %w", err)
 	}
 	return found, nil
+}
+
+// SetImage changes a channel's illustration within the resolved membership's organisation.
+// It writes no event: other members see the image on their next page load.
+func (s *Channels) SetImage(ctx context.Context, m org.Membership, id kernel.ID, image string) error {
+	if err := ValidateChannelImage(image); err != nil {
+		return err
+	}
+	if err := s.store.SetChannelImage(ctx, m.Organization.ID, id, image); err != nil {
+		return fmt.Errorf("changing channel image: %w", err)
+	}
+	return nil
 }

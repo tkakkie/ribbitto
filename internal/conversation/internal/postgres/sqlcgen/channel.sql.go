@@ -13,8 +13,8 @@ import (
 
 const createChannel = `-- name: CreateChannel :one
 WITH created AS (
-  INSERT INTO channel (organization_id, name, is_default)
-  VALUES ($1, $2, $3) RETURNING id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default, image
+  INSERT INTO channel (organization_id, name, is_default, image)
+  VALUES ($1, $2, $3, $4) RETURNING id, organization_id, name, is_default, created_at, default_topic_id, default_topic_is_default, image
 ), default_topic AS (
   INSERT INTO topic (id, organization_id, channel_id, is_default)
   SELECT default_topic_id, organization_id, id, true FROM created
@@ -26,6 +26,7 @@ type CreateChannelParams struct {
 	OrganizationID pgtype.UUID
 	Name           string
 	IsDefault      bool
+	Image          pgtype.Text
 }
 
 type CreateChannelRow struct {
@@ -44,7 +45,12 @@ type CreateChannelRow struct {
 // keeps both in one transaction even on a pool; the channel's foreign key to
 // the topic is deferred to commit.
 func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (CreateChannelRow, error) {
-	row := q.db.QueryRow(ctx, createChannel, arg.OrganizationID, arg.Name, arg.IsDefault)
+	row := q.db.QueryRow(ctx, createChannel,
+		arg.OrganizationID,
+		arg.Name,
+		arg.IsDefault,
+		arg.Image,
+	)
 	var i CreateChannelRow
 	err := row.Scan(
 		&i.ID,
@@ -135,4 +141,23 @@ func (q *Queries) ListChannels(ctx context.Context, organizationID pgtype.UUID) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const setChannelImage = `-- name: SetChannelImage :execrows
+UPDATE channel SET image = $3
+WHERE organization_id = $1 AND id = $2
+`
+
+type SetChannelImageParams struct {
+	OrganizationID pgtype.UUID
+	ID             pgtype.UUID
+	Image          pgtype.Text
+}
+
+func (q *Queries) SetChannelImage(ctx context.Context, arg SetChannelImageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setChannelImage, arg.OrganizationID, arg.ID, arg.Image)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

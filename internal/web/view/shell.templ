@@ -70,6 +70,7 @@ templ channelCreateForm(page ChannelPage, popover bool) {
 		} else {
 			<p id="channel-name-help" class="text-caption text-muted">{ i18n.T(ctx, "channel.name_help") }</p>
 		}
+		@imagePicker(page.ImageKeys, page.Image, "channel-image-error", page.CreateImageError)
 		@submitButton(buttonPrimary, "channel.create")
 	</form>
 }

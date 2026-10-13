@@ -22,9 +22,10 @@ import (
 
 // Channels provides channels within the resolved member's organisation.
 type Channels interface {
+	SetImage(context.Context, org.Membership, kernel.ID, string) error
 	Get(context.Context, org.Membership, kernel.ID) (conversation.Channel, error)
 	Default(context.Context, org.Membership) (conversation.Channel, error)
-	Create(context.Context, org.Membership, string) (conversation.Channel, error)
+	CreateWithImage(context.Context, org.Membership, string, string) (conversation.Channel, error)
 }
 
 // MessageReader provides the channel page and cursor from one snapshot, and
@@ -58,6 +59,7 @@ type channelPages struct {
 	posting   *conversation.Posting
 	pages     *pageRenderer
 	channels  Channels
+	imageErr  string
 }
 
 func (p channelPages) home(w http.ResponseWriter, r *http.Request, m org.Membership) {
@@ -87,7 +89,7 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 		p.post(w, r, m, id)
 		return
 	}
-	page := view.ChannelPage{Panel: p.panel}
+	page := view.ChannelPage{Panel: p.panel, ImageError: p.imageErr}
 	// ParseQuery, unlike URL.Query, reports malformed pairs instead of
 	// dropping them, so a broken link cannot fall back to the latest page.
 	query, err := url.ParseQuery(r.URL.RawQuery)
@@ -123,7 +125,15 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		p.after = &after
 	}
-	p.render(w, r, m, id, http.StatusOK, page, firstUnread)
+	if p.panel == view.PanelMembers {
+		query.Del("after")
+	}
+	page.Query = query.Encode()
+	status := http.StatusOK
+	if p.imageErr != "" {
+		status = http.StatusUnprocessableEntity
+	}
+	p.render(w, r, m, id, status, page, firstUnread)
 }
 
 // Preserve channel lookup errors ahead of malformed paging links, without a
@@ -140,12 +150,14 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 		return
 	}
 	name := r.PostForm.Get("name")
-	c, err := p.channels.Create(r.Context(), m, name)
-	message := ""
+	c, err := p.channels.CreateWithImage(r.Context(), m, name, r.PostForm.Get("image"))
+	message, imageMessage := "", ""
 	switch {
 	case err == nil:
 		http.Redirect(w, r, view.ChannelURL(m.Organization.Slug, c.ID), http.StatusSeeOther)
 		return
+	case errors.Is(err, conversation.ErrInvalidChannelImage):
+		imageMessage = "illustration.error"
 	case errors.Is(err, conversation.ErrInvalidChannelName):
 		message = "channel.error.name"
 	case errors.Is(err, conversation.ErrChannelNameTaken):
@@ -161,7 +173,7 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 		serverError(w, r, "finding default channel", err)
 		return
 	}
-	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message}, nil)
+	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message, Image: r.PostForm.Get("image"), CreateImageError: imageMessage}, nil)
 }
 
 func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage, firstUnread *int64) {
@@ -198,6 +210,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		page.Messages[i] = viewMessage(m.Organization.Slug, entry)
 	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
+		page.ImageKeys = conversation.ChannelImageKeys()
 		page = sidebarView(page, m, conversation.SidebarSnapshot{
 			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics,
 			ChannelCounts: history.ChannelCounts, TopicCounts: history.TopicCounts,
@@ -318,7 +331,7 @@ func pathID(raw string) (kernel.ID, bool) {
 // viewChannel and the helpers below copy only what the views display, so
 // view never depends on the use cases' entities.
 func viewChannel(c conversation.Channel) view.Channel {
-	return view.Channel{ID: c.ID, DefaultTopicID: c.DefaultTopicID, Name: c.Name, ImageURL: channelImageURL(c.ID, c.Image), Created: c.CreatedAt}
+	return view.Channel{ID: c.ID, DefaultTopicID: c.DefaultTopicID, Name: c.Name, ImageURL: channelImageURL(c.ID, c.Image), Image: c.Image, Created: c.CreatedAt}
 }
 
 func viewChannels(channels []conversation.Channel) []view.Channel {

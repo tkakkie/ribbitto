@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,16 @@ func stage2FakeOperation(id string, values []float64) stage2Operation {
 	panic("unknown fake operation")
 }
 
+func stage2ReplaceOperation(ops []stage2Operation, replacement stage2Operation) {
+	for i, op := range ops {
+		if op.Operation == replacement.Operation && op.Endpoint == replacement.Endpoint {
+			ops[i] = replacement
+			return
+		}
+	}
+	panic("unknown replacement operation")
+}
+
 func TestStage2NormalBoundaries(t *testing.T) {
 	for _, gate := range fixedStage2().Gates {
 		if !strings.Contains(gate.ID, ".") {
@@ -64,7 +75,7 @@ func TestStage2NormalBoundaries(t *testing.T) {
 					t.Run(fmt.Sprintf("%s/%g/p%d/over=%v", gate.ID, baseline, percentile, over), func(t *testing.T) {
 						w, sync := stage2WindowFixture(), stage2WindowFixture()
 						sync.Config.Arm = fixedStage2().Arms[0]
-						sync.Operations = []stage2Operation{stage2FakeOperation(id, []float64{baseline, baseline + 1, baseline + 2})}
+						stage2ReplaceOperation(sync.Operations, stage2FakeOperation(id, []float64{baseline, baseline + 1, baseline + 2}))
 						values := append([]float64(nil), gate.Limits...)
 						if paired {
 							values = []float64{baseline, baseline + 1, baseline + 2}
@@ -75,8 +86,10 @@ func TestStage2NormalBoundaries(t *testing.T) {
 						if over {
 							values[percentile] += .001
 						}
-						w.Operations = []stage2Operation{stage2FakeOperation(id, values)}
-						stage2Evaluate(&w, &sync)
+						stage2ReplaceOperation(w.Operations, stage2FakeOperation(id, values))
+						if err := stage2Evaluate(&w, &sync); err != nil {
+							t.Fatal(err)
+						}
 						want := "pass"
 						if over {
 							want = "reject"
@@ -96,7 +109,9 @@ func TestStage2NormalFailures(t *testing.T) {
 			start := time.Unix(123, 0)
 			o := stage2Observation{Slot: stage2Slot{Operation: "read", Endpoint: "feed", At: start}, Dispatch: start, Completed: start, Outcome: outcome}
 			w.Operations, w.Attempts = stage2Summarize([]stage2Observation{o})
-			stage2Evaluate(&w, nil)
+			if err := stage2Evaluate(&w, nil); err != nil {
+				t.Fatal(err)
+			}
 			stage2GateState(t, w, "read.feed", "reject")
 			stage2GateState(t, w, "read.feed.paired", "inconclusive")
 			stage2GateState(t, w, "post.topic", "reject")
@@ -107,7 +122,7 @@ func TestStage2NormalFailures(t *testing.T) {
 func TestStage2PairedEvidence(t *testing.T) {
 	for _, mismatch := range []string{"none", "arm", "group", "round", "fixture", "traffic", "missing", "failed"} {
 		w, sync := stage2WindowFixture(), stage2WindowFixture()
-		w.Operations = []stage2Operation{stage2FakeOperation("post.feed", []float64{1, 2, 3})}
+		stage2ReplaceOperation(w.Operations, stage2FakeOperation("post.feed", []float64{1, 2, 3}))
 		sync.Operations, sync.Config = append([]stage2Operation(nil), w.Operations...), w.Config
 		sync.Config.Arm = fixedStage2().Arms[0]
 		switch mismatch {
@@ -126,7 +141,17 @@ func TestStage2PairedEvidence(t *testing.T) {
 		case "failed":
 			sync.Operations[0].Succeeded--
 		}
-		stage2Evaluate(&w, &sync)
+		err := stage2Evaluate(&w, &sync)
+		if mismatch == "missing" {
+			if err == nil || !strings.Contains(err.Error(), "paired window operations: missing operation pair") {
+				t.Fatalf("missing paired operations must error, got %v", err)
+			}
+			stage2GateState(t, w, "post.feed.paired", "inconclusive")
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
 		want := "inconclusive"
 		if mismatch == "none" {
 			want = "pass"
@@ -143,7 +168,7 @@ func TestStage2RefusalBoundaries(t *testing.T) {
 		for _, outage := range []time.Duration{2 * time.Second, 2*time.Second + time.Nanosecond} {
 			for _, success := range []bool{false, true} {
 				w := stage2WindowFixture()
-				w.Operations = []stage2Operation{{Operation: "replacement", Scheduled: scheduled, Missed: 1}}
+				stage2ReplaceOperation(w.Operations, stage2Operation{Operation: "replacement", Endpoint: "feed", Scheduled: scheduled, Missed: 1})
 				w.Attempts = []stage2Attempt{}
 				start := time.Unix(123, 0)
 				o := stage2Observation{Slot: stage2Slot{Operation: "replacement", LogicalID: 7, At: start}}
@@ -156,7 +181,9 @@ func TestStage2RefusalBoundaries(t *testing.T) {
 					o.finish(start, start, start.Add(3*time.Second), start, 22, 200, "succeeded")
 				}
 				w.Attempts = append(w.Attempts, o.Attempts...)
-				stage2Evaluate(&w, nil)
+				if err := stage2Evaluate(&w, nil); err != nil {
+					t.Fatal(err)
+				}
 				want, recovered := "reject", uint64(0)
 				if success {
 					recovered = 1
@@ -178,7 +205,7 @@ func TestStage2MissingOutage(t *testing.T) {
 	for _, measured := range []bool{false, true} {
 		t.Run(fmt.Sprintf("measured=%v", measured), func(t *testing.T) {
 			w := stage2WindowFixture()
-			w.Operations = []stage2Operation{{Operation: "replacement", Scheduled: 1000}}
+			stage2ReplaceOperation(w.Operations, stage2Operation{Operation: "replacement", Endpoint: "feed", Scheduled: 1000})
 			start := time.Unix(123, 0)
 			o := stage2Observation{Slot: stage2Slot{Operation: "replacement", Endpoint: "feed", LogicalID: 7, At: start}}
 			o.finish(start, start, start.Add(time.Millisecond), time.Time{}, 1, 503, "failed")
@@ -190,7 +217,9 @@ func TestStage2MissingOutage(t *testing.T) {
 			}
 			o.finish(start, start, end, offline, 2, 200, "succeeded")
 			_, w.Attempts = stage2Summarize([]stage2Observation{o})
-			stage2Evaluate(&w, nil)
+			if err := stage2Evaluate(&w, nil); err != nil {
+				t.Fatal(err)
+			}
 			stage2GateState(t, w, "replacement-503", want)
 			if w.Refusals.Recovered != recovered || w.Attempts[1].OutageNS != outage {
 				t.Fatalf("missing and zero-duration outage evidence conflated: %+v %+v", w.Refusals, w.Attempts)
@@ -215,7 +244,7 @@ func TestStage2FirstReconnect(t *testing.T) {
 		for _, reversed := range []bool{false, true} {
 			t.Run(fmt.Sprintf("missing=%v/reversed=%v", missing, reversed), func(t *testing.T) {
 				w := stage2WindowFixture()
-				w.Operations = []stage2Operation{{Operation: "replacement", Scheduled: 1000}}
+				stage2ReplaceOperation(w.Operations, stage2Operation{Operation: "replacement", Endpoint: "feed", Scheduled: 1000})
 				start := time.Unix(123, 0)
 				o := stage2Observation{Slot: stage2Slot{Operation: "replacement", Endpoint: "feed", LogicalID: 7, At: start}}
 				o.finish(start, start, start.Add(time.Millisecond), start, 1, 503, "failed")
@@ -230,7 +259,9 @@ func TestStage2FirstReconnect(t *testing.T) {
 				if reversed {
 					w.Attempts[1], w.Attempts[2] = w.Attempts[2], w.Attempts[1]
 				}
-				stage2Evaluate(&w, nil)
+				if err := stage2Evaluate(&w, nil); err != nil {
+					t.Fatal(err)
+				}
 				stage2GateState(t, w, "replacement-503", "reject")
 				want := stage2Refusals{ScheduledReplacements: 1000, AffectedReplacements: 1, Recovered: 1, Attempts: 3, Refused503: 1, Retries: 2, MaxOutageNS: int64(2100 * time.Millisecond)}
 				if missing {
@@ -261,7 +292,9 @@ func TestStage2EvaluatedWindow(t *testing.T) {
 				observations = append(observations, o)
 			}
 			w.Operations, w.Attempts = stage2Summarize(observations)
-			stage2Evaluate(&w, nil)
+			if err := stage2Evaluate(&w, nil); err != nil {
+				t.Fatal(err)
+			}
 			want, count := "pass", float64(0)
 			if refusedKind != "none" {
 				want, count = "reject", 1
@@ -282,6 +315,96 @@ func TestStage2EvaluatedWindow(t *testing.T) {
 			if err := decodeStage2(raw, &stage2Window{}); err != nil {
 				t.Fatal(err)
 			}
+		}
+	}
+}
+
+func TestStage2OperationPairs(t *testing.T) {
+	for _, tc := range []struct {
+		name, wantErr, gate string
+		change              func([]stage2Operation) []stage2Operation
+	}{
+		{"reordered", "", "post.feed", func(ops []stage2Operation) []stage2Operation {
+			ops[0], ops[7] = ops[7], ops[0]
+			return ops
+		}},
+		{"duplicated replacement", "duplicate operation pair replacement.feed", "replacement-503", func(ops []stage2Operation) []stage2Operation {
+			return append(ops, ops[6])
+		}},
+		{"duplicated failing post.feed", "duplicate operation pair post.feed", "post.feed", func(ops []stage2Operation) []stage2Operation {
+			failed := ops[0]
+			failed.Succeeded--
+			failed.Failed++
+			return append(ops, failed)
+		}},
+		{"duplicate replacing topic", "duplicate operation pair post.feed", "post.feed", func(ops []stage2Operation) []stage2Operation {
+			ops[1] = ops[0]
+			return ops
+		}},
+		{"missing", "missing operation pair post.feed", "post.feed", func(ops []stage2Operation) []stage2Operation { return ops[1:] }},
+		{"empty", "missing operation pair post.feed", "post.feed", func([]stage2Operation) []stage2Operation { return []stage2Operation{} }},
+		{"unknown operation", "unknown operation pair", "post.feed", func(ops []stage2Operation) []stage2Operation {
+			ops[0].Operation = "establishment"
+			return ops
+		}},
+		{"unknown endpoint", "unknown operation pair", "post.feed", func(ops []stage2Operation) []stage2Operation {
+			ops[0].Endpoint = "invented"
+			return ops
+		}},
+	} {
+		for _, source := range []string{"window", "paired window"} {
+			t.Run(tc.name+"/"+source, func(t *testing.T) {
+				w, sync := stage2WindowFixture(), stage2WindowFixture()
+				stage2ReplaceOperation(w.Operations, stage2FakeOperation("post.feed", []float64{1, 2, 3}))
+				stage2ReplaceOperation(w.Operations, stage2Operation{Operation: "replacement", Endpoint: "feed", Scheduled: 999})
+				w.Attempts = []stage2Attempt{
+					{Operation: "replacement", Endpoint: "feed", LogicalID: 7, Attempt: 1, Status: 503, Outcome: "failed"},
+					{Operation: "replacement", Endpoint: "feed", LogicalID: 7, Attempt: 2, Status: 200, Outcome: "succeeded", OutageNS: int64(time.Second)},
+				}
+				sync.Config.Arm = fixedStage2().Arms[0]
+				sync.Operations = append([]stage2Operation(nil), w.Operations...)
+				if err := stage2Evaluate(&w, &sync); err != nil {
+					t.Fatal(err)
+				}
+				stage2GateState(t, w, "post.feed", "pass")
+				stage2GateState(t, w, "post.feed.paired", "pass")
+				stage2GateState(t, w, "replacement-503", "reject")
+				invalid := &w
+				if source == "paired window" {
+					invalid = &sync
+				}
+				invalid.Operations = tc.change(invalid.Operations)
+				raw, err := json.Marshal(invalid)
+				if err != nil {
+					t.Fatal(err)
+				}
+				decodeErr := decodeStage2(raw, &stage2Window{})
+				before := w
+				evalErr := stage2Evaluate(&w, &sync)
+				for _, result := range []struct {
+					name string
+					err  error
+				}{{"decode", decodeErr}, {"evaluate", evalErr}} {
+					t.Run(result.name, func(t *testing.T) {
+						if tc.wantErr == "" {
+							if result.err != nil {
+								t.Fatalf("%s rejected valid reordered pairs: %v", result.name, result.err)
+							}
+						} else if result.err == nil || !strings.Contains(result.err.Error(), tc.wantErr) {
+							state := "missing"
+							for _, gate := range w.Gates {
+								if gate.ID == tc.gate {
+									state = gate.State
+								}
+							}
+							t.Fatalf("%s: want %q, got %v; %s=%s", result.name, tc.wantErr, result.err, tc.gate, state)
+						}
+					})
+				}
+				if tc.wantErr != "" && !reflect.DeepEqual(w, before) {
+					t.Fatal("invalid operation evidence changed window evaluation")
+				}
+			})
 		}
 	}
 }

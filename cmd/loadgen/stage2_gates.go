@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -59,8 +60,17 @@ func stage2Successful(op stage2Operation) bool {
 }
 
 // Evaluate settled HTTP evidence only. Later slices replace the placeholders;
-// schema-valid output must not imply that unevaluated gates passed.
-func stage2Evaluate(w *stage2Window, paired *stage2Window) {
+// schema-valid output must not imply that unevaluated gates passed. Invalid
+// operation sets in either input return an error without changing the window.
+func stage2Evaluate(w *stage2Window, paired *stage2Window) error {
+	if err := stage2ValidateOperations(w.Operations); err != nil {
+		return fmt.Errorf("evaluating stage-2 window operations: %w", err)
+	}
+	if paired != nil {
+		if err := stage2ValidateOperations(paired.Operations); err != nil {
+			return fmt.Errorf("evaluating stage-2 paired window operations: %w", err)
+		}
+	}
 	var normal503 uint64
 	w.Refusals, normal503 = stage2CountRefusals(w.Operations, w.Attempts)
 	w.Gates = make([]stage2Verdict, 0, len(w.Protocol.Gates))
@@ -129,4 +139,5 @@ func stage2Evaluate(w *stage2Window, paired *stage2Window) {
 		}
 		w.Gates = append(w.Gates, v)
 	}
+	return nil
 }

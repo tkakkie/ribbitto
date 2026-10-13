@@ -51,8 +51,8 @@ these colours exist in templates; `make check` rejects literal colours
 | `base` | `#edf4f2` | page ground; the sidebar sits on it |
 | `bg` | `#ffffff` | blocks: the conversation, panels |
 | `rail` | `#ffffff` | the app bar block |
-| `sidebar` | `#edf4f2` | reserved for the channel sidebar; today it sits on `base` |
-| `panel` | `#f5f9f8` | reserved for the inside of a side panel; today's panels use `bg` |
+| `sidebar` | `#edf4f2` | reserved for the sidebar (it sits on `base`) |
+| `panel` | `#f5f9f8` | reserved for side panels (they use `bg`) |
 | `surface` | `#ffffff` | cards, popovers |
 | `input` | `#ffffff` | text fields |
 | `hover` | `#e4edeb` | hovered rows and buttons |
@@ -108,17 +108,17 @@ covers them.
 
 | Pair (foreground on background) | Used for | Needed | Ratio |
 |---|---|---|---|
-| `fg` on `bg` / `base` / `panel` / `hover` | body text | 4.5:1 | 17.23 / 15.44 / 16.24 / 14.45 |
-| `muted` on `bg` / `base` / `panel` / `hover` | secondary text | 4.5:1 | 6.78 / 6.08 / 6.39 / 5.69 |
+| `fg` on `bg` / `base` / `panel` / `hover` | body text (`panel` reserved) | 4.5:1 | 17.23 / 15.44 / 16.24 / 14.45 |
+| `muted` on `bg` / `base` / `panel` / `hover` | secondary text (`panel` reserved) | 4.5:1 | 6.78 / 6.08 / 6.39 / 5.69 |
 | `on-brand` on `brand` | button label, unread count | 4.5:1 | 5.47 |
 | `on-selected` on `selected` | current row's label | 4.5:1 | 8.11 |
 | `on-accent` on `accent` | "New" divider label | 4.5:1 | 6.99 |
 | `brand` on `bg` / `base` | link text; focus ring | 4.5:1 | 5.47 / 4.90 |
 | `brand` on `selected` | indicator on the current row | 3:1 | 4.58 |
 | `success` on `bg` / `base` | online dot | 3:1 | 3.69 / 3.31 |
-| `warning` on `bg` / `base` | warning text | 4.5:1 | 6.32 / 5.67 |
+| `warning` on `bg` / `base` | warning text (reserved) | 4.5:1 | 6.32 / 5.67 |
 | `danger` on `bg` / `base` | error text | 4.5:1 | 6.57 / 5.89 |
-| `on-danger` on `danger` | destructive button label | 4.5:1 | 6.57 |
+| `on-danger` on `danger` | destructive button label (reserved) | 4.5:1 | 6.57 |
 | `border-strong` on `bg` / `base` | input border | 3:1 | 3.60 / 3.23 |
 | `on-pastel-n` on `pastel-n` (1…6) | initials on avatars | 4.5:1 | 5.65 / 5.56 / 5.48 / 5.13 / 6.23 / 5.75 |
 

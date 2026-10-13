@@ -11,8 +11,8 @@ only in `web/styles/app.css`; this file explains them.
 
 Tailwind's default colour palette is switched off, so only
 these colours exist in templates; `make check` rejects literal colours
-([`ui-code.md`](ui-code.md#styles)). The dark values are chosen (#966);
-#967 applies them, and until then every page stays light.
+([`ui-code.md`](ui-code.md#styles)). Pages follow the system colour scheme
+without a reload.
 
 | Colour token | Light | Dark | Use |
 |---|---|---|---|
@@ -57,22 +57,47 @@ information and are exempt; a control's boundary always uses
 `border-strong`. The current row is shown by `on-selected` text **and** the
 `brand` indicator, not by the `selected` fill alone. In light `bg`, `rail`,
 `surface` and `input` share one value, and `sidebar` equals `base`, so each
-row below covers them. The table lists light ratios; in dark `surface` and
-`input` are lighter than `bg`, so #967 adds the dark pairs with their own
-rows for them (text, placeholder, control borders and the focus outline).
+light row below covers them. In dark, `rail` equals `bg` and `sidebar`
+equals `base`; `surface` and `input` have separate rows. No template uses
+placeholder text or a placeholder colour token. Input help uses `muted`.
+Ratios use the WCAG 2.x sRGB relative-luminance formula.
 
-| Pair (foreground on background) | Used for | Needed | Ratio |
-|---|---|---|---|
-| `fg` on `bg` / `base` / `panel` / `hover` | body text (`panel` reserved) | 4.5:1 | 17.23 / 15.44 / 16.24 / 14.45 |
-| `muted` on `bg` / `base` / `panel` / `hover` | secondary text (`panel` reserved) | 4.5:1 | 6.78 / 6.08 / 6.39 / 5.69 |
-| `on-brand` on `brand` | button label, unread count | 4.5:1 | 5.47 |
-| `on-selected` on `selected` | current row's label | 4.5:1 | 8.11 |
-| `on-accent` on `accent` | "New" divider label | 4.5:1 | 6.99 |
-| `brand` on `bg` / `base` | link text; focus ring | 4.5:1 | 5.47 / 4.90 |
-| `brand` on `selected` | indicator on the current row | 3:1 | 4.58 |
-| `success` on `bg` / `base` | online dot | 3:1 | 3.69 / 3.31 |
-| `warning` on `bg` / `base` | warning text (reserved) | 4.5:1 | 6.32 / 5.67 |
-| `danger` on `bg` / `base` | error text | 4.5:1 | 6.57 / 5.89 |
-| `on-danger` on `danger` | destructive button label (reserved) | 4.5:1 | 6.57 |
-| `border-strong` on `bg` / `base` | input border | 3:1 | 3.60 / 3.23 |
-| `on-pastel-n` on `pastel-n` (1…6) | initials on avatars | 4.5:1 | 5.65 / 5.56 / 5.48 / 5.13 / 6.23 / 5.75 |
+| Scheme | Pair (foreground on background) | Used for | Needed | Ratio |
+|---|---|---|---|---|
+| Light | `fg` on `bg` / `base` / `panel` / `hover` | body text (`panel` reserved) | 4.5:1 | 17.23 / 15.44 / 16.24 / 14.45 |
+| Light | `muted` on `bg` / `base` / `panel` / `hover` | secondary text (`panel` reserved) | 4.5:1 | 6.78 / 6.08 / 6.39 / 5.69 |
+| Light | `on-brand` on `brand` | button label, unread count | 4.5:1 | 5.47 |
+| Light | `on-selected` on `selected` | current row's label | 4.5:1 | 8.11 |
+| Light | `on-accent` on `accent` | "New" divider label | 4.5:1 | 6.99 |
+| Light | `brand` on `bg` / `base` | link text; focus ring | 4.5:1 | 5.47 / 4.90 |
+| Light | `brand` on `selected` | indicator on the current row | 3:1 | 4.58 |
+| Light | `success` on `bg` / `base` | online dot | 3:1 | 3.69 / 3.31 |
+| Light | `warning` on `bg` / `base` | warning text (reserved) | 4.5:1 | 6.32 / 5.67 |
+| Light | `danger` on `bg` / `base` | error text | 4.5:1 | 6.57 / 5.89 |
+| Light | `on-danger` on `danger` | destructive button label (reserved) | 4.5:1 | 6.57 |
+| Light | `border-strong` on `bg` / `base` | input border | 3:1 | 3.60 / 3.23 |
+| Light | `on-pastel-n` on `pastel-n` (1…6) | initials on avatars | 4.5:1 | 5.65 / 5.56 / 5.48 / 5.13 / 6.23 / 5.75 |
+| Dark | `fg` on `bg` / `base` / `panel` / `hover` | body text (`panel` reserved) | 4.5:1 | 13.63 / 15.36 / 14.25 / 11.31 |
+| Dark | `fg` on `surface` | card and popover text | 4.5:1 | 12.37 |
+| Dark | `fg` on `input` | typed text | 4.5:1 | 12.37 |
+| Dark | `muted` on `bg` / `base` / `panel` / `hover` | secondary text (`panel` reserved) | 4.5:1 | 6.59 / 7.43 / 6.89 / 5.47 |
+| Dark | `muted` on `surface` | card and popover secondary text | 4.5:1 | 5.98 |
+| Dark | `muted` on `input` | input help text | 4.5:1 | 5.98 |
+| Dark | `on-brand` on `brand` | button label, unread count | 4.5:1 | 8.07 |
+| Dark | `on-selected` on `selected` | current row's label | 4.5:1 | 9.08 |
+| Dark | `on-selected` on `bg` | app bar Home label (`rail` equals `bg`) | 4.5:1 | 12.58 |
+| Dark | `on-accent` on `accent` | "New" divider label | 4.5:1 | 9.75 |
+| Dark | `brand` on `bg` / `base` / `panel` / `hover` | link text; focus ring | 4.5:1 | 8.07 / 9.10 / 8.44 / 6.70 |
+| Dark | `brand` on `surface` | links; focus outline | 4.5:1 | 7.33 |
+| Dark | `brand` on `input` | focus outline and focused control border | 3:1 | 7.33 |
+| Dark | `brand` on `selected` | indicator on the current row | 3:1 | 5.82 |
+| Dark | `success` on `bg` / `base` | online dot | 3:1 | 7.44 / 8.39 |
+| Dark | `warning` on `bg` / `base` | warning text (reserved) | 4.5:1 | 8.75 / 9.86 |
+| Dark | `danger` on `bg` / `base` | error text | 4.5:1 | 7.19 / 8.11 |
+| Dark | `danger` on `surface` | card and popover error text | 4.5:1 | 6.53 |
+| Dark | `danger` on `input` | composer error text | 4.5:1 | 6.53 |
+| Dark | `on-danger` on `danger` | destructive button label (reserved) | 4.5:1 | 8.03 |
+| Dark | `border-strong` on `bg` / `base` / `hover` | control border against surrounding backgrounds | 3:1 | 4.15 / 4.68 / 3.44 |
+| Dark | `border-strong` on `surface` | control border on cards and popovers | 3:1 | 3.77 |
+| Dark | `border-strong` on `input` | input border against its fill | 3:1 | 3.77 |
+| Dark | `on-pastel-n` on `pastel-n` (1…6) | initials on avatars | 4.5:1 | 8.16 / 8.97 / 8.42 / 8.77 / 8.21 / 8.82 |

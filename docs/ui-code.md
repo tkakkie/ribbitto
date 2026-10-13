@@ -62,8 +62,8 @@ The fixed widths of the desktop layout, and the block shape
 | `w-panel` | 340 px | a side panel (#874); room for an overview image and a members list with names and handles |
 | `max-w-reading` | 760 px | the conversation's reading column |
 | `rounded-xl` | 12 px | the rounded blocks |
-| `shadow-block` | a 1 px ring and a soft drop | blocks and cards |
-| `shadow-popover` | a deeper drop | menus, popovers and dialogs |
+| `shadow-block` | a 1 px ring and a soft drop in light; a faint 1 px ring in dark | blocks and cards |
+| `shadow-popover` | a deeper drop in light; a faint 1 px ring in dark | menus, popovers and dialogs |
 
 **Breakpoints** ([`ui.md`](ui.md#layout-principles), #966): below 852 px
 (53.25 rem) the phone layout; from 852 px the desktop frame with a side

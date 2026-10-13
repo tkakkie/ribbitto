@@ -8,13 +8,12 @@
  * Colours are semantic CSS variables so a theme is one override block;
  * Tailwind's @theme cannot sit inside a media query, so @theme inline maps
  * utilities (bg-surface, text-muted, …) onto these variables.
- * Light only until M6 designs dark colours for this direction (docs/ui.md),
- * so there is no prefers-color-scheme override here.
+ * Pages follow the system colour scheme without a reload (docs/ui.md).
  * Contrast ratios for every pair are listed in docs/ui-colours.md — recheck them
  * there when you change a value here.
  */
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
   --rb-base: #edf4f2;
   --rb-bg: #ffffff;
   --rb-rail: #ffffff;
@@ -50,6 +49,50 @@
   --rb-on-pastel-5: #5b3fa8;
   --rb-pastel-6: #ffe0ea;
   --rb-on-pastel-6: #a3284f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --rb-base: #0f1514;
+    --rb-bg: #1a2120;
+    --rb-rail: #1a2120;
+    --rb-sidebar: #0f1514;
+    --rb-panel: #161d1c;
+    --rb-surface: #212928;
+    --rb-input: #212928;
+    --rb-hover: #26302e;
+    --rb-border: #2b3432;
+    --rb-border-strong: #768380;
+    --rb-fg: #e4ecea;
+    --rb-muted: #9ba7a4;
+    --rb-brand: #4cc9b8;
+    --rb-on-brand: #062421;
+    --rb-selected: #1d3d38;
+    --rb-on-selected: #b8ece2;
+    --rb-accent: #3a2216;
+    --rb-on-accent: #ffc6a3;
+    --rb-accent-line: #a8562f;
+    --rb-success: #5bc46a;
+    --rb-warning: #e9b55c;
+    --rb-danger: #ff8b7b;
+    --rb-on-danger: #2b0a05;
+    --rb-pastel-1: #1c3047;
+    --rb-on-pastel-1: #a9ccff;
+    --rb-pastel-2: #3a3214;
+    --rb-on-pastel-2: #f2d77a;
+    --rb-pastel-3: #173628;
+    --rb-on-pastel-3: #9fdcbc;
+    --rb-pastel-4: #3d2618;
+    --rb-on-pastel-4: #ffbe98;
+    --rb-pastel-5: #2b2347;
+    --rb-on-pastel-5: #c9b8ff;
+    --rb-pastel-6: #3d1a26;
+    --rb-on-pastel-6: #ffaec6;
+
+    /* Dark blocks lift by lightness; hairlines define edges without a drop. */
+    --shadow-block: 0 0 0 1px color-mix(in srgb, var(--rb-fg) 8%, transparent);
+    --shadow-popover: 0 0 0 1px color-mix(in srgb, var(--rb-fg) 12%, transparent);
+  }
 }
 
 @theme inline {

@@ -65,8 +65,9 @@ on a lightly tinted base — an app bar, the conversation and side panels —
 with the sidebar of
 icon-and-label rows on the base, a wide reading column and a rounded
 composer, and on desktop the feel of Microsoft's Fluent 2. It replaced the
-"Clear water" direction and its colours from #9. M5 is light only: the old
-dark theme is removed, and M6 designs dark colours for the new direction.
+"Clear water" direction and its colours from #9. M5 shipped light pages:
+it removed the old dark theme; M6 adds dark colours for the new direction
+(#967).
 The completed outcomes are:
 
 1. **The direction is written down.** [`ui.md`](ui.md) records the new

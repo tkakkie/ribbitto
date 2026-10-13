@@ -56,6 +56,9 @@ func TestScheduledDeliveryCompatibility(t *testing.T) {
 		bubble bool
 	}{
 		{"cold hub", testStreamDrainsBatchesOnAColdHub, true},
+		{"each durable send", testStreamRechecksAccessBeforeEachSend, true},
+		{"render revocation", testStreamDeniesAccessLostWhileRendering, true},
+		{"sidebar safety", testSidebarDeliverySafety, false},
 		{"errors", testStreamErrorsDoNotAdvanceTheCursor, false},
 		{"negative cursor", testStreamRefusesANegativeCursor, true},
 		{"cancellation", testStreamChecksCancellationBetweenEvents, true},

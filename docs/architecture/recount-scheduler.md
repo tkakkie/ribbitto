@@ -73,7 +73,12 @@ publications while queued, computing, completing, sending and capturing a wait,
 and release/late-worker safety. It also delivers a held completion after a successor
 has captured, proving request-local coverage independently of one-active submission.
 Mutation commands and failing assertions are in its PR description. Expanded
-authorization coverage remains part 1f-b; production activation remains original PR 2.
+authorization coverage in part 1f-b reuses synchronous safety cases and gates
+revocation during recounts and durable renders, with cancellation/error races.
+Fresh bound-member checks precede each frame, reset and heartbeat; another
+audience's deny advances, while bound revocation and check errors preserve the
+affected durable cursor. Pending and late output cannot survive exit.
+Production activation remains original PR 2.
 
 Scheduler instrumentation is deferred to a separate unit in original PR 2 of
 #865, before production wiring or activation: queue length and oldest pending

@@ -253,6 +253,10 @@ func testStreamDrainsBatchesOnAColdHub(t *testing.T, scheduled bool) {
 // Access is checked for each event right before sending, including events
 // read in the same batch as ones already sent.
 func TestStreamRechecksAccessBeforeEachSend(t *testing.T) {
+	testStreamRechecksAccessBeforeEachSend(t, false)
+}
+
+func testStreamRechecksAccessBeforeEachSend(t *testing.T, scheduled bool) {
 	log := &fakeLog{events: []Event{posted(1, channelA), posted(2, channelA)}}
 	var mu sync.Mutex
 	member := true
@@ -269,7 +273,7 @@ func TestStreamRechecksAccessBeforeEachSend(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
-	done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render)}, 0, send)
+	done := runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render)}, 0, send, scheduled)
 	send.waitFor(t, 1)
 	// Cancel only once event 2 has been checked: the loop checks
 	// cancellation before every event, so cancelling earlier would stop it
@@ -286,6 +290,10 @@ func TestStreamRechecksAccessBeforeEachSend(t *testing.T) {
 // stop that event: the check comes after the render, right before the send
 // (#262).
 func TestStreamDeniesAccessLostWhileRendering(t *testing.T) {
+	testStreamDeniesAccessLostWhileRendering(t, false)
+}
+
+func testStreamDeniesAccessLostWhileRendering(t *testing.T, scheduled bool) {
 	log := &fakeLog{events: []Event{posted(1, channelA), posted(2, channelA), posted(3, channelA)}}
 	var mu sync.Mutex
 	member := true
@@ -304,7 +312,7 @@ func TestStreamDeniesAccessLostWhileRendering(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
-	done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(renderSlowly)}, 0, send)
+	done := runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(renderSlowly)}, 0, send, scheduled)
 	<-rendering
 	mu.Lock()
 	member = false // the membership is removed while event 2 renders

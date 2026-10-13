@@ -95,6 +95,8 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   Scheduled computations capture at execution, not submission; each request owns
   its captured generation. Every received completion ends the active attempt and
   sets the interval deadline, even when its version is too old to send.
+  Revocation gates prove exit before an uncooperative recount returns, with no
+  pending/late writes.
   Each active read publication costs one locked lookup/update and replacement
   channel; wake work scales with that member's waiting tabs. Registry memory
   follows active member entries and watches; last release removes the entry.
@@ -103,10 +105,9 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   shared member invalidation and subscription/reconnect coordination are needed
   across processes; bounded recovery additionally needs revisions or replay.
   [Short measurements](read-advance-results.md) isolate matching tabs from total
-  connections: unrelated members do no read-induced work. They do not establish
-  a ceiling. Publication has no subscriber queue; zero-subscriber reads still
-  pay transaction cost but retain no registry entry. Unknown-COMMIT recounts
-  may precede persistence; [reconnect limits](unread-writes.md) still apply.
+  connections: unrelated members do no read-induced work. They establish no ceiling.
+  Publication has no queue; zero-subscriber reads pay transaction cost but retain
+  no registry entry. Unknown-COMMIT recounts may precede persistence; [reconnect limits](unread-writes.md) still apply.
 
 - Each connection reads the log itself (#209), so nothing queues for a slow
   client: its cursor just lags. A client that stops reading is

@@ -49,10 +49,10 @@ Left to review, because a pattern check cannot prove them: that a stored
 value is only a UX setting, that a script owns no application state, and
 that a component makes no authorisation decision.
 
-### Executed stream tests
+### Shared browser tests
 
-`TestMessageStreamBrowser` in `internal/web/message_stream_browser_test.go`
-runs the embedded `message-stream-v9.js`, vendored htmx and SSE extension
+`TestBrowser` in `internal/web/message_stream_browser_test.go` is the shared
+browser suite. Its stream cases run the embedded `message-stream-v9.js`, vendored htmx and SSE extension
 in headless Chrome through go-rod. An HTTP test server renders real
 `ChannelScreen` and `MovedMessageItems` components without a database. Controlled
 SSE deliveries and history responses cover both topic sides, bounded
@@ -74,7 +74,7 @@ The move form case runs the real branch handler with and without scripts:
 hidden and skipped by Tab with nothing checked, shown on Space with focus kept
 and the list's size unchanged, its errors, and a submitted move.
 
-Run `go test ./internal/web -run TestMessageStreamBrowser -v` with Chrome
+Run `go test ./internal/web -run TestBrowser -v` with Chrome
 installed. No browser is downloaded. Missing or unlaunchable browsers skip
 locally; `RIBBITTO_REQUIRE_BROWSER=1` makes either fatal and is set in CI.
 The Go replay model retains only in-flight moves and models append,

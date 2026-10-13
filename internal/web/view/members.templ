@@ -56,6 +56,6 @@ templ membersPanel(page ChannelPage) {
 		<p class="px-5 py-4 text-muted">{ i18n.T(ctx, "people.empty") }</p>
 	}
 	if page.Members.Next != nil {
-		<a href={ templ.SafeURL(panelURL(page, PanelMembers) + querySeparator(page) + "after=" + idValue(*page.Members.Next)) } class="inline-flex min-h-11 items-center px-5 py-4 text-brand underline">{ i18n.T(ctx, "people.next") }</a>
+		@textLink(panelURL(page, PanelMembers)+querySeparator(page)+"after="+idValue(*page.Members.Next), "people.next", "px-5 py-4")
 	}
 }

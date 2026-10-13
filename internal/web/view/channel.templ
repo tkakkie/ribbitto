@@ -44,12 +44,14 @@ type ChannelPage struct {
 	Channels                   []Channel
 	ChannelCounts, TopicCounts map[kernel.ID]int64
 	Name, Error                string
-	Image, ImageError, Query   string
+	Image, Query               string
 	CreateImageError           string
-	ImageKeys                  []string
-	Body, BodyError            string
-	BranchError, BranchName    string
-	Messages                   []Message
+	// OverviewImageError is the image picker's message ID after a failed change.
+	OverviewImageError      string
+	ImageKeys               []string
+	Body, BodyError         string
+	BranchError, BranchName string
+	Messages                []Message
 	// Panel names the side panel open beside the conversation, if any.
 	Panel   string
 	Members *MemberPage
@@ -69,15 +71,14 @@ type ChannelPage struct {
 
 // ChannelURL identifies a channel by its stable UUID, never its name.
 func ChannelURL(slug string, id kernel.ID) string {
-	return fmt.Sprintf("/organizations/%s/channels/%x-%x-%x-%x-%x", slug, id[:4], id[4:6], id[6:8], id[8:10], id[10:])
+	return "/organizations/" + slug + "/channels/" + idValue(id)
 }
 
 // ConversationURL identifies a channel feed or a topic within it.
 func ConversationURL(slug string, channelID kernel.ID, topicID *kernel.ID) string {
 	url := ChannelURL(slug, channelID)
 	if topicID != nil {
-		id := *topicID
-		url += fmt.Sprintf("/topics/%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:])
+		url += "/topics/" + idValue(*topicID)
 	}
 	return url
 }
@@ -403,13 +404,13 @@ templ ChannelList(page ChannelPage, oob bool) {
 		for _, c := range page.Channels {
 			@ChannelEntry(page.Organization.Slug, c, c.ID == page.Current.ID && page.Topic == nil, page.ChannelCounts[c.ID]) {
 				if c.ID == page.Current.ID {
-					@TopicList(page, false)
+					@TopicList(page)
 				}
 			}
 		}
 		if !currentChannelListed(page) {
 			<li>
-				@TopicList(page, false)
+				@TopicList(page)
 			</li>
 		}
 	</ul>
@@ -427,14 +428,11 @@ func currentChannelListed(page ChannelPage) bool {
 }
 
 // TopicList preserves the snapshot's bounded list, including its order.
-templ TopicList(page ChannelPage, oob bool) {
+templ TopicList(page ChannelPage) {
 	<ul
 		id="sidebar-topics"
 		aria-label={ i18n.T(ctx, "topic.list") }
 		class="mb-1 ml-6 mt-0.5 flex flex-col gap-0.5 border-l border-border pl-2"
-		if oob {
-			hx-swap-oob="true"
-		}
 	>
 		for _, topic := range page.Topics {
 			@TopicEntry(page.Organization.Slug, page.Current.ID, topic, page.Topic != nil && page.Topic.ID == topic.ID, page.TopicCounts[topic.ID])

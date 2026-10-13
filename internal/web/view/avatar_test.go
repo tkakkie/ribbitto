@@ -1,11 +1,40 @@
 package view
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
+
+func TestAccountButtonInitial(t *testing.T) {
+	var body bytes.Buffer
+	if err := appBar(ChannelPage{DisplayName: "🇯🇵friend", Handle: "friend"}).Render(t.Context(), &body); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := html.Parse(&body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for n := range doc.Descendants() {
+		if n.DataAtom != atom.Button {
+			continue
+		}
+		for _, a := range n.Attr {
+			if a.Key == "popovertarget" && a.Val == "account-menu" {
+				initial := n.FirstChild.FirstChild
+				if initial.Type != html.TextNode || initial.Data != "🇯🇵" {
+					t.Fatalf("account initial = %q, want the whole flag", initial.Data)
+				}
+				return
+			}
+		}
+	}
+	t.Fatal("no account button")
+}
 
 func TestAvatarInitial(t *testing.T) {
 	for _, tt := range []struct{ name, displayName, handle, want string }{

@@ -124,12 +124,12 @@ func Hello(stylesheetURL string, viewer Viewer) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = welcomeLink("/signin", "hello.sign_in").Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = textLink("/signin", "hello.sign_in", "text-body font-semibold").Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					if viewer.SignUpOpen {
-						templ_7745c5c3_Err = welcomeLink("/signup", "signup.title").Render(ctx, templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = textLink("/signup", "signup.title", "text-body font-semibold").Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}

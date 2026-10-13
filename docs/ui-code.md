@@ -16,11 +16,12 @@ Today's shared controls:
 
 | Component | File | Use |
 |---|---|---|
-| `submitButton` | `internal/web/view/controls.templ` | a form's submit button, labelled by a message ID: `buttonPrimary` (the main action), `buttonSecondary` (outlined; `buttonSecondaryIcon` adds a decorative child), `buttonLink` (looks like a link, still submits) |
+| `submitButton` | `internal/web/view/controls.templ` | a form's submit button, labelled by a message ID: `buttonPrimary` (the main action), `buttonSecondary` (outlined; `buttonSecondaryIcon` adds a decorative child) |
+| `textLink` | `internal/web/view/controls.templ` | underlined navigation links; callers supply a message ID and extra typography or spacing classes |
 | `textInput` | `internal/web/view/controls.templ` | a single-line text input with a control border and a brand underline on focus, alongside the focus outline; the caller supplies its label |
 | `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up); sign-in passes empty field errors and keeps its form-level alert |
 | `iconButton` | `internal/web/view/controls.templ` | a button that shows only an icon (its child) and has an accessible name; can open a popover |
-| `welcomeLayout`, `welcomeLink` | `internal/web/view/welcome.templ` | the shared brand and content columns for setup, sign-in, sign-up, home and rate-limit pages, and their navigation links |
+| `welcomeLayout` | `internal/web/view/welcome.templ` | the shared brand and content columns for setup, sign-in, sign-up, home and rate-limit pages |
 | `unreadBadge` | `internal/web/view/channel.templ` | an unread count with its screen-reader text |
 | `Icon` | `internal/web/view/icon.templ` | a decorative Fluent icon from the vendored sprite ([Icons](#icons)) |
 | `Avatar` | `internal/web/view/avatar.templ` | a fixed 36 px round initial; six pastel pairs chosen from the member ID, hidden from assistive technology beside the visible name |
@@ -31,7 +32,7 @@ Today's shared controls:
 
 - **Links navigate, buttons act.** Going somewhere is an `<a href>`;
   anything that changes state is a submit button in a form, even when it
-  should look like a link (`buttonLink`).
+  should look like a link.
 - **Components take small inputs** — a label, a kind, a props struct —
   and decide nothing about permissions or data; handlers prepare view
   models (`docs/architecture/web-layers.md`).
@@ -39,10 +40,10 @@ Today's shared controls:
   #873, the panel with #874, the channel image with #875. When a page is
   restyled, its repeated looks (links, for example) become components too.
 
-Message avatars use the first grapheme of the display name (via `uniseg`),
-falling back to the handle when the web layer blanks a legacy name. Text
-precedes the avatar in both page and live markup; a fixed gutter reserves
-its space without loading an image or web font.
+Message avatars and the account button use the first grapheme of the
+display name (via `uniseg`), falling back to the handle when the web layer
+blanks a legacy name. Text precedes the avatar in both page and live markup;
+a fixed gutter reserves its space without loading an image or web font.
 
 ## Sidebar order and position
 
@@ -142,7 +143,7 @@ the typing dots.
   deferred: it must mark the page before the first paint, or the pill
   shows at rest first. Browsers without the Navigation API show no arrival
   motion. `testArrivalBrowser` (`internal/web/arrival_browser_test.go`)
-  checks these cases in a browser.
+  checks these cases in the shared `TestBrowser` suite.
 - **Reduced motion.** The arrival animations and press scaling exist only
   under `prefers-reduced-motion: no-preference`, and under `reduce` one rule
   removes every animation and transition. `TestReducedMotion`

@@ -44,22 +44,22 @@ type TopicLookup interface {
 }
 
 type channelPages struct {
-	typing    *typing.State
-	limiter   *middleware.MemberRateLimiter
-	readLimit *middleware.MemberRateLimiter
-	reading   Reading
-	branching Branching
-	topics    TopicLookup
-	topicID   *kernel.ID // Set only on the request-local copy in show.
-	panel     string     // Set only on the request-local copy by a panel route.
-	after     *kernel.ID // The members panel's cursor, set only in show.
-	stream    *Streaming
-	renders   *realtime.Cache[renderKey, realtime.Outgoing]
-	messages  MessageReader
-	posting   *conversation.Posting
-	pages     *pageRenderer
-	channels  Channels
-	imageErr  string
+	typing           *typing.State
+	limiter          *middleware.MemberRateLimiter
+	readLimit        *middleware.MemberRateLimiter
+	reading          Reading
+	branching        Branching
+	topics           TopicLookup
+	topicID          *kernel.ID // Set only on the request-local copy in show.
+	panel            string     // Set only on the request-local copy by a panel route.
+	after            *kernel.ID // The members panel's cursor, set only in show.
+	stream           *Streaming
+	renders          *realtime.Cache[renderKey, realtime.Outgoing]
+	messages         MessageReader
+	posting          *conversation.Posting
+	pages            *pageRenderer
+	channels         Channels
+	overviewImageErr string // Set only on the request-local copy after a failed image change.
 }
 
 func (p channelPages) home(w http.ResponseWriter, r *http.Request, m org.Membership) {
@@ -89,7 +89,7 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 		p.post(w, r, m, id)
 		return
 	}
-	page := view.ChannelPage{Panel: p.panel, ImageError: p.imageErr}
+	page := view.ChannelPage{Panel: p.panel, OverviewImageError: p.overviewImageErr}
 	query, before, firstUnread, ok := conversationQuery(r.URL.RawQuery)
 	if !ok {
 		p.invalidQuery(w, r, m, id)
@@ -106,7 +106,7 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 		p.after = &after
 	}
 	status := http.StatusOK
-	if p.imageErr != "" {
+	if p.overviewImageErr != "" {
 		status = http.StatusUnprocessableEntity
 	}
 	p.render(w, r, m, id, status, page, firstUnread)

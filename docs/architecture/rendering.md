@@ -41,7 +41,7 @@ found or not, including the explicit 405 (`Allow: GET, HEAD`) for any other
 method (#937): an SVG opened directly is a document on this origin, so
 it runs nothing and loads nothing. Pages are unaffected, because a file used
 as `<img>`, `<use>`, a script or a stylesheet does not apply its own policy;
-`TestMessageStreamBrowser/static-headers` checks that icons and illustrations
+`TestBrowser/static-headers` checks that icons and illustrations
 still paint. Caddy owns `Strict-Transport-Security` in deployment.
 
 The layout's `htmx-config` meta tag sets `allowEval: false`,

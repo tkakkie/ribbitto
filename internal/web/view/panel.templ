@@ -42,14 +42,14 @@ func panelURL(page ChannelPage, panel string) string {
 // panelControls open the panels with ordinary links: each page load gives
 // the one stream the interests of the page (decisions 30 and 31).
 templ panelControls(page ChannelPage) {
-	@panelControl(page, PanelMembers, false) {
+	@panelControl(page, PanelMembers, "people.control") {
 		if page.Panel == PanelMembers {
 			@Icon("people-filled", 20)
 		} else {
 			@Icon("people-regular", 20)
 		}
 	}
-	@panelControl(page, PanelOverview, true) {
+	@panelControl(page, PanelOverview, "") {
 		if page.Panel == PanelOverview {
 			@Icon("info-filled", 20)
 		} else {
@@ -59,8 +59,9 @@ templ panelControls(page ChannelPage) {
 }
 
 // panelControl marks the open panel's control with aria-current="true";
-// "page" stays with the conversation's link in the sidebar.
-templ panelControl(page ChannelPage, panel string, iconOnly bool) {
+// "page" stays with the conversation's link in the sidebar. An empty label
+// makes the control icon-only, named by the panel title.
+templ panelControl(page ChannelPage, panel, label string) {
 	{{ open := page.Panel == panel }}
 	<a
 		id={ "panel-control-" + panel }
@@ -68,14 +69,14 @@ templ panelControl(page ChannelPage, panel string, iconOnly bool) {
 		if open {
 			aria-current="true"
 		}
-		if iconOnly {
+		if label == "" {
 			aria-label={ i18n.T(ctx, panelTitle(panel)) }
 		}
 		class={ "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-body transition-feedback motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", open), templ.KV("text-muted hover:bg-hover hover:text-fg", !open) }
 	>
 		{ children... }
-		if !iconOnly {
-			{ i18n.T(ctx, "people.control") }
+		if label != "" {
+			{ i18n.T(ctx, label) }
 		}
 	</a>
 }
@@ -105,10 +106,10 @@ templ overviewPanel(page ChannelPage) {
 			@channelImage(page.Current.ImageURL, true)
 			<span dir="auto" class="min-w-0">{ page.Current.Name }</span>
 		</p>
-		<details open?={ page.ImageError != "" }>
+		<details open?={ page.OverviewImageError != "" }>
 			<summary class="min-h-11 cursor-pointer text-brand underline">{ i18n.T(ctx, "illustration.change") }</summary>
 			<form method="post" action={ panelURL(page, PanelOverview) } class="flex flex-col gap-2">
-				@imagePicker(page.ImageKeys, page.Current.Image, "overview-image-error", page.ImageError)
+				@imagePicker(page.ImageKeys, page.Current.Image, "overview-image-error", page.OverviewImageError)
 				@submitButton(buttonPrimary, "illustration.save")
 			</form>
 		</details>
@@ -116,7 +117,7 @@ templ overviewPanel(page ChannelPage) {
 			<dt class="text-caption text-muted">{ i18n.T(ctx, "overview.created") }</dt>
 			<dd><time datetime={ page.Current.Created.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) }>{ page.Current.Created.UTC().Format("2006-01-02") }</time></dd>
 		</dl>
-		<a href={ templ.SafeURL(panelURL(page, PanelMembers)) } class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "people.title") }</a>
+		@textLink(panelURL(page, PanelMembers), "people.title", "")
 		<h3 class="font-semibold">{ i18n.T(ctx, "topic.list") }</h3>
 		<ul class="flex flex-col gap-1">
 			for _, topic := range page.Topics {

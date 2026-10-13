@@ -320,6 +320,12 @@ UPDATE message SET topic_id=$1,moved_event_seq=$2 WHERE organization_id=$3 AND c
 			must(sidebarOracleCompare(p.state, want))
 		})
 	}
+	// Stored events from before topics carry no topic_id; DecodePosted accepts them.
+	legacy := post(f.Channel.ID, f.Channel.DefaultTopicID, f.MemberID)
+	posted, err := conversation.DecodePosted(legacy.Payload)
+	must(err)
+	legacy.Payload = fmt.Appendf(nil, `{"channel_id":%q,"message_id":%q}`, realtime.FormatPayloadID(posted.ChannelID), realtime.FormatPayloadID(posted.MessageID))
+	step("legacy-payload-post", &legacy, nil, "post author and page read effects absent")
 	merge(f.Channel.ID, member, 5, unread.Range{Lo: 0, Hi: seq + 1})
 	readStep("feed-after-topic-and-moves-clears-zero", member)
 	checkCounts(0, 0, 0)

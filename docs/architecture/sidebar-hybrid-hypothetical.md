@@ -6,6 +6,10 @@ read writer. No condition borrows another's metadata or the oracle's results.
 
 - **Author:** committed non-author posts add one to the channel, listed topic
   and selection. Own posts reconcile: author identity cannot settle page reads.
+  The delta assumes the last completed state is exact and that a post cannot
+  change list membership (lists are ordered by name, and posts create no
+  channel or topic). A payload without a topic reconciles. Stale or reordered
+  state is #961's.
 - **Read ranges:** test-only SQL fixture unions and a coverage revision commit in
   one transaction. Publications reload persisted revisions after successful commit.
   Independently captured message identities, sequences and read status let exact

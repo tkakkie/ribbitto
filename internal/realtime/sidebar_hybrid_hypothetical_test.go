@@ -3,7 +3,6 @@ package realtime_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -95,14 +94,15 @@ func (h *hybridHypothesis) handle(p *hybridPrototype, operation string, event *r
 		if h.condition == "hypothetical-author" && author != (kernel.ID{}) {
 			reason = "author alone does not settle own read effects"
 			if author != p.state.member {
-				posted, err := conversation.DecodePosted(event.Payload)
-				if err != nil || posted.TopicID == nil {
-					return fmt.Errorf("hypothetical posted payload: %v", err)
+				// A legacy payload has no topic, and a malformed one says nothing
+				// reliable: both reconcile, like any unknown input.
+				reason = "posted payload without a topic"
+				if posted, err := conversation.DecodePosted(event.Payload); err == nil && posted.TopicID != nil {
+					hybridAdjust(p.state.channels, posted.ChannelID, 1, false)
+					hybridAdjust(p.state.topics, *posted.TopicID, 1, false)
+					hybridAdjust(p.state.selection, *posted.TopicID, 1, false)
+					mode, reason = "delta", "committed non-author post with complete prior state"
 				}
-				hybridAdjust(p.state.channels, posted.ChannelID, 1, false)
-				hybridAdjust(p.state.topics, *posted.TopicID, 1, false)
-				hybridAdjust(p.state.selection, *posted.TopicID, 1, false)
-				mode, reason = "delta", "committed non-author post with complete prior state"
 			}
 		}
 	case read != nil:
@@ -172,6 +172,14 @@ func hybridHypotheticalRoute(condition, operation string, noop bool, ownPost boo
 			return "reconciliation", "absolute channel total cannot determine topics or selection"
 		}
 		return "reconciliation", "read commit and exact coverage absent"
+	case "legacy-payload-post":
+		if condition == "hypothetical-author" && ownPost {
+			return "reconciliation", "author alone does not settle own read effects"
+		}
+		if condition == "hypothetical-author" {
+			return "reconciliation", "posted payload without a topic"
+		}
+		return "reconciliation", "post author and page read effects absent"
 	case "foreign-post":
 		return "reconciliation", "post author and page read effects absent"
 	case "foreign-read", "read-without-metadata", "unknown-read-outcome", "read-without-coverage":

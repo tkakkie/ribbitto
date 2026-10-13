@@ -220,6 +220,10 @@ func TestStreamReplaysThenDeliversLive(t *testing.T) {
 func TestStreamDrainsBatchesOnAColdHub(t *testing.T) { testStreamDrainsBatchesOnAColdHub(t, false) }
 
 func testStreamDrainsBatchesOnAColdHub(t *testing.T, scheduled bool) {
+	testStreamColdHubEntry(t, scheduled, false)
+}
+
+func testStreamColdHubEntry(t *testing.T, scheduled, reserved bool) {
 	denied := posted(5, channelA)
 	denied.AudienceMemberID = &kernel.ID{2}
 	log := &fakeLog{events: []Event{
@@ -236,7 +240,7 @@ func testStreamDrainsBatchesOnAColdHub(t *testing.T, scheduled bool) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
-	done := runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render), BatchSize: 2}, 0, send, scheduled)
+	done := runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render), BatchSize: 2}, 0, send, scheduled, reserved)
 	send.waitFor(t, 1, 6, 7)
 
 	cancel()
@@ -294,6 +298,10 @@ func TestStreamDeniesAccessLostWhileRendering(t *testing.T) {
 }
 
 func testStreamDeniesAccessLostWhileRendering(t *testing.T, scheduled bool) {
+	testStreamRenderRevocationEntry(t, scheduled, false)
+}
+
+func testStreamRenderRevocationEntry(t *testing.T, scheduled, reserved bool) {
 	log := &fakeLog{events: []Event{posted(1, channelA), posted(2, channelA), posted(3, channelA)}}
 	var mu sync.Mutex
 	member := true
@@ -312,7 +320,7 @@ func testStreamDeniesAccessLostWhileRendering(t *testing.T, scheduled bool) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
-	done := runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(renderSlowly)}, 0, send, scheduled)
+	done := runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(renderSlowly)}, 0, send, scheduled, reserved)
 	<-rendering
 	mu.Lock()
 	member = false // the membership is removed while event 2 renders

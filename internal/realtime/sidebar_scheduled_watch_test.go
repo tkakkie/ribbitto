@@ -14,6 +14,10 @@ import (
 )
 
 func TestScheduledWatchPublications(t *testing.T) {
+	testScheduledWatchPublications(t, false)
+}
+
+func testScheduledWatchPublications(t *testing.T, reserved bool) {
 	for _, phase := range []string{"before subscribe", "after subscribe", "queued", "computing", "completing", "sending", "wait capture", "blocked"} {
 		t.Run(phase, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -79,7 +83,7 @@ func TestScheduledWatchPublications(t *testing.T) {
 				}
 				done := make(chan result, 1)
 				go func() {
-					cursor, err := stream.Run(ctx, selected, 7, frameSender{func(out Outgoing) error {
+					cursor, err := runCompatibility(ctx, stream, selected, 7, frameSender{func(out Outgoing) error {
 						frameMu.Lock()
 						sent = append(sent, out)
 						first := len(sent) == 1
@@ -93,7 +97,7 @@ func TestScheduledWatchPublications(t *testing.T) {
 							}
 						}
 						return nil
-					}})
+					}}, reserved)
 					done <- result{cursor, err}
 				}()
 				switch phase {

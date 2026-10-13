@@ -15,6 +15,10 @@ import (
 // A check grants one write only. Rendering invalidates any earlier grant;
 // the sender consumes it, detecting both cached allows and checks before render.
 func TestScheduledAuthorizationFrames(t *testing.T) {
+	testScheduledAuthorizationFrames(t, false)
+}
+
+func testScheduledAuthorizationFrames(t *testing.T, reserved bool) {
 	for _, name := range []string{"sidebar", "heartbeat", "reset", "presence", "typing", "presence reset", "typing reset"} {
 		t.Run(name, compatibilityCase(true, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
@@ -85,7 +89,7 @@ func TestScheduledAuthorizationFrames(t *testing.T) {
 			}
 			done := make(chan result, 1)
 			go func() {
-				c, err := stream.Run(ctx, selected, 7, authorizationSender{write})
+				c, err := runCompatibility(ctx, stream, selected, 7, authorizationSender{write}, reserved)
 				done <- result{c, err}
 			}()
 			synctest.Wait()
@@ -146,6 +150,10 @@ func (s authorizationSender) Send(_ context.Context, out Outgoing) error { retur
 func (s authorizationSender) Heartbeat(context.Context) error            { return s.write("heartbeat") }
 
 func TestScheduledAuthorizationAudienceCursor(t *testing.T) {
+	testScheduledAuthorizationAudienceCursor(t, false)
+}
+
+func testScheduledAuthorizationAudienceCursor(t *testing.T, reserved bool) {
 	for _, name := range []string{"audience deny", "bound revoke", "audience error", "bound error"} {
 		t.Run(name, compatibilityCase(true, func(t *testing.T) {
 			failure := errors.New("authorization failed")
@@ -165,7 +173,7 @@ func TestScheduledAuthorizationAudienceCursor(t *testing.T) {
 					return bound && name != "bound revoke", nil
 				})}, &selected, true)
 			send := newRecorder()
-			cursor, err := stream.Run(t.Context(), selected, 7, send)
+			cursor, err := runCompatibility(t.Context(), stream, selected, 7, send, reserved)
 			wantCursor, wantErr := int64(7), error(failure)
 			if name == "audience deny" {
 				wantCursor, wantErr = 8, errTooManyReads
@@ -187,6 +195,10 @@ func TestScheduledAuthorizationAudienceCursor(t *testing.T) {
 // Both computations ignore cancellation until released. Exit must precede a
 // late recount return, and a buffered completion cannot outlive a denied render.
 func TestScheduledAuthorizationExitGates(t *testing.T) {
+	testScheduledAuthorizationExitGates(t, false)
+}
+
+func testScheduledAuthorizationExitGates(t *testing.T, reserved bool) {
 	for _, boundary := range []string{"recount completion", "running recount", "durable render"} {
 		for _, race := range []string{"revoke", "cancel", "error", "cancel error", "authorization error"} {
 			t.Run(boundary+"/"+race, compatibilityCase(true, func(t *testing.T) {
@@ -236,7 +248,7 @@ func TestScheduledAuthorizationExitGates(t *testing.T) {
 				var frames []string
 				done := make(chan result, 1)
 				go func() {
-					c, err := stream.Run(ctx, selected, 7, authorizationSender{func(name string) error { frames = append(frames, name); return nil }})
+					c, err := runCompatibility(ctx, stream, selected, 7, authorizationSender{func(name string) error { frames = append(frames, name); return nil }}, reserved)
 					done <- result{c, err}
 				}()
 				<-started

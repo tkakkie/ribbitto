@@ -245,7 +245,7 @@ other = "Select from only one source. Nothing was moved."
 other = "Something you selected has already moved or is no longer in its source. Nothing was moved. Reload and select again."
 
 ["topic.branch_invalid"]
-other = "Select 1–100 different ones from one source and a different destination: an existing one or a new name, not both. Nothing was moved."
+other = "Select 1–100 from one source, with no duplicates, and a destination other than that source: an existing destination or a new name, not both. Nothing was moved."
 
 ["topic.branch_name_taken"]
 other = "This name is already taken. Choose it as the destination or use another name."

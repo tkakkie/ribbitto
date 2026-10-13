@@ -111,7 +111,7 @@ func TestStage2Drivers(t *testing.T) {
 							t.Errorf("protocol: %s", r.Proto)
 						}
 						if operation == "post" {
-							if r.Method != "POST" || r.FormValue("body") != "marker & 日本語" || r.FormValue("cursor") != "77" || len(r.PostForm) != 2 || r.Header.Get("Origin") != "http://"+r.Host || r.Header.Get("Sec-Fetch-Site") != "same-origin" {
+							if r.Method != "POST" || r.FormValue("body") != stage2PostMarker(stage2Slot{Endpoint: endpoint, LogicalID: tc.id})+" marker & 日本語" || r.FormValue("cursor") != "90" || len(r.PostForm) != 2 || r.Header.Get("Origin") != "http://"+r.Host || r.Header.Get("Sec-Fetch-Site") != "same-origin" {
 								t.Error("invalid authenticated post form/CSRF headers")
 							}
 							hx := ""
@@ -138,11 +138,17 @@ func TestStage2Drivers(t *testing.T) {
 						t.Fatal(err)
 					}
 					defer d.transport.CloseIdleConnections()
+					m, scope := d.readMember(stage2Slot{Endpoint: endpoint, LogicalID: tc.id})
+					m.applyPage(scope, stage2ReadPage{cursor: 77})
+					d.applyFrame(uint64(tc.member), 90, "")
 					start := time.Unix(123, 0)
 					o := stage2Observation{Slot: stage2Slot{Operation: operation, Endpoint: endpoint, LogicalID: tc.id, At: start}}
-					got, err := d.drive(t.Context(), o, start, func() time.Time { return start }, "marker & 日本語", 77)
-					if err != nil || got.Outcome != "succeeded" || len(got.Attempts) != 1 || received.Load() != 1 {
+					got, err := d.drive(t.Context(), o, start, func() time.Time { return start }, "marker & 日本語")
+					if err != nil || got.Outcome != "succeeded" || len(got.Attempts) != 1 || received.Load() != 1 || !got.MemberSelected || got.Member != uint64(tc.member) {
 						t.Fatalf("one exchange with operation success status: %+v, %v, requests=%d", got, err, received.Load())
+					}
+					if operation == "post" && (m.used[scope] != 90 || len(m.pages) != 0) {
+						t.Fatal("post did not reserve newest applied cursor and invalidate pages")
 					}
 				})
 			}
@@ -168,18 +174,18 @@ func TestStage2DriverBoundaries(t *testing.T) {
 	if d.transport.Proxy != nil || d.transport.ForceAttemptHTTP2 {
 		t.Fatal("stage-2 enabled proxies or HTTP/2")
 	}
-	for _, slot := range []stage2Slot{{Operation: "read", Endpoint: "feed"}, {Operation: "replacement", Endpoint: "topic"}, {Operation: "page", Endpoint: "other"}} {
-		if _, err := d.request(t.Context(), slot, "", 0); err == nil {
+	for _, slot := range []stage2Slot{{Operation: "other", Endpoint: "feed"}, {Operation: "replacement", Endpoint: "topic"}, {Operation: "page", Endpoint: "other"}} {
+		if _, err := d.request(t.Context(), slot, "", 0, 0); err == nil {
 			t.Fatal("accepted unsupported slot")
 		}
 	}
 	for _, endpoint := range []string{"feed", "topic"} {
 		o := stage2Observation{Slot: stage2Slot{Operation: "post", Endpoint: endpoint}}
-		req, err := d.request(t.Context(), o.Slot, "marker", 0)
+		req, err := d.request(t.Context(), o.Slot, "marker", 0, 0)
 		if err != nil || req.GetBody != nil {
 			t.Fatal("POST body may be replayed")
 		}
-		got, err := d.drive(t.Context(), o, time.Time{}, time.Now, "marker", 0)
+		got, err := d.drive(t.Context(), o, time.Time{}, time.Now, "marker")
 		if err != nil || got.Outcome != "failed" || len(got.Attempts) != 1 {
 			t.Fatalf("503 must fail once: %+v, %v", got, err)
 		}

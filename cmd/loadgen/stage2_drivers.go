@@ -97,6 +97,9 @@ func readStage2Credentials(path string, group stage2Group, seed uint64) (stage2C
 type stage2Driver struct {
 	transport transport
 	data      stage2Credentials
+	members   []*stage2ReadMember
+	// The later witness must prove changed/noop over HTTP; unknown is unverified.
+	verifyRead func(context.Context, stage2Observation, uint64) string
 }
 
 func newStage2Driver(target, path string, group stage2Group, seed uint64) (*stage2Driver, error) {
@@ -113,15 +116,16 @@ func newStage2Driver(target, path string, group stage2Group, seed uint64) (*stag
 		return nil, err
 	}
 	tr.ForceAttemptHTTP2 = false
-	return &stage2Driver{tr, data}, nil
+	d := &stage2Driver{transport: tr, data: data}
+	d.initMembers()
+	return d, nil
 }
 
 // Rotation depends on the scheduled ID, never completion order or missed slots.
 // Named topics alternate on successive topic slots of either schedule phase.
-// The caller supplies the page cursor for posting's implicit read; this slice
-// does not discover cursors or advance/verify explicit reads.
-func (d *stage2Driver) request(ctx context.Context, slot stage2Slot, body string, cursor uint64) (*http.Request, error) {
-	if (slot.Operation != "post" && slot.Operation != "page") || (slot.Endpoint != "feed" && slot.Endpoint != "topic") {
+// The driver supplies the newest applied cursor for posting's implicit read.
+func (d *stage2Driver) request(ctx context.Context, slot stage2Slot, body string, cursor, member uint64) (*http.Request, error) {
+	if (slot.Operation != "post" && slot.Operation != "page" && slot.Operation != "read") || (slot.Endpoint != "feed" && slot.Endpoint != "topic") {
 		return nil, fmt.Errorf("unsupported stage-2 driver slot")
 	}
 	endpoint := d.transport.origin.Scheme + "://" + d.transport.origin.Host + "/organizations/" + url.PathEscape(d.data.Slug) + "/channels/" + d.data.Stage2.HotChannelID
@@ -132,18 +136,22 @@ func (d *stage2Driver) request(ctx context.Context, slot stage2Slot, body string
 	var form io.Reader
 	if slot.Operation == "post" {
 		method = http.MethodPost
-		form = strings.NewReader(url.Values{"body": {body}, "cursor": {strconv.FormatUint(cursor, 10)}}.Encode())
+		form = strings.NewReader(url.Values{"body": {stage2PostMarker(slot) + " " + body}, "cursor": {strconv.FormatUint(cursor, 10)}}.Encode())
+	}
+	if slot.Operation == "read" {
+		method, endpoint = http.MethodPost, endpoint+"/read"
+		form = strings.NewReader(url.Values{"cursor": {strconv.FormatUint(cursor, 10)}}.Encode())
 	}
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, form)
 	if err != nil {
 		return nil, fmt.Errorf("building stage-2 request: %w", err)
 	}
-	req.AddCookie(&http.Cookie{Name: "__Host-session", Value: d.data.Accounts[slot.LogicalID%uint64(len(d.data.Accounts))].Tokens[0]})
+	req.AddCookie(&http.Cookie{Name: "__Host-session", Value: d.data.Accounts[member].Tokens[0]})
 	if method == http.MethodPost {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("Origin", d.transport.origin.Scheme+"://"+d.transport.origin.Host)
 		req.Header.Set("Sec-Fetch-Site", "same-origin")
-		if slot.Endpoint == "feed" {
+		if slot.Endpoint == "feed" || slot.Operation == "read" {
 			req.Header.Set("HX-Request", "true")
 		}
 		// Transport retries replayable requests; a POST must have one attempt.
@@ -152,10 +160,59 @@ func (d *stage2Driver) request(ctx context.Context, slot stage2Slot, body string
 	return req, nil
 }
 
-func (d *stage2Driver) drive(ctx context.Context, o stage2Observation, start time.Time, now func() time.Time, body string, cursor uint64) (stage2Observation, error) {
-	req, err := d.request(ctx, o.Slot, body, cursor)
+func (d *stage2Driver) drive(ctx context.Context, o stage2Observation, start time.Time, now func() time.Time, body string) (stage2Observation, error) {
+	member := o.Slot.LogicalID % uint64(len(d.members))
+	scope := d.readScope(o.Slot)
+	var cursor uint64
+	refuse := func(err error) (stage2Observation, error) {
+		o.Dispatch, o.Completed, o.Outcome = now(), now(), "failed"
+		return o, err
+	}
+	if o.Slot.Operation == "read" {
+		var found bool
+		member, cursor, found = d.selectRead(o.Slot)
+		if !found {
+			return refuse(fmt.Errorf("no eligible stage-2 read member"))
+		}
+	} else if !d.members[member].admission.TryLock() {
+		return refuse(fmt.Errorf("stage-2 member busy"))
+	}
+	m := d.members[member]
+	defer m.admission.Unlock()
+	o.Member, o.MemberSelected = member, true
+	if o.Slot.Operation != "read" {
+		m.mu.Lock()
+	}
+	if o.Slot.Operation == "post" {
+		cursor = m.applied
+	}
+	req, err := d.request(ctx, o.Slot, body, cursor, member)
+	if err == nil && o.Slot.Operation != "page" {
+		// Failed/ambiguous writes may have committed; reserve before dispatch.
+		m.reserve(scope, cursor)
+	}
+	m.mu.Unlock()
 	if err != nil {
 		return o, err
 	}
-	return stage2HTTP(ctx, d.transport, req, o, start, now, nil), nil
+	o = stage2HTTP(ctx, d.transport, req, o, start, now, nil, func(raw []byte) {
+		if o.Slot.Operation == "page" {
+			m.mu.Lock()
+			m.applyPage(scope, stage2ReadPageFrom(raw))
+			m.mu.Unlock()
+		}
+	})
+	if o.Slot.Operation == "page" && o.Outcome != "succeeded" {
+		m.mu.Lock()
+		delete(m.pages, scope)
+		m.mu.Unlock()
+	}
+	if o.Outcome == "unverified" && d.verifyRead != nil {
+		switch proof := d.verifyRead(ctx, o, cursor); proof {
+		case "changed", "noop":
+			o.Outcome = proof
+			o.Attempts[0].Outcome = proof
+		}
+	}
+	return o, nil
 }

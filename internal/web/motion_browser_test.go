@@ -17,9 +17,10 @@ import (
 	"github.com/tkakkie/ribbitto/web/static"
 )
 
-// Only live appends move (#878), reconnect backlog included: the initial
-// page, a replay replacing a shown message, a move insertion and a Load
-// older prepend stay still. Reduced motion stops every motion on the page.
+// Only live appends move (#878): the initial page, backlog before each
+// connect's first typing frame, a replay replacing a shown message, a move
+// insertion and a Load older prepend stay still. Reduced motion stops every
+// motion on the page.
 func testMessageMotionBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
@@ -100,38 +101,45 @@ func testMessageMotionBrowser(t *testing.T, browser *rod.Browser) {
 			t.Fatalf("message %d: class and animation %q, want %q", seq, got, want)
 		}
 	}
+	caughtUp := func(typists ...typing.Typist) {
+		send(realtime.Outgoing{Ephemeral: true, Name: "typing", Data: streamTestMarkup(t, view.TypingIndicator(typing.Snapshot{Typists: typists}))})
+	}
 	connected("42")
 	assertMotion(40, false, "none")
 	assertMotion(60, false, "none")
+	// Until the typing frame that ends each connect's first read, it is backlog.
 	send(message(61, 61))
-	assertMotion(61, true, "message-in")
-	// A replay replaces the animated item with one that stays still.
-	page.MustEval(`id => window.replaced = document.getElementById(id)`, view.MessageDOMID(kernel.ID{61}))
-	send(message(62, 61))
-	page.MustWait(`id => document.getElementById(id) !== window.replaced`, view.MessageDOMID(kernel.ID{61}))
 	assertMotion(61, false, "none")
-	send(realtime.Outgoing{ID: 63, Name: "messages-moved",
+	caughtUp()
+	send(message(62, 62))
+	assertMotion(62, true, "message-in")
+	// A replay replaces the animated item with one that stays still.
+	page.MustEval(`id => window.replaced = document.getElementById(id)`, view.MessageDOMID(kernel.ID{62}))
+	send(message(63, 62))
+	page.MustWait(`id => document.getElementById(id) !== window.replaced`, view.MessageDOMID(kernel.ID{62}))
+	assertMotion(62, false, "none")
+	send(realtime.Outgoing{ID: 64, Name: "messages-moved",
 		Data: streamTestMarkup(t, view.MovedMessageItems(streamTestMessages(topic, 50), source, topic))})
 	assertMotion(50, false, "none")
 	page.MustEval(`() => document.querySelector('#load-older a').click()`)
 	assertMotion(20, false, "none")
-	assertBrowserItems(t, page, []int{20, 40, 50, 60, 61})
-	// Backlog after a reconnect is new to this page, so it moves too.
+	assertBrowserItems(t, page, []int{20, 40, 50, 60, 61, 62})
 	page.MustEval(`() => { window.testSource.close(); window.testSource.dispatchEvent(new Event('error')); }`)
-	connected("63")
-	send(message(64, 64))
-	assertMotion(64, true, "message-in")
-	typists := []typing.Typist{{DisplayName: "Alice", Handle: "alice"}}
-	send(realtime.Outgoing{Ephemeral: true, Name: "typing", Data: streamTestMarkup(t, view.TypingIndicator(typing.Snapshot{Typists: typists}))})
+	connected("64")
+	send(message(65, 65))
+	assertMotion(65, false, "none")
+	caughtUp(typing.Typist{DisplayName: "Alice", Handle: "alice"})
 	page.MustWait(`() => !!document.querySelector('#typing-status .animate-typing-dot-1')`)
+	send(message(66, 66))
+	assertMotion(66, true, "message-in")
 	states := `() => [getComputedStyle(document.querySelector('#typing-status .animate-typing-dot-1')).animationName,
 		getComputedStyle(document.querySelector('[popovertarget=account-menu]')).transitionDuration].join(' ')`
 	if got := page.MustEval(states).Str(); got != "typing-dot 0.1s" {
 		t.Fatalf("typing dot and button feedback = %q, want typing-dot 0.1s", got)
 	}
 	motion("reduce")
-	send(message(65, 65))
-	assertMotion(65, true, "none")
+	send(message(67, 67))
+	assertMotion(67, true, "none")
 	if got := page.MustEval(states).Str(); got != "none 0s" {
 		t.Fatalf("reduced motion: typing dot and button feedback = %q, want none 0s", got)
 	}

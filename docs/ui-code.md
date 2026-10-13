@@ -84,32 +84,32 @@ and popovers, `z-40` for dialogs.
 
 ## Motion
 
-Small and optional ([`ui.md`](ui.md#tokens)): it never delays text or input,
-and nothing loops except the typing dots.
+Small and optional ([`ui.md`](ui.md#tokens)). Perceived speed comes first:
+motion never delays readable text or blocks input, and nothing loops except
+the typing dots.
 
 | Token | Value | Use |
 |---|---|---|
-| `--duration-faster` | 100 ms | hover and press feedback (the default for `transition`); exits |
-| `--duration-fast` | 150 ms | the navigation cross-fade; a closing panel |
-| `--duration-normal` | 200 ms | a live message; the selection pill |
-| `--duration-gentle` | 250 ms | an opening panel |
-| `ease-standard` | `cubic-bezier(0.33, 0, 0.67, 1)` | colour changes, cross-fades |
-| `ease-decelerate` | `cubic-bezier(0, 0, 0, 1)` | things that enter |
+| `--duration-faster` | 100 ms | hover and press feedback (the default for `transition`); a live message; the old conversation fading out; the selection pill |
+| `--duration-fast` | 150 ms | an opening panel |
+| `--duration-normal`, `--duration-gentle` | 200 ms, 250 ms | reserved for larger surfaces |
+| `ease-standard` | `cubic-bezier(0.33, 0, 0.67, 1)` | colour changes |
+| `ease-decelerate` | `cubic-bezier(0, 0, 0, 1)` | things that enter; the old conversation clearing quickly |
 | `ease-accelerate` | `cubic-bezier(0.8, 0, 0.78, 1)` | things that leave |
 
 - **Rows and buttons** add `transition motion-safe:active:scale-96`: colours
   change over 100 ms and a press scales to 0.96.
-- **A live message** rises 8 px and fades in (`animate-message-in`).
-  `message-stream-v10.js` adds the class only to an append, reconnect
-  backlog included; history, prepends, the initial page, replay
-  replacements and move or branch inserts never move.
+- **A live message** is opaque from its first frame and only settles 3 px
+  (`animate-message-in`), added by `message-stream-v10.js` to appends only,
+  and only after the stream's first typing frame since its (re)connect: the
+  replayed backlog comes before it (a backlog beyond one 100-event read
+  still moves). History, replays, moves and branches never move.
 - **The typing dots** pulse (`animate-typing-dot-1`…`3`) while someone types.
-- **Navigation** uses cross-document view transitions, declared in
-  `web/styles/app.css` only: the page cross-fades, so the unchanged app bar
-  and sidebar stay put; an opening panel slides in 8 px and fades in, a
-  closing one leaves faster; the selection pill grows into a new row (each
-  row's pill has its own transition name, through typed `attr()`). Browsers
-  without support navigate as before.
+- **Navigation** uses cross-document view transitions (CSS only): the app
+  bar and sidebar stay; the new conversation and panel are opaque at once
+  while the old ones fade out above them in 100 ms; pointer input passes
+  through. An opening panel slides in 8 px; the pill grows into a new row
+  (a transition name per row, through typed `attr()`).
 - **Reduced motion.** `@view-transition` and press scaling exist only under
   `prefers-reduced-motion: no-preference`, and under `reduce` one rule
   removes every animation and transition. `TestReducedMotion`

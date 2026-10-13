@@ -59,8 +59,9 @@ SSE deliveries and history responses cover both topic sides, bounded
 insertion, duplicate replay, moves before/during Load older, stale/fresh
 swaps, removal of the moved first-unread message's divider, preservation on
 other moves, and abort/400 followed by another request. A motion case shows
-that only appends, reconnect backlog included, get the live-message motion,
-and that reduced motion stops it, the typing dots and button transitions. Exact ordered ID lists
+that only appends after a connect's first typing frame get the live-message
+motion, never backlog, and that reduced motion stops it, the typing dots
+and button transitions. Exact ordered ID lists
 detect duplicates and gaps; waits use DOM/lifecycle conditions, not sleeps.
 
 Composer cases run real signal/post handlers with request and DOM gates: IME,

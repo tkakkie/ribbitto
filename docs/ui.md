@@ -94,8 +94,9 @@ The layout widths (`w-rail`, `w-sidebar`, `w-panel`, `max-w-reading`),
 the shared components and how templates and styles are written are in
 [`ui-code.md`](ui-code.md).
 
-**Motion** animates only `transform`, `opacity` and colours, and is off
-under `prefers-reduced-motion: reduce`; uses: [Motion](ui-code.md#motion).
+**Motion** animates only `transform`, `opacity` and colours, never delays
+readable text, and is off under `prefers-reduced-motion: reduce`; uses:
+[Motion](ui-code.md#motion).
 
 ## Contrast (WCAG 2.2 AA)
 

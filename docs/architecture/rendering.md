@@ -111,8 +111,9 @@ moving another message leaves it in place. Destination inserts add no divider.
 `htmx:sseBeforeMessage`. It passes the server's HTML to htmx for an append or
 same-id replacement, settling synchronously so replay stays ordered and local
 timestamps are ready before scrolling. Only appends update the separate polite
-status with templ-rendered text and get the `animate-message-in` class, the
-one live motion ([UI code](../ui-code.md#motion)); scrolling follows only when already at the
+status with templ-rendered text; once the stream has caught up after a
+(re)connect, appends also get the `animate-message-in` class
+([UI code](../ui-code.md#motion)); scrolling follows only when already at the
 bottom, except for the sender's own post. A successful composer fragment's
 `data-posted-message` names that message; the script keeps it as a pending
 scroll outside the composer and scrolls to the item once it is present,

@@ -49,11 +49,17 @@
     connection.setAttribute("sse-connect", url.pathname + url.search);
     showApplied();
   };
+  // Each (re)connect first replays what this page missed. The stream sends
+  // its typing state after that first read of the log, so messages before
+  // that frame are backlog and stay still; only later appends move.
+  let catchingUp = true;
   document.addEventListener("htmx:sseOpen", (event) => {
     const connection = event.target;
     if (connection.id !== "organization-stream") return;
     const source = event.detail.source;
     source.addEventListener("reset", reset, { once: true });
+    catchingUp = true;
+    source.addEventListener("typing", () => { catchingUp = false; }, { once: true });
   });
   const applyMove = (items, data, payload) => {
     const moved = payload.querySelectorAll("li");
@@ -132,8 +138,7 @@
         // aria-relevant="additions" keeps removal of older entries silent.
         if (!existing) {
           // Only a live append moves: history, replays and moves never get here.
-          // Reconnect backlog is new to this page too, so it moves the same way.
-          document.getElementById(incoming.id)?.classList.add("animate-message-in");
+          if (!catchingUp) document.getElementById(incoming.id)?.classList.add("animate-message-in");
           const status = document.getElementById("message-status");
           status.append(
             document.createTextNode(incoming.dataset.announcement + "\n"),

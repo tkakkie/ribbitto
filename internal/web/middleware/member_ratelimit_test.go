@@ -247,3 +247,28 @@ func TestReadActiveRetention(t *testing.T) {
 	}
 	release()
 }
+
+func TestChannelCreationBudget(t *testing.T) {
+	now := time.Now()
+	l := NewChannelCreationRateLimiter(func() time.Time { return now })
+	organization, member := kernel.ID{1}, kernel.ID{2}
+	for range 10 {
+		if !l.Allow(organization, member) {
+			t.Fatal("burst refused")
+		}
+	}
+	if l.Allow(organization, member) {
+		t.Fatal("eleventh creation admitted")
+	}
+	if !l.Allow(organization, kernel.ID{3}) || !l.Allow(kernel.ID{4}, member) {
+		t.Fatal("budgets shared across members or organisations")
+	}
+	now = now.Add(time.Minute - time.Nanosecond)
+	if l.Allow(organization, member) {
+		t.Fatal("refilled early")
+	}
+	now = now.Add(time.Nanosecond)
+	if !l.Allow(organization, member) || l.Allow(organization, member) {
+		t.Fatal("want exactly one refilled token")
+	}
+}

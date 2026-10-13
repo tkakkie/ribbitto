@@ -91,6 +91,21 @@ tabs revealing together can be refused. With healthy service and subsiding
 competing load, all pending pages converge without another user action;
 there is no success guarantee under sustained overload.
 
+## Member admission for channel creation
+
+Channel creation requires an independent `Services.CreateLimits` instance
+(shared with neither reads nor typing); missing or shared wiring fails startup.
+Its `MemberRateLimiter` allows burst 10, then
+one token per minute per trusted organisation/member pair. Session and
+membership resolution precede admission, which precedes form parsing and
+all channel work. Refusal is empty 429 with `Retry-After: 60` and creates
+nothing. Failed admitted attempts also consume a token. Other members and
+organisations have independent budgets, as do typing and reads. The same
+10,000-bucket bound and full-refill eviction rule apply. State is in memory
+per process; restarting resets it and multiple processes have independent
+budgets. The separate persistent count cap is described in
+[channels](../domain/channels.md#creation-limits).
+
 ## Reverse proxies
 
 ribbitto works behind any reverse proxy (Caddy, nginx, HAProxy, Traefik…)

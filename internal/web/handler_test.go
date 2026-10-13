@@ -500,6 +500,9 @@ func TestNewHandlerRequiresServices(t *testing.T) {
 			s.Reading = readCall(func(context.Context) error { return nil })
 			s.SignalLimits = s.ReadLimits
 		},
+		"create without limiter":            func(s *Services) { s.CreateLimits = nil },
+		"create sharing read limiter":       func(s *Services) { s.CreateLimits = s.ReadLimits },
+		"create sharing typing limiter":     func(s *Services) { s.SignalLimits = s.CreateLimits },
 		"no authorizer":                     func(s *Services) { s.Authz = nil },
 		"no channels":                       func(s *Services) { s.Channels = nil },
 		"no topics":                         func(s *Services) { s.Topics = nil },

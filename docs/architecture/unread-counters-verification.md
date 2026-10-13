@@ -39,3 +39,31 @@ What this shows and what it does not:
   PostgreSQL tests.
 - **Cost.** The per-operation statement and row bounds in the pull request are
   model estimates for an unbatched adapter, not measurements.
+
+## 956b: sequential production writers (956b1)
+
+`internal/realtime/unread_counters_matrix_test.go` reuses the prototype with
+production `Posting`, `Reading`, setup and sign-up, through exported wiring.
+Test-local adapters reproduce the package-local composition in
+`cmd/ribbitto/read_adapters.go`, including topic-post preparation reuse. Only
+channel/topic metadata uses fixtures; no message or read state is written with
+direct SQL. Maintenance uses the previous snapshot and operation arguments and
+results, never the oracle or a post-write recount.
+
+Every operation compares the full model, raw counts and capped badges with the
+oracle in one read-only repeatable-read snapshot. Cases cover feed/topic posts
+with a shown cursor, cursorless older pages and own messages; fragmented,
+overlapping, repeated, reordered, floor-only and no-op feed/topic requests from
+several simulated tabs; implicit joins before read rows; missing bundles;
+99 → 100 → 101 → 100 → 99 → 0 → 1 transitions. The comparisons include lists,
+a listed selection, another empty channel, the materialised owner and an
+unmaterialised member (plus a late join). Separate assertions check fragmented
+ranges, unchanged floors on cursorless posts and the floor-only write.
+
+Eight mutation checks are recorded in the pull request.
+
+956b2 retains production moves/branches, mixed read states, move/floor cursors,
+unlisted totals/selection and member/organisation isolation. 956c retains real
+PostgreSQL commit orders, rollback and retry with deterministic gates; these
+sequential snapshots prove no concurrency guarantee. #957 still waits. The
+956a cost bounds remain **estimates**; no measurement ran.

@@ -57,7 +57,8 @@ listed, otherwise the current channel's row (an unlisted topic, or the
 feed). It moves neither the window nor focus, and scrolls instantly.
 Live recounts replace `#sidebar-channels` inside that pane, which keeps its
 scroll position, so the script does nothing then: the member's position
-wins. Without JavaScript the sidebar opens at its top.
+wins. Without JavaScript the sidebar opens at its top. At phone width
+(M6) the sidebar is not shown; its content becomes the channel list page.
 
 ## Styles
 
@@ -99,6 +100,11 @@ The fixed widths of the desktop layout, and the block shape
 | `rounded-xl` | 12 px | the rounded blocks |
 | `shadow-block` | a 1 px ring and a soft drop | blocks and cards |
 | `shadow-popover` | a deeper drop | menus, popovers and dialogs |
+
+**Breakpoints** ([`ui.md`](ui.md#layout-principles), #966): below 852 px
+(53.25 rem) the phone layout; from 852 px the desktop frame with a side
+panel overlaying the conversation; from 1200 px (75 rem) the panel beside
+it. They become `@theme` breakpoints with the first issue that uses them.
 
 **Layers.** Only four `z-index` values are used, through Tailwind's
 built-in utilities, so no z-index tokens are added: `z-10` for something

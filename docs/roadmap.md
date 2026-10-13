@@ -95,22 +95,22 @@ and a change on a measured path states its effect and any known regression
 switching was 42 ms against 28 ms, from cross-document View Transitions, so
 #921 replaced them with CSS arrival motion (34–36 ms). Posting was
 unchanged. A Claude and Codex audit of M5 found no serious security issue;
-its follow-ups (#936–#940) are merged, including a per-organisation channel
-cap and a per-member creation limit.
+its follow-ups (#936–#940) are merged.
 
-Left for later: dark mode and the mobile layout (M6); a hover colour for
-primary buttons, which needs M6's dark tokens (#925); the rich editor and
+Left for later: dark mode and the mobile layout (M6); the rich editor and
 the emoji picker.
 
 ## M6
 
 M6 is done when, in M5's design:
 
-1. **Dark mode.** Every page has dark colours that follow the system
-   setting and meet the contrast table, checked in a browser.
+1. **Dark mode.** Every page ([listed in `ui.md`](ui.md#layout-principles);
+   404 and 500 stay plain text) follows the system setting with dark
+   colours that meet the contrast table, checked in a browser.
 2. **Mobile layout.** At phone width, every page is one column, with the
-   conversation at full width and a bottom navigation; tap targets are at
-   least 44 × 44 px and nothing scrolls sideways.
+   conversation at full width, a bottom navigation on the channel list and
+   a back link in a conversation; tap targets are at least 44 × 44 px and
+   nothing scrolls sideways.
 3. **Motion** behaves the same in dark mode and on a phone.
 
 Left for later: a manual light/dark switch.

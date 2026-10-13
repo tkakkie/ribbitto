@@ -33,10 +33,15 @@ The mock-ups are a direction, not a specification.
   state relies on colour alone: it also has text, an icon or a shape.
 - **Readable first.** The sidebar and headers are compact; the reading
   column is calm and generous.
-- **Light only until M6.** M6 designs dark colours for this direction;
-  until then pages use the light theme whatever the system setting, so the
-  old dark theme never mixes with the new light one. All colours are CSS
-  variables, so dark mode is one override block.
+- **Dark follows the system** (chosen for M6, #966): pages follow
+  `prefers-color-scheme` without a reload; a manual switch comes later.
+  Blocks lift by lightness, not shadow: the base is the darkest surface,
+  blocks are slightly lighter, with a faint hairline instead of the shadow,
+  and greys keep the brand's hue trace. One brighter teal serves the brand
+  fill, links, focus and the selection indicator, with dark text on filled
+  controls. Images keep their colours (later photos are never recoloured);
+  avatar initials use darker pastel fills with light initials. All colours
+  are CSS variables, so dark mode is one override block.
 
 ## Tokens
 
@@ -44,30 +49,34 @@ Defined in `web/styles/app.css` and used through Tailwind utilities
 (`bg-base`, `text-muted`, `border-border-strong`, `rounded-md`,
 `text-body`, …). Tailwind's default colour palette is switched off, so only
 these colours exist in templates; `make check` rejects literal colours
-([`ui-code.md`](ui-code.md#styles)).
+([`ui-code.md`](ui-code.md#styles)). The dark values are chosen (#966);
+#967 applies them, and until then every page stays light.
 
-| Colour token | Value | Use |
-|---|---|---|
-| `base` | `#edf4f2` | page ground; the sidebar sits on it |
-| `bg` | `#ffffff` | blocks: the conversation, panels |
-| `rail` | `#ffffff` | the app bar block |
-| `sidebar` | `#edf4f2` | reserved for the sidebar (it sits on `base`) |
-| `panel` | `#f5f9f8` | reserved for side panels (they use `bg`) |
-| `surface` | `#ffffff` | cards, popovers |
-| `input` | `#ffffff` | text fields |
-| `hover` | `#e4edeb` | hovered rows and buttons |
-| `border` | `#e1e8e6` | decorative dividers only |
-| `border-strong` | `#7f8986` | borders that identify a control (inputs) |
-| `fg` | `#171c1b` | body text |
-| `muted` | `#545d5b` | secondary text, timestamps |
-| `brand` / `on-brand` | `#0f766e` / `#ffffff` | primary buttons, focus ring, selection indicator, unread counts, links |
-| `selected` / `on-selected` | `#d5f1ea` / `#0b4d48` | the current row |
-| `accent` / `on-accent` | `#fff0e6` / `#8a3a12` | the "New" divider's label |
-| `accent-line` | `#f2a37b` | the "New" divider's line (decorative; the label carries the meaning) |
-| `success` | `#3a9742` | online dot (always with a label) |
-| `warning` | `#8a5300` | reserved for warning text and icons (e.g. "reconnecting…"); none yet |
-| `danger` / `on-danger` | `#b42318` / `#ffffff` | error text / reserved for destructive buttons (none yet) |
-| `pastel-1`…`pastel-6` / `on-pastel-1`…`on-pastel-6` | `#dcebff`/`#1f5aa6`, `#fff3c4`/`#7a5d00`, `#d9f2e6`/`#1d6b47`, `#ffe4d6`/`#9a4a1f`, `#ebe3ff`/`#5b3fa8`, `#ffe0ea`/`#a3284f` | channel images and avatar fills / their initials |
+| Colour token | Light | Dark | Use |
+|---|---|---|---|
+| `base` | `#edf4f2` | `#0f1514` | page ground; the sidebar sits on it |
+| `bg` | `#ffffff` | `#1a2120` | blocks: the conversation, panels |
+| `rail` | `#ffffff` | `#1a2120` | the app bar block |
+| `sidebar` | `#edf4f2` | `#0f1514` | reserved for the sidebar (it sits on `base`) |
+| `panel` | `#f5f9f8` | `#161d1c` | reserved for side panels (they use `bg`) |
+| `surface` | `#ffffff` | `#212928` | cards, popovers |
+| `input` | `#ffffff` | `#212928` | text fields |
+| `hover` | `#e4edeb` | `#26302e` | hovered rows and buttons |
+| `border` | `#e1e8e6` | `#2b3432` | decorative dividers only |
+| `border-strong` | `#7f8986` | `#768380` | borders that identify a control (inputs) |
+| `fg` | `#171c1b` | `#e4ecea` | body text |
+| `muted` | `#545d5b` | `#9ba7a4` | secondary text, timestamps |
+| `brand` / `on-brand` | `#0f766e` / `#ffffff` | `#4cc9b8` / `#062421` | primary buttons, focus ring, selection indicator, unread counts, links |
+| `selected` / `on-selected` | `#d5f1ea` / `#0b4d48` | `#1d3d38` / `#b8ece2` | the current row |
+| `accent` / `on-accent` | `#fff0e6` / `#8a3a12` | `#3a2216` / `#ffc6a3` | the "New" divider's label |
+| `accent-line` | `#f2a37b` | `#a8562f` | the "New" divider's line (decorative; the label carries the meaning) |
+| `success` | `#3a9742` | `#5bc46a` | online dot (always with a label) |
+| `warning` | `#8a5300` | `#e9b55c` | reserved for warning text and icons (e.g. "reconnecting…"); none yet |
+| `danger` / `on-danger` | `#b42318` / `#ffffff` | `#ff8b7b` / `#2b0a05` | error text / reserved for destructive buttons (none yet) |
+| `pastel-1`…`6` / `on-pastel-1`…`6` | `#dcebff`/`#1f5aa6`, `#fff3c4`/`#7a5d00`, `#d9f2e6`/`#1d6b47`, `#ffe4d6`/`#9a4a1f`, `#ebe3ff`/`#5b3fa8`, `#ffe0ea`/`#a3284f` | `#1c3047`/`#a9ccff`, `#3a3214`/`#f2d77a`, `#173628`/`#9fdcbc`, `#3d2618`/`#ffbe98`, `#2b2347`/`#c9b8ff`, `#3d1a26`/`#ffaec6` | channel images and avatar fills / their initials |
+
+A deep-teal dark brand (white text on `#0f766e`) was rejected: its fill
+is 2.99:1 against the dark blocks, under 3:1 for a control.
 
 **Illustration colours** belong to the brand artwork only
 ([`brand.md`](brand.md)), never to CSS: the mascot's body `#4cc9a0`, shade
@@ -102,9 +111,11 @@ selection indicator, online dot) 3:1 against what is next to them. Ratios are
 truncated, never rounded up. Decorative `border` and `accent-line` carry no
 information and are exempt; a control's boundary always uses
 `border-strong`. The current row is shown by `on-selected` text **and** the
-`brand` indicator, not by the `selected` fill alone. `bg`, `rail`, `surface`
-and `input` share one value, and `sidebar` equals `base`, so each row below
-covers them.
+`brand` indicator, not by the `selected` fill alone. In light `bg`, `rail`,
+`surface` and `input` share one value, and `sidebar` equals `base`, so each
+row below covers them. The table lists light ratios; in dark `surface` and
+`input` are lighter than `bg`, so #967 adds the dark pairs with their own
+rows for them (text, placeholder, control borders and the focus outline).
 
 | Pair (foreground on background) | Used for | Needed | Ratio |
 |---|---|---|---|
@@ -134,8 +145,28 @@ covers them.
 - **Conversation:** a thin header; a centred reading column about 760 px
   wide with 15 px text; a rounded composer block at the bottom, whose
   place the move form takes while a message is checked.
-- **Mobile** (M6): one column — channel header, messages, composer, bottom
-  navigation. Every tap target is at least 44 × 44 px.
+- **Every page** (M6, #966): setup, sign-in, sign-up, home `/`, the
+  channel feed and the topic view with the members and overview panels,
+  the rate-limit page, and the channel list page once it exists. 404 and
+  500 stay plain-text responses.
+- **Widths** (measured for #966): the reading column stays comfortable
+  down to 480 px at 15 px text. The frame takes 372 px, and 720 px with a
+  side panel, so from 1200 px (75 rem) a panel sits beside the
+  conversation; from 852 px (53.25 rem) a panel overlays the conversation's
+  right side instead; below 852 px the phone layout applies. From 320 px
+  up nothing scrolls sideways and no control becomes unreachable.
+- **Phone** (M6): one column. The channel list is its own page with a
+  bottom navigation (Home, and an Account button that opens the account
+  menu). A conversation fills the screen; its header has a back link to
+  the list, and the bottom navigation is hidden there. Members and the
+  overview open as a bottom sheet over the conversation, and **Mark as
+  read** is reached from the overview sheet. Welcome pages show a short
+  brand strip (logo, name, tagline) above the form, without the
+  illustrations.
+- **Tap targets** at phone width are at least 44 × 44 px: links, buttons,
+  form controls, `<summary>` and labels that act as a control's target.
+  Links inside running text (message and help text) are the one
+  exception. Desktop keeps WCAG 2.2 AA (24 px, 2.5.8).
 - **Text first.** A message is readable before anything around it (avatars,
   images) has loaded.
 

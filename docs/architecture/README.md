@@ -43,6 +43,7 @@ Read the file for the area you change:
 | [`unread-counts.md`](unread-counts.md) | read-state storage and the counting statements between the modules |
 | [`unread-count-costs.md`](unread-count-costs.md) | what the counts cost, expected load, fragmentation and the unread benchmark |
 | [`unread-writes.md`](unread-writes.md) | how read ranges are written: the current feed, topic-view, branch-notice and posting writes |
+| [`sidebar-hybrid-contract.md`](sidebar-hybrid-contract.md) | #950: production-only derivability, snapshot coverage and exact model/comparison for the test-only hybrid investigation |
 | [`unread-benchmark-results.md`](unread-benchmark-results.md) | the read-range benchmark's results (#283) and the go/no-go decision |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
 | [`read-advance-results.md`](read-advance-results.md) | short read-advance costs, member isolation, matched posting/branching unions and #711 acceptance |

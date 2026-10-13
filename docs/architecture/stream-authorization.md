@@ -155,8 +155,8 @@ for a primary-key read, and the choice should be revisited.
 
 ### Tests that prove (a2)
 
-- **Unchanged:** the `realtime` tests above, #207's register-then-recheck
-  and session cancellation.
+- **Unchanged:** tests above, #207's register-then-recheck and session
+  cancellation; scheduled races remain #865 1f-b.
 - **`org`, no database:** an unchanged epoch runs no membership query
   (counted, even after snapshot eviction); a changed one queries and denies;
   a failed epoch read is an error, never a deny; organisation and audience

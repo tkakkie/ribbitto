@@ -32,7 +32,11 @@ memory tracks active subscriptions, bounded by production stream caps.
 recount and defers release immediately. Observed generations dirty the existing
 coalescer without moving its deadline; only a successful send or explicit denial
 acknowledges the generation captured before the persisted read. Changes during
-rendering remain pending. Atomic capture in the combined wait prevents a lost
+rendering remain pending. Scheduled delivery subscribes before submission, captures
+at the computation boundary and covers only that request's generation after send.
+The writer seals boundary access before its exactly-once release; an uncooperative
+worker may finish its read later but cannot snapshot the released watch.
+Atomic capture in the combined wait prevents a lost
 wake; advancing observation while throttled prevents spinning on already observed work.
 Recounts and authorisation retain per-tab costs; wakes/log reads are not throttled.
 Sidebar frames render before checking both organisation and bound member, omit

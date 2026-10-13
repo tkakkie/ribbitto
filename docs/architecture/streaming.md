@@ -134,8 +134,9 @@ that reset without `id:`, ending the stream so the page reloads.
 Sidebars recount on connect, posts/moves and the member's read advances,
 regardless of message interests. With a hub, Reading and watches share
 one `unread.Changes`; otherwise the publisher is nil. Subscribe before recounting;
-release on exit. Capture generations before each snapshot; send or deny covers
-only that generation. Changes dirty a [fixed deadline](stream-limits.md) checked
+release on exit. Capture before reads; send or deny covers that generation.
+Scheduled captures are per request.
+Changes dirty a [fixed deadline](stream-limits.md) checked
 between batches and in the combined wait. Authorize organisation and bound member
 after rendering, before sending. Frames omit `id:`; errors stop delivery. Reconnect recounts.
 [Short results](read-advance-results.md) record costs and acceptance. The

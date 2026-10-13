@@ -92,6 +92,9 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   restart the heartbeat deadline. Production streams supply a per-connection
   source (#819); its composition is in [unread counts](unread-counts.md).
   Production member watches (#711) feed this same coalescer.
+  Scheduled computations capture at execution, not submission; each request owns
+  its captured generation. Every received completion ends the active attempt and
+  sets the interval deadline, even when its version is too old to send.
   Each active read publication costs one locked lookup/update and replacement
   channel; wake work scales with that member's waiting tabs. Registry memory
   follows active member entries and watches; last release removes the entry.

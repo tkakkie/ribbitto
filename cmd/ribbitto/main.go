@@ -71,6 +71,10 @@ func run() error {
 }
 
 func serve(ctx context.Context, databaseURL string) error {
+	return serveWithLifecycle(ctx, databaseURL, newServiceLifecycle)
+}
+
+func serveWithLifecycle(ctx context.Context, databaseURL string, own func(context.Context, *realtime.Hub, *realtime.RecountScheduler, func()) *serviceLifecycle) (result error) {
 	streamCap, err := maxStreams()
 	if err != nil {
 		return err
@@ -117,19 +121,17 @@ func serve(ctx context.Context, databaseURL string) error {
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
-	defer pool.Close()
+	hub := realtime.NewHubWithMaxStreams(streamCap)
+	lifetime := own(ctx, hub, nil, pool.Close)
+	defer func() { result = errors.Join(result, lifetime.close()) }()
 	slog.Info("recount capacity configuration", "async_recounts", recounts.enabled, "delivery", "synchronous",
 		"pool_max_conns", pool.Config().MaxConns, "configured_workers", recounts.workers,
 		"max_connections", recounts.maxConnections, "reserved", recounts.reserved, "external", recounts.external,
 		"processes", recounts.processes, "normal_headroom", recounts.headroom, "process_budget", recounts.budget,
 		"registration_limit", recounts.registrationLimit)
-	// Cancel cache loads before closing the pool on every exit path.
-	ctx, cancelLoads := context.WithCancel(ctx)
-	defer cancelLoads()
 	// One hub per process: posting raises it, streams register their
 	// connections with it, and the metrics read its registry.
-	hub := realtime.NewHubWithMaxStreams(streamCap)
-	handler, sessions, err := buildHandler(ctx, pool, handlerConfig{
+	handler, sessions, err := buildHandler(lifetime.ctx, pool, handlerConfig{
 		setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
 		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), hub: hub,
 		authorizationCapacity: authorizationCapacity,
@@ -138,58 +140,32 @@ func serve(ctx context.Context, databaseURL string) error {
 		return err
 	}
 	// Stop cleanup before closing its pool, including on listener failure.
-	stopCleanup := startSessionCleanup(ctx, sessions)
-	defer stopCleanup()
-	stopWatermark := startRealtimeWorker(ctx, realtime.Watermark{Hub: hub, Sequences: orgpg.NewSequences(pool)}, realtime.WatermarkInterval)
-	defer stopWatermark()
-	stopRetention := startRealtimeWorker(ctx, realtime.Retention{Events: realtimepg.NewCleaner(pool, orgpg.RetentionBoundaryIn), Period: retention}, time.Hour)
-	defer stopRetention()
+	lifetime.workers = append(lifetime.workers, startSessionCleanup(lifetime.ctx, sessions))
+	lifetime.workers = append(lifetime.workers, startRealtimeWorker(lifetime.ctx, realtime.Watermark{Hub: hub, Sequences: orgpg.NewSequences(pool)}, realtime.WatermarkInterval))
+	lifetime.workers = append(lifetime.workers, startRealtimeWorker(lifetime.ctx, realtime.Retention{Events: realtimepg.NewCleaner(pool, orgpg.RetentionBoundaryIn), Period: retention}, time.Hour))
 
 	srv := newServer(addr, handler, serverTimeouts{
 		readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout,
 		write: writeTimeout,
 	})
-	endStreamsOnShutdown(srv, hub)
 
-	var metrics *http.Server
 	if metricsAddr != "" {
 		// Listen before serving, so a taken port fails the start.
 		ln, err := net.Listen("tcp", metricsAddr)
 		if err != nil {
 			return fmt.Errorf("RIBBITTO_DEV_METRICS_ADDR: %w", err)
 		}
-		metrics = newMetricsServer(metricsAddr, devMetrics{queries: queries, pool: pool, streams: hub})
-		defer func() { _ = metrics.Close() }()
+		metrics := newMetricsServer(metricsAddr, devMetrics{queries: queries, pool: pool, streams: hub})
+		lifetime.startServer(metrics, func() error { return metrics.Serve(ln) })
 		slog.Warn("development metrics enabled; use only on a disposable machine", "addr", metricsAddr)
-		go func() {
-			if err := metrics.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
-				slog.Error("development metrics stopped", "err", err)
-			}
-		}()
 	}
 
-	errc := make(chan error, 1)
-	go func() {
-		slog.Info("listening", "addr", addr)
-		errc <- srv.ListenAndServe()
-	}()
+	slog.Info("listening", "addr", addr)
+	lifetime.startServer(srv, srv.ListenAndServe)
 
 	select {
-	case err := <-errc:
-		return err
+	case <-lifetime.serverDone:
 	case <-ctx.Done():
-	}
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if metrics != nil {
-		_ = metrics.Shutdown(shutdownCtx)
-	}
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return err
-	}
-	if err := <-errc; !errors.Is(err, http.ErrServerClosed) {
-		return err
 	}
 	return nil
 }
@@ -251,14 +227,6 @@ const (
 
 type serverTimeouts struct {
 	readHeader, read, idle, write time.Duration
-}
-
-// endStreamsOnShutdown makes srv end every open event stream when it starts
-// shutting down. An open stream never goes idle, so Shutdown would wait for
-// it until its deadline; ending them first lets it finish, and browsers
-// reconnect to the next process.
-func endStreamsOnShutdown(srv *http.Server, hub *realtime.Hub) {
-	srv.RegisterOnShutdown(hub.CancelAll)
 }
 
 // newServer returns the HTTP server with its timeouts; tests pass short

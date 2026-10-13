@@ -38,16 +38,14 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   receives sidebar/presence payloads. Register and
   RaiseIfActive still use the registry mutex for caps and active checks.
 
-  The combined wait also accepts an optional recount completion mailbox (#865,
-  part 1c). The writer receives one result directly and returns it to its caller;
-  no bridge goroutine, scheduling, authorization or delivery is added. Buffered
-  results survive level capture; a consumed result cannot wake again. Once
-  received, a completion returns from the hub with no error even if its wait
-  context ended. The stream wait returns it together with the parent's cause;
-  the writer checks its parent context before delivery. A closed
-  mailbox is disabled inside the wait. Completion wakes change neither the last
-  write nor the fixed recount deadline. `Run` with nil `Recounts` stays synchronous;
-  `RunReserved` uses pre-admission ([scheduler integration](recount-scheduler.md)).
+  The combined wait accepts an optional recount completion mailbox (#865),
+  without a bridge or added scheduling, authorization or delivery. Buffered results
+  survive level capture; consumed results cannot wake again. Received completions
+  have no hub wait error; stream waits retain the parent's cause for the writer's
+  pre-delivery check. Closed
+  mailboxes are disabled. Completion wakes move neither the last write nor the
+  fixed recount deadline. `Run` with nil `Recounts` stays synchronous; `RunReserved`
+  uses pre-admission ([scheduler integration](recount-scheduler.md)).
 
 - Stream authorization caches allows per distinct (account ID, organisation
   slug), not per stream: streams with the same key share an entry. Entries
@@ -153,7 +151,13 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   Full/closed schedulers return plain-text 503, free the hub slot and open no
   presence/typing; hub overflow stays 429. The handler cancels unused reservations;
   `RunReserved` owns accepted ones. No synchronous fallback; nil stays synchronous.
-- `RegisterOnShutdown` calls `Hub.CancelAll` (`ErrShutdown`) to cancel streams
-  before `Shutdown`, which otherwise waits for its deadline, and stop admission
-  (503). Browsers reconnect and replay. Production uses Caddy HTTP/2; HTTP/1.1
-  browsers allow six connections per origin.
+
+## Shutdown
+
+Exit/failure: `Hub.CancelAll` (503/`ErrShutdown`) → lifetime cancel → concurrent
+HTTP shutdown/scheduler close → workers → pool. After HTTP's 10 s grace,
+`Close` force-closes connections. Scheduler/maintenance workers and server
+goroutines are joined; handlers need not have returned, so may still use the
+pool when it closes last. Mailbox closure cannot wake idle waits
+([ownership](recount-scheduler.md)). Browsers reconnect/replay; Caddy uses HTTP/2;
+HTTP/1.1: six connections/origin.

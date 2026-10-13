@@ -449,12 +449,14 @@ func testEventStreamEndsOnSignOutOverHTTP1(t *testing.T) {
 func testShutdownEndsOpenStreams(t *testing.T) {
 	pool := acceptanceDatabase(t)
 	hub := realtime.NewHub()
-	handler, _, err := buildHandler(t.Context(), pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
+	lifetime := newServiceLifecycle(t.Context(), hub, nil, func() {})
+	lifetime.grace = 5 * time.Second
+	handler, _, err := buildHandler(lifetime.ctx, pool, handlerConfig{setupToken: acceptanceToken, signupEnabled: true,
 		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, hub: hub})
 	acceptanceOK(t, err)
 	server := httptest.NewUnstartedServer(handler)
 	server.Config = newServer("", handler, serverTimeouts{readHeader: readHeaderTimeout, read: readTimeout, idle: idleTimeout, write: writeTimeout})
-	endStreamsOnShutdown(server.Config, hub)
+	lifetime.servers = append(lifetime.servers, server.Config)
 	server.EnableHTTP2 = true
 	server.StartTLS()
 	t.Cleanup(server.Close)
@@ -466,10 +468,8 @@ func testShutdownEndsOpenStreams(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("stream: status %d", status)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
 	started := time.Now()
-	if err := server.Config.Shutdown(ctx); err != nil {
+	if err := lifetime.close(); err != nil {
 		t.Fatalf("Shutdown with an open stream: %v after %v", err, time.Since(started))
 	}
 	if elapsed := time.Since(started); elapsed > 2*time.Second {

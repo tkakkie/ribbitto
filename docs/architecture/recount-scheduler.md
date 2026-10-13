@@ -3,7 +3,7 @@
 Parts 1a–1d of #865 implement `realtime.RecountScheduler` and optional
 `Stream.Recounts`; `cmd/ribbitto` leaves it nil. Production keeps synchronous
 sidebar delivery and the unchanged `SidebarInterval` ([streaming](streaming.md)).
-This core adds no database access, deployment capacity or shutdown wiring.
+This core adds no database access or deployment capacity.
 
 One shared instance has positive worker and registration limits. `Register`
 returns nil at capacity or after closure. A registration represents one stream;
@@ -66,8 +66,7 @@ computation finishes later. A result already received belongs to the caller.
 A running computation retains both worker and registration capacity until actual
 return, even if it ignores cancellation. `Close` refuses new work, cancels every
 registration and waits for actual returns; uncooperative computations can delay
-it. These lifecycle operations support deterministic cleanup; application shutdown
-is separate work.
+it. Application shutdown is below.
 
 Deterministic gates and `synctest` cover cancellation before dispatch, during
 an uncooperative computation, after a buffered completion, before a late
@@ -157,3 +156,6 @@ including RunReserved; nil adds no clocks, allocations or locks. Aggregates
 measure queue, compute, receipts, return→send and submit→send
 ([delivery metrics](dev-metrics.md#delivery-snapshot)). Stage 2 separates queue,
 compute and send delay but cannot prove freshness; PR 3 owns that oracle.
+
+Part 2g closes an optional scheduler with HTTP shutdown, after `Hub.CancelAll`
+and before the pool ([order](stream-limits.md#shutdown)).

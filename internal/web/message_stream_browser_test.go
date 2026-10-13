@@ -50,6 +50,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
 	t.Run("side-panel", func(t *testing.T) { testSidePanelBrowser(t, browser) })
 	t.Run("sidebar-scroll", func(t *testing.T) { testSidebarScrollBrowser(t, browser) })
+	t.Run("branch-form", func(t *testing.T) { testBranchFormBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {
 		modes := []string{"before", "stale", "fresh", "abort", "4xx"}
 		if side == "source" {

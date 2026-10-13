@@ -91,6 +91,8 @@ type Stream struct {
 	Sidebar SidebarSource
 	// Recounts optionally schedules sidebar computation; nil keeps synchronous delivery.
 	Recounts *RecountScheduler
+	// RecountObserver optionally aggregates scheduled delivery; nil disables observations.
+	RecountObserver *RecountObserver
 	// BatchSize bounds each read; zero means DefaultBatchSize.
 	BatchSize int
 	// Heartbeat is how long the loop waits on the hub before it sends a
@@ -262,6 +264,9 @@ func (s Stream) run(ctx context.Context, sub Subscription, cursor int64, send Se
 		}
 		levels, received, err := s.wait(ctx, sub, seen, send, &written, deadline, sidebar.watch, sidebar.observed, completions)
 		completion = received
+		if received != nil {
+			scheduled.received()
+		}
 		// Generations count as seen only after the owner returns their state.
 		seen.durable = levels.durable
 		if err != nil {

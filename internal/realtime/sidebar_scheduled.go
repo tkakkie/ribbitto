@@ -16,6 +16,7 @@ type scheduledSidebar struct {
 	pending       *sidebarDelivery
 	version, sent uint64
 	active        bool
+	observation   *recountObservation
 	// Each capture belongs to its request; receiving that completion publishes it
 	// to the writer even if another computation has already captured a generation.
 	captures map[uint64]*uint64
@@ -30,6 +31,17 @@ func (p *scheduledSidebar) cancel() {
 	p.stopped = true
 	p.mu.Unlock()
 	p.registration.Cancel()
+	p.observation.finish("cancelled")
+	p.observation = nil
+}
+
+func (p *scheduledSidebar) received() {
+	if p.observation != nil {
+		o := p.observation.observer
+		o.mu.Lock()
+		o.stats.Received++
+		o.mu.Unlock()
+	}
 }
 
 func (s Stream) scheduledRecount(ctx context.Context, sub Subscription, p *scheduledSidebar, completion *RecountCompletion, send Sender, written *time.Time) error {
@@ -53,6 +65,7 @@ func (s Stream) scheduledRecount(ctx context.Context, sub Subscription, p *sched
 				return ErrRecountRefused
 			}
 			completion = &result
+			p.received()
 		default:
 		}
 	}
@@ -63,19 +76,37 @@ func (s Stream) scheduledRecount(ctx context.Context, sub Subscription, p *sched
 		delete(p.captures, completion.Version)
 	}
 	if completion != nil && completion.Version > p.sent && captured != nil {
+		observation := p.observation
+		p.observation = nil
+		outcome := "failed"
+		defer func() { observation.finish(outcome) }()
 		if completion.Err != nil {
 			return fmt.Errorf("recounting sidebar: %w", completion.Err)
 		}
 		if ctx.Err() != nil {
+			outcome = "cancelled"
 			return context.Cause(ctx)
 		}
 		out := completion.Outgoing
 		out.ID, out.Name, out.Ephemeral = 0, "sidebar", true
 		if err := s.checkMember(ctx, sub, Event{OrganizationID: sub.Organization}); err != nil {
+			if ctx.Err() != nil {
+				outcome = "cancelled"
+			} else if errors.Is(err, ErrMembershipRevoked) {
+				outcome = "denied"
+			}
 			return fmt.Errorf("authorizing sidebar frame: %w", err)
 		}
 		if err := send.Send(ctx, out); err != nil {
+			if ctx.Err() != nil {
+				outcome = "cancelled"
+			}
 			return fmt.Errorf("sending sidebar frame: %w", err)
+		}
+		if ctx.Err() != nil {
+			outcome = "cancelled"
+		} else {
+			outcome = "delivered"
 		}
 		*written = time.Now()
 		pending.covered = *captured
@@ -89,7 +120,7 @@ func (s Stream) scheduledRecount(ctx context.Context, sub Subscription, p *sched
 	}
 	covered := pending.covered
 	p.captures[p.version] = &covered
-	if !p.registration.Submit(p.version, func(worker context.Context) (Outgoing, error) {
+	compute := func(worker context.Context) (Outgoing, error) {
 		p.mu.Lock()
 		if p.stopped {
 			p.mu.Unlock()
@@ -105,7 +136,14 @@ func (s Stream) scheduledRecount(ctx context.Context, sub Subscription, p *sched
 		defer stop()
 		defer cancel()
 		return s.Sidebar.Recount(compute, sub)
-	}) {
+	}
+	if s.RecountObserver != nil {
+		p.observation = s.RecountObserver.submit()
+		compute = p.observation.wrap(compute)
+	}
+	if !p.registration.Submit(p.version, compute) {
+		p.observation.finish("failed")
+		p.observation = nil
 		return ErrRecountRefused
 	}
 	p.active = true

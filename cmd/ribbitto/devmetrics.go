@@ -47,6 +47,7 @@ type devMetrics struct {
 	pool     *pgxpool.Pool
 	streams  interface{ Connections() int }
 	recounts *realtime.RecountScheduler // nil reports disabled; composition owns it.
+	delivery *realtime.RecountObserver
 }
 
 // metricsSnapshot holds operational statistics only: no SQL, arguments, tokens, IDs,
@@ -81,6 +82,13 @@ type metricsSnapshot struct {
 		Open int `json:"open"`
 	} `json:"streams"`
 	Scheduler schedulerMetrics `json:"scheduler"`
+	Delivery  deliveryMetrics  `json:"delivery"`
+}
+
+type deliveryMetrics struct {
+	Enabled bool `json:"enabled"`
+	realtime.RecountDeliveryStats
+	BucketUpperBoundsNS [5]int64 `json:"bucket_upper_bounds_ns"`
 }
 
 type schedulerMetrics struct {
@@ -139,6 +147,10 @@ func (m devMetrics) snapshot() metricsSnapshot {
 			RejectedSubmissions: stats.RejectedSubmissions, Errors: stats.Errors,
 			ErrorsAfterCancellation: stats.ErrorsAfterCancellation,
 		}
+	}
+	if m.delivery != nil {
+		s.Delivery = deliveryMetrics{Enabled: true, RecountDeliveryStats: m.delivery.Stats()}
+		s.Delivery.BucketUpperBoundsNS = [5]int64{int64(time.Millisecond), int64(10 * time.Millisecond), int64(100 * time.Millisecond), int64(time.Second), int64(10 * time.Second)}
 	}
 	return s
 }

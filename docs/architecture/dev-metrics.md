@@ -115,3 +115,32 @@ live recount failures separately from cancellations and refusals.
 `cancelled` counts removed pending work and first cancellation of running work,
 even if it later succeeds; it can overlap `errors_after_cancellation` and must not
 be subtracted from either error counter. All counters persist after closure.
+
+## Delivery snapshot
+
+Part 2f adds optional `delivery`, sampled under its own observer mutex. Nil gives
+`enabled: false` and zero values, independently of `scheduler`; production supplies
+neither until 2h. `submitted` counts scheduled writer attempts (including refused
+submissions), `received` counts actual mailbox receives, and `delivered` counts
+successful Sender returns whose context is still live. This does not acknowledge
+browser receipt or DOM application. `denied` counts membership revocation;
+`failed` counts computation/panic, authorization-check, submission and send errors.
+`cancelled` counts outstanding attempts abandoned on writer exit or cancellation,
+including buffered/late results. These terminal outcomes are disjoint; cancellation
+during authorization/send takes precedence over failure. Ordinary exit after a
+successful delivery adds no cancellation. Counters persist for the observer's life.
+
+`queue`, `compute`, `completion_to_send` and `submit_to_send` each expose `count`,
+`total_ns` and six disjoint `bucket_counts`, using `bucket_upper_bounds_ns` with
+[the scheduler bounds](#scheduler-snapshot). Queue samples end at computation
+invocation; compute includes watch capture and actual return, even after writer
+exit. Completion-to-send includes mailbox wait, writer work before delivery,
+authorization and Sender time. Both send durations sample only delivered attempts;
+denied, failed and cancelled attempts contribute nothing. Populations can differ
+between snapshots: queue starts, compute returns and sends are separate stages.
+
+Stage 2 can separate waiting for a worker, computation cost and delay after return,
+plus total submission-to-send latency. It cannot infer freshness relative to
+persisted changes, count coalesced invalidations, or prove which committed changes
+a frame covers. PR 3 must supply a same-snapshot witness or equally rigorous oracle.
+Only aggregates survive requests: no IDs, payloads or request history are retained.

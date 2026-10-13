@@ -194,6 +194,7 @@ func TestDevMetricsSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string][]string{
+		"delivery":  {"bucket_upper_bounds_ns", "cancelled", "completion_to_send", "compute", "delivered", "denied", "enabled", "failed", "queue", "received", "submit_to_send", "submitted"},
 		"database":  {"queries", "transactions_begun", "transactions_committed", "transactions_rolled_back"},
 		"pool":      {"acquire_count", "acquire_duration_ns", "acquired_conns", "canceled_acquire_count", "empty_acquire_count", "empty_acquire_wait_ns", "idle_conns", "max_conns", "total_conns"},
 		"runtime":   {"goroutines", "heap_inuse_bytes"},
@@ -211,7 +212,21 @@ func TestDevMetricsSnapshot(t *testing.T) {
 				if _, ok := value.(bool); !ok {
 					t.Errorf("%s.%s = %v, want a boolean", section, key, value)
 				}
-			case "processing_duration_bucket_counts", "processing_duration_bucket_upper_bounds_ns":
+			case "queue", "compute", "completion_to_send", "submit_to_send":
+				d, ok := value.(map[string]any)
+				if !ok || len(d) != 3 {
+					t.Fatalf("invalid duration aggregate: %v", value)
+				}
+				if _, ok := d["count"].(float64); !ok {
+					t.Fatal("duration count must be numeric")
+				}
+				if _, ok := d["total_ns"].(float64); !ok {
+					t.Fatal("duration total must be numeric")
+				}
+				if buckets, ok := d["bucket_counts"].([]any); !ok || len(buckets) != 6 {
+					t.Fatal("duration buckets must have six entries")
+				}
+			case "bucket_upper_bounds_ns", "processing_duration_bucket_counts", "processing_duration_bucket_upper_bounds_ns":
 				if _, ok := value.([]any); !ok {
 					t.Errorf("%s.%s = %v, want an array", section, key, value)
 				}
@@ -355,4 +370,16 @@ func lazyPool(t *testing.T) *pgxpool.Pool {
 	}
 	t.Cleanup(pool.Close)
 	return pool
+}
+
+func TestDevMetricsDelivery(t *testing.T) {
+	m := devMetrics{queries: platform.NewQueryCounter(), pool: lazyPool(t), streams: fakeStreams(0)}
+	if got := m.snapshot().Delivery; got != (deliveryMetrics{}) {
+		t.Fatalf("disabled delivery: %+v", got)
+	}
+	m.delivery = &realtime.RecountObserver{}
+	got := m.snapshot().Delivery
+	if !got.Enabled || got.RecountDeliveryStats != m.delivery.Stats() || got.BucketUpperBoundsNS != [5]int64{1e6, 1e7, 1e8, 1e9, 1e10} {
+		t.Fatalf("enabled delivery: %+v", got)
+	}
 }

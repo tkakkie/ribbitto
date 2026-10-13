@@ -35,7 +35,9 @@ type stage2Fixture struct {
 }
 type stage2Gate struct {
 	ID, Scope, Unit, Rule string
-	Limits                []float64
+	// Arms identifies verdict-recording windows; paired gates still need both inputs.
+	Arms   []string
+	Limits []float64
 }
 type stage2Stability struct {
 	AdjacentSeconds, SlideSeconds, BoundaryToleranceSeconds, MaxGapSeconds, BucketSeconds, MinPerBucket int
@@ -57,23 +59,23 @@ func fixedStage2() stage2Protocol {
 				limits = []float64{100, 300, 600}
 			}
 			id := operation + "." + endpoint
-			p.Gates = append(p.Gates, stage2Gate{id, "each async window", "ms", "p50/p95/p99 <= limits", limits},
-				stage2Gate{id + ".paired", "each paired percentile", "fraction,ms", "async <= sync + max(fraction*sync, floor)", []float64{.2, 10}})
+			p.Gates = append(p.Gates, stage2Gate{id, "each async window", "ms", "p50/p95/p99 <= limits", []string{"async"}, limits},
+				stage2Gate{id + ".paired", "async window against paired sync result", "fraction,ms", "async <= sync + max(fraction*sync, floor)", []string{"async"}, []float64{.2, 10}})
 		}
 	}
 	p.Gates = append(p.Gates,
-		stage2Gate{"normal-503", "establishment/posts/reads/pages", "count", "<= limit", []float64{0}},
-		stage2Gate{"replacement-503", "scheduled logical replacements (never attempts)", "fraction,ms", "affected fraction <= limit; every recovery <= limit", []float64{.001, 2000}},
-		stage2Gate{"acquired", "async window", "connections", "p95/p99/max <= limits", []float64{32, 35, 36}},
-		stage2Gate{"saturation", "async window", "fraction,count", "fraction at C <= limit; consecutive samples at C < limit", []float64{.01, 3}},
-		stage2Gate{"empty-acquire", "async window", "fraction", "delta empty / delta acquire <= limit", []float64{.01}},
-		stage2Gate{"empty-wait", "async window", "ms", "delta empty wait / delta empty count <= limit; zero when none", []float64{5}},
-		stage2Gate{"waiting-pressure", "async whole window and every planned 60s bucket", "callers", "delta empty wait / elapsed <= limit", []float64{.1}},
-		stage2Gate{"message-delivery", "continuously connected; HTTP response to complete receipt", "ms", "p95 <= limit", []float64{250}},
-		stage2Gate{"post-freshness", "covering witnessed sidebar after post response", "ms", "p95/p99 <= limits", []float64{2000, 5000}},
-		stage2Gate{"read-freshness", "covering witnessed sidebar after read response", "ms", "p95/p99 <= limits", []float64{2000, 5000}},
-		stage2Gate{"stability", "async; exclude warm-up only from trends", "fraction,bound-fraction,ms", "adjacent 120s means slide 60s; [60,240) vs [420,600); length max(percentage,bound-fraction); age max(percentage,ms)", []float64{.05, .005, 10}},
-		stage2Gate{"complete", "both arms", "count", "missing/missed/timeouts/unexpected statuses/resets/disconnects/live errors/unattributed cancellations/closed admission/underload/telemetry gaps must be zero", []float64{0}})
+		stage2Gate{"normal-503", "establishment/posts/reads/pages", "count", "<= limit", []string{"sync", "async"}, []float64{0}},
+		stage2Gate{"replacement-503", "scheduled logical replacements (never attempts)", "fraction,ms", "affected fraction <= limit; every recovery <= limit", []string{"sync", "async"}, []float64{.001, 2000}},
+		stage2Gate{"acquired", "async window", "connections", "p95/p99/max <= limits", []string{"async"}, []float64{32, 35, 36}},
+		stage2Gate{"saturation", "async window", "fraction,count", "fraction at C <= limit; consecutive samples at C < limit", []string{"async"}, []float64{.01, 3}},
+		stage2Gate{"empty-acquire", "async window", "fraction", "delta empty / delta acquire <= limit", []string{"async"}, []float64{.01}},
+		stage2Gate{"empty-wait", "async window", "ms", "delta empty wait / delta empty count <= limit; zero when none", []string{"async"}, []float64{5}},
+		stage2Gate{"waiting-pressure", "async whole window and every planned 60s bucket", "callers", "delta empty wait / elapsed <= limit", []string{"async"}, []float64{.1}},
+		stage2Gate{"message-delivery", "continuously connected; HTTP response to complete receipt", "ms", "p95 <= limit", []string{"sync", "async"}, []float64{250}},
+		stage2Gate{"post-freshness", "covering witnessed sidebar after post response", "ms", "p95/p99 <= limits", []string{"sync", "async"}, []float64{2000, 5000}},
+		stage2Gate{"read-freshness", "covering witnessed sidebar after read response", "ms", "p95/p99 <= limits", []string{"sync", "async"}, []float64{2000, 5000}},
+		stage2Gate{"stability", "async; exclude warm-up only from trends", "fraction,bound-fraction,ms", "adjacent 120s means slide 60s; [60,240) vs [420,600); length max(percentage,bound-fraction); age max(percentage,ms)", []string{"async"}, []float64{.05, .005, 10}},
+		stage2Gate{"complete", "both arms", "count", "missing/missed/timeouts/unexpected statuses/resets/disconnects/live errors/unattributed cancellations/closed admission/underload/telemetry gaps must be zero", []string{"sync", "async"}, []float64{0}})
 	p.Requirements = []string{
 		"real serve, fresh disposable PostgreSQL, authenticated HTTP/1.1 SSE via loopback HTTP target (no HTTPS negotiation); verify startup settings and metrics",
 		"N distinct members, one stream each; hot feed interests sidebar,messages,typing; initial snapshots before traffic",
@@ -294,8 +296,10 @@ func decodeStage2(raw []byte, dst any) error {
 	var protocol stage2Protocol
 	var configs []stage2Config
 	var gates []stage2Verdict
+	var windowArm string
 	switch v := dst.(type) {
 	case *stage2Window:
+		windowArm = v.Config.Arm.Name
 		gates = v.Gates
 		version, protocol, configs = v.Version, v.Protocol, []stage2Config{v.Config}
 		if v.Kind != "window" {
@@ -344,20 +348,24 @@ func decodeStage2(raw []byte, dst any) error {
 	if version != 1 || !reflect.DeepEqual(protocol, fixedStage2()) {
 		return fmt.Errorf("unknown version or changed protocol")
 	}
+	pinnedGates := make(map[string]stage2Gate, len(protocol.Gates))
 	seenGates := make(map[string]bool, len(protocol.Gates))
 	for _, gate := range protocol.Gates {
-		seenGates[gate.ID] = false
+		pinnedGates[gate.ID] = gate
 	}
 	for _, gate := range gates {
-		seen, known := seenGates[gate.ID]
+		pinned, known := pinnedGates[gate.ID]
 		if !known {
 			return fmt.Errorf("unknown gate ID %q", gate.ID)
 		}
-		if seen {
+		if seenGates[gate.ID] {
 			return fmt.Errorf("duplicate gate ID %q", gate.ID)
 		}
 		if !slices.Contains([]string{"pass", "reject", "inconclusive"}, gate.State) {
 			return fmt.Errorf("invalid gate verdict")
+		}
+		if windowArm != "" && !slices.Contains(pinned.Arms, windowArm) && gate.State != "inconclusive" {
+			return fmt.Errorf("gate %q does not apply to %s window: must be inconclusive", gate.ID, windowArm)
 		}
 		seenGates[gate.ID] = true
 	}

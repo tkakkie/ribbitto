@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -15,14 +16,15 @@ func TestStage2Protocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Pin the entire pre-registration, including scopes and nonnumeric gates.
-	if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != "1911275ad35eae2ccf365dfc022ea3829363254311db8eb0413021f515201215" {
+	// Pin the entire pre-registration, including applicability, scopes and nonnumeric gates.
+	if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != "d2f2e0845d9fe03875f7474de8d0b16ed30a785afb567a929b5e510ca7f9de34" {
 		t.Fatalf("protocol changed: %s", got)
 	}
 	p.Gates[0].Limits[0] = 999
+	p.Gates[0].Arms[0] = "changed"
 	p.Requirements[0] = "changed"
 	next := fixedStage2()
-	if next.Gates[0].Limits[0] != 50 || next.Requirements[0] == "changed" {
+	if next.Gates[0].Limits[0] != 50 || next.Gates[0].Arms[0] != "async" || next.Requirements[0] == "changed" {
 		t.Fatal("protocol shares mutable state")
 	}
 }
@@ -42,7 +44,7 @@ func stage2WindowFixture() stage2Window {
 		Attempts: []stage2Attempt{{Operation: "replacement", LogicalID: 1, Attempt: 2, Status: 503, Outcome: "refused_capacity"}}, Gates: gates}
 }
 
-func TestStage2Schema(t *testing.T) {
+func stage2ManifestFixture() stage2Manifest {
 	w := stage2WindowFixture()
 	p, e, gates := w.Protocol, w.Effective, w.Gates
 	m := stage2Manifest{Version: 1, Kind: "manifest", Protocol: p, Gates: gates}
@@ -53,13 +55,20 @@ func TestStage2Schema(t *testing.T) {
 			}
 		}
 	}
+	return m
+}
+
+func TestStage2Schema(t *testing.T) {
+	w := stage2WindowFixture()
+	p, e, gates := w.Protocol, w.Effective, w.Gates
+	m := stage2ManifestFixture()
 	for i, record := range []any{w, m} {
 		raw, err := json.Marshal(record)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Fixed examples prevent changing the version-1 wire shape unnoticed.
-		if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != [2]string{"d04667221273b7641b8a15435b22fbf93d6eeab683580c8d0d77cb3785c8dcf8", "87eff8c0f68647db6803ca4169e9af26acff718f28b6213d13482d4f3d8f535a"}[i] {
+		if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != [2]string{"bc824fc7f3ea4df8f8c66f5c92c329af85d5efc8ae85918e896bd64ed05a2e9e", "8cba0bdbf1362c7078cef41c9606389ff0170175d542f2ced3e0f4e628ee9fd1"}[i] {
 			t.Errorf("version-1 schema changed: %s", got)
 		}
 		dst := reflect.New(reflect.TypeOf(record)).Interface()
@@ -115,6 +124,7 @@ func TestStage2Schema(t *testing.T) {
 			})
 		}
 		for _, pair := range [][2]string{{`"Version":1`, `"Version":2`}, {`"Round":1`, `"Round":0`}, {`"Streams":1000`, `"Streams":999`}, {`"P95MS":2`, `"P95MS":"bad"`}, {`"Version":1`, `"Version":1,"Version":1`}, {`"State":"inconclusive"`, `"State":"unknown"`},
+			{`"Arms":["async"]`, `"Arms":["sync","async"]`},
 			{`"Early":1`, `"Early":101`}, {`"Early":1`, `"Early":0`}, {`"MinMS":-5`, `"MinMS":0`}, {`"MinMS":0`, `"MinMS":-1`}, {`"MinMS":0`, `"MinMS":1`},
 			{`"MinMS":-2`, `"MinMS":0`}, {`"MinMS":-3`, `"MinMS":0`},
 			{`"Count":100,"Early":1,"MinMS":-5`, `"Count":0,"Early":0,"MinMS":1`}, {`"Count":100,"Early":1,"MinMS":-5`, `"Count":100,"Early":0,"MinMS":2`},
@@ -195,6 +205,49 @@ func TestStage2Schema(t *testing.T) {
 				t.Fatal("round trip changed manifest state/evidence")
 			}
 		})
+	}
+}
+
+func TestStage2GateApplicability(t *testing.T) {
+	p := fixedStage2()
+	for i, gate := range p.Gates {
+		for _, arm := range p.Arms {
+			for _, state := range []string{"pass", "reject", "inconclusive"} {
+				t.Run(arm.Name+"/"+gate.ID+"/"+state, func(t *testing.T) {
+					w := stage2WindowFixture()
+					w.Config.Arm, w.Effective.Startup = arm, arm
+					w.Gates[i].State = state
+					raw, err := json.Marshal(w)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var decoded stage2Window
+					err = decodeStage2(raw, &decoded)
+					if !slices.Contains(gate.Arms, arm.Name) && state != "inconclusive" {
+						want := fmt.Sprintf("gate %q does not apply to %s window: must be inconclusive", gate.ID, arm.Name)
+						if err == nil || err.Error() != want {
+							t.Fatalf("expected non-applicable gate rejection %q, got: %v", want, err)
+						}
+					} else if err != nil {
+						t.Fatalf("applicable or inconclusive gate rejected: %v", err)
+					}
+				})
+			}
+		}
+		for _, state := range []string{"pass", "reject", "inconclusive"} {
+			t.Run("manifest/"+gate.ID+"/"+state, func(t *testing.T) {
+				m := stage2ManifestFixture()
+				m.Gates[i].State = state
+				raw, err := json.Marshal(m)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var decoded stage2Manifest
+				if err := decodeStage2(raw, &decoded); err != nil {
+					t.Fatalf("manifest aggregate gate rejected: %v", err)
+				}
+			})
+		}
 	}
 }
 

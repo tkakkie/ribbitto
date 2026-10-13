@@ -40,8 +40,9 @@ Every transferred reservation is cancelled on exit, including negative cursors,
 watch/reader panics, resets, errors and cancellation. Watch has no error return.
 The shared loop seals computation before watch release; capacity still waits for
 actual computation return. Reserved compatibility tests retain part 1e/1f's
-cursor, watch-publication and fresh-authorization assertions. HTTP pre-admission
-and composition remain parts 2e/2h; production stays synchronous.
+cursor, watch-publication and fresh-authorization assertions. The web stream
+handler pre-admits (part 2e, [streaming](streaming.md#authorization-and-revocation));
+composition remains part 2h, so production stays synchronous.
 
 The writer cancels on every exit and releases its watch on refusal with
 `ErrRecountRefused`. It consumes completions while idle and between batches,

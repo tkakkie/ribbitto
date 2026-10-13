@@ -101,11 +101,14 @@ lock. The bytea row is a test carrier, not a production schema or fan-out test.
 arguments and production event results, never oracle results or a post-write
 recount. Post/read shares one member's implicit and explicit reads. Initial
 bundles include both differently read members; joining eagerly
-materialises a test bundle from its prefix. At every outcome and while writes
-are uncommitted, persisted raw totals/read counts are checked separately, and
-all members' full models match the independent oracle, including raw counts and
-99+ badges. One read-only repeatable-read snapshot is reread across each commit
-or rollback and must retain the same model; fresh snapshots check the outcome.
+materialises a test bundle from its prefix. After every outcome, and while an
+operation has staged its writes but not committed (where a separate snapshot
+sees only the committed state), persisted raw totals/read counts are checked
+separately, and all members' full models match the independent oracle,
+including raw counts and 99+ badges. No check reads the staged state on the
+transaction's own connection before COMMIT. One read-only repeatable-read
+snapshot is reread across each commit or rollback and must retain the same
+model; fresh snapshots check the outcome.
 
 Together with 956a/956b, this completes #956's correctness cases. #957 may start
 after 956c completes; adoption remains undecided. Cost bounds are **estimates**;

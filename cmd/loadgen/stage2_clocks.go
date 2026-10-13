@@ -47,6 +47,8 @@ func newStage2Schedule(group stage2Group, seed uint64, start time.Time) (*stage2
 
 type stage2Observation struct {
 	Slot                stage2Slot
+	Member              uint64
+	MemberSelected      bool
 	Dispatch, Completed time.Time
 	Outcome             string
 	Attempts            []stage2Attempt
@@ -235,4 +237,16 @@ func stage2Summarize(observations []stage2Observation) ([]stage2Operation, []sta
 		}
 	}
 	return ops, attempts
+}
+
+// stage2MemberReadCounts reports attempts, including ambiguous HTTP failures;
+// selection and these counts do not attest persisted read advancement.
+func stage2MemberReadCounts(observations []stage2Observation, n int) []uint64 {
+	counts := make([]uint64, n)
+	for _, o := range observations {
+		if o.Slot.Operation == "read" && o.MemberSelected && len(o.Attempts) != 0 && o.Member < uint64(n) {
+			counts[o.Member]++
+		}
+	}
+	return counts
 }

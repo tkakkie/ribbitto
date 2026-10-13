@@ -54,9 +54,9 @@ func TestStage2ReadDrivers(t *testing.T) {
 	}
 	defer d.transport.CloseIdleConnections()
 	start := time.Unix(123, 0)
-	drive := func(operation, endpoint string, id, postCursor uint64) (stage2Observation, error) {
+	drive := func(operation, endpoint string, id uint64) (stage2Observation, error) {
 		slot = stage2Slot{Operation: operation, Endpoint: endpoint, LogicalID: id, At: start}
-		got, err := d.drive(t.Context(), stage2Observation{Slot: slot}, start, func() time.Time { return start }, "post", postCursor)
+		got, err := d.drive(t.Context(), stage2Observation{Slot: slot}, start, func() time.Time { return start }, "post")
 		serverMu.Lock()
 		completedCalls = calls
 		serverMu.Unlock()
@@ -64,14 +64,17 @@ func TestStage2ReadDrivers(t *testing.T) {
 	}
 	page := func(endpoint string, id uint64) {
 		t.Helper()
-		if got, err := drive("page", endpoint, id, 0); err != nil || got.Outcome != "succeeded" {
+		// Isolate snapshot rules from pool assignment (covered by schedule tests).
+		m, scope := d.readMember(stage2Slot{Endpoint: endpoint, LogicalID: id})
+		m.streamScope = scope
+		if got, err := drive("page", endpoint, id); err != nil || got.Outcome != "succeeded" {
 			t.Fatalf("page: %+v %v", got, err)
 		}
 	}
 	refuse := func(endpoint string, id uint64) {
 		t.Helper()
 		before := completedCalls
-		if _, err := drive("read", endpoint, id, 999999); err == nil || completedCalls != before {
+		if _, err := drive("read", endpoint, id); err == nil || completedCalls != before {
 			t.Fatal("read dispatched without newer unread snapshot")
 		}
 	}
@@ -94,16 +97,16 @@ func TestStage2ReadDrivers(t *testing.T) {
 			status, d.verifyRead = tc.status, nil
 			verified := false
 			if tc.proof != "" {
-				d.verifyRead = func(_ context.Context, s stage2Slot, c uint64) string {
+				d.verifyRead = func(_ context.Context, s stage2Observation, c uint64) string {
 					verified = true
-					if s != slot || c != cursor {
+					if s.Slot != slot || !s.MemberSelected || s.Member != slot.LogicalID%1000 || c != cursor {
 						t.Error("verifier scope/cursor")
 					}
 					return tc.proof
 				}
 			}
 			before := completedCalls
-			got, err := drive("read", tc.endpoint, tc.id, 999999)
+			got, err := drive("read", tc.endpoint, tc.id)
 			if err != nil || got.Outcome != tc.want || len(got.Attempts) != 1 || got.Attempts[0].Outcome != tc.want || completedCalls != before+1 || got.Completed != start {
 				t.Fatalf("read proof outcome: %+v %v requests=%d", got, err, completedCalls-before)
 			}
@@ -125,7 +128,7 @@ func TestStage2ReadDrivers(t *testing.T) {
 	cursor = 100
 	page("feed", 10)
 	page("topic", 10)
-	if _, err := drive("post", "feed", 10, 100); err != nil {
+	if _, err := drive("post", "feed", 10); err != nil {
 		t.Fatal(err)
 	}
 	refuse("topic", 10)
@@ -134,19 +137,19 @@ func TestStage2ReadDrivers(t *testing.T) {
 	cursor++
 	page("feed", 10)
 	page("topic", 10)
-	if _, err := drive("read", "topic", 10, 0); err != nil {
+	if _, err := drive("read", "topic", 10); err != nil {
 		t.Fatal(err)
 	}
 	refuse("feed", 10) // Topic write invalidates the overlapping feed snapshot.
 	page("feed", 10)   // Topic coverage must not suppress other topics in the feed.
-	if got, err := drive("read", "feed", 10, 0); err != nil || got.Outcome != "unverified" {
+	if got, err := drive("read", "feed", 10); err != nil || got.Outcome != "unverified" {
 		t.Fatalf("feed after topic: %+v %v", got, err)
 	}
 	page("topic", 10)
 	refuse("topic", 10)
 	cursor++
 	page("topic", 12)
-	if _, err := drive("post", "topic", 12, cursor); err != nil {
+	if _, err := drive("post", "topic", 12); err != nil {
 		t.Fatal(err)
 	}
 	page("topic", 12)
@@ -156,9 +159,9 @@ func TestStage2ReadDrivers(t *testing.T) {
 	page("feed", 11)
 	refuse("feed", 11) // Own posts/unrelated events alone are insufficient.
 	m, _ := d.readMember(stage2Slot{Endpoint: "feed", LogicalID: 11})
-	m.mu.Lock()
+	m.admission.Lock()
 	refuse("feed", 11)
-	m.mu.Unlock()
+	m.admission.Unlock()
 }
 
 func TestStage2ReadPageEvidence(t *testing.T) {

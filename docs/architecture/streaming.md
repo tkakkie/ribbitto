@@ -78,10 +78,9 @@ The retention period defaults to seven days; see [database configuration](../dat
 
 ### Resource limits
 
-[Recount scheduler](recount-scheduler.md).
+`RunReserved` accepts pre-admission ([scheduler](recount-scheduler.md)).
 
-Cache-load limits, write deadlines, heartbeats, the process and per-account stream caps,
-shutdown and HTTP/2 are in [`stream-limits.md`](stream-limits.md).
+Cache loads, write deadlines, heartbeats, stream caps, shutdown and HTTP/2: [`stream-limits.md`](stream-limits.md).
 
 ## Stream scope
 

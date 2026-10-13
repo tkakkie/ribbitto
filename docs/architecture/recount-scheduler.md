@@ -28,8 +28,23 @@ including that registration's pending successor. This recovery covers the
 computation on the worker, not goroutines started by it. The writer stops on
 completion errors (including panics), wrapping them as synchronous recount errors.
 
-The writer registers once, cancels on every exit and releases its watch on refusal
-with `ErrRecountRefused`. It consumes completions while idle and between batches,
+`Stream.Run` registers once when configured, preserving its nil/synchronous path.
+Part 2d adds `RunReserved`: the caller reserves with `Register` and transfers that
+registration once, even across concurrent entries. It never registers again.
+Nil, cancelled or consumed reservations return `ErrRecountRefused`; rejected reuse
+does not cancel the first owner. A different non-nil `Stream.Recounts` scheduler
+also returns that error and cancels the transferred reservation. With `Recounts`
+nil, the reservation supplies scheduling. The caller must cancel if it never hands
+off. Without sidebar interest or a source, entry cancels immediately before reading.
+Every transferred reservation is cancelled on exit, including negative cursors,
+watch/reader panics, resets, errors and cancellation. Watch has no error return.
+The shared loop seals computation before watch release; capacity still waits for
+actual computation return. Reserved compatibility tests retain part 1e/1f's
+cursor, watch-publication and fresh-authorization assertions. HTTP pre-admission
+and composition remain parts 2e/2h; production stays synchronous.
+
+The writer cancels on every exit and releases its watch on refusal with
+`ErrRecountRefused`. It consumes completions while idle and between batches,
 accepting only versions newer than the last sent; later invalidations stay dirty.
 Each completed attempt starts the unchanged `SidebarInterval`. Computations capture
 the watch generation at their boundary, guarded against access after release;

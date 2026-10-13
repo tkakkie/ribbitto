@@ -29,9 +29,22 @@ type RecountRegistration struct {
 	ctx                        context.Context
 	cancel                     context.CancelFunc
 	closed, running            bool
+	consumed                   bool
 	pending                    *recountRequest
 	pendingSince, runningSince time.Time
 	done                       chan RecountCompletion
+}
+
+// consume transfers a reservation to one stream, including concurrent callers.
+// Refusing reuse must not cancel work belonging to the successful caller.
+func (r *RecountRegistration) consume() bool {
+	r.q.mu.Lock()
+	defer r.q.mu.Unlock()
+	if r.closed || r.consumed {
+		return false
+	}
+	r.consumed = true
+	return true
 }
 
 type recountRequest struct {

@@ -21,7 +21,9 @@
 // immediately before sending without moving the cursor. Sidebar sources supply
 // full recounts at connect and on consumer-defined organisation-wide triggers.
 // Optional member watches subscribe before the first recount and release on exit.
-// Optional RecountScheduler bounds computations and registrations; the writer
+// Optional RecountScheduler bounds computations and registrations; RunReserved
+// consumes admission once and cancels on every exit, releasing unused reservations
+// immediately. The writer
 // alone sends completions, with each request's own captured watch generation
 // and an exit seal before release (docs/architecture/recount-scheduler.md).
 // Generations captured before fresh snapshots are covered only after send or

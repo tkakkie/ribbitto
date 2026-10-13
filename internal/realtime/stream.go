@@ -139,6 +139,31 @@ var errHeartbeatDue = errors.New("realtime: heartbeat due")
 // rendered and immediately before it is sent, including ones read in an
 // earlier batch, since access may have been lost in between.
 func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Sender) (int64, error) {
+	return s.run(ctx, sub, cursor, send, nil)
+}
+
+// RunReserved consumes an already-admitted registration without registering again.
+// It returns ErrRecountRefused for nil, cancelled or already-consumed reservations,
+// or a reservation from a different non-nil Recounts scheduler. A failed second
+// consumption does not cancel the first owner's stream. Every consumed reservation
+// is cancelled on exit, or immediately when sidebar delivery is unwired/unwanted.
+// With Recounts nil, the reservation supplies the scheduler. Delivery follows Run.
+func (s Stream) RunReserved(ctx context.Context, sub Subscription, cursor int64, send Sender, registration *RecountRegistration) (int64, error) {
+	if registration == nil || !registration.consume() {
+		return cursor, ErrRecountRefused
+	}
+	defer registration.Cancel()
+	if s.Recounts != nil && s.Recounts != registration.q {
+		return cursor, ErrRecountRefused
+	}
+	if s.Sidebar == nil || !slices.Contains(sub.Interests, InterestSidebar) {
+		registration.Cancel()
+		registration = nil
+	}
+	return s.run(ctx, sub, cursor, send, registration)
+}
+
+func (s Stream) run(ctx context.Context, sub Subscription, cursor int64, send Sender, registration *RecountRegistration) (int64, error) {
 	if cursor < 0 {
 		return cursor, fmt.Errorf("negative cursor %d", cursor)
 	}
@@ -160,8 +185,10 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		}
 	}
 	var scheduled *scheduledSidebar
-	if sidebar.dirty && s.Recounts != nil {
-		registration := s.Recounts.Register()
+	if sidebar.dirty && (registration != nil || s.Recounts != nil) {
+		if registration == nil {
+			registration = s.Recounts.Register()
+		}
 		if registration == nil {
 			return cursor, ErrRecountRefused
 		}

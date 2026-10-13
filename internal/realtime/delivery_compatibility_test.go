@@ -31,12 +31,38 @@ func compatibilityStream(t *testing.T, s Stream, selected *Subscription, schedul
 	return s
 }
 
-func runCompatibilityAsync(ctx context.Context, t *testing.T, s Stream, cursor int64, send Sender, scheduled bool) <-chan result {
+func runCompatibilityAsync(ctx context.Context, t *testing.T, s Stream, cursor int64, send Sender, scheduled bool, reserved ...bool) <-chan result {
 	selected := sub
 	s = compatibilityStream(t, s, &selected, scheduled)
 	done := make(chan result, 1)
-	go func() { c, err := s.Run(ctx, selected, cursor, send); done <- result{c, err} }()
+	go func() {
+		c, err := runCompatibility(ctx, s, selected, cursor, send, len(reserved) > 0 && reserved[0])
+		done <- result{c, err}
+	}()
 	return done
+}
+
+func runCompatibility(ctx context.Context, s Stream, selected Subscription, cursor int64, send Sender, reserved bool) (int64, error) {
+	if reserved {
+		return s.RunReserved(ctx, selected, cursor, send, s.Recounts.Register())
+	}
+	return s.Run(ctx, selected, cursor, send)
+}
+
+func TestReservedDeliveryCompatibility(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		run  func(*testing.T, bool)
+	}{
+		{"cold hub", func(t *testing.T, reserved bool) { testStreamColdHubEntry(t, true, reserved) }},
+		{"render revocation", func(t *testing.T, reserved bool) { testStreamRenderRevocationEntry(t, true, reserved) }},
+		{"authorization frames", testScheduledAuthorizationFrames},
+		{"audience cursor", testScheduledAuthorizationAudienceCursor},
+		{"exit gates", testScheduledAuthorizationExitGates},
+		{"watch publications", testScheduledWatchPublications},
+	} {
+		t.Run(tc.name, compatibilityCase(tc.name == "cold hub" || tc.name == "render revocation", func(t *testing.T) { tc.run(t, true) }))
+	}
 }
 
 func compatibilityCase(scheduled bool, run func(*testing.T)) func(*testing.T) {

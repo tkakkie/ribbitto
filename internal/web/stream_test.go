@@ -449,7 +449,7 @@ func TestOpenStreamCleanup(t *testing.T) {
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			}
 			w := httptest.NewRecorder()
-			ctx, cleanup, ok := p.openStream(w, r, kernel.ID{9}, kernel.ID{1}, kernel.ID{3}, place.Channel, live)
+			ctx, cleanup, ok := p.openStream(w, r, kernel.ID{9}, kernel.ID{1}, kernel.ID{3}, place.Channel, live, nil)
 			if cleanup != nil {
 				t.Cleanup(cleanup)
 			}

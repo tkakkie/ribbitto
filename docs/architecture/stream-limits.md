@@ -144,18 +144,16 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   registration lock, refusing an excess stream with 429 before registration
   or any SSE header, without taking an account slot. Only unregistering
   frees a slot; cancellation alone still counts.
-- An account holds at most `DefaultMaxStreamsPerAccount` (16) streams,
-  counted atomically by the hub's registration (#157, #207). One more is
-  refused with 429 before it starts, rather than closing the oldest, which
-  would make that tab reconnect and close the next, forever. The htmx SSE
-  extension retries a refused stream with back-off, 0.5 s doubling to 64 s,
-  and connects once a slot frees. The count is per process; there are no
-  limits per address or installation-wide.
-- On shutdown, the server ends every stream first (`RegisterOnShutdown`
-  with `Hub.CancelAll`, cause `ErrShutdown`): an open stream never goes
-  idle, so `Shutdown` would otherwise wait for it until its deadline. The
-  hub then refuses every registration, so a request accepted just before
-  gets 503 instead of a stream.
-  Browsers reconnect to the next process and replay from their cursor.
-  Production serves HTTP/2 through Caddy, because browsers allow only six
-  HTTP/1.1 connections per origin.
+- The hub atomically caps accounts at 16 (`DefaultMaxStreamsPerAccount`, #157,
+  #207); excess streams get 429. Closing the oldest would cause endless reconnects.
+  htmx retries (0.5 s doubling to 64 s) until a slot frees. Caps are per process,
+  not per address or installation-wide.
+- Optional `Streaming.Recounts` reserves sidebar interests with non-nil sources after hub
+  registration and session recheck/expiry, before presence/typing or SSE/200.
+  Full/closed schedulers return plain-text 503, free the hub slot and open no
+  presence/typing; hub overflow stays 429. The handler cancels unused reservations;
+  `RunReserved` owns accepted ones. No synchronous fallback; nil stays synchronous.
+- `RegisterOnShutdown` calls `Hub.CancelAll` (`ErrShutdown`) to cancel streams
+  before `Shutdown`, which otherwise waits for its deadline, and stop admission
+  (503). Browsers reconnect and replay. Production uses Caddy HTTP/2; HTTP/1.1
+  browsers allow six connections per origin.

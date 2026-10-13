@@ -61,24 +61,23 @@ The retention period defaults to seven days; see [database configuration](../dat
   `openStream` helper owns registration, the re-check and the expiry deadline.
   It frees failed registrations; on success, the handler defers one cleanup
   function that cancels the expiry context, unregisters the stream and
-  releases its presence and channel typing counts. Only a successful registration and session
-  re-check count, through `Streaming.StreamOpened` with the resolved
-  organisation, member and channel; every interest counts.
+  releases presence/typing counts. `Streaming.Recounts` admits sidebar interests
+  with a non-nil source after recheck/expiry, before presence/typing and SSE/200.
+  Full/closed schedulers return plain-text 503 with no retained request slots or
+  presence/typing; no synchronous fallback. `StreamOpened` counts every interest
+  with resolved organisation/member/channel IDs.
   Typing uses separate channel counts: the last matching close clears activity
   immediately ([typing lifetime](typing.md)); failed opens take no count. Presence stays online
   until 30 s after the last close; a reconnect cancels expiry.
-  Cancellation before the first write answers 404 for an ended session or
-  503 for shutdown, without committing SSE headers. The status is
-  committed by `WriteHeader` outside the sender, after one more look at the
-  context: the sender expires the write deadline on cancellation, which
-  over HTTP/2 resets the stream, so the answer would never arrive. A
-  cancellation after `WriteHeader` (a window no lock can close) ends a
-  stream that has started, without trying to change its HTTP status
-  (maintainer's decision on #315).
+  Before HTTP commitment, cancellation answers 404 for an ended session or 503
+  for shutdown. `WriteHeader` commits after a final context check, outside the
+  sender whose cancellation deadline resets HTTP/2. Later cancellation ends
+  the started stream without changing status (decision on #315).
 
 ### Resource limits
 
-`RunReserved` accepts pre-admission ([scheduler](recount-scheduler.md)).
+`Streaming.Recounts` enables pre-admission ([scheduler](recount-scheduler.md));
+nil preserves synchronous recounts. Production leaves it nil until #865 part 2h.
 
 Cache loads, write deadlines, heartbeats, stream caps, shutdown and HTTP/2: [`stream-limits.md`](stream-limits.md).
 

@@ -11,6 +11,44 @@ them into the shell as shown in the README. `.env` is ignored by Git.
 
 See [worktree environments](worktree-env.md) for per-worktree dev databases, ports, health checks and cleanup.
 
+## Recount capacity configuration
+
+`serve` accepts `RIBBITTO_ASYNC_RECOUNTS=on|off`; unset or empty means off,
+and any other value fails startup. Off ignores all seven budget inputs below,
+including malformed stray values, and preserves the database URL's pool settings
+and pgx defaults. On requires every input explicitly, with no defaults:
+
+| Environment variable | Budget input |
+|---|---|
+| `RIBBITTO_POOL_MAX_CONNS` | C: pool maximum per process |
+| `RIBBITTO_RECOUNT_WORKERS` | W: configured recount workers |
+| `RIBBITTO_DB_MAX_CONNECTIONS` | M: PostgreSQL max_connections |
+| `RIBBITTO_DB_RESERVED_CONNECTIONS` | R: reserved connections |
+| `RIBBITTO_DB_EXTERNAL_CONNECTIONS` | E: external/operations connections |
+| `RIBBITTO_DB_PROCESSES` | P: maximum simultaneous ribbitto processes |
+| `RIBBITTO_DB_NORMAL_HEADROOM` | H: connections for normal work per process |
+
+All inputs must be signed 32-bit integers: C, W, M and P positive; R, E and H
+non-negative. Startup reports all violated input and budget rules together:
+`B = floor((M-R-E)/P)`, `0 < C <= B`, `0 < W <= C-H`. Deployment inputs
+are operator declarations, not discovered database settings. Include overlap
+during deployments in P. The registration limit is the effective
+`RIBBITTO_MAX_STREAMS`, with no separate setting.
+
+With M=100, R=3, E=20, P=2 and H=10, B=38. C=36 and W=26 pass;
+C=39 or W=27 fail. **36/26 is a validation configuration, not a production
+default.** On applies C before opening the pool, overriding `pool_max_conns`
+in the database URL. The platform's `PoolOptions.MaxConns=0` preserves existing
+pool behavior. A startup `slog` record includes the effective pool maximum,
+configured budget, stream registration limit and synchronous delivery mode;
+no database URL or credentials are logged.
+
+Part 2c of #865 only validates capacity and sets the pool maximum: **both on
+and off still deliver recounts synchronously**, with no scheduler constructed.
+Activation belongs to part 2h; see the [scheduler contract](architecture/recount-scheduler.md).
+
+## Database workflow
+
 `make db-up` starts PostgreSQL 18 on loopback port 5432 and waits for its
 health check. Its password is for development only. `make db-down` stops
 it without deleting the named volume at `/var/lib/postgresql`.

@@ -122,3 +122,16 @@ error/panic tests and mutations cover both classifications, including cancellati
 after processing; commands and failing assertions are in the part 2b PR body.
 Production remains synchronous. Processing time is
 not recount freshness: delivery timing and mixed-load validation remain later work.
+
+Part 2c adds command-local [explicit capacity configuration](../database.md#recount-capacity-configuration).
+`RIBBITTO_ASYNC_RECOUNTS` defaults to off (also for empty); only on and off
+are accepted. Off ignores stray budget inputs and leaves pgx pool behavior
+unchanged. On requires explicit C/W/M/R/E/P/H without defaults and validates
+`B = floor((M-R-E)/P)`, `0 < C <= B` and `0 < W <= C-H` before workers or
+listeners start. C overrides the URL's pool maximum; registration capacity
+comes from the effective process stream cap, with no extra setting.
+M=100, R=3, E=20, P=2, H=10 gives B=38: C=36/W=26 passes, while
+C=39 or W=27 fails. **36/26 is a validation configuration, not a production
+default.** Startup logs non-secret effective capacity once. No scheduler is
+constructed in this part: on and off both retain synchronous delivery until
+part 2h supplies opt-in composition.

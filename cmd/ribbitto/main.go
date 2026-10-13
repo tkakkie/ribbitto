@@ -75,6 +75,10 @@ func serve(ctx context.Context, databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	recounts, err := recountConfiguration(streamCap)
+	if err != nil {
+		return err
+	}
 
 	authorizationCapacity, err := authorizationCacheCapacity(streamCap)
 	if err != nil {
@@ -109,11 +113,16 @@ func serve(ctx context.Context, databaseURL string) error {
 		return err
 	}
 
-	pool, err := platform.OpenPool(ctx, databaseURL, queries)
+	pool, err := platform.OpenPoolWithOptions(ctx, databaseURL, queries, platform.PoolOptions{MaxConns: int32(recounts.poolMax)})
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
 	defer pool.Close()
+	slog.Info("recount capacity configuration", "async_recounts", recounts.enabled, "delivery", "synchronous",
+		"pool_max_conns", pool.Config().MaxConns, "configured_workers", recounts.workers,
+		"max_connections", recounts.maxConnections, "reserved", recounts.reserved, "external", recounts.external,
+		"processes", recounts.processes, "normal_headroom", recounts.headroom, "process_budget", recounts.budget,
+		"registration_limit", recounts.registrationLimit)
 	// Cancel cache loads before closing the pool on every exit path.
 	ctx, cancelLoads := context.WithCancel(ctx)
 	defer cancelLoads()

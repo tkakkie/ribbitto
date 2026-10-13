@@ -360,6 +360,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Typing:        typingState,
 		SignalLimits:  middleware.NewMemberRateLimiter(time.Now),
 		ReadLimits:    config.readLimits,
+		CreateLimits:  middleware.NewChannelCreationRateLimiter(time.Now),
 	})
 	if err != nil {
 		return nil, nil, err

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -207,5 +208,37 @@ func TestChannelCreationLimit(t *testing.T) {
 				t.Fatalf("status %d, body %s", w.Code, body)
 			}
 		})
+	}
+}
+
+func TestChannelCreationAdmission(t *testing.T) {
+	fake := &fakeChannels{}
+	limits := middleware.NewChannelCreationRateLimiter(time.Now)
+	handler, _ := newLimitedHandler(t, asAlice, func(s *Services) { s.Channels = fake; s.CreateLimits = limits })
+	// Session and membership resolution precede admission; denied callers cannot
+	// consume the member's budget. The org route suite also proves their 404s.
+	r := httptest.NewRequest("POST", "/organizations/unknown/channels", strings.NewReader("name=%zz"))
+	r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != 404 {
+		t.Fatalf("non-member: %d", w.Code)
+	}
+	for i := range 11 {
+		r := httptest.NewRequest("POST", "/organizations/acme/channels", strings.NewReader("name=%zz"))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		want := 400
+		if i == 10 {
+			want = 429
+		}
+		if w.Code != want || (want == 429 && w.Header().Get("Retry-After") != "60") {
+			t.Fatalf("request %d: status %d, retry %q", i, w.Code, w.Header().Get("Retry-After"))
+		}
+	}
+	if fake.created != "" {
+		t.Fatal("refusal reached channel creation")
 	}
 }

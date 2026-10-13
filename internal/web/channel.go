@@ -46,6 +46,7 @@ type TopicLookup interface {
 type channelPages struct {
 	typing           *typing.State
 	limiter          *middleware.MemberRateLimiter
+	createLimit      *middleware.MemberRateLimiter
 	readLimit        *middleware.MemberRateLimiter
 	reading          Reading
 	branching        Branching
@@ -163,6 +164,11 @@ func (p channelPages) invalidQuery(w http.ResponseWriter, r *http.Request, m org
 }
 
 func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membership) {
+	if !p.createLimit.Allow(m.Organization.ID, m.Member.ID) {
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
 	if !parseForm(w, r) {
 		return
 	}

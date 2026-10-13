@@ -29,6 +29,8 @@ checks from message, topic and unread inserts. It then counts channels in a
 fresh snapshot before the guarded channel/default-topic insert.
 At the cap, the form returns localised 422 and keeps the name and image.
 Lowering the cap blocks new channels without removing existing ones.
+Creation also has a separate per-member budget: burst 10, then one per minute
+([rate limits](../architecture/rate-limits.md)).
 
 ## Images
 

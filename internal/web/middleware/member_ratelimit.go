@@ -45,6 +45,12 @@ func NewReadRateLimiter(now func() time.Time) *MemberRateLimiter {
 	return NewMemberRateLimiterWithBudget(now, 4, 16, 4)
 }
 
+// NewChannelCreationRateLimiter returns an independent burst of 10, then one
+// token per minute per organisation/member; share it across all create callers.
+func NewChannelCreationRateLimiter(now func() time.Time) *MemberRateLimiter {
+	return NewMemberRateLimiterWithBudget(now, 1.0/60, 10, 0)
+}
+
 // NewMemberRateLimiterWithBudget supplies an explicit trusted budget, including
 // for fixtures whose intentional request sequences exceed production limits.
 // Rate and burst must be positive; concurrent zero leaves slots unlimited.

@@ -28,8 +28,8 @@ type orgRoute struct {
 // orgRoutes lists every route under /organizations/{slug}/. The same list
 // registers the routes and drives the tests that prove non-members get
 // 404, so a route cannot be added without those tests covering it.
-func orgRoutes(pages *pageRenderer, channels Channels, topics TopicLookup, messages MessageReader, posting *conversation.Posting, branching Branching, stream *Streaming, reading Reading, typingState *typing.State, limiter, readLimit *middleware.MemberRateLimiter) []orgRoute {
-	handlers := channelPages{typing: typingState, limiter: limiter, readLimit: readLimit, reading: reading, pages: pages, channels: channels, topics: topics, messages: messages, posting: posting, branching: branching, stream: stream}
+func orgRoutes(pages *pageRenderer, channels Channels, topics TopicLookup, messages MessageReader, posting *conversation.Posting, branching Branching, stream *Streaming, reading Reading, typingState *typing.State, limiter, readLimit *middleware.MemberRateLimiter, createLimit *middleware.MemberRateLimiter) []orgRoute {
+	handlers := channelPages{typing: typingState, limiter: limiter, readLimit: readLimit, createLimit: createLimit, reading: reading, pages: pages, channels: channels, topics: topics, messages: messages, posting: posting, branching: branching, stream: stream}
 	if stream != nil {
 		handlers.renders = newRenderCache(stream.Lifetime)
 	}

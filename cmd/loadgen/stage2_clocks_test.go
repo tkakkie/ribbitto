@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -115,6 +116,7 @@ type stage2FakeHTTP struct {
 	now    *time.Time
 	status int
 	err    error
+	body   *stage2FakeBody
 }
 
 func (f stage2FakeHTTP) RoundTrip(*http.Request) (*http.Response, error) {
@@ -122,17 +124,31 @@ func (f stage2FakeHTTP) RoundTrip(*http.Request) (*http.Response, error) {
 	if f.err != nil && f.err != io.ErrUnexpectedEOF {
 		return nil, f.err
 	}
-	return &http.Response{StatusCode: f.status, Body: &stage2FakeBody{now: f.now, err: f.err}}, nil
+	body := f.body
+	if body == nil {
+		body = &stage2FakeBody{now: f.now, err: f.err}
+	}
+	return &http.Response{StatusCode: f.status, Body: body}, nil
 }
 
 type stage2FakeBody struct {
-	now  *time.Time
-	read bool
-	err  error
+	now        *time.Time
+	read       bool
+	err        error
+	reader     io.Reader
+	consumed   int
+	closedAt   time.Time
+	closeDelay time.Duration
+	closeErr   error
 }
 
 func (b *stage2FakeBody) Read(p []byte) (int, error) {
 	*b.now = b.now.Add(3 * time.Millisecond)
+	if b.reader != nil {
+		n, err := b.reader.Read(p)
+		b.consumed += n
+		return n, err
+	}
 	if b.read {
 		if b.err != nil {
 			return 0, b.err
@@ -142,7 +158,11 @@ func (b *stage2FakeBody) Read(p []byte) (int, error) {
 	b.read = true
 	return copy(p, "state"), nil
 }
-func (b *stage2FakeBody) Close() error { return nil }
+func (b *stage2FakeBody) Close() error {
+	b.closedAt = *b.now
+	*b.now = b.now.Add(b.closeDelay)
+	return b.closeErr
+}
 
 func TestStage2HTTPAccounting(t *testing.T) {
 	start := time.Unix(123, 0)
@@ -153,12 +173,12 @@ func TestStage2HTTPAccounting(t *testing.T) {
 		changed bool
 		outcome string
 	}{
-		{200, nil, true, "changed"}, {200, nil, false, "noop"}, {503, nil, false, "failed"}, {0, context.DeadlineExceeded, false, "timeout"}, {200, io.ErrUnexpectedEOF, false, "failed"},
+		{204, nil, true, "changed"}, {204, nil, false, "noop"}, {503, nil, false, "failed"}, {0, context.DeadlineExceeded, false, "timeout"}, {204, io.ErrUnexpectedEOF, false, "failed"},
 	} {
 		now := start.Add(time.Millisecond)
 		req, _ := http.NewRequest(http.MethodPost, "http://127.0.0.1/read", nil)
 		o := stage2Observation{Slot: stage2Slot{Operation: "read", Endpoint: "feed", LogicalID: uint64(i), At: start}}
-		o = stage2HTTP(context.Background(), stage2FakeHTTP{&now, tc.status, tc.err}, req, o, start, func() time.Time { return now }, func(body []byte) bool {
+		o = stage2HTTP(context.Background(), stage2FakeHTTP{now: &now, status: tc.status, err: tc.err}, req, o, start, func() time.Time { return now }, func(body []byte) bool {
 			if string(body) != "state" {
 				t.Fatal("incomplete body")
 			}
@@ -186,6 +206,90 @@ func TestStage2HTTPAccounting(t *testing.T) {
 	}
 	if err := decodeStage2(raw, &stage2Window{}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestStage2HTTPStatuses(t *testing.T) {
+	for _, tc := range []struct {
+		operation, endpoint string
+		status              int
+		outcome             string
+	}{
+		{"post", "feed", 200, "succeeded"}, {"post", "feed", 303, "failed"},
+		{"post", "topic", 303, "succeeded"}, {"post", "topic", 200, "failed"},
+		{"read", "feed", 204, "changed"}, {"read", "feed", 200, "failed"}, {"read", "feed", 303, "failed"},
+		{"read", "topic", 204, "changed"}, {"read", "topic", 200, "failed"},
+		{"page", "feed", 200, "succeeded"}, {"page", "topic", 200, "succeeded"}, {"page", "topic", 204, "failed"},
+		{"replacement", "feed", 200, "succeeded"}, {"replacement", "topic", 200, "succeeded"}, {"replacement", "topic", 503, "failed"},
+	} {
+		t.Run(tc.operation+"/"+tc.endpoint+"/"+http.StatusText(tc.status), func(t *testing.T) {
+			start := time.Unix(123, 0)
+			now := start
+			body := &stage2FakeBody{now: &now, reader: strings.NewReader("")}
+			req, _ := http.NewRequest(http.MethodPost, "http://127.0.0.1/", nil)
+			req.Header.Set("HX-Request", "true")
+			o := stage2Observation{Slot: stage2Slot{Operation: tc.operation, Endpoint: tc.endpoint, At: start}}
+			verified := false
+			o = stage2HTTP(context.Background(), stage2FakeHTTP{now: &now, status: tc.status, body: body}, req, o, start, func() time.Time { return now }, func(proof []byte) bool {
+				if len(proof) != 0 {
+					t.Fatal("read verifier must work with an empty response")
+				}
+				verified = true
+				return true // Stand-in for persisted read-state proof from later slices.
+			})
+			if o.Outcome != tc.outcome || verified != (tc.outcome == "changed") {
+				t.Fatalf("%s %s status %d: outcome=%s verified=%v, want %s", tc.operation, tc.endpoint, tc.status, o.Outcome, verified, tc.outcome)
+			}
+		})
+	}
+}
+
+func TestStage2HTTPBoundedBody(t *testing.T) {
+	start := time.Unix(123, 0)
+	now := start
+	size := stage2ProofBodyLimit + 8192
+	body := &stage2FakeBody{now: &now, reader: strings.NewReader(strings.Repeat("x", size))}
+	req, _ := http.NewRequest(http.MethodPost, "http://127.0.0.1/read", nil)
+	o := stage2Observation{Slot: stage2Slot{Operation: "read", Endpoint: "feed", At: start}}
+	verified := false
+	o = stage2HTTP(context.Background(), stage2FakeHTTP{now: &now, status: 204, body: body}, req, o, start, func() time.Time { return now }, func(proof []byte) bool {
+		if len(proof) != stage2ProofBodyLimit || string(proof) != strings.Repeat("x", stage2ProofBodyLimit) {
+			t.Fatalf("retained proof: %d bytes, want the bounded %d-byte prefix", len(proof), stage2ProofBodyLimit)
+		}
+		verified = true
+		return true
+	})
+	if body.consumed != size {
+		t.Fatalf("body consumed: %d bytes, want all %d", body.consumed, size)
+	}
+	if !verified || o.Outcome != "changed" || o.Completed != body.closedAt {
+		t.Fatalf("oversized body must drain before clock end without failing: %+v", o)
+	}
+}
+
+func TestStage2HTTPClockBeforeClose(t *testing.T) {
+	for _, tc := range []struct {
+		err     error
+		outcome string
+	}{{nil, "changed"}, {io.ErrClosedPipe, "failed"}, {context.DeadlineExceeded, "timeout"}} {
+		t.Run(tc.outcome, func(t *testing.T) {
+			start := time.Unix(123, 0)
+			now := start
+			body := &stage2FakeBody{now: &now, reader: strings.NewReader(""), closeDelay: 100 * time.Millisecond, closeErr: tc.err}
+			req, _ := http.NewRequest(http.MethodPost, "http://127.0.0.1/read", nil)
+			o := stage2Observation{Slot: stage2Slot{Operation: "read", Endpoint: "feed", At: start}}
+			o = stage2HTTP(context.Background(), stage2FakeHTTP{now: &now, status: 204, body: body}, req, o, start, func() time.Time { return now }, func([]byte) bool {
+				now = now.Add(20 * time.Millisecond)
+				return true
+			})
+			ops, _ := stage2Summarize([]stage2Observation{o})
+			if o.Completed != start.Add(5*time.Millisecond) || ops[2].HTTP != (stage2Latency{1, 5, 5, 5}) {
+				t.Fatalf("Close or verification inflated HTTP time: completed=%s HTTP=%+v, want 5ms", o.Completed.Sub(start), ops[2].HTTP)
+			}
+			if body.closedAt != o.Completed || now.Before(start.Add(105*time.Millisecond)) || o.Outcome != tc.outcome {
+				t.Fatalf("Close must run and retain its error: closed=%s outcome=%s, want %s", body.closedAt.Sub(start), o.Outcome, tc.outcome)
+			}
+		})
 	}
 }
 

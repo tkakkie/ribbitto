@@ -83,8 +83,36 @@ func (o *stage2Observation) finish(start, dispatch, end, offline time.Time, atte
 		o.Slot.LogicalID, attempt, status, dispatch.Sub(start).Nanoseconds(), outage.Nanoseconds()})
 }
 
+// Retain at most 1 MiB for proof, matching main.go's POST drain cap (page
+// parsing there allows 16 MiB). Excess bytes are drained, not an outcome failure;
+// a verifier that uses response bytes must work with only this prefix.
+const stage2ProofBodyLimit = 1 << 20
+
+// Stage-2 feed POSTs and reads use HX-Request: true. Both places share handlers:
+// internal/web/channel.go:301-304 returns 200 for feed POSTs, 303 for topic POSTs;
+// internal/web/read.go:65-68 returns 204 for reads, with no response-body proof;
+// internal/web/channel.go:108-112 returns 200 for page GETs;
+// internal/web/stream.go:153-161 returns 200 for SSE connects. Later slices drive
+// replacement streams; this HTTP helper does not measure SSE establishment.
+func stage2SuccessStatus(slot stage2Slot) int {
+	switch slot.Operation {
+	case "post":
+		if slot.Endpoint == "topic" {
+			return http.StatusSeeOther
+		}
+		return http.StatusOK
+	case "read":
+		return http.StatusNoContent
+	case "page", "replacement":
+		return http.StatusOK
+	default:
+		return 0
+	}
+}
+
 // Exactly one HTTP exchange; RoundTrip avoids redirect-generated POST retries.
-// changed must confirm persisted read advancement, not merely a 200 response.
+// changed must confirm persisted read advancement using proof supplied by later
+// slices (e.g. read state), independently of the empty 204 response body.
 func stage2HTTP(ctx context.Context, rt http.RoundTripper, req *http.Request, o stage2Observation, start time.Time, now func() time.Time, changed func([]byte) bool) stage2Observation {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -92,20 +120,26 @@ func stage2HTTP(ctx context.Context, rt http.RoundTripper, req *http.Request, o 
 	response, err := rt.RoundTrip(req.WithContext(ctx))
 	status, outcome := 0, "failed"
 	var body []byte
+	var end time.Time
 	if err == nil {
 		status = response.StatusCode
-		body, err = io.ReadAll(response.Body)
+		body, err = io.ReadAll(io.LimitReader(response.Body, stage2ProofBodyLimit))
+		if err == nil && len(body) == stage2ProofBodyLimit {
+			_, err = io.Copy(io.Discard, response.Body)
+		}
+		// Stop at complete-body consumption, before closing or read verification.
+		end = now()
 		closeErr := response.Body.Close()
 		if err == nil {
 			err = closeErr
 		}
+	} else {
+		end = now()
 	}
-	// Stop the HTTP clock at complete-body consumption, before read verification.
-	end := now()
 	var netErr net.Error
 	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
 		outcome = "timeout"
-	} else if err == nil && status == http.StatusOK {
+	} else if err == nil && status == stage2SuccessStatus(o.Slot) {
 		outcome = "succeeded"
 		if o.Slot.Operation == "read" {
 			outcome = "unverified"

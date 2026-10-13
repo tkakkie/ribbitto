@@ -42,6 +42,9 @@ type Services struct {
 	Stream        *Streaming             // nil: the channel event stream answers 404
 }
 
+// staticContentSecurityPolicy applies to every /static/ response.
+const staticContentSecurityPolicy = "default-src 'none'; sandbox"
+
 // NewHandler constructs the application's HTTP routes. A non-empty devAssets
 // directory serves live assets from disk instead of the embedded production assets.
 func NewHandler(devAssets string, catalogues *i18n.Catalogues, services Services) (http.Handler, error) {
@@ -127,7 +130,21 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Every method reaches this handler, so even a refusal carries the
+	// static headers; the method check is explicit rather than left to the
+	// file server.
+	mux.Handle("/static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Static files bypass SecurityHeaders. An SVG opened directly is a
+		// document on this origin, so it gets no script, no loads and a
+		// sandbox; pages using a file as <img>, <use>, a script or a
+		// stylesheet ignore a subresource's own policy.
+		w.Header().Set("Content-Security-Policy", staticContentSecurityPolicy)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		// Only successful file responses are immutable; missing assets may appear later.
 		info, err := fs.Stat(assets, r.URL.Path)
 		if err != nil || info.IsDir() {

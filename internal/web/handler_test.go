@@ -68,6 +68,55 @@ func TestHandler(t *testing.T) {
 	}
 }
 
+// TestStaticHeaders: static files bypass SecurityHeaders, so the static
+// handler sends its own nosniff and CSP on every response, found or not,
+// and refuses methods other than GET and HEAD with 405 and Allow,
+// from the embedded assets and from a development directory.
+func TestStaticHeaders(t *testing.T) {
+	for _, dir := range []string{"", filepath.Join("..", "..", "web", "static")} {
+		handler, err := newTestHandler(t, dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tt := range []struct {
+			method, path, rangeHeader string
+			code                      int
+		}{
+			{http.MethodGet, "/static/brand/logo-v1.svg", "", http.StatusOK},
+			{http.MethodGet, "/static/channel-images-v1/lake.svg", "", http.StatusOK},
+			{http.MethodGet, "/static/arrival-v1.js", "", http.StatusOK},
+			{http.MethodGet, "/static/css/app.css", "", http.StatusOK},
+			{http.MethodHead, "/static/brand/logo-v1.svg", "", http.StatusOK},
+			{http.MethodGet, "/static/brand/logo-v1.svg", "bytes=0-9", http.StatusPartialContent},
+			{http.MethodGet, "/static/missing.svg", "", http.StatusNotFound},
+			{http.MethodPost, "/static/brand/logo-v1.svg", "", http.StatusMethodNotAllowed},
+			{http.MethodOptions, "/static/brand/logo-v1.svg", "", http.StatusMethodNotAllowed},
+			{http.MethodPost, "/static/missing.svg", "", http.StatusMethodNotAllowed},
+		} {
+			t.Run(fmt.Sprintf("dev=%t/%s %s %s", dir != "", tt.method, tt.path, tt.rangeHeader), func(t *testing.T) {
+				r := httptest.NewRequest(tt.method, tt.path, nil)
+				if tt.rangeHeader != "" {
+					r.Header.Set("Range", tt.rangeHeader)
+				}
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, r)
+				if w.Code != tt.code {
+					t.Fatalf("status = %d, want %d", w.Code, tt.code)
+				}
+				if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+					t.Errorf("X-Content-Type-Options = %q", got)
+				}
+				if got := w.Header().Get("Content-Security-Policy"); got != "default-src 'none'; sandbox" {
+					t.Errorf("Content-Security-Policy = %q", got)
+				}
+				if tt.code == http.StatusMethodNotAllowed && w.Header().Get("Allow") != "GET, HEAD" {
+					t.Errorf("Allow = %q", w.Header().Get("Allow"))
+				}
+			})
+		}
+	}
+}
+
 // TestStaticRanges: a single range is served as usual, but a request for
 // several ranges gets the whole asset, so many tiny ranges cannot multiply
 // the response with a multipart header per part.

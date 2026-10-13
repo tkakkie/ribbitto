@@ -1,20 +1,53 @@
-"illustration.title" = { other = "画像" }
-"illustration.default" = { other = "デフォルトの画像を使う" }
-"illustration.change" = { other = "画像を変更" }
-"illustration.save" = { other = "画像を保存" }
-"illustration.error" = { other = "一覧から画像を選んでください。" }
-"illustration.option.lake" = { other = "湖" }
-"illustration.option.hills" = { other = "丘" }
-"illustration.option.leaf" = { other = "葉" }
-"illustration.option.cup" = { other = "カップ" }
-"illustration.option.flowers" = { other = "花" }
-"illustration.option.sunrise" = { other = "日の出" }
-"illustration.option.moon" = { other = "月" }
-"illustration.option.sail" = { other = "帆船" }
-"illustration.option.cactus" = { other = "サボテン" }
-"illustration.option.mountain" = { other = "山" }
-"illustration.option.shell" = { other = "貝" }
-"illustration.option.kite" = { other = "凧" }
+["illustration.title"]
+other = "画像"
+
+["illustration.default"]
+other = "デフォルトの画像を使う"
+
+["illustration.change"]
+other = "画像を変更"
+
+["illustration.save"]
+other = "画像を保存"
+
+["illustration.error"]
+other = "一覧から画像を選んでください。"
+
+["illustration.option.lake"]
+other = "湖"
+
+["illustration.option.hills"]
+other = "丘"
+
+["illustration.option.leaf"]
+other = "葉"
+
+["illustration.option.cup"]
+other = "カップ"
+
+["illustration.option.flowers"]
+other = "花"
+
+["illustration.option.sunrise"]
+other = "日の出"
+
+["illustration.option.moon"]
+other = "月"
+
+["illustration.option.sail"]
+other = "帆船"
+
+["illustration.option.cactus"]
+other = "サボテン"
+
+["illustration.option.mountain"]
+other = "山"
+
+["illustration.option.shell"]
+other = "貝"
+
+["illustration.option.kite"]
+other = "凧"
 
 ["app.title"]
 other = "ribbitto"

@@ -169,3 +169,5 @@ attribute hybrid/counter savings separately and report missing bundles.
   separate; never extrapolate a short smoke run into stability proof. Record every gate and maintenance/recovery cost.
 - Insufficient/conflicting evidence or unresolved noise means **inconclusive**.
   Parts 2 and 3 supply correctness/measurement; this part adopts nothing.
+
+Part 2's results are recorded in [prototype verification](unread-counters-verification.md).

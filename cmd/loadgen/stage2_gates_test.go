@@ -174,13 +174,82 @@ func TestStage2RefusalBoundaries(t *testing.T) {
 	}
 }
 
+func TestStage2MissingOutage(t *testing.T) {
+	for _, measured := range []bool{false, true} {
+		t.Run(fmt.Sprintf("measured=%v", measured), func(t *testing.T) {
+			w := stage2WindowFixture()
+			w.Operations = []stage2Operation{{Operation: "replacement", Scheduled: 1000}}
+			start := time.Unix(123, 0)
+			o := stage2Observation{Slot: stage2Slot{Operation: "replacement", Endpoint: "feed", LogicalID: 7, At: start}}
+			o.finish(start, start, start.Add(time.Millisecond), time.Time{}, 1, 503, "failed")
+			end, offline := start.Add(time.Second), time.Time{}
+			want, recovered, outage := "reject", uint64(0), int64(-1)
+			if measured {
+				// A measured zero-duration outage is distinct from missing evidence.
+				offline, want, recovered, outage = end, "pass", 1, 0
+			}
+			o.finish(start, start, end, offline, 2, 200, "succeeded")
+			_, w.Attempts = stage2Summarize([]stage2Observation{o})
+			stage2Evaluate(&w, nil)
+			stage2GateState(t, w, "replacement-503", want)
+			if w.Refusals.Recovered != recovered || w.Attempts[1].OutageNS != outage {
+				t.Fatalf("missing and zero-duration outage evidence conflated: %+v %+v", w.Refusals, w.Attempts)
+			}
+			raw, err := json.Marshal(w)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var decoded stage2Window
+			if err := decodeStage2(raw, &decoded); err != nil {
+				t.Fatal(err)
+			}
+			if decoded.Attempts[1].OutageNS != outage {
+				t.Fatal("outage evidence changed on JSON round trip")
+			}
+		})
+	}
+}
+
+func TestStage2FirstReconnect(t *testing.T) {
+	for _, missing := range []bool{false, true} {
+		for _, reversed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("missing=%v/reversed=%v", missing, reversed), func(t *testing.T) {
+				w := stage2WindowFixture()
+				w.Operations = []stage2Operation{{Operation: "replacement", Scheduled: 1000}}
+				start := time.Unix(123, 0)
+				o := stage2Observation{Slot: stage2Slot{Operation: "replacement", Endpoint: "feed", LogicalID: 7, At: start}}
+				o.finish(start, start, start.Add(time.Millisecond), start, 1, 503, "failed")
+				offline := start
+				if missing {
+					offline = time.Time{}
+				}
+				o.finish(start, start, start.Add(2100*time.Millisecond), offline, 2, 200, "succeeded")
+				// A later reconnect has a fresh offline start and a shorter outage.
+				o.finish(start, start, start.Add(4*time.Second), start.Add(3*time.Second), 3, 200, "succeeded")
+				_, w.Attempts = stage2Summarize([]stage2Observation{o})
+				if reversed {
+					w.Attempts[1], w.Attempts[2] = w.Attempts[2], w.Attempts[1]
+				}
+				stage2Evaluate(&w, nil)
+				stage2GateState(t, w, "replacement-503", "reject")
+				want := stage2Refusals{ScheduledReplacements: 1000, AffectedReplacements: 1, Recovered: 1, Attempts: 3, Refused503: 1, Retries: 2, MaxOutageNS: int64(2100 * time.Millisecond)}
+				if missing {
+					want.Recovered, want.MaxOutageNS = 0, 0
+				}
+				if w.Refusals != want {
+					t.Fatalf("first reconnect evidence replaced: got %+v, want %+v", w.Refusals, want)
+				}
+			})
+		}
+	}
+}
+
 func TestStage2EvaluatedWindow(t *testing.T) {
 	for _, arm := range fixedStage2().Arms {
 		for _, refusedKind := range []string{"none", "establishment", "post", "read", "page"} {
 			w := stage2WindowFixture()
 			w.Config.Arm, w.Effective.Startup = arm, arm
 			var observations []stage2Observation
-			w.Attempts = []stage2Attempt{}
 			for _, kind := range []string{"establishment", "post", "read", "page"} {
 				status := 200
 				if kind == refusedKind {
@@ -190,9 +259,8 @@ func TestStage2EvaluatedWindow(t *testing.T) {
 				req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1/fake", nil)
 				o := stage2HTTP(context.Background(), stage2FakeHTTP{&now, status, nil, nil}, req, stage2Observation{Slot: stage2Slot{Operation: kind, Endpoint: "feed", At: now}}, now, func() time.Time { return now }, func([]byte) bool { return true })
 				observations = append(observations, o)
-				w.Attempts = append(w.Attempts, o.Attempts...)
 			}
-			w.Operations, _ = stage2Summarize(observations)
+			w.Operations, w.Attempts = stage2Summarize(observations)
 			stage2Evaluate(&w, nil)
 			want, count := "pass", float64(0)
 			if refusedKind != "none" {

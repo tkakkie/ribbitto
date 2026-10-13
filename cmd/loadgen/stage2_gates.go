@@ -15,7 +15,7 @@ func stage2CountRefusals(ops []stage2Operation, attempts []stage2Attempt) (stage
 			r.ScheduledReplacements += op.Scheduled
 		}
 	}
-	affected, recovered := map[uint64]bool{}, map[uint64]int64{}
+	affected, recovered := map[uint64]bool{}, map[uint64]stage2Attempt{}
 	counts := map[uint64]uint64{}
 	var normal503 uint64
 	for _, a := range attempts {
@@ -34,17 +34,18 @@ func stage2CountRefusals(ops []stage2Operation, attempts []stage2Attempt) (stage
 			r.Refused503++
 			affected[a.LogicalID] = true
 		}
-		if a.Status == 200 && a.Outcome == "succeeded" && a.OutageNS >= 0 {
-			if outage, ok := recovered[a.LogicalID]; !ok || a.OutageNS < outage {
-				recovered[a.LogicalID] = a.OutageNS
+		if a.Status == 200 && a.Outcome == "succeeded" {
+			// Later successes cannot repair the first reconnect's outage evidence.
+			if first, ok := recovered[a.LogicalID]; !ok || a.Attempt < first.Attempt {
+				recovered[a.LogicalID] = a
 			}
 		}
 	}
 	for id := range affected {
 		r.AffectedReplacements++
-		if outage, ok := recovered[id]; ok {
+		if first, ok := recovered[id]; ok && first.OutageNS >= 0 {
 			r.Recovered++
-			r.MaxOutageNS = max(r.MaxOutageNS, outage)
+			r.MaxOutageNS = max(r.MaxOutageNS, first.OutageNS)
 		}
 	}
 	return r, normal503

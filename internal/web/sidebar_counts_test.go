@@ -96,8 +96,8 @@ func TestSidebarCountsMarkup(t *testing.T) {
 				endpoint, _ := idAttribute(t, doc, "organization-stream", "sse-connect")
 				sub, valid := streamScope(httptest.NewRequest("GET", endpoint, nil))
 				if !valid || (sub.Topic == nil) != (page.Topic == nil) || (sub.Topic != nil && *sub.Topic != page.Topic.ID) ||
-					strings.Contains(endpoint, "panel=members") != (kind == "members") ||
-					strings.Contains(endpoint, "messages") != (kind != "members" && !strings.HasSuffix(kind, "older")) {
+					strings.Contains(endpoint, "panel=") ||
+					strings.Contains(endpoint, "messages") != !strings.HasSuffix(kind, "older") {
 					t.Fatalf("page selection or interests lost: %s", endpoint)
 				}
 				var frame realtime.Outgoing
@@ -122,7 +122,7 @@ func TestSidebarCountsMarkup(t *testing.T) {
 						if id != fmt.Sprintf("channel-%x", c.ID) {
 							t.Fatal("unstable channel ID")
 						}
-						count, selected = page.ChannelCounts[c.ID], page.Topic == nil && kind != "members" && c.ID == page.Current.ID
+						count, selected = page.ChannelCounts[c.ID], page.Topic == nil && c.ID == page.Current.ID
 						channels++
 					case n.DataAtom == atom.Li && strings.HasPrefix(id, "topic-"):
 						topic := page.Topics[topics]

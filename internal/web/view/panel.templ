@@ -1,0 +1,74 @@
+package view
+
+import (
+	"fmt"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
+
+// PanelMembers names the members panel by its URL segment below the
+// conversation's URL.
+const PanelMembers = "members"
+
+// conversationQuery keeps an older page's own parameters on every panel and
+// close link, so a panel never moves the conversation to the latest page.
+func conversationQuery(page ChannelPage) string {
+	if page.Before == 0 {
+		return ""
+	}
+	return fmt.Sprintf("?before=%d&unread=%d", page.Before, page.FirstUnread)
+}
+
+func querySeparator(page ChannelPage) string {
+	if page.Before == 0 {
+		return "?"
+	}
+	return "&"
+}
+
+// panelURL opens a panel beside the conversation shown, feed or topic.
+func panelURL(page ChannelPage, panel string) string {
+	return conversationURL(page) + "/" + panel + conversationQuery(page)
+}
+
+// panelControls open the panels with ordinary links: each page load gives
+// the one stream the interests of the page (decisions 30 and 31).
+templ panelControls(page ChannelPage) {
+	@panelControl(page, PanelMembers, "people.control") {
+		if page.Panel == PanelMembers {
+			@Icon("people-filled", 20)
+		} else {
+			@Icon("people-regular", 20)
+		}
+	}
+}
+
+// panelControl marks the open panel's control with aria-current="true";
+// "page" stays with the conversation's link in the sidebar.
+templ panelControl(page ChannelPage, panel, label string) {
+	{{ open := page.Panel == panel }}
+	<a
+		id={ "panel-control-" + panel }
+		href={ templ.SafeURL(panelURL(page, panel)) }
+		if open {
+			aria-current="true"
+		}
+		class={ "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-body", templ.KV("bg-selected font-semibold text-on-selected", open), templ.KV("text-muted hover:bg-hover hover:text-fg", !open) }
+	>
+		{ children... }
+		{ i18n.T(ctx, label) }
+	</a>
+}
+
+// sidePanel is the block beside the conversation. Its heading takes focus
+// when the panel opens; the close link returns to the conversation.
+templ sidePanel(page ChannelPage) {
+	<aside id="side-panel" aria-labelledby="panel-heading" class="flex w-panel shrink-0 flex-col overflow-y-auto rounded-xl bg-bg shadow-block">
+		<header class="flex shrink-0 items-center gap-2 border-b border-border py-2 pl-5 pr-2">
+			<h2 id="panel-heading" tabindex="-1" autofocus class="min-w-0 flex-1 break-words text-title font-semibold">{ i18n.T(ctx, "people.title") }</h2>
+			<a id="panel-close" href={ templ.SafeURL(conversationURL(page) + conversationQuery(page)) } aria-label={ i18n.T(ctx, "panel.close") } class="flex size-11 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg">
+				@Icon("dismiss-regular", 20)
+			</a>
+		</header>
+		@membersPanel(page)
+	</aside>
+}

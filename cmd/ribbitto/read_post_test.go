@@ -107,7 +107,8 @@ func TestReadPost(t *testing.T) {
 			{"foreign channel GET", "GET", view.ChannelURL("read", foreign.Channel.ID), token, "", "", 404},
 			{"foreign topic GET", "GET", view.ConversationURL("read", f.Channel.ID, &foreign.Channel.DefaultTopicID), token, "", "", 404},
 			{"other channel topic GET", "GET", view.ConversationURL("read", f.Channel.ID, &other.DefaultTopicID), token, "", "", 404},
-			{"members GET", "GET", feed + "/members", token, "", "", 200},
+			// A panel beside the latest conversation keeps its read form; beside an older page it adds none (#874).
+			{"older members GET", "GET", base + "/members?before=3&unread=0", token, "", "", 200},
 			{"non-member members GET", "GET", feed + "/members", outsider, "", "", 404},
 			{"unseen channel", "POST", view.ChannelURL("read", foreign.Channel.ID) + "/read", token, "", "3", 404},
 			{"topic of another channel", "POST", view.ConversationURL("read", f.Channel.ID, &other.DefaultTopicID) + "/read", token, "", "3", 404},

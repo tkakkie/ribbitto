@@ -30,7 +30,7 @@ func TestTypingStatusMarkup(t *testing.T) {
 					page.Before = 40
 				}
 				if mode == "members" {
-					page.Members = &view.MemberPage{PresenceAfter: "process:0"}
+					page.Panel, page.Members = view.PanelMembers, &view.MemberPage{PresenceAfter: "process:0"}
 				}
 				if mode == "no-stream" {
 					page.EventCursor = nil
@@ -43,7 +43,7 @@ func TestTypingStatusMarkup(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				want, count := mode == "feed" || mode == "topic", 0
+				want, count := mode == "feed" || mode == "topic" || mode == "members", 0
 				for n := range doc.Descendants() {
 					if attr(n, "id") != "typing-status" {
 						continue

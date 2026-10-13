@@ -105,7 +105,7 @@ The endpoint takes:
 | `want` | comma-separated interests, each at most once: `sidebar`, `messages`, `typing`, `presence`; anything else is 400 |
 | `channel` | the page's channel: required with `messages`, `typing` or `sidebar` (for its initial recount); with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
 | `topic` | optional with `messages`, `typing` or `sidebar`; requires `channel`, narrows messages/typing and retains sidebar selection; another organisation or channel is 404 |
-| `panel` | optional `members`, suppressing feed selection on the members sidebar |
+| `panel` | optional `members`; ignored since #874 |
 | `presence-after` | required with `presence`: the process instance and presence generation the page was rendered with |
 
 | Page | `want` |
@@ -113,7 +113,7 @@ The endpoint takes:
 | Feed (latest page) | `sidebar,messages,typing` with `channel` |
 | Topic view (latest page) | `sidebar,messages,typing` with `channel` and `topic` |
 | `?before=` page | `sidebar` with `channel` and, on topic pages, `topic` |
-| Members panel | `sidebar,presence` with `channel`, `panel=members` and `presence-after` |
+| With the members panel | the page's own interests plus `presence`, with `presence-after` |
 
 Every page carries its snapshot cursor on `#organization-stream`, including
 `?before=` pages, which hold a slot under both stream caps. Only `message`
@@ -151,7 +151,7 @@ Swap targets:
 | `typing` | none | `#typing-status` content replacement on latest feeds/topics (#790) |
 | `reset` | the cursor for durable reset; none for owner reset | the stream script reloads the page |
 
-`#organization-stream`, holding `sse-connect`, wraps the sidebar and conversation or members panel, because the htmx
+`#organization-stream`, holding `sse-connect`, wraps the sidebar, conversation and any side panel, because the htmx
 SSE extension attaches an `sse-swap` element to its closest ancestor with a
 source. Messages have their own `sse-swap` on latest pages; older pages omit it.
 Typing replaces content outside the composer. Per-entry events go to the hidden
@@ -162,7 +162,7 @@ even when the main swap is `none`, and an entry not on the page is ignored.
 The sink is hidden from assistive technology and takes no focus.
 `TestMessageStreamBrowser` proves replacement and missing-target behavior with
 test-only entries rendered with `html/template`, and that native `Last-Event-ID` and the page's
-reconnect cursor stay unchanged after ephemeral frames. Production presence and sidebar frames share the page components (#768, #818, #819). Opening the members
-panel is a navigation. Its bounded, paged list has no live list updates. One
+reconnect cursor stay unchanged after ephemeral frames. Production presence and sidebar frames share the page components (#768, #818, #819). Opening or closing a panel is a
+navigation. Its bounded, paged list has no live list updates. One
 presence snapshot supplies every indicator and the page token; changes replace
 only loaded indicators, with visible localized labels and the success dot.

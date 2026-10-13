@@ -109,7 +109,7 @@ func TestMembersPageAgainstPostgreSQL(t *testing.T) {
 					t.Fatal(err)
 				}
 				q := stream.Query()
-				if stream.Path != "/organizations/acme/events" || q.Get("want") != "sidebar,presence" || q.Get("presence-after") == "" || q.Get("channel") != strings.TrimPrefix(view.ChannelURL("acme", local.Channel.ID), "/organizations/acme/channels/") || q.Get("after") != "1" || q.Has("topic") {
+				if stream.Path != "/organizations/acme/events" || q.Get("want") != "sidebar,messages,typing,presence" || q.Get("presence-after") == "" || q.Get("channel") != strings.TrimPrefix(view.ChannelURL("acme", local.Channel.ID), "/organizations/acme/channels/") || q.Get("after") != "1" || q.Has("topic") {
 					t.Fatalf("stream scope: %v", stream)
 				}
 			}
@@ -158,8 +158,8 @@ func TestMembersPageAgainstPostgreSQL(t *testing.T) {
 	// The page's strings resolve in both catalogues instead of falling back to
 	// their message IDs.
 	for _, tt := range []struct{ lang, title, back string }{
-		{"en", "Channel members", "Back to channel"},
-		{"ja", "チャンネルのメンバー", "チャンネルに戻る"},
+		{"en", "Channel members", "Close panel"},
+		{"ja", "チャンネルのメンバー", "パネルを閉じる"},
 	} {
 		r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", local.Channel.ID)+"/members", nil)
 		r.Header.Set("Accept-Language", tt.lang)

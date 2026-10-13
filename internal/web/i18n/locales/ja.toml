@@ -205,8 +205,11 @@ other = "トピック名は表示可能な1〜80文字で入力してくださ�
 ["people.title"]
 other = "チャンネルのメンバー"
 
-["people.back"]
-other = "チャンネルに戻る"
+["people.control"]
+other = "メンバー"
+
+["panel.close"]
+other = "パネルを閉じる"
 
 ["people.empty"]
 other = "このページにメンバーはいません。"

@@ -205,8 +205,11 @@ other = "Enter a topic name of 1–80 printable characters."
 ["people.title"]
 other = "Channel members"
 
-["people.back"]
-other = "Back to channel"
+["people.control"]
+other = "Members"
+
+["panel.close"]
+other = "Close panel"
 
 ["people.empty"]
 other = "No members on this page."

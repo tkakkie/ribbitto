@@ -44,7 +44,9 @@ type ChannelPage struct {
 	Body, BodyError            string
 	BranchError, BranchName    string
 	Messages                   []Message
-	Members                    *MemberPage
+	// Panel names the side panel open beside the conversation, if any.
+	Panel   string
+	Members *MemberPage
 	// Composer preserves absence separately from an empty submitted value.
 	Composer *string
 	// PostedMessageID correlates a successful enhanced post with stream delivery.
@@ -111,9 +113,10 @@ func olderURL(page ChannelPage) string {
 }
 
 // streamURL declares the page's interests independently of its history URL.
+// A panel adds presence only; the conversation beside it keeps its own.
 func streamURL(page ChannelPage) string {
 	want := "sidebar"
-	if page.Before == 0 && page.Members == nil {
+	if page.Before == 0 {
 		want += ",messages,typing"
 	}
 	if page.Members != nil && page.Members.PresenceAfter != "" {
@@ -122,9 +125,6 @@ func streamURL(page ChannelPage) string {
 	endpoint := fmt.Sprintf("/organizations/%s/events?after=%d&want=%s&channel=%s", page.Organization.Slug, *page.EventCursor, want, idValue(page.Current.ID))
 	if page.Topic != nil {
 		endpoint += "&topic=" + idValue(page.Topic.ID)
-	}
-	if page.Members != nil {
-		endpoint += "&panel=members"
 	}
 	if page.Members != nil && page.Members.PresenceAfter != "" {
 		endpoint += "&presence-after=" + url.QueryEscape(page.Members.PresenceAfter)
@@ -136,11 +136,11 @@ func streamURL(page ChannelPage) string {
 // the view model.
 templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 	{{ title := page.Current.Name + " · " + page.Organization.Name }}
-	if page.Members != nil {
-		{{ title = i18n.T(ctx, "people.title") + " · " + title }}
-	}
 	if page.Topic != nil {
 		{{ title = topicName(ctx, *page.Topic) + " · " + title }}
+	}
+	if page.Panel == PanelMembers {
+		{{ title = i18n.T(ctx, "people.title") + " · " + title }}
 	}
 	@layout(stylesheetURL, title) {
 		<div
@@ -173,9 +173,8 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					@channelCreateForm(page, true)
 				}
 			</aside>
-			if page.Members != nil {
-				@membersPanel(page)
-			} else {
+			// The conversation and its panel share one flexible region.
+			<div class="flex min-w-0 flex-1 gap-2">
 				<main id="conversation" class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block">
 					<header class="flex shrink-0 items-center gap-3 border-b border-border px-6 py-2">
 						<div class="flex min-w-0 flex-1 items-center gap-2">
@@ -191,7 +190,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 								<h1 class="truncate text-title font-semibold">{ page.Current.Name }</h1>
 							}
 						</div>
-						<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID) + "/members") } class="inline-flex min-h-11 shrink-0 items-center text-body text-brand underline">{ i18n.T(ctx, "people.title") }</a>
+						@panelControls(page)
 						if page.Reading && page.Before == 0 && page.EventCursor != nil {
 							@readForm(page)
 						}
@@ -245,16 +244,17 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						@messageComposer(page, false)
 					</div>
 				</main>
-			}
+				if page.Panel != "" {
+					@sidePanel(page)
+				}
+			</div>
 		</div>
 		// Scripts stay outside swap targets; htmx will not run swapped scripts.
-		if page.Members == nil {
-			<script defer src="/static/read-visibility-v4.js" nonce={ templ.GetNonce(ctx) }></script>
-			<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
-			<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-			<script defer src="/static/message-composer-v5.js" nonce={ templ.GetNonce(ctx) }></script>
-			<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		}
+		<script defer src="/static/read-visibility-v4.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v5.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v9.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
@@ -384,7 +384,7 @@ templ ChannelList(page ChannelPage, oob bool) {
 		}
 	>
 		for _, c := range page.Channels {
-			@ChannelEntry(page.Organization.Slug, c, c.ID == page.Current.ID && page.Topic == nil && page.Members == nil, page.ChannelCounts[c.ID]) {
+			@ChannelEntry(page.Organization.Slug, c, c.ID == page.Current.ID && page.Topic == nil, page.ChannelCounts[c.ID]) {
 				if c.ID == page.Current.ID {
 					@TopicList(page, false)
 				}

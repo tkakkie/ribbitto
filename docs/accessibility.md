@@ -72,3 +72,8 @@ The textarea keeps invalid drafts and links errors with `aria-describedby`;
 htmx submissions return focus to it. "Load older messages"
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
+
+A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
+when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's
+header control has `aria-current="true"`; the panel's close link returns to
+the conversation.

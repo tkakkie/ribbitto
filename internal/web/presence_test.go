@@ -80,7 +80,7 @@ func TestPresencePageReconnect(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if indicators != 2 || !strings.Contains(w.Body.String(), "bg-success") || u.Query().Get("want") != "sidebar,presence" || u.Query().Get("presence-after") != presenceToken(snapshot.Token) {
+				if indicators != 2 || !strings.Contains(w.Body.String(), "bg-success") || u.Query().Get("want") != "sidebar,messages,typing,presence" || u.Query().Get("presence-after") != presenceToken(snapshot.Token) {
 					t.Fatal("page did not render snapshot state and token")
 				}
 				closeStream()

@@ -1,70 +1,45 @@
 package web
 
 import (
-	"errors"
+	"context"
+	"fmt"
 	"net/http"
-	"net/url"
 
-	"github.com/a-h/templ"
-	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
-	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
+// members renders the conversation with the members panel open, so opening
+// and closing a panel are ordinary page loads.
 func (p channelPages) members(w http.ResponseWriter, r *http.Request, m org.Membership) {
-	id, ok := channelID(r)
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-	query, err := url.ParseQuery(r.URL.RawQuery)
-	var after *kernel.ID
-	if raw, present := query["after"]; present {
-		parsed, valid := pathID(raw[0])
-		if len(raw) != 1 || !valid {
-			p.invalidQuery(w, r, m, id)
-			return
-		}
-		after = &parsed
-	}
+	p.panel = view.PanelMembers
+	p.show(w, r, m)
+}
+
+// memberListing reads one page of members after the conversation's snapshot.
+// The page keeps that snapshot's cursor, so replay follows what the
+// conversation shows; presence has its own token from the same members.
+func (p channelPages) memberListing(ctx context.Context, m org.Membership, id kernel.ID) (*view.MemberPage, error) {
+	result, err := p.messages.Members(ctx, m, id, p.after)
 	if err != nil {
-		p.invalidQuery(w, r, m, id)
-		return
+		return nil, fmt.Errorf("reading members: %w", err)
 	}
-	result, err := p.messages.Members(r.Context(), m, id, after)
-	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) {
-		http.NotFound(w, r)
-		return
-	}
-	if err != nil {
-		serverError(w, r, "reading members page", err)
-		return
-	}
-	account, _ := middleware.Account(r.Context())
-	page := sidebarView(view.ChannelPage{
-		DisplayName: memberDisplayName(account.DisplayName), Handle: m.Member.Handle, Role: string(m.Member.Role),
-		EventCursor: result.EventCursor, Members: &view.MemberPage{Next: result.Next},
-	}, m, conversation.SidebarSnapshot{
-		Current: result.Current, Channels: result.Channels, Topics: result.Topics,
-		ChannelCounts: result.ChannelCounts, TopicCounts: result.TopicCounts,
-	})
+	listing := &view.MemberPage{Next: result.Next}
 	ids := make([]kernel.ID, len(result.Members))
 	for i, member := range result.Members {
 		ids[i] = member.ID
-		page.Members.Items = append(page.Members.Items, view.Member{ID: member.ID, DisplayName: memberDisplayName(member.DisplayName), Handle: member.Handle})
+		listing.Items = append(listing.Items, view.Member{ID: member.ID, DisplayName: memberDisplayName(member.DisplayName), Handle: member.Handle})
 	}
 	if p.stream != nil && p.stream.Presence != nil {
 		snapshot, err := p.stream.Presence.Read(m.Organization.ID, ids)
 		if err != nil {
-			serverError(w, r, "reading presence snapshot", err)
-			return
+			return nil, fmt.Errorf("reading presence snapshot: %w", err)
 		}
-		page.Members.PresenceAfter = presenceToken(snapshot.Token)
+		listing.PresenceAfter = presenceToken(snapshot.Token)
 		for i, online := range snapshot.Online {
-			page.Members.Items[i].Online = online
+			listing.Items[i].Online = online
 		}
 	}
-	p.pages.render(w, r, http.StatusOK, func(url string) templ.Component { return view.ChannelScreen(url, page) })
+	return listing, nil
 }

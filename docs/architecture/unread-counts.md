@@ -68,12 +68,13 @@ unread; selection still reaches step 3 and step 4. Legacy injected
 `PageCounter` adapters retain `Read` as a compatibility fallback. Normal
 page entry points still enable first unread, preserving the unread divider.
 
-Production streams bind the already-resolved membership, channel, selected topic
-and members-panel selection to one `cmd/ribbitto` sidebar source (#819). Posts
+Production streams bind the already-resolved membership, channel and selected
+topic to one `cmd/ribbitto` sidebar source (#819); its `panel` flag no longer
+changes the selection, since panels open beside the conversation (#874). Posts
 and moves trigger independent snapshots through this same page-count adapter,
 including for the author and when another channel changes. Web's `RenderSidebar`
-shares one sidebar view builder with channel/topic and members pages, preserving
-the feed, topic and members selection. It uses page components for the whole channel
+shares one sidebar view builder with channel and topic pages, with or without a
+side panel, preserving the feed and topic selection. It uses page components for the whole channel
 list, with the current channel's topics nested (#872), and the selected heading (#818); member-dependent output bypasses the shared
 message cache. Realtime retains its render-then-authorize
 order immediately before sending, coalescing and cursor/heartbeat rules (#810).

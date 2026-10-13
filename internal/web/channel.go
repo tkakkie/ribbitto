@@ -50,6 +50,8 @@ type channelPages struct {
 	branching Branching
 	topics    TopicLookup
 	topicID   *kernel.ID // Set only on the request-local copy in show.
+	panel     string     // Set only on the request-local copy by a panel route.
+	after     *kernel.ID // The members panel's cursor, set only in show.
 	stream    *Streaming
 	renders   *realtime.Cache[renderKey, realtime.Outgoing]
 	messages  MessageReader
@@ -85,7 +87,7 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 		p.post(w, r, m, id)
 		return
 	}
-	page := view.ChannelPage{}
+	page := view.ChannelPage{Panel: p.panel}
 	// ParseQuery, unlike URL.Query, reports malformed pairs instead of
 	// dropping them, so a broken link cannot fall back to the latest page.
 	query, err := url.ParseQuery(r.URL.RawQuery)
@@ -111,6 +113,15 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 			return
 		}
 		firstUnread = &seq
+	}
+	// The members' cursor stays apart from the conversation's before and unread.
+	if raw, ok := query["after"]; ok && p.panel == view.PanelMembers {
+		after, valid := pathID(raw[0])
+		if len(raw) != 1 || !valid {
+			p.invalidQuery(w, r, m, id)
+			return
+		}
+		p.after = &after
 	}
 	p.render(w, r, m, id, http.StatusOK, page, firstUnread)
 }
@@ -166,6 +177,17 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	if err != nil {
 		serverError(w, r, "reading channel page", err)
 		return
+	}
+	if page.Panel == view.PanelMembers {
+		page.Members, err = p.memberListing(r.Context(), m, id)
+		if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			serverError(w, r, "reading members panel", err)
+			return
+		}
 	}
 	account, _ := middleware.Account(r.Context())
 	if page.BodyError == "" {

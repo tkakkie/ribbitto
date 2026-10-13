@@ -39,7 +39,9 @@ under 2 KB, and use only the pastel pairs in [`ui.md`](ui.md#tokens) and `bg` wh
 
 To add one, draw a simple silhouette that reads at 24 px and 120 px,
 save an SVG under 2 KB using these colours, and add its neutral key to
-the registry in `internal/conversation/channel.go` and its asset test.
+the registry in `internal/conversation/channel.go` and its asset test,
+and its option name (`illustration.option.<key>`) to both catalogues in
+`internal/web/i18n/locales/` (`TestChannelImageOptionNames` fails without them).
 Use no external references, scripts or text. When changing artwork,
 create a new versioned directory and update both the embed declaration
 and `view.ChannelImageURL`; never change a file at an immutable URL. Keep registry

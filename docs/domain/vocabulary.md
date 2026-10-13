@@ -24,9 +24,14 @@ glossary current too. The decision is recorded in
 | default topic of a channel | chorus | exists | The one topic every channel has, where a message goes when no topic is chosen. |
 | `message` | ribbit | exists | A post in a channel, written by a member. |
 
-Status describes the concept, not whether the UI uses its label yet.
-Today's UI still says "channel" and "message"; applying these labels is a
-separate change, best done with the design pass. The conversation model behind
+Status describes the concept. The UI shows the labels as
+[`ui.md`](../ui.md#product-labels) describes (#879): on the conversation
+screen a label is the noun for its thing — headings, list and panel names,
+counts, the composer's field and the nouns in controls ("Create lilypad",
+"Load older ribbits") — while verbs, errors, help text, identity, roles and
+presence keep ordinary words. *marsh* has no string: the organisation is
+its name at the top of the sidebar, and the setup and sign-up pages, where
+that look is absent, say "organisation". The conversation model behind
 *ripple* and *chorus* is in [`topics.md`](topics.md) ([decision 21](../decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md));
 the *section* row reserves a label only.
 
@@ -45,5 +50,7 @@ They do not get themed labels such as *peep*, *croak* or *hop*.
 ## Japanese UI
 
 Product labels use **the same Latin-script word as in English**: `lilypad`,
-not 蓮の葉 or リリーパッド. Keeping the spelling makes the labels work as names;
-ordinary words are still localised normally.
+not 蓮の葉 or リリーパッド, and without the English plural (`lilypad`, not
+`lilypads`). Keeping the spelling makes the labels work as names; ordinary
+words are still localised normally. In both languages a label stays
+lowercase, also at the start of a heading.

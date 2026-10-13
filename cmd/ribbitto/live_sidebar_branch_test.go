@@ -61,8 +61,8 @@ func newSidebarBranchFixture(t *testing.T) sidebarBranchFixture {
 func sidebarBadge(t *testing.T, frame, id string, count int) {
 	t.Helper()
 	node := sidebarNode(t, frame, id)
-	want := fmt.Sprintf("Unread messages: %d", count)
-	if (count == 0 && strings.Contains(node, "Unread messages:")) || (count > 0 && !strings.Contains(node, want+"</span>")) {
+	want := fmt.Sprintf("Unread ribbits: %d", count)
+	if (count == 0 && strings.Contains(node, "Unread ribbits:")) || (count > 0 && !strings.Contains(node, want+"</span>")) {
 		t.Fatalf("%s badge = %s; want count %d", id, node, count)
 	}
 }

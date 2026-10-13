@@ -157,7 +157,9 @@ beside them (decisions 20 and 28):
   uses an ordinary word ("Create", "Send"). Japanese uses the same
   Latin-script word.
 
-Which strings use a label is applied in #879.
+The strings follow this on the conversation screen, where each kind's
+look is present; welcome pages, errors and help text keep ordinary words
+([`vocabulary.md`](domain/vocabulary.md#product-labels)).
 
 ## Brand
 

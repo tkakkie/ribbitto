@@ -87,7 +87,7 @@ The script scrolls to the newest entry on load
 and focuses the composer after its replacement. Scripts
 stay outside the replaced section; CSP and htmx evaluation remain unchanged.
 
-`message-history-v2.js` keeps the reader's place when "Load older messages"
+`message-history-v2.js` keeps the reader's place when "Load older"
 prepends a page: the link selects the older page's `<li>` elements into
 `#message-items` (`afterbegin`) and replaces `#load-older` out of band. The
 script restores the distance from the pane's bottom after the swap and again

@@ -69,7 +69,7 @@ Latest feeds/topics have a separate visible `#typing-status`, localized and
 polite with `aria-atomic="true"`. Content replacement keeps the region and focus;
 it stays outside history and composer replacement, with no keyboard stop.
 The textarea keeps invalid drafts and links errors with `aria-describedby`;
-htmx submissions return focus to it. "Load older messages"
+htmx submissions return focus to it. "Load older"
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
 

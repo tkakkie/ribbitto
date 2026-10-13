@@ -94,5 +94,5 @@ The available names, pinned source, licence and rebuild steps are in
 
 Icons are decorative (`aria-hidden="true"`, `focusable="false"`). Keep a
 control's text label, or give an icon-only button an `aria-label`; the icon
-never supplies its accessible name. “Load older messages” uses the arrow-up
+never supplies its accessible name. “Load older” uses the arrow-up
 icon and keeps its text and paging contract.

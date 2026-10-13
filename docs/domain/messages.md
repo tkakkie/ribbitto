@@ -95,7 +95,7 @@ bounded by the oldest shown `event_seq` (`?before=` on the channel URL); no
 `OFFSET` and no count query — one extra row says whether an older page
 exists. The bound is only a number: the read is still scoped to the URL's
 organisation and channel, so a value taken from another channel returns
-this channel's older messages, never that channel's. "Load older messages"
+this channel's older messages, never that channel's. "Load older"
 prepends the page with htmx and keeps the reader's place; without
 JavaScript it is a link to that page, which links back to the newest. The
 control is gone once the oldest message is shown.

@@ -95,7 +95,7 @@ func TestUnreadDivider(t *testing.T) {
 						}
 						return
 					}
-					label := map[string]string{"en": "New messages", "ja": "ここから未読メッセージ"}[lang]
+					label := map[string]string{"en": "New ribbits", "ja": "ここから未読ribbit"}[lang]
 					if divider == nil || strings.TrimSpace(text(divider)) != label || attr(divider.Parent, "id") != "message-items" {
 						t.Fatal("missing localized page divider")
 					}

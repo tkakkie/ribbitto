@@ -185,9 +185,9 @@ func assertUnreadBadge(t *testing.T, node *html.Node, lang string, count int64) 
 		if count >= 100 {
 			want = "99+"
 		}
-		label = " Unread messages: " + want
+		label = " Unread ribbits: " + want
 		if lang == "ja" {
-			label = " 未読メッセージ " + want + " 件"
+			label = " 未読ribbit " + want + " 件"
 		}
 	}
 	if visible != want || accessible != label {

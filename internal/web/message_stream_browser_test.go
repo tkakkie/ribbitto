@@ -46,6 +46,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 	t.Run("composer/no-javascript", func(t *testing.T) { testComposerWithoutJavaScript(t, browser) })
 	t.Run("read-recovery", func(t *testing.T) { testReadRecoveryBrowser(t, browser) })
 	t.Run("unread-divider", func(t *testing.T) { testUnreadDividerBrowser(t, browser) })
+	t.Run("read-control", func(t *testing.T) { testReadControlBrowser(t, browser) })
 	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
 	t.Run("side-panel", func(t *testing.T) { testSidePanelBrowser(t, browser) })
 	t.Run("sidebar-scroll", func(t *testing.T) { testSidebarScrollBrowser(t, browser) })

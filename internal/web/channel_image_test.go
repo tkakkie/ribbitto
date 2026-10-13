@@ -1,6 +1,8 @@
 package web
 
 import (
+	"bytes"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -100,6 +102,34 @@ func TestChannelImageAssets(t *testing.T) {
 				t.Fatalf("asset status = %d, headers = %v", w.Code, w.Header())
 			}
 		})
+	}
+}
+
+// The picker names each option through a computed message ID, so a key added
+// without its two strings would fall back to English or to the raw ID. The
+// catalogues log every fallback, which tells a missing Japanese string apart
+// from a present one.
+func TestChannelImageOptionNames(t *testing.T) {
+	var logs bytes.Buffer
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&logs, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lang := range []string{"en", "ja"} {
+		handler := catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			for _, key := range conversation.ChannelImageKeys() {
+				id := "illustration.option." + key
+				if name := i18n.T(r.Context(), id); name == id || strings.TrimSpace(name) == "" {
+					t.Errorf("%s: %s has no name", lang, id)
+				}
+			}
+		}))
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("Accept-Language", lang)
+		handler.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	if logs.Len() != 0 {
+		t.Errorf("option names fell back:\n%s", logs.String())
 	}
 }
 

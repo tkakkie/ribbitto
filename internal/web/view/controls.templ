@@ -15,9 +15,6 @@ const (
 	buttonSecondary
 	// buttonSecondaryIcon adds a decorative child to the secondary look.
 	buttonSecondaryIcon
-	// buttonLink looks like a link but submits its form, so it stays a
-	// button: it changes state, which a link must never do.
-	buttonLink
 )
 
 // submitButton is the one place a form's submit button gets its look; label
@@ -29,8 +26,6 @@ templ submitButton(kind buttonKind, label string) {
 				{ children... }
 				{ i18n.T(ctx, label) }
 			</button>
-		case buttonLink:
-			<button type="submit" class="inline-flex min-h-11 items-center text-body text-brand underline transition-feedback motion-safe:active:scale-96">{ i18n.T(ctx, label) }</button>
 		default:
 			<button type="submit" class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand transition-feedback motion-safe:active:scale-96">{ i18n.T(ctx, label) }</button>
 	}
@@ -91,4 +86,10 @@ templ iconButton(label, popoverTarget string) {
 	>
 		{ children... }
 	</button>
+}
+
+// textLink shares the navigation affordance; label is a message ID and
+// extraClasses preserves the caller's typography or spacing.
+templ textLink(href, label, extraClasses string) {
+	<a href={ templ.SafeURL(href) } class={ "inline-flex min-h-11 items-center", templ.KV(extraClasses, extraClasses != ""), "text-brand underline" }>{ i18n.T(ctx, label) }</a>
 }

@@ -24,7 +24,7 @@ templ SignIn(stylesheetURL string, form SignInForm) {
 				@submitButton(buttonPrimary, "signin.submit")
 			</form>
 			if form.SignUpOpen {
-				@welcomeLink("/signup", "signup.title")
+				@textLink("/signup", "signup.title", "text-body font-semibold")
 			}
 		}
 	}

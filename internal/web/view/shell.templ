@@ -30,7 +30,7 @@ templ appBar(page ChannelPage) {
 			// The menu is an HTML popover: it opens, closes on Escape and on an
 			// outside click, and returns focus without JavaScript.
 			<button type="button" popovertarget="account-menu" aria-label={ i18n.T(ctx, "account.menu") } class="flex size-11 items-center justify-center rounded-full hover:bg-hover transition-feedback motion-safe:active:scale-96">
-				<span aria-hidden="true" class="flex size-9 items-center justify-center rounded-full bg-selected text-title font-semibold text-on-selected">{ initial(accountName(page)) }</span>
+				<span aria-hidden="true" class="flex size-9 items-center justify-center rounded-full bg-selected text-title font-semibold text-on-selected">{ avatarInitial(page.DisplayName, page.Handle) }</span>
 			</button>
 			<div id="account-menu" popover class="inset-auto bottom-3 left-24 m-0 w-64 rounded-xl border border-border bg-surface p-3 text-body text-fg shadow-popover">
 				<p class="break-words text-caption text-muted">
@@ -73,21 +73,4 @@ templ channelCreateForm(page ChannelPage, popover bool) {
 		@imagePicker(page.ImageKeys, page.Image, "channel-image-error", page.CreateImageError)
 		@submitButton(buttonPrimary, "channel.create")
 	</form>
-}
-
-// accountName is what the account button's initial comes from: the display
-// name, or the handle when the name is empty.
-func accountName(page ChannelPage) string {
-	if page.DisplayName != "" {
-		return page.DisplayName
-	}
-	return page.Handle
-}
-
-// initial is the first character of a name, for a placeholder tile.
-func initial(name string) string {
-	for _, r := range name {
-		return string(r)
-	}
-	return ""
 }

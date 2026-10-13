@@ -24,9 +24,9 @@ templ Hello(stylesheetURL string, viewer Viewer) {
 				</div>
 			} else {
 				<div class="flex flex-wrap gap-6">
-					@welcomeLink("/signin", "hello.sign_in")
+					@textLink("/signin", "hello.sign_in", "text-body font-semibold")
 					if viewer.SignUpOpen {
-						@welcomeLink("/signup", "signup.title")
+						@textLink("/signup", "signup.title", "text-body font-semibold")
 					}
 				</div>
 			}

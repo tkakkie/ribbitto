@@ -111,9 +111,9 @@ func appBar(page ChannelPage) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(initial(accountName(page)))
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(avatarInitial(page.DisplayName, page.Handle))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/shell.templ`, Line: 33, Col: 172}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/shell.templ`, Line: 33, Col: 190}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -302,23 +302,6 @@ func channelCreateForm(page ChannelPage, popover bool) templ.Component {
 		}
 		return nil
 	})
-}
-
-// accountName is what the account button's initial comes from: the display
-// name, or the handle when the name is empty.
-func accountName(page ChannelPage) string {
-	if page.DisplayName != "" {
-		return page.DisplayName
-	}
-	return page.Handle
-}
-
-// initial is the first character of a name, for a placeholder tile.
-func initial(name string) string {
-	for _, r := range name {
-		return string(r)
-	}
-	return ""
 }
 
 var _ = templruntime.GeneratedTemplate

@@ -24,7 +24,7 @@ import (
 	"github.com/tkakkie/ribbitto/web/static"
 )
 
-func TestMessageStreamBrowser(t *testing.T) {
+func TestBrowser(t *testing.T) {
 	bin, found := launcher.LookPath()
 	if !found {
 		browserUnavailable(t, "no installed browser")

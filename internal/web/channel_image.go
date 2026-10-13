@@ -12,14 +12,12 @@ import (
 )
 
 func channelImageURL(id kernel.ID, key string) string {
-	keys := conversation.ChannelImageKeys()
-	for _, known := range keys {
-		if key == known {
-			return view.ChannelImageURL(key)
-		}
+	if key != "" && conversation.ValidateChannelImage(key) == nil {
+		return view.ChannelImageURL(key)
 	}
 	// Hash all UUID bytes, including the random suffix, rather than grouping
 	// channels created close together by their UUIDv7 timestamp.
+	keys := conversation.ChannelImageKeys()
 	digest := sha256.Sum256(id[:])
 	return view.ChannelImageURL(keys[int(digest[0])%len(keys)])
 }
@@ -46,7 +44,7 @@ func (p channelPages) changeImage(w http.ResponseWriter, r *http.Request, m org.
 	err := p.channels.SetImage(r.Context(), m, id, r.PostForm.Get("image"))
 	switch {
 	case errors.Is(err, conversation.ErrInvalidChannelImage):
-		p.imageErr = "illustration.error"
+		p.overviewImageErr = "illustration.error"
 		request := r.Clone(r.Context())
 		request.Method = http.MethodGet
 		p.overview(w, request, m)

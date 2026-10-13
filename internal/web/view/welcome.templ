@@ -23,8 +23,3 @@ templ welcomeLayout() {
 		</div>
 	</main>
 }
-
-// welcomeLink gives navigation between welcome pages a shared visible affordance.
-templ welcomeLink(href, label string) {
-	<a href={ templ.SafeURL(href) } class="inline-flex min-h-11 items-center text-body font-semibold text-brand underline">{ i18n.T(ctx, label) }</a>
-}

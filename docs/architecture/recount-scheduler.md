@@ -1,8 +1,8 @@
 # Bounded recount scheduler
 
 Parts 1a–1d of #865 implement `realtime.RecountScheduler` and optional
-`Stream.Recounts`; `cmd/ribbitto` leaves it nil. Production keeps synchronous
-sidebar delivery and the unchanged `SidebarInterval` ([streaming](streaming.md)).
+`Stream.Recounts`; [command opt-in](../database.md#recount-capacity-configuration)
+keeps synchronous sidebar delivery by default, with unchanged `SidebarInterval`.
 This core adds no database access or deployment capacity.
 
 One shared instance has positive worker and registration limits. `Register`
@@ -42,7 +42,7 @@ The shared loop seals computation before watch release; capacity still waits for
 actual computation return. Reserved compatibility tests retain part 1e/1f's
 cursor, watch-publication and fresh-authorization assertions. The web stream
 handler pre-admits (part 2e, [streaming](streaming.md#authorization-and-revocation));
-composition remains part 2h, so production stays synchronous.
+command composition requires explicit opt-in.
 
 The writer cancels on every exit and releases its watch on refusal with
 `ErrRecountRefused`. It consumes completions while idle and between batches,
@@ -93,7 +93,7 @@ revocation during recounts and durable renders, with cancellation/error races.
 Fresh bound-member checks precede each frame, reset and heartbeat; another
 audience's deny advances, while bound revocation and check errors preserve the
 affected durable cursor. Pending and late output cannot survive exit.
-Production activation remains original PR 2.
+Part 2h composes opt-in; PR 3 decides production activation.
 
 Part 2a adds `Stats() RecountStats`, a read-only, allocation-free snapshot
 sampled under the scheduler mutex. It copies lifetime counters and scans the
@@ -135,7 +135,7 @@ Part 2b exposes these fields through the optional scheduler dependency in
 (`errors`) from errors after cancellation (`errors_after_cancellation`). Its gated
 error/panic tests and mutations cover both classifications, including cancellation
 after processing; commands and failing assertions are in the part 2b PR body.
-Production remains synchronous. Processing time is
+Default delivery remains synchronous. Processing time is
 not recount freshness; mixed-load validation remains later work.
 
 Part 2c adds command-local [explicit capacity configuration](../database.md#recount-capacity-configuration).
@@ -147,9 +147,8 @@ listeners start. C overrides the URL's pool maximum; registration capacity
 comes from the effective process stream cap, with no extra setting.
 M=100, R=3, E=20, P=2, H=10 gives B=38: C=36/W=26 passes, while
 C=39 or W=27 fails. **36/26 is a validation configuration, not a production
-default.** Startup logs non-secret effective capacity once. No scheduler is
-constructed in this part: on and off both retain synchronous delivery until
-part 2h supplies opt-in composition.
+default.** Startup logs non-secret effective capacity once. Part 2h composes
+opt-in delivery; [operation and validation status](../database.md#recount-capacity-configuration).
 
 Part 2f forwards optional `RecountObserver` through Stream and web Streaming,
 including RunReserved; nil adds no clocks, allocations or locks. Aggregates

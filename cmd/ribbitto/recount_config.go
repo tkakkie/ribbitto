@@ -14,7 +14,7 @@ type recountConfig struct {
 	registrationLimit                          int
 }
 
-// recountConfiguration validates opt-in capacity without activating delivery.
+// recountConfiguration validates capacity before opt-in delivery is composed.
 // Bound inputs to int32 (pgx's pool limit); int64 arithmetic avoids overflow.
 func recountConfiguration(streamCap int) (recountConfig, error) {
 	c := recountConfig{registrationLimit: streamCap}

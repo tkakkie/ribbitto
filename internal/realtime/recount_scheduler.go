@@ -220,14 +220,7 @@ func (q *RecountScheduler) work() {
 		q.stats.RunningWorkers--
 		q.stats.Completed++
 		q.stats.ProcessingDuration += duration
-		bucket := 0
-		for _, bound := range [...]time.Duration{time.Millisecond, 10 * time.Millisecond, 100 * time.Millisecond, time.Second, 10 * time.Second} {
-			if duration <= bound {
-				break
-			}
-			bucket++
-		}
-		q.stats.DurationBuckets[bucket]++
+		q.stats.DurationBuckets[durationBucket(duration)]++
 		if err != nil {
 			if r.closed {
 				q.stats.ErrorsAfterCancellation++

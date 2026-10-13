@@ -72,7 +72,8 @@ func TestStreamRecountAdmission(t *testing.T) {
 			w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
 			var reads atomic.Int32
 			source := &admissionSidebar{}
-			stream := &Streaming{Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Authorizer: streamAllow(true), Recounts: q}
+			observer := &realtime.RecountObserver{}
+			stream := &Streaming{RecountObserver: observer, Lifetime: t.Context(), Hub: hub, Events: firstRead{&reads}, Authorizer: streamAllow(true), Recounts: q}
 			stream.Sessions = admissionSession(func(context.Context, string) (identity.Account, identity.Session, error) {
 				seen++
 				want := 0
@@ -190,6 +191,13 @@ func TestStreamRecountAdmission(t *testing.T) {
 			}
 			if stats.RefusedCapacity+stats.RefusedClosed != refusals || (stats.RefusedClosed != 0) != (tt.mode == "closed") {
 				t.Fatalf("unexpected scheduler admission: %+v", stats)
+			}
+			wantObserved := uint64(0)
+			if tt.mode == "accepted" {
+				wantObserved = 1
+			}
+			if got := observer.Stats(); got.Submitted != wantObserved || got.Received != wantObserved || got.Failed != wantObserved || got.Delivered != 0 {
+				t.Fatalf("web observation forwarding: %+v", got)
 			}
 			if tt.mode == "accepted" && stats.Completed != 1 {
 				t.Fatalf("accepted stream did not use reserved scheduler: %+v", stats)

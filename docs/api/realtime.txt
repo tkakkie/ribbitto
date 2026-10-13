@@ -86,6 +86,23 @@ type RecountCompletion struct // RecountCompletion carries computation output, w
   field Err error // Err is the computation error, or a recovered panic with its stack trace.
   field Outgoing Outgoing // Outgoing is computation output for the writer to authorize before sending.
   field Version uint64 // Version identifies the submitted request, not a scheduler sequence.
+type RecountDeliveryStats struct // RecountDeliveryStats contains lifetime counters, independently of scheduler Stats.
+  field Cancelled uint64 // Cancelled counts outstanding attempts abandoned on writer exit or cancellation.
+  field CompletionToSend RecountDuration // CompletionToSend measures actual return to successful send, including mailbox wait.
+  field Compute RecountDuration // Compute measures invocation to return, including watch capture, panics and late returns.
+  field Delivered uint64 // Delivered counts only successful sends with an uncancelled context.
+  field Denied uint64 // Denied counts bound membership revocations.
+  field Failed uint64 // Failed counts computation, authorization-check, submission and send errors.
+  field Queue RecountDuration // Queue measures submission to computation invocation, before watch capture.
+  field Received uint64 // Received counts completions received by the writer.
+  field SubmitToSend RecountDuration // SubmitToSend measures submission to successful send.
+  field Submitted uint64 // Submitted counts writer submissions, including refusals.
+type RecountDuration struct // RecountDuration aggregates disjoint buckets with the scheduler's bounds.
+  field Buckets [6]uint64 // Buckets counts <=1ms, <=10ms, <=100ms, <=1s, <=10s, then >10s.
+  field Count uint64 // Count is the number of samples.
+  field Total time.Duration // Total sums sample durations in nanoseconds.
+type RecountObserver struct // RecountObserver optionally aggregates scheduled writer delivery timing.
+  func (*RecountObserver).Stats() RecountDeliveryStats // Stats returns a consistent, allocation-free copy of the aggregates.
 type RecountRegistration struct // RecountRegistration owns one running and one replaceable pending computation.
   func (*RecountRegistration).Cancel() // Cancel removes eligibility, cancels computation and drops buffered/late results.
   func (*RecountRegistration).Completions() <-chan RecountCompletion // Completions is a one-slot mailbox; an unread result is replaced on completion.
@@ -147,6 +164,7 @@ type Stream struct // Stream runs the per-connection delivery loop.
   field Heartbeat time.Duration // Heartbeat is how long the loop waits on the hub before it sends a heartbeat and waits again; zero sends none.
   field Hub *Hub
   field Owners map[Interest]EphemeralOwner // Owners supplies current frames; nil entries preserve durable-only delivery.
+  field RecountObserver *RecountObserver // RecountObserver optionally aggregates scheduled delivery; nil disables observations.
   field Recounts *RecountScheduler // Recounts optionally schedules sidebar computation; nil keeps synchronous delivery.
   field Renderer Renderer
   func (Stream).Run(ctx context.Context, sub Subscription, cursor int64, send Sender) (int64, error) // Run delivers the subscription's events with a sequence above cursor until ctx ends or delivery fails, and returns the last sequence it delivered or skipped, with the reason it stopped.

@@ -137,7 +137,7 @@ Part 2b exposes these fields through the optional scheduler dependency in
 error/panic tests and mutations cover both classifications, including cancellation
 after processing; commands and failing assertions are in the part 2b PR body.
 Production remains synchronous. Processing time is
-not recount freshness: delivery timing and mixed-load validation remain later work.
+not recount freshness; mixed-load validation remains later work.
 
 Part 2c adds command-local [explicit capacity configuration](../database.md#recount-capacity-configuration).
 `RIBBITTO_ASYNC_RECOUNTS` defaults to off (also for empty); only on and off
@@ -151,3 +151,9 @@ C=39 or W=27 fails. **36/26 is a validation configuration, not a production
 default.** Startup logs non-secret effective capacity once. No scheduler is
 constructed in this part: on and off both retain synchronous delivery until
 part 2h supplies opt-in composition.
+
+Part 2f forwards optional `RecountObserver` through Stream and web Streaming,
+including RunReserved; nil adds no clocks, allocations or locks. Aggregates
+measure queue, compute, receipts, return→send and submit→send
+([delivery metrics](dev-metrics.md#delivery-snapshot)). Stage 2 separates queue,
+compute and send delay but cannot prove freshness; PR 3 owns that oracle.

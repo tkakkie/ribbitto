@@ -32,7 +32,10 @@ func TestStage2Schema(t *testing.T) {
 	c := stage2Config{p.Groups[0], p.Arms[1], 1, 42, 43}
 	metrics := json.RawMessage(`{"database":{},"pool":{},"runtime":{},"streams":{},"scheduler":{},"delivery":{}}`)
 	e := stage2Effective{p.Arms[1], 1000, metrics}
-	gates := []stage2Verdict{{"message-delivery", "inconclusive", map[string]float64{"count": 0}}}
+	gates := make([]stage2Verdict, 0, len(p.Gates))
+	for _, gate := range p.Gates {
+		gates = append(gates, stage2Verdict{gate.ID, "inconclusive", map[string]float64{"count": 0}})
+	}
 	w := stage2Window{Version: 1, Kind: "window", Protocol: p, Config: c, Effective: e,
 		Samples: []stage2Sample{{0, "traffic", metrics}}, Operations: []stage2Operation{{Operation: "post", Endpoint: "feed", HTTP: stage2Latency{1, 1, 2, 3}}},
 		Delivery: stage2Delivery{Message: stage2ReceiptLatency{100, 1, -5, 1, 2, 3}, PostFreshness: stage2ReceiptLatency{1, 1, -2, -2, -2, -2}, ReadFreshness: stage2ReceiptLatency{1, 1, -3, -3, -3, -3}},
@@ -51,7 +54,7 @@ func TestStage2Schema(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Fixed examples prevent changing the version-1 wire shape unnoticed.
-		if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != [2]string{"8cb058e36c929f1360334886440a671b574588d1510a70ab388ce40a370ee441", "26228474dc87c94384e545f134f78583153783faba3b56f1028affd575943f6d"}[i] {
+		if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != [2]string{"d04667221273b7641b8a15435b22fbf93d6eeab683580c8d0d77cb3785c8dcf8", "87eff8c0f68647db6803ca4169e9af26acff718f28b6213d13482d4f3d8f535a"}[i] {
 			t.Errorf("version-1 schema changed: %s", got)
 		}
 		dst := reflect.New(reflect.TypeOf(record)).Interface()
@@ -60,6 +63,51 @@ func TestStage2Schema(t *testing.T) {
 		}
 		if !reflect.DeepEqual(record, reflect.ValueOf(dst).Elem().Interface()) {
 			t.Fatal("round trip changed result")
+		}
+		for _, tc := range []struct {
+			name   string
+			change func([]stage2Verdict) []stage2Verdict
+			valid  bool
+		}{
+			{"empty", func(g []stage2Verdict) []stage2Verdict { return g[:0] }, false},
+			{"missing", func(g []stage2Verdict) []stage2Verdict { return g[1:] }, false},
+			{"duplicate", func(g []stage2Verdict) []stage2Verdict { return append(g, g[0]) }, false},
+			{"duplicate replacement", func(g []stage2Verdict) []stage2Verdict { g[1] = g[0]; return g }, false},
+			{"unknown", func(g []stage2Verdict) []stage2Verdict {
+				return append(g, stage2Verdict{"invented", "inconclusive", map[string]float64{}})
+			}, false},
+			{"unknown replacement", func(g []stage2Verdict) []stage2Verdict { g[0].ID = "invented"; return g }, false},
+			{"blank ID", func(g []stage2Verdict) []stage2Verdict { g[0].ID = ""; return g }, false},
+			{"reordered states", func(g []stage2Verdict) []stage2Verdict {
+				g[0], g[1] = g[1], g[0]
+				g[0].State, g[1].State = "pass", "reject"
+				return g
+			}, true},
+		} {
+			t.Run([]string{"window", "manifest"}[i]+"/gates/"+tc.name, func(t *testing.T) {
+				copyGates := tc.change(append([]stage2Verdict(nil), gates...))
+				var copyRecord any
+				if i == 0 {
+					copy := w
+					copy.Gates = copyGates
+					copyRecord = copy
+				} else {
+					copy := m
+					copy.Gates = copyGates
+					copyRecord = copy
+				}
+				raw, err := json.Marshal(copyRecord)
+				if err != nil {
+					t.Fatal(err)
+				}
+				dst := reflect.New(reflect.TypeOf(copyRecord)).Interface()
+				if err := decodeStage2(raw, dst); (err == nil) != tc.valid {
+					t.Fatalf("gate verdicts valid=%v, decode error: %v", tc.valid, err)
+				}
+				if tc.valid && !reflect.DeepEqual(copyRecord, reflect.ValueOf(dst).Elem().Interface()) {
+					t.Fatal("round trip changed gate verdicts")
+				}
+			})
 		}
 		for _, pair := range [][2]string{{`"Version":1`, `"Version":2`}, {`"Round":1`, `"Round":0`}, {`"Streams":1000`, `"Streams":999`}, {`"P95MS":2`, `"P95MS":"bad"`}, {`"Version":1`, `"Version":1,"Version":1`}, {`"State":"inconclusive"`, `"State":"unknown"`},
 			{`"Early":1`, `"Early":101`}, {`"Early":1`, `"Early":0`}, {`"MinMS":-5`, `"MinMS":0`}, {`"MinMS":0`, `"MinMS":-1`}, {`"MinMS":0`, `"MinMS":1`},
@@ -79,6 +127,21 @@ func TestStage2Schema(t *testing.T) {
 		}
 		stage2MissingFields(t, tree, tree, dst)
 	}
+	t.Run("sync inconclusive gates", func(t *testing.T) {
+		copy := w
+		copy.Config.Arm, copy.Effective.Startup = p.Arms[0], p.Arms[0]
+		raw, err := json.Marshal(copy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded stage2Window
+		if err := decodeStage2(raw, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(copy, decoded) {
+			t.Fatal("round trip changed sync inconclusive verdicts")
+		}
+	})
 	for _, tc := range []struct {
 		name   string
 		change func(*stage2Manifest)

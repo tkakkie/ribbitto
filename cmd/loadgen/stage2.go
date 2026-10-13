@@ -304,9 +304,26 @@ func decodeStage2(raw []byte, dst any) error {
 	if version != 1 || !reflect.DeepEqual(protocol, fixedStage2()) {
 		return fmt.Errorf("unknown version or changed protocol")
 	}
+	seenGates := make(map[string]bool, len(protocol.Gates))
+	for _, gate := range protocol.Gates {
+		seenGates[gate.ID] = false
+	}
 	for _, gate := range gates {
-		if gate.ID == "" || !slices.Contains([]string{"pass", "reject", "inconclusive"}, gate.State) {
+		seen, known := seenGates[gate.ID]
+		if !known {
+			return fmt.Errorf("unknown gate ID %q", gate.ID)
+		}
+		if seen {
+			return fmt.Errorf("duplicate gate ID %q", gate.ID)
+		}
+		if !slices.Contains([]string{"pass", "reject", "inconclusive"}, gate.State) {
 			return fmt.Errorf("invalid gate verdict")
+		}
+		seenGates[gate.ID] = true
+	}
+	for _, gate := range protocol.Gates {
+		if !seenGates[gate.ID] {
+			return fmt.Errorf("missing gate ID %q", gate.ID)
 		}
 	}
 	for _, c := range configs {

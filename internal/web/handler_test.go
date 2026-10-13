@@ -179,8 +179,9 @@ func TestHTMLSecurity(t *testing.T) {
 				}
 				previous = nonce
 				tags := scripts.FindAllString(w.Body.String(), -1)
-				if len(tags) != 3 {
-					t.Fatalf("got %d scripts, want 3", len(tags))
+				// The layout's arrival script and htmx with its two extensions.
+				if len(tags) != 4 {
+					t.Fatalf("got %d scripts, want 4", len(tags))
 				}
 				for _, tag := range tags {
 					if !strings.Contains(tag, ` nonce="`+nonce+`"`) {

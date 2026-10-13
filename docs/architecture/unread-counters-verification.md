@@ -77,7 +77,36 @@ Foreign fixtures supply only metadata; every message/read mutation uses the
 production writers. The branch adapter captures the notice sequence from its
 production read arguments; maintenance still uses the pre-write snapshot.
 
-956c retains real
-PostgreSQL commit orders, rollback and retry with deterministic gates; these
-sequential snapshots prove no concurrency guarantee. #957 still waits. The
-956a cost bounds remain **estimates**; no measurement ran.
+## 956c: PostgreSQL transactions and ordering
+
+`internal/realtime/unread_counters_transactions_test.go` runs production topic
+reads, page posts, branches and sign-up with a test-only adapter. For read/move,
+post/read and join/post, both orders run with both commits and with either
+operation aborted then retried as a whole transaction: 18 gated cases. Both
+transactions begin before writes; `pg_blocking_pids` confirms the second waits
+on the first's organisation lock. Gates control release; deadlines only bound
+failures, with no sleeps or measurements.
+
+**PostgreSQL evidence:** the adapter takes the design's conservative organisation
+lock before loading pre-write truth. It stores the prototype's uncapped totals
+and complete bundles in one test-only bytea row on the production transaction's
+connection, before COMMIT. A server error after both writes confirms rollback;
+source messages, members, ranges, floors, event sequence, event/account counts
+and counter bytes stay unchanged. Retry reloads committed truth and counters
+after acquiring the lock. This tests READ COMMITTED classification and atomicity
+under the proposed protocol; today's production reads do not take this extra
+lock. The bytea row is a test carrier, not a production schema or fan-out test.
+
+**Arithmetic evidence:** the existing in-memory maintenance uses pre-write truth,
+arguments and production event results, never oracle results or a post-write
+recount. Post/read shares one member's implicit and explicit reads. Initial
+bundles include both differently read members; joining eagerly
+materialises a test bundle from its prefix. At every outcome and while writes
+are uncommitted, persisted raw totals/read counts are checked separately, and
+all members' full models match the independent oracle, including raw counts and
+99+ badges. One read-only repeatable-read snapshot is reread across each commit
+or rollback and must retain the same model; fresh snapshots check the outcome.
+
+Together with 956a/956b, this completes #956's correctness cases. #957 may start
+after 956c completes; adoption remains undecided. Cost bounds are **estimates**;
+no load run or measurement ran.

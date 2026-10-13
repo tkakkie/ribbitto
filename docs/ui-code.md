@@ -44,6 +44,20 @@ falling back to the handle when the web layer blanks a legacy name. Text
 precedes the avatar in both page and live markup; a fixed gutter reserves
 its space without loading an image or web font.
 
+## Sidebar order and position
+
+Channels are listed by name, and the current channel nests its topics: the
+default first, then by name, at most 50 ([`topics.md`](domain/topics.md)).
+The order never changes to bring the current row forward (#922). Instead
+`sidebar-scroll-v1.js`, once on load, scrolls the sidebar's own pane (the
+`<aside>` around `#sidebar-channels`) so that the target row is in view,
+centred, when it is not already: the selected topic's row when it is
+listed, otherwise the current channel's row (an unlisted topic, or the
+feed). It moves neither the window nor focus, and scrolls instantly.
+Live recounts replace `#sidebar-channels` inside that pane, which keeps its
+scroll position, so the script does nothing then: the member's position
+wins. Without JavaScript the sidebar opens at its top.
+
 ## Styles
 
 - **Templates use token utilities only.** Colours, sizes, radii and shadows

@@ -10,9 +10,7 @@ Other browser actions use POST. One process serves every stream; multiple
 processes are future work (hub, stream caps and watermark are per process).
 
 Ordering, replay and vanished messages are in [`replay.md`](replay.md).
-A shared reader per organisation, which would serve caught-up connections
-from a window instead of their own reads (replay still reads the database),
-is designed but not built (#232): [`shared-reader.md`](shared-reader.md).
+A [shared reader per organisation](shared-reader.md) is designed but not built (#232).
 
 ### Retention
 
@@ -77,7 +75,8 @@ The retention period defaults to seven days; see [database configuration](../dat
 ### Resource limits
 
 `Streaming.Recounts` enables pre-admission ([scheduler](recount-scheduler.md));
-nil preserves synchronous recounts. Production leaves it nil until #865 part 2h.
+nil preserves synchronous recounts. `cmd/ribbitto` supplies it only with explicit
+[opt-in configuration](../database.md#recount-capacity-configuration).
 
 Cache loads, write deadlines, heartbeats, stream caps, shutdown and HTTP/2: [`stream-limits.md`](stream-limits.md).
 

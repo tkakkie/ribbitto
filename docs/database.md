@@ -40,12 +40,22 @@ C=39 or W=27 fail. **36/26 is a validation configuration, not a production
 default.** On applies C before opening the pool, overriding `pool_max_conns`
 in the database URL. The platform's `PoolOptions.MaxConns=0` preserves existing
 pool behavior. A startup `slog` record includes the effective pool maximum,
-configured budget, stream registration limit and synchronous delivery mode;
+configured budget, stream registration limit and effective delivery mode;
 no database URL or credentials are logged.
 
-Part 2c of #865 only validates capacity and sets the pool maximum: **both on
-and off still deliver recounts synchronously**, with no scheduler constructed.
-Activation belongs to part 2h; see the [scheduler contract](architecture/recount-scheduler.md).
+On constructs one scheduler with W workers and the process stream cap as its
+registration limit, plus one delivery observer. Both share the production
+stream composition and development metrics; shutdown joins the scheduler before
+closing the shared pool. Off constructs neither and keeps synchronous delivery;
+metrics report `scheduler.enabled: false` and `delivery.enabled: false`.
+**Async recounts are not enabled by default and are not yet validated for
+production.** Stage 2 / PR 3 of #865 decides activation using a freshness oracle
+and mixed-load validation; opt-in wiring alone is not that validation.
+See the [scheduler contract](architecture/recount-scheduler.md).
+
+Member/account fairness is out of scope: FIFO is per stream, so sixteen tabs
+receive more service than one tab. Equal account shares need an identity-aware
+policy.
 
 ## Database workflow
 

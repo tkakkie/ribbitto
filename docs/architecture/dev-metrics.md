@@ -84,8 +84,9 @@ COMMIT that failed.
 `scheduler` exposes every [RecountStats field](recount-scheduler.md), sampled
 together under its mutex. Other sections are sampled independently.
 The metrics dependency is optional: nil yields `enabled: false` and every other
-value zero (including arrays). This is the production default until part 2h of
-#865 wires a scheduler. Scraping never constructs or activates one.
+value zero (including arrays). This remains the default; only explicit
+[async opt-in](../database.md#recount-capacity-configuration) supplies a scheduler.
+Scraping never constructs or activates one.
 
 With a scheduler, `enabled: true`; `closed` reports stopped admission, and
 `snapshot_at_unix_ns` timestamps the gauges. `worker_limit` and
@@ -120,7 +121,7 @@ be subtracted from either error counter. All counters persist after closure.
 
 Part 2f adds optional `delivery`, sampled under its own observer mutex. Nil gives
 `enabled: false` and zero values, independently of `scheduler`; production supplies
-neither until 2h. `submitted` counts scheduled writer attempts (including refused
+neither by default. `submitted` counts scheduled writer attempts (including refused
 submissions), `received` counts actual mailbox receives, and `delivered` counts
 successful Sender returns whose context is still live. This does not acknowledge
 browser receipt or DOM application. `denied` counts membership revocation;

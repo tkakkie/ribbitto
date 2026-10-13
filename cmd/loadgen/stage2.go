@@ -114,6 +114,21 @@ type stage2Latency struct {
 	Count               uint64
 	P50MS, P95MS, P99MS float64
 }
+
+func (l stage2Latency) validate() error {
+	if l.Count == 0 && (l.P50MS != 0 || l.P95MS != 0 || l.P99MS != 0) {
+		return fmt.Errorf("empty latency must be zero")
+	}
+	if l.P50MS > l.P95MS || l.P95MS > l.P99MS {
+		return fmt.Errorf("invalid latency percentile order")
+	}
+	// Ordered percentiles are all nonnegative exactly when p50 is.
+	if l.P50MS < 0 {
+		return fmt.Errorf("negative latency")
+	}
+	return nil
+}
+
 type stage2Operation struct {
 	Operation, Endpoint                                                     string
 	Scheduled, Executed, Succeeded, Changed, Noop, Missed, Timeouts, Failed uint64
@@ -136,6 +151,20 @@ type stage2ReceiptLatency struct {
 	Count, Early               uint64
 	MinMS, P50MS, P95MS, P99MS float64
 }
+
+func (l stage2ReceiptLatency) validate() error {
+	if l.Count == 0 && (l.MinMS != 0 || l.Early != 0 || l.P50MS != 0 || l.P95MS != 0 || l.P99MS != 0) {
+		return fmt.Errorf("empty receipt latency must be zero")
+	}
+	if l.P50MS > l.P95MS || l.P95MS > l.P99MS {
+		return fmt.Errorf("invalid receipt percentile order")
+	}
+	if l.Early > l.Count || (l.MinMS < 0) != (l.Early > 0) || l.MinMS > l.P50MS {
+		return fmt.Errorf("invalid signed receipt evidence")
+	}
+	return nil
+}
+
 type stage2Delivery struct {
 	Message, PostFreshness, ReadFreshness                                                 stage2ReceiptLatency
 	ScheduledToReceipt, OfflineReplay                                                     stage2Latency
@@ -232,6 +261,22 @@ func stage2Shape(raw json.RawMessage, typ reflect.Type) error {
 			}
 		}
 	}
+	// Validate summary types during the field traversal so new summary fields
+	// cannot bypass their invariants. Required fields are checked first.
+	switch typ {
+	case reflect.TypeOf(stage2Latency{}):
+		var l stage2Latency
+		if err := json.Unmarshal(raw, &l); err != nil {
+			return err
+		}
+		return l.validate()
+	case reflect.TypeOf(stage2ReceiptLatency{}):
+		var l stage2ReceiptLatency
+		if err := json.Unmarshal(raw, &l); err != nil {
+			return err
+		}
+		return l.validate()
+	}
 	return nil
 }
 
@@ -251,11 +296,6 @@ func decodeStage2(raw []byte, dst any) error {
 	var gates []stage2Verdict
 	switch v := dst.(type) {
 	case *stage2Window:
-		for _, receipt := range []stage2ReceiptLatency{v.Delivery.Message, v.Delivery.PostFreshness, v.Delivery.ReadFreshness} {
-			if receipt.Early > receipt.Count || (receipt.MinMS < 0) != (receipt.Early > 0) || receipt.MinMS > receipt.P50MS || (receipt.Count == 0 && receipt.MinMS != 0) {
-				return fmt.Errorf("invalid signed receipt evidence")
-			}
-		}
 		gates = v.Gates
 		version, protocol, configs = v.Version, v.Protocol, []stage2Config{v.Config}
 		if v.Kind != "window" {

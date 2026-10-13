@@ -27,7 +27,7 @@ func TestStage2Protocol(t *testing.T) {
 	}
 }
 
-func TestStage2Schema(t *testing.T) {
+func stage2WindowFixture() stage2Window {
 	p := fixedStage2()
 	c := stage2Config{p.Groups[0], p.Arms[1], 1, 42, 43}
 	metrics := json.RawMessage(`{"database":{},"pool":{},"runtime":{},"streams":{},"scheduler":{},"delivery":{}}`)
@@ -36,15 +36,20 @@ func TestStage2Schema(t *testing.T) {
 	for _, gate := range p.Gates {
 		gates = append(gates, stage2Verdict{gate.ID, "inconclusive", map[string]float64{"count": 0}})
 	}
-	w := stage2Window{Version: 1, Kind: "window", Protocol: p, Config: c, Effective: e,
+	return stage2Window{Version: 1, Kind: "window", Protocol: p, Config: c, Effective: e,
 		Samples: []stage2Sample{{0, "traffic", metrics}}, Operations: []stage2Operation{{Operation: "post", Endpoint: "feed", HTTP: stage2Latency{1, 1, 2, 3}}},
 		Delivery: stage2Delivery{Message: stage2ReceiptLatency{100, 1, -5, 1, 2, 3}, PostFreshness: stage2ReceiptLatency{1, 1, -2, -2, -2, -2}, ReadFreshness: stage2ReceiptLatency{1, 1, -3, -3, -3, -3}},
 		Attempts: []stage2Attempt{{Operation: "replacement", LogicalID: 1, Attempt: 2, Status: 503, Outcome: "refused_capacity"}}, Gates: gates}
+}
+
+func TestStage2Schema(t *testing.T) {
+	w := stage2WindowFixture()
+	p, e, gates := w.Protocol, w.Effective, w.Gates
 	m := stage2Manifest{Version: 1, Kind: "manifest", Protocol: p, Gates: gates}
 	for _, group := range p.Groups {
 		for _, arm := range p.Arms {
 			for round := 1; round <= p.Rounds; round++ {
-				m.Windows = append(m.Windows, stage2WindowRef{"completed", "", "window.json", strings.Repeat("a", 64), stage2Config{group, arm, round, 42, 43}, &stage2Effective{arm, group.Streams, metrics}})
+				m.Windows = append(m.Windows, stage2WindowRef{"completed", "", "window.json", strings.Repeat("a", 64), stage2Config{group, arm, round, 42, 43}, &stage2Effective{arm, group.Streams, e.Metrics}})
 			}
 		}
 	}
@@ -190,6 +195,98 @@ func TestStage2Schema(t *testing.T) {
 				t.Fatal("round trip changed manifest state/evidence")
 			}
 		})
+	}
+}
+
+func TestStage2Latencies(t *testing.T) {
+	type latencyCase struct {
+		name    string
+		summary any
+		wantErr string
+	}
+	durations := []latencyCase{
+		{"equal", stage2Latency{1, 2, 2, 2}, ""},
+		{"observed zeros", stage2Latency{1, 0, 0, 0}, ""},
+		{"empty", stage2Latency{}, ""},
+		{"p50 above p95", stage2Latency{1, 2, 1, 3}, "invalid latency percentile order"},
+		{"p95 above p99", stage2Latency{1, 1, 3, 2}, "invalid latency percentile order"},
+		{"empty p50", stage2Latency{0, 1, 0, 0}, "empty latency must be zero"},
+		{"empty p95", stage2Latency{0, 0, 1, 0}, "empty latency must be zero"},
+		{"empty p99", stage2Latency{0, 0, 0, 1}, "empty latency must be zero"},
+		{"empty percentiles", stage2Latency{0, 1, 1, 1}, "empty latency must be zero"},
+		{"negative p50", stage2Latency{1, -1, 0, 0}, "negative latency"},
+		{"all negative", stage2Latency{1, -3, -2, -1}, "negative latency"},
+	}
+	receipts := []latencyCase{
+		{"equal", stage2ReceiptLatency{1, 0, 2, 2, 2, 2}, ""},
+		{"observed zeros", stage2ReceiptLatency{1, 0, 0, 0, 0, 0}, ""},
+		{"empty", stage2ReceiptLatency{}, ""},
+		{"negative equal", stage2ReceiptLatency{1, 1, -2, -2, -2, -2}, ""},
+		{"mixed signs", stage2ReceiptLatency{2, 1, -2, -1, 0, 1}, ""},
+		{"early below median", stage2ReceiptLatency{100, 1, -2, 0, 1, 2}, ""},
+		{"p50 above p95", stage2ReceiptLatency{1, 0, 0, 2, 1, 3}, "invalid receipt percentile order"},
+		{"p95 above p99", stage2ReceiptLatency{1, 0, 0, 1, 3, 2}, "invalid receipt percentile order"},
+		{"negative p50 above p95", stage2ReceiptLatency{1, 1, -3, -1, -2, 0}, "invalid receipt percentile order"},
+		{"negative p95 above p99", stage2ReceiptLatency{1, 1, -3, -3, -1, -2}, "invalid receipt percentile order"},
+		{"empty min", stage2ReceiptLatency{0, 0, 1, 0, 0, 0}, "empty receipt latency must be zero"},
+		{"empty early", stage2ReceiptLatency{0, 1, 0, 0, 0, 0}, "empty receipt latency must be zero"},
+		{"empty p50", stage2ReceiptLatency{0, 0, 0, 1, 0, 0}, "empty receipt latency must be zero"},
+		{"empty p95", stage2ReceiptLatency{0, 0, 0, 0, 1, 0}, "empty receipt latency must be zero"},
+		{"empty p99", stage2ReceiptLatency{0, 0, 0, 0, 0, 1}, "empty receipt latency must be zero"},
+		{"empty percentiles", stage2ReceiptLatency{0, 0, 0, 1, 1, 1}, "empty receipt latency must be zero"},
+		{"early exceeds count", stage2ReceiptLatency{1, 2, -1, 0, 0, 0}, "invalid signed receipt evidence"},
+		{"negative min without early", stage2ReceiptLatency{1, 0, -1, 0, 0, 0}, "invalid signed receipt evidence"},
+		{"zero min with early", stage2ReceiptLatency{1, 1, 0, 0, 0, 0}, "invalid signed receipt evidence"},
+		{"positive min with early", stage2ReceiptLatency{1, 1, 1, 1, 1, 1}, "invalid signed receipt evidence"},
+		{"min above p50", stage2ReceiptLatency{1, 0, 2, 1, 2, 3}, "invalid signed receipt evidence"},
+	}
+	// Discover every summary field: adding one to either record automatically
+	// exercises it through decodeStage2, rather than maintaining a field list.
+	w := stage2WindowFixture()
+	for _, record := range []struct {
+		name  string
+		value reflect.Value
+	}{
+		{"Operation", reflect.ValueOf(&w.Operations[0]).Elem()},
+		{"Delivery", reflect.ValueOf(&w.Delivery).Elem()},
+	} {
+		for i := 0; i < record.value.NumField(); i++ {
+			field := record.value.Field(i)
+			var cases []latencyCase
+			switch field.Type() {
+			case reflect.TypeOf(stage2Latency{}):
+				cases = durations
+			case reflect.TypeOf(stage2ReceiptLatency{}):
+				cases = receipts
+			default:
+				continue
+			}
+			original := reflect.ValueOf(field.Interface())
+			t.Run(record.name+"/"+record.value.Type().Field(i).Name, func(t *testing.T) {
+				for _, tc := range cases {
+					t.Run(tc.name, func(t *testing.T) {
+						field.Set(reflect.ValueOf(tc.summary))
+						defer field.Set(original)
+						raw, err := json.Marshal(w)
+						if err != nil {
+							t.Fatal(err)
+						}
+						var decoded stage2Window
+						err = decodeStage2(raw, &decoded)
+						if tc.wantErr == "" {
+							if err != nil {
+								t.Fatalf("rejected valid latency: %v", err)
+							}
+							if !reflect.DeepEqual(w, decoded) {
+								t.Fatal("round trip changed latency evidence")
+							}
+						} else if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+							t.Fatalf("want error containing %q, got %v", tc.wantErr, err)
+						}
+					})
+				}
+			})
+		}
 	}
 }
 

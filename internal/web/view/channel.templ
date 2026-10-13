@@ -336,7 +336,7 @@ templ messageComposer(page ChannelPage, oob bool) {
 			} else {
 				<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
 			}
-			<button type="submit" aria-label={ i18n.T(ctx, "message.send") } class="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand disabled:opacity-50">
+			<button type="submit" aria-label={ i18n.T(ctx, "message.send") } class="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand transition motion-safe:active:scale-96 disabled:opacity-50">
 				@Icon("send-regular", 20)
 			</button>
 		</div>

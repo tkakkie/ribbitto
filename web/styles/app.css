@@ -94,6 +94,21 @@
   --color-current: currentColor;
 }
 
+/* Motion after Fluent 2 (docs/ui-code.md#motion); only transform, opacity and
+ * colours animate. Static, so every token reaches the built stylesheet even
+ * while no utility uses it yet. */
+@theme static {
+  /* Only these easings exist; Tailwind's defaults are dropped. */
+  --ease-*: initial;
+  --duration-faster: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-gentle: 250ms;
+  --ease-standard: cubic-bezier(0.33, 0, 0.67, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0, 1);
+  --ease-accelerate: cubic-bezier(0.8, 0, 0.78, 1);
+}
+
 @theme {
   /* System fonts only (no web fonts: self-hosting and privacy), with Japanese fallbacks. */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
@@ -131,15 +146,6 @@
   --container-panel: 21.25rem;
   --container-reading: 47.5rem;
 
-  /* Motion after Fluent 2 (docs/ui-code.md#motion); only transform, opacity and colours animate. */
-  --duration-faster: 100ms;
-  --duration-fast: 150ms;
-  --duration-normal: 200ms;
-  --duration-gentle: 250ms;
-  --ease-*: initial;
-  --ease-standard: cubic-bezier(0.33, 0, 0.67, 1);
-  --ease-decelerate: cubic-bezier(0, 0, 0, 1);
-  --ease-accelerate: cubic-bezier(0.8, 0, 0.78, 1);
   /* Hover and press feedback: the transition utility uses these. */
   --default-transition-duration: var(--duration-faster);
   --default-transition-timing-function: var(--ease-standard);

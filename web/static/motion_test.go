@@ -96,3 +96,17 @@ func cssRules(source string) []cssRule {
 	}
 	return rules
 }
+
+// TestMotionTokens proves every documented motion token reaches the built
+// stylesheet, used by a utility yet or not (docs/ui-code.md#motion).
+func TestMotionTokens(t *testing.T) {
+	source, err := os.ReadFile("css/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{"--duration-faster:", "--duration-fast:", "--duration-normal:", "--duration-gentle:", "--ease-standard:", "--ease-decelerate:", "--ease-accelerate:"} {
+		if !strings.Contains(string(source), token) {
+			t.Errorf("built stylesheet lacks %s", strings.TrimSuffix(token, ":"))
+		}
+	}
+}

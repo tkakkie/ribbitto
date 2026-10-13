@@ -43,7 +43,7 @@ wins. Without JavaScript the sidebar opens at its top. At phone width
   contents (quoted or unquoted) are ignored before arbitrary property
   prefixes are stripped. Generated CSS and vendored assets are excluded.
   The pattern check does not evaluate dynamic expressions.
-- **`web/styles/app.css` holds only** the tokens (`:root` colours and
+- **`web/styles/app.css` holds only** the tokens (`:root` colours, shadows and
   `@theme`), base styles, and what utilities cannot express: `@keyframes`,
   the arrival animations and the reduced-motion rule. No component classes and
   no `@apply` for components; no `style` attributes in templates.
@@ -64,6 +64,9 @@ The fixed widths of the desktop layout, and the block shape
 | `rounded-xl` | 12 px | the rounded blocks |
 | `shadow-block` | a 1 px ring and a soft drop in light; a faint 1 px ring in dark | blocks and cards |
 | `shadow-popover` | a deeper drop in light; a faint 1 px ring in dark | menus, popovers and dialogs |
+
+The shadow utilities read `--rb-shadow-block` and `--rb-shadow-popover`,
+defined in `:root` and overridden in the dark colour scheme.
 
 **Breakpoints** ([`ui.md`](ui.md#layout-principles), #966): below 852 px
 (53.25 rem) the phone layout; from 852 px the desktop frame with a side

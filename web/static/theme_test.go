@@ -42,3 +42,38 @@ func TestDarkColourTokens(t *testing.T) {
 		}
 	}
 }
+
+// TestSchemeDependentShadows catches Tailwind inlining a light shadow instead
+// of reading the variable that changes with the system colour scheme.
+func TestSchemeDependentShadows(t *testing.T) {
+	source, err := os.ReadFile("css/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := cssRules(string(source))
+	for _, name := range []string{"block", "popover"} {
+		t.Run(name, func(t *testing.T) {
+			selector := ".shadow-" + name
+			found := false
+			for _, rule := range rules {
+				if rule.selector != selector {
+					continue
+				}
+				found = true
+				value := ""
+				for _, declaration := range strings.Split(rule.declarations, ";") {
+					property, candidate, _ := strings.Cut(declaration, ":")
+					if property == "--tw-shadow" {
+						value = candidate
+					}
+				}
+				if want := "var(--rb-shadow-" + name + ")"; value != want {
+					t.Errorf("%s: --tw-shadow = %q, want %q so the shadow follows the colour scheme", selector, value, want)
+				}
+			}
+			if !found {
+				t.Errorf("shadow utility %s missing from the built stylesheet", selector)
+			}
+		})
+	}
+}

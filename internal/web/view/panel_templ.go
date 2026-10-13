@@ -156,7 +156,7 @@ func panelControl(page ChannelPage, panel string, iconOnly bool) templ.Component
 		}
 		ctx = templ.ClearChildren(ctx)
 		open := page.Panel == panel
-		var templ_7745c5c3_Var5 = []any{"inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-body transition motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", open), templ.KV("text-muted hover:bg-hover hover:text-fg", !open)}
+		var templ_7745c5c3_Var5 = []any{"inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-body transition-feedback motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", open), templ.KV("text-muted hover:bg-hover hover:text-fg", !open)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var5...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -318,7 +318,7 @@ func sidePanel(page ChannelPage) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" class=\"flex size-11 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg transition motion-safe:active:scale-96\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" class=\"flex size-11 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg transition-feedback motion-safe:active:scale-96\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

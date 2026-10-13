@@ -79,7 +79,7 @@ wins. Without JavaScript the sidebar opens at its top.
   The pattern check does not evaluate dynamic expressions.
 - **`web/styles/app.css` holds only** the tokens (`:root` colours and
   `@theme`), base styles, and what utilities cannot express: `@keyframes`,
-  view transitions and the reduced-motion rule. No component classes and
+  the arrival animations and the reduced-motion rule. No component classes and
   no `@apply` for components; no `style` attributes in templates.
 - **Spacing** follows the 4 px grid; a container sets the space between
   its children with `gap`, rather than margins on each child.
@@ -112,28 +112,42 @@ the typing dots.
 
 | Token | Value | Use |
 |---|---|---|
-| `--duration-faster` | 100 ms | hover and press feedback (the default for `transition`); the selection pill |
+| `--duration-faster` | 100 ms | hover and press feedback (the default for `transition-feedback`); the selection pill |
 | `--duration-fast` | 150 ms | an opening panel |
 | `--duration-normal`, `--duration-gentle` | 200 ms, 250 ms | reserved for larger surfaces |
 | `ease-standard` | `cubic-bezier(0.33, 0, 0.67, 1)` | colour changes |
 | `ease-decelerate` | `cubic-bezier(0, 0, 0, 1)` | things that enter |
 | `ease-accelerate` | `cubic-bezier(0.8, 0, 0.78, 1)` | things that leave |
 
-- **Rows and buttons** add `transition motion-safe:active:scale-96`: colours
+- **Rows and buttons** add `transition-feedback motion-safe:active:scale-96` (a utility in `app.css` that animates only colours and `scale`, rather than Tailwind's longer `transition` list, #921): colours
   change over 100 ms and a press scales to 0.96.
 - **Messages never move**, live ones included: the page cannot tell
   reconnect backlog from live delivery, and backlog must not move.
 - **The typing dots** pulse (`animate-typing-dot-1`…`3`) while someone types.
-- **Navigation** uses cross-document view transitions (CSS only), with no
-  cross-fade: the old page disappears at once and the new one shows from
-  its first frame; pointer input passes through. Only an opening panel
-  slides in 8 px over 150 ms (a closing one just disappears), and the pill
-  grows into a new row over 100 ms (a transition name per row, through
-  typed `attr()`).
-- **Reduced motion.** `@view-transition` and press scaling exist only under
-  `prefers-reduced-motion: no-preference`, and under `reduce` one rule
+- **Navigation** has no cross-document view transition: its setup delayed
+  every switch (#921). The new page shows from its first frame. Only an
+  opening panel slides in 8 px over 150 ms (a closing one just disappears),
+  and the pill grows into a new row over 100 ms.
+- **Arrival.** `arrival-v1.js` marks the root (`data-arrive-pill`,
+  `data-arrive-panel`) and CSS animates under those marks. It reads
+  `navigation.activation` and stores nothing: only a `push` whose previous
+  entry is same-origin (a link, or a form's redirect) is marked, the pill
+  when the place (the path without `/members` or `/overview`) changed, the
+  panel when one newly opened. A first load, a reload or Back/Forward is
+  never marked; neither is a panel switch or close. A mark is removed when
+  its animation ends, the pill's earlier at the first live
+  `#sidebar-channels` replacement, so a live list never grows its pill
+  again; one with nothing to animate (reduced motion, a hidden row) is
+  removed at `DOMContentLoaded`. The script sits in `<head>` and is not
+  deferred: it must mark the page before the first paint, or the pill
+  shows at rest first. Browsers without the Navigation API show no arrival
+  motion. `testArrivalBrowser` (`internal/web/arrival_browser_test.go`)
+  checks these cases in a browser.
+- **Reduced motion.** The arrival animations and press scaling exist only
+  under `prefers-reduced-motion: no-preference`, and under `reduce` one rule
   removes every animation and transition. `TestReducedMotion`
-  (`web/static/motion_test.go`) checks this on the built stylesheet.
+  (`web/static/motion_test.go`) checks this on the built stylesheet, and
+  `TestNoViewTransitions` that it declares no view transition.
 
 ## Icons
 

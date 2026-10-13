@@ -33,7 +33,10 @@ func TestMessageStreamBrowser(t *testing.T) {
 	// limit before the scenarios ran (#415); one that misses this still fails.
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Context(ctx)
+	// Without the back/forward cache, Back and Forward load a page anew and
+	// run its scripts (the arrival case), and a page left behind keeps no
+	// stream open to exhaust HTTP/1.1's six connections per host.
+	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Set("disable-back-forward-cache").Context(ctx)
 	url, err := launch.Launch()
 	if err != nil {
 		browserUnavailable(t, err.Error())
@@ -51,6 +54,7 @@ func TestMessageStreamBrowser(t *testing.T) {
 	t.Run("side-panel", func(t *testing.T) { testSidePanelBrowser(t, browser) })
 	t.Run("sidebar-scroll", func(t *testing.T) { testSidebarScrollBrowser(t, browser) })
 	t.Run("branch-form", func(t *testing.T) { testBranchFormBrowser(t, browser) })
+	t.Run("arrival", func(t *testing.T) { testArrivalBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {
 		modes := []string{"before", "stale", "fresh", "abort", "4xx"}
 		if side == "source" {

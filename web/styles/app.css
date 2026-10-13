@@ -173,8 +173,9 @@
   }
 }
 
-/* Navigation fades only the old conversation (and panel) out above the new,
-   opaque one, so new content is readable at once; reduced motion never opts in. */
+/* Navigation: the old page disappears at once and the new one shows from its
+   first frame; only an opening panel and a new row's pill move. Reduced
+   motion never opts in. */
 @media (prefers-reduced-motion: no-preference) {
   @view-transition {
     navigation: auto;
@@ -183,31 +184,17 @@
   ::view-transition {
     pointer-events: none;
   }
-  #conversation {
-    view-transition-name: conversation;
-  }
-  #side-panel {
-    view-transition-name: side-panel;
-  }
-  /* Everything snaps to the new page; the root does not fade at all. */
   ::view-transition-group(*),
-  ::view-transition-old(*),
   ::view-transition-new(*) {
     animation: none;
   }
-  ::view-transition-old(root) {
+  ::view-transition-old(*) {
     display: none;
   }
-  /* Uncropped, the old block would stretch to the new width. */
-  ::view-transition-old(conversation),
-  ::view-transition-old(side-panel) {
-    z-index: 1;
-    block-size: 100%;
-    object-fit: none;
-    object-position: left top;
-    animation: rb-fade-out var(--duration-faster) var(--ease-decelerate) both;
-  }
   /* An opening panel, with no partner on the old page, slides in 8 px. */
+  #side-panel {
+    view-transition-name: side-panel;
+  }
   ::view-transition-new(side-panel):only-child {
     animation: rb-panel-in var(--duration-fast) var(--ease-decelerate);
   }
@@ -220,14 +207,8 @@
   ::view-transition-new(.selection-pill):only-child {
     animation: rb-pill-in var(--duration-faster) var(--ease-decelerate);
   }
-  ::view-transition-old(.selection-pill):only-child {
-    display: none;
-  }
 }
 
-@keyframes rb-fade-out {
-  to { opacity: 0; }
-}
 @keyframes rb-panel-in {
   from { transform: translateX(0.5rem); }
 }

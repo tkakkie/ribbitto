@@ -53,8 +53,16 @@ its space without loading an image or web font.
   `tools/sourcecheck` rejects square brackets in template class
   attributes, including string literals in dynamic class expressions
   (comments are skipped), and reports each such class once — under the
-  colour rule in [`ui.md`](ui.md) when it holds a raw colour; computed
-  class names are not evaluated, so reviewers check those.
+  colour rule below when it holds a raw colour; computed class names are
+  not evaluated, so reviewers check those.
+- **No literal colours.** `tools/sourcecheck`, run by `make check`, rejects
+  literal colours in arbitrary classes and inline styles in authored
+  `.templ` attributes, and in `web/styles/app.css` (including `@apply`)
+  outside token definitions (`--rb-*` in `:root`, and custom properties in
+  `@theme`). Token references, `transparent` and `currentColor` pass; URL
+  contents (quoted or unquoted) are ignored before arbitrary property
+  prefixes are stripped. Generated CSS and vendored assets are excluded.
+  The pattern check does not evaluate dynamic expressions.
 - **`web/styles/app.css` holds only** the tokens (`:root` colours and
   `@theme`), base styles, and what utilities cannot express: `@keyframes`,
   view transitions and the reduced-motion rule. No component classes and
@@ -90,11 +98,11 @@ the typing dots.
 
 | Token | Value | Use |
 |---|---|---|
-| `--duration-faster` | 100 ms | hover and press feedback (the default for `transition`); a live message; the old conversation fading out; the selection pill |
+| `--duration-faster` | 100 ms | hover and press feedback (the default for `transition`); a live message; the selection pill |
 | `--duration-fast` | 150 ms | an opening panel |
 | `--duration-normal`, `--duration-gentle` | 200 ms, 250 ms | reserved for larger surfaces |
 | `ease-standard` | `cubic-bezier(0.33, 0, 0.67, 1)` | colour changes |
-| `ease-decelerate` | `cubic-bezier(0, 0, 0, 1)` | things that enter; the old conversation clearing quickly |
+| `ease-decelerate` | `cubic-bezier(0, 0, 0, 1)` | things that enter |
 | `ease-accelerate` | `cubic-bezier(0.8, 0, 0.78, 1)` | things that leave |
 
 - **Rows and buttons** add `transition motion-safe:active:scale-96`: colours
@@ -105,11 +113,12 @@ the typing dots.
   replayed backlog comes before it (a backlog beyond one 100-event read
   still moves). History, replays, moves and branches never move.
 - **The typing dots** pulse (`animate-typing-dot-1`…`3`) while someone types.
-- **Navigation** uses cross-document view transitions (CSS only): the app
-  bar and sidebar stay; the new conversation and panel are opaque at once
-  while the old ones fade out above them in 100 ms; pointer input passes
-  through. An opening panel slides in 8 px; the pill grows into a new row
-  (a transition name per row, through typed `attr()`).
+- **Navigation** uses cross-document view transitions (CSS only), with no
+  cross-fade: the old page disappears at once and the new one shows from
+  its first frame; pointer input passes through. Only an opening panel
+  slides in 8 px over 150 ms (a closing one just disappears), and the pill
+  grows into a new row over 100 ms (a transition name per row, through
+  typed `attr()`).
 - **Reduced motion.** `@view-transition` and press scaling exist only under
   `prefers-reduced-motion: no-preference`, and under `reduce` one rule
   removes every animation and transition. `TestReducedMotion`

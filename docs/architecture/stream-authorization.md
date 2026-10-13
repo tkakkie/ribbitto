@@ -1,12 +1,10 @@
 # Stream authorization cost
 
-How a stream keeps #262's guarantee without one database query per
-connection per event (#622). **Decided by the maintainer on 2026-10-08:
-option (a2), with its triggers mandatory** ([Decision](#decision)). It is
-implemented by #669 (epoch) and #670 (delivery); #671 measured the cost
-([results](stream-authorization-results.md)). Current checks use fresh shared epochs and bounded cached allows,
-reloading memberships independently on misses. Parent cancellation fails
-closed. The comparison preserves the pre-#670 reasoning.
+Keeping #262's guarantee without a query per connection/event (#622).
+**Maintainer, 2026-10-08: (a2), triggers mandatory** ([Decision](#decision)).
+Implemented by #669/#670 and [measured by #671](stream-authorization-results.md):
+fresh shared epochs and bounded cached allows; misses reload independently.
+Cancellation fails closed. The comparison preserves pre-#670 reasoning.
 
 ## Before #670
 
@@ -156,7 +154,9 @@ for a primary-key read, and the choice should be revisited.
 ### Tests that prove (a2)
 
 - **Unchanged:** tests above, #207's register-then-recheck and session
-  cancellation; scheduled races remain #865 1f-b.
+  cancellation. #865 1f-b repeats safety assertions on scheduled Run and gates
+  recount/render revocation with cancellation/errors. Audience denies advance;
+  bound revocation and check errors do not.
 - **`org`, no database:** an unchanged epoch runs no membership query
   (counted, even after snapshot eviction); a changed one queries and denies;
   a failed epoch read is an error, never a deny; organisation and audience

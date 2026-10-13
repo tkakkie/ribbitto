@@ -2,13 +2,12 @@
 
 ## Server-Sent Events
 
-One organisation-wide SSE connection per tab, including directly opened
-older history pages, filtered by the page's [interests](#stream-scope).
+One organisation-wide SSE connection per tab, including older history pages,
+filtered by [interests](#stream-scope).
 Named durable events are `message`, `messages-moved` and `reset`; wired
 ephemeral owners can also supply `presence` and `typing` without `id:`.
-The browser sends everything else as ordinary POST requests. One
-process serves every stream; several server processes are future work (the
-hub, both stream caps and the watermark are per process).
+Other browser actions use POST. One process serves every stream; multiple
+processes are future work (hub, stream caps and watermark are per process).
 
 Ordering, replay and vanished messages are in [`replay.md`](replay.md).
 A shared reader per organisation, which would serve caught-up connections
@@ -115,8 +114,8 @@ The endpoint takes:
 | `?before=` page | `sidebar` with `channel` and, on topic pages, `topic` |
 | With the members panel | the page's own interests plus `presence`, with `presence-after` |
 
-Every page carries its snapshot cursor on `#organization-stream`, including
-`?before=` pages, which hold a slot under both stream caps. Only `message`
+Every page, including `?before=`, carries a snapshot cursor on
+`#organization-stream` and holds a slot under both caps. Only `message`
 and `messages-moved` frames advance the browser's durable cursor.
 
 Ephemeral delivery filters organisation, interest and typing channel/topic
@@ -135,7 +134,8 @@ Sidebars recount on connect, posts/moves and the member's read advances,
 regardless of message interests. With a hub, Reading and watches share
 one `unread.Changes`; otherwise the publisher is nil. Subscribe before recounting;
 release on exit. Capture before reads; send or deny covers that generation.
-Scheduled captures are per request.
+Scheduled captures are per request. Scheduled tests pin a fresh bound check
+before every write, and no write after revocation or cancellation.
 Changes dirty a [fixed deadline](stream-limits.md) checked
 between batches and in the combined wait. Authorize organisation and bound member
 after rendering, before sending. Frames omit `id:`; errors stop delivery. Reconnect recounts.

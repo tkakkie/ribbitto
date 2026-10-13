@@ -30,7 +30,9 @@
 // A dirty flag and fixed deadline coalesce recounts between batches; neither a
 // quiet period nor a backlog loses pending work. Rendering precedes authorization,
 // and sidebar frames check the organisation and bound member, preserving the
-// durable cursor. Production presence and
+// durable cursor. Scheduled authorization gates also pin audience-deny cursor
+// progress, revocation during computation/rendering and suppression after exit.
+// Production presence and
 // typing are implemented; web renders their indicators.
 // Web's hidden sink receives sidebar/presence payloads. The hub is also the
 // registry of open connections: Register caps

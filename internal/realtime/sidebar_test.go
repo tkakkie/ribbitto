@@ -213,7 +213,9 @@ func testSidebarContinuingBacklog(t *testing.T, readChanges bool) {
 	})
 }
 
-func TestSidebarDeliverySafety(t *testing.T) {
+func TestSidebarDeliverySafety(t *testing.T) { testSidebarDeliverySafety(t, false) }
+
+func testSidebarDeliverySafety(t *testing.T, scheduled bool) {
 	for _, name := range []string{"deny after render", "replacement during render", "authorization error", "send failure", "cancel during render", "cancel during authorization"} {
 		t.Run(name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -254,6 +256,7 @@ func TestSidebarDeliverySafety(t *testing.T) {
 					})}
 				stream.Sidebar = watchedSidebar{stream.Sidebar.(sidebarSource), func(kernel.ID, kernel.ID) SidebarWatch { return w }}
 				done := make(chan result, 1)
+				stream = compatibilityStream(t, stream, &selected, scheduled)
 				go func() { c, err := stream.Run(ctx, selected, 7, send); done <- result{c, err} }()
 				<-gate
 				if name == "deny after render" {

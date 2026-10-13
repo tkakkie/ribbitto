@@ -35,6 +35,11 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   dialog's heading, an error summary) or `0` on a scrollable region with
   `role="region"` and an `aria-label`. Focus is always visible (the focus
   token); nothing removes the outline.
+- **Tap targets** at phone width are at least 44 × 44 px, stricter than
+  AA's 24 px (2.5.8), which desktop keeps: links, buttons, form controls,
+  `<summary>` and labels that act as a control's target. Links inside
+  running text (message and help text) are the one exception
+  ([`ui.md`](ui.md#layout-principles), #966).
 - **Colour is never the only signal** (see [*Direction*](ui.md#direction)): a state also has
   text, an icon or a shape.
 - **Styles** ✓ only through the token utilities: no `style` attributes and

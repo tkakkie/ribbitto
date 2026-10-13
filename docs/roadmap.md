@@ -17,8 +17,8 @@ day-to-day progress. What the steps aim at is in the [vision](vision.md).
 | **M3 Real time** ✓ done | Server-Sent Events hub with per-connection authorization and replay | Messages arrive instantly; nothing is lost on reconnect; nothing reaches a connection that may not read it |
 | **Topics** ✓ done | Topics inside channels: the default topic, the feed and topic view, branching ([decision 21](decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)) | A conversation started in the default topic can be branched into its own topic, and both views show it |
 | **M4 Awareness** ✓ done | Unread counts, presence, typing indicator | The four outcomes under [M4](#m4) below |
-| **M5 UI pass** ← next | The existing pages in a new visual direction, with icons, channel images and motion | The five outcomes under [M5](#m5) below |
-| **M6 Dark mode and mobile** | Dark colours and a mobile layout for M5's design | The three outcomes under [M6](#m6) below |
+| **M5 UI pass** ✓ done | The existing pages in a new visual direction, with icons, channel images and motion | The five outcomes under [M5](#m5) below |
+| **M6 Dark mode and mobile** ← next | Dark colours and a mobile layout for M5's design | The three outcomes under [M6](#m6) below |
 
 The modular-monolith migration ([decision 26](decisions/26-modules-by-feature-layout-seams-and-order.md),
 [decision 27](decisions/27-channels-topics-and-messages-are-one-conversation-module.md),
@@ -59,14 +59,15 @@ me" view (#433); presence across several server processes (#236).
 
 ## M5
 
-M5 starts once M4 is done. It gives the pages that exist today one design,
-for a desktop browser: white rounded blocks on a lightly tinted base — an
-app bar, the conversation and side panels — with the sidebar of
+M5 is done (#870–#879; whole-milestone review #881). It gave the pages
+that existed then one design, for a desktop browser: white rounded blocks
+on a lightly tinted base — an app bar, the conversation and side panels —
+with the sidebar of
 icon-and-label rows on the base, a wide reading column and a rounded
-composer, and on desktop the feel of Microsoft's Fluent 2. It replaces the
+composer, and on desktop the feel of Microsoft's Fluent 2. It replaced the
 "Clear water" direction and its colours from #9. M5 is light only: the old
 dark theme is removed, and M6 designs dark colours for the new direction.
-M5 is done when:
+The completed outcomes are:
 
 1. **The direction is written down.** [`ui.md`](ui.md) records the new
    direction, its tokens with colours chosen anew, and the contrast table;
@@ -90,9 +91,15 @@ M5 is done when:
 The performance rules still hold: images never delay a message's text or
 shift the layout ([`ui.md`](ui.md#planned-directions-from-the-maintainer-9)),
 and a change on a measured path states its effect and any known regression
-([vision](vision.md#fast)).
+([vision](vision.md#fast)). #881 measured M5 against the commit before it:
+switching was 42 ms against 28 ms, from cross-document View Transitions, so
+#921 replaced them with CSS arrival motion (34–36 ms). Posting was
+unchanged. A Claude and Codex audit of M5 found no serious security issue;
+its follow-ups (#936–#940) are merged, including a per-organisation channel
+cap and a per-member creation limit.
 
-Left for later: dark mode and the mobile layout (M6); the rich editor and
+Left for later: dark mode and the mobile layout (M6); a hover colour for
+primary buttons, which needs M6's dark tokens (#925); the rich editor and
 the emoji picker.
 
 ## M6

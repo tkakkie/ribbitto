@@ -83,7 +83,8 @@ A new member can talk before learning how ribbitto is organised.
   cannot yet answer.
 - **Frog labels stay names** ([decision 20](decisions/20-product-labels-and-ordinary-words.md)).
   Their meaning is made clear by presentation and placement, not by
-  ordinary words added beside them; how is settled in the M5 design pass.
+  ordinary words added beside them; how is written in
+  [`ui.md`](ui.md#product-labels) (M5).
 
 **Rules out:** requiring a topic before posting; a new concept that has
 to be explained before it can be used; themed words for operations

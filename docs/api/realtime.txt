@@ -93,6 +93,27 @@ type RecountRegistration struct // RecountRegistration owns one running and one 
 type RecountScheduler struct // RecountScheduler bounds concurrent computations and registered streams.
   func (*RecountScheduler).Close() // Close refuses new work, cancels registrations and waits for actual returns.
   func (*RecountScheduler).Register() *RecountRegistration // Register returns nil when capacity is retained or the scheduler is closed.
+  func (*RecountScheduler).Stats() RecountStats // Stats copies counters and scans the bounded registrations under the mutex.
+type RecountStats struct // RecountStats is a scheduler snapshot; counters accumulate for its lifetime.
+  field Cancelled uint64 // Cancelled counts pending work removed and running work first cancelled.
+  field Closed bool // Closed reports whether admission has stopped.
+  field Completed uint64 // Completed counts actual returns, including errors, panics and cancelled work.
+  field DurationBuckets [6]uint64 // DurationBuckets are disjoint counts: <=1ms, <=10ms, <=100ms, <=1s, <=10s, >10s.
+  field Eligible int // Eligible counts pending registrations queued for a worker.
+  field Errors uint64 // Errors counts returned errors and recovered panics, even after cancellation.
+  field OldestPendingAge time.Duration // OldestPendingAge preserves continuous pending time across replacement.
+  field OldestRunningAge time.Duration // OldestRunningAge includes unfinished, cancelled computations.
+  field Pending int // Pending includes successors waiting behind running computations.
+  field ProcessingDuration time.Duration // ProcessingDuration sums dispatch-to-return durations for Completed.
+  field RefusedCapacity uint64 // RefusedCapacity counts Register calls refused by the registration limit.
+  field RefusedClosed uint64 // RefusedClosed counts Register calls refused after closure, ahead of capacity.
+  field RegistrationLimit int // RegistrationLimit is the configured registration capacity.
+  field Registrations int // Registrations includes cancelled registrations retained by running work.
+  field RejectedSubmissions uint64 // RejectedSubmissions counts Submit calls rejected for nil compute or closure.
+  field RunningWorkers int // RunningWorkers includes cancelled computations until actual return.
+  field SnapshotAt time.Time // SnapshotAt is sampled under the scheduler mutex.
+  field WaitingWorkers int // WaitingWorkers counts workers idle in the scheduler's condition wait.
+  field WorkerLimit int // WorkerLimit is the configured computation concurrency bound.
 type Renderer interface // Renderer turns an event the subscription wants into what the stream sends; the stream does the subscription's filtering, so a render depends only on the event.
   func (Renderer).Render(ctx context.Context, event Event) (Outgoing, error)
 type Retention struct // Retention expires replay history at start and on each tick; messages and unread state remain.

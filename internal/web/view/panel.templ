@@ -1,7 +1,6 @@
 package view
 
 import (
-	"fmt"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"time"
 )
@@ -22,14 +21,14 @@ func panelTitle(panel string) string {
 // conversationQuery keeps an older page's own parameters on every panel and
 // close link, so a panel never moves the conversation to the latest page.
 func conversationQuery(page ChannelPage) string {
-	if page.Before == 0 {
+	if page.Query == "" {
 		return ""
 	}
-	return fmt.Sprintf("?before=%d&unread=%d", page.Before, page.FirstUnread)
+	return "?" + page.Query
 }
 
 func querySeparator(page ChannelPage) string {
-	if page.Before == 0 {
+	if page.Query == "" {
 		return "?"
 	}
 	return "&"
@@ -106,6 +105,16 @@ templ overviewPanel(page ChannelPage) {
 			@channelImage(page.Current.ImageURL, true)
 			<span dir="auto" class="min-w-0">{ page.Current.Name }</span>
 		</p>
+		<details open?={ page.ImageError != "" }>
+			<summary class="min-h-11 cursor-pointer text-brand underline">{ i18n.T(ctx, "illustration.change") }</summary>
+			<form method="post" action={ panelURL(page, PanelOverview) } class="flex flex-col gap-2">
+				@imagePicker(page.ImageKeys, page.Current.Image)
+				if page.ImageError != "" {
+					<p role="alert" class="text-danger">{ i18n.T(ctx, page.ImageError) }</p>
+				}
+				@submitButton(buttonPrimary, "illustration.save")
+			</form>
+		</details>
 		<dl class="flex flex-col gap-1">
 			<dt class="text-caption text-muted">{ i18n.T(ctx, "overview.created") }</dt>
 			<dd><time datetime={ page.Current.Created.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) }>{ page.Current.Created.UTC().Format("2006-01-02") }</time></dd>

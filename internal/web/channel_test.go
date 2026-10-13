@@ -100,8 +100,11 @@ func (f *fakeChannels) Default(ctx context.Context, m org.Membership) (conversat
 	list, _ := f.list(ctx, m)
 	return list[0], f.defaultErr
 }
-func (f *fakeChannels) Create(_ context.Context, _ org.Membership, name string) (conversation.Channel, error) {
+func (f *fakeChannels) CreateWithImage(_ context.Context, _ org.Membership, name, image string) (conversation.Channel, error) {
 	f.created = name
+	if err := conversation.ValidateChannelImage(image); err != nil {
+		return conversation.Channel{}, err
+	}
 	return conversation.Channel{ID: kernel.ID{3}, Name: name}, f.createErr
 }
 
@@ -176,4 +179,8 @@ func TestChannelHandlers(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (f *fakeChannels) SetImage(_ context.Context, _ org.Membership, _ kernel.ID, image string) error {
+	return conversation.ValidateChannelImage(image)
 }

@@ -37,3 +37,24 @@ var ErrInvalidChannelName = errors.New("invalid channel name")
 // Names are unique only because channels sit flat under the organisation;
 // the id, not the name, identifies a channel.
 var ErrChannelNameTaken = errors.New("channel name already taken")
+
+// ChannelImageKeys returns the bundled illustration keys in stable fallback order.
+func ChannelImageKeys() []string {
+	return []string{"lake", "hills", "leaf", "cup", "flowers", "sunrise", "moon", "sail", "cactus", "mountain", "shell", "kite"}
+}
+
+// ErrInvalidChannelImage means the key is outside the bundled set.
+var ErrInvalidChannelImage = errors.New("invalid channel image")
+
+// ValidateChannelImage accepts a bundled key, or empty for the ID-based default.
+func ValidateChannelImage(key string) error {
+	if key == "" {
+		return nil
+	}
+	for _, known := range ChannelImageKeys() {
+		if key == known {
+			return nil
+		}
+	}
+	return ErrInvalidChannelImage
+}

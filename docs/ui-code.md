@@ -26,6 +26,7 @@ Today's shared controls:
 | `Avatar` | `internal/web/view/avatar.templ` | a fixed 36 px round initial; six pastel pairs chosen from the member ID, hidden from assistive technology beside the visible name |
 | `historyLink` | `internal/web/view/channel.templ` | the rounded older/newest navigation link; only older links carry the history prepend attributes |
 | `sidePanel`, `panelControl` | `internal/web/view/panel.templ` | the white block beside the conversation, with a focusable `h2` and a close link; a header link, labelled or icon-only, that opens one panel, `aria-current="true"` and a Filled icon while it is open |
+| `imagePicker` | `internal/web/view/channel_image.templ` | a labelled fieldset of native radios, decorative illustrations and named choices, including the ID-based default; shared by creation and overview |
 | `channelImage` | `internal/web/view/channel_image.templ` | a decorative channel illustration from a handler-resolved URL; 24 px and lazy in the sidebar, 32 px in the header, with fixed dimensions and asynchronous decoding |
 
 - **Links navigate, buttons act.** Going somewhere is an `<a href>`;
@@ -70,7 +71,7 @@ The fixed widths of the desktop layout, and the block shape
 |---|---|---|
 | `w-rail` | 76 px | the app bar block |
 | `w-sidebar` | 264 px | the channel sidebar |
-| `w-panel` | 340 px | a side panel (#874); room for an overview banner and a members list with names and handles |
+| `w-panel` | 340 px | a side panel (#874); room for an overview image and a members list with names and handles |
 | `max-w-reading` | 760 px | the conversation's reading column |
 | `rounded-xl` | 12 px | the rounded blocks |
 | `shadow-block` | a 1 px ring and a soft drop | blocks and cards |

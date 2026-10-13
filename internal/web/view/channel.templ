@@ -22,6 +22,7 @@ type Channel struct {
 	DefaultTopicID kernel.ID
 	Name           string
 	ImageURL       string
+	Image          string
 	Created        time.Time
 }
 
@@ -43,6 +44,8 @@ type ChannelPage struct {
 	Channels                   []Channel
 	ChannelCounts, TopicCounts map[kernel.ID]int64
 	Name, Error                string
+	Image, ImageError, Query   string
+	ImageKeys                  []string
 	Body, BodyError            string
 	BranchError, BranchName    string
 	Messages                   []Message

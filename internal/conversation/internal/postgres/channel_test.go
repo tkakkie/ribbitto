@@ -31,7 +31,7 @@ func TestChannelStore(t *testing.T) {
 	// A default under another name proves the lookup uses the flag.
 	defaultChannel, err := store.CreateDefaultChannelForTest(ctx, acme, "Welcome")
 	requireNoError(t, err)
-	channel, err := store.CreateChannel(ctx, acme, "開発")
+	channel, err := store.CreateChannel(ctx, acme, "開発", "")
 	requireNoError(t, err)
 	foreign, err := store.CreateDefaultChannelForTest(ctx, other, "開発")
 	requireNoError(t, err)
@@ -73,6 +73,23 @@ func TestChannelStore(t *testing.T) {
 	requireNoError(t, err)
 	if !reflect.DeepEqual(list, []conversation.Channel{defaultChannel, channel}) {
 		t.Fatalf("list = %+v; want only acme's channels, ordered by name", list)
+	}
+
+	for _, tc := range []struct {
+		name             string
+		organization, id kernel.ID
+	}{
+		{"image organisation", other, channel.ID}, {"image channel", acme, kernel.ID{0xee}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := store.SetChannelImage(ctx, tc.organization, tc.id, "moon"); !errors.Is(err, conversation.ErrChannelNotFound) {
+				t.Fatalf("scope: %v", err)
+			}
+			unchanged, err := store.GetChannel(ctx, acme, channel.ID)
+			if err != nil || unchanged.Image != "leaf" {
+				t.Fatalf("changed scoped image: %+v, %v", unchanged, err)
+			}
+		})
 	}
 	empty := orgtest.Organization(t, pool, "empty", "empty", 0)
 	list, err = store.ListChannels(ctx, empty)
@@ -116,7 +133,7 @@ func TestChannelStoreCreateErrors(t *testing.T) {
 		{"unknown", kernel.ID{0xee}, nil, "23503"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := store.CreateChannel(ctx, tc.org, tc.name)
+			_, err := store.CreateChannel(ctx, tc.org, tc.name, "")
 			if tc.want != nil && !errors.Is(err, tc.want) {
 				t.Fatalf("error = %v, want %v", err, tc.want)
 			}

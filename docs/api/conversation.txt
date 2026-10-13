@@ -19,6 +19,7 @@ type Channel struct // Channel is a conversation identified by ID; Name is only 
   field IsDefault bool
   field Name string
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
+func ChannelImageKeys() []string // ChannelImageKeys returns the bundled illustration keys in stable fallback order.
 type ChannelMember struct // ChannelMember holds a channel member's names for display, never authorization.
   field DisplayName string
   field Handle string
@@ -32,16 +33,19 @@ type ChannelPage struct // ChannelPage is a channel, its sidebar and history rea
   field Topic *Topic
   field Topics []Topic
 type ChannelStore interface // ChannelStore reads and writes channels, always within one organisation.
-  func (ChannelStore).CreateChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, name string) (Channel, error)
+  func (ChannelStore).CreateChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, name string, image string) (Channel, error)
   func (ChannelStore).GetChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error)
   func (ChannelStore).GetDefaultChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error)
+  func (ChannelStore).SetChannelImage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID, image string) error
 type ChannelUnread interface // ChannelUnread counts messages in supplied, ordered, disjoint channel gaps.
   func (ChannelUnread).Count(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channels []github.com/tkakkie/ribbitto/internal/kernel.ID, gapChannels []github.com/tkakkie/ribbitto/internal/kernel.ID, los []int64, his []int64) (counts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, first map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, err error) // Count returns counts capped at 100 and first unread sequences (zero if none).
   func (ChannelUnread).CountWithFirstUnread(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channels []github.com/tkakkie/ribbitto/internal/kernel.ID, gapChannels []github.com/tkakkie/ribbitto/internal/kernel.ID, los []int64, his []int64, firstUnread bool) (counts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, first map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, err error) // CountWithFirstUnread explicitly chooses whether to compute first unread.
 type Channels struct // Channels runs the channel use cases for a member resolved by org.
   func (*Channels).Create(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, name string) (Channel, error) // Create adds a channel.
+  func (*Channels).CreateWithImage(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, name string, image string) (Channel, error) // CreateWithImage adds a channel with a bundled image, or its ID-based default.
   func (*Channels).Default(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership) (Channel, error) // Default returns the member's organisation's default channel.
   func (*Channels).Get(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error) // Get returns a channel of the member's organisation by id, or ErrChannelNotFound.
+  func (*Channels).SetImage(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, id github.com/tkakkie/ribbitto/internal/kernel.ID, image string) error // SetImage changes a channel's illustration within the resolved membership's organisation.
 func DecodeMoved(data []byte) (Moved, error) // DecodeMoved reads stored data.
 func DecodePosted(data []byte) (Posted, error) // DecodePosted reads stored data.
 const DefaultChannelName untyped string = "general" // DefaultChannelName is the initial name of an organisation's default channel.
@@ -58,6 +62,7 @@ var ErrChannelNameTaken error // ErrChannelNameTaken means the organisation alre
 var ErrChannelNotFound error // ErrChannelNotFound means the channel does not exist in the caller's organisation, including when it exists in another one.
 var ErrInvalidBody error // ErrInvalidBody wraps a body that breaks ValidateMessageBody.
 var ErrInvalidBranch error // ErrInvalidBranch means the request itself is unusable: no messages, too many, a repeated one, no destination or two, or the source as destination.
+var ErrInvalidChannelImage error // ErrInvalidChannelImage means the key is outside the bundled set.
 var ErrInvalidChannelName error // ErrInvalidChannelName wraps a name that breaks ValidateChannelName.
 var ErrInvalidPostCursor error // ErrInvalidPostCursor means the page cursor is invalid or ahead of committed events.
 var ErrInvalidTopicName error // ErrInvalidTopicName wraps a name that breaks ValidateTopicName.
@@ -190,6 +195,7 @@ type Topics struct // Topics runs the topic lookups for a member resolved by org
   func (*Topics).Get(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // Get returns a topic of the channel in the member's organisation, or ErrTopicNotFound.
 type TxRunner interface // TxRunner runs posting's and branching's transaction (decision 26): the use case owns the boundary, the writers only bind to the Tx they are given.
   func (TxRunner).InTx(ctx context.Context, fn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) error) error // InTx runs fn in a new transaction.
+func ValidateChannelImage(key string) error // ValidateChannelImage accepts a bundled key, or empty for the ID-based default.
 func ValidateChannelName(value string) (string, error) // ValidateChannelName returns a trimmed NFC name of 1–80 printable Unicode code points.
 func ValidateMessageBody(value string) (string, error) // ValidateMessageBody normalizes line endings and trims the whole plain-text body.
 func ValidateTopicName(value string) (string, error) // ValidateTopicName returns a trimmed NFC name of 1–80 printable Unicode code points, the same rule as channel names (docs/domain/topics.md).

@@ -22,5 +22,5 @@ func NewReadStoreForTest(db sqlcgen.DBTX) ReadStore {
 // CreateDefaultChannelForTest allows schema tests to exercise the default flag
 // with arbitrary names, independently of setup's transaction.
 func (s *ChannelStore) CreateDefaultChannelForTest(ctx context.Context, organizationID kernel.ID, name string) (conversation.Channel, error) {
-	return s.createChannel(ctx, organizationID, name, true)
+	return s.createChannel(ctx, organizationID, name, true, "")
 }

@@ -162,7 +162,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") || !strings.Contains(w.Body.String(), "雑談") {
 					t.Fatalf("channel: %d %s", w.Code, w.Body.String())
 				}
-			case "POST /channels/{channelID}", "POST /channels/{channelID}/topics/{topicID}":
+			case "POST /channels/{channelID}/overview", "POST /channels/{channelID}/topics/{topicID}/overview", "POST /channels/{channelID}", "POST /channels/{channelID}/topics/{topicID}":
 				if w.Code != 303 || w.Header().Get("Location") != path {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())
 				}
@@ -363,6 +363,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			t.Fatalf("%s at /: %d", name, w.Code)
 		}
 	}
+	// Give Carol a membership only after the non-member assertions above.
+	if _, err := pool.Exec(ctx, "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $2, 'member', 2, 'carol')", acme, carol); err != nil {
+		t.Fatal(err)
+	}
 	t.Run("author lookup isolation and reload", func(t *testing.T) {
 		authzService := orgpg.NewAuthorizer(pool)
 		a, err := authzService.Member(ctx, &identity.Account{ID: alice}, "acme")
@@ -371,10 +375,6 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 		b, err := authzService.Member(ctx, &identity.Account{ID: bob}, "globex")
 		if err != nil {
-			t.Fatal(err)
-		}
-		// Give Carol a membership only after the non-member assertions above.
-		if _, err := pool.Exec(ctx, "INSERT INTO member (organization_id, account_id, role, joined_event_seq, handle) VALUES ($1, $2, 'member', 2, 'carol')", acme, carol); err != nil {
 			t.Fatal(err)
 		}
 		var members map[kernel.ID]org.DirectoryEntry
@@ -423,6 +423,99 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		}
 	})
 
+	t.Run("image picker", func(t *testing.T) {
+		clock = now
+		for _, denied := range []struct{ path, token string }{
+			{view.ChannelURL("acme", acmeChannel), bobToken},
+			{view.ChannelURL("acme", globexChannel), carolToken},
+			{view.ChannelURL("acme", kernel.ID{0xee}), carolToken},
+		} {
+			if w := serveForm(handler, "POST", denied.path+"/overview", denied.token, url.Values{"image": {"moon"}}); w.Code != 404 {
+				t.Fatalf("scope: %d", w.Code)
+			}
+		}
+		var foreignImage *string
+		if err := pool.QueryRow(ctx, "SELECT image FROM channel WHERE organization_id = $1 AND id = $2", globex, globexChannel).Scan(&foreignImage); err != nil || foreignImage != nil {
+			t.Fatalf("foreign image: %v, %v", foreignImage, err)
+		}
+		for _, topic := range []*kernel.ID{nil, &defaultTopic.ID} {
+			for _, query := range []string{"", "?before=2&unread=1&position=kept&position=twice"} {
+				target := view.ConversationURL("acme", acmeChannel, topic) + "/overview" + query
+				for _, hx := range []bool{false, true} {
+					for _, key := range []string{"moon", "bad", ""} {
+						request := httptest.NewRequest("POST", target, strings.NewReader(url.Values{"image": {key}, "organization_id": {fmt.Sprint(globex)}}.Encode()))
+						request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+						request.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: carolToken})
+						if hx {
+							request.Header.Set("HX-Request", "true")
+						}
+						response := httptest.NewRecorder()
+						handler.ServeHTTP(response, request)
+						want := key
+						if key == "bad" {
+							want = "moon"
+							if response.Code != 422 || !strings.Contains(response.Body.String(), "Choose an image from the set.") || !strings.Contains(response.Body.String(), "<details open") {
+								t.Fatalf("invalid image: %d", response.Code)
+							}
+						} else {
+							if response.Code != 303 || response.Header().Get("Location") != target {
+								t.Fatalf("return: %d %s", response.Code, response.Header().Get("Location"))
+							}
+							page := serveForm(handler, "GET", target, carolToken, nil)
+							doc, err := html.Parse(page.Body)
+							if err != nil || page.Code != 200 {
+								t.Fatalf("page: %d, %v", page.Code, err)
+							}
+							shown, radios := 0, 0
+							for n := range doc.Descendants() {
+								if n.DataAtom == atom.Input && attr(n, "name") == "image" {
+									radios++
+								}
+								if n.DataAtom == atom.Img && attr(n, "src") == channelImageURL(acmeChannel, key) {
+									inForm := false
+									for a := n.Parent; a != nil; a = a.Parent {
+										inForm = inForm || a.DataAtom == atom.Form
+									}
+									if !inForm {
+										shown++
+									}
+								}
+								if n.DataAtom == atom.Form && strings.Contains(attr(n, "action"), "/overview") {
+									action, _ := url.Parse(attr(n, "action"))
+									original, _ := url.Parse(target)
+									if action.Path != original.Path || action.Query().Encode() != original.Query().Encode() {
+										t.Fatal("picker lost conversation parameters")
+									}
+								}
+							}
+							if shown != 3 || radios != 2*(len(conversation.ChannelImageKeys())+1) {
+								t.Fatalf("images=%d radios=%d", shown, radios)
+							}
+						}
+						var stored *string
+						if err := pool.QueryRow(ctx, "SELECT image FROM channel WHERE organization_id = $1 AND id = $2", acme, acmeChannel).Scan(&stored); err != nil || (want == "") != (stored == nil) || (stored != nil && *stored != want) {
+							t.Fatalf("stored image: %v, %v", stored, err)
+						}
+					}
+				}
+			}
+		}
+		for _, key := range []string{"leaf", "bad", ""} {
+			w := serveForm(handler, "POST", "/organizations/acme/channels", carolToken, url.Values{"name": {"image-" + key}, "image": {key}})
+			if key == "bad" {
+				var count int
+				if err := pool.QueryRow(ctx, "SELECT count(*) FROM channel WHERE organization_id = $1 AND name = 'image-bad'", acme).Scan(&count); err != nil || count != 0 || w.Code != 422 {
+					t.Fatalf("invalid creation: %d, %d, %v", count, w.Code, err)
+				}
+			} else {
+				id, ok := pathID(strings.TrimPrefix(w.Header().Get("Location"), "/organizations/acme/channels/"))
+				c, err := services.Channels.Get(ctx, membership, id)
+				if w.Code != 303 || !ok || err != nil || c.Image != key {
+					t.Fatalf("creation: %d, %+v, %v", w.Code, c, err)
+				}
+			}
+		}
+	})
 	if logs.Len() != 0 {
 		t.Errorf("unexpected message fallback: %s", logs.String())
 	}

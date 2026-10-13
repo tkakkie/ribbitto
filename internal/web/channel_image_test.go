@@ -56,6 +56,13 @@ func TestChannelImages(t *testing.T) {
 				if n.DataAtom != atom.Img || !strings.HasPrefix(attr(n, "src"), "/static/channel-images-v1/") {
 					continue
 				}
+				inForm := false
+				for a := n.Parent; a != nil; a = a.Parent {
+					inForm = inForm || a.DataAtom == atom.Form
+				}
+				if inForm {
+					continue
+				}
 				images++
 				wantSize, wantLoading := "24", "lazy"
 				for a := n.Parent; a != nil; a = a.Parent {
@@ -81,7 +88,7 @@ func TestChannelImageAssets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"lake", "hills", "leaf", "cup", "flowers", "sunrise", "moon", "sail", "cactus", "mountain", "shell", "kite"} {
+	for _, key := range conversation.ChannelImageKeys() {
 		t.Run(key, func(t *testing.T) {
 			url := channelImageURL(kernel.ID{}, key)
 			if !strings.HasSuffix(url, "/"+key+".svg") {

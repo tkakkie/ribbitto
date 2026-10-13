@@ -9,7 +9,7 @@ enhancement, not full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
   a channel or topic with its history (including older pages) and its members or overview panel, posting a message,
-  branching, marking a feed or topic read, and creating channels. Plain forms and links work alone;
+  branching, marking a feed or topic read, and creating channels or changing their images. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
   keyboard shortcuts (Enter to send), and local-time display. Without

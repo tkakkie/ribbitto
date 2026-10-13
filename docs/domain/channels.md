@@ -20,6 +20,14 @@ example `(organization_id, parent_id, name)`; nothing may rely on a name
 being unique across the organisation. A duplicate name is a user-facing
 error. Every member may create channels: in the MVP all channels are public.
 
+## Images
+
+Any organisation member can choose a bundled image when creating a channel
+or change it in the overview panel. Only keys from the shared registry are
+accepted; empty stores NULL and restores the ID-based default. Changing an
+image writes no event; other members see it on their next page load.
+The overview POST returns to the same feed or topic with its query parameters.
+
 ## Channel members
 
 The conversation header opens the members panel beside the conversation

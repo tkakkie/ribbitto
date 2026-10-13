@@ -20,7 +20,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
 )
 
-func TestHybridProductionDomain(t *testing.T) {
+func TestHybridProductionDomain(t *testing.T) { runHybridDomain(t, "production-only") }
+
+func runHybridDomain(t *testing.T, condition string) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	must := func(err error) {
@@ -47,13 +49,25 @@ func TestHybridProductionDomain(t *testing.T) {
 		}
 		selected = id
 	}
-	// Persisted fixtures express domain effects, not hypothetical event fields.
-	// The candidate receives only production envelopes and invalidations.
+	// The production arm receives only envelopes and invalidations; hypothetical
+	// metadata is supplied separately to each labelled arm.
 	exec(`INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq)
 SELECT $1,$2,$3,$4,'fixture',s FROM generate_series(1,102) s`, f.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, f.MemberID)
 	seq := int64(102)
+	var author kernel.ID
+	var receipt *hybridReceipt
+	if condition == "hypothetical-read-ranges" || condition == "hypothetical-absolute-count" {
+		exec(`CREATE TABLE hybrid_read_metadata (revision bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+organization_id uuid NOT NULL,member_id uuid NOT NULL,channel_id uuid NOT NULL,coverage bytea,absolute_count bigint NOT NULL)`)
+	}
 	merge := func(ch, who kernel.ID, joined int64, ranges ...unread.Range) {
 		t.Helper()
+		if condition == "hypothetical-read-ranges" || condition == "hypothetical-absolute-count" {
+			var err error
+			receipt, err = hybridReadTransaction(ctx, pool, condition, f.OrganizationID, who, ch, joined, ranges)
+			must(err)
+			return
+		}
 		must(platform.InTx(ctx, pool, func(tx platform.Tx) error {
 			for _, r := range ranges {
 				if err := unreadpg.WriterIn(tx).Merge(ctx, unread.Scope{OrganizationID: f.OrganizationID, ChannelID: ch, MemberID: who}, joined, r); err != nil {
@@ -63,17 +77,18 @@ SELECT $1,$2,$3,$4,'fixture',s FROM generate_series(1,102) s`, f.OrganizationID,
 			return nil
 		}))
 	}
-	post := func(ch, topic, author kernel.ID) realtime.Event {
+	post := func(ch, topic, who kernel.ID) realtime.Event {
+		author = who
 		t.Helper()
 		seq++
 		var id kernel.ID
 		must(pool.QueryRow(ctx, `INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq)
-VALUES ($1,$2,$3,$4,'post',$5) RETURNING id`, f.OrganizationID, ch, topic, author, seq).Scan(&id))
+VALUES ($1,$2,$3,$4,'post',$5) RETURNING id`, f.OrganizationID, ch, topic, who, seq).Scan(&id))
 		joined := int64(1)
-		if author == member {
+		if who == member {
 			joined = 5
 		}
-		merge(ch, author, joined, unread.Range{Lo: seq, Hi: seq + 1})
+		merge(ch, who, joined, unread.Range{Lo: seq, Hi: seq + 1})
 		// Synthetic messages have no log rows; retain only sequences after them.
 		exec(`UPDATE organization SET event_seq=$2,event_log_boundary_seq=$2 WHERE id=$1`, f.OrganizationID, seq)
 		return realtime.Event{OrganizationID: f.OrganizationID, Seq: seq, Kind: conversation.KindPosted, ChannelID: ch, Payload: conversation.EncodePosted(ch, id, topic)}
@@ -86,6 +101,7 @@ VALUES ($1,$2,$3,$4,'post',$5) RETURNING id`, f.OrganizationID, ch, topic, autho
 	defer q.Close()
 	now := time.Unix(0, 0)
 	var tabs []*hybridPrototype
+	hypotheses := make(map[*hybridPrototype]*hybridHypothesis)
 	for _, view := range []struct {
 		organization, member, channel kernel.ID
 		selection                     *kernel.ID
@@ -95,14 +111,21 @@ VALUES ($1,$2,$3,$4,'post',$5) RETURNING id`, f.OrganizationID, ch, topic, autho
 		{f.OrganizationID, f.MemberID, f.Channel.ID, &first},
 		{foreign.OrganizationID, foreign.MemberID, foreign.Channel.ID, nil},
 	} {
+		h := &hybridHypothesis{condition: condition}
 		p := newHybrid(q, now, 0, func(ctx context.Context) (sidebarOracleModel, error) {
 			m := org.Membership{Organization: org.Organization{ID: view.organization}, Member: org.Member{ID: view.member}}
-			return hybridSnapshot(ctx, pool, m, view.channel, view.selection)
+			state, err := hybridSnapshot(ctx, pool, m, view.channel, view.selection)
+			if err == nil && condition == "hypothetical-read-ranges" {
+				err = h.capture(ctx, pool, view.organization, view.member)
+			}
+			return state, err
 		})
+		p.condition = condition
 		defer p.registration.Cancel()
 		must(p.reconcile("connect"))
 		must(p.complete())
 		tabs = append(tabs, p)
+		hypotheses[p] = h
 	}
 	oracle := func(p *hybridPrototype) sidebarOracleModel {
 		t.Helper()
@@ -139,24 +162,36 @@ VALUES ($1,$2,$3,$4,'post',$5) RETURNING id`, f.OrganizationID, ch, topic, autho
 					return sidebarOracleModel{}, ctx.Err()
 				}
 			}
-			err := p.handle(operation, event, read, p.state.organization, p.state.member)
-			unchanged := sidebarOracleCompare(p.state, before)
-			close(release)
-			must(err)
-			must(unchanged)
-			r := p.records[len(p.records)-1]
 			noop := (event != nil && event.OrganizationID != p.state.organization) || (read != nil && (read.organization != p.state.organization || read.member != p.state.member))
 			mode, why := "reconciliation", reason
 			if noop {
 				mode, why = "delta-noop", "outside bound organisation or member"
-			} else {
-				must(p.complete())
 			}
-			if r.condition != "production-only" || r.operation != operation || r.mode != mode || r.reason != why || (r.request == 0) != noop {
+			var err error
+			if condition == "production-only" {
+				err = p.handle(operation, event, read, p.state.organization, p.state.member)
+			} else {
+				mode, why = hybridHypotheticalRoute(condition, operation, noop, author == p.state.member)
+				err = hypotheses[p].handle(p, operation, event, read, author, receipt)
+			}
+			var unchanged error
+			if mode == "reconciliation" {
+				unchanged = sidebarOracleCompare(p.state, before)
+			}
+			close(release)
+			must(err)
+			must(unchanged)
+			r := p.records[len(p.records)-1]
+			if r.condition != condition || r.operation != operation || r.mode != mode || r.reason != why || (r.request == 0) != (mode != "reconciliation") {
 				t.Fatalf("operation routing %s tab %d: %+v, want %s: %s", operation, i, r, mode, why)
 			}
+			if mode == "reconciliation" {
+				must(p.complete())
+			}
 			t.Logf("tab=%d record=%+v", i, r)
-			must(sidebarOracleCompare(p.state, want)) // Immediate for the exact no-op.
+			if err := sidebarOracleCompare(p.state, want); err != nil {
+				t.Fatalf("%s %s tab %d %s equality: %v", condition, operation, i, mode, err)
+			} // No completion is consumed for any exact delta.
 			p.snapshot = snapshot
 		}
 	}
@@ -187,6 +222,22 @@ VALUES ($1,$2,$3,$4,'post',$5) RETURNING id`, f.OrganizationID, ch, topic, autho
 	merge(f.Channel.ID, member, 5, unread.Range{Lo: 6, Hi: 12})
 	readStep("repeated-other-tab-read", member)
 	checkCounts(95, 93, 2)
+	if condition == "hypothetical-read-ranges" || condition == "hypothetical-absolute-count" {
+		read := &hybridRead{f.OrganizationID, member}
+		committed := receipt
+		receipt = nil
+		step("read-without-metadata", nil, read, "read commit and exact coverage absent")
+		copy := *committed
+		copy.revision = 0
+		receipt = &copy
+		step("unknown-read-outcome", nil, read, "read commit and exact coverage absent")
+		if condition == "hypothetical-read-ranges" {
+			copy.revision, copy.ranges = committed.revision, nil
+			step("read-without-coverage", nil, read, "read commit and exact coverage absent")
+		}
+		receipt = committed
+		step("replayed-read-revision", nil, read, "read commit and exact coverage absent")
+	}
 	merge(f.Channel.ID, member, 5, unread.Range{Lo: 103, Hi: 105})
 	readStep("topic-through-latest-leaves-default-unread", member)
 	checkCounts(93, 93, 0)
@@ -211,6 +262,7 @@ VALUES ($1,$2,$3,$4,'post',$5) RETURNING id`, f.OrganizationID, ch, topic, autho
 	// Foreign persistence must be an immediate no-op for every local tab.
 	exec(`INSERT INTO message (organization_id,channel_id,topic_id,member_id,body,event_seq) VALUES ($1,$2,$3,$4,'foreign',2)`, foreign.OrganizationID, foreign.Channel.ID, foreign.Channel.DefaultTopicID, foreign.MemberID)
 	exec(`UPDATE organization SET event_seq=2,event_log_boundary_seq=2 WHERE id=$1`, foreign.OrganizationID)
+	author = kernel.ID{}
 	step("foreign-post", &realtime.Event{OrganizationID: foreign.OrganizationID, Kind: conversation.KindPosted}, nil, "post author and page read effects absent")
 	must(platform.InTx(ctx, pool, func(tx platform.Tx) error {
 		return unreadpg.WriterIn(tx).Merge(ctx, unread.Scope{OrganizationID: foreign.OrganizationID, ChannelID: foreign.Channel.ID, MemberID: foreign.MemberID}, 1, unread.Range{Lo: 0, Hi: 3})
@@ -261,7 +313,7 @@ UPDATE message SET topic_id=$1,moved_event_seq=$2 WHERE organization_id=$3 AND c
 			now = now.Add(p.interval)
 			must(p.tick(now))
 			must(p.complete())
-			if r := p.records[len(p.records)-1]; r.mode != "reconciliation" || r.reason != "unconditional lost-state repair" {
+			if r := p.records[len(p.records)-1]; r.condition != condition || r.mode != "reconciliation" || r.reason != "unconditional lost-state repair" {
 				t.Fatalf("drift repair record: %+v", r)
 			}
 			t.Logf("%s repair record=%+v", fault, p.records[len(p.records)-1])

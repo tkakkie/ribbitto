@@ -98,3 +98,15 @@ correctness, stability, connections and SQL together. First one 60 s smoke is
 inconclusive for stability. Adoption at 30 s needs three independent passing
 600 s windows at both rates; all long-run/sensitivity scope requires explicit
 maintainer authorization. #950 performs no prototype or measurement.
+
+## Baseline prototype (#951, part 2a)
+
+The external realtime tests implement an independent repeatable-read full-state
+adapter and a model writer using `RecountScheduler` (26 workers). A controllable
+virtual clock drives unconditional fixed repair deadlines at 10/30/60 seconds;
+completion mailboxes and a computation gate provide deterministic checkpoints.
+Records label each operation `production-only`, with a reconciliation request or
+an exact no-op delta. No author/cursor/read-effect metadata is inferred. The
+baseline covers connect/reconnect, uncapped and displayed state, quiet repair and
+non-derivable read completion. Snapshot/delta concurrency proofs and hypothetical
+arms remain #960/#961; cost-arm integration and measurements remain #952.

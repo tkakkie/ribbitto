@@ -11,7 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import "github.com/tkakkie/ribbitto/internal/web/i18n"
 
 // Shared controls: each look lives here once, and pages compose these
-// components instead of repeating class strings (docs/ui-code.md).
+// components instead of repeating class strings (docs/ui-components.md).
 
 // buttonKind chooses one of the shared looks of a submit button.
 type buttonKind int

@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -99,8 +100,8 @@ GROUP BY m.channel_id, m.topic_id`, m.Organization.ID, m.Member.ID, joined)
 }
 
 type hybridRecord struct {
-	condition, operation, mode string
-	request                    uint64 // Zero for an exact no-op delta.
+	condition, operation, mode, reason string
+	request                            uint64 // Zero for an exact no-op delta.
 }
 
 type hybridRead struct{ organization, member kernel.ID } // Production invalidation only.
@@ -127,6 +128,10 @@ func newHybrid(q *realtime.RecountScheduler, now time.Time, interval time.Durati
 }
 
 func (p *hybridPrototype) reconcile(operation string) error {
+	return p.reconcileBecause(operation, "fresh snapshot required")
+}
+
+func (p *hybridPrototype) reconcileBecause(operation, reason string) error {
 	p.requested++
 	capture := new(sidebarOracleModel)
 	p.captures[p.requested] = capture
@@ -137,7 +142,7 @@ func (p *hybridPrototype) reconcile(operation string) error {
 	}) {
 		return realtime.ErrRecountRefused
 	}
-	p.records = append(p.records, hybridRecord{"production-only", operation, "reconciliation", p.requested})
+	p.records = append(p.records, hybridRecord{"production-only", operation, "reconciliation", reason, p.requested})
 	return nil
 }
 
@@ -147,10 +152,19 @@ func (p *hybridPrototype) handle(operation string, event *realtime.Event, read *
 	noop := event != nil && event.OrganizationID != organization
 	noop = noop || (read != nil && (read.organization != organization || read.member != member))
 	if noop {
-		p.records = append(p.records, hybridRecord{"production-only", operation, "delta-noop", 0})
+		p.records = append(p.records, hybridRecord{"production-only", operation, "delta-noop", "outside bound organisation or member", 0})
 		return nil
 	}
-	return p.reconcile(operation)
+	reason := "unknown input or list metadata absent"
+	switch {
+	case read != nil:
+		reason = "read commit and exact coverage absent"
+	case event != nil && event.Kind == conversation.KindPosted:
+		reason = "post author and page read effects absent"
+	case event != nil && event.Kind == conversation.KindMessagesMoved:
+		reason = "move read identities and list metadata absent"
+	}
+	return p.reconcileBecause(operation, reason)
 }
 
 func (p *hybridPrototype) tick(now time.Time) error {
@@ -160,7 +174,7 @@ func (p *hybridPrototype) tick(now time.Time) error {
 	for !p.next.After(now) {
 		p.next = p.next.Add(p.interval)
 	}
-	return p.reconcile("periodic") // Unconditional, independent of event dirt.
+	return p.reconcileBecause("periodic", "unconditional lost-state repair")
 }
 
 func (p *hybridPrototype) complete() error {

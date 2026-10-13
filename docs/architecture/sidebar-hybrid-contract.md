@@ -108,5 +108,23 @@ completion mailboxes and a computation gate provide deterministic checkpoints.
 Records label each operation `production-only`, with a reconciliation request or
 an exact no-op delta. No author/cursor/read-effect metadata is inferred. The
 baseline covers connect/reconnect, uncapped and displayed state, quiet repair and
-non-derivable read completion. Snapshot/delta concurrency proofs and hypothetical
-arms remain #960/#961; cost-arm integration and measurements remain #952.
+non-derivable read completion. Cost-arm integration and measurements remain #952.
+
+## Production domain checks (#960, part 960a)
+
+The same prototype checks persisted post/author/page-read effects, fragmented and
+overlapping multi-tab reads, join prefixes, feed/topic differences, both cap
+crossings, zero badges, all-topic totals, 50 listed topics and unlisted selections,
+list displacement, read/unread moves with a separate notice, other channels and
+member/organisation isolation. Synthetic persisted fixtures express these domain
+effects; they do not test the production publishing transactions or add metadata
+to production events. Every operation records its routing reason. Isolated input
+is an exact no-op immediately; relevant input reconciles.
+
+Writes finish before each oracle boundary and remain stopped until all tab
+computations complete; gates check unchanged state before completion. Both raw
+and capped full models must match. Lost delivery and injected duplicated count
+and reordered topic effects must exhibit drift, then match after a virtual-clock
+periodic repair. These injections do not claim production delta derivability or
+prove delivery order. Labelled hypothetical metadata remains 960b; ordering,
+generations, no rollback and continuous-posting progress remain #961.

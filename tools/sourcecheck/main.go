@@ -1,5 +1,6 @@
-// Command sourcecheck enforces docs/domain/vocabulary.md and docs/ui-colours.md on
-// repository sources. It checks mux patterns as authored, without resolving
+// Command sourcecheck enforces docs/domain/vocabulary.md, docs/ui-colours.md
+// (raw colours) and docs/ui-code.md (arbitrary class values) on repository
+// sources. It checks mux patterns as authored, without resolving
 // aliases or evaluating route expressions, and literal CSS values.
 package main
 

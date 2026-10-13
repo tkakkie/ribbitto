@@ -82,6 +82,7 @@ Outermost first:
    unaffected.
 3. On everything except `/static/` and `/healthz`: security headers
    ([`rendering.md`](rendering.md#content-security-policy)), then i18n.
+   `/static/` sets its own `nosniff` and restrictive CSP.
 4. On each **registered** HTML route (the `sessionMux` in `NewHandler`
    wraps routes one by one; `/setup` and `/signup` are registered without
    it, so their availability is decided first): `middleware.Session`. An unknown path or

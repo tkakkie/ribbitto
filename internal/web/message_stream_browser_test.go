@@ -48,7 +48,6 @@ func TestMessageStreamBrowser(t *testing.T) {
 	t.Run("unread-divider", func(t *testing.T) { testUnreadDividerBrowser(t, browser) })
 	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
 	t.Run("side-panel", func(t *testing.T) { testSidePanelBrowser(t, browser) })
-	t.Run("message-motion", func(t *testing.T) { testMessageMotionBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {
 		modes := []string{"before", "stale", "fresh", "abort", "4xx"}
 		if side == "source" {

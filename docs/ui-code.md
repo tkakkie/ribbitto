@@ -98,7 +98,7 @@ the typing dots.
 
 | Token | Value | Use |
 |---|---|---|
-| `--duration-faster` | 100 ms | hover and press feedback (the default for `transition`); a live message; the selection pill |
+| `--duration-faster` | 100 ms | hover and press feedback (the default for `transition`); the selection pill |
 | `--duration-fast` | 150 ms | an opening panel |
 | `--duration-normal`, `--duration-gentle` | 200 ms, 250 ms | reserved for larger surfaces |
 | `ease-standard` | `cubic-bezier(0.33, 0, 0.67, 1)` | colour changes |
@@ -107,11 +107,8 @@ the typing dots.
 
 - **Rows and buttons** add `transition motion-safe:active:scale-96`: colours
   change over 100 ms and a press scales to 0.96.
-- **A live message** is opaque from its first frame and only settles 3 px
-  (`animate-message-in`), added by `message-stream-v10.js` to appends only,
-  and only after the stream's first typing frame since its (re)connect: the
-  replayed backlog comes before it (a backlog beyond one 100-event read
-  still moves). History, replays, moves and branches never move.
+- **Messages never move**, live ones included: the page cannot tell
+  reconnect backlog from live delivery, and backlog must not move.
 - **The typing dots** pulse (`animate-typing-dot-1`…`3`) while someone types.
 - **Navigation** uses cross-document view transitions (CSS only), with no
   cross-fade: the old page disappears at once and the new one shows from

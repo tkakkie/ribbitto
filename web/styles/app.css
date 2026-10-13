@@ -2,8 +2,6 @@
 @source "../../internal/web/**/*.templ";
 /* With source(none), Tailwind watches only @source paths, so include this directory to rebuild on CSS-only edits. */
 @source "./*.css";
-/* message-stream-v10.js adds this to live appends only; no template names it. */
-@source inline("animate-message-in");
 
 /*
  * Design tokens (the M5 direction, see docs/ui.md).
@@ -146,15 +144,10 @@
   --default-transition-duration: var(--duration-faster);
   --default-transition-timing-function: var(--ease-standard);
   --animate-*: initial;
-  --animate-message-in: message-in var(--duration-faster) var(--ease-decelerate);
   /* The only loop, staggered per dot; it ends when the typing status empties. */
   --animate-typing-dot-1: typing-dot 1.2s var(--ease-standard) infinite;
   --animate-typing-dot-2: typing-dot 1.2s var(--ease-standard) 0.2s infinite;
   --animate-typing-dot-3: typing-dot 1.2s var(--ease-standard) 0.4s infinite;
-  /* Opaque from the first frame: text is readable at once and only settles 3 px. */
-  @keyframes message-in {
-    from { translate: 0 3px; }
-  }
   @keyframes typing-dot {
     0%, 60%, 100% { opacity: 0.3; }
     30% { opacity: 1; }

@@ -128,7 +128,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
 JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
 keyboard, local time, selection constraints, and htmx/SSE input glue.
 
-- `message-stream-v10.js` emits `read-applied` only after successful DOM
+- `message-stream-v9.js` emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
   `read-visibility-v4.js` initializes on scoped `htmx:load`; triggers send
   the snapshot, then the latest applied cursor.

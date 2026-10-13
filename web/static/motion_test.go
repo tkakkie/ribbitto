@@ -61,7 +61,7 @@ func TestReducedMotion(t *testing.T) {
 		t.Errorf("no @view-transition { navigation: auto }")
 	}
 	// The motion classes are built, so the checks above cover them.
-	for _, class := range []string{".animate-message-in", ".animate-typing-dot-3", ".transition", `.motion-safe\:active\:scale-96:active`} {
+	for _, class := range []string{".animate-typing-dot-1", ".animate-typing-dot-3", ".transition", `.motion-safe\:active\:scale-96:active`} {
 		if !built[class] {
 			t.Errorf("motion class %s missing from the stylesheet", class)
 		}

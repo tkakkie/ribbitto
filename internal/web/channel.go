@@ -90,32 +90,12 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 		return
 	}
 	page := view.ChannelPage{Panel: p.panel, ImageError: p.imageErr}
-	// ParseQuery, unlike URL.Query, reports malformed pairs instead of
-	// dropping them, so a broken link cannot fall back to the latest page.
-	query, err := url.ParseQuery(r.URL.RawQuery)
-	if err != nil {
+	query, before, firstUnread, ok := conversationQuery(r.URL.RawQuery)
+	if !ok {
 		p.invalidQuery(w, r, m, id)
 		return
 	}
-	if raw, ok := query["before"]; ok {
-		// An event_seq is positive; anything else is a malformed link.
-		before, err := strconv.ParseInt(raw[0], 10, 64)
-		if len(raw) != 1 || err != nil || before < 1 {
-			p.invalidQuery(w, r, m, id)
-			return
-		}
-		page.Before = before
-	}
-	// An older-history link carries the visit's divider so its read POSTs cannot move it.
-	var firstUnread *int64
-	if raw, ok := query["unread"]; ok {
-		seq, err := strconv.ParseInt(raw[0], 10, 64)
-		if len(raw) != 1 || err != nil || seq < 0 || page.Before == 0 {
-			p.invalidQuery(w, r, m, id)
-			return
-		}
-		firstUnread = &seq
-	}
+	page.Before = before
 	// The members' cursor stays apart from the conversation's before and unread.
 	if raw, ok := query["after"]; ok && p.panel == view.PanelMembers {
 		after, valid := pathID(raw[0])
@@ -125,15 +105,51 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		p.after = &after
 	}
-	if p.panel == view.PanelMembers {
-		query.Del("after")
-	}
-	page.Query = query.Encode()
 	status := http.StatusOK
 	if p.imageErr != "" {
 		status = http.StatusUnprocessableEntity
 	}
 	p.render(w, r, m, id, status, page, firstUnread)
+}
+
+// conversationQuery parses a page's own parameters. ParseQuery, unlike
+// URL.Query, reports malformed pairs instead of dropping them, so a broken
+// link cannot fall back to the latest page.
+func conversationQuery(raw string) (query url.Values, before int64, firstUnread *int64, ok bool) {
+	query, err := url.ParseQuery(raw)
+	if err != nil {
+		return nil, 0, nil, false
+	}
+	if raw, ok := query["before"]; ok {
+		// An event_seq is positive; anything else is a malformed link.
+		parsed, err := strconv.ParseInt(raw[0], 10, 64)
+		if len(raw) != 1 || err != nil || parsed < 1 {
+			return nil, 0, nil, false
+		}
+		before = parsed
+	}
+	// An older-history link carries the visit's divider so its read POSTs cannot move it.
+	if raw, ok := query["unread"]; ok {
+		seq, err := strconv.ParseInt(raw[0], 10, 64)
+		if len(raw) != 1 || err != nil || seq < 0 || before == 0 {
+			return nil, 0, nil, false
+		}
+		firstUnread = &seq
+	}
+	return query, before, firstUnread, true
+}
+
+// conversationState encodes the conversation position a page renders, so
+// panel links and redirects carry exactly that, never a request's other keys.
+func conversationState(before int64, firstUnread *int64) string {
+	state := url.Values{}
+	if before > 0 {
+		state.Set("before", strconv.FormatInt(before, 10))
+		if firstUnread != nil {
+			state.Set("unread", strconv.FormatInt(*firstUnread, 10))
+		}
+	}
+	return state.Encode()
 }
 
 // Preserve channel lookup errors ahead of malformed paging links, without a
@@ -181,6 +197,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	if page.Before > 0 {
 		before = &page.Before
 	}
+	page.Query = conversationState(page.Before, firstUnread)
 	history, err := p.messages.Page(r.Context(), m, id, p.topicID, before)
 	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) || errors.Is(err, conversation.ErrTopicNotFound) {
 		http.NotFound(w, r)

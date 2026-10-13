@@ -443,8 +443,10 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			t.Fatalf("foreign image: %v, %v", foreignImage, err)
 		}
 		for _, topic := range []*kernel.ID{nil, &defaultTopic.ID} {
-			for _, query := range []string{"", "?before=2&unread=1&position=kept&position=twice"} {
-				target := view.ConversationURL("acme", acmeChannel, topic) + "/overview" + query
+			// Unrelated keys are dropped from the return; before and unread stay (#936).
+			for _, query := range []struct{ sent, kept string }{{"", ""}, {"?before=2&unread=1&position=kept&position=twice", "?before=2&unread=1"}} {
+				target := view.ConversationURL("acme", acmeChannel, topic) + "/overview" + query.sent
+				back := view.ConversationURL("acme", acmeChannel, topic) + "/overview" + query.kept
 				for _, hx := range []bool{false, true} {
 					for _, key := range []string{"moon", "bad", ""} {
 						request := httptest.NewRequest("POST", target, strings.NewReader(url.Values{"image": {key}, "organization_id": {fmt.Sprint(globex)}}.Encode()))
@@ -462,7 +464,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 								t.Fatalf("invalid image: %d", response.Code)
 							}
 						} else {
-							if response.Code != 303 || response.Header().Get("Location") != target {
+							if response.Code != 303 || response.Header().Get("Location") != back {
 								t.Fatalf("return: %d %s", response.Code, response.Header().Get("Location"))
 							}
 							same := strings.TrimSuffix(path.Base(channelImageURL(acmeChannel, key)), ".svg")
@@ -494,7 +496,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 								}
 								if n.DataAtom == atom.Form && strings.Contains(attr(n, "action"), "/overview") {
 									action, _ := url.Parse(attr(n, "action"))
-									original, _ := url.Parse(target)
+									original, _ := url.Parse(back)
 									if action.Path != original.Path || action.Query().Encode() != original.Query().Encode() {
 										t.Fatal("picker lost conversation parameters")
 									}

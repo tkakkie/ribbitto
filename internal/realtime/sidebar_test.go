@@ -32,7 +32,9 @@ func sidebarTrigger(e Event) bool { return e.Kind == kindPosted || e.Kind == kin
 
 // Negative fixtures differ in one predicate; the reader deliberately supplies
 // a foreign envelope so its own organisation scope cannot mask the pre-filter.
-func TestSidebarTriggersAndDeadline(t *testing.T) {
+func TestSidebarTriggersAndDeadline(t *testing.T) { testSidebarTriggersAndDeadline(t, false) }
+
+func testSidebarTriggersAndDeadline(t *testing.T, scheduled bool) {
 	for _, name := range []string{"burst", "moved", "channel", "topic", "sidebar only", "organisation", "kind", "interest"} {
 		t.Run(name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -65,6 +67,7 @@ func TestSidebarTriggersAndDeadline(t *testing.T) {
 							}
 							return Outgoing{ID: 999, Data: []byte("full recount")}, nil
 						}}}
+				stream = compatibilityStream(t, stream, &selected, scheduled)
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				done := make(chan result, 1)
@@ -117,6 +120,10 @@ func TestSidebarTriggersAndDeadline(t *testing.T) {
 }
 
 func TestSidebarReconnectAfterMessageBeforeRecount(t *testing.T) {
+	testSidebarReconnectAfterMessageBeforeRecount(t, false)
+}
+
+func testSidebarReconnectAfterMessageBeforeRecount(t *testing.T, scheduled bool) {
 	synctest.Test(t, func(t *testing.T) {
 		h, log, reads := NewHub(), &fakeLog{}, 0
 		selected := sub
@@ -126,6 +133,7 @@ func TestSidebarReconnectAfterMessageBeforeRecount(t *testing.T) {
 				reads++
 				return Outgoing{ID: 999, Data: []byte{byte(reads)}}, nil
 			}}}
+		stream = compatibilityStream(t, stream, &selected, scheduled)
 		var frames []Outgoing
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan result, 1)

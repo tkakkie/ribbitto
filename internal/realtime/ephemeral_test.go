@@ -20,7 +20,9 @@ func (f ownerFunc) Read(_ context.Context, sub Subscription, after int64) (Ephem
 
 // Every negative scope fixture changes just one predicate. The authorizer
 // allows those fixtures, so it cannot hide a missing pre-filter.
-func TestEphemeralScopesAndAuthorization(t *testing.T) {
+func TestEphemeralScopesAndAuthorization(t *testing.T) { testEphemeralScopesAndAuthorization(t, false) }
+
+func testEphemeralScopesAndAuthorization(t *testing.T, scheduled bool) {
 	failure := errors.New("authorization failed")
 	topicA, topicB := kernel.ID{1}, kernel.ID{2}
 	for _, tt := range []struct {
@@ -80,6 +82,7 @@ func TestEphemeralScopesAndAuthorization(t *testing.T) {
 					}
 					return !tt.deny, tt.err
 				})}
+				stream = compatibilityStream(t, stream, &selected, scheduled)
 				// Nine coalesced changes still require at most one check, denied too.
 				for generation := int64(1); generation <= 9 && tt.name != "connect"; generation++ {
 					h.RaiseGeneration(orgA, tt.kind, generation)

@@ -217,7 +217,9 @@ func TestStreamReplaysThenDeliversLive(t *testing.T) {
 
 // A fresh hub knows no sequence, so the loop must drain every batch before
 // it waits, and skipped events must still move the cursor.
-func TestStreamDrainsBatchesOnAColdHub(t *testing.T) {
+func TestStreamDrainsBatchesOnAColdHub(t *testing.T) { testStreamDrainsBatchesOnAColdHub(t, false) }
+
+func testStreamDrainsBatchesOnAColdHub(t *testing.T, scheduled bool) {
 	denied := posted(5, channelA)
 	denied.AudienceMemberID = &kernel.ID{2}
 	log := &fakeLog{events: []Event{
@@ -234,7 +236,7 @@ func TestStreamDrainsBatchesOnAColdHub(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
-	done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render), BatchSize: 2}, 0, send)
+	done := runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render), BatchSize: 2}, 0, send, scheduled)
 	send.waitFor(t, 1, 6, 7)
 
 	cancel()
@@ -330,6 +332,10 @@ func TestStreamStopsOnCancelWhileWaiting(t *testing.T) {
 // Each failure stops the loop before the event it could not deliver, so a
 // reconnect resumes there; none of them may be treated as a skip.
 func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
+	testStreamErrorsDoNotAdvanceTheCursor(t, false)
+}
+
+func testStreamErrorsDoNotAdvanceTheCursor(t *testing.T, scheduled bool) {
 	failure := errors.New("database unavailable")
 	tests := []struct {
 		name      string
@@ -383,7 +389,7 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 		{name: "sender", authorize: allowAll, render: render, failSend: true},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, compatibilityCase(scheduled, func(t *testing.T) {
 			log := tt.log
 			if log == nil {
 				log = &fakeLog{}
@@ -394,11 +400,13 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 				send.failOn, send.err = 2, failure
 			}
 			s := Stream{Hub: NewHub(), Events: log, Authorizer: tt.authorize, Renderer: tt.render, BatchSize: 1}
+			selected := sub
+			s = compatibilityStream(t, s, &selected, scheduled)
 			// Bounded, so a loop that skips instead of failing ends the test
 			// rather than waiting on the hub forever.
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
-			cursor, err := s.Run(ctx, sub, 0, send)
+			cursor, err := s.Run(ctx, selected, 0, send)
 			if !errors.Is(err, failure) {
 				t.Fatalf("Run error = %v, want %v", err, failure)
 			}
@@ -408,7 +416,7 @@ func TestStreamErrorsDoNotAdvanceTheCursor(t *testing.T) {
 			if got := send.ids(); !slices.Equal(got, []int64{1}) {
 				t.Fatalf("sent %v, want only event 1", got)
 			}
-		})
+		}))
 	}
 }
 
@@ -446,10 +454,14 @@ func TestStreamDoesNotSpinWhenTheHubIsAheadOfTheLog(t *testing.T) {
 	})
 }
 
-func TestStreamRefusesANegativeCursor(t *testing.T) {
+func TestStreamRefusesANegativeCursor(t *testing.T) { testStreamRefusesANegativeCursor(t, false) }
+
+func testStreamRefusesANegativeCursor(t *testing.T, scheduled bool) {
 	log := &fakeLog{}
 	s := Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}
-	if _, err := s.Run(t.Context(), sub, -1, newRecorder()); err == nil || log.calls != 0 {
+	selected := sub
+	s = compatibilityStream(t, s, &selected, scheduled)
+	if _, err := s.Run(t.Context(), selected, -1, newRecorder()); err == nil || log.calls != 0 {
 		t.Fatalf("Run(-1) = %v after %d reads, want a refusal before reading", err, log.calls)
 	}
 }
@@ -457,12 +469,18 @@ func TestStreamRefusesANegativeCursor(t *testing.T) {
 // Cancellation between two events of the same batch stops the loop before
 // the second, even when the authorizer and renderer ignore the context.
 func TestStreamChecksCancellationBetweenEvents(t *testing.T) {
+	testStreamChecksCancellationBetweenEvents(t, false)
+}
+
+func testStreamChecksCancellationBetweenEvents(t *testing.T, scheduled bool) {
 	cause := errors.New("session ended")
 	ctx, cancel := context.WithCancelCause(t.Context())
 	log := &fakeLog{events: []Event{posted(1, channelA), posted(2, channelA)}}
 	send := &cancellingSender{recorder: newRecorder(), cancel: func() { cancel(cause) }}
 	s := Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}
-	cursor, err := s.Run(ctx, sub, 0, send)
+	selected := sub
+	s = compatibilityStream(t, s, &selected, scheduled)
+	cursor, err := s.Run(ctx, selected, 0, send)
 	if !errors.Is(err, cause) || cursor != 1 || !slices.Equal(send.ids(), []int64{1}) {
 		t.Fatalf("Run = %d, %v, sent %v; want 1, %v, only event 1", cursor, err, send.ids(), cause)
 	}
@@ -607,7 +625,9 @@ func TestStreamHeartbeatsWhileDrainingFilteredBatches(t *testing.T) {
 
 // A gap resets the stream before anything of that batch is delivered,
 // whether it comes before the batch's first event or inside the batch.
-func TestStreamResetsOnAGap(t *testing.T) {
+func TestStreamResetsOnAGap(t *testing.T) { testStreamResetsOnAGap(t, false) }
+
+func testStreamResetsOnAGap(t *testing.T, scheduled bool) {
 	for _, tt := range []struct {
 		name   string
 		events []Event
@@ -615,21 +635,21 @@ func TestStreamResetsOnAGap(t *testing.T) {
 		{"before the first event", []Event{posted(12, channelA)}},
 		{"inside a batch", []Event{posted(11, channelA), posted(13, channelA)}},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, compatibilityCase(scheduled, func(t *testing.T) {
 			log := &fakeLog{events: tt.events}
 			send := newRecorder()
 			// Bounded, so a regression that delivers past the gap and then
 			// waits fails instead of hanging.
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
-			got := <-runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send)
+			got := <-runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send, scheduled)
 			if got.err != nil || got.cursor != 10 {
 				t.Fatalf("Run = %d, %v; want 10 and the reset sent", got.cursor, got.err)
 			}
 			if ids := send.ids(); !slices.Equal(ids, []int64{10}) {
 				t.Fatalf("sent %v, want only the reset (id 10): nothing may be delivered past the gap", ids)
 			}
-		})
+		}))
 	}
 }
 
@@ -651,37 +671,43 @@ func (c cancelOnRead) EventsAfter(ctx context.Context, org kernel.ID, after int6
 // boundary the cursor is still valid, and an open stream whose next read
 // falls below a boundary raised meanwhile resets too. A stream whose
 // context ended while the reset was due sends nothing.
-func TestStreamResetsBelowTheBoundary(t *testing.T) {
-	t.Run("at the boundary", func(t *testing.T) {
+func TestStreamResetsBelowTheBoundary(t *testing.T) { testStreamResetsBelowTheBoundary(t, false) }
+
+func testStreamResetsBelowTheBoundary(t *testing.T, scheduled bool) {
+	t.Run("at the boundary", compatibilityCase(scheduled, func(t *testing.T) {
 		log := &fakeLog{boundary: 5, events: []Event{posted(6, channelA)}}
 		ctx, cancel := context.WithCancel(t.Context())
 		send := newRecorder()
-		done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 5, send)
+		done := runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 5, send, scheduled)
 		send.waitFor(t, 6)
 		cancel()
 		if got := <-done; got.cursor != 6 || !errors.Is(got.err, context.Canceled) {
 			t.Fatalf("Run = %d, %v; want 6, context.Canceled", got.cursor, got.err)
 		}
-	})
-	t.Run("below the boundary", func(t *testing.T) {
+	}))
+	t.Run("below the boundary", compatibilityCase(scheduled, func(t *testing.T) {
 		log := &fakeLog{boundary: 5, events: []Event{posted(6, channelA)}}
 		send := newRecorder()
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
-		got := <-runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 4, send)
+		got := <-runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 4, send, scheduled)
 		if got.err != nil || got.cursor != 4 || !slices.Equal(send.ids(), []int64{4}) || !slices.Equal(send.eventNames(), []string{"reset"}) {
 			t.Fatalf("Run = %d, %v, sent %v %v; want 4, nil and only a reset with id 4", got.cursor, got.err, send.eventNames(), send.ids())
 		}
-	})
-	t.Run("an open stream's next read falls below", func(t *testing.T) {
+	}))
+	t.Run("an open stream's next read falls below", compatibilityCase(scheduled, func(t *testing.T) {
 		hub := NewHub()
 		log := &fakeLog{events: []Event{posted(1, channelA)}}
 		send := newRecorder()
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
-		done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 0, send)
+		done := runCompatibilityAsync(ctx, t, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 0, send, scheduled)
 		send.waitFor(t, 1)
-		waitForHubWaiters(t, hub, orgA, 1)
+		if scheduled {
+			synctest.Wait()
+		} else {
+			waitForHubWaiters(t, hub, orgA, 1)
+		}
 		// Retention expires the log past the stream's cursor, then a new
 		// event wakes it.
 		log.expire(5)
@@ -691,18 +717,19 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 		if got.err != nil || got.cursor != 1 || !slices.Equal(send.ids(), []int64{1, 1}) || !slices.Equal(send.eventNames(), []string{"message", "reset"}) {
 			t.Fatalf("Run = %d, %v, sent %v %v; want 1, nil and message 1 then a reset with id 1", got.cursor, got.err, send.eventNames(), send.ids())
 		}
-	})
-	t.Run("the context ends while the reset is due", func(t *testing.T) {
+	}))
+	t.Run("the context ends while the reset is due", compatibilityCase(scheduled, func(t *testing.T) {
 		cause := errors.New("session ended")
 		ctx, cancel := context.WithCancelCause(t.Context())
 		defer cancel(nil)
 		log := cancelOnRead{log: &fakeLog{boundary: 5}, cancel: cancel, cause: cause}
 		send := newRecorder()
-		cursor, err := Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}.Run(ctx, sub, 4, send)
+		got := <-runCompatibilityAsync(ctx, t, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 4, send, scheduled)
+		cursor, err := got.cursor, got.err
 		if cursor != 4 || !errors.Is(err, cause) || len(send.ids()) != 0 {
 			t.Fatalf("Run = %d, %v, sent %v; want 4, %v and nothing sent", cursor, err, send.ids(), cause)
 		}
-	})
+	}))
 }
 
 // A topic subscription delivers an event without routing topics (a post

@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -8,7 +9,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
-func TestStreamSubscriptionInterest(t *testing.T) {
+func TestStreamSubscriptionInterest(t *testing.T) { testStreamSubscriptionInterest(t, false) }
+
+func testStreamSubscriptionInterest(t *testing.T, scheduled bool) {
 	topicA, topicB, topicC := kernel.ID{0x7a}, kernel.ID{0x7b}, kernel.ID{0x7c}
 	for _, tt := range []struct {
 		name         string
@@ -43,7 +46,7 @@ func TestStreamSubscriptionInterest(t *testing.T) {
 		{"synthetic kind", channelA, "test.synthetic", &topicC, []kernel.ID{topicC}, topicA, false, false, []string{"render", "authorize"}, []int64{1}},
 		{"synthetic kind, other topic", channelA, "test.synthetic", &topicA, []kernel.ID{topicC}, topicA, false, false, nil, nil},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, compatibilityCase(scheduled, func(t *testing.T) {
 			event := posted(1, tt.channel)
 			event.Kind, event.Topics = tt.kind, tt.topics
 			selected := sub
@@ -65,6 +68,7 @@ func TestStreamSubscriptionInterest(t *testing.T) {
 					return allowed, nil
 				}),
 			}
+			s = compatibilityStream(t, s, &selected, scheduled)
 			send := newRecorder()
 			cursor, err := s.Run(t.Context(), selected, 0, send)
 			wantCursor, wantErr := int64(1), errTooManyReads
@@ -74,7 +78,7 @@ func TestStreamSubscriptionInterest(t *testing.T) {
 			if cursor != wantCursor || !errors.Is(err, wantErr) || !slices.Equal(calls, tt.wantCalls) || !slices.Equal(send.ids(), tt.wantSent) {
 				t.Fatalf("Run = %d, %v; calls %v, sent %v; want cursor 1, calls %v, sent %v", cursor, err, calls, send.ids(), tt.wantCalls, tt.wantSent)
 			}
-		})
+		}))
 	}
 }
 
@@ -129,6 +133,32 @@ func TestStreamSubscriptionScopes(t *testing.T) {
 					if !errors.Is(err, wantErr) || sent != tt.wantSent || !slices.Equal(calls, tt.wantCalls) {
 						t.Fatalf("deliver = %t, %v; calls %v; want sent %t, calls %v", sent, err, calls, tt.wantSent, tt.wantCalls)
 					}
+					t.Run("scheduled", compatibilityCase(true, func(t *testing.T) {
+						calls = nil
+						s.Hub, s.BatchSize = NewHub(), 1
+						// Deliberately return the foreign envelope: the reader must
+						// not mask the organisation pre-filter in Run.
+						s.Events = sidebarReader(func(_ context.Context, _ kernel.ID, after int64, _ int) ([]Event, error) {
+							if after == 0 {
+								return []Event{event}, nil
+							}
+							return nil, errTooManyReads
+						})
+						s = compatibilityStream(t, s, &selected, true)
+						count := 0
+						cursor, err := s.Run(t.Context(), selected, 0, frameSender{func(Outgoing) error {
+							calls = append(calls, "send")
+							count++
+							return nil
+						}})
+						wantCursor, wantErr := int64(1), errTooManyReads
+						if tt.deny {
+							wantCursor, wantErr = 0, ErrMembershipRevoked
+						}
+						if cursor != wantCursor || !errors.Is(err, wantErr) || !slices.Equal(calls, tt.wantCalls) || (count == 1) != tt.wantSent {
+							t.Fatalf("scheduled scope: cursor=%d err=%v calls=%v frames=%d; want calls=%v sent=%v", cursor, err, calls, count, tt.wantCalls, tt.wantSent)
+						}
+					}))
 				})
 			}
 		})

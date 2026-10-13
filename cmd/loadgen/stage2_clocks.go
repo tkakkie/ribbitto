@@ -76,8 +76,12 @@ func (o *stage2Observation) finish(start, dispatch, end, offline time.Time, atte
 	}
 	o.Completed, o.Outcome = end, outcome
 	outage := time.Duration(0)
-	if o.Slot.Operation == "replacement" && !offline.IsZero() {
-		outage = end.Sub(offline)
+	if o.Slot.Operation == "replacement" {
+		// Missing evidence must not claim an instantaneous recovery.
+		outage = -1
+		if !offline.IsZero() {
+			outage = end.Sub(offline)
+		}
 	}
 	o.Attempts = append(o.Attempts, stage2Attempt{o.Slot.Operation, o.Slot.Endpoint, outcome,
 		o.Slot.LogicalID, attempt, status, dispatch.Sub(start).Nanoseconds(), outage.Nanoseconds()})
@@ -176,6 +180,10 @@ func stage2Percentiles(values []time.Duration) stage2Latency {
 // in ScheduledToResponse; the completeness gate must reject any miss.
 func stage2Summarize(observations []stage2Observation) ([]stage2Operation, []stage2Attempt) {
 	ops, attempts := []stage2Operation{}, []stage2Attempt{}
+	// Establishment has no scheduled-operation summary but still supplies refusals.
+	for _, o := range observations {
+		attempts = append(attempts, o.Attempts...)
+	}
 	for _, kind := range []string{"post", "read", "page", "replacement"} {
 		for _, endpoint := range []string{"feed", "topic"} {
 			op := stage2Operation{Operation: kind, Endpoint: endpoint}
@@ -214,7 +222,6 @@ func stage2Summarize(observations []stage2Observation) ([]stage2Operation, []sta
 					}
 				}
 				totalTimes = append(totalTimes, o.Completed.Sub(o.Slot.At))
-				attempts = append(attempts, o.Attempts...)
 			}
 			op.HTTP, op.ScheduledToResponse, op.DispatchLateness = stage2Percentiles(httpTimes), stage2Percentiles(totalTimes), stage2Percentiles(lateTimes)
 			ops = append(ops, op)

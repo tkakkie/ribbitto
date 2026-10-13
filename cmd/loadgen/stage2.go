@@ -136,6 +136,33 @@ type stage2Operation struct {
 	Scheduled, Executed, Succeeded, Changed, Noop, Missed, Timeouts, Failed uint64
 	HTTP, ScheduledToResponse, DispatchLateness                             stage2Latency
 }
+
+// The schedule has eight pairs even when a pair has no observations. Validate
+// before lookup or aggregation so duplicate summaries cannot hide failures or
+// inflate the replacement denominator.
+func stage2ValidateOperations(ops []stage2Operation) error {
+	seen := make(map[[2]string]bool)
+	for _, op := range ops {
+		if !slices.Contains([]string{"post", "read", "page", "replacement"}, op.Operation) ||
+			!slices.Contains([]string{"feed", "topic"}, op.Endpoint) {
+			return fmt.Errorf("unknown operation pair %q.%q", op.Operation, op.Endpoint)
+		}
+		key := [2]string{op.Operation, op.Endpoint}
+		if seen[key] {
+			return fmt.Errorf("duplicate operation pair %s.%s", op.Operation, op.Endpoint)
+		}
+		seen[key] = true
+	}
+	for _, operation := range []string{"post", "read", "page", "replacement"} {
+		for _, endpoint := range []string{"feed", "topic"} {
+			if !seen[[2]string{operation, endpoint}] {
+				return fmt.Errorf("missing operation pair %s.%s", operation, endpoint)
+			}
+		}
+	}
+	return nil
+}
+
 type stage2Attempt struct {
 	Operation, Endpoint, Outcome string
 	LogicalID, Attempt           uint64
@@ -304,6 +331,9 @@ func decodeStage2(raw []byte, dst any) error {
 		version, protocol, configs = v.Version, v.Protocol, []stage2Config{v.Config}
 		if v.Kind != "window" {
 			return fmt.Errorf("expected window")
+		}
+		if err := stage2ValidateOperations(v.Operations); err != nil {
+			return fmt.Errorf("stage-2 window operations: %w", err)
 		}
 	case *stage2Manifest:
 		gates = v.Gates

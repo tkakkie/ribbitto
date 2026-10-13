@@ -38,8 +38,10 @@ func stage2WindowFixture() stage2Window {
 	for _, gate := range p.Gates {
 		gates = append(gates, stage2Verdict{gate.ID, "inconclusive", map[string]float64{"count": 0}})
 	}
+	ops, _ := stage2Summarize(nil)
+	ops[0].HTTP = stage2Latency{1, 1, 2, 3}
 	return stage2Window{Version: 1, Kind: "window", Protocol: p, Config: c, Effective: e,
-		Samples: []stage2Sample{{0, "traffic", metrics}}, Operations: []stage2Operation{{Operation: "post", Endpoint: "feed", HTTP: stage2Latency{1, 1, 2, 3}}},
+		Samples: []stage2Sample{{0, "traffic", metrics}}, Operations: ops,
 		Delivery: stage2Delivery{Message: stage2ReceiptLatency{100, 1, -5, 1, 2, 3}, PostFreshness: stage2ReceiptLatency{1, 1, -2, -2, -2, -2}, ReadFreshness: stage2ReceiptLatency{1, 1, -3, -3, -3, -3}},
 		Attempts: []stage2Attempt{{Operation: "replacement", LogicalID: 1, Attempt: 2, Status: 503, Outcome: "refused_capacity"}}, Gates: gates}
 }
@@ -68,7 +70,7 @@ func TestStage2Schema(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Fixed examples prevent changing the version-1 wire shape unnoticed.
-		if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != [2]string{"bc824fc7f3ea4df8f8c66f5c92c329af85d5efc8ae85918e896bd64ed05a2e9e", "8cba0bdbf1362c7078cef41c9606389ff0170175d542f2ced3e0f4e628ee9fd1"}[i] {
+		if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != [2]string{"af1dbbdb2c7e4de4865cb3162c8591428de6d842c514e55f8a1e589bad3cf541", "8cba0bdbf1362c7078cef41c9606389ff0170175d542f2ced3e0f4e628ee9fd1"}[i] {
 			t.Errorf("version-1 schema changed: %s", got)
 		}
 		dst := reflect.New(reflect.TypeOf(record)).Interface()

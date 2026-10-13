@@ -64,8 +64,8 @@ The retention period defaults to seven days; see [database configuration](../dat
   releases presence/typing counts. `Streaming.Recounts` admits sidebar interests
   with a non-nil source after recheck/expiry, before presence/typing and SSE/200.
   Full/closed schedulers return plain-text 503 with no retained request slots or
-  presence/typing; no synchronous fallback. `StreamOpened` counts every interest
-  with resolved organisation/member/channel IDs.
+  presence/typing; no synchronous fallback. `StreamOpened` counts each accepted
+  stream once, whatever its interests.
   Typing uses separate channel counts: the last matching close clears activity
   immediately ([typing lifetime](typing.md)); failed opens take no count. Presence stays online
   until 30 s after the last close; a reconnect cancels expiry.

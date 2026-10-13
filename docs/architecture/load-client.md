@@ -168,5 +168,5 @@ Each JSON object names its verdict's reasons: `Slow` (p95 over 1 s),
 `MaxMS`, and `Server.Delta` holds the step's database and pool costs.
 
 [Stage-2 credentials](../seed-data.md#stage-2-fixture) supply authenticated
-post/page drivers over loopback HTTP/1.1 (slice 3-2a). Read drivers and the runner
-follow; measurements require approval.
+post, page and read [drivers](stream-sidebar-stage2-drivers.md) over loopback
+HTTP/1.1. Runs need approval.

@@ -100,9 +100,18 @@ type counterMatrix struct {
 	signup        *org.SignUp
 	members       []org.Membership
 	channel, base kernel.ID
+	selected      kernel.ID
+	extra         []counterView
+	posted        map[int64]kernel.ID
 	prototype     counterPrototype
 	truth         counterTruth
+	truthByOrg    map[kernel.ID]counterTruth
 	models        map[kernel.ID]sidebarOracleModel
+}
+
+type counterView struct {
+	member            org.Membership
+	channel, selected kernel.ID
 }
 
 func newCounterMatrix(t *testing.T) *counterMatrix {
@@ -130,8 +139,10 @@ func newCounterMatrix(t *testing.T) *counterMatrix {
 	}
 	conversationtest.Channel(t, pool, result.OrganizationID, "other", false)
 	h := &counterMatrix{pool: pool, members: []org.Membership{owner}, channel: channel.ID, base: channel.DefaultTopicID,
-		prototype: counterPrototype{totals: map[kernel.ID]map[kernel.ID]int64{}, bundles: map[counterKey]*counterBundle{}, suspended: map[kernel.ID]bool{}},
-		models:    map[kernel.ID]sidebarOracleModel{}}
+		selected: channel.DefaultTopicID, posted: map[int64]kernel.ID{},
+		truthByOrg: map[kernel.ID]counterTruth{},
+		prototype:  counterPrototype{totals: map[kernel.ID]map[kernel.ID]int64{}, bundles: map[counterKey]*counterBundle{}, suspended: map[kernel.ID]bool{}},
+		models:     map[kernel.ID]sidebarOracleModel{}}
 	h.posting = conversationpg.NewPagePosting(pool, postingSequence, postingEvents,
 		func(tx platform.Tx) conversation.PostReadWriter { return counterPostReads{tx} }, nil)
 	h.reading = unreadpg.NewReading(pool, counterFeedWriter(), counterTopicWriter(nil), nil)
@@ -150,12 +161,22 @@ func (h *counterMatrix) check(t *testing.T, name string) {
 		}
 		defer func() { _ = tx.Rollback(t.Context()) }()
 		h.truth = counterLoad(t, tx, h.members[0].Organization.ID)
+		h.truthByOrg[h.members[0].Organization.ID] = h.truth
 		if len(h.prototype.totals) == 0 {
 			h.prototype.totals[h.channel] = counterRecount(h.truth, h.channel, kernel.ID{}, false)
 		}
+		views := append([]counterView(nil), h.extra...)
 		for _, m := range h.members {
-			got := h.prototype.model(t, tx, h.truth, m.Organization.ID, m.Member.ID, h.channel, &h.base)
-			want, err := sidebarOracleIn(t.Context(), tx, m.Organization.ID, m.Member.ID, h.channel, &h.base)
+			views = append(views, counterView{m, h.channel, h.selected})
+		}
+		for _, v := range views {
+			m, truth := v.member, h.truth
+			if m.Organization.ID != h.members[0].Organization.ID {
+				truth = counterLoad(t, tx, m.Organization.ID)
+			}
+			h.truthByOrg[m.Organization.ID] = truth
+			got := h.prototype.model(t, tx, truth, m.Organization.ID, m.Member.ID, v.channel, &v.selected)
+			want, err := sidebarOracleIn(t.Context(), tx, m.Organization.ID, m.Member.ID, v.channel, &v.selected)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -191,12 +212,17 @@ func (h *counterMatrix) join(t *testing.T, handle string) org.Membership {
 
 func (h *counterMatrix) post(t *testing.T, name string, m org.Membership, topic *kernel.ID, cursor *int64) int64 {
 	t.Helper()
+	return h.postIn(t, name, m, h.channel, topic, cursor)
+}
+
+func (h *counterMatrix) postIn(t *testing.T, name string, m org.Membership, channel kernel.ID, topic *kernel.ID, cursor *int64) int64 {
+	t.Helper()
 	var message conversation.Message
 	var err error
 	if cursor == nil {
-		message, err = h.posting.PostToTopic(t.Context(), m, h.channel, topic, "older page")
+		message, err = h.posting.PostToTopic(t.Context(), m, channel, topic, "older page")
 	} else {
-		message, err = h.posting.PostFromPage(t.Context(), m, h.channel, topic, "latest page", *cursor)
+		message, err = h.posting.PostFromPage(t.Context(), m, channel, topic, "latest page", *cursor)
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -211,7 +237,10 @@ func (h *counterMatrix) post(t *testing.T, name string, m org.Membership, topic 
 	}
 	// Maintenance uses the pre-write snapshot and the caller's arguments/result,
 	// never a post-write recount or any value returned by the oracle.
-	h.prototype.post(h.truth, counterMessage{channel: h.channel, topic: message.TopicID, seq: message.EventSeq}, m.Member.ID, scope, through)
+	h.prototype.post(h.truthByOrg[m.Organization.ID], counterMessage{channel: channel, topic: message.TopicID, seq: message.EventSeq}, m.Member.ID, scope, through)
+	if m.Organization.ID == h.members[0].Organization.ID {
+		h.posted[message.EventSeq] = message.ID
+	}
 	h.check(t, name)
 	return message.EventSeq
 }

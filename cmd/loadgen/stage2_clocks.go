@@ -47,6 +47,8 @@ func newStage2Schedule(group stage2Group, seed uint64, start time.Time) (*stage2
 
 type stage2Observation struct {
 	Slot                stage2Slot
+	Member              uint64
+	MemberSelected      bool
 	Dispatch, Completed time.Time
 	Outcome             string
 	Attempts            []stage2Attempt
@@ -117,7 +119,9 @@ func stage2SuccessStatus(slot stage2Slot) int {
 // Exactly one HTTP exchange; RoundTrip avoids redirect-generated POST retries.
 // changed must confirm persisted read advancement using proof supplied by later
 // slices (e.g. read state), independently of the empty 204 response body.
-func stage2HTTP(ctx context.Context, rt http.RoundTripper, req *http.Request, o stage2Observation, start time.Time, now func() time.Time, changed func([]byte) bool) stage2Observation {
+// Successful response observers receive the capped proof prefix after the clock
+// stops, so snapshot parsing adds no time to the HTTP latency.
+func stage2HTTP(ctx context.Context, rt http.RoundTripper, req *http.Request, o stage2Observation, start time.Time, now func() time.Time, changed func([]byte) bool, observed ...func([]byte)) stage2Observation {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	o.Dispatch = now()
@@ -156,6 +160,11 @@ func stage2HTTP(ctx context.Context, rt http.RoundTripper, req *http.Request, o 
 		}
 	}
 	o.finish(start, o.Dispatch, end, time.Time{}, 1, status, outcome)
+	if err == nil && status == stage2SuccessStatus(o.Slot) {
+		for _, observe := range observed {
+			observe(body)
+		}
+	}
 	return o
 }
 
@@ -228,4 +237,16 @@ func stage2Summarize(observations []stage2Observation) ([]stage2Operation, []sta
 		}
 	}
 	return ops, attempts
+}
+
+// stage2MemberReadCounts reports attempts, including ambiguous HTTP failures;
+// selection and these counts do not attest persisted read advancement.
+func stage2MemberReadCounts(observations []stage2Observation, n int) []uint64 {
+	counts := make([]uint64, n)
+	for _, o := range observations {
+		if o.Slot.Operation == "read" && o.MemberSelected && len(o.Attempts) != 0 && o.Member < uint64(n) {
+			counts[o.Member]++
+		}
+	}
+	return counts
 }

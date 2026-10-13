@@ -104,10 +104,21 @@ computation first cancelled. Replacement, buffered-result disposal and repeated
 Cancel/Close add nothing. RefusedCapacity counts full Register calls;
 RefusedClosed counts closed Register calls, taking precedence over capacity.
 RejectedSubmissions counts each Submit refused for a nil computation, cancelled
-registration or closed scheduler. Errors counts each returned error or recovered
-panic, including after cancellation. All counters persist after Close.
+registration or closed scheduler. Errors counts returned errors and recovered
+panics from live registrations. ErrorsAfterCancellation counts those whose
+registration is already cancelled (`r.closed`) when the worker processes the
+return under the scheduler mutex, regardless of the error value. The counters
+are disjoint: even `context.Canceled` counts in Errors if the registration is
+still live. Cancellation racing with return is classified by that mutex-protected
+check; cancellation that lands after return processing counts as a live error.
+All counters persist after Close.
 
 Gated synctest tests cover these rules and duration boundaries without sleeps;
 mutation commands and failing assertions are recorded in the part 2a PR body.
-Metrics exposure is part 2b; production remains synchronous. Processing time is
+Part 2b exposes these fields through the optional scheduler dependency in
+[development metrics](dev-metrics.md#scheduler-snapshot), splitting live errors
+(`errors`) from errors after cancellation (`errors_after_cancellation`). Its gated
+error/panic tests and mutations cover both classifications, including cancellation
+after processing; commands and failing assertions are in the part 2b PR body.
+Production remains synchronous. Processing time is
 not recount freshness: delivery timing and mixed-load validation remain later work.

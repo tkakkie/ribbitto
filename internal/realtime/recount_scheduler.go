@@ -90,8 +90,14 @@ type RecountStats struct {
 	RefusedClosed uint64
 	// RejectedSubmissions counts Submit calls rejected for nil compute or closure.
 	RejectedSubmissions uint64
-	// Errors counts returned errors and recovered panics, even after cancellation.
+	// Errors counts returned errors and recovered panics from live registrations.
+	// Classification checks registration cancellation under the scheduler mutex
+	// when processing the return; cancellation after that point counts as a live error.
 	Errors uint64
+	// ErrorsAfterCancellation counts returned errors and recovered panics whose
+	// registration was already cancelled when the return was processed under the
+	// scheduler mutex. It is disjoint from Errors, regardless of the error value.
+	ErrorsAfterCancellation uint64
 }
 
 // Stats copies counters and scans the bounded registrations under the mutex.
@@ -210,7 +216,11 @@ func (q *RecountScheduler) work() {
 		}
 		q.stats.DurationBuckets[bucket]++
 		if err != nil {
-			q.stats.Errors++
+			if r.closed {
+				q.stats.ErrorsAfterCancellation++
+			} else {
+				q.stats.Errors++
+			}
 		}
 		r.running = false
 		if r.closed {

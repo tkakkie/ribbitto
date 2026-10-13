@@ -100,7 +100,8 @@ type RecountStats struct // RecountStats is a scheduler snapshot; counters accum
   field Completed uint64 // Completed counts actual returns, including errors, panics and cancelled work.
   field DurationBuckets [6]uint64 // DurationBuckets are disjoint counts: <=1ms, <=10ms, <=100ms, <=1s, <=10s, >10s.
   field Eligible int // Eligible counts pending registrations queued for a worker.
-  field Errors uint64 // Errors counts returned errors and recovered panics, even after cancellation.
+  field Errors uint64 // Errors counts returned errors and recovered panics from live registrations.
+  field ErrorsAfterCancellation uint64 // ErrorsAfterCancellation counts returned errors and recovered panics whose registration was already cancelled when the return was processed under the scheduler mutex.
   field OldestPendingAge time.Duration // OldestPendingAge preserves continuous pending time across replacement.
   field OldestRunningAge time.Duration // OldestRunningAge includes unfinished, cancelled computations.
   field Pending int // Pending includes successors waiting behind running computations.

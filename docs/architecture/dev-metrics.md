@@ -57,15 +57,15 @@ for the 15,000-stream HTTP/1.1 step.
 
 ## The snapshot
 
-JSON with numbers only — never SQL text, arguments, tokens, IDs, names
-or message content. Two kinds of field:
+JSON with numbers, numeric arrays and state booleans only — never SQL text,
+arguments, tokens, IDs, names or message content. Two kinds of numeric field:
 
 - **Counters** (`database.*`, `pool.acquire_count`, `pool.acquire_duration_ns`,
   `pool.empty_acquire_count`, `pool.empty_acquire_wait_ns`,
   `pool.canceled_acquire_count`) are cumulative since the process started
   and never reset: take a snapshot before and after each load step and use
   the difference. A restart starts them again.
-- **Gauges** (`pool.idle_conns`, `pool.total_conns`, `pool.max_conns`,
+- **Gauges** (`pool.acquired_conns`, `pool.idle_conns`, `pool.total_conns`, `pool.max_conns`,
   `runtime.*`, `streams.open`) are current values: read them as they are.
 
 The `database` fields count statements **sent**, before PostgreSQL answers:
@@ -75,6 +75,43 @@ COMMIT that failed.
 | Section | Fields |
 |---|---|
 | `database` | `queries` (every statement except the three below), `transactions_begun`, `transactions_committed`, `transactions_rolled_back`, counted by `postgres.QueryCounter`, a pgx tracer that looks only at a statement's first word |
-| `pool` | pgx v5 `pgxpool.Stat` with its meanings: `acquire_count`, `acquire_duration_ns` (every successful acquisition), `empty_acquire_count` and `empty_acquire_wait_ns` (only acquisitions that waited for a connection), `canceled_acquire_count`, `idle_conns`, `total_conns`, `max_conns` |
+| `pool` | pgx v5 `pgxpool.Stat` with its meanings: `acquire_count`, `acquire_duration_ns` (every successful acquisition), `empty_acquire_count` and `empty_acquire_wait_ns` (only acquisitions that waited for a connection), `canceled_acquire_count`, `acquired_conns` (currently held), `idle_conns`, `total_conns`, `max_conns` |
 | `runtime` | `goroutines`, `heap_inuse_bytes` |
-| `streams` | `open`: connections in `realtime.Hub`'s registry, read through `Connections()`; `realtime` itself keeps no metrics |
+| `streams` | `open`: connections in `realtime.Hub`'s registry, read through `Connections()` |
+
+## Scheduler snapshot
+
+`scheduler` exposes every [RecountStats field](recount-scheduler.md), sampled
+together under its mutex. Other sections are sampled independently.
+The metrics dependency is optional: nil yields `enabled: false` and every other
+value zero (including arrays). This is the production default until part 2h of
+#865 wires a scheduler. Scraping never constructs or activates one.
+
+With a scheduler, `enabled: true`; `closed` reports stopped admission, and
+`snapshot_at_unix_ns` timestamps the gauges. `worker_limit` and
+`registration_limit` are configured bounds. `pending` includes successors behind
+running work; `eligible` counts queued registrations. `running_workers`,
+`waiting_workers`, `registrations`, `oldest_pending_age_ns` and
+`oldest_running_age_ns` describe current occupancy. Idle has no pending/running
+work; worker saturation has `running_workers == worker_limit`, with `eligible`
+showing queued demand. Registration saturation has `registrations ==
+registration_limit`. Cancelled running work retains capacity until actual return.
+
+Lifetime counters are `completed`, `processing_duration_ns`,
+`processing_duration_bucket_counts`, `cancelled`, `refused_capacity`,
+`refused_closed`, `rejected_submissions`, `errors` and `errors_after_cancellation`.
+The six bucket counts are disjoint, summing to `completed`. The first five have
+inclusive upper bounds in `processing_duration_bucket_upper_bounds_ns`
+(1ms, 10ms, 100ms, 1s, 10s); the sixth is over 10s. Each bucket excludes durations
+covered by earlier buckets. Processing duration measures dispatch to actual
+return, including cancelled work; it does not measure delivery or freshness.
+
+`errors` counts returned errors and recovered panics from live registrations;
+`errors_after_cancellation` counts those whose registration was already cancelled
+when the worker processed the return under the scheduler mutex. They are disjoint
+and classify by registration state, regardless of the error value. A cancellation
+that lands after return processing counts as a live error. Thus `errors` measures
+live recount failures separately from cancellations and refusals.
+`cancelled` counts removed pending work and first cancellation of running work,
+even if it later succeeds; it can overlap `errors_after_cancellation` and must not
+be subtracted from either error counter. All counters persist after closure.

@@ -33,6 +33,13 @@ func (p channelPages) changeImage(w http.ResponseWriter, r *http.Request, m org.
 	if _, ok := p.resolvePlace(w, r, m, id, r.PathValue("topicID")); !ok {
 		return
 	}
+	// The redirect returns to the page's own position; a malformed one
+	// changes nothing, like the page it came from would refuse it.
+	_, before, firstUnread, ok := conversationQuery(r.URL.RawQuery)
+	if !ok {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
 	if !parseForm(w, r) {
 		return
 	}
@@ -48,6 +55,10 @@ func (p channelPages) changeImage(w http.ResponseWriter, r *http.Request, m org.
 	case err != nil:
 		serverError(w, r, "changing channel image", err)
 	default:
-		http.Redirect(w, r, r.URL.RequestURI(), http.StatusSeeOther)
+		target := r.URL.EscapedPath()
+		if state := conversationState(before, firstUnread); state != "" {
+			target += "?" + state
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
 	}
 }

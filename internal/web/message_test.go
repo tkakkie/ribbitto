@@ -32,6 +32,8 @@ type fakeMessages struct {
 	entries  []conversation.Entry
 	older    bool
 	err      error
+	// firstUnread is the snapshot's feed divider.
+	firstUnread int64
 	// before, when set, records the bound each read received.
 	before *[]*int64
 }
@@ -62,6 +64,7 @@ func (f fakeMessages) Page(ctx context.Context, m org.Membership, id kernel.ID, 
 		return conversation.ChannelPage{}, err
 	}
 	page := conversation.ChannelPage{Page: conversation.Page{Entries: f.entries, Older: f.older}, Current: current, Channels: list}
+	page.FeedFirstUnread = f.firstUnread
 	if topicID != nil {
 		page.Topic = &conversation.Topic{ID: *topicID, Name: "Planning"}
 	}

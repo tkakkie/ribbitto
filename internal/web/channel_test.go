@@ -76,6 +76,7 @@ type fakeChannels struct {
 	channels                               []conversation.Channel
 	createErr, defaultErr, getErr, listErr error
 	created                                string
+	imageSets                              int
 }
 
 func (f *fakeChannels) list(context.Context, org.Membership) ([]conversation.Channel, error) {
@@ -182,5 +183,6 @@ func TestChannelHandlers(t *testing.T) {
 }
 
 func (f *fakeChannels) SetImage(_ context.Context, _ org.Membership, _ kernel.ID, image string) error {
+	f.imageSets++
 	return conversation.ValidateChannelImage(image)
 }

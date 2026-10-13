@@ -198,9 +198,9 @@ func TestChannelCreationLimit(t *testing.T) {
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, r)
-			message := "This organisation has reached its channel limit."
+			message := "No more can be created here."
 			if language == "ja" {
-				message = "この組織のチャンネル数が上限に達しています。"
+				message = "ここではこれ以上作成できません。"
 			}
 			body := w.Body.String()
 			if w.Code != 422 || !strings.Contains(body, message) || !strings.Contains(body, `value="kept"`) || !strings.Contains(body, `value="moon" checked`) {

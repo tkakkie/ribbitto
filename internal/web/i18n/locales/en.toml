@@ -323,4 +323,4 @@ other = "Home"
 other = "Account menu"
 
 ["creation.error.limit"]
-other = "This organisation has reached its channel limit."
+other = "No more can be created here."

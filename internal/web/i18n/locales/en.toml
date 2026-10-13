@@ -185,10 +185,10 @@ other = "Create lilypad"
 other = "No ribbits yet."
 
 ["channel.error.name"]
-other = "Enter a channel name of 1–80 printable characters."
+other = "Use 1–80 printable characters."
 
 ["channel.error.name_taken"]
-other = "A channel with this name already exists."
+other = "This name is already taken."
 
 ["message.list"]
 other = "ribbits"
@@ -236,22 +236,22 @@ other = "New ripple name"
 other = "Move selected ribbits"
 
 ["topic.branch_help"]
-other = "Select 1–100 messages from one topic. Choose an existing destination or enter a new name; leave the name empty for an existing topic."
+other = "Select 1–100 from the same source. Choose an existing destination or enter a new name; leave the name empty to use an existing destination."
 
 ["topic.branch_mixed"]
-other = "Select messages from only one source topic. Nothing was moved."
+other = "Select from only one source. Nothing was moved."
 
 ["topic.branch_conflict"]
-other = "A selected message has already moved or is outside the expected source topic. Nothing was moved. Reload and select again."
+other = "Something you selected has already moved or is no longer in its source. Nothing was moved. Reload and select again."
 
 ["topic.branch_invalid"]
-other = "Select 1–100 distinct messages from one topic and a different destination: an existing topic or a new name, not both. Nothing was moved."
+other = "Select 1–100 different ones from one source and a different destination: an existing one or a new name, not both. Nothing was moved."
 
 ["topic.branch_name_taken"]
-other = "A topic with this name already exists. Choose it as the destination or use another name."
+other = "This name is already taken. Choose it as the destination or use another name."
 
 ["topic.branch_name_invalid"]
-other = "Enter a topic name of 1–80 printable characters."
+other = "Use 1–80 printable characters."
 
 ["people.title"]
 other = "lilypad members"

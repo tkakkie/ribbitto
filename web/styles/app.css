@@ -186,6 +186,15 @@
   }
 }
 
+/* Hover and press feedback animates only what it changes: colours and the
+   press scale, not Tailwind's longer `transition` list (display, filters
+   and more) on every row of a long sidebar (#921). */
+@utility transition-feedback {
+  transition-property: color, background-color, border-color, scale;
+  transition-timing-function: var(--default-transition-timing-function);
+  transition-duration: var(--default-transition-duration);
+}
+
 @keyframes rb-panel-in {
   from { transform: translateX(0.5rem); }
 }

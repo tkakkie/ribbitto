@@ -281,7 +281,7 @@ templ historyLink(url string, older bool) {
 			hx-select="#message-items > li"
 			hx-select-oob="#load-older"
 		}
-		class="inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-body text-muted hover:bg-hover hover:text-fg transition motion-safe:active:scale-96"
+		class="inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-body text-muted hover:bg-hover hover:text-fg transition-feedback motion-safe:active:scale-96"
 	>
 		{ children... }
 	</a>
@@ -339,7 +339,7 @@ templ messageComposer(page ChannelPage, oob bool) {
 			} else {
 				<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
 			}
-			<button type="submit" aria-label={ i18n.T(ctx, "message.send") } class="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand transition motion-safe:active:scale-96 disabled:opacity-50">
+			<button type="submit" aria-label={ i18n.T(ctx, "message.send") } class="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand transition-feedback motion-safe:active:scale-96 disabled:opacity-50">
 				@Icon("send-regular", 20)
 			</button>
 		</div>
@@ -492,7 +492,7 @@ templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
 			if selected {
 				aria-current="page"
 			}
-			class={ "relative flex min-h-9 items-center gap-2.5 break-words rounded-lg px-3 py-1.5 transition motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-fg hover:bg-hover", !selected), templ.KV("font-semibold", !selected && count > 0) }
+			class={ "relative flex min-h-9 items-center gap-2.5 break-words rounded-lg px-3 py-1.5 transition-feedback motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-fg hover:bg-hover", !selected), templ.KV("font-semibold", !selected && count > 0) }
 		>
 			if selected {
 				@selectionPill()
@@ -514,7 +514,7 @@ templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, c
 			if selected {
 				aria-current="page"
 			}
-			class={ "relative flex min-h-8 items-center gap-2 break-words rounded-md px-2.5 py-1 transition motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-muted hover:bg-hover hover:text-fg", !selected), templ.KV("font-semibold text-fg", !selected && count > 0) }
+			class={ "relative flex min-h-8 items-center gap-2 break-words rounded-md px-2.5 py-1 transition-feedback motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-muted hover:bg-hover hover:text-fg", !selected), templ.KV("font-semibold text-fg", !selected && count > 0) }
 		>
 			if selected {
 				@selectionPill()

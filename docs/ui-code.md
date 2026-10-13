@@ -112,14 +112,14 @@ the typing dots.
 
 | Token | Value | Use |
 |---|---|---|
-| `--duration-faster` | 100 ms | hover and press feedback (the default for `transition`); the selection pill |
+| `--duration-faster` | 100 ms | hover and press feedback (the default for `transition-feedback`); the selection pill |
 | `--duration-fast` | 150 ms | an opening panel |
 | `--duration-normal`, `--duration-gentle` | 200 ms, 250 ms | reserved for larger surfaces |
 | `ease-standard` | `cubic-bezier(0.33, 0, 0.67, 1)` | colour changes |
 | `ease-decelerate` | `cubic-bezier(0, 0, 0, 1)` | things that enter |
 | `ease-accelerate` | `cubic-bezier(0.8, 0, 0.78, 1)` | things that leave |
 
-- **Rows and buttons** add `transition motion-safe:active:scale-96`: colours
+- **Rows and buttons** add `transition-feedback motion-safe:active:scale-96` (a utility in `app.css` that animates only colours and `scale`, rather than Tailwind's longer `transition` list, #921): colours
   change over 100 ms and a press scales to 0.96.
 - **Messages never move**, live ones included: the page cannot tell
   reconnect backlog from live delivery, and backlog must not move.

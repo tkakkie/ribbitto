@@ -131,6 +131,9 @@
         // Retain recent additions for replay bursts without growing forever.
         // aria-relevant="additions" keeps removal of older entries silent.
         if (!existing) {
+          // Only a live append moves: history, replays and moves never get here.
+          // Reconnect backlog is new to this page too, so it moves the same way.
+          document.getElementById(incoming.id)?.classList.add("animate-message-in");
           const status = document.getElementById("message-status");
           status.append(
             document.createTextNode(incoming.dataset.announcement + "\n"),

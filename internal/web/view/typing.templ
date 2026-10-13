@@ -14,7 +14,15 @@ import (
 // into a space, which Japanese shows around 、 and before が入力中.
 templ TypingIndicator(snapshot typing.Snapshot) {
 	for index, person := range snapshot.Typists {
-		@templ.Join(typingText(typingSeparator(ctx, snapshot, index)), MemberName(person.DisplayName, person.Handle), typingText(typingSuffix(ctx, snapshot, index)))
+		@templ.Join(typingDots(index), typingText(typingSeparator(ctx, snapshot, index)), MemberName(person.DisplayName, person.Handle), typingText(typingSuffix(ctx, snapshot, index)))
+	}
+}
+
+// typingDots pulses before the first name; an empty status (no one typing) has none.
+templ typingDots(index int) {
+	{{ _ = ctx }}
+	if index == 0 {
+		<span aria-hidden="true" class="mr-1.5 inline-flex gap-0.5 align-middle"><span class="size-1 rounded-full bg-muted animate-typing-dot-1"></span><span class="size-1 rounded-full bg-muted animate-typing-dot-2"></span><span class="size-1 rounded-full bg-muted animate-typing-dot-3"></span></span>
 	}
 }
 

@@ -2,6 +2,8 @@
 @source "../../internal/web/**/*.templ";
 /* With source(none), Tailwind watches only @source paths, so include this directory to rebuild on CSS-only edits. */
 @source "./*.css";
+/* message-stream-v10.js adds this to live appends only; no template names it. */
+@source inline("animate-message-in");
 
 /*
  * Design tokens (the M5 direction, see docs/ui.md).
@@ -130,6 +132,32 @@
   --container-sidebar: 16.5rem;
   --container-panel: 21.25rem;
   --container-reading: 47.5rem;
+
+  /* Motion after Fluent 2 (docs/ui-code.md#motion); only transform, opacity and colours animate. */
+  --duration-faster: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-gentle: 250ms;
+  --ease-*: initial;
+  --ease-standard: cubic-bezier(0.33, 0, 0.67, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0, 1);
+  --ease-accelerate: cubic-bezier(0.8, 0, 0.78, 1);
+  /* Hover and press feedback: the transition utility uses these. */
+  --default-transition-duration: var(--duration-faster);
+  --default-transition-timing-function: var(--ease-standard);
+  --animate-*: initial;
+  --animate-message-in: message-in var(--duration-normal) var(--ease-decelerate);
+  /* The only loop, staggered per dot; it ends when the typing status empties. */
+  --animate-typing-dot-1: typing-dot 1.2s var(--ease-standard) infinite;
+  --animate-typing-dot-2: typing-dot 1.2s var(--ease-standard) 0.2s infinite;
+  --animate-typing-dot-3: typing-dot 1.2s var(--ease-standard) 0.4s infinite;
+  @keyframes message-in {
+    from { opacity: 0; translate: 0 0.5rem; }
+  }
+  @keyframes typing-dot {
+    0%, 60%, 100% { opacity: 0.3; }
+    30% { opacity: 1; }
+  }
 }
 
 @layer base {
@@ -141,5 +169,74 @@
   :focus-visible {
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;
+  }
+}
+
+/*
+ * Navigation cross-fades the page, so the unchanged app bar and sidebar stay
+ * put; browsers without cross-document view transitions navigate as before.
+ * Declared only here, so reduced motion never opts in.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+  /* Clicks reach the new page during the short transition. */
+  ::view-transition {
+    pointer-events: none;
+  }
+  /* The browser's symmetric cross-fade keeps identical pixels still. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: var(--duration-fast);
+    animation-timing-function: var(--ease-standard);
+  }
+  /* Only an opening or closing panel lacks a partner on the other page. */
+  #side-panel {
+    view-transition-name: side-panel;
+  }
+  ::view-transition-new(side-panel):only-child {
+    animation: rb-panel-in var(--duration-gentle) var(--ease-decelerate) both;
+  }
+  ::view-transition-old(side-panel):only-child {
+    animation: rb-panel-out var(--duration-fast) var(--ease-accelerate) both;
+  }
+  /* A name per row: an unchanged row stays still, a new row's pill grows in.
+     Without typed attr() the pill cross-fades with the page. */
+  [data-selection-pill] {
+    view-transition-name: attr(id type(<custom-ident>), none);
+    view-transition-class: selection-pill;
+  }
+  ::view-transition-group(.selection-pill) {
+    animation: none;
+  }
+  ::view-transition-new(.selection-pill):only-child {
+    animation: rb-pill-in var(--duration-normal) var(--ease-decelerate) both;
+  }
+  ::view-transition-old(.selection-pill):only-child {
+    animation: rb-pill-out var(--duration-faster) var(--ease-accelerate) both;
+  }
+}
+
+@keyframes rb-panel-in {
+  from { opacity: 0; transform: translateX(0.5rem); }
+}
+@keyframes rb-panel-out {
+  to { opacity: 0; transform: translateX(0.5rem); }
+}
+@keyframes rb-pill-in {
+  from { transform: scaleY(0); }
+}
+@keyframes rb-pill-out {
+  to { transform: scaleY(0); }
+}
+
+/* Under reduced motion everything stops; states change instantly. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

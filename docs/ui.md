@@ -88,10 +88,14 @@ black shadows and the `selected` and `brand` tokens.
 | Radius | `rounded-sm` 4 px · `rounded-md` 6 px · `rounded-lg` 10 px · `rounded-xl` 12 px (blocks) |
 | Shadow | `shadow-block` (blocks, cards) · `shadow-popover` (menus, dialogs) |
 | Focus | 2 px `brand` outline, 2 px offset, on `:focus-visible` |
+| Motion | durations 100 · 150 · 200 · 250 ms; easings `standard`, `decelerate` (entering), `accelerate` (leaving), after Fluent 2 |
 
 The layout widths (`w-rail`, `w-sidebar`, `w-panel`, `max-w-reading`),
 the shared components and how templates and styles are written are in
-[`ui-code.md`](ui-code.md); motion tokens come with #878.
+[`ui-code.md`](ui-code.md).
+
+**Motion** animates only `transform`, `opacity` and colours, and is off
+under `prefers-reduced-motion: reduce`; uses: [Motion](ui-code.md#motion).
 
 ## Contrast (WCAG 2.2 AA)
 
@@ -188,5 +192,4 @@ Recorded now, designed when each screen is built:
   decoded asynchronously, and cached as immutable; the text of a message
   renders immediately and images fill in after.
 - **Playfulness** in design or motion is welcome — for example small,
-  frog-like micro-animations — as long as it is cheap to render and turned
-  off under `prefers-reduced-motion`.
+  frog-like micro-animations — under the motion rule above.

@@ -25,14 +25,14 @@ const (
 templ submitButton(kind buttonKind, label string) {
 	switch kind {
 		case buttonSecondary, buttonSecondaryIcon:
-			<button type="submit" class={ "min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover", templ.KV("inline-flex items-center justify-center gap-2 whitespace-nowrap", kind == buttonSecondaryIcon) }>
+			<button type="submit" class={ "min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover transition motion-safe:active:scale-96", templ.KV("inline-flex items-center justify-center gap-2 whitespace-nowrap", kind == buttonSecondaryIcon) }>
 				{ children... }
 				{ i18n.T(ctx, label) }
 			</button>
 		case buttonLink:
-			<button type="submit" class="inline-flex min-h-11 items-center text-body text-brand underline">{ i18n.T(ctx, label) }</button>
+			<button type="submit" class="inline-flex min-h-11 items-center text-body text-brand underline transition motion-safe:active:scale-96">{ i18n.T(ctx, label) }</button>
 		default:
-			<button type="submit" class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand">{ i18n.T(ctx, label) }</button>
+			<button type="submit" class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand transition motion-safe:active:scale-96">{ i18n.T(ctx, label) }</button>
 	}
 }
 
@@ -87,7 +87,7 @@ templ iconButton(label, popoverTarget string) {
 		if popoverTarget != "" {
 			popovertarget={ popoverTarget }
 		}
-		class="flex size-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg"
+		class="flex size-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg transition motion-safe:active:scale-96"
 	>
 		{ children... }
 	</button>

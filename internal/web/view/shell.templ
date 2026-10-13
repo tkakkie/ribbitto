@@ -29,7 +29,7 @@ templ appBar(page ChannelPage) {
 		<div class="mt-auto">
 			// The menu is an HTML popover: it opens, closes on Escape and on an
 			// outside click, and returns focus without JavaScript.
-			<button type="button" popovertarget="account-menu" aria-label={ i18n.T(ctx, "account.menu") } class="flex size-11 items-center justify-center rounded-full hover:bg-hover">
+			<button type="button" popovertarget="account-menu" aria-label={ i18n.T(ctx, "account.menu") } class="flex size-11 items-center justify-center rounded-full hover:bg-hover transition motion-safe:active:scale-96">
 				<span aria-hidden="true" class="flex size-9 items-center justify-center rounded-full bg-selected text-title font-semibold text-on-selected">{ initial(accountName(page)) }</span>
 			</button>
 			<div id="account-menu" popover class="inset-auto bottom-3 left-24 m-0 w-64 rounded-xl border border-border bg-surface p-3 text-body text-fg shadow-popover">

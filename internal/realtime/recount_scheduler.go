@@ -10,7 +10,7 @@ import (
 )
 
 // RecountScheduler bounds concurrent computations and registered streams.
-// Stream.Run optionally uses it; the server composition root leaves it unwired.
+// Streams use it optionally; the server builds one only when async recounts are enabled.
 type RecountScheduler struct {
 	mu      sync.Mutex
 	wg      sync.WaitGroup

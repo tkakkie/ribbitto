@@ -8,7 +8,7 @@ Core functionality works without JavaScript. JavaScript is progressive
 enhancement, not full parity.
 
 - **Core, today:** first-run setup, sign-up, sign-in and sign-out, opening
-  a channel or topic with its history (including older pages) and its members panel, posting a message,
+  a channel or topic with its history (including older pages) and its members or overview panel, posting a message,
   branching, marking a feed or topic read, and creating channels. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
@@ -60,7 +60,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   updating every reference in the same pull request. Today's contract ids
   are `organization-stream`, `stream-sink`, `conversation`, `message-list`, `message-items`, `load-older`,
   `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
-  `read-form`, `side-panel`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
+  `read-form`, `side-panel`, `panel-close`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
   `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and
@@ -86,7 +86,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   (plus `topic=<id>` on all topic views). Latest pages declare
   `sidebar,messages,typing`; older pages declare `sidebar`; the members panel adds `presence` with
   `presence-after` from the same snapshot as its indicators. Older topic pages retain `topic`.
-  Panels open, page and close with ordinary links (#874); `#members-list` is bounded
+  Panels open, switch, page and close with ordinary links (#874); `#members-list` is bounded
   to 100 names and has no live list swap or live region. Presence entries replace
   individual labeled indicators by stable DOM id.
   See [stream scope](streaming.md#stream-scope). `reset` handling attaches to

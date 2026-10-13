@@ -162,7 +162,7 @@ even when the main swap is `none`, and an entry not on the page is ignored.
 The sink is hidden from assistive technology and takes no focus.
 `TestMessageStreamBrowser` proves replacement and missing-target behavior with
 test-only entries rendered with `html/template`, and that native `Last-Event-ID` and the page's
-reconnect cursor stay unchanged after ephemeral frames. Production presence and sidebar frames share the page components (#768, #818, #819). Opening or closing a panel is a
-navigation. Its bounded, paged list has no live list updates. One
+reconnect cursor stay unchanged after ephemeral frames. Production presence and sidebar frames share the page components (#768, #818, #819). Opening, switching or closing a
+panel is a navigation. Its bounded, paged list has no live list updates. One
 presence snapshot supplies every indicator and the page token; changes replace
 only loaded indicators, with visible localized labels and the success dot.

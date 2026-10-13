@@ -3,11 +3,21 @@ package view
 import (
 	"fmt"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
+	"time"
 )
 
-// PanelMembers names the members panel by its URL segment below the
-// conversation's URL.
-const PanelMembers = "members"
+// Side panels, named by their URL segment below the conversation's URL.
+const (
+	PanelMembers  = "members"
+	PanelOverview = "overview"
+)
+
+func panelTitle(panel string) string {
+	if panel == PanelMembers {
+		return "people.title"
+	}
+	return "overview.title"
+}
 
 // conversationQuery keeps an older page's own parameters on every panel and
 // close link, so a panel never moves the conversation to the latest page.
@@ -33,18 +43,25 @@ func panelURL(page ChannelPage, panel string) string {
 // panelControls open the panels with ordinary links: each page load gives
 // the one stream the interests of the page (decisions 30 and 31).
 templ panelControls(page ChannelPage) {
-	@panelControl(page, PanelMembers, "people.control") {
+	@panelControl(page, PanelMembers, false) {
 		if page.Panel == PanelMembers {
 			@Icon("people-filled", 20)
 		} else {
 			@Icon("people-regular", 20)
 		}
 	}
+	@panelControl(page, PanelOverview, true) {
+		if page.Panel == PanelOverview {
+			@Icon("info-filled", 20)
+		} else {
+			@Icon("info-regular", 20)
+		}
+	}
 }
 
 // panelControl marks the open panel's control with aria-current="true";
 // "page" stays with the conversation's link in the sidebar.
-templ panelControl(page ChannelPage, panel, label string) {
+templ panelControl(page ChannelPage, panel string, iconOnly bool) {
 	{{ open := page.Panel == panel }}
 	<a
 		id={ "panel-control-" + panel }
@@ -52,23 +69,55 @@ templ panelControl(page ChannelPage, panel, label string) {
 		if open {
 			aria-current="true"
 		}
+		if iconOnly {
+			aria-label={ i18n.T(ctx, panelTitle(panel)) }
+		}
 		class={ "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-body", templ.KV("bg-selected font-semibold text-on-selected", open), templ.KV("text-muted hover:bg-hover hover:text-fg", !open) }
 	>
 		{ children... }
-		{ i18n.T(ctx, label) }
+		if !iconOnly {
+			{ i18n.T(ctx, "people.control") }
+		}
 	</a>
 }
 
 // sidePanel is the block beside the conversation. Its heading takes focus
-// when the panel opens; the close link returns to the conversation.
+// when the panel opens; side-panel-v1.js adds Escape and returns focus.
 templ sidePanel(page ChannelPage) {
 	<aside id="side-panel" aria-labelledby="panel-heading" class="flex w-panel shrink-0 flex-col overflow-y-auto rounded-xl bg-bg shadow-block">
 		<header class="flex shrink-0 items-center gap-2 border-b border-border py-2 pl-5 pr-2">
-			<h2 id="panel-heading" tabindex="-1" autofocus class="min-w-0 flex-1 break-words text-title font-semibold">{ i18n.T(ctx, "people.title") }</h2>
+			<h2 id="panel-heading" tabindex="-1" autofocus class="min-w-0 flex-1 break-words text-title font-semibold">{ i18n.T(ctx, panelTitle(page.Panel)) }</h2>
 			<a id="panel-close" href={ templ.SafeURL(conversationURL(page) + conversationQuery(page)) } aria-label={ i18n.T(ctx, "panel.close") } class="flex size-11 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg">
 				@Icon("dismiss-regular", 20)
 			</a>
 		</header>
-		@membersPanel(page)
+		if page.Panel == PanelMembers {
+			@membersPanel(page)
+		} else {
+			@overviewPanel(page)
+		}
 	</aside>
+}
+
+// overviewPanel leaves room for later sections, such as pins (#880).
+templ overviewPanel(page ChannelPage) {
+	<div class="flex flex-col gap-4 px-5 py-4">
+		<p class="flex items-center gap-2 break-words text-title font-semibold">
+			@channelImage(page.Current.ImageURL, true)
+			<span dir="auto" class="min-w-0">{ page.Current.Name }</span>
+		</p>
+		<dl class="flex flex-col gap-1">
+			<dt class="text-caption text-muted">{ i18n.T(ctx, "overview.created") }</dt>
+			<dd><time datetime={ page.Current.Created.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) }>{ page.Current.Created.UTC().Format("2006-01-02") }</time></dd>
+		</dl>
+		<a href={ templ.SafeURL(panelURL(page, PanelMembers)) } class="inline-flex min-h-11 items-center text-brand underline">{ i18n.T(ctx, "people.title") }</a>
+		<h3 class="font-semibold">{ i18n.T(ctx, "topic.list") }</h3>
+		<ul class="flex flex-col gap-1">
+			for _, topic := range page.Topics {
+				<li class="break-words">
+					<a href={ templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)) } dir="auto" class="inline-flex min-h-9 items-center text-fg hover:text-brand">{ topicName(ctx, topic) }</a>
+				</li>
+			}
+		</ul>
+	</div>
 }

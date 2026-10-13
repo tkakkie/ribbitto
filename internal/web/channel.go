@@ -318,7 +318,7 @@ func pathID(raw string) (kernel.ID, bool) {
 // viewChannel and the helpers below copy only what the views display, so
 // view never depends on the use cases' entities.
 func viewChannel(c conversation.Channel) view.Channel {
-	return view.Channel{ID: c.ID, DefaultTopicID: c.DefaultTopicID, Name: c.Name, ImageURL: channelImageURL(c.ID, c.Image)}
+	return view.Channel{ID: c.ID, DefaultTopicID: c.DefaultTopicID, Name: c.Name, ImageURL: channelImageURL(c.ID, c.Image), Created: c.CreatedAt}
 }
 
 func viewChannels(channels []conversation.Channel) []view.Channel {

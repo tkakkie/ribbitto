@@ -11,6 +11,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/input"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/typing"
@@ -18,8 +19,8 @@ import (
 	"github.com/tkakkie/ribbitto/web/static"
 )
 
-// The members panel keeps the conversation live on the page's one stream,
-// and closing it is a page load whose stream drops presence (#874).
+// The members panel keeps the conversation live on the page's one stream;
+// Escape closes it with a page load and returns focus to its control (#874).
 func testSidePanelBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
@@ -92,8 +93,15 @@ func testSidePanelBrowser(t *testing.T, browser *rod.Browser) {
 	send(realtime.Outgoing{Ephemeral: true, Name: "typing", Data: streamTestMarkup(t, view.TypingIndicator(typing.Snapshot{Typists: []typing.Typist{{Handle: "alice"}}}))})
 	page.MustWait(`() => document.getElementById('typing-status').textContent.includes('alice')`)
 	assertBrowserItems(t, page, []int{43})
-	page.MustElement("#panel-close").MustClick()
-	page.MustWait(`() => !document.getElementById('side-panel')`)
+	// Escape in the composer leaves the panel and the draft alone.
+	page.MustElement("#message-body").MustInput("draft")
+	page.Keyboard.MustType(input.Escape)
+	if !page.MustEval(`() => sessionStorage.getItem('panel-opener') === null && document.getElementById('message-body').value.endsWith('draft')`).Bool() {
+		t.Fatal("Escape in the composer closed the panel")
+	}
+	page.MustElement("#panel-heading").MustFocus()
+	page.Keyboard.MustType(input.Escape)
+	page.MustWait(`() => !document.getElementById('side-panel') && document.activeElement.id === 'panel-control-members'`)
 	if got := page.MustInfo().URL; got != server.URL+conversationPath {
 		t.Fatalf("closed to %s", got)
 	}

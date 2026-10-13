@@ -211,6 +211,12 @@ other = "メンバー"
 ["panel.close"]
 other = "パネルを閉じる"
 
+["overview.title"]
+other = "チャンネルの概要"
+
+["overview.created"]
+other = "作成日"
+
 ["people.empty"]
 other = "このページにメンバーはいません。"
 

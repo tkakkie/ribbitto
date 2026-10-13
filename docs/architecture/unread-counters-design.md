@@ -48,7 +48,7 @@ keys and composite foreign keys (`db/migrations/00012_unread.sql:3`,
 proposed counters add member/scope rows, **no member/message rows**. The
 subscription-counter fan-out model named Rocket.Chat in #955 is a useful cost
 category; the per-member/per-message models named Zulip and Synapse are
-excluded. These are issue-supplied analogies.
+excluded.
 
 ## Exact transaction increments
 
@@ -139,8 +139,9 @@ move, inserts the notice and reads only its author's notice bounds
 (`internal/conversation/branch_tx.go:16`,
 `internal/conversation/branch_tx.go:40`,
 `internal/conversation/branch_tx.go:54`,
-`internal/conversation/branch_tx.go:64`). Add 1 to source/channel T, and 1 to
-source/channel R only for the author; non-authors gain 1 unread. Moving existing
+`internal/conversation/branch_tx.go:64`). The notice is in the source topic: add 1 to `T_c` and
+the source `T_t`, and, for the author only, to `R_mc` and the source `R_mt`
+(`T_c = sum(T_t)` holds). Moving existing
 messages implicitly reads none, including for the branch author
 (`docs/domain/unread.md:73`). Failed selection, notice or event append must roll
 back all counter changes too.

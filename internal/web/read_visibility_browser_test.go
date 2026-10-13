@@ -69,7 +69,8 @@ func testReadRecoveryBrowser(t *testing.T, browser *rod.Browser) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	visit := &dividerVisit{}
+	// Something stays unread (POSTs never reach the handler), so pages offer Mark as read.
+	visit := &dividerVisit{first: 40}
 	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages, s.Reading = visit, visit }))
 	if err != nil {
 		t.Fatal(err)

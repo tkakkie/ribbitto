@@ -88,6 +88,12 @@ when the POST runs, but has moved out of the topic since the page showed
 it, stays unread: it is no longer there to mark. A message already read
 stays read whatever moves. Without JavaScript, nothing advances on load; the feed and topic view
 offer a *Mark as read* form that sends the same POST with the page's cursor.
+Its button shows only when the page's snapshot found something unread in its
+scope (the [divider's](#the-unread-divider) first unread is non-zero) and,
+like the divider, keeps that answer for the visit: live messages are read
+automatically once shown, so they never add it. Automatic reading posts
+through the same form, which stays on the page, hidden, when nothing was
+unread.
 
 ## Counts
 

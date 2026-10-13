@@ -110,9 +110,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
   content (`hx-swap="innerHTML"`). Empty reconnect frames clear stale content;
   typing changes neither focus nor durable cursors.
 - Latest feeds/topics render `#read-form` with the snapshot `cursor`, a plain
-  *Mark as read* submit button, and `hx-post` to the conversation URL plus
-  `/read`: `POST /organizations/{slug}/channels/{channelID}/read` or
-  `/organizations/{slug}/channels/{channelID}/topics/{topicID}/read`. `hx-trigger="read-visible, submit"`, `hx-sync="this:drop"` and `hx-swap="none"`
+  *Mark as read* submit button only if something was unread (else the form is
+  `hidden`), and `hx-post` to the conversation URL plus `/read` (`POST /organizations/{slug}/channels/{channelID}[/topics/{topicID}]/read`). `hx-trigger="read-visible, submit"`, `hx-sync="this:drop"` and `hx-swap="none"`
   send automatic and manual POSTs without swapping history or overlapping reads.
   `?before=` pages omit it. The endpoint resolves visibility,
   calls the transaction-owning unread use case and returns 204 to htmx or a 303

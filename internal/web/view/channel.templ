@@ -365,11 +365,17 @@ templ messageComposer(page ChannelPage, oob bool) {
 }
 
 // The snapshot bounds plain submissions; htmx uses the cursor of the shown DOM.
+// Automatic reading posts through this form, live arrivals included, so it
+// stays when nothing was unread and only the button goes. Like the divider,
+// the button follows the snapshot for the whole visit: live messages are read
+// automatically once shown, and a page without JavaScript gets none.
 templ readForm(page ChannelPage) {
-	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible, submit" hx-swap="none" hx-sync="this:drop">
+	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible, submit" hx-swap="none" hx-sync="this:drop" hidden?={ page.FirstUnread == 0 }>
 		<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
-		@submitButton(buttonSecondaryIcon, "reading.mark") {
-			@Icon("checkmark-regular", 20)
+		if page.FirstUnread > 0 {
+			@submitButton(buttonSecondaryIcon, "reading.mark") {
+				@Icon("checkmark-regular", 20)
+			}
 		}
 	</form>
 }

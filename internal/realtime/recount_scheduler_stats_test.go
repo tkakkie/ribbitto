@@ -71,7 +71,7 @@ func TestRecountSchedulerStatsLifecycle(t *testing.T) {
 		checkRecountStats(t, q, want) // Unfinished work remains visible after Close.
 		first.open()
 		synctest.Wait()
-		want.RunningWorkers, want.Registrations, want.Completed, want.Errors = 1, 1, 1, 1
+		want.RunningWorkers, want.Registrations, want.Completed, want.ErrorsAfterCancellation = 1, 1, 1, 1
 		want.ProcessingDuration, want.OldestRunningAge = 11*time.Millisecond, 9*time.Millisecond
 		want.DurationBuckets[2] = 1
 		checkRecountStats(t, q, want)
@@ -79,7 +79,7 @@ func TestRecountSchedulerStatsLifecycle(t *testing.T) {
 		synctest.Wait()
 		q.Close()
 		want.RunningWorkers, want.Registrations, want.OldestRunningAge = 0, 0, 0
-		want.Completed, want.Errors, want.ProcessingDuration = 2, 2, 20*time.Millisecond
+		want.Completed, want.ErrorsAfterCancellation, want.ProcessingDuration = 2, 2, 20*time.Millisecond
 		want.DurationBuckets[1] = 1
 		checkRecountStats(t, q, want)
 	})
@@ -137,6 +137,59 @@ func TestRecountSchedulerStatsProcessing(t *testing.T) {
 		want.Closed, want.WaitingWorkers = true, 0
 		checkRecountStats(t, q, want)
 	})
+}
+
+func TestRecountSchedulerStatsErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		cancelled bool
+		panic     bool
+		err       error
+	}{
+		{name: "live error", err: errors.New("failed")},
+		{name: "live panic", panic: true},
+		{name: "live context cancellation", err: context.Canceled},
+		{name: "cancelled context", cancelled: true, err: context.Canceled},
+		{name: "cancelled error", cancelled: true, err: errors.New("failed")},
+		{name: "cancelled panic", cancelled: true, panic: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				q := realtime.NewRecountScheduler(1, 1)
+				defer q.Close()
+				r := q.Register()
+				gate := make(chan struct{})
+				defer close(gate)
+				r.Submit(1, func(context.Context) (realtime.Outgoing, error) {
+					<-gate
+					if tc.panic {
+						panic("failed")
+					}
+					return realtime.Outgoing{}, tc.err
+				})
+				synctest.Wait()
+				if tc.cancelled {
+					r.Cancel()
+				}
+				gate <- struct{}{}
+				synctest.Wait()
+				live, cancelled := uint64(1), uint64(0)
+				if tc.cancelled {
+					live, cancelled = 0, 1
+				}
+				check := func() {
+					t.Helper()
+					s := q.Stats()
+					if s.Completed != 1 || s.Errors != live || s.ErrorsAfterCancellation != cancelled {
+						t.Fatalf("Completed=%d Errors=%d ErrorsAfterCancellation=%d; want 1 %d %d", s.Completed, s.Errors, s.ErrorsAfterCancellation, live, cancelled)
+					}
+				}
+				check()
+				r.Cancel() // Cancellation after return processing cannot reclassify it.
+				check()
+			})
+		})
+	}
 }
 
 func TestRecountSchedulerStatsClosedRefusalPrecedesCapacity(t *testing.T) {

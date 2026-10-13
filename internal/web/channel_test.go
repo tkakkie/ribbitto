@@ -186,3 +186,26 @@ func (f *fakeChannels) SetImage(_ context.Context, _ org.Membership, _ kernel.ID
 	f.imageSets++
 	return conversation.ValidateChannelImage(image)
 }
+
+func TestChannelCreationLimit(t *testing.T) {
+	for _, language := range []string{"en", "ja"} {
+		t.Run(language, func(t *testing.T) {
+			fake := &fakeChannels{createErr: conversation.ErrChannelLimit}
+			handler, _ := newLimitedHandler(t, asAlice, func(s *Services) { s.Channels, s.Messages = fake, fakeMessages{channels: fake} })
+			r := httptest.NewRequest("POST", "/organizations/acme/channels", strings.NewReader("name=kept&image=moon"))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			r.Header.Set("Accept-Language", language)
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			message := "No more can be created here."
+			if language == "ja" {
+				message = "ここではこれ以上作成できません。"
+			}
+			body := w.Body.String()
+			if w.Code != 422 || !strings.Contains(body, message) || !strings.Contains(body, `value="kept"`) || !strings.Contains(body, `value="moon" checked`) {
+				t.Fatalf("status %d, body %s", w.Code, body)
+			}
+		})
+	}
+}

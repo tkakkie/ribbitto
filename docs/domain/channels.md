@@ -20,6 +20,16 @@ example `(organization_id, parent_id, name)`; nothing may rely on a name
 being unique across the organisation. A duplicate name is a user-facing
 error. Every member may create channels: in the MVP all channels are public.
 
+## Creation limits
+
+The organisation cap is `RIBBITTO_MAX_CHANNELS` (default 500), including the
+default channel. Creation takes `FOR NO KEY UPDATE` on the default channel's
+stable row, serializing creators while allowing foreign-key `FOR KEY SHARE`
+checks from message, topic and unread inserts. It then counts channels in a
+fresh snapshot before the guarded channel/default-topic insert.
+At the cap, the form returns localised 422 and keeps the name and image.
+Lowering the cap blocks new channels without removing existing ones.
+
 ## Images
 
 Any organisation member can choose a bundled image when creating a channel

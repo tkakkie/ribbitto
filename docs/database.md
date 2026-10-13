@@ -131,6 +131,12 @@ the next tick retries remaining work. The listing reads `event_log` once
 additional index or migration is needed until the log grows far beyond that.
 Messages and unread inputs are never deleted.
 
+`RIBBITTO_MAX_CHANNELS` caps channels per organisation, including the default.
+Unset or empty selects `500`; any other value must contain only decimal digits,
+be positive and fit int32 (at most 2,147,483,647), or startup fails. Lowering
+it below the current count blocks new creation without changing existing data.
+See [channel creation limits](domain/channels.md#creation-limits).
+
 `RIBBITTO_MAX_STREAMS` caps open event streams per process (default `5000`
 when unset). An explicit value must be a positive integer; empty, zero,
 negative, unparsable and overflowing values fail at start. Excess streams

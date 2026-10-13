@@ -321,3 +321,6 @@ other = "Home"
 
 ["account.menu"]
 other = "Account menu"
+
+["creation.error.limit"]
+other = "No more can be created here."

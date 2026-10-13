@@ -1,10 +1,12 @@
 package postgres_test
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -27,7 +29,7 @@ func TestChannelStore(t *testing.T) {
 	ctx := t.Context()
 	acme := orgtest.Organization(t, pool, "acme", "acme", 0)
 	other := orgtest.Organization(t, pool, "other", "other", 0)
-	store := postgres.NewChannelStore(pool)
+	store := postgres.NewChannelStore(pool, conversation.DefaultMaxChannels)
 	// A default under another name proves the lookup uses the flag.
 	defaultChannel, err := store.CreateDefaultChannelForTest(ctx, acme, "Welcome")
 	requireNoError(t, err)
@@ -118,7 +120,7 @@ func TestChannelStoreCreateErrors(t *testing.T) {
 	pool := pgtest.New(t)
 	ctx := t.Context()
 	organizationID := orgtest.Organization(t, pool, "acme", "acme", 0)
-	store := postgres.NewChannelStore(pool)
+	store := postgres.NewChannelStore(pool, conversation.DefaultMaxChannels)
 	_, err := store.CreateDefaultChannelForTest(ctx, organizationID, "taken")
 	requireNoError(t, err)
 	for _, tc := range []struct {
@@ -147,5 +149,26 @@ func TestChannelStoreCreateErrors(t *testing.T) {
 	requireNoError(t, pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM channel), (SELECT count(*) FROM topic)").Scan(&channels, &topics))
 	if channels != 1 || topics != 1 {
 		t.Fatalf("rows after failed creates = %d channels, %d topics; want 1 each", channels, topics)
+	}
+}
+
+func TestChannelCreationLockAllowsForeignKeyInsert(t *testing.T) {
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	id := orgtest.Organization(t, pool, "acme", "acme", 0)
+	store := postgres.NewChannelStore(pool, 2)
+	channel, err := store.CreateDefaultChannelForTest(ctx, id, conversation.DefaultChannelName)
+	requireNoError(t, err)
+	locker, err := pool.Begin(ctx)
+	requireNoError(t, err)
+	defer func() { _ = locker.Rollback(context.Background()) }()
+	requireNoError(t, postgres.NewChannelStore(locker, 2).LockCreation(ctx, id))
+	// The topic FK takes FOR KEY SHARE on the locked default channel. It must
+	// finish while the creation transaction still holds its production lock.
+	insertCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_, err = pool.Exec(insertCtx, "INSERT INTO topic (organization_id, channel_id, name) VALUES ($1, $2, 'independent')", id, channel.ID)
+	if err != nil {
+		t.Fatalf("foreign-key insert blocked by creation lock: %v", err)
 	}
 }

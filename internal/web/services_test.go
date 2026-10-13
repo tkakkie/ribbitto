@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"testing"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 )
 
 // testServices returns the services NewHandler requires, as DB-free fakes:
@@ -64,7 +64,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Sessions:  sessions,
 		SignIn:    identitypg.NewSignIn(pool, hasher, sessions),
 		Authz:     orgpg.NewAuthorizer(pool),
-		Channels:  conversationpg.NewChannels(pool),
+		Channels:  conversationpg.NewChannels(pool, conversation.DefaultMaxChannels),
 		Topics:    conversationpg.NewTopics(pool),
 		Messages:  conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn),
 		Posting:   conversationpg.NewPagePosting(pool, postingSequence, postingEvents, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, nil),

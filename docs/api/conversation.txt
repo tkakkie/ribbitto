@@ -19,6 +19,10 @@ type Channel struct // Channel is a conversation identified by ID; Name is only 
   field IsDefault bool
   field Name string
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
+type ChannelCreator interface // ChannelCreator serializes creation before the guarded channel/default-topic write.
+  func (ChannelCreator).CreateChannel(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, string, string) (Channel, error)
+  func (ChannelCreator).LockCreation(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID) error
+type ChannelCreatorIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) ChannelCreator // ChannelCreatorIn binds creation to the use case's transaction.
 func ChannelImageKeys() []string // ChannelImageKeys returns the bundled illustration keys in stable fallback order.
 type ChannelMember struct // ChannelMember holds a channel member's names for display, never authorization.
   field DisplayName string
@@ -49,6 +53,7 @@ type Channels struct // Channels runs the channel use cases for a member resolve
 func DecodeMoved(data []byte) (Moved, error) // DecodeMoved reads stored data.
 func DecodePosted(data []byte) (Posted, error) // DecodePosted reads stored data.
 const DefaultChannelName untyped string = "general" // DefaultChannelName is the initial name of an organisation's default channel.
+const DefaultMaxChannels int32 = 500 // DefaultMaxChannels includes the default channel in the organisation cap.
 func EncodeMoved(m Moved) []byte // EncodeMoved returns the stored data of m: canonical UUID text under channel_id, from_topic_id and to_topic_id, and a message_ids array.
 func EncodePosted(channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) []byte // EncodePosted returns the stored data of KindPosted for a post in topicID: canonical UUID text under channel_id, message_id and topic_id.
 type Entry struct // Entry is a stored message with its current author names and topic label.
@@ -58,6 +63,7 @@ type Entry struct // Entry is a stored message with its current author names and
   field Message Message
   field TopicName string
 var ErrBranchConflict error // ErrBranchConflict means a selected message is no longer in the topic the request expected (someone else branched it first): nothing changed.
+var ErrChannelLimit error // ErrChannelLimit means the organisation cannot create another channel.
 var ErrChannelNameTaken error // ErrChannelNameTaken means the organisation already has a channel with that name.
 var ErrChannelNotFound error // ErrChannelNotFound means the channel does not exist in the caller's organisation, including when it exists in another one.
 var ErrInvalidBody error // ErrInvalidBody wraps a body that breaks ValidateMessageBody.
@@ -117,6 +123,7 @@ func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn,
 func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Posting // NewPosting builds posting over transaction-bound factories.
 func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account, cursor and count factories supplied by the composition root.
 func NewTopics(reader TopicReader) *Topics // NewTopics returns a Topics.
+func NewTransactionalChannels(store ChannelStore, runner TxRunner, creator ChannelCreatorIn) *Channels // NewTransactionalChannels adds atomic, capped creation to channel lookups.
 type Notifier interface // Notifier records the latest committed event sequence for an organisation, so open streams wake; posting and branching call it only after commit.
   func (Notifier).Raise(organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64)
 type Page struct // Page is one page of a channel's history, oldest first.
@@ -193,7 +200,7 @@ type TopicUnread interface // TopicUnread counts messages using supplied read st
   func (TopicUnread).CountWithFirstUnread(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, prefix int64, topics []github.com/tkakkie/ribbitto/internal/kernel.ID, floors []int64, readSet [][2]int64, selected *github.com/tkakkie/ribbitto/internal/kernel.ID, firstUnread bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error) // CountWithFirstUnread explicitly chooses whether to compute first unread.
 type Topics struct // Topics runs the topic lookups for a member resolved by org.
   func (*Topics).Get(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // Get returns a topic of the channel in the member's organisation, or ErrTopicNotFound.
-type TxRunner interface // TxRunner runs posting's and branching's transaction (decision 26): the use case owns the boundary, the writers only bind to the Tx they are given.
+type TxRunner interface // TxRunner runs channel creation, posting and branching (decision 26): the use case owns the boundary, the writers only bind to the Tx they are given.
   func (TxRunner).InTx(ctx context.Context, fn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) error) error // InTx runs fn in a new transaction.
 func ValidateChannelImage(key string) error // ValidateChannelImage accepts a bundled key, or empty for the ID-based default.
 func ValidateChannelName(value string) (string, error) // ValidateChannelName returns a trimmed NFC name of 1–80 printable Unicode code points.

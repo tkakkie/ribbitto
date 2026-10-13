@@ -1,8 +1,10 @@
 package conversationpg_test
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
@@ -23,7 +25,7 @@ func TestChannels(t *testing.T) {
 	member := func(orgID kernel.ID) org.Membership {
 		return org.Membership{Organization: org.Organization{ID: orgID}, Member: org.Member{OrganizationID: orgID}}
 	}
-	service := conversationpg.NewChannels(pool)
+	service := conversationpg.NewChannels(pool, conversation.DefaultMaxChannels)
 	for _, org := range []kernel.ID{acme, globex} {
 		conversationtest.Channel(t, pool, org, conversation.DefaultChannelName, true)
 	}
@@ -42,5 +44,82 @@ func TestChannels(t *testing.T) {
 	}
 	if got, err := service.Default(ctx, member(globex)); err != nil || got.Name != conversation.DefaultChannelName || got.OrganizationID != globex {
 		t.Fatalf("default: %+v, %v", got, err)
+	}
+}
+
+func TestChannelLimitConcurrent(t *testing.T) {
+	pool := pgtest.New(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	id := orgtest.Organization(t, pool, "acme", "acme", 0)
+	m := org.Membership{Organization: org.Organization{ID: id}}
+	conversationtest.Channel(t, pool, id, conversation.DefaultChannelName, true)
+	service := conversationpg.NewChannels(pool, 2)
+	// Hold the creation lock until both callers are waiting, so this exercises
+	// overlapping transactions rather than two accidentally sequential calls.
+	blocker, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = blocker.Rollback(context.Background()) }()
+	if _, err := blocker.Exec(ctx, "SELECT id FROM channel WHERE organization_id = $1 AND is_default FOR UPDATE", id); err != nil {
+		t.Fatal(err)
+	}
+	results := make(chan error, 2)
+	for _, name := range []string{"one", "two"} {
+		go func() { _, err := service.Create(ctx, m, name); results <- err }()
+	}
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		var waiting int
+		err := pool.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'").Scan(&waiting)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if waiting == 2 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("creators did not both wait for the creation lock")
+		case <-ticker.C:
+		}
+	}
+	if err := blocker.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	success, limited := 0, 0
+	for range 2 {
+		err := <-results
+		switch {
+		case err == nil:
+			success++
+		case errors.Is(err, conversation.ErrChannelLimit):
+			limited++
+		default:
+			t.Fatal(err)
+		}
+	}
+	if success != 1 || limited != 1 {
+		t.Fatalf("concurrent creates = %d successes, %d limited; want 1 each", success, limited)
+	}
+	// Lowering the cap must refuse without deleting channels or their topics.
+	for _, cap := range []int32{2, 1} {
+		if _, err := conversationpg.NewChannels(pool, cap).Create(ctx, m, "blocked"); !errors.Is(err, conversation.ErrChannelLimit) {
+			t.Fatalf("cap %d: %v", cap, err)
+		}
+	}
+	var channels, topics int
+	if err := pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM channel WHERE organization_id = $1), (SELECT count(*) FROM topic WHERE organization_id = $1)", id).Scan(&channels, &topics); err != nil {
+		t.Fatal(err)
+	}
+	if channels != 2 || topics != 2 {
+		t.Fatalf("rows = %d channels, %d topics; want 2 each", channels, topics)
+	}
+	other := orgtest.Organization(t, pool, "other", "other", 0)
+	conversationtest.Channel(t, pool, other, conversation.DefaultChannelName, true)
+	if _, err := service.Create(ctx, org.Membership{Organization: org.Organization{ID: other}}, "one"); err != nil {
+		t.Fatal(err)
 	}
 }

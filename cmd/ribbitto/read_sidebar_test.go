@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -119,7 +120,7 @@ func TestReadSidebarHTTPAllTabs(t *testing.T) {
 func TestReadSidebarHTTPWithoutHub(t *testing.T) {
 	pool := pgtest.New(t)
 	f := newReadSidebarFixture(t, pool)
-	handler, _, err := buildHandler(t.Context(), pool, handlerConfig{})
+	handler, _, err := buildHandler(t.Context(), pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels})
 	acceptanceOK(t, err)
 	api := httptest.NewTLSServer(handler)
 	t.Cleanup(api.Close)

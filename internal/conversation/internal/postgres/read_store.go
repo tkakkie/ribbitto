@@ -22,7 +22,7 @@ func ReadStoreIn(snapshot platform.Snapshot) ReadStore {
 }
 
 func newReadStore(db sqlcgen.DBTX) ReadStore {
-	return ReadStore{TopicStore: NewTopicStore(db), channels: NewChannelStore(db), queries: sqlcgen.New(db)}
+	return ReadStore{TopicStore: NewTopicStore(db), channels: NewChannelStore(db, conversation.DefaultMaxChannels), queries: sqlcgen.New(db)}
 }
 
 // ReadStore implements conversation.ReadStore. It delegates to ChannelStore

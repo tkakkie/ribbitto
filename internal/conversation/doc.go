@@ -9,6 +9,8 @@
 // unknown keys to a stable image from the channel ID without a backfill.
 // Members choose validated bundled keys or restore NULL; image writes emit no event.
 //
+// Channel creation owns a transaction lock on the default channel and
+// guarded channel/default-topic insert enforcing the configured count cap.
 // Posting and branching own their transactions so content and events commit
 // together with page-post and branch-notice read state, then notify. History and
 // author lookups and injected unread counts share a snapshot so a page cannot mix states; the bounded channel-members page shares its sidebar,

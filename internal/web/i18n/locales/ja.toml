@@ -321,3 +321,6 @@ other = "ホーム"
 
 ["account.menu"]
 other = "アカウントメニュー"
+
+["creation.error.limit"]
+other = "ここではこれ以上作成できません。"

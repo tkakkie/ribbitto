@@ -192,10 +192,16 @@ func stage2Summarize(observations []stage2Observation) ([]stage2Operation, []sta
 					httpTimes = append(httpTimes, o.Completed.Sub(o.Dispatch))
 					lateTimes = append(lateTimes, o.Dispatch.Sub(o.Slot.At))
 					switch o.Outcome {
-					case "succeeded", "changed":
+					case "changed":
 						op.Succeeded++
 						if kind == "read" {
 							op.Changed++
+						}
+					case "succeeded":
+						if kind == "read" {
+							op.Failed++
+						} else {
+							op.Succeeded++
 						}
 					default:
 						op.Failed++

@@ -88,6 +88,49 @@ func TestStage2MissedAndLateness(t *testing.T) {
 	}
 }
 
+func TestStage2SummaryOutcomeCounts(t *testing.T) {
+	start := time.Unix(123, 0)
+	for _, tc := range []struct {
+		operation, outcome string
+		succeeded, changed uint64
+		noop, failed       uint64
+	}{
+		{"read", "succeeded", 0, 0, 0, 1},
+		{"read", "changed", 1, 1, 0, 0},
+		{"read", "noop", 0, 0, 1, 1},
+		{"read", "unverified", 0, 0, 0, 1},
+		{"post", "succeeded", 1, 0, 0, 0},
+		{"page", "succeeded", 1, 0, 0, 0},
+		{"replacement", "succeeded", 1, 0, 0, 0},
+	} {
+		for _, endpoint := range []string{"feed", "topic"} {
+			t.Run(tc.operation+"/"+tc.outcome+"/"+endpoint, func(t *testing.T) {
+				slot := stage2Slot{Operation: tc.operation, Endpoint: endpoint, At: start}
+				ops, _ := stage2Summarize([]stage2Observation{{Slot: slot, Dispatch: start, Completed: start.Add(time.Millisecond), Outcome: tc.outcome}})
+				for _, op := range ops {
+					if op.Operation != tc.operation || op.Endpoint != endpoint {
+						continue
+					}
+					for _, count := range []struct {
+						name      string
+						got, want uint64
+					}{
+						{"Scheduled", op.Scheduled, 1}, {"Executed", op.Executed, 1},
+						{"Succeeded", op.Succeeded, tc.succeeded}, {"Changed", op.Changed, tc.changed},
+						{"Noop", op.Noop, tc.noop}, {"Failed", op.Failed, tc.failed},
+					} {
+						if count.got != count.want {
+							t.Errorf("%s = %d, want %d", count.name, count.got, count.want)
+						}
+					}
+					return
+				}
+				t.Fatal("missing operation summary")
+			})
+		}
+	}
+}
+
 func TestStage2SummaryExecutedSamples(t *testing.T) {
 	start := time.Unix(123, 0)
 	for _, outcome := range []string{"succeeded", "changed", "failed", "timeout", "noop", "unverified"} {

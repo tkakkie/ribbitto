@@ -156,11 +156,22 @@ func TestScheduledVersionsAndGeneration(t *testing.T) {
 			t.Errorf("generation capture: covered=%d dirty=%v frames=%d", p.pending.covered, p.pending.dirty, frames)
 		}
 		for _, version := range []uint64{1, 0} {
+			p.active, p.pending.next = true, time.Time{}
+			captured := p.pending.covered
+			p.captures[version] = &captured
 			completion.Version = version
 			_ = stream.scheduledRecount(t.Context(), sub, p, &completion, send, &written)
+			if p.active || !p.pending.next.Equal(time.Now().Add(SidebarInterval)) {
+				t.Errorf("stale completion retained active request or lost deadline: active=%v next=%v", p.active, p.pending.next)
+			}
 		}
 		if frames != 1 || p.sent != 1 {
 			t.Errorf("duplicate/older completion sent: frames=%d sent=%d", frames, p.sent)
+		}
+		<-time.After(SidebarInterval)
+		_ = stream.scheduledRecount(t.Context(), sub, p, nil, send, &written)
+		if !p.active || len(p.captures) != 1 {
+			t.Error("stale completion prevented successor submission")
 		}
 	})
 }

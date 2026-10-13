@@ -33,7 +33,12 @@ with `ErrRecountRefused`. It consumes completions while idle and between batches
 accepting only versions newer than the last sent; later invalidations stay dirty.
 Each completed attempt starts the unchanged `SidebarInterval`. Computations capture
 the watch generation at their boundary, guarded against access after release;
-only that generation is covered by delivery. The writer checks parent cancellation,
+each request owns its capture, indexed by version until its completion is received.
+The mailbox receive publishes that request-local value to the writer; another
+computation cannot overwrite it. Production submits only while inactive, bounding
+retained captures to one. Any received completion clears active and sets the next
+deadline, including duplicate/older versions that send nothing. Only the sent
+request's generation is covered by delivery. The writer checks parent cancellation,
 then bound membership immediately before each id-free sidebar frame. Durable
 delivery and heartbeats continue during queued/running work; late results cannot send.
 
@@ -63,7 +68,12 @@ resets and error/cancellation cursor rules retain their synchronous assertions.
 Gates prove presence and typing continue while a recount is queued and running;
 owner connect tokens/generations and later owner resets preserve the cursor.
 Sidebar, presence and typing frames omit IDs. Future-cursor resets also check
-configured read limits. Watch and authorization race coverage remains part 1f.
+configured read limits. Part 1f-a gates subscription before the initial recount,
+publications while queued, computing, completing, sending and capturing a wait,
+and release/late-worker safety. It also delivers a held completion after a successor
+has captured, proving request-local coverage independently of one-active submission.
+Mutation commands and failing assertions are in its PR description. Expanded
+authorization coverage remains part 1f-b; production activation remains original PR 2.
 
 Scheduler instrumentation is deferred to a separate unit in original PR 2 of
 #865, before production wiring or activation: queue length and oldest pending

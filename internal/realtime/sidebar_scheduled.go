@@ -16,11 +16,13 @@ type scheduledSidebar struct {
 	pending       *sidebarDelivery
 	version, sent uint64
 	active        bool
+	// Each capture belongs to its request; receiving that completion publishes it
+	// to the writer even if another computation has already captured a generation.
+	captures map[uint64]*uint64
 	// Guard only the computation boundary, never the persisted read: exit
 	// seals access before releasing the watch, even for an uncooperative worker.
 	mu      sync.Mutex
 	stopped bool
-	covered uint64
 }
 
 func (p *scheduledSidebar) cancel() {
@@ -54,8 +56,13 @@ func (s Stream) scheduledRecount(ctx context.Context, sub Subscription, p *sched
 		default:
 		}
 	}
-	if completion != nil && completion.Version > p.sent {
+	var captured *uint64
+	if completion != nil {
 		p.active, pending.next = false, time.Now().Add(SidebarInterval)
+		captured = p.captures[completion.Version]
+		delete(p.captures, completion.Version)
+	}
+	if completion != nil && completion.Version > p.sent && captured != nil {
 		if completion.Err != nil {
 			return fmt.Errorf("recounting sidebar: %w", completion.Err)
 		}
@@ -71,12 +78,17 @@ func (s Stream) scheduledRecount(ctx context.Context, sub Subscription, p *sched
 			return fmt.Errorf("sending sidebar frame: %w", err)
 		}
 		*written = time.Now()
-		pending.covered = p.covered
+		pending.covered = *captured
 		p.sent, pending.dirty = completion.Version, p.version > completion.Version
 	}
 	if !pending.dirty || p.active || time.Now().Before(pending.next) {
 		return nil
 	}
+	if p.captures == nil {
+		p.captures = make(map[uint64]*uint64)
+	}
+	covered := pending.covered
+	p.captures[p.version] = &covered
 	if !p.registration.Submit(p.version, func(worker context.Context) (Outgoing, error) {
 		p.mu.Lock()
 		if p.stopped {
@@ -84,7 +96,7 @@ func (s Stream) scheduledRecount(ctx context.Context, sub Subscription, p *sched
 			return Outgoing{}, context.Canceled
 		}
 		if pending.watch != nil {
-			p.covered, _ = pending.watch.Snapshot()
+			covered, _ = pending.watch.Snapshot()
 		}
 		p.mu.Unlock()
 		// Preserve request values while Cancel owns cancellation on every exit.

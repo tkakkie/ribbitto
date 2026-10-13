@@ -321,11 +321,30 @@ SELECT $1,$2,$3,$4,'fixture',s FROM generate_series(2,100) s`, f.OrganizationID,
 		verdict(c.install(base), "repair")
 		check(before)
 		staleAccept, requested := p.accept, p.requested
+		pinned, compute, computed := make(chan struct{}), make(chan struct{}), make(chan struct{})
+		repair := hybridFrame{incarnation: 1, watch: c.watch}
 		p.snapshot = func(ctx context.Context) (sidebarOracleModel, error) {
-			return hybridSnapshot(ctx, pool, m, f.Channel.ID, &f.Channel.DefaultTopicID)
+			tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+			if err != nil {
+				return sidebarOracleModel{}, err
+			}
+			defer func() { _ = tx.Rollback(ctx) }()
+			err = tx.QueryRow(ctx, `SELECT event_seq,(SELECT coalesce(max(revision),0) FROM hybrid_read_metadata WHERE organization_id=$1 AND member_id=$2) FROM organization WHERE id=$1`, f.OrganizationID, member).Scan(&repair.boundary.sequence, &repair.boundary.revision)
+			close(pinned)
+			<-compute
+			if err != nil {
+				return sidebarOracleModel{}, err
+			}
+			model, err := hybridSnapshotIn(ctx, tx, m, f.Channel.ID, &f.Channel.DefaultTopicID)
+			if err == nil {
+				err = tx.Commit(ctx)
+			}
+			close(computed)
+			return model, err
 		}
 		p.accept = func(version uint64, model sidebarOracleModel) error {
-			verdict(c.install(hybridFrame{boundary: point, incarnation: 1, request: version, watch: c.watch, model: model}), "applied")
+			repair.request, repair.model = version, model
+			verdict(c.install(repair), "applied")
 			p.state = c.frame.model
 			return nil
 		}
@@ -334,7 +353,21 @@ SELECT $1,$2,$3,$4,'fixture',s FROM generate_series(2,100) s`, f.OrganizationID,
 			t.Fatal("unavailable coverage did not schedule reconciliation")
 		}
 		check(before)
+		<-pinned
+		// Retained effects must survive replacing state with the pinned repair.
+		apply(post(false))
+		if fault == "missing-read" {
+			apply(read())
+		}
+		close(compute)
+		<-computed
+		// This first delivery happens after acceptance; it is not a duplicate.
+		delayed := post(false)
 		must(p.complete())
+		if got := c.delta(delayed); got != "applied" {
+			t.Fatalf("%s repair: gated post delta = %s, want applied", fault, got)
+		}
+		p.state = c.frame.model
 		want, err := sidebarOracle(ctx, pool, f.OrganizationID, member, f.Channel.ID, &f.Channel.DefaultTopicID)
 		must(err)
 		check(want)

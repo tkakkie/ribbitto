@@ -73,12 +73,15 @@ func TestUnreadCountersMoves(t *testing.T) {
 	foreignWriter := foreignOwner
 	foreignWriter.Member.ID = orgtest.Member(t, h.pool, foreign.OrganizationID, owner.Member.AccountID, org.RoleMember, "writer", 1)
 	foreignWriter.Member.AccountID = owner.Member.AccountID
-	h.extra = []counterView{{foreignOwner, foreign.Channel.ID, foreign.Channel.DefaultTopicID}}
+	// Compare both foreign members: the owner's materialised bundle and the
+	// same-account writer, whose own posts must not leak into either organisation.
+	h.extra = []counterView{{foreignOwner, foreign.Channel.ID, foreign.Channel.DefaultTopicID}, {foreignWriter, foreign.Channel.ID, foreign.Channel.DefaultTopicID}}
 	h.prototype.totals[other.ID] = map[kernel.ID]int64{}
 	h.prototype.totals[foreign.Channel.ID] = map[kernel.ID]int64{}
 	h.check(t, "metadata-and-unlisted-selection")
 	h.prototype.materialize(h.truth, counterKey{owner.Member.ID, other.ID})
 	h.prototype.materialize(h.truthByOrg[foreign.OrganizationID], counterKey{foreign.MemberID, foreign.Channel.ID})
+	h.prototype.materialize(h.truthByOrg[foreign.OrganizationID], counterKey{foreignWriter.Member.ID, foreign.Channel.ID})
 	h.postIn(t, "other-channel-unread-sentinel", writer, other.ID, nil, nil)
 	h.postIn(t, "foreign-unread-sentinel", foreignWriter, foreign.Channel.ID, nil, nil)
 	h.post(t, "unlisted-sibling-contributes-to-channel", writer, &unlisted, nil)

@@ -132,7 +132,8 @@ covers them.
   channel sidebar on the base · the conversation block · a side panel block
   when one is open.
 - **Conversation:** a thin header; a centred reading column about 760 px
-  wide with 15 px text; a rounded composer block at the bottom.
+  wide with 15 px text; a rounded composer block at the bottom, whose
+  place the move form takes while a message is checked.
 - **Mobile** (M6): one column — channel header, messages, composer, bottom
   navigation. Every tap target is at least 44 × 44 px.
 - **Text first.** A message is readable before anything around it (avatars,

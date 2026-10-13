@@ -95,3 +95,37 @@ func TestChannelImageAssets(t *testing.T) {
 		})
 	}
 }
+
+func TestWelcomeComposition(t *testing.T) {
+	handler, err := newTestHandler(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/", "/signin"} {
+		t.Run(path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+			doc, err := html.Parse(w.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			images := 0
+			for n := range doc.Descendants() {
+				if n.DataAtom != atom.Img || !strings.HasPrefix(attr(n, "src"), "/static/channel-images-v1/") {
+					continue
+				}
+				images++
+				hidden := false
+				for a := n.Parent; a != nil; a = a.Parent {
+					hidden = hidden || attr(a, "aria-hidden") == "true"
+				}
+				if alt, ok := attrOK(n, "alt"); !ok || alt != "" || !hidden {
+					t.Errorf("illustration %v is not decorative", n.Attr)
+				}
+			}
+			if images != 4 {
+				t.Fatalf("illustrations = %d, want the welcome card's four", images)
+			}
+		})
+	}
+}

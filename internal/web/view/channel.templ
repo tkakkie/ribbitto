@@ -45,6 +45,7 @@ type ChannelPage struct {
 	ChannelCounts, TopicCounts map[kernel.ID]int64
 	Name, Error                string
 	Image, ImageError, Query   string
+	CreateImageError           string
 	ImageKeys                  []string
 	Body, BodyError            string
 	BranchError, BranchName    string
@@ -172,7 +173,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 				</nav>
 				// A failed submit shows the form in place, so its error is visible and
 				// focusable without JavaScript; otherwise it opens from the add button.
-				if page.Error != "" {
+				if page.Error != "" || page.CreateImageError != "" {
 					@channelCreateForm(page, false)
 				} else {
 					@channelCreateForm(page, true)

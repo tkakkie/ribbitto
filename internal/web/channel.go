@@ -151,13 +151,13 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	name := r.PostForm.Get("name")
 	c, err := p.channels.CreateWithImage(r.Context(), m, name, r.PostForm.Get("image"))
-	message := ""
+	message, imageMessage := "", ""
 	switch {
 	case err == nil:
 		http.Redirect(w, r, view.ChannelURL(m.Organization.Slug, c.ID), http.StatusSeeOther)
 		return
 	case errors.Is(err, conversation.ErrInvalidChannelImage):
-		message = "illustration.error"
+		imageMessage = "illustration.error"
 	case errors.Is(err, conversation.ErrInvalidChannelName):
 		message = "channel.error.name"
 	case errors.Is(err, conversation.ErrChannelNameTaken):
@@ -173,7 +173,7 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 		serverError(w, r, "finding default channel", err)
 		return
 	}
-	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message, Image: r.PostForm.Get("image")}, nil)
+	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message, Image: r.PostForm.Get("image"), CreateImageError: imageMessage}, nil)
 }
 
 func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage, firstUnread *int64) {

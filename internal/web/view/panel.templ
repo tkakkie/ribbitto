@@ -108,10 +108,7 @@ templ overviewPanel(page ChannelPage) {
 		<details open?={ page.ImageError != "" }>
 			<summary class="min-h-11 cursor-pointer text-brand underline">{ i18n.T(ctx, "illustration.change") }</summary>
 			<form method="post" action={ panelURL(page, PanelOverview) } class="flex flex-col gap-2">
-				@imagePicker(page.ImageKeys, page.Current.Image)
-				if page.ImageError != "" {
-					<p role="alert" class="text-danger">{ i18n.T(ctx, page.ImageError) }</p>
-				}
+				@imagePicker(page.ImageKeys, page.Current.Image, "overview-image-error", page.ImageError)
 				@submitButton(buttonPrimary, "illustration.save")
 			</form>
 		</details>

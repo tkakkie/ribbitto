@@ -51,8 +51,8 @@ these colours exist in templates; `make check` rejects literal colours
 | `base` | `#edf4f2` | page ground; the sidebar sits on it |
 | `bg` | `#ffffff` | blocks: the conversation, panels |
 | `rail` | `#ffffff` | the app bar block |
-| `sidebar` | `#edf4f2` | the channel sidebar (the base) |
-| `panel` | `#f5f9f8` | the inside of a side panel, behind its cards |
+| `sidebar` | `#edf4f2` | reserved for the sidebar (it sits on `base`) |
+| `panel` | `#f5f9f8` | reserved for side panels (they use `bg`) |
 | `surface` | `#ffffff` | cards, popovers |
 | `input` | `#ffffff` | text fields |
 | `hover` | `#e4edeb` | hovered rows and buttons |
@@ -65,8 +65,8 @@ these colours exist in templates; `make check` rejects literal colours
 | `accent` / `on-accent` | `#fff0e6` / `#8a3a12` | the "New" divider's label |
 | `accent-line` | `#f2a37b` | the "New" divider's line (decorative; the label carries the meaning) |
 | `success` | `#3a9742` | online dot (always with a label) |
-| `warning` | `#8a5300` | warning text and icons (e.g. "reconnecting…") |
-| `danger` / `on-danger` | `#b42318` / `#ffffff` | error text; destructive buttons |
+| `warning` | `#8a5300` | reserved for warning text and icons (e.g. "reconnecting…"); none yet |
+| `danger` / `on-danger` | `#b42318` / `#ffffff` | error text / reserved for destructive buttons (none yet) |
 | `pastel-1`…`pastel-6` / `on-pastel-1`…`on-pastel-6` | `#dcebff`/`#1f5aa6`, `#fff3c4`/`#7a5d00`, `#d9f2e6`/`#1d6b47`, `#ffe4d6`/`#9a4a1f`, `#ebe3ff`/`#5b3fa8`, `#ffe0ea`/`#a3284f` | channel images and avatar fills / their initials |
 
 **Illustration colours** belong to the brand artwork only
@@ -108,17 +108,17 @@ covers them.
 
 | Pair (foreground on background) | Used for | Needed | Ratio |
 |---|---|---|---|
-| `fg` on `bg` / `base` / `panel` / `hover` | body text | 4.5:1 | 17.23 / 15.44 / 16.24 / 14.45 |
-| `muted` on `bg` / `base` / `panel` / `hover` | secondary text | 4.5:1 | 6.78 / 6.08 / 6.39 / 5.69 |
+| `fg` on `bg` / `base` / `panel` / `hover` | body text (`panel` reserved) | 4.5:1 | 17.23 / 15.44 / 16.24 / 14.45 |
+| `muted` on `bg` / `base` / `panel` / `hover` | secondary text (`panel` reserved) | 4.5:1 | 6.78 / 6.08 / 6.39 / 5.69 |
 | `on-brand` on `brand` | button label, unread count | 4.5:1 | 5.47 |
 | `on-selected` on `selected` | current row's label | 4.5:1 | 8.11 |
 | `on-accent` on `accent` | "New" divider label | 4.5:1 | 6.99 |
 | `brand` on `bg` / `base` | link text; focus ring | 4.5:1 | 5.47 / 4.90 |
 | `brand` on `selected` | indicator on the current row | 3:1 | 4.58 |
 | `success` on `bg` / `base` | online dot | 3:1 | 3.69 / 3.31 |
-| `warning` on `bg` / `base` | warning text | 4.5:1 | 6.32 / 5.67 |
+| `warning` on `bg` / `base` | warning text (reserved) | 4.5:1 | 6.32 / 5.67 |
 | `danger` on `bg` / `base` | error text | 4.5:1 | 6.57 / 5.89 |
-| `on-danger` on `danger` | destructive button label | 4.5:1 | 6.57 |
+| `on-danger` on `danger` | destructive button label (reserved) | 4.5:1 | 6.57 |
 | `border-strong` on `bg` / `base` | input border | 3:1 | 3.60 / 3.23 |
 | `on-pastel-n` on `pastel-n` (1…6) | initials on avatars | 4.5:1 | 5.65 / 5.56 / 5.48 / 5.13 / 6.23 / 5.75 |
 
@@ -145,9 +145,9 @@ The frog labels (`docs/domain/vocabulary.md`) are names. Their meaning
 comes from presentation and placement, never from ordinary words added
 beside them (decisions 20 and 28):
 
-- **Placement shows the hierarchy.** The organisation's name and image sit
-  at the top of the sidebar; channels are listed under it, each with its
-  image; a channel's topics are nested under it on a tree line, with the
+- **Placement shows the hierarchy.** The organisation's name sits at the
+  top of the sidebar (an organisation image is not built yet); channels
+  are listed under it, each with its image; a channel's topics are nested under it on a tree line, with the
   default topic first; the conversation header repeats the path
   (`channel › topic`).
 - **Each kind has one look.** Channels always show their image; topics a
@@ -165,8 +165,9 @@ notices name no thing ([`vocabulary.md`](domain/vocabulary.md#product-labels)).
 ## Brand
 
 The logo is at least 16 px, with clear space of a quarter of its size, in
-brand teal, white on a teal tile, or `currentColor` only. The mascot
-appears on welcome pages, empty states and while loading or sending; it is
+brand teal, white on a teal tile, or `currentColor` only. The mascot is
+meant for welcome pages, empty states and loading or sending, but no page
+places it yet (the welcome card shows channel illustrations); it is
 decorative (`alt=""`) and never the only carrier of information. Files,
 poses, the channel illustrations and details are in [`brand.md`](brand.md).
 

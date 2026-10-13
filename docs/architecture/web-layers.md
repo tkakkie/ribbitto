@@ -25,12 +25,12 @@ to view models, and choose the status, component and full page or fragment. They
 
 ## templ
 
-Components render view models defined in `internal/web/view`. Handlers convert module results; components never receive them. View
-models own their `Organization` (`Slug`, `Name`), `Channel` (`ID`, `DefaultTopicID`, `Name`, `ImageURL`)
-and `Topic` (`ID`, `Name`, `IsDefault`). Views import neither `org` nor
-`conversation`. From `kernel`
-they hold only `kernel.ID`, which carries no behaviour a template could
-misuse. Components do no I/O and
+Components render view models in `internal/web/view`. Handlers convert
+module results; components never receive them. View models own their
+`Organization` (`Slug`, `Name`), `Channel` (`ID`, `DefaultTopicID`, `Name`,
+`ImageURL`, `Image`, `Created`) and `Topic` (`ID`, `Name`, `IsDefault`).
+Views import neither `org` nor `conversation`. From `kernel` they hold only
+`kernel.ID`, which carries no behaviour a template could misuse. Components do no I/O and
 make no authorisation decisions; display logic (building URLs,
 formatting, choosing an i18n message ID) belongs in them.
 

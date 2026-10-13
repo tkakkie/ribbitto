@@ -37,7 +37,8 @@ injection. HTML responses also send `X-Content-Type-Options: nosniff` and
 `Referrer-Policy: same-origin`; `/static/` and `/healthz` bypass this
 middleware. The static handler sends its own `X-Content-Type-Options: nosniff`
 and `Content-Security-Policy: default-src 'none'; sandbox` on every response,
-found or not (#937): an SVG opened directly is a document on this origin, so
+found or not, including the explicit 405 (`Allow: GET, HEAD`) for any other
+method (#937): an SVG opened directly is a document on this origin, so
 it runs nothing and loads nothing. Pages are unaffected, because a file used
 as `<img>`, `<use>`, a script or a stylesheet does not apply its own policy;
 `TestMessageStreamBrowser/static-headers` checks that icons and illustrations

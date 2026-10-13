@@ -110,6 +110,7 @@ type hybridRead struct{ organization, member kernel.ID } // Production invalidat
 // It deliberately makes no stream/HTML or performance claims. Each capture is
 // owned by its request; the scheduler mailbox publishes it to the sole writer.
 type hybridPrototype struct {
+	condition          string
 	registration       *realtime.RecountRegistration
 	snapshot           func(context.Context) (sidebarOracleModel, error)
 	state              sidebarOracleModel
@@ -124,7 +125,7 @@ func newHybrid(q *realtime.RecountScheduler, now time.Time, interval time.Durati
 	if interval == 0 {
 		interval = 30 * time.Second
 	}
-	return &hybridPrototype{registration: q.Register(), snapshot: snapshot, captures: make(map[uint64]*sidebarOracleModel), interval: interval, next: now.Add(interval)}
+	return &hybridPrototype{condition: "production-only", registration: q.Register(), snapshot: snapshot, captures: make(map[uint64]*sidebarOracleModel), interval: interval, next: now.Add(interval)}
 }
 
 func (p *hybridPrototype) reconcile(operation string) error {
@@ -142,7 +143,7 @@ func (p *hybridPrototype) reconcileBecause(operation, reason string) error {
 	}) {
 		return realtime.ErrRecountRefused
 	}
-	p.records = append(p.records, hybridRecord{"production-only", operation, "reconciliation", reason, p.requested})
+	p.records = append(p.records, hybridRecord{p.condition, operation, "reconciliation", reason, p.requested})
 	return nil
 }
 

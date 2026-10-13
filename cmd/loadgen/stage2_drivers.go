@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -97,6 +98,10 @@ func readStage2Credentials(path string, group stage2Group, seed uint64) (stage2C
 type stage2Driver struct {
 	transport transport
 	data      stage2Credentials
+	mu        sync.Mutex
+	members   map[uint64]*stage2ReadMember
+	// The later witness must prove changed/noop over HTTP; unknown is unverified.
+	verifyRead func(context.Context, stage2Slot, uint64) string
 }
 
 func newStage2Driver(target, path string, group stage2Group, seed uint64) (*stage2Driver, error) {
@@ -113,15 +118,14 @@ func newStage2Driver(target, path string, group stage2Group, seed uint64) (*stag
 		return nil, err
 	}
 	tr.ForceAttemptHTTP2 = false
-	return &stage2Driver{tr, data}, nil
+	return &stage2Driver{transport: tr, data: data, members: map[uint64]*stage2ReadMember{}}, nil
 }
 
 // Rotation depends on the scheduled ID, never completion order or missed slots.
 // Named topics alternate on successive topic slots of either schedule phase.
-// The caller supplies the page cursor for posting's implicit read; this slice
-// does not discover cursors or advance/verify explicit reads.
+// The caller supplies the page cursor for posting's implicit read.
 func (d *stage2Driver) request(ctx context.Context, slot stage2Slot, body string, cursor uint64) (*http.Request, error) {
-	if (slot.Operation != "post" && slot.Operation != "page") || (slot.Endpoint != "feed" && slot.Endpoint != "topic") {
+	if (slot.Operation != "post" && slot.Operation != "page" && slot.Operation != "read") || (slot.Endpoint != "feed" && slot.Endpoint != "topic") {
 		return nil, fmt.Errorf("unsupported stage-2 driver slot")
 	}
 	endpoint := d.transport.origin.Scheme + "://" + d.transport.origin.Host + "/organizations/" + url.PathEscape(d.data.Slug) + "/channels/" + d.data.Stage2.HotChannelID
@@ -134,6 +138,10 @@ func (d *stage2Driver) request(ctx context.Context, slot stage2Slot, body string
 		method = http.MethodPost
 		form = strings.NewReader(url.Values{"body": {body}, "cursor": {strconv.FormatUint(cursor, 10)}}.Encode())
 	}
+	if slot.Operation == "read" {
+		method, endpoint = http.MethodPost, endpoint+"/read"
+		form = strings.NewReader(url.Values{"cursor": {strconv.FormatUint(cursor, 10)}}.Encode())
+	}
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, form)
 	if err != nil {
 		return nil, fmt.Errorf("building stage-2 request: %w", err)
@@ -143,7 +151,7 @@ func (d *stage2Driver) request(ctx context.Context, slot stage2Slot, body string
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("Origin", d.transport.origin.Scheme+"://"+d.transport.origin.Host)
 		req.Header.Set("Sec-Fetch-Site", "same-origin")
-		if slot.Endpoint == "feed" {
+		if slot.Endpoint == "feed" || slot.Operation == "read" {
 			req.Header.Set("HX-Request", "true")
 		}
 		// Transport retries replayable requests; a POST must have one attempt.
@@ -153,9 +161,44 @@ func (d *stage2Driver) request(ctx context.Context, slot stage2Slot, body string
 }
 
 func (d *stage2Driver) drive(ctx context.Context, o stage2Observation, start time.Time, now func() time.Time, body string, cursor uint64) (stage2Observation, error) {
+	m, scope := d.readMember(o.Slot)
+	// Drop overlapping work rather than block a fixed-rate schedule. This covers
+	// pages too: a pre-write snapshot must not become eligible after that write.
+	if !m.mu.TryLock() {
+		return o, fmt.Errorf("stage-2 member busy")
+	}
+	defer m.mu.Unlock()
+	if o.Slot.Operation == "read" {
+		page := m.pages[scope]
+		if !page.unread || page.cursor <= max(m.used["feed"], m.used[scope]) {
+			return o, fmt.Errorf("no newer observed stage-2 read cursor")
+		}
+		cursor = page.cursor
+	}
 	req, err := d.request(ctx, o.Slot, body, cursor)
 	if err != nil {
 		return o, err
 	}
-	return stage2HTTP(ctx, d.transport, req, o, start, now, nil), nil
+	if o.Slot.Operation != "page" {
+		// Reserve even failed/ambiguous writes: they may have committed. Invalidate
+		// all scopes because topic reads and own posts also affect the feed.
+		m.used[scope] = max(m.used[scope], cursor)
+		clear(m.pages)
+	}
+	o = stage2HTTP(ctx, d.transport, req, o, start, now, nil, func(raw []byte) {
+		if o.Slot.Operation == "page" {
+			m.pages[scope] = stage2ReadPageFrom(raw)
+		}
+	})
+	if o.Slot.Operation == "page" && o.Outcome != "succeeded" {
+		delete(m.pages, scope)
+	}
+	if o.Outcome == "unverified" && d.verifyRead != nil {
+		switch proof := d.verifyRead(ctx, o.Slot, cursor); proof {
+		case "changed", "noop":
+			o.Outcome = proof
+			o.Attempts[0].Outcome = proof
+		}
+	}
+	return o, nil
 }

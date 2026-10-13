@@ -37,7 +37,5 @@ all topics once. Version-1 credential metadata identifies members, sessions,
 channels and topics; a fixture seed reproduces semantic content, not credentials
 or generated IDs. No traffic driver or measurement runner is added.
 
-Slice 3-2a validates credential version/seed, channel/topic counts and N distinct
-members/sessions. Metadata cannot attest message counts. Post/page drivers rotate
-members by slot ID and named topics by topic slot, using loopback HTTP/1.1 and
-`stage2HTTP`. Posts carry the caller's page cursor; reads and proof remain 3-2b.
+Slices 3-2a and 3-2b add the authenticated post, page and read drivers; their
+targeting and proof limits are in [stage-2 drivers](stream-sidebar-stage2-drivers.md).

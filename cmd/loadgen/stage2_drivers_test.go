@@ -168,7 +168,7 @@ func TestStage2DriverBoundaries(t *testing.T) {
 	if d.transport.Proxy != nil || d.transport.ForceAttemptHTTP2 {
 		t.Fatal("stage-2 enabled proxies or HTTP/2")
 	}
-	for _, slot := range []stage2Slot{{Operation: "read", Endpoint: "feed"}, {Operation: "replacement", Endpoint: "topic"}, {Operation: "page", Endpoint: "other"}} {
+	for _, slot := range []stage2Slot{{Operation: "other", Endpoint: "feed"}, {Operation: "replacement", Endpoint: "topic"}, {Operation: "page", Endpoint: "other"}} {
 		if _, err := d.request(t.Context(), slot, "", 0); err == nil {
 			t.Fatal("accepted unsupported slot")
 		}

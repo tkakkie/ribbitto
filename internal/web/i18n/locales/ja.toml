@@ -119,19 +119,19 @@ other = "試行回数が多すぎます"
 other = "しばらく待ってから、もう一度お試しください。"
 
 ["channel.list"]
-other = "チャンネル"
+other = "lilypad"
 
 ["channel.name"]
-other = "チャンネル名"
+other = "lilypad名"
 
 ["channel.name_help"]
 other = "表示可能な1〜80文字。"
 
 ["channel.create"]
-other = "チャンネルを作成"
+other = "lilypadを作成"
 
 ["channel.empty"]
-other = "まだメッセージはありません。"
+other = "まだribbitはありません。"
 
 ["channel.error.name"]
 other = "チャンネル名は表示可能な1〜80文字で入力してください。"
@@ -140,10 +140,10 @@ other = "チャンネル名は表示可能な1〜80文字で入力してくだ�
 other = "この名前のチャンネルは既に存在します。"
 
 ["message.list"]
-other = "メッセージ一覧"
+other = "ribbit一覧"
 
 ["message.body"]
-other = "メッセージ"
+other = "ribbit"
 
 ["message.help"]
 other = "Enterで送信、Shift+Enterで改行します。"
@@ -155,19 +155,19 @@ other = "送信"
 other = "制御文字や文字方向の埋め込み・上書き文字を含めず、1〜4000文字で入力してください。"
 
 ["message.load_older"]
-other = "以前のメッセージを読み込む"
+other = "以前のribbitを読み込む"
 
 ["message.newest"]
-other = "最新のメッセージへ"
+other = "最新のribbitへ"
 
 ["message.new"]
-other = "新しいメッセージ"
+other = "新しいribbit"
 
 ["topic.default"]
 other = "chorus"
 
 ["topic.list"]
-other = "トピック（名前順・先頭50件）"
+other = "ripple（名前順・先頭50件）"
 
 ["topic.branch_notice"]
 other = "{count} 件を「{topic}」に移動しました"
@@ -176,13 +176,13 @@ other = "{count} 件を「{topic}」に移動しました"
 other = "選択"
 
 ["topic.branch_to"]
-other = "移動先（先頭50トピック）"
+other = "移動先（ripple・先頭50件）"
 
 ["topic.branch_new"]
-other = "新しいトピック名"
+other = "新しいripple名"
 
 ["topic.branch_submit"]
-other = "選択したメッセージを移動"
+other = "選択したribbitを移動"
 
 ["topic.branch_help"]
 other = "同じトピックから1〜100件を選択してください。既存の移動先を選ぶか、新しい名前を入力してください。既存のトピックの場合は名前を空欄にします。"
@@ -203,7 +203,7 @@ other = "この名前のトピックはすでに存在します。移動先と�
 other = "トピック名は表示可能な1〜80文字で入力してください。"
 
 ["people.title"]
-other = "チャンネルのメンバー"
+other = "lilypadのメンバー"
 
 ["people.control"]
 other = "メンバー"
@@ -212,7 +212,7 @@ other = "メンバー"
 other = "パネルを閉じる"
 
 ["overview.title"]
-other = "チャンネルの概要"
+other = "lilypadの概要"
 
 ["overview.created"]
 other = "作成日"
@@ -233,10 +233,10 @@ other = "オフライン"
 other = "既読にする"
 
 ["reading.unread_count"]
-other = "未読メッセージ {count} 件"
+other = "未読ribbit {count} 件"
 
 ["reading.new_messages"]
-other = "ここから未読メッセージ"
+other = "ここから未読ribbit"
 
 ["activity.separator"]
 other = "、"

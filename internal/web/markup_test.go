@@ -940,7 +940,7 @@ func TestComponentsMarkup(t *testing.T) {
 						if item == nil || attr(item, "id") != "message-abcd0000000000000000000000000000" {
 							t.Fatal("standalone message lost its list item or stable DOM id")
 						}
-						wantAnnouncement := map[string]string{"en": "New message", "ja": "新しいメッセージ"}[lang] + " @author: <script>bad()</script>\nمرحبا"
+						wantAnnouncement := map[string]string{"en": "New ribbit", "ja": "新しいribbit"}[lang] + " @author: <script>bad()</script>\nمرحبا"
 						if component.name == "MessageItem" {
 							if _, ok := attrOK(item, "data-announcement"); ok {
 								t.Error("history item must not carry announcement text")

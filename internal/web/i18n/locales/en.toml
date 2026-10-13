@@ -119,19 +119,19 @@ other = "Too many attempts"
 other = "Please wait a while before trying again."
 
 ["channel.list"]
-other = "Channels"
+other = "lilypads"
 
 ["channel.name"]
-other = "Channel name"
+other = "lilypad name"
 
 ["channel.name_help"]
 other = "1–80 printable characters."
 
 ["channel.create"]
-other = "Create channel"
+other = "Create lilypad"
 
 ["channel.empty"]
-other = "No messages yet."
+other = "No ribbits yet."
 
 ["channel.error.name"]
 other = "Enter a channel name of 1–80 printable characters."
@@ -140,10 +140,10 @@ other = "Enter a channel name of 1–80 printable characters."
 other = "A channel with this name already exists."
 
 ["message.list"]
-other = "Messages"
+other = "ribbits"
 
 ["message.body"]
-other = "Message"
+other = "ribbit"
 
 ["message.help"]
 other = "Enter sends; Shift+Enter adds a line break."
@@ -155,19 +155,19 @@ other = "Send"
 other = "Enter 1–4000 characters without control characters or directional embeddings and overrides."
 
 ["message.load_older"]
-other = "Load older messages"
+other = "Load older ribbits"
 
 ["message.newest"]
-other = "Jump to the newest messages"
+other = "Jump to the newest ribbits"
 
 ["message.new"]
-other = "New message"
+other = "New ribbit"
 
 ["topic.default"]
 other = "chorus"
 
 ["topic.list"]
-other = "Topics (first 50 by name)"
+other = "ripples (first 50 by name)"
 
 ["topic.branch_notice"]
 other = "Moved {count} to “{topic}”"
@@ -176,13 +176,13 @@ other = "Moved {count} to “{topic}”"
 other = "Select"
 
 ["topic.branch_to"]
-other = "Destination (first 50 topics)"
+other = "Destination (first 50 ripples)"
 
 ["topic.branch_new"]
-other = "New topic name"
+other = "New ripple name"
 
 ["topic.branch_submit"]
-other = "Move selected messages"
+other = "Move selected ribbits"
 
 ["topic.branch_help"]
 other = "Select 1–100 messages from one topic. Choose an existing destination or enter a new name; leave the name empty for an existing topic."
@@ -203,7 +203,7 @@ other = "A topic with this name already exists. Choose it as the destination or 
 other = "Enter a topic name of 1–80 printable characters."
 
 ["people.title"]
-other = "Channel members"
+other = "lilypad members"
 
 ["people.control"]
 other = "Members"
@@ -212,7 +212,7 @@ other = "Members"
 other = "Close panel"
 
 ["overview.title"]
-other = "Channel overview"
+other = "lilypad overview"
 
 ["overview.created"]
 other = "Created"
@@ -233,10 +233,10 @@ other = "Offline"
 other = "Mark as read"
 
 ["reading.unread_count"]
-other = "Unread messages: {count}"
+other = "Unread ribbits: {count}"
 
 ["reading.new_messages"]
-other = "New messages"
+other = "New ribbits"
 
 ["activity.separator"]
 other = ", "

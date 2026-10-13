@@ -158,8 +158,8 @@ func TestMembersPageAgainstPostgreSQL(t *testing.T) {
 	// The page's strings resolve in both catalogues instead of falling back to
 	// their message IDs.
 	for _, tt := range []struct{ lang, title, back string }{
-		{"en", "Channel members", "Close panel"},
-		{"ja", "チャンネルのメンバー", "パネルを閉じる"},
+		{"en", "lilypad members", "Close panel"},
+		{"ja", "lilypadのメンバー", "パネルを閉じる"},
 	} {
 		r := httptest.NewRequest(http.MethodGet, view.ChannelURL("acme", local.Channel.ID)+"/members", nil)
 		r.Header.Set("Accept-Language", tt.lang)

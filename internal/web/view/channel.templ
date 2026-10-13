@@ -184,6 +184,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							if page.Topic != nil {
 								<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="min-w-0 truncate text-title text-muted hover:text-brand">{ page.Current.Name }</a>
 								@Icon("chevron-right-regular", 20)
+								@Icon("branch-regular", 20)
 								<h1 class="flex min-w-0 items-center text-title font-semibold">
 									<span class="truncate">{ topicName(ctx, *page.Topic) }</span>
 									@TopicHeadingCount(page, false)
@@ -505,6 +506,7 @@ templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, c
 			if selected {
 				@selectionPill()
 			}
+			@Icon("branch-regular", 16)
 			<span dir="auto" class="min-w-0 flex-1">{ topicName(ctx, topic) }</span>
 			@unreadBadge(count)
 		</a>

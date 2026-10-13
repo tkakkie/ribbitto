@@ -288,8 +288,8 @@ func testEventStream(t *testing.T) {
 	if first.name != "message" || !strings.Contains(first.data, "first\nwith a second line") || !strings.Contains(first.data, `<li id="message-`) || second.id <= first.id || !strings.Contains(second.data, "second") {
 		t.Fatalf("replayed %+v then %+v", first, second)
 	}
-	if !strings.Contains(first.data, "data-announcement=\"New message @owner: first\nwith a second line\"") ||
-		!strings.Contains(second.data, `data-announcement="New message @owner: second"`) {
+	if !strings.Contains(first.data, "data-announcement=\"New ribbit @owner: first\nwith a second line\"") ||
+		!strings.Contains(second.data, `data-announcement="New ribbit @owner: second"`) {
 		t.Fatal("stream payloads must carry announcement text")
 	}
 

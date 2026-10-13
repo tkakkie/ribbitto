@@ -141,6 +141,7 @@ func conversationQuery(raw string) (query url.Values, before int64, firstUnread 
 
 // conversationState encodes the conversation position a page renders, so
 // panel links and redirects carry exactly that, never a request's other keys.
+// The divider belongs to an older page only, like the older link's.
 func conversationState(before int64, firstUnread *int64) string {
 	state := url.Values{}
 	if before > 0 {
@@ -197,7 +198,6 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	if page.Before > 0 {
 		before = &page.Before
 	}
-	page.Query = conversationState(page.Before, firstUnread)
 	history, err := p.messages.Page(r.Context(), m, id, p.topicID, before)
 	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) || errors.Is(err, conversation.ErrTopicNotFound) {
 		http.NotFound(w, r)
@@ -241,6 +241,8 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		if firstUnread != nil {
 			page.FirstUnread = *firstUnread
 		}
+		// Links carry the divider this page shows, as the older link does.
+		page.Query = conversationState(page.Before, &page.FirstUnread)
 		page.Reading = p.reading != nil
 		page.EventCursor = history.EventCursor
 		return view.ChannelScreen(url, page)

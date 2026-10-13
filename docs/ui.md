@@ -51,8 +51,8 @@ these colours exist in templates; `make check` rejects literal colours
 | `base` | `#edf4f2` | page ground; the sidebar sits on it |
 | `bg` | `#ffffff` | blocks: the conversation, panels |
 | `rail` | `#ffffff` | the app bar block |
-| `sidebar` | `#edf4f2` | the channel sidebar (the base) |
-| `panel` | `#f5f9f8` | the inside of a side panel, behind its cards |
+| `sidebar` | `#edf4f2` | reserved for the channel sidebar; today it sits on `base` |
+| `panel` | `#f5f9f8` | reserved for the inside of a side panel; today's panels use `bg` |
 | `surface` | `#ffffff` | cards, popovers |
 | `input` | `#ffffff` | text fields |
 | `hover` | `#e4edeb` | hovered rows and buttons |
@@ -65,8 +65,8 @@ these colours exist in templates; `make check` rejects literal colours
 | `accent` / `on-accent` | `#fff0e6` / `#8a3a12` | the "New" divider's label |
 | `accent-line` | `#f2a37b` | the "New" divider's line (decorative; the label carries the meaning) |
 | `success` | `#3a9742` | online dot (always with a label) |
-| `warning` | `#8a5300` | warning text and icons (e.g. "reconnecting…") |
-| `danger` / `on-danger` | `#b42318` / `#ffffff` | error text; destructive buttons |
+| `warning` | `#8a5300` | reserved for warning text and icons (e.g. "reconnecting…"); none yet |
+| `danger` / `on-danger` | `#b42318` / `#ffffff` | error text / reserved for destructive buttons (none yet) |
 | `pastel-1`…`pastel-6` / `on-pastel-1`…`on-pastel-6` | `#dcebff`/`#1f5aa6`, `#fff3c4`/`#7a5d00`, `#d9f2e6`/`#1d6b47`, `#ffe4d6`/`#9a4a1f`, `#ebe3ff`/`#5b3fa8`, `#ffe0ea`/`#a3284f` | channel images and avatar fills / their initials |
 
 **Illustration colours** belong to the brand artwork only
@@ -145,9 +145,9 @@ The frog labels (`docs/domain/vocabulary.md`) are names. Their meaning
 comes from presentation and placement, never from ordinary words added
 beside them (decisions 20 and 28):
 
-- **Placement shows the hierarchy.** The organisation's name and image sit
-  at the top of the sidebar; channels are listed under it, each with its
-  image; a channel's topics are nested under it on a tree line, with the
+- **Placement shows the hierarchy.** The organisation's name sits at the
+  top of the sidebar (an organisation image is not built yet); channels
+  are listed under it, each with its image; a channel's topics are nested under it on a tree line, with the
   default topic first; the conversation header repeats the path
   (`channel › topic`).
 - **Each kind has one look.** Channels always show their image; topics a
@@ -165,8 +165,9 @@ notices name no thing ([`vocabulary.md`](domain/vocabulary.md#product-labels)).
 ## Brand
 
 The logo is at least 16 px, with clear space of a quarter of its size, in
-brand teal, white on a teal tile, or `currentColor` only. The mascot
-appears on welcome pages, empty states and while loading or sending; it is
+brand teal, white on a teal tile, or `currentColor` only. The mascot is
+meant for welcome pages, empty states and loading or sending, but no page
+places it yet (the welcome card shows channel illustrations); it is
 decorative (`alt=""`) and never the only carrier of information. Files,
 poses, the channel illustrations and details are in [`brand.md`](brand.md).
 

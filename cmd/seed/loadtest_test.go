@@ -120,6 +120,14 @@ func TestLoadTestSeed(t *testing.T) {
 	if err := json.Unmarshal(raw, &file); err != nil {
 		t.Fatal(err)
 	}
+	if file.Stage2 != nil {
+		t.Fatal("legacy load-test mode emitted stage-2 metadata")
+	}
+	for _, entry := range file.Accounts {
+		if entry.MemberID != "" {
+			t.Fatal("legacy credential schema gained member IDs")
+		}
+	}
 	got := readSnapshot(t, pool)
 	if len(got.Topics) != 4 {
 		t.Fatalf("load-test topics: %v", got.Topics)

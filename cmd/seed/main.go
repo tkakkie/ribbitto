@@ -103,6 +103,9 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	output := flags.String("output", "", "new JSON credential or expected file outside any repository")
 	expected := flags.Bool("expected", false, "read expected messages only; requires -tokens, -after and -output")
 	tokens := flags.String("tokens", "", "seed credential file for -expected")
+	stage2 := flags.Bool("stage2", false, "pinned stage-2 fixture; requires -members, -fixture-seed and -output")
+	memberCount := flags.Int("members", 0, "distinct stage-2 members, one session each")
+	fixtureSeed := flags.Uint64("fixture-seed", 0, "stage-2 content seed (required, including zero)")
 	after := flags.Uint64("after", 0, "initial event cursor for -expected (required, including zero)")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -113,13 +116,16 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	if err := requireLocal(databaseURL); err != nil {
 		return err
 	}
-	afterSet, seedFlags := false, false
+	afterSet, seedFlags, stage2Flags, fixtureSeedSet, membersSet := false, false, false, false, false
 	flags.Visit(func(f *flag.Flag) {
 		afterSet = afterSet || f.Name == "after"
+		stage2Flags = stage2Flags || f.Name == "stage2" || f.Name == "members" || f.Name == "fixture-seed"
+		fixtureSeedSet = fixtureSeedSet || f.Name == "fixture-seed"
+		membersSet = membersSet || f.Name == "members"
 		seedFlags = seedFlags || f.Name == "messages" || f.Name == "streams" || f.Name == "streams-per-account" || f.Name == "sessions-per-account"
 	})
 	if *expected {
-		if !afterSet || seedFlags || *tokens == "" || *output == "" {
+		if !afterSet || seedFlags || stage2Flags || *tokens == "" || *output == "" {
 			return errors.New("-expected requires -tokens, -after and -output, without seeding flags")
 		}
 		return writeExpected(ctx, databaseURL, *tokens, *output, *after)
@@ -127,9 +133,20 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 	if afterSet || *tokens != "" {
 		return errors.New("-tokens and -after require -expected")
 	}
+	if *stage2 {
+		if seedFlags || !fixtureSeedSet || !membersSet || *memberCount < 1 || *memberCount > 98000 || *output == "" {
+			return errors.New("-stage2 requires -members 1..98000, -fixture-seed and -output, without other seeding flags")
+		}
+		*count, *streams, *perAccount, *sessionCount = 500, *memberCount, 1, 1
+	} else if stage2Flags {
+		return errors.New("-members and -fixture-seed require -stage2")
+	}
 	var data script
 	if err := json.Unmarshal(conversations, &data); err != nil {
 		return fmt.Errorf("reading conversations: %w", err)
+	}
+	if *stage2 {
+		stage2Script(&data, *memberCount, *fixtureSeed)
 	}
 	password, err := newSecret()
 	if err != nil {
@@ -180,6 +197,9 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		data.Members = append(data.Members, struct{ Name, Handle string }{handle, handle})
 	}
 	manifest := credentialFile{OrganizationSlug: slug}
+	if *stage2 {
+		manifest.Stage2 = &stage2Credentials{Version: 1, FixtureSeed: *fixtureSeed}
+	}
 	sessions := identitypg.NewSessions(pool, time.Now, nil)
 	owner := data.Members[0]
 	created, err := installer.Complete(ctx, token, org.SetupInput{
@@ -217,6 +237,9 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		if err != nil {
 			return fmt.Errorf("resolving %s: %w", person.Handle, err)
 		}
+		if *stage2 {
+			manifest.Accounts[i].MemberID = seedID(members[person.Handle].Member.ID)
+		}
 	}
 	channels := conversationpg.NewChannels(pool, conversation.DefaultMaxChannels)
 	posts := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
@@ -237,6 +260,17 @@ func run(ctx context.Context, databaseURL string, args []string, out io.Writer) 
 		}
 		id := destination.ID
 		manifest.ChannelIDs = append(manifest.ChannelIDs, fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]))
+		if *stage2 {
+			manifest.Stage2.DefaultTopicIDs = append(manifest.Stage2.DefaultTopicIDs, seedID(destination.DefaultTopicID))
+			if scripted.Name == conversation.DefaultChannelName {
+				manifest.Stage2.HotChannelID = seedID(destination.ID)
+				branches := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil)
+				if err := seedStage2Hot(ctx, posts, branches, members, destination, scripted.Messages, manifest.Stage2); err != nil {
+					return err
+				}
+				continue
+			}
+		}
 		// Repeat whole exchanges, preserving references and author order without randomness.
 		for i := 0; i < *count; i++ {
 			line := scripted.Messages[i%len(scripted.Messages)]

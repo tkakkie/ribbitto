@@ -70,6 +70,10 @@ for A/feed/B scope, self-exclusion, English/Japanese counts, expiry, send, multi
 streams/last close and current/empty reconnects. Transport cases assert native
 Last-Event-ID and the page cursor after populated and empty typing frames.
 
+The move form case runs the real branch handler with and without scripts:
+hidden and skipped by Tab with nothing checked, shown on Space with focus kept
+and the list's size unchanged, its errors, and a submitted move.
+
 Run `go test ./internal/web -run TestMessageStreamBrowser -v` with Chrome
 installed. No browser is downloaded. Missing or unlaunchable browsers skip
 locally; `RIBBITTO_REQUIRE_BROWSER=1` makes either fatal and is set in CI.

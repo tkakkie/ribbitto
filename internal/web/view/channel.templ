@@ -181,7 +181,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 			</aside>
 			// The conversation and its panel share one flexible region.
 			<div class="flex min-w-0 flex-1 gap-2">
-				<main id="conversation" class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block">
+				<main id="conversation" class="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block">
 					<header class="flex shrink-0 items-center gap-3 border-b border-border px-6 py-2">
 						<div class="flex min-w-0 flex-1 items-center gap-2">
 							@channelImage(page.Current.ImageURL, true)
@@ -202,7 +202,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							@readForm(page)
 						}
 					</header>
-					<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="min-h-0 flex-1 overflow-y-auto">
+					<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="peer/list min-h-0 flex-1 overflow-y-auto">
 						// Always present, empty on the oldest page: loading older
 						// messages replaces it out of band with the next control.
 						<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
@@ -244,7 +244,9 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					</div>
 					<div id="message-status" role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" class="sr-only"></div>
 					@branchForm(page)
-					<div class="mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4">
+					// While a message is checked the move form covers this area, which
+					// keeps its space so the message list neither shrinks nor scrolls.
+					<div class={ "mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4", templ.KV("peer-has-checked/list:invisible", page.BranchError == "") }>
 						if page.Before == 0 && page.EventCursor != nil {
 							<div id="typing-status" sse-swap="typing" hx-swap="innerHTML" role="status" aria-live="polite" aria-atomic="true" aria-label={ i18n.T(ctx, "activity.label") } class="min-h-6 px-3 text-caption text-muted"></div>
 						}

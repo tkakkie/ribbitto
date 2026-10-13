@@ -75,6 +75,15 @@ htmx submissions return focus to it. "Load older"
 is a plain link without JavaScript; after a prepend, the reading position
 stays put; focus moves to the next link, or the pane at the start.
 
+The move form (`#branch-form`) shows only while a message is checked (#923),
+through CSS `:has()` alone, so it behaves the same without JavaScript. Until
+then it is `display: none`: out of the tab order and the accessibility tree.
+Checking a message never moves focus; the form appears next in the tab order
+after the list, over the composer's area, which turns invisible but keeps its
+space, so the list neither resizes nor scrolls. A plain failed submit, which
+checks nothing, keeps the form and its alert in the column above the composer;
+a browser without `:has()` shows both, as before.
+
 A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
 when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's
 header control has `aria-current="true"`. Its close link, and Escape through

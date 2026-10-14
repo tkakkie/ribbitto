@@ -130,6 +130,26 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					plain = plainBase.Context(stepCtx)
 				}
 			}
+			// device runs mouse and keyboard work, which rod dispatches through
+			// the original page outside any step context, under the step's
+			// deadline and name.
+			device := func(on *rod.Page, what string, fn func(p *rod.Page)) {
+				t.Helper()
+				p := on.WithPanic(func(v any) { panic(v) })
+				done := make(chan any, 1)
+				go func() {
+					defer func() { done <- recover() }()
+					fn(p)
+				}()
+				select {
+				case v := <-done:
+					if v != nil {
+						t.Fatalf("%s: %s: %v (at %s)", current, what, v, since())
+					}
+				case <-on.GetContext().Done():
+					t.Fatalf("%s: %s did not finish (at %s)", current, what, since())
+				}
+			}
 			// read waits at least 200 ms for exactly the expected reading POSTs.
 			var want []string
 			read := func(more ...string) {
@@ -146,7 +166,7 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					t.Fatalf("%s: reading POSTs %q, want %q (at %s)", current, got, want, since())
 				}
 			}
-			base = browser.MustPage().Context(ctx).WithPanic(fail)
+			base = browser.Context(ctx).MustPage().WithPanic(fail)
 			defer base.MustClose()
 			page = base
 			wait := func(what, js string, args ...any) {
@@ -176,11 +196,14 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 				// The function WaitNavigation returns ignores its context's end, so
 				// that end is checked: a missed load fails by name instead of
 				// costing 10 s silently.
-				loadCtx, stop := context.WithTimeout(ctx, 10*time.Second)
+				loadCtx, stop := context.WithTimeout(page.GetContext(), 10*time.Second)
 				defer stop()
 				navigated := page.Context(loadCtx).WaitNavigation(proto.PageLifecycleEventNameLoad)
 				action()
 				navigated()
+				if page.GetContext().Err() != nil {
+					t.Fatalf("%s: %s: the step's 20 s ran out before the load event (at %s)", current, what, since())
+				}
 				if loadCtx.Err() != nil {
 					t.Fatalf("%s: no load event within 10 s (at %s)", what, since())
 				}
@@ -189,7 +212,7 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			open := func() {
 				t.Helper()
 				page.MustElement("#panel-control-overview").MustFocus()
-				load("Enter on the control opens the dialog with focus inside", func() { page.Keyboard.MustType(input.Enter) },
+				load("Enter on the control opens the dialog with focus inside", func() { device(page, "Enter", func(p *rod.Page) { p.Keyboard.MustType(input.Enter) }) },
 					`() => document.activeElement.id === 'panel-heading' && document.getElementById('side-panel').getAttribute('aria-modal') === 'true'`)
 			}
 			closed := func(what string, action func()) {
@@ -247,11 +270,13 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 				t.Helper()
 				page.MustElement("#panel-heading").MustFocus()
 				for i := range 16 {
-					if i < 8 {
-						page.Keyboard.MustType(input.Tab)
-					} else {
-						page.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
-					}
+					device(page, fmt.Sprintf("Tab %d", i+1), func(p *rod.Page) {
+						if i < 8 {
+							p.Keyboard.MustType(input.Tab)
+						} else {
+							p.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
+						}
+					})
 					if !page.MustEval(`() => document.getElementById('side-panel').contains(document.activeElement)`).Bool() {
 						t.Fatalf("%s: Tab %d left the dialog for %s", where, i+1, page.MustEval(`() => document.activeElement.outerHTML.slice(0, 80)`).Str())
 					}
@@ -282,11 +307,11 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 				seq := 50 + 10*i
 				live(seq)
 				read()
-				page.MustElement(`#side-panel button[form="read-form"]`).MustClick()
+				device(page, "Mark as read", func(p *rod.Page) { p.MustElement(`#side-panel button[form="read-form"]`).MustClick() })
 				read(fmt.Sprint(seq))
 				live(seq + 1)
 				throttle.Store(true)
-				page.MustElement(`#side-panel button[form="read-form"]`).MustClick()
+				device(page, "Mark as read", func(p *rod.Page) { p.MustElement(`#side-panel button[form="read-form"]`).MustClick() })
 				live(seq + 2)
 				read(fmt.Sprint(seq+1, " 429"), fmt.Sprint(seq+1))
 			}
@@ -345,27 +370,29 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			live(101)
 			read()
 			// Mark as read in the dialog sends the newest shown cursor.
-			page.MustElement(`#side-panel button[form="read-form"]`).MustClick()
+			device(page, "Mark as read", func(p *rod.Page) { p.MustElement(`#side-panel button[form="read-form"]`).MustClick() })
 			read("101")
 			step("390 px: trap and manual reading")
 			size(390, 844)
 			trap("390 px")
 			live(102)
 			read()
-			page.MustElement(`#side-panel button[form="read-form"]`).MustClick()
+			device(page, "Mark as read", func(p *rod.Page) { p.MustElement(`#side-panel button[form="read-form"]`).MustClick() })
 			read("102")
 			// The wheel over the dimmed page scrolls nothing behind it.
 			step("390 px: the page behind does not scroll; a tall sheet")
 			const scrolled = `() => { const l = document.getElementById('message-list'); return [l.scrollHeight > l.clientHeight && l.scrollTop > 0, l.scrollTop, document.scrollingElement.scrollTop].join(); }`
 			before := page.MustEval(scrolled).Str()
-			page.Mouse.MustMoveTo(195, 40).MustScroll(0, -600)
-			page.Mouse.MustScroll(0, 600)
+			device(page, "the wheel over the dimmed page", func(p *rod.Page) {
+				p.Mouse.MustMoveTo(195, 40).MustScroll(0, -600)
+				p.Mouse.MustScroll(0, 600)
+			})
 			time.Sleep(200 * time.Millisecond)
 			if after := page.MustEval(scrolled).Str(); !strings.HasPrefix(before, "true,") || after != before {
 				t.Fatalf("the conversation behind the sheet scrolled: %s to %s", before, after)
 			}
 			// A tall sheet stops at 80 % and scrolls itself.
-			page.MustElement("#side-panel summary").MustClick()
+			device(page, "opening the image picker", func(p *rod.Page) { p.MustElement("#side-panel summary").MustClick() })
 			if !page.MustEval(`() => { const p = document.getElementById('side-panel'), h = document.documentElement.clientHeight;
 				return Math.abs(p.getBoundingClientRect().height - 0.8 * h) <= 1 && p.scrollHeight > p.clientHeight; }`).Bool() {
 				t.Fatal("a tall sheet is not 80 % high with its own scrolling")
@@ -375,30 +402,36 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			visit.cursor.Store(102)
 			step("Escape at 390 px")
 			page.MustElement("#panel-heading").MustFocus()
-			closed("Escape at 390 px", func() { page.Keyboard.MustType(input.Escape) })
+			closed("Escape at 390 px", func() { device(page, "Escape", func(p *rod.Page) { p.Keyboard.MustType(input.Escape) }) })
 			read("102")
 			step("Escape at 1000 px")
 			size(1000, 800)
 			open()
-			closed("Escape at 1000 px", func() { page.Keyboard.MustType(input.Escape) })
+			closed("Escape at 1000 px", func() { device(page, "Escape", func(p *rod.Page) { p.Keyboard.MustType(input.Escape) }) })
 			read("102")
 			step("the close link at 1000 px")
 			open()
-			closed("the close link at 1000 px", func() { page.MustElement("#panel-close").MustClick() })
+			closed("the close link at 1000 px", func() {
+				device(page, "the close link", func(p *rod.Page) { p.MustElement("#panel-close").MustClick() })
+			})
 			read("102")
 			step("the dimmed sidebar at 1000 px")
 			open()
-			closed("the dimmed sidebar at 1000 px", func() { page.Mouse.MustMoveTo(150, 400).MustClick(proto.InputMouseButtonLeft) })
+			closed("the dimmed sidebar at 1000 px", func() {
+				device(page, "a click on the dimmed sidebar", func(p *rod.Page) { p.Mouse.MustMoveTo(150, 400).MustClick(proto.InputMouseButtonLeft) })
+			})
 			read("102")
 			step("the dimmed conversation at 390 px")
 			size(390, 844)
 			open()
-			closed("the dimmed conversation at 390 px", func() { page.Mouse.MustMoveTo(195, 40).MustClick(proto.InputMouseButtonLeft) })
+			closed("the dimmed conversation at 390 px", func() {
+				device(page, "a click on the dimmed conversation", func(p *rod.Page) { p.Mouse.MustMoveTo(195, 40).MustClick(proto.InputMouseButtonLeft) })
+			})
 			read("102")
 
 			// Without JavaScript the panel is a page: its member paging, close
 			// link and Mark as read work, and nothing reads automatically.
-			plainBase = browser.MustPage().Context(ctx).WithPanic(fail)
+			plainBase = browser.Context(ctx).MustPage().WithPanic(fail)
 			defer plainBase.MustClose()
 			step("without JavaScript: the members page")
 			if err := (proto.EmulationSetScriptExecutionDisabled{Value: true}).Call(plain); err != nil {
@@ -411,7 +444,7 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 				if err := plain.MustEval(`s => { const r = document.querySelector(s).getBoundingClientRect(); return {x: r.x + r.width / 2, y: r.y + r.height / 2}; }`, selector).Unmarshal(&at); err != nil {
 					t.Fatal(err)
 				}
-				plain.Mouse.MustMoveTo(at.X, at.Y).MustClick(proto.InputMouseButtonLeft)
+				device(plain, "a click on "+selector, func(p *rod.Page) { p.Mouse.MustMoveTo(at.X, at.Y).MustClick(proto.InputMouseButtonLeft) })
 				if err := plain.Timeout(10 * time.Second).Wait(rod.Eval(`want => location.pathname + location.search === want && document.readyState === 'complete'`, want)); err != nil {
 					t.Fatalf("without JavaScript, %s → %s: %v (at %s)", selector, want, err, since())
 				}

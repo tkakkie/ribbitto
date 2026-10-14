@@ -53,6 +53,13 @@ func testWelcomeBrowser(t *testing.T, browser *rod.Browser) {
 	defer server.Close()
 	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
 	defer page.MustClose()
+	// The lang cookie is host-wide in the shared browser and outranks
+	// Accept-Language, so later scenarios must not inherit it.
+	defer func() {
+		if err := (proto.NetworkDeleteCookies{Name: "lang", URL: server.URL}).Call(page); err != nil {
+			t.Error(err)
+		}
+	}()
 	for _, size := range [][2]int{{390, 844}, {320, 568}, {1280, 800}} {
 		phone := size[0] < 852
 		insets := map[string]int{"left": 0, "right": 0, "bottom": 0}

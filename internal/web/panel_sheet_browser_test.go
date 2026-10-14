@@ -51,7 +51,11 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	for _, topic := range []bool{false, true} {
 		t.Run(fmt.Sprintf("topic=%t", topic), func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(t.Context(), 40*time.Second)
+			// 90 s, as the read-visibility and welcome tests: each step below has
+			// its own bound and names itself when it stalls (#1060).
+			ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+			started := time.Now()
+			since := func() time.Duration { return time.Since(started).Round(time.Millisecond) }
 			defer cancel()
 			visit := &sheetVisit{}
 			visit.cursor.Store(42)
@@ -128,15 +132,15 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			wait := func(what, js string, args ...any) {
 				t.Helper()
 				if err := page.Timeout(5 * time.Second).Wait(rod.Eval(js, args...)); err != nil {
-					t.Fatalf("%s: %v", what, err)
+					t.Fatalf("%s: %v (at %s)", what, err, since())
 				}
 			}
 			send := func(out realtime.Outgoing) {
 				t.Helper()
 				select {
 				case frames <- out:
-				case <-ctx.Done():
-					t.Fatal("no stream took the frame")
+				case <-time.After(10 * time.Second):
+					t.Fatalf("no stream took frame %d (at %s)", out.ID, since())
 				}
 			}
 			// live delivers a message on the stream: the page applies and shows
@@ -149,9 +153,17 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			load := func(what string, action func(), want string) {
 				t.Helper()
+				// The function WaitNavigation returns ignores its timeout, so a
+				// missed load would cost 10 s silently: a marker on the old
+				// document and the elapsed time make it fail by name instead.
+				page.MustEval(`() => { window.panelSheetStale = true }`)
+				begun := time.Now()
 				navigated := page.Timeout(10 * time.Second).WaitNavigation(proto.PageLifecycleEventNameLoad)
 				action()
 				navigated()
+				if took := time.Since(begun); page.MustEval(`() => !!window.panelSheetStale`).Bool() || took >= 9*time.Second {
+					t.Fatalf("%s: no load event within %s (at %s)", what, took.Round(time.Millisecond), since())
+				}
 				wait(what, want)
 			}
 			open := func() {
@@ -365,7 +377,9 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					t.Fatal(err)
 				}
 				plain.Mouse.MustMoveTo(at.X, at.Y).MustClick(proto.InputMouseButtonLeft)
-				plain.MustWait(`want => location.pathname + location.search === want && document.readyState === 'complete'`, want)
+				if err := plain.Timeout(10 * time.Second).Wait(rod.Eval(`want => location.pathname + location.search === want && document.readyState === 'complete'`, want)); err != nil {
+					t.Fatalf("without JavaScript, %s → %s: %v (at %s)", selector, want, err, since())
+				}
 			}
 			plain.MustNavigate(server.URL + path + "/members").MustWaitLoad()
 			if problem := plain.MustEval(sheet).Str(); problem != "" {

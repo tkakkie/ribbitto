@@ -66,6 +66,7 @@ templ imagePicker(keys []string, selected, errorID, errorMsg string) {
 		<label class="flex min-h-11 items-center gap-2">
 			<input
 				type="radio"
+				class="accent-brand"
 				name="image"
 				value=""
 				checked?={ selected == "" }
@@ -81,6 +82,7 @@ templ imagePicker(keys []string, selected, errorID, errorMsg string) {
 				<label class="flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-border-strong p-1 hover:bg-hover">
 					<input
 						type="radio"
+						class="accent-brand"
 						name="image"
 						value={ key }
 						checked?={ selected == key }

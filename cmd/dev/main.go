@@ -145,15 +145,17 @@ func shutdown(watchers []watcher) (err error) {
 	if len(watchers) == 0 {
 		return nil
 	}
-	// A watcher whose leader had exited before shutdown's first signal failed
-	// on its own; one still running then and ending later ended because of the
-	// signals. The verdict is taken once, from the reaped flags and the
-	// process table, and never from which results have been delivered, so it
-	// does not depend on delivery timing (the maintainer and Codex on #1042).
+	// A watcher failed on its own if it exited with a non-zero status at any
+	// time, or ended in any error before shutdown's first signal; ending by a
+	// signal after that is shutdown's doing. Neither test depends on when a
+	// result is delivered or on how close an exit came to the signals (the
+	// maintainer and Codex on #1042). It relies on the watchers ending by the
+	// signal or with status 0 when stopped: Tailwind dies of SIGTERM and SIGINT,
+	// templ exits 0 (measured with the pinned versions).
 	exited, scanErr := exitedLeaders(watchers)
 	defer func() {
 		for i, w := range watchers {
-			if result := <-w.done; exited[i] && result != nil {
+			if result := <-w.done; result != nil && (exited[i] || failedOnItsOwn(result)) {
 				err = errors.Join(err, fmt.Errorf("watcher %s failed: %w", w.cmd.Path, result))
 			}
 		}
@@ -230,6 +232,13 @@ func signalSessions(watchers []watcher, exited []bool, sig syscall.Signal) (int,
 		}
 	}
 	return remaining, nil
+}
+
+// failedOnItsOwn reports whether a watcher exited by itself with a non-zero
+// status, which shutdown's signals never cause.
+func failedOnItsOwn(result error) bool {
+	var exit *exec.ExitError
+	return errors.As(result, &exit) && exit.Exited() && exit.ExitCode() != 0
 }
 
 // exitedLeaders reports, per watcher, whether its leader had already exited.

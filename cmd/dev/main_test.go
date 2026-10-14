@@ -244,10 +244,11 @@ func TestSuperviseReportsAFailureDeliveredAfterSignals(t *testing.T) {
 }
 
 // Codex on #1042: a watcher still running when shutdown reads the process
-// table and exiting with a failure before the first signal gets the same
-// verdict whether its result is delivered at once or late. It ends at the
-// same point in both runs: shutdown's hook just before the first signal.
-func TestShutdownVerdictDoesNotDependOnDelivery(t *testing.T) {
+// table that exits with status 7 just before the first signal failed on its
+// own, and must be reported whether its result is delivered at once or late.
+// It ends at the same point in both runs: shutdown's hook just before the
+// first signal.
+func TestShutdownReportsAFailureJustBeforeTheSignals(t *testing.T) {
 	for _, late := range []bool{false, true} {
 		t.Run("late "+strconv.FormatBool(late), func(t *testing.T) {
 			dir := t.TempDir()
@@ -274,8 +275,28 @@ func TestShutdownVerdictDoesNotDependOnDelivery(t *testing.T) {
 			if late {
 				go func() { <-reaped; time.Sleep(100 * time.Millisecond); close(release) }()
 			}
+			var exit *exec.ExitError
+			if err := shutdown([]watcher{w}); !errors.As(err, &exit) || exit.ExitCode() != 7 {
+				t.Fatalf("shutdown = %v, want the exit status 7", err)
+			}
+		})
+	}
+}
+
+// A watcher that ends because of shutdown's signals is not a failure, whether
+// it dies of the signal (as Tailwind does) or exits 0 (as templ does).
+func TestShutdownIgnoresExitsCausedByTheSignals(t *testing.T) {
+	for name, script := range map[string]string{
+		"killed by the signal": "sleep 30",
+		"exits 0 on SIGTERM":   "trap 'exit 0' TERM; while :; do sleep 0.01; done",
+	} {
+		t.Run(name, func(t *testing.T) {
+			w, err := start(exec.Command("/bin/sh", "-c", script))
+			if err != nil {
+				t.Fatal(err)
+			}
 			if err := shutdown([]watcher{w}); err != nil {
-				t.Fatalf("shutdown = %v; a watcher running when the table was read counts as stopped by the signals", err)
+				t.Fatalf("shutdown = %v, want no failure", err)
 			}
 		})
 	}

@@ -78,7 +78,7 @@ func (w *worker) poll() error {
 type cleanupOps struct {
 	scan       func(int) ([]int, error)
 	killGroup  func(int)
-	killMember func(int, int)
+	killMember func(int, *worker)
 }
 
 func systemCleanup() cleanupOps {
@@ -97,12 +97,17 @@ func (c cleanupOps) stop(w *worker) bool {
 		if err != nil {
 			break
 		}
-		if len(members) == 0 {
+		remaining := 0
+		for _, pid := range members {
+			if !w.canBeMember(pid) {
+				continue
+			}
+			remaining++
+			c.killMember(pid, w)
+		}
+		if remaining == 0 {
 			confirmed = true
 			break
-		}
-		for _, pid := range members {
-			c.killMember(pid, w.pid)
 		}
 		// A member can fork before it dies; its child inherits the same session.
 		time.Sleep(20 * time.Millisecond)
@@ -143,11 +148,19 @@ func members(listing string, session int, getsid func(int) (int, error)) []int {
 	return found
 }
 
-func killMember(pid, session int) {
+func (w *worker) canBeMember(pid int) bool {
+	// A reaped leader's PID can only belong to a new session (Muse Code on #1035).
+	return !w.exited || pid != w.pid
+}
+
+func killMember(pid int, w *worker) {
 	// macOS ps omits session IDs. Recheck just before the signal to narrow the
 	// PID-reuse window (no pidfd there; the maintainer accepted this in #636).
 	// A descendant calling setsid leaves this session; Chromium does not (#636).
-	if sid, err := unix.Getsid(pid); err == nil && sid == session {
+	if !w.canBeMember(pid) {
+		return
+	}
+	if sid, err := unix.Getsid(pid); err == nil && sid == w.pid {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
 }

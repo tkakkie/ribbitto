@@ -48,12 +48,41 @@ func TestCleanup(t *testing.T) {
 					return scan, nil
 				},
 				killGroup:  func(int) { t.Fatal("killed reaped leader's group") },
-				killMember: func(pid, session int) { killed = append(killed, pid) },
+				killMember: func(pid int, _ *worker) { killed = append(killed, pid) },
 			}
 			if got := c.stop(w); got != tc.confirmed || !reflect.DeepEqual(killed, tc.killed) {
 				t.Fatalf("stop = %v, killed %v", got, killed)
 			}
 		})
+	}
+}
+
+func TestCleanupReusedLeaderPID(t *testing.T) {
+	w := &worker{pid: 41, exited: true}
+	scans := [][]int{{41, 101}, {41}}
+	var killed []int
+	c := cleanupOps{
+		scan: func(session int) ([]int, error) {
+			if session != w.pid {
+				t.Fatalf("session = %d", session)
+			}
+			if len(scans) == 0 {
+				return nil, fmt.Errorf("too many scans")
+			}
+			scan := scans[0]
+			scans = scans[1:]
+			return scan, nil
+		},
+		killGroup: func(int) { t.Fatal("killed reaped leader's group") },
+		killMember: func(pid int, _ *worker) {
+			if pid == w.pid {
+				t.Errorf("signalled reused leader PID %d", pid)
+			}
+			killed = append(killed, pid)
+		},
+	}
+	if confirmed := c.stop(w); !confirmed || !reflect.DeepEqual(killed, []int{101}) || len(scans) != 0 {
+		t.Fatalf("confirmed = %v, killed %v, remaining scans = %d", confirmed, killed, len(scans))
 	}
 }
 

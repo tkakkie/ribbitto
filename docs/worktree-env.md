@@ -27,17 +27,23 @@ failures and SQL failures without credentials;
 `make check` runs it before tests when DB configuration is set or required.
 `make check-ai-env` tests this tooling.
 
-Run `python3 scripts/ai_capacity.py WT1 WT2 PACKAGES PARALLEL` outside the
-sandbox, with this change in both worktrees and `bin/ai-db` built. It reports
+Build with `go build -o bin/ai-capacity ./cmd/capacity`, then run
+`bin/ai-capacity WT1 WT2 PACKAGES PARALLEL` outside the sandbox, with this
+change in both worktrees and `bin/ai-db` built. Run the built binary so targeted
+signals reach its cleanup handler. It reports
 two uncached required-DB checks' exit codes and counts of lines matching
 `53300|too many clients`, sampled peak/initial client backends (including one
 persistent observer connected before checks), server limit, `-p`, `-parallel`
-and pool limits. Each check runs in its own process group, killed on cleanup.
+and pool limits. Each check runs in its own session. Cleanup kills its process
+group and rescans for descendants, including those that leave the group; zombies are ignored.
+A failed `ps` scan fails the run because cleanup cannot be confirmed. SIGINT,
+SIGTERM and SIGHUP also clean up. A descendant that calls `setsid()` leaves
+the session and cannot be found (accepted limit, #636).
 Output stays in a 0600 `bin/ai-capacity-*.log` in each worktree; logs may contain
 credentials, so do not share them. The report never prints URLs. The runner
 reuses the inherited/default module cache and GOPATH. SQL pools are unbounded
-(0); `pgtest` pools allow a fixed 16 (`pgtest.MaxConns`, #849), and other pgx
-pools use pgx's default, max(4, CPUs). The admin URL cannot carry
+(0); the report reads the fixed pool limit from `pgtest.MaxConns` (#849). Other
+pgx pools use pgx's default, max(4, CPUs). The admin URL cannot carry
 `pool_max_conns`: pgtest's admin connection is plain pgx, which would send it to
 the server as a setting.
 

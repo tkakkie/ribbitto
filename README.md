@@ -122,7 +122,7 @@ after the package must be a valid Go identifier, exported or unexported, and
 the package directory must contain at least one regular `.go` file.
 Decision records are exempt from this path check because
 they describe history; their Markdown links and anchors are still checked.
-Worktree tooling uses Python 3 standard-library unittests (`make check-ai-env`);
+Capacity has Go tests. Worktree setup uses Python unittests (`make check-ai-env`);
 there is no Python lint/format gate.
 
 `make prepush` is a quick subset to run before pushing a follow-up commit: it

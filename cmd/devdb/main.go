@@ -1,6 +1,6 @@
 // Command devdb migrates worktree databases and observes development capacity.
 // It keeps admin credentials in the environment and suppresses driver errors,
-// which can contain connection strings. Used by ai_env.py and ai_capacity.py.
+// which can contain connection strings. Used by ai_env.py and cmd/capacity.
 package main
 
 import (

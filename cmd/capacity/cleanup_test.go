@@ -1,0 +1,265 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"strconv"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
+)
+
+func TestCleanup(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		scans     [][]int
+		fail      bool
+		confirmed bool
+		killed    []int
+	}{
+		{"rescans", [][]int{{101}, {102}, {}}, false, true, []int{101, 102}},
+		{"reaped leader", [][]int{{}}, false, true, nil},
+		{"ps failure after reap", nil, true, false, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &worker{pid: 41, exited: true}
+			var killed []int
+			c := cleanupOps{
+				scan: func(session int) ([]int, error) {
+					if session != 41 {
+						t.Fatalf("session = %d", session)
+					}
+					if tc.fail {
+						return nil, fmt.Errorf("ps failed")
+					}
+					if len(tc.scans) == 0 {
+						t.Fatal("too many scans")
+					}
+					scan := tc.scans[0]
+					tc.scans = tc.scans[1:]
+					return scan, nil
+				},
+				killGroup:  func(int) { t.Fatal("killed reaped leader's group") },
+				killMember: func(pid, session int) { killed = append(killed, pid) },
+			}
+			if got := c.stop(w); got != tc.confirmed || !reflect.DeepEqual(killed, tc.killed) {
+				t.Fatalf("stop = %v, killed %v", got, killed)
+			}
+		})
+	}
+}
+
+func TestCleanupFallback(t *testing.T) {
+	o, _ := fixture(t)
+	t.Setenv("CAPACITY_MODE", "signal")
+	// A direct sleeper has no detached children, so fallback cannot leak them.
+	t.Setenv("CAPACITY_HELPER", "sleep")
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	process, err := os.StartProcess(executable, []string{executable, "-test.run=^TestHelperProcess$"}, &os.ProcAttr{Dir: o.roots[0], Env: os.Environ(), Files: []*os.File{os.Stdin, os.Stdout, os.Stderr}, Sys: &syscall.SysProcAttr{Setsid: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &worker{process: process, pid: process.Pid}
+	defer func() { _ = process.Kill(); _, _ = process.Wait() }()
+	waitFile(t, filepath.Join(o.roots[0], "ready-"+strconv.Itoa(w.pid)))
+	c := systemCleanup()
+	c.scan = func(int) ([]int, error) { return nil, context.DeadlineExceeded }
+	if c.stop(w) || !w.exited {
+		t.Fatal("fallback must reap the group but leave cleanup unconfirmed")
+	}
+}
+
+func TestSessionMembers(t *testing.T) {
+	listing := fmt.Sprintf(" 41 Ss\n42 Z+\n43 R\n44 S\n45 S\n%d S\n", os.Getpid())
+	got := members(listing, 41, func(pid int) (int, error) {
+		if pid == 45 {
+			return 0, syscall.ESRCH
+		}
+		if pid == 44 {
+			return 44, nil
+		}
+		return 41, nil
+	})
+	if !reflect.DeepEqual(got, []int{41, 43}) {
+		t.Fatalf("members = %v", got)
+	}
+}
+
+func TestDescendantCleanup(t *testing.T) {
+	for _, mode := range []string{"descendants", "early-first", "early-second"} {
+		t.Run(mode, func(t *testing.T) {
+			o, helper := fixture(t)
+			if mode == "descendants" {
+				t.Setenv("CAPACITY_MODE", mode)
+			} else {
+				t.Setenv("CAPACITY_MODE", "early")
+				fast := 0
+				if mode == "early-second" {
+					fast = 1
+				}
+				t.Setenv("CAPACITY_FAST", o.roots[fast])
+			}
+			defer removeChildren(t, o)
+			ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+			defer cancel()
+			if _, err := run(ctx, o, helper, io.Discard, systemCleanup()); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "descendants" {
+				for _, pid := range recordedPIDs(t, o) {
+					if alive(t, pid) {
+						t.Errorf("descendant %d survived", pid)
+					}
+				}
+			} else {
+				for _, root := range o.roots {
+					if data, err := os.ReadFile(filepath.Join(root, "verdict")); err == nil && string(data) == "early" {
+						return
+					}
+				}
+				t.Fatal("no early cleanup verdict")
+			}
+		})
+	}
+}
+
+func TestSignalCleanup(t *testing.T) {
+	for _, sig := range []syscall.Signal{syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT} {
+		t.Run(sig.String(), func(t *testing.T) {
+			o, helper := fixture(t)
+			t.Setenv("CAPACITY_MODE", "signal")
+			base := filepath.Dir(helper)
+			if err := os.Mkdir(filepath.Join(base, "bin"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(helper, filepath.Join(base, "bin/ai-db")); err != nil {
+				t.Fatal(err)
+			}
+			executable, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, executable, "-test.run=^TestHelperProcess$", "--", o.roots[0], o.roots[1], "2", "3")
+			cmd.Dir, cmd.Env = base, append(os.Environ(), "CAPACITY_HELPER=runner")
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait(); removeChildren(t, o) }()
+			for _, root := range o.roots {
+				waitFile(t, filepath.Join(root, "pids"))
+			}
+			pids := recordedPIDs(t, o)
+			if len(pids) != 8 {
+				t.Fatalf("pids = %v", pids)
+			}
+			if err := cmd.Process.Signal(sig); err != nil {
+				t.Fatal(err)
+			}
+			err = cmd.Wait()
+			if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 128+int(sig) {
+				t.Fatalf("signal exit = %v; %s", err, stderr.String())
+			}
+			for _, pid := range pids {
+				if alive(t, pid) {
+					t.Errorf("process %d survived %s", pid, sig)
+				}
+			}
+		})
+	}
+}
+
+func recordedPIDs(t *testing.T, o options) []int {
+	t.Helper()
+	var pids []int
+	seen := map[int]bool{}
+	for _, root := range o.roots {
+		children, err := filepath.Glob(filepath.Join(root, "child-*"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		paths := []string{filepath.Join(root, "pids"), filepath.Join(root, "left"), filepath.Join(root, "spawned")}
+		for _, path := range append(paths, children...) {
+			data, err := os.ReadFile(path)
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, value := range strings.Fields(string(data)) {
+				pid, err := strconv.Atoi(value)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if seen[pid] {
+					continue
+				}
+				seen[pid] = true
+				pids = append(pids, pid)
+			}
+		}
+	}
+	return pids
+}
+
+func removeChildren(t *testing.T, o options) {
+	t.Helper()
+	for _, pid := range recordedPIDs(t, o) {
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+	}
+}
+
+func TestObserverSampling(t *testing.T) {
+	if os.Getenv("RIBBITTO_TEST_DATABASE_URL") == "" && os.Getenv("RIBBITTO_REQUIRE_DB") != "1" {
+		t.Skip("admin configuration unset")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	helper, err := filepath.Abs("../../bin/ai-db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := startObserver(ctx, helper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = first.stdin.Close(); cancel(); <-first.done }()
+	var baseline struct {
+		Baseline int `json:"baseline"`
+	}
+	if err := json.Unmarshal([]byte(<-first.lines), &baseline); err != nil || baseline.Baseline <= 0 {
+		t.Fatalf("baseline = %+v, %v", baseline, err)
+	}
+	second, err := startObserver(ctx, helper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = second.stdin.Close(); <-second.done }()
+	if line := <-second.lines; line == "" {
+		t.Fatal("second observer did not connect")
+	}
+	time.Sleep(500 * time.Millisecond)
+	_ = second.stdin.Close()
+	<-second.done
+	_ = first.stdin.Close()
+	peak, err := strconv.Atoi(<-first.lines)
+	<-first.done
+	if err != nil || first.err != nil || second.err != nil || peak < baseline.Baseline+1 {
+		t.Fatalf("peak = %d, parse %v, observers %v / %v; baseline %d", peak, err, first.err, second.err, baseline.Baseline)
+	}
+}

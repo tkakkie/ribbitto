@@ -135,7 +135,10 @@ func validate(root, common string, values map[string]string) error {
 	}
 	e, ok := entries[key]
 	if ok && key != "main" {
-		token, found := metadataToken(common, key)
+		token, found, err := metadataToken(common, key)
+		if err != nil {
+			return err
+		}
 		if e.MetadataToken == nil || *e.MetadataToken == "" || !found || *e.MetadataToken != token {
 			return failure("worktree reservation is stale; run make ai-env")
 		}
@@ -255,12 +258,17 @@ func currentID(root string, live map[string]string) (string, error) {
 // metadataToken reads the token make ai-env stores in the worktree's Git
 // metadata. Git keeps it on moves, copies and repair but deletes it with the
 // worktree, so a reused metadata name cannot inherit a database.
-func metadataToken(common, key string) (string, bool) {
+// Only a missing file means "no token"; any other read error is returned,
+// since treating it as missing would drop a live worktree's database.
+func metadataToken(common, key string) (string, bool, error) {
 	data, err := os.ReadFile(filepath.Join(common, "worktrees", strings.TrimPrefix(key, "worktree:"), "ribbitto-ai-env"))
-	if err != nil {
-		return "", false
+	if errors.Is(err, os.ErrNotExist) {
+		return "", false, nil
 	}
-	return strings.TrimSpace(string(data)), true
+	if err != nil {
+		return "", false, err
+	}
+	return strings.TrimSpace(string(data)), true, nil
 }
 
 func databaseName(key string) string {

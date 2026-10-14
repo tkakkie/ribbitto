@@ -74,10 +74,26 @@ func reserveLocked(root, common string, release bool, db adminServer) error {
 	if err != nil {
 		return err
 	}
+	// Read every live worktree's token before dropping anything, so a read
+	// error stops the run with nothing dropped (Codex on #1040).
+	type token struct {
+		value string
+		found bool
+	}
+	tokens := map[string]token{}
+	for id := range live {
+		if id != "main" {
+			value, found, err := metadataToken(common, id)
+			if err != nil {
+				return err
+			}
+			tokens[id] = token{value, found}
+		}
+	}
 	for id, e := range entries {
 		path, listed := live[id]
-		token, found := metadataToken(common, id)
-		if !listed || id != "main" && (e.MetadataToken == nil || *e.MetadataToken == "" || !found || *e.MetadataToken != token) {
+		t := tokens[id]
+		if !listed || id != "main" && (e.MetadataToken == nil || *e.MetadataToken == "" || !t.found || *e.MetadataToken != t.value) {
 			if _, err := db.query(`DROP DATABASE IF EXISTS "` + databaseName(e.DatabasePath) + `" WITH (FORCE)`); err != nil {
 				return err
 			}

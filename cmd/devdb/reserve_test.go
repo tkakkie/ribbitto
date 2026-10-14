@@ -106,8 +106,8 @@ func TestReserveWritesTodaysFormat(t *testing.T) {
 	if m.MetadataToken != nil || m.DatabasePath != mainDir || len(m.Ports) != 2 {
 		t.Fatalf("main entry: %+v", m)
 	}
-	token, found := metadataToken(common, "worktree:linked")
-	if l.MetadataToken == nil || !found || *l.MetadataToken != token || len(token) != 64 {
+	token, found, err := metadataToken(common, "worktree:linked")
+	if l.MetadataToken == nil || err != nil || !found || *l.MetadataToken != token || len(token) != 64 {
 		t.Fatalf("linked token: entry %v, file %q", l.MetadataToken, token)
 	}
 	local, err := os.ReadFile(filepath.Join(linked, ".env.local"))
@@ -441,7 +441,7 @@ func TestReserveReusedWorktreeID(t *testing.T) {
 			}
 			mustReserve(t, replacement, db)
 			fresh := registryOf(t, common)["worktree:linked"]
-			stored, _ := metadataToken(common, "worktree:linked")
+			stored, _, _ := metadataToken(common, "worktree:linked")
 			if *fresh.MetadataToken == *old.MetadataToken || stored != *fresh.MetadataToken || fresh.DatabasePath != resolve(replacement) {
 				t.Fatalf("fresh entry %+v, token file %q", fresh, stored)
 			}
@@ -510,5 +510,73 @@ func TestReserveWithDatabase(t *testing.T) {
 	// rather than counting databases.
 	if count, _ := db.query("SELECT count(*) FROM pg_database WHERE datname IN ('template0', 'template1')"); count != "2" {
 		t.Fatal("release dropped a template database")
+	}
+}
+
+// A token that exists but cannot be read stops the run before anything is
+// dropped; treating it as missing would drop a live worktree's database.
+func TestReserveStopsOnAnUnreadableToken(t *testing.T) {
+	mainDir, linked, common := worktreeFixture(t)
+	db := newFakeServer()
+	mustReserve(t, linked, db)
+	tokenFile := filepath.Join(common, "worktrees", "linked", "ribbitto-ai-env")
+	if err := os.Chmod(tokenFile, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(tokenFile, 0o600) })
+	if f, err := os.Open(tokenFile); err == nil {
+		_ = f.Close()
+		t.Skip("running with permission to read it")
+	}
+	if err := reserve(mainDir, false, db); err == nil {
+		t.Fatal("reserve passed with an unreadable token")
+	}
+	if db.dropped(databaseName(linked)) {
+		t.Fatal("the live worktree's database was dropped")
+	}
+	if _, ok := registryOf(t, common)["worktree:linked"]; !ok {
+		t.Fatal("the live worktree's reservation was removed")
+	}
+}
+
+// A reservation written by the Python ai-env (its JSON layout, token file and
+// .env.local) keeps its database, token and ports through a Go reserve.
+func TestReserveKeepsTodaysReservation(t *testing.T) {
+	mainDir, linked, common := worktreeFixture(t)
+	ports := []int{}
+	for _, l := range []net.Listener{listen(t, 0), listen(t, 0)} {
+		ports = append(ports, l.Addr().(*net.TCPAddr).Port)
+		_ = l.Close()
+	}
+	token := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	registry := `{"worktree:linked": {"path": "` + linked + `", "database_path": "` + linked + `", "ports": [` + strconv.Itoa(ports[0]) + `, ` + strconv.Itoa(ports[1]) + `], "metadata_token": "` + token + `"}}` + "\n"
+	if err := os.WriteFile(filepath.Join(common, "ai-env.json"), []byte(registry), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(common, "worktrees", "linked", "ribbitto-ai-env"), []byte(token+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	name := databaseName(linked)
+	local := "AI_DATABASE=" + name + "\nAI_APP_PORT=" + strconv.Itoa(ports[0]) + "\nAI_METRICS_PORT=" + strconv.Itoa(ports[1]) + "\n"
+	if err := os.WriteFile(filepath.Join(linked, ".env.local"), []byte(local), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	db := newFakeServer()
+	db.databases[name] = true
+	mustReserve(t, mainDir, db)
+	mustReserve(t, linked, db)
+	got := registryOf(t, common)["worktree:linked"]
+	if got.DatabasePath != linked || !slices.Equal(got.Ports, ports) || got.MetadataToken == nil || *got.MetadataToken != token {
+		t.Fatalf("entry %+v", got)
+	}
+	if stored, _, _ := metadataToken(common, "worktree:linked"); stored != token {
+		t.Fatalf("token file rewritten: %q", stored)
+	}
+	after, err := os.ReadFile(filepath.Join(linked, ".env.local"))
+	if err != nil || string(after) != local {
+		t.Fatalf(".env.local = %q, %v", after, err)
+	}
+	if db.dropped(name) || slices.Contains(db.statements, `CREATE DATABASE "`+name+`" TEMPLATE template0`) {
+		t.Fatalf("the database was recreated: %v", db.statements)
 	}
 }

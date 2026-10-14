@@ -27,6 +27,9 @@ It imports only `internal/platform/postgres/pgtest` from this module to report
 including templ's server in another process group, and confirms descendant
 cleanup on shutdown. It imports no application packages; `bin/ai-db run`
 applies worktree configuration to templ and its server.
+`cmd/argonreview` runs Argon adversarial reviews (#1065): `verify` refuses a
+binary not built from a clean `origin/main`; `guard` is Antigravity's tool hook.
+It imports no application packages.
 
 `tools/download` is a tools-module command that owns the Tailwind and
 golangci-lint release pins, selects macOS arm64 or Linux amd64 assets, checks

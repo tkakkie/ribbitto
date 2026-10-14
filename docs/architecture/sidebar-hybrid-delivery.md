@@ -20,7 +20,8 @@ Reconnect starts request/watch generations anew, takes a fresh full snapshot,
 and sends while old work is still held. Releasing that old work cannot send or
 pollute the new stream; the coverage guard also rejects its old incarnation.
 
-Part 2c-b2 reuses this harness for continuous-posting recount/repair progress and
-full-model equality at pinned persisted boundaries. Mutation evidence belongs
-in the PR body. Production code, `SidebarInterval` and #865's PR 3 plan are
-unchanged; measurement and adoption remain #952. This part does not close #961.
+Part [2c-b2](sidebar-hybrid-progress.md) reuses this harness for continuous-posting
+recount/repair progress and full-model equality at pinned persisted boundaries.
+Mutation evidence belongs in the PR body. Production code, `SidebarInterval` and
+#865's PR 3 plan are unchanged; measurement and adoption remain #952. Together
+with 2a–2c-b2, the tests cover #961's acceptance conditions.

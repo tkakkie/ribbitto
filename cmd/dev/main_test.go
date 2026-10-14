@@ -284,19 +284,32 @@ func TestShutdownReportsAFailureJustBeforeTheSignals(t *testing.T) {
 }
 
 // A watcher that ends because of shutdown's signals is not a failure, whether
-// it dies of the signal (as Tailwind does) or exits 0 (as templ does).
+// it dies of the signal (as Tailwind does) or exits 0 (as templ does). Each
+// script writes a marker once its handling is in place, and the way it ended
+// is checked, so each case exercises what it names.
 func TestShutdownIgnoresExitsCausedByTheSignals(t *testing.T) {
-	for name, script := range map[string]string{
-		"killed by the signal": "sleep 30",
-		"exits 0 on SIGTERM":   "trap 'exit 0' TERM; while :; do sleep 0.01; done",
+	for _, tc := range []struct {
+		name, script string
+		signaled     bool
+	}{
+		{"killed by the signal", `: > "$1"; while :; do sleep 0.01; done`, true},
+		{"exits 0 on SIGTERM", `trap 'exit 0' TERM; : > "$1"; while :; do sleep 0.01; done`, false},
 	} {
-		t.Run(name, func(t *testing.T) {
-			w, err := start(exec.Command("/bin/sh", "-c", script))
+		t.Run(tc.name, func(t *testing.T) {
+			ready := filepath.Join(t.TempDir(), "ready")
+			w, err := start(exec.Command("/bin/sh", "-c", tc.script, "watcher", ready))
 			if err != nil {
 				t.Fatal(err)
 			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			waitFor(t, ctx, func() bool { _, err := os.Stat(ready); return err == nil })
 			if err := shutdown([]watcher{w}); err != nil {
 				t.Fatalf("shutdown = %v, want no failure", err)
+			}
+			status := w.cmd.ProcessState.Sys().(syscall.WaitStatus)
+			if status.Signaled() != tc.signaled || !tc.signaled && status.ExitStatus() != 0 {
+				t.Fatalf("watcher ended with %v, want signaled=%v", w.cmd.ProcessState, tc.signaled)
 			}
 		})
 	}

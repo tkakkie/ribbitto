@@ -2,6 +2,7 @@ package realtime_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -113,7 +114,11 @@ func (r counterSQLPostReads) Read(ctx context.Context, m org.Membership, channel
 	if err := counterPostReads(r).Read(ctx, m, channel, topic, cursor, lo, hi, floor); err != nil {
 		return err
 	}
-	ctx.Value(counterSQLKey{}).(*counterSQLWrite).seq = hi - 1
+	w, ok := ctx.Value(counterSQLKey{}).(*counterSQLWrite)
+	if !ok || w == nil {
+		return errors.New("counter SQL post without a write tracker")
+	}
+	w.seq = hi - 1
 	return nil
 }
 

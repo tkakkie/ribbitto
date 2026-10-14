@@ -18,6 +18,7 @@ Eviction or missing read coverage preserves applied state and schedules a fresh
 recount. Full-model equality includes scope, lists, selection, raw/display counts
 and badges; generation assertions are separate from the oracle.
 
-These are model-application checkpoints, not SSE sends. Disconnect cancellation,
-authorization before every send, send ordering, reconnect recovery and equality
-under continuous posting remain part 2c-b. Measurements and adoption remain #952.
+These are model-application checkpoints, not SSE sends. Part
+[2c-b1](sidebar-hybrid-delivery.md) verifies the delivery lifecycle; recount/repair
+progress and equality under continuous posting remain part 2c-b2. Measurements
+and adoption remain #952.

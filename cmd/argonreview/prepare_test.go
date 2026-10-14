@@ -297,7 +297,7 @@ func TestPrepareRefusesASwapAfterWriting(t *testing.T) {
 			account, unchanged := fixture(t)
 			home := filepath.Join(account, "dev", "agy-home")
 			mkdir(t, home)
-			afterWrite = func(home string) {
+			swap := func(home string) {
 				path := filepath.Join(home, dir)
 				if err := os.Rename(path, path+".old"); err != nil {
 					t.Fatal(err)
@@ -311,12 +311,109 @@ func TestPrepareRefusesASwapAfterWriting(t *testing.T) {
 					mkdir(t, filepath.Join(path, "config"))
 				}
 			}
-			t.Cleanup(func() { afterWrite = func(string) {} })
-			if _, err := prepare(home, account, guardBinary); err == nil {
+			if _, err := prepareWith(home, account, guardBinary, swap); err == nil {
 				t.Fatal("a swapped directory was accepted")
 			}
 			unchanged()
 		})
+	}
+}
+
+// A dangling shared symlink names a place this run could create; it is
+// refused before anything is created (Codex on #1075).
+func TestPrepareRefusesADanglingSharedSymlink(t *testing.T) {
+	for _, rel := range []string{".gemini", ".gemini/config", ".gemini/antigravity-cli"} {
+		t.Run(rel, func(t *testing.T) {
+			account := resolved(t, t.TempDir())
+			home := resolved(t, t.TempDir())
+			if rel != ".gemini" {
+				mkdir(t, filepath.Join(account, ".gemini"))
+			}
+			symlink(t, filepath.Join(home, rel), filepath.Join(account, rel))
+			before := snapshot(t, home)
+			if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "cannot be resolved") {
+				t.Fatalf("err = %v", err)
+			}
+			if !equal(before, snapshot(t, home)) {
+				t.Fatal("the dedicated HOME changed")
+			}
+			if _, err := os.Lstat(filepath.Join(home, ".gemini")); err == nil {
+				t.Fatal("the dangling target was created")
+			}
+		})
+	}
+}
+
+// A shared directory whose parent can be searched but not read hides the
+// chain above it; that refuses rather than shortening the chain.
+func TestPrepareRefusesAnUnwalkableChain(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads any directory")
+	}
+	account := resolved(t, t.TempDir())
+	elsewhere := resolved(t, t.TempDir())
+	parent := filepath.Join(elsewhere, "p")
+	mkdir(t, filepath.Join(parent, ".gemini"))
+	symlink(t, filepath.Join(parent, ".gemini"), filepath.Join(account, ".gemini"))
+	if err := os.Chmod(parent, 0o111); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
+	home := filepath.Join(account, "dev", "agy-home")
+	mkdir(t, home)
+	if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "cannot walk up") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".gemini")); err == nil {
+		t.Fatal("prepare wrote before refusing")
+	}
+}
+
+// An owned directory that can be listed but not searched hides what is in
+// it; that refuses before settings.json is rewritten (Codex on #1075).
+func TestPrepareRefusesWhatItCannotInspect(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root searches any directory")
+	}
+	account, unchanged := fixture(t)
+	home := filepath.Join(account, "dev", "agy-home")
+	write(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), "mine")
+	symlink(t, filepath.Join(account, ".gemini/config/hooks.json"), filepath.Join(home, ".gemini/config/hooks.json"))
+	config := filepath.Join(home, ".gemini/config")
+	if err := os.Chmod(config, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(config, 0o700) })
+	if _, err := prepare(home, account, guardBinary); err == nil {
+		t.Fatal("accepted")
+	}
+	if data, _ := os.ReadFile(filepath.Join(home, ".gemini/antigravity-cli/settings.json")); string(data) != "mine" {
+		t.Fatalf("settings.json was rewritten: %q", data)
+	}
+	unchanged()
+}
+
+// Refusals close every descriptor they opened.
+func TestPrepareKeepsNoDescriptors(t *testing.T) {
+	account, _ := fixture(t)
+	home := filepath.Join(account, "dev", "agy-home")
+	mkdir(t, filepath.Join(home, ".gemini/antigravity-cli"))
+	symlink(t, filepath.Join(account, ".gemini/config"), filepath.Join(home, ".gemini/config"))
+	open := func() int {
+		entries, err := os.ReadDir("/dev/fd")
+		if err != nil {
+			t.Skip("no /dev/fd")
+		}
+		return len(entries)
+	}
+	before := open()
+	for range 50 {
+		if _, err := prepare(home, account, guardBinary); err == nil {
+			t.Fatal("accepted")
+		}
+	}
+	if after := open(); after > before {
+		t.Fatalf("descriptors grew from %d to %d", before, after)
 	}
 }
 

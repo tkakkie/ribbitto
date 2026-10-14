@@ -33,13 +33,8 @@ const settingsJSON = `{
 // stops the run instead of being deleted, so nothing put there is lost.
 var refusedCustomisation = []string{"config.json", "skills.json", "rules.json", "agents.json", "plugins.json", "plugins", "skills", "rules", "agents", "workflows"}
 
-// The directories the launcher owns under HOME/.gemini, and the shared ones
-// under the account's home that it must never reach.
+// The directories the launcher owns under HOME/.gemini.
 var ownedDirs = []string{"antigravity-cli", "config"}
-
-// afterWrite runs between writing and re-checking; a test swaps directories
-// there.
-var afterWrite = func(string) {}
 
 type ownedFile struct {
 	dir, name string
@@ -79,15 +74,21 @@ func owned(guardPath string) ([]ownedFile, error) {
 // checks them, refusing to run on anything else (#1069). The sign-in, logs,
 // caches and Antigravity's other state are neither written nor removed.
 // accountHome is the account's home, whose .gemini other projects share.
+func prepare(home, accountHome, guardPath string) (string, error) {
+	return prepareWith(home, accountHome, guardPath, func(string) {})
+}
+
+// prepareWith is prepare with a hook between writing and re-checking, where a
+// test swaps directories.
 //
 // HOME is opened one component at a time from the root without following
 // symlinks, and every directory below it the same way. Files are created and
 // renamed relative to those descriptors, and places are compared by device
 // and inode, not by spelling, so case-insensitive aliases and symlinks cannot
-// lead a write into the shared configuration (Codex on #1075). Everything is
-// checked before the first write, and the whole path is walked again after
-// the last one.
-func prepare(home, accountHome, guardPath string) (string, error) {
+// lead a write into the shared configuration. Every check runs before the
+// first write, any error a check meets refuses, and the whole path is walked
+// again after the last write (Codex on #1075).
+func prepareWith(home, accountHome, guardPath string, afterWrite func(string)) (string, error) {
 	files, err := owned(guardPath)
 	if err != nil {
 		return "", err
@@ -96,10 +97,10 @@ func prepare(home, accountHome, guardPath string) (string, error) {
 		return "", errors.New("RIBBITTO_ARGON_HOME must be a clean absolute path of a dedicated directory")
 	}
 	shared, err := openShared(accountHome)
+	defer shared.close()
 	if err != nil {
 		return "", err
 	}
-	defer shared.close()
 	root, err := walk(home)
 	if err != nil {
 		return "", fmt.Errorf("opening RIBBITTO_ARGON_HOME %s without symlinks: %w", home, err)
@@ -109,25 +110,30 @@ func prepare(home, accountHome, guardPath string) (string, error) {
 		return "", err
 	}
 
-	// Check everything that exists before writing anything.
 	gemini, dirs, err := openOwned(root, false)
+	defer closeAll(gemini, dirs)
 	if err != nil {
 		return "", err
 	}
-	defer closeAll(gemini, dirs)
 	if err := checkBeforeWrite(root, dirs, files); err != nil {
 		return "", err
 	}
 
 	gemini2, dirs2, err := openOwned(root, true)
+	defer closeAll(gemini2, dirs2)
 	if err != nil {
 		return "", err
 	}
-	defer closeAll(gemini2, dirs2)
-	for _, fd := range append([]int{gemini2}, values(dirs2)...) {
-		if shared.has(identity(fd)) {
+	written := map[string]place{}
+	for name, fd := range dirs2 {
+		p, err := identity(fd)
+		if err != nil {
+			return "", err
+		}
+		if shared.has(p) {
 			return "", errors.New("refusing: an owned directory is the shared configuration")
 		}
+		written[name] = p
 	}
 	for _, f := range files {
 		if err := writeOwned(dirs2[f.dir], f.name, f.content); err != nil {
@@ -136,26 +142,25 @@ func prepare(home, accountHome, guardPath string) (string, error) {
 	}
 	afterWrite(home)
 
-	// Walk the path again: the places written must still be the ones HOME
-	// names, still apart from the shared configuration, and hold exactly the
-	// launcher's content.
+	// Walk the path again. The owned directories are where the files went, so
+	// they must still be the ones HOME names: HOME or .gemini replaced around
+	// them moves no file. They must also still be apart from the shared
+	// configuration and hold exactly the launcher's content.
 	again, err := walk(home)
 	if err != nil {
 		return "", fmt.Errorf("re-opening RIBBITTO_ARGON_HOME: %w", err)
 	}
 	defer closeFD(again)
 	gemini3, dirs3, err := openOwned(again, false)
+	defer closeAll(gemini3, dirs3)
 	if err != nil {
 		return "", err
 	}
-	defer closeAll(gemini3, dirs3)
-	if gemini3 < 0 {
-		return "", errors.New("refusing: .gemini disappeared while it was written")
-	}
-	// The owned directories are where the files went; HOME or .gemini
-	// replaced around them does not move a file, so their identities decide.
-	for name, fd := range dirs2 {
-		if dirs3[name] < 0 || identity(dirs3[name]) != identity(fd) {
+	for name, want := range written {
+		if dirs3[name] < 0 {
+			return "", fmt.Errorf("refusing: .gemini/%s disappeared while it was written", name)
+		}
+		if p, err := identity(dirs3[name]); err != nil || p != want {
 			return "", fmt.Errorf("refusing: .gemini/%s changed while it was written", name)
 		}
 	}
@@ -175,12 +180,12 @@ func prepare(home, accountHome, guardPath string) (string, error) {
 
 type place struct{ dev, ino uint64 }
 
-func identity(fd int) place {
+func identity(fd int) (place, error) {
 	var st unix.Stat_t
-	if unix.Fstat(fd, &st) != nil {
-		return place{}
+	if err := unix.Fstat(fd, &st); err != nil {
+		return place{}, fmt.Errorf("refusing: cannot identify a directory: %w", err)
 	}
-	return place{uint64(st.Dev), st.Ino}
+	return place{uint64(st.Dev), st.Ino}, nil
 }
 
 // shared holds what HOME must stay apart from, opened following symlinks:
@@ -189,7 +194,8 @@ func identity(fd int) place {
 // its own HOME, which HOME may not be, lie inside or contain.
 type shared struct {
 	account int
-	gemini  []int
+	gemini  []place
+	parents []map[place]bool
 }
 
 func openShared(accountHome string) (shared, error) {
@@ -200,29 +206,40 @@ func openShared(accountHome string) (shared, error) {
 	}
 	s.account = fd
 	for _, rel := range []string{".gemini", ".gemini/antigravity-cli", ".gemini/config"} {
-		fd, err := unix.Open(filepath.Join(accountHome, rel), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+		path := filepath.Join(accountHome, rel)
+		fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 		if errors.Is(err, unix.ENOENT) {
+			// Absent, unless a dangling symlink names a place this run could
+			// create, which would then be shared (Codex on #1075).
+			var st unix.Stat_t
+			if err := unix.Lstat(path, &st); !errors.Is(err, unix.ENOENT) {
+				return s, fmt.Errorf("refusing: the shared %s exists but cannot be resolved", rel)
+			}
 			continue
 		}
 		if err != nil {
-			s.close()
-			return s, fmt.Errorf("opening the shared %s: %w", rel, err)
+			return s, fmt.Errorf("refusing: cannot open the shared %s: %w", rel, err)
 		}
-		s.gemini = append(s.gemini, fd)
+		p, err := identity(fd)
+		var up map[place]bool
+		if err == nil {
+			up, err = ancestors(fd)
+		}
+		closeFD(fd)
+		if err != nil {
+			return s, err
+		}
+		s.gemini = append(s.gemini, p)
+		s.parents = append(s.parents, up)
 	}
 	return s, nil
 }
 
-func (s shared) close() {
-	closeFD(s.account)
-	for _, fd := range s.gemini {
-		closeFD(fd)
-	}
-}
+func (s shared) close() { closeFD(s.account) }
 
 func (s shared) has(p place) bool {
-	for _, fd := range s.gemini {
-		if identity(fd) == p {
+	for _, g := range s.gemini {
+		if g == p {
 			return true
 		}
 	}
@@ -231,38 +248,56 @@ func (s shared) has(p place) bool {
 
 // separate compares identities up the directory chains, so neither a symlink
 // nor a differently spelled path (Darwin's case-insensitive names) can make
-// HOME the account's home or overlap its shared .gemini.
+// HOME the account's home or overlap its shared .gemini. A chain it cannot
+// walk to the root refuses.
 func separate(root int, s shared) error {
-	h := identity(root)
-	if ancestors(s.account)[h] {
+	h, err := identity(root)
+	if err != nil {
+		return err
+	}
+	accountUp, err := ancestors(s.account)
+	if err != nil {
+		return err
+	}
+	if accountUp[h] {
 		return errors.New("refusing RIBBITTO_ARGON_HOME: it is the account's home or an ancestor of it")
 	}
-	up := ancestors(root)
-	for _, fd := range s.gemini {
-		if up[identity(fd)] || ancestors(fd)[h] {
+	up, err := ancestors(root)
+	if err != nil {
+		return err
+	}
+	for i, g := range s.gemini {
+		if up[g] || s.parents[i][h] {
 			return errors.New("refusing RIBBITTO_ARGON_HOME: it overlaps the account's shared .gemini")
 		}
 	}
 	return nil
 }
 
-func ancestors(fd int) map[place]bool {
+// ancestors returns the identities of fd's directory and every directory
+// above it up to the root; failing to reach the root is an error, never a
+// shorter chain.
+func ancestors(fd int) (map[place]bool, error) {
 	seen := map[place]bool{}
 	cur, err := unix.Dup(fd)
 	if err != nil {
-		return seen
+		return nil, fmt.Errorf("refusing: cannot walk up a directory: %w", err)
 	}
 	for {
-		p := identity(cur)
+		p, err := identity(cur)
+		if err != nil {
+			closeFD(cur)
+			return nil, err
+		}
 		if seen[p] {
 			closeFD(cur)
-			return seen
+			return seen, nil
 		}
 		seen[p] = true
 		parent, err := unix.Openat(cur, "..", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 		closeFD(cur)
 		if err != nil {
-			return seen
+			return nil, fmt.Errorf("refusing: cannot walk up a directory: %w", err)
 		}
 		cur = parent
 	}
@@ -291,6 +326,7 @@ func walk(path string) (int, error) {
 
 // openOwned opens .gemini and the owned directories under it without
 // following symlinks. A missing one is -1, or created when create is set.
+// Whatever it opened is returned even on error, for the caller to close.
 func openOwned(root int, create bool) (int, map[string]int, error) {
 	dirs := map[string]int{}
 	for _, name := range ownedDirs {
@@ -324,11 +360,11 @@ func openDir(parent int, name string, create bool) (int, error) {
 	return fd, nil
 }
 
-// checkBeforeWrite refuses customisation, .agents, and any owned file that
-// exists but is not a regular file.
+// checkBeforeWrite refuses customisation, .agents, any owned file that exists
+// but is not a regular file, and anything it cannot inspect.
 func checkBeforeWrite(root int, dirs map[string]int, files []ownedFile) error {
-	if exists(root, ".agents") {
-		return errors.New("refusing .agents in RIBBITTO_ARGON_HOME: customisation could add tools, hooks or instructions")
+	if found, err := exists(root, ".agents"); err != nil || found {
+		return errors.Join(errors.New("refusing .agents in RIBBITTO_ARGON_HOME: customisation could add tools, hooks or instructions"), err)
 	}
 	for name, fd := range dirs {
 		if fd < 0 {
@@ -339,23 +375,37 @@ func checkBeforeWrite(root int, dirs map[string]int, files []ownedFile) error {
 			names = append([]string{"hooks.json", "mcp_config.json"}, names...)
 		}
 		for _, n := range names {
-			if exists(fd, n) {
-				return fmt.Errorf("refusing .gemini/%s/%s: customisation could add tools, hooks or instructions", name, n)
+			if found, err := exists(fd, n); err != nil || found {
+				return errors.Join(fmt.Errorf("refusing .gemini/%s/%s: customisation could add tools, hooks or instructions", name, n), err)
 			}
 		}
 	}
 	for _, f := range files {
+		fd := dirs[f.dir]
+		if fd < 0 {
+			continue
+		}
 		var st unix.Stat_t
-		if fd := dirs[f.dir]; fd >= 0 && unix.Fstatat(fd, f.name, &st, unix.AT_SYMLINK_NOFOLLOW) == nil && st.Mode&unix.S_IFMT != unix.S_IFREG {
-			return fmt.Errorf("refusing .gemini/%s/%s: not a regular file", f.dir, f.name)
+		err := unix.Fstatat(fd, f.name, &st, unix.AT_SYMLINK_NOFOLLOW)
+		if errors.Is(err, unix.ENOENT) {
+			continue
+		}
+		if err != nil || st.Mode&unix.S_IFMT != unix.S_IFREG {
+			return errors.Join(fmt.Errorf("refusing .gemini/%s/%s: not a regular file", f.dir, f.name), err)
 		}
 	}
 	return nil
 }
 
-func exists(dir int, name string) bool {
+// exists reports whether name is in dir; an error other than "not found"
+// is returned, never read as absence.
+func exists(dir int, name string) (bool, error) {
 	var st unix.Stat_t
-	return unix.Fstatat(dir, name, &st, unix.AT_SYMLINK_NOFOLLOW) == nil
+	err := unix.Fstatat(dir, name, &st, unix.AT_SYMLINK_NOFOLLOW)
+	if errors.Is(err, unix.ENOENT) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // writeOwned writes an exclusive temporary file in dir and renames it over
@@ -401,14 +451,6 @@ func checkOwned(dir int, name string, want []byte) error {
 		return errors.New("it differs from the launcher's configuration")
 	}
 	return nil
-}
-
-func values(m map[string]int) []int {
-	var out []int
-	for _, fd := range m {
-		out = append(out, fd)
-	}
-	return out
 }
 
 func closeFD(fd int) {

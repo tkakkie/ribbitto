@@ -32,7 +32,7 @@ PostgreSQL with pgx, sqlc and goose.
 
 ## Development
 
-Requires Go (see `go.mod` for the version), Python 3 and Docker Compose for PostgreSQL 18.
+Requires Go (see `go.mod` for the version) and Docker Compose for PostgreSQL 18.
 
 ```sh
 cp .env.example .env

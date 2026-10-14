@@ -62,3 +62,4 @@ coverage and the normal document size limit for both the index and entries.
 - [31. Presence and typing are current state with a generation](docs/decisions/31-presence-and-typing-are-current-state-with-a-generation.md)
 - [32. Read state is a set of read ranges per member and channel](docs/decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)
 - [33. UI code: shared components and token utilities only](docs/decisions/33-ui-code-shared-components-and-token-utilities-only.md)
+- [34. Repository tooling is Go, with one-line Makefile recipes](docs/decisions/34-tooling-in-go.md)

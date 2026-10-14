@@ -53,7 +53,10 @@ func sourceRevision(source string, git func(dir string, args ...string) (string,
 	if source == "" || !filepath.IsAbs(source) {
 		return "", errors.New("RIBBITTO_ARGON_SOURCE must be the absolute path of a ribbitto checkout")
 	}
-	url, err := git(source, "remote", "get-url", "origin")
+	// The raw local value: remote get-url applies url.*.insteadOf, which the
+	// checkout's own .git/config could use to dress a fork up as ribbitto
+	// (Copilot on #1073).
+	url, err := git(source, "config", "--local", "--get", "remote.origin.url")
 	if err != nil {
 		return "", fmt.Errorf("reading the source checkout's origin: %w", err)
 	}
@@ -75,9 +78,9 @@ func isRibbitto(url string) bool {
 
 // git runs in dir with every GIT_* variable removed, because GIT_DIR,
 // GIT_WORK_TREE and the like override -C. Global and system configuration are
-// off, because a url.*.insteadOf there (found through HOME or XDG_CONFIG_HOME)
-// rewrites what remote get-url reports. Otherwise an inherited environment
-// could make a fork, or a review target, pass as the source (Codex on #1073).
+// off too, so nothing outside the checkout (HOME, XDG_CONFIG_HOME) changes
+// what it reads. Otherwise an inherited environment could make a review
+// target pass as the source (Codex on #1073).
 func git(dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

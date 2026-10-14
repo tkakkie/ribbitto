@@ -131,7 +131,7 @@ func TestSourceRevision(t *testing.T) {
 				if dir != tc.source {
 					t.Fatalf("git ran in %q, not the source %q", dir, tc.source)
 				}
-				if args[0] == "remote" {
+				if args[0] == "config" {
 					if tc.fail {
 						return "", errors.New("exit status 2")
 					}
@@ -227,6 +227,24 @@ func TestSourceRevisionIgnoresGlobalConfiguration(t *testing.T) {
 				t.Fatalf("err = %v, want the fork refused", err)
 			}
 		})
+	}
+}
+
+// A url.*.insteadOf in the checkout's own configuration must not make a fork
+// pass as ribbitto either: the raw remote.origin.url is what counts.
+func TestSourceRevisionIgnoresALocalRewrite(t *testing.T) {
+	const fork, ribbitto = "https://github.com/someone/fork", "https://github.com/tkakkie/ribbitto"
+	source := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", fork}, {"config", "url." + ribbitto + ".insteadOf", fork}} {
+		if out, err := exec.Command("git", append([]string{"-C", source}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if out, err := git(source, "remote", "get-url", "origin"); err != nil || out != ribbitto {
+		t.Fatalf("get-url = %q, %v; the fixture's rewrite is not in effect", out, err)
+	}
+	if _, err := sourceRevision(source, git); err == nil || !strings.Contains(err.Error(), "not github.com/tkakkie/ribbitto") {
+		t.Fatalf("err = %v, want the fork refused", err)
 	}
 }
 

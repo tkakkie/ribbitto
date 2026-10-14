@@ -76,9 +76,11 @@ jobs:
             exit 1
           fi
 
-      # make check is check-static, check-test and check-tools in order; this
-      # job runs the first and the last, and the tests of every package the
-      # test jobs below do not (tools/testshard's "rest" shard).
+      # make check is check-static, check-test, check-tools and
+      # check-launchers in order; this job runs the first and the third, and
+      # the tests of every package the test jobs below do not
+      # (tools/testshard's "rest" shard). The Makefile pins golangci-lint for
+      # both local checks and CI.
       - name: check-static
         run: make check-static
 
@@ -90,18 +92,8 @@ jobs:
           test -n "$packages"
           make check-test GO_TEST_PACKAGES="$packages"
 
-      # The Makefile pins golangci-lint for both local checks and CI. On a
-      # pull request, the AI launchers' self-tests run only when the diff from
-      # the base can affect them: the depth-2 checkout includes the merge
-      # commit and its first parent, HEAD^1, the base branch as merged. The
-      # event's base.sha is not used: once main moves, it is outside this
-      # checkout, and the fail-safe would run them every time (#560). An
-      # unresolvable base runs them (scripts/ai/launcher-tests.sh). On main
-      # and nightly, an empty base always runs them.
       - name: check-tools
-        env:
-          BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || '' }}
-        run: make check-tools LAUNCHER_TESTS_BASE="$BASE"
+        run: make check-tools
 
       - name: package-import edge changes
         # HEAD^1 is the PR merge commit's base, or the previous commit on main.
@@ -126,7 +118,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [loadgen, web]
+        shard: [loadgen, web, realtime]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -161,11 +153,33 @@ jobs:
           test -n "$packages"
           make check-test GO_TEST_PACKAGES="$packages"
 
+  # make check-launchers: the AI launchers' self-tests need neither Go nor
+  # PostgreSQL.
+  launchers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      # On a pull request, the AI launchers' self-tests run only when the
+      # diff from the base can affect them: the depth-2 checkout includes the merge
+      # commit and its first parent, HEAD^1, the base branch as merged. The
+      # event's base.sha is not used: once main moves, it is outside this
+      # checkout, and the fail-safe would run them every time (#560). An
+      # unresolvable base runs them (scripts/ai/launcher-tests.sh). On main
+      # and nightly, an empty base always runs them.
+      - name: check-launchers
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || '' }}
+        run: make check-launchers LAUNCHER_TESTS_BASE="$BASE"
+
   # The required check. A job whose needs failed is skipped by default, and a
   # skipped job satisfies a required check, so this one always runs and
   # passes only when every job it needs succeeded.
   ci:
-    needs: [checks, test]
+    needs: [checks, test, launchers]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -174,4 +188,4 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
         run: |
           printf '%s\n' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          printf '%s\n' "$NEEDS" | jq -e 'length == 2 and all(.[]; .result == "success")' > /dev/null
+          printf '%s\n' "$NEEDS" | jq -e 'length == 3 and all(.[]; .result == "success")' > /dev/null

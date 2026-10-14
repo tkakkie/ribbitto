@@ -26,6 +26,7 @@ var shards = []struct {
 }{
 	{"loadgen", []string{"./cmd/loadgen", "./cmd/seed"}},
 	{"web", []string{"./cmd/ribbitto", "./internal/web"}},
+	{"realtime", []string{"./internal/realtime"}},
 }
 
 const rest = "rest"

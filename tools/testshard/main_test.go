@@ -7,15 +7,16 @@ import (
 )
 
 func TestPartition(t *testing.T) {
-	all := []string{".", "./cmd/loadgen", "./cmd/ribbitto", "./cmd/seed", "./internal/kernel", "./internal/web", "./tools/new"}
+	all := []string{".", "./cmd/loadgen", "./cmd/ribbitto", "./cmd/seed", "./internal/kernel", "./internal/realtime", "./internal/realtime/realtimepg", "./internal/web", "./tools/new"}
 	parts, err := partition(all)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for name, want := range map[string][]string{
-		"loadgen": {"./cmd/loadgen", "./cmd/seed"},
-		"web":     {"./cmd/ribbitto", "./internal/web"},
-		rest:      {".", "./internal/kernel", "./tools/new"},
+		"loadgen":  {"./cmd/loadgen", "./cmd/seed"},
+		"web":      {"./cmd/ribbitto", "./internal/web"},
+		"realtime": {"./internal/realtime"},
+		rest:       {".", "./internal/kernel", "./internal/realtime/realtimepg", "./tools/new"},
 	} {
 		if !slices.Equal(parts[name], want) {
 			t.Errorf("shard %s = %v, want %v", name, parts[name], want)
@@ -27,7 +28,7 @@ func TestPartition(t *testing.T) {
 }
 
 func TestPartitionRefusesAMissingNamedPackage(t *testing.T) {
-	_, err := partition([]string{"./cmd/loadgen", "./cmd/ribbitto", "./internal/web"})
+	_, err := partition([]string{"./cmd/loadgen", "./cmd/ribbitto", "./internal/realtime", "./internal/web"})
 	if err == nil || !strings.Contains(err.Error(), "./cmd/seed") {
 		t.Fatalf("partition without ./cmd/seed: err = %v", err)
 	}
@@ -85,14 +86,14 @@ func TestScheduled(t *testing.T) {
 	for _, tc := range []struct {
 		name, source, want string
 	}{
-		{"every shard once", "        shard: [loadgen, web]\n" + restStep, ""},
-		{"named shard omitted", "        shard: [loadgen]\n" + restStep, "shard web 0 times"},
-		{"named shard repeated", "        shard: [loadgen, web, web]\n" + restStep, "shard web 2 times"},
-		{"unknown shard", "        shard: [loadgen, web, rest]\n" + restStep, `unknown shard "rest"`},
+		{"every shard once", "        shard: [loadgen, web, realtime]\n" + restStep, ""},
+		{"named shard omitted", "        shard: [loadgen, realtime]\n" + restStep, "shard web 0 times"},
+		{"named shard repeated", "        shard: [loadgen, web, web, realtime]\n" + restStep, "shard web 2 times"},
+		{"unknown shard", "        shard: [loadgen, web, realtime, rest]\n" + restStep, `unknown shard "rest"`},
 		{"no matrix", restStep, "found 0"},
-		{"two matrices", "shard: [loadgen, web]\nshard: [loadgen, web]\n" + restStep, "found 2"},
-		{"rest not run", "        shard: [loadgen, web]\n", "runs in 0 steps"},
-		{"rest run twice", "        shard: [loadgen, web]\n" + restStep + restStep, "runs in 2 steps"},
+		{"two matrices", "shard: [loadgen, web, realtime]\nshard: [loadgen, web, realtime]\n" + restStep, "found 2"},
+		{"rest not run", "        shard: [loadgen, web, realtime]\n", "runs in 0 steps"},
+		{"rest run twice", "        shard: [loadgen, web, realtime]\n" + restStep + restStep, "runs in 2 steps"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := scheduled(tc.source)

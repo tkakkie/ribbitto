@@ -35,7 +35,7 @@ schema-docs:
 
 # Regenerates docs/dependencies.md; make check fails when it is stale.
 deps:
-	bash scripts/deps.sh
+	go -C tools run ./deps ..
 
 api:
 	go -C tools run ./apicheck ..
@@ -123,8 +123,7 @@ check-tools:
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck
 	go -C tools run ./apicheck -check ..
-	bash scripts/deps.sh --check
-	bash scripts/deps_test.sh
+	go -C tools run ./deps --check ..
 	bash scripts/fingerprint_test.sh
 	go -C tools vet ./...
 	go -C tools test -race -count=1 ./...
@@ -150,7 +149,7 @@ check-ai:
 prepush: $(TEMPL) $(TAILWIND)
 	bash scripts/check-unchanged.sh $(MAKE) generate css
 	go -C tools run ./apicheck -check ..
-	bash scripts/deps.sh --check
+	go -C tools run ./deps --check ..
 	go -C tools run ./docscheck ..
 	$(MAKE) lint
 

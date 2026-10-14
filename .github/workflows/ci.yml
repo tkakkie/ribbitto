@@ -98,7 +98,7 @@ jobs:
       - name: package-import edge changes
         # HEAD^1 is the PR merge commit's base, or the previous commit on main.
         run: |
-          changes=$(bash scripts/deps.sh --diff HEAD^1)
+          changes=$(go -C tools run ./deps --diff HEAD^1 ..)
           # The log repeats the summary for readers who cannot see summaries.
           printf '%s\n' "$changes" | tee -a "$GITHUB_STEP_SUMMARY"
           printf '%s\n' "$changes" | awk '/^- Added: `/ {

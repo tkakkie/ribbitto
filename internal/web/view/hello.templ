@@ -20,9 +20,7 @@ templ Hello(stylesheetURL string, viewer Viewer) {
 						{ i18n.T(ctx, "hello.signed_in_as") }
 						<span class="font-semibold text-fg">{ viewer.DisplayName }</span>
 					</p>
-					<form method="post" action="/signout">
-						@submitButton(buttonWelcomeSecondary, "signout.submit")
-					</form>
+					@signOutButton(buttonWelcomeSecondary)
 				</div>
 			} else {
 				<div class="flex flex-wrap gap-6">
@@ -39,7 +37,12 @@ templ Hello(stylesheetURL string, viewer Viewer) {
 // SignOutButton is a form, because signing out changes state and so must be
 // a POST.
 templ SignOutButton() {
+	@signOutButton(buttonSecondary)
+}
+
+// signOutButton shares the POST form while welcome pages choose a phone target.
+templ signOutButton(kind buttonKind) {
 	<form method="post" action="/signout">
-		@submitButton(buttonSecondary, "signout.submit")
+		@submitButton(kind, "signout.submit")
 	</form>
 }

@@ -21,6 +21,7 @@ Today's shared controls:
 | `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up); sign-in passes empty field errors and keeps its form-level alert |
 | `iconButton` | `internal/web/view/controls.templ` | a button that shows only an icon (its child) and has an accessible name; can open a popover |
 | `welcomeLayout` | `internal/web/view/welcome.templ` | the shared brand and content columns for setup, sign-in, sign-up, home and rate-limit pages; below `desk`, a short brand strip without the composition above the content |
+| `signOutButton` | `internal/web/view/hello.templ` | the shared POST sign-out form, taking a button kind; home uses `buttonWelcomeSecondary`, and `SignOutButton` keeps `buttonSecondary` for the account menu |
 | `unreadBadge` | `internal/web/view/channel.templ` | an unread count with its screen-reader text |
 | `Icon` | `internal/web/view/icon.templ` | a decorative Fluent icon from the vendored sprite ([Icons](ui-code.md#icons)) |
 | `Avatar` | `internal/web/view/avatar.templ` | a fixed 36 px round initial; six pastel pairs chosen from the member ID, hidden from assistive technology beside the visible name |

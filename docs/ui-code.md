@@ -93,7 +93,8 @@ page ([side panels](ui-components.md#side-panels)).
 **Safe area** (#970). The viewport meta has `viewport-fit=cover`, without
 which `env(safe-area-inset-*)` stays 0, so pages extend under a phone's
 home indicator and, in landscape, its notch. The base style pads `body`
-by the side insets, as the default fit did; what meets the bottom edge
+by the side insets, as the default fit did; the layout gives `body` the
+`base` background so these bands match the page. What meets the bottom edge
 below `desk` uses `pb-safe-<n>`, `n` spacing steps plus the bottom inset:
 `pb-safe-0` on the bottom navigation, `pb-safe-4` on the account sheet
 and conversation composer (`pb-safe-3` on the move form), and on the

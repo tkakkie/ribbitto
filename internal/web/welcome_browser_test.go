@@ -80,11 +80,13 @@ func testWelcomeBrowser(t *testing.T, browser *rod.Browser) {
 							const main = document.querySelector('main'), card = main.firstElementChild, brand = card.firstElementChild, content = card.lastElementChild;
 							const composition = brand.querySelector('[aria-hidden]'), logo = brand.querySelector('img');
 							if (root.lang !== lang) return 'wrong language';
+							if (getComputedStyle(document.body).backgroundColor !== getComputedStyle(main).backgroundColor) return 'body safe-area background differs from main';
 							if (!brand.checkVisibility() || !logo.checkVisibility() || !logo.naturalWidth || brand.querySelectorAll('p').length !== 2 || [...brand.querySelectorAll('p')].some(e => !e.checkVisibility() || !e.textContent.trim())) return 'brand strip missing logo, name or tagline';
 							if (composition.checkVisibility() === phone) return 'composition visibility';
 							const probe = document.createElement('div'); probe.style.backgroundColor = 'var(--rb-selected)'; brand.append(probe);
 							const tint = getComputedStyle(probe).backgroundColor; probe.remove();
 							if (getComputedStyle(brand).backgroundColor !== tint) return 'brand tint';
+							if (getComputedStyle(brand).rowGap !== (phone ? '8px' : '32px')) return 'brand gap';
 							if (phone && (box(brand).height > 192 || box(brand).bottom > box(content).top)) return 'brand is not a short strip above content';
 							if (!phone && (box(brand).right !== box(content).left || box(brand).top !== box(content).top || getComputedStyle(brand).paddingTop !== '48px' || composition.querySelectorAll('img').length !== 4)) return 'desktop welcome columns changed';
 							const inputs = [...document.querySelectorAll('input:not([type=hidden])')], buttons = [...document.querySelectorAll('button')];

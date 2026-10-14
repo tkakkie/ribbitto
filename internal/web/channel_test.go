@@ -256,7 +256,7 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 		t.Fatal(err)
 	}
 	stream := "/organizations/acme/events?after=42&want=sidebar&channel=" + strings.TrimPrefix(view.ChannelURL("acme", channel), "/organizations/acme/channels/")
-	mains, topics, scripts := 0, 0, map[string]bool{}
+	mains, topics, streams, scripts := 0, 0, 0, map[string]bool{}
 	for n := range doc.Descendants() {
 		switch {
 		case n.DataAtom == atom.Main:
@@ -269,14 +269,17 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 			if n.Parent == nil || attr(n.Parent, "id") != view.ChannelDOMID(channel) {
 				t.Errorf("topics are not nested in %s", view.ChannelDOMID(channel))
 			}
-		case attr(n, "id") == "organization-stream" && attr(n, "sse-connect") != stream:
-			t.Errorf("stream %q, want %q", attr(n, "sse-connect"), stream)
+		case attr(n, "id") == "organization-stream":
+			streams++
+			if attr(n, "sse-connect") != stream {
+				t.Errorf("stream %q, want %q", attr(n, "sse-connect"), stream)
+			}
 		case n.DataAtom == atom.Script:
 			scripts[attr(n, "src")] = true
 		}
 	}
-	if mains != 1 || topics != 1 {
-		t.Errorf("%d mains and %d topic lists, want one each", mains, topics)
+	if mains != 1 || topics != 1 || streams != 1 {
+		t.Errorf("%d mains, %d topic lists and %d streams, want one each", mains, topics, streams)
 	}
 	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v9.js"] || scripts["/static/read-visibility-v4.js"] || scripts["/static/message-composer-v5.js"] {
 		t.Errorf("list page scripts %v", scripts)

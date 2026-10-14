@@ -26,8 +26,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
-// TestChannelListBrowser drives the phone list page and the back link through
-// the production handler, stream and scripts (#969).
+// TestChannelListBrowser drives the channel list page at phone and desktop
+// widths through the production handler, stream and scripts (#969).
 func TestChannelListBrowser(t *testing.T) {
 	unavailable := func(reason string) {
 		t.Helper()

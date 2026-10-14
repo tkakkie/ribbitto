@@ -242,3 +242,101 @@ func TestChannelCreationAdmission(t *testing.T) {
 		t.Fatal("refusal reached channel creation")
 	}
 }
+
+// assertChannelListPage checks the list page: the list is the one <main>, the
+// channel's row nests the topics, the stream is sidebar-only and nothing reads
+// or posts.
+func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
+	t.Helper()
+	if !strings.Contains(body, "<title>lilypads · Acme Corporation · ribbitto</title>") {
+		t.Error("list page title missing")
+	}
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream := "/organizations/acme/events?after=42&want=sidebar&channel=" + strings.TrimPrefix(view.ChannelURL("acme", channel), "/organizations/acme/channels/")
+	mains, topics, streams, scripts := 0, 0, 0, map[string]bool{}
+	for n := range doc.Descendants() {
+		switch {
+		case n.DataAtom == atom.Main:
+			mains++
+			if find(n, atom.H1) == nil || !strings.Contains(nodeIDs(n), " sidebar-channels ") {
+				t.Error("the main does not hold the heading and the list")
+			}
+		case attr(n, "id") == "sidebar-topics":
+			topics++
+			if n.Parent == nil || attr(n.Parent, "id") != view.ChannelDOMID(channel) {
+				t.Errorf("topics are not nested in %s", view.ChannelDOMID(channel))
+			}
+		case attr(n, "id") == "organization-stream":
+			streams++
+			if attr(n, "sse-connect") != stream {
+				t.Errorf("stream %q, want %q", attr(n, "sse-connect"), stream)
+			}
+		case n.DataAtom == atom.Script:
+			scripts[attr(n, "src")] = true
+		}
+	}
+	if mains != 1 || topics != 1 || streams != 1 {
+		t.Errorf("%d mains, %d topic lists and %d streams, want one each", mains, topics, streams)
+	}
+	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v9.js"] || scripts["/static/read-visibility-v4.js"] || scripts["/static/message-composer-v5.js"] {
+		t.Errorf("list page scripts %v", scripts)
+	}
+	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`, `id="conversation"`} {
+		if strings.Contains(body, absent) {
+			t.Errorf("list page renders %s", absent)
+		}
+	}
+}
+
+// nodeIDs lists the ids within n, space-separated and padded.
+func nodeIDs(n *html.Node) string {
+	ids := " "
+	for d := range n.Descendants() {
+		if id := attr(d, "id"); id != "" {
+			ids += id + " "
+		}
+	}
+	return ids
+}
+
+func TestChannelListPage(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name, query string
+		channel     kernel.ID
+		status      int
+	}{
+		{"default channel", "", kernel.ID{1}, 200},
+		{"named channel", "?channel=" + strings.TrimPrefix(view.ChannelURL("acme", kernel.ID{2}), "/organizations/acme/channels/"), kernel.ID{2}, 200},
+		{"unknown channel", "?channel=09000000-0000-0000-0000-000000000000", kernel.ID{}, 404},
+		{"malformed channel", "?channel=bad", kernel.ID{}, 404},
+		{"empty channel", "?channel=", kernel.ID{}, 404},
+		{"repeated channel", "?channel=01000000-0000-0000-0000-000000000000&channel=01000000-0000-0000-0000-000000000000", kernel.ID{}, 404},
+		{"malformed query", "?channel=%zz", kernel.ID{}, 404},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, err := NewHandler("", catalogues, testServices(asAlice))
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest("GET", "/organizations/acme/channels"+tt.query, nil)
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tt.status {
+				t.Fatalf("status %d, body %s", w.Code, w.Body.String())
+			}
+			if tt.status == 200 {
+				assertChannelListPage(t, w.Body.String(), tt.channel)
+			} else if strings.Contains(w.Body.String(), "Acme") {
+				t.Fatal("404 carries organisation data")
+			}
+		})
+	}
+}

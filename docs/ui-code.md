@@ -14,15 +14,19 @@ in [`ui-components.md`](ui-components.md).
 Channels are listed by name, and the current channel nests its topics: the
 default first, then by name, at most 50 ([`topics.md`](domain/topics.md)).
 The order never changes to bring the current row forward (#922). Instead
-`sidebar-scroll-v1.js`, once on load, scrolls the sidebar's own pane (the
-`<aside>` around `#sidebar-channels`) so that the target row is in view,
+`sidebar-scroll-v2.js`, once on load, scrolls the sidebar's own pane (the
+`<aside>` around `#sidebar-channels`, or the list page's `<main>`) so that the target row is in view,
 centred, when it is not already: the selected topic's row when it is
 listed, otherwise the current channel's row (an unlisted topic, or the
 feed). It moves neither the window nor focus, and scrolls instantly.
 Live recounts replace `#sidebar-channels` inside that pane, which keeps its
 scroll position, so the script does nothing then: the member's position
-wins. Without JavaScript the sidebar opens at its top. At phone width
-(M6) the sidebar is not shown; its content becomes the channel list page.
+wins. Without JavaScript the sidebar opens at its top, unless the URL's
+fragment names a row. The channel list page
+(`/organizations/{slug}/channels?channel=<id>`, #969) is the sidebar's
+content as the page's `<main>`, with the same pane, script and recounts;
+below `desk` it fills the width beside the app bar, and the block that
+prompts to open a channel at desktop width is hidden.
 
 ## Styles
 
@@ -71,7 +75,10 @@ defined in `:root` and overridden in the dark colour scheme.
 **Breakpoints** ([`ui.md`](ui.md#layout-principles), #966): below 852 px
 (53.25 rem) the phone layout; from 852 px the desktop frame with a side
 panel overlaying the conversation; from 1200 px (75 rem) the panel beside
-it. They become `@theme` breakpoints with the first issue that uses them.
+it. The first is the `@theme` breakpoint `--breakpoint-desk` (#969): `desk:`
+utilities apply from 852 px and `max-desk:` below it, so phone overrides
+leave the desktop classes as they are. The 1200 px one becomes a token
+with the issue that uses it (#972).
 
 **Layers.** Only four `z-index` values are used, through Tailwind's
 built-in utilities, so no z-index tokens are added: `z-10` for something

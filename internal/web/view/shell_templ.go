@@ -189,7 +189,7 @@ func channelCreateForm(page ChannelPage, popover bool) templ.Component {
 			templ_7745c5c3_Var9 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var10 = []any{"flex-col gap-2 text-body text-fg", templ.KV("hidden open:flex inset-auto left-24 top-20 m-0 w-72 rounded-xl border border-border bg-surface p-4 shadow-popover", popover), templ.KV("flex mx-1 mt-3 rounded-xl bg-surface p-3 shadow-block", !popover)}
+		var templ_7745c5c3_Var10 = []any{"flex-col gap-2 text-body text-fg", templ.KV("hidden open:flex inset-auto left-24 top-20 m-0 w-72 max-desk:inset-x-4 max-desk:w-auto rounded-xl border border-border bg-surface p-4 shadow-popover", popover), templ.KV("flex mx-1 mt-3 rounded-xl bg-surface p-3 shadow-block", !popover)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var10...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -237,7 +237,7 @@ func channelCreateForm(page ChannelPage, popover bool) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "channel.name"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/shell.templ`, Line: 66, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/shell.templ`, Line: 67, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -259,7 +259,7 @@ func channelCreateForm(page ChannelPage, popover bool) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, page.Error))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/shell.templ`, Line: 69, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/shell.templ`, Line: 70, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -277,7 +277,7 @@ func channelCreateForm(page ChannelPage, popover bool) templ.Component {
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "channel.name_help"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/shell.templ`, Line: 71, Col: 95}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/shell.templ`, Line: 72, Col: 95}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 			if templ_7745c5c3_Err != nil {

@@ -4,7 +4,8 @@
   // list replacements happen inside the scrolling pane, which keeps its own
   // position, and moving it then would fight a member who has scrolled.
   const list = document.getElementById("sidebar-channels");
-  const pane = list?.closest("aside");
+  // The pane is the sidebar's <aside>, or the list page's <main>.
+  const pane = list?.closest("aside, main");
   if (!pane) return;
   // A listed selection is the row marked as the current page. An unlisted
   // topic falls back to its channel, the row that nests the topic list.

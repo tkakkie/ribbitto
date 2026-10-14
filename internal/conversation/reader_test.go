@@ -30,6 +30,9 @@ type snapshotFake struct {
 	*postingFake
 	historyData
 	organizationID kernel.ID
+	// Sentinel lists, empty unless a test needs to see them reach its page.
+	channels []conversation.Channel
+	topics   []conversation.Topic
 }
 
 func (f *snapshotFake) InSnapshot(_ context.Context, fn func(platform.Snapshot) error) error {
@@ -53,7 +56,7 @@ func (f *snapshotFake) ListChannels(_ context.Context, organizationID kernel.ID)
 	if organizationID != f.organizationID {
 		f.t.Fatalf("ListChannels organisation = %x, want membership's %x", organizationID, f.organizationID)
 	}
-	return nil, f.step("channels")
+	return f.channels, f.step("channels")
 }
 func (f *snapshotFake) GetTopic(_ context.Context, _, _, id kernel.ID) (conversation.Topic, error) {
 	return conversation.Topic{ID: id}, f.step("selected")
@@ -62,7 +65,7 @@ func (f *snapshotFake) ListTopics(_ context.Context, _, _ kernel.ID, limit int) 
 	if limit != 50 {
 		f.t.Fatal("wrong sidebar limit:", limit)
 	}
-	return nil, f.step("topics")
+	return f.topics, f.step("topics")
 }
 func (f *snapshotFake) ListMessagesBefore(ctx context.Context, orgID, ch kernel.ID, topic *kernel.ID, before *int64, limit int32) ([]conversation.Message, error) {
 	if err := f.step("history"); err != nil {
@@ -166,5 +169,46 @@ func TestReaderSidebarSnapshot(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// sidebarCountsFake adds the counts-only read, so a page that asked for first
+// unread sequences would record "counts" instead of "counts only".
+type sidebarCountsFake struct{ *snapshotFake }
+
+func (f sidebarCountsFake) ReadCounts(context.Context, org.Membership, kernel.ID, []kernel.ID, []kernel.ID, *kernel.ID) (conversation.PageCounts, error) {
+	counts := conversation.PageCounts{ChannelCounts: map[kernel.ID]int64{{3}: 4}, TopicCounts: map[kernel.ID]int64{{5}: 6}}
+	return counts, f.step("counts only")
+}
+
+func TestReaderChannelListSnapshot(t *testing.T) {
+	membership := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
+	order := []string{"snapshot", "reads", "channel", "channels", "topics", "bind cursor", "cursor", "bind counts", "counts only"}
+	for _, fail := range []string{"", "channel", "channels", "topics", "cursor", "counts only"} {
+		t.Run("failure="+fail, func(t *testing.T) {
+			f := &snapshotFake{postingFake: &postingFake{t: t, err: conversation.ErrMessageNotFound}, organizationID: membership.Organization.ID,
+				channels: []conversation.Channel{{ID: kernel.ID{3}}}, topics: []conversation.Topic{{ID: kernel.ID{5}}}}
+			f.fail = fail
+			reader := conversation.NewReader(f,
+				func(s platform.Snapshot) conversation.ReadStore { f.bound(s, "reads"); return f },
+				nil, nil,
+				func(s platform.Snapshot) conversation.EventCursor { f.bound(s, "bind cursor"); return f },
+				func(s platform.Snapshot) conversation.PageCounter {
+					f.bound(s, "bind counts")
+					return sidebarCountsFake{f}
+				})
+			page, err := reader.ChannelList(t.Context(), membership, kernel.ID{2})
+			want, wantErr := order, error(nil)
+			if fail != "" {
+				want, wantErr = order[:slices.Index(order, fail)+1], f.err
+			}
+			if !reflect.DeepEqual(f.calls, want) || !errors.Is(err, wantErr) {
+				t.Fatalf("calls/error = %v/%v, want %v/%v", f.calls, err, want, wantErr)
+			}
+			if fail == "" && (page.EventCursor != 7 || page.Topic != nil || !reflect.DeepEqual(page.Channels, f.channels) || !reflect.DeepEqual(page.Topics, f.topics) ||
+				page.ChannelCounts[kernel.ID{3}] != 4 || page.TopicCounts[kernel.ID{5}] != 6) {
+				t.Fatalf("page = %+v, want the snapshot's lists, counts and cursor 7", page)
+			}
+		})
 	}
 }

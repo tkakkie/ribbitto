@@ -10,7 +10,8 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   handler.
 - **Pages are titled.** ✓ Every page's `<title>` names the page first and
   the app last, joined by ` · `: a localised purpose (`Sign in · ribbitto`),
-  or the channel and organisation (`general · Acme · ribbitto`). The app
+  or the channel and organisation (`general · Acme · ribbitto`); the channel
+  list page names the list and the organisation (`lilypads · Acme · ribbitto`). The app
   name alone fails the check.
 - **Structure means something.** ✓ Every page has `lang` and exactly one
   `<main>`; ✓ headings do not skip levels. Use `<nav>`, `<header>` and lists

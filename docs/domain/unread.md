@@ -81,7 +81,7 @@ applied.
 and later the newest durable sequence the visible page has applied, covering posts
 and moves. An application while hidden counts only once the page becomes visible.
 At most one reading POST is in flight; afterwards it sends the newest shown
-cursor. Hidden tabs and `?before=` pages send no reading POST.
+cursor. Hidden tabs, `?before=` pages and the channel list page send no reading POST.
 A cursor above the organisation's committed `event_seq` is refused, so a
 later message is never read in advance. A message that is still unread
 when the POST runs, but has moved out of the topic since the page showed

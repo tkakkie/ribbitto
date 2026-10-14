@@ -19,6 +19,8 @@ func TestReducedMotion(t *testing.T) {
 	const reduce, safe = "@media (prefers-reduced-motion:reduce)", "@media (prefers-reduced-motion:no-preference)"
 	property := regexp.MustCompile(`^(animation|transition|scale|rotate|translate|transform)(-[a-z-]+)?$`)
 	state := regexp.MustCompile(`:(hover|active|focus)`)
+	// Minified, ::before and ::after are written :before and :after.
+	pseudo := regexp.MustCompile(`::[a-z-]+`)
 	reset, built := false, map[string]bool{}
 	for _, rule := range cssRules(string(source)) {
 		context := strings.Join(rule.context, " ")
@@ -37,6 +39,11 @@ func TestReducedMotion(t *testing.T) {
 			case match == nil:
 			case match[1] == "animation" || match[1] == "transition":
 				built[rule.selector] = true
+				// The reset reaches elements, ::before and ::after only, not a
+				// sheet's ::backdrop or other pseudo-elements.
+				if pseudo.MatchString(rule.selector) && !strings.Contains(context, safe) {
+					t.Errorf("%s: %s on a pseudo-element the reset misses, outside %s", rule.selector, name, safe)
+				}
 				// Layered !important would outrank the unlayered reset.
 				if strings.Contains(value, "!important") {
 					t.Errorf("%s: %s is !important, so reduced motion cannot reset it", rule.selector, name)
@@ -71,6 +78,68 @@ func TestNoViewTransitions(t *testing.T) {
 	}
 	if strings.Contains(string(source), "view-transition") {
 		t.Error("built stylesheet declares a view transition (@view-transition, ::view-transition or a view-transition property)")
+	}
+}
+
+// TestHoverOnlyWithHover proves on the built stylesheet that every hover
+// style applies only under @media (hover:hover): a tap leaves the tapped
+// element :hover, and a touch screen must not keep it highlighted
+// (docs/ui-code.md#motion). Tailwind's hover: utilities do this; a
+// hand-written rule must too.
+func TestHoverOnlyWithHover(t *testing.T) {
+	source, err := os.ReadFile("css/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hovers := 0
+	for _, rule := range cssRules(string(source)) {
+		if strings.Contains(rule.selector, ":hover") {
+			hovers++
+			if !strings.Contains(strings.Join(rule.context, " "), "@media (hover:hover)") {
+				t.Errorf("%s: a hover style outside @media (hover:hover)", rule.selector)
+			}
+		}
+	}
+	if hovers == 0 {
+		t.Error("no hover style in the built stylesheet, so this test proves nothing")
+	}
+}
+
+// TestArrivalMotion proves on the built stylesheet that the arrival motion,
+// the pill, the panel and below desk its sheet, shows its content from the
+// first frame (docs/ui-code.md#motion): its keyframes only move, never fade
+// or hide, and no motion waits for a delay.
+func TestArrivalMotion(t *testing.T) {
+	source, err := os.ReadFile("css/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	moves := regexp.MustCompile(`^(transform|translate|scale)$`)
+	times := regexp.MustCompile(`var\(--duration-[a-z]+\)|(^|\s)[\d.]+m?s\b`)
+	keyframes := map[string]bool{}
+	for _, rule := range cssRules(string(source)) {
+		context := strings.Join(rule.context, " ")
+		// The typing dots, the only loop, are decorative and pulse by opacity.
+		frames := strings.Contains(context, "@keyframes rb-")
+		if frames {
+			keyframes[context] = true
+		}
+		for _, declaration := range strings.Split(rule.declarations, ";") {
+			name, value, _ := strings.Cut(declaration, ":")
+			switch {
+			case frames && !moves.MatchString(name):
+				t.Errorf("%s %s: %s; arrival keyframes only move, so content shows from the first frame", context, rule.selector, declaration)
+			case name == "animation-delay" || name == "transition-delay",
+				name == "animation" && strings.HasPrefix(value, "rb-") && len(times.FindAllString(value, -1)) != 1:
+				t.Errorf("%s: %s delays the motion", rule.selector, declaration)
+			}
+		}
+	}
+	// The phone's sheet rises by the panel's keyframes redefined under max-desk:.
+	for _, want := range []string{"@keyframes rb-pill-in", "@keyframes rb-panel-in", "@media not all and (min-width:53.25rem) @keyframes rb-panel-in"} {
+		if !keyframes[want] {
+			t.Errorf("built stylesheet lacks %s", want)
+		}
 	}
 }
 

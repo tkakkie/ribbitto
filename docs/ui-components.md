@@ -83,3 +83,28 @@ updates the page behind. The header's **Mark as read** is hidden below
 `wide`, where the overview shows a `submitButtonFor` the same
 `#read-form`. Without JavaScript the panel is its own page: its links still
 close it and page the members.
+
+## Arrival motion
+
+The selection pill and the side panel move only on arrival
+([motion](ui-code.md#motion), #921). `arrival-v1.js` marks the root
+(`data-arrive-pill`, `data-arrive-panel`) and CSS animates under those
+marks. It reads `navigation.activation` and stores nothing: only a `push`
+whose previous entry is same-origin (a link, or a form's redirect) is
+marked, the pill when the place (the path without `/members` or
+`/overview`) changed, the panel when one newly opened. A first load, a
+reload or Back/Forward is never marked; neither is a panel switch or close.
+A mark is removed when its animation ends, the pill's earlier at the first
+live `#sidebar-channels` replacement, so a live list never grows its pill
+again; one with nothing to animate (reduced motion, a hidden row) is
+removed at `DOMContentLoaded`. The script sits in `<head>` and is not
+deferred: it must mark the page before the first paint, or the pill shows
+at rest first. Browsers without the Navigation API show no arrival motion.
+`testArrivalBrowser` (`internal/web/arrival_browser_test.go`) checks these
+cases in the shared `TestBrowser` suite.
+
+Below `desk` a conversation hides the sidebar, so its pill never moves; the
+list page's pill grows in when a conversation's back link leads there, and
+an opening panel rises as the sheet, because `rb-panel-in` is redefined
+under `max-desk:`. `testMotionTouchBrowser`
+(`internal/web/motion_touch_browser_test.go`) checks that nothing else moves.

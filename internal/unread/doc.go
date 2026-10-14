@@ -27,7 +27,8 @@
 // combine it with an injected message counter in the same snapshot.
 // Process-local member change generations share wake channels only among active
 // watches of one organisation/member; releasing the last watch removes its state.
-// Publication wakes only matching tabs; their full recounts retain per-tab costs.
+// Read publications and explicit resync requests wake only matching tabs;
+// their full recounts retain per-tab costs.
 // Persisted read state remains authoritative across subscription lifetimes;
 // multiple processes need shared invalidation and subscription coordination.
 package unread

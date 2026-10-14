@@ -22,6 +22,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -54,7 +55,7 @@ func TestReadPostBrowser(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
 			pool, scope := feedFixture(t)
-			handler, sessions, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels})
+			handler, sessions, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, hub: realtime.NewHub()})
 			feedRequire(t, err)
 			var account, topicID kernel.ID
 			feedRequire(t, pool.QueryRow(ctx, "SELECT m.account_id,c.default_topic_id FROM member m JOIN channel c ON c.organization_id=m.organization_id WHERE m.organization_id=$1 AND m.id=$2 AND c.id=$3", scope.OrganizationID, scope.MemberID, scope.ChannelID).Scan(&account, &topicID))
@@ -94,7 +95,8 @@ func TestReadPostBrowser(t *testing.T) {
 				}
 				// Supply the real session without making this test about signing in.
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: token})
-				if r.Method == "POST" {
+				// Resync and typing signals are neither reads nor compositions.
+				if r.Method == "POST" && !strings.HasSuffix(r.URL.Path, "/sidebar/resync") && !strings.HasSuffix(r.URL.Path, "/typing") {
 					posts.Add(1)
 					if strings.HasSuffix(r.URL.Path, "/read") {
 						if active.Add(1) != 1 {

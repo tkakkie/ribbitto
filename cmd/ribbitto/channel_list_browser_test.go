@@ -163,10 +163,11 @@ func TestChannelListBrowser(t *testing.T) {
 	}
 
 	post(t, owner, view.ChannelURL("list", f.Channel.ID), "first")
-	page.MustWait(`(general, n) => window.recounts > n && document.getElementById('link-' + general).querySelector('.sr-only') && !document.querySelector('.htmx-settling')`, general, first.Recounts)
+	// Another member's post reaches the reader as an unread frame, not a recount.
+	page.MustWait(`general => document.getElementById('link-' + general).querySelector('[data-unread-count]:not([hidden]) > .sr-only')?.previousElementSibling?.textContent === '1'`, general)
 	live := read()
-	if live.Badge != "1" || live.Scroll != first.Scroll || !live.Nested || live.Open != 1 || live.URL != first.URL || len(live.Small) != 0 {
-		t.Fatalf("live recount: %+v, want count 1 at scroll %v, still nested", live, first.Scroll)
+	if live.Badge != "1" || live.Recounts != first.Recounts || live.Scroll != first.Scroll || !live.Nested || live.Open != 1 || live.URL != first.URL || len(live.Small) != 0 {
+		t.Fatalf("live count: %+v, want count 1 without a recount at scroll %v, still nested", live, first.Scroll)
 	}
 
 	// A reconnect recounts from the database, so a corrupted count is restored.

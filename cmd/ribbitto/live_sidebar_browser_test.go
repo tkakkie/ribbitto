@@ -50,7 +50,7 @@ func TestLiveSidebarBrowser(t *testing.T) {
 		document.addEventListener('htmx:sseMessage', e => {
 			if (e.detail.type === 'sidebar') document.body.dataset.recounts = String(+(document.body.dataset.recounts || 0) + 1);
 		});`)
-	page.MustNavigate(f.reader.server.URL + f.path).MustWaitLoad()
+	page.MustNavigate(f.reader.server.URL + f.path + "?before=3").MustWaitLoad()
 	page.MustWait(`() => +document.body.dataset.recounts >= 1 && !document.querySelector('.htmx-settling')`)
 	source, channel := view.TopicDOMID(f.source), view.ChannelDOMID(f.channel)
 	if !page.MustEval(`id => document.getElementById('link-' + id).getAttribute('aria-current') === 'page' &&
@@ -101,9 +101,11 @@ func TestLiveSidebarBrowser(t *testing.T) {
 	post(t, f.owner, f.path, "unlisted source stays live")
 	page.MustWait(`() => document.querySelector('#topic-heading-count [aria-hidden]')?.textContent === '1' &&
 		!document.querySelector('.htmx-settling')`)
-	if !page.MustEval(`id => document.activeElement.id === 'link-' + id && document.activeElement !== window.focusedLink`, retained).Bool() {
-		t.Fatal("retained topic link lost focus after production recount")
+	if !page.MustEval(`id => document.activeElement.id === 'link-' + id && document.activeElement === window.focusedLink`, retained).Bool() {
+		t.Fatal("increment replaced the retained topic link")
 	}
+	page.MustEval(`() => document.getElementById('sidebar-resync').dispatchEvent(new Event('sidebar-resync', {bubbles: true}))`)
+	page.MustWait(`() => +document.body.dataset.recounts >= 3 && !document.querySelector('.htmx-settling')`)
 	_, reload := f.reader.visit(t, "GET", f.path, nil, 200)
 	if !page.MustEval(`markup => {
 		const reload = new DOMParser().parseFromString(markup, 'text/html');

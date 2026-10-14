@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity"
@@ -132,6 +133,13 @@ func TestLiveSidebar(t *testing.T) {
 		_, err := posting.PostToTopic(t.Context(), m, channel, topic, "live")
 		acceptanceOK(t, err)
 		for i, b := range []acceptanceBrowser{owner, reader} {
+			if i == 1 {
+				frame := nextEvent(t, connections[i])
+				if frame.name != "unread" || frame.id != "" {
+					t.Fatalf("other member post delivery = %+v", frame)
+				}
+				b.visit(t, "POST", "/organizations/live/sidebar/resync", nil, 204)
+			}
 			frame := sidebarReload(t, b, path, connections[i])
 			if sidebarHasUnread(t, frame, view.ChannelDOMID(other.ID)) != (i == 1) ||
 				sidebarHasUnread(t, frame, view.TopicDOMID(selected.ID)) != (i == 1 && topic != nil) {
@@ -155,6 +163,7 @@ func TestLiveSidebar(t *testing.T) {
 	if message.name != "message" || message.id != "105" {
 		t.Fatalf("durable frame before disconnect = %+v", message)
 	}
+	reader.visit(t, "POST", "/organizations/live/sidebar/resync", nil, 204)
 	select {
 	case <-gate.started:
 	case <-time.After(5 * time.Second):
@@ -238,10 +247,24 @@ func TestLiveSidebarAccessLostDuringRecount(t *testing.T) {
 }
 
 func TestLiveSidebarTrigger(t *testing.T) {
-	for _, kind := range []string{"message.posted", "messages.moved", "member.joined"} {
-		t.Run(kind, func(t *testing.T) {
-			if (liveSidebar{}).Trigger(realtime.Event{Kind: realtime.EventKind(kind)}) != (kind != "member.joined") {
-				t.Fatal("incorrect recount trigger")
+	member, other, channel := kernel.ID{1}, kernel.ID{2}, kernel.ID{3}
+	s := liveSidebar{membership: org.Membership{Member: org.Member{ID: member}}, channel: channel}
+	for _, tc := range []struct {
+		name  string
+		event realtime.Event
+		want  bool
+	}{
+		{"author", realtime.Event{Kind: conversation.KindPosted, Payload: conversation.EncodePosted(channel, other, other, member)}, true},
+		{"other author", realtime.Event{Kind: conversation.KindPosted, Payload: conversation.EncodePosted(channel, other, other, other)}, false},
+		{"legacy", realtime.Event{Kind: conversation.KindPosted, Payload: []byte(`{"channel_id":"03000000-0000-0000-0000-000000000000","message_id":"02000000-0000-0000-0000-000000000000"}`)}, false},
+		{"malformed", realtime.Event{Kind: conversation.KindPosted, Payload: []byte(`{`)}, false},
+		{"current move", realtime.Event{Kind: conversation.KindMessagesMoved, ChannelID: channel}, true},
+		{"other move", realtime.Event{Kind: conversation.KindMessagesMoved, ChannelID: other}, false},
+		{"join", realtime.Event{Kind: "member.joined"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := s.Trigger(tc.event); got != tc.want {
+				t.Fatalf("trigger = %t, want %t", got, tc.want)
 			}
 		})
 	}

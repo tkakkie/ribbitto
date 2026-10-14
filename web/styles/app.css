@@ -194,6 +194,9 @@
   --container-panel: 21.25rem;
   --container-reading: 47.5rem;
 
+  /* Below desk (852 px) the phone layout applies: desk: and max-desk: (docs/ui-code.md). */
+  --breakpoint-desk: 53.25rem;
+
   /* Hover and press feedback: the transition utility uses these. */
   --default-transition-duration: var(--duration-faster);
   --default-transition-timing-function: var(--ease-standard);

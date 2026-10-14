@@ -163,6 +163,14 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") || !strings.Contains(w.Body.String(), "雑談") {
 					t.Fatalf("channel: %d %s", w.Code, w.Body.String())
 				}
+			case "GET /channels":
+				// The default channel's row nests its topics; another organisation's
+				// channel is 404 with none of its data (scope check in the snapshot).
+				foreign := get("GET", view.ChannelListURL("acme", globexChannel), aliceToken, now)
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") || !strings.Contains(w.Body.String(), `<li id="`+view.ChannelDOMID(acmeChannel)+`">`) ||
+					foreign.Code != http.StatusNotFound || strings.Contains(foreign.Body.String(), "Globex") {
+					t.Fatalf("list: %d, foreign channel: %d %s", w.Code, foreign.Code, foreign.Body.String())
+				}
 			case "POST /channels/{channelID}/overview", "POST /channels/{channelID}/topics/{topicID}/overview", "POST /channels/{channelID}", "POST /channels/{channelID}/topics/{topicID}":
 				if w.Code != 303 || w.Header().Get("Location") != path {
 					t.Fatalf("post: %d %s", w.Code, w.Body.String())

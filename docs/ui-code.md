@@ -21,8 +21,13 @@ listed, otherwise the current channel's row (an unlisted topic, or the
 feed). It moves neither the window nor focus, and scrolls instantly.
 Live recounts replace `#sidebar-channels` inside that pane, which keeps its
 scroll position, so the script does nothing then: the member's position
-wins. Without JavaScript the sidebar opens at its top. At phone width
-(M6) the sidebar is not shown; its content becomes the channel list page.
+wins. Without JavaScript the sidebar opens at its top. Below `desk` a
+conversation hides the app bar and the sidebar; the sidebar's content is
+then the channel list page (`/organizations/{slug}/channels?channel=<id>`,
+#969): the same pane, script and recounts, filling the width while the
+conversation block, a prompt at desktop width, is hidden. The conversation
+header's back link carries the channel's row id as its fragment, so the
+row is in view even without JavaScript.
 
 ## Styles
 
@@ -71,7 +76,10 @@ defined in `:root` and overridden in the dark colour scheme.
 **Breakpoints** ([`ui.md`](ui.md#layout-principles), #966): below 852 px
 (53.25 rem) the phone layout; from 852 px the desktop frame with a side
 panel overlaying the conversation; from 1200 px (75 rem) the panel beside
-it. They become `@theme` breakpoints with the first issue that uses them.
+it. The first is the `@theme` breakpoint `--breakpoint-desk` (#969): `desk:`
+utilities apply from 852 px and `max-desk:` below it, so phone overrides
+leave the desktop classes as they are. The 1200 px one becomes a token
+with the issue that uses it (#972).
 
 **Layers.** Only four `z-index` values are used, through Tailwind's
 built-in utilities, so no z-index tokens are added: `z-10` for something

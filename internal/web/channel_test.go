@@ -242,3 +242,59 @@ func TestChannelCreationAdmission(t *testing.T) {
 		t.Fatal("refusal reached channel creation")
 	}
 }
+
+// assertChannelListPage checks the list page: the sidebar with channel's topics
+// nested, a sidebar-only stream and nothing that reads or posts.
+func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
+	t.Helper()
+	assertFullConversationPage(t, body)
+	stream := `sse-connect="/organizations/acme/events?after=42&amp;want=sidebar&amp;channel=` + strings.TrimPrefix(view.ChannelURL("acme", channel), "/organizations/acme/channels/") + `"`
+	nested := `<li id="` + view.ChannelDOMID(channel) + `">`
+	if !strings.Contains(body, stream) || !strings.Contains(body, nested) || strings.Count(body, `id="sidebar-topics"`) != 1 || !strings.Contains(body, "<title>lilypads · Acme Corporation · ribbitto</title>") {
+		t.Errorf("list page lacks its title, stream %s or nested topics", stream)
+	}
+	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`} {
+		if strings.Contains(body, absent) {
+			t.Errorf("list page renders %s", absent)
+		}
+	}
+}
+
+func TestChannelListPage(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name, query string
+		channel     kernel.ID
+		status      int
+	}{
+		{"default channel", "", kernel.ID{1}, 200},
+		{"named channel", "?channel=" + strings.TrimPrefix(view.ChannelURL("acme", kernel.ID{2}), "/organizations/acme/channels/"), kernel.ID{2}, 200},
+		{"unknown channel", "?channel=09000000-0000-0000-0000-000000000000", kernel.ID{}, 404},
+		{"malformed channel", "?channel=bad", kernel.ID{}, 404},
+		{"empty channel", "?channel=", kernel.ID{}, 404},
+		{"repeated channel", "?channel=01000000-0000-0000-0000-000000000000&channel=01000000-0000-0000-0000-000000000000", kernel.ID{}, 404},
+		{"malformed query", "?channel=%zz", kernel.ID{}, 404},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, err := NewHandler("", catalogues, testServices(asAlice))
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRequest("GET", "/organizations/acme/channels"+tt.query, nil)
+			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tt.status {
+				t.Fatalf("status %d, body %s", w.Code, w.Body.String())
+			}
+			if tt.status == 200 {
+				assertChannelListPage(t, w.Body.String(), tt.channel)
+			} else if strings.Contains(w.Body.String(), "Acme") {
+				t.Fatal("404 carries organisation data")
+			}
+		})
+	}
+}

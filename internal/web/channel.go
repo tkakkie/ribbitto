@@ -32,6 +32,7 @@ type Channels interface {
 // one message by sequence or a bounded batch by ID for the stream.
 type MessageReader interface {
 	Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error)
+	ChannelList(context.Context, org.Membership, kernel.ID) (conversation.ChannelListPage, error)
 	Many(context.Context, org.Membership, kernel.ID, []kernel.ID) ([]conversation.Entry, error)
 	Page(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64) (conversation.ChannelPage, error)
 	One(context.Context, org.Membership, kernel.ID, int64) (conversation.Entry, error)
@@ -199,6 +200,55 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 		return
 	}
 	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message, Image: r.PostForm.Get("image"), CreateImageError: imageMessage}, nil)
+}
+
+// list renders the channel list page, nesting the topics of the channel the
+// member came from (the query's channel) or else the default channel's.
+func (p channelPages) list(w http.ResponseWriter, r *http.Request, m org.Membership) {
+	// ParseQuery reports malformed pairs, so a broken link is not the default list.
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	raw := query["channel"]
+	if err != nil || len(raw) > 1 {
+		http.NotFound(w, r)
+		return
+	}
+	var id kernel.ID
+	if len(raw) == 1 {
+		var ok bool
+		if id, ok = pathID(raw[0]); !ok {
+			http.NotFound(w, r)
+			return
+		}
+	} else {
+		c, err := p.channels.Default(r.Context(), m)
+		if err != nil {
+			serverError(w, r, "finding default channel", err)
+			return
+		}
+		id = c.ID
+	}
+	p.renderList(w, r, m, id)
+}
+
+// renderList reads the list in one snapshot, which checks that the channel
+// belongs to the resolved organisation.
+func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID) {
+	list, err := p.messages.ChannelList(r.Context(), m, id)
+	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		serverError(w, r, "reading channel list", err)
+		return
+	}
+	account, _ := middleware.Account(r.Context())
+	p.pages.render(w, r, http.StatusOK, func(url string) templ.Component {
+		page := sidebarView(view.ChannelPage{List: true, ImageKeys: conversation.ChannelImageKeys()}, m, list.SidebarSnapshot)
+		page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
+		page.EventCursor = &list.EventCursor
+		return view.ChannelListScreen(url, page)
+	})
 }
 
 func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage, firstUnread *int64) {

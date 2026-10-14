@@ -354,7 +354,7 @@ func TestChannelListBrowser(t *testing.T) {
 			t.Fatalf("landscape %s: %s", path, problem)
 		}
 	}
-	insets(map[string]int{})
+	insets(map[string]int{"top": 0, "left": 0, "right": 0, "bottom": 0})
 
 	// At desktop width the list is still the one main, beside the prompt, and a
 	// conversation keeps its frame and hides the link.

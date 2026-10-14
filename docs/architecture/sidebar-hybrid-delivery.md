@@ -43,4 +43,16 @@ The baseline `costWriter` keeps its fair scheduler and now subscribes to scoped
 member watches before recounting, captures generations when queued work starts,
 retains publications during computation and releases watches on every exit.
 Both schedulers pass the same deterministic full-model/read-only, scope and late
-completion checks. The changed-read driver remains #952a2. No measurement ran.
+completion checks. No measurement ran.
+
+Part #952a2 adds a shared open-loop driver offering 100 changed reads/s across
+5,000 streams. Before connecting, persisted seed capacity covers every member
+round for the whole window, independently of posting. The production feed writer
+and detached commit distinguish committed message changes from successful no-ops;
+unknown commits remain failures even when they publish a recount request. Global
+and per-member admission misses, no-ops and failures stay separate, without
+retries. Cancellation joins admitted workers and counts unadmitted work as missed.
+After writes stop, drain verification requires each stream's exact full model
+against independent persisted truth captured outside application SQL totals.
+Measured snapshots still pass a nil oracle checkpoint. Runner wiring remains
+#952b–952c; these are deterministic checks, with no measurement.

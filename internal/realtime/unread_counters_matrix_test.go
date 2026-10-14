@@ -26,7 +26,8 @@ import (
 // These adapters bind the same exported writers, including preparation reuse
 // for a topic post; they never synthesize persisted messages or read state.
 func counterFeedWriter() *unread.FeedWriter {
-	return unreadpg.NewFeedWriter(
+	return unread.NewFeedWriter(
+		func(tx platform.Tx) unread.RangeWriter { return counterIntervalRanges{unreadpg.WriterIn(tx)} },
 		func(tx platform.Tx) unread.ChannelMessages { return conversationpg.MessageSequencesIn(tx) },
 		func(tx platform.Tx) unread.EventCursor { return orgpg.EventCursorInTx(tx) },
 	)
@@ -36,7 +37,8 @@ func counterTopicWriter(prepared *unread.PreparedTopic) *unread.TopicWriter {
 	return unread.NewTopicWriter(
 		func(tx platform.Tx) func(context.Context, unread.TopicScope, int64) (unread.PreparedTopic, error) {
 			return func(ctx context.Context, scope unread.TopicScope, joined int64) (unread.PreparedTopic, error) {
-				p, err := unreadpg.WriterIn(tx).Prepare(ctx, scope, joined)
+				raw, err := unreadpg.WriterIn(tx).Prepare(ctx, scope, joined)
+				var p unread.PreparedTopic = counterIntervalPrepared{raw}
 				if prepared != nil {
 					*prepared = p
 				}
@@ -67,6 +69,10 @@ func (m counterTopicMessages) Ranges(ctx context.Context, organization, channel,
 	for i, r := range bounds {
 		ranges[i] = unread.Range{Lo: r.Lo, Hi: r.Hi}
 	}
+	if w := counterIntervalIn(ctx); w != nil {
+		w.topics[topic] += int64(len(ranges)) // One candidate per unread message, before coalescing.
+		w.changed = w.changed || len(ranges) > 0
+	}
 	return ranges, nil
 }
 
@@ -83,6 +89,9 @@ func (w counterPostReads) Read(ctx context.Context, m org.Membership, channel ke
 		if prepared == nil {
 			return fmt.Errorf("topic post returned without preparation")
 		}
+		if w := counterIntervalIn(ctx); w != nil {
+			w.topics[*topic]++ // The own post is outside the validated page cursor.
+		}
 		return prepared.Add(ctx, []int64{lo}, []int64{hi}, floor)
 	}
 	if cursor != nil {
@@ -90,7 +99,7 @@ func (w counterPostReads) Read(ctx context.Context, m org.Membership, channel ke
 			return err
 		}
 	}
-	return unreadpg.WriterIn(w.tx).Merge(ctx, scope, joined, unread.Range{Lo: lo, Hi: hi})
+	return (counterIntervalRanges{unreadpg.WriterIn(w.tx)}).Merge(ctx, scope, joined, unread.Range{Lo: lo, Hi: hi})
 }
 
 type counterMatrix struct {

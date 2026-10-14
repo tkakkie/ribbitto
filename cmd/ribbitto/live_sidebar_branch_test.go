@@ -102,6 +102,10 @@ func TestLiveSidebarBranchDisplacement(t *testing.T) {
 		sidebarBadge(t, frame, view.ChannelDOMID(f.channel), 1)
 	}
 	post(t, f.owner, f.path, "unlisted source stays live")
+	if frame := nextEvent(t, connections[0]); frame.name != "unread" {
+		t.Fatalf("unlisted post = %+v", frame)
+	}
+	f.reader.visit(t, "POST", "/organizations/branch/sidebar/resync", nil, 204)
 	frame := sidebarReload(t, f.reader, f.path, connections[0])
 	sidebarBadge(t, frame, "topic-heading-count", 1)
 	sidebarBadge(t, frame, view.ChannelDOMID(f.channel), 2)

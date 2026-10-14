@@ -46,6 +46,7 @@ type ChannelPage struct {
 	Channels                   []Channel
 	ChannelCounts, TopicCounts map[kernel.ID]int64
 	SnapshotSeq                int64
+	MemberID                   kernel.ID
 	Name, Error                string
 	Image, Query               string
 	CreateImageError           string
@@ -255,6 +256,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/message-composer-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/side-panel-v2.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/sidebar-unread-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v9.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
@@ -267,6 +269,10 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 templ channelFrame(page ChannelPage) {
 	<div
 		id="organization-stream"
+		data-member={ idValue(page.MemberID) }
+		if page.Topic != nil {
+			data-sidebar-topic={ idValue(page.Topic.ID) }
+		}
 		if page.EventCursor != nil {
 			data-event-cursor={ fmt.Sprint(*page.EventCursor) }
 			hx-ext="sse"
@@ -274,6 +280,9 @@ templ channelFrame(page ChannelPage) {
 		}
 		class={ "flex h-dvh gap-2 bg-base p-2 text-body", templ.KV("max-desk:p-0", !page.List), templ.KV("max-desk:flex-col max-desk:pb-0", page.List) }
 	>
+		if page.EventCursor != nil {
+			<form id="sidebar-resync" hidden method="post" action={ "/organizations/" + page.Organization.Slug + "/sidebar/resync" } hx-post={ "/organizations/" + page.Organization.Slug + "/sidebar/resync" } hx-trigger="sidebar-resync" hx-sync="this:drop" hx-swap="none"></form>
+		}
 		<div id="stream-sink" hidden aria-hidden="true" sse-swap="sidebar,presence" hx-swap="none"></div>
 		@appBar(page)
 		// Either element is the scrolling pane that sidebar-scroll-v2.js finds.
@@ -331,6 +340,7 @@ templ ChannelListScreen(stylesheetURL string, page ChannelPage) {
 			</div>
 		}
 		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/sidebar-unread-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v9.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

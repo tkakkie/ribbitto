@@ -6,7 +6,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
-// Changes holds process-local read-change watches for actively subscribed members.
+// Changes holds process-local read-change and resync watches for actively subscribed members.
 // Its zero value is ready to use; it must not be copied after first use.
 type Changes struct {
 	mu      sync.Mutex
@@ -61,6 +61,11 @@ func (c *Changes) ReadChanged(organizationID, memberID kernel.ID) {
 	entry.generation++
 	close(entry.changed)
 	entry.changed = make(chan struct{})
+}
+
+// RequestResync invalidates only this member's streams, without changing read state.
+func (c *Changes) RequestResync(organizationID, memberID kernel.ID) {
+	c.ReadChanged(organizationID, memberID)
 }
 
 // Snapshot atomically captures a generation and its wake channel. Capture it

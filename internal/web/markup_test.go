@@ -484,6 +484,12 @@ func checkHTMXRequests(t *testing.T, handler http.Handler, page *html.Node, lang
 						}
 						w := httptest.NewRecorder()
 						handler.ServeHTTP(w, r)
+						if attr(element, "id") == "sidebar-resync" {
+							if method != "POST" || !strings.HasSuffix(path, "/sidebar/resync") || attr(element, "hx-trigger") != "sidebar-resync" || attr(element, "hx-swap") != "none" || attr(element, "hx-sync") != "this:drop" || w.Code != 204 || w.Body.Len() != 0 {
+								t.Fatalf("invalid resync trigger/no-swap response: %s, %d", path, w.Code)
+							}
+							return
+						}
 						if attr(element, "id") == "typing-form" {
 							if method != "POST" || !strings.HasSuffix(path, "/typing") || element.DataAtom != atom.Form || attr(element, "method") != "post" || attr(element, "action") != path || attr(element, "hx-swap") != "none" || len(form) != 1 || len(form["composer"]) != 1 || form.Get("composer") == "" || w.Code != 204 || w.Body.Len() != 0 {
 								t.Fatalf("invalid typing form/no-swap response: %s, %v, %d", path, form, w.Code)
@@ -636,7 +642,7 @@ func TestPagesMarkup(t *testing.T) {
 		cases = append(cases, markupCase{name: "topic " + method, route: method + " /organizations/{slug}/channels/{channelID}/topics/{topicID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: method, path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}), cookie: true, form: url.Values{"cursor": {"0"}, "body": {""}}, status: status, alerts: alerts})
 	}
 	cases = append(cases, markupCase{name: "branch invalid", route: "POST /organizations/{slug}/channels/{channelID}/branch", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/branch", cookie: true, status: 422, alerts: 1})
-	noPage := []string{"POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing", "POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "GET /organizations/{slug}/{$}"}
+	noPage := []string{"POST /organizations/{slug}/sidebar/resync", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing", "POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "GET /organizations/{slug}/{$}"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
 	if err != nil {

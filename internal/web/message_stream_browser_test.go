@@ -489,8 +489,11 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 	for _, name := range []string{"sidebar", "presence"} {
 		page.MustEval(`() => window.testEntries = ['message-help', 'message-status'].map(id => document.getElementById(id))`)
 		// Put the missing target first: it must not prevent the later replacements.
-		send(&realtime.Outgoing{Ephemeral: true, ID: 999, Name: name,
-			Data: streamTestMarkup(t, streamBrowserEntries([]string{"stream-test-absent", "message-help", "message-status"}, name))})
+		data := streamTestMarkup(t, streamBrowserEntries([]string{"stream-test-absent", "message-help", "message-status"}, name))
+		if name == "sidebar" {
+			data = append(data, streamTestMarkup(t, view.SidebarLists(snapshot))...)
+		}
+		send(&realtime.Outgoing{Ephemeral: true, ID: 999, Name: name, Data: data})
 		page.MustWait(`name => document.body.dataset.frame === name &&
 			window.testEntries.every(old => document.getElementById(old.id) !== old &&
 				document.getElementById(old.id).textContent === name)`, name)

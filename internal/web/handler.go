@@ -39,6 +39,7 @@ type Services struct {
 	Branching     Branching // nil: branching answers 404
 	Channels      Channels
 	Limits        *middleware.AuthLimits // nil: no rate limits (tests)
+	SidebarResync SidebarResync          // nil: resync POSTs answer 404
 	Reading       Reading                // nil: read POSTs answer 404
 	Stream        *Streaming             // nil: the channel event stream answers 404
 }
@@ -128,7 +129,7 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	registerSignIn(routes, pages, services.SignIn, services.SignUp, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignIn }))
 	registerSetup(routes, pages, services.Setup, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.Setup }))
 	registerSignUp(routes, pages, services.SignUp, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignUp }))
-	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits))
+	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync))
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

@@ -117,7 +117,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, method, path, cookie, url.Values{"composer": {state.IssueComposer(acme, place, membership.Member.ID)}, "name": {"新しいチャンネル"}, "cursor": {"0"}, "body": {"posted through the page"}})
 	}
 
-	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits)
+	routes := orgRoutes(&pageRenderer{}, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync)
 	if len(routes) == 0 {
 		t.Fatal("no organisation routes")
 	}
@@ -179,7 +179,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				if w.Code != 204 || w.Body.Len() != 0 {
 					t.Fatalf("typing: %d", w.Code)
 				}
-			case "POST /channels/{channelID}/read", "POST /channels/{channelID}/topics/{topicID}/read":
+			case "POST /sidebar/resync", "POST /channels/{channelID}/read", "POST /channels/{channelID}/topics/{topicID}/read":
 				if w.Code != http.StatusNotFound {
 					t.Fatalf("reading disabled: %d", w.Code)
 				}

@@ -35,6 +35,7 @@ func testServices(overrides ...func(*Services)) Services {
 		Messages: fakeMessages{},
 		Posting:  testPoster(),
 	}
+	s.SidebarResync = &unread.Changes{}
 	s.ReadLimits = middleware.NewReadRateLimiter(time.Now)
 	s.CreateLimits = middleware.NewChannelCreationRateLimiter(time.Now)
 	s.Branching = testBrancher(&fakeBranchWriter{})

@@ -314,12 +314,14 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 	// A nil hub must stay a nil Notifier, not a typed nil in the interface.
 	var postingNotifier conversation.Notifier
 	var readPublisher unread.ReadPublisher
+	var sidebarResync web.SidebarResync
 	var stream *web.Streaming
 	var typingState *typing.State
 	if config.hub != nil {
 		postingNotifier = config.hub
 		changes := &unread.Changes{}
 		readPublisher = changes
+		sidebarResync = changes
 		kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
 		if err != nil {
 			return nil, nil, fmt.Errorf("merging event kinds: %w", err)
@@ -352,6 +354,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		Topics:        conversationpg.NewTopics(pool),
 		Messages:      conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn),
 		Posting:       posting,
+		SidebarResync: sidebarResync,
 		Reading:       unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), readPublisher),
 		Branching:     branching,
 		Channels:      conversationpg.NewChannels(pool, config.maxChannels),

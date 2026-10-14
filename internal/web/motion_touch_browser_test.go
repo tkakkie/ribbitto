@@ -47,11 +47,22 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	// The tab closes through the browser's own context, so cleanup works even
-	// after ctx has expired and server.Close is not left waiting on its stream.
-	tab := browser.MustPage()
-	defer tab.MustClose()
-	page := tab.Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+	// Ends the page's stream even if its tab failed to close, so server.Close
+	// cannot wait on it.
+	defer server.CloseClientConnections()
+	// stage names what runs, for failures that reach the panic handler.
+	stage := "opening the tab"
+	tab := browser.Context(ctx).MustPage()
+	// Cleanup gets its own bound, so it works after ctx has expired and a
+	// stalled close cannot hang the test.
+	defer func() {
+		closeCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+		defer stop()
+		if err := tab.Context(closeCtx).Close(); err != nil {
+			t.Errorf("closing the tab: %v", err)
+		}
+	}()
+	page := tab.Context(ctx).WithPanic(func(v any) { t.Fatalf("%s: %v", stage, v) })
 	// Animations run, and their events fire, only in a tab that repaints.
 	page.MustActivate()
 	page.MustSetViewport(390, 844, 1, true)
@@ -144,6 +155,7 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 			}); }`, selector)
 		x, y := centre(selector)
 		touchTap(selector, x, y)
+		stage = where + ": awaiting the tap on " + selector
 		var press struct {
 			Active  bool
 			Pressed float64
@@ -168,6 +180,7 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 		if reduce {
 			want = ""
 		}
+		stage = where + ": the motion after tapping " + selector
 		expect(where+": tapping "+selector, want)
 	}
 	link := func(id kernel.ID) string { return "#link-" + view.ChannelDOMID(id) }
@@ -184,7 +197,13 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 		if err := media.Call(page); err != nil {
 			t.Fatal(err)
 		}
-		page.MustNavigate(server.URL + view.ChannelURL("acme", general.ID)).MustWaitLoad()
+		stage = where + ": loading the conversation"
+		if err := page.Timeout(10 * time.Second).Navigate(server.URL + view.ChannelURL("acme", general.ID)); err != nil {
+			t.Fatalf("%s: %v", stage, err)
+		}
+		if err := page.Timeout(10 * time.Second).WaitLoad(); err != nil {
+			t.Fatalf("%s: %v", stage, err)
+		}
 		if got := page.MustEval(`() => [matchMedia('(hover: hover)').matches, matchMedia('(pointer: coarse)').matches, matchMedia('(prefers-color-scheme: dark)').matches].join()`).Str(); got != fmt.Sprintf("false,true,%t", pass.scheme == "dark") {
 			t.Fatalf("%s: hover, coarse pointer, dark = %s", where, got)
 		}

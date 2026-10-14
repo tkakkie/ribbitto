@@ -329,6 +329,7 @@ func TestStage2ReadScheduleEvidence(t *testing.T) {
 		for _, seed := range []uint64{0, 1, 42, 865} {
 			for _, lag := range []time.Duration{0, time.Second, 5 * time.Second} {
 				t.Run(fmt.Sprintf("N%d/posts%d/seed%d/L%d", g.Streams, g.PostsPerSecond, seed, int(lag/time.Second)), func(t *testing.T) {
+					t.Parallel()
 					r := simulateStage2Reads(t, g, seed, lag, true)
 					if r.refused != 0 || r.reads != g.ReadsPerSecond*600 || r.smallest <= 0 {
 						t.Fatalf("read demand shortfall: %+v", r)
@@ -337,6 +338,7 @@ func TestStage2ReadScheduleEvidence(t *testing.T) {
 				})
 			}
 			t.Run(fmt.Sprintf("page-only/N%d/posts%d/seed%d", g.Streams, g.PostsPerSecond, seed), func(t *testing.T) {
+				t.Parallel()
 				r := simulateStage2Reads(t, g, seed, 0, false)
 				supply := g.Streams + g.PagesPerSecond*600
 				if r.refused == 0 || r.reads > supply || supply >= g.ReadsPerSecond*600 {

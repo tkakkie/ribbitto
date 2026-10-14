@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -36,14 +37,42 @@ func (w costWriter) run(parent context.Context, sub realtime.Subscription, curso
 			}
 		}
 	}()
-	defer func() { cancel(); w.queue.cancel(w.work); <-joined }()
+	enabled := w.stream.Sidebar != nil && slices.Contains(sub.Interests, realtime.InterestSidebar)
+	var watch realtime.SidebarWatch
+	if source, ok := w.stream.Sidebar.(realtime.SidebarWatcher); ok && enabled {
+		watch = source.Watch(sub.Organization, sub.Member)
+	}
+	var captureMu sync.Mutex
+	stopped := false
+	defer func() {
+		captureMu.Lock()
+		stopped = true
+		captureMu.Unlock()
+		cancel()
+		w.queue.cancel(w.work)
+		if watch != nil {
+			watch.Release()
+		}
+		<-joined
+	}()
 	version, sent := int64(1), int64(0)
-	dirty, active := w.stream.Sidebar != nil && slices.Contains(sub.Interests, realtime.InterestSidebar), false
+	dirty, active := enabled, false
+	var observed, covered uint64
+	captures := make(map[int64]*uint64)
 	next, written := time.Time{}, time.Now()
 	var completed *costQueueResult
 	for {
 		if ctx.Err() != nil {
 			return cursor, context.Cause(ctx)
+		}
+		var changed <-chan struct{}
+		if watch != nil {
+			generation, wake := watch.Snapshot()
+			if generation > observed {
+				version++
+			}
+			observed, changed = generation, wake
+			dirty = dirty || generation > covered
 		}
 		events, err := w.stream.Events.EventsAfter(ctx, sub.Organization, cursor, realtime.DefaultBatchSize)
 		if err != nil {
@@ -88,11 +117,13 @@ func (w costWriter) run(parent context.Context, sub realtime.Subscription, curso
 		}
 		if completed != nil {
 			result := *completed
+			captured := captures[result.version]
+			delete(captures, result.version)
 			completed = nil
 			active, next = false, time.Now().Add(realtime.SidebarInterval)
 			// Newer-than-sent results make progress even under continuous invalidation;
 			// requiring the desired version starved sends in #832's controlled run.
-			if result.version > sent {
+			if result.version > sent && captured != nil {
 				if result.err != nil {
 					return cursor, fmt.Errorf("recounting prototype sidebar: %w", result.err)
 				}
@@ -105,11 +136,25 @@ func (w costWriter) run(parent context.Context, sub realtime.Subscription, curso
 					return cursor, fmt.Errorf("sending prototype sidebar: %w", err)
 				}
 				// Keep later triggers pending without rolling back the last sent frame.
-				sent, dirty, written = result.version, version > result.version, time.Now()
+				covered = *captured
+				sent, dirty, written = result.version, version > result.version || observed > covered, time.Now()
 			}
 		}
 		if dirty && !active && !time.Now().Before(next) {
+			captured := new(uint64)
+			captures[version] = captured
 			if !w.queue.submit(w.work, costQueueRequest{version, func(ctx context.Context) (realtime.Outgoing, error) {
+				// Capture when computation starts, not when it joins the queue.
+				// Exit seals this boundary before releasing the member watch.
+				captureMu.Lock()
+				if stopped {
+					captureMu.Unlock()
+					return realtime.Outgoing{}, context.Canceled
+				}
+				if watch != nil {
+					*captured, _ = watch.Snapshot()
+				}
+				captureMu.Unlock()
 				return w.stream.Sidebar.Recount(ctx, sub)
 			}}) {
 				return cursor, fmt.Errorf("prototype recount admission refused")
@@ -142,6 +187,7 @@ func (w costWriter) run(parent context.Context, sub realtime.Subscription, curso
 		select {
 		case <-ctx.Done():
 		case <-wakes:
+		case <-changed:
 		case <-timer:
 		case result := <-w.work.done:
 			completed = &result

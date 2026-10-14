@@ -281,6 +281,10 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			modal("390 → 1000 px")
 			trap("1000 px")
+			// Below wide Mark as read lives in the overview only, as on a phone.
+			if page.MustEval(`() => document.getElementById('read-form').checkVisibility()`).Bool() {
+				t.Fatal("1000 px: the header shows Mark as read")
+			}
 			size(390, 844)
 			modal("1000 → 390 px")
 			size(1000, 800)
@@ -294,6 +298,9 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 				t.Fatal("1280 px: the panel is still modal")
 			}
 			role("complementary")
+			if !page.MustEval(`() => !!document.querySelector('#read-form button')?.checkVisibility()`).Bool() {
+				t.Fatal("1280 px: the header lacks Mark as read")
+			}
 			size(1000, 800)
 			modal("1280 → 1000 px")
 			live(101)

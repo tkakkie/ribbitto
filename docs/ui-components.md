@@ -67,6 +67,6 @@ which scripts read as its computed `position`: `side-panel-v2.js` makes it
 a modal dialog over an inert page ([accessibility](accessibility.md)) and
 `read-visibility-v5.js` pauses automatic reading, while the stream still
 updates the page behind. The header's **Mark as read** is hidden below
-`desk`; below `wide` the overview shows a `submitButtonFor` the same
+`wide`, where the overview shows a `submitButtonFor` the same
 `#read-form`. Without JavaScript the panel is its own page: its links still
 close it and page the members.

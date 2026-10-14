@@ -87,6 +87,9 @@ func stage2QueueStability(samples []stage2Sample, duration int64, bound int) sta
 			fail(fmt.Sprintf("bucket_%ds_samples", start/second), int64(count))
 		}
 	}
+	if duration <= 0 {
+		incomplete = true
+	}
 	if !incomplete {
 		m["complete"] = 1
 	} else {

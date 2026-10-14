@@ -16,6 +16,8 @@
   {"Name":"age-percentage/0","DurationNS":600000000000,"Bound":5000,"Runs":[[0,300000000000,1000000000,0,300000000,0],[300000000000,600000000000,1000000000,0,315000000,0]],"Want":"pass","Complete":true},
   {"Name":"age-percentage/1","DurationNS":600000000000,"Bound":5000,"Runs":[[0,300000000000,1000000000,0,300000000,0],[300000000000,600000000000,1000000000,0,315000001,0]],"Want":"reject","Complete":true},
   {"Name":"duration/0","DurationNS":0,"Bound":1000,"Runs":[[0,0,1000000000,0,0,0]],"Want":"inconclusive","Complete":false},
+  {"Name":"duration/0-with-sample","DurationNS":0,"Bound":1000,"Runs":[[0,1,1000000000,0,0,0]],"Want":"inconclusive","Complete":false,"Measured":{"posting_samples":1}},
+  {"Name":"duration/-1","DurationNS":-1,"Bound":1000,"Runs":[[0,1,1000000000,0,0,0]],"Want":"inconclusive","Complete":false,"Measured":{"posting_samples":1}},
   {"Name":"duration/60","DurationNS":60000000000,"Bound":1000,"Runs":[[0,60000000000,1000000000,0,0,0]],"Want":"inconclusive","Complete":true},
   {"Name":"duration/300","DurationNS":300000000000,"Bound":1000,"Runs":[[0,300000000000,1000000000,0,0,0]],"Want":"inconclusive","Complete":true},
   {"Name":"duration/599","DurationNS":599000000000,"Bound":1000,"Runs":[[0,599000000000,1000000000,0,0,0]],"Want":"inconclusive","Complete":true},

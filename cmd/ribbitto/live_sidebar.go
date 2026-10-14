@@ -33,7 +33,15 @@ func (s liveSidebar) Watch(organizationID, memberID kernel.ID) realtime.SidebarW
 }
 
 func (s liveSidebar) Trigger(event realtime.Event) bool {
-	return event.Kind == conversation.KindPosted || event.Kind == conversation.KindMessagesMoved
+	switch event.Kind {
+	case conversation.KindPosted:
+		posted, err := conversation.DecodePosted(event.Payload)
+		return err == nil && posted.AuthorID != nil && *posted.AuthorID == s.membership.Member.ID
+	case conversation.KindMessagesMoved:
+		return event.ChannelID == s.channel
+	default:
+		return false
+	}
 }
 
 func (s liveSidebar) Recount(ctx context.Context, _ realtime.Subscription) (realtime.Outgoing, error) {

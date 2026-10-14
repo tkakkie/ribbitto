@@ -68,15 +68,15 @@ unread; selection still reaches step 3 and step 4. Legacy injected
 `PageCounter` adapters retain `Read` as a compatibility fallback. Normal
 page entry points still enable first unread, preserving the unread divider.
 
-**Planned (#1039, [decision 34](../decisions/34-live-unread-counts.md)):**
-Posts will send shared `unread` frames instead of recounting every sidebar;
-resync goes through the stream. Until PR 3 lands, the behaviour below is current.
+**Current (#1039 PR 3, [decision 34](../decisions/34-live-unread-counts.md)):**
+Posts send shared `unread` frames instead of recounting every sidebar; client
+increments are approximate between exact snapshots. Resync goes through SSE.
 
 Production streams bind the already-resolved membership, channel and selected
 topic to one `cmd/ribbitto` sidebar source (#819); its `panel` flag no longer
-changes the selection, since panels open beside the conversation (#874). Posts
-and moves trigger independent snapshots through this same page-count adapter,
-including for the author and when another channel changes. Web's `RenderSidebar`
+changes the selection, since panels open beside the conversation (#874). Own posts
+and current-channel moves trigger snapshots through this page-count adapter;
+resync wakes the member's streams through `unread.Changes`. Web's `RenderSidebar`
 shares one sidebar view builder with channel and topic pages, with or without a
 side panel, preserving the feed and topic selection. It uses page components for the whole channel
 list, with the current channel's topics nested (#872), and the selected heading (#818); member-dependent output bypasses the shared
@@ -94,7 +94,7 @@ organisation: reading A clears A and reduces the channel while preserving B;
 reading the feed clears its related displayed topics in every tab. Posting's
 read writes use the existing durable trigger, without a duplicate read signal.
 [Read results and acceptance](read-advance-results.md) cover the per-tab cost;
-no count is incrementally patched in memory.
+browser badge increments follow the [script contract](web-javascript.md).
 
 Read sets cross as arrays of `(lo, hi)` bounds, or one `int8multirange`
 parameter. These statements share the page or sidebar snapshot that runs them, with none per channel or topic.

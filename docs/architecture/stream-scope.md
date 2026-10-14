@@ -50,7 +50,7 @@ The state, boundary and generation come from one locked read. Another process's
 token, a start below the boundary or over 100 changes require `reset` on connect
 or later; equality at the boundary is served. The presence adapter sends
 that reset without `id:`, ending the stream so the page reloads.
-Sidebars recount on connect, posts/moves and the member's read advances,
+Sidebars recount on connect, own posts, current-channel moves, resync and the member's read advances,
 regardless of message interests. With a hub, Reading and watches share
 one `unread.Changes`; otherwise the publisher is nil. Subscribe before recounting;
 release on exit. Capture before reads; send or deny covers that generation.
@@ -63,8 +63,8 @@ after rendering, before sending. Frames omit `id:`; errors stop delivery. Reconn
 [single-process contract](ephemeral-state.md#member-read-change-watches) and
 [unknown-COMMIT exception](unread-writes.md) limit recovery.
 
-**Planned sidebar delivery ([decision 34](../decisions/34-live-unread-counts.md),
-#1039):** today's per-connection recount remains until PR 3. After interest and
+**Sidebar delivery ([decision 34](../decisions/34-live-unread-counts.md),
+#1039):** after interest and
 topic filtering, each sidebar connection gets exactly one frame per post:
 `message` if its message interest selects it, otherwise a shared, once-rendered
 `unread` frame with `channel`, `topic`, `seq` and `author` fields. It uses the
@@ -74,25 +74,28 @@ and final bound-member checks still apply; interests grant no access.
 Every member may currently read every channel; private channels must add a
 per-channel check before shipping these frames.
 
-**Planned snapshot and resync (PR 3):** the sidebar's organisation event
+**Snapshot and resync:** the sidebar's organisation event
 sequence and counts come from one repeatable-read snapshot, exposed through
-the [planned badge data attributes](web-layers.md#htmx).
+the [badge data attributes](web-layers.md#htmx).
 `POST /organizations/{slug}/sidebar/resync` is member-scoped, publishes through
 `unread.Changes` and returns 204 with no fragment. The member's streams recount
 and deliver snapshots as `sidebar` frames over SSE, applied in stream delivery
 order, never by selecting the highest sequence: reads can change counts at the
-same sequence. Replace badge numbers, reapply retained events above the snapshot
-with their original application decisions, and drop the rest. Reads and own
+same sequence. Replace badge numbers, drop retained events at or below the snapshot,
+and reapply eligible events above it while not recovering or after a clean answered
+resync. Reads and own
 posts recount only that member's tabs; moves or branches dirty only streams
 showing that channel.
 
-**Planned recovery (PR 3) and server bound (PR 4):** reconnect, `reset`,
+**Recovery; planned server bound (PR 4):** reconnect, `reset`,
 visibility return, back-forward-cache `pageshow` and failures trigger resync.
 Malformed frames, failed DOM application or resync requests, or losses beyond
 the 1,000-event retention bound stop increments and enter recovery. Coalesce
 requests into one pending request and retry with jittered backoff. Clear recovery
 only after a snapshot arrives with no event lost between the request it answers
-and its arrival; otherwise resync again and stay recovering. No event-history
+and its arrival, then reapply eligible retained events above it. Retained events
+are not losses; otherwise show the snapshot numbers, resync again and stay
+recovering. No event-history
 replay or unbounded retention is added. PR 4 spreads connect recounts by 0–3 s,
 visibility/pageshow resyncs by 0–2 s and `reset` reloads by 0–5 s. One bound on
 concurrent recount computations covers connect, read, resync and moves in both
@@ -107,6 +110,7 @@ Swap targets:
 | Event | `id:` | Where htmx puts it |
 |---|---|---|
 | `message`, `messages-moved` | the sequence | `#message-items` |
+| `unread` | none | the sidebar script increments shown server-rendered badges |
 | `sidebar` | none | whole sidebar lists and selected heading count, out of band (#818) |
 | `presence` | none | each member's indicator, out of band by its DOM id (#768) |
 | `typing` | none | `#typing-status` content replacement on latest feeds/topics (#790) |

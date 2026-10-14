@@ -2,8 +2,8 @@
 
 **Decided** (#1039, 2026-10-14; documented by #1043): counts are exact at
 page load and at every successful resync, approximate in between, and always
-exact again after the next successful resync. This is *planned* until PRs 2–4
-of #1039 land; today's per-connection recounts remain until PR 3 replaces them.
+exact again after the next successful resync. PRs 2–3 of #1039 implement the
+contract, client increments and resync; PR 4's delays and server bound remain planned.
 Rules: [unread](../domain/unread.md#counts); composition:
 [unread counts](../architecture/unread-counts.md); transport:
 [streaming](../architecture/streaming.md); markup:
@@ -19,7 +19,8 @@ Rules: [unread](../domain/unread.md#counts); composition:
   visibility of server-rendered badges, never creates elements and never
   makes requests: htmx sends the resync request. Its bounded recovery state
   is the snapshot sequence, at most 1,000 retained `unread` events since
-  that snapshot with whether each was applied, and a recovering flag.
+  that snapshot with eligibility and whether each is applied, a recovering flag,
+  loss generations and the highest possibly lost sequence.
 - **[Decision 30](30-one-organisation-wide-stream-per-tab-filtered-by-its-interests.md) still holds.**
   Every `unread` frame passes the existing audience and final bound-member
   checks; interests grant nothing new. The connection, interests and cursor
@@ -27,7 +28,7 @@ Rules: [unread](../domain/unread.md#counts); composition:
   **Precondition:** every member may read every channel. Private channels
   must add a per-channel check to `unread` frames before they ship.
 - **[Decision 24](24-a-cursor-that-cannot-be-served-gets-reset.md)** still
-  requires a page reload on `reset`, now after a random delay.
+  requires a page reload on `reset`; PR 4 adds its random delay.
   **[Decision 32](32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)**
   is unchanged: read state, its writes and exact page-load SQL stay as they are.
 
@@ -45,9 +46,9 @@ and the prior recount investigation on 2026-10-14: #832, #865 stage 2, #952,
 #955–#957 and the hybrid prototypes). Their removal is separate, after #1039's
 five PRs, from its approved list; this decision removes no code.
 
-## Planned event and snapshot contract
+## Event and snapshot contract
 
-PR 2 adds the contract without switching behaviour; PR 3 switches to it.
+PR 2 added the contract; PR 3 switches live counts to the client.
 For ordinary posts and branch notices, `message.posted` gains `author_id`
 resolved from the session, never the request. Missing author or topic in a
 legacy payload never produces an increment. After interest and topic filtering,
@@ -70,13 +71,15 @@ badge only for a previously unseen sequence above the snapshot, with a present
 author other than the tab's member, while not recovering. It shows `99+` from
 100. Snapshots arrive as `sidebar` frames and apply in stream delivery order,
 never by choosing the highest sequence: a read changes counts at the same
-sequence, and computations complete in start order. Replace the numbers, reapply
-retained events above the new sequence with their original application decisions,
-and drop the rest. Later events at or below the snapshot are ignored.
+sequence, and computations complete in start order. Replace the numbers and drop
+retained events at or below the new sequence. While not recovering, reapply all
+eligible retained events above it, marking them applied; eligibility requires a
+present author other than the tab's member. Later events at or below the snapshot
+are ignored.
 
-## Planned resync and recovery
+## Resync and recovery
 
-PR 3 adds `POST /organizations/{slug}/sidebar/resync`: a member-scoped 204
+PR 3 provides `POST /organizations/{slug}/sidebar/resync`: a member-scoped 204
 that publishes through `unread.Changes` and returns no fragment. The member's
 streams recount and deliver the snapshot over SSE. Reads and own posts recount
 only that member's tabs; moves or branches dirty only streams showing that
@@ -87,8 +90,13 @@ Resync also follows reconnect, `reset`, visibility return or back-forward-cache
 losses beyond retention. Above 1,000 retained events or on those failures, stop
 incrementing and enter recovery. Merge duplicate requests into one pending
 request and retry with jittered backoff. Clear recovery only when a snapshot
-arrives with no event lost between the request it answers and its arrival;
-otherwise request another resync and stay recovering, even if losses recur.
+arrives after dispatch, with no event lost since the request it answers was
+dispatched, and its sequence covers every possibly lost event. Overflow records
+the highest dropped sequence; malformed or unapplied frames record the highest
+sequence seen, including the failed frame when parsable. Then apply all eligible
+retained events above that snapshot. Retained events are not losses.
+Otherwise show the snapshot numbers, request another resync and stay recovering,
+even if losses recur.
 No event-history replay or unbounded retention is added. Extreme sustained load
 can keep recovery open, showing the last exact snapshot.
 

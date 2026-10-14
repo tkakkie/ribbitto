@@ -94,8 +94,9 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
   conversation; from 852 px (53.25 rem) a panel overlays the conversation's
   right side instead, as a modal over the dimmed page, like the phone's
   sheet; below 852 px the phone layout applies. From 320 px up nothing
-  scrolls sideways and no control becomes unreachable, down to 320 × 200
-  (400 % zoom, #1056).
+  scrolls sideways and no control becomes unreachable at the audited sizes
+  (`TestBrowser/width-audit`), down to 320 × 200 (400 % zoom, #1056). At
+  short desktop heights the create popover does not fit yet (#1076).
 - **Phone** (M6): one column. The channel list is its own page with a
   bottom navigation (#970) instead of the app bar: Home, and an Account
   button that opens the account menu as a bottom sheet, each an icon above

@@ -84,7 +84,7 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
 	// Keep the ordinary stream and reading scripts running against idle fakes;
 	// the layout fixture must include the cursor-dependent Mark as read targets.
-	mux.HandleFunc("/organizations/acme/events", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /organizations/acme/events", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
 		if sender.Heartbeat(r.Context()) == nil {
@@ -123,7 +123,12 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 					page.MustEval(`() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`)
 					audit := func(state string) {
 						t.Helper()
-						for _, problem := range page.MustEval(widthAudit).Arr() {
+						result := page.MustEval(widthAudit)
+						// The rate-limit page is the one page without a control.
+						if result.Get("checked").Int() == 0 && c.name != "rate-limit" {
+							t.Errorf("page=%s viewport=%dx%d language=%s state=%s: no visible control audited", c.name, size[0], size[1], lang, state)
+						}
+						for _, problem := range result.Get("problems").Arr() {
 							t.Errorf("page=%s viewport=%dx%d language=%s state=%s: %s", c.name, size[0], size[1], lang, state, problem.Str())
 						}
 					}
@@ -135,13 +140,19 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 					}
 					if strings.HasSuffix(c.name, "closed") {
 						page.MustElement(`#message-items input[type=checkbox]`).MustClick()
-						page.MustWait(`() => document.getElementById('branch-form').checkVisibility()`)
+						page.MustWait(`() => document.querySelector('#message-items input[type=checkbox]:checked') &&
+							document.getElementById('branch-form').checkVisibility()`)
 						audit("move-form-visible")
 					}
 					if c.name == "channel-list" || strings.HasSuffix(c.name, "closed") {
 						for _, id := range []string{"channel-create", "account-menu"} {
 							if !page.MustEval(`id => [...document.querySelectorAll('[popovertarget="' + id + '"]')].some(e => e.checkVisibility())`, id).Bool() {
-								continue // Phone conversations expose these controls on the list page.
+								// Phone conversations expose these controls on the list page;
+								// anywhere else a missing invoker would skip the audit silently.
+								if c.name == "channel-list" || size[0] >= 852 {
+									t.Errorf("page=%s viewport=%dx%d language=%s: no visible invoker for %s", c.name, size[0], size[1], lang, id)
+								}
+								continue
 							}
 							page.MustEval(`id => [...document.querySelectorAll('[popovertarget="' + id + '"]')].find(e => e.checkVisibility()).click()`, id)
 							page.MustWait(`id => document.getElementById(id).matches(':popover-open')`, id)
@@ -174,16 +185,23 @@ const widthAudit = `() => {
 	const controls = [...document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,summary,label')];
 	const positions = [...document.querySelectorAll('*')].filter(e => scrolls(getComputedStyle(e).overflowX) || scrolls(getComputedStyle(e).overflowY)).map(e => [e,e.scrollLeft,e.scrollTop]);
 	const windowPosition = [window.scrollX, window.scrollY];
+	const toggle = 'input[type=checkbox],input[type=radio]';
+	let checked = 0;
 	for (const e of controls) {
 		if (!shown(e) || e.closest('[inert]')) continue;
-		if (e.tagName === 'LABEL' && !e.control) continue;
-		// Native checkbox/radio widgets have the same action as their larger
-		// labels; audit each visible label as the target, not the tiny widget.
-		if (e.matches('input[type=checkbox],input[type=radio]') && [...e.labels].some(shown)) continue;
-		// Only prose links are exempt. A paragraph used as a flex wrapper for
-		// a paging control is not running text and still needs a phone target.
+		// A checkbox or radio label is the target that stands in for the tiny
+		// native widget, so it is audited instead of the widget. A text field's
+		// caption is not: the field itself is the target and is audited.
+		if (e.tagName === 'LABEL' && !e.control?.matches(toggle)) continue;
+		if (e.matches(toggle) && [...e.labels].some(shown)) continue;
+		checked++;
+		// Only inline links in running text are exempt: an inline <a> whose
+		// paragraph also has its own text. A paragraph used as a flex wrapper
+		// for a paging control, or a link styled as a block or button, is not
+		// running text and still needs a phone target.
 		const p = e.closest('p');
-		const proseLink = e.matches('a[href]') && p && [...p.childNodes].some(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+		const proseLink = e.matches('a[href]') && getComputedStyle(e).display === 'inline' && p &&
+			[...p.childNodes].some(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
 		let r = box(e);
 		if (matchMedia('(width < 852px)').matches && !proseLink && (r.width < 44 || r.height < 44))
 			problems.push('phone target smaller than 44x44: ' + describe(e));
@@ -215,5 +233,5 @@ const widthAudit = `() => {
 	}
 	for (const [e,x,y] of positions) { e.scrollLeft = x; e.scrollTop = y; }
 	window.scrollTo({left:windowPosition[0],top:windowPosition[1],behavior:'instant'});
-	return problems;
+	return {problems, checked};
 }`

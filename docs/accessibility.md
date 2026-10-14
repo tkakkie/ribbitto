@@ -46,7 +46,10 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   field text (#973). `TestBrowser/width-audit`
   (`internal/web/width_audit_browser_test.go`) checks these targets, control
   reachability, and document and scroll-container horizontal overflow on
-  every page at phone, landscape and breakpoint widths (#974).
+  every page at phone, landscape and breakpoint widths (#974). A target
+  label is a checkbox's or radio's label, which stands in for the small
+  native widget; a text field's caption is not, since the field itself is
+  the target.
 - **Colour is never the only signal** (see [*Direction*](ui.md#direction)): a state also has
   text, an icon or a shape.
 - **Styles** ✓ only through the token utilities: no `style` attributes and

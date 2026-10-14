@@ -53,9 +53,11 @@ templ messageItem(entry Message, announcement string) {
 				@MemberName(entry.DisplayName, entry.Handle)
 			</span>
 			<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
-			<a href={ templ.SafeURL(entry.TopicURL) } class="inline-flex items-center gap-1 text-caption max-desk:min-w-0 text-muted hover:text-brand">
+			// A long topic name wraps at any width rather than widening the
+			// reading column, which scrolls sideways at the desk breakpoint.
+			<a href={ templ.SafeURL(entry.TopicURL) } class="inline-flex min-w-0 items-center gap-1 text-caption text-muted wrap-anywhere hover:text-brand max-desk:min-h-11">
 				@Icon("branch-regular", 20)
-				<bdi class="max-desk:min-w-0">
+				<bdi class="min-w-0">
 					if entry.DefaultTopic {
 						{ i18n.T(ctx, "topic.default") }
 					} else {
@@ -64,7 +66,7 @@ templ messageItem(entry Message, announcement string) {
 				</bdi>
 			</a>
 			// Every checkbox shows the same label, so its message's body describes it.
-			<label class="ml-auto inline-flex min-h-9 items-center gap-2 rounded-md px-2 text-caption text-muted hover:bg-hover">
+			<label class="ml-auto inline-flex min-h-9 items-center gap-2 rounded-md px-2 text-caption text-muted hover:bg-hover max-desk:min-h-11">
 				<input type="checkbox" id={ "select-" + MessageDOMID(entry.ID) } form="branch-form" name="message" value={ idValue(entry.ID) + "/" + idValue(entry.TopicID) } data-source={ idValue(entry.TopicID) } aria-describedby={ "body-" + MessageDOMID(entry.ID) }/>
 				{ i18n.T(ctx, "topic.branch_select") }
 			</label>

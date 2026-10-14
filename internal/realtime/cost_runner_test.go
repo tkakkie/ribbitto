@@ -2,6 +2,7 @@ package realtime_test
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,6 +27,9 @@ type costRunner struct {
 	hybrids     []*costHybridConnection
 	senders     []*costRunnerSender
 	snapshot    func(context.Context, org.Membership, realtime.Subscription) (hybridFrame, error)
+
+	persistMu        sync.Mutex
+	changesPersisted []costChange
 }
 
 func costModelArm(arm string) bool { return arm == "baseline" || arm == "hybrid" }
@@ -71,7 +75,12 @@ func (r *costRunner) wire(i int, stream realtime.Stream, sink *collector, schedu
 
 func (r *costRunner) reads(ctx context.Context, start time.Time) costReadResult {
 	return r.plan.run(ctx, start, r.first, func(ctx context.Context, member int, cursor int64) (bool, error) {
-		return costChangedRead(ctx, r.pool, r.changes, r.members[member], r.subs[member].Channel, cursor)
+		p := new(costPersist)
+		changed, err := costChangedRead(context.WithValue(ctx, costPersistKey{}, p), r.pool, r.changes, r.members[member], r.subs[member].Channel, cursor)
+		if changed && err == nil {
+			r.persisted(costChange{stream: member, readThrough: cursor}, p)
+		}
+		return changed, err
 	})
 }
 
@@ -101,7 +110,6 @@ func (r *costRunner) rejections() costHybridRejections {
 // hybrid completions. Atomic totals can be captured while writers are active.
 type costRunnerSender struct {
 	realtime.Sender
-	sidebars          []realtime.Outgoing
 	snapshots, deltas atomic.Int64
 }
 
@@ -112,7 +120,6 @@ func (s *costRunnerSender) Send(ctx context.Context, out realtime.Outgoing) erro
 	switch out.Name {
 	case "sidebar":
 		s.snapshots.Add(1)
-		s.sidebars = append(s.sidebars, out) // Only the writer uses this; inspect after exit.
 	case "sidebar-delta":
 		s.deltas.Add(1)
 	}

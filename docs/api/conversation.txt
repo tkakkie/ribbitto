@@ -139,6 +139,7 @@ type PageCounts struct // PageCounts holds capped sidebar counts and uncapped fi
   field FeedFirstUnread int64
   field TopicCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field TopicFirstUnread int64
+  field Witness *SidebarWitness
 type PageCountsIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) PageCounter // PageCountsIn binds unread's count orchestration to a page or sidebar snapshot.
 const PageSize untyped int = 50 // PageSize is how many messages one page of history holds.
 type PostReadWriter interface // PostReadWriter reads the page scope and adds the new message's range; floor is the safe topic floor computed by conversation from its own messages.
@@ -172,6 +173,7 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
   func (*Reader).One(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64) (entry Entry, err error) // One reads one message, its author names and topic in a read-only snapshot.
   func (*Reader).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64) (page ChannelPage, err error) // Page reads channel or topic history with the snapshot's event cursor, including older pages with a before bound.
   func (*Reader).Sidebar(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID) (sidebar SidebarSnapshot, err error) // Sidebar reads lists and counts in an independent read-only repeatable-read snapshot, without history, author directories or a stream cursor.
+  func (*Reader).WithWitness(capture WitnessIn) *Reader // WithWitness returns a configured copy; the ordinary reader stays disabled.
 func RouteMoved(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteMoved is messages.moved's realtime.Router: the channel and both topics, so a view of either sees the move.
 func RoutePosted(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePosted is message.posted's realtime.Router: the channel and, unless the payload is legacy, the posting-time topic.
 type SequenceRange struct // SequenceRange contains message sequences from Lo inclusive to Hi exclusive.
@@ -186,6 +188,17 @@ type SidebarSnapshot struct // SidebarSnapshot holds fresh sidebar lists and exp
   field Topic *Topic
   field TopicCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field Topics []Topic
+  field Witness *SidebarWitness
+type SidebarWitness struct // SidebarWitness is versioned member-specific evidence; absent floors stay absent.
+  field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field EventSeq int64
+  field Floors map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
+  field JoinedEventSeq int64
+  field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Ranges []WitnessRange
+  field Selected *github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Version int
 type SnapshotRunner interface // SnapshotRunner runs page/sidebar snapshots, One and Many (decision 26): the use case owns the read boundary, and the stores and directories only bind to the Snapshot they are given, so every read sees the same committed state.
   func (SnapshotRunner).InSnapshot(ctx context.Context, fn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) error) error // InSnapshot runs fn in a new read-only, repeatable-read transaction, returning fn's error as is.
 type Topic struct // Topic is a named conversation inside a channel, identified by ID.
@@ -210,6 +223,11 @@ func ValidateChannelImage(key string) error // ValidateChannelImage accepts a bu
 func ValidateChannelName(value string) (string, error) // ValidateChannelName returns a trimmed NFC name of 1–80 printable Unicode code points.
 func ValidateMessageBody(value string) (string, error) // ValidateMessageBody normalizes line endings and trims the whole plain-text body.
 func ValidateTopicName(value string) (string, error) // ValidateTopicName returns a trimmed NFC name of 1–80 printable Unicode code points, the same rule as channel names (docs/domain/topics.md).
+type WitnessIn func(context.Context, github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID) ([]WitnessRange, map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, error) // WitnessIn binds optional capture to the existing snapshot and validated scope.
+type WitnessRange struct // WitnessRange is a persisted member range, not an effective count gap.
+  field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Hi int64
+  field Lo int64
 type Writer interface // Writer is posting's and branching's reads and writes in the caller's transaction, on validated values.
   func (Writer).CreateTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, name string) (Topic, error) // CreateTopic creates a named topic.
   func (Writer).GetDefaultTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // GetDefaultTopic returns the channel's default topic; none, as for another organisation's channel, is ErrTopicNotFound.

@@ -255,6 +255,15 @@ func TestInSnapshot(t *testing.T) {
 		if !errors.As(err, &pgErr) || pgErr.Code != "25006" {
 			t.Fatalf("write in a snapshot = %v, want read_only_sql_transaction (25006)", err)
 		}
+		requireNoError(t, postgres.InSnapshot(ctx, pool, func(s postgres.Snapshot) error {
+			if postgres.CaptureSnapshot(ctx, s, func(bound postgres.Snapshot) error {
+				_, err := pgxbridge.Snapshot(bound).Exec(ctx, "SELECT 1/0")
+				return err
+			}) {
+				t.Fatal("SQL capture error accepted")
+			}
+			return nil
+		}))
 	})
 	t.Run("sees one snapshot while others commit", func(t *testing.T) {
 		requireNoError(t, postgres.InSnapshot(ctx, pool, func(s postgres.Snapshot) error {

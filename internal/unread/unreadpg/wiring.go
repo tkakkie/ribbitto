@@ -40,3 +40,6 @@ func TopicStateIn(s platform.Snapshot) unread.TopicStateReader { return postgres
 func NewFeedWriter(messages unread.ChannelMessagesIn, cursor unread.EventCursorIn) *unread.FeedWriter {
 	return unread.NewFeedWriter(func(tx platform.Tx) unread.RangeWriter { return WriterIn(tx) }, messages, cursor)
 }
+
+// PersistedIn binds unbounded raw read-state capture to the caller's snapshot.
+func PersistedIn(s platform.Snapshot) unread.PersistedReader { return postgres.PersistedIn(s) }

@@ -56,3 +56,34 @@ After writes stop, drain verification requires each stream's exact full model
 against independent persisted truth captured outside application SQL totals.
 Measured snapshots still pass a nil oracle checkpoint. Runner wiring remains
 #952b–952c; these are deterministic checks, with no measurement.
+
+Part #952b1 adds `costHybridConnection`, using the shared full-model source and
+writer-side coverage guard. The production-only route reconciles every bound
+organisation event (including unknown kinds and other channels) and member read;
+it infers no hypothetical effects. A private per-connection watch adds fixed
+30 s repairs with separate 10/60 s sensitivity, without publishing repairs to
+other tabs or the baseline. Exit joins its timer worker and releases the member
+watch. Both `repair` and `ignored` coverage rejections preserve the installed
+model and request fresh private repair after the recount throttle;
+a failed send never installs the candidate. The matched pinned-model tests and
+all #961 lifecycle scenarios also run through this adapter. Runner integration
+is #952b2; accounting, freshness and gates remain #952c. No measurement ran.
+
+Rejected completions return nil, so the production stream records them as
+delivered, advances its covered generation and resets the heartbeat timer even
+though no frame was installed. The observer's `Delivered` count and heartbeat
+timing are therefore not hybrid-arm evidence. Hybrid evidence uses sender-side
+probe frames, the adapter's separate `repair`/`ignored` rejection counts and SQL
+totals: a rejected computation's SQL stays counted. Measured runs must keep
+heartbeats off, as the cost runner already does. The private wake requests a
+recount after the throttle; it cannot undo the stream's delivery bookkeeping.
+On a single production stream, increasing request versions and one incarnation
+prevent `ignored`; its wake remains defensive. Virtual-time regressions force
+stale coverage through `Stream.Run` and a duplicate directly through the arm's
+`Send`, then require the stream's next recount to install the changed model.
+
+A production hybrid requires a sidebar-only retry outcome on the stream, such
+as a retry sentinel: keep the stream dirty, preserve sent version, covered
+generation and last-written time, retain the recount throttle and record a
+separate observer outcome. This is a prerequisite for adoption, not implemented
+here: #952 excludes production package changes.

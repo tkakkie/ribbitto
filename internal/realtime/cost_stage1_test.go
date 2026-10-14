@@ -11,6 +11,8 @@ import (
 func costSizing(t *testing.T, arm string, normal int) (int, int, int) {
 	t.Helper()
 	switch arm {
+	case "baseline", "hybrid":
+		return 36, 0, 26
 	case "sync40", "async40":
 		return 40, 0, 40
 	case "async10+30":

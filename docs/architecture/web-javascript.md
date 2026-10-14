@@ -7,6 +7,15 @@ JavaScript responsibilities and constraints for browser enhancements.
 JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
 keyboard, local time, selection constraints, and htmx/SSE input glue.
 
+**Planned exception until PR 3 of #1039 lands:**
+[decision 34](../decisions/34-live-unread-counts.md) lets one script own
+sidebar badge numbers and bounded recovery state: the snapshot sequence,
+at most 1,000 retained `unread` events with their application decisions,
+and a recovering flag. It changes only the text and visibility of
+server-rendered badges, never creates elements and never makes requests;
+htmx sends resync requests. The planned markup contract is in
+[web layers](web-layers.md#htmx).
+
 - `message-stream-v9.js` emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
   `read-visibility-v5.js` initializes on scoped `htmx:load`; automatic

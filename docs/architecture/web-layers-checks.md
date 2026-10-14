@@ -50,6 +50,11 @@ Left to review, because a pattern check cannot prove them: that a stored
 value is only a UX setting, that a script owns no application state, and
 that a component makes no authorisation decision.
 
+**Planned exception until PR 3 of #1039 lands:** review the no-application-state
+rule with [decision 34](../decisions/34-live-unread-counts.md)'s narrow allowance
+for one script's sidebar badge numbers and bounded recovery state. It never
+creates elements or makes requests.
+
 ### Shared browser tests
 
 `TestBrowser` in `internal/web/message_stream_browser_test.go` is the shared

@@ -1,4 +1,4 @@
-# Write-time unread counters: SQL adapter (#957a–c2b)
+# Write-time unread counters: SQL adapter (#957a–c3)
 
 The test-only adapter in `internal/realtime/unread_counters_sql_test.go` creates
 scoped bigint totals and complete member bundles with validity/revision. It uses
@@ -7,7 +7,7 @@ messages in exact newly covered ranges by topic before COMMIT. Own posts enter
 that difference once; range/floor changes advance revision. Materialisation
 counts every topic uncapped. Missing/invalid bundles fall back to SQL prefix/range
 counts in the caller's snapshot. Raw fallback is exhaustive for verification;
-#957c3 must retain today's capped fallback separately for measurement.
+the recount path uses today's capped fallback separately.
 
 `internal/realtime/unread_counters_sql_moves_test.go` transfers topic T/R in the
 production branch transaction, classifying selected original sequences by each
@@ -42,7 +42,7 @@ scan. Both shapes run the same sequential oracle and gated transaction tests,
 including no-ops, overlap, rollback, retries, prefixes, missing/invalid bundles
 and pinned snapshots. A structural guard rejects whole-coverage aggregation
 on the intended path. Materialisation and exhaustive fallback remain correctness
-checks; matched capped recounts and workload wiring follow in #957c3–c4.
+checks; mixed workload scheduling follows in #957c4.
 
 `internal/realtime/unread_counters_accounting_test.go` adds #957c2a's
 **unmeasured accounting seam**, shared by current production writes and intended
@@ -85,6 +85,28 @@ and both designs hold COMMIT until PostgreSQL confirms the wait; repeated polls
 count once and a sequential control counts none. Two materialised members and
 two topics require 2/2/4 locked rows in the counter move. Every-member locking
 and #957c2a's deadlock/failure/retry accounting are unchanged.
+
+`internal/realtime/unread_counters_recounts_test.go` adds #957c3's unmeasured
+recounts and drift/repair operations. Both designs use the same persisted fixture,
+member/selection inputs and production sidebar lists. Each gets 36 connections:
+35 shared by **all** application work (writes, recounts, fallback, detection and
+repair), plus one reserved for lock observation; no separate recount/repair pool.
+The fixture/oracle pool is verification-only. A lease-exhaustion test proves the
+shared application ceiling and the observer's reserved capacity for both designs.
+
+Valid bundles use one batched counter lookup; missing/invalid scopes use today's
+four capped count statements in the caller's snapshot, including off-list
+selection. Recount and fallback have separate accounts on the existing seam;
+fallback's statements are excluded from the parent's statement total, while its
+time remains inside the parent's transaction sample. Detection has its own
+read-only snapshot/account and compares exhaustive T and R independently across
+all topics. Missing bundles are lazy, not drift. Explicit repair has a separate
+account, takes the existing organisation-first locks and rebuilds scoped totals
+and the selected member's whole bundle uncapped, advancing revision. It leaves
+other members' missing bundles absent. RETURNING sums include every CTE write.
+These exhaustive detection/repair scans are application load, never correctness
+oracle SQL or write-maintenance evidence. Tests cover fragmentation, join prefixes,
+empty/off-list topics, 99+ fallback, T/R/validity drift and uncapped repair.
 
 Production, migrations and #867's stability rule are unchanged. No measurements
 or adoption conclusion follow from these tests. Only the intended maintenance

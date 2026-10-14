@@ -59,7 +59,7 @@ func stage2Successful(op stage2Operation) bool {
 		(op.Operation != "read" || op.Changed == op.Scheduled)
 }
 
-// Evaluate settled HTTP evidence only. Later slices replace the placeholders;
+// Evaluate settled HTTP, headroom and stability evidence. Later slices replace placeholders;
 // schema-valid output must not imply that unevaluated gates passed. Invalid
 // operation sets in either input return an error without changing the window.
 func stage2Evaluate(w *stage2Window, paired *stage2Window) error {
@@ -98,6 +98,9 @@ func stage2Evaluate(w *stage2Window, paired *stage2Window) error {
 				continue
 			}
 			switch gate.ID {
+			case "stability":
+				w.Gates = append(w.Gates, stage2QueueStability(w.Samples, int64(w.Protocol.WindowSeconds)*int64(time.Second), stage2RegistrationBound(w.Effective.Metrics)))
+				continue
 			case "normal-503":
 				v.Measured["count"] = float64(normal503)
 				pass, evaluated = float64(normal503) <= gate.Limits[0], true

@@ -134,6 +134,9 @@ func counterClassifyLock(words []string) bool {
 func (a counterAccountingTracer) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	words := strings.Fields(strings.ToLower(strings.TrimSuffix(strings.TrimSpace(data.SQL), ";")))
 	control := counterClassifyControl(words)
+	if r, _ := ctx.Value(counterRecountKey{}).(*counterRecountState); r != nil && control == counterBegin {
+		r.conn = conn // The count factory uses the sidebar's connection and snapshot.
+	}
 	var lockStart time.Time
 	if n := counterAccountIn(ctx); n != nil {
 		if counterClassifyLock(words) {

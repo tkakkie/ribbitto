@@ -3,7 +3,7 @@
 `cmd/loadgen/stage2_headroom.go` consumes the [telemetry contract](stream-sidebar-stage2-telemetry.md)
 and supplies exactly the five [pinned headroom verdicts](stream-sidebar-stage2.md)
 to window evaluation. These gates are async-only, so sync windows record them as
-inconclusive. The stability gate stays an inconclusive placeholder until slice 5c.
+inconclusive. The [stability evaluator](stream-sidebar-stage2-stability.md) supplies its separate gate.
 Invalid phases, offsets or pool sections error before changing the window.
 
 Acquired p95/p99 use exact nearest rank, and maximum uses retained `traffic`

@@ -23,8 +23,8 @@ concurrency:
 
 jobs:
   # The required status check is the job named "ci" at the end; the other
-  # jobs run in parallel, each on its own runner with its own PostgreSQL
-  # (#992). Do not add path filters: a workflow that path filters skip never
+  # jobs run in parallel, each on its own runner, and each that runs Go
+  # tests with its own PostgreSQL (#992). Do not add path filters: a workflow that path filters skip never
   # reports, and the pull request can then never be merged. Every job runs on
   # every event.
   checks:

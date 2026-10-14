@@ -78,13 +78,14 @@
     const unread = (message) => {
       try {
         const event = JSON.parse(message.data);
-        if ((Number.isInteger(event?.seq) && event.seq >= 0) ||
-            (typeof event?.seq === "string" && /^\d+$/.test(event.seq))) observe(BigInt(event.seq));
-        if (!event || !Number.isSafeInteger(event.seq) || event.seq < 0 || !uuid(event.channel)) throw new Error("invalid unread");
+        if (!event || !Number.isSafeInteger(event.seq) || event.seq < 0) throw new Error("invalid unread sequence");
+        const seq = BigInt(event.seq);
+        observe(seq);
+        if (!uuid(event.channel)) throw new Error("invalid unread");
         // Missing topic/author is legacy, not a new post that can increment.
         if (event.topic === undefined) return;
         if (!uuid(event.topic) || (event.author !== undefined && !uuid(event.author))) throw new Error("invalid routing");
-        if (BigInt(event.seq) <= snapshot || events.has(event.seq)) return;
+        if (seq <= snapshot || events.has(seq)) return;
         if (events.size === 1000) {
           let dropped = 0n;
           for (const seq of events.keys()) if (BigInt(seq) > dropped) dropped = BigInt(seq);
@@ -93,7 +94,7 @@
         }
         event.eligible = event.author !== undefined && event.author !== connection.dataset.member;
         event.applied = false;
-        events.set(event.seq, event);
+        events.set(seq, event);
         if (!recovering && event.eligible) {
           increment(event);
           event.applied = true;

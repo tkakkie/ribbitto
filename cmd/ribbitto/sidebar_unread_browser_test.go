@@ -92,7 +92,7 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 		}
 	})
 
-	for _, kind := range []string{"older-feed", "older-topic", "list", "hidden", "DOM", "malformed", "failed-request", "during-resync", "continuous-posts", "before-request", "loss-during-resync", "overflow", "older-loss-snapshot", "second-overflow"} {
+	for _, kind := range []string{"older-feed", "older-topic", "list", "hidden", "DOM", "malformed", "sequence-string", "sequence-fraction", "sequence-unsafe", "failed-request", "during-resync", "continuous-posts", "before-request", "loss-during-resync", "overflow", "older-loss-snapshot", "second-overflow"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 			defer cancel()
@@ -280,6 +280,29 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 				page.MustEval(`() => window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))`)
 				finish(next(), 204)
 				exact(7, 0)
+				return
+			}
+			if strings.HasPrefix(kind, "sequence-") {
+				exact(6, 5)
+				send(post(7, other))
+				both(6)
+				seq := map[string]string{
+					"sequence-string":   `"9007199254740993"`,
+					"sequence-fraction": `100.5`,
+					"sequence-unsafe":   `9007199254740992`,
+				}[kind]
+				send(fmt.Sprintf("event: unread\ndata: {\"channel\":%q,\"topic\":%q,\"seq\":%s,\"author\":%q}\n\n", realtimeID(f.channel), realtimeID(f.a), seq, realtimeID(other)))
+				both(6)
+				reply := next()
+				send(post(8, other))
+				both(6)      // Malformed sequences must stop increments until recovery completes.
+				exact(8, 10) // Cover the highest valid sequence, never the malformed value.
+				both(10)
+				finish(reply, 204)
+				both(10)
+				send(post(9, other))
+				both(11)
+				noRetry(1)
 				return
 			}
 			// A malformed badge is a failed DOM application, rather than a missing row.

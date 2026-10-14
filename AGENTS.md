@@ -12,7 +12,7 @@ comments, docs, commits, issues, pull requests — is written in English.
 
 ## Workflow
 
-Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file covers what). The rules you must not skip:
+Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file covers what); new measurement work needs approval and a cap. The rules you must not skip:
 
 - **Start of a session:** read the pinned Status issue (`gh issue view 1`)
   and `docs/roadmap.md`.

@@ -23,12 +23,13 @@ func (s Scope) Physical(relation map[string]any) bool {
 	return relation["schemaname"] != nil || relation["catalogname"] != nil || !s.CTEs[name]
 }
 
-// Options selects traversal semantics; all acceptance and refusal is in Visit.
+// Options selects traversal semantics; callers own SQL acceptance policy.
 type Options struct {
-	Visit         func(string, map[string]any, Scope) error
-	NodesOnly     bool // Visit tagged nodes rather than JSON field names as well.
-	LexicalCTEs   bool // Visit nonrecursive bodies before exposing each CTE name.
-	OpaqueInserts bool // Visit WITH first, then let Visit check the INSERT body.
+	Visit          func(string, map[string]any, Scope) error
+	NodesOnly      bool // Visit tagged nodes rather than JSON field names as well.
+	LexicalCTEs    bool // Visit nonrecursive bodies before exposing each CTE name.
+	OpaqueInserts  bool // Visit WITH first, then let Visit check the INSERT body.
+	SelectBranches bool // Visit embedded set-operation branches as SelectStmt nodes.
 	// Relation visits write targets separately and excludes them from read traversal.
 	Relation func(map[string]any, bool, Scope) error
 }
@@ -72,6 +73,28 @@ func Walk(value any, scope Scope, options Options) error {
 						delete(n, "withClause")
 					}
 					child = n
+				}
+			}
+			if kind == "SelectStmt" && options.SelectBranches {
+				// PostgreSQL embeds these statements without their node tags.
+				// Re-tag copies so each branch gets statement policy and CTE scope.
+				switch n["op"] {
+				case "SETOP_NONE":
+					if n["larg"] != nil || n["rarg"] != nil {
+						return fmt.Errorf("unsupported SELECT branches")
+					}
+				case "SETOP_UNION", "SETOP_INTERSECT", "SETOP_EXCEPT":
+					n = maps.Clone(n)
+					for _, field := range []string{"larg", "rarg"} {
+						branch := Object(n[field])
+						if len(branch) == 0 {
+							return fmt.Errorf("unsupported SELECT branch %s", field)
+						}
+						n[field] = map[string]any{"SelectStmt": branch}
+					}
+					child = n
+				default:
+					return fmt.Errorf("unsupported SELECT operation %v", n["op"])
 				}
 			}
 			if kind == "InsertStmt" && options.OpaqueInserts {

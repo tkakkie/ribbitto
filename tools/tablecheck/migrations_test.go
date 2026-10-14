@@ -96,13 +96,19 @@ func (p *migrationPolicy) visit(tag string, n map[string]any, module string) err
 		default:
 			return fmt.Errorf("unsupported migration function %s", sqlwalk.Names(n["funcname"]))
 		}
-	case "A_Expr":
-		switch sqlwalk.Names(n["name"]) {
+	case "A_Expr", "SubLink", "SortBy":
+		name, err := expressionOperator(tag, n)
+		if err != nil {
+			return fmt.Errorf("unsupported migration operator: %w", err)
+		}
+		switch name {
+		case "":
+			return nil
 		case "=", "<", ">", "<=", ">=", "<>", "+", "-", "||":
 		default:
-			return fmt.Errorf("unsupported migration operator %s", sqlwalk.Names(n["name"]))
+			return fmt.Errorf("unsupported migration operator %s", name)
 		}
-	case "ReturnStmt", "RangeVar", "ResTarget", "ColumnRef", "A_Star", "A_Const", "String", "Integer", "ParamRef", "BoolExpr", "NullTest", "SubLink", "RangeSubselect", "JoinExpr", "Alias", "SortBy", "List", "CoalesceExpr", "MinMaxExpr", "OnConflictClause", "InferClause", "IndexElem", "WindowDef":
+	case "ReturnStmt", "RangeVar", "ResTarget", "ColumnRef", "A_Star", "A_Const", "String", "Integer", "ParamRef", "BoolExpr", "NullTest", "RangeSubselect", "JoinExpr", "Alias", "List", "CoalesceExpr", "MinMaxExpr", "OnConflictClause", "InferClause", "IndexElem", "WindowDef":
 	default:
 		return fmt.Errorf("unsupported migration SQL node %s", tag)
 	}

@@ -155,7 +155,7 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 		return fmt.Errorf("foreign table %s (write=%v, owner=%s)", table, write, owner)
 	}
 	return sqlwalk.Walk(stmt, sqlwalk.Scope{}, sqlwalk.Options{
-		NodesOnly: true, LexicalCTEs: true,
+		NodesOnly: true, LexicalCTEs: true, SelectBranches: true,
 		Relation: func(r map[string]any, write bool, _ sqlwalk.Scope) error {
 			if r["schemaname"] != nil || r["catalogname"] != nil {
 				if write {
@@ -207,18 +207,20 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 				if n["lockedRels"] != nil {
 					return fmt.Errorf("unsupported FOR UPDATE OF (relation or alias)")
 				}
-			case "A_Expr":
-				parts := n["name"].([]any)
-				if len(parts) != 1 {
-					return fmt.Errorf("unsupported qualified operator")
+			case "A_Expr", "SubLink", "SortBy":
+				name, err := expressionOperator(tag, n)
+				if err != nil {
+					return err
 				}
-				name := sqlwalk.Node(parts[0], "String")["sval"].(string)
+				if name == "" {
+					return nil
+				}
 				// These are the only operators used in db/queries; others can
 				// invoke user-defined functions with hidden table access.
 				switch name {
 				case "=", "<", ">", "<=", "+":
 				case "@>":
-					if n["kind"] != "AEXPR_OP" || !readSetParameter(n["lexpr"]) || !bigintOperand(n["rexpr"], bigints) {
+					if tag != "A_Expr" || n["kind"] != "AEXPR_OP" || !readSetParameter(n["lexpr"]) || !bigintOperand(n["rexpr"], bigints) {
 						return fmt.Errorf("unsupported containment: requires int8multirange sqlc.arg parameter and bigint expression")
 					}
 				default:
@@ -244,7 +246,7 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 				if !builtin {
 					return fmt.Errorf("unsupported type %s", name)
 				}
-			case "ResTarget", "ColumnRef", "A_Star", "A_Const", "String", "Integer", "ParamRef", "BoolExpr", "NullTest", "SubLink", "RangeSubselect", "JoinExpr", "Alias", "SortBy", "List", "CoalesceExpr", "MinMaxExpr", "OnConflictClause", "InferClause", "IndexElem":
+			case "ResTarget", "ColumnRef", "A_Star", "A_Const", "String", "Integer", "ParamRef", "BoolExpr", "NullTest", "RangeSubselect", "JoinExpr", "Alias", "List", "CoalesceExpr", "MinMaxExpr", "OnConflictClause", "InferClause", "IndexElem":
 			default:
 				return fmt.Errorf("unsupported SQL node %s", tag)
 			}

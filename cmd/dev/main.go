@@ -250,6 +250,11 @@ func exitedLeaders(watchers []watcher) ([]bool, error) {
 		return reaped, fmt.Errorf("reading the process table before shutdown: %w", err)
 	}
 	gone, _ := classify(watchers, reaped, table)
+	// A watcher reaped during the scan has exited, though its stale line and
+	// a new holder of its PID can make it look alive (Codex on #1052).
+	for i, w := range watchers {
+		gone[i] = gone[i] || w.reaped.Load()
+	}
 	return gone, nil
 }
 

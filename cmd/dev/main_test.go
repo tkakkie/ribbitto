@@ -569,6 +569,45 @@ func TestShutdownSkipsASessionReusedDuringTheSignals(t *testing.T) {
 	}
 }
 
+// Codex on #1052: a watcher that a signal from elsewhere kills and that is
+// reaped while the first table is read has exited before shutdown's signals,
+// so its failure is reported, even when its line in the table is stale and a
+// new session leader holds its PID. The record carries a stranger's PID.
+func TestShutdownReportsAWatcherReapedDuringTheFirstScan(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", "exec sleep 30")
+	w, err := start(cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stranger := exec.Command("/bin/sh", "-c", "exec sleep 30")
+	stranger.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := stranger.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stranger.Process.Kill(); _ = stranger.Wait() })
+	original := listProcesses
+	t.Cleanup(func() { listProcesses = original })
+	first := true
+	listProcesses = func() (string, error) {
+		out, err := original()
+		if first {
+			first = false
+			_ = cmd.Process.Kill()
+			for !w.reaped.Load() {
+				time.Sleep(time.Millisecond)
+			}
+		}
+		return out, err
+	}
+	w.pid = stranger.Process.Pid
+	if err := shutdown([]watcher{w}); err == nil || !strings.Contains(err.Error(), "signal: killed") {
+		t.Fatalf("shutdown = %v, want the watcher killed before the signals", err)
+	}
+	if !alive(t, stranger.Process.Pid) {
+		t.Fatal("shutdown signalled the process holding the reused PID")
+	}
+}
+
 func helper(role, root string) *exec.Cmd {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
 	cmd.Env = append(os.Environ(), "DEV_HELPER="+role, "DEV_ROOT="+root)

@@ -8,6 +8,39 @@ import (
 	"testing"
 )
 
+func TestParse(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		root    string
+		check   bool
+		rev     string
+		wantErr bool
+	}{
+		{"write", []string{".."}, "..", false, "", false},
+		{"check", []string{"--check", ".."}, "..", true, "", false},
+		{"diff", []string{"--diff", "HEAD", ".."}, "..", false, "HEAD", false},
+		{"diff equals", []string{"--diff=HEAD", ".."}, "..", false, "HEAD", false},
+		{"no root", nil, "", false, "", true},
+		{"two roots", []string{"..", ".."}, "", false, "", true},
+		{"check and diff", []string{"--check", "--diff", "HEAD", ".."}, "", false, "", true},
+		{"empty diff", []string{"--diff", "", ".."}, "", false, "", true},
+		{"empty diff equals", []string{"--diff=", ".."}, "", false, "", true},
+		{"missing diff value", []string{"--diff"}, "", false, "", true},
+		{"unknown flag", []string{"--unknown", ".."}, "", false, "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, check, rev, err := parse(tc.args)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("parse error = %v, want error = %v", err, tc.wantErr)
+			}
+			if !tc.wantErr && (root != tc.root || check != tc.check || rev != tc.rev) {
+				t.Fatalf("parse = (%q, %v, %q), want (%q, %v, %q)", root, check, rev, tc.root, tc.check, tc.rev)
+			}
+		})
+	}
+}
+
 func write(t *testing.T, root, path, content string) {
 	t.Helper()
 	path = filepath.Join(root, path)

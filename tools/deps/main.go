@@ -31,20 +31,31 @@ const header = "# Package dependencies\n\n" +
 	"package, or SQL access to tables.\n\n```text\n"
 
 func main() {
-	check := flag.Bool("check", false, "fail when the graph is stale")
-	rev := flag.String("diff", "", "list changed edges since a revision")
-	flag.Usage = func() { fmt.Fprintln(os.Stderr, "usage: deps [--check | --diff <rev>] <repository root>") }
-	flag.Parse()
-	diff := false
-	flag.Visit(func(f *flag.Flag) { diff = diff || f.Name == "diff" })
-	if flag.NArg() != 1 || diff && (*check || *rev == "") {
-		flag.Usage()
+	root, check, rev, err := parse(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "usage: deps [--check | --diff <rev>] <repository root>")
 		os.Exit(2)
 	}
-	if err := run(flag.Arg(0), *check, *rev, os.Stdout); err != nil {
+	if err := run(root, check, rev, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "deps:", err)
 		os.Exit(1)
 	}
+}
+
+func parse(args []string) (string, bool, string, error) {
+	flags := flag.NewFlagSet("deps", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	check := flags.Bool("check", false, "fail when the graph is stale")
+	rev := flags.String("diff", "", "list changed edges since a revision")
+	if err := flags.Parse(args); err != nil {
+		return "", false, "", err
+	}
+	diff := false
+	flags.Visit(func(f *flag.Flag) { diff = diff || f.Name == "diff" })
+	if flags.NArg() != 1 || diff && (*check || *rev == "") {
+		return "", false, "", fmt.Errorf("invalid arguments")
+	}
+	return flags.Arg(0), *check, *rev, nil
 }
 
 func run(root string, check bool, rev string, out io.Writer) error {

@@ -95,7 +95,7 @@ func counterSQLIntervalMaintain(ctx context.Context, conn *pgx.Conn, w *counterS
 	}
 	// Each lateral aggregate has equality on the index's scope keys and a
 	// half-open event_seq range. Sequence holes contribute no messages.
-	return counterSQLExec(ctx, conn, `WITH intervals AS (
+	return counterSQLCountExec(ctx, conn, `WITH intervals AS (
  SELECT lo,hi FROM unnest($4::bigint[],$5::bigint[]) b(lo,hi)
  ), effects AS (
  SELECT d.topic_id,d.n FROM intervals i CROSS JOIN LATERAL (
@@ -105,11 +105,12 @@ func counterSQLIntervalMaintain(ctx context.Context, conn *pgx.Conn, w *counterS
  ), delta AS (SELECT topic_id,sum(n)::bigint AS n FROM effects GROUP BY topic_id HAVING sum(n)>0), topics AS (
  INSERT INTO counter_topic_read SELECT $1,$2,$3,d.topic_id,d.n FROM delta d
  WHERE EXISTS (SELECT 1 FROM counter_bundle WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3 AND valid)
- ON CONFLICT (organization_id,channel_id,member_id,topic_id) DO UPDATE SET n=counter_topic_read.n+excluded.n
- ) UPDATE counter_bundle SET n=n+CASE WHEN valid THEN (SELECT coalesce(sum(n),0) FROM delta) ELSE 0 END,
+ ON CONFLICT (organization_id,channel_id,member_id,topic_id) DO UPDATE SET n=counter_topic_read.n+excluded.n RETURNING 1
+ ), bundle AS (UPDATE counter_bundle SET n=n+CASE WHEN valid THEN (SELECT coalesce(sum(n),0) FROM delta) ELSE 0 END,
  revision=revision+CASE WHEN $8 THEN 1 ELSE 0 END
  WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3
- AND ($8 OR EXISTS(SELECT 1 FROM delta))`,
+ AND ($8 OR EXISTS(SELECT 1 FROM delta)) RETURNING 1)
+ SELECT (SELECT count(*) FROM topics)+(SELECT count(*) FROM bundle)`,
 		w.organization, w.channel, w.member, los, his, topics, counts, w.interval.changed)
 }
 

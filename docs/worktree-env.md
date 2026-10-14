@@ -25,8 +25,8 @@ until pruned. No prefix scans or test-template cleanup.
 `make ai-health` distinguishes missing/invalid admin configuration, connection
 failures and SQL failures without credentials;
 `make check` runs it before tests when DB configuration is set or required.
-`make check-ai-env` tests the reservation and cleanup (`scripts/ai_env.py`, until #1004);
-`cmd/devdb`'s Go tests cover running commands and the health check.
+`cmd/devdb` (`bin/ai-db reserve`, `release`, `run`, `health`) implements all of
+this; its Go tests cover each rule.
 
 Build with `go build -o bin/ai-capacity ./cmd/capacity`, then run
 `bin/ai-capacity WT1 WT2 PACKAGES PARALLEL` outside the sandbox, with this

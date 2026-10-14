@@ -2,6 +2,7 @@ package realtime_test
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -57,7 +58,7 @@ func newCostRunner(ctx context.Context, arm string, pool, truth *pgxpool.Pool, m
 func (r *costRunner) wire(i int, stream realtime.Stream, sink *collector, scheduler *realtime.RecountScheduler) (realtime.Stream, realtime.Subscription, realtime.Sender) {
 	sub := r.subs[i]
 	sub.Interests = []realtime.Interest{realtime.InterestMessages, realtime.InterestSidebar}
-	r.senders[i].collector = sink
+	r.senders[i].Sender = sink
 	r.models[i].sender = r.senders[i]
 	stream.Heartbeat = 0 // Rejected hybrid completions also reset production's timer.
 	stream.Sidebar = r.models[i]
@@ -96,19 +97,52 @@ func (r *costRunner) rejections() costHybridRejections {
 	return total
 }
 
-// Sender-side frames are evidence; StreamObserver.Delivered includes rejected
-// hybrid completions. Keep these witnesses available for #952c's accounting.
+// Sender-side successes are evidence; StreamObserver.Delivered includes rejected
+// hybrid completions. Atomic totals can be captured while writers are active.
 type costRunnerSender struct {
-	*collector
-	sidebars []realtime.Outgoing
+	realtime.Sender
+	sidebars          []realtime.Outgoing
+	snapshots, deltas atomic.Int64
 }
 
 func (s *costRunnerSender) Send(ctx context.Context, out realtime.Outgoing) error {
-	if err := s.collector.Send(ctx, out); err != nil {
+	if err := s.Sender.Send(ctx, out); err != nil {
 		return err
 	}
-	if out.Name == "sidebar" {
+	switch out.Name {
+	case "sidebar":
+		s.snapshots.Add(1)
 		s.sidebars = append(s.sidebars, out) // Only the writer uses this; inspect after exit.
+	case "sidebar-delta":
+		s.deltas.Add(1)
 	}
 	return nil
+}
+
+// SQL shares include attempted transaction controls, regardless of outcome.
+// The existing pool tracer attributes recounts by role; fixture pools are untraced.
+type costAccounting struct {
+	sidebarSQL, otherSQL, totalSQL  int64
+	computations, snapshots, deltas int64
+}
+
+func (r *costRunner) accounting(queries *epochCounter) costAccounting {
+	queries.sqlMu.Lock()
+	q := queries.Counts()
+	total := costAccounting{sidebarSQL: queries.sidebarSQL, totalSQL: q.Queries + q.Begins + q.Commits + q.Rollbacks}
+	total.otherSQL = total.totalSQL - total.sidebarSQL
+	queries.sqlMu.Unlock()
+	for i, c := range r.models {
+		total.computations += c.computations.Load()
+		total.snapshots += r.senders[i].snapshots.Load()
+		total.deltas += r.senders[i].deltas.Load()
+	}
+	return total
+}
+
+func (a costAccounting) since(before costAccounting) costAccounting {
+	return costAccounting{
+		sidebarSQL: a.sidebarSQL - before.sidebarSQL, otherSQL: a.otherSQL - before.otherSQL, totalSQL: a.totalSQL - before.totalSQL,
+		computations: a.computations - before.computations, snapshots: a.snapshots - before.snapshots, deltas: a.deltas - before.deltas,
+	}
 }

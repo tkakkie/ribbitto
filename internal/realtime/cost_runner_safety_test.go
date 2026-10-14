@@ -41,7 +41,7 @@ func TestCostRunnerMatchedWiringAndDrain(t *testing.T) {
 				if normal != 36 || separate != 0 || workers != 26 {
 					t.Fatal("matched connection/worker budget changed")
 				}
-				queries := platform.NewQueryCounter()
+				queries := &epochCounter{QueryCounter: platform.NewQueryCounter()}
 				config := truth.Config()
 				config.MaxConns, config.ConnConfig.Tracer = int32(normal), queries
 				pool, err := pgxpool.NewWithConfig(t.Context(), config)
@@ -56,6 +56,9 @@ func TestCostRunnerMatchedWiringAndDrain(t *testing.T) {
 				// Compare the runner's actual closure to an explicit nil-checkpoint
 				// snapshot: any oracle queries in the runner change this SQL total.
 				before := queries.Counts()
+				if before != (platform.QueryCounts{}) {
+					t.Fatal("runner setup polluted application SQL")
+				}
 				_, err = costModelSnapshot(t.Context(), pool, members[0], subs[0].Channel, subs[0].Topic, nil)
 				middle := queries.Counts()
 				_, runnerErr := r.models[0].snapshot(t.Context())
@@ -104,6 +107,10 @@ func TestCostRunnerMatchedWiringAndDrain(t *testing.T) {
 				if costReadDrain(r.models, want) != nil {
 					t.Fatal("matched initial models were not delivered")
 				}
+				accounting0 := r.accounting(queries)
+				if accounting0.computations != 2 || accounting0.snapshots != 2 || accounting0.deltas != 0 {
+					t.Fatalf("initial computation/send accounting: %+v", accounting0)
+				}
 				reads := r.reads(ctx, time.Now())
 				if reads != (costReadResult{scheduled: 4, changed: 4}) {
 					t.Fatalf("runner changed-read load incomplete: %+v", reads)
@@ -120,6 +127,9 @@ func TestCostRunnerMatchedWiringAndDrain(t *testing.T) {
 				synctest.Wait()
 				if err := costReadDrain(r.models, fresh); err != nil {
 					t.Fatalf("exact final drain failed: %v", err)
+				}
+				if got := r.accounting(queries).since(accounting0); got.sidebarSQL <= 0 || got.otherSQL <= 0 || got.sidebarSQL+got.otherSQL != got.totalSQL || got.computations != 2 || got.snapshots != 2 || got.deltas != 0 {
+					t.Fatalf("matched window included setup or lost accounting: %+v", got)
 				}
 				saved := r.models[1]
 				r.models[1] = &costModelConnection{}

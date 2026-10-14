@@ -254,7 +254,9 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 		}
 		setupStart = time.Now()
 		if modelRunner != nil {
-			// #952c supplies this comparison's accounting, freshness and gates.
+			t.Logf("accounting: arm=%s condition=production-only streams=%d sidebar-recount-sql-statements=%d other-application-sql-statements=%d total-application-sql-statements=%d recount-computations=%d snapshot-sends=%d delta-sends=%d repair-rejections=%d ignored-rejections=%d", arm, n,
+				r.accounting.sidebarSQL, r.accounting.otherSQL, r.accounting.totalSQL, r.accounting.computations, r.accounting.snapshots, r.accounting.deltas, r.rejected.repair, r.rejected.ignored)
+			// #952c2-c4 supply freshness, telemetry and gates; zero deltas are no evidence.
 			continue
 		}
 		if smoke {
@@ -325,6 +327,7 @@ type stepResult struct {
 	arm                          string
 	reads                        costReadResult
 	rejected                     costHybridRejections
+	accounting                   costAccounting
 	scheduled, completed, missed int
 	queue                        []costQueueSample
 	postingDuration              time.Duration
@@ -462,6 +465,10 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	counts0 := queries.countStatements.Load()
 	q0, s0, empty0, epochs0, a0 := queries.Counts(), costPoolStats(pool, recountPool), dbReads.empty.Load(), queries.epochReads.Load(), checks.inner.Stats()
 	queries.peak.Store(queries.active.Load())
+	var accounting0 costAccounting
+	if modelRunner != nil {
+		accounting0 = modelRunner.accounting(queries)
+	}
 	// Posts are scheduled at the fixed rate whatever their latency (an open
 	// loop), with at most one second's worth in flight: a post that would
 	// exceed it is counted as missed, and the step as underloaded, rather
@@ -568,6 +575,15 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	series := finishQueue()
 	cancel()
 	wg.Wait()
+	if modelRunner != nil {
+		// Join actual computations, including cancelled SQL, before closing totals.
+		if queue != nil {
+			queue.shutdown()
+		}
+		if scheduler != nil {
+			scheduler.Close()
+		}
+	}
 	if queue != nil {
 		series = append(series, costQueuePoint(queue, start, "disconnect"))
 	}
@@ -580,6 +596,10 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	r.reads = reads
 	if modelRunner != nil {
 		r.rejected = modelRunner.rejections()
+		r.accounting = modelRunner.accounting(queries).since(accounting0)
+		if r.accounting.sidebarSQL < 0 || r.accounting.otherSQL < 0 || r.accounting.sidebarSQL+r.accounting.otherSQL != r.accounting.totalSQL {
+			t.Fatalf("window SQL attribution does not sum to application total: %+v", r.accounting)
+		}
 	}
 	r.elapsed, r.countStatements = end.Sub(start), counts1-counts0
 	r.poolWait, r.poolEmpty = s1.EmptyAcquireWaitTime()-s0.EmptyAcquireWaitTime(), s1.EmptyAcquireCount()-s0.EmptyAcquireCount()
@@ -727,6 +747,9 @@ func (a *timingAuthorizer) take() []time.Duration {
 // production code needs no hook.
 type epochCounter struct {
 	*platform.QueryCounter
+	// Capture role and total together while statements can still start.
+	sqlMu           sync.Mutex
+	sidebarSQL      int64
 	timings         *costTimings
 	epochReads      atomic.Int64
 	countStatements atomic.Int64
@@ -742,6 +765,11 @@ func (c *epochCounter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data
 		if strings.HasPrefix(data.SQL, "-- name: "+name+" ") {
 			c.countStatements.Add(1)
 		}
+	}
+	c.sqlMu.Lock()
+	defer c.sqlMu.Unlock()
+	if ctx.Value(costRoleKey{}) == costSidebar {
+		c.sidebarSQL++
 	}
 	return c.QueryCounter.TraceQueryStart(ctx, conn, data)
 }

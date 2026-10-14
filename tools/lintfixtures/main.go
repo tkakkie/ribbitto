@@ -5,9 +5,10 @@
 // templates, that bodyclose rejects unclosed HTTP response bodies, that
 // sqlclosecheck rejects unused, unclosed pgx rows, and that nilerr rejects
 // returning nil after checking a non-nil error; plain lint never sees them.
-// Any other rows use satisfies sqlclosecheck: keep defer rows.Close(); lint
-// does not catch a missing Close once rows are used. make check runs it with
-// the pinned golangci-lint and the repository root.
+// sqlclosecheck only catches rows that are never used: once rows are read,
+// a missing Close passes lint, so keep defer rows.Close() after the query's
+// error check. make check runs it with the pinned golangci-lint and the
+// repository root.
 package main
 
 import (

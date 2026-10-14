@@ -20,6 +20,11 @@ packages. See [load client](load-client.md) for limits and usage.
 and capacity observation. It imports only `internal/platform/postgres` from
 this module to reuse the migration runner; credentials stay in the environment.
 
+`tools/download` is a tools-module command that owns the Tailwind and
+golangci-lint release pins, selects macOS arm64 or Linux amd64 assets, checks
+SHA-256 hashes and installs binaries atomically. It imports only the standard
+library; Make asks it for the versioned paths and invokes it on first use.
+
 | Package | Responsibility | May import from this module |
 |---|---|---|
 | `internal/kernel` | What every module shares and none owns ([decision 26](../decisions/26-modules-by-feature-layout-seams-and-order.md)): `ID` only today. | nothing |

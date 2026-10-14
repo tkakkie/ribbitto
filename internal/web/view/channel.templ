@@ -258,9 +258,10 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 }
 
 // channelFrame is the organisation stream around the app bar, the sidebar and
-// the page's own blocks. On the list page the sidebar is the page's <main>,
-// which fills the width below the desk breakpoint; there a conversation hides
-// the bar and the sidebar instead. The server never needs the width.
+// the page's own blocks. On the list page the sidebar is the page's <main>;
+// below the desk breakpoint it fills the screen above the bottom navigation,
+// and a conversation hides the bar and the sidebar instead. The server never
+// needs the width.
 templ channelFrame(page ChannelPage) {
 	<div
 		id="organization-stream"
@@ -269,13 +270,13 @@ templ channelFrame(page ChannelPage) {
 			hx-ext="sse"
 			sse-connect={ streamURL(page) }
 		}
-		class="flex h-dvh gap-2 bg-base p-2 text-body"
+		class={ "flex h-dvh gap-2 bg-base p-2 text-body", templ.KV("max-desk:flex-col max-desk:pb-0", page.List) }
 	>
 		<div id="stream-sink" hidden aria-hidden="true" sse-swap="sidebar,presence" hx-swap="none"></div>
 		@appBar(page)
 		// Either element is the scrolling pane that sidebar-scroll-v2.js finds.
 		if page.List {
-			<main class="flex w-sidebar shrink-0 flex-col overflow-y-auto px-1 py-2 max-desk:min-w-0 max-desk:flex-1">
+			<main class="flex w-sidebar shrink-0 flex-col overflow-y-auto px-1 py-2 max-desk:w-auto max-desk:flex-1">
 				@sidebarContent(page)
 			</main>
 		} else {
@@ -284,6 +285,10 @@ templ channelFrame(page ChannelPage) {
 			</aside>
 		}
 		{ children... }
+		if page.List {
+			@bottomNav(page)
+		}
+		@accountMenu(page)
 	</div>
 }
 

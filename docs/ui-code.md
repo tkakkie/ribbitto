@@ -25,11 +25,17 @@ wins. Without JavaScript the sidebar opens at its top, unless the URL's
 fragment names a row. The channel list page
 (`/organizations/{slug}/channels?channel=<id>`, #969) is the sidebar's
 content as the page's `<main>`, with the same pane, script and recounts;
-below `desk` it fills the width beside the app bar, and the block that
-prompts to open a channel at desktop width is hidden. There a conversation
-hides the app bar and the sidebar instead; its header's back link carries
-the channel's row id as its fragment, so the row is in view even without
-JavaScript.
+below `desk` the app bar and the block that prompts to open a channel at
+desktop width are hidden, and the list fills the screen above the bottom
+navigation (#970), the frame's last row, so no row scrolls behind it.
+There a conversation hides the app bar and the sidebar and shows no bottom
+navigation; its header's back link carries the channel's row id as its
+fragment, so the row is in view even without JavaScript.
+
+The account menu is one popover (`#account-menu`) in the frame, opened by
+the app bar's button at desktop width and the bottom navigation's Account
+below `desk`, where it is a bottom sheet. It sits outside both bars because
+a popover inside an ancestor hidden at the current width cannot show.
 
 ## Styles
 
@@ -52,7 +58,7 @@ JavaScript.
   The pattern check does not evaluate dynamic expressions.
 - **`web/styles/app.css` holds only** the tokens (`:root` colours, shadows and
   `@theme`), base styles, and what utilities cannot express: `@keyframes`,
-  the arrival animations and the reduced-motion rule. No component classes and
+  the arrival animations, the reduced-motion rule and the safe-area utility. No component classes and
   no `@apply` for components; no `style` attributes in templates.
 - **Spacing** follows the 4 px grid; a container sets the space between
   its children with `gap`, rather than margins on each child.
@@ -82,6 +88,13 @@ it. The first is the `@theme` breakpoint `--breakpoint-desk` (#969): `desk:`
 utilities apply from 852 px and `max-desk:` below it, so phone overrides
 leave the desktop classes as they are. The 1200 px one becomes a token
 with the issue that uses it (#972).
+
+**Safe area** (#970). The viewport meta has `viewport-fit=cover`, without
+which `env(safe-area-inset-*)` stays 0, so pages extend under a phone's
+home indicator and, in landscape, its notch. The base style pads `body`
+by the side insets, as the default fit did; what meets the bottom edge
+below `desk` uses `pb-safe-<n>`, `n` spacing steps plus the bottom inset:
+`pb-safe-0` on the bottom navigation, `pb-safe-4` on the account sheet.
 
 **Layers.** Only four `z-index` values are used, through Tailwind's
 built-in utilities, so no z-index tokens are added: `z-10` for something

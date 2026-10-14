@@ -60,7 +60,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   updating every reference in the same pull request. Today's contract ids
   are `organization-stream`, `stream-sink`, `conversation`, `message-list`, `message-items`, `load-older`,
   `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
-  `read-form`, `side-panel`, `panel-close`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
+  `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
   `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and
@@ -112,7 +112,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
 - Latest feeds/topics render `#read-form` with the snapshot `cursor`, a plain
   *Mark as read* submit button only if something was unread (else the form is
   `hidden`), and `hx-post` to the conversation URL plus `/read` (`POST /organizations/{slug}/channels/{channelID}[/topics/{topicID}]/read`). `hx-trigger="read-visible, submit"`, `hx-sync="this:drop"` and `hx-swap="none"`
-  send automatic and manual POSTs without swapping history or overlapping reads.
+  send automatic and manual POSTs without swapping history or overlapping reads;
+  automatic ones pause under a covering panel ([panels](../ui-components.md#side-panels)).
   `?before=` pages omit it. The endpoint resolves visibility,
   calls the transaction-owning unread use case and returns 204 to htmx or a 303
   for the plain form.
@@ -129,7 +130,7 @@ keyboard, local time, selection constraints, and htmx/SSE input glue.
 
 - `message-stream-v9.js` emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
-  `read-visibility-v4.js` initializes on scoped `htmx:load`; triggers send
+  `read-visibility-v5.js` initializes on scoped `htmx:load`; triggers send
   the snapshot, then the latest applied cursor.
   One request and one timer per page coalesce cursors. A 429 retries
   until success or hide/removal/navigation, with jittered exponential backoff
@@ -154,12 +155,9 @@ keyboard, local time, selection constraints, and htmx/SSE input glue.
 - **htmx events:** an `htmx:load` handler works only on the inserted element
   and descendants, never the whole document (#168).
 
-Move/history regression tests use an installed headless browser through
-go-rod (#349); see the [checks](web-layers-checks.md).
-
 ## How the rules are checked
 
-The checks, the JavaScript pattern check and the M3 audit are in
-[`web-layers-checks.md`](web-layers-checks.md).
+[`web-layers-checks.md`](web-layers-checks.md) has the go-rod browser
+tests (#349), the JavaScript pattern check and the M3 audit.
 
 [a11y]: ../accessibility.md

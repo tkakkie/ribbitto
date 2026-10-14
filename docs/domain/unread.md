@@ -95,6 +95,15 @@ automatically once shown, so they never add it. Automatic reading posts
 through the same form, which stays on the page, hidden, when nothing was
 unread.
 
+**A covering panel pauses automatic reading** (#972). While the members or
+overview panel covers the conversation — a bottom sheet below 852 px, an
+overlay from 852 to 1200 px — no automatic reading POST is sent: not on the
+panel page's load and not for live arrivals, re-evaluated whenever the width
+changes with the panel open. When the panel closes (a page load) or stops
+covering (the window widens to 1200 px), automatic reading resumes under the
+rules above. *Mark as read* is deliberate and never paused: below 1200 px
+the overview offers it, submitting the same form.
+
 ## Counts
 
 A channel's unread count is the number of its unread messages, which is the

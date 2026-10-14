@@ -159,8 +159,9 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 	}
 	@layout(stylesheetURL, title) {
 		@channelFrame(page) {
-			// The conversation and its panel share one flexible region.
-			<div class="flex min-w-0 flex-1 gap-2">
+			// The conversation and its panel share one flexible region, which
+			// an overlay panel covers.
+			<div class="relative flex min-w-0 flex-1 gap-2">
 				<main id="conversation" class="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block max-desk:rounded-none">
 					<header class="flex shrink-0 items-center gap-3 border-b border-border px-6 py-2 max-desk:gap-0 max-desk:px-1">
 						// Below the desk breakpoint the list replaces the hidden sidebar; the
@@ -185,7 +186,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							}
 						</div>
 						@panelControls(page)
-						if page.Reading && page.Before == 0 && page.EventCursor != nil {
+						if readable(page) {
 							@readForm(page)
 						}
 					</header>
@@ -247,12 +248,12 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		}
 		// Scripts stay outside swap targets; htmx will not run swapped scripts.
 		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/read-visibility-v4.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/read-visibility-v5.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-composer-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/side-panel-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/side-panel-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v9.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
@@ -430,12 +431,20 @@ templ messageComposer(page ChannelPage, oob bool) {
 }
 
 // The snapshot bounds plain submissions; htmx uses the cursor of the shown DOM.
+// readable reports whether the page has #read-form: only a latest page with
+// reading wired and a snapshot cursor reads.
+func readable(page ChannelPage) bool {
+	return page.Reading && page.Before == 0 && page.EventCursor != nil
+}
+
 // Automatic reading posts through this form, live arrivals included, so it
 // stays when nothing was unread and only the button goes. Like the divider,
 // the button follows the snapshot for the whole visit: live messages are read
 // automatically once shown, and a page without JavaScript gets none.
 templ readForm(page ChannelPage) {
-	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible, submit" hx-swap="none" hx-sync="this:drop" hidden?={ page.FirstUnread == 0 } class="max-desk:shrink-0">
+	// Below desk its button shows in the overview sheet instead; automatic
+	// reading posts through the form at every width.
+	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible, submit" hx-swap="none" hx-sync="this:drop" hidden?={ page.FirstUnread == 0 } class="max-desk:hidden">
 		<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		if page.FirstUnread > 0 {
 			@submitButton(buttonSecondaryIcon, "reading.mark") {

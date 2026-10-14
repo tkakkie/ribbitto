@@ -83,13 +83,30 @@ templ panelControl(page ChannelPage, panel, label string) {
 	</a>
 }
 
-// sidePanel is the block beside the conversation. Its heading takes focus
-// when the panel opens; side-panel-v1.js adds Escape and returns focus.
+// sheetHeight caps a panel's bottom sheet below desk: members and the
+// overview take at most 80 %, so a later panel, such as the reply chain,
+// can take the whole height without new structure.
+func sheetHeight(panel string) string {
+	if panel == PanelMembers || panel == PanelOverview {
+		return "max-desk:max-h-4/5"
+	}
+	return "max-desk:max-h-full"
+}
+
+// sidePanel is the block beside the conversation from the wide breakpoint;
+// below it the block covers the conversation, dimmed behind a link that
+// closes it: an overlay on its right side, below desk a bottom sheet. The
+// heading takes focus when the panel opens; side-panel-v2.js adds Escape,
+// keeps focus out of the covered conversation and returns focus.
 templ sidePanel(page ChannelPage) {
-	<aside id="side-panel" aria-labelledby="panel-heading" class="flex w-panel shrink-0 flex-col overflow-y-auto rounded-xl bg-bg shadow-block">
+	{{ closeURL := conversationURL(page) + conversationQuery(page) }}
+	// Pointer-only: the close link and Escape serve the keyboard and
+	// assistive technology.
+	<a id="panel-backdrop" href={ templ.SafeURL(closeURL) } tabindex="-1" aria-hidden="true" class="hidden max-wide:absolute max-wide:inset-0 max-wide:z-20 max-wide:block max-wide:rounded-xl max-wide:bg-scrim max-desk:fixed max-desk:rounded-none"></a>
+	<aside id="side-panel" aria-labelledby="panel-heading" class={ "flex w-panel shrink-0 flex-col overflow-y-auto overscroll-contain rounded-xl bg-bg shadow-block max-wide:absolute max-wide:inset-y-0 max-wide:right-0 max-wide:z-20 max-wide:shadow-popover max-desk:fixed max-desk:inset-x-0 max-desk:top-auto max-desk:w-auto max-desk:rounded-b-none max-desk:pb-safe-0", sheetHeight(page.Panel) }>
 		<header class="flex shrink-0 items-center gap-2 border-b border-border py-2 pl-5 pr-2">
 			<h2 id="panel-heading" tabindex="-1" autofocus class="min-w-0 flex-1 break-words text-title font-semibold">{ i18n.T(ctx, panelTitle(page.Panel)) }</h2>
-			<a id="panel-close" href={ templ.SafeURL(conversationURL(page) + conversationQuery(page)) } aria-label={ i18n.T(ctx, "panel.close") } class="flex size-11 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg transition-feedback motion-safe:active:scale-96">
+			<a id="panel-close" href={ templ.SafeURL(closeURL) } aria-label={ i18n.T(ctx, "panel.close") } class="flex size-11 shrink-0 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-fg transition-feedback motion-safe:active:scale-96">
 				@Icon("dismiss-regular", 20)
 			</a>
 		</header>
@@ -102,12 +119,18 @@ templ sidePanel(page ChannelPage) {
 }
 
 // overviewPanel leaves room for later sections, such as pins (#880).
+// Where it covers the header's Mark as read, it submits the same #read-form.
 templ overviewPanel(page ChannelPage) {
 	<div class="flex flex-col gap-4 px-5 py-4">
 		<p class="flex items-center gap-2 break-words text-title font-semibold">
 			@channelImage(page.Current.ImageURL, true)
 			<span dir="auto" class="min-w-0">{ page.Current.Name }</span>
 		</p>
+		if readable(page) && page.FirstUnread > 0 {
+			<div class="flex wide:hidden">
+				@submitButtonFor(buttonSecondary, "reading.mark", "read-form")
+			</div>
+		}
 		<details open?={ page.OverviewImageError != "" }>
 			<summary class="min-h-11 cursor-pointer text-brand underline">{ i18n.T(ctx, "illustration.change") }</summary>
 			<form method="post" action={ panelURL(page, PanelOverview) } class="flex flex-col gap-2">

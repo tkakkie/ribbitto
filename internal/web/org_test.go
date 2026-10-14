@@ -224,7 +224,9 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 			view.ConversationURL("acme", acmeChannel, &other.DefaultTopicID), // topic
 		} {
 			for _, panel := range []string{"/members", "/overview"} {
-				if w := get("GET", path+panel, aliceToken, now); w.Code != 404 || strings.Contains(w.Body.String(), "Globex") {
+				// The plain 404 carries no foreign data and no panel markup,
+				// whose sheet and overlay are the same page at every width.
+				if w := get("GET", path+panel, aliceToken, now); w.Code != 404 || w.Body.String() != "404 page not found\n" {
 					t.Errorf("panel %s%s: %d", path, panel, w.Code)
 				}
 			}

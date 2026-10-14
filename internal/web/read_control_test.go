@@ -109,8 +109,8 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 				if topic {
 					path, first = view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{5}), tt.topic
 				}
-				get := func() *httptest.ResponseRecorder {
-					r := httptest.NewRequest("GET", path, nil)
+				get := func(panel string) *httptest.ResponseRecorder {
+					r := httptest.NewRequest("GET", path+panel, nil)
 					r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 					w := httptest.NewRecorder()
 					h.ServeHTTP(w, r)
@@ -127,7 +127,22 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 						t.Fatalf("control shown with nothing unread: hidden=%t buttons=%d", hidden, len(buttons))
 					}
 				}
-				w := get()
+				// The overview submits the same #read-form from outside it, once
+				// and only when the header offers Mark as read (#972).
+				doc, err := html.Parse(get("/overview").Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				sheet := 0
+				for n := range doc.Descendants() {
+					if attr(n, "form") == "read-form" && strings.TrimSpace(text(n)) == "Mark as read" {
+						sheet++
+					}
+				}
+				if problems := checkMarkup(doc, true); len(problems) != 0 || sheet != int(min(first, 1)) {
+					t.Fatalf("overview: %d sheet controls, markup %q", sheet, problems)
+				}
+				w := get("")
 				if first == 0 {
 					assertHidden(w)
 					return
@@ -145,7 +160,7 @@ func TestReadControlOnlyWhenUnread(t *testing.T) {
 				if posted.Code != http.StatusSeeOther || posted.Header().Get("Location") != path || visit.reads.Load() != 1 {
 					t.Fatalf("plain read: status %d, location %q, reads %d", posted.Code, posted.Header().Get("Location"), visit.reads.Load())
 				}
-				assertHidden(get())
+				assertHidden(get(""))
 			})
 		}
 	}

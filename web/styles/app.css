@@ -52,6 +52,7 @@
   --rb-on-pastel-6: #a3284f;
   --rb-shadow-block: 0 0 0 1px rgb(0 0 0 / 0.05), 0 1px 3px rgb(0 0 0 / 0.06);
   --rb-shadow-popover: 0 0 2px rgb(0 0 0 / 0.12), 0 8px 16px rgb(0 0 0 / 0.14);
+  --rb-scrim: rgb(23 28 27 / 0.4);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -96,6 +97,7 @@
     /* Dark blocks lift by lightness; hairlines define edges without a drop. */
     --rb-shadow-block: 0 0 0 1px color-mix(in srgb, var(--rb-fg) 8%, transparent);
     --rb-shadow-popover: 0 0 0 1px color-mix(in srgb, var(--rb-fg) 12%, transparent);
+    --rb-scrim: rgb(0 0 0 / 0.6);
   }
 }
 
@@ -138,6 +140,7 @@
   --color-on-pastel-5: var(--rb-on-pastel-5);
   --color-pastel-6: var(--rb-pastel-6);
   --color-on-pastel-6: var(--rb-on-pastel-6);
+  --color-scrim: var(--rb-scrim);
   --color-transparent: transparent;
   --color-current: currentColor;
 }
@@ -197,8 +200,10 @@
   --container-panel: 21.25rem;
   --container-reading: 47.5rem;
 
-  /* Below desk (852 px) the phone layout applies: desk: and max-desk: (docs/ui-code.md). */
+  /* Below desk (852 px) the phone layout applies: desk: and max-desk: (docs/ui-code.md).
+     Below wide (1200 px) an open panel covers the conversation. */
   --breakpoint-desk: 53.25rem;
+  --breakpoint-wide: 75rem;
 
   /* Hover and press feedback: the transition utility uses these. */
   --default-transition-duration: var(--duration-faster);
@@ -264,6 +269,13 @@
 
 @keyframes rb-panel-in {
   from { transform: translateX(0.5rem); }
+}
+/* A phone's bottom sheet rises instead. The name stays, so arrival-v1.js
+   ends the panel mark the same way at every width. */
+@variant max-desk {
+  @keyframes rb-panel-in {
+    from { transform: translateY(1rem); }
+  }
 }
 @keyframes rb-pill-in {
   from { transform: scaleY(0); }

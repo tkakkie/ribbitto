@@ -98,10 +98,10 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
   a short label, both above the safe area. A conversation fills the screen without the
   bottom navigation, with 16 px message gutters. Its one-row header keeps
   the back link, channel image, truncated channel/topic names, and named
-  icon controls for **Mark as read**, Members and Overview (#971).
+  icon controls for Members and Overview (#971).
   The composer sits above the bottom safe area, with 16 px input text.
-  Members and the overview will open as bottom sheets, with **Mark as
-  read** in the overview sheet (#972). Welcome pages show a short
+  Members and the overview open as bottom sheets over the dimmed
+  conversation, with **Mark as read** in the overview sheet (#972). Welcome pages show a short
   brand strip (logo, name, tagline) above the form, without the
   illustrations.
 - **Tap targets** at phone width are at least 44 × 44 px: links, buttons,

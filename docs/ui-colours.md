@@ -36,6 +36,7 @@ without a reload.
 | `success` | `#3a9742` | `#5bc46a` | online dot (always with a label) |
 | `warning` | `#8a5300` | `#e9b55c` | reserved for warning text and icons (e.g. "reconnecting…"); none yet |
 | `danger` / `on-danger` | `#b42318` / `#ffffff` | `#ff8b7b` / `#2b0a05` | error text / reserved for destructive buttons (none yet) |
+| `scrim` | `rgb(23 28 27 / 0.4)` | `rgb(0 0 0 / 0.6)` | dims a conversation under a covering panel (decorative; the panel carries the meaning) |
 | `pastel-1`…`6` / `on-pastel-1`…`6` | `#dcebff`/`#1f5aa6`, `#fff3c4`/`#7a5d00`, `#d9f2e6`/`#1d6b47`, `#ffe4d6`/`#9a4a1f`, `#ebe3ff`/`#5b3fa8`, `#ffe0ea`/`#a3284f` | `#1c3047`/`#a9ccff`, `#3a3214`/`#f2d77a`, `#173628`/`#9fdcbc`, `#3d2618`/`#ffbe98`, `#2b2347`/`#c9b8ff`, `#3d1a26`/`#ffaec6` | channel images and avatar fills / their initials |
 
 A deep-teal dark brand (white text on `#0f766e`) was rejected: its fill

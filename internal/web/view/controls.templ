@@ -20,10 +20,21 @@ const (
 // submitButton is the one place a form's submit button gets its look; label
 // is a message ID. Navigation is a link (<a href>), never this component.
 templ submitButton(kind buttonKind, label string) {
+	@submitButtonFor(kind, label, "") {
+		{ children... }
+	}
+}
+
+// submitButtonFor submits the form with the given ID from outside it, or
+// its own form when form is empty.
+templ submitButtonFor(kind buttonKind, label, form string) {
 	switch kind {
 		case buttonSecondary, buttonSecondaryIcon:
 			<button
 				type="submit"
+				if form != "" {
+					form={ form }
+				}
 				if kind == buttonSecondaryIcon {
 					aria-label={ i18n.T(ctx, label) }
 				}
@@ -33,7 +44,13 @@ templ submitButton(kind buttonKind, label string) {
 				<span class={ templ.KV("max-desk:hidden", kind == buttonSecondaryIcon) }>{ i18n.T(ctx, label) }</span>
 			</button>
 		default:
-			<button type="submit" class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand hover:bg-brand-hover transition-feedback motion-safe:active:scale-96">{ i18n.T(ctx, label) }</button>
+			<button
+				type="submit"
+				if form != "" {
+					form={ form }
+				}
+				class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand hover:bg-brand-hover transition-feedback motion-safe:active:scale-96"
+			>{ i18n.T(ctx, label) }</button>
 	}
 }
 

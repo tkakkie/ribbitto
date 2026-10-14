@@ -16,13 +16,20 @@
     let failures = 0;
     let navigating = false;
     const needed = () => !navigating && document.visibilityState === 'visible' && form.isConnected;
+    // An open panel out of flow covers the conversation (an overlay, or a
+    // phone's sheet). Only visible() triggers read-visible, so automatic
+    // reading waits while Mark as read's submit never does.
+    const covered = () => {
+      const panel = document.getElementById('side-panel');
+      return panel !== null && getComputedStyle(panel).position !== 'static';
+    };
     const clearRetry = () => {
       clearTimeout(timer);
       timer = null;
     };
     const cursor = () => attempted === null ? snapshot : stream.dataset.appliedCursor || snapshot;
     const visible = () => {
-      if (!needed() || inFlight || timer !== null) return;
+      if (!needed() || covered() || inFlight || timer !== null) return;
       if (succeeded === null || BigInt(cursor()) > succeeded) htmx.trigger(form, 'read-visible');
     };
     form.addEventListener('htmx:configRequest', event => {
@@ -91,6 +98,7 @@
       removed.disconnect();
       document.removeEventListener('visibilitychange', visibility);
       document.removeEventListener('read-applied', visible);
+      window.removeEventListener('resize', visible);
       window.removeEventListener('pagehide', navigation);
       window.removeEventListener('pageshow', restore);
       if (active === visible) active = null;
@@ -98,6 +106,8 @@
     removed.observe(document.body, { childList: true, subtree: true });
     document.addEventListener('visibilitychange', visibility);
     document.addEventListener('read-applied', visible);
+    // Crossing a breakpoint can uncover the conversation with the panel open.
+    window.addEventListener('resize', visible);
     window.addEventListener('pagehide', navigation);
     window.addEventListener('pageshow', restore);
     active = visible;

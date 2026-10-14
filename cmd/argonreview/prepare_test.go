@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -311,7 +312,7 @@ func TestPrepareRefusesASwapAfterWriting(t *testing.T) {
 					mkdir(t, filepath.Join(path, "config"))
 				}
 			}
-			if _, err := prepareWith(home, account, guardBinary, swap); err == nil {
+			if _, err := prepareWith(home, account, guardBinary, hooks{afterWrite: func() { swap(home) }}); err == nil {
 				t.Fatal("a swapped directory was accepted")
 			}
 			unchanged()
@@ -414,6 +415,122 @@ func TestPrepareKeepsNoDescriptors(t *testing.T) {
 	}
 	if after := open(); after > before {
 		t.Fatalf("descriptors grew from %d to %d", before, after)
+	}
+}
+
+// A checked directory swapped for another real one before the first write is
+// refused, and nothing is written into the replacement (Copilot on #1075).
+func TestPrepareRefusesASwapBeforeWriting(t *testing.T) {
+	for _, planted := range []string{"", "skills.json"} {
+		t.Run("planted="+planted, func(t *testing.T) {
+			account, unchanged := fixture(t)
+			home := filepath.Join(account, "dev", "agy-home")
+			mkdir(t, filepath.Join(home, ".gemini/config"))
+			mkdir(t, filepath.Join(home, ".gemini/antigravity-cli"))
+			config := filepath.Join(home, ".gemini/config")
+			swap := func() {
+				if err := os.Rename(config, config+".old"); err != nil {
+					t.Fatal(err)
+				}
+				mkdir(t, config)
+				if planted != "" {
+					write(t, filepath.Join(config, planted), "{}")
+				}
+			}
+			if _, err := prepareWith(home, account, guardBinary, hooks{beforeWrite: swap}); err == nil {
+				t.Fatal("a directory swapped before writing was accepted")
+			}
+			if _, err := os.Lstat(filepath.Join(config, "hooks.json")); err == nil {
+				t.Fatal("hooks.json was written into the replacement")
+			}
+			unchanged()
+		})
+	}
+}
+
+// A directory absent when checked, created with customisation in it before
+// the first write, is checked again and refused.
+func TestPrepareRefusesADirectoryPlantedBeforeWriting(t *testing.T) {
+	account, unchanged := fixture(t)
+	home := filepath.Join(account, "dev", "agy-home")
+	mkdir(t, filepath.Join(home, ".gemini/antigravity-cli"))
+	plant := func() { write(t, filepath.Join(home, ".gemini/config/skills.json"), "{}") }
+	if _, err := prepareWith(home, account, guardBinary, hooks{beforeWrite: plant}); err == nil || !strings.Contains(err.Error(), "customisation") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".gemini/config/hooks.json")); err == nil {
+		t.Fatal("hooks.json was written next to the planted customisation")
+	}
+	unchanged()
+}
+
+// The shared .gemini is resolved again just before writing and after it.
+// Turned meanwhile into a symlink to this HOME's .gemini or to HOME itself, it
+// is refused (Copilot on #1075).
+func TestPrepareRefusesASharedSwap(t *testing.T) {
+	for _, tc := range []struct {
+		name, target string
+		after        bool
+	}{
+		{"before writing, to HOME/.gemini", ".gemini", false},
+		{"before writing, to HOME", "", false},
+		{"after writing, to HOME", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			account := resolved(t, t.TempDir())
+			write(t, filepath.Join(account, ".gemini/config/hooks.json"), `{"tencle":{}}`)
+			home := filepath.Join(account, "dev", "agy-home")
+			write(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), "mine")
+			swap := func() {
+				shared := filepath.Join(account, ".gemini")
+				if err := os.Rename(shared, shared+".old"); err != nil {
+					t.Fatal(err)
+				}
+				symlink(t, filepath.Join(home, tc.target), shared)
+			}
+			test := hooks{beforeWrite: swap}
+			if tc.after {
+				test = hooks{afterWrite: swap}
+			}
+			if _, err := prepareWith(home, account, guardBinary, test); err == nil {
+				t.Fatal("accepted")
+			}
+			if !tc.after {
+				if data, _ := os.ReadFile(filepath.Join(home, ".gemini/antigravity-cli/settings.json")); string(data) != "mine" {
+					t.Fatalf("settings.json, now shared, was rewritten: %q", data)
+				}
+			}
+		})
+	}
+}
+
+// An owned file swapped for a FIFO after writing makes prepare fail, not hang
+// (Copilot on #1075).
+func TestPrepareRefusesAFIFO(t *testing.T) {
+	account, _ := fixture(t)
+	home := filepath.Join(account, "dev", "agy-home")
+	mkdir(t, home)
+	settings := filepath.Join(home, ".gemini/antigravity-cli/settings.json")
+	swap := func() {
+		if err := os.Remove(settings); err != nil {
+			t.Fatal(err)
+		}
+		if err := unix.Mkfifo(settings, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := prepareWith(home, account, guardBinary, hooks{afterWrite: swap})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "not a regular file") {
+			t.Fatalf("err = %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("prepare hung on a FIFO")
 	}
 }
 

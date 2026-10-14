@@ -75,11 +75,20 @@ func owned(guardPath string) ([]ownedFile, error) {
 // caches and Antigravity's other state are neither written nor removed.
 // accountHome is the account's home, whose .gemini other projects share.
 func prepare(home, accountHome, guardPath string) (string, error) {
-	return prepareWith(home, accountHome, guardPath, func(string) {})
+	return prepareWith(home, accountHome, guardPath, hooks{})
 }
 
-// prepareWith is prepare with a hook between writing and re-checking, where a
-// test swaps directories.
+// hooks run just before the first write and just after the last; a test
+// swaps directories or files there.
+type hooks struct{ beforeWrite, afterWrite func() }
+
+func (h hooks) run(f func()) {
+	if f != nil {
+		f()
+	}
+}
+
+// prepareWith is prepare with test hooks.
 //
 // HOME is opened one component at a time from the root without following
 // symlinks, and every directory below it the same way. Files are created and
@@ -88,7 +97,7 @@ func prepare(home, accountHome, guardPath string) (string, error) {
 // lead a write into the shared configuration. Every check runs before the
 // first write, any error a check meets refuses, and the whole path is walked
 // again after the last write (Codex on #1075).
-func prepareWith(home, accountHome, guardPath string, afterWrite func(string)) (string, error) {
+func prepareWith(home, accountHome, guardPath string, test hooks) (string, error) {
 	files, err := owned(guardPath)
 	if err != nil {
 		return "", err
@@ -119,9 +128,22 @@ func prepareWith(home, accountHome, guardPath string, afterWrite func(string)) (
 		return "", err
 	}
 
+	test.run(test.beforeWrite)
 	gemini2, dirs2, err := openOwned(root, true)
 	defer closeAll(gemini2, dirs2)
 	if err != nil {
+		return "", err
+	}
+	// The directories about to be written must be the ones just checked, and
+	// the shared configuration is resolved again, in case either was swapped
+	// since (Copilot on #1075). A directory created here was empty when made;
+	// the checks run on it again all the same.
+	current, err := openShared(accountHome)
+	defer current.close()
+	if err != nil {
+		return "", err
+	}
+	if err := separate(root, current); err != nil {
 		return "", err
 	}
 	written := map[string]place{}
@@ -130,17 +152,25 @@ func prepareWith(home, accountHome, guardPath string, afterWrite func(string)) (
 		if err != nil {
 			return "", err
 		}
-		if shared.has(p) {
+		if dirs[name] >= 0 {
+			if checked, err := identity(dirs[name]); err != nil || checked != p {
+				return "", fmt.Errorf("refusing: .gemini/%s changed after it was checked", name)
+			}
+		}
+		if shared.has(p) || current.has(p) {
 			return "", errors.New("refusing: an owned directory is the shared configuration")
 		}
 		written[name] = p
+	}
+	if err := checkBeforeWrite(root, dirs2, files); err != nil {
+		return "", err
 	}
 	for _, f := range files {
 		if err := writeOwned(dirs2[f.dir], f.name, f.content); err != nil {
 			return "", fmt.Errorf("writing .gemini/%s/%s: %w", f.dir, f.name, err)
 		}
 	}
-	afterWrite(home)
+	test.run(test.afterWrite)
 
 	// Walk the path again. The owned directories are where the files went, so
 	// they must still be the ones HOME names: HOME or .gemini replaced around
@@ -164,7 +194,12 @@ func prepareWith(home, accountHome, guardPath string, afterWrite func(string)) (
 			return "", fmt.Errorf("refusing: .gemini/%s changed while it was written", name)
 		}
 	}
-	if err := separate(again, shared); err != nil {
+	final, err := openShared(accountHome)
+	defer final.close()
+	if err != nil {
+		return "", err
+	}
+	if err := separate(again, final); err != nil {
 		return "", err
 	}
 	if err := checkBeforeWrite(again, dirs3, nil); err != nil {
@@ -433,7 +468,9 @@ func writeOwned(dir int, name string, content []byte) error {
 // from what the launcher writes: an extra grant, a trusted workspace, another
 // hook or an MCP server all differ.
 func checkOwned(dir int, name string, want []byte) error {
-	fd, err := unix.Openat(dir, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	// Non-blocking, so a FIFO swapped in cannot hang the run (Copilot on #1075);
+	// it is refused below as not a regular file.
+	fd, err := unix.Openat(dir, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return fmt.Errorf("not a regular file (%w)", err)
 	}

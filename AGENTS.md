@@ -36,16 +36,16 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 - `make vuln` — runs `govulncheck`; it needs the network, so CI runs it,
   not `make check`.
 - `make lint` — runs golangci-lint.
-- Tooling is Go (`tools/`, `cmd/`); one-line `Makefile` recipes
+- Tooling is Go, with one-line `Makefile` recipes
   ([decision 35](docs/decisions/35-tooling-in-go.md)).
 - `make deps` — regenerates `docs/dependencies.md` (package-import
-  edges); commit it with any change to them.
-- `make check` also checks documents: every link and `#anchor` to a
-  Markdown file resolves, repository paths in code spans exist, and each
+  edges); commit it with any edge change.
+- `make check` also checks documents: Markdown links and `#anchors`
+  resolve, repository paths in code spans exist, and each
   document stays under its size limit (one topic per file). When a file
-  goes over, open an issue to split it, add
-  `<path> #<issue>` to `docs/size-exceptions.txt`, and split it in a
-  separate pull request.
+  goes over, open an issue, add
+  `<path> #<issue>` to `docs/size-exceptions.txt`, and split it in its
+  own pull request.
 
 ## Layout and dependency direction
 

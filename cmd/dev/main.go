@@ -250,6 +250,12 @@ func exitedLeaders(watchers []watcher) ([]bool, error) {
 		return reaped, fmt.Errorf("reading the process table before shutdown: %w", err)
 	}
 	gone, _ := classify(watchers, reaped, table)
+	// For the verdict only: a watcher reaped after its own check, while a
+	// later one is classified, has still exited before the signals (Codex on
+	// #1055).
+	for i, w := range watchers {
+		gone[i] = gone[i] || w.reaped.Load()
+	}
 	return gone, nil
 }
 

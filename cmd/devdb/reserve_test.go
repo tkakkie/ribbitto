@@ -580,3 +580,19 @@ func TestReserveKeepsTodaysReservation(t *testing.T) {
 		t.Fatalf("the database was recreated: %v", db.statements)
 	}
 }
+
+// A registry that is JSON null or not an object is refused instead of
+// crashing the run.
+func TestReserveRefusesAnUnusableRegistry(t *testing.T) {
+	for _, content := range []string{"null\n", "[]\n", "{\n"} {
+		t.Run(strings.TrimSpace(content), func(t *testing.T) {
+			_, linked, common := worktreeFixture(t)
+			if err := os.WriteFile(filepath.Join(common, "ai-env.json"), []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := reserve(linked, false, newFakeServer()); err == nil {
+				t.Fatal("reserve accepted the registry")
+			}
+		})
+	}
+}

@@ -245,7 +245,15 @@ func readRegistry(path string) (map[string]stored, error) {
 		return nil, err
 	}
 	entries := map[string]stored{}
-	return entries, json.Unmarshal(data, &entries)
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, err
+	}
+	// JSON null decodes into a nil map, which a later write would panic on
+	// (Copilot on #1040); like any other unusable registry, it is an error.
+	if entries == nil {
+		return nil, errors.New("ai-env registry is not an object")
+	}
+	return entries, nil
 }
 
 func writeRegistry(path string, entries map[string]stored) error {

@@ -511,6 +511,82 @@ func swapForEmpty(t *testing.T, gemini string) {
 	mkdir(t, gemini)
 }
 
+// Customisation planted in an existing owned directory after the checks is
+// found by the checks run again before anything is created (Codex on #1075).
+func TestPrepareChecksAgainBeforeCreating(t *testing.T) {
+	account, unchanged := fixture(t)
+	home := filepath.Join(account, "dev", "agy-home")
+	mkdir(t, filepath.Join(home, ".gemini/antigravity-cli"))
+	plant := func() { write(t, filepath.Join(home, ".gemini/antigravity-cli/skills.json"), "{}") }
+	if _, err := prepareWith(home, account, guardBinary, hooks{beforeWrite: plant}); err == nil || !strings.Contains(err.Error(), "customisation") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".gemini/config")); err == nil {
+		t.Fatal("config was created before the refusal")
+	}
+	unchanged()
+}
+
+// A shared directory moved into HOME between prepare creating a directory
+// and opening it, with a symlink left at its old place, keeps its identity
+// and is refused before anything is created in it or written (Codex on
+// #1075).
+func TestPrepareRefusesASharedDirectoryMovedInDuringCreation(t *testing.T) {
+	for _, tc := range []struct{ created, shared string }{
+		{".gemini", ".gemini"},
+		{"config", ".gemini/config"},
+	} {
+		t.Run(tc.created, func(t *testing.T) {
+			account := resolved(t, t.TempDir())
+			sharedDir := filepath.Join(account, tc.shared)
+			mkdir(t, sharedDir)
+			if tc.created == "config" {
+				write(t, filepath.Join(sharedDir, "hooks.json"), `{"tencle":{}}`)
+			}
+			home := filepath.Join(account, "dev", "agy-home")
+			mkdir(t, home)
+			if tc.created == "config" {
+				mkdir(t, filepath.Join(home, ".gemini/antigravity-cli"))
+			}
+			ours := filepath.Join(home, ".gemini")
+			if tc.created == "config" {
+				ours = filepath.Join(ours, "config")
+			}
+			swap := func(name string) {
+				if name != tc.created {
+					return
+				}
+				if err := os.Rename(ours, ours+".aside"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Rename(sharedDir, ours); err != nil {
+					t.Fatal(err)
+				}
+				symlink(t, ours, sharedDir)
+			}
+			if _, err := prepareWith(home, account, guardBinary, hooks{afterMkdir: swap}); err == nil || !strings.Contains(err.Error(), "shared") {
+				t.Fatalf("err = %v", err)
+			}
+			entries, err := os.ReadDir(ours)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			if tc.created == "config" {
+				want = 1 // the shared hooks.json, untouched below
+			}
+			if len(entries) != want {
+				t.Fatalf("the shared directory now holds %v", entries)
+			}
+			if tc.created == "config" {
+				if data, _ := os.ReadFile(filepath.Join(ours, "hooks.json")); string(data) != `{"tencle":{}}` {
+					t.Fatalf("the shared hooks.json was rewritten: %q", data)
+				}
+			}
+		})
+	}
+}
+
 // A directory that appeared between the re-check and its creation is not
 // this run's to use.
 func TestMkdirOpenRefusesAnExistingDirectory(t *testing.T) {
@@ -521,7 +597,7 @@ func TestMkdirOpenRefusesAnExistingDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer closeFD(fd)
-	if got, err := mkdirOpen(fd, "config"); err == nil {
+	if got, err := mkdirOpen(fd, "config", nil); err == nil {
 		closeFD(got)
 		t.Fatal("an existing directory was accepted")
 	}

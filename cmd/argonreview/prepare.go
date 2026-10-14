@@ -78,9 +78,13 @@ func prepare(home, accountHome, guardPath string) (string, error) {
 	return prepareWith(home, accountHome, guardPath, hooks{})
 }
 
-// hooks run just before the first write and just after the last; a test
-// swaps directories or files there.
-type hooks struct{ beforeWrite, afterWrite func() }
+// hooks run just before the first write, after each directory prepare
+// creates (before it is opened), and just after the last write; a test swaps
+// directories or files there.
+type hooks struct {
+	beforeWrite, afterWrite func()
+	afterMkdir              func(name string)
+}
 
 func (h hooks) run(f func()) {
 	if f != nil {
@@ -163,22 +167,35 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	if err := checkSharedFiles(accountHome, files, checked); err != nil {
 		return "", err
 	}
-	gemini2, dirs2, err := createOwned(root, gemini, dirs)
-	defer closeAll(gemini2, dirs2)
+	// The directories about to be written must be the ones checked (Copilot
+	// on #1075), checked again before anything is created, and apart from the
+	// shared configuration (Codex on #1075).
+	gemini2, dirs2, err := matchOwned(root, gemini, dirs)
+	defer func() { closeAll(gemini2, dirs2) }()
 	if err != nil {
 		return "", err
 	}
-	// createOwned matched the directories about to be written with the ones
-	// checked (Copilot on #1075); they must also be apart from the shared
-	// configuration. The checks run on them again all the same.
+	if err := checkBeforeWrite(root, dirs2, files); err != nil {
+		return "", err
+	}
+	notShared := func(fd int) error {
+		p, err := identity(fd)
+		if err != nil {
+			return err
+		}
+		if shared.has(p) || current.has(p) {
+			return errors.New("refusing: an owned directory is the shared configuration")
+		}
+		return nil
+	}
+	if gemini2, err = createMissing(root, gemini2, dirs2, notShared, test.afterMkdir); err != nil {
+		return "", err
+	}
 	written := map[string]place{}
 	for name, fd := range dirs2 {
 		p, err := identity(fd)
 		if err != nil {
 			return "", err
-		}
-		if shared.has(p) || current.has(p) {
-			return "", errors.New("refusing: an owned directory is the shared configuration")
 		}
 		written[name] = p
 	}
@@ -465,12 +482,11 @@ func openOwned(root int) (int, map[string]int, error) {
 	return gemini, dirs, nil
 }
 
-// createOwned opens .gemini and the owned directories again and creates the
-// missing ones, relative to descriptors checked against the ones the
-// pre-write checks used. What existed must be the same directory; what was
-// missing must still be missing, and is created here, so nothing replaced or
-// planted since the checks gets a directory created in it (Codex on #1075).
-func createOwned(root, checkedGemini int, checked map[string]int) (int, map[string]int, error) {
+// matchOwned opens .gemini and the owned directories again without creating
+// anything and requires each to be the one the pre-write checks used: present
+// and the same directory, or still absent. Whatever it opened is returned,
+// for the caller to close.
+func matchOwned(root, checkedGemini int, checked map[string]int) (int, map[string]int, error) {
 	gemini, dirs, err := openOwned(root)
 	if err != nil {
 		return gemini, dirs, err
@@ -499,26 +515,45 @@ func createOwned(root, checkedGemini int, checked map[string]int) (int, map[stri
 			return gemini, dirs, err
 		}
 	}
+	return gemini, dirs, nil
+}
+
+// createMissing creates what matchOwned found missing, relative to the matched
+// descriptors, and refuses as soon as a directory it holds, existing or just
+// created, is a shared one: a shared directory moved into HOME between
+// creation and opening keeps its identity (Codex on #1075). dirs is updated in
+// place; the returned .gemini descriptor replaces the one passed.
+func createMissing(root, gemini int, dirs map[string]int, notShared func(int) error, afterMkdir func(string)) (int, error) {
+	var err error
 	if gemini < 0 {
-		if gemini, err = mkdirOpen(root, ".gemini"); err != nil {
-			return gemini, dirs, err
+		if gemini, err = mkdirOpen(root, ".gemini", afterMkdir); err != nil {
+			return gemini, err
 		}
+	}
+	if err := notShared(gemini); err != nil {
+		return gemini, err
 	}
 	for _, name := range ownedDirs {
 		if dirs[name] < 0 {
-			if dirs[name], err = mkdirOpen(gemini, name); err != nil {
-				return gemini, dirs, err
+			if dirs[name], err = mkdirOpen(gemini, name, afterMkdir); err != nil {
+				return gemini, err
 			}
 		}
+		if err := notShared(dirs[name]); err != nil {
+			return gemini, err
+		}
 	}
-	return gemini, dirs, nil
+	return gemini, nil
 }
 
 // mkdirOpen creates name under parent and opens it. It must not exist yet:
 // one that appeared since the checks is not this run's to use.
-func mkdirOpen(parent int, name string) (int, error) {
+func mkdirOpen(parent int, name string, after func(string)) (int, error) {
 	if err := unix.Mkdirat(parent, name, 0o700); err != nil {
 		return -1, fmt.Errorf("refusing %s: creating it: %w", name, err)
+	}
+	if after != nil {
+		after(name)
 	}
 	fd, err := unix.Openat(parent, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {

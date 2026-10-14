@@ -65,14 +65,23 @@ func (f *fixture) local(t *testing.T, values map[string]string) {
 	}
 }
 
-func lookup(env []string, key string) string {
-	value := ""
+// lookup returns the only value for key, failing on a duplicate: the first
+// one would win after exec.
+func lookup(t *testing.T, env []string, key string) string {
+	t.Helper()
+	var values []string
 	for _, kv := range env {
 		if k, v, ok := strings.Cut(kv, "="); ok && k == key {
-			value = v
+			values = append(values, v)
 		}
 	}
-	return value
+	if len(values) > 1 {
+		t.Fatalf("%s appears %d times", key, len(values))
+	}
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }
 
 const admin = "postgres://user:pass@127.0.0.1:5432/postgres?sslmode=disable"
@@ -84,19 +93,19 @@ func TestEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, err := url.Parse(lookup(env, "RIBBITTO_DATABASE_URL"))
+	u, err := url.Parse(lookup(t, env, "RIBBITTO_DATABASE_URL"))
 	if err != nil || u.Path != "/"+databaseName(f.linked) || u.Host != "127.0.0.1:5432" || u.User.String() != "user:pass" || u.RawQuery != "sslmode=disable" {
 		t.Fatalf("database URL fields: path %q host %q query %q, err %v", u.Path, u.Host, u.RawQuery, err)
 	}
-	if lookup(env, "RIBBITTO_ADDR") != "127.0.0.1:20001" || lookup(env, "RIBBITTO_DEV_METRICS_ADDR") != "127.0.0.1:20002" {
-		t.Fatalf("addresses: %q %q", lookup(env, "RIBBITTO_ADDR"), lookup(env, "RIBBITTO_DEV_METRICS_ADDR"))
+	if lookup(t, env, "RIBBITTO_ADDR") != "127.0.0.1:20001" || lookup(t, env, "RIBBITTO_DEV_METRICS_ADDR") != "127.0.0.1:20002" {
+		t.Fatalf("addresses: %q %q", lookup(t, env, "RIBBITTO_ADDR"), lookup(t, env, "RIBBITTO_DEV_METRICS_ADDR"))
 	}
 	// A subdirectory uses the worktree root's reservation.
 	child := filepath.Join(f.linked, "child")
 	if err := os.Mkdir(child, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if env, err := environment(child); err != nil || lookup(env, "RIBBITTO_ADDR") != "127.0.0.1:20001" {
+	if env, err := environment(child); err != nil || lookup(t, env, "RIBBITTO_ADDR") != "127.0.0.1:20001" {
 		t.Fatalf("subdirectory: %v", err)
 	}
 }
@@ -182,7 +191,7 @@ func TestEnvironmentFollowsTheWorktreeID(t *testing.T) {
 		f := newFixture(t)
 		moved := filepath.Join(filepath.Dir(f.linked), "moved")
 		gitIn(t, f.main, "worktree", "move", f.linked, moved)
-		if env, err := environment(moved); err != nil || !strings.Contains(lookup(env, "RIBBITTO_DATABASE_URL"), databaseName(f.linked)) {
+		if env, err := environment(moved); err != nil || !strings.Contains(lookup(t, env, "RIBBITTO_DATABASE_URL"), databaseName(f.linked)) {
 			t.Fatalf("moved worktree: %v", err)
 		}
 	})

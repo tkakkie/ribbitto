@@ -90,10 +90,30 @@ func environment(dir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(os.Environ(),
-		"RIBBITTO_DATABASE_URL="+databaseURL,
-		"RIBBITTO_ADDR=127.0.0.1:"+values["AI_APP_PORT"],
-		"RIBBITTO_DEV_METRICS_ADDR=127.0.0.1:"+values["AI_METRICS_PORT"]), nil
+	return override(os.Environ(), map[string]string{
+		"RIBBITTO_DATABASE_URL":     databaseURL,
+		"RIBBITTO_ADDR":             "127.0.0.1:" + values["AI_APP_PORT"],
+		"RIBBITTO_DEV_METRICS_ADDR": "127.0.0.1:" + values["AI_METRICS_PORT"],
+	}), nil
+}
+
+// override drops every inherited entry for the given keys before adding
+// them: syscall.Exec passes duplicates on, and Go's environment lookup keeps
+// the first, so an inherited database URL would win (Codex on #1031).
+func override(env []string, values map[string]string) []string {
+	var out []string
+	for _, kv := range env {
+		key, _, _ := strings.Cut(kv, "=")
+		if _, replaced := values[key]; !replaced {
+			out = append(out, kv)
+		}
+	}
+	for _, key := range []string{"RIBBITTO_DATABASE_URL", "RIBBITTO_ADDR", "RIBBITTO_DEV_METRICS_ADDR"} {
+		if value, ok := values[key]; ok {
+			out = append(out, key+"="+value)
+		}
+	}
+	return out
 }
 
 func validate(root, common string, values map[string]string) error {

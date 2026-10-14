@@ -93,7 +93,7 @@ func stage2PostMarker(slot stage2Slot) string {
 
 // applyFrame is called only after a complete durable frame has been applied,
 // not on receipt. Feed streams receive all hot-channel posts; topic streams
-// receive only their topic's posts (streaming.md). Ephemeral frames have no ID.
+// receive only their topic's posts (stream-scope.md). Ephemeral frames have no ID.
 func (d *stage2Driver) applyFrame(member, sequence uint64, marker string) {
 	if sequence == 0 || sequence > (1<<63)-1 || member >= uint64(len(d.members)) {
 		return

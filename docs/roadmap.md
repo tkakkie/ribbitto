@@ -138,7 +138,7 @@ old one. Roughly in this order:
    [19](decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)),
    tried first in one composer prototype with a size and INP budget; what
    browser storage may hold, by use
-   ([web layers](architecture/web-layers.md#javascript)); a message format
+   ([web layers](architecture/web-javascript.md#javascript)); a message format
    and safe Markdown rendering
    ([decision 18](decisions/18-stored-message-formats-never-change-meaning.md),
    no `templ.Raw`); the URL of one message. Nothing here is adopted until

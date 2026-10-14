@@ -90,7 +90,7 @@ func SignUp(stylesheetURL string, form SignUpForm) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = submitButton(buttonPrimary, "signup.submit").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = submitButton(buttonWelcomePrimary, "signup.submit").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

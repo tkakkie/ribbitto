@@ -29,6 +29,7 @@ without a reload.
 | `fg` | `#171c1b` | `#e4ecea` | body text |
 | `muted` | `#545d5b` | `#9ba7a4` | secondary text, timestamps |
 | `brand` / `on-brand` | `#0f766e` / `#ffffff` | `#4cc9b8` / `#062421` | primary buttons, focus ring, selection indicator, unread counts, links |
+| `brand-hover` | `#0b5f58` | `#6dd8c9` | hovered primary buttons and the send button, under `on-brand` (darker in light, lighter in dark) |
 | `selected` / `on-selected` | `#d5f1ea` / `#0b4d48` | `#1d3d38` / `#b8ece2` | the current row |
 | `accent` / `on-accent` | `#fff0e6` / `#8a3a12` | `#3a2216` / `#ffc6a3` | the "New" divider's label |
 | `accent-line` | `#f2a37b` | `#a8562f` | the "New" divider's line (decorative; the label carries the meaning) |
@@ -67,6 +68,7 @@ Ratios use the WCAG 2.x sRGB relative-luminance formula.
 | Light | `fg` on `bg` / `base` / `panel` / `hover` | body text (`panel` reserved) | 4.5:1 | 17.23 / 15.44 / 16.24 / 14.45 |
 | Light | `muted` on `bg` / `base` / `panel` / `hover` | secondary text (`panel` reserved) | 4.5:1 | 6.78 / 6.08 / 6.39 / 5.69 |
 | Light | `on-brand` on `brand` | button label, unread count | 4.5:1 | 5.47 |
+| Light | `on-brand` on `brand-hover` | hovered button label | 4.5:1 | 7.52 |
 | Light | `on-selected` on `selected` | current row's label | 4.5:1 | 8.11 |
 | Light | `on-accent` on `accent` | "New" divider label | 4.5:1 | 6.99 |
 | Light | `brand` on `bg` / `base` | link text; focus ring | 4.5:1 | 5.47 / 4.90 |
@@ -84,6 +86,7 @@ Ratios use the WCAG 2.x sRGB relative-luminance formula.
 | Dark | `muted` on `surface` | card and popover secondary text | 4.5:1 | 5.98 |
 | Dark | `muted` on `input` | input help text | 4.5:1 | 5.98 |
 | Dark | `on-brand` on `brand` | button label, unread count | 4.5:1 | 8.07 |
+| Dark | `on-brand` on `brand-hover` | hovered button label | 4.5:1 | 9.60 |
 | Dark | `on-selected` on `selected` | current row's label | 4.5:1 | 9.08 |
 | Dark | `on-selected` on `bg` | app bar Home label (`rail` equals `bg`) | 4.5:1 | 12.58 |
 | Dark | `on-accent` on `accent` | "New" divider label | 4.5:1 | 9.75 |

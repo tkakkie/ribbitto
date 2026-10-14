@@ -28,6 +28,7 @@
   --rb-muted: #545d5b;
   --rb-brand: #0f766e;
   --rb-on-brand: #ffffff;
+  --rb-brand-hover: #0b5f58;
   --rb-selected: #d5f1ea;
   --rb-on-selected: #0b4d48;
   --rb-accent: #fff0e6;
@@ -69,6 +70,7 @@
     --rb-muted: #9ba7a4;
     --rb-brand: #4cc9b8;
     --rb-on-brand: #062421;
+    --rb-brand-hover: #6dd8c9;
     --rb-selected: #1d3d38;
     --rb-on-selected: #b8ece2;
     --rb-accent: #3a2216;
@@ -114,6 +116,7 @@
   --color-muted: var(--rb-muted);
   --color-brand: var(--rb-brand);
   --color-on-brand: var(--rb-on-brand);
+  --color-brand-hover: var(--rb-brand-hover);
   --color-selected: var(--rb-selected);
   --color-on-selected: var(--rb-on-selected);
   --color-accent: var(--rb-accent);

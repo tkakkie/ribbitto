@@ -82,18 +82,32 @@ func TestPick(t *testing.T) {
 }
 
 func TestScheduled(t *testing.T) {
-	const restStep = "packages=$(go -C tools run ./testshard .. rest)\n"
+	const (
+		matrix    = "        shard: [loadgen, web, realtime]\n"
+		restStep  = "          packages=$(go -C tools run ./testshard .. rest)\n          test -n \"$packages\"\n          make check-test GO_TEST_PACKAGES=\"$packages\"\n"
+		shardStep = "          packages=$(go -C tools run ./testshard .. \"$SHARD\")\n          test -n \"$packages\"\n          make check-test GO_TEST_PACKAGES=\"$packages\"\n"
+		valid     = matrix + restStep + shardStep
+	)
 	for _, tc := range []struct {
 		name, source, want string
 	}{
-		{"every shard once", "        shard: [loadgen, web, realtime]\n" + restStep, ""},
-		{"named shard omitted", "        shard: [loadgen, realtime]\n" + restStep, "shard web 0 times"},
-		{"named shard repeated", "        shard: [loadgen, web, web, realtime]\n" + restStep, "shard web 2 times"},
-		{"unknown shard", "        shard: [loadgen, web, realtime, rest]\n" + restStep, `unknown shard "rest"`},
-		{"no matrix", restStep, "found 0"},
-		{"two matrices", "shard: [loadgen, web, realtime]\nshard: [loadgen, web, realtime]\n" + restStep, "found 2"},
-		{"rest not run", "        shard: [loadgen, web, realtime]\n", "runs in 0 steps"},
-		{"rest run twice", "        shard: [loadgen, web, realtime]\n" + restStep + restStep, "runs in 2 steps"},
+		{"every shard once", valid, ""},
+		{"named shard omitted", strings.Replace(valid, "web, ", "", 1), "shard web 0 times"},
+		{"named shard repeated", strings.Replace(valid, "web, ", "web, web, ", 1), "shard web 2 times"},
+		{"unknown shard", strings.Replace(valid, "realtime]", "realtime, rest]", 1), `unknown shard "rest"`},
+		{"no matrix", restStep + shardStep, "found 0"},
+		{"two matrices", matrix + valid, "found 2"},
+		{"rest not run", matrix + shardStep, "rest step's lines appear 0 times"},
+		{"rest run twice", valid + restStep, "rest step's lines appear 2 times"},
+		{"matrix shard not run", matrix + restStep, "matrix step's lines appear 0 times"},
+		// Muse Code on #1007: sentinels kept only in comments, or a step
+		// that tests other packages or cannot fail, must not pass.
+		{"steps only in comments", matrix + "# " + strings.ReplaceAll(strings.TrimSuffix(restStep+shardStep, "\n"), "\n", "\n# ") + "\n", "appear 0 times"},
+		{"matrix only in a comment", "# " + valid, "found 0"},
+		{"other packages", strings.Replace(valid, `GO_TEST_PACKAGES="$packages"`, `GO_TEST_PACKAGES="./tools/new"`, 1), "rest step's lines appear 0 times"},
+		{"cannot fail", strings.Replace(valid, `test -n "$packages"`, `test -n "$packages" || true`, 1), "rest step's lines appear 0 times"},
+		{"lines apart", strings.Replace(valid, `test -n "$packages"`, "echo\n          test -n \"$packages\"", 1), "rest step's lines appear 0 times"},
+		{"another check-test", valid + "          make check-test GO_TEST_PACKAGES=./x\n", "runs in 3 places"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := scheduled(tc.source)

@@ -33,12 +33,17 @@ const rest = "rest"
 
 const workflow = ".github/workflows/ci.yml"
 
-// The workflow names the shards it runs in a test matrix line and in rest's
-// make check-test step; -check reads both, so a shard dropped from or
-// repeated in the workflow fails make check.
+// The workflow names the shards it runs in a test matrix line, and runs each
+// shard with one of the two steps below. -check reads the workflow without
+// its comment lines and requires each step's lines exactly once, so a shard
+// dropped, repeated, replaced by another package list or made unable to fail
+// (Muse Code on #1007) fails make check.
 var (
 	matrixLine = regexp.MustCompile(`(?m)^\s*shard: \[(.*)\]\s*$`)
-	restRun    = regexp.MustCompile(`testshard \.\. ` + rest + `\)`)
+	steps      = map[string][]string{
+		rest:     {`packages=$(go -C tools run ./testshard .. rest)`, `test -n "$packages"`, `make check-test GO_TEST_PACKAGES="$packages"`},
+		"matrix": {`packages=$(go -C tools run ./testshard .. "$SHARD")`, `test -n "$packages"`, `make check-test GO_TEST_PACKAGES="$packages"`},
+	}
 )
 
 func main() {
@@ -185,6 +190,14 @@ func covers(parts map[string][]string, all []string) error {
 // scheduled checks that the workflow runs every shard exactly once: each
 // named shard once in the test matrix and rest once in its own step.
 func scheduled(source string) error {
+	var kept, trimmed []string
+	for _, line := range strings.Split(source, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			kept = append(kept, line)
+			trimmed = append(trimmed, strings.TrimSpace(line))
+		}
+	}
+	source = strings.Join(kept, "\n")
 	lines := matrixLine.FindAllStringSubmatch(source, -1)
 	if len(lines) != 1 {
 		return fmt.Errorf("%s: want one test matrix line \"shard: [...]\", found %d", workflow, len(lines))
@@ -206,8 +219,25 @@ func scheduled(source string) error {
 			return fmt.Errorf("%s: the test matrix runs shard %s %d times, want once", workflow, name, n)
 		}
 	}
-	if n := len(restRun.FindAllString(source, -1)); n != 1 {
-		return fmt.Errorf("%s: shard %s runs in %d steps, want one", workflow, rest, n)
+	for _, name := range []string{rest, "matrix"} {
+		if n := runs(trimmed, steps[name]); n != 1 {
+			return fmt.Errorf("%s: the %s step's lines appear %d times, want once: %q", workflow, name, n, steps[name])
+		}
+	}
+	// No other step may pick its own package list.
+	if n := strings.Count(source, "make check-test"); n != len(steps) {
+		return fmt.Errorf("%s: make check-test runs in %d places, want %d", workflow, n, len(steps))
 	}
 	return nil
+}
+
+// runs counts where want appears as consecutive lines.
+func runs(lines, want []string) int {
+	n := 0
+	for i := range lines {
+		if i+len(want) <= len(lines) && slices.Equal(lines[i:i+len(want)], want) {
+			n++
+		}
+	}
+	return n
 }

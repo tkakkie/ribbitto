@@ -20,8 +20,11 @@ export LAUNCHER_TESTS_BASE
 # default; go test's own default (-p = CPUs) can exceed it. Override only for
 # measurement, and re-measure before raising it (docs/worktree-env.md).
 GO_TEST_FLAGS ?= -p 2
+# CI's test jobs each pass one shard from tools/testshard; locally every
+# package runs.
+GO_TEST_PACKAGES ?= ./...
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-ai prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-static check-test check-tools check-ai prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -72,7 +75,15 @@ $(TAILWIND):
 # tablecheck read db/queries, db/migrations and module_imports_test.go from
 # outside the tools module, which Go's test cache does not track, so a cached
 # pass would hide a changed query or manifest.
-check: $(TEMPL) db-health
+#
+# check runs its three parts in order; CI runs them in parallel jobs (#992),
+# check-test once per tools/testshard shard, so the two cannot drift.
+check:
+	$(MAKE) check-static
+	$(MAKE) check-test
+	$(MAKE) check-tools
+
+check-static: $(TEMPL)
 	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
 	if [ -n "$$unformatted" ]; then \
 		echo "These files need gofmt:"; \
@@ -102,7 +113,11 @@ check: $(TEMPL) db-health
 	$(MAKE) lint
 	$(MAKE) lint-fixtures
 	go build ./...
-	go test -race $(GO_TEST_FLAGS) ./...
+
+check-test: db-health
+	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
+
+check-tools:
 	$(MAKE) check-ai-env
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck
@@ -112,6 +127,7 @@ check: $(TEMPL) db-health
 	bash scripts/fingerprint_test.sh
 	go -C tools vet ./...
 	go -C tools test -race -count=1 ./...
+	go -C tools run ./testshard -check ..
 	go -C tools run ./docscheck ..
 	go -C tools run ./sourcecheck ..
 	bash scripts/ai/launcher-tests_test.sh

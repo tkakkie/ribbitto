@@ -22,10 +22,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # A single job named "ci" is the required status check. Keep every check in
-  # this one job and do not add path filters: a required check that is
-  # skipped never reports, and the pull request can then never be merged.
-  ci:
+  # The required status check is the job named "ci" at the end; the other
+  # jobs run in parallel, each on its own runner with its own PostgreSQL
+  # (#992). Do not add path filters: a workflow that path filters skip never
+  # reports, and the pull request can then never be merged. Every job runs on
+  # every event.
+  checks:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -74,6 +76,15 @@ jobs:
             exit 1
           fi
 
+      # make check is check-static, check-test and check-tools in order; this
+      # job runs the first and the last, and the tests of every package the
+      # test jobs below do not (tools/testshard's "rest" shard).
+      - name: check-static
+        run: make check-static
+
+      - name: check-test (rest)
+        run: make check-test GO_TEST_PACKAGES="$(go -C tools run ./testshard .. rest)"
+
       # The Makefile pins golangci-lint for both local checks and CI. On a
       # pull request, the AI launchers' self-tests run only when the diff from
       # the base can affect them: the depth-2 checkout includes the merge
@@ -82,10 +93,10 @@ jobs:
       # checkout, and the fail-safe would run them every time (#560). An
       # unresolvable base runs them (scripts/ai/launcher-tests.sh). On main
       # and nightly, an empty base always runs them.
-      - name: check
+      - name: check-tools
         env:
           BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || '' }}
-        run: make check LAUNCHER_TESTS_BASE="$BASE"
+        run: make check-tools LAUNCHER_TESTS_BASE="$BASE"
 
       - name: package-import edge changes
         # HEAD^1 is the PR merge commit's base, or the previous commit on main.
@@ -103,3 +114,55 @@ jobs:
       # "Checks" in the README for what to do.
       - name: govulncheck
         run: make vuln
+
+  # The slowest packages, one tools/testshard shard per job.
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [loadgen, web]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: ribbitto-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      RIBBITTO_TEST_DATABASE_URL: postgres://postgres:ribbitto-ci-only@127.0.0.1:5432/postgres?sslmode=disable
+      RIBBITTO_REQUIRE_DB: "1"
+      RIBBITTO_REQUIRE_BROWSER: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: check-test (${{ matrix.shard }})
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: make check-test GO_TEST_PACKAGES="$(go -C tools run ./testshard .. "$SHARD")"
+
+  # The required check. A job whose needs failed is skipped by default, and a
+  # skipped job satisfies a required check, so this one always runs and
+  # passes only when every job it needs succeeded.
+  ci:
+    needs: [checks, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: every job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          printf '%s\n' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          printf '%s\n' "$NEEDS" | jq -e 'length == 2 and all(.[]; .result == "success")' > /dev/null

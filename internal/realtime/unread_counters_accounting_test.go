@@ -70,13 +70,54 @@ func (a *counterAccount) latency() [3]time.Duration {
 
 type counterAccountingTracer struct{ inner pgx.QueryTracer }
 
+type counterControl uint8
+
+const (
+	counterApplication counterControl = iota
+	counterBegin
+	counterEnd
+	counterSavepoint
+)
+
+func counterClassifyControl(sql string) counterControl {
+	words := strings.Fields(strings.ToLower(strings.TrimSuffix(strings.TrimSpace(sql), ";")))
+	if len(words) == 0 {
+		return counterApplication
+	}
+	switch words[0] {
+	case "begin":
+		return counterBegin
+	case "start":
+		if len(words) > 1 && words[1] == "transaction" {
+			return counterBegin
+		}
+	case "commit", "end", "abort":
+		return counterEnd
+	case "rollback":
+		// WORK/TRANSACTION may precede TO; the ROLLBACK command tag alone
+		// cannot distinguish a savepoint rollback from the outer boundary.
+		rest := words[1:]
+		if len(rest) > 0 && (rest[0] == "work" || rest[0] == "transaction") {
+			rest = rest[1:]
+		}
+		if len(rest) > 0 && rest[0] == "to" {
+			return counterSavepoint
+		}
+		return counterEnd
+	case "savepoint", "release":
+		return counterSavepoint
+	}
+	return counterApplication
+}
+
 func (a counterAccountingTracer) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	control := counterClassifyControl(data.SQL)
 	if n := counterAccountIn(ctx); n != nil {
-		switch {
-		case data.SQL == "begin" || strings.HasPrefix(data.SQL, "begin "):
+		switch control {
+		case counterBegin:
 			n.started, n.active = n.now(), true
 			n.controls++
-		case data.SQL == "commit", strings.HasPrefix(data.SQL, "rollback"), strings.HasPrefix(data.SQL, "savepoint "), strings.HasPrefix(data.SQL, "release savepoint "):
+		case counterEnd, counterSavepoint:
 			n.controls++
 		default:
 			if strings.Contains(data.SQL, "range_agg") || strings.Contains(data.SQL, "$4::int8multirange - $5::int8multirange") {
@@ -86,7 +127,7 @@ func (a counterAccountingTracer) TraceQueryStart(ctx context.Context, conn *pgx.
 		}
 	}
 	// Count before delegation: COMMIT's hook executes nested maintenance SQL.
-	ctx = context.WithValue(ctx, counterAccountQueryKey{}, data.SQL)
+	ctx = context.WithValue(ctx, counterAccountQueryKey{}, control)
 	if a.inner != nil {
 		ctx = a.inner.TraceQueryStart(ctx, conn, data)
 	}
@@ -103,8 +144,8 @@ func (a counterAccountingTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Co
 		}
 		var p *pgconn.PgError
 		n.deadlocked = n.deadlocked || errors.As(data.Err, &p) && p.Code == "40P01"
-		sql, _ := ctx.Value(counterAccountQueryKey{}).(string)
-		if n.active && (sql == "commit" || sql == "rollback" || (sql == "begin" || strings.HasPrefix(sql, "begin ")) && data.Err != nil) {
+		control, _ := ctx.Value(counterAccountQueryKey{}).(counterControl)
+		if n.active && (control == counterEnd || control == counterBegin && data.Err != nil) {
 			n.transactions = append(n.transactions, n.now().Sub(n.started))
 			n.active = false
 		}
@@ -132,6 +173,96 @@ func (h counterAccountingHook) TraceQueryStart(ctx context.Context, _ *pgx.Conn,
 }
 
 func (counterAccountingHook) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+func TestUnreadCountersAccountingControls(t *testing.T) {
+	for _, tc := range []struct {
+		sql     string
+		control counterControl
+	}{
+		{"begin", counterBegin},
+		{"begin isolation level serializable read only deferrable", counterBegin},
+		{"begin isolation level repeatable read read write not deferrable", counterBegin},
+		{"begin isolation level read committed", counterBegin},
+		{"begin isolation level read uncommitted", counterBegin},
+		{" \tBeGiN\n TRANSACTION ;\r\n", counterBegin},
+		{"BEGIN WORK", counterBegin},
+		{" START\t TRANSACTION\nREAD ONLY; ", counterBegin},
+		{"commit", counterEnd},
+		{" \nCOMMIT\t; ", counterEnd},
+		{"COMMIT WORK", counterEnd},
+		{"COMMIT TRANSACTION", counterEnd},
+		{" END\tWORK; ", counterEnd},
+		{"END TRANSACTION", counterEnd},
+		{"END", counterEnd},
+		{"rollback", counterEnd},
+		{" \nROLLBACK\t; ", counterEnd},
+		{"ROLLBACK WORK", counterEnd},
+		{"ROLLBACK TRANSACTION", counterEnd},
+		{" ABORT\tWORK; ", counterEnd},
+		{"ABORT TRANSACTION", counterEnd},
+		{"ABORT", counterEnd},
+		{"savepoint sp_1", counterSavepoint},
+		{" SAVEPOINT\tsp_1; ", counterSavepoint},
+		{"release savepoint sp_1", counterSavepoint},
+		{" RELEASE\nSAVEPOINT\tsp_1; ", counterSavepoint},
+		{"RELEASE sp_1", counterSavepoint},
+		{"rollback to savepoint sp_1", counterSavepoint},
+		{" ROLLBACK\nTO\tSAVEPOINT sp_1; ", counterSavepoint},
+		{"ROLLBACK TO sp_1", counterSavepoint},
+		{"ROLLBACK WORK TO SAVEPOINT sp_1", counterSavepoint},
+		{"ROLLBACK TRANSACTION TO sp_1", counterSavepoint},
+		{"SELECT 1", counterApplication},
+		{"rollbackish", counterApplication},
+		{"beginning", counterApplication},
+		{"committed", counterApplication},
+		{"savepoints", counterApplication},
+		{"release_notes", counterApplication},
+		{"", counterApplication},
+	} {
+		t.Run(tc.sql, func(t *testing.T) {
+			for _, failed := range []bool{false, true} {
+				clock := time.Unix(0, 0)
+				ctx, n := counterAccountContext(t.Context(), func() time.Time { return clock })
+				// Non-BEGIN cases start inside a transaction so a premature
+				// savepoint boundary cannot hide behind an inactive account.
+				n.started, n.active = clock, tc.control != counterBegin
+				tracer := counterAccountingTracer{}
+				q := tracer.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{SQL: tc.sql})
+				clock = clock.Add(time.Millisecond)
+				var err error
+				if failed {
+					err = errors.New("query failed")
+				}
+				// Savepoint rollbacks also return ROLLBACK. Classification
+				// must survive that tag and an error without ending the sample.
+				tracer.TraceQueryEnd(q, nil, pgx.TraceQueryEndData{CommandTag: pgconn.NewCommandTag("ROLLBACK"), Err: err})
+				var statements, controls int64
+				if tc.control == counterApplication {
+					statements = 1
+				} else {
+					controls = 1
+				}
+				ends := tc.control == counterEnd || tc.control == counterBegin && failed
+				samples := 0
+				if ends {
+					samples = 1
+				}
+				if n.statements != statements || n.controls != controls || n.rows != 0 || n.active == ends || len(n.transactions) != samples {
+					t.Fatalf("failed=%t: statements=%d controls=%d rows=%d active=%t samples=%v; want statements=%d controls=%d active=%t samples=%d", failed, n.statements, n.controls, n.rows, n.active, n.transactions, statements, controls, !ends, samples)
+				}
+				if !ends {
+					q = tracer.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{SQL: "COMMIT"})
+					clock = clock.Add(time.Millisecond)
+					tracer.TraceQueryEnd(q, nil, pgx.TraceQueryEndData{CommandTag: pgconn.NewCommandTag("COMMIT")})
+				}
+				want := time.Duration(2-samples) * time.Millisecond
+				if len(n.transactions) != 1 || n.transactions[0] != want || n.active {
+					t.Fatalf("outer boundary: active=%t samples=%v; want [%v]", n.active, n.transactions, want)
+				}
+			}
+		})
+	}
+}
 
 func TestUnreadCountersAccounting(t *testing.T) {
 	clock := time.Unix(0, 0)

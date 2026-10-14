@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -169,8 +170,9 @@ func TestSupervisePreservesDeliveredFailure(t *testing.T) {
 			if err := cmd.Start(); err != nil {
 				t.Fatal(err)
 			}
-			w := watcher{cmd, make(chan error, 1), cmd.Process.Pid}
+			w := watcher{cmd, make(chan error, 1), cmd.Process.Pid, &atomic.Bool{}}
 			w.done <- cmd.Wait()
+			w.reaped.Store(true)
 			close(w.done)
 			watchers = append(watchers, w)
 		}
@@ -193,28 +195,42 @@ func TestSupervisePreservesDeliveredFailure(t *testing.T) {
 	})
 }
 
+// holdDelivery delays the delivery of cmd's result until release is closed,
+// and closes reaped once cmd has been reaped.
+func holdDelivery(t *testing.T, cmd *exec.Cmd, release <-chan struct{}) <-chan struct{} {
+	t.Helper()
+	reaped := make(chan struct{})
+	original := deliver
+	t.Cleanup(func() { deliver = original })
+	deliver = func(w watcher, result error) {
+		if w.cmd == cmd {
+			close(reaped)
+			<-release
+		}
+		original(w, result)
+	}
+	return reaped
+}
+
+func setBeforeSignals(t *testing.T, hook func()) {
+	t.Helper()
+	original := beforeSignals
+	t.Cleanup(func() { beforeSignals = original })
+	beforeSignals = hook
+}
+
 // The maintainer on #1042: a watcher that failed before shutdown signalled
 // anything must be reported even when its result is delivered only after the
-// signals. Here the failing watcher is reaped first, its result is held until
-// shutdown's first signal, and the other watcher exits cleanly only once the
-// failing one is reaped, so the order is fixed by synchronisation, not by
-// timing.
+// signals. The failing watcher is reaped first and its result is held until
+// shutdown's first signal; the other exits cleanly only once the failing one
+// is reaped, so synchronisation, not timing, fixes the order.
 func TestSuperviseReportsAFailureDeliveredAfterSignals(t *testing.T) {
 	dir := t.TempDir()
 	failing := exec.Command("/bin/sh", "-c", "exit 7")
 	clean := exec.Command("/bin/sh", "-c", `until [ -e "$1" ]; do sleep 0.01; done`, "clean", filepath.Join(dir, "reaped"))
-	release, reaped := make(chan struct{}), make(chan struct{})
-	wait, hook := waitWatcher, beforeSignals
-	t.Cleanup(func() { waitWatcher, beforeSignals = wait, hook })
-	waitWatcher = func(cmd *exec.Cmd) error {
-		err := cmd.Wait()
-		if cmd == failing {
-			close(reaped)
-			<-release
-		}
-		return err
-	}
-	beforeSignals = func() { close(release) }
+	release := make(chan struct{})
+	reaped := holdDelivery(t, failing, release)
+	setBeforeSignals(t, func() { close(release) })
 	go func() {
 		<-reaped
 		_ = os.WriteFile(filepath.Join(dir, "reaped"), nil, 0o600)
@@ -224,6 +240,101 @@ func TestSuperviseReportsAFailureDeliveredAfterSignals(t *testing.T) {
 	var exit *exec.ExitError
 	if err := supervise(ctx, []*exec.Cmd{failing, clean}); !errors.As(err, &exit) || exit.ExitCode() != 7 {
 		t.Fatalf("supervise = %v, want the failure delivered after the signals", err)
+	}
+}
+
+// Codex on #1042: a watcher still running when shutdown reads the process
+// table and exiting with a failure before the first signal gets the same
+// verdict whether its result is delivered at once or late. It ends at the
+// same point in both runs: shutdown's hook just before the first signal.
+func TestShutdownVerdictDoesNotDependOnDelivery(t *testing.T) {
+	for _, late := range []bool{false, true} {
+		t.Run("late "+strconv.FormatBool(late), func(t *testing.T) {
+			dir := t.TempDir()
+			stop := filepath.Join(dir, "stop")
+			cmd := exec.Command("/bin/sh", "-c", `until [ -e "$1" ]; do sleep 0.01; done; exit 7`, "watcher", stop)
+			release := make(chan struct{})
+			reaped := holdDelivery(t, cmd, release)
+			w, err := start(cmd)
+			if err != nil {
+				t.Fatal(err)
+			}
+			setBeforeSignals(t, func() {
+				if err := os.WriteFile(stop, nil, 0o600); err != nil {
+					t.Error(err)
+				}
+				<-reaped
+				if !late {
+					close(release)
+					for len(w.done) == 0 {
+						time.Sleep(time.Millisecond)
+					}
+				}
+			})
+			if late {
+				go func() { <-reaped; time.Sleep(100 * time.Millisecond); close(release) }()
+			}
+			if err := shutdown([]watcher{w}); err != nil {
+				t.Fatalf("shutdown = %v; a watcher running when the table was read counts as stopped by the signals", err)
+			}
+		})
+	}
+}
+
+// Codex on #1042: if the process table cannot be read before the signals,
+// running and failed watchers cannot be told apart, so shutdown still stops
+// everything but reports the failure.
+func TestShutdownReportsAnUnreadableTable(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", "sleep 30")
+	w, err := start(cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := listProcesses
+	t.Cleanup(func() { listProcesses = original })
+	calls := 0
+	listProcesses = func() (string, error) {
+		calls++
+		if calls == 1 {
+			return "", errors.New("ps denied")
+		}
+		return original()
+	}
+	if err := shutdown([]watcher{w}); err == nil || !strings.Contains(err.Error(), "reading the process table before shutdown") {
+		t.Fatalf("shutdown = %v, want the first scan's failure", err)
+	}
+	if alive(t, w.pid) {
+		t.Fatal("the watcher survived shutdown")
+	}
+}
+
+// Codex on #1042: a reaped watcher whose PID now belongs to a new session
+// leader must still count as exited, so its late failure is reported. The
+// watcher record points at a real, unrelated session leader's PID.
+func TestShutdownReportsAReapedWatcherWhosePIDWasReused(t *testing.T) {
+	failing := exec.Command("/bin/sh", "-c", "exit 7")
+	release := make(chan struct{})
+	reaped := holdDelivery(t, failing, release)
+	w, err := start(failing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-reaped
+	stranger := exec.Command("/bin/sh", "-c", "sleep 30")
+	stranger.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := stranger.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stranger.Process.Kill(); _ = stranger.Wait() })
+	w.pid = stranger.Process.Pid
+	setBeforeSignals(t, func() { close(release) })
+	var exit *exec.ExitError
+	err = shutdown([]watcher{w})
+	if !errors.As(err, &exit) || exit.ExitCode() != 7 || strings.Contains(err.Error(), "remain") {
+		t.Fatalf("shutdown = %v, want only the reaped watcher's failure", err)
+	}
+	if !alive(t, stranger.Process.Pid) {
+		t.Fatal("shutdown signalled the unrelated session leader")
 	}
 }
 

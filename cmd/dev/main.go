@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -54,8 +55,18 @@ func run(ctx context.Context, tailwind, templ string) error {
 	return supervise(ctx, []*exec.Cmd{css, server})
 }
 
-// waitWatcher reaps a watcher; a test replaces it to deliver a result late.
-var waitWatcher = func(cmd *exec.Cmd) error { return cmd.Wait() }
+// deliver hands a reaped watcher's result to supervise; a test replaces it
+// to deliver a result late.
+var deliver = func(w watcher, result error) { w.done <- result }
+
+// listProcesses returns "pid stat" lines for every process; a test replaces
+// it to fail or to describe a reused PID.
+var listProcesses = func() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,stat=").Output()
+	return string(out), err
+}
 
 // beforeSignals runs once per shutdown, just before its first signal; a test
 // uses it to order a late result after that point.
@@ -65,6 +76,25 @@ type watcher struct {
 	cmd  *exec.Cmd
 	done chan error
 	pid  int // Wait releases the process handle; retain the session ID.
+	// reaped is set as soon as Wait returns, before the result is delivered,
+	// so shutdown knows the leader is gone even if its PID is reused.
+	reaped *atomic.Bool
+}
+
+// start runs cmd in its own session and reaps it in the background.
+func start(cmd *exec.Cmd) (watcher, error) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return watcher{}, fmt.Errorf("starting %s: %w", cmd.Path, err)
+	}
+	w := watcher{cmd, make(chan error, 1), cmd.Process.Pid, &atomic.Bool{}}
+	go func() {
+		result := cmd.Wait()
+		w.reaped.Store(true)
+		deliver(w, result)
+		close(w.done)
+	}()
+	return w, nil
 }
 
 func supervise(ctx context.Context, commands []*exec.Cmd) (err error) {
@@ -75,16 +105,11 @@ func supervise(ctx context.Context, commands []*exec.Cmd) (err error) {
 			return nil
 		}
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-		if err := cmd.Start(); err != nil {
-			return fmt.Errorf("starting %s: %w", cmd.Path, err)
+		w, err := start(cmd)
+		if err != nil {
+			return err
 		}
-		w := watcher{cmd, make(chan error, 1), cmd.Process.Pid}
 		watchers = append(watchers, w)
-		go func() {
-			w.done <- waitWatcher(cmd)
-			close(w.done)
-		}()
 	}
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
@@ -112,37 +137,25 @@ func supervise(ctx context.Context, commands []*exec.Cmd) (err error) {
 }
 
 func shutdown(watchers []watcher) (err error) {
-	// A watcher whose leader had exited before shutdown signalled anything
-	// failed on its own, whenever Wait's result arrives; one still running
-	// then and ending later ended because of the signals. The state is read
-	// from the process table at that instant, so the verdict does not depend
-	// on when a result is delivered (Copilot and the maintainer on #1042).
-	exited := exitedLeaders(watchers)
-	results := make([]error, len(watchers))
-	received := make([]bool, len(watchers))
-	for i, w := range watchers {
-		select {
-		case result, ok := <-w.done:
-			received[i], exited[i] = true, true
-			if ok {
-				results[i] = result
-			}
-		default:
-		}
-	}
-	defer func() {
-		for i, w := range watchers {
-			if !received[i] {
-				results[i] = <-w.done
-			}
-			if exited[i] && results[i] != nil {
-				err = errors.Join(err, fmt.Errorf("watcher %s failed: %w", w.cmd.Path, results[i]))
-			}
-		}
-	}()
 	if len(watchers) == 0 {
 		return nil
 	}
+	// A watcher whose leader had exited before shutdown's first signal failed
+	// on its own; one still running then and ending later ended because of the
+	// signals. The verdict is taken once, from the reaped flags and the
+	// process table, and never from which results have been delivered, so it
+	// does not depend on delivery timing (the maintainer and Codex on #1042).
+	exited, scanErr := exitedLeaders(watchers)
+	defer func() {
+		for i, w := range watchers {
+			if result := <-w.done; exited[i] && result != nil {
+				err = errors.Join(err, fmt.Errorf("watcher %s failed: %w", w.cmd.Path, result))
+			}
+		}
+		// Without the table no running watcher can be told from a failed one
+		// whose result is late, so the run cannot count as clean.
+		err = errors.Join(err, scanErr)
+	}()
 	beforeSignals()
 	// Give the server time to drain, then kill stubborn descendants. Scanning
 	// again also catches a child forked between the first scan and its signal.
@@ -157,7 +170,7 @@ func shutdown(watchers []watcher) (err error) {
 				_ = w.cmd.Process.Signal(sig)
 			}
 		}
-		remaining, err := signalSessions(watchers, sig)
+		remaining, err := signalSessions(watchers, exited, sig)
 		if err != nil {
 			// Still stop owned leaders if ps is denied;
 			// report failure because detached descendants cannot be confirmed.
@@ -177,15 +190,13 @@ func shutdown(watchers []watcher) (err error) {
 	}
 }
 
-func signalSessions(watchers []watcher, sig syscall.Signal) (int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,stat=").Output()
+func signalSessions(watchers []watcher, exited []bool, sig syscall.Signal) (int, error) {
+	out, err := listProcesses()
 	if err != nil {
 		return 0, fmt.Errorf("scanning watcher sessions: %w", err)
 	}
 	remaining := 0
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
 		// Zombies cannot run or be signalled; init owns orphan reaping.
 		if len(fields) != 2 || strings.HasPrefix(fields[1], "Z") {
@@ -195,7 +206,12 @@ func signalSessions(watchers []watcher, sig syscall.Signal) (int, error) {
 		if err != nil {
 			continue
 		}
-		for _, w := range watchers {
+		for i, w := range watchers {
+			// Once the leader is reaped, a process with its PID is a new
+			// session leader, not ours: neither signalled nor waited for.
+			if exited[i] && pid == w.pid {
+				continue
+			}
 			if sid, err := unix.Getsid(pid); err == nil && sid == w.pid {
 				// A leader's PID may have been reused after Wait. Process.Signal
 				// checks its handle; never signal that PID from a stale ps listing.
@@ -212,19 +228,18 @@ func signalSessions(watchers []watcher, sig syscall.Signal) (int, error) {
 }
 
 // exitedLeaders reports, per watcher, whether its leader had already exited:
-// listed as a zombie, not listed, or listed under another session (a reused
-// PID). If ps fails, nothing counts as exited here; the cleanup scan reports
-// that failure.
-func exitedLeaders(watchers []watcher) []bool {
+// reaped, listed as a zombie, not listed, or listed under another session.
+func exitedLeaders(watchers []watcher) ([]bool, error) {
 	exited := make([]bool, len(watchers))
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,stat=").Output()
+	out, err := listProcesses()
 	if err != nil {
-		return exited
+		for i, w := range watchers {
+			exited[i] = w.reaped.Load()
+		}
+		return exited, fmt.Errorf("reading the process table before shutdown: %w", err)
 	}
 	running := map[int]bool{}
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 2 || strings.HasPrefix(fields[1], "Z") {
 			continue
@@ -234,8 +249,10 @@ func exitedLeaders(watchers []watcher) []bool {
 		}
 	}
 	for i, w := range watchers {
+		// The flag is read after the table, so a leader reaped meanwhile
+		// counts as exited even if its PID was reused at once.
 		sid, err := unix.Getsid(w.pid)
-		exited[i] = !running[w.pid] || err != nil || sid != w.pid
+		exited[i] = w.reaped.Load() || !running[w.pid] || err != nil || sid != w.pid
 	}
-	return exited
+	return exited, nil
 }

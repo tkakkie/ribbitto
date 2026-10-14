@@ -242,11 +242,52 @@ func TestChannelListBrowser(t *testing.T) {
 		t.Helper()
 		page.MustWait(`open => document.getElementById('account-menu').matches(':popover-open') === open`, open)
 	}
-	focused := func(selector string) bool {
-		return page.MustEval(`s => document.activeElement === document.querySelector(s)`, selector).Bool()
+	// accountKeys drives the menu from its visible invoker, with or without
+	// scripts: Enter and Space each open and close it, Escape closes it from
+	// inside with focus back on the invoker, and an outside tap closes it.
+	// After each step the invoker's accessibility node reports the state.
+	accountKeys := func(p *rod.Page, invoker string, tap func()) {
+		t.Helper()
+		step := func(name string, open bool, keys ...input.Key) {
+			t.Helper()
+			p.Keyboard.MustType(keys...)
+			if err := p.Timeout(5 * time.Second).Wait(rod.Eval(`open => document.getElementById('account-menu').matches(':popover-open') === open`, open)); err != nil {
+				t.Fatalf("%s %s: the menu is not open=%t: %v", invoker, name, open, err)
+			}
+			tree, err := proto.AccessibilityGetPartialAXTree{ObjectID: p.MustElement(invoker).Object.ObjectID}.Call(p)
+			acceptanceOK(t, err)
+			got := "absent"
+			for _, property := range tree.Nodes[0].Properties {
+				if property.Name == proto.AccessibilityAXPropertyNameExpanded {
+					got = fmt.Sprint(property.Value.Value.Bool())
+				}
+			}
+			if got != fmt.Sprint(open) {
+				t.Fatalf("%s %s: expanded %s, want %t", invoker, name, got, open)
+			}
+		}
+		p.MustEval(`s => document.querySelector(s).focus()`, invoker)
+		step("closed", false)
+		step("Enter", true, input.Enter)
+		step("Enter again", false, input.Enter)
+		step("Space", true, input.Space)
+		step("Space again", false, input.Space)
+		step("Enter", true, input.Enter)
+		p.Keyboard.MustType(input.Tab)
+		if !p.MustEval(`() => !!document.activeElement.closest('#account-menu')`).Bool() {
+			t.Fatalf("%s: Tab does not enter the menu", invoker)
+		}
+		step("Escape", false, input.Escape)
+		if !p.MustEval(`s => document.activeElement === document.querySelector(s)`, invoker).Bool() {
+			t.Fatalf("%s: Escape did not return focus", invoker)
+		}
+		step("Space", true, input.Space)
+		tap()
+		step("outside tap", false)
 	}
-	page.MustElement(bottomAccount).MustFocus()
-	page.Keyboard.MustType(input.Enter)
+	tapHeading := func() { page.MustElement("main h1").MustClick() }
+	accountKeys(page, bottomAccount, tapHeading)
+	page.MustElement(bottomAccount).MustClick()
 	sheet(true)
 	if problem := page.MustEval(`() => {
 		const menu = document.getElementById('account-menu'), box = menu.getBoundingClientRect();
@@ -256,19 +297,7 @@ func TestChannelListBrowser(t *testing.T) {
 	}`).Str(); problem != "" {
 		t.Fatalf("account sheet: %s", problem)
 	}
-	page.Keyboard.MustType(input.Tab)
-	if !focused("#account-menu button") {
-		t.Fatal("Tab from Account does not enter the sheet")
-	}
 	page.Keyboard.MustType(input.Escape)
-	sheet(false)
-	if !focused(bottomAccount) {
-		t.Fatal("Escape did not return focus to Account")
-	}
-	page.Keyboard.MustType(input.Space)
-	sheet(true)
-	// An outside tap on the list's heading, which acts on nothing.
-	page.MustElement("main h1").MustClick()
 	sheet(false)
 
 	// A phone conversation hides the frame and leads back to its row.
@@ -301,6 +330,32 @@ func TestChannelListBrowser(t *testing.T) {
 		t.Fatal("the back link did not open the list with the channel expanded and in view")
 	}
 
+	// viewport-fit=cover extends pages under a landscape notch (emulated 44 px
+	// side insets); the body keeps content beside it, here and on sign-in
+	// below, and at desktop width it adds nothing.
+	insets := func(sides map[string]int) {
+		_, err := page.Call(ctx, string(page.SessionID), "Emulation.setSafeAreaInsetsOverride", map[string]any{"insets": sides})
+		acceptanceOK(t, err)
+	}
+	inset := func(want float64) string {
+		return page.MustEval(`want => {
+			const style = getComputedStyle(document.body), box = document.body.firstElementChild.getBoundingClientRect();
+			if (!document.querySelector('meta[name=viewport]').content.includes('viewport-fit=cover')) return 'no viewport-fit=cover';
+			if (style.paddingLeft !== want + 'px' || style.paddingRight !== want + 'px') return 'body padding ' + style.paddingLeft + ' ' + style.paddingRight;
+			if (box.left !== want || box.right !== innerWidth - want) return 'content from ' + box.left + ' to ' + box.right;
+			return document.documentElement.scrollWidth > innerWidth ? 'the page scrolls sideways' : '';
+		}`, want).Str()
+	}
+	insets(map[string]int{"left": 44, "right": 44, "bottom": 21})
+	page.MustSetViewport(844, 390, 1, false)
+	for _, path := range []string{view.ChannelListURL("list", expanded.ID), view.ChannelURL("list", expanded.ID)} {
+		page.MustNavigate(server.URL + path).MustWaitLoad()
+		if problem := inset(44); problem != "" {
+			t.Fatalf("landscape %s: %s", path, problem)
+		}
+	}
+	insets(map[string]int{})
+
 	// At desktop width the list is still the one main, beside the prompt, and a
 	// conversation keeps its frame and hides the link.
 	page.MustSetViewport(1280, 800, 1, false)
@@ -309,6 +364,9 @@ func TestChannelListBrowser(t *testing.T) {
 	if desktop := read(); desktop.Mains != 1 || !desktop.MainShown || !desktop.PromptShown {
 		t.Fatalf("desktop list page: %+v", desktop)
 	}
+	if problem := inset(0); problem != "" {
+		t.Fatalf("desktop list page: %s", problem)
+	}
 	page.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID)).MustWaitLoad()
 	if desktop := frame(); desktop.Back || !desktop.Rail || !desktop.Aside || desktop.Bar {
 		t.Fatalf("desktop conversation frame: %+v", desktop)
@@ -316,7 +374,9 @@ func TestChannelListBrowser(t *testing.T) {
 	// The desktop list page hides the bottom navigation; the app bar's button
 	// opens the same menu where it always opened.
 	page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
-	page.MustElement("#organization-stream > nav:first-of-type [popovertarget=account-menu]").MustClick()
+	const barAccount = "#organization-stream > nav:first-of-type [popovertarget=account-menu]"
+	accountKeys(page, barAccount, tapHeading)
+	page.MustElement(barAccount).MustClick()
 	sheet(true)
 	if problem := page.MustEval(`homeLink => {
 		const box = document.getElementById('account-menu').getBoundingClientRect();
@@ -353,6 +413,7 @@ func TestChannelListBrowser(t *testing.T) {
 	if plain.MustEval(inView, row).Bool() {
 		t.Fatal("the expanded row starts in view, so the fragment proves nothing")
 	}
+	accountKeys(plain, bottomAccount, func() { click("main h1") })
 	plain.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID))
 	landed(view.ChannelURL("list", expanded.ID))
 	click("header a[aria-label]")
@@ -399,6 +460,11 @@ func TestChannelListBrowser(t *testing.T) {
 	page.MustElement("#account-menu form[action='/signout'] button").MustClick()
 	page.MustWait(`() => location.pathname === '/signin' && document.readyState === 'complete'`)
 	reader.visit(t, "GET", listURL, nil, 404)
+	insets(map[string]int{"left": 44, "right": 44})
+	page.MustSetViewport(844, 390, 1, false)
+	if problem := inset(44); problem != "" {
+		t.Fatalf("landscape sign-in: %s", problem)
+	}
 }
 
 // statusRecorder keeps a page response's status; Unwrap keeps the

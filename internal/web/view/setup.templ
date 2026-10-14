@@ -25,7 +25,7 @@ templ Setup(stylesheetURL string, form SetupForm) {
 				} {
 					@textField(field.name, field.kind, field.autocomplete, form.Values[field.name], "setup."+field.name, form.Errors[field.name])
 				}
-				@submitButton(buttonPrimary, "setup.submit")
+				@submitButton(buttonWelcomePrimary, "setup.submit")
 			</form>
 		}
 	}

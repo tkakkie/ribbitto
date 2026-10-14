@@ -41,7 +41,9 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   AA's 24 px (2.5.8), which desktop keeps: links, buttons, form controls,
   `<summary>` and labels that act as a control's target. Links inside
   running text (message and help text) are the one exception
-  ([`ui.md`](ui.md#layout-principles), #966).
+  ([`ui.md`](ui.md#layout-principles), #966). Welcome text fields and
+  buttons have a 48 px minimum height below `desk`, with at least 16 px
+  field text (#973).
 - **Colour is never the only signal** (see [*Direction*](ui.md#direction)): a state also has
   text, an icon or a shape.
 - **Styles** ✓ only through the token utilities: no `style` attributes and

@@ -22,7 +22,7 @@ templ SignUp(stylesheetURL string, form SignUpForm) {
 				} {
 					@textField(field.name, field.kind, field.autocomplete, form.Values[field.name], "setup."+field.name, form.Errors[field.name])
 				}
-				@submitButton(buttonPrimary, "signup.submit")
+				@submitButton(buttonWelcomePrimary, "signup.submit")
 			</form>
 		}
 	}

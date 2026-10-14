@@ -55,7 +55,7 @@ and the contrast table are in [`ui-colours.md`](ui-colours.md).
 | Other token | Value |
 |---|---|
 | Fonts | `font-sans`: system UI fonts with Japanese fallbacks (Hiragino Sans, Noto Sans JP, Yu Gothic, Meiryo); `font-mono` for code. No web fonts (self-hosting and privacy). |
-| Type scale | `text-caption` 12/16 · `text-body` 14/22 · `text-title` 15/22 · `text-entry` 16/22 (phone composer) · `text-heading` 20/28 · `text-display` 28/36 (px, size/line height) |
+| Type scale | `text-caption` 12/16 · `text-body` 14/22 · `text-title` 15/22 · `text-entry` 16/22 (phone inputs) · `text-heading` 20/28 · `text-display` 28/36 (px, size/line height) |
 | Spacing | `--spacing: 0.25rem` — a 4 px grid (`p-1` = 4 px, `p-4` = 16 px) |
 | Radius | `rounded-sm` 4 px · `rounded-md` 6 px · `rounded-lg` 10 px · `rounded-xl` 12 px (blocks) |
 | Shadow | `shadow-block` (blocks, cards) · `shadow-popover` (menus, dialogs) |
@@ -75,7 +75,9 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
 - **Welcome pages:** setup, sign-in, sign-up, home and the rate-limit page
   share a rounded card on the base. On desktop, the logo and tagline sit
   on the pale `selected` brand tint beside the white content column; a
-  decorative row of four channel illustrations sits below them.
+  decorative row of four channel illustrations sits below them. Below
+  `desk` (852 px), this becomes a short strip on the same tint above the
+  content, with the logo, name and tagline and no illustrations (#973).
 - **Desktop:** the app bar block (logo, Home, the account menu) · the
   channel sidebar on the base · the conversation block · a side panel block
   when one is open.
@@ -104,7 +106,9 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
   Members and the overview open as bottom sheets over the dimmed
   conversation, with **Mark as read** in the overview sheet (#972). Welcome pages show a short
   brand strip (logo, name, tagline) above the form, without the
-  illustrations.
+  illustrations. Their text fields and buttons are at least 48 px tall,
+  with 16 px field text; the sign-in heading and first field fit on the
+  first screen at 390 × 844 in either theme.
 - **Tap targets** at phone width are at least 44 × 44 px: links, buttons,
   form controls, `<summary>` and labels that act as a control's target.
   Links inside running text (message and help text) are the one
@@ -140,7 +144,7 @@ notices name no thing ([`vocabulary.md`](domain/vocabulary.md#product-labels)).
 The logo is at least 16 px, with clear space of a quarter of its size, in
 brand teal, white on a teal tile, or `currentColor` only. The mascot is
 meant for welcome pages, empty states and loading or sending, but no page
-places it yet (the welcome card shows channel illustrations); it is
+places it yet (the desktop welcome card shows channel illustrations); it is
 decorative (`alt=""`) and never the only carrier of information. Files,
 poses, the channel illustrations and details are in [`brand.md`](brand.md).
 

@@ -21,7 +21,7 @@ templ SignIn(stylesheetURL string, form SignInForm) {
 			<form method="post" action="/signin" class="flex flex-col gap-4">
 				@textField("email", "email", "username", form.Email, "signin.email", "")
 				@textField("password", "password", "current-password", "", "signin.password", "")
-				@submitButton(buttonPrimary, "signin.submit")
+				@submitButton(buttonWelcomePrimary, "signin.submit")
 			</form>
 			if form.SignUpOpen {
 				@textLink("/signup", "signup.title", "text-body font-semibold")

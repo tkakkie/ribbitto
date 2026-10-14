@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
@@ -188,6 +189,44 @@ func TestSourceRevisionIgnoresTheCurrentDirectory(t *testing.T) {
 	got, err = sourceRevision(source, git)
 	if err != nil || got != want {
 		t.Fatalf("with GIT_DIR on the target: sourceRevision = %q, %v; want the source's %s, not %s", got, err, want, other)
+	}
+}
+
+// A url.*.insteadOf in the global configuration, found through HOME or
+// XDG_CONFIG_HOME, must not make a fork pass as ribbitto.
+func TestSourceRevisionIgnoresGlobalConfiguration(t *testing.T) {
+	const fork, ribbitto = "https://github.com/someone/fork", "https://github.com/tkakkie/ribbitto"
+	rewrite := "[url \"" + ribbitto + "\"]\n\tinsteadOf = " + fork + "\n"
+	for _, where := range []string{"HOME", "XDG_CONFIG_HOME"} {
+		t.Run(where, func(t *testing.T) {
+			source := t.TempDir()
+			for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", fork}} {
+				if out, err := exec.Command("git", append([]string{"-C", source}, args...)...).CombinedOutput(); err != nil {
+					t.Fatalf("git %v: %v\n%s", args, err, out)
+				}
+			}
+			home, xdg := t.TempDir(), t.TempDir()
+			path := filepath.Join(home, ".gitconfig")
+			if where == "XDG_CONFIG_HOME" {
+				path = filepath.Join(xdg, "git", "config")
+			}
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(rewrite), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("HOME", home)
+			t.Setenv("XDG_CONFIG_HOME", xdg)
+			// The rewrite is live for a plain git call, so the test can fail.
+			out, err := exec.Command("git", "-C", source, "remote", "get-url", "origin").Output()
+			if err != nil || strings.TrimSpace(string(out)) != ribbitto {
+				t.Fatalf("plain get-url = %q, %v; the fixture's rewrite is not in effect", out, err)
+			}
+			if _, err := sourceRevision(source, git); err == nil || !strings.Contains(err.Error(), "not github.com/tkakkie/ribbitto") {
+				t.Fatalf("err = %v, want the fork refused", err)
+			}
+		})
 	}
 }
 

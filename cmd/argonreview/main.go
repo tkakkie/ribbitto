@@ -73,10 +73,11 @@ func isRibbitto(url string) bool {
 	return false
 }
 
-// git runs in dir with every GIT_* variable removed: GIT_DIR, GIT_WORK_TREE
-// and the like override -C, and GIT_CONFIG_* could rewrite the origin URL, so
-// an inherited environment could point the check at a review target (Codex
-// on #1073).
+// git runs in dir with every GIT_* variable removed, because GIT_DIR,
+// GIT_WORK_TREE and the like override -C. Global and system configuration are
+// off, because a url.*.insteadOf there (found through HOME or XDG_CONFIG_HOME)
+// rewrites what remote get-url reports. Otherwise an inherited environment
+// could make a fork, or a review target, pass as the source (Codex on #1073).
 func git(dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -86,9 +87,7 @@ func git(dir string, args ...string) (string, error) {
 			cmd.Env = append(cmd.Env, value)
 		}
 	}
-	if cmd.Env == nil {
-		cmd.Env = []string{}
-	}
+	cmd.Env = append(cmd.Env, "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
 }

@@ -192,9 +192,11 @@ const widthAudit = `() => {
 	for (const e of controls) {
 		if (!shown(e) || e.closest('[inert]')) continue;
 		// A checkbox or radio label is the target that stands in for the tiny
-		// native widget, so it is audited instead of the widget. A text field's
-		// caption is not: the field itself is the target and is audited.
-		if (e.tagName === 'LABEL' && !e.control?.matches(toggle)) continue;
+		// native widget, so it is audited instead of the widget. Any other
+		// control's caption is an equivalent target (docs/ui.md): exempt only
+		// while the control itself is shown and at least 44 x 44.
+		if (e.tagName === 'LABEL' && e.control && !e.control.matches(toggle) && shown(e.control) &&
+			box(e.control).width >= 44 && box(e.control).height >= 44) continue;
 		if (e.matches(toggle) && [...e.labels].some(shown)) continue;
 		checked++;
 		// Only inline links in running text are exempt: an inline <a> whose

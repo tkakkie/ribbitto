@@ -115,7 +115,7 @@ func (p *Posting) post(ctx context.Context, m org.Membership, channelID kernel.I
 				return err
 			}
 		}
-		return p.events(tx).Append(ctx, organizationID, seq, KindPosted, nil, EncodePosted(channelID, posted.ID, posted.TopicID))
+		return p.events(tx).Append(ctx, organizationID, seq, KindPosted, nil, EncodePosted(channelID, posted.ID, posted.TopicID, m.Member.ID))
 	})
 	if err != nil {
 		return Message{}, fmt.Errorf("posting message: %w", err)

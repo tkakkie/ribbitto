@@ -16,7 +16,7 @@
 // author lookups and injected unread counts share a snapshot so a page cannot mix states; the bounded channel-members page shares its sidebar,
 // display-name lookup and stream cursor in one snapshot, as the channel list page
 // shares its sidebar and cursor. Independent sidebar
-// snapshots read fresh bounded lists and counts without history or directories.
+// snapshots read fresh bounded lists, counts and their event sequence without history or directories.
 // Optional capture shares the snapshot after counts; production leaves it disabled.
 // Member lookups return org's directory entries, not copies. The topic lookup
 // is scoped by a resolved

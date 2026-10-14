@@ -19,28 +19,32 @@ type Posted struct {
 	// TopicID is the posting-time topic. Nil means a legacy payload
 	// written before topics, without topic_id.
 	TopicID *kernel.ID
+	// AuthorID is the session-resolved member; nil means a legacy payload.
+	AuthorID *kernel.ID
 }
 
 // EncodePosted returns the stored data of KindPosted for a post in topicID:
-// canonical UUID text under channel_id, message_id and topic_id.
-func EncodePosted(channelID, messageID, topicID kernel.ID) []byte {
+// canonical UUID text under channel_id, message_id, topic_id and author_id.
+func EncodePosted(channelID, messageID, topicID, authorID kernel.ID) []byte {
 	// This payload contains only strings, so marshaling cannot fail.
 	data, _ := json.Marshal(map[string]string{
 		"channel_id": realtime.FormatPayloadID(channelID),
 		"message_id": realtime.FormatPayloadID(messageID),
 		"topic_id":   realtime.FormatPayloadID(topicID),
+		"author_id":  realtime.FormatPayloadID(authorID),
 	})
 	return data
 }
 
-// DecodePosted reads stored data. Both IDs are required. Only an absent
-// topic_id is legacy; a present malformed one fails, rather than silently
+// DecodePosted reads stored data. Channel and message are required. Absent
+// author_id or topic_id is legacy; a present malformed one fails, rather than silently
 // changing how the post is routed.
 func DecodePosted(data []byte) (Posted, error) {
 	var raw struct {
 		ChannelID string          `json:"channel_id"`
 		MessageID string          `json:"message_id"`
 		TopicID   json.RawMessage `json:"topic_id"`
+		AuthorID  json.RawMessage `json:"author_id"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return Posted{}, err
@@ -53,16 +57,22 @@ func DecodePosted(data []byte) (Posted, error) {
 	if p.MessageID, err = realtime.ParsePayloadID(raw.MessageID); err != nil {
 		return Posted{}, err
 	}
-	if len(raw.TopicID) != 0 {
+	for _, field := range []struct {
+		data json.RawMessage
+		id   **kernel.ID
+	}{{raw.TopicID, &p.TopicID}, {raw.AuthorID, &p.AuthorID}} {
+		if len(field.data) == 0 {
+			continue
+		}
 		var value string
-		if err := json.Unmarshal(raw.TopicID, &value); err != nil {
+		if err := json.Unmarshal(field.data, &value); err != nil {
 			return Posted{}, err
 		}
 		id, err := realtime.ParsePayloadID(value)
 		if err != nil {
 			return Posted{}, err
 		}
-		p.TopicID = &id
+		*field.id = &id
 	}
 	return p, nil
 }

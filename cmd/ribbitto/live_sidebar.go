@@ -37,6 +37,7 @@ func (s liveSidebar) Trigger(event realtime.Event) bool {
 }
 
 func (s liveSidebar) Recount(ctx context.Context, _ realtime.Subscription) (realtime.Outgoing, error) {
+	// The cursor factory is snapshot-bound, like the counts it accompanies.
 	snapshot, err := s.reader.Sidebar(ctx, s.membership, s.channel, s.topic)
 	if err != nil {
 		return realtime.Outgoing{}, err

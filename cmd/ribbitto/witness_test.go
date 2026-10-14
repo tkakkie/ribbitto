@@ -227,8 +227,8 @@ func TestWitnessOffBaseline(t *testing.T) {
 	witnessRead(t, r, m, f.Channel.ID, nil, "list")
 	b, err := os.ReadFile("testdata/witness-off.json")
 	feedRequire(t, err)
-	if fmt.Sprintf("%x", sha256.Sum256(b)) != "cf72191df45765c86337d1b65c5e46d4b86a2b4ec1e68bb0260a44d56badff3b" {
-		t.Fatal("pre-change baseline pin changed")
+	if fmt.Sprintf("%x", sha256.Sum256(b)) != "447ea459c29ac4cbe20fa40180ed732fa55a8a20164aa10be5c832e6e8055c36" {
+		t.Fatal("sidebar-contract baseline pin changed")
 	}
 	var lines string
 	feedRequire(t, json.Unmarshal(b, &lines))
@@ -239,7 +239,7 @@ func TestWitnessOffBaseline(t *testing.T) {
 		baseline = append(baseline, q)
 	}
 	if !witnessCanonical(baseline) || !witnessCanonical(trace.queries) || !reflect.DeepEqual(baseline, trace.queries) {
-		t.Fatal("off SQL/arguments/transaction order differs from pre-change baseline")
+		t.Fatal("off SQL/arguments/transaction order differs from pinned sidebar-contract baseline")
 	}
 }
 

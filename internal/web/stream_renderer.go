@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -40,6 +41,32 @@ type renderKey struct {
 	organization, channel kernel.ID
 	seq                   int64
 	language              string
+	unread                bool
+}
+
+// RenderUnread uses a language-independent cache entry: every sidebar recipient
+// gets the same posting-time routing data, without a message read or cursor ID.
+func (r messageRenderer) RenderUnread(ctx context.Context, event realtime.Event) (realtime.Outgoing, error) {
+	if event.Kind != conversation.KindPosted {
+		return realtime.Outgoing{}, nil
+	}
+	key := renderKey{organization: event.OrganizationID, channel: event.ChannelID, seq: event.Seq, unread: true}
+	return r.renders.Get(ctx, key, func(context.Context) (realtime.Outgoing, error) {
+		post, err := conversation.DecodePosted(event.Payload)
+		if err != nil {
+			return realtime.Outgoing{}, fmt.Errorf("decoding unread post: %w", err)
+		}
+		if post.TopicID == nil || post.AuthorID == nil {
+			return realtime.Outgoing{}, nil
+		}
+		data, err := json.Marshal(struct {
+			Channel string `json:"channel"`
+			Topic   string `json:"topic"`
+			Seq     int64  `json:"seq"`
+			Author  string `json:"author"`
+		}{realtime.FormatPayloadID(post.ChannelID), realtime.FormatPayloadID(*post.TopicID), event.Seq, realtime.FormatPayloadID(*post.AuthorID)})
+		return realtime.Outgoing{Name: "unread", Ephemeral: true, Data: data}, err
+	})
 }
 
 // Render caching bounds: names shown in a live message can be up to

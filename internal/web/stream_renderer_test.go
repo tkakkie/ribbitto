@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -64,7 +65,7 @@ func eventOf(t *testing.T, org kernel.ID, seq int64, kind realtime.EventKind, mo
 	var route realtime.Router
 	switch kind {
 	case conversation.KindPosted:
-		e.Payload = conversation.EncodePosted(moved.ChannelID, kernel.ID{7}, moved.ToTopicID)
+		e.Payload = conversation.EncodePosted(moved.ChannelID, kernel.ID{7}, moved.ToTopicID, kernel.ID{8})
 		route = conversation.RoutePosted
 	case conversation.KindMessagesMoved:
 		e.Payload = conversation.EncodeMoved(moved)
@@ -317,4 +318,52 @@ func TestRenderCacheDoesNotStoreAtShutdown(t *testing.T) {
 			t.Errorf("entries=%d reads=%d; want 0, 1", cache.Len(), calls.Load())
 		}
 	})
+}
+
+func TestUnreadFrame(t *testing.T) {
+	cache := newRenderCache(t.Context())
+	e := eventOf(t, kernel.ID{1}, 9, conversation.KindPosted, conversation.Moved{ChannelID: kernel.ID{2}, ToTopicID: kernel.ID{3}})
+	r := messageRenderer{renders: cache} // No message reader: unread must never load it.
+	out, err := r.RenderUnread(t.Context(), e)
+	want := `{"channel":"02000000-0000-0000-0000-000000000000","topic":"03000000-0000-0000-0000-000000000000","seq":9,"author":"08000000-0000-0000-0000-000000000000"}`
+	if err != nil || out.Name != "unread" || !out.Ephemeral || out.ID != 0 || string(out.Data) != want {
+		t.Fatalf("unread frame name=%s ephemeral=%v id=%d data=%s, %v", out.Name, out.Ephemeral, out.ID, out.Data, err)
+	}
+	// Reusing the same backing bytes proves that the shared loader rendered once.
+	again, err := r.RenderUnread(t.Context(), e)
+	if err != nil || &again.Data[0] != &out.Data[0] {
+		t.Fatal("unread render was not shared")
+	}
+	w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+	sender := &sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+	if err := sender.Send(t.Context(), out); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.Body.String(); got != "event: unread\ndata: "+want+"\n\n" {
+		t.Fatalf("unread SSE = %q", got)
+	}
+	for i, missing := range []string{"author_id", "topic_id", "both"} {
+		t.Run(missing, func(t *testing.T) {
+			var payload map[string]json.RawMessage
+			if err := json.Unmarshal(e.Payload, &payload); err != nil {
+				t.Fatal(err)
+			}
+			delete(payload, missing)
+			if missing == "both" {
+				delete(payload, "author_id")
+				delete(payload, "topic_id")
+			}
+			legacy := e
+			legacy.Seq += int64(i + 1)
+			legacy.Payload, _ = json.Marshal(payload)
+			got, err := r.RenderUnread(t.Context(), legacy)
+			if err != nil || got.Name != "" || len(got.Data) != 0 {
+				t.Fatalf("legacy %s frame = %+v, %v", missing, got, err)
+			}
+		})
+	}
+	e.Kind = conversation.KindMessagesMoved
+	if got, err := r.RenderUnread(t.Context(), e); err != nil || len(got.Data) != 0 || got.Name != "" {
+		t.Fatalf("non-post unread = %+v, %v", got, err)
+	}
 }

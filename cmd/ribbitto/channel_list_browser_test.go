@@ -123,7 +123,7 @@ func TestChannelListBrowser(t *testing.T) {
 	const state = `(general, row) => {
 		const main = document.querySelector('main'), stream = document.getElementById('organization-stream');
 		const open = window.sources.filter(s => s.readyState !== EventSource.CLOSED).length;
-		const badge = document.getElementById('link-' + general).querySelector('.sr-only')?.previousElementSibling?.textContent || '';
+		const badge = document.getElementById('link-' + general).querySelector('[data-unread-count]:not([hidden]) > .sr-only')?.previousElementSibling?.textContent || '';
 		const box = e => e.getBoundingClientRect(), add = box(document.querySelector('[popovertarget=channel-create]'));
 		const small = [...document.querySelectorAll('#sidebar-channels a')].filter(a => box(a).height < 44 || box(a).width < box(a.parentElement).width - 1).map(a => a.id);
 		if (add.width < 44 || add.height < 44) small.push('add');

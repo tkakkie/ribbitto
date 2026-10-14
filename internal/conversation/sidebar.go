@@ -12,6 +12,7 @@ import (
 // SidebarSnapshot holds fresh sidebar lists and explicit counts, including zero.
 // Topic is the validated selection; it never extends the 50-topic Topics list.
 type SidebarSnapshot struct {
+	SnapshotSeq                int64
 	Witness                    *SidebarWitness
 	Current                    Channel
 	Channels                   []Channel
@@ -21,8 +22,8 @@ type SidebarSnapshot struct {
 }
 
 // Sidebar reads lists and counts in an independent read-only repeatable-read
-// snapshot, without history, author directories or a stream cursor. Membership
-// is resolved by org; the channel and optional topic are checked in the snapshot.
+// snapshot, including its organisation event sequence, without history or
+// directories. Membership is resolved by org; the channel and optional topic are checked in the snapshot.
 func (s *Reader) Sidebar(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID) (sidebar SidebarSnapshot, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		loaded, err := loadSidebarContext(ctx, s.reads(snapshot), m.Organization.ID, channelID, topicID)
@@ -31,6 +32,10 @@ func (s *Reader) Sidebar(ctx context.Context, m org.Membership, channelID kernel
 		}
 		sidebar.Current, sidebar.Channels = loaded.current, loaded.channels
 		sidebar.Topic, sidebar.Topics = loaded.topic, loaded.topics
+		sidebar.SnapshotSeq, err = s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
+		if err != nil {
+			return fmt.Errorf("reading sidebar sequence: %w", err)
+		}
 		counts, err := s.readCounts(ctx, snapshot, m, channelID, sidebar.Channels, sidebar.Topics, topicID, false)
 		if err != nil {
 			return err
@@ -70,6 +75,7 @@ func (s *Reader) ChannelList(ctx context.Context, m org.Membership, channelID ke
 		if err != nil {
 			return err
 		}
+		page.SnapshotSeq = page.EventCursor
 		page.ChannelCounts, page.TopicCounts = counts.ChannelCounts, counts.TopicCounts
 		page.Witness = counts.Witness
 		return nil

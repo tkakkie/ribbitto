@@ -64,7 +64,7 @@ func (s *Brancher) run(ctx context.Context, m org.Membership, channelID kernel.I
 		if err := s.reads(tx).Merge(ctx, organizationID, channelID, memberID, m.Member.JoinedEventSeq, previous+1, noticeSeq+1); err != nil {
 			return err
 		}
-		return events.Append(ctx, organizationID, noticeSeq, KindPosted, nil, EncodePosted(channelID, posted.ID, posted.TopicID))
+		return events.Append(ctx, organizationID, noticeSeq, KindPosted, nil, EncodePosted(channelID, posted.ID, posted.TopicID, memberID))
 	})
 	return destination, noticeSeq, err
 }

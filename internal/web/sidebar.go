@@ -31,5 +31,6 @@ func sidebarView(page view.ChannelPage, m org.Membership, snapshot conversation.
 	page.Current, page.Channels = viewChannel(snapshot.Current), viewChannels(snapshot.Channels)
 	page.Topic, page.Topics = viewTopicPtr(snapshot.Topic), viewTopics(snapshot.Topics)
 	page.ChannelCounts, page.TopicCounts = snapshot.ChannelCounts, snapshot.TopicCounts
+	page.SnapshotSeq = snapshot.SnapshotSeq
 	return page
 }

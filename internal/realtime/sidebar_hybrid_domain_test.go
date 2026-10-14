@@ -91,7 +91,7 @@ VALUES ($1,$2,$3,$4,'post',$5) RETURNING id`, f.OrganizationID, ch, topic, who, 
 		merge(ch, who, joined, unread.Range{Lo: seq, Hi: seq + 1})
 		// Synthetic messages have no log rows; retain only sequences after them.
 		exec(`UPDATE organization SET event_seq=$2,event_log_boundary_seq=$2 WHERE id=$1`, f.OrganizationID, seq)
-		return realtime.Event{OrganizationID: f.OrganizationID, Seq: seq, Kind: conversation.KindPosted, ChannelID: ch, Payload: conversation.EncodePosted(ch, id, topic)}
+		return realtime.Event{OrganizationID: f.OrganizationID, Seq: seq, Kind: conversation.KindPosted, ChannelID: ch, Payload: conversation.EncodePosted(ch, id, topic, f.MemberID)}
 	}
 	post(f.Channel.ID, selected, f.MemberID)
 	post(f.Channel.ID, selected, f.MemberID)

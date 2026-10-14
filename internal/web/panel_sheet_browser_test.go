@@ -177,10 +177,14 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			send := func(out realtime.Outgoing) {
 				t.Helper()
+				timer := time.NewTimer(10 * time.Second)
+				defer timer.Stop()
 				select {
 				case frames <- out:
-				case <-time.After(10 * time.Second):
-					t.Fatalf("no stream took frame %d (at %s)", out.ID, since())
+				case <-timer.C:
+					t.Fatalf("%s: no stream took frame %d within 10 s (at %s)", current, out.ID, since())
+				case <-page.GetContext().Done():
+					t.Fatalf("%s: the step ran out before a stream took frame %d (at %s)", current, out.ID, since())
 				}
 			}
 			// live delivers a message on the stream: the page applies and shows

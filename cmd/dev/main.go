@@ -59,14 +59,18 @@ func run(ctx context.Context, tailwind, templ string) error {
 // to deliver a result late.
 var deliver = func(w watcher, result error) { w.done <- result }
 
-// listProcesses returns "pid stat" lines for every process; a test replaces
-// it to fail or to describe a reused PID.
+// listProcesses returns "pid ppid stat" lines for every process; a test
+// replaces it to fail.
 var listProcesses = func() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,stat=").Output()
+	out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,ppid=,stat=").Output()
 	return string(out), err
 }
+
+// afterReap runs between Wait reaping a watcher and the reaped flag being
+// set; a test pauses there to reuse the PID in that interval.
+var afterReap = func(watcher) {}
 
 // beforeSignals runs once per shutdown, just before its first signal; a test
 // uses it to order a late result after that point.
@@ -90,6 +94,7 @@ func start(cmd *exec.Cmd) (watcher, error) {
 	w := watcher{cmd, make(chan error, 1), cmd.Process.Pid, &atomic.Bool{}}
 	go func() {
 		result := cmd.Wait()
+		afterReap(w)
 		w.reaped.Store(true)
 		deliver(w, result)
 		close(w.done)
@@ -199,7 +204,7 @@ func signalSessions(watchers []watcher, exited []bool, sig syscall.Signal) (int,
 	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
 		// Zombies cannot run or be signalled; init owns orphan reaping.
-		if len(fields) != 2 || strings.HasPrefix(fields[1], "Z") {
+		if len(fields) != 3 || strings.HasPrefix(fields[2], "Z") {
 			continue
 		}
 		pid, err := strconv.Atoi(fields[0])
@@ -227,8 +232,10 @@ func signalSessions(watchers []watcher, exited []bool, sig syscall.Signal) (int,
 	return remaining, nil
 }
 
-// exitedLeaders reports, per watcher, whether its leader had already exited:
-// reaped, listed as a zombie, not listed, or listed under another session.
+// exitedLeaders reports, per watcher, whether its leader had already exited.
+// A leader still runs only if it is listed, not a zombie, its own session's
+// leader and this process's child: a PID reused after the reap, even before
+// the reaped flag is set, belongs to a process with another parent.
 func exitedLeaders(watchers []watcher) ([]bool, error) {
 	exited := make([]bool, len(watchers))
 	out, err := listProcesses()
@@ -238,21 +245,23 @@ func exitedLeaders(watchers []watcher) ([]bool, error) {
 		}
 		return exited, fmt.Errorf("reading the process table before shutdown: %w", err)
 	}
-	running := map[int]bool{}
+	ours, self := map[int]bool{}, os.Getpid()
 	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) != 2 || strings.HasPrefix(fields[1], "Z") {
+		if len(fields) != 3 || strings.HasPrefix(fields[2], "Z") {
 			continue
 		}
-		if pid, err := strconv.Atoi(fields[0]); err == nil {
-			running[pid] = true
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil {
+			continue
+		}
+		if ppid, err := strconv.Atoi(fields[1]); err == nil && ppid == self {
+			ours[pid] = true
 		}
 	}
 	for i, w := range watchers {
-		// The flag is read after the table, so a leader reaped meanwhile
-		// counts as exited even if its PID was reused at once.
 		sid, err := unix.Getsid(w.pid)
-		exited[i] = w.reaped.Load() || !running[w.pid] || err != nil || sid != w.pid
+		exited[i] = w.reaped.Load() || !ours[w.pid] || err != nil || sid != w.pid
 	}
 	return exited, nil
 }

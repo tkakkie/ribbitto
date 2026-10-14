@@ -338,6 +338,51 @@ func TestShutdownReportsAReapedWatcherWhosePIDWasReused(t *testing.T) {
 	}
 }
 
+// Codex on #1042: between Wait reaping a watcher and its reaped flag being
+// set, the PID can be reused by a new session leader. Paused exactly there,
+// the watcher's PID is taken over by such a leader that is not this
+// process's child, and its failure must still be reported.
+func TestShutdownReportsAWatcherReusedBeforeItsFlag(t *testing.T) {
+	dir := t.TempDir()
+	failing := exec.Command("/bin/sh", "-c", "exit 7")
+	paused, resume := make(chan struct{}), make(chan struct{})
+	original := afterReap
+	t.Cleanup(func() { afterReap = original })
+	afterReap = func(w watcher) {
+		if w.cmd == failing {
+			close(paused)
+			<-resume
+		}
+	}
+	w, err := start(failing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-paused
+	if err := helper("orphan", dir).Run(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "orphan.pid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	orphan, err := strconv.Atoi(string(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(orphan, syscall.SIGKILL) })
+	w.pid = orphan
+	setBeforeSignals(t, func() { close(resume) })
+	var exit *exec.ExitError
+	err = shutdown([]watcher{w})
+	if !errors.As(err, &exit) || exit.ExitCode() != 7 || strings.Contains(err.Error(), "remain") {
+		t.Fatalf("shutdown = %v, want only the watcher's failure", err)
+	}
+	if !alive(t, orphan) {
+		t.Fatal("shutdown signalled the unrelated session leader")
+	}
+}
+
 func helper(role, root string) *exec.Cmd {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
 	cmd.Env = append(os.Environ(), "DEV_HELPER="+role, "DEV_ROOT="+root)
@@ -364,6 +409,19 @@ func TestHelperProcess(t *testing.T) {
 	role, root := os.Getenv("DEV_HELPER"), os.Getenv("DEV_ROOT")
 	if role == "" {
 		return
+	}
+	if role == "orphan" {
+		// A new session leader whose parent exits at once, so it is nobody's
+		// child here.
+		child := exec.Command("/bin/sh", "-c", "sleep 30")
+		child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		if err := child.Start(); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "orphan.pid"), []byte(strconv.Itoa(child.Process.Pid)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		os.Exit(0)
 	}
 	if role == "supervisor" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

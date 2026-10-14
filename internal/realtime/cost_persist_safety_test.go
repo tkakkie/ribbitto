@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"reflect"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -193,8 +194,14 @@ func TestCostSentModelPinnedReadCoverage(t *testing.T) {
 }
 
 func TestCostSentModelBounded(t *testing.T) {
-	if costSentLimit != 1024 || binary.Size(costSentModel{}) != 57 {
-		t.Fatal("sender witness size differs from documented 1024 records of 57 serialized bytes")
+	if got := reflect.TypeOf(costSentModel{}).Size(); got != 64 {
+		t.Fatalf("sender witness in-memory record size = %d bytes, want documented 64 bytes", got)
+	}
+	if costSentLimit != 1024 {
+		t.Fatalf("sender witness buffer capacity = %d records, want documented 1024 records", costSentLimit)
+	}
+	if got := binary.Size(costSentModel{}); got != 57 {
+		t.Fatalf("sender witness serialized record size = %d bytes, want documented 57 bytes", got)
 	}
 	c := new(costModelConnection)
 	frame := hybridFrame{model: sidebarOracleModel{channels: []sidebarOracleEntry{{name: "general", count: sidebarOracleDisplay(101)}}}}

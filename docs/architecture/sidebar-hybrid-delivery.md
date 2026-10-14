@@ -134,7 +134,8 @@ The digest is computed after capturing sender success time, with no oracle query
 952c2b can compare it with an independently expected model. Hashing is additional
 witness work in both arms and is not subtracted from results. Computed, rejected
 and failed output supplies no sender witness. Each stream retains its first
-1,024 successes in a fixed-capacity buffer: 64 bytes per record (57 serialized bytes), at most 64 KiB
+1,024 successes in a fixed-capacity buffer: 64 bytes per record in memory,
+including padding (57 serialized bytes), at most 64 KiB
 plus 56 bytes for the slice, time anchor and overflow counter on 64-bit hosts
 (65,592 bytes/stream, 327,960,000 bytes or about 312.8 MiB for 5,000 streams per
 window, independent of subsequent sends). This excludes existing current/pending

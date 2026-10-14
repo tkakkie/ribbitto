@@ -48,12 +48,11 @@ css: $(TAILWIND)
 	$(TAILWIND) $(CSS_ARGS)
 
 # Serve rebuilt CSS from disk so updates do not depend on a server restart.
-dev: $(TEMPL) css bin/ai-db
-	@set -eu; \
-	$(TAILWIND) $(CSS_ARGS) --watch=always & css_pid=$$!; \
-	trap 'kill "$$css_pid" 2>/dev/null || true; wait "$$css_pid" 2>/dev/null || true' EXIT; \
-	trap 'exit 130' INT; trap 'exit 143' TERM; \
-	RIBBITTO_DEV_ASSETS=web/static ./bin/ai-db run $(TEMPL) generate --watch --cmd 'go run ./cmd/ribbitto'
+dev: $(TEMPL) css bin/ai-db bin/dev
+	@./bin/dev -tailwind $(TAILWIND) -templ $(TEMPL)
+
+bin/dev: $(wildcard cmd/dev/*.go) go.mod go.sum
+	go build -o $@ ./cmd/dev
 
 $(TAILWIND):
 	go -C tools run ./download tailwind ..

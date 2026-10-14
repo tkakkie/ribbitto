@@ -23,6 +23,10 @@ this module to reuse the migration runner; credentials stay in the environment.
 `cmd/capacity` runs two uncached required-DB checks and cleans up their sessions.
 It imports only `internal/platform/postgres/pgtest` from this module to report
 `pgtest.MaxConns`; it does not configure pools or import the Python worktree helper.
+`cmd/dev` supervises the Tailwind and templ watchers in separate sessions,
+including templ's server in another process group, and confirms descendant
+cleanup on shutdown. It imports no application packages; `bin/ai-db run`
+applies worktree configuration to templ and its server.
 
 `tools/download` is a tools-module command that owns the Tailwind and
 golangci-lint release pins, selects macOS arm64 or Linux amd64 assets, checks

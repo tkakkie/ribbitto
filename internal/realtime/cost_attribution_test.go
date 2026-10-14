@@ -150,6 +150,7 @@ func (c *costTimings) queryStart(ctx context.Context, sql string) context.Contex
 }
 
 func (c *epochCounter) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
+	costPersistEnd(ctx, data)
 	if start, ok := ctx.Value(costQueryKey{}).(costStart); ok {
 		c.timings.add(start.kind, start.at, data.Err)
 	}

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -67,7 +68,7 @@ func TestChannelListBrowser(t *testing.T) {
 	handler, _, err := buildHandler(ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, hub: realtime.NewHub()})
 	acceptanceOK(t, err)
 	var mu sync.Mutex
-	var streams []string
+	var streams, pages []string
 	reads := 0
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
@@ -78,7 +79,17 @@ func TestChannelListBrowser(t *testing.T) {
 			reads++
 		}
 		mu.Unlock()
-		handler.ServeHTTP(w, r)
+		if strings.HasSuffix(r.URL.Path, "/events") {
+			handler.ServeHTTP(w, r)
+			return
+		}
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		handler.ServeHTTP(recorder, r)
+		if !strings.HasPrefix(r.URL.Path, "/static/") {
+			mu.Lock()
+			pages = append(pages, fmt.Sprintf("%s %s %d", r.Method, r.URL.Path, recorder.status))
+			mu.Unlock()
+		}
 	}))
 	defer server.Close()
 	recorded := func() ([]string, int) {
@@ -209,19 +220,20 @@ func TestChannelListBrowser(t *testing.T) {
 	// A phone conversation hides the frame and leads back to its row.
 	type frameState struct {
 		Back, Rail, Aside bool
+		Width, Height     float64
 		Label             string
 	}
 	frame := func() frameState {
 		var s frameState
 		acceptanceOK(t, page.MustEval(`() => {
 			const back = document.querySelector('header a[aria-label]'), box = back.getBoundingClientRect();
-			return { back: back.checkVisibility() && box.width >= 44 && box.height >= 44, label: back.getAttribute('aria-label'),
+			return { back: back.checkVisibility(), width: box.width, height: box.height, label: back.getAttribute('aria-label'),
 				rail: document.querySelector('nav').checkVisibility(), aside: document.querySelector('aside').checkVisibility() };
 		}`).Unmarshal(&s))
 		return s
 	}
 	page.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID)).MustWaitLoad()
-	if phone := frame(); !phone.Back || phone.Label != "Back to lilypads" || phone.Rail || phone.Aside {
+	if phone := frame(); !phone.Back || phone.Width < 44 || phone.Height < 44 || phone.Label != "Back to lilypads" || phone.Rail || phone.Aside {
 		t.Fatalf("phone conversation frame: %+v", phone)
 	}
 	page.MustElement("header a[aria-label]").MustClick()
@@ -246,4 +258,79 @@ func TestChannelListBrowser(t *testing.T) {
 	if desktop := frame(); desktop.Back || !desktop.Rail || !desktop.Aside {
 		t.Fatalf("desktop conversation frame: %+v", desktop)
 	}
+
+	// Without JavaScript, at phone width: the back link's fragment alone brings
+	// the row into view, and a failed creation can be corrected in place.
+	plain := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+	defer plain.MustClose()
+	acceptanceOK(t, proto.EmulationSetScriptExecutionDisabled{Value: true}.Call(plain))
+	plain.MustSetViewport(390, 844, 1, false)
+	// rod's element clicks and input did not return with scripts disabled, so
+	// press the mouse at the element's centre and insert text into the focused
+	// field; landed polls for the expected document.
+	landed := func(want string) {
+		plain.MustWait(`want => location.pathname + location.search + location.hash === want && document.readyState === 'complete'`, want)
+	}
+	click := func(selector string) {
+		var at struct{ X, Y float64 }
+		acceptanceOK(t, plain.MustEval(`s => { const e = document.querySelector(s); e.scrollIntoView({block: 'center'});
+			const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }`, selector).Unmarshal(&at))
+		plain.Mouse.MustMoveTo(at.X, at.Y).MustClick(proto.InputMouseButtonLeft)
+	}
+	const inView = `row => {
+		const port = document.querySelector('main').getBoundingClientRect(), box = document.getElementById(row).getBoundingClientRect();
+		return box.top >= port.top && box.top < port.bottom;
+	}`
+	plain.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID))
+	landed(view.ChannelListURL("list", expanded.ID))
+	if plain.MustEval(inView, row).Bool() {
+		t.Fatal("the expanded row starts in view, so the fragment proves nothing")
+	}
+	plain.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID))
+	landed(view.ChannelURL("list", expanded.ID))
+	click("header a[aria-label]")
+	landed(view.ChannelListURL("list", expanded.ID) + "#" + row)
+	if !plain.MustEval(inView, row).Bool() {
+		t.Fatal("without JavaScript the back link did not bring the row into view")
+	}
+	click("[popovertarget=channel-create]")
+	click("#channel-name")
+	plain.MustInsertText("general")
+	click("#channel-create button[type=submit]")
+	landed("/organizations/list/channels")
+	if !plain.MustEval(`() => {
+		const form = document.getElementById('channel-create'), field = document.getElementById('channel-name');
+		const error = document.getElementById(field.getAttribute('aria-describedby'));
+		return field.getAttribute('aria-invalid') === 'true' && !form.hasAttribute('popover') && form.checkVisibility() && error?.getAttribute('role') === 'alert' && error.checkVisibility() && error.textContent.trim() !== '';
+	}`).Bool() {
+		t.Fatal("the failed form is not in place with a visible error linked to its field")
+	}
+	click("#channel-name")
+	if !plain.MustEval(`() => document.activeElement.id === 'channel-name' && (document.activeElement.select(), true)`).Bool() {
+		t.Fatal("the invalid field does not take focus")
+	}
+	plain.MustInsertText("planning")
+	click("#channel-create button[type=submit]")
+	plain.MustWait(`() => document.readyState === 'complete' && /^\/organizations\/list\/channels\/[0-9a-f-]{36}$/.test(location.pathname) && document.title.startsWith('planning ·')`)
+	mu.Lock()
+	tail := append([]string(nil), pages[len(pages)-4:]...)
+	mu.Unlock()
+	created := plain.MustEval(`() => location.pathname`).Str()
+	if want := []string{"POST /organizations/list/channels 422", "POST /organizations/list/channels 303", "GET " + created + " 200"}; !slices.Equal(tail[1:], want) {
+		t.Fatalf("creation requests %v, want %v", tail, want)
+	}
 }
+
+// statusRecorder keeps a page response's status; Unwrap keeps the
+// ResponseController behind it working.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (s *statusRecorder) WriteHeader(code int) {
+	s.status = code
+	s.ResponseWriter.WriteHeader(code)
+}
+
+func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }

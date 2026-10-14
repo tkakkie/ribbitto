@@ -86,8 +86,9 @@ defined in `:root` and overridden in the dark colour scheme.
 panel overlaying the conversation; from 1200 px (75 rem) the panel beside
 it. The first is the `@theme` breakpoint `--breakpoint-desk` (#969): `desk:`
 utilities apply from 852 px and `max-desk:` below it, so phone overrides
-leave the desktop classes as they are. The 1200 px one becomes a token
-with the issue that uses it (#972).
+leave the desktop classes as they are. The second is `--breakpoint-wide`
+(#972): below it (`max-wide:`) an open panel is a modal over the dimmed
+page ([side panels](ui-components.md#side-panels)).
 
 **Safe area** (#970). The viewport meta has `viewport-fit=cover`, without
 which `env(safe-area-inset-*)` stays 0, so pages extend under a phone's
@@ -141,8 +142,9 @@ the typing dots.
 - **The typing dots** pulse (`animate-typing-dot-1`…`3`) while someone types.
 - **Navigation** has no cross-document view transition: its setup delayed
   every switch (#921). The new page shows from its first frame. Only an
-  opening panel slides in 8 px over 150 ms (a closing one just disappears),
-  and the pill grows into a new row over 100 ms.
+  opening panel slides in 8 px over 150 ms, a phone's sheet up 16 px
+  (a closing one just disappears), and the pill grows into a new row over
+  100 ms.
 - **Arrival.** `arrival-v1.js` marks the root (`data-arrive-pill`,
   `data-arrive-panel`) and CSS animates under those marks. It reads
   `navigation.activation` and stores nothing: only a `push` whose previous

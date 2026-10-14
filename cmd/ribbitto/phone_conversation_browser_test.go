@@ -97,11 +97,9 @@ func TestPhoneConversationBrowser(t *testing.T) {
 				if path == topicURL {
 					controls["header a:not([aria-label])"] = f.Channel.Name
 				}
-				for selector, name := range controls {
-					if !phone && selector == "header > a" {
-						continue
-					}
-					element := page.MustElement("#conversation " + selector)
+				named := func(selector, name string) {
+					t.Helper()
+					element := page.MustElement(selector)
 					tree, err := (proto.AccessibilityGetPartialAXTree{ObjectID: element.Object.ObjectID}).Call(page)
 					acceptanceOK(t, err)
 					if len(tree.Nodes) == 0 || tree.Nodes[0].Ignored || tree.Nodes[0].Name == nil || tree.Nodes[0].Name.Value.Str() != name {
@@ -114,6 +112,18 @@ func TestPhoneConversationBrowser(t *testing.T) {
 						}
 						t.Fatalf("%s accessible name: want %q, got %q", selector, name, names)
 					}
+				}
+				for selector, name := range controls {
+					// Below desk Mark as read is in the overview sheet (#972).
+					if !phone && selector == "header > a" || phone && selector == "#read-form button" {
+						continue
+					}
+					named("#conversation "+selector, name)
+				}
+				if phone {
+					page.MustNavigate(server.URL + path + "/overview").MustWaitLoad()
+					named(`#side-panel button[form="read-form"]`, "Mark as read")
+					page.MustNavigate(server.URL + path).MustWaitLoad()
 				}
 				if problem := page.MustEval(`phone => {
 					const header = document.querySelector('#conversation > header'), box = e => e.getBoundingClientRect(), width = document.documentElement.clientWidth;
@@ -132,6 +142,7 @@ func TestPhoneConversationBrowser(t *testing.T) {
 						if (document.querySelector(selector).checkVisibility() === phone) return 'header label visibility changed: ' + selector;
 					}
 					if (!phone && header.querySelector(':scope > a').checkVisibility()) return 'desktop back link shown';
+					if (phone && document.querySelector('#read-form button').checkVisibility()) return 'phone header shows Mark as read';
 					if (document.documentElement.scrollWidth > width || [...document.querySelectorAll('#message-list, #message-items, #message-items li, #message-items p')].some(e => e.scrollWidth > e.clientWidth)) return 'sideways scroll';
 					const items = box(document.getElementById('message-items')), list = box(document.getElementById('message-list'));
 					if (phone && (items.width !== document.getElementById('message-list').clientWidth || getComputedStyle(document.getElementById('message-items')).paddingLeft !== '16px' || items.left !== list.left)) return 'message width or 16 px gutter';

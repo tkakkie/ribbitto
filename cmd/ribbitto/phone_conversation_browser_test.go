@@ -105,11 +105,20 @@ func TestPhoneConversationBrowser(t *testing.T) {
 					tree, err := (proto.AccessibilityGetPartialAXTree{ObjectID: element.Object.ObjectID}).Call(page)
 					acceptanceOK(t, err)
 					if len(tree.Nodes) == 0 || tree.Nodes[0].Ignored || tree.Nodes[0].Name == nil || tree.Nodes[0].Name.Value.Str() != name {
-						t.Fatalf("%s accessible name: want %q, got %+v", selector, name, tree.Nodes)
+						names := make([]string, len(tree.Nodes))
+						for i, node := range tree.Nodes {
+							names[i] = "<missing name>"
+							if node.Name != nil {
+								names[i] = node.Name.Value.Str()
+							}
+						}
+						t.Fatalf("%s accessible name: want %q, got %q", selector, name, names)
 					}
 				}
 				if problem := page.MustEval(`phone => {
 					const header = document.querySelector('#conversation > header'), box = e => e.getBoundingClientRect(), width = document.documentElement.clientWidth;
+					const conversation = box(document.getElementById('conversation'));
+					if (phone && (conversation.left !== 0 || conversation.right !== width)) return 'conversation edges: want 0 and ' + width + ', got ' + conversation.left + ' and ' + conversation.right;
 					const controls = [...header.querySelectorAll('a, button')].filter(e => e.checkVisibility());
 					if (phone && controls.some(e => box(e).width < 44 || box(e).height < 44 || box(e).left < 0 || box(e).right > width)) return 'header target under 44 x 44 or outside viewport';
 					const image = header.querySelector('img'), heading = header.querySelector('h1');
@@ -127,9 +136,22 @@ func TestPhoneConversationBrowser(t *testing.T) {
 					const items = box(document.getElementById('message-items')), list = box(document.getElementById('message-list'));
 					if (phone && (items.width !== document.getElementById('message-list').clientWidth || getComputedStyle(document.getElementById('message-items')).paddingLeft !== '16px' || items.left !== list.left)) return 'message width or 16 px gutter';
 					const composer = document.getElementById('message-composer'), send = composer.querySelector('button'), input = document.getElementById('message-body');
+					const wrapperStyle = getComputedStyle(composer.parentElement);
+					if (phone && (wrapperStyle.paddingLeft !== '16px' || wrapperStyle.paddingRight !== '16px')) return 'composer side padding: want 16px, got ' + wrapperStyle.paddingLeft + ' and ' + wrapperStyle.paddingRight;
 					if (phone && (parseFloat(getComputedStyle(input).fontSize) < 16 || box(send).width < 44 || box(send).height < 44)) return 'composer font or send target too small';
 					if (phone && (getComputedStyle(composer.parentElement).paddingBottom !== '50px' || box(composer).bottom > document.documentElement.clientHeight - 34)) return 'composer below safe area';
 					if (composer.hasAttribute('hx-post') !== !location.pathname.includes('/topics/')) return 'topic submission was enhanced';
+					if (phone) {
+						const checkbox = document.querySelector('#message-items input[type="checkbox"]');
+						checkbox.checked = true;
+						try {
+							const branchForm = document.getElementById('branch-form'), style = getComputedStyle(branchForm);
+							if (!branchForm.checkVisibility()) return 'move form hidden while a message is checked';
+							if (style.paddingLeft !== '16px' || style.paddingRight !== '16px') return 'move form side padding: want 16px, got ' + style.paddingLeft + ' and ' + style.paddingRight;
+						} finally {
+							checkbox.checked = false;
+						}
+					}
 					return '';
 				}`, phone).Str(); problem != "" {
 					t.Fatal(problem)

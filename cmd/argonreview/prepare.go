@@ -165,6 +165,9 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	if err := checkBeforeWrite(root, dirs2, files); err != nil {
 		return "", err
 	}
+	if err := checkSharedFiles(accountHome, files, written); err != nil {
+		return "", err
+	}
 	for _, f := range files {
 		if err := writeOwned(dirs2[f.dir], f.name, f.content); err != nil {
 			return "", fmt.Errorf("writing .gemini/%s/%s: %w", f.dir, f.name, err)
@@ -203,6 +206,9 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 		return "", err
 	}
 	if err := checkBeforeWrite(again, dirs3, nil); err != nil {
+		return "", err
+	}
+	if err := checkSharedFiles(accountHome, files, written); err != nil {
 		return "", err
 	}
 	for _, f := range files {
@@ -279,6 +285,49 @@ func (s shared) has(p place) bool {
 		}
 	}
 	return false
+}
+
+// checkSharedFiles refuses a shared file, at the place of an owned one, that
+// is a symlink into an owned directory: after the launcher's rename it would
+// read the launcher's content. A symlink that cannot be resolved, such as one
+// to an owned file not yet created, refuses too (the maintainer on #1075).
+func checkSharedFiles(accountHome string, files []ownedFile, owned map[string]place) error {
+	ownedPlaces := map[place]bool{}
+	for _, p := range owned {
+		ownedPlaces[p] = true
+	}
+	for _, f := range files {
+		rel := filepath.Join(".gemini", f.dir, f.name)
+		path := filepath.Join(accountHome, rel)
+		var st unix.Stat_t
+		err := unix.Lstat(path, &st)
+		if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ENOTDIR) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("refusing: cannot inspect the shared %s: %w", rel, err)
+		}
+		if st.Mode&unix.S_IFMT != unix.S_IFLNK {
+			continue
+		}
+		target, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return fmt.Errorf("refusing: the shared %s is a symlink that cannot be resolved", rel)
+		}
+		fd, err := unix.Open(filepath.Dir(target), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+		if err != nil {
+			return fmt.Errorf("refusing: cannot open where the shared %s points: %w", rel, err)
+		}
+		p, err := identity(fd)
+		closeFD(fd)
+		if err != nil {
+			return err
+		}
+		if ownedPlaces[p] {
+			return fmt.Errorf("refusing: the shared %s is a symlink into the dedicated HOME", rel)
+		}
+	}
+	return nil
 }
 
 // separate compares identities up the directory chains, so neither a symlink

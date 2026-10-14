@@ -534,6 +534,71 @@ func TestPrepareRefusesAFIFO(t *testing.T) {
 	}
 }
 
+// A shared configuration file that is a symlink to an owned file in the
+// dedicated HOME would read the launcher's content after the rename; one to a
+// not-yet-created owned file likewise. Both are refused before any write,
+// with the shared side and the dedicated HOME left as they were.
+func TestPrepareRefusesASharedFileAliasingAnOwnedFile(t *testing.T) {
+	for _, f := range []struct{ dir, name string }{
+		{"antigravity-cli", "settings.json"},
+		{"config", "hooks.json"},
+		{"config", "mcp_config.json"},
+	} {
+		for _, dangling := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/%s dangling=%v", f.dir, f.name, dangling), func(t *testing.T) {
+				account := resolved(t, t.TempDir())
+				home := filepath.Join(account, "dev", "agy-home")
+				mkdir(t, filepath.Join(home, ".gemini/antigravity-cli"))
+				mkdir(t, filepath.Join(home, ".gemini/config"))
+				target := filepath.Join(home, ".gemini", f.dir, f.name)
+				if !dangling {
+					write(t, target, "mine")
+				}
+				symlink(t, target, filepath.Join(account, ".gemini", f.dir, f.name))
+				before := snapshot(t, home)
+				if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "shared") {
+					t.Fatalf("err = %v", err)
+				}
+				if !equal(before, snapshot(t, home)) {
+					t.Fatalf("the dedicated HOME changed:\n%v\n%v", before, snapshot(t, home))
+				}
+				if data, err := os.ReadFile(filepath.Join(account, ".gemini", f.dir, f.name)); dangling && err == nil || !dangling && string(data) != "mine" {
+					t.Fatalf("the shared %s now reads %q, %v", f.name, data, err)
+				}
+			})
+		}
+	}
+}
+
+// A shared file that is a symlink elsewhere, such as into a dotfiles
+// repository, is the account's own business: prepare accepts it and leaves it
+// alone. One made into an owned file after the writes is refused by the final
+// check.
+func TestPrepareSharedFileSymlinks(t *testing.T) {
+	account := resolved(t, t.TempDir())
+	dotfiles := filepath.Join(account, "dotfiles", "settings.json")
+	write(t, dotfiles, "dotfiles")
+	shared := filepath.Join(account, ".gemini/antigravity-cli/settings.json")
+	symlink(t, dotfiles, shared)
+	home := filepath.Join(account, "dev", "agy-home")
+	mkdir(t, home)
+	if _, err := prepare(home, account, guardBinary); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(shared); string(data) != "dotfiles" {
+		t.Fatalf("the shared settings read %q", data)
+	}
+	alias := func() {
+		if err := os.Remove(shared); err != nil {
+			t.Fatal(err)
+		}
+		symlink(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), shared)
+	}
+	if _, err := prepareWith(home, account, guardBinary, hooks{afterWrite: alias}); err == nil || !strings.Contains(err.Error(), "into the dedicated HOME") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 // checkOwned refuses any content but the launcher's own.
 func TestCheckOwned(t *testing.T) {
 	for _, tc := range []struct{ name, dir, file, content string }{

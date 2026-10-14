@@ -383,6 +383,44 @@ func TestShutdownReportsAWatcherReusedBeforeItsFlag(t *testing.T) {
 	}
 }
 
+// Codex on #1042: the PID freed by a reaped watcher whose flag is not yet
+// set can go to the next watcher supervise starts, which is this process's
+// child and its own session leader. Paused after the reap, the first
+// watcher's record is given the second watcher's PID; the first must count
+// as exited and its failure be reported, and the second, still running,
+// stopped by the signals without a failure.
+func TestShutdownReportsAWatcherReusedByALaterWatcher(t *testing.T) {
+	failing := exec.Command("/bin/sh", "-c", "exit 7")
+	paused, resume := make(chan struct{}), make(chan struct{})
+	original := afterReap
+	t.Cleanup(func() { afterReap = original })
+	afterReap = func(w watcher) {
+		if w.cmd == failing {
+			close(paused)
+			<-resume
+		}
+	}
+	first, err := start(failing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-paused
+	second, err := start(exec.Command("/bin/sh", "-c", "sleep 30"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.pid = second.pid
+	setBeforeSignals(t, func() { close(resume) })
+	var exit *exec.ExitError
+	err = shutdown([]watcher{first, second})
+	if !errors.As(err, &exit) || exit.ExitCode() != 7 || strings.Contains(err.Error(), "remain") || strings.Contains(err.Error(), "signal") {
+		t.Fatalf("shutdown = %v, want only the first watcher's failure", err)
+	}
+	if alive(t, second.pid) {
+		t.Fatal("the later watcher survived shutdown")
+	}
+}
+
 func helper(role, root string) *exec.Cmd {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
 	cmd.Env = append(os.Environ(), "DEV_HELPER="+role, "DEV_ROOT="+root)

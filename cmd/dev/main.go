@@ -235,7 +235,9 @@ func signalSessions(watchers []watcher, exited []bool, sig syscall.Signal) (int,
 // exitedLeaders reports, per watcher, whether its leader had already exited.
 // A leader still runs only if it is listed, not a zombie, its own session's
 // leader and this process's child: a PID reused after the reap, even before
-// the reaped flag is set, belongs to a process with another parent.
+// the reaped flag is set, belongs to a process with another parent, unless a
+// later watcher reused it. Two live processes never share a PID, so a
+// watcher whose PID a later watcher holds has exited (Codex on #1042).
 func exitedLeaders(watchers []watcher) ([]bool, error) {
 	exited := make([]bool, len(watchers))
 	out, err := listProcesses()
@@ -262,6 +264,9 @@ func exitedLeaders(watchers []watcher) ([]bool, error) {
 	for i, w := range watchers {
 		sid, err := unix.Getsid(w.pid)
 		exited[i] = w.reaped.Load() || !ours[w.pid] || err != nil || sid != w.pid
+		for _, later := range watchers[i+1:] {
+			exited[i] = exited[i] || later.pid == w.pid
+		}
 	}
 	return exited, nil
 }

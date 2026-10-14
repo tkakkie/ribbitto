@@ -139,6 +139,10 @@ the typing dots.
 
 - **Rows and buttons** add `transition-feedback motion-safe:active:scale-96` (a utility in `app.css` that animates only colours and `scale`, rather than Tailwind's longer `transition` list, #921): colours
   change over 100 ms and a press scales to 0.96.
+- **Hover styles exist only under `@media (hover: hover)`:** a tap leaves
+  its element `:hover`, which a touch screen must not show; the press still
+  does. Tailwind's `hover:` does this; a hand-written rule must too
+  (`TestHoverOnlyWithHover`).
 - **Messages never move**, live ones included: the page cannot tell
   reconnect backlog from live delivery, and backlog must not move.
 - **The typing dots** pulse (`animate-typing-dot-1`…`3`) while someone types.
@@ -146,27 +150,19 @@ the typing dots.
   every switch (#921). The new page shows from its first frame. Only an
   opening panel slides in 8 px over 150 ms, a phone's sheet up 16 px
   (a closing one just disappears), and the pill grows into a new row over
-  100 ms.
-- **Arrival.** `arrival-v1.js` marks the root (`data-arrive-pill`,
-  `data-arrive-panel`) and CSS animates under those marks. It reads
-  `navigation.activation` and stores nothing: only a `push` whose previous
-  entry is same-origin (a link, or a form's redirect) is marked, the pill
-  when the place (the path without `/members` or `/overview`) changed, the
-  panel when one newly opened. A first load, a reload or Back/Forward is
-  never marked; neither is a panel switch or close. A mark is removed when
-  its animation ends, the pill's earlier at the first live
-  `#sidebar-channels` replacement, so a live list never grows its pill
-  again; one with nothing to animate (reduced motion, a hidden row) is
-  removed at `DOMContentLoaded`. The script sits in `<head>` and is not
-  deferred: it must mark the page before the first paint, or the pill
-  shows at rest first. Browsers without the Navigation API show no arrival
-  motion. `testArrivalBrowser` (`internal/web/arrival_browser_test.go`)
-  checks these cases in the shared `TestBrowser` suite.
+  100 ms, the list page's too. Their keyframes only move, never fade, and
+  no motion has a delay (`TestArrivalMotion`).
+- **Arrival.** `arrival-v1.js` marks a page reached from another page of
+  the app, and CSS animates under the marks ([arrival
+  motion](ui-components.md#arrival-motion)).
 - **Reduced motion.** The arrival animations and press scaling exist only
   under `prefers-reduced-motion: no-preference`, and under `reduce` one rule
   removes every animation and transition. `TestReducedMotion`
-  (`web/static/motion_test.go`) checks this on the built stylesheet, and
-  `TestNoViewTransitions` that it declares no view transition.
+  (`web/static/motion_test.go`) checks this on the built stylesheet (the
+  rule misses pseudo-elements such as `::backdrop`, so their motion needs
+  `no-preference`), and `TestNoViewTransitions` that it declares no view
+  transition. `testMotionTouchBrowser` taps rows and buttons at phone width
+  under touch emulation, in light, dark and reduced motion.
 
 ## Icons
 

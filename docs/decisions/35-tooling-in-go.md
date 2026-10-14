@@ -8,7 +8,10 @@ module, so their dependencies (linters, `govulncheck`) stay out of the
 application's `go.mod`; development commands live under `cmd/` in the
 application module, whether they import its packages (`cmd/devdb`,
 `cmd/capacity`) or not (`cmd/dev`, `cmd/loadgen`; see
-[packages](../architecture/packages.md)). The series moved
+[packages](../architecture/packages.md)). This is wider than #1000's
+wording ("`cmd/` when it needs the application's packages") on purpose, to
+match the commands already there: a new tool goes under `tools/` if it checks
+or generates something and under `cmd/` if a developer runs it. The series moved
 the dependency graph (`tools/deps`), the prepush fingerprint
 (`tools/unchanged`), the formatting and `doc.go` checks (`tools/formatcheck`),
 the lint fixtures (`tools/lintfixtures`), the icon sprite

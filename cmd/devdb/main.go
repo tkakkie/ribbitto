@@ -2,7 +2,7 @@
 // runs commands with a worktree's database and ports (run) and checks the
 // admin connection (health). It keeps admin credentials in the environment
 // and suppresses driver errors, which can contain connection strings. The
-// Makefile builds it as bin/ai-db; ai_env.py and ai_capacity.py also use it.
+// Makefile builds it as bin/ai-db; ai_env.py and cmd/capacity also use it.
 package main
 
 import (

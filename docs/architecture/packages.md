@@ -17,8 +17,12 @@ imports `db/migrations`; the database must already be migrated.
 `cmd/loadgen` is a development-only HTTP client, run-file comparator and stage-2 protocol/result contract; it imports no application
 packages. See [load client](load-client.md) for limits and usage.
 `cmd/devdb` is a development-only database helper for worktree configuration
-and capacity observation. It imports only `internal/platform/postgres` from
+and capacity observation through `bin/ai-db --observe`, used by `cmd/capacity`.
+It imports only `internal/platform/postgres` from
 this module to reuse the migration runner; credentials stay in the environment.
+`cmd/capacity` runs two uncached required-DB checks and cleans up their sessions.
+It imports only `internal/platform/postgres/pgtest` from this module to report
+`pgtest.MaxConns`; it does not configure pools or import the Python worktree helper.
 
 `tools/download` is a tools-module command that owns the Tailwind and
 golangci-lint release pins, selects macOS arm64 or Linux amd64 assets, checks
@@ -52,6 +56,7 @@ flowchart LR
   cmd[cmd/ribbitto] --> web & orgpg[org/orgpg] & conversationpg[conversation/conversationpg] & identity & identitypg[identity/identitypg] & realtimepg & realtime & presence & unread & unreadpg & platform[platform/postgres]
   seed[cmd/seed] --> conversation & conversationpg & org & orgpg & identity & identitypg & realtimepg & platform & kernel
   devdb[cmd/devdb] --> platform
+  capacity[cmd/capacity] --> pgtest[platform/postgres/pgtest]
   web[internal/web] --> org & conversation & identity & kernel & realtime & presence & unread & static[web/static]
   conversationpg --> conversation[internal/conversation] & cstore[conversation/internal/postgres] & realtime & platform
   conversation --> identity & org & realtime & kernel & platform

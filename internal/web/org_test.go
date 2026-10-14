@@ -168,7 +168,7 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				// channel is 404 with none of its data (scope check in the snapshot).
 				foreign := get("GET", view.ChannelListURL("acme", globexChannel), aliceToken, now)
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") || !strings.Contains(w.Body.String(), `<li id="`+view.ChannelDOMID(acmeChannel)+`">`) ||
-					foreign.Code != http.StatusNotFound || strings.Contains(foreign.Body.String(), "Globex") {
+					foreign.Code != http.StatusNotFound || foreign.Body.String() != "404 page not found\n" {
 					t.Fatalf("list: %d, foreign channel: %d %s", w.Code, foreign.Code, foreign.Body.String())
 				}
 			case "POST /channels/{channelID}/overview", "POST /channels/{channelID}/topics/{topicID}/overview", "POST /channels/{channelID}", "POST /channels/{channelID}/topics/{topicID}":

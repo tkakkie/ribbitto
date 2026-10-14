@@ -163,13 +163,6 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 			<div class="flex min-w-0 flex-1 gap-2">
 				<main id="conversation" class="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block">
 					<header class="flex shrink-0 items-center gap-3 border-b border-border px-6 py-2">
-						// Below the desk breakpoint the list replaces the hidden sidebar; the
-						// fragment brings this channel's row into view without JavaScript.
-						<a href={ templ.SafeURL(ChannelListURL(page.Organization.Slug, page.Current.ID) + "#" + ChannelDOMID(page.Current.ID)) } aria-label={ i18n.T(ctx, "channel.back") } class="flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-fg desk:hidden transition-feedback motion-safe:active:scale-96">
-							// A text chevron: the sprite has no back arrow, and a sprite icon
-							// hidden at desktop width would have nothing to paint.
-							<span aria-hidden="true" class="text-heading">‹</span>
-						</a>
 						<div class="flex min-w-0 flex-1 items-center gap-2">
 							@channelImage(page.Current.ImageURL, true)
 							if page.Topic != nil {
@@ -246,7 +239,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 			</div>
 		}
 		// Scripts stay outside swap targets; htmx will not run swapped scripts.
-		<script defer src="/static/sidebar-scroll-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/read-visibility-v4.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -258,9 +251,8 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 }
 
 // channelFrame is the organisation stream around the app bar, the sidebar and
-// the page's own blocks. Below the desk breakpoint a conversation hides the bar
-// and the sidebar, and the list page lets the sidebar fill the width, so the
-// server never needs the width.
+// the page's own blocks. On the list page the sidebar is the page's <main>,
+// which fills the width below the desk breakpoint; the server never needs the width.
 templ channelFrame(page ChannelPage) {
 	<div
 		id="organization-stream"
@@ -273,45 +265,57 @@ templ channelFrame(page ChannelPage) {
 	>
 		<div id="stream-sink" hidden aria-hidden="true" sse-swap="sidebar,presence" hx-swap="none"></div>
 		@appBar(page)
-		<aside class={ "flex w-sidebar shrink-0 flex-col overflow-y-auto px-1 py-2", templ.KV("max-desk:min-w-0 max-desk:flex-1", page.List), templ.KV("max-desk:hidden", !page.List) }>
-			// On the list page the organisation's name heads the page's content.
-			if page.List {
-				<h1 class="break-words px-3 pb-3 pt-1 text-title font-semibold">{ page.Organization.Name }</h1>
-			} else {
-				<p class="break-words px-3 pb-3 pt-1 text-title font-semibold">{ page.Organization.Name }</p>
-			}
-			<nav aria-label={ i18n.T(ctx, "channel.list") }>
-				<div class="flex items-center justify-between gap-2 pb-1 pl-3">
-					<p class="text-caption font-semibold text-muted">{ i18n.T(ctx, "channel.list") }</p>
-					@iconButton("channel.create", "channel-create") {
-						@Icon("add-regular", 20)
-					}
-				</div>
-				@ChannelList(page, false)
-			</nav>
-			// A failed submit shows the form in place, so its error is visible and
-			// focusable without JavaScript; otherwise it opens from the add button.
-			if page.Error != "" || page.CreateImageError != "" {
-				@channelCreateForm(page, false)
-			} else {
-				@channelCreateForm(page, true)
-			}
-		</aside>
+		// Either element is the scrolling pane that sidebar-scroll-v2.js finds.
+		if page.List {
+			<main class="flex w-sidebar shrink-0 flex-col overflow-y-auto px-1 py-2 max-desk:min-w-0 max-desk:flex-1">
+				@sidebarContent(page)
+			</main>
+		} else {
+			<aside class="flex w-sidebar shrink-0 flex-col overflow-y-auto px-1 py-2">
+				@sidebarContent(page)
+			</aside>
+		}
 		{ children... }
 	</div>
 }
 
-// ChannelListScreen renders the channel list page: at desktop width the frame
-// with a prompt in the conversation block, below it the sidebar alone. It has
-// no read form or composer, so it never reads or posts.
+// sidebarContent is the sidebar's content: the organisation's name (the list
+// page's heading), the channel list and the creation form.
+templ sidebarContent(page ChannelPage) {
+	if page.List {
+		<h1 class="break-words px-3 pb-3 pt-1 text-title font-semibold">{ page.Organization.Name }</h1>
+	} else {
+		<p class="break-words px-3 pb-3 pt-1 text-title font-semibold">{ page.Organization.Name }</p>
+	}
+	<nav aria-label={ i18n.T(ctx, "channel.list") }>
+		<div class="flex items-center justify-between gap-2 pb-1 pl-3">
+			<p class="text-caption font-semibold text-muted">{ i18n.T(ctx, "channel.list") }</p>
+			@iconButton("channel.create", "channel-create") {
+				@Icon("add-regular", 20)
+			}
+		</div>
+		@ChannelList(page, false)
+	</nav>
+	// A failed submit shows the form in place, so its error is visible and
+	// focusable without JavaScript; otherwise it opens from the add button.
+	if page.Error != "" || page.CreateImageError != "" {
+		@channelCreateForm(page, false)
+	} else {
+		@channelCreateForm(page, true)
+	}
+}
+
+// ChannelListScreen renders the channel list page: the list is the page's
+// main content, and at desktop width a block beside it prompts to open a
+// channel. It has no read form or composer, so it never reads or posts.
 templ ChannelListScreen(stylesheetURL string, page ChannelPage) {
 	@layout(stylesheetURL, i18n.T(ctx, "channel.list")+" · "+page.Organization.Name) {
 		@channelFrame(page) {
-			<main id="conversation" class="flex min-w-0 flex-1 items-center justify-center rounded-xl bg-bg p-8 shadow-block max-desk:hidden">
+			<div class="flex min-w-0 flex-1 items-center justify-center rounded-xl bg-bg p-8 shadow-block max-desk:hidden">
 				<p class="text-muted">{ i18n.T(ctx, "channel.choose") }</p>
-			</main>
+			</div>
 		}
-		<script defer src="/static/sidebar-scroll-v1.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v9.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
@@ -535,7 +539,7 @@ templ ChannelEntry(slug string, channel Channel, selected bool, count int64) {
 			if selected {
 				aria-current="page"
 			}
-			class={ "relative flex min-h-9 items-center gap-2.5 break-words rounded-lg px-3 py-1.5 transition-feedback motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-fg hover:bg-hover", !selected), templ.KV("font-semibold", !selected && count > 0) }
+			class={ "relative flex min-h-9 items-center gap-2.5 max-desk:min-h-11 break-words rounded-lg px-3 py-1.5 transition-feedback motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-fg hover:bg-hover", !selected), templ.KV("font-semibold", !selected && count > 0) }
 		>
 			if selected {
 				@selectionPill()
@@ -557,7 +561,7 @@ templ TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, c
 			if selected {
 				aria-current="page"
 			}
-			class={ "relative flex min-h-8 items-center gap-2 break-words rounded-md px-2.5 py-1 transition-feedback motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-muted hover:bg-hover hover:text-fg", !selected), templ.KV("font-semibold text-fg", !selected && count > 0) }
+			class={ "relative flex min-h-8 items-center gap-2 max-desk:min-h-11 break-words rounded-md px-2.5 py-1 transition-feedback motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", selected), templ.KV("text-muted hover:bg-hover hover:text-fg", !selected), templ.KV("font-semibold text-fg", !selected && count > 0) }
 		>
 			if selected {
 				@selectionPill()

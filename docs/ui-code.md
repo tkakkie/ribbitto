@@ -14,20 +14,19 @@ in [`ui-components.md`](ui-components.md).
 Channels are listed by name, and the current channel nests its topics: the
 default first, then by name, at most 50 ([`topics.md`](domain/topics.md)).
 The order never changes to bring the current row forward (#922). Instead
-`sidebar-scroll-v1.js`, once on load, scrolls the sidebar's own pane (the
-`<aside>` around `#sidebar-channels`) so that the target row is in view,
+`sidebar-scroll-v2.js`, once on load, scrolls the sidebar's own pane (the
+`<aside>` around `#sidebar-channels`, or the list page's `<main>`) so that the target row is in view,
 centred, when it is not already: the selected topic's row when it is
 listed, otherwise the current channel's row (an unlisted topic, or the
 feed). It moves neither the window nor focus, and scrolls instantly.
 Live recounts replace `#sidebar-channels` inside that pane, which keeps its
 scroll position, so the script does nothing then: the member's position
-wins. Without JavaScript the sidebar opens at its top. Below `desk` a
-conversation hides the app bar and the sidebar; the sidebar's content is
-then the channel list page (`/organizations/{slug}/channels?channel=<id>`,
-#969): the same pane, script and recounts, filling the width while the
-conversation block, a prompt at desktop width, is hidden. The conversation
-header's back link carries the channel's row id as its fragment, so the
-row is in view even without JavaScript.
+wins. Without JavaScript the sidebar opens at its top, unless the URL's
+fragment names a row. The channel list page
+(`/organizations/{slug}/channels?channel=<id>`, #969) is the sidebar's
+content as the page's `<main>`, with the same pane, script and recounts;
+below `desk` it fills the width beside the app bar, and the block that
+prompts to open a channel at desktop width is hidden.
 
 ## Styles
 

@@ -243,21 +243,60 @@ func TestChannelCreationAdmission(t *testing.T) {
 	}
 }
 
-// assertChannelListPage checks the list page: the sidebar with channel's topics
-// nested, a sidebar-only stream and nothing that reads or posts.
+// assertChannelListPage checks the list page: the list is the one <main>, the
+// channel's row nests the topics, the stream is sidebar-only and nothing reads
+// or posts.
 func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	t.Helper()
-	assertFullConversationPage(t, body)
-	stream := `sse-connect="/organizations/acme/events?after=42&amp;want=sidebar&amp;channel=` + strings.TrimPrefix(view.ChannelURL("acme", channel), "/organizations/acme/channels/") + `"`
-	nested := `<li id="` + view.ChannelDOMID(channel) + `">`
-	if !strings.Contains(body, stream) || !strings.Contains(body, nested) || strings.Count(body, `id="sidebar-topics"`) != 1 || !strings.Contains(body, "<title>lilypads · Acme Corporation · ribbitto</title>") {
-		t.Errorf("list page lacks its title, stream %s or nested topics", stream)
+	if !strings.Contains(body, "<title>lilypads · Acme Corporation · ribbitto</title>") {
+		t.Error("list page title missing")
 	}
-	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`} {
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream := "/organizations/acme/events?after=42&want=sidebar&channel=" + strings.TrimPrefix(view.ChannelURL("acme", channel), "/organizations/acme/channels/")
+	mains, topics, scripts := 0, 0, map[string]bool{}
+	for n := range doc.Descendants() {
+		switch {
+		case n.DataAtom == atom.Main:
+			mains++
+			if find(n, atom.H1) == nil || !strings.Contains(nodeIDs(n), " sidebar-channels ") {
+				t.Error("the main does not hold the heading and the list")
+			}
+		case attr(n, "id") == "sidebar-topics":
+			topics++
+			if n.Parent == nil || attr(n.Parent, "id") != view.ChannelDOMID(channel) {
+				t.Errorf("topics are not nested in %s", view.ChannelDOMID(channel))
+			}
+		case attr(n, "id") == "organization-stream" && attr(n, "sse-connect") != stream:
+			t.Errorf("stream %q, want %q", attr(n, "sse-connect"), stream)
+		case n.DataAtom == atom.Script:
+			scripts[attr(n, "src")] = true
+		}
+	}
+	if mains != 1 || topics != 1 {
+		t.Errorf("%d mains and %d topic lists, want one each", mains, topics)
+	}
+	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v9.js"] || scripts["/static/read-visibility-v4.js"] || scripts["/static/message-composer-v5.js"] {
+		t.Errorf("list page scripts %v", scripts)
+	}
+	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`, `id="conversation"`} {
 		if strings.Contains(body, absent) {
 			t.Errorf("list page renders %s", absent)
 		}
 	}
+}
+
+// nodeIDs lists the ids within n, space-separated and padded.
+func nodeIDs(n *html.Node) string {
+	ids := " "
+	for d := range n.Descendants() {
+		if id := attr(d, "id"); id != "" {
+			ids += id + " "
+		}
+	}
+	return ids
 }
 
 func TestChannelListPage(t *testing.T) {

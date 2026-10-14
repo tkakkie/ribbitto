@@ -106,22 +106,29 @@ func TestChannelListBrowser(t *testing.T) {
 		return strings.TrimPrefix(view.ChannelURL("list", id), "/organizations/list/channels/")
 	}
 	// Scoped to the row's own link: the expanded row also holds its topic rows.
+	// Tap targets below desk: the add button 44 × 44, every row link 44 tall and as
+	// wide as its row.
 	const state = `(general, row) => {
-		const aside = document.querySelector('aside'), main = document.getElementById('conversation');
-		const stream = document.getElementById('organization-stream');
+		const main = document.querySelector('main'), stream = document.getElementById('organization-stream');
 		const open = window.sources.filter(s => s.readyState !== EventSource.CLOSED).length;
 		const badge = document.getElementById('link-' + general).querySelector('.sr-only')?.previousElementSibling?.textContent || '';
+		const box = e => e.getBoundingClientRect(), add = box(document.querySelector('[popovertarget=channel-create]'));
+		const small = [...document.querySelectorAll('#sidebar-channels a')].filter(a => box(a).height < 44 || box(a).width < box(a.parentElement).width - 1).map(a => a.id);
+		if (add.width < 44 || add.height < 44) small.push('add');
 		return { url: stream.getAttribute('sse-connect'), cursor: stream.dataset.eventCursor, open, badge,
-			recounts: window.recounts, scroll: aside.scrollTop, asideWidth: aside.getBoundingClientRect().width,
-			mainShown: main.checkVisibility(), nested: !!document.querySelector('#' + row + ' > #sidebar-topics'),
+			recounts: window.recounts, scroll: main.scrollTop, mainWidth: box(main).width, small,
+			mains: document.querySelectorAll('main').length, mainShown: main.checkVisibility() && main.contains(document.getElementById('sidebar-channels')),
+			promptShown: main.nextElementSibling.checkVisibility(), nested: !!document.querySelector('#' + row + ' > #sidebar-topics'),
 			reads: !!document.getElementById('read-form') };
 	}`
 	type listState struct {
 		URL, Cursor, Badge string
 		Open, Recounts     int
-		Scroll, AsideWidth float64
+		Scroll, MainWidth  float64
+		Small              []string
+		Mains              int
 		MainShown, Nested  bool
-		Reads              bool
+		PromptShown, Reads bool
 	}
 	read := func() listState {
 		var s listState
@@ -135,7 +142,8 @@ func TestChannelListBrowser(t *testing.T) {
 	page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
 	page.MustWait(`() => window.recounts >= 1 && !document.querySelector('.htmx-settling')`)
 	first := read()
-	if first.URL != wantURL(first.Cursor) || first.Open != 1 || first.AsideWidth < 280 || first.MainShown || !first.Nested || first.Reads || first.Scroll == 0 {
+	if first.URL != wantURL(first.Cursor) || first.Open != 1 || first.MainWidth < 280 || first.Mains != 1 || !first.MainShown || first.PromptShown ||
+		!first.Nested || first.Reads || first.Scroll == 0 || len(first.Small) != 0 {
 		t.Fatalf("phone list page: %+v, want stream %s", first, wantURL(first.Cursor))
 	}
 	if got, _ := recorded(); len(got) != 1 || got[0] != first.URL {
@@ -145,7 +153,7 @@ func TestChannelListBrowser(t *testing.T) {
 	post(t, owner, view.ChannelURL("list", f.Channel.ID), "first")
 	page.MustWait(`(general, n) => window.recounts > n && document.getElementById('link-' + general).querySelector('.sr-only') && !document.querySelector('.htmx-settling')`, general, first.Recounts)
 	live := read()
-	if live.Badge != "1" || live.Scroll != first.Scroll || !live.Nested || live.Open != 1 || live.URL != first.URL {
+	if live.Badge != "1" || live.Scroll != first.Scroll || !live.Nested || live.Open != 1 || live.URL != first.URL || len(live.Small) != 0 {
 		t.Fatalf("live recount: %+v, want count 1 at scroll %v, still nested", live, first.Scroll)
 	}
 
@@ -181,38 +189,28 @@ func TestChannelListBrowser(t *testing.T) {
 		t.Fatalf("the list page sent %d reading POSTs", n)
 	}
 
-	// A phone conversation hides the frame and leads back to its row.
-	type frameState struct {
-		Back, Rail, Aside bool
-		Label             string
-	}
-	frame := func() frameState {
-		var s frameState
-		acceptanceOK(t, page.MustEval(`() => {
-			const back = document.querySelector('header a[aria-label]'), box = back.getBoundingClientRect();
-			return { back: back.checkVisibility() && box.width >= 44 && box.height >= 44, label: back.getAttribute('aria-label'),
-				rail: document.querySelector('nav').checkVisibility(), aside: document.querySelector('aside').checkVisibility() };
-		}`).Unmarshal(&s))
-		return s
-	}
-	page.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID)).MustWaitLoad()
-	if phone := frame(); !phone.Back || phone.Label != "Back to lilypads" || phone.Rail || phone.Aside {
-		t.Fatalf("phone conversation frame: %+v", phone)
-	}
-	page.MustElement("header a[aria-label]").MustClick()
-	page.MustWait(`want => location.pathname + location.search + location.hash === want && document.readyState === 'complete'`,
-		view.ChannelListURL("list", expanded.ID)+"#"+row)
-	if !page.MustEval(`row => {
-		const port = document.querySelector('aside').getBoundingClientRect(), box = document.getElementById(row).getBoundingClientRect();
-		return box.top >= port.top && box.top < port.bottom && !!document.querySelector('#' + row + ' > #sidebar-topics');
-	}`, row).Bool() {
-		t.Fatal("the back link did not open the list with the channel expanded and in view")
+	// The creation popover stays inside narrow screens, with 44 px controls.
+	for _, size := range [][2]int{{320, 568}, {390, 844}} {
+		page.MustSetViewport(size[0], size[1], 1, false)
+		page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
+		page.MustElement("[popovertarget=channel-create]").MustClick()
+		page.MustWait(`() => document.getElementById('channel-create').matches(':popover-open')`)
+		if problem := page.MustEval(`() => {
+			const form = document.getElementById('channel-create'), box = form.getBoundingClientRect();
+			if (box.left < 0 || box.top < 0 || box.right > innerWidth || box.bottom > innerHeight) return 'outside the viewport: ' + JSON.stringify(box);
+			if (document.documentElement.scrollWidth > innerWidth) return 'the page scrolls sideways';
+			const small = [...form.querySelectorAll('input:not([type=radio]), button, label:has(input[type=radio])')].filter(e => e.getBoundingClientRect().height < 44);
+			return small.length ? 'controls under 44 px: ' + small.length : '';
+		}`).Str(); problem != "" {
+			t.Fatalf("%d px popover: %s", size[0], problem)
+		}
 	}
 
-	// At desktop width the conversation keeps its frame and hides the link.
+	// At desktop width the list is still the one main, beside the prompt.
 	page.MustSetViewport(1280, 800, 1, false)
-	page.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID)).MustWaitLoad()
-	if desktop := frame(); desktop.Back || !desktop.Rail || !desktop.Aside {
-		t.Fatalf("desktop conversation frame: %+v", desktop)
+	page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
+	page.MustWait(`() => window.recounts >= 1`)
+	if desktop := read(); desktop.Mains != 1 || !desktop.MainShown || !desktop.PromptShown {
+		t.Fatalf("desktop list page: %+v", desktop)
 	}
 }

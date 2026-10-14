@@ -175,9 +175,6 @@ other = "lilypad"
 ["channel.choose"]
 other = "一覧からlilypadを開いてください。"
 
-["channel.back"]
-other = "lilypad一覧に戻る"
-
 ["channel.name"]
 other = "lilypad名"
 

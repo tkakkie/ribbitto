@@ -19,12 +19,20 @@ import (
 // Separate list queries and a grouped left join also avoid using the oracle's
 // union/EXISTS algorithm. Fixtures are the cost harness's persisted fixtures.
 func hybridSnapshot(ctx context.Context, pool *pgxpool.Pool, m org.Membership, channel kernel.ID, selected *kernel.ID) (sidebarOracleModel, error) {
-	model := sidebarOracleModel{organization: m.Organization.ID, member: m.Member.ID, current: channel}
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return sidebarOracleModel{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	model, err := hybridSnapshotIn(ctx, tx, m, channel, selected)
 	if err != nil {
 		return model, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	return model, tx.Commit(ctx)
+}
+
+func hybridSnapshotIn(ctx context.Context, tx pgx.Tx, m org.Membership, channel kernel.ID, selected *kernel.ID) (sidebarOracleModel, error) {
+	model := sidebarOracleModel{organization: m.Organization.ID, member: m.Member.ID, current: channel}
 	var joined int64
 	if err := tx.QueryRow(ctx, `SELECT joined_event_seq FROM member WHERE organization_id=$1 AND id=$2`, m.Organization.ID, m.Member.ID).Scan(&joined); err != nil {
 		return model, err
@@ -96,7 +104,7 @@ GROUP BY m.channel_id, m.topic_id`, m.Organization.ID, m.Member.ID, joined)
 			return model, fmt.Errorf("hybrid selection outside channel: %v", err)
 		}
 	}
-	return model, tx.Commit(ctx)
+	return model, nil
 }
 
 type hybridRecord struct {
@@ -114,6 +122,7 @@ type hybridPrototype struct {
 	registration       *realtime.RecountRegistration
 	snapshot           func(context.Context) (sidebarOracleModel, error)
 	state              sidebarOracleModel
+	accept             func(uint64, sidebarOracleModel) error
 	captures           map[uint64]*sidebarOracleModel
 	requested, applied uint64
 	interval           time.Duration
@@ -186,7 +195,11 @@ func (p *hybridPrototype) complete() error {
 	if result.Err != nil {
 		return fmt.Errorf("hybrid recount: %w", result.Err)
 	}
-	if result.Version > p.applied {
+	if p.accept != nil {
+		if err := p.accept(result.Version, *p.captures[result.Version]); err != nil {
+			return err
+		}
+	} else if result.Version > p.applied {
 		p.state, p.applied = *p.captures[result.Version], result.Version
 	}
 	// Coalesced requests have no completion; discard their captures too.

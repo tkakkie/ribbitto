@@ -45,6 +45,7 @@ Read the file for the area you change:
 | [`unread-writes.md`](unread-writes.md) | how read ranges are written: the current feed, topic-view, branch-notice and posting writes |
 | [`unread-counters-design.md`](unread-counters-design.md) | #955: proposed write-time counter maintenance; linked operations, concurrency, repair and pre-measurement adoption criteria |
 | [`unread-counters-verification.md`](unread-counters-verification.md) | #956: what the test-only counter prototype has verified against #950's oracle, and its limits |
+| [`sidebar-hybrid-coverage.md`](sidebar-hybrid-coverage.md) | #961 part 2c-a: pinned coverage, stale-input rejection and retained exact replay |
 | [`sidebar-hybrid-hypothetical.md`](sidebar-hybrid-hypothetical.md) | #960b: separate hypothetical metadata, exact deltas and reconciliation limits |
 | [`sidebar-hybrid-contract.md`](sidebar-hybrid-contract.md) | #950: production-only derivability, snapshot coverage and exact model/comparison for the test-only hybrid investigation |
 | [`unread-benchmark-results.md`](unread-benchmark-results.md) | the read-range benchmark's results (#283) and the go/no-go decision |
@@ -62,7 +63,7 @@ Read the file for the area you change:
 | [`stream-sidebar-stability.md`](stream-sidebar-stability.md) | #832 stability work parts 1–2: pre-registered queue stability criterion and complete regression evidence |
 | [`stream-sidebar-stage1.md`](stream-sidebar-stage1.md) | #832 stability work part 3: 36-connection configurations, 24-window runner and pre-registered stage-1 plan |
 | [`stream-sidebar-stage2.md`](stream-sidebar-stage2.md) | #865 PR 3: fixed mixed-load protocol, gates and versioned result contracts; execution requires explicit instruction |
-| [`stream-sidebar-stage2-drivers.md`](stream-sidebar-stage2-drivers.md) | #865 PR 3: authenticated post, page and read drivers; read targeting, reservations and proof limits |
+| [`stream-sidebar-stage2-drivers.md`](stream-sidebar-stage2-drivers.md) | #865 PR 3: authenticated post, page, read and stream drivers; evidence, lifecycle and proof limits |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |

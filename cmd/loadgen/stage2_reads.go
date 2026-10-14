@@ -14,6 +14,7 @@ type stage2ReadPage struct {
 }
 
 type stage2ReadMember struct {
+	stream      sync.Mutex // Held for the caller-owned stream lifetime.
 	admission   sync.Mutex
 	mu          sync.Mutex // Short evidence lock; never held across HTTP or verification.
 	streamScope string     // Immutable after construction.

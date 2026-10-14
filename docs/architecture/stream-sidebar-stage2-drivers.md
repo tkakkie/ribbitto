@@ -25,7 +25,7 @@ rotation stay exactly as `newStage2Schedule` specifies.
 two named topics. The pools are N/2, N/4 and N/4, proportional to read demand.
 The establishment page's current read form supplies initial evidence, with no
 extra GET. Members precede seeded messages, so these snapshots have unread work.
-The later stream slice must apply complete durable frames through `applyFrame`;
+The [stream intake](#streams-slice-4a) applies complete durable frames through `applyFrame`;
 receipt alone, ephemeral frames and POST responses never advance the cursor.
 Feed streams receive hot-channel posts from all topics; topic streams receive
 only their named topic's posts ([streaming](streaming.md#stream-scope)).
@@ -85,3 +85,30 @@ injected verifier classifies a read as `changed` (persisted advancement) or
 Verification runs after the HTTP clock stops. No verifier exists yet: reads stay
 `unverified`, and the stage-2 gates reject them until the witness slice supplies
 the proof.
+
+## Streams (slice 4a)
+
+`establishStream` owns one stream per member until its caller closes it. It
+uses `stage2StreamPage(member)` once through the page driver, installing that
+read form as initial evidence and taking its positive cursor for Last-Event-ID.
+It authenticates the scoped `/events` GET with that member's session and asks
+for sidebar, messages and typing on the hot channel and, for topic members,
+their named topic. Admission requires HTTP/1.1, 200 and `text/event-stream`.
+The 10 s header deadline ends at admission; the stream retains the caller's
+context. Page and stream attempts keep their statuses as establishment evidence,
+outside scheduled page totals. Failed establishment releases ownership without
+retrying or waiting for capacity.
+
+The complete-frame parser calls an explicit application callback. Only an
+accepted `message` or `messages-moved` frame with a positive signed-63-bit ID
+advances the stream cursor and feeds `applyFrame`, including any post markers.
+Partial payloads, declined application, ephemeral/unknown events and responses
+cannot acknowledge durable progress. Later page evidence may improve read
+eligibility without moving the stream cursor forward and skipping replay.
+The callback is a seam for the later oracle; it is not itself a freshness proof.
+
+Close cancels and closes the response body, joins frame intake, then releases
+the member's stream ownership exactly once. Reset and unexplained EOF/read
+failure remain lifecycle errors; caller cancellation is planned shutdown.
+Fake-server tests gate frame delivery and cancellation without sleeps. Scheduled
+churn and refusal accounting belong to slice 4b; there is still no runner.

@@ -106,8 +106,9 @@ func (counterSQLAdapter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, da
 	ctx = context.WithValue(ctx, counterSQLBegin{}, data.SQL == "begin")
 	ctx = context.WithValue(ctx, counterSQLFloorWrite{}, strings.HasPrefix(data.SQL, "-- name: InsertTopicReadFloor ") || strings.HasPrefix(data.SQL, "-- name: RaiseTopicReadFloor "))
 	w, _ := ctx.Value(counterSQLKey{}).(*counterSQLWrite)
-	if w == nil && data.SQL == "commit" {
-		// Only production writes use the traced pool: a write without a tracker
+	if w == nil && data.SQL == "commit" && ctx.Value(counterStandaloneKey{}) != true {
+		// Only explicit recount/detection/repair calls bypass write tracking.
+		// A production write without a tracker
 		// would commit without counter maintenance, so abort it instead.
 		_, _ = conn.Exec(ctx, `SELECT 1/0`)
 		return ctx

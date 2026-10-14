@@ -2,7 +2,7 @@
 
 The [proposal, Claude review and maintainer decisions of 2026-10-13](https://github.com/tkakkie/ribbitto/issues/865) fix this protocol before measurement. **Runs start only on the maintainer's explicit instruction**, after harness review and functional checks. The current slices add the contract, operation measurement primitives, seed fixture and post, page, read and stream drivers; there is no runner yet. 36/26 remains a validation configuration; activation is a separate decision, and #832/#865 remain open.
 
-The driver will extend `cmd/loadgen`: its [HTTP-only boundary](packages.md) and [existing transport, complete-frame parser and receipt comparison](load-client.md) support the real authenticated workload without application imports. Stage 2 pins a loopback HTTP target for HTTP/1.1; the existing HTTPS transport negotiates HTTP/2 and must not be used. The old stability evaluator is private `realtime_test` code, not importable; this slice records the [unchanged rule](stream-sidebar-stability.md), without duplicating its evaluator. Extraction/reuse belongs to the evaluator slice.
+The driver will extend `cmd/loadgen`: its [HTTP-only boundary](packages.md) and [existing transport, complete-frame parser and receipt comparison](load-client.md) support the real authenticated workload without application imports. Stage 2 pins a loopback HTTP target for HTTP/1.1; the existing HTTPS transport negotiates HTTP/2 and must not be used. [Slice 5c](stream-sidebar-stage2-stability.md) reimplements the unchanged #867 rule in `cmd/loadgen` and proves identical verdicts through shared fixtures without importing the private `realtime_test` evaluator.
 
 | Streams | Posts/s | Changed reads/s | Page GETs/s | Replacements/s |
 |---:|---:|---:|---:|---:|

@@ -198,7 +198,7 @@ func TestStage2HeadroomEvidence(t *testing.T) {
 			case "duplicate-second":
 				samples = slices.Insert(samples, 1, stage2Sample{1, "traffic", samples[0].Metrics})
 			}
-			w := stage2CheckHeadroom(t, samples, "stability", "inconclusive")
+			w := stage2CheckHeadroom(t, samples, "stability", "reject")
 			for _, id := range []string{"acquired", "saturation", "empty-acquire", "empty-wait", "waiting-pressure"} {
 				want := "inconclusive"
 				if change == "zero" || change == "no-empty" ||
@@ -237,7 +237,11 @@ func TestStage2HeadroomWindow(t *testing.T) {
 			}
 			stage2GateState(t, w, id, want)
 		}
-		stage2GateState(t, w, "stability", "inconclusive")
+		want := "reject"
+		if arm.Name == "sync" {
+			want = "inconclusive"
+		}
+		stage2GateState(t, w, "stability", want)
 		raw, _ := json.Marshal(w)
 		if err := decodeStage2(raw, &stage2Window{}); err != nil {
 			t.Fatal(err)

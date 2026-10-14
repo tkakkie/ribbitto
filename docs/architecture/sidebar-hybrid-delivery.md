@@ -98,3 +98,20 @@ unchanged sequence coverage. Application snapshots pass nil oracle checkpoints.
 Sender-side frames and separate rejection counts remain available for #952c;
 these arms bypass historical verdict output until its accounting/freshness/gates
 land. Deterministic wiring/drain tests ran; no measurement ran.
+
+Part #952c1 separately records sidebar recount SQL under the existing sidebar
+role, remaining application SQL (posts, reads, events and authorization), and
+their checked sum per window. Both shares count attempted queries plus
+BEGIN/COMMIT/ROLLBACK, including snapshot transaction controls. Actual recount
+starts, successful snapshot sends and successful delta sends have separate
+counts. Errors, cancellation and coverage rejection retain computation and SQL
+costs; rejected completions and failed sends add no send. Window totals
+subtract counters captured after initial models arrive, excluding setup; oracle
+truth stays on the untraced fixture pool. At exit both schedulers join actual
+computations before accounting closes, retaining cancelled work's SQL. Atomic
+sender totals can be captured while writers run; the observer and heartbeat
+timing provide no evidence. Production-only routing emits zero deltas: that is
+reported explicitly and cannot establish delta evidence. Synthetic delta-frame
+tests verify classification only, apart from production-only results. Freshness,
+drift, queue telemetry and acceptance/adoption gates remain #952c2–c4; no
+measurement ran.

@@ -311,7 +311,11 @@ func TestStage2EvaluatedWindow(t *testing.T) {
 			}
 			for _, gate := range w.Protocol.Gates {
 				if (arm.Name == "sync" || strings.HasSuffix(gate.ID, ".paired")) && strings.Contains(gate.ID, ".") || !strings.Contains(gate.ID, ".") && gate.ID != "normal-503" && gate.ID != "replacement-503" {
-					stage2GateState(t, w, gate.ID, "inconclusive")
+					want := "inconclusive"
+					if gate.ID == "stability" && arm.Name == "async" {
+						want = "reject"
+					}
+					stage2GateState(t, w, gate.ID, want)
 				}
 			}
 			raw, err := json.Marshal(w)

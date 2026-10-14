@@ -250,11 +250,6 @@ func exitedLeaders(watchers []watcher) ([]bool, error) {
 		return reaped, fmt.Errorf("reading the process table before shutdown: %w", err)
 	}
 	gone, _ := classify(watchers, reaped, table)
-	// A watcher reaped during the scan has exited, though its stale line and
-	// a new holder of its PID can make it look alive (Codex on #1052).
-	for i, w := range watchers {
-		gone[i] = gone[i] || w.reaped.Load()
-	}
 	return gone, nil
 }
 
@@ -321,9 +316,14 @@ func classify(watchers []watcher, reaped []bool, table []process) (gone, reused 
 		for _, next := range watchers[i+1:] {
 			later = later || next.pid == w.pid
 		}
+		// The flag is read again before Getsid: a leader reaped since the
+		// table was read may already have its PID taken, which makes its
+		// line stale (Codex and Argon on #1055). A process holding the PID
+		// after the reap is not ours.
+		now := reaped[i] || w.reaped.Load()
 		sid, err := unix.Getsid(w.pid)
-		gone[i] = reaped[i] || !held || holder.zombie || holder.ppid != self || err != nil || sid != w.pid || later
-		reused[i] = held && (reaped[i] || holder.ppid != self)
+		gone[i] = now || !held || holder.zombie || holder.ppid != self || err != nil || sid != w.pid || later
+		reused[i] = held && (reaped[i] || holder.ppid != self) || now && err == nil
 	}
 	return gone, reused
 }

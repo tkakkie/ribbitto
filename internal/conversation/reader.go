@@ -18,6 +18,7 @@ type Reader struct {
 	accounts AccountDirectoryIn
 	cursor   EventCursorIn
 	counts   PageCountsIn
+	witness  WitnessIn
 }
 
 // NewReader builds the snapshot use case with conversation's reads and the

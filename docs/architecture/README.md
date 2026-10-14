@@ -45,7 +45,7 @@ Read the file for the area you change:
 | [`unread-writes.md`](unread-writes.md) | how read ranges are written: the current feed, topic-view, branch-notice and posting writes |
 | [`unread-counters-design.md`](unread-counters-design.md) | #955: proposed write-time counter maintenance; linked operations, concurrency, repair and pre-measurement adoption criteria |
 | [`unread-counters-verification.md`](unread-counters-verification.md) | #956: what the test-only counter prototype has verified against #950's oracle, and its limits |
-| [`unread-counters-sql-adapter.md`](unread-counters-sql-adapter.md) | #957a–c2b: test-only SQL rows, write-owned intervals, operation accounting and gated lock waits; measurement boundaries |
+| #957: [SQL adapter](unread-counters-sql-adapter.md), [workload](unread-counters-workload.md) | test-only SQL, accounting, recounts/repair and fixed mixed schedule; unmeasured |
 | [`sidebar-hybrid-coverage.md`](sidebar-hybrid-coverage.md) | #961 part 2c-a: pinned coverage, stale-input rejection and retained exact replay |
 | [`sidebar-hybrid-progress.md`](sidebar-hybrid-progress.md) | #961 part 2c-b2: bounded recount/repair delivery under continuous posts, pinned full-model equality |
 | [`sidebar-hybrid-delivery.md`](sidebar-hybrid-delivery.md) | #961 part 2c-b1: stream lifecycle, authorization, send order and reconnect recovery |
@@ -67,7 +67,7 @@ Read the file for the area you change:
 | [`stream-sidebar-stage1.md`](stream-sidebar-stage1.md) | #832 stability work part 3: 36-connection configurations, 24-window runner and pre-registered stage-1 plan |
 | [`stream-sidebar-stage2.md`](stream-sidebar-stage2.md) | #865 PR 3: fixed mixed-load protocol, gates and versioned result contracts; execution requires explicit instruction |
 | [`stream-sidebar-stage2-drivers.md`](stream-sidebar-stage2-drivers.md) | #865 PR 3: authenticated post, page, read and stream drivers; evidence, lifecycle and proof limits |
-| Stage-2 slice 5: [telemetry](stream-sidebar-stage2-telemetry.md), [headroom](stream-sidebar-stage2-headroom.md), [stability](stream-sidebar-stage2-stability.md) | #865 PR 3: continuous evidence and gate evaluators |
+| Stage-2 slices 5–6a: [telemetry](stream-sidebar-stage2-telemetry.md), [headroom](stream-sidebar-stage2-headroom.md), [stability](stream-sidebar-stage2-stability.md), [capture](stream-sidebar-stage2-witness.md) | #865 PR 3: continuous evidence and gate evaluators |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |

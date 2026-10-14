@@ -20,6 +20,8 @@
 // from at most 101 ranges per channel, retaining the join prefix without rows.
 // Channel counts deduplicate sidebar IDs and call conversation through an
 // injected counter in that snapshot, using two statements for the whole list.
+// Optional measurement reads retain every requested persisted range and only
+// stored floors in the caller's snapshot, without effective defaults.
 // Topic state loads the prefix, all ranges above it and requested floors in
 // one snapshot statement, without multiplying ranges by topics. Topic counts
 // combine it with an injected message counter in the same snapshot.

@@ -8,5 +8,6 @@
 // through primary-key predecessors and upper bounds; they raise the floor in
 // the same locked transaction. Snapshot reads load the sidebar's first ranges
 // in one statement regardless of channel count. Topic state unions channel ranges
-// with requested floors in one snapshot statement. No query reads message rows.
+// with requested floors in one snapshot statement. Optional capture reads raw
+// ranges without a cap and stored floors only. No query reads message rows.
 package postgres

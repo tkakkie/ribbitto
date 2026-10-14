@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
+	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/org"
+	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
@@ -109,6 +111,59 @@ func TestCostReadAdmissionAndDrain(t *testing.T) {
 			t.Fatalf("cancelled admissions or failed drain lost: %+v", got)
 		}
 	})
+}
+
+func TestCostPersistedReadsAcrossMembers(t *testing.T) {
+	pool := pgtest.New(t)
+	f := conversationtest.OrganizationWithOwner(t, pool, "member-reads", "general")
+	members := []org.Membership{{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID, JoinedEventSeq: 1}}}
+	for i := 1; i < 3; i++ {
+		account := identitytest.Account(t, pool, fmt.Sprintf("reader%d@example.org", i), "Reader")
+		member := orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, fmt.Sprintf("reader%d", i), 1)
+		members = append(members, org.Membership{Organization: members[0].Organization, Member: org.Member{ID: member, JoinedEventSeq: 1}})
+	}
+	// An incomplete final round leaves a seeded message unread for one member.
+	p, err := newCostReadPlan(len(members), 80*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := p.seed(t.Context(), pool, members[0], f.Channel.ID, f.Channel.DefaultTopicID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes := new(unread.Changes)
+	for i := range p.scheduled {
+		member, cursor := p.target(i, first)
+		changed, err := costChangedRead(t.Context(), pool, changes, members[member], f.Channel.ID, cursor)
+		if err != nil || !changed {
+			t.Fatalf("scheduled read %d member %d cursor %d: changed=%t error=%v; want committed change", i, member, cursor, changed, err)
+		}
+	}
+	for i, m := range members {
+		rounds := (p.scheduled + len(members) - 1 - i) / len(members)
+		if rounds < 2 {
+			t.Fatalf("member %d has only %d scheduled rounds", i, rounds)
+		}
+		want, err := sidebarOracle(t.Context(), pool, f.OrganizationID, m.Member.ID, f.Channel.ID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		unreadCount := int64(p.capacity - rounds)
+		if len(want.channels) != 1 || want.channels[0].id != f.Channel.ID || want.channels[0].count.raw != unreadCount {
+			t.Fatalf("member %d persisted unread after %d rounds: channels=%+v; want %d", i, rounds, want.channels, unreadCount)
+		}
+		got, err := costModelSnapshot(t.Context(), pool, m, f.Channel.ID, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := sidebarOracleCompare(got.model, want); err != nil {
+			t.Fatalf("member %d: %v", i, err)
+		}
+		changed, err := costChangedRead(t.Context(), pool, changes, m, f.Channel.ID, first+int64(rounds)-1)
+		if err != nil || changed {
+			t.Fatalf("member %d repeated final read: changed=%t error=%v; want no-op", i, changed, err)
+		}
+	}
 }
 
 func TestCostPersistedReadsAndFinalModel(t *testing.T) {

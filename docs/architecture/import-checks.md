@@ -139,6 +139,12 @@ the opposite case, `if err == nil { return err }`. `make lint-fixtures`
 asserts the non-nil-error finding in a tagged Go fixture, so disabling
 nilerr fails the check.
 
-`make check` also requires a `doc.go` in every directory under `internal/`
+`make check-static` runs [`tools/formatcheck`](../../tools/formatcheck/main.go),
+which requires a `doc.go` in every directory under `internal/`
 that contains non-test Go files, including generated packages, as specified
 in `AGENTS.md`. Fixtures under `testdata/` are excluded.
+
+The command first checks Go formatting with PATH's `gofmt -l`, then compares
+each template with the pinned `./bin/templ`'s formatter stdout (parse errors
+fail too). Neither check rewrites files. Both skip root `bin/` but include
+`_test.go` and `testdata/` files; the exemptions above apply only to `doc.go`.

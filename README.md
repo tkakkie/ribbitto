@@ -101,12 +101,12 @@ so local notes and tools do not change the output.
 
 ### Checks
 
-`make check` is what must pass before a pull request, and what CI runs, in
-parallel jobs: `make check` is `check-static`, `check-test`, `check-tools`
-and `check-launchers` in order, and CI runs `check-test` once per
-[`tools/testshard`](tools/testshard/main.go) shard, beside the other three
-(`.github/workflows/ci.yml`). It
-checks formatting (`gofmt` for Go, `templ fmt` for templates), vets, lints,
+`make check` must pass before a pull request. It runs `check-static`,
+`check-test`, `check-tools` and `check-launchers` in order. CI runs them in
+parallel, with `check-test` once per [`tools/testshard`](tools/testshard/main.go)
+shard (`.github/workflows/ci.yml`). It
+checks formatting and internal packages' `doc.go` files through
+[`tools/formatcheck`](tools/formatcheck/main.go), then vets, lints,
 builds, runs the Go tests with the race detector (at `-p 2` by default; see
 [worktree-env.md](docs/worktree-env.md)), and checks the import
 graph, module API summaries and the documents. `tools/sourcecheck` enforces the

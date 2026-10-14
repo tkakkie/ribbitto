@@ -65,7 +65,7 @@ Posts go through `conversation.Posting` with the hub as notifier.
   latency but fails no step (#227): with the caches, waits become rare and
   their per-acquisition mean can exceed half of a 5 ms p95, and without them
   the pool dominates a 30 ms p95 at 100 streams — neither is a ceiling.
-- **Latency** runs from `Post` returning after commit to the in-memory send
+- **Baseline/arm latency** runs from `Post` returning after commit to the in-memory send
   (a delivery before `Post` returns counts as a negative sample), reported as
   p50, p95 and p99; it includes any stagger wait. It is not a commit
   timestamp.
@@ -83,6 +83,8 @@ Posts go through `conversation.Posting` with the hub as notifier.
   with the empty and cancelled acquire counts, the first delivery over 1 s,
   and the failed stream loops with the first error. CPU and memory, of this
   process or PostgreSQL, are not visible to it; watch them outside.
+
+Historical sidebar; [current mode](stream-client-counts-results.md) implements #1047.
 
 ## Sidebar mode (#812)
 

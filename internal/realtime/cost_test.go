@@ -31,6 +31,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/realtime/realtimepg"
+	"github.com/tkakkie/ribbitto/internal/unread"
 )
 
 // TestStreamCost measures what the delivery loop costs per post as the
@@ -53,14 +54,17 @@ import (
 //	                               of one member for every stream
 //	RIBBITTO_STREAM_COST_SIDEBAR   1: per-member live counts; needs distinct
 //	                               members; same-snapshot freshness witness
+//	RIBBITTO_STREAM_COST_OTHER     0..100: percent on another channel in the
+//	                               same organisation; sidebar, no comparison arm
 //	RIBBITTO_STREAM_COST_ATTRIBUTION 1: acquire, statement and snapshot timing
 //	RIBBITTO_STREAM_COST_RECOUNTS  positive shared concurrent recount limit;
-//	                               unset is unbounded, needs sidebar mode
+//	                               unset: max(1, pool/2), needs sidebar mode
 //	RIBBITTO_STREAM_COST_STAGGER   a window: stream i of N waits i*window/N
 //	                               after its render, before its check (#671);
 //	                               needs _MEMBERS=distinct
 //
-// Every stream follows the same channel of one organisation. The renderer
+// Streams follow one organisation, with placement controlled by _OTHER.
+// See docs/architecture/stream-cost.md. The renderer
 // reads the message with its authors (#206) but renders no HTML: this
 // measures database cost. A second table reports the authorization check:
 // epoch reads (statements classified here), the cached-allow hit rate (from
@@ -103,18 +107,26 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 	}
 
 	sidebar := os.Getenv("RIBBITTO_STREAM_COST_SIDEBAR") == "1"
-	var recountSlots chan struct{}
+	other := 0
+	if raw := os.Getenv("RIBBITTO_STREAM_COST_OTHER"); raw != "" {
+		var err error
+		other, err = strconv.Atoi(raw)
+		if err != nil || other < 0 || other > 100 || !sidebar || arm != "" {
+			t.Fatal("RIBBITTO_STREAM_COST_OTHER needs 0..100, sidebar mode and no comparison arm")
+		}
+	}
+	recountCapacity := 0
 	if os.Getenv("RIBBITTO_STREAM_COST_RECOUNTS") != "" {
 		if !sidebar {
 			t.Fatal("RIBBITTO_STREAM_COST_RECOUNTS needs sidebar mode")
 		}
-		recountSlots = make(chan struct{}, envInts(t, "RIBBITTO_STREAM_COST_RECOUNTS", nil)[0])
+		recountCapacity = envInts(t, "RIBBITTO_STREAM_COST_RECOUNTS", nil)[0]
 	}
 	if sidebar && !validCostSidebar(os.Getenv("RIBBITTO_STREAM_COST_MEMBERS") == "distinct", scheduledPosts(rate, duration)) {
 		t.Fatal("sidebar measurement needs distinct members and at least one post")
 	}
 
-	if arm != "" && (!sidebar || recountSlots != nil || stagger != 0) {
+	if arm != "" && (!sidebar || recountCapacity != 0 || stagger != 0) {
 		t.Fatal("comparison arms require sidebar mode without gate or stagger")
 	}
 
@@ -130,6 +142,10 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 		t.Fatal(err)
 	}
 	fixture := conversationtest.OrganizationWithOwner(t, fixturePool, "acme", "general")
+	var otherChannel conversationtest.ChannelFixture
+	if other > 0 {
+		otherChannel = conversationtest.Channel(t, fixturePool, fixture.OrganizationID, "other", false)
+	}
 	cached := os.Getenv("RIBBITTO_STREAM_COST_CACHE") == "1"
 	distinct := os.Getenv("RIBBITTO_STREAM_COST_MEMBERS") == "distinct"
 	subs := []realtime.Subscription{{Interests: []realtime.Interest{realtime.InterestMessages}, Organization: fixture.OrganizationID, OrganizationSlug: "acme", Account: fixture.AccountID, Member: fixture.MemberID, Channel: fixture.Channel.ID}}
@@ -188,10 +204,20 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 	if cached {
 		inner = realtime.NewCachedEvents(t.Context(), dbReads, hub, 1024, time.Minute)
 		renderer.renders = realtime.NewCache[int64, realtime.Outgoing](t.Context(), 4096, realtime.DefaultCacheLoads, time.Minute, 10*time.Second, nil, time.Now)
+		renderer.unreadRenders = realtime.NewCache[int64, realtime.Outgoing](t.Context(), 4096, realtime.DefaultCacheLoads, time.Minute, 10*time.Second, nil, time.Now)
 	}
 	loopReads := &countingReader{inner: inner}
 	checks := &timingAuthorizer{inner: orgpg.NewCachedAuthorizer(t.Context(), pool, org.DefaultAuthorizationCapacity)}
 	stream := realtime.Stream{Hub: hub, Events: loopReads, Authorizer: checks, Renderer: renderer}
+	var changes *unread.Changes
+	if sidebar && arm == "" {
+		changes = &unread.Changes{}
+		if recountCapacity == 0 {
+			// cmd/ cannot be imported: synchronous production reserves half the pool.
+			recountCapacity = max(1, int(pool.Config().MaxConns)/2)
+		}
+		stream.RecountLimit = realtime.NewRecountLimit(recountCapacity)
+	}
 
 	if !smoke {
 		var postgresVersion string
@@ -206,7 +232,7 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 			}
 			t.Logf("PostgreSQL %s=%s", setting, value)
 		}
-		t.Logf("attribution %t; concurrent recount limit %d (0=unbounded)", queries.timings != nil, cap(recountSlots))
+		t.Logf("attribution %t; concurrent recount limit %d; other-channel placement %d%%", queries.timings != nil, recountCapacity, other)
 		t.Logf("%s/%s, %d CPUs, %s; pool max %d; batch %d; %d posts/s for %s per step; cache %t; distinct members %t; stagger window %s",
 			runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version(), pool.Config().MaxConns, realtime.DefaultBatchSize, rate, duration, cached, distinct, stagger)
 		t.Log("| streams | posts scheduled/completed/missed | deliveries | queries/post | tx statements/post | empty reads/post | queries/delivery | tx statements/delivery | empty reads/delivery | mean empty-acquire wait | empty-acquire wait/delivery | p50 | p95 | p99 | result |")
@@ -237,7 +263,11 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 		if sidebar && !costModelArm(arm) {
 			connections = costConnections(t, pool, posting, sidebarReader, members[:n], subs[0].Channel, fixture.Channel.DefaultTopicID)
 			for _, c := range connections {
-				c.timings, c.slots = queries.timings, recountSlots
+				c.timings, c.changes, c.postingChannel = queries.timings, changes, fixture.Channel.ID
+			}
+			for i := n - n*other/100; i < n; i++ {
+				connections[i].other = true
+				connections[i].channel, connections[i].topic = otherChannel.ID, otherChannel.DefaultTopicID
 			}
 		}
 		var modelRunner *costRunner
@@ -248,7 +278,7 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 				t.Fatal(err)
 			}
 		}
-		r := measureStep(t, stream, posting, pool, recountPool, queries, checks, loopReads, dbReads, m, subs, n, rate, duration, stagger, connections, modelRunner, setupStart)
+		r := measureStep(t, stream, posting, pool, recountPool, queries, checks, loopReads, dbReads, m, subs, n, rate, other, duration, stagger, connections, modelRunner, setupStart)
 		if record != nil {
 			record(r)
 		}
@@ -260,7 +290,7 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 			continue
 		}
 		if smoke {
-			if r.completed != r.scheduled || r.missed != 0 || r.timedOut || r.missing != 0 || r.loopErrors != 0 || r.deliveries != n*r.scheduled || (arm != "" && len(r.queue) < 2) {
+			if r.completed != r.scheduled || r.missed != 0 || r.timedOut || r.missing != 0 || r.loopErrors != 0 || r.deliveries+r.unreadDeliveries != n*r.scheduled || (arm != "" && len(r.queue) < 2) {
 				t.Fatalf("functional smoke incomplete: posts=%d/%d missed=%d missing=%d timeout=%t loop-errors=%d", r.completed, r.scheduled, r.missed, r.missing, r.timedOut, r.loopErrors)
 			}
 			t.Logf("functional smoke passed: arm=%q streams=%d; all posts/messages/final snapshots and telemetry checked", arm, n)
@@ -269,7 +299,10 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 		reportCostQueue(t, r.queue, r.postingDuration, r.queueBound)
 		t.Logf("progress: streams=%d posting-p50/p95/p99=%v scheduled-to-delivery-p50/p95/p99=%v peak-acquired=%d loop-errors=%d provisional-target=%t window-eligible=%t; recommendation requires all three independent stage-1 matrix windows to pass (TestStreamCostStage1 aggregates them)", n, r.posting, r.scheduledLatency, r.peakAcquired, r.loopErrors, costTargets(r), costRecommendable(r))
 		if sidebar {
-			t.Logf("sidebar: streams=%d queries=%d tx=%d count-statements=%d recounts=%d elapsed=%s recounts/stream/s=%.3f count/recount=%.2f count/post=%.2f delay p50/p95/p99=%s/%s/%s pool-empty=%d pool-cancelled=%d pool-wait-total=%s", n,
+			if arm == "" {
+				t.Logf("delivery split: message=%d unread=%d; return-to-message p50/p95/p99=%v; return-to-unread p50/p95/p99=%v; final-resync=%s", r.deliveries, r.unreadDeliveries, r.latency, r.unreadLatency, r.finalResync)
+			}
+			t.Logf("sidebar: streams=%d queries=%d tx=%d count-statements=%d recounts=%d elapsed=%s recounts/stream/s=%.3f count/recount=%.2f count/post=%.2f legacy recount-delay p50/p95/p99=%s/%s/%s pool-empty=%d pool-cancelled=%d pool-wait-total=%s", n,
 				r.queries, r.txStatements, r.countStatements, r.recounts, r.elapsed.Round(time.Millisecond), float64(r.recounts)/float64(n)/r.elapsed.Seconds(), per(r.countStatements, r.recounts), per(r.countStatements, r.completed), r.recountDelay[0].Round(time.Microsecond), r.recountDelay[1].Round(time.Microsecond), r.recountDelay[2].Round(time.Microsecond), r.poolEmpty, r.poolCancelled, r.poolWait.Round(time.Microsecond))
 		}
 		t.Logf("totals: streams=%d queries=%d tx=%d elapsed=%s pool-empty=%d pool-wait-total=%s", n, r.queries, r.txStatements, r.elapsed.Round(time.Millisecond), r.poolEmpty, r.poolWait.Round(time.Microsecond))
@@ -279,16 +312,17 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 			verdict = fmt.Sprintf("fail: underloaded or incomplete, %d of %d posts completed (%d missed)", r.completed, r.scheduled, r.missed)
 		case r.timedOut:
 			verdict = "fail: step deadline passed before messages and final snapshot recounts arrived"
-		case r.deliveries == 0:
+		case r.deliveries+r.unreadDeliveries == 0:
 			verdict = "fail: no deliveries to measure"
 		case r.missing > 0:
 			verdict = fmt.Sprintf("fail: %d deliveries missing after the drain", r.missing)
 		case r.latency[1] > latencyLimit:
 			verdict = "fail: p95 over 1 s"
 		}
-		t.Logf("| %d | %d/%d/%d | %d | %.1f | %.1f | %.1f | %.2f | %.2f | %.2f | %s | %s | %s | %s | %s | %s |", n, r.scheduled, r.completed, r.missed, r.deliveries,
+		frames := r.deliveries + r.unreadDeliveries
+		t.Logf("| %d | %d/%d/%d | %d | %.1f | %.1f | %.1f | %.2f | %.2f | %.2f | %s | %s | %s | %s | %s | %s |", n, r.scheduled, r.completed, r.missed, frames,
 			per(r.queries, r.completed), per(r.txStatements, r.completed), per(r.emptyReads, r.completed),
-			per(r.queries, r.deliveries), per(r.txStatements, r.deliveries), per(r.emptyReads, r.deliveries),
+			per(r.queries, frames), per(r.txStatements, frames), per(r.emptyReads, frames),
 			r.meanWait.Round(time.Microsecond), r.waitPerDelivery.Round(time.Microsecond),
 			r.latency[0].Round(time.Microsecond), r.latency[1].Round(time.Microsecond), r.latency[2].Round(time.Microsecond), verdict)
 		delays := "none"
@@ -339,6 +373,9 @@ type stepResult struct {
 	posting, scheduledLatency    [3]time.Duration
 	elapsed, poolWait            time.Duration
 	recountDelay                 [3]time.Duration
+	unreadDeliveries             int
+	unreadLatency                [3]time.Duration
+	finalResync                  time.Duration
 	// timedOut reports that the step's deadline passed before every post
 	// completed and every delivery arrived.
 	timedOut                          bool
@@ -372,7 +409,7 @@ func per(n int64, d int) float64 {
 // duration, waits for every delivery or a drain deadline, and closes them.
 // Counts cover the posting window and the drain, not the streams' start.
 func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Posting, pool, recountPool *pgxpool.Pool, queries *epochCounter, checks *timingAuthorizer,
-	events, dbReads *countingReader, m org.Membership, subs []realtime.Subscription, n, rate int, duration, stagger time.Duration, connections []*costConnection, modelRunner *costRunner, setupStart time.Time) stepResult {
+	events, dbReads *countingReader, m org.Membership, subs []realtime.Subscription, n, rate, other int, duration, stagger time.Duration, connections []*costConnection, modelRunner *costRunner, setupStart time.Time) stepResult {
 	t.Helper()
 	sub := subs[0]
 	var exactTruth []sidebarOracleModel
@@ -422,6 +459,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 			s.Sidebar, sender = connections[i], connections[i]
 			connectionSub.Interests = []realtime.Interest{realtime.InterestMessages, realtime.InterestSidebar}
 			connections[i].messages = sink
+			connectionSub.Channel = connections[i].channel
 		}
 		if modelRunner != nil {
 			s, connectionSub, sender = modelRunner.wire(i, s, sink, scheduler)
@@ -455,7 +493,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 		if time.Now().After(deadline) {
 			t.Fatalf("%d streams did not all start within a minute", n)
 		}
-		time.Sleep(10 * time.Millisecond)
+		<-time.After(10 * time.Millisecond)
 	}
 
 	for _, c := range connections {
@@ -519,7 +557,10 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	}
 	for i := range scheduled {
 		scheduledAt := start.Add(time.Duration(i) * interval)
-		time.Sleep(time.Until(scheduledAt))
+		select {
+		case <-stepCtx.Done():
+		case <-time.After(time.Until(scheduledAt)):
+		}
 		select {
 		case inFlight <- struct{}{}:
 		default:
@@ -563,9 +604,22 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	if failed != nil {
 		t.Fatal(failed)
 	}
-	want := n * len(returned)
+	wantMessages, wantUnread := n*len(returned), 0
+	var resyncStart time.Time
+	if stream.RecountLimit != nil {
+		wantMessages = (n - n*other/100) * len(returned)
+		wantUnread = n*len(returned) - wantMessages
+		resyncStart = time.Now()
+		for _, c := range connections {
+			c.mu.Lock()
+			c.resyncAt = resyncStart
+			c.mu.Unlock()
+			c.changes.RequestResync(c.member.Organization.ID, c.member.Member.ID)
+		}
+	}
+	want := wantMessages
 	for (sink.count() < want || !costComplete(connections, returned) || (modelRunner != nil && costReadDrain(modelRunner.models, exactTruth) != nil)) && stepCtx.Err() == nil {
-		time.Sleep(10 * time.Millisecond)
+		<-time.After(10 * time.Millisecond)
 	}
 	end := time.Now()
 	if os.Getenv("RIBBITTO_STREAM_COST_SMOKE") != "1" {
@@ -599,6 +653,41 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	}
 
 	r := stepResult{arm: os.Getenv("RIBBITTO_STREAM_COST_ARM"), queue: series, postingDuration: duration, queueBound: n, scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: timedOut, peakAcquired: peak1, loopErrors: int64(loopErrs.n), posting: percentiles(postTimes)}
+	var unreadLatencies []time.Duration
+	if !resyncStart.IsZero() {
+		r.finalResync = end.Sub(resyncStart)
+		for i, c := range connections {
+			if c.other != (i >= n-n*other/100) {
+				t.Fatalf("placement split: stream %d other=%t", i, c.other)
+			}
+			expected := len(returned)
+			if c.other {
+				if c.messageCount != 0 || len(c.unread) != expected || len(c.sequences) != expected {
+					t.Fatalf("other placement: stream %d message=%d unread=%d sequences=%d want=%d unread", i, c.messageCount, len(c.unread), len(c.sequences), expected)
+				}
+			} else if c.messageCount != expected || len(c.unread) != 0 || len(c.sequences) != expected {
+				t.Fatalf("posting placement: stream %d message=%d unread=%d sequences=%d want=%d messages", i, c.messageCount, len(c.unread), len(c.sequences), expected)
+			}
+			triggers := 0
+			if c.member.Member.ID == m.Member.ID {
+				triggers = expected
+			}
+			if c.postTriggers != triggers {
+				t.Fatalf("author-only trigger: stream %d triggers=%d want=%d", i, c.postTriggers, triggers)
+			}
+			for _, d := range c.unread {
+				unreadLatencies = append(unreadLatencies, d.at.Sub(returned[d.seq])) // Same origin as message arrival.
+			}
+			r.unreadDeliveries += len(c.unread)
+		}
+		if r.deliveries != wantMessages || r.unreadDeliveries != wantUnread {
+			t.Fatalf("delivery expectations: message=%d/%d unread=%d/%d", r.deliveries, wantMessages, r.unreadDeliveries, wantUnread)
+		}
+		if !costComplete(connections, returned) {
+			t.Fatal("final resync: every stream must deliver an exact post-stop snapshot")
+		}
+		r.unreadLatency = percentiles(unreadLatencies)
+	}
 	r.reads = reads
 	if modelRunner != nil {
 		r.rejected = modelRunner.rejections()
@@ -623,6 +712,9 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 		snapshots := slices.Clone(c.snapshots)
 		c.mu.Unlock()
 		r.recounts += len(snapshots)
+		if c.changes != nil {
+			continue
+		}
 		for i, seq := range seqs {
 			for _, snapshot := range snapshots {
 				if snapshot.covers(c.initial+int64(i+1), seq) {
@@ -646,8 +738,8 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	if waited := s1.EmptyAcquireCount() - s0.EmptyAcquireCount(); waited > 0 {
 		r.meanWait = wait / time.Duration(waited)
 	}
-	if r.deliveries > 0 {
-		r.waitPerDelivery = wait / time.Duration(r.deliveries)
+	if frames := r.deliveries + r.unreadDeliveries; frames > 0 {
+		r.waitPerDelivery = wait / time.Duration(frames)
 	}
 	// A delivery that lands before Post returns is a negative sample.
 	var latencies []time.Duration
@@ -709,8 +801,17 @@ type staggeredRenderer struct {
 	delay time.Duration
 }
 
+func (r staggeredRenderer) RenderUnread(ctx context.Context, e realtime.Event) (realtime.Outgoing, error) {
+	out, err := r.inner.(realtime.UnreadRenderer).RenderUnread(ctx, e)
+	return r.wait(ctx, out, err)
+}
+
 func (r staggeredRenderer) Render(ctx context.Context, e realtime.Event) (realtime.Outgoing, error) {
 	out, err := r.inner.Render(ctx, e)
+	return r.wait(ctx, out, err)
+}
+
+func (r staggeredRenderer) wait(ctx context.Context, out realtime.Outgoing, err error) (realtime.Outgoing, error) {
 	if err != nil || r.delay == 0 {
 		return out, err
 	}
@@ -806,9 +907,10 @@ func (c *countingReader) EventsAfter(ctx context.Context, org kernel.ID, after i
 // through renders (keyed by sequence, as one organisation and channel are
 // measured) when the cache is on.
 type readingRenderer struct {
-	messages   *conversation.Reader
-	membership org.Membership
-	renders    *realtime.Cache[int64, realtime.Outgoing]
+	messages      *conversation.Reader
+	membership    org.Membership
+	renders       *realtime.Cache[int64, realtime.Outgoing]
+	unreadRenders *realtime.Cache[int64, realtime.Outgoing]
 }
 
 func (r readingRenderer) Render(ctx context.Context, e realtime.Event) (realtime.Outgoing, error) {

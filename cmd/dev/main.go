@@ -174,8 +174,10 @@ func shutdown(watchers []watcher) (err error) {
 		if time.Until(deadline) < 2*time.Second {
 			sig = syscall.SIGKILL
 		}
-		// Process.Signal checks its handle, so a reaped leader is never
-		// signalled through its reused PID.
+		// Once Wait has returned, Process.Signal sends nothing to a reused PID:
+		// on Linux it signals through a pidfd, on macOS it returns
+		// ErrProcessDone. On macOS a Signal racing the reap can still reach a
+		// reused PID, the limit of signalling by PID accepted in #636 (#1055).
 		for _, w := range watchers {
 			_ = w.cmd.Process.Signal(sig)
 		}
@@ -221,8 +223,9 @@ func signalSessions(watchers []watcher, sig syscall.Signal) (int, error) {
 				continue
 			}
 			if sid, err := unix.Getsid(p.pid); err == nil && sid == w.pid {
-				// A leader's PID may have been reused after Wait. Process.Signal
-				// checks its handle; never signal that PID from a stale ps listing.
+				// A leader's PID may have been reused after Wait; leaders are
+				// signalled only through Process.Signal above, never by a PID
+				// from a stale ps listing.
 				if p.pid != w.pid {
 					if sid, err := unix.Getsid(p.pid); err == nil && sid == w.pid {
 						_ = syscall.Kill(p.pid, sig)

@@ -77,6 +77,12 @@ func (counterSQLAdapter) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data
 func (counterSQLAdapter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	ctx = context.WithValue(ctx, counterSQLBegin{}, data.SQL == "begin")
 	w, _ := ctx.Value(counterSQLKey{}).(*counterSQLWrite)
+	if w == nil && data.SQL == "commit" {
+		// Only production writes use the traced pool: a write without a tracker
+		// would commit without counter maintenance, so abort it instead.
+		_, _ = conn.Exec(ctx, `SELECT 1/0`)
+		return ctx
+	}
 	if w == nil || data.SQL != "commit" || w.err != nil {
 		return ctx
 	}

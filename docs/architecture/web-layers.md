@@ -79,6 +79,11 @@ htmx does only requests and swaps; the server and templ own the HTML.
   | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
   | `data-event-seq` | each message `<li>` | always | its `event_seq`, which orders an inserted item |
   | `data-source` | each message's checkbox | always | its topic's ID; a selection stays within one source topic |
+  | `data-snapshot-seq` | `#sidebar-channels` | **planned**: always | organisation event sequence read in the same repeatable-read snapshot as the sidebar counts ([decision 34](../decisions/34-live-unread-counts.md)) |
+  | `data-unread-count` | every sidebar badge, including the heading badge | **planned**: always, including zero | numeric unread count; a zero badge remains present but hidden ([decision 34](../decisions/34-live-unread-counts.md)) |
+
+  These two rows remain **planned** until PR 3 of #1039 lands.
+
 - Every channel/topic page, including `?before=` and panel pages, carries
   `data-event-cursor` on `#organization-stream`, the outer layout div outside
   every swap target. It wraps the sidebar, conversation and any panel, with `hx-ext="sse"`
@@ -126,6 +131,11 @@ htmx does only requests and swaps; the server and templ own the HTML.
 ## JavaScript
 
 See [JavaScript responsibilities and constraints](web-javascript.md).
+
+**Planned until PR 3 of #1039 lands:** [decision 34](../decisions/34-live-unread-counts.md)
+adds one exception to the no-application-state rule: one script owns sidebar
+badge numbers and bounded recovery state, never creates elements and never
+makes requests. The server still renders the badges; htmx sends resync requests.
 
 ## How the rules are checked
 

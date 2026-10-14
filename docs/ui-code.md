@@ -26,7 +26,10 @@ fragment names a row. The channel list page
 (`/organizations/{slug}/channels?channel=<id>`, #969) is the sidebar's
 content as the page's `<main>`, with the same pane, script and recounts;
 below `desk` it fills the width beside the app bar, and the block that
-prompts to open a channel at desktop width is hidden.
+prompts to open a channel at desktop width is hidden. There a conversation
+hides the app bar and the sidebar instead; its header's back link carries
+the channel's row id as its fragment, so the row is in view even without
+JavaScript.
 
 ## Styles
 

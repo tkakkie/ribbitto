@@ -206,11 +206,44 @@ func TestChannelListBrowser(t *testing.T) {
 		}
 	}
 
-	// At desktop width the list is still the one main, beside the prompt.
+	// A phone conversation hides the frame and leads back to its row.
+	type frameState struct {
+		Back, Rail, Aside bool
+		Label             string
+	}
+	frame := func() frameState {
+		var s frameState
+		acceptanceOK(t, page.MustEval(`() => {
+			const back = document.querySelector('header a[aria-label]'), box = back.getBoundingClientRect();
+			return { back: back.checkVisibility() && box.width >= 44 && box.height >= 44, label: back.getAttribute('aria-label'),
+				rail: document.querySelector('nav').checkVisibility(), aside: document.querySelector('aside').checkVisibility() };
+		}`).Unmarshal(&s))
+		return s
+	}
+	page.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID)).MustWaitLoad()
+	if phone := frame(); !phone.Back || phone.Label != "Back to lilypads" || phone.Rail || phone.Aside {
+		t.Fatalf("phone conversation frame: %+v", phone)
+	}
+	page.MustElement("header a[aria-label]").MustClick()
+	page.MustWait(`want => location.pathname + location.search + location.hash === want && document.readyState === 'complete'`,
+		view.ChannelListURL("list", expanded.ID)+"#"+row)
+	if !page.MustEval(`row => {
+		const port = document.querySelector('main').getBoundingClientRect(), box = document.getElementById(row).getBoundingClientRect();
+		return box.top >= port.top && box.top < port.bottom && !!document.querySelector('#' + row + ' > #sidebar-topics');
+	}`, row).Bool() {
+		t.Fatal("the back link did not open the list with the channel expanded and in view")
+	}
+
+	// At desktop width the list is still the one main, beside the prompt, and a
+	// conversation keeps its frame and hides the link.
 	page.MustSetViewport(1280, 800, 1, false)
 	page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
 	page.MustWait(`() => window.recounts >= 1`)
 	if desktop := read(); desktop.Mains != 1 || !desktop.MainShown || !desktop.PromptShown {
 		t.Fatalf("desktop list page: %+v", desktop)
+	}
+	page.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID)).MustWaitLoad()
+	if desktop := frame(); desktop.Back || !desktop.Rail || !desktop.Aside {
+		t.Fatalf("desktop conversation frame: %+v", desktop)
 	}
 }

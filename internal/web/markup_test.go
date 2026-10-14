@@ -609,8 +609,11 @@ func TestPagesMarkup(t *testing.T) {
 		// One response serves both widths; only its classes differ by breakpoint.
 		{name: "channel list", route: "GET /organizations/{slug}/channels", services: signedIn(oneOrganisation{}), method: "GET", path: "/organizations/acme/channels", cookie: true},
 		{name: "channel list, other channel", route: "GET /organizations/{slug}/channels", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelListURL("acme", kernel.ID{2}), cookie: true},
-		{name: "channel invalid name", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrInvalidChannelName), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {""}}, status: http.StatusUnprocessableEntity},
-		{name: "channel duplicate name", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrChannelNameTaken), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"雑談"}}, status: http.StatusUnprocessableEntity},
+		// A failed creation renders the list page with the error in place.
+		{name: "channel invalid name", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrInvalidChannelName), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {""}}, status: http.StatusUnprocessableEntity, alerts: 1},
+		{name: "channel duplicate name", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrChannelNameTaken), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"雑談"}}, status: http.StatusUnprocessableEntity, alerts: 1},
+		{name: "channel invalid image", route: "POST /organizations/{slug}/channels", services: signedIn(oneOrganisation{}), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"Plans"}, "image": {"unknown"}}, status: http.StatusUnprocessableEntity, alerts: 1},
+		{name: "channel cap", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrChannelLimit), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"Plans"}}, status: http.StatusUnprocessableEntity, alerts: 1},
 	}
 	for _, body := range []string{"", strings.Repeat("界", 4001), "bad\u202e"} {
 		for _, hx := range []bool{false, true} {

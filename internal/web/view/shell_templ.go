@@ -106,7 +106,7 @@ func appBar(page ChannelPage) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"flex size-11 items-center justify-center rounded-full hover:bg-hover transition-feedback motion-safe:active:scale-96\"><span aria-hidden=\"true\" class=\"flex size-9 items-center justify-center rounded-full bg-pastel-3 text-title font-semibold text-on-pastel-3\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"flex size-11 items-center justify-center rounded-full hover:bg-hover transition-feedback motion-safe:active:scale-96\"><span aria-hidden=\"true\" class=\"flex size-9 items-center justify-center rounded-full bg-selected text-title font-semibold text-on-selected\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

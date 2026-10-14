@@ -34,9 +34,8 @@ card's `selected` background it is **5.82:1**.
 
 Illustrations, channel images, the welcome composition and the mascot keep
 their original colours in dark; later uploaded photos must not be recoloured.
-Avatar initials use the dark pastel pairs, whose ratios are recorded in
-[`ui-colours.md`](ui-colours.md#contrast-wcag-22-aa); the account button uses
-pair 3. No page places the mascot yet.
+Message avatar initials use the dark pastel pairs, whose ratios are recorded
+in [`ui-colours.md`](ui-colours.md#contrast-wcag-22-aa). No page places the mascot yet.
 
 ## Channel illustrations
 

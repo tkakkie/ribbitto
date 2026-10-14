@@ -41,7 +41,6 @@ Today's shared controls:
 
 Message avatars and the account button use the first grapheme of the
 display name (via `uniseg`), falling back to the handle when the web layer
-blanks a legacy name. The account initial uses pastel pair 3; message avatars
-choose from all six pairs by member ID. Text precedes the avatar in both page
-and live markup; a fixed gutter reserves its space without loading an image
-or web font.
+blanks a legacy name. Message avatars choose from all six pairs by member ID.
+Text precedes the avatar in both page and live markup; a fixed gutter reserves
+its space without loading an image or web font.

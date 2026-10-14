@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+func stage2GateWindowFixture() stage2Window {
+	w := stage2WindowFixture()
+	w.Samples = []stage2Sample{}
+	return w
+}
+
 func stage2GateState(t *testing.T, w stage2Window, id, want string) {
 	t.Helper()
 	for _, v := range w.Gates {
@@ -73,7 +79,7 @@ func TestStage2NormalBoundaries(t *testing.T) {
 			for percentile := range 3 {
 				for _, over := range []bool{false, true} {
 					t.Run(fmt.Sprintf("%s/%g/p%d/over=%v", gate.ID, baseline, percentile, over), func(t *testing.T) {
-						w, sync := stage2WindowFixture(), stage2WindowFixture()
+						w, sync := stage2GateWindowFixture(), stage2GateWindowFixture()
 						sync.Config.Arm = fixedStage2().Arms[0]
 						stage2ReplaceOperation(sync.Operations, stage2FakeOperation(id, []float64{baseline, baseline + 1, baseline + 2}))
 						values := append([]float64(nil), gate.Limits...)
@@ -105,7 +111,7 @@ func TestStage2NormalBoundaries(t *testing.T) {
 func TestStage2NormalFailures(t *testing.T) {
 	for _, outcome := range []string{"failed", "missed", "timeout", "noop", "unverified"} {
 		t.Run(outcome, func(t *testing.T) {
-			w := stage2WindowFixture()
+			w := stage2GateWindowFixture()
 			start := time.Unix(123, 0)
 			o := stage2Observation{Slot: stage2Slot{Operation: "read", Endpoint: "feed", At: start}, Dispatch: start, Completed: start, Outcome: outcome}
 			w.Operations, w.Attempts = stage2Summarize([]stage2Observation{o})
@@ -121,7 +127,7 @@ func TestStage2NormalFailures(t *testing.T) {
 
 func TestStage2PairedEvidence(t *testing.T) {
 	for _, mismatch := range []string{"none", "arm", "group", "round", "fixture", "traffic", "missing", "failed"} {
-		w, sync := stage2WindowFixture(), stage2WindowFixture()
+		w, sync := stage2GateWindowFixture(), stage2GateWindowFixture()
 		stage2ReplaceOperation(w.Operations, stage2FakeOperation("post.feed", []float64{1, 2, 3}))
 		sync.Operations, sync.Config = append([]stage2Operation(nil), w.Operations...), w.Config
 		sync.Config.Arm = fixedStage2().Arms[0]
@@ -167,7 +173,7 @@ func TestStage2RefusalBoundaries(t *testing.T) {
 	for _, scheduled := range []uint64{999, 1000} {
 		for _, outage := range []time.Duration{2 * time.Second, 2*time.Second + time.Nanosecond} {
 			for _, success := range []bool{false, true} {
-				w := stage2WindowFixture()
+				w := stage2GateWindowFixture()
 				stage2ReplaceOperation(w.Operations, stage2Operation{Operation: "replacement", Endpoint: "feed", Scheduled: scheduled, Missed: 1})
 				w.Attempts = []stage2Attempt{}
 				start := time.Unix(123, 0)
@@ -204,7 +210,7 @@ func TestStage2RefusalBoundaries(t *testing.T) {
 func TestStage2MissingOutage(t *testing.T) {
 	for _, measured := range []bool{false, true} {
 		t.Run(fmt.Sprintf("measured=%v", measured), func(t *testing.T) {
-			w := stage2WindowFixture()
+			w := stage2GateWindowFixture()
 			stage2ReplaceOperation(w.Operations, stage2Operation{Operation: "replacement", Endpoint: "feed", Scheduled: 1000})
 			start := time.Unix(123, 0)
 			o := stage2Observation{Slot: stage2Slot{Operation: "replacement", Endpoint: "feed", LogicalID: 7, At: start}}
@@ -243,7 +249,7 @@ func TestStage2FirstReconnect(t *testing.T) {
 	for _, missing := range []bool{false, true} {
 		for _, reversed := range []bool{false, true} {
 			t.Run(fmt.Sprintf("missing=%v/reversed=%v", missing, reversed), func(t *testing.T) {
-				w := stage2WindowFixture()
+				w := stage2GateWindowFixture()
 				stage2ReplaceOperation(w.Operations, stage2Operation{Operation: "replacement", Endpoint: "feed", Scheduled: 1000})
 				start := time.Unix(123, 0)
 				o := stage2Observation{Slot: stage2Slot{Operation: "replacement", Endpoint: "feed", LogicalID: 7, At: start}}
@@ -278,7 +284,7 @@ func TestStage2FirstReconnect(t *testing.T) {
 func TestStage2EvaluatedWindow(t *testing.T) {
 	for _, arm := range fixedStage2().Arms {
 		for _, refusedKind := range []string{"none", "establishment", "post", "read", "page"} {
-			w := stage2WindowFixture()
+			w := stage2GateWindowFixture()
 			w.Config.Arm, w.Effective.Startup = arm, arm
 			var observations []stage2Observation
 			for _, kind := range []string{"establishment", "post", "read", "page"} {
@@ -354,7 +360,7 @@ func TestStage2OperationPairs(t *testing.T) {
 	} {
 		for _, source := range []string{"window", "paired window"} {
 			t.Run(tc.name+"/"+source, func(t *testing.T) {
-				w, sync := stage2WindowFixture(), stage2WindowFixture()
+				w, sync := stage2GateWindowFixture(), stage2GateWindowFixture()
 				stage2ReplaceOperation(w.Operations, stage2FakeOperation("post.feed", []float64{1, 2, 3}))
 				stage2ReplaceOperation(w.Operations, stage2Operation{Operation: "replacement", Endpoint: "feed", Scheduled: 999})
 				w.Attempts = []stage2Attempt{

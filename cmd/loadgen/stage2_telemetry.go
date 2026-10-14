@@ -169,9 +169,10 @@ func stage2AggregateTelemetry(samples []stage2Sample) ([]stage2TelemetryRange, e
 			}
 		}
 		r.Missing = int((r.EndNS-r.StartNS)/int64(time.Second)) - len(seen)
+		endCovered := false
 		if first >= 0 && last >= 0 {
 			startCovered := retained[first].OffsetNS < r.StartNS+int64(time.Second)
-			endCovered := retained[last].OffsetNS < r.EndNS+int64(time.Second)
+			endCovered = retained[last].OffsetNS < r.EndNS+int64(time.Second)
 			if r.StartNS == 0 {
 				startCovered = retained[first].OffsetNS <= int64(2*time.Second)
 			}
@@ -183,6 +184,9 @@ func stage2AggregateTelemetry(samples []stage2Sample) ([]stage2TelemetryRange, e
 		resetEnd := last
 		if resetEnd < 0 {
 			resetEnd = len(pools) - 1
+		} else if !endCovered {
+			// A drop at a late endpoint may have happened in the next range.
+			resetEnd--
 		}
 		for i := first + 1; first >= 0 && i <= resetEnd; i++ {
 			for _, key := range []string{"acquire_count", "acquire_duration_ns", "empty_acquire_count", "empty_acquire_wait_ns", "canceled_acquire_count"} {

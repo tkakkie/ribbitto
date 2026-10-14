@@ -35,7 +35,9 @@ cannot produce a pass; slice 5b's consumer must treat unavailable bucket ratios
 as inconclusive. No headroom or stability verdict is implemented here.
 
 Elapsed time uses actual endpoint offsets. Interior counter drops remain visible
-even when net deltas grow. Missing boundaries leave deltas absent; resets suppress
+even when net deltas grow. A counter drop into the end sample belongs to the range
+only when that sample is within its end-boundary tolerance.
+Missing boundaries leave deltas absent; resets suppress
 derived ratios. Zero empty acquisitions give zero mean wait. Consumers must check
 coverage, missing samples, resets and counter consistency before interpreting ratios.
 `SampledMaxNotExactPeak` labels pool occupancy maxima explicitly: these are sampled

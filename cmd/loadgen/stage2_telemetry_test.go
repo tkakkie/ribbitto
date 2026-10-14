@@ -368,6 +368,50 @@ func TestStage2TelemetryMinuteTolerance(t *testing.T) {
 	}
 }
 
+func TestStage2TelemetryEndResetAttribution(t *testing.T) {
+	for _, lateness := range []time.Duration{0, time.Second - time.Nanosecond, time.Second, time.Second + time.Nanosecond} {
+		t.Run(lateness.String(), func(t *testing.T) {
+			start := time.Unix(123, 0)
+			clock := start
+			samples, sampleErr := stage2SampleMetrics(context.Background(), start, func() time.Time { return clock }, func(_ context.Context, delay time.Duration) bool {
+				clock = clock.Add(delay)
+				if clock.Sub(start) == time.Minute {
+					clock = clock.Add(lateness)
+				}
+				return true
+			}, func(context.Context) (json.RawMessage, error) {
+				second := int(clock.Sub(start) / time.Second)
+				if second >= 60 {
+					second -= 60
+				}
+				return stage2MetricFixture(second), nil
+			})
+			covered := lateness < time.Second
+			if (sampleErr != nil) != !covered {
+				t.Fatalf("minute sampling: covered=%t err=%v", covered, sampleErr)
+			}
+			ranges, err := stage2AggregateTelemetry(samples)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := ranges[1]
+			if r.BoundaryCovered != covered {
+				t.Fatalf("minute end coverage: got=%t want=%t", r.BoundaryCovered, covered)
+			}
+			wantResets := []int64{}
+			if covered {
+				wantResets = append(wantResets, int64(time.Minute+lateness))
+			}
+			if !reflect.DeepEqual(r.ResetOffsetsNS, wantResets) {
+				t.Fatalf("minute end reset attribution: got=%v want=%v covered=%t", r.ResetOffsetsNS, wantResets, covered)
+			}
+			if !reflect.DeepEqual(ranges[0].ResetOffsetsNS, []int64{int64(time.Minute + lateness)}) || len(ranges[2].ResetOffsetsNS) != 0 {
+				t.Fatalf("reset attribution outside earlier minute: window=%v next=%v", ranges[0].ResetOffsetsNS, ranges[2].ResetOffsetsNS)
+			}
+		})
+	}
+}
+
 func TestStage2ReadMetrics(t *testing.T) {
 	for _, mode := range []string{"ok", "503", "large", "cancel"} {
 		t.Run(mode, func(t *testing.T) {

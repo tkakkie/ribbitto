@@ -12,7 +12,7 @@ comments, docs, commits, issues, pull requests — is written in English.
 
 ## Workflow
 
-Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file covers what). The rules you must not skip:
+Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file covers what); new measurement work needs approval and a cap. The rules you must not skip:
 
 - **Start of a session:** read the pinned Status issue (`gh issue view 1`)
   and `docs/roadmap.md`.
@@ -37,7 +37,7 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
   not `make check`.
 - `make lint` — runs golangci-lint.
 - Tooling is Go (`tools/`, `cmd/`); one-line `Makefile` recipes
-  ([decision 34](docs/decisions/34-tooling-in-go.md)).
+  ([decision 35](docs/decisions/35-tooling-in-go.md)).
 - `make deps` — regenerates `docs/dependencies.md` (package-import
   edges); commit it with any change to them.
 - `make check` also checks documents: every link and `#anchor` to a

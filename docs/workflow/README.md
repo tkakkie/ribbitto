@@ -35,6 +35,8 @@ disagree, fix the disagreement in a pull request.
    decision record, unless they conflict with an existing decision
    ([`DECISIONS.md`](../../DECISIONS.md)).
 
+[Investigations](investigations.md).
+
 ## Roles
 
 | Who | Does |

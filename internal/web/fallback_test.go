@@ -107,7 +107,7 @@ func assertFullConversationPage(t *testing.T, body string) {
 	t.Helper()
 	// html.Parse synthesizes document wrappers for fragments, so check the
 	// response bytes for the layout before checking the conversation itself.
-	for _, want := range []string{"<!doctype html>", "<html ", "<head>", "<title>", "<body>", `id="conversation"`, "</body>", "</html>"} {
+	for _, want := range []string{"<!doctype html>", "<html ", "<head>", "<title>", "<body ", `id="conversation"`, "</body>", "</html>"} {
 		if !strings.Contains(strings.ToLower(body), want) {
 			t.Errorf("full conversation page missing %q", want)
 		}

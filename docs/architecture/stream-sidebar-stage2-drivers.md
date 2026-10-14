@@ -28,7 +28,7 @@ extra GET. Members precede seeded messages, so these snapshots have unread work.
 The [stream intake](#streams-slice-4a) applies complete durable frames through `applyFrame`;
 receipt alone, ephemeral frames and POST responses never advance the cursor.
 Feed streams receive hot-channel posts from all topics; topic streams receive
-only their named topic's posts ([streaming](streaming.md#stream-scope)).
+only their named topic's posts ([streaming](stream-scope.md#stream-scope)).
 
 **Targets and selection.** A read scans at most N members in rotation order,
 starting at scheduled ID modulo N. It takes the first member on the slot's scope

@@ -79,6 +79,11 @@ htmx does only requests and swaps; the server and templ own the HTML.
   | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
   | `data-event-seq` | each message `<li>` | always | its `event_seq`, which orders an inserted item |
   | `data-source` | each message's checkbox | always | its topic's ID; a selection stays within one source topic |
+  | `data-snapshot-seq` | `#sidebar-channels` | **planned**: always | organisation event sequence read in the same repeatable-read snapshot as the sidebar counts ([decision 34](../decisions/34-live-unread-counts.md)) |
+  | `data-unread-count` | every sidebar badge, including the heading badge | **planned**: always, including zero | numeric unread count; a zero badge remains present but hidden ([decision 34](../decisions/34-live-unread-counts.md)) |
+
+  These two rows remain **planned** until PR 3 of #1039 lands.
+
 - Every channel/topic page, including `?before=` and panel pages, carries
   `data-event-cursor` on `#organization-stream`, the outer layout div outside
   every swap target. It wraps the sidebar, conversation and any panel, with `hx-ext="sse"`
@@ -89,7 +94,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   Panels open, switch, page and close with ordinary links (#874); `#members-list` is bounded
   to 100 names and has no live list swap or live region. Presence entries replace
   individual labeled indicators by stable DOM id.
-  See [stream scope](streaming.md#stream-scope). `reset` handling attaches to
+  See [stream scope](stream-scope.md#stream-scope). `reset` handling attaches to
   this container. Its reconnect cursor and `data-applied-cursor` advance after an inserted message
   settles or a move applies successfully. `data-event-cursor` advances only while
   visible, or when a hidden application is shown again.
@@ -125,39 +130,14 @@ htmx does only requests and swaps; the server and templ own the HTML.
 
 ## JavaScript
 
-JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
-keyboard, local time, selection constraints, and htmx/SSE input glue.
+See [JavaScript responsibilities and constraints](web-javascript.md).
 
-- `message-stream-v9.js` emits `read-applied` only after successful DOM
-  application is shown while visible, including on return from a hidden tab.
-  `read-visibility-v5.js` initializes on scoped `htmx:load`; automatic
-  triggers send the snapshot, then the latest applied cursor.
-  One request and one timer per page coalesce cursors. A 429 retries
-  until success or hide/removal/navigation, with jittered exponential backoff
-  capped initially at 8 s; `Retry-After` is a minimum, even above that cap.
-  Success resets backoff and flushes newer shown work. Other failures flush only
-  strictly newer work; the same cursor waits for another trigger. Cleanup clears
-  timers. Composer responses and unapplied events cannot advance it.
-- SSE `reset` closes htmx's event source and reloads the page to obtain a fresh snapshot.
-- **No requests of its own:** no `fetch` or `XMLHttpRequest`. Requests go
-  through HTML forms, links and htmx.
-- **Storage:** `localStorage` and `sessionStorage` may hold only
-  non-sensitive UX settings whose loss affects no function and no server
-  state, such as whether a panel is open or a display preference. They
-  never hold messages, unsent drafts, credentials, session tokens or other
-  server-derived application data. IndexedDB is not used; a clear need,
-  such as offline support, gets its own issue.
-- **Files:** every script is external in `web/static` and loaded with the
-  response nonce. Application scripts also define no globals and are
-  versioned by file name (`-vN`), since static assets are immutable
-  ([`rendering.md`](rendering.md)). Vendored libraries (htmx, idiomorph)
-  keep their own globals and upstream file names ([a11y]).
-- **htmx events:** an `htmx:load` handler works only on the inserted element
-  and descendants, never the whole document (#168).
+**Planned until PR 3 of #1039 lands:** [decision 34](../decisions/34-live-unread-counts.md)
+adds one exception to the no-application-state rule: one script owns sidebar
+badge numbers and bounded recovery state, never creates elements and never
+makes requests. The server still renders the badges; htmx sends resync requests.
 
 ## How the rules are checked
 
 [`web-layers-checks.md`](web-layers-checks.md) has the go-rod browser
 tests (#349), the JavaScript pattern check and the M3 audit.
-
-[a11y]: ../accessibility.md

@@ -3,7 +3,7 @@
 **Decided** (#296; supersedes nothing; [decision 31](31-presence-and-typing-are-current-state-with-a-generation.md)
 settles the ephemeral signals it carries). Page streams implemented (#709); ephemeral delivery implemented (#736);
 presence rendering/delivery implemented (#768); sidebar recounts are delivered in production (#809, #810, #818, #819); typing delivery and page status regions are implemented (#788–#790; closes #288). Details in
-[streaming](../architecture/streaming.md#stream-scope).
+[streaming](../architecture/stream-scope.md#stream-scope).
 
 - **One stream per tab.** Every page of an organisation holds one
   Server-Sent Events stream, `GET /organizations/{slug}/events`: the feed,

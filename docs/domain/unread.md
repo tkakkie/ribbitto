@@ -109,6 +109,22 @@ while the panel stays modal; it reads nothing that arrived after the click.
 
 ## Counts
 
+**Planned (#1039 PRs 2–4, [decision 34](../decisions/34-live-unread-counts.md)):**
+live counts are eventually exact: exact at page load and every successful
+resync, approximate in between, and always exact again after the next successful
+resync. Today streams still recount on posts, moves and reads; PR 3 replaces
+the all-connection post recount with small `unread` frames and browser increments.
+Read state and its writes are unchanged. Without JavaScript, counts are exact
+at page load and change only on the next page load.
+
+Intended approximations: a `message` frame never raises a count, so a hidden
+tab, or a shown scope not yet read, does not rise while messages arrive;
+the next resync or read makes it exact. Legacy events and channels or topics
+created after the snapshot wait for the next resync. Only `unread` frames for
+another member's post newer than the snapshot can increment; own posts and
+duplicates never do. Recovery stops increments until a successful resync
+recovers any losses ([recovery contract](../decisions/34-live-unread-counts.md#planned-resync-and-recovery)).
+
 A channel's unread count is the number of its unread messages, which is the
 sum over **all** its topics, not only the 50 the sidebar lists. A topic's
 count is the channel's unread messages in that topic. Counts are shown

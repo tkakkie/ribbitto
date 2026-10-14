@@ -93,7 +93,7 @@ func Setup(stylesheetURL string, form SetupForm) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = submitButton(buttonPrimary, "setup.submit").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = submitButton(buttonWelcomePrimary, "setup.submit").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

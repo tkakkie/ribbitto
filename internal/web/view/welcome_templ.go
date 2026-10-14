@@ -33,7 +33,7 @@ func welcomeLayout() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<main class=\"flex min-h-screen items-center justify-center bg-base p-4 lg:p-8\"><div class=\"grid w-full max-w-5xl overflow-hidden rounded-xl bg-surface shadow-block lg:grid-cols-2\"><div class=\"flex flex-col justify-center gap-8 bg-selected p-8 lg:p-12\"><div class=\"flex items-center gap-3\"><div class=\"p-3\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<main class=\"flex min-h-screen items-center justify-center bg-base p-4 max-desk:items-start max-desk:pb-safe-4 lg:p-8\"><div class=\"grid w-full min-w-0 max-w-5xl overflow-hidden rounded-xl bg-surface shadow-block lg:grid-cols-2\"><div class=\"flex flex-col justify-center gap-8 bg-selected p-8 max-desk:gap-2 max-desk:p-4 lg:p-12\"><div class=\"flex items-center gap-3\"><div class=\"p-3\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -67,7 +67,7 @@ func welcomeLayout() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</p><div class=\"max-desk:hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -75,7 +75,7 @@ func welcomeLayout() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><div class=\"flex flex-col justify-center gap-6 p-8 lg:p-12\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div></div><div class=\"flex flex-col justify-center gap-6 p-8 max-desk:min-w-0 max-desk:wrap-anywhere max-desk:p-4 lg:p-12\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

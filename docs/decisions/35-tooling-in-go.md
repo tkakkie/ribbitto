@@ -1,4 +1,4 @@
-# 34. Repository tooling is Go, with one-line Makefile recipes
+# 35. Repository tooling is Go, with one-line Makefile recipes
 
 **Decided** (#1000, at the maintainer's request on 2026-10-14, after the
 series #993–#999 and #1002–#1004): repository tooling is written in Go — a

@@ -5,9 +5,9 @@ import "github.com/tkakkie/ribbitto/internal/web/i18n"
 // welcomeLayout keeps the pages before entering an organisation consistent.
 // The page owns its heading and content; the brand side introduces the app.
 templ welcomeLayout() {
-	<main class="flex min-h-screen items-center justify-center bg-base p-4 lg:p-8">
-		<div class="grid w-full max-w-5xl overflow-hidden rounded-xl bg-surface shadow-block lg:grid-cols-2">
-			<div class="flex flex-col justify-center gap-8 bg-selected p-8 lg:p-12">
+	<main class="flex min-h-screen items-center justify-center bg-base p-4 max-desk:items-start max-desk:pb-safe-4 lg:p-8">
+		<div class="grid w-full min-w-0 max-w-5xl overflow-hidden rounded-xl bg-surface shadow-block lg:grid-cols-2">
+			<div class="flex flex-col justify-center gap-8 bg-selected p-8 max-desk:gap-2 max-desk:p-4 lg:p-12">
 				<div class="flex items-center gap-3">
 					<div class="p-3">
 						@brandLogo(48, "")
@@ -15,9 +15,11 @@ templ welcomeLayout() {
 					<p class="text-display font-bold tracking-tight text-on-selected">{ i18n.T(ctx, "app.title") }</p>
 				</div>
 				<p class="text-title text-on-selected">{ i18n.T(ctx, "hello.tagline") }</p>
-				@welcomeComposition()
+				<div class="max-desk:hidden">
+					@welcomeComposition()
+				</div>
 			</div>
-			<div class="flex flex-col justify-center gap-6 p-8 lg:p-12">
+			<div class="flex flex-col justify-center gap-6 p-8 max-desk:min-w-0 max-desk:wrap-anywhere max-desk:p-4 lg:p-12">
 				{ children... }
 			</div>
 		</div>

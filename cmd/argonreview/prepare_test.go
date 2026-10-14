@@ -457,13 +457,74 @@ func TestPrepareRefusesADirectoryPlantedBeforeWriting(t *testing.T) {
 	home := filepath.Join(account, "dev", "agy-home")
 	mkdir(t, filepath.Join(home, ".gemini/antigravity-cli"))
 	plant := func() { write(t, filepath.Join(home, ".gemini/config/skills.json"), "{}") }
-	if _, err := prepareWith(home, account, guardBinary, hooks{beforeWrite: plant}); err == nil || !strings.Contains(err.Error(), "customisation") {
+	if _, err := prepareWith(home, account, guardBinary, hooks{beforeWrite: plant}); err == nil || !strings.Contains(err.Error(), "changed after it was checked") {
 		t.Fatalf("err = %v", err)
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".gemini/config/hooks.json")); err == nil {
 		t.Fatal("hooks.json was written next to the planted customisation")
 	}
 	unchanged()
+}
+
+// .gemini replaced by an empty directory after the checks gets nothing
+// created in it, whether or not it held owned directories (Codex on #1075).
+// An owned directory removed since the checks refuses too.
+func TestPrepareRefusesAGeminiChangeBeforeCreating(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		setup  func(t *testing.T, gemini string)
+		change func(t *testing.T, gemini string)
+	}{
+		{"swapped, with owned directories", func(t *testing.T, gemini string) {
+			write(t, filepath.Join(gemini, "antigravity-cli/settings.json"), "mine")
+		}, swapForEmpty},
+		{"swapped, without owned directories", func(t *testing.T, gemini string) { mkdir(t, gemini) }, swapForEmpty},
+		{"an owned directory removed", func(t *testing.T, gemini string) {
+			write(t, filepath.Join(gemini, "antigravity-cli/settings.json"), "mine")
+		}, func(t *testing.T, gemini string) {
+			if err := os.RemoveAll(filepath.Join(gemini, "antigravity-cli")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			account, unchanged := fixture(t)
+			home := filepath.Join(account, "dev", "agy-home")
+			gemini := filepath.Join(home, ".gemini")
+			tc.setup(t, gemini)
+			test := hooks{beforeWrite: func() { tc.change(t, gemini) }}
+			if _, err := prepareWith(home, account, guardBinary, test); err == nil || !strings.Contains(err.Error(), "changed after it was checked") {
+				t.Fatalf("err = %v", err)
+			}
+			if entries, err := os.ReadDir(gemini); err != nil || len(entries) != 0 {
+				t.Fatalf(".gemini now holds %v, %v", entries, err)
+			}
+			unchanged()
+		})
+	}
+}
+
+func swapForEmpty(t *testing.T, gemini string) {
+	if err := os.Rename(gemini, gemini+".old"); err != nil {
+		t.Fatal(err)
+	}
+	mkdir(t, gemini)
+}
+
+// A directory that appeared between the re-check and its creation is not
+// this run's to use.
+func TestMkdirOpenRefusesAnExistingDirectory(t *testing.T) {
+	dir := t.TempDir()
+	mkdir(t, filepath.Join(dir, "config"))
+	fd, err := unix.Open(dir, unix.O_RDONLY|unix.O_DIRECTORY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFD(fd)
+	if got, err := mkdirOpen(fd, "config"); err == nil {
+		closeFD(got)
+		t.Fatal("an existing directory was accepted")
+	}
 }
 
 // The shared .gemini is resolved again just before writing and after it.

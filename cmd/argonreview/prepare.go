@@ -119,7 +119,7 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 		return "", err
 	}
 
-	gemini, dirs, err := openOwned(root, false)
+	gemini, dirs, err := openOwned(root)
 	defer closeAll(gemini, dirs)
 	if err != nil {
 		return "", err
@@ -163,25 +163,19 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	if err := checkSharedFiles(accountHome, files, checked); err != nil {
 		return "", err
 	}
-	gemini2, dirs2, err := openOwned(root, true)
+	gemini2, dirs2, err := createOwned(root, gemini, dirs)
 	defer closeAll(gemini2, dirs2)
 	if err != nil {
 		return "", err
 	}
-	// The directories about to be written must be the ones just checked, and
-	// still apart from the shared configuration, in case either was swapped
-	// since (Copilot on #1075). A directory created here was empty when made;
-	// the checks run on it again all the same.
+	// createOwned matched the directories about to be written with the ones
+	// checked (Copilot on #1075); they must also be apart from the shared
+	// configuration. The checks run on them again all the same.
 	written := map[string]place{}
 	for name, fd := range dirs2 {
 		p, err := identity(fd)
 		if err != nil {
 			return "", err
-		}
-		if dirs[name] >= 0 {
-			if checked, err := identity(dirs[name]); err != nil || checked != p {
-				return "", fmt.Errorf("refusing: .gemini/%s changed after it was checked", name)
-			}
 		}
 		if shared.has(p) || current.has(p) {
 			return "", errors.New("refusing: an owned directory is the shared configuration")
@@ -210,7 +204,7 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 		return "", fmt.Errorf("re-opening RIBBITTO_ARGON_HOME: %w", err)
 	}
 	defer closeFD(again)
-	gemini3, dirs3, err := openOwned(again, false)
+	gemini3, dirs3, err := openOwned(again)
 	defer closeAll(gemini3, dirs3)
 	if err != nil {
 		return "", err
@@ -452,33 +446,90 @@ func walk(path string) (int, error) {
 }
 
 // openOwned opens .gemini and the owned directories under it without
-// following symlinks. A missing one is -1, or created when create is set.
-// Whatever it opened is returned even on error, for the caller to close.
-func openOwned(root int, create bool) (int, map[string]int, error) {
+// following symlinks; a missing one is -1. Whatever it opened is returned
+// even on error, for the caller to close.
+func openOwned(root int) (int, map[string]int, error) {
 	dirs := map[string]int{}
 	for _, name := range ownedDirs {
 		dirs[name] = -1
 	}
-	gemini, err := openDir(root, ".gemini", create)
+	gemini, err := openDir(root, ".gemini")
 	if err != nil || gemini < 0 {
 		return gemini, dirs, err
 	}
 	for _, name := range ownedDirs {
-		if dirs[name], err = openDir(gemini, name, create); err != nil {
+		if dirs[name], err = openDir(gemini, name); err != nil {
 			return gemini, dirs, err
 		}
 	}
 	return gemini, dirs, nil
 }
 
-func openDir(parent int, name string, create bool) (int, error) {
-	if create {
-		if err := unix.Mkdirat(parent, name, 0o700); err != nil && !errors.Is(err, unix.EEXIST) {
-			return -1, fmt.Errorf("creating %s: %w", name, err)
+// createOwned opens .gemini and the owned directories again and creates the
+// missing ones, relative to descriptors checked against the ones the
+// pre-write checks used. What existed must be the same directory; what was
+// missing must still be missing, and is created here, so nothing replaced or
+// planted since the checks gets a directory created in it (Codex on #1075).
+func createOwned(root, checkedGemini int, checked map[string]int) (int, map[string]int, error) {
+	gemini, dirs, err := openOwned(root)
+	if err != nil {
+		return gemini, dirs, err
+	}
+	same := func(now, then int) error {
+		if now < 0 && then < 0 {
+			return nil
+		}
+		if now < 0 || then < 0 {
+			return errors.New("refusing: .gemini changed after it was checked")
+		}
+		a, err := identity(now)
+		if err != nil {
+			return err
+		}
+		if b, err := identity(then); err != nil || a != b {
+			return errors.New("refusing: .gemini changed after it was checked")
+		}
+		return nil
+	}
+	if err := same(gemini, checkedGemini); err != nil {
+		return gemini, dirs, err
+	}
+	for _, name := range ownedDirs {
+		if err := same(dirs[name], checked[name]); err != nil {
+			return gemini, dirs, err
 		}
 	}
+	if gemini < 0 {
+		if gemini, err = mkdirOpen(root, ".gemini"); err != nil {
+			return gemini, dirs, err
+		}
+	}
+	for _, name := range ownedDirs {
+		if dirs[name] < 0 {
+			if dirs[name], err = mkdirOpen(gemini, name); err != nil {
+				return gemini, dirs, err
+			}
+		}
+	}
+	return gemini, dirs, nil
+}
+
+// mkdirOpen creates name under parent and opens it. It must not exist yet:
+// one that appeared since the checks is not this run's to use.
+func mkdirOpen(parent int, name string) (int, error) {
+	if err := unix.Mkdirat(parent, name, 0o700); err != nil {
+		return -1, fmt.Errorf("refusing %s: creating it: %w", name, err)
+	}
 	fd, err := unix.Openat(parent, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if errors.Is(err, unix.ENOENT) && !create {
+	if err != nil {
+		return -1, fmt.Errorf("refusing %s: not a plain directory (%w)", name, err)
+	}
+	return fd, nil
+}
+
+func openDir(parent int, name string) (int, error) {
+	fd, err := unix.Openat(parent, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if errors.Is(err, unix.ENOENT) {
 		return -1, nil
 	}
 	if err != nil {

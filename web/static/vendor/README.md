@@ -57,8 +57,9 @@ Each row includes **Regular and Filled, 20 px**. The source path is
 | pin | pin |
 | sign-out | sign_out |
 
-Rebuild from the repository root with `python3 scripts/build-icons.py`
-(Python standard library and curl only). The development-only script fetches
+Rebuild from the repository root with `go -C tools run ./buildicons ..`
+([`tools/buildicons`](../../../tools/buildicons/main.go), Go standard library
+only). The development-only command fetches
 both pinned sources, checks their SHA-256 hashes, and copies each SVG's
 children unchanged into a named symbol with its original viewBox and
 `fill="currentColor"`. It writes the sprite and licence beside this file;

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -180,6 +181,13 @@ func TestSourceRevisionIgnoresTheCurrentDirectory(t *testing.T) {
 	got, err := sourceRevision(source, git)
 	if err != nil || got != want || got == other {
 		t.Fatalf("sourceRevision = %q, %v; source %s, current directory %s", got, err, want, other)
+	}
+	// An inherited GIT_DIR or GIT_WORK_TREE overrides -C unless removed.
+	t.Setenv("GIT_DIR", filepath.Join(target, ".git"))
+	t.Setenv("GIT_WORK_TREE", target)
+	got, err = sourceRevision(source, git)
+	if err != nil || got != want {
+		t.Fatalf("with GIT_DIR on the target: sourceRevision = %q, %v; want the source's %s, not %s", got, err, want, other)
 	}
 }
 

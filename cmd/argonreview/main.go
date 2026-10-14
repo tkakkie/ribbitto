@@ -73,9 +73,22 @@ func isRibbitto(url string) bool {
 	return false
 }
 
+// git runs in dir with every GIT_* variable removed: GIT_DIR, GIT_WORK_TREE
+// and the like override -C, and GIT_CONFIG_* could rewrite the origin URL, so
+// an inherited environment could point the check at a review target (Codex
+// on #1073).
 func git(dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...).Output()
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	for _, value := range os.Environ() {
+		if !strings.HasPrefix(value, "GIT_") {
+			cmd.Env = append(cmd.Env, value)
+		}
+	}
+	if cmd.Env == nil {
+		cmd.Env = []string{}
+	}
+	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
 }

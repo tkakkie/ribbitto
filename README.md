@@ -130,12 +130,12 @@ the first failure. It does not run Go or templ formatting, the `doc.go` check,
 `go vet`, `sourcecheck` or the tests, which `make check` keeps, nor the schema
 docs or `make vuln`, which CI runs separately.
 
-The AI launchers' self-tests, most of its time, run
+The bash launchers' self-tests (Grok and Muse Code), most of its time, run
 only when the change since `LAUNCHER_TESTS_BASE` (default `origin/main`;
 commits, staged, unstaged and untracked files) touches `scripts/ai/`,
 `.github/prompts/`, `.github/workflows/` or the `Makefile`, or when that
 comparison fails; `make check` prints what it chose. `make check-ai` always
-runs them. CI compares a pull request's merge commit with its first parent
+runs them; the Argon launcher's Go tests run with the others. CI compares a pull request's merge commit with its first parent
 (the base as merged), and always runs them on `main` and nightly. CI also runs
 `make vuln`, which runs the pinned `govulncheck` over the application module
 and fails when a known vulnerability is statically reachable from our code.

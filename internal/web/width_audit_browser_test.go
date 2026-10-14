@@ -122,7 +122,7 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 			t.Errorf("deleting the lang cookie: %v", err)
 		}
 	}()
-	for _, size := range [][2]int{{320, 568}, {390, 844}, {851, 844}, {852, 844}, {1199, 844}, {1200, 844}, {844, 390}, {320, 200}, {640, 400}} {
+	for _, size := range [][2]int{{320, 568}, {390, 844}, {851, 844}, {852, 844}, {1199, 844}, {1200, 844}, {844, 390}, {320, 200}, {640, 400}, {1280, 400}, {1280, 200}} {
 		setup(fmt.Sprintf("setting the viewport to %dx%d", size[0], size[1]), func(p *rod.Page) error {
 			return proto.EmulationSetDeviceMetricsOverride{Width: size[0], Height: size[1], DeviceScaleFactor: 1}.Call(p)
 		})

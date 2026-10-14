@@ -161,8 +161,8 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		@channelFrame(page) {
 			// The conversation and its panel share one flexible region.
 			<div class="flex min-w-0 flex-1 gap-2">
-				<main id="conversation" class="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block">
-					<header class="flex shrink-0 items-center gap-3 border-b border-border px-6 py-2">
+				<main id="conversation" class="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block max-desk:rounded-none">
+					<header class="flex shrink-0 items-center gap-3 border-b border-border px-6 py-2 max-desk:gap-0 max-desk:px-1">
 						// Below the desk breakpoint the list replaces the hidden sidebar; the
 						// fragment brings this channel's row into view without JavaScript.
 						<a href={ templ.SafeURL(ChannelListURL(page.Organization.Slug, page.Current.ID) + "#" + ChannelDOMID(page.Current.ID)) } aria-label={ i18n.T(ctx, "channel.back") } class="flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-fg desk:hidden transition-feedback motion-safe:active:scale-96">
@@ -170,13 +170,13 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							// hidden at desktop width would have nothing to paint.
 							<span aria-hidden="true" class="text-heading">‹</span>
 						</a>
-						<div class="flex min-w-0 flex-1 items-center gap-2">
+						<div class="flex min-w-0 flex-1 items-center gap-2 max-desk:gap-0">
 							@channelImage(page.Current.ImageURL, true)
 							if page.Topic != nil {
-								<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="min-w-0 truncate text-title text-muted hover:text-brand">{ page.Current.Name }</a>
+								<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="min-w-0 truncate text-title text-muted hover:text-brand max-desk:flex max-desk:min-h-11 max-desk:w-11 max-desk:shrink-0 max-desk:items-center"><span class="truncate">{ page.Current.Name }</span></a>
 								@Icon("chevron-right-regular", 20)
 								@Icon("branch-regular", 20)
-								<h1 class="flex min-w-0 items-center text-title font-semibold">
+								<h1 class="flex min-w-0 items-center text-title font-semibold max-desk:flex-1">
 									<span class="truncate">{ topicName(ctx, *page.Topic) }</span>
 									@TopicHeadingCount(page, false)
 								</h1>
@@ -211,7 +211,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 								sse-swap="message,messages-moved"
 								hx-swap="beforeend"
 							}
-							class="peer mx-auto flex w-full max-w-reading flex-col gap-6 px-6 py-6 empty:hidden"
+							class="peer mx-auto flex w-full max-w-reading flex-col gap-6 px-6 py-6 empty:hidden max-desk:max-w-none max-desk:px-4"
 						>
 							for _, entry := range page.Messages {
 								@unreadDivider(entry.EventSeq, page.FirstUnread)
@@ -233,7 +233,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					@branchForm(page)
 					// While a message is checked the move form covers this area, which
 					// keeps its space so the message list neither shrinks nor scrolls.
-					<div class={ "mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4", templ.KV("peer-has-checked/list:invisible", page.BranchError == "") }>
+					<div class={ "mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4 max-desk:max-w-none max-desk:px-4 max-desk:pb-safe-4", templ.KV("peer-has-checked/list:invisible", page.BranchError == "") }>
 						if page.Before == 0 && page.EventCursor != nil {
 							<div id="typing-status" sse-swap="typing" hx-swap="innerHTML" role="status" aria-live="polite" aria-atomic="true" aria-label={ i18n.T(ctx, "activity.label") } class="min-h-6 px-3 text-caption text-muted"></div>
 						}
@@ -250,7 +250,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/read-visibility-v4.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v5.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/side-panel-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-stream-v9.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -270,7 +270,7 @@ templ channelFrame(page ChannelPage) {
 			hx-ext="sse"
 			sse-connect={ streamURL(page) }
 		}
-		class={ "flex h-dvh gap-2 bg-base p-2 text-body", templ.KV("max-desk:flex-col max-desk:pb-0", page.List) }
+		class={ "flex h-dvh gap-2 bg-base p-2 text-body", templ.KV("max-desk:p-0", !page.List), templ.KV("max-desk:flex-col max-desk:pb-0", page.List) }
 	>
 		<div id="stream-sink" hidden aria-hidden="true" sse-swap="sidebar,presence" hx-swap="none"></div>
 		@appBar(page)
@@ -395,7 +395,7 @@ templ messageComposer(page ChannelPage, oob bool) {
 		}
 		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
-		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg">{ "\n" + page.Body }</textarea>
+		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-input">{ "\n" + page.Body }</textarea>
 		<div class="flex items-end justify-between gap-3">
 			if page.BodyError != "" {
 				<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, page.BodyError) }</p>
@@ -435,7 +435,7 @@ templ messageComposer(page ChannelPage, oob bool) {
 // the button follows the snapshot for the whole visit: live messages are read
 // automatically once shown, and a page without JavaScript gets none.
 templ readForm(page ChannelPage) {
-	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible, submit" hx-swap="none" hx-sync="this:drop" hidden?={ page.FirstUnread == 0 }>
+	<form id="read-form" method="post" action={ conversationURL(page) + "/read" } hx-post={ conversationURL(page) + "/read" } hx-trigger="read-visible, submit" hx-swap="none" hx-sync="this:drop" hidden?={ page.FirstUnread == 0 } class="max-desk:shrink-0">
 		<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		if page.FirstUnread > 0 {
 			@submitButton(buttonSecondaryIcon, "reading.mark") {
@@ -506,7 +506,7 @@ templ TopicList(page ChannelPage) {
 templ TopicHeadingCount(page ChannelPage, oob bool) {
 	<span
 		id="topic-heading-count"
-		class="ml-2"
+		class="ml-2 max-desk:ml-0"
 		if oob {
 			hx-swap-oob="true"
 		}

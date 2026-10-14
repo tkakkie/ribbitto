@@ -94,7 +94,25 @@ which `env(safe-area-inset-*)` stays 0, so pages extend under a phone's
 home indicator and, in landscape, its notch. The base style pads `body`
 by the side insets, as the default fit did; what meets the bottom edge
 below `desk` uses `pb-safe-<n>`, `n` spacing steps plus the bottom inset:
-`pb-safe-0` on the bottom navigation, `pb-safe-4` on the account sheet.
+`pb-safe-0` on the bottom navigation, `pb-safe-4` on the account sheet
+and conversation composer (`pb-safe-3` on the move form).
+
+**Phone conversation** (#971). `max-desk:` overrides remove the frame
+padding and conversation radius, give messages and composer 16 px gutters,
+and hide only header text labels, keeping the same sprite icons and
+accessible names at both widths. The topic's channel link keeps a 44 px
+target; both names truncate on one row. Plain-text bodies (URLs and code
+included) and metadata use `wrap-anywhere` below `desk`.
+The composer uses `text-input` (16/22 px) below `desk` to avoid iOS focus
+zoom; its send button stays 44 × 44 px. Only the latest feed is enhanced;
+topic and history submissions remain plain forms. `message-composer-v6.js`
+also guards Enter within 100 ms of `compositionend`, since phone IMEs can
+clear `isComposing` before the confirming keydown.
+
+The viewport also requests `interactive-widget=resizes-content`: supporting
+browsers resize the existing `h-dvh` frame for the keyboard, leaving the
+composer outside the message pane. No keyboard JavaScript is added;
+browsers that ignore the key still need device/emulation verification.
 
 **Layers.** Only four `z-index` values are used, through Tailwind's
 built-in utilities, so no z-index tokens are added: `z-10` for something

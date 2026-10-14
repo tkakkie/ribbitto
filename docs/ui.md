@@ -34,7 +34,7 @@ The mock-ups are a direction, not a specification.
   state relies on colour alone: it also has text, an icon or a shape.
 - **Readable first.** The sidebar and headers are compact; the reading
   column is calm and generous.
-- **Dark follows the system** (chosen for M6, #966): pages follow
+- **Dark follows the system** (#967): pages follow
   `prefers-color-scheme` without a reload; a manual switch comes later.
   Blocks lift by lightness, not shadow: the base is the darkest surface,
   blocks are slightly lighter, with a faint hairline instead of the shadow,

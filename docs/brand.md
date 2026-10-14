@@ -31,6 +31,10 @@ The logo follows `prefers-color-scheme` inside its SVG: deep brand teal
 `base`, **8.07:1** on `bg` / `rail`, and **7.33:1** on `surface` (WCAG 2.x
 sRGB luminance, truncated to two decimals; all exceed 3:1). On the welcome
 card's `selected` background it is **5.82:1**.
+In pages, the logo image follows a live scheme switch without a reload
+(checked in Chromium, #987). The favicon reads the same file, but whether a
+browser repaints it on a live switch is **unverified**: no browser checked so
+far showed its tab icon. Record the result here when one is checked.
 
 Illustrations, channel images, the welcome composition and the mascot keep
 their original colours in dark; later uploaded photos must not be recoloured.

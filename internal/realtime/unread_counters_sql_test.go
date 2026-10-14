@@ -54,13 +54,17 @@ func counterSQLLock(ctx context.Context, conn *pgx.Conn, w *counterSQLWrite) err
 			return err
 		}
 		if q.keys == 2 && len(w.moves) > 0 {
-			for _, sql := range []string{
+			for i, sql := range []string{
 				`INSERT INTO channel_read SELECT organization_id,channel_id,member_id FROM counter_bundle WHERE organization_id=$1 AND channel_id=$2 AND valid ON CONFLICT DO NOTHING`,
 				`SELECT member_id FROM channel_read WHERE organization_id=$1 AND channel_id=$2 ORDER BY member_id FOR UPDATE`,
 				`SELECT member_id FROM counter_bundle WHERE organization_id=$1 AND channel_id=$2 ORDER BY member_id FOR UPDATE`,
 				`SELECT topic_id FROM counter_topic_read WHERE organization_id=$1 AND channel_id=$2 ORDER BY member_id,topic_id FOR UPDATE`,
 			} {
-				if err := counterSQLExec(ctx, conn, sql, w.organization, w.channel); err != nil {
+				lockCtx := ctx
+				if i > 0 {
+					lockCtx = context.WithValue(ctx, counterMoveLockKey{}, i-1)
+				}
+				if err := counterSQLExec(lockCtx, conn, sql, w.organization, w.channel); err != nil {
 					return err
 				}
 			}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,12 +28,20 @@ import (
 
 type counterAccountKey struct{}
 type counterAccountQueryKey struct{}
+type counterWaitQueryKey struct{}
+type counterMoveLockKey struct{}
+type counterLockStartKey struct{}
 
 // An account belongs to one operation, used by sequential attempts only.
 // Concurrent operations get separate accounts; scaffolding gets no account.
 type counterAccount struct {
 	statements, controls, rows, failures, deadlocks, retries int64
 	transactions                                             []time.Duration
+	move                                                     bool
+	moveLocks                                                [3]int64
+	lockTime, moveMemberLockTime                             time.Duration
+	lockWaits, moveLockWaits, query, current, observed       atomic.Uint64
+	observationStatements                                    int64
 	now                                                      func() time.Time
 	started                                                  time.Time
 	active, deadlocked                                       bool
@@ -40,6 +49,9 @@ type counterAccount struct {
 
 func counterAccountContext(ctx context.Context, now func() time.Time) (context.Context, *counterAccount) {
 	a := &counterAccount{now: now}
+	if w, _ := ctx.Value(counterSQLKey{}).(*counterSQLWrite); w != nil {
+		a.move = len(w.moves) > 0
+	}
 	return context.WithValue(ctx, counterAccountKey{}, a), a
 }
 
@@ -79,8 +91,7 @@ const (
 	counterSavepoint
 )
 
-func counterClassifyControl(sql string) counterControl {
-	words := strings.Fields(strings.ToLower(strings.TrimSuffix(strings.TrimSpace(sql), ";")))
+func counterClassifyControl(words []string) counterControl {
 	if len(words) == 0 {
 		return counterApplication
 	}
@@ -110,9 +121,27 @@ func counterClassifyControl(sql string) counterControl {
 	return counterApplication
 }
 
+func counterClassifyLock(words []string) bool {
+	sql := " " + strings.Join(words, " ") + " "
+	for _, clause := range []string{" for update ", " for no key update ", " for share ", " for key share "} {
+		if strings.Contains(sql, clause) {
+			return true
+		}
+	}
+	return false
+}
+
 func (a counterAccountingTracer) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	control := counterClassifyControl(data.SQL)
+	words := strings.Fields(strings.ToLower(strings.TrimSuffix(strings.TrimSpace(data.SQL), ";")))
+	control := counterClassifyControl(words)
+	var lockStart time.Time
 	if n := counterAccountIn(ctx); n != nil {
+		if counterClassifyLock(words) {
+			lockStart = n.now()
+		}
+		id := n.query.Add(1)
+		n.current.Store(id)
+		ctx = context.WithValue(ctx, counterWaitQueryKey{}, id)
 		switch control {
 		case counterBegin:
 			n.started, n.active = n.now(), true
@@ -128,6 +157,7 @@ func (a counterAccountingTracer) TraceQueryStart(ctx context.Context, conn *pgx.
 	}
 	// Count before delegation: COMMIT's hook executes nested maintenance SQL.
 	ctx = context.WithValue(ctx, counterAccountQueryKey{}, control)
+	ctx = context.WithValue(ctx, counterLockStartKey{}, lockStart)
 	if a.inner != nil {
 		ctx = a.inner.TraceQueryStart(ctx, conn, data)
 	}
@@ -139,6 +169,19 @@ func (a counterAccountingTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Co
 		a.inner.TraceQueryEnd(ctx, conn, data)
 	}
 	if n := counterAccountIn(ctx); n != nil {
+		if start, _ := ctx.Value(counterLockStartKey{}).(time.Time); !start.IsZero() {
+			// Includes execution as well as blocking, so this is an upper bound.
+			duration := n.now().Sub(start)
+			n.lockTime += duration
+			if _, memberLock := ctx.Value(counterMoveLockKey{}).(int); memberLock {
+				n.moveMemberLockTime += duration
+			}
+		}
+		id, _ := ctx.Value(counterWaitQueryKey{}).(uint64)
+		n.current.CompareAndSwap(id, 0)
+		if table, ok := ctx.Value(counterMoveLockKey{}).(int); ok && data.Err == nil {
+			n.moveLocks[table] += data.CommandTag.RowsAffected()
+		}
 		if data.Err == nil && (data.CommandTag.Insert() || data.CommandTag.Update() || data.CommandTag.Delete()) {
 			n.rows += data.CommandTag.RowsAffected()
 		}

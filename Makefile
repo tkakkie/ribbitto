@@ -67,11 +67,9 @@ $(TAILWIND):
 	printf '%s  %s\n' "$$sha" "$$tmp" | shasum -a 256 -c -; \
 	chmod +x "$$tmp"; mv "$$tmp" "$@"
 
-# Local caches under bin/ include third-party sources and invalid test fixtures.
-# The pinned templ has no check-only flag, so each file is compared with the
-# formatter's stdout; the working tree is never rewritten. The exit status is
-# checked on its own: on a parse error the formatter prints nothing, which
-# would match an empty file. The tools tests run with -count=1: scopecheck and
+# tools/formatcheck excludes caches under bin/: they contain third-party
+# sources and invalid fixtures. Comparing formatter output keeps files untouched.
+# The tools tests run with -count=1: scopecheck and
 # tablecheck read db/queries, db/migrations and module_imports_test.go from
 # outside the tools module, which Go's test cache does not track, so a cached
 # pass would hide a changed query or manifest.
@@ -85,31 +83,7 @@ check:
 	$(MAKE) check-launchers
 
 check-static: $(TEMPL)
-	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
-	if [ -n "$$unformatted" ]; then \
-		echo "These files need gofmt:"; \
-		echo "$$unformatted"; \
-		exit 1; \
-	fi
-	@set -eu; formatted=$$(mktemp); trap 'rm -f "$$formatted"' EXIT; \
-	unformatted=$$(find . -path ./bin -prune -o -type f -name '*.templ' -print | sort | while IFS= read -r file; do \
-			if ! $(TEMPL) fmt -stdout -stdin-filepath "$$file" < "$$file" > "$$formatted" \
-				|| ! cmp -s "$$formatted" "$$file"; then printf '%s\n' "$$file"; fi; \
-		done); \
-	if [ -n "$$unformatted" ]; then \
-		echo "These files need templ fmt (run ./bin/templ fmt on them):"; \
-		echo "$$unformatted"; \
-		exit 1; \
-	fi
-	@set -eu; missing=$$(find internal -type f -name '*.go' ! -name '*_test.go' ! -path '*/testdata/*' \
-		| sed 's|/[^/]*$$||' | sort -u | while IFS= read -r dir; do \
-			if [ ! -f "$$dir/doc.go" ]; then printf '%s\n' "$$dir"; fi; \
-		done); \
-	if [ -n "$$missing" ]; then \
-		echo "These internal package directories are missing doc.go:"; \
-		echo "$$missing"; \
-		exit 1; \
-	fi
+	go -C tools run ./formatcheck -templ ../$(TEMPL) ..
 	go vet ./...
 	$(MAKE) lint
 	$(MAKE) lint-fixtures
@@ -118,13 +92,12 @@ check-static: $(TEMPL)
 check-test: db-health
 	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
 
-check-tools:
+check-tools: $(TEMPL)
 	$(MAKE) check-ai-env
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck
 	go -C tools run ./apicheck -check ..
 	go -C tools run ./deps --check ..
-	bash scripts/fingerprint_test.sh
 	go -C tools vet ./...
 	go -C tools test -race -count=1 ./...
 	go -C tools run ./testshard -check ..
@@ -147,7 +120,7 @@ check-ai:
 # templ formatting, the doc.go check, go vet, sourcecheck or the tests
 # (make check does), nor the schema docs or make vuln (CI does).
 prepush: $(TEMPL) $(TAILWIND)
-	bash scripts/check-unchanged.sh $(MAKE) generate css
+	go -C tools run ./unchanged .. $(MAKE) generate css
 	go -C tools run ./apicheck -check ..
 	go -C tools run ./deps --check ..
 	go -C tools run ./docscheck ..

@@ -36,6 +36,8 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 		messages[i].CreatedAt = time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 		messages[i].Body = "https://example.org/" + strings.Repeat("longpath", 60) + "\nconst value = " + strings.Repeat("code_without_spaces", 30) + "\n" + strings.Repeat("日本語の長い文章", 60)
 	}
+	// A one-character topic name keeps the message's topic link narrow.
+	messages[len(messages)-1].TopicName = "短"
 	base := view.ChannelPage{Organization: view.Organization{Name: longName, Slug: "acme"},
 		Current:     view.Channel{ID: kernel.ID{1}, DefaultTopicID: kernel.ID{2}, Name: longName, ImageURL: view.ChannelImageURL("lake")},
 		DisplayName: longName, Handle: "long_member_handle", Role: "owner", Messages: messages,

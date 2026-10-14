@@ -214,7 +214,7 @@ func messageItem(entry Message, announcement string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" class=\"inline-flex min-w-0 items-center gap-1 text-caption text-muted wrap-anywhere hover:text-brand max-desk:min-h-11\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" class=\"inline-flex min-w-0 items-center gap-1 text-caption text-muted wrap-anywhere hover:text-brand max-desk:min-h-11 max-desk:min-w-11\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

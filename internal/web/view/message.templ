@@ -55,7 +55,7 @@ templ messageItem(entry Message, announcement string) {
 			<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
 			// A long topic name wraps at any width rather than widening the
 			// reading column, which scrolls sideways at the desk breakpoint.
-			<a href={ templ.SafeURL(entry.TopicURL) } class="inline-flex min-w-0 items-center gap-1 text-caption text-muted wrap-anywhere hover:text-brand max-desk:min-h-11">
+			<a href={ templ.SafeURL(entry.TopicURL) } class="inline-flex min-w-0 items-center gap-1 text-caption text-muted wrap-anywhere hover:text-brand max-desk:min-h-11 max-desk:min-w-11">
 				@Icon("branch-regular", 20)
 				<bdi class="min-w-0">
 					if entry.DefaultTopic {

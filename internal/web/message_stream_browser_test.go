@@ -58,6 +58,7 @@ func TestBrowser(t *testing.T) {
 	t.Run("arrival", func(t *testing.T) { testArrivalBrowser(t, browser) })
 	t.Run("motion-touch", func(t *testing.T) { testMotionTouchBrowser(t, browser) })
 	t.Run("width-audit", func(t *testing.T) { testWidthAuditBrowser(t, browser) })
+	t.Run("short-height", func(t *testing.T) { testShortHeightBrowser(t, browser) })
 	t.Run("welcome", func(t *testing.T) { testWelcomeBrowser(t, browser) })
 	t.Run("static-headers", func(t *testing.T) { testStaticHeadersBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {

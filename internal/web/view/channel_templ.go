@@ -211,14 +211,14 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "  <div class=\"relative flex min-w-0 flex-1 gap-2\"><main id=\"conversation\" class=\"relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block max-desk:rounded-none\"><header class=\"flex shrink-0 items-center gap-3 border-b border-border px-6 py-2 max-desk:gap-0 max-desk:px-1\"><a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "  <div class=\"relative flex min-w-0 flex-1 gap-2\"><main id=\"conversation\" class=\"relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block max-desk:rounded-none short:overflow-y-auto\"><header class=\"flex shrink-0 items-center gap-3 border-b border-border px-6 py-2 max-desk:gap-0 max-desk:px-1\"><a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var4 templ.SafeURL
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(ChannelListURL(page.Organization.Slug, page.Current.ID) + "#" + ChannelDOMID(page.Current.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 171, Col: 124}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 173, Col: 124}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -231,7 +231,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "channel.back"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 171, Col: 167}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 173, Col: 167}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 				if templ_7745c5c3_Err != nil {
@@ -253,7 +253,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 					var templ_7745c5c3_Var6 templ.SafeURL
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 179, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 181, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 					if templ_7745c5c3_Err != nil {
@@ -266,7 +266,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(page.Current.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 179, Col: 279}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 181, Col: 279}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
@@ -291,7 +291,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 					var templ_7745c5c3_Var8 string
 					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(topicName(ctx, *page.Topic))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 183, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 185, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 					if templ_7745c5c3_Err != nil {
@@ -317,7 +317,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 					var templ_7745c5c3_Var9 string
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(page.Current.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 187, Col: 73}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 189, Col: 73}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 					if templ_7745c5c3_Err != nil {
@@ -349,20 +349,20 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "message.list"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 195, Col: 82}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 197, Col: 82}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" tabindex=\"0\" class=\"peer/list min-h-0 flex-1 overflow-y-auto\"><div id=\"load-older\" data-oldest-seq=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" tabindex=\"0\" class=\"peer/list min-h-0 flex-1 overflow-y-auto short:h-32 short:flex-none\"><div id=\"load-older\" data-oldest-seq=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(oldestSequence(page)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 198, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 200, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 				if templ_7745c5c3_Err != nil {
@@ -400,7 +400,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 						var templ_7745c5c3_Var13 string
 						templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "message.load_older"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 203, Col: 45}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 205, Col: 45}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 						if templ_7745c5c3_Err != nil {
@@ -429,7 +429,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 					var templ_7745c5c3_Var14 string
 					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(idValue(page.Topic.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 211, Col: 43}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 213, Col: 43}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 					if templ_7745c5c3_Err != nil {
@@ -467,7 +467,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 				var templ_7745c5c3_Var15 string
 				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "channel.empty"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 224, Col: 137}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 226, Col: 137}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 				if templ_7745c5c3_Err != nil {
@@ -505,7 +505,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 						var templ_7745c5c3_Var17 string
 						templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "message.newest"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 230, Col: 40}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 232, Col: 40}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 						if templ_7745c5c3_Err != nil {
@@ -530,7 +530,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var18 = []any{"mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4 max-desk:max-w-none max-desk:px-4 max-desk:pb-safe-4", templ.KV("peer-has-checked/list:invisible", page.BranchError == "")}
+				var templ_7745c5c3_Var18 = []any{"mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4 max-desk:max-w-none max-desk:px-4 max-desk:pb-safe-4", templ.KV("peer-has-checked/list:invisible short:peer-has-checked/list:hidden", page.BranchError == "")}
 				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var18...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -560,7 +560,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 					var templ_7745c5c3_Var20 string
 					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "activity.label"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 241, Col: 163}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 245, Col: 163}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 					if templ_7745c5c3_Err != nil {
@@ -602,7 +602,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 252, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 256, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 			if templ_7745c5c3_Err != nil {
@@ -615,7 +615,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var22 string
 			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 253, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 257, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 			if templ_7745c5c3_Err != nil {
@@ -628,7 +628,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 254, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 258, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 			if templ_7745c5c3_Err != nil {
@@ -641,7 +641,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 255, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 259, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 			if templ_7745c5c3_Err != nil {
@@ -654,7 +654,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 256, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 260, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 			if templ_7745c5c3_Err != nil {
@@ -667,7 +667,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 257, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 261, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 			if templ_7745c5c3_Err != nil {
@@ -680,7 +680,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 258, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 262, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 			if templ_7745c5c3_Err != nil {
@@ -693,7 +693,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 259, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 263, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 			if templ_7745c5c3_Err != nil {
@@ -706,7 +706,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var29 string
 			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 260, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 264, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 			if templ_7745c5c3_Err != nil {
@@ -764,7 +764,7 @@ func channelFrame(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(idValue(page.MemberID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 272, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 276, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 		if templ_7745c5c3_Err != nil {
@@ -782,7 +782,7 @@ func channelFrame(page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(idValue(page.Topic.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 274, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 278, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 			if templ_7745c5c3_Err != nil {
@@ -801,7 +801,7 @@ func channelFrame(page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var34 string
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(*page.EventCursor))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 277, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 281, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 			if templ_7745c5c3_Err != nil {
@@ -814,7 +814,7 @@ func channelFrame(page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var35 string
 			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(streamURL(page))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 279, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 283, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 			if templ_7745c5c3_Err != nil {
@@ -850,7 +850,7 @@ func channelFrame(page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var37 templ.SafeURL
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinURLErrs("/organizations/" + page.Organization.Slug + "/sidebar/resync")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 284, Col: 121}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 288, Col: 121}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 			if templ_7745c5c3_Err != nil {
@@ -863,7 +863,7 @@ func channelFrame(page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue("/organizations/" + page.Organization.Slug + "/sidebar/resync")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 284, Col: 196}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 288, Col: 196}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 			if templ_7745c5c3_Err != nil {
@@ -962,7 +962,7 @@ func sidebarContent(page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var40 string
 			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(page.Organization.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 310, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 314, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 			if templ_7745c5c3_Err != nil {
@@ -980,7 +980,7 @@ func sidebarContent(page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var41 string
 			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(page.Organization.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 312, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 316, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 			if templ_7745c5c3_Err != nil {
@@ -998,7 +998,7 @@ func sidebarContent(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "channel.list"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 314, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 318, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 		if templ_7745c5c3_Err != nil {
@@ -1011,7 +1011,7 @@ func sidebarContent(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "channel.list"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 316, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 320, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
@@ -1125,7 +1125,7 @@ func ChannelListScreen(stylesheetURL string, page ChannelPage) templ.Component {
 				var templ_7745c5c3_Var48 string
 				templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "channel.choose"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 339, Col: 57}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 343, Col: 57}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 				if templ_7745c5c3_Err != nil {
@@ -1148,7 +1148,7 @@ func ChannelListScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 342, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 346, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 			if templ_7745c5c3_Err != nil {
@@ -1161,7 +1161,7 @@ func ChannelListScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var50 string
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 343, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 347, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 			if templ_7745c5c3_Err != nil {
@@ -1174,7 +1174,7 @@ func ChannelListScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var51 string
 			templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.GetNonce(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 344, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 348, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
 			if templ_7745c5c3_Err != nil {
@@ -1223,7 +1223,7 @@ func historyLink(url string, older bool) templ.Component {
 		var templ_7745c5c3_Var53 templ.SafeURL
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(url))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 351, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 355, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
@@ -1241,7 +1241,7 @@ func historyLink(url string, older bool) templ.Component {
 			var templ_7745c5c3_Var54 string
 			templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.ResolveAttributeValue(url)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 353, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 357, Col: 15}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var54)
 			if templ_7745c5c3_Err != nil {
@@ -1299,7 +1299,7 @@ func unreadDivider(seq, firstUnread int64) templ.Component {
 			var templ_7745c5c3_Var56 string
 			templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(firstUnread))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 369, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 373, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
 			if templ_7745c5c3_Err != nil {
@@ -1312,7 +1312,7 @@ func unreadDivider(seq, firstUnread int64) templ.Component {
 			var templ_7745c5c3_Var57 string
 			templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "reading.new_messages"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 371, Col: 124}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 375, Col: 124}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 			if templ_7745c5c3_Err != nil {
@@ -1393,7 +1393,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 			var templ_7745c5c3_Var60 string
 			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(MessageDOMID(*page.PostedMessageID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 389, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 393, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 			if templ_7745c5c3_Err != nil {
@@ -1411,7 +1411,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 		var templ_7745c5c3_Var61 templ.SafeURL
 		templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinURLErrs(conversationURL(page))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 392, Col: 32}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 396, Col: 32}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 		if templ_7745c5c3_Err != nil {
@@ -1429,7 +1429,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 			var templ_7745c5c3_Var62 string
 			templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.ResolveAttributeValue(ChannelURL(page.Organization.Slug, page.Current.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 394, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 398, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
 			if templ_7745c5c3_Err != nil {
@@ -1452,7 +1452,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 			var templ_7745c5c3_Var63 string
 			templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.ResolveAttributeValue(*page.Composer)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 403, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 407, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
 			if templ_7745c5c3_Err != nil {
@@ -1471,7 +1471,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 			var templ_7745c5c3_Var64 string
 			templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(*page.EventCursor))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 406, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 410, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 			if templ_7745c5c3_Err != nil {
@@ -1489,7 +1489,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 		var templ_7745c5c3_Var65 string
 		templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "message.body"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 408, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 412, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 		if templ_7745c5c3_Err != nil {
@@ -1502,7 +1502,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 		var templ_7745c5c3_Var66 string
 		templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(page.BodyError != ""))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 410, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 414, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
 		if templ_7745c5c3_Err != nil {
@@ -1515,7 +1515,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 		var templ_7745c5c3_Var67 string
 		templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs("\n" + page.Body)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 410, Col: 258}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 414, Col: 258}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 		if templ_7745c5c3_Err != nil {
@@ -1533,7 +1533,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 			var templ_7745c5c3_Var68 string
 			templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, page.BodyError))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 413, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 417, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 			if templ_7745c5c3_Err != nil {
@@ -1551,7 +1551,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 			var templ_7745c5c3_Var69 string
 			templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "message.help"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 415, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 419, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 			if templ_7745c5c3_Err != nil {
@@ -1569,7 +1569,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 		var templ_7745c5c3_Var70 string
 		templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "message.send"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 417, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 421, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 		if templ_7745c5c3_Err != nil {
@@ -1590,7 +1590,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 		var templ_7745c5c3_Var71 templ.SafeURL
 		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinURLErrs(typingURL(page))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 427, Col: 26}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 431, Col: 26}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 		if templ_7745c5c3_Err != nil {
@@ -1614,7 +1614,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 			var templ_7745c5c3_Var72 string
 			templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.ResolveAttributeValue(typingURL(page))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 432, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 436, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 			if templ_7745c5c3_Err != nil {
@@ -1637,7 +1637,7 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 			var templ_7745c5c3_Var73 string
 			templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.ResolveAttributeValue(*page.Composer)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 439, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 443, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var73)
 			if templ_7745c5c3_Err != nil {
@@ -1695,7 +1695,7 @@ func readForm(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var75 templ.SafeURL
 		templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinURLErrs(conversationURL(page) + "/read")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 458, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 462, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 		if templ_7745c5c3_Err != nil {
@@ -1708,7 +1708,7 @@ func readForm(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var76 string
 		templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.ResolveAttributeValue(conversationURL(page) + "/read")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 458, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 462, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var76)
 		if templ_7745c5c3_Err != nil {
@@ -1731,7 +1731,7 @@ func readForm(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var77 string
 		templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(*page.EventCursor))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 459, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 463, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var77)
 		if templ_7745c5c3_Err != nil {
@@ -1838,7 +1838,7 @@ func ChannelList(page ChannelPage, oob bool) templ.Component {
 		var templ_7745c5c3_Var81 string
 		templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(page.SnapshotSeq))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 481, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 485, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var81)
 		if templ_7745c5c3_Err != nil {
@@ -1946,7 +1946,7 @@ func TopicList(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var84 string
 		templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "topic.list"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 517, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 521, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var84)
 		if templ_7745c5c3_Err != nil {
@@ -2075,7 +2075,7 @@ func ChannelEntry(slug string, channel Channel, selected bool, count int64) temp
 		var templ_7745c5c3_Var87 string
 		templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.ResolveAttributeValue(ChannelDOMID(channel.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 569, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 573, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var87)
 		if templ_7745c5c3_Err != nil {
@@ -2097,7 +2097,7 @@ func ChannelEntry(slug string, channel Channel, selected bool, count int64) temp
 		var templ_7745c5c3_Var89 string
 		templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.ResolveAttributeValue("link-" + ChannelDOMID(channel.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 571, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 575, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var89)
 		if templ_7745c5c3_Err != nil {
@@ -2110,7 +2110,7 @@ func ChannelEntry(slug string, channel Channel, selected bool, count int64) temp
 		var templ_7745c5c3_Var90 templ.SafeURL
 		templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(ChannelURL(slug, channel.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 572, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 576, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var90))
 		if templ_7745c5c3_Err != nil {
@@ -2160,7 +2160,7 @@ func ChannelEntry(slug string, channel Channel, selected bool, count int64) temp
 		var templ_7745c5c3_Var92 string
 		templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.JoinStringErrs(channel.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 582, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 586, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var92))
 		if templ_7745c5c3_Err != nil {
@@ -2219,7 +2219,7 @@ func TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, co
 		var templ_7745c5c3_Var94 string
 		templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.ResolveAttributeValue(TopicDOMID(topic.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 591, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 595, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var94)
 		if templ_7745c5c3_Err != nil {
@@ -2241,7 +2241,7 @@ func TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, co
 		var templ_7745c5c3_Var96 string
 		templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.ResolveAttributeValue("link-" + TopicDOMID(topic.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 593, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 597, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var96)
 		if templ_7745c5c3_Err != nil {
@@ -2254,7 +2254,7 @@ func TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, co
 		var templ_7745c5c3_Var97 templ.SafeURL
 		templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(ConversationURL(slug, channelID, &topic.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 594, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 598, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var97))
 		if templ_7745c5c3_Err != nil {
@@ -2304,7 +2304,7 @@ func TopicEntry(slug string, channelID kernel.ID, topic Topic, selected bool, co
 		var templ_7745c5c3_Var99 string
 		templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.JoinStringErrs(topicName(ctx, topic))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 604, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 608, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var99))
 		if templ_7745c5c3_Err != nil {
@@ -2387,7 +2387,7 @@ func unreadBadge(count int64) templ.Component {
 		var templ_7745c5c3_Var102 string
 		templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(count))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 619, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 623, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var102)
 		if templ_7745c5c3_Err != nil {
@@ -2410,7 +2410,7 @@ func unreadBadge(count int64) templ.Component {
 		var templ_7745c5c3_Var103 string
 		templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.JoinStringErrs(unreadText(count))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 620, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 624, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var103))
 		if templ_7745c5c3_Err != nil {
@@ -2423,7 +2423,7 @@ func unreadBadge(count int64) templ.Component {
 		var templ_7745c5c3_Var104 string
 		templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.JoinStringErrs(" " + strings.ReplaceAll(i18n.T(ctx, "reading.unread_count"), "{count}", unreadText(count)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 621, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 625, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var104))
 		if templ_7745c5c3_Err != nil {

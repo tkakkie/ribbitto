@@ -84,6 +84,25 @@ updates the page behind. The header's **Mark as read** is hidden below
 `#read-form`. Without JavaScript the panel is its own page: its links still
 close it and page the members.
 
+## Short heights
+
+Below the `short:` height (#1056) a conversation no longer fits its frame:
+the header, the composer and the frame's padding take 307 px from `desk`
+(291 px below it), so 436 px leaves the list 128 px, `h-32`, a few short
+messages. There `#conversation` scrolls as a whole (`short:overflow-y-auto`)
+and the list is fixed at `h-32` (`short:flex-none`). It is still the pane the
+composer, history and stream scripts move, so they need no change, and
+automatic reading never depended on it. The frame keeps `h-dvh`: a frame of
+`min-h-dvh` would let the desktop sidebar and a panel beside the
+conversation grow to their content and stop scrolling themselves, while
+this leaves the sidebar, app bar, panels and list page as they are.
+
+Two things differ there. A covering move form would scroll away from the
+composer with the conversation, so the form follows the list in the column
+and the composer is hidden; the fixed list still does not resize. A post
+scrolls its message into view (`message-stream-v10.js`), which there also
+scrolls the conversation up from the composer.
+
 ## Arrival motion
 
 The selection pill and the side panel move only on arrival

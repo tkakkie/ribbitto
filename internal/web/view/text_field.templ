@@ -7,7 +7,7 @@ import "github.com/tkakkie/ribbitto/internal/web/i18n"
 // fieldInput sets the error description only while there is an error, so
 // valid inputs omit aria-invalid and aria-describedby.
 func fieldInput(name, kind, autocomplete, value, message string) inputProps {
-	p := inputProps{ID: name, Name: name, Type: kind, Value: value, Autocomplete: autocomplete, Required: true}
+	p := inputProps{ID: name, Name: name, Type: kind, Value: value, Autocomplete: autocomplete, Required: true, Welcome: true}
 	if message != "" {
 		p.Invalid, p.DescribedBy = "true", name+"-error"
 	}

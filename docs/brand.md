@@ -66,5 +66,7 @@ create a new versioned directory and update both the embed declaration
 and `view.ChannelImageURL`; never change a file at an immutable URL. Keep registry
 order stable: NULL and unknown keys select by SHA-256 of the channel ID,
 modulo the set size. Adding a key may change these fallback assignments;
-stored known keys keep their image. The welcome card shows four of them (`welcomeImages`). Members choose from the same registry in the create form and overview
-panel (#876); the overview shows the image beside the name at 32 px.
+stored known keys keep their image. At desktop width the welcome card shows
+four of them (`welcomeImages`); below `desk` it shows only the logo, name
+and tagline on `selected`. Members choose from the same registry in the
+create form and overview panel (#876); the overview shows the image beside the name at 32 px.

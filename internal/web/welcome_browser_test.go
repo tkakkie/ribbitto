@@ -65,7 +65,9 @@ func testWelcomeBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		page.MustSetViewport(size[0], size[1], 1, false)
 		for _, lang := range []string{"en", "ja"} {
-			page.MustSetExtraHeaders("Accept-Language", lang)
+			// The lang cookie is the server's first choice; an extra
+			// Accept-Language header did not reach every navigation.
+			page.MustSetCookies(&proto.NetworkCookieParam{Name: "lang", Value: lang, URL: server.URL})
 			for _, theme := range []string{"light", "dark"} {
 				if err := (proto.EmulationSetEmulatedMedia{Features: []*proto.EmulationMediaFeature{{Name: "prefers-color-scheme", Value: theme}}}).Call(page); err != nil {
 					t.Fatal(err)

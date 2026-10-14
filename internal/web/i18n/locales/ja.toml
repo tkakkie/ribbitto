@@ -328,5 +328,8 @@ other = "ホーム"
 ["account.menu"]
 other = "アカウントメニュー"
 
+["account.label"]
+other = "アカウント"
+
 ["creation.error.limit"]
 other = "ここではこれ以上作成できません。"

@@ -87,3 +87,14 @@ as a retry sentinel: keep the stream dirty, preserve sent version, covered
 generation and last-written time, retain the recount throttle and record a
 separate observer outcome. This is a prerequisite for adoption, not implemented
 here: #952 excludes production package changes.
+
+Part #952b2 wires `baseline` and `hybrid` into the cost runner with the same
+full-model source, member fixtures, caches and pool 36/26-worker budget. Baseline
+keeps `costWriter`/`costQueue`; hybrid uses `RecountScheduler`. Both seed the shared
+100 changed-read/s plan before connecting, run it alongside posts and join all
+writes before capturing independent final truth through the fixture pool. Drain
+requires every delivered full model to match, including read-only changes with
+unchanged sequence coverage. Application snapshots pass nil oracle checkpoints.
+Sender-side frames and separate rejection counts remain available for #952c;
+these arms bypass historical verdict output until its accounting/freshness/gates
+land. Deterministic wiring/drain tests ran; no measurement ran.

@@ -742,6 +742,19 @@ func TestPagesMarkup(t *testing.T) {
 						t.Error("channel must have exactly one live status region")
 					}
 				}
+				// The bottom navigation's Home (#970) is on the list page only, a
+				// failed creation's included; conversations never render it.
+				if list := strings.HasSuffix(c.route, " /organizations/{slug}/channels"); (list || strings.Contains(c.route, "{channelID}")) && !fragment {
+					homes := 0
+					for n := range doc.Descendants() {
+						if n.DataAtom == atom.A && attr(n, "aria-current") == "page" && attr(n, "href") == "/organizations/acme/channels" {
+							homes++
+						}
+					}
+					if want := map[bool]int{true: 1}[list]; homes != want {
+						t.Errorf("%d bottom navigation Home links, want %d", homes, want)
+					}
+				}
 				checkHTMXRequests(t, handler, doc, lang, c.cookie)
 				for _, problem := range checkFallbackURLs(doc) {
 					t.Error(problem)

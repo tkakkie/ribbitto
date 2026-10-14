@@ -45,7 +45,7 @@ Read the file for the area you change:
 | [`unread-writes.md`](unread-writes.md) | how read ranges are written: the current feed, topic-view, branch-notice and posting writes |
 | [`unread-counters-design.md`](unread-counters-design.md) | #955: proposed write-time counter maintenance; linked operations, concurrency, repair and pre-measurement adoption criteria |
 | [`unread-counters-verification.md`](unread-counters-verification.md) | #956: what the test-only counter prototype has verified against #950's oracle, and its limits |
-| [`unread-counters-sql-adapter.md`](unread-counters-sql-adapter.md) | #957a–c2a: test-only SQL rows, write-owned intervals and deterministic operation accounting; measurement boundaries |
+| [`unread-counters-sql-adapter.md`](unread-counters-sql-adapter.md) | #957a–c2b: test-only SQL rows, write-owned intervals, operation accounting and gated lock waits; measurement boundaries |
 | [`sidebar-hybrid-coverage.md`](sidebar-hybrid-coverage.md) | #961 part 2c-a: pinned coverage, stale-input rejection and retained exact replay |
 | [`sidebar-hybrid-progress.md`](sidebar-hybrid-progress.md) | #961 part 2c-b2: bounded recount/repair delivery under continuous posts, pinned full-model equality |
 | [`sidebar-hybrid-delivery.md`](sidebar-hybrid-delivery.md) | #961 part 2c-b1: stream lifecycle, authorization, send order and reconnect recovery |
@@ -68,6 +68,7 @@ Read the file for the area you change:
 | [`stream-sidebar-stage2.md`](stream-sidebar-stage2.md) | #865 PR 3: fixed mixed-load protocol, gates and versioned result contracts; execution requires explicit instruction |
 | [`stream-sidebar-stage2-drivers.md`](stream-sidebar-stage2-drivers.md) | #865 PR 3: authenticated post, page, read and stream drivers; evidence, lifecycle and proof limits |
 | [`stream-sidebar-stage2-telemetry.md`](stream-sidebar-stage2-telemetry.md) | #865 PR 3 slice 5a: continuous snapshots, pool counters, reset evidence and planned minute aggregates |
+| [`stream-sidebar-stage2-headroom.md`](stream-sidebar-stage2-headroom.md) | #865 5b: headroom gates |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |

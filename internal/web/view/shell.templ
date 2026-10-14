@@ -6,13 +6,13 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
 )
 
-// appBar is the app's own navigation block: the logo, Home and, at the
-// bottom, the signed-in member's account menu. Items for features that do
-// not exist yet arrive with those features.
+// appBar is the app's own navigation block at desktop width: the logo, Home
+// and, at the bottom, the button for the signed-in member's account menu.
+// Items for features that do not exist yet arrive with those features.
 templ appBar(page ChannelPage) {
-	// A phone's conversation fills the screen; the list page keeps the bar
-	// until a bottom navigation replaces it (#970).
-	<nav aria-label={ i18n.T(ctx, "app.navigation") } class={ "flex w-rail shrink-0 flex-col items-center gap-1 rounded-xl bg-rail py-3 shadow-block", templ.KV("max-desk:hidden", !page.List) }>
+	// Below desk a conversation fills the screen, and the list page has the
+	// bottom navigation instead (bottomNav).
+	<nav aria-label={ i18n.T(ctx, "app.navigation") } class="flex w-rail shrink-0 flex-col items-center gap-1 rounded-xl bg-rail py-3 shadow-block max-desk:hidden">
 		<span class="mb-3">
 			@brandLogo(36, "")
 		</span>
@@ -29,25 +29,53 @@ templ appBar(page ChannelPage) {
 			</li>
 		</ul>
 		<div class="mt-auto">
-			// The menu is an HTML popover: it opens, closes on Escape and on an
-			// outside click, and returns focus without JavaScript.
 			<button type="button" popovertarget="account-menu" aria-label={ i18n.T(ctx, "account.menu") } class="flex size-11 items-center justify-center rounded-full hover:bg-hover transition-feedback motion-safe:active:scale-96">
 				<span aria-hidden="true" class="flex size-9 items-center justify-center rounded-full bg-selected text-title font-semibold text-on-selected">{ avatarInitial(page.DisplayName, page.Handle) }</span>
 			</button>
-			<div id="account-menu" popover class="inset-auto bottom-3 left-24 m-0 w-64 rounded-xl border border-border bg-surface p-3 text-body text-fg shadow-popover">
-				<p class="break-words text-caption text-muted">
-					// templ drops the white space before a component call but keeps
-					// it after one, so only the first space is part of the text.
-					{ i18n.T(ctx, "hello.signed_in_as") + " " }
-					@MemberName(page.DisplayName, page.Handle)
-					{ "· " + i18n.T(ctx, "org.role." + page.Role) }
-				</p>
-				<div class="mt-3">
-					@SignOutButton()
-				</div>
-			</div>
 		</div>
 	</nav>
+}
+
+// bottomNav is the list page's navigation below desk (#970): Home, which is
+// this page, and the account menu, each an icon above a short label. It is
+// the frame's last row rather than fixed, so the list pane ends above it and
+// no row scrolls behind it; its padding keeps the items above the safe area.
+templ bottomNav(page ChannelPage) {
+	<nav aria-label={ i18n.T(ctx, "app.navigation") } class="-mx-2 flex shrink-0 border-t border-border bg-rail pb-safe-0 desk:hidden">
+		<a href={ templ.SafeURL("/organizations/" + page.Organization.Slug + "/channels") } aria-current="page" class="flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-caption font-semibold text-on-selected">
+			<span class="flex h-8 w-11 items-center justify-center rounded-lg bg-selected text-brand">
+				@Icon("home-filled", 20)
+			</span>
+			{ i18n.T(ctx, "app.home") }
+		</a>
+		// The same invoker as the app bar's: the popover reports its open
+		// state, so it never takes aria-current.
+		<button type="button" popovertarget="account-menu" aria-label={ i18n.T(ctx, "account.menu") } class="flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-caption text-muted hover:text-fg transition-feedback motion-safe:active:scale-96">
+			<span aria-hidden="true" class="flex size-8 items-center justify-center rounded-full bg-selected text-body font-semibold text-on-selected">{ avatarInitial(page.DisplayName, page.Handle) }</span>
+			{ i18n.T(ctx, "account.label") }
+		</button>
+	</nav>
+}
+
+// accountMenu is one popover for both invokers, the app bar's button and the
+// bottom navigation's. It sits in the frame, outside both bars, because a
+// popover inside an ancestor hidden at the current width cannot show. As an
+// HTML popover it opens, closes on Escape and on an outside tap, and returns
+// focus without JavaScript. Below desk it is a bottom sheet above the safe
+// area, narrow enough in landscape to stay clear of a notch.
+templ accountMenu(page ChannelPage) {
+	<div id="account-menu" popover class="inset-auto bottom-3 left-24 m-0 w-64 rounded-xl border border-border bg-surface p-3 text-body text-fg shadow-popover max-desk:inset-x-0 max-desk:bottom-0 max-desk:mx-auto max-desk:w-full max-desk:max-w-md max-desk:rounded-b-none max-desk:border-b-0 max-desk:p-4 max-desk:pb-safe-4">
+		<p class="break-words text-caption text-muted">
+			// templ drops the white space before a component call but keeps
+			// it after one, so only the first space is part of the text.
+			{ i18n.T(ctx, "hello.signed_in_as") + " " }
+			@MemberName(page.DisplayName, page.Handle)
+			{ "· " + i18n.T(ctx, "org.role." + page.Role) }
+		</p>
+		<div class="mt-3">
+			@SignOutButton()
+		</div>
+	</div>
 }
 
 // channelCreateForm opens from the sidebar's add button as a popover; after a

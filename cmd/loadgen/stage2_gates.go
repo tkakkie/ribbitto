@@ -71,6 +71,10 @@ func stage2Evaluate(w *stage2Window, paired *stage2Window) error {
 			return fmt.Errorf("evaluating stage-2 paired window operations: %w", err)
 		}
 	}
+	headroom, err := stage2Headroom(w.Samples)
+	if err != nil {
+		return err
+	}
 	var normal503 uint64
 	w.Refusals, normal503 = stage2CountRefusals(w.Operations, w.Attempts)
 	w.Gates = make([]stage2Verdict, 0, len(w.Protocol.Gates))
@@ -89,6 +93,10 @@ func stage2Evaluate(w *stage2Window, paired *stage2Window) error {
 		v := stage2Verdict{gate.ID, "inconclusive", map[string]float64{}}
 		pass, evaluated := true, false
 		if slices.Contains(gate.Arms, w.Config.Arm.Name) {
+			if verdict, ok := headroom[gate.ID]; ok {
+				w.Gates = append(w.Gates, verdict)
+				continue
+			}
 			switch gate.ID {
 			case "normal-503":
 				v.Measured["count"] = float64(normal503)

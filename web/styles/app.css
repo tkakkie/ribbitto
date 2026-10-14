@@ -221,6 +221,19 @@
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;
   }
+  /* viewport-fit=cover (layout.templ) extends pages under a landscape
+     notch; keep content beside it, as the default fit did. */
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Bottom padding of n spacing steps plus the bottom safe area (the home
+   indicator), for what meets the screen's bottom edge below desk:
+   pb-safe-0 on the bottom navigation, pb-safe-4 on a bottom sheet. */
+@utility pb-safe-* {
+  padding-bottom: calc(var(--spacing) * --value(integer) + env(safe-area-inset-bottom));
 }
 
 /* Navigation: no cross-document view transition, whose setup slowed every

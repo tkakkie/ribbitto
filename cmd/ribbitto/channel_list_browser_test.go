@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -217,23 +218,106 @@ func TestChannelListBrowser(t *testing.T) {
 		}
 	}
 
+	// The bottom navigation (#970) ends the list's pane above the safe area
+	// (a 34 px home indicator); Home is this page, and Account opens the
+	// shared account menu as a bottom sheet.
+	_, err = page.Call(ctx, string(page.SessionID), "Emulation.setSafeAreaInsetsOverride", map[string]any{"insets": map[string]int{"bottom": 34}})
+	acceptanceOK(t, err)
+	const homeLink, bottomAccount = `a[aria-current=page][href="/organizations/list/channels"]`, "#organization-stream > nav:last-of-type [popovertarget=account-menu]"
+	page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
+	if problem := page.MustEval(`(homeLink, bottomAccount) => {
+		const home = document.querySelector(homeLink), account = document.querySelector(bottomAccount), bar = home?.closest('nav');
+		if (!bar?.checkVisibility() || bar !== account?.closest('nav')) return 'no visible bar with Home and Account';
+		if (account.hasAttribute('aria-current')) return 'Account has aria-current';
+		const box = e => e.getBoundingClientRect(), main = document.querySelector('main');
+		if ([home, account].some(e => box(e).width < 44 || box(e).height < 44)) return 'an item under 44 × 44';
+		if (getComputedStyle(bar).paddingBottom !== '34px' || box(bar).bottom !== innerHeight) return 'not above the safe area: ' + getComputedStyle(bar).paddingBottom;
+		main.scrollTop = main.scrollHeight;
+		const last = box(document.querySelector('#sidebar-channels > li:last-child'));
+		return last.bottom > box(bar).top || last.bottom > box(main).bottom ? 'the bar covers the last row' : '';
+	}`, homeLink, bottomAccount).Str(); problem != "" {
+		t.Fatalf("phone bottom navigation: %s", problem)
+	}
+	sheet := func(open bool) {
+		t.Helper()
+		page.MustWait(`open => document.getElementById('account-menu').matches(':popover-open') === open`, open)
+	}
+	// accountKeys drives the menu from its visible invoker, with or without
+	// scripts: Enter and Space each open and close it, Escape closes it from
+	// inside with focus back on the invoker, and an outside tap closes it.
+	// After each step the invoker's accessibility node reports the state.
+	accountKeys := func(p *rod.Page, invoker string, tap func()) {
+		t.Helper()
+		step := func(name string, open bool, keys ...input.Key) {
+			t.Helper()
+			p.Keyboard.MustType(keys...)
+			if err := p.Timeout(5 * time.Second).Wait(rod.Eval(`open => document.getElementById('account-menu').matches(':popover-open') === open`, open)); err != nil {
+				t.Fatalf("%s %s: the menu is not open=%t: %v", invoker, name, open, err)
+			}
+			tree, err := proto.AccessibilityGetPartialAXTree{ObjectID: p.MustElement(invoker).Object.ObjectID}.Call(p)
+			acceptanceOK(t, err)
+			got := "absent"
+			for _, property := range tree.Nodes[0].Properties {
+				if property.Name == proto.AccessibilityAXPropertyNameExpanded {
+					got = fmt.Sprint(property.Value.Value.Bool())
+				}
+			}
+			if got != fmt.Sprint(open) {
+				t.Fatalf("%s %s: expanded %s, want %t", invoker, name, got, open)
+			}
+		}
+		p.MustEval(`s => document.querySelector(s).focus()`, invoker)
+		step("closed", false)
+		step("Enter", true, input.Enter)
+		step("Enter again", false, input.Enter)
+		step("Space", true, input.Space)
+		step("Space again", false, input.Space)
+		step("Enter", true, input.Enter)
+		p.Keyboard.MustType(input.Tab)
+		if !p.MustEval(`() => !!document.activeElement.closest('#account-menu')`).Bool() {
+			t.Fatalf("%s: Tab does not enter the menu", invoker)
+		}
+		step("Escape", false, input.Escape)
+		if !p.MustEval(`s => document.activeElement === document.querySelector(s)`, invoker).Bool() {
+			t.Fatalf("%s: Escape did not return focus", invoker)
+		}
+		step("Space", true, input.Space)
+		tap()
+		step("outside tap", false)
+	}
+	tapHeading := func() { page.MustElement("main h1").MustClick() }
+	accountKeys(page, bottomAccount, tapHeading)
+	page.MustElement(bottomAccount).MustClick()
+	sheet(true)
+	if problem := page.MustEval(`() => {
+		const menu = document.getElementById('account-menu'), box = menu.getBoundingClientRect();
+		if (box.left !== 0 || box.right !== innerWidth || box.bottom !== innerHeight) return 'not a full-width bottom sheet: ' + JSON.stringify(box);
+		if (getComputedStyle(menu).paddingBottom !== '50px') return 'no safe-area padding: ' + getComputedStyle(menu).paddingBottom;
+		return menu.querySelector('form[action="/signout"] button').getBoundingClientRect().height < 44 ? 'sign-out under 44 px' : '';
+	}`).Str(); problem != "" {
+		t.Fatalf("account sheet: %s", problem)
+	}
+	page.Keyboard.MustType(input.Escape)
+	sheet(false)
+
 	// A phone conversation hides the frame and leads back to its row.
 	type frameState struct {
-		Back, Rail, Aside bool
-		Width, Height     float64
-		Label             string
+		Back, Rail, Aside, Bar bool
+		Width, Height          float64
+		Label                  string
 	}
 	frame := func() frameState {
 		var s frameState
-		acceptanceOK(t, page.MustEval(`() => {
+		acceptanceOK(t, page.MustEval(`homeLink => {
 			const back = document.querySelector('header a[aria-label]'), box = back.getBoundingClientRect();
 			return { back: back.checkVisibility(), width: box.width, height: box.height, label: back.getAttribute('aria-label'),
-				rail: document.querySelector('nav').checkVisibility(), aside: document.querySelector('aside').checkVisibility() };
-		}`).Unmarshal(&s))
+				rail: document.querySelector('nav').checkVisibility(), aside: document.querySelector('aside').checkVisibility(),
+				bar: !!document.querySelector(homeLink)?.checkVisibility() };
+		}`, homeLink).Unmarshal(&s))
 		return s
 	}
 	page.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID)).MustWaitLoad()
-	if phone := frame(); !phone.Back || phone.Width < 44 || phone.Height < 44 || phone.Label != "Back to lilypads" || phone.Rail || phone.Aside {
+	if phone := frame(); !phone.Back || phone.Width < 44 || phone.Height < 44 || phone.Label != "Back to lilypads" || phone.Rail || phone.Aside || phone.Bar {
 		t.Fatalf("phone conversation frame: %+v", phone)
 	}
 	page.MustElement("header a[aria-label]").MustClick()
@@ -246,6 +330,34 @@ func TestChannelListBrowser(t *testing.T) {
 		t.Fatal("the back link did not open the list with the channel expanded and in view")
 	}
 
+	// viewport-fit=cover extends pages under a landscape notch (emulated 44 px
+	// side insets); the body keeps content beside it, here and on sign-in
+	// below, and at desktop width it adds nothing.
+	insets := func(sides map[string]int) {
+		_, err := page.Call(ctx, string(page.SessionID), "Emulation.setSafeAreaInsetsOverride", map[string]any{"insets": sides})
+		acceptanceOK(t, err)
+	}
+	inset := func(want float64) string {
+		return page.MustEval(`want => {
+			// clientWidth leaves out a classic scrollbar (Linux CI), which a page
+			// taller than the landscape viewport shows and innerWidth includes.
+			const style = getComputedStyle(document.body), box = document.body.firstElementChild.getBoundingClientRect(), width = document.documentElement.clientWidth;
+			if (!document.querySelector('meta[name=viewport]').content.includes('viewport-fit=cover')) return 'no viewport-fit=cover';
+			if (style.paddingLeft !== want + 'px' || style.paddingRight !== want + 'px') return 'body padding ' + style.paddingLeft + ' ' + style.paddingRight;
+			if (box.left !== want || box.right !== width - want) return 'content from ' + box.left + ' to ' + box.right + ', want ' + want + ' to ' + (width - want);
+			return document.documentElement.scrollWidth > width ? 'the page scrolls sideways' : '';
+		}`, want).Str()
+	}
+	insets(map[string]int{"left": 44, "right": 44, "bottom": 21})
+	page.MustSetViewport(844, 390, 1, false)
+	for _, path := range []string{view.ChannelListURL("list", expanded.ID), view.ChannelURL("list", expanded.ID)} {
+		page.MustNavigate(server.URL + path).MustWaitLoad()
+		if problem := inset(44); problem != "" {
+			t.Fatalf("landscape %s: %s", path, problem)
+		}
+	}
+	insets(map[string]int{"top": 0, "left": 0, "right": 0, "bottom": 0})
+
 	// At desktop width the list is still the one main, beside the prompt, and a
 	// conversation keeps its frame and hides the link.
 	page.MustSetViewport(1280, 800, 1, false)
@@ -254,9 +366,26 @@ func TestChannelListBrowser(t *testing.T) {
 	if desktop := read(); desktop.Mains != 1 || !desktop.MainShown || !desktop.PromptShown {
 		t.Fatalf("desktop list page: %+v", desktop)
 	}
+	if problem := inset(0); problem != "" {
+		t.Fatalf("desktop list page: %s", problem)
+	}
 	page.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID)).MustWaitLoad()
-	if desktop := frame(); desktop.Back || !desktop.Rail || !desktop.Aside {
+	if desktop := frame(); desktop.Back || !desktop.Rail || !desktop.Aside || desktop.Bar {
 		t.Fatalf("desktop conversation frame: %+v", desktop)
+	}
+	// The desktop list page hides the bottom navigation; the app bar's button
+	// opens the same menu where it always opened.
+	page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
+	const barAccount = "#organization-stream > nav:first-of-type [popovertarget=account-menu]"
+	accountKeys(page, barAccount, tapHeading)
+	page.MustElement(barAccount).MustClick()
+	sheet(true)
+	if problem := page.MustEval(`homeLink => {
+		const box = document.getElementById('account-menu').getBoundingClientRect();
+		if (document.querySelector(homeLink)?.checkVisibility()) return 'the bottom navigation shows';
+		return box.left !== 96 || box.width !== 256 || box.bottom !== innerHeight - 12 ? 'menu moved: ' + JSON.stringify(box) : '';
+	}`, homeLink).Str(); problem != "" {
+		t.Fatalf("desktop account menu: %s", problem)
 	}
 
 	// Without JavaScript, at phone width: the back link's fragment alone brings
@@ -286,6 +415,7 @@ func TestChannelListBrowser(t *testing.T) {
 	if plain.MustEval(inView, row).Bool() {
 		t.Fatal("the expanded row starts in view, so the fragment proves nothing")
 	}
+	accountKeys(plain, bottomAccount, func() { click("main h1") })
 	plain.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID))
 	landed(view.ChannelURL("list", expanded.ID))
 	click("header a[aria-label]")
@@ -318,6 +448,24 @@ func TestChannelListBrowser(t *testing.T) {
 	created := plain.MustEval(`() => location.pathname`).Str()
 	if want := []string{"POST /organizations/list/channels 422", "POST /organizations/list/channels 303", "GET " + created + " 200"}; !slices.Equal(tail[1:], want) {
 		t.Fatalf("creation requests %v, want %v", tail, want)
+	}
+
+	// Last, since it ends the session both pages share: signing out from the
+	// phone sheet lands on sign-in, and the old session no longer opens the list.
+	listURL := view.ChannelListURL("list", expanded.ID)
+	reader.visit(t, "GET", listURL, nil, 200)
+	// Front the page again: a background tab paints no frames to click on.
+	page.MustActivate().MustSetViewport(390, 844, 1, false)
+	page.MustNavigate(server.URL + listURL).MustWaitLoad()
+	page.MustElement(bottomAccount).MustClick()
+	sheet(true)
+	page.MustElement("#account-menu form[action='/signout'] button").MustClick()
+	page.MustWait(`() => location.pathname === '/signin' && document.readyState === 'complete'`)
+	reader.visit(t, "GET", listURL, nil, 404)
+	insets(map[string]int{"left": 44, "right": 44})
+	page.MustSetViewport(844, 390, 1, false)
+	if problem := inset(44); problem != "" {
+		t.Fatalf("landscape sign-in: %s", problem)
 	}
 }
 

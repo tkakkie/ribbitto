@@ -66,7 +66,11 @@ func checkMarkup(doc *html.Node, fullPage bool) []string {
 				add("<%s> has a %s attribute", n.Data, a.Key)
 			}
 			switch a.Key {
-			case "for", "aria-describedby", "aria-labelledby":
+			case "for", "form", "aria-describedby", "aria-labelledby":
+				// A fragment's control may belong to a form elsewhere on its page.
+				if a.Key == "form" && !fullPage {
+					continue
+				}
 				targets := []string{a.Val}
 				if a.Key != "for" || n.DataAtom == atom.Output {
 					targets = strings.FieldsFunc(a.Val, asciiSpace)
@@ -272,6 +276,7 @@ func TestCheckMarkup(t *testing.T) {
 		{"duplicate ids", `<p id="same"></p><span id="same"></span>`, false, []string{`duplicate id "same"`}},
 		{"unique ids", `<p id="one"></p><span id="two"></span>`, false, nil},
 		{"missing for target", `<label for="missing">Name</label>`, false, []string{`references missing id "missing"`}},
+		{"missing form owner", page(`<main><button type="submit" form="missing">Go</button></main>`), true, []string{`form="missing"> references missing id "missing"`}},
 		{"forward for target", `<label for="name">Name</label><input id="name">`, false, nil},
 		{"output for targets", `<output for="a b"></output><input id="a" type="hidden"><input id="b" type="hidden">`, false, nil},
 		{"missing description target", `<p aria-describedby="present missing"></p><p id="present"></p>`, false, []string{`aria-describedby="present missing"> references missing id "missing"`}},

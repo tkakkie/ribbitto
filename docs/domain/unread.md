@@ -95,6 +95,18 @@ automatically once shown, so they never add it. Automatic reading posts
 through the same form, which stays on the page, hidden, when nothing was
 unread.
 
+**A modal panel pauses automatic reading** (#972). While the members or
+overview panel covers the conversation as a modal — a bottom sheet below
+852 px, an overlay from 852 to 1200 px — no automatic reading POST is sent:
+not on the panel page's load and not for live arrivals, re-evaluated
+whenever the width changes with the panel open. The stream is still applied
+behind it: new messages, counts and typing appear, but nothing shown then
+counts as read. When the panel closes (a page load) or stops covering (the
+window widens to 1200 px), automatic reading resumes under the rules above. *Mark as read* is deliberate and never paused: below 1200 px
+the overview offers it, submitting the same form. One click reads up to the
+newest shown sequence, and a refused (429) click retries with that cursor
+while the panel stays modal; it reads nothing that arrived after the click.
+
 ## Counts
 
 A channel's unread count is the number of its unread messages, which is the

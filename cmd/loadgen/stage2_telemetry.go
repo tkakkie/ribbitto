@@ -197,7 +197,12 @@ func stage2AggregateTelemetry(samples []stage2Sample) ([]stage2TelemetryRange, e
 			// A drop at a late endpoint may have happened in the next range.
 			resetEnd--
 		}
-		for i := first + 1; first >= 0 && i <= resetEnd; i++ {
+		resetStart := first + 1
+		if first > 0 && retained[first].OffsetNS >= r.StartNS+int64(time.Second) {
+			// The previous range excluded this late boundary transition.
+			resetStart = first
+		}
+		for i := resetStart; first >= 0 && i <= resetEnd; i++ {
 			for _, key := range []string{"acquire_count", "acquire_duration_ns", "empty_acquire_count", "empty_acquire_wait_ns", "canceled_acquire_count"} {
 				if pools[i][key] < pools[i-1][key] {
 					r.ResetOffsetsNS = append(r.ResetOffsetsNS, retained[i].OffsetNS)

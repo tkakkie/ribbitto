@@ -38,7 +38,9 @@ as inconclusive. No headroom or stability verdict is implemented here.
 
 Elapsed time uses actual endpoint offsets. Interior counter drops remain visible
 even when net deltas grow. A counter drop into the end sample belongs to the range
-only when that sample is within its end-boundary tolerance.
+only within its end-boundary tolerance; at an internal minute boundary, a drop
+into the first sample at or after `StartNS + 1s` belongs to the following range
+when a previous retained sample exists, while on-time drops stay in the earlier range.
 Missing boundaries leave deltas absent; resets suppress
 derived ratios. Zero empty acquisitions give zero mean wait. Consumers must check
 coverage, missing samples, resets and counter consistency before interpreting ratios.

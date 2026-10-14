@@ -608,8 +608,86 @@ func TestStage2TelemetryEndResetAttribution(t *testing.T) {
 			if !reflect.DeepEqual(r.ResetOffsetsNS, wantResets) {
 				t.Fatalf("minute end reset attribution: got=%v want=%v covered=%t", r.ResetOffsetsNS, wantResets, covered)
 			}
-			if !reflect.DeepEqual(ranges[0].ResetOffsetsNS, []int64{int64(time.Minute + lateness)}) || len(ranges[2].ResetOffsetsNS) != 0 {
-				t.Fatalf("reset attribution outside earlier minute: window=%v next=%v", ranges[0].ResetOffsetsNS, ranges[2].ResetOffsetsNS)
+			// A late drop leaves the earlier minute but must still be recorded in the next.
+			wantNext := []int64{}
+			if !covered {
+				wantNext = append(wantNext, int64(time.Minute+lateness))
+			}
+			if !reflect.DeepEqual(ranges[0].ResetOffsetsNS, []int64{int64(time.Minute + lateness)}) || !reflect.DeepEqual(ranges[2].ResetOffsetsNS, wantNext) {
+				t.Fatalf("reset attribution across the minute boundary: window=%v next=%v want next=%v", ranges[0].ResetOffsetsNS, ranges[2].ResetOffsetsNS, wantNext)
+			}
+		})
+	}
+}
+
+func TestStage2TelemetryBoundaryResetAttribution(t *testing.T) {
+	for _, tc := range []struct {
+		name                     string
+		opening, minute, closing time.Duration
+	}{
+		{"on-time", 0, 500 * time.Millisecond, 0},
+		{"late", 0, 1200 * time.Millisecond, 0},
+		{"exact-minute-cutoff", 0, time.Second, 0},
+		{"opening-tolerance", 2 * time.Second, 1200 * time.Millisecond, 0},
+		{"opening-uncovered", 2*time.Second + time.Nanosecond, 1200 * time.Millisecond, 0},
+		{"terminal-tolerance", 0, 1200 * time.Millisecond, 2 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			start := time.Unix(123, 0)
+			clock := start.Add(tc.opening)
+			samples, sampleErr := stage2SampleMetrics(context.Background(), start, func() time.Time { return clock }, func(_ context.Context, delay time.Duration) bool {
+				clock = clock.Add(delay)
+				switch clock.Sub(start) {
+				case 59 * time.Second, 120 * time.Second:
+					clock = clock.Add(500 * time.Millisecond)
+				case time.Minute:
+					clock = clock.Add(tc.minute)
+				case 600 * time.Second:
+					clock = clock.Add(tc.closing)
+				}
+				return true
+			}, func(context.Context) (json.RawMessage, error) {
+				second := int(clock.Sub(start) / time.Second)
+				switch {
+				case second >= 600:
+					second -= 600
+				case second >= 120:
+					second -= 120
+				case second >= 60:
+					second -= 60
+				}
+				return stage2MetricFixture(second), nil
+			})
+			if (sampleErr != nil) != (tc.opening > 0 || tc.minute >= time.Second) {
+				t.Fatalf("boundary sampling: err=%v", sampleErr)
+			}
+			ranges, err := stage2AggregateTelemetry(samples)
+			if err != nil {
+				t.Fatal(err)
+			}
+			firstDrop := int64(time.Minute + tc.minute)
+			secondDrop := int64(120*time.Second + 500*time.Millisecond)
+			terminalDrop := int64(600*time.Second + tc.closing)
+			for i, r := range ranges {
+				want := []int64{}
+				switch i {
+				case 0:
+					want = append(want, firstDrop, secondDrop, terminalDrop)
+				case 1:
+					if tc.minute < time.Second {
+						want = append(want, firstDrop)
+					}
+				case 2:
+					if tc.minute >= time.Second {
+						want = append(want, firstDrop)
+					}
+					want = append(want, secondDrop)
+				case 10:
+					want = append(want, terminalDrop)
+				}
+				if !reflect.DeepEqual(r.ResetOffsetsNS, want) {
+					t.Fatalf("range %d reset attribution: got=%v want=%v", i, r.ResetOffsetsNS, want)
+				}
 			}
 		})
 	}

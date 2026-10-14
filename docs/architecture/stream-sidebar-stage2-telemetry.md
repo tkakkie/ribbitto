@@ -1,7 +1,8 @@
 # Stage-2 continuous telemetry (#865, PR 3 slice 5a)
 
 The [fixed protocol](stream-sidebar-stage2.md) has a sampler and pool aggregates
-in `cmd/loadgen/stage2_telemetry.go`. It adds no runner or gate verdicts.
+in `cmd/loadgen/stage2_telemetry.go`; the [headroom evaluator](stream-sidebar-stage2-headroom.md)
+consumes this contract. The sampler adds no runner or gate verdicts.
 The caller supplies a clock, context-aware wait and metrics reader; tests use
 virtual time. The HTTP reader uses the loopback transport, a one-second deadline,
 one attempt and a 1 MiB cap. Every successful snapshot retains all six sections.
@@ -34,7 +35,7 @@ sampling slot rather than borrowing a later slot to hide missing evidence.
 A miss at either endpoint makes that bucket's `BoundaryCovered` false, leaves
 deltas absent and elapsed time/ratios at their unavailable zero defaults. It
 cannot produce a pass; slice 5b's consumer must treat unavailable bucket ratios
-as inconclusive. No headroom or stability verdict is implemented here.
+as inconclusive. Gate verdicts belong to the consumer, not aggregation.
 
 Elapsed time uses actual endpoint offsets. Interior counter drops remain visible
 even when net deltas grow. A counter drop into the end sample belongs to the range

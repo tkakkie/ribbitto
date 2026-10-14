@@ -138,23 +138,20 @@ after processing; commands and failing assertions are in the part 2b PR body.
 Default delivery remains synchronous. Processing time is
 not recount freshness; mixed-load validation remains later work.
 
-Part 2c adds command-local [explicit capacity configuration](../database.md#recount-capacity-configuration).
-`RIBBITTO_ASYNC_RECOUNTS` defaults to off (also for empty); only on and off
-are accepted. Off ignores stray budget inputs and leaves pgx pool behavior
-unchanged. On requires explicit C/W/M/R/E/P/H without defaults and validates
-`B = floor((M-R-E)/P)`, `0 < C <= B` and `0 < W <= C-H` before workers or
-listeners start. C overrides the URL's pool maximum; registration capacity
-comes from the effective process stream cap, with no extra setting.
-M=100, R=3, E=20, P=2, H=10 gives B=38: C=36/W=26 passes, while
-C=39 or W=27 fails. **36/26 is a validation configuration, not a production
-default.** Startup logs non-secret effective capacity once. Part 2h composes
-opt-in delivery; [operation and validation status](../database.md#recount-capacity-configuration).
+Command capacity, observation and shutdown composition are in
+[recount operations](recount-operations.md).
 
-Part 2f forwards optional `RecountObserver` through Stream and web Streaming,
-including RunReserved; nil adds no clocks, allocations or locks. Aggregates
-measure queue, compute, receipts, return→send and submit→send
-([delivery metrics](dev-metrics.md#delivery-snapshot)). Stage 2 separates queue,
-compute and send delay but cannot prove freshness; PR 3 owns that oracle.
+## Current shared computation limit (#1046)
 
-Part 2g closes an optional scheduler with HTTP shutdown, after `Hub.CancelAll`
-and before the pool ([order](stream-limits.md#shutdown)).
+Production shares one `RecountLimit` across connect, read, resync and move
+recounts in both modes, separately from scheduler registrations. Slot acquisition
+waits at most 25 ms. Expiry is a deferral, not a stream error: dirty state and
+watch coverage remain pending, and a new attempt follows after 250–1,000 ms
+of jitter. Slots are released only when the actual computation returns.
+The asynchronous worker returns a deferred completion; only the stream writer
+schedules its retry. Neither mode sends 503 on a deferred established stream.
+
+Connect sets a recount deadline randomly within 0–3 s rather than blocking
+the writer. Durable frames, owner frames and authorization continue during
+that delay. A connect occupies no computation slot until its deadline.
+Pool sizing is in [recount capacity](../recount-capacity.md#current-computation-sizing-1046).

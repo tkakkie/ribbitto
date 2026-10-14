@@ -114,7 +114,7 @@ components never include it, so live replacements leave it in place. Its
 list children. Moving that message out of a topic view removes its divider;
 moving another message leaves it in place. Destination inserts add no divider.
 
-`message-stream-v9.js` listens to the vendored SSE extension's
+`message-stream-v10.js` listens to the vendored SSE extension's
 `htmx:sseBeforeMessage`. It passes the server's HTML to htmx for an append or
 same-id replacement, settling synchronously so replay stays ordered and local
 timestamps are ready before scrolling. Only appends update the separate polite

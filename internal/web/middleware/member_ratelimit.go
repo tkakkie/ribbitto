@@ -52,7 +52,7 @@ func NewChannelCreationRateLimiter(now func() time.Time) *MemberRateLimiter {
 }
 
 // NewSidebarResyncRateLimiter returns an independent budget of 32/s, burst 32.
-// It covers 16 tabs retrying at the script's one-second backoff cap.
+// It covers 16 tabs retrying at the script's 8 s backoff cap with headroom.
 func NewSidebarResyncRateLimiter(now func() time.Time) *MemberRateLimiter {
 	return NewMemberRateLimiterWithBudget(now, 32, 32, 0)
 }

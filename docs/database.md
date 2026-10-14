@@ -13,49 +13,8 @@ See [worktree environments](worktree-env.md) for per-worktree dev databases, por
 
 ## Recount capacity configuration
 
-`serve` accepts `RIBBITTO_ASYNC_RECOUNTS=on|off`; unset or empty means off,
-and any other value fails startup. Off ignores all seven budget inputs below,
-including malformed stray values, and preserves the database URL's pool settings
-and pgx defaults. On requires every input explicitly, with no defaults:
-
-| Environment variable | Budget input |
-|---|---|
-| `RIBBITTO_POOL_MAX_CONNS` | C: pool maximum per process |
-| `RIBBITTO_RECOUNT_WORKERS` | W: configured recount workers |
-| `RIBBITTO_DB_MAX_CONNECTIONS` | M: PostgreSQL max_connections |
-| `RIBBITTO_DB_RESERVED_CONNECTIONS` | R: reserved connections |
-| `RIBBITTO_DB_EXTERNAL_CONNECTIONS` | E: external/operations connections |
-| `RIBBITTO_DB_PROCESSES` | P: maximum simultaneous ribbitto processes |
-| `RIBBITTO_DB_NORMAL_HEADROOM` | H: connections for normal work per process |
-
-All inputs must be signed 32-bit integers: C, W, M and P positive; R, E and H
-non-negative. Startup reports all violated input and budget rules together:
-`B = floor((M-R-E)/P)`, `0 < C <= B`, `0 < W <= C-H`. Deployment inputs
-are operator declarations, not discovered database settings. Include overlap
-during deployments in P. The registration limit is the effective
-`RIBBITTO_MAX_STREAMS`, with no separate setting.
-
-With M=100, R=3, E=20, P=2 and H=10, B=38. C=36 and W=26 pass;
-C=39 or W=27 fail. **36/26 is a validation configuration, not a production
-default.** On applies C before opening the pool, overriding `pool_max_conns`
-in the database URL. The platform's `PoolOptions.MaxConns=0` preserves existing
-pool behavior. A startup `slog` record includes the effective pool maximum,
-configured budget, stream registration limit and effective delivery mode;
-no database URL or credentials are logged.
-
-On constructs one scheduler with W workers and the process stream cap as its
-registration limit, plus one delivery observer. Both share the production
-stream composition and development metrics; shutdown joins the scheduler before
-closing the shared pool. Off constructs neither and keeps synchronous delivery;
-metrics report `scheduler.enabled: false` and `delivery.enabled: false`.
-**Async recounts are not enabled by default and are not yet validated for
-production.** Stage 2 / PR 3 of #865 decides activation using a freshness oracle
-and mixed-load validation; opt-in wiring alone is not that validation.
-See the [scheduler contract](architecture/recount-scheduler.md).
-
-Member/account fairness is out of scope: FIFO is per stream, so sixteen tabs
-receive more service than one tab. Equal account shares need an identity-aware
-policy.
+See [recount capacity](recount-capacity.md#recount-capacity-configuration) for
+explicit async budgets and the current shared computation limit.
 
 ## Database workflow
 

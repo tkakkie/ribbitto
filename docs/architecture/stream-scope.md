@@ -87,7 +87,7 @@ resync. Reads and own
 posts recount only that member's tabs; moves or branches dirty only streams
 showing that channel.
 
-**Recovery; planned server bound (PR 4):** reconnect, `reset`,
+**Recovery and current server bound (PR 4):** reconnect, `reset`,
 visibility return, back-forward-cache `pageshow` and failures trigger resync.
 Malformed frames, failed DOM application or resync requests, or losses beyond
 the 1,000-event retention bound stop increments and enter recovery. Coalesce
@@ -96,11 +96,11 @@ only after a snapshot arrives with no event lost between the request it answers
 and its arrival, then reapply eligible retained events above it. Retained events
 are not losses; otherwise show the snapshot numbers, resync again and stay
 recovering. No event-history
-replay or unbounded retention is added. PR 4 spreads connect recounts by 0–3 s,
+replay or unbounded retention is added. PR 4 now spreads connect recounts by 0–3 s,
 visibility/pageshow resyncs by 0–2 s and `reset` reloads by 0–5 s. One bound on
 concurrent recount computations covers connect, read, resync and moves in both
 synchronous and asynchronous modes, separately from stream registrations, sized
-against normal-work pool headroom. After a bounded slot wait, leave the sidebar
+against [normal-work pool headroom](../recount-capacity.md#current-computation-sizing-1046). After a bounded slot wait, leave the sidebar
 dirty and retry with jitter; established streams do not return 503. The resync
 POST only publishes and answers immediately. Decision 34 defines the remaining
 recovery and admission limits.

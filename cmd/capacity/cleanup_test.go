@@ -61,10 +61,12 @@ func TestCleanup(t *testing.T) {
 
 // The kernel never hands out a PID still in use as a session ID, so once the
 // reaped leader's PID is held again nothing in that session is ours: neither
-// the holder nor another member is signalled or counted (#1053).
+// the holder nor another member is signalled or counted (#1053). The PID is
+// taken during the first scan, so the check after it is what skips them.
 func TestCleanupReusedLeaderPID(t *testing.T) {
 	w := &worker{pid: 41, exited: true}
 	scans := [][]int{{41, 101}, {41}}
+	scanned := false
 	var killed []int
 	c := cleanupOps{
 		scan: func(session int) ([]int, error) {
@@ -74,16 +76,33 @@ func TestCleanupReusedLeaderPID(t *testing.T) {
 			if len(scans) == 0 {
 				return nil, fmt.Errorf("too many scans")
 			}
+			scanned = true
 			scan := scans[0]
 			scans = scans[1:]
 			return scan, nil
 		},
 		killGroup:  func(int) { t.Fatal("killed reaped leader's group") },
 		killMember: func(pid int, _ *worker) { killed = append(killed, pid) },
-		held:       func(pid int) bool { return pid == w.pid },
+		held:       func(pid int) bool { return pid == w.pid && scanned },
 	}
 	if confirmed := c.stop(w); !confirmed || len(killed) != 0 || len(scans) != 1 {
 		t.Fatalf("confirmed = %v, killed %v, remaining scans = %d", confirmed, killed, len(scans))
+	}
+}
+
+// The maintainer on #1059: a reaped leader's PID held again confirms the
+// cleanup even when the scan fails; with nobody holding it, a failing scan
+// leaves the cleanup unconfirmed (TestCleanup's "ps failure after reap").
+func TestCleanupReusedLeaderPIDScanFails(t *testing.T) {
+	w := &worker{pid: 41, exited: true}
+	c := cleanupOps{
+		scan:       func(int) ([]int, error) { return nil, fmt.Errorf("ps failed") },
+		killGroup:  func(int) { t.Fatal("killed reaped leader's group") },
+		killMember: func(pid int, _ *worker) { t.Fatalf("signalled %d", pid) },
+		held:       func(pid int) bool { return pid == w.pid },
+	}
+	if !c.stop(w) {
+		t.Fatal("cleanup of a reused session was not confirmed after a failed scan")
 	}
 }
 

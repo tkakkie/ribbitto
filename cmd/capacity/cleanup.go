@@ -98,17 +98,24 @@ func (c cleanupOps) stop(w *worker) bool {
 	if !w.exited {
 		c.killGroup(w.pid)
 	}
+	// The kernel never hands out a PID still in use as a session ID, so once
+	// the leader is reaped, a process holding its PID means nothing of ours
+	// is left in that session (#1053). Nobody holding it leaves the members
+	// as our orphans, within the limit accepted in #636. Checked before each
+	// scan, so a failing scan cannot leave such a session unconfirmed (the
+	// maintainer on #1059), and again after it.
+	reused := func() bool { return w.exited && c.held(w.pid) }
 	confirmed := false
 	for range 100 {
+		if reused() {
+			confirmed = true
+			break
+		}
 		members, err := c.scan(w.pid)
 		if err != nil {
 			break
 		}
-		// The kernel never hands out a PID still in use as a session ID, so
-		// once the leader is reaped, a process holding its PID means nothing
-		// of ours is left in that session (#1053). Nobody holding it leaves
-		// the members as our orphans, within the limit accepted in #636.
-		if w.exited && c.held(w.pid) {
+		if reused() {
 			confirmed = true
 			break
 		}

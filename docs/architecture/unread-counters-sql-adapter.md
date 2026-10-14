@@ -1,4 +1,4 @@
-# Write-time unread counters: SQL adapter (#957a–c1)
+# Write-time unread counters: SQL adapter (#957a–c2a)
 
 The test-only adapter in `internal/realtime/unread_counters_sql_test.go` creates
 scoped bigint totals and complete member bundles with validity/revision. It uses
@@ -42,7 +42,29 @@ scan. Both shapes run the same sequential oracle and gated transaction tests,
 including no-ops, overlap, rollback, retries, prefixes, missing/invalid bundles
 and pinned snapshots. A structural guard rejects whole-coverage aggregation
 on the intended path. Materialisation and exhaustive fallback remain correctness
-checks; matched capped recounts and accounting follow in #957c2–c4.
+checks; matched capped recounts and workload wiring follow in #957c3–c4.
+
+`internal/realtime/unread_counters_accounting_test.go` adds #957c2a's
+**unmeasured accounting seam**, shared by current production writes and intended
+counter writes. An explicit operation context counts application statements,
+transaction controls separately (including savepoints), and successful row
+mutations, including DELETE RETURNING. SELECT/locking results are not mutations.
+Maintenance CTEs return the sum of all their writes' RETURNING rows in their
+existing round trip; no extra observation query or coverage scan is added.
+Repeated reads may still physically rewrite ranges even with no unread change.
+Rows include work later rolled back, rather than only committed changes.
+
+An injected clock spans BEGIN through COMMIT/ROLLBACK, including nested
+maintenance and failed BEGIN, excluding pool acquisition and post-transaction
+work. Per-operation samples yield p50/p95/p99 with the harness's percentile
+convention. The caller records each failed attempt once, each deadlocked attempt
+once (SQLSTATE 40P01), and actual retry attempts explicitly; no retry policy is
+introduced. Fresh write-owned captures are still required for retries.
+Deterministic tests use virtual time and exact SQL/mutation expectations for
+posts, feed/topic reads, repeated reads, moves with notices, and lazy joins in
+both designs. Fixtures/oracles use a separate untraced pool/context; the seam
+rejects correctness-only coverage SQL. Lock-wait observation, per-move breakdown
+and gated contention accounting remain #957c2b.
 
 Production, migrations and #867's stability rule are unchanged. No measurements
 or adoption conclusion follow from these tests. Only the intended maintenance

@@ -13,20 +13,21 @@ import (
 // validates their source under the organisation lock. Classification
 // ignores floors; the notice union cannot cover any older selected message.
 func counterSQLTransfer(ctx context.Context, conn *pgx.Conn, w *counterSQLWrite) error {
-	if err := counterSQLExec(ctx, conn, `WITH source AS (
+	if err := counterSQLCountExec(ctx, conn, `WITH source AS (
  UPDATE counter_total SET n=n-cardinality($3::bigint[])
- WHERE organization_id=$1 AND channel_id=$2 AND scope_id=$4
+ WHERE organization_id=$1 AND channel_id=$2 AND scope_id=$4 RETURNING 1
  ), delta AS (
  SELECT topic_id AS scope_id,count(*) AS n FROM message
  WHERE organization_id=$1 AND channel_id=$2 AND event_seq=ANY($3) GROUP BY topic_id
- ) INSERT INTO counter_total SELECT $1,$2,scope_id,n FROM delta
- ON CONFLICT(organization_id,channel_id,scope_id) DO UPDATE SET n=counter_total.n+excluded.n`,
+ ), destination AS (INSERT INTO counter_total SELECT $1,$2,scope_id,n FROM delta
+ ON CONFLICT(organization_id,channel_id,scope_id) DO UPDATE SET n=counter_total.n+excluded.n RETURNING 1)
+ SELECT (SELECT count(*) FROM source)+(SELECT count(*) FROM destination)`,
 		w.organization, w.channel, w.moves, w.moveFrom); err != nil {
 		return err
 	}
 	// Source decrements must UPDATE existing nonnegative rows: inserting a
 	// negative candidate would fail CHECK before ON CONFLICT can add it.
-	return counterSQLExec(ctx, conn, `WITH moved AS (
+	return counterSQLCountExec(ctx, conn, `WITH moved AS (
  SELECT m.topic_id,m.event_seq FROM message m
  WHERE m.organization_id=$1 AND m.channel_id=$2 AND m.event_seq=ANY($3)
  ), reads AS (
@@ -39,9 +40,10 @@ func counterSQLTransfer(ctx context.Context, conn *pgx.Conn, w *counterSQLWrite)
  ), source AS (
  UPDATE counter_topic_read r SET n=r.n-d.n FROM
  (SELECT member_id,sum(n)::bigint AS n FROM reads GROUP BY member_id) d
- WHERE r.organization_id=$1 AND r.channel_id=$2 AND r.topic_id=$4 AND r.member_id=d.member_id
- ) INSERT INTO counter_topic_read SELECT $1,$2,member_id,topic_id,n FROM reads
- ON CONFLICT(organization_id,channel_id,member_id,topic_id) DO UPDATE SET n=counter_topic_read.n+excluded.n`,
+ WHERE r.organization_id=$1 AND r.channel_id=$2 AND r.topic_id=$4 AND r.member_id=d.member_id RETURNING 1
+ ), destination AS (INSERT INTO counter_topic_read SELECT $1,$2,member_id,topic_id,n FROM reads
+ ON CONFLICT(organization_id,channel_id,member_id,topic_id) DO UPDATE SET n=counter_topic_read.n+excluded.n RETURNING 1)
+ SELECT (SELECT count(*) FROM source)+(SELECT count(*) FROM destination)`,
 		w.organization, w.channel, w.moves, w.moveFrom)
 }
 

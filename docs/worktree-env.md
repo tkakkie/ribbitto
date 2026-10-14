@@ -4,7 +4,7 @@
 `RIBBITTO_TEST_DATABASE_URL`. Its ignored `.env.local` stores only its name and
 app/metrics ports. `make dev`, `make migrate DIRECTION=up|down|status`,
 `make seed ARGS='-messages 100'` and `make schema-docs` read it. For other
-commands: `python3 scripts/ai_env.py run <command>`. Without `.env.local`,
+commands: `./bin/ai-db run <command>` (`cmd/devdb`). Without `.env.local`,
 shell configuration applies. Local names and integer ports must match the registry
 before any connection; only the parsed admin URL's database field changes.
 
@@ -25,7 +25,8 @@ until pruned. No prefix scans or test-template cleanup.
 `make ai-health` distinguishes missing/invalid admin configuration, connection
 failures and SQL failures without credentials;
 `make check` runs it before tests when DB configuration is set or required.
-`make check-ai-env` tests this tooling.
+`make check-ai-env` tests the reservation and cleanup (`scripts/ai_env.py`, until #1004);
+`cmd/devdb`'s Go tests cover running commands and the health check.
 
 Build with `go build -o bin/ai-capacity ./cmd/capacity`, then run
 `bin/ai-capacity WT1 WT2 PACKAGES PARALLEL` outside the sandbox, with this

@@ -56,7 +56,7 @@ For parallel worktrees, optionally run `make ai-env` after `make db-up`.
 It migrates a separate dev database and allocates app/metrics ports in
 `.env.local`; the Make targets above then use those values instead of
 `RIBBITTO_DATABASE_URL`. Start other commands with
-`python3 scripts/ai_env.py run <command>` to use that configuration.
+`./bin/ai-db run <command>` (built by `make bin/ai-db`) to use that configuration.
 Commands use the worktree root even from a subdirectory. Git worktree IDs
 keep databases across moves and symlink spellings. Local database names and
 ports must match the registry; reruns keep free ports and replace busy ones.
@@ -93,8 +93,8 @@ without caching and recompute the stylesheet URL's content hash on each page
 request. Reload the browser after an edit; rebuilt CSS needs no server restart.
 Ctrl-C stops the watchers and server.
 
-The standalone Tailwind CLI is downloaded and SHA-256 checked by `make css`
-(macOS ARM64 and Linux x64). No npm or JavaScript build step is needed.
+`make css` and `make lint` use [`tools/download`](tools/download/main.go)
+for SHA-256 checked tools (macOS ARM64 and Linux x64). No npm is needed.
 Generated Go, CSS and vendored scripts are committed, so `go build` needs
 neither templ nor Tailwind. CSS class detection is limited to `.templ` files
 so local notes and tools do not change the output.

@@ -55,7 +55,7 @@ and the contrast table are in [`ui-colours.md`](ui-colours.md).
 | Other token | Value |
 |---|---|
 | Fonts | `font-sans`: system UI fonts with Japanese fallbacks (Hiragino Sans, Noto Sans JP, Yu Gothic, Meiryo); `font-mono` for code. No web fonts (self-hosting and privacy). |
-| Type scale | `text-caption` 12/16 · `text-body` 14/22 · `text-title` 15/22 · `text-heading` 20/28 · `text-display` 28/36 (px, size/line height) |
+| Type scale | `text-caption` 12/16 · `text-body` 14/22 · `text-title` 15/22 · `text-entry` 16/22 (phone composer) · `text-heading` 20/28 · `text-display` 28/36 (px, size/line height) |
 | Spacing | `--spacing: 0.25rem` — a 4 px grid (`p-1` = 4 px, `p-4` = 16 px) |
 | Radius | `rounded-sm` 4 px · `rounded-md` 6 px · `rounded-lg` 10 px · `rounded-xl` 12 px (blocks) |
 | Shadow | `shadow-block` (blocks, cards) · `shadow-popover` (menus, dialogs) |
@@ -95,10 +95,13 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
 - **Phone** (M6): one column. The channel list is its own page with a
   bottom navigation (#970) instead of the app bar: Home, and an Account
   button that opens the account menu as a bottom sheet, each an icon above
-  a short label, both above the safe area. A conversation fills the screen; its header has a back link to
-  the list, and the bottom navigation is hidden there. Members and the
-  overview open as a bottom sheet over the conversation, and **Mark as
-  read** is reached from the overview sheet. Welcome pages show a short
+  a short label, both above the safe area. A conversation fills the screen without the
+  bottom navigation, with 16 px message gutters. Its one-row header keeps
+  the back link, channel image, truncated channel/topic names, and named
+  icon controls for **Mark as read**, Members and Overview (#971).
+  The composer sits above the bottom safe area, with 16 px input text.
+  Members and the overview will open as bottom sheets, with **Mark as
+  read** in the overview sheet (#972). Welcome pages show a short
   brand strip (logo, name, tagline) above the form, without the
   illustrations.
 - **Tap targets** at phone width are at least 44 × 44 px: links, buttons,

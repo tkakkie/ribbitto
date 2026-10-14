@@ -110,6 +110,7 @@ func (c *costHybridConnection) Send(ctx context.Context, out realtime.Outgoing) 
 	if err := c.sender.Send(ctx, out); err != nil {
 		return err
 	}
+	c.sentModel(next.frame)
 	*c.coverage, c.latest = next, next.frame
 	delete(c.pending, string(out.Data))
 	return nil

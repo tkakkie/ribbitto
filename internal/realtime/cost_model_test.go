@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -25,6 +26,9 @@ type costModelConnection struct {
 	next         uint64
 	pending      map[string]hybridFrame
 	latest       hybridFrame
+	sent         []costSentModel
+	sentStart    time.Time
+	sentDropped  uint64
 	computations atomic.Int64
 }
 
@@ -75,6 +79,7 @@ func (c *costModelConnection) Send(ctx context.Context, out realtime.Outgoing) e
 	if out.Name == "sidebar" {
 		c.mu.Lock()
 		defer c.mu.Unlock()
+		c.sentModel(frame)
 		c.latest = frame
 		delete(c.pending, string(out.Data))
 	}
@@ -102,7 +107,9 @@ func costModelSnapshot(ctx context.Context, pool *pgxpool.Pool, m org.Membership
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var frame hybridFrame
-	if err := tx.QueryRow(ctx, `SELECT event_seq FROM organization WHERE id=$1`, m.Organization.ID).Scan(&frame.boundary.sequence); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT event_seq, COALESCE((SELECT MAX(hi)-1 FROM read_range
+WHERE organization_id=$1 AND member_id=$2 AND channel_id=$3 AND lo=0),0)
+FROM organization WHERE id=$1`, m.Organization.ID, m.Member.ID, channel).Scan(&frame.boundary.sequence, &frame.readThrough); err != nil {
 		return frame, err
 	}
 	if checkpoint != nil {

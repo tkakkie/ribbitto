@@ -24,10 +24,13 @@ type counterBranchReads struct {
 }
 
 func (w counterBranchReads) Merge(ctx context.Context, organization, channel, member kernel.ID, joined, lo, hi int64) error {
-	if err := unreadpg.WriterIn(w.tx).Merge(ctx, unread.Scope{OrganizationID: organization, ChannelID: channel, MemberID: member}, joined, unread.Range{Lo: lo, Hi: hi}); err != nil {
+	if err := (counterIntervalRanges{unreadpg.WriterIn(w.tx)}).Merge(ctx, unread.Scope{OrganizationID: organization, ChannelID: channel, MemberID: member}, joined, unread.Range{Lo: lo, Hi: hi}); err != nil {
 		return err
 	}
 	*w.notice = hi - 1
+	if tracked, _ := ctx.Value(counterSQLKey{}).(*counterSQLWrite); tracked != nil {
+		tracked.seq = *w.notice
+	}
 	return nil
 }
 

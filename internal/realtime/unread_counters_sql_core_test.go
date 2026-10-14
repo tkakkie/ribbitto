@@ -17,6 +17,10 @@ import (
 )
 
 func TestUnreadCountersSQLCore(t *testing.T) {
+	counterSQLCore(t, false)
+}
+
+func counterSQLCore(t *testing.T, intervals bool) {
 	h := newCounterMatrix(t)
 	owner, writer := h.members[0], h.join(t, "writer")
 	var topic kernel.ID
@@ -29,6 +33,9 @@ func TestUnreadCountersSQLCore(t *testing.T) {
 	counterSQLTables(t, h.pool)
 	config := h.pool.Config()
 	config.ConnConfig.Tracer = counterSQLAdapter{}
+	if intervals {
+		config.ConnConfig.Tracer = counterIntervalAdapter{t: t}
+	}
 	pool, err := pgxpool.NewWithConfig(t.Context(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +65,9 @@ func TestUnreadCountersSQLCore(t *testing.T) {
 	post := func(name string, m org.Membership, channel kernel.ID, target *kernel.ID, cursor *int64) int64 {
 		t.Helper()
 		ctx, w := counterSQLContext(t.Context(), m, channel)
+		if intervals {
+			counterSQLUseIntervals(w)
+		}
 		var message conversation.Message
 		var err error
 		if cursor == nil {
@@ -69,11 +79,15 @@ func TestUnreadCountersSQLCore(t *testing.T) {
 			t.Fatalf("source: %v; counters: %v", err, w.err)
 		}
 		check(name)
+		h.posted[message.EventSeq] = message.ID
 		return message.EventSeq
 	}
 	read := func(name string, m org.Membership, target *kernel.ID, cursor int64) {
 		t.Helper()
 		ctx, w := counterSQLContext(t.Context(), m, h.channel)
+		if intervals {
+			counterSQLUseIntervals(w)
+		}
 		scope := unread.Scope{OrganizationID: m.Organization.ID, ChannelID: h.channel, MemberID: m.Member.ID}
 		var err error
 		if target == nil {
@@ -127,6 +141,20 @@ func TestUnreadCountersSQLCore(t *testing.T) {
 	post("cursorless-topic-own-post", owner, h.channel, &topic, nil)
 	h.floor(t, owner, topic, seq[3])
 	post("topic-cursor-post", owner, h.channel, &topic, &seq[5])
+	// Notice maintenance must work without the gated history's event tracker.
+	ctx, branchWrite := counterSQLContext(t.Context(), owner, h.channel)
+	if intervals {
+		counterSQLUseIntervals(branchWrite)
+	}
+	branchWrite.moveFrom, branchWrite.moves = topic, []int64{seq[1]}
+	var notice int64
+	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents,
+		func(tx platform.Tx) conversation.ReadRangeWriter { return counterBranchReads{tx, &notice} }, nil)
+	if _, err := branching.Branch(ctx, owner, h.channel, conversation.Branch{From: topic, To: &h.base,
+		Messages: []kernel.ID{h.posted[seq[1]]}}, func(conversation.Topic) string { return "branch notice" }); err != nil || branchWrite.err != nil {
+		t.Fatalf("source: %v; counters: %v", err, branchWrite.err)
+	}
+	check("write-owned-notice")
 	var latest int64
 	for i := 0; i < 101; i++ {
 		latest = post(fmt.Sprintf("cap-%d", i), writer, h.channel, nil, nil)

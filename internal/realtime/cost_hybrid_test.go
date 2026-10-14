@@ -20,6 +20,16 @@ type costHybridConnection struct {
 	coverage     *hybridCoverage
 	watch        *costHybridWatch
 	watcher      realtime.SidebarWatcher
+	rejected     costHybridRejections
+}
+
+// Rejections are separate from installed sends, which only the sender probe counts.
+type costHybridRejections struct{ repair, ignored uint64 }
+
+func (c *costHybridConnection) rejections() costHybridRejections {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rejected
 }
 
 func (c *costHybridConnection) Trigger(e realtime.Event) bool {
@@ -85,9 +95,16 @@ func (c *costHybridConnection) Send(ctx context.Context, out realtime.Outgoing) 
 	verdict := next.install(frame)
 	if verdict != "applied" {
 		delete(c.pending, string(out.Data))
-		if verdict == "repair" {
-			c.watch.repair()
+		switch verdict {
+		case "repair":
+			c.rejected.repair++
+		case "ignored":
+			c.rejected.ignored++
 		}
+		// A single production stream has increasing request versions and one
+		// incarnation, so ignored cannot occur there. Wake defensively for it
+		// too: neither rejection installed the change captured by this request.
+		c.watch.repair()
 		return nil
 	}
 	if err := c.sender.Send(ctx, out); err != nil {

@@ -127,5 +127,94 @@ func TestCostHybridCoverageSend(t *testing.T) {
 		if c.Send(t.Context(), realtime.Outgoing{Name: "sidebar", Ephemeral: true, Data: []byte("frame")}) == nil {
 			t.Fatal("consumed hybrid token accepted twice")
 		}
+		if got := c.rejections(); got != (costHybridRejections{repair: 1, ignored: 2}) {
+			t.Fatalf("rejected verdict counts: got %+v, want repair=1 ignored=2", got)
+		}
 	})
+}
+
+func TestCostHybridRejectedCompletion(t *testing.T) {
+	for _, verdict := range []string{"repair", "ignored"} {
+		t.Run(verdict, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				sub := realtime.Subscription{Organization: kernel.ID{1}, Member: kernel.ID{2}, Interests: []realtime.Interest{realtime.InterestSidebar}}
+				p := &costWriterProbe{t: t, sub: sub}
+				changes := new(unread.Changes)
+				c := &costHybridConnection{costModelConnection: &costModelConnection{changes: changes, sender: p}, organization: sub.Organization, incarnation: 1, coverage: &hybridCoverage{frame: hybridFrame{incarnation: 1}}}
+				frameCount := func() int {
+					c.mu.Lock()
+					defer c.mu.Unlock()
+					return len(p.frames)
+				}
+				before := sidebarOracleModel{organization: sub.Organization, member: sub.Member,
+					channels: []sidebarOracleEntry{{id: kernel.ID{3}, count: sidebarOracleDisplay(1)}}}
+				after := hybridClone(before)
+				after.channels[0].count = sidebarOracleDisplay(2)
+				calls := 0
+				c.snapshot = func(context.Context) (hybridFrame, error) {
+					calls++
+					if calls == 1 {
+						return hybridFrame{boundary: hybridBoundary{sequence: 100}, model: before}, nil
+					}
+					if verdict == "repair" && calls == 2 {
+						// Inject stale coverage through the production completion path.
+						return hybridFrame{boundary: hybridBoundary{sequence: 99}, model: before}, nil
+					}
+					return hybridFrame{boundary: hybridBoundary{sequence: 101}, model: after}, nil
+				}
+				q := realtime.NewRecountScheduler(1, 1)
+				defer q.Close()
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				done := make(chan error, 1)
+				stream := realtime.Stream{Hub: realtime.NewHub(), Events: p, Authorizer: p, Sidebar: c, Recounts: q}
+				go func() { _, err := stream.Run(ctx, sub, 0, c); done <- err }()
+				synctest.Wait()
+				if frameCount() != 1 || c.exact(before) != nil {
+					t.Fatal("initial recount did not install the original model")
+				}
+				want := costHybridRejections{repair: 1}
+				if verdict == "repair" {
+					changes.ReadChanged(sub.Organization, sub.Member)
+					<-time.After(realtime.SidebarInterval)
+				} else {
+					// Stream.Run serializes increasing versions in one incarnation,
+					// so force ignored by sending a duplicate directly while it is idle.
+					// Do not publish a read: only the rejection's wake can expose the change.
+					c.mu.Lock()
+					c.pending = map[string]hybridFrame{"duplicate": c.latest}
+					c.mu.Unlock()
+					if err := c.Send(ctx, realtime.Outgoing{Name: "sidebar", Ephemeral: true, Data: []byte("duplicate")}); err != nil {
+						t.Fatal(err)
+					}
+					want = costHybridRejections{ignored: 1}
+				}
+				synctest.Wait()
+				if got := c.rejections(); got != want {
+					t.Errorf("rejected verdict counts: got %+v, want %+v", got, want)
+				}
+				if frameCount() != 1 || p.sends.Load() != 1 || c.exact(before) != nil || c.exact(after) == nil {
+					t.Fatal("rejected completion added a probe frame or replaced the installed model")
+				}
+				<-time.After(realtime.SidebarInterval - time.Nanosecond)
+				synctest.Wait()
+				if frameCount() != 1 {
+					t.Fatal("rejection bypassed the recount throttle")
+				}
+				<-time.After(time.Nanosecond)
+				synctest.Wait()
+				if frameCount() != 2 || p.sends.Load() != 2 || c.exact(after) != nil {
+					t.Fatalf("%s rejection lost the change at the next recount deadline: frames=%d model=%v", verdict, frameCount(), c.exact(after))
+				}
+				if got := c.rejections(); got != want {
+					t.Errorf("installed recount changed rejection counts: got %+v, want %+v", got, want)
+				}
+				cancel()
+				synctest.Wait()
+				if err := <-done; !errors.Is(err, context.Canceled) || q.Stats().Registrations != 0 {
+					t.Fatalf("rejection lifecycle exit: %v", err)
+				}
+			})
+		})
+	}
 }

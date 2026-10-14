@@ -56,3 +56,14 @@ After writes stop, drain verification requires each stream's exact full model
 against independent persisted truth captured outside application SQL totals.
 Measured snapshots still pass a nil oracle checkpoint. Runner wiring remains
 #952b–952c; these are deterministic checks, with no measurement.
+
+Part #952b1 adds `costHybridConnection`, using the shared full-model source and
+writer-side coverage guard. The production-only route reconciles every bound
+organisation event (including unknown kinds and other channels) and member read;
+it infers no hypothetical effects. A private per-connection watch adds fixed
+30 s repairs with separate 10/60 s sensitivity, without publishing repairs to
+other tabs or the baseline. Exit joins its timer worker and releases the member
+watch. Coverage rejection preserves delivered state and requests fresh repair;
+a failed send never installs the candidate. The matched pinned-model tests and
+all #961 lifecycle scenarios also run through this adapter. Runner integration
+is #952b2; accounting, freshness and gates remain #952c. No measurement ran.

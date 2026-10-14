@@ -49,6 +49,7 @@ type hybridDelivery struct {
 	mu         sync.Mutex
 	requests   []*hybridDeliveryRequest
 	trigger    func(realtime.Event) bool
+	cost       bool
 }
 
 func (d *hybridDelivery) Watch(organization, member kernel.ID) realtime.SidebarWatch {
@@ -90,7 +91,7 @@ func (d *hybridDelivery) Send(ctx context.Context, out realtime.Outgoing) error 
 	if ctx.Err() != nil || d.deny.Load() {
 		d.t.Error("hybrid send survived cancellation or revocation")
 	}
-	if out.Name == "sidebar" {
+	if out.Name == "sidebar" && !d.cost {
 		d.mu.Lock()
 		var frame hybridFrame
 		for _, r := range d.requests {
@@ -121,10 +122,15 @@ func (d *hybridDelivery) close() {
 }
 
 func startHybridDelivery(t *testing.T, hub *realtime.Hub, q *realtime.RecountScheduler, changes *unread.Changes, sub realtime.Subscription, incarnation uint64, snapshot func(context.Context) (hybridFrame, error), heartbeat ...time.Duration) *hybridDelivery {
+	return startHybridDeliveryArm(t, hub, q, changes, sub, incarnation, snapshot, false, heartbeat...)
+}
+
+func startHybridDeliveryArm(t *testing.T, hub *realtime.Hub, q *realtime.RecountScheduler, changes *unread.Changes, sub realtime.Subscription, incarnation uint64, snapshot func(context.Context) (hybridFrame, error), cost bool, heartbeat ...time.Duration) *hybridDelivery {
 	t.Helper()
 	d := &hybridDelivery{costWriterProbe: &costWriterProbe{t: t, sub: sub}, hub: hub, changes: changes,
 		coverage: hybridCoverage{frame: hybridFrame{incarnation: incarnation}}, snapshot: snapshot,
 		started: make(chan *hybridDeliveryRequest, 8), done: make(chan costWriterExit, 1)}
+	d.cost = cost
 	parent, cancel := context.WithCancel(t.Context())
 	d.disconnect = cancel
 	ctx, unregister, err := hub.Register(parent, realtime.Connection{Organization: sub.Organization, Account: sub.Account, Session: kernel.ID{9}}, 2)
@@ -135,15 +141,33 @@ func startHybridDelivery(t *testing.T, hub *realtime.Hub, q *realtime.RecountSch
 	if len(heartbeat) != 0 {
 		stream.Heartbeat = heartbeat[0]
 	}
+	var sender realtime.Sender = d
+	if cost {
+		c := &costHybridConnection{costModelConnection: &costModelConnection{changes: changes, sender: d}, organization: sub.Organization, incarnation: incarnation, coverage: &d.coverage, watcher: d}
+		c.snapshot = func(ctx context.Context) (hybridFrame, error) {
+			_, err := d.Recount(ctx, sub)
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			if err != nil {
+				return hybridFrame{}, err
+			}
+			return d.requests[len(d.requests)-1].frame, nil
+		}
+		stream.Sidebar, sender = c, c
+	}
 	go func() {
 		defer unregister()
-		cursor, err := stream.Run(ctx, sub, 0, d)
+		cursor, err := stream.Run(ctx, sub, 0, sender)
 		d.done <- costWriterExit{cursor, err}
 	}()
 	return d
 }
 
-func TestHybridDelivery(t *testing.T) {
+func TestHybridDelivery(t *testing.T) { testHybridDelivery(t, false) }
+
+func TestCostHybridDelivery(t *testing.T) { testHybridDelivery(t, true) }
+
+func testHybridDelivery(t *testing.T, cost bool) {
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "delivery", "general")
 	account := identitytest.Account(t, pool, "reader@example.org", "Reader")
@@ -152,6 +176,9 @@ func TestHybridDelivery(t *testing.T) {
 	sub := realtime.Subscription{Organization: f.OrganizationID, OrganizationSlug: "delivery", Account: account, Member: member, Channel: f.Channel.ID,
 		Interests: []realtime.Interest{realtime.InterestMessages, realtime.InterestSidebar}}
 	snapshot := func(ctx context.Context) (hybridFrame, error) {
+		if cost {
+			return costModelSnapshot(ctx, pool, m, sub.Channel, &f.Channel.DefaultTopicID, nil)
+		}
 		model, err := hybridSnapshot(ctx, pool, m, f.Channel.ID, &f.Channel.DefaultTopicID)
 		return hybridFrame{model: model}, err
 	}
@@ -164,7 +191,7 @@ func TestHybridDelivery(t *testing.T) {
 				if scenario == "heartbeat revoke" {
 					heartbeat = realtime.SidebarInterval
 				}
-				d := startHybridDelivery(t, hub, q, changes, sub, 1, snapshot, heartbeat)
+				d := startHybridDeliveryArm(t, hub, q, changes, sub, 1, snapshot, cost, heartbeat)
 				defer d.close()
 				first := <-d.started
 				synctest.Wait()
@@ -201,7 +228,7 @@ SELECT $1,$2,$3,$4,'offline',event_seq FROM advanced`, sub.Organization, sub.Cha
 						t.Fatal(err)
 					}
 					changes.ReadChanged(sub.Organization, sub.Member)
-					reconnected := startHybridDelivery(t, hub, q, changes, sub, 2, snapshot)
+					reconnected := startHybridDeliveryArm(t, hub, q, changes, sub, 2, snapshot, cost)
 					defer reconnected.close()
 					fresh := <-reconnected.started
 					if fresh.frame.watch != 0 || fresh.frame.request != 1 {

@@ -32,7 +32,7 @@ func (c *costWatchedModel) Watch(organization, member kernel.ID) realtime.Sideba
 }
 
 func TestCostMatchedModel(t *testing.T) {
-	for _, arm := range []string{"baseline", "scheduler"} {
+	for _, arm := range []string{"baseline", "scheduler", "hybrid"} {
 		t.Run(arm, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				pool := pgtest.New(t)
@@ -78,6 +78,11 @@ SELECT $1,$2,$3,$4,'fixture',s FROM generate_series(2,107) s`, f.OrganizationID,
 				defer scheduler.Close()
 				defer close(resume)
 				stream := realtime.Stream{Hub: realtime.NewHub(), Events: p, Authorizer: p, Sidebar: c}
+				var sender realtime.Sender = c
+				if arm == "hybrid" {
+					h := &costHybridConnection{costModelConnection: c.costModelConnection, organization: sub.Organization, incarnation: 1, coverage: &hybridCoverage{frame: hybridFrame{incarnation: 1}}, watcher: c}
+					stream.Sidebar, sender = h, h
+				}
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				done := make(chan error, 1)
@@ -91,7 +96,7 @@ SELECT $1,$2,$3,$4,'fixture',s FROM generate_series(2,107) s`, f.OrganizationID,
 						_, err = (costWriter{stream, q, work}).run(ctx, sub, 107, c)
 					} else {
 						stream.Recounts = scheduler
-						_, err = stream.Run(ctx, sub, 107, c)
+						_, err = stream.Run(ctx, sub, 107, sender)
 					}
 					done <- err
 				}()

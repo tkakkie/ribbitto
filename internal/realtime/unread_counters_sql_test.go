@@ -3,6 +3,7 @@ package realtime_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -17,6 +18,7 @@ import (
 type counterSQLAdapter struct{}
 type counterSQLKey struct{}
 type counterSQLBegin struct{}
+type counterSQLFloorWrite struct{}
 type counterSQLWrite struct {
 	organization, channel, member kernel.ID
 	before, floors                string
@@ -24,6 +26,7 @@ type counterSQLWrite struct {
 	moveFrom                      kernel.ID
 	moves                         []int64
 	join                          bool
+	interval                      *counterIntervalWrite
 	err                           error
 }
 
@@ -80,11 +83,14 @@ func counterSQLState(ctx context.Context, conn *pgx.Conn, w *counterSQLWrite) (s
 
 func (counterSQLAdapter) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryEndData) {
 	w, _ := ctx.Value(counterSQLKey{}).(*counterSQLWrite)
+	if w != nil && w.interval != nil && ctx.Value(counterSQLFloorWrite{}) == true && data.Err == nil && data.CommandTag.RowsAffected() > 0 {
+		w.interval.changed = true
+	}
 	if w == nil || ctx.Value(counterSQLBegin{}) != true || data.Err != nil {
 		return
 	}
 	w.err = counterSQLLock(ctx, conn, w)
-	if w.err == nil && !w.join {
+	if w.err == nil && !w.join && w.interval == nil {
 		w.before, w.floors, w.err = counterSQLState(ctx, conn, w)
 	}
 	if w.err != nil {
@@ -94,6 +100,7 @@ func (counterSQLAdapter) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data
 
 func (counterSQLAdapter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	ctx = context.WithValue(ctx, counterSQLBegin{}, data.SQL == "begin")
+	ctx = context.WithValue(ctx, counterSQLFloorWrite{}, strings.HasPrefix(data.SQL, "-- name: InsertTopicReadFloor ") || strings.HasPrefix(data.SQL, "-- name: RaiseTopicReadFloor "))
 	w, _ := ctx.Value(counterSQLKey{}).(*counterSQLWrite)
 	if w == nil && data.SQL == "commit" {
 		// Only production writes use the traced pool: a write without a tracker
@@ -104,7 +111,12 @@ func (counterSQLAdapter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, da
 	if w == nil || data.SQL != "commit" || w.err != nil || w.join {
 		return ctx
 	}
-	after, floors, err := counterSQLState(ctx, conn, w)
+	var after, floors string
+	var err error
+	if w.interval == nil {
+		// Correctness-only: whole-coverage diff and channel scan, never evidence.
+		after, floors, err = counterSQLState(ctx, conn, w)
+	}
 	if err == nil && len(w.moves) > 0 {
 		err = counterSQLTransfer(ctx, conn, w)
 	}
@@ -114,7 +126,9 @@ func (counterSQLAdapter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, da
  WHERE m.organization_id=$1 AND m.channel_id=$2 AND m.event_seq=$3
  ON CONFLICT (organization_id,channel_id,scope_id) DO UPDATE SET n=counter_total.n+1`, w.organization, w.channel, w.seq)
 	}
-	if err == nil {
+	if err == nil && w.interval != nil {
+		err = counterSQLIntervalMaintain(ctx, conn, w)
+	} else if err == nil {
 		// Count messages in the exact new coverage, never interval widths or a
 		// capped recount. The own post belongs to this difference exactly once.
 		err = counterSQLExec(ctx, conn, `WITH delta AS (

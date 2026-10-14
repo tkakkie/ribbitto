@@ -46,7 +46,7 @@ func counterSQLTransfer(ctx context.Context, conn *pgx.Conn, w *counterSQLWrite)
 }
 
 func TestUnreadCountersSQLTransactions(t *testing.T) {
-	counterTransactions(t, true)
+	counterTransactions(t, true, false)
 }
 
 // Both passes use the caller's pinned snapshot, including fallback and lists.

@@ -1,4 +1,4 @@
-# Write-time unread counters: SQL adapter (#957a–b)
+# Write-time unread counters: SQL adapter (#957a–c1)
 
 The test-only adapter in `internal/realtime/unread_counters_sql_test.go` creates
 scoped bigint totals and complete member bundles with validity/revision. It uses
@@ -7,7 +7,7 @@ messages in exact newly covered ranges by topic before COMMIT. Own posts enter
 that difference once; range/floor changes advance revision. Materialisation
 counts every topic uncapped. Missing/invalid bundles fall back to SQL prefix/range
 counts in the caller's snapshot. Raw fallback is exhaustive for verification;
-#957c must retain today's capped fallback separately for measurement.
+#957c3 must retain today's capped fallback separately for measurement.
 
 `internal/realtime/unread_counters_sql_moves_test.go` transfers topic T/R in the
 production branch transaction, classifying selected original sequences by each
@@ -26,8 +26,25 @@ checks raw T/R/U and #950's raw/99+ model in a fresh snapshot; snapshots pinned
 before outcomes are checked again afterward. Rollback compares source, counters,
 validity/revision, topics, members, accounts, events and organisation sequence.
 
+`internal/realtime/unread_counters_intervals_test.go` adds #957c1's
+**measurement-intended shape (unmeasured)**. Feed, cursorless post and notice
+writers retain `MergeCovered`'s newly covered intervals under the source lock.
+Each interval uses a scoped half-open `event_seq` lookup supported by
+`message_channel_event_seq_idx`, grouped by current topic; widths never count
+messages. Topic reads retain the one-per-unread-message candidates before
+coalescing; topic-cursor posts add their own message once, outside the old
+cursor. Successful floor INSERT/UPDATE effects advance revision; repeated
+reads leave it unchanged. Captures are transaction-local, including on retry.
+Move transfers keep #957b's every-member locking.
+
+The **correctness-only shape** retains the whole-coverage difference and channel
+scan. Both shapes run the same sequential oracle and gated transaction tests,
+including no-ops, overlap, rollback, retries, prefixes, missing/invalid bundles
+and pinned snapshots. A structural guard rejects whole-coverage aggregation
+on the intended path. Materialisation and exhaustive fallback remain correctness
+checks; matched capped recounts and accounting follow in #957c2–c4.
+
 Production, migrations and #867's stability rule are unchanged. No measurements
-or adoption conclusion follow from these tests. #957c must measure the design's
-per-interval, index-backed counts from each write's newly covered intervals.
-The whole-coverage difference and channel scan here remain correctness checks;
-label both shapes, with only the intended shape counted as measured evidence.
+or adoption conclusion follow from these tests. Only the intended maintenance
+shape may contribute measured evidence in a later approved run. The whole-
+coverage shape and #956c's bytea carrier never do.

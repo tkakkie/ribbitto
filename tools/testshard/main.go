@@ -57,7 +57,9 @@ func run(root, shard string, check bool) error {
 	if !ok {
 		return fmt.Errorf("unknown shard %q", shard)
 	}
-	fmt.Println(strings.Join(packages, "\n"))
+	// One line: make check-test passes the list in a variable, and a newline
+	// there would end the recipe line.
+	fmt.Println(strings.Join(packages, " "))
 	return nil
 }
 

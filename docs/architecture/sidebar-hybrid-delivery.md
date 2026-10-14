@@ -25,3 +25,19 @@ recount/repair progress and full-model equality at pinned persisted boundaries.
 Mutation evidence belongs in the PR body. Production code, `SidebarInterval` and
 #865's PR 3 plan are unchanged; measurement and adoption remain #952. Together
 with 2a–2c-b2, the tests cover #961's acceptance conditions.
+
+## Matched cost-harness support (#952a1)
+
+`costModelConnection` supplies both comparison arms with the same uncapped full
+model, ordered lists, selection, display counts and badges. Sequence coverage is
+read in that model's repeatable-read snapshot. Its test-token sink installs state
+only after successful delivery and rejects duplicate completions. Application
+snapshot SQL is counted through the supplied pool; independent oracle checks are
+verification work outside application totals. The historical stage-1 source stays
+separate. Runner integration, repairs and new accounting remain #952b–952c.
+
+The baseline `costWriter` keeps its fair scheduler and now subscribes to scoped
+member watches before recounting, captures generations when queued work starts,
+retains publications during computation and releases watches on every exit.
+Both schedulers pass the same deterministic full-model/read-only, scope and late
+completion checks. The changed-read driver remains #952a2. No measurement ran.

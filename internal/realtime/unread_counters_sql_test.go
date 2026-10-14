@@ -21,6 +21,9 @@ type counterSQLWrite struct {
 	organization, channel, member kernel.ID
 	before, floors                string
 	seq                           int64
+	moveFrom                      kernel.ID
+	moves                         []int64
+	join                          bool
 	err                           error
 }
 
@@ -41,8 +44,23 @@ func counterSQLLock(ctx context.Context, conn *pgx.Conn, w *counterSQLWrite) err
 		{`SELECT member_id FROM counter_bundle WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3 FOR UPDATE`, 3},
 		{`SELECT topic_id FROM counter_topic_read WHERE organization_id=$1 AND channel_id=$2 AND member_id=$3 ORDER BY topic_id FOR UPDATE`, 3},
 	} {
+		if w.join && q.keys > 1 {
+			return nil
+		}
 		if err := counterSQLExec(ctx, conn, q.sql, []any{w.organization, w.channel, w.member}[:q.keys]...); err != nil {
 			return err
+		}
+		if q.keys == 2 && len(w.moves) > 0 {
+			for _, sql := range []string{
+				`INSERT INTO channel_read SELECT organization_id,channel_id,member_id FROM counter_bundle WHERE organization_id=$1 AND channel_id=$2 AND valid ON CONFLICT DO NOTHING`,
+				`SELECT member_id FROM channel_read WHERE organization_id=$1 AND channel_id=$2 ORDER BY member_id FOR UPDATE`,
+				`SELECT member_id FROM counter_bundle WHERE organization_id=$1 AND channel_id=$2 ORDER BY member_id FOR UPDATE`,
+				`SELECT topic_id FROM counter_topic_read WHERE organization_id=$1 AND channel_id=$2 ORDER BY member_id,topic_id FOR UPDATE`,
+			} {
+				if err := counterSQLExec(ctx, conn, sql, w.organization, w.channel); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
@@ -66,7 +84,7 @@ func (counterSQLAdapter) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data
 		return
 	}
 	w.err = counterSQLLock(ctx, conn, w)
-	if w.err == nil {
+	if w.err == nil && !w.join {
 		w.before, w.floors, w.err = counterSQLState(ctx, conn, w)
 	}
 	if w.err != nil {
@@ -83,10 +101,13 @@ func (counterSQLAdapter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, da
 		_, _ = conn.Exec(ctx, `SELECT 1/0`)
 		return ctx
 	}
-	if w == nil || data.SQL != "commit" || w.err != nil {
+	if w == nil || data.SQL != "commit" || w.err != nil || w.join {
 		return ctx
 	}
 	after, floors, err := counterSQLState(ctx, conn, w)
+	if err == nil && len(w.moves) > 0 {
+		err = counterSQLTransfer(ctx, conn, w)
+	}
 	if err == nil && w.seq != 0 {
 		err = counterSQLExec(ctx, conn, `INSERT INTO counter_total
  SELECT $1,$2,s,1 FROM message m CROSS JOIN LATERAL unnest(ARRAY[m.channel_id,m.topic_id]) s
@@ -211,6 +232,9 @@ func counterSQLModel(t *testing.T, tx pgx.Tx, v counterView, truth counterTruth)
 		}
 		wantTotal := counterRecount(truth, channel, kernel.ID{}, false)[entry.id]
 		wantRead := counterRecount(truth, channel, member, true)[entry.id]
+		if n != wantTotal-wantRead {
+			t.Fatalf("raw SQL unread differs from truth: scope=%x unread=%d/%d", entry.id, n, wantTotal-wantRead)
+		}
 		if total != wantTotal || valid && read != wantRead {
 			t.Fatalf("persisted totals/read counts differ from truth: scope=%x total=%d/%d read=%d/%d", entry.id, total, wantTotal, read, wantRead)
 		}

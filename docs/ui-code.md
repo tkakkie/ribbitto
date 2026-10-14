@@ -103,7 +103,8 @@ padding and conversation radius, give messages and composer 16 px gutters,
 and hide only header text labels, keeping the same sprite icons and
 accessible names at both widths. The topic's channel link keeps a 44 px
 target; both names truncate on one row. Plain-text bodies (URLs and code
-included) and metadata use `wrap-anywhere` below `desk`.
+included) and metadata use `wrap-anywhere` below `desk`, topic links at
+every width (#974).
 The composer uses `text-entry` (16/22 px; not `text-input`, which is the `input` colour) below `desk` to avoid iOS focus
 zoom; welcome fields use it too (#973). The send button stays 44 × 44 px.
 Only the latest feed is enhanced;

@@ -45,6 +45,13 @@ for 48 px phone targets; `textField` sets `inputProps.Welcome` for the
 same height and `text-entry` (16 px) below `desk`. Other controls keep
 their existing sizes.
 
+Topic links in messages and the overview wrap anywhere at every width, so a
+long name never widens the reading column or the panel (#974). Below `desk`
+a message's topic link and **Select** label are 44 px tall and an overview
+topic link fills its row. The create popover may stretch to 16 px above the
+bottom, capped at its content height, so on a phone on its side it scrolls
+to its submit button.
+
 Message avatars and the account button use the first grapheme of the
 display name (via `uniseg`), falling back to the handle when the web layer
 blanks a legacy name. Message avatars choose from all six pairs by member ID.

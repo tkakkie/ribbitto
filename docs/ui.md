@@ -111,8 +111,9 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
   first screen at 390 × 844 in either theme.
 - **Tap targets** at phone width are at least 44 × 44 px: links, buttons,
   form controls, `<summary>` and labels that act as a control's target.
-  Links inside running text (message and help text) are the one
-  exception. Desktop keeps WCAG 2.2 AA (24 px, 2.5.8).
+  Exceptions: links inside running text (message and help text), and a
+  control's caption label while the control itself is a 44 × 44 px target
+  (an equivalent target, WCAG 2.5.5). Desktop keeps WCAG 2.2 AA (24 px, 2.5.8).
 - **Text first.** A message is readable before anything around it (avatars,
   images) has loaded.
 

@@ -56,6 +56,7 @@ func TestBrowser(t *testing.T) {
 	t.Run("sidebar-scroll", func(t *testing.T) { testSidebarScrollBrowser(t, browser) })
 	t.Run("branch-form", func(t *testing.T) { testBranchFormBrowser(t, browser) })
 	t.Run("arrival", func(t *testing.T) { testArrivalBrowser(t, browser) })
+	t.Run("width-audit", func(t *testing.T) { testWidthAuditBrowser(t, browser) })
 	t.Run("welcome", func(t *testing.T) { testWelcomeBrowser(t, browser) })
 	t.Run("static-headers", func(t *testing.T) { testStaticHeadersBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {

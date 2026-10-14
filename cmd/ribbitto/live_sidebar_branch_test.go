@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -18,7 +20,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/unread/unreadpg"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
 	"github.com/tkakkie/ribbitto/internal/web/view"
+	"golang.org/x/net/html"
 )
 
 type sidebarBranchFixture struct {
@@ -65,10 +69,52 @@ func sidebarBadge(t *testing.T, frame, id string, count int) {
 		return
 	}
 	want := fmt.Sprintf("Unread ribbits: %d", count)
-	_, badge, found := strings.Cut(node, `data-unread-count="`)
-	raw, _, _ := strings.Cut(badge, `"`)
-	if !found || raw != fmt.Sprint(count) || (count == 0 && !strings.Contains(badge, `" hidden="`)) || (count > 0 && !strings.Contains(badge, want+"</span>")) {
-		t.Fatalf("%s badge = %s; want count %d", id, node, count)
+	_, badge, _ := strings.Cut(node, `data-unread-count="`)
+	doc, err := html.Parse(strings.NewReader(node))
+	acceptanceOK(t, err)
+	for n := range doc.Descendants() {
+		var raw string
+		var found, hidden bool
+		for _, a := range n.Attr {
+			if a.Key == "data-unread-count" {
+				raw, found = a.Val, true
+			}
+			hidden = hidden || a.Key == "hidden"
+		}
+		if !found {
+			continue
+		}
+		if raw != fmt.Sprint(count) || hidden != (count == 0) || (count > 0 && !strings.Contains(badge, want+"</span>")) {
+			t.Fatalf("%s badge count=%q hidden=%t; want count %d hidden=%t: %s", id, raw, hidden, count, count == 0, node)
+		}
+		return
+	}
+	t.Fatalf("%s missing unread badge: %s", id, node)
+}
+
+func TestSidebarBadgeRendering(t *testing.T) {
+	cat, err := i18n.New(slog.Default())
+	acceptanceOK(t, err)
+	channel := view.Channel{ID: kernel.ID{1}, Name: "general"}
+	topic := view.Topic{ID: kernel.ID{2}, Name: "unlisted"}
+	for _, count := range []int{0, 1} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			// An unlisted selection renders a real heading badge instead of an empty target.
+			page := view.ChannelPage{Organization: view.Organization{Slug: "badges"}, Current: channel, Channels: []view.Channel{channel}, Topic: &topic,
+				ChannelCounts: map[kernel.ID]int64{channel.ID: int64(count)}, TopicCounts: map[kernel.ID]int64{topic.ID: int64(count)}}
+			var frame strings.Builder
+			cat.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				acceptanceOK(t, view.SidebarLists(page).Render(r.Context(), &frame))
+			})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil).WithContext(t.Context()))
+			for _, target := range []struct{ name, id string }{{"channel", view.ChannelDOMID(channel.ID)}, {"heading", "topic-heading-count"}} {
+				t.Run(target.name, func(t *testing.T) {
+					if !strings.Contains(sidebarNode(t, frame.String(), target.id), `data-unread-count="`) {
+						t.Fatalf("%s must contain a badge, not an empty target", target.id)
+					}
+					sidebarBadge(t, frame.String(), target.id, count)
+				})
+			}
+		})
 	}
 }
 

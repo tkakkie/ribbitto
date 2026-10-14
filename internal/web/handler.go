@@ -27,6 +27,7 @@ type Services struct {
 	SignalLimits  *middleware.MemberRateLimiter
 	ReadLimits    *middleware.MemberRateLimiter
 	CreateLimits  *middleware.MemberRateLimiter
+	ResyncLimits  *middleware.MemberRateLimiter
 	Sessions      middleware.SessionResolver
 	SignIn        SignInService
 	SignUp        SignUpService
@@ -75,6 +76,9 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	}
 	if services.Channels != nil && (services.CreateLimits == nil || services.CreateLimits == services.ReadLimits || services.CreateLimits == services.SignalLimits) {
 		return nil, nil, errors.New("web: independent Services.CreateLimits is required with Channels")
+	}
+	if services.SidebarResync != nil && (services.ResyncLimits == nil || services.ResyncLimits == services.SignalLimits || services.ResyncLimits == services.ReadLimits || services.ResyncLimits == services.CreateLimits) {
+		return nil, nil, errors.New("web: independent Services.ResyncLimits is required with SidebarResync")
 	}
 	assets := static.FS()
 	if devAssets != "" {
@@ -129,7 +133,7 @@ func newHandler(devAssets string, catalogues *i18n.Catalogues, services Services
 	registerSignIn(routes, pages, services.SignIn, services.SignUp, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignIn }))
 	registerSetup(routes, pages, services.Setup, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.Setup }))
 	registerSignUp(routes, pages, services.SignUp, services.SetupSessions, limit(func(l *middleware.AuthLimits) *middleware.RateLimiter { return l.SignUp }))
-	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync))
+	registerOrgRoutes(routes, services.Authz, orgRoutes(pages, services.Channels, services.Topics, services.Messages, services.Posting, services.Branching, services.Stream, services.Reading, services.Typing, services.SignalLimits, services.ReadLimits, services.CreateLimits, services.SidebarResync, services.ResyncLimits))
 	mux := http.NewServeMux()
 	mux.Handle("/", middleware.SecurityHeaders(catalogues.Middleware(routes)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

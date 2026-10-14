@@ -106,6 +106,29 @@ per process; restarting resets it and multiple processes have independent
 budgets. The separate persistent count cap is described in
 [channels](../domain/channels.md#creation-limits).
 
+## Member admission for sidebar resyncs
+
+The sidebar resync POST requires an independent `Services.ResyncLimits`
+instance, shared with neither typing, reads nor creation; missing or shared
+wiring fails startup. Its `MemberRateLimiter` allows an initial, unmeasured
+32 requests/s with burst 32 per trusted organisation/member pair, across
+all tabs, sessions and addresses. The script's 50–1,000 ms exponential
+backoff adds 0–25 ms jitter: at the cap, 16 tabs retry at most 16 times/s.
+The budget leaves steady retry headroom and a burst of two requests per tab
+for visibility return, persisted `pageshow` and early recovery retries.
+
+CSRF, session and membership checks precede admission; non-members still
+get 404. Admission precedes `RequestResync`. Refusal is empty 429 with
+`Retry-After: 1` and never advances the member's watch generation or wakes
+streams. Success is empty 204 and publishes only to that member's streams.
+Other members and organisations have independent budgets. The same
+10,000-bucket bound and full-refill eviction rule apply. State is in memory
+per process; restarting resets it and multiple processes have independent
+budgets. A 429 follows the script's failed-request path: recovery stays
+open and retries with backoff. Only a successful request with an applied,
+covering snapshot and no intervening loss clears recovery; overload has no
+convergence guarantee.
+
 ## Reverse proxies
 
 ribbitto works behind any reverse proxy (Caddy, nginx, HAProxy, Traefik…)

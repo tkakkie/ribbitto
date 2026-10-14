@@ -2,6 +2,7 @@ package web
 
 import (
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/identity/identitypg"
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
 	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/unread"
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -80,4 +82,67 @@ func TestSidebarResync(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSidebarResyncAdmission(t *testing.T) {
+	now := time.Unix(1, 0)
+	limits := middleware.NewSidebarResyncRateLimiter(func() time.Time { return now })
+	changes := &unread.Changes{}
+	member := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}, Member: org.Member{ID: kernel.ID{2}}}
+	otherMember := member
+	otherMember.Member.ID = kernel.ID{3}
+	otherOrganization := member
+	otherOrganization.Organization.ID = kernel.ID{4}
+	members := []org.Membership{member, otherMember, otherOrganization}
+	watches := make([]*unread.ChangeWatch, len(members))
+	for i, m := range members {
+		watches[i] = changes.Watch(m.Organization.ID, m.Member.ID)
+		defer watches[i].Release()
+	}
+	handle := resyncSidebar(changes, limits)
+	request := func(t *testing.T, index, status int) {
+		t.Helper()
+		before := make([]uint64, len(watches))
+		for i, watch := range watches {
+			before[i], _ = watch.Snapshot()
+		}
+		w := httptest.NewRecorder()
+		handle(w, httptest.NewRequest(http.MethodPost, "/sidebar/resync", nil), members[index])
+		if w.Code != status {
+			t.Fatalf("resync status = %d, want %d", w.Code, status)
+		}
+		if w.Body.Len() != 0 || (status == http.StatusTooManyRequests && w.Header().Get("Retry-After") != "1") {
+			t.Fatalf("resync body=%q Retry-After=%q", w.Body.String(), w.Header().Get("Retry-After"))
+		}
+		for i, watch := range watches {
+			want := before[i]
+			if i == index && status == http.StatusNoContent {
+				want++
+			}
+			if got, _ := watch.Snapshot(); got != want {
+				t.Fatalf("watch %d generation = %d, want %d (status %d)", i, got, want, status)
+			}
+		}
+	}
+	t.Run("burst and refusal", func(t *testing.T) {
+		for range 32 {
+			request(t, 0, http.StatusNoContent)
+		}
+		for range 2 {
+			request(t, 0, http.StatusTooManyRequests)
+		}
+	})
+	for index, name := range []string{"other member", "other organisation"} {
+		t.Run(name, func(t *testing.T) {
+			for range 32 {
+				request(t, index+1, http.StatusNoContent)
+			}
+			request(t, index+1, http.StatusTooManyRequests)
+		})
+	}
+	t.Run("refill", func(t *testing.T) {
+		now = now.Add(time.Second / 32)
+		request(t, 0, http.StatusNoContent)
+		request(t, 0, http.StatusTooManyRequests)
+	})
 }

@@ -92,7 +92,7 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 		}
 	})
 
-	for _, kind := range []string{"older-feed", "older-topic", "list", "hidden", "DOM", "malformed", "sequence-string", "sequence-fraction", "sequence-unsafe", "failed-request", "during-resync", "continuous-posts", "before-request", "loss-during-resync", "overflow", "older-loss-snapshot", "second-overflow"} {
+	for _, kind := range []string{"older-feed", "older-topic", "list", "hidden", "DOM", "malformed", "sequence-string", "sequence-fraction", "sequence-unsafe", "failed-request", "rate-limited", "during-resync", "continuous-posts", "before-request", "loss-during-resync", "overflow", "older-loss-snapshot", "second-overflow"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 			defer cancel()
@@ -327,6 +327,25 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 			reply := next()
 			if kind == "DOM" {
 				page.MustEval(`id => document.getElementById('link-'+id).querySelector('[data-unread-count]').dataset.unreadCount='5'`, view.ChannelDOMID(f.channel))
+			}
+			if kind == "rate-limited" {
+				exact(7, 10) // A snapshot before a refused answer cannot clear recovery.
+				finish(reply, http.StatusTooManyRequests)
+				send(post(8, other))
+				both(10)
+				if !page.MustEval(`() => window.sidebarTest.pending() === 1`).Bool() {
+					t.Fatal("429 did not reserve one resync retry")
+				}
+				retry := next()
+				exact(7, 10)
+				send(post(9, other))
+				both(10) // Recovery stays open through the covering snapshot until HTTP success.
+				finish(retry, http.StatusNoContent)
+				both(12) // Only the successful retry may reapply retained 8 and 9.
+				send(post(10, other))
+				both(13)
+				noRetry(2)
+				return
 			}
 			if kind == "older-loss-snapshot" {
 				exact(50, 49) // An earlier read's snapshot arrives after dispatch, before its answer.

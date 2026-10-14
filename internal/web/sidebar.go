@@ -10,6 +10,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/realtime"
+	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
@@ -43,10 +44,15 @@ type SidebarResync interface {
 	RequestResync(organizationID, memberID kernel.ID)
 }
 
-func resyncSidebar(resync SidebarResync) func(http.ResponseWriter, *http.Request, org.Membership) {
+func resyncSidebar(resync SidebarResync, limiter *middleware.MemberRateLimiter) func(http.ResponseWriter, *http.Request, org.Membership) {
 	return func(w http.ResponseWriter, r *http.Request, m org.Membership) {
 		if resync == nil {
 			http.NotFound(w, r)
+			return
+		}
+		if !limiter.Allow(m.Organization.ID, m.Member.ID) {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
 		resync.RequestResync(m.Organization.ID, m.Member.ID)

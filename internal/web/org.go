@@ -28,7 +28,7 @@ type orgRoute struct {
 // orgRoutes lists every route under /organizations/{slug}/. The same list
 // registers the routes and drives the tests that prove non-members get
 // 404, so a route cannot be added without those tests covering it.
-func orgRoutes(pages *pageRenderer, channels Channels, topics TopicLookup, messages MessageReader, posting *conversation.Posting, branching Branching, stream *Streaming, reading Reading, typingState *typing.State, limiter, readLimit *middleware.MemberRateLimiter, createLimit *middleware.MemberRateLimiter, resync SidebarResync) []orgRoute {
+func orgRoutes(pages *pageRenderer, channels Channels, topics TopicLookup, messages MessageReader, posting *conversation.Posting, branching Branching, stream *Streaming, reading Reading, typingState *typing.State, limiter, readLimit *middleware.MemberRateLimiter, createLimit *middleware.MemberRateLimiter, resync SidebarResync, resyncLimit *middleware.MemberRateLimiter) []orgRoute {
 	handlers := channelPages{typing: typingState, limiter: limiter, readLimit: readLimit, createLimit: createLimit, reading: reading, pages: pages, channels: channels, topics: topics, messages: messages, posting: posting, branching: branching, stream: stream}
 	if stream != nil {
 		handlers.renders = newRenderCache(stream.Lifetime)
@@ -36,7 +36,7 @@ func orgRoutes(pages *pageRenderer, channels Channels, topics TopicLookup, messa
 	return []orgRoute{
 		{http.MethodGet, "/{$}", handlers.home},
 		{http.MethodGet, "/events", handlers.events},
-		{http.MethodPost, "/sidebar/resync", resyncSidebar(resync)},
+		{http.MethodPost, "/sidebar/resync", resyncSidebar(resync, resyncLimit)},
 		{http.MethodPost, "/channels/{channelID}/topics/{topicID}/typing", handlers.signal},
 		{http.MethodGet, "/channels/{channelID}", handlers.show},
 		{http.MethodGet, "/channels/{channelID}/members", handlers.members},

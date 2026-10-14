@@ -38,7 +38,8 @@ htmx sends resync requests. The markup contract is in
   failures stop increments; losses during a
   request reserve another, including repeated losses during retries. One pending
   htmx request and one timer merge duplicate triggers, with a minimal 50–1,000 ms
-  backoff and 0–25 ms jitter;
+  backoff and 0–25 ms jitter; a 429 counts as a request failure, keeps
+  recovery open and retries through that backoff;
   PR 4 tunes this. Visibility return and persisted `pageshow` request resync.
   Cleanup clears the timer when its stream container is removed.
 

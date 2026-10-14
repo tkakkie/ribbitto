@@ -25,7 +25,7 @@ GO_TEST_FLAGS ?= -p 2
 # package runs.
 GO_TEST_PACKAGES ?= ./...
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-static check-test check-tools check-launchers check-ai prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools check-launchers check-ai prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -84,7 +84,6 @@ check-test: db-health
 	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
 
 check-tools: $(TEMPL)
-	$(MAKE) check-ai-env
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck
 	go -C tools run ./apicheck -check ..
@@ -144,8 +143,11 @@ bin/ai-db: $(wildcard cmd/devdb/*.go) $(wildcard internal/platform/postgres/*.go
 	mkdir -p "$(@D)"
 	go build -o $@ ./cmd/devdb
 
-ai-env ai-env-clean: bin/ai-db
-	@python3 scripts/ai_env.py $(patsubst ai-env-clean,clean,$@)
+ai-env: bin/ai-db
+	@./bin/ai-db reserve
+
+ai-env-clean: bin/ai-db
+	@./bin/ai-db release
 
 ai-health: bin/ai-db
 	@./bin/ai-db health
@@ -158,6 +160,3 @@ migrate: bin/ai-db
 
 seed: bin/ai-db
 	@./bin/ai-db run go run ./cmd/seed $(ARGS)
-
-check-ai-env: bin/ai-db
-	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'ai_*_test.py'

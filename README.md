@@ -122,8 +122,6 @@ after the package must be a valid Go identifier, exported or unexported, and
 the package directory must contain at least one regular `.go` file.
 Decision records are exempt from this path check because
 they describe history; their Markdown links and anchors are still checked.
-Worktree reservation still uses Python unittests (`make check-ai-env`); there
-is no Python lint/format gate.
 
 `make prepush` is a quick subset to run before pushing a follow-up commit: it
 regenerates templates, SQL and CSS and fails if that changes any file, then

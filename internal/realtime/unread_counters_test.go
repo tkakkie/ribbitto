@@ -1,6 +1,7 @@
 package realtime_test
 
 import (
+	"context"
 	"strconv"
 	"testing"
 
@@ -27,7 +28,11 @@ type counterTruth struct {
 	ranges   []counterRange
 }
 
-func counterQuery(t *testing.T, tx pgx.Tx, sql string, args ...any) pgx.Rows {
+type counterSQL interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
+func counterQuery(t *testing.T, tx counterSQL, sql string, args ...any) pgx.Rows {
 	t.Helper()
 	rows, err := tx.Query(t.Context(), sql, args...)
 	if err != nil {
@@ -36,7 +41,7 @@ func counterQuery(t *testing.T, tx pgx.Tx, sql string, args ...any) pgx.Rows {
 	return rows
 }
 
-func counterLoad(t *testing.T, tx pgx.Tx, organization kernel.ID) counterTruth {
+func counterLoad(t *testing.T, tx counterSQL, organization kernel.ID) counterTruth {
 	t.Helper()
 	messages, err := pgx.CollectRows(counterQuery(t, tx, `SELECT channel_id,topic_id,event_seq,coalesce(moved_event_seq,0) FROM message WHERE organization_id=$1`, organization), func(row pgx.CollectableRow) (counterMessage, error) {
 		var m counterMessage

@@ -47,8 +47,11 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-	defer page.MustClose()
+	// The tab closes through the browser's own context, so cleanup works even
+	// after ctx has expired and server.Close is not left waiting on its stream.
+	tab := browser.MustPage()
+	defer tab.MustClose()
+	page := tab.Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
 	// Animations run, and their events fire, only in a tab that repaints.
 	page.MustActivate()
 	page.MustSetViewport(390, 844, 1, true)
@@ -63,11 +66,14 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 		window.blockClicks = false;
 		document.addEventListener('click', e => { if (blockClicks) e.preventDefault(); }, true);
 		for (const type of ['animationstart', 'transitionrun']) document.addEventListener(type, e => {
-			const name = e.animationName || e.propertyName;
-			const effect = e.target.getAnimations().find(a => (a.animationName || a.transitionProperty) === name).effect;
+			// Record the event before reading its effect, so a missing effect is
+			// reported instead of throwing in the listener.
+			const name = e.animationName || e.propertyName, at = motion.push(name) - 1;
+			const effect = e.target.getAnimations().find(a => (a.animationName || a.transitionProperty) === name)?.effect;
+			if (!effect) return void (motion[at] = name + ' (no effect)');
 			const from = e.animationName ? Object.entries(effect.getKeyframes()[0]).filter(([k]) => !['offset', 'computedOffset', 'easing', 'composite'].includes(k)).map(([k, v]) => ' ' + k + ': ' + v).join(';') : '';
 			const delay = effect.getTiming().delay ? ' delay ' + effect.getTiming().delay : '';
-			motion.push(name + from + delay);
+			motion[at] = name + from + delay;
 		}, true);`)
 	// expect reports, then forgets, the motion started so far.
 	expect := func(step, want string) {
@@ -84,12 +90,37 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		return at.X, at.Y
 	}
+	// touchTap taps through rod's Touch, which dispatches on the original tab
+	// outside ctx, so it runs under its own bound and fails by name (#1060).
+	touchTap := func(what string, x, y float64) {
+		t.Helper()
+		done := make(chan any, 1)
+		go func() {
+			defer func() { done <- recover() }()
+			tab.Touch.MustTap(x, y)
+		}()
+		timer := time.NewTimer(10 * time.Second)
+		defer timer.Stop()
+		select {
+		case v := <-done:
+			if v != nil {
+				t.Fatalf("tap on %s: %v", what, v)
+			}
+		case <-timer.C:
+			t.Fatalf("tap on %s did not finish within 10 s", what)
+		case <-ctx.Done():
+			t.Fatalf("tap on %s: the test's time ran out", what)
+		}
+	}
 	// navigate taps the selector and waits for the page it leads to.
 	navigate := func(selector string) {
 		t.Helper()
 		page.MustEval(`() => { blockClicks = false; window.leaving = true; }`)
-		page.Touch.MustTap(centre(selector))
-		page.MustWait(`() => !window.leaving && document.readyState === 'complete'`)
+		x, y := centre(selector)
+		touchTap(selector, x, y)
+		if err := page.Timeout(10 * time.Second).Wait(rod.Eval(`() => !window.leaving && document.readyState === 'complete'`)); err != nil {
+			t.Fatalf("tap on %s led to no loaded page: %v", selector, err)
+		}
 	}
 	const look = `s => { const c = getComputedStyle(document.querySelector(s)); return [c.backgroundColor, c.color, c.outlineStyle, c.scale].join(' / '); }`
 	// tap taps the selector with its click blocked, so the page stays: it
@@ -111,7 +142,8 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 				};
 				tick();
 			}); }`, selector)
-		page.Touch.MustTap(centre(selector))
+		x, y := centre(selector)
+		touchTap(selector, x, y)
 		var press struct {
 			Active  bool
 			Pressed float64

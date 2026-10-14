@@ -44,7 +44,13 @@ func stage2SampleMetrics(ctx context.Context, start time.Time, now func() time.T
 			return samples, errors.Join(append(problems, fmt.Errorf("sampling stopped: %v", ctx.Err()))...)
 		}
 		offset := now().Sub(start)
-		if offset >= time.Duration(second+1)*time.Second {
+		withinSlot := offset < time.Duration(second+1)*time.Second
+		if second == 0 || second == fixedStage2().WindowSeconds {
+			withinSlot = offset <= time.Duration(second)*time.Second+2*time.Second
+		}
+		// A delayed opening scrape may occupy a later second, but cannot be
+		// reused as another sample when the scheduler catches up.
+		if !withinSlot || (len(samples) > 0 && offset.Nanoseconds() <= samples[len(samples)-1].OffsetNS) {
 			problems = append(problems, fmt.Errorf("missed metrics slot %d", second))
 			continue
 		}
@@ -106,8 +112,10 @@ func stage2AggregateTelemetry(samples []stage2Sample) ([]stage2TelemetryRange, e
 		if s.Phase == "drain" {
 			continue
 		}
-		if s.OffsetNS < 0 || s.OffsetNS >= end+int64(time.Second) ||
+		if s.OffsetNS < 0 || s.OffsetNS > end+int64(2*time.Second) ||
 			(s.Phase != "traffic" && s.Phase != "boundary") ||
+			(s.Phase == "traffic" && s.OffsetNS >= end) ||
+			(s.Phase == "boundary" && s.OffsetNS < end) ||
 			(len(retained) > 0 && s.OffsetNS <= retained[len(retained)-1].OffsetNS) {
 			return nil, fmt.Errorf("invalid metrics offset or phase")
 		}
@@ -147,7 +155,17 @@ func stage2AggregateTelemetry(samples []stage2Sample) ([]stage2TelemetryRange, e
 			}
 		}
 		r.Missing = int((r.EndNS-r.StartNS)/int64(time.Second)) - len(seen)
-		r.BoundaryCovered = first >= 0 && last >= 0 && retained[first].OffsetNS < r.StartNS+int64(time.Second) && retained[last].OffsetNS < r.EndNS+int64(time.Second)
+		if first >= 0 && last >= 0 {
+			startCovered := retained[first].OffsetNS < r.StartNS+int64(time.Second)
+			endCovered := retained[last].OffsetNS < r.EndNS+int64(time.Second)
+			if r.StartNS == 0 {
+				startCovered = retained[first].OffsetNS <= int64(2*time.Second)
+			}
+			if r.EndNS == end {
+				endCovered = retained[last].OffsetNS <= end+int64(2*time.Second)
+			}
+			r.BoundaryCovered = startCovered && endCovered
+		}
 		resetEnd := last
 		if resetEnd < 0 {
 			resetEnd = len(pools) - 1

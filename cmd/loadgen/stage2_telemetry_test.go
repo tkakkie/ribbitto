@@ -139,6 +139,162 @@ func TestStage2TelemetryFailures(t *testing.T) {
 	}
 }
 
+func TestStage2TelemetryPhases(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		at    int
+		phase string
+	}{
+		{"traffic-at-end", 600, "traffic"},
+		{"boundary-mid-window", 30, "boundary"},
+		{"boundary-before-end", 599, "boundary"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var samples []stage2Sample
+			for second := 0; second <= 600; second++ {
+				phase := "traffic"
+				if second == 600 {
+					phase = "boundary"
+				}
+				samples = append(samples, stage2Sample{int64(second) * int64(time.Second), phase, stage2MetricFixture(second)})
+			}
+			samples[tc.at].Phase = tc.phase
+			got, err := stage2AggregateTelemetry(samples)
+			if err == nil {
+				t.Fatalf("wrong phase accepted: BoundaryCovered=%t Missing=%d", got[0].BoundaryCovered, got[0].Missing)
+			}
+		})
+	}
+}
+
+func TestStage2TelemetryWindowTolerance(t *testing.T) {
+	for _, boundary := range []string{"start", "end"} {
+		for _, lateness := range []time.Duration{2*time.Second - time.Nanosecond, 2 * time.Second, 2*time.Second + time.Nanosecond} {
+			t.Run(fmt.Sprintf("%s/%s", boundary, lateness), func(t *testing.T) {
+				start := time.Unix(123, 0)
+				clock := start
+				if boundary == "start" {
+					clock = clock.Add(lateness)
+				}
+				waitCalls, firstScrapeSlot := 0, -1
+				samples, sampleErr := stage2SampleMetrics(context.Background(), start, func() time.Time { return clock }, func(_ context.Context, delay time.Duration) bool {
+					waitCalls++
+					clock = clock.Add(delay)
+					if boundary == "end" && clock.Sub(start) == 600*time.Second {
+						clock = clock.Add(lateness)
+					}
+					return true
+				}, func(context.Context) (json.RawMessage, error) {
+					if firstScrapeSlot < 0 {
+						firstScrapeSlot = waitCalls - 1
+					}
+					return stage2MetricFixture(int(clock.Sub(start) / time.Second)), nil
+				})
+				inside := lateness <= 2*time.Second
+				wantSamples, wantMissing := 601, 0
+				if boundary == "start" {
+					wantFirstSlot := 0
+					if !inside {
+						wantFirstSlot = 2
+					}
+					if firstScrapeSlot != wantFirstSlot {
+						t.Fatalf("opening slot tolerance: first scrape slot=%d want=%d", firstScrapeSlot, wantFirstSlot)
+					}
+					wantMissing = int(lateness / time.Second)
+					wantSamples -= wantMissing
+					if samples[0].OffsetNS != int64(lateness) {
+						t.Fatalf("opening scrape lost: offset=%d want=%d", samples[0].OffsetNS, lateness)
+					}
+				} else if !inside {
+					wantSamples--
+				}
+				if len(samples) != wantSamples || (sampleErr != nil) != (boundary == "start" || !inside) {
+					t.Fatalf("boundary sampling: samples=%d want=%d err=%v", len(samples), wantSamples, sampleErr)
+				}
+				for i := 1; i < len(samples); i++ {
+					if samples[i].OffsetNS <= samples[i-1].OffsetNS {
+						t.Fatal("late opening scrape backfilled an expired slot")
+					}
+				}
+				ranges, err := stage2AggregateTelemetry(samples)
+				if err != nil {
+					t.Fatal(err)
+				}
+				r := ranges[0]
+				edgeBucket := 1
+				if boundary == "end" {
+					edgeBucket = 10
+				}
+				if r.BoundaryCovered != inside || ranges[edgeBucket].BoundaryCovered != inside || r.Missing != wantMissing {
+					t.Fatalf("window boundary coverage: covered=%t want=%t missing=%d want=%d", r.BoundaryCovered, inside, r.Missing, wantMissing)
+				}
+				if inside {
+					wantElapsed := 600*time.Second + lateness
+					if boundary == "start" {
+						wantElapsed = 600*time.Second - lateness
+					}
+					if r.ElapsedNS != int64(wantElapsed) || r.Delta["empty_acquire_wait_ns"] == 0 || r.WaitingPressure != float64(r.Delta["empty_acquire_wait_ns"])/float64(wantElapsed) {
+						t.Fatalf("actual boundary duration/ratios lost: %+v", r)
+					}
+				} else if len(r.Delta) != 0 || r.WaitingPressure != 0 || r.MeanEmptyWaitNS != 0 {
+					t.Fatalf("uncovered window has usable ratios: %+v", r)
+				}
+				if boundary == "end" {
+					// Also check retained input independently of the sampler's cutoff.
+					samples = append([]stage2Sample(nil), samples[:600]...)
+					samples = append(samples, stage2Sample{int64(600*time.Second + lateness), "boundary", stage2MetricFixture(600)})
+					got, err := stage2AggregateTelemetry(samples)
+					if (err == nil) != inside || inside && (!got[0].BoundaryCovered || !got[10].BoundaryCovered || got[0].Missing != 0) {
+						t.Fatalf("retained closing boundary tolerance: lateness=%s err=%v", lateness, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestStage2TelemetryMinuteTolerance(t *testing.T) {
+	for _, boundary := range []string{"start", "end"} {
+		for _, lateness := range []time.Duration{time.Second - time.Nanosecond, time.Second, time.Second + time.Nanosecond} {
+			t.Run(fmt.Sprintf("%s/%s", boundary, lateness), func(t *testing.T) {
+				var samples []stage2Sample
+				for second := 0; second <= 600; second++ {
+					if second == 60 || lateness >= time.Second && second == 61 {
+						continue
+					}
+					phase := "traffic"
+					if second == 600 {
+						phase = "boundary"
+					}
+					samples = append(samples, stage2Sample{int64(second) * int64(time.Second), phase, stage2MetricFixture(second)})
+					if second == 59 {
+						samples = append(samples, stage2Sample{int64(60*time.Second + lateness), "traffic", stage2MetricFixture(60)})
+					}
+				}
+				ranges, err := stage2AggregateTelemetry(samples)
+				if err != nil {
+					t.Fatal(err)
+				}
+				index := 1
+				if boundary == "start" {
+					index = 2
+				}
+				r := ranges[index]
+				inside := lateness < time.Second
+				if r.BoundaryCovered != inside || !ranges[0].BoundaryCovered {
+					t.Fatalf("minute boundary coverage: covered=%t want=%t", r.BoundaryCovered, inside)
+				}
+				if inside && (r.ElapsedNS == 0 || len(r.Delta) == 0 || r.WaitingPressure == 0) {
+					t.Fatalf("covered minute ratios lost: %+v", r)
+				}
+				if !inside && (r.ElapsedNS != 0 || len(r.Delta) != 0 || r.WaitingPressure != 0 || r.MeanEmptyWaitNS != 0) {
+					t.Fatalf("uncovered minute has usable ratios: %+v", r)
+				}
+			})
+		}
+	}
+}
+
 func TestStage2ReadMetrics(t *testing.T) {
 	for _, mode := range []string{"ok", "503", "large", "cancel"} {
 		t.Run(mode, func(t *testing.T) {

@@ -27,7 +27,7 @@ templ layout(stylesheetURL, title string) {
 			<script defer src="/static/vendor/htmx-ext-sse-2.2.4.min.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/vendor/idiomorph-ext-0.7.4.min.js" nonce={ templ.GetNonce(ctx) }></script>
 		</head>
-		<body>
+		<body class="bg-base">
 			{ children... }
 		</body>
 	</html>

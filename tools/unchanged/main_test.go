@@ -150,3 +150,54 @@ func TestCheckFailsWhenEitherFingerprintFails(t *testing.T) {
 		t.Errorf("both fingerprints succeeding: %v", err)
 	}
 }
+
+func TestFingerprintStagedEdit(t *testing.T) {
+	root := repository(t)
+	before, err := fingerprint(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, root, "tracked.txt", "staged edit\n")
+	cmd := exec.Command("git", "add", "tracked.txt")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v\n%s", err, out)
+	}
+	after, err := fingerprint(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after == before {
+		t.Fatal("an edited and staged tracked file left the fingerprint unchanged")
+	}
+}
+
+func TestFingerprintSymlinks(t *testing.T) {
+	root := repository(t)
+	outside := t.TempDir()
+	write(t, outside, "target.txt", "a")
+	if err := os.Symlink(filepath.Join(outside, "target.txt"), filepath.Join(root, "file-link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "dir-link")); err != nil {
+		t.Fatal(err)
+	}
+	before, err := fingerprint(root)
+	if err != nil {
+		t.Fatalf("a symlink to a directory failed the fingerprint: %v", err)
+	}
+	// Git stores the link, not what it points to.
+	write(t, outside, "target.txt", "b")
+	if after, err := fingerprint(root); err != nil || after != before {
+		t.Fatalf("changing a link's target outside the worktree: changed = %v, err = %v", after != before, err)
+	}
+	if err := os.Remove(filepath.Join(root, "file-link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "other.txt"), filepath.Join(root, "file-link")); err != nil {
+		t.Fatal(err)
+	}
+	if after, err := fingerprint(root); err != nil || after == before {
+		t.Fatalf("retargeting a link: changed = %v, err = %v", after != before, err)
+	}
+}

@@ -67,8 +67,9 @@ func check(fp func() (string, error), run func() error) error {
 	return nil
 }
 
-// fingerprint hashes the tracked diff, then the NUL-separated list of
-// untracked files, then each of those files. Names stay NUL-separated and are
+// fingerprint hashes the unstaged and the staged diff, so a command that
+// edits and stages a tracked file is caught (Copilot on #1024), then the
+// NUL-separated list of untracked files, then each of those files. Names stay NUL-separated and are
 // never parsed by a shell, so quoted names and a file named "-" count too.
 func fingerprint(root string) (string, error) {
 	h := sha256.New()
@@ -77,6 +78,12 @@ func fingerprint(root string) (string, error) {
 		return "", err
 	}
 	h.Write(diff)
+	staged, err := git(root, "diff", "--cached", "--binary", "--no-ext-diff")
+	if err != nil {
+		return "", err
+	}
+	fmt.Fprintf(h, "\x00staged %d\x00", len(staged))
+	h.Write(staged)
 	list, err := git(root, "ls-files", "-z", "-o", "--exclude-standard")
 	if err != nil {
 		return "", err
@@ -94,7 +101,18 @@ func fingerprint(root string) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
+// hashFile hashes a symlink as its target path, as Git stores it, so a change
+// outside the worktree behind the link changes nothing and a link to a
+// directory can be hashed (Copilot on #1024).
 func hashFile(h io.Writer, path string) error {
+	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(path)
+		if err != nil {
+			return fmt.Errorf("reading untracked symlink: %w", err)
+		}
+		fmt.Fprintf(h, "\x00link %d\x00%s", len(target), target)
+		return nil
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("reading untracked file: %w", err)

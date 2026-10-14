@@ -95,7 +95,8 @@ func TestReadPostBrowser(t *testing.T) {
 				}
 				// Supply the real session without making this test about signing in.
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: token})
-				if r.Method == "POST" && !strings.HasSuffix(r.URL.Path, "/sidebar/resync") {
+				// Resync and typing signals are neither reads nor compositions.
+				if r.Method == "POST" && !strings.HasSuffix(r.URL.Path, "/sidebar/resync") && !strings.HasSuffix(r.URL.Path, "/typing") {
 					posts.Add(1)
 					if strings.HasSuffix(r.URL.Path, "/read") {
 						if active.Add(1) != 1 {

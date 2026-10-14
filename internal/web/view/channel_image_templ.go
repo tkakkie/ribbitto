@@ -253,7 +253,7 @@ func imagePicker(keys []string, selected, errorID, errorMsg string) templ.Compon
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<label class=\"flex min-h-11 items-center gap-2\"><input type=\"radio\" name=\"image\" value=\"\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<label class=\"flex min-h-11 items-center gap-2\"><input type=\"radio\" class=\"accent-brand\" name=\"image\" value=\"\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -271,7 +271,7 @@ func imagePicker(keys []string, selected, errorID, errorMsg string) templ.Compon
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(errorID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel_image.templ`, Line: 74, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel_image.templ`, Line: 75, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
@@ -289,7 +289,7 @@ func imagePicker(keys []string, selected, errorID, errorMsg string) templ.Compon
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "illustration.default"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel_image.templ`, Line: 77, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel_image.templ`, Line: 78, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -300,14 +300,14 @@ func imagePicker(keys []string, selected, errorID, errorMsg string) templ.Compon
 			return templ_7745c5c3_Err
 		}
 		for _, key := range keys {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<label class=\"flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-border-strong p-1 hover:bg-hover\"><input type=\"radio\" name=\"image\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<label class=\"flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-border-strong p-1 hover:bg-hover\"><input type=\"radio\" class=\"accent-brand\" name=\"image\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel_image.templ`, Line: 85, Col: 17}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel_image.templ`, Line: 87, Col: 17}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 			if templ_7745c5c3_Err != nil {
@@ -331,7 +331,7 @@ func imagePicker(keys []string, selected, errorID, errorMsg string) templ.Compon
 				var templ_7745c5c3_Var16 string
 				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(errorID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel_image.templ`, Line: 89, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel_image.templ`, Line: 91, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 				if templ_7745c5c3_Err != nil {
@@ -357,7 +357,7 @@ func imagePicker(keys []string, selected, errorID, errorMsg string) templ.Compon
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "illustration.option."+key))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel_image.templ`, Line: 93, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel_image.templ`, Line: 95, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {

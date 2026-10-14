@@ -26,7 +26,7 @@ Today's shared controls:
 | `Avatar` | `internal/web/view/avatar.templ` | a fixed 36 px round initial; six pastel pairs chosen from the member ID, hidden from assistive technology beside the visible name |
 | `historyLink` | `internal/web/view/channel.templ` | the rounded older/newest navigation link; only older links carry the history prepend attributes |
 | `sidePanel`, `panelControl` | `internal/web/view/panel.templ` | the white block beside the conversation, with a focusable `h2` and a close link; a header link, labelled or icon-only, that opens one panel, `aria-current="true"` and a Filled icon while it is open |
-| `imagePicker` | `internal/web/view/channel_image.templ` | a labelled fieldset of native radios, decorative illustrations and named choices, including the ID-based default; shared by creation and overview |
+| `imagePicker` | `internal/web/view/channel_image.templ` | a labelled fieldset of native radios with the `brand` accent and focus outline, decorative illustrations and named choices, including the ID-based default; shared by creation and overview |
 | `channelImage` | `internal/web/view/channel_image.templ` | a decorative channel illustration from a handler-resolved URL; 24 px and lazy in the sidebar, 32 px in the header, with fixed dimensions and asynchronous decoding |
 
 - **Links navigate, buttons act.** Going somewhere is an `<a href>`;
@@ -41,5 +41,7 @@ Today's shared controls:
 
 Message avatars and the account button use the first grapheme of the
 display name (via `uniseg`), falling back to the handle when the web layer
-blanks a legacy name. Text precedes the avatar in both page and live markup;
-a fixed gutter reserves its space without loading an image or web font.
+blanks a legacy name. The account initial uses pastel pair 3; message avatars
+choose from all six pairs by member ID. Text precedes the avatar in both page
+and live markup; a fixed gutter reserves its space without loading an image
+or web font.

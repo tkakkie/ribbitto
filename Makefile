@@ -92,7 +92,7 @@ check-static: $(TEMPL)
 check-test: db-health
 	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
 
-check-tools:
+check-tools: $(TEMPL)
 	$(MAKE) check-ai-env
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck

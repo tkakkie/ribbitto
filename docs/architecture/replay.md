@@ -68,6 +68,10 @@ sequenceDiagram
   never move it or its `before=` link. Only
   Load older replaces it, so older moved items cannot duplicate or skip history.
   Moves are silent; the notice arrives separately as `message.posted`.
+  Posts and notices now carry the session-resolved `author_id`. Sidebar interests
+  receive a shared `unread` frame when message filtering excludes a post: channel,
+  posting-time topic, sequence and author, with no `id:`. Legacy posts without
+  author or topic send none. Audience and final bound-member checks still apply.
 - **A topic page** subscribes to one topic of the channel
   (the organisation endpoint with
   `want=sidebar,messages,typing&channel=…&topic=…`; an unknown topic, or another channel's, is

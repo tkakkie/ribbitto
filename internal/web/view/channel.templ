@@ -45,6 +45,7 @@ type ChannelPage struct {
 	Current                    Channel
 	Channels                   []Channel
 	ChannelCounts, TopicCounts map[kernel.ID]int64
+	SnapshotSeq                int64
 	Name, Error                string
 	Image, Query               string
 	CreateImageError           string
@@ -467,6 +468,7 @@ templ SidebarLists(page ChannelPage) {
 templ ChannelList(page ChannelPage, oob bool) {
 	<ul
 		id="sidebar-channels"
+		data-snapshot-seq={ fmt.Sprint(page.SnapshotSeq) }
 		class="flex flex-col gap-1"
 		if oob {
 			hx-swap-oob="true"
@@ -604,10 +606,8 @@ templ selectionPill() {
 }
 
 templ unreadBadge(count int64) {
-	if count > 0 {
-		<span class="inline-flex min-w-5 shrink-0 justify-center rounded-full bg-brand px-1.5 text-caption font-semibold text-on-brand">
-			<span aria-hidden="true">{ unreadText(count) }</span>
-			<span class="sr-only">{ " " + strings.ReplaceAll(i18n.T(ctx, "reading.unread_count"), "{count}", unreadText(count)) }</span>
-		</span>
-	}
+	<span data-unread-count={ fmt.Sprint(count) } hidden?={ count == 0 } class="inline-flex min-w-5 shrink-0 justify-center rounded-full bg-brand px-1.5 text-caption font-semibold text-on-brand">
+		<span aria-hidden="true">{ unreadText(count) }</span>
+		<span class="sr-only">{ " " + strings.ReplaceAll(i18n.T(ctx, "reading.unread_count"), "{count}", unreadText(count)) }</span>
+	</span>
 }

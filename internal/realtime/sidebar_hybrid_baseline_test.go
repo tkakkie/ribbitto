@@ -118,7 +118,7 @@ UNION ALL SELECT $1::uuid,$6::uuid,$7::uuid,$4::uuid,'other',109;
 	must(t, p.complete())
 	exact(t, p)
 	p.snapshot = snapshot
-	post := realtime.Event{OrganizationID: f.OrganizationID, Kind: conversation.KindPosted, ChannelID: other.ID, Payload: conversation.EncodePosted(other.ID, kernel.ID{1}, other.DefaultTopicID)}
+	post := realtime.Event{OrganizationID: f.OrganizationID, Kind: conversation.KindPosted, ChannelID: other.ID, Payload: conversation.EncodePosted(other.ID, kernel.ID{1}, other.DefaultTopicID, f.MemberID)}
 	move := realtime.Event{OrganizationID: f.OrganizationID, Kind: conversation.KindMessagesMoved, Payload: conversation.EncodeMoved(conversation.Moved{ChannelID: f.Channel.ID, FromTopicID: f.Channel.DefaultTopicID, ToTopicID: selected, MessageIDs: []kernel.ID{{1}}})}
 	for _, tt := range []struct {
 		operation string

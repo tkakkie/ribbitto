@@ -58,7 +58,7 @@ func DecodePosted(data []byte) (Posted, error) // DecodePosted reads stored data
 const DefaultChannelName untyped string = "general" // DefaultChannelName is the initial name of an organisation's default channel.
 const DefaultMaxChannels int32 = 500 // DefaultMaxChannels includes the default channel in the organisation cap.
 func EncodeMoved(m Moved) []byte // EncodeMoved returns the stored data of m: canonical UUID text under channel_id, from_topic_id and to_topic_id, and a message_ids array.
-func EncodePosted(channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) []byte // EncodePosted returns the stored data of KindPosted for a post in topicID: canonical UUID text under channel_id, message_id and topic_id.
+func EncodePosted(channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, authorID github.com/tkakkie/ribbitto/internal/kernel.ID) []byte // EncodePosted returns the stored data of KindPosted for a post in topicID: canonical UUID text under channel_id, message_id, topic_id and author_id.
 type Entry struct // Entry is a stored message with its current author names and topic label.
   field DefaultTopic bool
   field DisplayName string
@@ -137,6 +137,7 @@ type PageCounter interface // PageCounter reads both sidebar lists using org's r
 type PageCounts struct // PageCounts holds capped sidebar counts and uncapped first unread sequences; First sequences are zero when absent or disabled.
   field ChannelCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field FeedFirstUnread int64
+  field SnapshotSeq int64
   field TopicCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field TopicFirstUnread int64
   field Witness *SidebarWitness
@@ -146,6 +147,7 @@ type PostReadWriter interface // PostReadWriter reads the page scope and adds th
   func (PostReadWriter).Read(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, *int64, int64, int64, int64) error
 type PostReadWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) PostReadWriter // PostReadWriterIn binds read-state writes to posting's transaction.
 type Posted struct // Posted is the decoded payload of KindPosted.
+  field AuthorID *github.com/tkakkie/ribbitto/internal/kernel.ID
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
   field MessageID github.com/tkakkie/ribbitto/internal/kernel.ID
   field TopicID *github.com/tkakkie/ribbitto/internal/kernel.ID // TopicID is the posting-time topic.
@@ -172,7 +174,7 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
   func (*Reader).Members(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, after *github.com/tkakkie/ribbitto/internal/kernel.ID) (page MembersPage, err error) // Members reads a bounded channel membership page.
   func (*Reader).One(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64) (entry Entry, err error) // One reads one message, its author names and topic in a read-only snapshot.
   func (*Reader).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64) (page ChannelPage, err error) // Page reads channel or topic history with the snapshot's event cursor, including older pages with a before bound.
-  func (*Reader).Sidebar(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID) (sidebar SidebarSnapshot, err error) // Sidebar reads lists and counts in an independent read-only repeatable-read snapshot, without history, author directories or a stream cursor.
+  func (*Reader).Sidebar(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID) (sidebar SidebarSnapshot, err error) // Sidebar reads lists and counts in an independent read-only repeatable-read snapshot, including its organisation event sequence, without history or directories.
   func (*Reader).WithWitness(capture WitnessIn) *Reader // WithWitness returns a configured copy; the ordinary reader stays disabled.
 func RouteMoved(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteMoved is messages.moved's realtime.Router: the channel and both topics, so a view of either sees the move.
 func RoutePosted(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePosted is message.posted's realtime.Router: the channel and, unless the payload is legacy, the posting-time topic.
@@ -185,6 +187,7 @@ type SidebarSnapshot struct // SidebarSnapshot holds fresh sidebar lists and exp
   field ChannelCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field Channels []Channel
   field Current Channel
+  field SnapshotSeq int64
   field Topic *Topic
   field TopicCounts map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
   field Topics []Topic

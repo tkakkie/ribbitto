@@ -52,8 +52,8 @@ loader for the current channel, all channels in name/ID order, the optional
 selected topic and the first 50 topics (default first, then case-insensitive
 name/ID). The loader uses reads bound to the caller's snapshot and does not
 count. Page and members callers keep counts after their history or members and
-cursor reads; the independent sidebar caller counts immediately after context.
-Snapshot ownership and query order stay unchanged.
+cursor reads; the independent sidebar caller reads its sequence after context,
+then counts in that same snapshot.
 
 `Reader.Sidebar` independently reads that context,
 with both count maps in the same read-only repeatable-read snapshot. It validates
@@ -62,7 +62,7 @@ including when unlisted, counting at most 51 topics without extending the list. 
 fresh lists: a displaced non-selected topic disappears. Channel totals still
 cover all topics; both maps include zero, so whole-list replacement clears badges.
 It uses the same `PageCounter` and persisted member join sequence as page reads,
-with no history, author directory, cursor read or writes. Production's
+with its organisation sequence, but no history, author directory or writes. Production's
 counts-only `SidebarCounter.ReadCounts` extension explicitly disables first
 unread; selection still reaches step 3 and step 4. Legacy injected
 `PageCounter` adapters retain `Read` as a compatibility fallback. Normal

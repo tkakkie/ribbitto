@@ -40,9 +40,9 @@ func TestSidebarCountsMarkup(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, lang := range []string{"en", "ja"} {
-		for _, kind := range []string{"feed", "feed older", "topic", "topic older", "unlisted", "unlisted older", "members"} {
+		for _, kind := range []string{"feed", "feed older", "topic", "topic older", "unlisted", "unlisted older", "unlisted zero", "members"} {
 			t.Run(lang+"/"+kind, func(t *testing.T) {
-				page := conversation.ChannelPage{EventCursor: new(int64(42)), PageCounts: conversation.PageCounts{
+				page := conversation.ChannelPage{EventCursor: new(int64(42)), PageCounts: conversation.PageCounts{SnapshotSeq: 42,
 					ChannelCounts: map[kernel.ID]int64{}, TopicCounts: map[kernel.ID]int64{},
 				}}
 				counts := []int64{0, 1, 99, 100}
@@ -64,6 +64,9 @@ func TestSidebarCountsMarkup(t *testing.T) {
 				if strings.HasPrefix(kind, "unlisted") {
 					page.Topic = &conversation.Topic{ID: kernel.ID{200}, Name: "<selected>"}
 					page.TopicCounts[page.Topic.ID] = 100
+					if kind == "unlisted zero" {
+						page.TopicCounts[page.Topic.ID] = 0
+					}
 				}
 				if page.Topic != nil {
 					path = view.ConversationURL("acme", page.Current.ID, &page.Topic.ID)
@@ -104,11 +107,14 @@ func TestSidebarCountsMarkup(t *testing.T) {
 				catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 					frame, err = RenderSidebar(r.Context(), org.Membership{Organization: org.Organization{Slug: "acme"}}, conversation.SidebarSnapshot{
 						Current: page.Current, Channels: page.Channels, Topics: page.Topics, Topic: page.Topic,
-						ChannelCounts: page.ChannelCounts, TopicCounts: page.TopicCounts,
+						ChannelCounts: page.ChannelCounts, TopicCounts: page.TopicCounts, SnapshotSeq: page.SnapshotSeq,
 					}, kind == "members")
 				})).ServeHTTP(httptest.NewRecorder(), r)
 				if err != nil {
 					t.Fatal(err)
+				}
+				if seq, _ := idAttribute(t, doc, "sidebar-channels", "data-snapshot-seq"); seq != "42" {
+					t.Fatalf("sidebar sequence = %q, want 42", seq)
 				}
 				assertSidebarMatchesPage(t, doc, frame)
 				channels, topics := 0, 0
@@ -155,7 +161,15 @@ func TestSidebarCountsMarkup(t *testing.T) {
 				if kind != "members" {
 					count := int64(0)
 					if strings.HasPrefix(kind, "unlisted") {
-						count = 100
+						count = page.TopicCounts[page.Topic.ID]
+						for n := range doc.Descendants() {
+							if attr(n, "id") == "topic-heading-count" {
+								if n.FirstChild == nil {
+									t.Fatal("unlisted heading badge missing")
+								}
+								assertUnreadBadge(t, n, lang, count)
+							}
+						}
 					}
 					assertUnreadBadge(t, find(doc, atom.H1), lang, count)
 				}
@@ -167,9 +181,19 @@ func TestSidebarCountsMarkup(t *testing.T) {
 func assertUnreadBadge(t *testing.T, node *html.Node, lang string, count int64) {
 	t.Helper()
 	visible, accessible := "", ""
+	badges := 0
 	for n := range node.Descendants() {
 		// The badge pairs a hidden count with its screen-reader text; other
 		// decorative spans (the row's tile, the selection pill) are not it.
+		if raw := attr(n, "data-unread-count"); raw != "" {
+			badges++
+			if raw != fmt.Sprint(count) || badgeHidden(n) != (count == 0) {
+				t.Fatalf("raw badge count/visibility = %q/%v, want %d/%v", raw, badgeHidden(n), count, count == 0)
+			}
+		}
+		if count == 0 && n.Parent != nil && badgeHidden(n.Parent) {
+			continue
+		}
 		if n.DataAtom == atom.Span && attr(n, "aria-hidden") == "true" && hasSROnlyChild(n.Parent) {
 			if n.FirstChild != nil {
 				visible += n.FirstChild.Data
@@ -178,6 +202,9 @@ func assertUnreadBadge(t *testing.T, node *html.Node, lang string, count int64) 
 		if n.DataAtom == atom.Span && attr(n, "class") == "sr-only" {
 			accessible += text(n)
 		}
+	}
+	if node.DataAtom == atom.A && badges != 1 {
+		t.Fatalf("badge elements = %d, want 1", badges)
 	}
 	want, label := "", ""
 	if count > 0 {
@@ -198,6 +225,15 @@ func assertUnreadBadge(t *testing.T, node *html.Node, lang string, count int64) 
 func hasSROnlyChild(n *html.Node) bool {
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		if c.DataAtom == atom.Span && attr(c, "class") == "sr-only" {
+			return true
+		}
+	}
+	return false
+}
+
+func badgeHidden(n *html.Node) bool {
+	for _, a := range n.Attr {
+		if a.Key == "hidden" {
 			return true
 		}
 	}

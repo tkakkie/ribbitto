@@ -72,6 +72,12 @@ func readSidebarConnect(t *testing.T, b acceptanceBrowser, streams *httptest.Ser
 func readSidebarFrame(t *testing.T, events <-chan sseEvent) string {
 	t.Helper()
 	e := nextEvent(t, events)
+	for e.name == "unread" {
+		if e.id != "" {
+			t.Fatal("unread frame advanced cursor")
+		}
+		e = nextEvent(t, events)
+	}
 	if e.name != "sidebar" || e.id != "" {
 		t.Fatalf("read recount frame = %+v; want sidebar without id", e)
 	}

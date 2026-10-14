@@ -66,21 +66,18 @@ func sidebarNode(t *testing.T, body, id string) string {
 
 func sidebarReload(t *testing.T, b acceptanceBrowser, path string, events <-chan sseEvent) string {
 	t.Helper()
-	e := nextEvent(t, events)
-	if e.name != "sidebar" || e.id != "" {
-		t.Fatalf("recount frame = %+v; want sidebar without id", e)
-	}
+	frame := readSidebarFrame(t, events)
 	_, page := b.visit(t, "GET", path, nil, 200)
 	ids := []string{"sidebar-channels", "sidebar-topics"}
 	if strings.Contains(path, "/topics/") {
 		ids = append(ids, "topic-heading-count")
 	}
 	for _, id := range ids {
-		if sidebarNode(t, e.data, id) != sidebarNode(t, page, id) {
+		if sidebarNode(t, frame, id) != sidebarNode(t, page, id) {
 			t.Fatalf("%s recount differs from reload", id)
 		}
 	}
-	return e.data
+	return frame
 }
 
 func TestLiveSidebar(t *testing.T) {
@@ -123,7 +120,7 @@ func TestLiveSidebar(t *testing.T) {
 		frame := sidebarReload(t, b, path, events)
 		want := b.client == reader.client
 		if strings.Contains(sidebarNode(t, frame, view.ChannelDOMID(f.Channel.ID)), "99+") != want ||
-			strings.Contains(sidebarNode(t, frame, view.TopicDOMID(selected.ID)), "Unread") {
+			sidebarHasUnread(t, frame, view.TopicDOMID(selected.ID)) {
 			t.Fatal("member read state or capped/zero count incorrect")
 		}
 	}
@@ -136,8 +133,8 @@ func TestLiveSidebar(t *testing.T) {
 		acceptanceOK(t, err)
 		for i, b := range []acceptanceBrowser{owner, reader} {
 			frame := sidebarReload(t, b, path, connections[i])
-			if strings.Contains(sidebarNode(t, frame, view.ChannelDOMID(other.ID)), "Unread") != (i == 1) ||
-				strings.Contains(sidebarNode(t, frame, view.TopicDOMID(selected.ID)), "Unread") != (i == 1 && topic != nil) {
+			if sidebarHasUnread(t, frame, view.ChannelDOMID(other.ID)) != (i == 1) ||
+				sidebarHasUnread(t, frame, view.TopicDOMID(selected.ID)) != (i == 1 && topic != nil) {
 				t.Fatal("other-channel or selected-topic recount incorrect")
 			}
 		}
@@ -248,4 +245,11 @@ func TestLiveSidebarTrigger(t *testing.T) {
 			}
 		})
 	}
+}
+
+func sidebarHasUnread(t *testing.T, frame, id string) bool {
+	t.Helper()
+	_, badge, _ := strings.Cut(sidebarNode(t, frame, id), `data-unread-count="`)
+	raw, _, _ := strings.Cut(badge, `"`)
+	return raw != "" && raw != "0"
 }

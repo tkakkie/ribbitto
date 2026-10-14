@@ -19,7 +19,7 @@ func TestEventPayloadCompatibility(t *testing.T) {
 	pool := pgtest.New(t)
 	id := func(n byte) kernel.ID { return kernel.ID{0: 0xab, 6: 0x7c, 8: 0x9d, 15: n} }
 	uuid := func(n byte) pgtype.UUID { return pgtype.UUID{Bytes: id(n), Valid: true} }
-	posted := conversation.EncodePosted(id(1), id(2), id(3))
+	posted := conversation.EncodePosted(id(1), id(2), id(3), id(4))
 	moved := conversation.EncodeMoved(conversation.Moved{ChannelID: id(1), FromTopicID: id(3), ToTopicID: id(5), MessageIDs: []kernel.ID{id(2), id(6)}})
 	for _, tt := range []struct {
 		name    string
@@ -31,10 +31,10 @@ func TestEventPayloadCompatibility(t *testing.T) {
 	}{
 		{
 			"message.posted", posted,
-			"SELECT jsonb_build_object('channel_id', $1::uuid, 'message_id', $2::uuid, 'topic_id', $3::uuid)",
-			[]any{uuid(1), uuid(2), uuid(3)},
+			"SELECT jsonb_build_object('channel_id', $1::uuid, 'message_id', $2::uuid, 'topic_id', $3::uuid, 'author_id', $4::uuid)",
+			[]any{uuid(1), uuid(2), uuid(3), uuid(4)},
 			func(b []byte) (any, error) { return conversation.DecodePosted(b) },
-			conversation.Posted{ChannelID: id(1), MessageID: id(2), TopicID: &[]kernel.ID{id(3)}[0]},
+			conversation.Posted{ChannelID: id(1), MessageID: id(2), TopicID: &[]kernel.ID{id(3)}[0], AuthorID: &[]kernel.ID{id(4)}[0]},
 		},
 		{
 			"legacy message.posted", nil,

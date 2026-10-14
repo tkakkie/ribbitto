@@ -75,6 +75,7 @@ func TestLiveSidebarBrowser(t *testing.T) {
 				link.append(wrap);
 			}
 			badge.textContent = '999';
+			badge.parentElement.hidden = false;
 		}
 		document.getElementById('link-' + channel).focus();
 		window.focusedLink = document.activeElement;
@@ -86,7 +87,7 @@ func TestLiveSidebarBrowser(t *testing.T) {
 		!document.querySelector('.htmx-settling')`, destinationID)
 	if !page.MustEval(`(source, channel, retained, destination) => {
 		// Scoped to the row's own link: a channel row also holds its topic rows.
-		const count = node => node.querySelector('.sr-only')?.previousElementSibling?.textContent || '';
+		const count = node => node.querySelector('[data-unread-count]:not([hidden]) > .sr-only')?.previousElementSibling?.textContent || '';
 		const badge = id => count(document.getElementById('link-' + id));
 		const ids = Array.from(document.querySelectorAll('[id]'), e => e.id);
 		return document.activeElement.id === 'link-' + channel && document.activeElement !== window.focusedLink &&

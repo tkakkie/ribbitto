@@ -244,8 +244,12 @@ func TestCostAttributionDatabase(t *testing.T) {
 	}
 	measured := counter.timings.take()
 	for _, kind := range []int{costSidebar, costEvents, costRanges, costChannelCount, costTopicState, costTopicCount, costGetChannel, costListChannels, costListTopics, costWitness, costBegin, costCommit, costWhole} {
-		if len(measured.samples[kind]) != 1 {
-			t.Fatalf("%s: want one real operation, got %d", costNames[kind], len(measured.samples[kind]))
+		want := 1
+		if kind == costWitness {
+			want = 2
+		} // Snapshot sequence plus the test-only witness.
+		if len(measured.samples[kind]) != want {
+			t.Fatalf("%s: want %d real operations, got %d", costNames[kind], want, len(measured.samples[kind]))
 		}
 	}
 	if len(measured.samples[costAuth]) == 0 || len(measured.samples[costOther]) != 0 || measured.failed[costGate] != 1 {

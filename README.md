@@ -93,8 +93,8 @@ without caching and recompute the stylesheet URL's content hash on each page
 request. Reload the browser after an edit; rebuilt CSS needs no server restart.
 Ctrl-C stops the watchers and server.
 
-The standalone Tailwind CLI is downloaded and SHA-256 checked by `make css`
-(macOS ARM64 and Linux x64). No npm or JavaScript build step is needed.
+`make css` and `make lint` use [`tools/download`](tools/download/main.go)
+for SHA-256 checked tools (macOS ARM64 and Linux x64). No npm is needed.
 Generated Go, CSS and vendored scripts are committed, so `go build` needs
 neither templ nor Tailwind. CSS class detection is limited to `.templ` files
 so local notes and tools do not change the output.

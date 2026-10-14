@@ -52,6 +52,7 @@ func TestBrowser(t *testing.T) {
 	t.Run("read-control", func(t *testing.T) { testReadControlBrowser(t, browser) })
 	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
 	t.Run("side-panel", func(t *testing.T) { testSidePanelBrowser(t, browser) })
+	t.Run("panel-sheet", func(t *testing.T) { testPanelSheetBrowser(t, browser) })
 	t.Run("sidebar-scroll", func(t *testing.T) { testSidebarScrollBrowser(t, browser) })
 	t.Run("branch-form", func(t *testing.T) { testBranchFormBrowser(t, browser) })
 	t.Run("arrival", func(t *testing.T) { testArrivalBrowser(t, browser) })

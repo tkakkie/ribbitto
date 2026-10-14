@@ -38,7 +38,7 @@ const readBrowserClock = `(() => {
  Math.random = () => test.random;
  Date.now = () => 1700000000000;
  window.setTimeout = (fn, ms, ...args) => {
-  if (!new Error().stack.includes('read-visibility-v4.js')) return original(fn, ms, ...args);
+  if (!new Error().stack.includes('read-visibility-v5.js')) return original(fn, ms, ...args);
   const id = --next; timers.set(id, {fn: () => fn(...args), ms});
   test.maxTimers = Math.max(test.maxTimers, timers.size); return id;
  };

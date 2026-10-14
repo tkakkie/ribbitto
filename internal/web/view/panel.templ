@@ -147,7 +147,7 @@ templ overviewPanel(page ChannelPage) {
 		<ul class="flex flex-col gap-1">
 			for _, topic := range page.Topics {
 				<li class="break-words">
-					<a href={ templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)) } dir="auto" class="inline-flex min-h-9 items-center gap-2 text-fg hover:text-brand">
+					<a href={ templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)) } dir="auto" class="inline-flex min-h-9 items-center gap-2 text-fg hover:text-brand max-desk:min-h-11">
 						@Icon("branch-regular", 16)
 						{ topicName(ctx, topic) }
 					</a>

@@ -9,9 +9,9 @@ file or one of these rules changes.
 
 - **Logo:** the speech-bubble frog — a chat bubble with a tail, two eye
   bumps and three dots for a mouth (echoed by the typing dots). Files
-  in `web/static/brand/`: `logo-v1.svg` (brand colour), `logo-mono-v1.svg`
+  in `web/static/brand/`: `logo-v2.svg` (scheme-aware brand colour), `logo-mono-v1.svg`
   (`currentColor`) and `logo-tile-v1.svg` (white on brand, for app icons);
-  only `logo-v1.svg` is used today.
+  only `logo-v2.svg` is used today. Keep `logo-v1.svg` for cached pages.
   Every page uses it as its favicon and `brandLogo` draws it; both read one
   constant, so replacing the logo changes one file and one reference. At
   least 16 px, with clear space of a quarter of its size; no other colours.
@@ -24,11 +24,28 @@ file or one of these rules changes.
 - A changed brand file gets a new version suffix, since static files are
   cached as immutable.
 
+## Dark artwork
+
+The logo follows `prefers-color-scheme` inside its SVG: deep brand teal
+`#0f766e` in light, `#4cc9b8` in dark. Its dark contrast is **9.10:1** on
+`base`, **8.07:1** on `bg` / `rail`, and **7.33:1** on `surface` (WCAG 2.x
+sRGB luminance, truncated to two decimals; all exceed 3:1). On the welcome
+card's `selected` background it is **5.82:1**.
+In pages, the logo image follows a live scheme switch without a reload
+(checked in Chromium, #987). The favicon reads the same file, but whether a
+browser repaints it on a live switch is **unverified**: no browser checked so
+far showed its tab icon. Record the result here when one is checked.
+
+Illustrations, channel images, the welcome composition and the mascot keep
+their original colours in dark; later uploaded photos must not be recoloured.
+Message avatar initials use the dark pastel pairs, whose ratios are recorded
+in [`ui-colours.md`](ui-colours.md#contrast-wcag-22-aa). No page places the mascot yet.
+
 ## Channel illustrations
 
 The repository's own SVG artwork in `web/static/channel-images-v1` is
 covered by the repository licence. All twelve are square (120 × 120),
-under 2 KB, and use only the pastel pairs in [`ui-colours.md`](ui-colours.md#colour-tokens) and `bg` white:
+under 2 KB, and use only the light pastel pairs in [`ui-colours.md`](ui-colours.md#colour-tokens) and white:
 
 | Pair | Keys / scenes |
 |---|---|

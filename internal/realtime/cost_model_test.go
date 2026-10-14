@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,13 +18,14 @@ import (
 // Tokens keep unexported model witnesses out of the simulated SSE payload.
 // The historical stage-1 two-count source remains separate from #952.
 type costModelConnection struct {
-	changes  *unread.Changes
-	snapshot func(context.Context) (hybridFrame, error)
-	sender   realtime.Sender
-	mu       sync.Mutex
-	next     uint64
-	pending  map[string]hybridFrame
-	latest   hybridFrame
+	changes      *unread.Changes
+	snapshot     func(context.Context) (hybridFrame, error)
+	sender       realtime.Sender
+	mu           sync.Mutex
+	next         uint64
+	pending      map[string]hybridFrame
+	latest       hybridFrame
+	computations atomic.Int64
 }
 
 func (c *costModelConnection) Watch(organization, member kernel.ID) realtime.SidebarWatch {
@@ -35,6 +37,8 @@ func (c *costModelConnection) Trigger(e realtime.Event) bool {
 }
 
 func (c *costModelConnection) Recount(ctx context.Context, sub realtime.Subscription) (realtime.Outgoing, error) {
+	// Count actual starts, including errors, cancellation and rejected output.
+	c.computations.Add(1)
 	frame, err := c.snapshot(context.WithValue(ctx, costRoleKey{}, costSidebar))
 	if err != nil {
 		return realtime.Outgoing{}, err

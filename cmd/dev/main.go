@@ -104,8 +104,21 @@ func supervise(ctx context.Context, commands []*exec.Cmd) (err error) {
 	}
 }
 
-func shutdown(watchers []watcher) error {
+func shutdown(watchers []watcher) (err error) {
+	// Copilot on #1042: preserve failures delivered before shutdown signals;
+	// later results may be caused by those signals.
+	var delivered error
+	for _, w := range watchers {
+		select {
+		case result := <-w.done:
+			if result != nil {
+				delivered = errors.Join(delivered, fmt.Errorf("watcher %s failed: %w", w.cmd.Path, result))
+			}
+		default:
+		}
+	}
 	defer func() {
+		err = errors.Join(err, delivered)
 		for _, w := range watchers {
 			<-w.done
 		}

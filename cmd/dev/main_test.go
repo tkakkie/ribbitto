@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -121,6 +122,77 @@ func TestSupervise(t *testing.T) {
 	}
 }
 
+// Copilot on #1042 questioned whether a leader alone can block shutdown.
+func TestSuperviseLeaderIgnoresSIGTERM(t *testing.T) {
+	root := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cmd := helper("leader", root)
+	done := make(chan error, 1)
+	go func() { done <- supervise(ctx, []*exec.Cmd{cmd}) }()
+	defer func() {
+		data, _ := os.ReadFile(filepath.Join(root, "leader.pid"))
+		if pid, err := strconv.Atoi(string(data)); err == nil {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	}()
+	ready, stop := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stop()
+	waitFor(t, ready, func() bool {
+		_, err := os.Stat(filepath.Join(root, "leader.pid"))
+		return err == nil
+	})
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("supervise: %v", err)
+		}
+		status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
+		if !ok || !status.Signaled() || status.Signal() != syscall.SIGKILL {
+			t.Errorf("leader exit = %v, want SIGKILL", cmd.ProcessState)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("supervise did not return within the shutdown deadline")
+	}
+}
+
+// Copilot on #1042 found that a failure delivered before shutdown can be lost.
+func TestSupervisePreservesDeliveredFailure(t *testing.T) {
+	t.Run("shutdown boundary", func(t *testing.T) {
+		var watchers []watcher
+		// Reap the failure before the clean exit so both results are available
+		// at the shutdown boundary without relying on scheduler timing.
+		for _, code := range []string{"7", "0"} {
+			cmd := exec.Command("/bin/sh", "-c", "exit "+code)
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			w := watcher{cmd, make(chan error, 1), cmd.Process.Pid}
+			w.done <- cmd.Wait()
+			close(w.done)
+			watchers = append(watchers, w)
+		}
+		var exit *exec.ExitError
+		if err := shutdown(watchers); !errors.As(err, &exit) || exit.ExitCode() != 7 {
+			t.Fatalf("shutdown = %v, want the delivered exit status 7", err)
+		}
+	})
+	t.Run("supervise", func(t *testing.T) {
+		commands := []*exec.Cmd{
+			exec.Command("/bin/sh", "-c", "exit 7"),
+			exec.Command("/bin/sh", "-c", "exit 0"),
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var exit *exec.ExitError
+		if err := supervise(ctx, commands); !errors.As(err, &exit) || exit.ExitCode() != 7 {
+			t.Fatalf("supervise = %v, want the watcher failure", err)
+		}
+	})
+}
+
 func helper(role, root string) *exec.Cmd {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
 	cmd.Env = append(os.Environ(), "DEV_HELPER="+role, "DEV_ROOT="+root)
@@ -162,7 +234,7 @@ func TestHelperProcess(t *testing.T) {
 		os.Exit(0)
 	}
 	signal.Ignore(os.Interrupt, syscall.SIGTERM)
-	if !strings.HasSuffix(role, "-child-child") {
+	if role != "leader" && !strings.HasSuffix(role, "-child-child") {
 		child := helper(role+"-child", root)
 		child.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		if err := child.Start(); err != nil {

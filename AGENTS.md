@@ -29,21 +29,23 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 ## Commands
 
 - `make check` — checks formatting (Go and templ), vets, lints, builds and
-  tests (with the race detector); must pass before you open a pull request.
-  It runs the AI launchers' self-tests only when the change can affect them
+  tests (race detector on); must pass before you open a pull request.
+  AI launcher self-tests run only when a change can affect them
   (README *Checks*); `make check-ai` always runs them.
   Format templates with `./bin/templ fmt <path>`.
-- `make vuln` — runs `govulncheck`; CI runs it too. It needs the network, so
-  it is not part of `make check`.
+- `make vuln` — runs `govulncheck`; it needs the network, so CI runs it,
+  not `make check`.
 - `make lint` — runs golangci-lint.
-- `make deps` — regenerates `docs/dependencies.md`, the package-import
-  edges; commit it with any change that adds or removes one.
-- `make check` also checks documents: every link and `#anchor` to a
-  Markdown file resolves, repository paths in code spans exist, and each
+- Tooling is Go, with one-line `Makefile` recipes
+  ([decision 35](docs/decisions/35-tooling-in-go.md)).
+- `make deps` — regenerates `docs/dependencies.md` (package-import
+  edges); commit it with any edge change.
+- `make check` also checks documents: Markdown links and `#anchors`
+  resolve, repository paths in code spans exist, and each
   document stays under its size limit (one topic per file). When a file
-  goes over, open an issue to split it, add
-  `<path> #<issue>` to `docs/size-exceptions.txt`, and split it in a
-  separate pull request.
+  goes over, open an issue, add
+  `<path> #<issue>` to `docs/size-exceptions.txt`, and split it in its
+  own pull request.
 
 ## Layout and dependency direction
 

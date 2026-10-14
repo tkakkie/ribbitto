@@ -627,3 +627,8 @@ type fakePostReads struct{}
 func (fakePostReads) Read(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64, int64, int64, int64) error {
 	return nil
 }
+
+func (f fakeMessages) ChannelList(ctx context.Context, m org.Membership, id kernel.ID) (conversation.ChannelListPage, error) {
+	page, err := f.Page(ctx, m, id, nil, nil)
+	return conversation.ChannelListPage{SidebarSnapshot: conversation.SidebarSnapshot{Current: page.Current, Channels: page.Channels, Topics: page.Topics}, EventCursor: 42}, err
+}

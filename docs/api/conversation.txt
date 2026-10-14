@@ -24,6 +24,9 @@ type ChannelCreator interface // ChannelCreator serializes creation before the g
   func (ChannelCreator).LockCreation(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID) error
 type ChannelCreatorIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) ChannelCreator // ChannelCreatorIn binds creation to the use case's transaction.
 func ChannelImageKeys() []string // ChannelImageKeys returns the bundled illustration keys in stable fallback order.
+type ChannelListPage struct // ChannelListPage is a sidebar snapshot, with the channel's topics nested and no topic selected, plus the cursor its stream resumes after.
+  field EventCursor int64
+  field SidebarSnapshot SidebarSnapshot
 type ChannelMember struct // ChannelMember holds a channel member's names for display, never authorization.
   field DisplayName string
   field Handle string
@@ -163,6 +166,7 @@ type ReadStore interface // ReadStore is conversation's reads in the caller's sn
   func (ReadStore).LookupTopics(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicIDs []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]Topic, error) // LookupTopics resolves the requested topics of the channel in one batch, so a page costs one topic query rather than one per message.
 type ReadStoreIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) ReadStore // ReadStoreIn binds conversation's reads to the caller's snapshot.
 type Reader struct // Reader owns page, sidebar, single-message and batch snapshots across conversation, org, identity and unread through factories bound to the same read-only snapshot.
+  func (*Reader).ChannelList(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (page ChannelListPage, err error) // ChannelList reads the channel list page in one snapshot, as Members does: the cursor comes from the snapshot that counted, so the stream neither skips nor repeats a change.
   func (*Reader).Many(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, ids []github.com/tkakkie/ribbitto/internal/kernel.ID) (entries []Entry, err error) // Many reads a move's bounded message batch and directories in one snapshot.
   func (*Reader).Members(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, after *github.com/tkakkie/ribbitto/internal/kernel.ID) (page MembersPage, err error) // Members reads a bounded channel membership page.
   func (*Reader).One(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64) (entry Entry, err error) // One reads one message, its author names and topic in a read-only snapshot.

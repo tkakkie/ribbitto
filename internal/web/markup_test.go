@@ -606,6 +606,9 @@ func TestPagesMarkup(t *testing.T) {
 		{name: "channel with messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = populatedMessages(); return s }, method: "GET", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true},
 		{name: "channel with older messages", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ChannelURL("acme", kernel.ID{1}), cookie: true},
 		{name: "older page", route: "GET /organizations/{slug}/channels/{channelID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: "GET", path: view.ChannelURL("acme", kernel.ID{1}) + "?before=40", cookie: true},
+		// One response serves both widths; only its classes differ by breakpoint.
+		{name: "channel list", route: "GET /organizations/{slug}/channels", services: signedIn(oneOrganisation{}), method: "GET", path: "/organizations/acme/channels", cookie: true},
+		{name: "channel list, other channel", route: "GET /organizations/{slug}/channels", services: signedIn(oneOrganisation{}), method: "GET", path: view.ChannelListURL("acme", kernel.ID{2}), cookie: true},
 		{name: "channel invalid name", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrInvalidChannelName), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {""}}, status: http.StatusUnprocessableEntity},
 		{name: "channel duplicate name", route: "POST /organizations/{slug}/channels", services: withChannelError(conversation.ErrChannelNameTaken), method: "POST", path: "/organizations/acme/channels", cookie: true, form: url.Values{"name": {"雑談"}}, status: http.StatusUnprocessableEntity},
 	}
@@ -652,6 +655,8 @@ func TestPagesMarkup(t *testing.T) {
 		"setup/ja":           "初期設定 · ribbitto",
 		"channel/en":         "雑談 <script>alert(1)</script> · Acme Corporation · ribbitto",
 		"channel/ja":         "雑談 <script>alert(1)</script> · Acme Corporation · ribbitto",
+		"channel list/en":    "lilypads · Acme Corporation · ribbitto",
+		"channel list/ja":    "lilypad · Acme Corporation · ribbitto",
 	}
 	for _, c := range cases {
 		for _, lang := range []string{"en", "ja"} {

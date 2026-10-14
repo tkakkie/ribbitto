@@ -109,6 +109,7 @@ The endpoint takes:
 | Feed (latest page) | `sidebar,messages,typing` with `channel` |
 | Topic view (latest page) | `sidebar,messages,typing` with `channel` and `topic` |
 | `?before=` page | `sidebar` with `channel` and, on topic pages, `topic` |
+| Channel list page | `sidebar` with `channel`, the channel whose topics it nests |
 | With the members panel | the page's own interests plus `presence`, with `presence-after` |
 
 Every page, including `?before=`, carries a snapshot cursor on

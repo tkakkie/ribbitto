@@ -87,10 +87,17 @@ type counterTransactionAdapter struct {
 	moved       int64
 	moves       []int64
 	sql         bool
+	intervals   bool
 	newTopic    bool
 }
 
 func (a *counterTransactionAdapter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	if a.sql {
+		counterSQLIntervalGuard(a.t, ctx, data.SQL)
+		if data.SQL != "commit" {
+			ctx = (counterSQLAdapter{}).TraceQueryStart(ctx, conn, data)
+		}
+	}
 	ctx = context.WithValue(ctx, counterBeginKey{}, data.SQL == "begin")
 	op, _ := ctx.Value(counterOperationKey{}).(*counterOperation)
 	if op == nil || data.SQL != "commit" {
@@ -139,6 +146,9 @@ func (a *counterTransactionAdapter) TraceQueryStart(ctx context.Context, conn *p
 }
 
 func (a *counterTransactionAdapter) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, end pgx.TraceQueryEndData) {
+	if a.sql && ctx.Value(counterBeginKey{}) != true {
+		(counterSQLAdapter{}).TraceQueryEnd(ctx, conn, end)
+	}
 	op, _ := ctx.Value(counterOperationKey{}).(*counterOperation)
 	if op == nil || ctx.Value(counterBeginKey{}) != true {
 		return
@@ -191,6 +201,9 @@ func (a *counterTransactionAdapter) start(ctx context.Context, pool *pgxpool.Poo
 	if a.sql {
 		var w *counterSQLWrite
 		ctx, w = counterSQLContext(ctx, m, a.h.channel)
+		if a.intervals {
+			counterSQLUseIntervals(w)
+		}
 		w.join = kind == "join"
 		if kind == "move" {
 			w.moveFrom, w.moves = a.h.base, a.moves
@@ -295,10 +308,10 @@ func counterOutcome(t *testing.T, ctx context.Context, h *counterMatrix, op *cou
 }
 
 func TestUnreadCountersTransactions(t *testing.T) {
-	counterTransactions(t, false)
+	counterTransactions(t, false, false)
 }
 
-func counterTransactions(t *testing.T, sql bool) {
+func counterTransactions(t *testing.T, sql, intervals bool) {
 	pairs := [][2]string{{"read", "move"}, {"post", "read"}, {"join", "post"}}
 	orders := [][2]bool{{false, false}, {true, false}}
 	if sql {
@@ -330,7 +343,7 @@ func counterTransactions(t *testing.T, sql bool) {
 					}
 					h.expect(t, owner, int64(seeds))
 					h.prototype.materialize(h.truth, counterKey{writer.Member.ID, h.channel})
-					a := &counterTransactionAdapter{t: t, h: h, moved: cursor, sql: sql, newTopic: newTopic}
+					a := &counterTransactionAdapter{t: t, h: h, moved: cursor, sql: sql, intervals: intervals, newTopic: newTopic}
 					if sql {
 						h.read(t, "partial-source-read", owner, &h.base, sequences[1])
 						a.moves = []int64{sequences[0], sequences[1], cursor}

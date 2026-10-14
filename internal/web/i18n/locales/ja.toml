@@ -172,6 +172,9 @@ other = "しばらく待ってから、もう一度お試しください。"
 ["channel.list"]
 other = "lilypad"
 
+["channel.choose"]
+other = "一覧からlilypadを開いてください。"
+
 ["channel.name"]
 other = "lilypad名"
 

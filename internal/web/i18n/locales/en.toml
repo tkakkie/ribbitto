@@ -172,6 +172,9 @@ other = "Please wait a while before trying again."
 ["channel.list"]
 other = "lilypads"
 
+["channel.choose"]
+other = "Open a lilypad from the list."
+
 ["channel.name"]
 other = "lilypad name"
 

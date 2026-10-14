@@ -168,7 +168,7 @@ func TestChannelHandlers(t *testing.T) {
 				t.Fatalf("created %q", tt.fake.created)
 			}
 			if tt.status == 422 {
-				assertFullConversationPage(t, w.Body.String())
+				assertChannelListPage(t, w.Body.String(), kernel.ID{1})
 				doc, err := html.Parse(w.Body)
 				if err != nil {
 					t.Fatal(err)
@@ -336,6 +336,69 @@ func TestChannelListPage(t *testing.T) {
 				assertChannelListPage(t, w.Body.String(), tt.channel)
 			} else if strings.Contains(w.Body.String(), "Acme") {
 				t.Fatal("404 carries organisation data")
+			}
+		})
+	}
+}
+
+// A failed creation renders the list page with the error next to its field;
+// the corrected form, submitted as rendered, creates the channel.
+func TestChannelCreationCorrection(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name, form, field string
+		err               error
+	}{
+		{"invalid name", "name=", "name", conversation.ErrInvalidChannelName},
+		{"duplicate name", "name=taken", "name", conversation.ErrChannelNameTaken},
+		{"invalid image", "name=Plans&image=unknown", "image", nil},
+		{"channel cap", "name=Plans", "name", conversation.ErrChannelLimit},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeChannels{createErr: tt.err}
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Channels, s.Messages = fake, fakeMessages{channels: fake} }))
+			if err != nil {
+				t.Fatal(err)
+			}
+			submit := func(action, form string) *httptest.ResponseRecorder {
+				r := httptest.NewRequest("POST", action, strings.NewReader(form))
+				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, r)
+				return w
+			}
+			w := submit("/organizations/acme/channels", tt.form)
+			if w.Code != 422 {
+				t.Fatalf("status %d", w.Code)
+			}
+			assertChannelListPage(t, w.Body.String(), kernel.ID{1})
+			doc, err := html.Parse(w.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var form, field *html.Node
+			for n := range doc.Descendants() {
+				if attr(n, "id") == "channel-create" {
+					form = n
+				}
+				if n.DataAtom == atom.Input && attr(n, "name") == tt.field && attr(n, "aria-invalid") == "true" && field == nil {
+					field = n
+				}
+			}
+			if form == nil || field == nil {
+				t.Fatal("the form is not in place with its invalid field")
+			}
+			if _, popover := attrOK(form, "popover"); popover {
+				t.Fatal("the failed form is hidden in a popover")
+			}
+			checkFieldError(t, doc, field)
+			fake.createErr = nil
+			if w := submit(attr(form, "action"), "name=Plans&image="); w.Code != 303 || w.Header().Get("Location") != view.ChannelURL("acme", kernel.ID{3}) {
+				t.Fatalf("resubmission: %d %s", w.Code, w.Header().Get("Location"))
 			}
 		})
 	}

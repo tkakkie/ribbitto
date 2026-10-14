@@ -192,14 +192,15 @@ func (p channelPages) create(w http.ResponseWriter, r *http.Request, m org.Membe
 		serverError(w, r, "creating channel", err)
 		return
 	}
-	// No channel identity is accepted from the form: failed creation returns
-	// to the default conversation within the resolved organisation.
+	// No channel identity is accepted from the form: failed creation shows the
+	// list page with the default channel of the resolved organisation. A phone
+	// shows only the list there, so the error stays visible at every width.
 	c, err = p.channels.Default(r.Context(), m)
 	if err != nil {
 		serverError(w, r, "finding default channel", err)
 		return
 	}
-	p.render(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message, Image: r.PostForm.Get("image"), CreateImageError: imageMessage}, nil)
+	p.renderList(w, r, m, c.ID, http.StatusUnprocessableEntity, view.ChannelPage{Name: name, Error: message, Image: r.PostForm.Get("image"), CreateImageError: imageMessage})
 }
 
 // list renders the channel list page, nesting the topics of the channel the
@@ -227,12 +228,12 @@ func (p channelPages) list(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		id = c.ID
 	}
-	p.renderList(w, r, m, id)
+	p.renderList(w, r, m, id, http.StatusOK, view.ChannelPage{})
 }
 
-// renderList reads the list in one snapshot, which checks that the channel
-// belongs to the resolved organisation.
-func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID) {
+// renderList keeps the creation form's state; the snapshot checks that the
+// channel belongs to the resolved organisation.
+func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage) {
 	list, err := p.messages.ChannelList(r.Context(), m, id)
 	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) {
 		http.NotFound(w, r)
@@ -243,8 +244,9 @@ func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.M
 		return
 	}
 	account, _ := middleware.Account(r.Context())
-	p.pages.render(w, r, http.StatusOK, func(url string) templ.Component {
-		page := sidebarView(view.ChannelPage{List: true, ImageKeys: conversation.ChannelImageKeys()}, m, list.SidebarSnapshot)
+	p.pages.render(w, r, status, func(url string) templ.Component {
+		page.List, page.ImageKeys = true, conversation.ChannelImageKeys()
+		page = sidebarView(page, m, list.SidebarSnapshot)
 		page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
 		page.EventCursor = &list.EventCursor
 		return view.ChannelListScreen(url, page)

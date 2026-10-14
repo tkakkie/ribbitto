@@ -163,6 +163,13 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 			<div class="flex min-w-0 flex-1 gap-2">
 				<main id="conversation" class="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block">
 					<header class="flex shrink-0 items-center gap-3 border-b border-border px-6 py-2">
+						// Below the desk breakpoint the list replaces the hidden sidebar; the
+						// fragment brings this channel's row into view without JavaScript.
+						<a href={ templ.SafeURL(ChannelListURL(page.Organization.Slug, page.Current.ID) + "#" + ChannelDOMID(page.Current.ID)) } aria-label={ i18n.T(ctx, "channel.back") } class="flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-fg desk:hidden transition-feedback motion-safe:active:scale-96">
+							// A text chevron: the sprite has no back arrow, and a sprite icon
+							// hidden at desktop width would have nothing to paint.
+							<span aria-hidden="true" class="text-heading">‹</span>
+						</a>
 						<div class="flex min-w-0 flex-1 items-center gap-2">
 							@channelImage(page.Current.ImageURL, true)
 							if page.Topic != nil {
@@ -252,7 +259,8 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 
 // channelFrame is the organisation stream around the app bar, the sidebar and
 // the page's own blocks. On the list page the sidebar is the page's <main>,
-// which fills the width below the desk breakpoint; the server never needs the width.
+// which fills the width below the desk breakpoint; there a conversation hides
+// the bar and the sidebar instead. The server never needs the width.
 templ channelFrame(page ChannelPage) {
 	<div
 		id="organization-stream"
@@ -271,7 +279,7 @@ templ channelFrame(page ChannelPage) {
 				@sidebarContent(page)
 			</main>
 		} else {
-			<aside class="flex w-sidebar shrink-0 flex-col overflow-y-auto px-1 py-2">
+			<aside class="flex w-sidebar shrink-0 flex-col overflow-y-auto px-1 py-2 max-desk:hidden">
 				@sidebarContent(page)
 			</aside>
 		}

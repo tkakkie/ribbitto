@@ -175,6 +175,9 @@ other = "lilypads"
 ["channel.choose"]
 other = "Open a lilypad from the list."
 
+["channel.back"]
+other = "Back to lilypads"
+
 ["channel.name"]
 other = "lilypad name"
 

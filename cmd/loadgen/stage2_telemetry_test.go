@@ -240,6 +240,102 @@ func TestStage2TelemetryNeverEarly(t *testing.T) {
 	}
 }
 
+func TestStage2TelemetryElapsedSecondBuckets(t *testing.T) {
+	for _, lateOpening := range []bool{false, true} {
+		t.Run(fmt.Sprintf("late-opening=%t", lateOpening), func(t *testing.T) {
+			start := time.Unix(123, 0)
+			clock, slot := start, -1
+			if lateOpening {
+				clock = start.Add(1500 * time.Millisecond)
+			}
+			var fetched []int
+			samples, err := stage2SampleMetrics(context.Background(), start, func() time.Time { return clock }, func(_ context.Context, delay time.Duration) bool {
+				slot++
+				clock = clock.Add(delay)
+				if lateOpening && slot == 1 && clock.Sub(start) != 1600*time.Millisecond {
+					t.Fatalf("slot 1 considered at %s, want 1.6s", clock.Sub(start))
+				}
+				return true
+			}, func(context.Context) (json.RawMessage, error) {
+				fetched = append(fetched, slot)
+				if lateOpening && slot == 0 {
+					clock = start.Add(1600 * time.Millisecond)
+				}
+				return stage2MetricFixture(slot), nil
+			})
+			wantSlots := make([]int, 0, 601)
+			for second := 0; second <= 600; second++ {
+				if !lateOpening || second != 1 {
+					wantSlots = append(wantSlots, second)
+				}
+			}
+			if lateOpening {
+				if err == nil || err.Error() != "missed metrics slot 1" {
+					t.Errorf("same-bucket slot not recorded as missed: got %v want missed metrics slot 1", err)
+				}
+			} else if err != nil {
+				t.Errorf("normal schedule failed: %v", err)
+			}
+			if !reflect.DeepEqual(fetched, wantSlots) {
+				t.Errorf("fetch schedule differs: fetches=%d want=%d slot 1 fetched=%t", len(fetched), len(wantSlots), len(fetched) > 1 && fetched[1] == 1)
+			}
+			if len(samples) != len(wantSlots) {
+				t.Fatalf("retained samples=%d want=%d; same-bucket sample must not be retained", len(samples), len(wantSlots))
+			}
+			for i, second := range wantSlots {
+				offset, phase := time.Duration(second)*time.Second, "traffic"
+				if lateOpening && second == 0 {
+					offset = 1500 * time.Millisecond
+				}
+				if second == 600 {
+					phase = "boundary"
+				}
+				if samples[i].OffsetNS != int64(offset) || samples[i].Phase != phase || !reflect.DeepEqual(samples[i].Metrics, stage2MetricFixture(second)) {
+					t.Fatalf("retained slot %d changed: %+v", second, samples[i])
+				}
+			}
+		})
+	}
+}
+
+func TestStage2TelemetryTerminalAfterLateTraffic(t *testing.T) {
+	for _, terminal := range []time.Duration{600100 * time.Millisecond, 602 * time.Second, 602*time.Second + time.Nanosecond} {
+		t.Run(terminal.String(), func(t *testing.T) {
+			start := time.Unix(123, 0)
+			clock, slot, calls := start, -1, 0
+			samples, err := stage2SampleMetrics(context.Background(), start, func() time.Time { return clock }, func(_ context.Context, delay time.Duration) bool {
+				slot++
+				clock = clock.Add(delay)
+				if slot == 599 {
+					clock = start.Add(599500 * time.Millisecond)
+				}
+				return true
+			}, func(context.Context) (json.RawMessage, error) {
+				calls++
+				if slot == 599 {
+					clock = start.Add(terminal)
+				}
+				return stage2MetricFixture(slot), nil
+			})
+			want := 601
+			if terminal > 602*time.Second {
+				want--
+				if err == nil || err.Error() != "missed metrics slot 600" {
+					t.Fatalf("late terminal not recorded as missed: %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("valid terminal rejected after late traffic: %v", err)
+			}
+			if len(samples) != want || calls != want {
+				t.Fatalf("terminal coverage: samples=%d fetches=%d want=%d", len(samples), calls, want)
+			}
+			if want == 601 && (samples[600].OffsetNS != int64(terminal) || samples[600].Phase != "boundary") {
+				t.Fatalf("terminal dispatch changed: %+v", samples[600])
+			}
+		})
+	}
+}
+
 func TestStage2TelemetryFailures(t *testing.T) {
 	for _, failure := range []string{"scrape", "slow", "shape", "cancel"} {
 		t.Run(failure, func(t *testing.T) {

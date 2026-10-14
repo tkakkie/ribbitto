@@ -63,8 +63,13 @@ func stage2SampleMetrics(ctx context.Context, start time.Time, now func() time.T
 			withinSlot = offset <= time.Duration(second)*time.Second+2*time.Second
 		}
 		// A delayed opening scrape may occupy a later second, but cannot be
-		// reused as another sample when the scheduler catches up.
-		if offset < time.Duration(second)*time.Second || !withinSlot || (len(samples) > 0 && offset.Nanoseconds() <= samples[len(samples)-1].OffsetNS) {
+		// reused in the same elapsed-second bucket when the scheduler catches up.
+		advances := true
+		if len(samples) > 0 {
+			previous := time.Duration(samples[len(samples)-1].OffsetNS)
+			advances = offset > previous && offset.Truncate(time.Second) > previous.Truncate(time.Second)
+		}
+		if offset < time.Duration(second)*time.Second || !withinSlot || !advances {
 			problems = append(problems, fmt.Errorf("missed metrics slot %d", second))
 			continue
 		}

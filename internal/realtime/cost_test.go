@@ -529,7 +529,13 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 		posters.Go(func() {
 			defer func() { <-inFlight }()
 			began := time.Now()
-			posted, err := posting.Post(stepCtx, m, sub.Channel, "cost")
+			var posted conversation.Message
+			var err error
+			if modelRunner != nil {
+				posted, err = modelRunner.post(stepCtx, posting, m, sub.Channel)
+			} else {
+				posted, err = posting.Post(stepCtx, m, sub.Channel, "cost")
+			}
 			at := time.Now()
 			mu.Lock()
 			defer mu.Unlock()
@@ -758,6 +764,9 @@ type epochCounter struct {
 
 func (c *epochCounter) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	ctx = c.timings.queryStart(ctx, data.SQL)
+	if strings.EqualFold(strings.TrimSpace(data.SQL), "commit") {
+		ctx = context.WithValue(ctx, costCommitKey{}, true)
+	}
 	if strings.HasPrefix(data.SQL, "-- name: GetAccessEpoch ") {
 		c.epochReads.Add(1)
 	}

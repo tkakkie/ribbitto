@@ -30,8 +30,8 @@ generate: $(TEMPL)
 	$(TEMPL) generate
 	go tool -modfile=tools/go.mod sqlc generate
 
-schema-docs:
-	python3 scripts/ai_env.py run go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist
+schema-docs: bin/ai-db
+	./bin/ai-db run go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist
 
 # Regenerates docs/dependencies.md; make check fails when it is stale.
 deps:
@@ -47,12 +47,12 @@ css: $(TAILWIND)
 	$(TAILWIND) $(CSS_ARGS)
 
 # Serve rebuilt CSS from disk so updates do not depend on a server restart.
-dev: $(TEMPL) css
+dev: $(TEMPL) css bin/ai-db
 	@set -eu; \
 	$(TAILWIND) $(CSS_ARGS) --watch=always & css_pid=$$!; \
 	trap 'kill "$$css_pid" 2>/dev/null || true; wait "$$css_pid" 2>/dev/null || true' EXIT; \
 	trap 'exit 130' INT; trap 'exit 143' TERM; \
-	RIBBITTO_DEV_ASSETS=web/static python3 scripts/ai_env.py run $(TEMPL) generate --watch --cmd 'go run ./cmd/ribbitto'
+	RIBBITTO_DEV_ASSETS=web/static ./bin/ai-db run $(TEMPL) generate --watch --cmd 'go run ./cmd/ribbitto'
 
 $(TAILWIND):
 	@mkdir -p "$(@D)"
@@ -158,17 +158,20 @@ bin/ai-db: $(wildcard cmd/devdb/*.go) $(wildcard internal/platform/postgres/*.go
 	mkdir -p "$(@D)"
 	go build -o $@ ./cmd/devdb
 
-ai-env ai-env-clean ai-health: bin/ai-db
-	@python3 scripts/ai_env.py $(patsubst ai-env-clean,clean,$(patsubst ai-health,health,$@))
+ai-env ai-env-clean: bin/ai-db
+	@python3 scripts/ai_env.py $(patsubst ai-env-clean,clean,$@)
+
+ai-health: bin/ai-db
+	@./bin/ai-db health
 
 db-health:
 	@if [ "$${RIBBITTO_TEST_DATABASE_URL+x}" = x ] || [ "$${RIBBITTO_REQUIRE_DB:-}" = 1 ]; then $(MAKE) ai-health; fi
 
-migrate:
-	@python3 scripts/ai_env.py run go run ./cmd/ribbitto migrate $(or $(DIRECTION),up)
+migrate: bin/ai-db
+	@./bin/ai-db run go run ./cmd/ribbitto migrate $(or $(DIRECTION),up)
 
-seed:
-	@python3 scripts/ai_env.py run go run ./cmd/seed $(ARGS)
+seed: bin/ai-db
+	@./bin/ai-db run go run ./cmd/seed $(ARGS)
 
 check-ai-env: bin/ai-db
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'ai_*_test.py'

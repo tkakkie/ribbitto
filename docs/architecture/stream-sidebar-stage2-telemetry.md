@@ -12,6 +12,8 @@ retained samples; a late scrape never backfills expired slots or duplicates an
 opening scrape while catching up. Drain is excluded. Aggregation accepts
 `traffic` only in `[0,600s)` and `boundary` only at the closing boundary,
 `[600s,602s]`; a wrong phase invalidates the evidence.
+A valid terminal snapshot is retained if cancellation occurs during its fetch,
+but the sampler still returns a sampling-stopped error.
 
 The [stability protocol's](stream-sidebar-stability.md#new-window-rule-and-telemetry)
 inclusive two-second tolerance applies to the whole window's start and end,

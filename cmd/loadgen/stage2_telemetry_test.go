@@ -212,6 +212,45 @@ func TestStage2TelemetryFailures(t *testing.T) {
 	}
 }
 
+func TestStage2TelemetryTerminalFetchCancellation(t *testing.T) {
+	for _, cancelDuringFetch := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cancel=%t", cancelDuringFetch), func(t *testing.T) {
+			start := time.Unix(123, 0)
+			clock, calls := start, 0
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			samples, err := stage2SampleMetrics(ctx, start, func() time.Time { return clock }, func(_ context.Context, delay time.Duration) bool {
+				clock = clock.Add(delay)
+				return true
+			}, func(context.Context) (json.RawMessage, error) {
+				second := calls
+				calls++
+				if second == 600 {
+					clock = clock.Add(500 * time.Millisecond)
+					if cancelDuringFetch {
+						cancel()
+					}
+				}
+				return stage2MetricFixture(second), nil
+			})
+			if cancelDuringFetch {
+				if err == nil || !strings.Contains(err.Error(), "sampling stopped: context canceled") {
+					t.Fatalf("terminal-fetch cancellation not reported: err=%v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("uncancelled sampling failed: %v", err)
+			}
+			if len(samples) != 601 || calls != 601 {
+				t.Fatalf("terminal fetch lost samples: samples=%d calls=%d", len(samples), calls)
+			}
+			terminal := samples[600]
+			if terminal.OffsetNS != int64(600*time.Second) || terminal.Phase != "boundary" || !reflect.DeepEqual(terminal.Metrics, stage2MetricFixture(600)) {
+				t.Fatalf("valid terminal snapshot not retained: %+v", terminal)
+			}
+		})
+	}
+}
+
 func TestStage2TelemetryPhases(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

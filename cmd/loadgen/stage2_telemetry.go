@@ -82,6 +82,10 @@ func stage2SampleMetrics(ctx context.Context, start time.Time, now func() time.T
 		}
 		samples = append(samples, stage2Sample{offset.Nanoseconds(), phase, slices.Clone(raw)})
 	}
+	// Retain a valid terminal snapshot, but do not hide cancellation during its fetch.
+	if err := ctx.Err(); err != nil {
+		problems = append(problems, fmt.Errorf("sampling stopped: %v", err))
+	}
 	return samples, errors.Join(problems...)
 }
 

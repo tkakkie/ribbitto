@@ -210,6 +210,70 @@ func TestStage2Schema(t *testing.T) {
 	}
 }
 
+func TestStage2MetricsSectionShapes(t *testing.T) {
+	w := stage2WindowFixture()
+	m := stage2ManifestFixture()
+	var decodedWindow stage2Window
+	decodedManifest := stage2ManifestFixture()
+	for _, target := range []struct {
+		name           string
+		record, dst    any
+		metrics        *json.RawMessage
+		decodedMetrics func() json.RawMessage
+	}{
+		{"window/effective", &w, &decodedWindow, &w.Effective.Metrics, func() json.RawMessage { return decodedWindow.Effective.Metrics }},
+		{"window/sample", &w, &decodedWindow, &w.Samples[0].Metrics, func() json.RawMessage { return decodedWindow.Samples[0].Metrics }},
+		{"manifest/effective", &m, &decodedManifest, &m.Windows[0].Effective.Metrics, func() json.RawMessage { return decodedManifest.Windows[0].Effective.Metrics }},
+	} {
+		t.Run(target.name, func(t *testing.T) {
+			original := *target.metrics
+			defer func() { *target.metrics = original }()
+			sections := map[string]json.RawMessage{}
+			for _, section := range []string{"database", "pool", "runtime", "streams", "scheduler", "delivery"} {
+				sections[section] = json.RawMessage(`{"unknown":{"values":[null,1e3,"future",[]]}}`)
+			}
+			metrics, err := json.Marshal(sections)
+			if err != nil {
+				t.Fatal(err)
+			}
+			*target.metrics = metrics
+			raw, err := json.Marshal(target.record)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := decodeStage2(raw, target.dst); err != nil {
+				t.Fatalf("rejected valid metrics with unknown section fields: %v", err)
+			}
+			if string(target.decodedMetrics()) != string(metrics) {
+				t.Fatal("decoding changed metrics verbatim contents")
+			}
+			for section, value := range sections {
+				t.Run(section, func(t *testing.T) {
+					for _, invalid := range []struct{ name, raw string }{
+						{"null", "null"}, {"number", "42"}, {"string", `"invalid"`}, {"array", "[]"},
+					} {
+						t.Run(invalid.name, func(t *testing.T) {
+							sections[section] = json.RawMessage(invalid.raw)
+							defer func() { sections[section] = value }()
+							*target.metrics, err = json.Marshal(sections)
+							if err != nil {
+								t.Fatal(err)
+							}
+							raw, err := json.Marshal(target.record)
+							if err != nil {
+								t.Fatal(err)
+							}
+							if err := decodeStage2(raw, target.dst); err == nil {
+								t.Fatalf("accepted %s metrics section %q: %s", invalid.name, section, invalid.raw)
+							}
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestStage2GateApplicability(t *testing.T) {
 	p := fixedStage2()
 	for i, gate := range p.Gates {

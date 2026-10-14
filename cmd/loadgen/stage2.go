@@ -247,7 +247,7 @@ func stage2Shape(raw json.RawMessage, typ reflect.Type) error {
 		return fmt.Errorf("null %s", typ)
 	}
 	if typ == reflect.TypeOf(json.RawMessage{}) {
-		_, err := requiredObject(raw, "database", "pool", "runtime", "streams", "scheduler", "delivery")
+		_, err := stage2MetricsSections(raw)
 		return err
 	}
 	switch typ.Kind() {

@@ -126,8 +126,8 @@ computations complete; gates check unchanged state before completion. Both raw
 and capped full models must match. Lost delivery and injected duplicated count
 and reordered topic effects must exhibit drift, then match after a virtual-clock
 periodic repair. These injections do not claim production delta derivability or
-prove delivery order. Labelled hypothetical metadata is covered below; ordering,
-generations, no rollback and continuous-posting progress remain #961.
+prove delivery order. Labelled hypothetical metadata is covered below;
+[coverage, delivery and progress](sidebar-hybrid-progress.md) are verified by #961.
 
 ## Hypothetical domain checks (#960, part 960b)
 

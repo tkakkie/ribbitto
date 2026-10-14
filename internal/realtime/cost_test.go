@@ -256,7 +256,8 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 		if modelRunner != nil {
 			t.Logf("accounting: arm=%s condition=production-only streams=%d sidebar-recount-sql-statements=%d other-application-sql-statements=%d total-application-sql-statements=%d recount-computations=%d snapshot-sends=%d delta-sends=%d repair-rejections=%d ignored-rejections=%d", arm, n,
 				r.accounting.sidebarSQL, r.accounting.otherSQL, r.accounting.totalSQL, r.accounting.computations, r.accounting.snapshots, r.accounting.deltas, r.rejected.repair, r.rejected.ignored)
-			// #952c2-c4 supply freshness, telemetry and gates; zero deltas are no evidence.
+			r.samples.report(t, arm)
+			// #952c3-c4 supply drift, telemetry and gates.
 			continue
 		}
 		if smoke {
@@ -328,6 +329,7 @@ type stepResult struct {
 	reads                        costReadResult
 	rejected                     costHybridRejections
 	accounting                   costAccounting
+	samples                      costSamples
 	scheduled, completed, missed int
 	queue                        []costQueueSample
 	postingDuration              time.Duration
@@ -379,6 +381,9 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	if modelRunner != nil {
 		var err error
 		exactTruth, err = modelRunner.capture(t.Context())
+		if err == nil {
+			err = modelRunner.prepareSamples(t.Context(), exactTruth)
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -601,6 +606,7 @@ func measureStep(t *testing.T, stream realtime.Stream, posting *conversation.Pos
 	r := stepResult{arm: os.Getenv("RIBBITTO_STREAM_COST_ARM"), queue: series, postingDuration: duration, queueBound: n, scheduled: scheduled, completed: len(returned), missed: missed, deliveries: sink.count(), timedOut: timedOut, peakAcquired: peak1, loopErrors: int64(loopErrs.n), posting: percentiles(postTimes)}
 	r.reads = reads
 	if modelRunner != nil {
+		r.samples = modelRunner.samples(start, end)
 		r.rejected = modelRunner.rejections()
 		r.accounting = modelRunner.accounting(queries).since(accounting0)
 		if r.accounting.sidebarSQL < 0 || r.accounting.otherSQL < 0 || r.accounting.sidebarSQL+r.accounting.otherSQL != r.accounting.totalSQL {

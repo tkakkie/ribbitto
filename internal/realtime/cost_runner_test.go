@@ -30,6 +30,9 @@ type costRunner struct {
 
 	persistMu        sync.Mutex
 	changesPersisted []costChange
+	initial          []sidebarOracleModel
+	history          []costExpectedMessage
+	topic            kernel.ID
 }
 
 func costModelArm(arm string) bool { return arm == "baseline" || arm == "hybrid" }
@@ -43,7 +46,7 @@ func newCostRunner(ctx context.Context, arm string, pool, truth *pgxpool.Pool, m
 	if err != nil {
 		return nil, err
 	}
-	r := &costRunner{arm: arm, plan: plan, first: first, pool: pool, truth: truth, members: members, subs: subs, changes: new(unread.Changes)}
+	r := &costRunner{topic: topic, arm: arm, plan: plan, first: first, pool: pool, truth: truth, members: members, subs: subs, changes: new(unread.Changes)}
 	r.snapshot = func(ctx context.Context, m org.Membership, sub realtime.Subscription) (hybridFrame, error) {
 		return costModelSnapshot(ctx, pool, m, sub.Channel, sub.Topic, nil)
 	}

@@ -58,6 +58,7 @@ type costSentModel struct {
 	elapsed               time.Duration
 	sequence, readThrough int64
 	digest                [sha256.Size]byte
+	kind                  costExactKind
 }
 
 // Caller holds the connection lock, as when installing the successful model.
@@ -73,7 +74,7 @@ func (c *costModelConnection) sentModel(frame hybridFrame) {
 	}
 	c.sent = append(c.sent, costSentModel{
 		elapsed: at.Sub(c.sentStart), sequence: frame.boundary.sequence,
-		readThrough: frame.readThrough, digest: costModelDigest(frame.model),
+		readThrough: frame.readThrough, digest: costModelDigest(frame.model), kind: frame.exactKind,
 	})
 }
 

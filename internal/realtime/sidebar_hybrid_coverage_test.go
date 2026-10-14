@@ -21,6 +21,7 @@ import (
 // revision is hypothetical persisted metadata, not a production watch token.
 type hybridBoundary struct{ sequence, revision int64 }
 type hybridFrame struct {
+	exactKind                   costExactKind
 	readThrough                 int64 // Cost driver feed-prefix coverage; not a hypothetical revision.
 	boundary                    hybridBoundary
 	incarnation, request, watch uint64

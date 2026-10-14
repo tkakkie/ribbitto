@@ -48,7 +48,7 @@ Read the file for the area you change:
 | [`unread-counters-sql-adapter.md`](unread-counters-sql-adapter.md) | #957a–c2b: test-only SQL rows, write-owned intervals, operation accounting and gated lock waits; measurement boundaries |
 | [`sidebar-hybrid-coverage.md`](sidebar-hybrid-coverage.md) | #961 part 2c-a: pinned coverage, stale-input rejection and retained exact replay |
 | [`sidebar-hybrid-progress.md`](sidebar-hybrid-progress.md) | #961 part 2c-b2: bounded recount/repair delivery under continuous posts, pinned full-model equality |
-| [`sidebar-hybrid-delivery.md`](sidebar-hybrid-delivery.md) | #961 part 2c-b1: stream lifecycle, authorization, send order and reconnect recovery |
+| [Delivery](sidebar-hybrid-delivery.md), [samples](sidebar-hybrid-samples.md) | #961 lifecycle; #952 persist-to-exact and incomplete evidence |
 | [`sidebar-hybrid-hypothetical.md`](sidebar-hybrid-hypothetical.md) | #960b: separate hypothetical metadata, exact deltas and reconciliation limits |
 | [`sidebar-hybrid-contract.md`](sidebar-hybrid-contract.md) | #950: production-only derivability, snapshot coverage and exact model/comparison for the test-only hybrid investigation |
 | [`unread-benchmark-results.md`](unread-benchmark-results.md) | the read-range benchmark's results (#283) and the go/no-go decision |

@@ -56,7 +56,10 @@ func (c *costHybridConnection) Watch(organization, member kernel.ID) realtime.Si
 			select {
 			case <-wake:
 			case <-ticker.C:
-				c.watch.repair()
+				c.watch.mu.Lock()
+				c.watch.periodic = true
+				c.watch.publish(1)
+				c.watch.mu.Unlock()
 			case <-c.watch.stop:
 				return
 			}
@@ -66,7 +69,7 @@ func (c *costHybridConnection) Watch(organization, member kernel.ID) realtime.Si
 }
 
 func (c *costHybridConnection) Recount(ctx context.Context, sub realtime.Subscription) (realtime.Outgoing, error) {
-	generation, _ := c.watch.Snapshot()
+	generation, kind := c.watch.capture()
 	out, err := c.costModelConnection.Recount(ctx, sub)
 	if err != nil {
 		return out, err
@@ -74,7 +77,7 @@ func (c *costHybridConnection) Recount(ctx context.Context, sub realtime.Subscri
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	frame := c.pending[string(out.Data)]
-	frame.incarnation, frame.watch = c.incarnation, generation
+	frame.incarnation, frame.watch, frame.exactKind = c.incarnation, generation, kind
 	c.pending[string(out.Data)] = frame
 	return out, nil
 }
@@ -126,6 +129,7 @@ type costHybridWatch struct {
 	stop, done        chan struct{}
 	release           sync.Once
 	stopped           bool
+	periodic          bool
 }
 
 func (w *costHybridWatch) publish(n uint64) {
@@ -137,6 +141,10 @@ func (w *costHybridWatch) publish(n uint64) {
 func (w *costHybridWatch) Snapshot() (uint64, <-chan struct{}) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	return w.snapshot()
+}
+
+func (w *costHybridWatch) snapshot() (uint64, <-chan struct{}) {
 	reads := w.reads
 	if !w.stopped {
 		reads, _ = w.base.Snapshot()
@@ -146,6 +154,19 @@ func (w *costHybridWatch) Snapshot() (uint64, <-chan struct{}) {
 		w.reads = reads
 	}
 	return w.generation, w.wake
+}
+
+// Consume periodic causes when computation starts, not when its frame sends.
+func (w *costHybridWatch) capture() (uint64, costExactKind) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	generation, _ := w.snapshot()
+	kind := costNormal
+	if w.periodic {
+		kind = costPeriodic
+	}
+	w.periodic = false
+	return generation, kind
 }
 
 func (w *costHybridWatch) repair() {

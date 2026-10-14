@@ -134,9 +134,9 @@ The digest is computed after capturing sender success time, with no oracle query
 952c2b can compare it with an independently expected model. Hashing is additional
 witness work in both arms and is not subtracted from results. Computed, rejected
 and failed output supplies no sender witness. Each stream retains its first
-1,024 successes in a fixed-capacity buffer: 56 bytes per record, at most 56 KiB
+1,024 successes in a fixed-capacity buffer: 64 bytes per record (57 serialized bytes), at most 64 KiB
 plus 56 bytes for the slice, time anchor and overflow counter on 64-bit hosts
-(57,400 bytes/stream, 287,000,000 bytes or about 273.7 MiB for 5,000 streams per
+(65,592 bytes/stream, 327,960,000 bytes or about 312.8 MiB for 5,000 streams per
 window, independent of subsequent sends). This excludes existing current/pending
 models and the shared persisted-change log. The buffer includes setup and drain;
 it accommodates the cited approximately 600 sends/stream in a 600 s window.
@@ -147,3 +147,5 @@ send totals remain. Only deterministic tests clone historical models. Gated
 virtual-time tests hold calls after commit and frames across committed reads and
 continuing posts. Freshness samples, attribution and incomplete handling remain
 #952c2b; no measurement ran.
+
+Part #952c2b adds [persist-to-exact samples](sidebar-hybrid-samples.md).

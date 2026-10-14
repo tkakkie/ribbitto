@@ -70,6 +70,9 @@ func TestCostRunnerMatchedWiringAndDrain(t *testing.T) {
 				if err != nil || queries.Counts() != after || len(want[0].channels) != 2 || len(want[0].selection) != 1 || want[1].selection != nil {
 					t.Fatal("shared fixture/selection or independent oracle pool lost")
 				}
+				if err := r.prepareSamples(t.Context(), want); err != nil {
+					t.Fatal(err)
+				}
 				q, scheduler := newCostQueue(workers, 2), realtime.NewRecountScheduler(workers, 2)
 				defer q.shutdown()
 				defer scheduler.Close()
@@ -111,7 +114,8 @@ func TestCostRunnerMatchedWiringAndDrain(t *testing.T) {
 				if accounting0.computations != 2 || accounting0.snapshots != 2 || accounting0.deltas != 0 {
 					t.Fatalf("initial computation/send accounting: %+v", accounting0)
 				}
-				reads := r.reads(ctx, time.Now())
+				sampleStart := time.Now()
+				reads := r.reads(ctx, sampleStart)
 				if reads != (costReadResult{scheduled: 4, changed: 4}) {
 					t.Fatalf("runner changed-read load incomplete: %+v", reads)
 				}
@@ -130,6 +134,10 @@ func TestCostRunnerMatchedWiringAndDrain(t *testing.T) {
 				}
 				if got := r.accounting(queries).since(accounting0); got.sidebarSQL <= 0 || got.otherSQL <= 0 || got.sidebarSQL+got.otherSQL != got.totalSQL || got.computations != 2 || got.snapshots != 2 || got.deltas != 0 {
 					t.Fatalf("matched window included setup or lost accounting: %+v", got)
+				}
+				samples := r.samples(sampleStart, time.Now())
+				if samples.total != 4 || samples.incomplete != 0 || len(samples.byKind[costNormal]) != 4 || len(samples.byKind[costDelta]) != 0 || len(samples.byKind[costPeriodic]) != 0 {
+					t.Fatalf("production-only changed reads lost normal or zero-delta evidence: %s", samples)
 				}
 				saved := r.models[1]
 				r.models[1] = &costModelConnection{}

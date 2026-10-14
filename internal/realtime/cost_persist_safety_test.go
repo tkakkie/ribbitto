@@ -193,8 +193,8 @@ func TestCostSentModelPinnedReadCoverage(t *testing.T) {
 }
 
 func TestCostSentModelBounded(t *testing.T) {
-	if costSentLimit != 1024 || binary.Size(costSentModel{}) != 56 {
-		t.Fatal("sender witness size differs from documented 1024 records of 56 bytes")
+	if costSentLimit != 1024 || binary.Size(costSentModel{}) != 57 {
+		t.Fatal("sender witness size differs from documented 1024 records of 57 serialized bytes")
 	}
 	c := new(costModelConnection)
 	frame := hybridFrame{model: sidebarOracleModel{channels: []sidebarOracleEntry{{name: "general", count: sidebarOracleDisplay(101)}}}}

@@ -88,7 +88,9 @@ it. The first is the `@theme` breakpoint `--breakpoint-desk` (#969): `desk:`
 utilities apply from 852 px and `max-desk:` below it, so phone overrides
 leave the desktop classes as they are. The second is `--breakpoint-wide`
 (#972): below it (`max-wide:`) an open panel is a modal over the dimmed
-page ([side panels](ui-components.md#side-panels)).
+page ([side panels](ui-components.md#side-panels)). The custom variant
+`short:` (#1056) applies below 27.25 rem (436 px) tall, where the header and
+composer leave under 128 px for the list ([short heights](ui-components.md#short-heights)).
 
 **Safe area** (#970). The viewport meta has `viewport-fit=cover`, without
 which `env(safe-area-inset-*)` stays 0, so pages extend under a phone's

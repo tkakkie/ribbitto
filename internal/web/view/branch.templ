@@ -17,7 +17,9 @@ func idValue(id kernel.ID) string {
 // of joining the column, so appearing never resizes or scrolls the message
 // list. Every rule needs :has(), so a browser without it keeps the plain
 // column. After a plain failed submit nothing is checked, so the form stays
-// in the column to show its error.
+// in the column to show its error. Below the short height the conversation
+// scrolls, which would carry a covering form away from the composer, so the
+// form takes the hidden composer's place in the column instead (#1056).
 templ branchForm(page ChannelPage) {
 	<form
 		id="branch-form"
@@ -27,7 +29,7 @@ templ branchForm(page ChannelPage) {
 		hx-target="#branch-feedback"
 		hx-swap="outerHTML"
 		hx-sync="this:drop"
-		class={ "mx-auto flex w-full max-w-reading shrink-0 flex-wrap items-center gap-2 bg-bg px-6 py-3 text-body max-desk:px-4 max-desk:pb-safe-3", templ.KV("peer-not-has-checked/list:hidden peer-has-checked/list:absolute peer-has-checked/list:inset-x-0 peer-has-checked/list:bottom-0", page.BranchError == "") }
+		class={ "mx-auto flex w-full max-w-reading shrink-0 flex-wrap items-center gap-2 bg-bg px-6 py-3 text-body max-desk:px-4 max-desk:pb-safe-3", templ.KV("peer-not-has-checked/list:hidden peer-has-checked/list:absolute peer-has-checked/list:inset-x-0 peer-has-checked/list:bottom-0 short:peer-has-checked/list:static", page.BranchError == "") }
 	>
 		if page.Topic != nil {
 			<input type="hidden" name="return_topic" value={ idValue(page.Topic.ID) }/>

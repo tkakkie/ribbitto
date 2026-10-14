@@ -98,7 +98,9 @@ Checking a message never moves focus; the form appears next in the tab order
 after the list, over the composer's area, which turns invisible but keeps its
 space, so the list neither resizes nor scrolls. A plain failed submit, which
 checks nothing, keeps the form and its alert in the column above the composer;
-a browser without `:has()` shows both, as before.
+a browser without `:has()` shows both, as before. Below the
+[short height](ui-components.md#short-heights) the form follows the list in
+the column instead, and the composer is hidden.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
 when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's

@@ -219,6 +219,11 @@
   }
 }
 
+/* Below short (436 px tall) the conversation's header, a 128 px message list
+   and the composer no longer fit: the conversation scrolls as a whole
+   (docs/ui-code.md). Tailwind's breakpoints are widths, so this is a variant. */
+@custom-variant short (@media (height < 27.25rem));
+
 @layer base {
   html {
     background-color: var(--color-bg);

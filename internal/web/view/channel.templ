@@ -163,7 +163,9 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 			// The conversation and its panel share one flexible region, which
 			// an overlay panel covers.
 			<div class="relative flex min-w-0 flex-1 gap-2">
-				<main id="conversation" class="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block max-desk:rounded-none">
+				// Below the short height the conversation scrolls as a whole around a
+				// fixed list, so messages stay readable and the composer reachable.
+				<main id="conversation" class="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block max-desk:rounded-none short:overflow-y-auto">
 					<header class="flex shrink-0 items-center gap-3 border-b border-border px-6 py-2 max-desk:gap-0 max-desk:px-1">
 						// Below the desk breakpoint the list replaces the hidden sidebar; the
 						// fragment brings this channel's row into view without JavaScript.
@@ -191,7 +193,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							@readForm(page)
 						}
 					</header>
-					<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="peer/list min-h-0 flex-1 overflow-y-auto">
+					<div id="message-list" role="region" aria-label={ i18n.T(ctx, "message.list") } tabindex="0" class="peer/list min-h-0 flex-1 overflow-y-auto short:h-32 short:flex-none">
 						// Always present, empty on the oldest page: loading older
 						// messages replaces it out of band with the next control.
 						<div id="load-older" data-oldest-seq={ fmt.Sprint(oldestSequence(page)) }>
@@ -235,7 +237,9 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					@branchForm(page)
 					// While a message is checked the move form covers this area, which
 					// keeps its space so the message list neither shrinks nor scrolls.
-					<div class={ "mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4 max-desk:max-w-none max-desk:px-4 max-desk:pb-safe-4", templ.KV("peer-has-checked/list:invisible", page.BranchError == "") }>
+					// Below the short height the form takes its place in the column,
+					// and the fixed list still neither shrinks nor scrolls.
+					<div class={ "mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4 max-desk:max-w-none max-desk:px-4 max-desk:pb-safe-4", templ.KV("peer-has-checked/list:invisible short:peer-has-checked/list:hidden", page.BranchError == "") }>
 						if page.Before == 0 && page.EventCursor != nil {
 							<div id="typing-status" sse-swap="typing" hx-swap="innerHTML" role="status" aria-live="polite" aria-atomic="true" aria-label={ i18n.T(ctx, "activity.label") } class="min-h-6 px-3 text-caption text-muted"></div>
 						}

@@ -110,7 +110,7 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 			t.Error(err)
 		}
 	}()
-	for _, size := range [][2]int{{320, 568}, {390, 844}, {851, 844}, {852, 844}, {1199, 844}, {1200, 844}, {844, 390}} {
+	for _, size := range [][2]int{{320, 568}, {390, 844}, {851, 844}, {852, 844}, {1199, 844}, {1200, 844}, {844, 390}, {320, 200}, {640, 400}} {
 		page.MustSetViewport(size[0], size[1], 1, false)
 		for _, lang := range []string{"en", "ja"} {
 			page.MustSetCookies(&proto.NetworkCookieParam{Name: "lang", Value: lang, URL: server.URL})
@@ -134,17 +134,56 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 							t.Errorf("page=%s viewport=%dx%d language=%s state=%s: %s", c.name, size[0], size[1], lang, state, problem.Str())
 						}
 					}
+					// Below the short height (#1056) a conversation scrolls as a whole
+					// around its message list, which must stay the scrolling pane the
+					// history, composer and stream scripts move.
+					shortAudit := func(state string) {
+						t.Helper()
+						if size[1] >= shortHeight || !strings.HasSuffix(c.name, "closed") {
+							return
+						}
+						for _, problem := range page.MustEval(shortConversationAudit, state != "loaded").Arr() {
+							t.Errorf("page=%s viewport=%dx%d language=%s state=%s: %s", c.name, size[0], size[1], lang, state, problem.Str())
+						}
+					}
+					// A click and its wait share one bound: rod dispatches the mouse
+					// through the original page, outside any step context (#1060), and
+					// a click into a collapsed list waited for the whole test's (#1056).
+					step := func(what string, fn func(p *rod.Page)) {
+						t.Helper()
+						stepCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+						defer cancel()
+						done := make(chan any, 1)
+						go func() {
+							defer func() { done <- recover() }()
+							fn(page.Context(stepCtx).WithPanic(func(v any) { panic(v) }))
+						}()
+						select {
+						case v := <-done:
+							if v != nil {
+								t.Fatalf("page=%s viewport=%dx%d language=%s: %s: %v", c.name, size[0], size[1], lang, what, v)
+							}
+						case <-stepCtx.Done():
+							t.Fatalf("page=%s viewport=%dx%d language=%s: %s did not finish in 10 s", c.name, size[0], size[1], lang, what)
+						}
+					}
 					audit("loaded")
+					shortAudit("loaded")
 					if strings.HasSuffix(c.name, "overview") {
-						page.MustElement("#side-panel summary").MustClick()
-						page.MustWait(`() => document.querySelector('#side-panel details').open`)
+						step("opening the image picker", func(p *rod.Page) {
+							p.MustElement("#side-panel summary").MustClick()
+							p.MustWait(`() => document.querySelector('#side-panel details').open`)
+						})
 						audit("image-picker-open")
 					}
 					if strings.HasSuffix(c.name, "closed") {
-						page.MustElement(`#message-items input[type=checkbox]`).MustClick()
-						page.MustWait(`() => document.querySelector('#message-items input[type=checkbox]:checked') &&
-							document.getElementById('branch-form').checkVisibility()`)
+						step("checking a message", func(p *rod.Page) {
+							p.MustElement(`#message-items input[type=checkbox]`).MustClick()
+							p.MustWait(`() => document.querySelector('#message-items input[type=checkbox]:checked') &&
+								document.getElementById('branch-form').checkVisibility()`)
+						})
 						audit("move-form-visible")
+						shortAudit("move-form-visible")
 					}
 					if c.name == "channel-list" || strings.HasSuffix(c.name, "closed") {
 						for _, id := range []string{"channel-create", "account-menu"} {
@@ -238,4 +277,44 @@ const widthAudit = `() => {
 	for (const [e,x,y] of positions) { e.scrollLeft = x; e.scrollTop = y; }
 	window.scrollTo({left:windowPosition[0],top:windowPosition[1],behavior:'instant'});
 	return {problems, checked};
+}`
+
+// shortHeight is the short variant's 27.25 rem in web/styles/app.css.
+const shortHeight = 436
+
+// shortConversationAudit checks a conversation below the short height: the
+// list is still a pane scrolled to the newest message on load, at least four
+// 22 px lines of the first and the last message can be scrolled into view
+// inside it, and a shown move form follows the list in the column instead of
+// covering it, in place of the hidden composer.
+const shortConversationAudit = `moving => {
+	const root = document.documentElement, list = document.getElementById('message-list'), problems = [], box = e => e.getBoundingClientRect();
+	const scrolls = e => ['auto','scroll'].includes(getComputedStyle(e).overflowY);
+	const positions = [...document.querySelectorAll('*')].filter(scrolls).map(e => [e,e.scrollTop]);
+	const windowTop = window.scrollY;
+	if (!scrolls(list) || list.scrollHeight <= list.clientHeight)
+		problems.push('message list is not a scrolling pane: clientHeight=' + list.clientHeight + ' scrollHeight=' + list.scrollHeight);
+	if (!moving && list.scrollHeight - list.scrollTop - list.clientHeight > 2)
+		problems.push('message list not at the newest message on load: scrollTop=' + list.scrollTop + ' scrollHeight=' + list.scrollHeight + ' clientHeight=' + list.clientHeight);
+	const items = [...document.querySelectorAll('#message-items > li[data-event-seq]:not(#unread-divider)')];
+	for (const item of [items[0], items.at(-1)]) {
+		list.scrollTop += box(item).top - box(list).top - list.clientTop;
+		for (let a = list.parentElement; a && a !== document.body; a = a.parentElement)
+			if (scrolls(a)) a.scrollTop += box(list).top - box(a).top - a.clientTop;
+		window.scrollTo({top: window.scrollY + box(list).top, behavior:'instant'});
+		const r = box(item), top = Math.max(r.top, box(list).top + list.clientTop, 0);
+		const shown = Math.max(0, Math.min(r.bottom, box(list).top + list.clientTop + list.clientHeight, root.clientHeight) - top);
+		if (shown < Math.min(r.height, 88) - 0.5)
+			problems.push('message ' + item.id + ' shows ' + shown + ' px after scrolling (list clientHeight=' + list.clientHeight + ', viewport ' + root.clientWidth + 'x' + root.clientHeight + ')');
+	}
+	if (moving) {
+		const form = document.getElementById('branch-form');
+		if (box(form).top < box(list).bottom - 0.5)
+			problems.push('move form overlaps the message list: form top=' + box(form).top + ' list bottom=' + box(list).bottom);
+		if (document.getElementById('message-composer').checkVisibility())
+			problems.push('composer still in the column beside the move form');
+	}
+	for (const [e,y] of positions) e.scrollTop = y;
+	window.scrollTo({top: windowTop, behavior:'instant'});
+	return problems;
 }`

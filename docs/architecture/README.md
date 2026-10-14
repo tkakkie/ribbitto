@@ -68,6 +68,7 @@ Read the file for the area you change:
 | [`stream-sidebar-stage2.md`](stream-sidebar-stage2.md) | #865 PR 3: fixed mixed-load protocol, gates and versioned result contracts; execution requires explicit instruction |
 | [`stream-sidebar-stage2-drivers.md`](stream-sidebar-stage2-drivers.md) | #865 PR 3: authenticated post, page, read and stream drivers; evidence, lifecycle and proof limits |
 | [`stream-sidebar-stage2-telemetry.md`](stream-sidebar-stage2-telemetry.md) | #865 PR 3 slice 5a: continuous snapshots, pool counters, reset evidence and planned minute aggregates |
+| [`stream-sidebar-stage2-headroom.md`](stream-sidebar-stage2-headroom.md) | #865 5b: headroom gates |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |

@@ -20,7 +20,9 @@ templ Hello(stylesheetURL string, viewer Viewer) {
 						{ i18n.T(ctx, "hello.signed_in_as") }
 						<span class="font-semibold text-fg">{ viewer.DisplayName }</span>
 					</p>
-					@SignOutButton()
+					<form method="post" action="/signout">
+						@submitButton(buttonWelcomeSecondary, "signout.submit")
+					</form>
 				</div>
 			} else {
 				<div class="flex flex-wrap gap-6">

@@ -20,7 +20,7 @@ Today's shared controls:
 | `textInput` | `internal/web/view/controls.templ` | a single-line text input with a control border and a brand underline on focus, alongside the focus outline; the caller supplies its label |
 | `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up); sign-in passes empty field errors and keeps its form-level alert |
 | `iconButton` | `internal/web/view/controls.templ` | a button that shows only an icon (its child) and has an accessible name; can open a popover |
-| `welcomeLayout` | `internal/web/view/welcome.templ` | the shared brand and content columns for setup, sign-in, sign-up, home and rate-limit pages |
+| `welcomeLayout` | `internal/web/view/welcome.templ` | the shared brand and content columns for setup, sign-in, sign-up, home and rate-limit pages; below `desk`, a short brand strip without the composition above the content |
 | `unreadBadge` | `internal/web/view/channel.templ` | an unread count with its screen-reader text |
 | `Icon` | `internal/web/view/icon.templ` | a decorative Fluent icon from the vendored sprite ([Icons](ui-code.md#icons)) |
 | `Avatar` | `internal/web/view/avatar.templ` | a fixed 36 px round initial; six pastel pairs chosen from the member ID, hidden from assistive technology beside the visible name |
@@ -38,6 +38,11 @@ Today's shared controls:
 - **A new component arrives with its first user.** The account menu came with #872 (`appBar`, using an HTML popover), the avatar with
   #873, the panel with #874, the channel image with #875. When a page is
   restyled, its repeated looks (links, for example) become components too.
+
+Welcome forms select `buttonWelcomePrimary` or `buttonWelcomeSecondary`
+for 48 px phone targets; `textField` sets `inputProps.Welcome` for the
+same height and `text-entry` (16 px) below `desk`. Other controls keep
+their existing sizes.
 
 Message avatars and the account button use the first grapheme of the
 display name (via `uniseg`), falling back to the handle when the web layer

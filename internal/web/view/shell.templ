@@ -91,8 +91,11 @@ templ channelCreateForm(page ChannelPage, popover bool) {
 		}
 		// A display utility would override the browser's hiding of a closed
 		// popover, so the popover form is flex only while open. Below desk it
-		// keeps 16 px from both edges, so it fits a 320 px screen.
-		class={ "flex-col gap-2 text-body text-fg", templ.KV("hidden open:flex inset-auto left-24 top-20 m-0 w-72 max-desk:inset-x-4 max-desk:w-auto rounded-xl border border-border bg-surface p-4 shadow-popover", popover), templ.KV("flex mx-1 mt-3 rounded-xl bg-surface p-3 shadow-block", !popover) }
+		// keeps 16 px from both edges, so it fits a 320 px screen. It may also
+		// stretch down to 16 px from the bottom, capped at its content height,
+		// so on a phone on its side the popover's own overflow scrolls to the
+		// submit button (a fit-content height never stops at the inset).
+		class={ "flex-col gap-2 text-body text-fg", templ.KV("hidden open:flex inset-auto left-24 top-20 m-0 w-72 max-desk:inset-x-4 max-desk:bottom-4 max-desk:h-auto max-desk:max-h-fit max-desk:w-auto rounded-xl border border-border bg-surface p-4 shadow-popover", popover), templ.KV("flex mx-1 mt-3 rounded-xl bg-surface p-3 shadow-block", !popover) }
 	>
 		<label for="channel-name" class="font-semibold">{ i18n.T(ctx, "channel.name") }</label>
 		@textInput(inputProps{ID: "channel-name", Name: "name", Value: page.Name, Required: true, Invalid: fmt.Sprint(page.Error != ""), DescribedBy: "channel-name-help"})

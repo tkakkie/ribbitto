@@ -147,8 +147,10 @@ templ overviewPanel(page ChannelPage) {
 		<h3 class="font-semibold">{ i18n.T(ctx, "topic.list") }</h3>
 		<ul class="flex flex-col gap-1">
 			for _, topic := range page.Topics {
+				// A long name wraps instead of widening the panel; below desk the
+				// whole row is the target, so a one-character name still has 44 px.
 				<li class="break-words">
-					<a href={ templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)) } dir="auto" class="inline-flex min-h-9 items-center gap-2 text-fg hover:text-brand max-desk:min-h-11">
+					<a href={ templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)) } dir="auto" class="inline-flex min-h-9 items-center gap-2 text-fg wrap-anywhere hover:text-brand max-desk:flex max-desk:min-h-11">
 						@Icon("branch-regular", 16)
 						{ topicName(ctx, topic) }
 					</a>

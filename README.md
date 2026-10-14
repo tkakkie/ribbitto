@@ -32,7 +32,7 @@ PostgreSQL with pgx, sqlc and goose.
 
 ## Development
 
-Requires Go (see `go.mod` for the version), Python 3 and Docker Compose for PostgreSQL 18.
+Requires Go (see `go.mod` for the version) and Docker Compose for PostgreSQL 18.
 
 ```sh
 cp .env.example .env
@@ -90,8 +90,8 @@ for integration tests.
 and Tailwind watchers together, restarting Go when templates or Go source
 change. It sets `RIBBITTO_DEV_ASSETS=web/static` to serve assets from disk
 without caching and recompute the stylesheet URL's content hash on each page
-request. Reload the browser after an edit; rebuilt CSS needs no server restart.
-Ctrl-C stops the watchers and server.
+request. Reload on edits; CSS needs no server restart.
+`cmd/dev` stops watchers and server on Ctrl-C, SIGTERM or watcher exit.
 
 `make css` and `make lint` use [`tools/download`](tools/download/main.go)
 for SHA-256 checked tools (macOS ARM64 and Linux x64). No npm is needed.

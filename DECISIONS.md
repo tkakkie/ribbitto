@@ -63,3 +63,4 @@ coverage and the normal document size limit for both the index and entries.
 - [32. Read state is a set of read ranges per member and channel](docs/decisions/32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)
 - [33. UI code: shared components and token utilities only](docs/decisions/33-ui-code-shared-components-and-token-utilities-only.md)
 - [34. Live sidebar unread counts are eventually exact](docs/decisions/34-live-unread-counts.md)
+- [35. Repository tooling is Go, with one-line Makefile recipes](docs/decisions/35-tooling-in-go.md)

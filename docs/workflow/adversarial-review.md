@@ -103,7 +103,7 @@ qualifying path is listed here with its evidence:
   (`go list -deps`), nothing imports it, and only `make check` runs it, for
   its own tests.
 
-`scripts/deps.sh` is not listed: CI's `ci` job and `make check` run it.
+`scripts/deps.sh` is not listed: CI and `make check` run it.
 The exception changes nothing else: production commands, migrations,
 deployment tooling and shared code are classified by behaviour; code a tool
 imports by its own area; A's second item applies to a tool's change too;

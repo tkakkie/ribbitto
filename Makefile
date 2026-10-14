@@ -7,8 +7,8 @@ TAILWIND := ./bin/tailwindcss-$(TAILWIND_VERSION)
 TAILWIND_SHA_macos-arm64 := cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d
 TAILWIND_SHA_linux-x64 := dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a
 CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
-# The AI launchers' self-tests take most of check's time, so check runs them
-# only when the change since this base can affect them (an empty base always
+# The AI launchers' self-tests take most of check's time, so check-launchers
+# runs them only when the change since this base can affect them (an empty base always
 # runs them); scripts/ai/launcher-tests.sh says what it chose and why. CI
 # passes HEAD^1 on a pull request (its merge commit's first parent, the base
 # as merged), or an empty base on main and nightly. It is exported so the
@@ -20,8 +20,11 @@ export LAUNCHER_TESTS_BASE
 # default; go test's own default (-p = CPUs) can exceed it. Override only for
 # measurement, and re-measure before raising it (docs/worktree-env.md).
 GO_TEST_FLAGS ?= -p 2
+# CI's test jobs each pass one shard from tools/testshard; locally every
+# package runs.
+GO_TEST_PACKAGES ?= ./...
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-ai prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check-ai-env check check-static check-test check-tools check-launchers check-ai prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -72,7 +75,16 @@ $(TAILWIND):
 # tablecheck read db/queries, db/migrations and module_imports_test.go from
 # outside the tools module, which Go's test cache does not track, so a cached
 # pass would hide a changed query or manifest.
-check: $(TEMPL) db-health
+#
+# check runs its four parts in order; CI runs them in parallel jobs (#992),
+# check-test once per tools/testshard shard, so the two cannot drift.
+check:
+	$(MAKE) check-static
+	$(MAKE) check-test
+	$(MAKE) check-tools
+	$(MAKE) check-launchers
+
+check-static: $(TEMPL)
 	@set -eu; unformatted=$$(find . -path ./bin -prune -o -type f -name '*.go' -exec gofmt -l {} +); \
 	if [ -n "$$unformatted" ]; then \
 		echo "These files need gofmt:"; \
@@ -102,7 +114,11 @@ check: $(TEMPL) db-health
 	$(MAKE) lint
 	$(MAKE) lint-fixtures
 	go build ./...
-	go test -race $(GO_TEST_FLAGS) ./...
+
+check-test: db-health
+	go test -race $(GO_TEST_FLAGS) $(GO_TEST_PACKAGES)
+
+check-tools:
 	$(MAKE) check-ai-env
 	go -C tools vet ./apicheck
 	go -C tools test -race ./apicheck
@@ -112,8 +128,11 @@ check: $(TEMPL) db-health
 	bash scripts/fingerprint_test.sh
 	go -C tools vet ./...
 	go -C tools test -race -count=1 ./...
+	go -C tools run ./testshard -check ..
 	go -C tools run ./docscheck ..
 	go -C tools run ./sourcecheck ..
+
+check-launchers:
 	bash scripts/ai/launcher-tests_test.sh
 	bash scripts/ai/launcher-tests.sh --base "$$LAUNCHER_TESTS_BASE"
 

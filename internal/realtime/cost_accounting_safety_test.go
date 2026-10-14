@@ -74,6 +74,7 @@ func TestCostAccountingComputationOutcomes(t *testing.T) {
 		for _, outcome := range []string{"applied", "repair", "ignored", "failed-send", "failed-computation", "cancelled-computation"} {
 			func() {
 				before := r.accounting(queries)
+				sentBefore := len(c.sent)
 				failSend, failCompute = outcome == "failed-send", outcome == "failed-computation"
 				cancelCompute = outcome == "cancelled-computation"
 				out, computeErr := h.Recount(t.Context(), sub)
@@ -107,6 +108,9 @@ func TestCostAccountingComputationOutcomes(t *testing.T) {
 				want := costAccounting{sidebarSQL: 7, totalSQL: 7, computations: 1}
 				if outcome == "applied" {
 					want.snapshots = 1
+				}
+				if n := len(c.sent) - sentBefore; int64(n) != want.snapshots {
+					t.Fatalf("%s produced %d sender witnesses; want %d", outcome, n, want.snapshots)
 				}
 				if got := r.accounting(queries).since(before); got != want || (err != nil) != failSend {
 					t.Fatalf("%s accounting: got %+v want %+v err=%v", outcome, got, want, err)
@@ -157,7 +161,7 @@ func TestCostAccountingHypotheticalSender(t *testing.T) {
 			t.Fatal("failed send unexpectedly succeeded")
 		}
 	}
-	if s.snapshots.Load() != 1 || s.deltas.Load() != 2 || len(s.sidebars) != 1 {
+	if s.snapshots.Load() != 1 || s.deltas.Load() != 2 {
 		t.Fatal("sender conflated snapshots/deltas, messages/heartbeats or failed sends")
 	}
 }

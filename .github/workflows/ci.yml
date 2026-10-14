@@ -79,8 +79,8 @@ jobs:
       # make check is check-static, check-test, check-tools and
       # check-launchers in order; this job runs the first and the third, and
       # the tests of every package the test jobs below do not
-      # (tools/testshard's "rest" shard). The Makefile pins golangci-lint for
-      # both local checks and CI.
+      # (tools/testshard's "rest" shard). tools/download pins golangci-lint for
+      # both local checks and CI, invoked by the Makefile.
       - name: check-static
         run: make check-static
 

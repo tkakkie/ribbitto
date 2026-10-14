@@ -171,7 +171,8 @@ func unit(path string) string {
 
 func edgeDiff(before, current string) string {
 	old, now := edges(before), edges(current)
-	var changes []string
+	type edgeChange struct{ group, kind, edge string }
+	var changes []edgeChange
 	for _, change := range []struct {
 		kind     string
 		from, to map[string]bool
@@ -183,25 +184,33 @@ func edgeDiff(before, current string) string {
 				if unit(p[0]) == unit(p[2]) {
 					group = "2"
 				}
-				changes = append(changes, group+" "+change.kind+": `"+edge+"`\n")
+				changes = append(changes, edgeChange{group, change.kind, edge})
 			}
 		}
 	}
 	if len(changes) == 0 {
 		return "No package-import edges changed.\n"
 	}
-	slices.Sort(changes)
+	slices.SortFunc(changes, func(a, b edgeChange) int {
+		if a.group != b.group {
+			return strings.Compare(a.group, b.group)
+		}
+		if a.kind != b.kind {
+			return strings.Compare(a.kind, b.kind)
+		}
+		return strings.Compare(a.edge, b.edge)
+	})
 	out, group := "## Package-import edge changes\n", ""
 	for _, change := range changes {
-		if change[:1] != group {
-			group = change[:1]
+		if change.group != group {
+			group = change.group
 			label := "Crossing units"
 			if group == "2" {
 				label = "Within one unit"
 			}
 			out += "\n### " + label + "\n\n"
 		}
-		out += "- " + change[2:]
+		out += "- " + change.kind + ": `" + change.edge + "`\n"
 	}
 	return out
 }

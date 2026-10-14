@@ -117,6 +117,7 @@ func TestDiff(t *testing.T) {
 	for _, tc := range []struct{ name, rev, current, want string }{
 		{"unchanged", "HEAD", baseline, "No package-import edges changed.\n"},
 		{"header only", "HEAD", "Different " + baseline, "No package-import edges changed.\n"},
+		{"prefix targets", "HEAD^", "```text\ncmd/x -> internal/web\ncmd/x -> internal/web/view\n```\n", crossing + "- Added: `cmd/x -> internal/web`\n- Added: `cmd/x -> internal/web/view`\n"},
 		{"unknown revision", "refs/heads/unknown-deps-test-revision", baseline, ""},
 		{"groups", "HEAD", changed, crossing + "- Added: `cmd/ribbitto -> cmd/seed`\n- Added: `internal/web/i18n -> internal/kernel`\n- Added: `internal/web/i18n -> web/static`\n- Removed: `cmd/ribbitto -> internal/web`\n\n### Within one unit\n\n- Added: `cmd/ribbitto -> cmd/ribbitto/helper`\n- Added: `internal/web/i18n -> internal/web/middleware`\n"},
 		{"valid revision without graph", "HEAD^", baseline, crossing + "- Added: `cmd/ribbitto -> internal/web`\n- Added: `internal/web -> internal/kernel`\n"},

@@ -257,30 +257,48 @@ func TestObserverSampling(t *testing.T) {
 	if os.Getenv("RIBBITTO_TEST_DATABASE_URL") == "" && os.Getenv("RIBBITTO_REQUIRE_DB") != "1" {
 		t.Skip("admin configuration unset")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 	helper, err := filepath.Abs("../../bin/ai-db")
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Other packages' tests share the server and open and close connections
+	// meanwhile, so one attempt can see the second observer offset by a
+	// connection closing elsewhere. The assertion stays exact; a broken
+	// sampler fails every attempt.
+	var last string
+	for attempt := 0; attempt < 5; attempt++ {
+		peak, baseline, err := sampleWithSecondObserver(helper)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if peak >= baseline+1 {
+			return
+		}
+		last = fmt.Sprintf("peak = %d, baseline %d", peak, baseline)
+	}
+	t.Fatalf("the observer never sampled the second connection in 5 attempts; last %s", last)
+}
+
+func sampleWithSecondObserver(helper string) (int, int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	first, err := startObserver(ctx, helper)
 	if err != nil {
-		t.Fatal(err)
+		return 0, 0, err
 	}
 	defer func() { _ = first.stdin.Close(); cancel(); <-first.done }()
 	var baseline struct {
 		Baseline int `json:"baseline"`
 	}
 	if err := json.Unmarshal([]byte(<-first.lines), &baseline); err != nil || baseline.Baseline <= 0 {
-		t.Fatalf("baseline = %+v, %v", baseline, err)
+		return 0, 0, fmt.Errorf("baseline = %+v, %v", baseline, err)
 	}
 	second, err := startObserver(ctx, helper)
 	if err != nil {
-		t.Fatal(err)
+		return 0, 0, err
 	}
-	defer func() { _ = second.stdin.Close(); <-second.done }()
 	if line := <-second.lines; line == "" {
-		t.Fatal("second observer did not connect")
+		return 0, 0, fmt.Errorf("second observer did not connect")
 	}
 	time.Sleep(500 * time.Millisecond)
 	_ = second.stdin.Close()
@@ -288,10 +306,8 @@ func TestObserverSampling(t *testing.T) {
 	_ = first.stdin.Close()
 	peak, err := strconv.Atoi(<-first.lines)
 	<-first.done
-	// Other packages' tests share the server and open and close connections
-	// meanwhile, so the baseline is no floor; while both observers were
-	// connected, a sample saw at least these two.
-	if err != nil || first.err != nil || second.err != nil || peak < 2 {
-		t.Fatalf("peak = %d, parse %v, observers %v / %v; baseline %d", peak, err, first.err, second.err, baseline.Baseline)
+	if err != nil || first.err != nil || second.err != nil {
+		return 0, 0, fmt.Errorf("parse %v, observers %v / %v", err, first.err, second.err)
 	}
+	return peak, baseline.Baseline, nil
 }

@@ -79,10 +79,17 @@ type cleanupOps struct {
 	scan       func(int) ([]int, error)
 	killGroup  func(int)
 	killMember func(int, *worker)
+	held       func(int) bool
 }
 
 func systemCleanup() cleanupOps {
-	return cleanupOps{sessionMembers, func(pid int) { _ = syscall.Kill(-pid, syscall.SIGKILL) }, killMember}
+	return cleanupOps{sessionMembers, func(pid int) { _ = syscall.Kill(-pid, syscall.SIGKILL) }, killMember, pidHeld}
+}
+
+// pidHeld reports whether any process, ours or not, has the PID; EPERM means
+// one exists that this process may not signal.
+func pidHeld(pid int) bool {
+	return syscall.Kill(pid, 0) != syscall.ESRCH
 }
 
 func (c cleanupOps) stop(w *worker) bool {
@@ -95,6 +102,14 @@ func (c cleanupOps) stop(w *worker) bool {
 	for range 100 {
 		members, err := c.scan(w.pid)
 		if err != nil {
+			break
+		}
+		// The kernel never hands out a PID still in use as a session ID, so
+		// once the leader is reaped, a process holding its PID means nothing
+		// of ours is left in that session (#1053). Nobody holding it leaves
+		// the members as our orphans, within the limit accepted in #636.
+		if w.exited && c.held(w.pid) {
+			confirmed = true
 			break
 		}
 		remaining := 0
@@ -149,7 +164,8 @@ func members(listing string, session int, getsid func(int) (int, error)) []int {
 }
 
 func (w *worker) canBeMember(pid int) bool {
-	// A reaped leader's PID can only belong to a new session (Muse Code on #1035).
+	// A reaped leader's PID can only belong to a process that is not ours
+	// (Muse Code on #1035); stop skips that whole session (#1053).
 	return !w.exited || pid != w.pid
 }
 

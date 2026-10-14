@@ -56,7 +56,7 @@ For parallel worktrees, optionally run `make ai-env` after `make db-up`.
 It migrates a separate dev database and allocates app/metrics ports in
 `.env.local`; the Make targets above then use those values instead of
 `RIBBITTO_DATABASE_URL`. Start other commands with
-`python3 scripts/ai_env.py run <command>` to use that configuration.
+`./bin/ai-db run <command>` (built by `make bin/ai-db`) to use that configuration.
 Commands use the worktree root even from a subdirectory. Git worktree IDs
 keep databases across moves and symlink spellings. Local database names and
 ports must match the registry; reruns keep free ports and replace busy ones.

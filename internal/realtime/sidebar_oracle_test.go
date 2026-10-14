@@ -202,7 +202,7 @@ SELECT $1,$2,$3,$4,'fixture',s FROM generate_series(1,106) s;
 	}
 	for _, selection := range []*kernel.ID{nil, &first, &selected} {
 		model := read(selection)
-		reader := conversationpg.NewReader(pool, nil, nil, nil, costPageCountsIn)
+		reader := conversationpg.NewReader(pool, nil, nil, eventCursor, costPageCountsIn)
 		actual, err := reader.Sidebar(t.Context(), m, f.Channel.ID, selection)
 		if err != nil {
 			t.Fatal(err)

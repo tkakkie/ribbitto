@@ -1,6 +1,7 @@
 package conversationpg_test
 
 import (
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"slices"
 	"testing"
 
@@ -25,6 +26,10 @@ func TestPostedEventTopic(t *testing.T) {
 	requireNoError(t, err)
 	if len(events) != 1 || !slices.Equal(events[0].Topics, []kernel.ID{named}) {
 		t.Fatalf("named-topic post: %+v", events)
+	}
+	payload, err := conversation.DecodePosted(events[0].Payload)
+	if err != nil || payload.AuthorID == nil || *payload.AuthorID != m.Member.ID {
+		t.Fatalf("posted author: %+v, %v", payload, err)
 	}
 	// An absent topic_id is readable legacy data (conversation.DecodePosted's
 	// tests cover the malformed values).

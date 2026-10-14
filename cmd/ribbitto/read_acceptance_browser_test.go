@@ -74,7 +74,7 @@ func TestReadSidebarBrowser(t *testing.T) {
 			}
 			page.MustWait(`(a, b, channel, wantB, frames) => {
 				// Scoped to the row's own link: a channel row also holds its topic rows.
-				const badge = id => document.getElementById('link-' + id).querySelector('.sr-only')?.previousElementSibling?.textContent.trim() || '';
+				const badge = id => document.getElementById('link-' + id).querySelector('[data-unread-count]:not([hidden]) > .sr-only')?.previousElementSibling?.textContent.trim() || '';
 				return window.recounts >= frames && badge(a) === '' && badge(b) === wantB && badge(channel) === wantB &&
 					!document.querySelector('.htmx-settling') && !document.querySelector('#read-form.htmx-request');
 			}`, view.TopicDOMID(f.a), view.TopicDOMID(f.b), view.ChannelDOMID(f.channel), wantB, step+2)

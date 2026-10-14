@@ -179,6 +179,8 @@ type Subscription struct // Subscription is one connection's explicit interests 
   field OrganizationSlug string
   field PresenceAfter string // PresenceAfter is the opaque page token interpreted by the presence owner.
   field Topic *github.com/tkakkie/ribbitto/internal/kernel.ID // Topic, when set, narrows the channel to one topic (a topic view).
+type UnreadRenderer interface // UnreadRenderer supplies a shared post frame when message interests do not select it.
+  func (UnreadRenderer).RenderUnread(context.Context, Event) (Outgoing, error)
 type Watermark struct // Watermark raises the hub to each active organisation's committed sequence.
   func (Watermark).Check(ctx context.Context) error // Check reads, in one query, the committed sequences of the organisations with registered connections and raises the hub to those still active; a value that is not ahead changes nothing.
   field Hub *Hub

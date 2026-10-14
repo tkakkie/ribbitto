@@ -119,7 +119,7 @@ func counterSidebar(ctx context.Context, pool *pgxpool.Pool, counters bool, v co
 	ctx, account := counterAccountContext(ctx, now)
 	_, fallback := counterAccountContext(context.Background(), now)
 	ctx = context.WithValue(ctx, counterRecountKey{}, &counterRecountState{fallback: fallback})
-	reader := conversationpg.NewReader(pool, nil, nil, nil, func(s platform.Snapshot) conversation.PageCounter {
+	reader := conversationpg.NewReader(pool, nil, nil, eventCursor, func(s platform.Snapshot) conversation.PageCounter {
 		return counterPageCounts{costPageCounter{s}, counters}
 	})
 	model, err := reader.Sidebar(ctx, v.member, v.channel, &v.selected)
@@ -252,11 +252,11 @@ func TestUnreadCountersRecountsAndRepair(t *testing.T) {
 			if err != nil || !maps.Equal(got.ChannelCounts, ch) || !maps.Equal(got.TopicCounts, topics) || len(got.Topics) != 50 || got.Topic == nil || got.Topic.ID != selected {
 				t.Fatalf("design %d recount vs oracle: %v; channel=%d/%d base=%d/%d selected=%d/%d", design, err, got.ChannelCounts[h.channel], ch[h.channel], got.TopicCounts[h.base], topics[h.base], got.TopicCounts[selected], topics[selected])
 			}
-			// Four list/selection + four current count statements, or one
+			// Four list/selection + one sequence + four current count statements, or one
 			// counter lookup; fallback uses four production count statements.
-			statements, extra := int64(8), int64(0)
+			statements, extra := int64(9), int64(0)
 			if design == 1 {
-				statements, extra = 5, fallbackStatements
+				statements, extra = 6, fallbackStatements
 			}
 			if n.statements != statements || n.controls != 2 || n.rows != 0 || len(n.transactions) != 1 || fallback.statements != extra || fallback.controls != 0 || fallback.rows != 0 || len(fallback.transactions) != 0 {
 				t.Fatalf("recount accounting design=%d: main=%d/%d/%d/%d fallback=%d/%d/%d/%d", design, n.statements, n.controls, n.rows, len(n.transactions), fallback.statements, fallback.controls, fallback.rows, len(fallback.transactions))

@@ -150,8 +150,8 @@ func TestReaderSidebarSnapshot(t *testing.T) {
 		if selected != nil {
 			order = append(order, "selected")
 		}
-		order = append(order, "topics", "bind counts", "counts")
-		failures := []string{"", "channel", "channels", "topics", "counts"}
+		order = append(order, "topics", "bind cursor", "cursor", "bind counts", "counts")
+		failures := []string{"", "channel", "channels", "topics", "cursor", "counts"}
 		if selected != nil {
 			failures = append(failures, "selected")
 		}
@@ -159,7 +159,10 @@ func TestReaderSidebarSnapshot(t *testing.T) {
 			t.Run("failure="+fail, func(t *testing.T) {
 				reader, f := testReader(t, nil)
 				f.fail, f.organizationID = fail, membership.Organization.ID
-				_, err := reader.Sidebar(t.Context(), membership, kernel.ID{2}, selected)
+				snapshot, err := reader.Sidebar(t.Context(), membership, kernel.ID{2}, selected)
+				if fail == "" && snapshot.SnapshotSeq != 7 {
+					t.Fatalf("snapshot sequence = %d, want 7", snapshot.SnapshotSeq)
+				}
 				want, wantErr := order, error(nil)
 				if fail != "" {
 					want, wantErr = order[:slices.Index(order, fail)+1], f.err

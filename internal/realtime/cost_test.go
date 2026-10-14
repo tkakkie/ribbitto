@@ -174,7 +174,7 @@ func runStreamCost(t *testing.T, record func(stepResult)) {
 		}
 		t.Cleanup(recountPool.Close)
 	}
-	sidebarReader := conversationpg.NewReader(recountPool, nil, nil, nil, costPageCountsIn)
+	sidebarReader := conversationpg.NewReader(recountPool, nil, nil, eventCursor, costPageCountsIn)
 
 	m := members[0]
 	hub := realtime.NewHub()

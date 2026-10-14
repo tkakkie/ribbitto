@@ -23,7 +23,7 @@ import (
 )
 
 func TestSidebarSnapshot(t *testing.T) {
-	statements := []string{"ListChannels", "ListTopics", "FirstChannelReadRanges", "CountChannelUnread", "ReadTopicState", "CountTopicUnread"}
+	statements := []string{"ListChannels", "ListTopics", "GetEventSeq", "FirstChannelReadRanges", "CountChannelUnread", "ReadTopicState", "CountTopicUnread"}
 	for _, selectedView := range []bool{false, true} {
 		for _, statement := range statements {
 			t.Run(fmt.Sprintf("selected=%t/%s", selectedView, statement), func(t *testing.T) {
@@ -75,15 +75,15 @@ func TestSidebarSnapshot(t *testing.T) {
 				traced, err := pgxpool.NewWithConfig(t.Context(), config)
 				feedRequire(t, err)
 				defer traced.Close()
-				// Nil factories also prove this read cannot load authors or a cursor.
-				sidebar, err := conversationpg.NewReader(traced, nil, nil, nil, pageCountsIn).Sidebar(t.Context(), m, f.Channel.ID, topic)
+				// Nil directory factories prove this read cannot load authors.
+				sidebar, err := conversationpg.NewReader(traced, nil, nil, eventCursor, pageCountsIn).Sidebar(t.Context(), m, f.Channel.ID, topic)
 				feedRequire(t, err)
-				if !committed || !reflect.DeepEqual(sidebar.Channels, page.Channels) || !reflect.DeepEqual(sidebar.Topics, page.Topics) ||
+				if !committed || sidebar.SnapshotSeq != *page.EventCursor || !reflect.DeepEqual(sidebar.Channels, page.Channels) || !reflect.DeepEqual(sidebar.Topics, page.Topics) ||
 					!reflect.DeepEqual(sidebar.ChannelCounts, page.ChannelCounts) || !reflect.DeepEqual(sidebar.TopicCounts, page.TopicCounts) ||
 					sidebar.ChannelCounts[f.Channel.ID] != 2 || sidebar.ChannelCounts[empty.ID] != 0 {
 					t.Fatalf("sidebar mixed snapshots or disagrees with page: %+v", sidebar)
 				}
-				wantStatements := int64(7)
+				wantStatements := int64(8)
 				if selectedView {
 					wantStatements++
 					if sidebar.Topic == nil || sidebar.Topic.ID != selected || sidebar.TopicCounts[selected] != 2 || len(sidebar.TopicCounts) != 51 {
@@ -100,7 +100,7 @@ func TestSidebarSnapshot(t *testing.T) {
 				}
 				fresh, err := reader.Sidebar(t.Context(), m, f.Channel.ID, topic)
 				feedRequire(t, err)
-				if len(fresh.Channels) != 3 || fresh.Channels[2].ID != added.ID || len(fresh.Topics) != 50 || fresh.Topics[1].ID != moved.ID {
+				if fresh.SnapshotSeq != *page.EventCursor+3 || len(fresh.Channels) != 3 || fresh.Channels[2].ID != added.ID || len(fresh.Topics) != 50 || fresh.Topics[1].ID != moved.ID {
 					t.Fatalf("fresh lists or order incorrect: %+v", fresh)
 				}
 				if _, ok := fresh.TopicCounts[displaced]; ok {
@@ -131,7 +131,7 @@ func TestSidebarScopes(t *testing.T) {
 	f := conversationtest.OrganizationWithOwner(t, pool, "sidebar", "general")
 	m, err := orgpg.NewAuthorizer(pool).Member(t.Context(), &identity.Account{ID: f.AccountID}, "sidebar")
 	feedRequire(t, err)
-	reader := conversationpg.NewReader(pool, nil, nil, nil, pageCountsIn)
+	reader := conversationpg.NewReader(pool, nil, nil, eventCursor, pageCountsIn)
 	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
 	otherTopic := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, "other")
 	post, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, nil, "unread")

@@ -845,3 +845,81 @@ func TestStreamReplacementDeliveryAndIsolation(t *testing.T) {
 		})
 	}
 }
+
+type unreadTestRenderer struct {
+	rendererFunc
+	unread int
+	after  func()
+}
+
+func (r *unreadTestRenderer) RenderUnread(context.Context, Event) (Outgoing, error) {
+	r.unread++
+	if r.after != nil {
+		r.after()
+	}
+	return Outgoing{Name: "unread", Ephemeral: true}, nil
+}
+
+func TestUnreadSelection(t *testing.T) {
+	topic, other, member := kernel.ID{1}, kernel.ID{2}, kernel.ID{3}
+	for _, tc := range []struct {
+		name                              string
+		messages, sidebar                 bool
+		channel                           kernel.ID
+		selected                          *kernel.ID
+		topics                            []kernel.ID
+		audience                          *kernel.ID
+		denyAudience, denyMember, revoked bool
+		want                              string
+	}{
+		{name: "feed", messages: true, sidebar: true, channel: channelA, topics: []kernel.ID{topic}, want: "message"},
+		{name: "topic", messages: true, sidebar: true, channel: channelA, selected: &topic, topics: []kernel.ID{topic}, want: "message"},
+		{name: "other topic", messages: true, sidebar: true, channel: channelA, selected: &other, topics: []kernel.ID{topic}, want: "unread"},
+		{name: "older topic", sidebar: true, channel: channelA, selected: &topic, topics: []kernel.ID{topic}, want: "unread"},
+		{name: "channel list", sidebar: true, channel: channelA, want: "unread"},
+		{name: "other channel", messages: true, sidebar: true, channel: channelB, want: "unread"},
+		{name: "no sidebar", messages: true, channel: channelB},
+		{name: "audience", sidebar: true, channel: channelA, audience: &other, denyAudience: true},
+		{name: "non-member", sidebar: true, channel: channelA, denyMember: true},
+		{name: "revoked during render", sidebar: true, channel: channelA, revoked: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sub := Subscription{Organization: orgA, Member: member, Channel: tc.channel, Topic: tc.selected}
+			if tc.messages {
+				sub.Interests = append(sub.Interests, InterestMessages)
+			}
+			if tc.sidebar {
+				sub.Interests = append(sub.Interests, InterestSidebar)
+			}
+			e := posted(7, channelA)
+			e.Topics, e.AudienceMemberID = tc.topics, tc.audience
+			r := &unreadTestRenderer{rendererFunc: rendererFunc(render)}
+			revoked := false
+			r.after = func() { revoked = tc.revoked }
+			var checks []kernel.ID
+			stream := Stream{Renderer: r, Authorizer: authorizerFunc(func(e Event) (bool, error) {
+				checks = append(checks, *e.AudienceMemberID)
+				if revoked || tc.denyMember && *e.AudienceMemberID == member || tc.denyAudience && *e.AudienceMemberID == other {
+					return false, nil
+				}
+				return true, nil
+			})}
+			send := newRecorder()
+			send.failOn = -1
+			sent, err := stream.deliver(t.Context(), sub, e, send)
+			if sent != (tc.want != "") || errors.Is(err, ErrMembershipRevoked) != (tc.denyMember || tc.revoked) {
+				t.Fatalf("sent=%v err=%v", sent, err)
+			}
+			want := []string{}
+			if tc.want != "" {
+				want = append(want, tc.want)
+			}
+			if !slices.Equal(send.eventNames(), want) || r.unread > 1 || (r.unread == 1) != (tc.sidebar && tc.want != "message") {
+				t.Fatalf("frames=%v unread renders=%d, want %v", send.eventNames(), r.unread, want)
+			}
+			if tc.sidebar && tc.want != "message" && (len(checks) == 0 || checks[len(checks)-1] != member) {
+				t.Fatalf("missing final bound check: %v", checks)
+			}
+		})
+	}
+}

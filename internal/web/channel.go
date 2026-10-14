@@ -289,7 +289,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		page.ImageKeys = conversation.ChannelImageKeys()
 		page = sidebarView(page, m, conversation.SidebarSnapshot{
-			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics,
+			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics, SnapshotSeq: history.SnapshotSeq,
 			ChannelCounts: history.ChannelCounts, TopicCounts: history.TopicCounts,
 		})
 		page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)

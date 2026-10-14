@@ -117,7 +117,7 @@ func TestBranching(t *testing.T) {
 			t.Fatalf("notice after move: %+v", next)
 		}
 		notice, err := conversation.DecodePosted(next[0].Payload)
-		if err != nil || notice.MessageID != got[3].id {
+		if err != nil || notice.MessageID != got[3].id || notice.AuthorID == nil || *notice.AuthorID != member.Member.ID {
 			t.Fatalf("notice payload: %+v, %v", notice, err)
 		}
 	}

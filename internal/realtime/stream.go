@@ -36,6 +36,12 @@ type Renderer interface {
 	Render(ctx context.Context, event Event) (Outgoing, error)
 }
 
+// UnreadRenderer supplies a shared post frame when message interests do not
+// select it. An empty name means a non-post or legacy payload has no frame.
+type UnreadRenderer interface {
+	RenderUnread(context.Context, Event) (Outgoing, error)
+}
+
 // Sender writes to the connection: an outgoing event, or a heartbeat that
 // carries no event. web implements it.
 type Sender interface {
@@ -286,7 +292,7 @@ func (s Stream) deliver(ctx context.Context, sub Subscription, event Event, send
 	if ctx.Err() != nil {
 		return false, context.Cause(ctx)
 	}
-	if !sub.wants(event) {
+	if event.OrganizationID != sub.Organization {
 		return false, nil
 	}
 	// Render first, then authorize: a render can wait on the database, and
@@ -295,11 +301,23 @@ func (s Stream) deliver(ctx context.Context, sub Subscription, event Event, send
 	// a fresh shared access epoch. A render error stops the loop even for an event
 	// that would have been denied, so nothing is ever skipped without a
 	// decision.
-	out, err := s.Renderer.Render(ctx, event)
+	var out Outgoing
+	var err error
+	selected := sub.wants(event)
+	if selected {
+		out, err = s.Renderer.Render(ctx, event)
+		selected = sub.wantsRendered(event, out)
+	}
+	if err == nil && !selected && slices.Contains(sub.Interests, InterestSidebar) {
+		if renderer, ok := s.Renderer.(UnreadRenderer); ok {
+			out, err = renderer.RenderUnread(ctx, event)
+			selected = out.Name != ""
+		}
+	}
 	if err != nil {
 		return false, fmt.Errorf("rendering event %d: %w", event.Seq, err)
 	}
-	if !sub.wantsRendered(event, out) {
+	if !selected {
 		return false, nil
 	}
 	// Own-audience and organisation-wide events need only the bound check.

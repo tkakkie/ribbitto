@@ -354,7 +354,10 @@ func TestShutdownReportsAReapedWatcherWhosePIDWasReused(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-reaped
-	stranger := exec.Command("/bin/sh", "-c", "sleep 30")
+	// exec keeps the stranger childless: members of a reused session are
+	// still cleaned up, since they cannot be told from our own orphans (as in
+	// cmd/capacity, #1035); only the reused PID itself is spared.
+	stranger := exec.Command("/bin/sh", "-c", "exec sleep 30")
 	stranger.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := stranger.Start(); err != nil {
 		t.Fatal(err)
@@ -485,7 +488,8 @@ func TestHelperProcess(t *testing.T) {
 	if role == "orphan" {
 		// A new session leader whose parent exits at once, so it is nobody's
 		// child here.
-		child := exec.Command("/bin/sh", "-c", "sleep 30")
+		// exec keeps it childless; see the reused-PID test.
+		child := exec.Command("/bin/sh", "-c", "exec sleep 30")
 		child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 		if err := child.Start(); err != nil {
 			t.Fatal(err)

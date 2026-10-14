@@ -48,6 +48,7 @@ type hybridDelivery struct {
 	disconnect context.CancelFunc
 	mu         sync.Mutex
 	requests   []*hybridDeliveryRequest
+	trigger    func(realtime.Event) bool
 }
 
 func (d *hybridDelivery) Watch(organization, member kernel.ID) realtime.SidebarWatch {
@@ -58,7 +59,12 @@ func (d *hybridDelivery) Watch(organization, member kernel.ID) realtime.SidebarW
 	return d.watch
 }
 
-func (*hybridDelivery) Trigger(realtime.Event) bool { return true }
+func (d *hybridDelivery) Trigger(e realtime.Event) bool {
+	if d.trigger != nil {
+		return d.trigger(e)
+	}
+	return true
+}
 
 func (d *hybridDelivery) Recount(ctx context.Context, sub realtime.Subscription) (realtime.Outgoing, error) {
 	if sub.Organization != d.sub.Organization || sub.Member != d.sub.Member || d.watch == nil {

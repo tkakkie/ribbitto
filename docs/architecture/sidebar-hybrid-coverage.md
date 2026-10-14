@@ -20,5 +20,5 @@ and badges; generation assertions are separate from the oracle.
 
 These are model-application checkpoints, not SSE sends. Part
 [2c-b1](sidebar-hybrid-delivery.md) verifies the delivery lifecycle; recount/repair
-progress and equality under continuous posting remain part 2c-b2. Measurements
-and adoption remain #952.
+progress and equality under continuous posting are verified in
+[2c-b2](sidebar-hybrid-progress.md). Measurements and adoption remain #952.

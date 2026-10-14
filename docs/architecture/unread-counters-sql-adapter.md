@@ -112,3 +112,6 @@ Production, migrations and #867's stability rule are unchanged. No measurements
 or adoption conclusion follow from these tests. Only the intended maintenance
 shape may contribute measured evidence in a later approved run. The whole-
 coverage shape and #956c's bytea carrier never do.
+
+#957c4a fixes the [mixed workload](unread-counters-workload.md) and dispatches it
+through this seam; stream integration and completion/drain checks follow in #957c4b.

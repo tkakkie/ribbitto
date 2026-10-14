@@ -99,14 +99,20 @@ in the panel or on nothing and no popover open, so Escape in the composer
 never closes the panel (a draft is still lost by leaving the page). After that close, focus returns to the control that opened the panel:
 its id crosses the page load in `sessionStorage`.
 
-Below 1200 px the panel covers the conversation (#972,
-[side panels](ui-components.md#side-panels)): the script makes
-`#conversation` inert, so neither focus nor a pointer reaches it, and moves
-focus that was inside it to the heading; widening the window removes
-`inert`. The dimmed `#panel-backdrop` is a close link for a pointer only
-(`tabindex="-1"`, `aria-hidden="true"`); the close link and Escape serve the
-keyboard and assistive technology, and focus returns to the opener after
-any of the three. Below 852 px the sheet is all there is to reach: Tab from
-its last stop, and Shift-Tab from its first stop or its heading, wrap inside
-it. `testPanelSheetBrowser` checks this with the sheet's height, scrolling
-and reading pause.
+Below 1200 px the panel covers the conversation and is a modal dialog,
+one model for the overlay and the phone's sheet (#972,
+[side panels](ui-components.md#side-panels)). The script gives it
+`role="dialog"` and `aria-modal="true"` and makes everything else on the
+page inert (the app bar, the sidebar or list, and the conversation), so
+neither focus nor a pointer reaches them; focus left behind moves to the
+heading. Tab from the last stop, and Shift-Tab from the first stop or the
+heading, wrap inside the dialog. Widening the window to 1200 px removes the
+role, `aria-modal` and `inert`, leaving the complementary `<aside>`;
+crossing 852 px either way keeps the modal. The dimmed `#panel-backdrop`,
+over the whole page, is a close link for a pointer only (`tabindex="-1"`,
+`aria-hidden="true"`); the close link and Escape serve the keyboard and
+assistive technology, and focus returns to the opener after any of the
+three. The modal semantics come with the script: without JavaScript the
+panel is a page whose close link and member paging work.
+`testPanelSheetBrowser` checks this through the accessibility tree at both
+widths, with the sheet's height, scrolling and the reading pause.

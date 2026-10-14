@@ -87,8 +87,8 @@ panel overlaying the conversation; from 1200 px (75 rem) the panel beside
 it. The first is the `@theme` breakpoint `--breakpoint-desk` (#969): `desk:`
 utilities apply from 852 px and `max-desk:` below it, so phone overrides
 leave the desktop classes as they are. The second is `--breakpoint-wide`
-(#972): below it (`max-wide:`) an open panel covers the conversation
-([side panels](ui-components.md#side-panels)).
+(#972): below it (`max-wide:`) an open panel is a modal over the dimmed
+page ([side panels](ui-components.md#side-panels)).
 
 **Safe area** (#970). The viewport meta has `viewport-fit=cover`, without
 which `env(safe-area-inset-*)` stays 0, so pages extend under a phone's

@@ -60,12 +60,13 @@ breakpoints ([`ui-code.md`](ui-code.md#dimension-tokens)) place it (#972):
   chain, needs no new structure. The sheet scrolls itself, with
   `overscroll-contain`.
 
-Below `wide`, `#panel-backdrop` dims the conversation in `scrim` (the whole
-screen below `desk`): a link to the close URL that only a pointer reaches
-([accessibility](accessibility.md)). The panel covers the conversation
-exactly while it is out of flow, which scripts read as its computed
-`position`: `side-panel-v2.js` makes the conversation inert and
-`read-visibility-v5.js` pauses automatic reading. The header's **Mark as
-read** is hidden below `desk`; below `wide` the overview shows a
-`submitButtonFor` the same `#read-form`. Without JavaScript the sheet is the
-panel's page: its links still close it and page the members.
+Below `wide` the overlay and the sheet are one modal: `#panel-backdrop` dims
+the whole page in `scrim`, a link to the close URL that only a pointer
+reaches. The panel covers the conversation exactly while it is out of flow,
+which scripts read as its computed `position`: `side-panel-v2.js` makes it
+a modal dialog over an inert page ([accessibility](accessibility.md)) and
+`read-visibility-v5.js` pauses automatic reading, while the stream still
+updates the page behind. The header's **Mark as read** is hidden below
+`desk`; below `wide` the overview shows a `submitButtonFor` the same
+`#read-form`. Without JavaScript the panel is its own page: its links still
+close it and page the members.

@@ -294,10 +294,11 @@ func sheetHeight(panel string) string {
 }
 
 // sidePanel is the block beside the conversation from the wide breakpoint;
-// below it the block covers the conversation, dimmed behind a link that
-// closes it: an overlay on its right side, below desk a bottom sheet. The
-// heading takes focus when the panel opens; side-panel-v2.js adds Escape,
-// keeps focus out of the covered conversation and returns focus.
+// below it the block covers the conversation over a dimmed page, whose
+// dimmed area is a link that closes it: an overlay on the conversation's
+// right side, below desk a bottom sheet. The heading takes focus when the
+// panel opens; side-panel-v2.js makes the covering panel a modal dialog,
+// adds Escape and returns focus.
 func sidePanel(page ChannelPage) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -327,13 +328,13 @@ func sidePanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var13 templ.SafeURL
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(closeURL))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 105, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 106, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" tabindex=\"-1\" aria-hidden=\"true\" class=\"hidden max-wide:absolute max-wide:inset-0 max-wide:z-20 max-wide:block max-wide:rounded-xl max-wide:bg-scrim max-desk:fixed max-desk:rounded-none\"></a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" tabindex=\"-1\" aria-hidden=\"true\" class=\"hidden max-wide:fixed max-wide:inset-0 max-wide:z-20 max-wide:block max-wide:bg-scrim\"></a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -362,7 +363,7 @@ func sidePanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, panelTitle(page.Panel)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 108, Col: 147}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 109, Col: 147}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -375,7 +376,7 @@ func sidePanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var17 templ.SafeURL
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(closeURL))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 109, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 110, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -388,7 +389,7 @@ func sidePanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T(ctx, "panel.close"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 109, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 110, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {
@@ -463,7 +464,7 @@ func overviewPanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(page.Current.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 127, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 128, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -504,7 +505,7 @@ func overviewPanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "illustration.change"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 135, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 136, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
@@ -517,7 +518,7 @@ func overviewPanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var22 templ.SafeURL
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinURLErrs(panelURL(page, PanelOverview))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 136, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 137, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
@@ -542,7 +543,7 @@ func overviewPanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var23 string
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "overview.created"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 142, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 143, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
@@ -555,7 +556,7 @@ func overviewPanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Current.Created.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 143, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 144, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
@@ -568,7 +569,7 @@ func overviewPanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(page.Current.Created.UTC().Format("2006-01-02"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 143, Col: 154}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 144, Col: 154}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -589,7 +590,7 @@ func overviewPanel(page ChannelPage) templ.Component {
 		var templ_7745c5c3_Var26 string
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(i18n.T(ctx, "topic.list"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 146, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 147, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 		if templ_7745c5c3_Err != nil {
@@ -607,7 +608,7 @@ func overviewPanel(page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var27 templ.SafeURL
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(ConversationURL(page.Organization.Slug, page.Current.ID, &topic.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 150, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 151, Col: 97}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 			if templ_7745c5c3_Err != nil {
@@ -628,7 +629,7 @@ func overviewPanel(page ChannelPage) templ.Component {
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(topicName(ctx, topic))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 152, Col: 29}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/panel.templ`, Line: 153, Col: 29}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {

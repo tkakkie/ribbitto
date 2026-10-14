@@ -23,24 +23,36 @@
     }
   };
   close.addEventListener("click", remember);
-  document.getElementById("panel-backdrop").addEventListener("click", remember);
-  // While the panel covers the conversation (out of flow below the wide
-  // breakpoint), the conversation is inert: focus and pointer stay out of it,
-  // and widening the window restores it.
+  const backdrop = document.getElementById("panel-backdrop");
+  backdrop.addEventListener("click", remember);
+  // Below the wide breakpoint the panel covers the conversation (out of
+  // flow: an overlay, or a phone's sheet) and is a modal dialog: everything
+  // else on the page is inert, Tab stays inside, and widening the window
+  // releases it to the complementary panel beside the conversation.
   const panel = document.getElementById("side-panel");
-  const conversation = document.getElementById("conversation");
+  const background = [];
+  for (let node = panel; node.parentElement && node !== document.body; node = node.parentElement) {
+    for (const sibling of node.parentElement.children) if (sibling !== node && sibling !== backdrop) background.push(sibling);
+  }
+  let modal = false;
   const cover = () => {
-    const covered = getComputedStyle(panel).position !== "static";
-    // Narrowing the window would otherwise drop focus from the composer.
-    if (covered && conversation.contains(document.activeElement)) document.getElementById("panel-heading").focus();
-    conversation.inert = covered;
+    modal = getComputedStyle(panel).position !== "static";
+    for (const element of background) element.inert = modal;
+    if (modal) {
+      panel.setAttribute("role", "dialog");
+      panel.setAttribute("aria-modal", "true");
+      // Narrowing the window would otherwise leave focus behind the panel.
+      if (!panel.contains(document.activeElement)) document.getElementById("panel-heading").focus();
+    } else {
+      panel.removeAttribute("role");
+      panel.removeAttribute("aria-modal");
+    }
   };
   cover();
   window.addEventListener("resize", cover);
-  // A phone's sheet is all there is to reach: Tab and Shift-Tab wrap
-  // inside it rather than leave the page.
+  // Tab and Shift-Tab wrap inside the dialog rather than leave the page.
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Tab" || getComputedStyle(panel).position !== "fixed") return;
+    if (event.key !== "Tab" || !modal) return;
     const stops = [...panel.querySelectorAll("a[href], button, summary, input, select, textarea")].filter((e) => e.tabIndex >= 0 && !e.disabled && e.checkVisibility());
     if (stops.length === 0) return;
     const [first, last] = [stops[0], stops.at(-1)];

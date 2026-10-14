@@ -94,15 +94,16 @@ func sheetHeight(panel string) string {
 }
 
 // sidePanel is the block beside the conversation from the wide breakpoint;
-// below it the block covers the conversation, dimmed behind a link that
-// closes it: an overlay on its right side, below desk a bottom sheet. The
-// heading takes focus when the panel opens; side-panel-v2.js adds Escape,
-// keeps focus out of the covered conversation and returns focus.
+// below it the block covers the conversation over a dimmed page, whose
+// dimmed area is a link that closes it: an overlay on the conversation's
+// right side, below desk a bottom sheet. The heading takes focus when the
+// panel opens; side-panel-v2.js makes the covering panel a modal dialog,
+// adds Escape and returns focus.
 templ sidePanel(page ChannelPage) {
 	{{ closeURL := conversationURL(page) + conversationQuery(page) }}
 	// Pointer-only: the close link and Escape serve the keyboard and
 	// assistive technology.
-	<a id="panel-backdrop" href={ templ.SafeURL(closeURL) } tabindex="-1" aria-hidden="true" class="hidden max-wide:absolute max-wide:inset-0 max-wide:z-20 max-wide:block max-wide:rounded-xl max-wide:bg-scrim max-desk:fixed max-desk:rounded-none"></a>
+	<a id="panel-backdrop" href={ templ.SafeURL(closeURL) } tabindex="-1" aria-hidden="true" class="hidden max-wide:fixed max-wide:inset-0 max-wide:z-20 max-wide:block max-wide:bg-scrim"></a>
 	<aside id="side-panel" aria-labelledby="panel-heading" class={ "flex w-panel shrink-0 flex-col overflow-y-auto overscroll-contain rounded-xl bg-bg shadow-block max-wide:absolute max-wide:inset-y-0 max-wide:right-0 max-wide:z-20 max-wide:shadow-popover max-desk:fixed max-desk:inset-x-0 max-desk:top-auto max-desk:w-auto max-desk:rounded-b-none max-desk:pb-safe-0", sheetHeight(page.Panel) }>
 		<header class="flex shrink-0 items-center gap-2 border-b border-border py-2 pl-5 pr-2">
 			<h2 id="panel-heading" tabindex="-1" autofocus class="min-w-0 flex-1 break-words text-title font-semibold">{ i18n.T(ctx, panelTitle(page.Panel)) }</h2>

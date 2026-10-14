@@ -113,7 +113,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   *Mark as read* submit button only if something was unread (else the form is
   `hidden`), and `hx-post` to the conversation URL plus `/read` (`POST /organizations/{slug}/channels/{channelID}[/topics/{topicID}]/read`). `hx-trigger="read-visible, submit"`, `hx-sync="this:drop"` and `hx-swap="none"`
   send automatic and manual POSTs without swapping history or overlapping reads;
-  automatic ones pause under a covering panel ([panels](../ui-components.md#side-panels)).
+  automatic ones pause while a panel is modal ([panels](../ui-components.md#side-panels)).
   `?before=` pages omit it. The endpoint resolves visibility,
   calls the transaction-owning unread use case and returns 204 to htmx or a 303
   for the plain form.

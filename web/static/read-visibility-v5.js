@@ -15,10 +15,12 @@
     let timer = null;
     let failures = 0;
     let navigating = false;
+    // Mark as read's cursor until a request covering it succeeds: one action
+    // reads everything shown, and its 429 retries pass a covering panel.
+    let intent = null;
     const needed = () => !navigating && document.visibilityState === 'visible' && form.isConnected;
     // An open panel out of flow covers the conversation (an overlay, or a
-    // phone's sheet). Only visible() triggers read-visible, so automatic
-    // reading waits while Mark as read's submit never does.
+    // phone's sheet): automatic reading waits, Mark as read never does.
     const covered = () => {
       const panel = document.getElementById('side-panel');
       return panel !== null && getComputedStyle(panel).position !== 'static';
@@ -27,12 +29,15 @@
       clearTimeout(timer);
       timer = null;
     };
-    const cursor = () => attempted === null ? snapshot : stream.dataset.appliedCursor || snapshot;
+    const latest = () => stream.dataset.appliedCursor || snapshot;
+    const cursor = () => intent ?? (attempted === null ? snapshot : latest());
     const visible = () => {
-      if (!needed() || covered() || inFlight || timer !== null) return;
+      if (!needed() || (intent === null && covered()) || inFlight || timer !== null) return;
       if (succeeded === null || BigInt(cursor()) > succeeded) htmx.trigger(form, 'read-visible');
+      else intent = null;
     };
     form.addEventListener('htmx:configRequest', event => {
+      if (event.detail.triggeringEvent?.type === 'submit') intent = latest();
       form.elements.cursor.value = cursor();
       event.detail.parameters.cursor = cursor();
     });
@@ -57,6 +62,7 @@
       if (event.detail.successful) {
         succeeded = attempted;
         failures = 0;
+        if (intent !== null && attempted >= BigInt(intent)) intent = null;
       } else if (event.detail.xhr.status === 429) {
         if (!needed()) return;
         const header = event.detail.xhr.getResponseHeader('Retry-After');
@@ -74,8 +80,12 @@
         }, delay);
         return;
       }
-      // Flush newer shown work after failure without retrying the same cursor.
-      else if (BigInt(cursor()) <= attempted) return;
+      else {
+        // A failed Mark as read waits for another click. Flush newer shown
+        // work without retrying the same cursor.
+        intent = null;
+        if (BigInt(cursor()) <= attempted) return;
+      }
       // htmx releases its request lock after afterRequest returns. Read the
       // newest cursor then, rather than queueing snapshots of older triggers.
       queueMicrotask(() => active?.());

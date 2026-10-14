@@ -103,7 +103,9 @@ whenever the width changes with the panel open. The stream is still applied
 behind it: new messages, counts and typing appear, but nothing shown then
 counts as read. When the panel closes (a page load) or stops covering (the
 window widens to 1200 px), automatic reading resumes under the rules above. *Mark as read* is deliberate and never paused: below 1200 px
-the overview offers it, submitting the same form.
+the overview offers it, submitting the same form. One click reads up to the
+newest shown sequence, and a refused (429) click retries with that cursor
+while the panel stays modal; it reads nothing that arrived after the click.
 
 ## Counts
 

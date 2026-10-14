@@ -65,6 +65,7 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			var mu sync.Mutex
 			var reads []string
+			var throttle atomic.Bool // refuse the next reading POST with 429
 			frames := make(chan realtime.Outgoing)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/organizations/acme/events" {
@@ -85,9 +86,18 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					if r.Header.Get("HX-Request") == "" {
 						cursor += " plain"
 					}
+					refuse := throttle.Swap(false)
+					if refuse {
+						cursor += " 429"
+					}
 					mu.Lock()
 					reads = append(reads, cursor)
 					mu.Unlock()
+					if refuse {
+						w.Header().Set("Retry-After", "0")
+						w.WriteHeader(http.StatusTooManyRequests)
+						return
+					}
 				}
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 				handler.ServeHTTP(w, r)
@@ -229,6 +239,24 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 				if (document.documentElement.scrollWidth > width || panel.scrollWidth > panel.clientWidth) return 'sideways scroll';
 				return '';
 			}`
+			// Loaded modal, before any widening has sent a read: one Mark as
+			// read covers what arrived since the snapshot, and a refused one
+			// retries past the dialog without reading later arrivals.
+			for i, width := range []int{390, 1000} {
+				size(width, 800)
+				page.MustNavigate(server.URL + path + "/overview").MustWaitLoad()
+				wait(fmt.Sprintf("%d px: the overview opens as a modal", width), `() => document.getElementById('side-panel').getAttribute('aria-modal') === 'true'`)
+				seq := 50 + 10*i
+				live(seq)
+				read()
+				page.MustElement(`#side-panel button[form="read-form"]`).MustClick()
+				read(fmt.Sprint(seq))
+				live(seq + 1)
+				throttle.Store(true)
+				page.MustElement(`#side-panel button[form="read-form"]`).MustClick()
+				live(seq + 2)
+				read(fmt.Sprint(seq+1, " 429"), fmt.Sprint(seq+1))
+			}
 			size(390, 844)
 			page.MustNavigate(server.URL + path).MustWaitLoad()
 			read("42")

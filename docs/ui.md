@@ -90,8 +90,9 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
   down to 480 px at 15 px text. The frame takes 372 px, and 720 px with a
   side panel, so from 1200 px (75 rem) a panel sits beside the
   conversation; from 852 px (53.25 rem) a panel overlays the conversation's
-  right side instead, as a modal over the dimmed page, like the phone's sheet; below 852 px the phone layout applies. From 320 px
-  up nothing scrolls sideways and no control becomes unreachable.
+  right side instead, as a modal over the dimmed page, like the phone's
+  sheet; below 852 px the phone layout applies. From 320 px up nothing
+  scrolls sideways and no control becomes unreachable.
 - **Phone** (M6): one column. The channel list is its own page with a
   bottom navigation (#970) instead of the app bar: Home, and an Account
   button that opens the account menu as a bottom sheet, each an icon above

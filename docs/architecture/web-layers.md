@@ -69,7 +69,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   (32 lowercase hex digits). Load older selects `#message-items > li`.
 - **Script-read data attributes are a contract too,** with the
   same renaming rule (#351). Besides `data-event-cursor`,
-  `data-posted-message` and `data-announcement` (described in this section):
+  `data-posted-message` and `data-announcement` (this section):
 
   | Attribute | On | Present | Meaning |
   |---|---|---|---|
@@ -130,8 +130,8 @@ keyboard, local time, selection constraints, and htmx/SSE input glue.
 
 - `message-stream-v9.js` emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
-  `read-visibility-v5.js` initializes on scoped `htmx:load`; triggers send
-  the snapshot, then the latest applied cursor.
+  `read-visibility-v5.js` initializes on scoped `htmx:load`; automatic
+  triggers send the snapshot, then the latest applied cursor.
   One request and one timer per page coalesce cursors. A 429 retries
   until success or hide/removal/navigation, with jittered exponential backoff
   capped initially at 8 s; `Retry-After` is a minimum, even above that cap.

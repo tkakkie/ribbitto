@@ -288,7 +288,10 @@ func TestObserverSampling(t *testing.T) {
 	_ = first.stdin.Close()
 	peak, err := strconv.Atoi(<-first.lines)
 	<-first.done
-	if err != nil || first.err != nil || second.err != nil || peak < baseline.Baseline+1 {
+	// Other packages' tests share the server and open and close connections
+	// meanwhile, so the baseline is no floor; while both observers were
+	// connected, a sample saw at least these two.
+	if err != nil || first.err != nil || second.err != nil || peak < 2 {
 		t.Fatalf("peak = %d, parse %v, observers %v / %v; baseline %d", peak, err, first.err, second.err, baseline.Baseline)
 	}
 }

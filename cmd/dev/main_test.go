@@ -354,9 +354,8 @@ func TestShutdownReportsAReapedWatcherWhosePIDWasReused(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-reaped
-	// exec keeps the stranger childless: members of a reused session are
-	// still cleaned up, since they cannot be told from our own orphans (as in
-	// cmd/capacity, #1035); only the reused PID itself is spared.
+	// exec keeps the stranger childless, so this test is about the verdict;
+	// TestShutdownSkipsAReusedSession gives the stranger a child.
 	stranger := exec.Command("/bin/sh", "-c", "exec sleep 30")
 	stranger.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := stranger.Start(); err != nil {
@@ -407,7 +406,20 @@ func TestShutdownReportsAWatcherReusedBeforeItsFlag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = syscall.Kill(orphan, syscall.SIGKILL) })
+	child := 0
+	t.Cleanup(func() {
+		_ = syscall.Kill(orphan, syscall.SIGKILL)
+		if child > 0 {
+			_ = syscall.Kill(child, syscall.SIGKILL)
+		}
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	waitFor(t, ctx, func() bool {
+		data, _ := os.ReadFile(filepath.Join(dir, "orphan-child.pid"))
+		child, _ = strconv.Atoi(strings.TrimSpace(string(data)))
+		return child > 0
+	})
 	w.pid = orphan
 	setBeforeSignals(t, func() { close(resume) })
 	var exit *exec.ExitError
@@ -415,8 +427,9 @@ func TestShutdownReportsAWatcherReusedBeforeItsFlag(t *testing.T) {
 	if !errors.As(err, &exit) || exit.ExitCode() != 7 || strings.Contains(err.Error(), "remain") {
 		t.Fatalf("shutdown = %v, want only the watcher's failure", err)
 	}
-	if !alive(t, orphan) {
-		t.Fatal("shutdown signalled the unrelated session leader")
+	// The child shows that the whole session is skipped (#1052).
+	if !alive(t, orphan) || !alive(t, child) {
+		t.Fatal("shutdown signalled the unrelated session")
 	}
 }
 
@@ -458,6 +471,104 @@ func TestShutdownReportsAWatcherReusedByALaterWatcher(t *testing.T) {
 	}
 }
 
+// Argon on #1042 (#1052): once another session leader holds a reaped
+// watcher's PID, nothing in that session is ours, since the kernel never hands
+// out a PID still in use as a session ID. The leader and its child both
+// survive, and nothing is counted as remaining.
+func TestShutdownSkipsAReusedSession(t *testing.T) {
+	failing := exec.Command("/bin/sh", "-c", "exit 7")
+	release := make(chan struct{})
+	reaped := holdDelivery(t, failing, release)
+	w, err := start(failing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-reaped
+	file := filepath.Join(t.TempDir(), "child.pid")
+	stranger := exec.Command("/bin/sh", "-c", `sleep 30 & echo $! > "$1"; wait`, "stranger", file)
+	stranger.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := stranger.Start(); err != nil {
+		t.Fatal(err)
+	}
+	child := 0
+	t.Cleanup(func() {
+		if child > 0 {
+			_ = syscall.Kill(child, syscall.SIGKILL)
+		}
+		_ = stranger.Process.Kill()
+		_ = stranger.Wait()
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	waitFor(t, ctx, func() bool {
+		data, _ := os.ReadFile(file)
+		child, _ = strconv.Atoi(strings.TrimSpace(string(data)))
+		return child > 0
+	})
+	w.pid = stranger.Process.Pid
+	setBeforeSignals(t, func() { close(release) })
+	var exit *exec.ExitError
+	err = shutdown([]watcher{w})
+	if !errors.As(err, &exit) || exit.ExitCode() != 7 || strings.Contains(err.Error(), "remain") {
+		t.Fatalf("shutdown = %v, want only the reaped watcher's failure", err)
+	}
+	if !alive(t, stranger.Process.Pid) || !alive(t, child) {
+		t.Fatal("shutdown signalled the unrelated session")
+	}
+}
+
+// Argon on #1042 (#1052): a watcher stopped by the first signal is reaped
+// during the loop, and once another process holds its PID its session is no
+// longer ours, so shutdown ends at once instead of at the deadline. The record
+// carries a stranger's PID, listed as this process's child until the watcher
+// is reaped: it stands for the leader before the reap and the new holder after.
+func TestShutdownSkipsASessionReusedDuringTheSignals(t *testing.T) {
+	ready := filepath.Join(t.TempDir(), "ready")
+	w, err := start(exec.Command("/bin/sh", "-c", `trap 'exit 0' TERM; : > "$1"; while :; do sleep 0.01; done`, "watcher", ready))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	waitFor(t, ctx, func() bool { _, err := os.Stat(ready); return err == nil })
+	stranger := exec.Command("/bin/sh", "-c", "exec sleep 30")
+	stranger.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := stranger.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stranger.Process.Kill(); _ = stranger.Wait() })
+	held, self := strconv.Itoa(stranger.Process.Pid), strconv.Itoa(os.Getpid())
+	original := listProcesses
+	t.Cleanup(func() { listProcesses = original })
+	listProcesses = func() (string, error) {
+		out, err := original()
+		if err != nil || w.reaped.Load() {
+			return out, err
+		}
+		lines := strings.Split(out, "\n")
+		for i, line := range lines {
+			if fields := strings.Fields(line); len(fields) == 3 && fields[0] == held {
+				lines[i] = held + " " + self + " " + fields[2]
+			}
+		}
+		return strings.Join(lines, "\n"), nil
+	}
+	w.pid = stranger.Process.Pid
+	begin := time.Now()
+	if err := shutdown([]watcher{w}); err != nil {
+		t.Fatalf("shutdown = %v, want no failure", err)
+	}
+	if elapsed := time.Since(begin); elapsed >= 1500*time.Millisecond {
+		t.Fatalf("shutdown took %v, want under half of its deadline", elapsed)
+	}
+	if !w.reaped.Load() {
+		t.Fatal("the watcher was not reaped during shutdown")
+	}
+	if !alive(t, stranger.Process.Pid) {
+		t.Fatal("shutdown signalled the process holding the reused PID")
+	}
+}
+
 func helper(role, root string) *exec.Cmd {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
 	cmd.Env = append(os.Environ(), "DEV_HELPER="+role, "DEV_ROOT="+root)
@@ -487,9 +598,8 @@ func TestHelperProcess(t *testing.T) {
 	}
 	if role == "orphan" {
 		// A new session leader whose parent exits at once, so it is nobody's
-		// child here.
-		// exec keeps it childless; see the reused-PID test.
-		child := exec.Command("/bin/sh", "-c", "exec sleep 30")
+		// child here, with a child of its own in its session.
+		child := exec.Command("/bin/sh", "-c", `sleep 30 & echo $! > "$1"; wait`, "orphan", filepath.Join(root, "orphan-child.pid"))
 		child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 		if err := child.Start(); err != nil {
 			t.Fatal(err)

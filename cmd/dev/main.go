@@ -152,6 +152,8 @@ func shutdown(watchers []watcher) (err error) {
 	// maintainer and Codex on #1042). It relies on the watchers ending by the
 	// signal or with status 0 when stopped: Tailwind dies of SIGTERM and SIGINT,
 	// templ exits 0 (measured with the pinned versions).
+	// Taken once, for the verdict only: each scan below decides afresh which
+	// leaders are gone (#1052).
 	exited, scanErr := exitedLeaders(watchers)
 	defer func() {
 		for i, w := range watchers {
@@ -172,12 +174,12 @@ func shutdown(watchers []watcher) (err error) {
 		if time.Until(deadline) < 2*time.Second {
 			sig = syscall.SIGKILL
 		}
-		for i, w := range watchers {
-			if !exited[i] {
-				_ = w.cmd.Process.Signal(sig)
-			}
+		// Process.Signal checks its handle, so a reaped leader is never
+		// signalled through its reused PID.
+		for _, w := range watchers {
+			_ = w.cmd.Process.Signal(sig)
 		}
-		remaining, err := signalSessions(watchers, exited, sig)
+		remaining, err := signalSessions(watchers, sig)
 		if err != nil {
 			// Still stop owned leaders if ps is denied;
 			// report failure because detached descendants cannot be confirmed.
@@ -197,34 +199,33 @@ func shutdown(watchers []watcher) (err error) {
 	}
 }
 
-func signalSessions(watchers []watcher, exited []bool, sig syscall.Signal) (int, error) {
-	out, err := listProcesses()
+func signalSessions(watchers []watcher, sig syscall.Signal) (int, error) {
+	reaped := reapedFlags(watchers)
+	table, err := readTable()
 	if err != nil {
 		return 0, fmt.Errorf("scanning watcher sessions: %w", err)
 	}
+	gone, reused := classify(watchers, reaped, table)
 	remaining := 0
-	for _, line := range strings.Split(out, "\n") {
-		fields := strings.Fields(line)
+	for _, p := range table {
 		// Zombies cannot run or be signalled; init owns orphan reaping.
-		if len(fields) != 3 || strings.HasPrefix(fields[2], "Z") {
-			continue
-		}
-		pid, err := strconv.Atoi(fields[0])
-		if err != nil {
+		if p.zombie {
 			continue
 		}
 		for i, w := range watchers {
-			// Once the leader is reaped, a process with its PID is a new
-			// session leader, not ours: neither signalled nor waited for.
-			if exited[i] && pid == w.pid {
+			// The kernel never hands out a PID still in use as a session ID, so
+			// while another process holds a gone leader's PID nothing in that
+			// session is ours (Argon on #1042). A gone leader's PID held by our
+			// own child (ps) leads no session of ours either.
+			if reused[i] || gone[i] && p.pid == w.pid {
 				continue
 			}
-			if sid, err := unix.Getsid(pid); err == nil && sid == w.pid {
+			if sid, err := unix.Getsid(p.pid); err == nil && sid == w.pid {
 				// A leader's PID may have been reused after Wait. Process.Signal
 				// checks its handle; never signal that PID from a stale ps listing.
-				if pid != w.pid {
-					if sid, err := unix.Getsid(pid); err == nil && sid == w.pid {
-						_ = syscall.Kill(pid, sig)
+				if p.pid != w.pid {
+					if sid, err := unix.Getsid(p.pid); err == nil && sid == w.pid {
+						_ = syscall.Kill(p.pid, sig)
 					}
 				}
 				remaining++
@@ -242,40 +243,82 @@ func failedOnItsOwn(result error) bool {
 }
 
 // exitedLeaders reports, per watcher, whether its leader had already exited.
-// A leader still runs only if it is listed, not a zombie, its own session's
-// leader and this process's child: a PID reused after the reap, even before
-// the reaped flag is set, belongs to a process with another parent, unless a
-// later watcher reused it. Two live processes never share a PID, so a
-// watcher whose PID a later watcher holds has exited (Codex on #1042).
 func exitedLeaders(watchers []watcher) ([]bool, error) {
-	exited := make([]bool, len(watchers))
+	reaped := reapedFlags(watchers)
+	table, err := readTable()
+	if err != nil {
+		return reaped, fmt.Errorf("reading the process table before shutdown: %w", err)
+	}
+	gone, _ := classify(watchers, reaped, table)
+	return gone, nil
+}
+
+// process is one line of the process table.
+type process struct {
+	pid, ppid int
+	zombie    bool
+}
+
+// readTable lists every process. Callers read the reaped flags first, so a
+// process listed with the PID of a watcher already reaped holds it after the
+// reap.
+func readTable() ([]process, error) {
 	out, err := listProcesses()
 	if err != nil {
-		for i, w := range watchers {
-			exited[i] = w.reaped.Load()
-		}
-		return exited, fmt.Errorf("reading the process table before shutdown: %w", err)
+		return nil, err
 	}
-	ours, self := map[int]bool{}, os.Getpid()
+	var table []process
 	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) != 3 || strings.HasPrefix(fields[2], "Z") {
+		if len(fields) != 3 {
 			continue
 		}
 		pid, err := strconv.Atoi(fields[0])
 		if err != nil {
 			continue
 		}
-		if ppid, err := strconv.Atoi(fields[1]); err == nil && ppid == self {
-			ours[pid] = true
+		ppid, err := strconv.Atoi(fields[1])
+		if err != nil {
+			continue
 		}
+		table = append(table, process{pid, ppid, strings.HasPrefix(fields[2], "Z")})
 	}
+	return table, nil
+}
+
+func reapedFlags(watchers []watcher) []bool {
+	reaped := make([]bool, len(watchers))
 	for i, w := range watchers {
-		sid, err := unix.Getsid(w.pid)
-		exited[i] = w.reaped.Load() || !ours[w.pid] || err != nil || sid != w.pid
-		for _, later := range watchers[i+1:] {
-			exited[i] = exited[i] || later.pid == w.pid
-		}
+		reaped[i] = w.reaped.Load()
 	}
-	return exited, nil
+	return reaped
+}
+
+// classify reports, per watcher, whether its leader is gone and whether
+// another process now holds its PID. A leader still runs only if it is listed,
+// not a zombie, its own session's leader and this process's child: a PID
+// reused after the reap, even before the reaped flag is set, belongs to a
+// process with another parent, unless a later watcher reused it. Two live
+// processes never share a PID, so a watcher whose PID a later watcher holds
+// has exited (Codex on #1042). The PID is reused if it is listed once the
+// leader was reaped or held by a process that is not our child; until the
+// reap, our own child with that PID may be the leader's zombie, and a later
+// watcher holding it leads a session that is ours anyway.
+func classify(watchers []watcher, reaped []bool, table []process) (gone, reused []bool) {
+	holders, self := map[int]process{}, os.Getpid()
+	for _, p := range table {
+		holders[p.pid] = p
+	}
+	gone, reused = make([]bool, len(watchers)), make([]bool, len(watchers))
+	for i, w := range watchers {
+		holder, held := holders[w.pid]
+		later := false
+		for _, next := range watchers[i+1:] {
+			later = later || next.pid == w.pid
+		}
+		sid, err := unix.Getsid(w.pid)
+		gone[i] = reaped[i] || !held || holder.zombie || holder.ppid != self || err != nil || sid != w.pid || later
+		reused[i] = held && (reaped[i] || holder.ppid != self)
+	}
+	return gone, reused
 }

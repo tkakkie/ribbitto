@@ -97,6 +97,8 @@ type Stream struct {
 	Sidebar SidebarSource
 	// Recounts optionally schedules sidebar computation; nil keeps synchronous delivery.
 	Recounts *RecountScheduler
+	// RecountLimit shares computation capacity; nil preserves unbounded test compositions.
+	RecountLimit *RecountLimit
 	// RecountObserver optionally aggregates scheduled delivery; nil disables observations.
 	RecountObserver *RecountObserver
 	// BatchSize bounds each read; zero means DefaultBatchSize.
@@ -187,6 +189,12 @@ func (s Stream) run(ctx context.Context, sub Subscription, cursor int64, send Se
 	written := time.Now()
 	sidebar := sidebarDelivery{dirty: s.Sidebar != nil && slices.Contains(sub.Interests, InterestSidebar)}
 	if sidebar.dirty {
+		if s.RecountLimit != nil {
+			if err := s.checkMember(ctx, sub, Event{OrganizationID: sub.Organization}); err != nil {
+				return cursor, err
+			}
+		}
+		sidebar.next = time.Now().Add(s.RecountLimit.connectDelay())
 		if source, ok := s.Sidebar.(SidebarWatcher); ok {
 			sidebar.watch = source.Watch(sub.Organization, sub.Member)
 			defer sidebar.watch.Release()

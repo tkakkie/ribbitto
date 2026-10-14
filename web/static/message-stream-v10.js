@@ -26,7 +26,7 @@
   });
   const reset = (event) => {
     event.target.close();
-    location.reload();
+    setTimeout(() => location.reload(), Math.random() * 5000);
   };
   const showApplied = () => {
     const connection = document.getElementById("organization-stream");

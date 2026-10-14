@@ -38,6 +38,8 @@ type Streaming struct {
 	Sidebar func(org.Membership, kernel.ID, *kernel.ID, bool) realtime.SidebarSource
 	// Recounts admits sidebar streams before opening; nil keeps synchronous recounts.
 	Recounts *realtime.RecountScheduler
+	// RecountLimit bounds computations independently of stream admission.
+	RecountLimit *realtime.RecountLimit
 	// RecountObserver optionally aggregates scheduled delivery; nil disables observations.
 	RecountObserver *realtime.RecountObserver
 	// StreamOpened counts every accepted stream, regardless of interests.
@@ -170,9 +172,9 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 	stream := realtime.Stream{
 		Hub: p.stream.Hub, Events: p.stream.Events, Authorizer: p.stream.Authorizer,
 		Owners:          p.stream.Owners,
-		RecountObserver: p.stream.RecountObserver,
-		Renderer:        messageRenderer{messages: p.messages, membership: m, renders: p.renders},
-		Heartbeat:       heartbeat,
+		RecountObserver: p.stream.RecountObserver, RecountLimit: p.stream.RecountLimit,
+		Renderer:  messageRenderer{messages: p.messages, membership: m, renders: p.renders},
+		Heartbeat: heartbeat,
 	}
 	if admit != nil {
 		stream.Sidebar = sidebar

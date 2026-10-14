@@ -7,21 +7,21 @@
     const events = new Map();
     let snapshot = BigInt(connection.querySelector("#sidebar-channels").dataset.snapshotSeq);
     let seen = snapshot, lostThrough = 0n;
-    let recovering = false, losses = 0, request = null, timer = null, delay = 50;
+    let recovering = false, losses = 0, request = null, timer = null, delay = 250;
     const observe = (seq) => { if (seq > seen) seen = seq; };
     const uuid = (value) => typeof value === "string" && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
     const sequence = (value) => {
       if (!/^\d+$/.test(value)) throw new Error("invalid snapshot sequence");
       return BigInt(value);
     };
-    const schedule = () => {
+    const schedule = (wait = delay / 2 + Math.random() * delay / 2) => {
       if (request || timer || !connection.isConnected) return;
       timer = setTimeout(() => {
         timer = null;
         if (!connection.isConnected) return;
         request = { losses, received: false, success: false };
         form.dispatchEvent(new Event("sidebar-resync", { bubbles: true }));
-      }, delay + Math.random() * 25);
+      }, wait);
     };
     const recover = (through = seen) => {
       if (through > lostThrough) lostThrough = through;
@@ -37,11 +37,11 @@
       request = null;
       if (covered) {
         recovering = false;
-        delay = 50;
+        delay = 250;
         applyRetained();
       } else {
         recovering = true;
-        delay = Math.min(delay * 2, 1000);
+        delay = Math.min(delay * 2, 8000);
         schedule();
       }
     };
@@ -153,7 +153,7 @@
       if (!request) return;
       if (!event.detail.successful) {
         request = null;
-        delay = Math.min(delay * 2, 1000);
+        delay = Math.min(delay * 2, 8000);
         recover();
       } else {
         request.success = true;
@@ -184,7 +184,7 @@
   });
   const resume = () => {
     const connection = document.getElementById("organization-stream");
-    if (connection) initialize(connection)?.schedule();
+    if (connection) initialize(connection)?.schedule(Math.random() * 2000);
   };
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") resume();

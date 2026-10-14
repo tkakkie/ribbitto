@@ -134,10 +134,11 @@ func serveWithLifecycle(ctx context.Context, databaseURL string, own func(contex
 		observer = &realtime.RecountObserver{}
 		delivery = "asynchronous"
 	}
+	limit := realtime.NewRecountLimit(recounts.computationLimit(pool.Config().MaxConns))
 	lifetime := own(ctx, hub, scheduler, pool.Close)
 	defer func() { result = errors.Join(result, lifetime.close()) }()
 	slog.Info("recount capacity configuration", "async_recounts", recounts.enabled, "delivery", delivery,
-		"pool_max_conns", pool.Config().MaxConns, "configured_workers", recounts.workers,
+		"pool_max_conns", pool.Config().MaxConns, "configured_workers", recounts.workers, "computation_limit", recounts.computationLimit(pool.Config().MaxConns),
 		"max_connections", recounts.maxConnections, "reserved", recounts.reserved, "external", recounts.external,
 		"processes", recounts.processes, "normal_headroom", recounts.headroom, "process_budget", recounts.budget,
 		"registration_limit", recounts.registrationLimit)
@@ -146,7 +147,7 @@ func serveWithLifecycle(ctx context.Context, databaseURL string, own func(contex
 	handler, sessions, err := buildHandler(lifetime.ctx, pool, handlerConfig{
 		maxChannels: maxChannels, setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
 		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), hub: hub,
-		recounts: scheduler, recountObserver: observer,
+		recounts: scheduler, recountObserver: observer, recountLimit: limit,
 		authorizationCapacity: authorizationCapacity,
 	})
 	if err != nil {
@@ -262,6 +263,7 @@ func newServer(addr string, handler http.Handler, timeouts serverTimeouts) *http
 }
 
 type handlerConfig struct {
+	recountLimit          *realtime.RecountLimit
 	maxChannels           int32
 	authorizationCapacity int
 	setupToken, devAssets string
@@ -332,7 +334,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		state := presence.New(config.hub)
 		typingState = typing.New(config.hub)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout,
-			Recounts: config.recounts, RecountObserver: config.recountObserver,
+			Recounts: config.recounts, RecountObserver: config.recountObserver, RecountLimit: config.recountLimit,
 			Sidebar:  sidebarSource(conversationpg.NewReader(pool, nil, nil, eventCursor, pageCountsIn), changes),
 			Presence: state, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
 				closePresence, closeTyping := state.Open(organizationID, memberID), typingState.Open(organizationID, memberID, channelID)

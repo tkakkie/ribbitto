@@ -74,6 +74,7 @@ func NewCache[K comparable, V any](parent context.Context, capacity int, maxLoad
 func NewCachedEvents(parent context.Context, events EventReader, hub *Hub, capacity int, ttl time.Duration) *CachedEvents // NewCachedEvents wraps events.
 func NewHub() *Hub // NewHub returns an empty hub with DefaultMaxStreams as its process cap.
 func NewHubWithMaxStreams(maxStreams int) *Hub // NewHubWithMaxStreams returns an empty hub with the given process cap.
+func NewRecountLimit(capacity int) *RecountLimit // NewRecountLimit creates a process-wide limit; capacity must be positive.
 func NewRecountScheduler(workers int, registrations int) *RecountScheduler // NewRecountScheduler requires positive worker and registration limits.
 type Outgoing struct // Outgoing is one event ready to send.
   field Data []byte
@@ -101,6 +102,7 @@ type RecountDuration struct // RecountDuration aggregates disjoint buckets with 
   field Buckets [6]uint64 // Buckets counts <=1ms, <=10ms, <=100ms, <=1s, <=10s, then >10s.
   field Count uint64 // Count is the number of samples.
   field Total time.Duration // Total sums sample durations in nanoseconds.
+type RecountLimit struct // RecountLimit bounds computations across all sidebar triggers and delivery modes.
 type RecountObserver struct // RecountObserver optionally aggregates scheduled writer delivery timing.
   func (*RecountObserver).Stats() RecountDeliveryStats // Stats returns a consistent, allocation-free copy of the aggregates.
 type RecountRegistration struct // RecountRegistration owns one running and one replaceable pending computation.
@@ -164,6 +166,7 @@ type Stream struct // Stream runs the per-connection delivery loop.
   field Heartbeat time.Duration // Heartbeat is how long the loop waits on the hub before it sends a heartbeat and waits again; zero sends none.
   field Hub *Hub
   field Owners map[Interest]EphemeralOwner // Owners supplies current frames; nil entries preserve durable-only delivery.
+  field RecountLimit *RecountLimit // RecountLimit shares computation capacity; nil preserves unbounded test compositions.
   field RecountObserver *RecountObserver // RecountObserver optionally aggregates scheduled delivery; nil disables observations.
   field Recounts *RecountScheduler // Recounts optionally schedules sidebar computation; nil keeps synchronous delivery.
   field Renderer Renderer

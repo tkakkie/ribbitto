@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,13 +16,10 @@ import (
 const guardBinary = "/opt/argonreview/argonreview"
 
 // fixture returns a fake account home whose .gemini holds shared settings,
-// and a snapshot function that fails the test if anything in it changed.
-func fixture(t *testing.T) (account string, unchanged func()) {
+// and a function that fails the test if any of them changed.
+func fixture(t *testing.T) (string, func()) {
 	t.Helper()
-	account, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+	account := resolved(t, t.TempDir())
 	shared := map[string]string{
 		".gemini/antigravity-cli/settings.json": `{"permissions":{"allow":["command(git diff)"]}}`,
 		".gemini/config/hooks.json":             `{"tencle":{}}`,
@@ -37,171 +37,41 @@ func fixture(t *testing.T) (account string, unchanged func()) {
 	}
 }
 
+// snapshot records every file under dir with its content, so a refusal can
+// be shown to leave the dedicated HOME untouched too.
+func snapshot(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	files := map[string]string{}
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			target, _ := os.Readlink(path)
+			files[path] = "-> " + target
+		} else if !d.IsDir() {
+			data, _ := os.ReadFile(path)
+			files[path] = string(data)
+		}
+		return nil
+	})
+	return files
+}
+
+func resolved(t *testing.T, path string) string {
+	t.Helper()
+	path, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func write(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	mkdir(t, filepath.Dir(path))
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestPrepare(t *testing.T) {
-	account, unchanged := fixture(t)
-	// A dedicated directory under the account home is allowed.
-	home := filepath.Join(account, "dev", "agy-home")
-	kept := map[string]string{
-		".gemini/antigravity-cli/antigravity-oauth-token":  "token",
-		".gemini/antigravity-cli/conversations/1.db":       "conversation",
-		".gemini/config/projects/default-cli-project.json": "{}",
-	}
-	for path, content := range kept {
-		write(t, filepath.Join(home, path), content)
-	}
-	// Antigravity's own rewrite, adding a trusted workspace, is replaced.
-	write(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), `{"trustedWorkspaces":["/"]}`)
-	got, err := prepare(home, account, guardBinary)
-	if err != nil || got != home {
-		t.Fatalf("prepare = %q, %v", got, err)
-	}
-	for _, f := range owned(guardBinary) {
-		data, err := os.ReadFile(filepath.Join(home, ".gemini", f.dir, f.name))
-		if err != nil || !bytes.Equal(data, f.content) {
-			t.Fatalf("%s/%s = %q, %v", f.dir, f.name, data, err)
-		}
-	}
-	for path, want := range kept {
-		if data, err := os.ReadFile(filepath.Join(home, path)); err != nil || string(data) != want {
-			t.Fatalf("kept %s changed: %q, %v", path, data, err)
-		}
-	}
-	if !strings.Contains(string(owned(guardBinary)[1].content), `"'`+guardBinary+`' guard"`) {
-		t.Fatal("the hook does not run this binary's guard")
-	}
-	unchanged()
-}
-
-func TestPrepareRefuses(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		setup func(t *testing.T, account, home string) string // returns RIBBITTO_ARGON_HOME
-		guard string
-		want  string
-	}{
-		{"account home", func(_ *testing.T, account, _ string) string { return account }, "", "account home"},
-		{"ancestor of the account home", func(_ *testing.T, account, _ string) string { return filepath.Dir(account) }, "", "account home"},
-		{"the shared .gemini", func(_ *testing.T, account, _ string) string { return filepath.Join(account, ".gemini") }, "", "overlaps"},
-		{"inside the shared .gemini", func(_ *testing.T, account, _ string) string { return filepath.Join(account, ".gemini/config") }, "", "overlaps"},
-		{"a symlink to the shared .gemini", func(t *testing.T, account, home string) string {
-			link := filepath.Join(home, "alias")
-			symlink(t, filepath.Join(account, ".gemini"), link)
-			return link
-		}, "", "overlaps"},
-		{"relative", func(_ *testing.T, _, _ string) string { return "agy-home" }, "", "absolute path"},
-		{"unset", func(_ *testing.T, _, _ string) string { return "" }, "", "absolute path"},
-		{"symlinked .gemini", func(t *testing.T, account, home string) string {
-			symlink(t, filepath.Join(account, ".gemini"), filepath.Join(home, ".gemini"))
-			return home
-		}, "", "not a plain directory"},
-		{"symlinked config", func(t *testing.T, account, home string) string {
-			mkdir(t, filepath.Join(home, ".gemini"))
-			symlink(t, filepath.Join(account, ".gemini/config"), filepath.Join(home, ".gemini/config"))
-			return home
-		}, "", "not a plain directory"},
-		{"symlinked settings", func(t *testing.T, account, home string) string {
-			mkdir(t, filepath.Join(home, ".gemini/antigravity-cli"))
-			symlink(t, filepath.Join(account, ".gemini/antigravity-cli/settings.json"), filepath.Join(home, ".gemini/antigravity-cli/settings.json"))
-			return home
-		}, "", "not a regular file"},
-		{"symlinked hooks", func(t *testing.T, account, home string) string {
-			mkdir(t, filepath.Join(home, ".gemini/config"))
-			symlink(t, filepath.Join(account, ".gemini/config/hooks.json"), filepath.Join(home, ".gemini/config/hooks.json"))
-			return home
-		}, "", "not a regular file"},
-		{"unquotable guard path", func(_ *testing.T, _, home string) string { return home }, "/opt/it's/argonreview", "cannot be quoted"},
-		{".agents", func(t *testing.T, _, home string) string { mkdir(t, filepath.Join(home, ".agents")); return home }, "", "customisation"},
-		{"hooks in antigravity-cli", func(t *testing.T, _, home string) string {
-			write(t, filepath.Join(home, ".gemini/antigravity-cli/hooks.json"), "{}")
-			return home
-		}, "", "customisation"},
-		{"MCP in antigravity-cli", func(t *testing.T, _, home string) string {
-			write(t, filepath.Join(home, ".gemini/antigravity-cli/mcp_config.json"), "{}")
-			return home
-		}, "", "customisation"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			account, unchanged := fixture(t)
-			home := filepath.Join(account, "dev", "agy-home")
-			mkdir(t, home)
-			guard := guardBinary
-			if tc.guard != "" {
-				guard = tc.guard
-			}
-			if _, err := prepare(tc.setup(t, account, home), account, guard); err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("err = %v, want %q", err, tc.want)
-			}
-			unchanged()
-		})
-	}
-	for _, dir := range []string{"config", "antigravity-cli"} {
-		for _, name := range refusedCustomisation {
-			t.Run(dir+"/"+name, func(t *testing.T) {
-				account, unchanged := fixture(t)
-				home := filepath.Join(account, "dev", "agy-home")
-				write(t, filepath.Join(home, ".gemini", dir, name), "{}")
-				if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "customisation") {
-					t.Fatalf("err = %v", err)
-				}
-				unchanged()
-			})
-		}
-	}
-}
-
-// checkOwned refuses any content but the launcher's own.
-func TestCheckOwned(t *testing.T) {
-	settings := strings.Replace(settingsJSON, `"permissions": {`, `"permissions": {"allow": [], `, 1)
-	for _, tc := range []struct{ name, dir, file, content string }{
-		{"an allow rule", "antigravity-cli", "settings.json", strings.Replace(settingsJSON, `"deny": [`, `"allow": ["command(git)"], "deny": [`, 1)},
-		{"a read_file grant", "antigravity-cli", "settings.json", strings.Replace(settingsJSON, `"deny": [`, `"allow": ["read_file(*)"], "deny": [`, 1)},
-		{"an empty allow list", "antigravity-cli", "settings.json", settings},
-		{"a trusted workspace", "antigravity-cli", "settings.json", strings.Replace(settingsJSON, "{\n", "{\n  \"trustedWorkspaces\": [\"/\"],\n", 1)},
-		{"a wrong deny list", "antigravity-cli", "settings.json", strings.Replace(settingsJSON, `      "mcp(*)"`, `      "unsandboxed(*)"`, 1)},
-		{"another hook", "config", "hooks.json", `{"other":{"PreToolUse":[]}}`},
-		{"an MCP server", "config", "mcp_config.json", `{"mcpServers":{"x":{"command":"sh"}}}`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			fd, err := unix.Open(dir, unix.O_RDONLY|unix.O_DIRECTORY, 0)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() { _ = unix.Close(fd) }()
-			write(t, filepath.Join(dir, tc.file), tc.content)
-			for _, f := range owned(guardBinary) {
-				if f.dir == tc.dir && f.name == tc.file {
-					if err := checkOwned(fd, tc.file, f.content); err == nil {
-						t.Fatal("accepted")
-					}
-					return
-				}
-			}
-			t.Fatal("not an owned file")
-		})
-	}
-}
-
-// prepare runs only after the trusted-build check: an unstamped test binary
-// is refused before anything in HOME is created.
-func TestPrepareChecksTheBuildFirst(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("RIBBITTO_ARGON_HOME", home)
-	if code := run([]string{"prepare"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 1 {
-		t.Fatalf("exit %d", code)
-	}
-	if entries, err := os.ReadDir(home); err != nil || len(entries) != 0 {
-		t.Fatalf("HOME holds %v, %v", entries, err)
 	}
 }
 
@@ -218,4 +88,292 @@ func symlink(t *testing.T, target, link string) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func ownedFiles(t *testing.T, guard string) []ownedFile {
+	t.Helper()
+	files, err := owned(guard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
+func TestPrepare(t *testing.T) {
+	account, unchanged := fixture(t)
+	// A dedicated directory under the account's home is allowed.
+	home := filepath.Join(account, "dev", "agy-home")
+	kept := map[string]string{
+		".gemini/antigravity-cli/antigravity-oauth-token":  "token",
+		".gemini/antigravity-cli/conversations/1.db":       "conversation",
+		".gemini/config/projects/default-cli-project.json": "{}",
+	}
+	for path, content := range kept {
+		write(t, filepath.Join(home, path), content)
+	}
+	// Antigravity's own rewrite, adding a trusted workspace, is replaced.
+	write(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), `{"trustedWorkspaces":["/"]}`)
+	got, err := prepare(home, account, guardBinary)
+	if err != nil || got != home {
+		t.Fatalf("prepare = %q, %v", got, err)
+	}
+	for _, f := range ownedFiles(t, guardBinary) {
+		data, err := os.ReadFile(filepath.Join(home, ".gemini", f.dir, f.name))
+		if err != nil || !bytes.Equal(data, f.content) {
+			t.Fatalf("%s/%s = %q, %v", f.dir, f.name, data, err)
+		}
+	}
+	for path, want := range kept {
+		if data, err := os.ReadFile(filepath.Join(home, path)); err != nil || string(data) != want {
+			t.Fatalf("kept %s changed: %q, %v", path, data, err)
+		}
+	}
+	// A fresh HOME gets its directories created.
+	fresh := filepath.Join(account, "dev", "fresh")
+	mkdir(t, fresh)
+	if _, err := prepare(fresh, account, guardBinary); err != nil {
+		t.Fatal(err)
+	}
+	unchanged()
+}
+
+// The hook command decodes to exactly the single-quoted path and "guard",
+// whatever JSON-special characters the path holds.
+func TestHookCommand(t *testing.T) {
+	for _, path := range []string{guardBinary, `/opt/a "b"/argonreview`, `/opt/a\b/argonreview`} {
+		var hooks map[string]map[string][]struct {
+			Matcher string `json:"matcher"`
+			Hooks   []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		}
+		files := ownedFiles(t, path)
+		if err := json.Unmarshal(files[1].content, &hooks); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		entries := hooks["ribbitto-guard"]["PreToolUse"]
+		if len(hooks) != 1 || len(entries) != 1 || entries[0].Matcher != "*" || len(entries[0].Hooks) != 1 || entries[0].Hooks[0].Command != "'"+path+"' guard" {
+			t.Fatalf("%s: hooks = %+v", path, hooks)
+		}
+	}
+	for _, path := range []string{"/opt/it's/argonreview", "/opt/a\nb", "argonreview"} {
+		if _, err := owned(path); err == nil {
+			t.Fatalf("%q accepted", path)
+		}
+	}
+}
+
+func TestPrepareRefuses(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(t *testing.T, account, home string) string // returns RIBBITTO_ARGON_HOME
+		want  string
+	}{
+		{"account home", func(_ *testing.T, account, _ string) string { return account }, "account's home"},
+		{"ancestor of the account home", func(_ *testing.T, account, _ string) string { return filepath.Dir(account) }, "account's home"},
+		{"the shared .gemini", func(_ *testing.T, account, _ string) string { return filepath.Join(account, ".gemini") }, "overlaps"},
+		{"inside the shared .gemini", func(_ *testing.T, account, _ string) string { return filepath.Join(account, ".gemini/config") }, "overlaps"},
+		{"a HOME that is a symlink", func(t *testing.T, _, home string) string {
+			link := filepath.Join(filepath.Dir(home), "alias")
+			symlink(t, home, link)
+			return link
+		}, "without symlinks"},
+		{"a symlinked ancestor", func(t *testing.T, _, home string) string {
+			link := filepath.Join(filepath.Dir(home), "parent-alias")
+			symlink(t, filepath.Dir(home), link)
+			return filepath.Join(link, filepath.Base(home))
+		}, "without symlinks"},
+		{"relative", func(_ *testing.T, _, _ string) string { return "agy-home" }, "absolute path"},
+		{"unclean", func(_ *testing.T, _, home string) string { return home + "/../agy-home" }, "absolute path"},
+		{"unset", func(_ *testing.T, _, _ string) string { return "" }, "absolute path"},
+		{"symlinked .gemini", func(t *testing.T, account, home string) string {
+			symlink(t, filepath.Join(account, ".gemini"), filepath.Join(home, ".gemini"))
+			return home
+		}, "not a plain directory"},
+		{"symlinked config", func(t *testing.T, account, home string) string {
+			symlink(t, filepath.Join(account, ".gemini/config"), filepath.Join(home, ".gemini/config"))
+			return home
+		}, "not a plain directory"},
+		{"symlinked settings", func(t *testing.T, account, home string) string {
+			symlink(t, filepath.Join(account, ".gemini/antigravity-cli/settings.json"), filepath.Join(home, ".gemini/antigravity-cli/settings.json"))
+			return home
+		}, "not a regular file"},
+		// The symlink at hooks.json is found before settings.json, which
+		// exists and differs, is rewritten.
+		{"symlinked hooks with existing settings", func(t *testing.T, account, home string) string {
+			write(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), "mine")
+			symlink(t, filepath.Join(account, ".gemini/config/hooks.json"), filepath.Join(home, ".gemini/config/hooks.json"))
+			return home
+		}, "not a regular file"},
+		{".agents", func(t *testing.T, _, home string) string { mkdir(t, filepath.Join(home, ".agents")); return home }, "customisation"},
+		{"hooks in antigravity-cli", func(t *testing.T, _, home string) string {
+			write(t, filepath.Join(home, ".gemini/antigravity-cli/hooks.json"), "{}")
+			return home
+		}, "customisation"},
+		{"MCP in antigravity-cli", func(t *testing.T, _, home string) string {
+			write(t, filepath.Join(home, ".gemini/antigravity-cli/mcp_config.json"), "{}")
+			return home
+		}, "customisation"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			account, unchanged := fixture(t)
+			home := filepath.Join(account, "dev", "agy-home")
+			mkdir(t, home)
+			target := tc.setup(t, account, home)
+			before := snapshot(t, home)
+			if _, err := prepare(target, account, guardBinary); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want %q", err, tc.want)
+			}
+			if after := snapshot(t, home); !equal(before, after) {
+				t.Fatalf("the dedicated HOME changed:\n%v\n%v", before, after)
+			}
+			unchanged()
+		})
+	}
+	for _, dir := range ownedDirs {
+		for _, name := range refusedCustomisation {
+			t.Run(dir+"/"+name, func(t *testing.T) {
+				account, unchanged := fixture(t)
+				home := filepath.Join(account, "dev", "agy-home")
+				write(t, filepath.Join(home, ".gemini", dir, name), "{}")
+				before := snapshot(t, home)
+				if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "customisation") {
+					t.Fatalf("err = %v", err)
+				}
+				if !equal(before, snapshot(t, home)) {
+					t.Fatal("the dedicated HOME changed")
+				}
+				unchanged()
+			})
+		}
+	}
+}
+
+// The shared .gemini may live elsewhere through a symlink; a HOME that
+// contains its target is refused (Codex on #1075).
+func TestPrepareRefusesASymlinkedSharedGemini(t *testing.T) {
+	account := resolved(t, t.TempDir())
+	elsewhere := resolved(t, t.TempDir())
+	write(t, filepath.Join(elsewhere, ".gemini/config/hooks.json"), `{"tencle":{}}`)
+	symlink(t, filepath.Join(elsewhere, ".gemini"), filepath.Join(account, ".gemini"))
+	if _, err := prepare(elsewhere, account, guardBinary); err == nil || !strings.Contains(err.Error(), "overlaps") {
+		t.Fatalf("err = %v", err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(elsewhere, ".gemini/config/hooks.json")); string(data) != `{"tencle":{}}` {
+		t.Fatalf("shared hooks changed: %q", data)
+	}
+}
+
+// On a case-insensitive file system a differently spelled path names the
+// same directory; identities, not spellings, decide (Codex on #1075).
+func TestPrepareRefusesACaseAlias(t *testing.T) {
+	account, unchanged := fixture(t)
+	alias := filepath.Join(filepath.Dir(account), strings.ToUpper(filepath.Base(account)))
+	if alias == account {
+		alias = filepath.Join(filepath.Dir(account), strings.ToLower(filepath.Base(account)))
+	}
+	a, errA := os.Stat(account)
+	b, errB := os.Stat(alias)
+	if errA != nil || errB != nil || !os.SameFile(a, b) {
+		t.Skip("the file system is case-sensitive")
+	}
+	for _, home := range []string{alias, filepath.Join(alias, ".gemini"), filepath.Join(account, ".GEMINI")} {
+		if _, err := prepare(home, account, guardBinary); err == nil {
+			t.Fatalf("%s accepted", home)
+		}
+	}
+	unchanged()
+}
+
+// A directory swapped for a symlink after the writes is found by walking the
+// path again (Codex on #1075).
+func TestPrepareRefusesASwapAfterWriting(t *testing.T) {
+	for _, tc := range []struct {
+		dir     string
+		symlink bool
+	}{{".gemini", true}, {".gemini/config", true}, {".gemini", false}, {".gemini/antigravity-cli", false}} {
+		dir := tc.dir
+		t.Run(fmt.Sprintf("%s symlink=%v", dir, tc.symlink), func(t *testing.T) {
+			account, unchanged := fixture(t)
+			home := filepath.Join(account, "dev", "agy-home")
+			mkdir(t, home)
+			afterWrite = func(home string) {
+				path := filepath.Join(home, dir)
+				if err := os.Rename(path, path+".old"); err != nil {
+					t.Fatal(err)
+				}
+				// A symlink is refused by the walk; another real directory
+				// only by its identity.
+				if tc.symlink {
+					symlink(t, filepath.Join(account, dir), path)
+				} else {
+					mkdir(t, filepath.Join(path, "antigravity-cli"))
+					mkdir(t, filepath.Join(path, "config"))
+				}
+			}
+			t.Cleanup(func() { afterWrite = func(string) {} })
+			if _, err := prepare(home, account, guardBinary); err == nil {
+				t.Fatal("a swapped directory was accepted")
+			}
+			unchanged()
+		})
+	}
+}
+
+// checkOwned refuses any content but the launcher's own.
+func TestCheckOwned(t *testing.T) {
+	for _, tc := range []struct{ name, dir, file, content string }{
+		{"an allow rule", "antigravity-cli", "settings.json", strings.Replace(settingsJSON, `"deny": [`, `"allow": ["command(git)"], "deny": [`, 1)},
+		{"a read_file grant", "antigravity-cli", "settings.json", strings.Replace(settingsJSON, `"deny": [`, `"allow": ["read_file(*)"], "deny": [`, 1)},
+		{"an empty allow list", "antigravity-cli", "settings.json", strings.Replace(settingsJSON, `"deny": [`, `"allow": [], "deny": [`, 1)},
+		{"a trusted workspace", "antigravity-cli", "settings.json", strings.Replace(settingsJSON, "{\n", "{\n  \"trustedWorkspaces\": [\"/\"],\n", 1)},
+		{"a wrong deny list", "antigravity-cli", "settings.json", strings.Replace(settingsJSON, `      "mcp(*)"`, `      "unsandboxed(*)"`, 1)},
+		{"another hook", "config", "hooks.json", `{"other":{"PreToolUse":[]}}`},
+		{"an MCP server", "config", "mcp_config.json", `{"mcpServers":{"x":{"command":"sh"}}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			fd, err := unix.Open(dir, unix.O_RDONLY|unix.O_DIRECTORY, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeFD(fd)
+			write(t, filepath.Join(dir, tc.file), tc.content)
+			for _, f := range ownedFiles(t, guardBinary) {
+				if f.dir == tc.dir && f.name == tc.file {
+					if err := checkOwned(fd, tc.file, f.content); err == nil {
+						t.Fatal("accepted")
+					}
+					return
+				}
+			}
+			t.Fatal("not an owned file")
+		})
+	}
+}
+
+// prepare runs only after the trusted-build check: an unstamped test binary
+// is refused before anything in HOME is created.
+func TestPrepareChecksTheBuildFirst(t *testing.T) {
+	// Resolved, so that prepare would succeed and write if it ran first.
+	home := resolved(t, t.TempDir())
+	t.Setenv("RIBBITTO_ARGON_HOME", home)
+	if code := run([]string{"prepare"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	if entries, err := os.ReadDir(home); err != nil || len(entries) != 0 {
+		t.Fatalf("HOME holds %v, %v", entries, err)
+	}
+}
+
+func equal(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
 }

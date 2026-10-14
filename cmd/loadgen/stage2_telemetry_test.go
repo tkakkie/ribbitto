@@ -16,6 +16,79 @@ func stage2MetricFixture(second int) json.RawMessage {
 	return json.RawMessage(fmt.Sprintf(`{"database":{"queries":%d},"pool":{"acquire_count":%d,"acquire_duration_ns":%d,"empty_acquire_count":%d,"empty_acquire_wait_ns":%d,"canceled_acquire_count":%d,"acquired_conns":%d,"idle_conns":1,"total_conns":36,"max_conns":36},"runtime":{"goroutines":12,"heap_inuse_bytes":4096},"streams":{"open":1000},"scheduler":{"enabled":true,"pending":7,"processing_duration_bucket_counts":[1,2,3,4,5,6]},"delivery":{"enabled":false,"extra":42}}`, second, 1000+second*100, second*2000000, 10+second, 1000000+second*5000000, 3+second, second%37))
 }
 
+func TestStage2TelemetrySectionTypes(t *testing.T) {
+	for _, section := range []string{"database", "pool", "runtime", "streams", "scheduler", "delivery"} {
+		for _, value := range []string{"null", "42", `"text"`, "[]"} {
+			t.Run(section+"/"+value, func(t *testing.T) {
+				var sections map[string]json.RawMessage
+				if err := json.Unmarshal(stage2MetricFixture(0), &sections); err != nil {
+					t.Fatal(err)
+				}
+				sections[section] = json.RawMessage(value)
+				raw, err := json.Marshal(sections)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Run("sampler", func(t *testing.T) {
+					start := time.Unix(123, 0)
+					clock, calls := start, 0
+					samples, err := stage2SampleMetrics(context.Background(), start, func() time.Time { return clock }, func(_ context.Context, delay time.Duration) bool {
+						clock = clock.Add(delay)
+						return true
+					}, func(context.Context) (json.RawMessage, error) {
+						calls++
+						if calls == 1 {
+							return raw, nil
+						}
+						return stage2MetricFixture(0), nil
+					})
+					if err == nil || !strings.Contains(err.Error(), "metrics slot 0:") || len(samples) != 600 || calls != 601 {
+						t.Fatalf("sampler accepted invalid %s section or lost problem: samples=%d calls=%d err=%v", section, len(samples), calls, err)
+					}
+					for i, sample := range samples {
+						if sample.OffsetNS != int64(i+1)*int64(time.Second) || !reflect.DeepEqual(sample.Metrics, stage2MetricFixture(0)) {
+							t.Fatalf("invalid %s section retained or later sample lost at %d: %+v", section, i, sample)
+						}
+					}
+				})
+				t.Run("aggregation", func(t *testing.T) {
+					if _, err := stage2AggregateTelemetry([]stage2Sample{{0, "traffic", raw}}); err == nil {
+						t.Fatalf("aggregation accepted invalid %s section", section)
+					}
+				})
+			})
+		}
+	}
+}
+
+func TestStage2TelemetrySectionContents(t *testing.T) {
+	for _, extra := range []bool{false, true} {
+		t.Run(fmt.Sprintf("extra-fields=%t", extra), func(t *testing.T) {
+			raw := stage2MetricFixture(0)
+			if extra {
+				raw = json.RawMessage(strings.ReplaceAll(string(raw), `:{`, `:{ "future": [null, 1, "opaque", {}], `))
+			}
+			start := time.Unix(123, 0)
+			clock := start
+			samples, err := stage2SampleMetrics(context.Background(), start, func() time.Time { return clock }, func(_ context.Context, delay time.Duration) bool {
+				clock = clock.Add(delay)
+				return true
+			}, func(context.Context) (json.RawMessage, error) { return raw, nil })
+			if err != nil || len(samples) != 601 {
+				t.Fatalf("object sections rejected: samples=%d err=%v", len(samples), err)
+			}
+			if _, err := stage2AggregateTelemetry(samples); err != nil {
+				t.Fatalf("object sections rejected by aggregation: %v", err)
+			}
+			for i, sample := range samples {
+				if !reflect.DeepEqual(sample.Metrics, raw) {
+					t.Fatalf("section contents changed at %d: got %s want %s", i, sample.Metrics, raw)
+				}
+			}
+		})
+	}
+}
+
 func TestStage2Telemetry(t *testing.T) {
 	start := time.Unix(123, 0)
 	clock := start

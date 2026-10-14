@@ -11,6 +11,20 @@ import (
 	"time"
 )
 
+func stage2MetricsSections(raw json.RawMessage) (map[string]json.RawMessage, error) {
+	fields := []string{"database", "pool", "runtime", "streams", "scheduler", "delivery"}
+	sections, err := requiredObject(raw, fields...)
+	if err != nil {
+		return nil, err
+	}
+	for _, field := range fields {
+		if _, err := requiredObject(sections[field]); err != nil {
+			return nil, fmt.Errorf("metrics section %s: %w", field, err)
+		}
+	}
+	return sections, nil
+}
+
 func stage2ReadMetrics(ctx context.Context, t transport) (json.RawMessage, error) {
 	if t.origin.Scheme != "http" {
 		return nil, fmt.Errorf("stage-2 metrics require loopback HTTP")
@@ -56,7 +70,7 @@ func stage2SampleMetrics(ctx context.Context, start time.Time, now func() time.T
 		}
 		raw, err := fetch(ctx)
 		if err == nil {
-			_, err = requiredObject(raw, "database", "pool", "runtime", "streams", "scheduler", "delivery")
+			_, err = stage2MetricsSections(raw)
 		}
 		if err != nil {
 			problems = append(problems, fmt.Errorf("metrics slot %d: %w", second, err))
@@ -83,7 +97,7 @@ type stage2TelemetryRange struct {
 }
 
 func stage2PoolEvidence(raw json.RawMessage) (map[string]int64, error) {
-	sections, err := requiredObject(raw, "database", "pool", "runtime", "streams", "scheduler", "delivery")
+	sections, err := stage2MetricsSections(raw)
 	if err != nil {
 		return nil, err
 	}

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -217,23 +218,77 @@ func TestChannelListBrowser(t *testing.T) {
 		}
 	}
 
+	// The bottom navigation (#970) ends the list's pane above the safe area
+	// (a 34 px home indicator); Home is this page, and Account opens the
+	// shared account menu as a bottom sheet.
+	_, err = page.Call(ctx, string(page.SessionID), "Emulation.setSafeAreaInsetsOverride", map[string]any{"insets": map[string]int{"bottom": 34}})
+	acceptanceOK(t, err)
+	const homeLink, bottomAccount = `a[aria-current=page][href="/organizations/list/channels"]`, "#organization-stream > nav:last-of-type [popovertarget=account-menu]"
+	page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
+	if problem := page.MustEval(`(homeLink, bottomAccount) => {
+		const home = document.querySelector(homeLink), account = document.querySelector(bottomAccount), bar = home?.closest('nav');
+		if (!bar?.checkVisibility() || bar !== account?.closest('nav')) return 'no visible bar with Home and Account';
+		if (account.hasAttribute('aria-current')) return 'Account has aria-current';
+		const box = e => e.getBoundingClientRect(), main = document.querySelector('main');
+		if ([home, account].some(e => box(e).width < 44 || box(e).height < 44)) return 'an item under 44 × 44';
+		if (getComputedStyle(bar).paddingBottom !== '34px' || box(bar).bottom !== innerHeight) return 'not above the safe area: ' + getComputedStyle(bar).paddingBottom;
+		main.scrollTop = main.scrollHeight;
+		const last = box(document.querySelector('#sidebar-channels > li:last-child'));
+		return last.bottom > box(bar).top || last.bottom > box(main).bottom ? 'the bar covers the last row' : '';
+	}`, homeLink, bottomAccount).Str(); problem != "" {
+		t.Fatalf("phone bottom navigation: %s", problem)
+	}
+	sheet := func(open bool) {
+		t.Helper()
+		page.MustWait(`open => document.getElementById('account-menu').matches(':popover-open') === open`, open)
+	}
+	focused := func(selector string) bool {
+		return page.MustEval(`s => document.activeElement === document.querySelector(s)`, selector).Bool()
+	}
+	page.MustElement(bottomAccount).MustFocus()
+	page.Keyboard.MustType(input.Enter)
+	sheet(true)
+	if problem := page.MustEval(`() => {
+		const menu = document.getElementById('account-menu'), box = menu.getBoundingClientRect();
+		if (box.left !== 0 || box.right !== innerWidth || box.bottom !== innerHeight) return 'not a full-width bottom sheet: ' + JSON.stringify(box);
+		if (getComputedStyle(menu).paddingBottom !== '50px') return 'no safe-area padding: ' + getComputedStyle(menu).paddingBottom;
+		return menu.querySelector('form[action="/signout"] button').getBoundingClientRect().height < 44 ? 'sign-out under 44 px' : '';
+	}`).Str(); problem != "" {
+		t.Fatalf("account sheet: %s", problem)
+	}
+	page.Keyboard.MustType(input.Tab)
+	if !focused("#account-menu button") {
+		t.Fatal("Tab from Account does not enter the sheet")
+	}
+	page.Keyboard.MustType(input.Escape)
+	sheet(false)
+	if !focused(bottomAccount) {
+		t.Fatal("Escape did not return focus to Account")
+	}
+	page.Keyboard.MustType(input.Space)
+	sheet(true)
+	// An outside tap on the list's heading, which acts on nothing.
+	page.MustElement("main h1").MustClick()
+	sheet(false)
+
 	// A phone conversation hides the frame and leads back to its row.
 	type frameState struct {
-		Back, Rail, Aside bool
-		Width, Height     float64
-		Label             string
+		Back, Rail, Aside, Bar bool
+		Width, Height          float64
+		Label                  string
 	}
 	frame := func() frameState {
 		var s frameState
-		acceptanceOK(t, page.MustEval(`() => {
+		acceptanceOK(t, page.MustEval(`homeLink => {
 			const back = document.querySelector('header a[aria-label]'), box = back.getBoundingClientRect();
 			return { back: back.checkVisibility(), width: box.width, height: box.height, label: back.getAttribute('aria-label'),
-				rail: document.querySelector('nav').checkVisibility(), aside: document.querySelector('aside').checkVisibility() };
-		}`).Unmarshal(&s))
+				rail: document.querySelector('nav').checkVisibility(), aside: document.querySelector('aside').checkVisibility(),
+				bar: !!document.querySelector(homeLink)?.checkVisibility() };
+		}`, homeLink).Unmarshal(&s))
 		return s
 	}
 	page.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID)).MustWaitLoad()
-	if phone := frame(); !phone.Back || phone.Width < 44 || phone.Height < 44 || phone.Label != "Back to lilypads" || phone.Rail || phone.Aside {
+	if phone := frame(); !phone.Back || phone.Width < 44 || phone.Height < 44 || phone.Label != "Back to lilypads" || phone.Rail || phone.Aside || phone.Bar {
 		t.Fatalf("phone conversation frame: %+v", phone)
 	}
 	page.MustElement("header a[aria-label]").MustClick()
@@ -255,8 +310,20 @@ func TestChannelListBrowser(t *testing.T) {
 		t.Fatalf("desktop list page: %+v", desktop)
 	}
 	page.MustNavigate(server.URL + view.ChannelURL("list", expanded.ID)).MustWaitLoad()
-	if desktop := frame(); desktop.Back || !desktop.Rail || !desktop.Aside {
+	if desktop := frame(); desktop.Back || !desktop.Rail || !desktop.Aside || desktop.Bar {
 		t.Fatalf("desktop conversation frame: %+v", desktop)
+	}
+	// The desktop list page hides the bottom navigation; the app bar's button
+	// opens the same menu where it always opened.
+	page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
+	page.MustElement("#organization-stream > nav:first-of-type [popovertarget=account-menu]").MustClick()
+	sheet(true)
+	if problem := page.MustEval(`homeLink => {
+		const box = document.getElementById('account-menu').getBoundingClientRect();
+		if (document.querySelector(homeLink)?.checkVisibility()) return 'the bottom navigation shows';
+		return box.left !== 96 || box.width !== 256 || box.bottom !== innerHeight - 12 ? 'menu moved: ' + JSON.stringify(box) : '';
+	}`, homeLink).Str(); problem != "" {
+		t.Fatalf("desktop account menu: %s", problem)
 	}
 
 	// Without JavaScript, at phone width: the back link's fragment alone brings
@@ -319,6 +386,19 @@ func TestChannelListBrowser(t *testing.T) {
 	if want := []string{"POST /organizations/list/channels 422", "POST /organizations/list/channels 303", "GET " + created + " 200"}; !slices.Equal(tail[1:], want) {
 		t.Fatalf("creation requests %v, want %v", tail, want)
 	}
+
+	// Last, since it ends the session both pages share: signing out from the
+	// phone sheet lands on sign-in, and the old session no longer opens the list.
+	listURL := view.ChannelListURL("list", expanded.ID)
+	reader.visit(t, "GET", listURL, nil, 200)
+	// Front the page again: a background tab paints no frames to click on.
+	page.MustActivate().MustSetViewport(390, 844, 1, false)
+	page.MustNavigate(server.URL + listURL).MustWaitLoad()
+	page.MustElement(bottomAccount).MustClick()
+	sheet(true)
+	page.MustElement("#account-menu form[action='/signout'] button").MustClick()
+	page.MustWait(`() => location.pathname === '/signin' && document.readyState === 'complete'`)
+	reader.visit(t, "GET", listURL, nil, 404)
 }
 
 // statusRecorder keeps a page response's status; Unwrap keeps the

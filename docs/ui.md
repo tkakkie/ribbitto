@@ -93,8 +93,9 @@ readable text, and is off under `prefers-reduced-motion: reduce`; uses:
   right side instead; below 852 px the phone layout applies. From 320 px
   up nothing scrolls sideways and no control becomes unreachable.
 - **Phone** (M6): one column. The channel list is its own page with a
-  bottom navigation (Home, and an Account button that opens the account
-  menu). A conversation fills the screen; its header has a back link to
+  bottom navigation (#970) instead of the app bar: Home, and an Account
+  button that opens the account menu as a bottom sheet, each an icon above
+  a short label, both above the safe area. A conversation fills the screen; its header has a back link to
   the list, and the bottom navigation is hidden there. Members and the
   overview open as a bottom sheet over the conversation, and **Mark as
   read** is reached from the overview sheet. Welcome pages show a short

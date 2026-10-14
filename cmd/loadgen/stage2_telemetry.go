@@ -55,7 +55,7 @@ func stage2SampleMetrics(ctx context.Context, start time.Time, now func() time.T
 	for second := 0; second <= fixedStage2().WindowSeconds; second++ {
 		at := start.Add(time.Duration(second) * time.Second)
 		if !wait(ctx, max(0, at.Sub(now()))) || ctx.Err() != nil {
-			return samples, errors.Join(append(problems, fmt.Errorf("sampling stopped: %v", ctx.Err()))...)
+			return samples, errors.Join(append(problems, fmt.Errorf("sampling stopped: %w", ctx.Err()))...)
 		}
 		offset := now().Sub(start)
 		withinSlot := offset < time.Duration(second+1)*time.Second
@@ -64,7 +64,7 @@ func stage2SampleMetrics(ctx context.Context, start time.Time, now func() time.T
 		}
 		// A delayed opening scrape may occupy a later second, but cannot be
 		// reused as another sample when the scheduler catches up.
-		if !withinSlot || (len(samples) > 0 && offset.Nanoseconds() <= samples[len(samples)-1].OffsetNS) {
+		if offset < time.Duration(second)*time.Second || !withinSlot || (len(samples) > 0 && offset.Nanoseconds() <= samples[len(samples)-1].OffsetNS) {
 			problems = append(problems, fmt.Errorf("missed metrics slot %d", second))
 			continue
 		}
@@ -84,7 +84,7 @@ func stage2SampleMetrics(ctx context.Context, start time.Time, now func() time.T
 	}
 	// Retain a valid terminal snapshot, but do not hide cancellation during its fetch.
 	if err := ctx.Err(); err != nil {
-		problems = append(problems, fmt.Errorf("sampling stopped: %v", err))
+		problems = append(problems, fmt.Errorf("sampling stopped: %w", err))
 	}
 	return samples, errors.Join(problems...)
 }

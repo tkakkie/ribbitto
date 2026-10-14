@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -178,6 +179,67 @@ func TestStage2Telemetry(t *testing.T) {
 	}
 }
 
+func TestStage2TelemetryNeverEarly(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		slot   int
+		offset time.Duration
+	}{
+		{"normal", -1, 0},
+		{"early-wait", 1, 500 * time.Millisecond},
+		{"clock-before-start", 0, -time.Nanosecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			start := time.Unix(123, 0)
+			clock, slot := start, -1
+			var fetched []int
+			samples, err := stage2SampleMetrics(context.Background(), start, func() time.Time { return clock }, func(_ context.Context, delay time.Duration) bool {
+				slot++
+				clock = clock.Add(delay)
+				if slot == tc.slot {
+					clock = start.Add(tc.offset)
+				}
+				return true
+			}, func(context.Context) (json.RawMessage, error) {
+				fetched = append(fetched, slot)
+				return stage2MetricFixture(slot), nil
+			})
+			wantSamples := 601
+			if tc.slot >= 0 {
+				wantSamples--
+				wantProblem := fmt.Sprintf("missed metrics slot %d", tc.slot)
+				if err == nil || err.Error() != wantProblem {
+					t.Errorf("early dispatch not recorded as a slot problem: got %v want %q", err, wantProblem)
+				}
+			} else if err != nil {
+				t.Errorf("normal schedule failed: %v", err)
+			}
+			for _, fetchedSlot := range fetched {
+				if fetchedSlot == tc.slot {
+					t.Errorf("early slot %d fetched metrics", tc.slot)
+				}
+			}
+			for _, sample := range samples {
+				if tc.slot >= 0 && sample.OffsetNS == int64(tc.offset) {
+					t.Errorf("early slot %d retained sample at %s", tc.slot, tc.offset)
+				}
+			}
+			if len(samples) != wantSamples || len(fetched) != wantSamples {
+				t.Fatalf("schedule coverage: samples=%d fetches=%d want=%d", len(samples), len(fetched), wantSamples)
+			}
+			for i, sample := range samples {
+				second := i
+				if tc.slot >= 0 && second >= tc.slot {
+					second++
+				}
+				if sample.OffsetNS != int64(second)*int64(time.Second) || !reflect.DeepEqual(sample.Metrics, stage2MetricFixture(second)) {
+					t.Fatalf("scheduled sample changed at slot %d: %+v", second, sample)
+				}
+			}
+		})
+	}
+}
+
 func TestStage2TelemetryFailures(t *testing.T) {
 	for _, failure := range []string{"scrape", "slow", "shape", "cancel"} {
 		t.Run(failure, func(t *testing.T) {
@@ -208,6 +270,9 @@ func TestStage2TelemetryFailures(t *testing.T) {
 			if err == nil || len(samples) != want || calls != want+map[string]int{"scrape": 1, "shape": 1}[failure] || failure == "slow" && samples[1].OffsetNS != int64(2500*time.Millisecond) {
 				t.Fatalf("failure lost or backfilled: %s samples=%d calls=%d err=%v", failure, len(samples), calls, err)
 			}
+			if failure == "cancel" && !errors.Is(err, context.Canceled) {
+				t.Fatalf("sampling cancellation identity lost: err=%v", err)
+			}
 		})
 	}
 }
@@ -236,6 +301,9 @@ func TestStage2TelemetryTerminalFetchCancellation(t *testing.T) {
 			if cancelDuringFetch {
 				if err == nil || !strings.Contains(err.Error(), "sampling stopped: context canceled") {
 					t.Fatalf("terminal-fetch cancellation not reported: err=%v", err)
+				}
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("terminal-fetch cancellation identity lost: err=%v", err)
 				}
 			} else if err != nil {
 				t.Fatalf("uncancelled sampling failed: %v", err)

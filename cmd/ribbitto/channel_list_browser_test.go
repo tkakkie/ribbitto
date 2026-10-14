@@ -339,11 +339,13 @@ func TestChannelListBrowser(t *testing.T) {
 	}
 	inset := func(want float64) string {
 		return page.MustEval(`want => {
-			const style = getComputedStyle(document.body), box = document.body.firstElementChild.getBoundingClientRect();
+			// clientWidth leaves out a classic scrollbar (Linux CI), which a page
+			// taller than the landscape viewport shows and innerWidth includes.
+			const style = getComputedStyle(document.body), box = document.body.firstElementChild.getBoundingClientRect(), width = document.documentElement.clientWidth;
 			if (!document.querySelector('meta[name=viewport]').content.includes('viewport-fit=cover')) return 'no viewport-fit=cover';
 			if (style.paddingLeft !== want + 'px' || style.paddingRight !== want + 'px') return 'body padding ' + style.paddingLeft + ' ' + style.paddingRight;
-			if (box.left !== want || box.right !== innerWidth - want) return 'content from ' + box.left + ' to ' + box.right;
-			return document.documentElement.scrollWidth > innerWidth ? 'the page scrolls sideways' : '';
+			if (box.left !== want || box.right !== width - want) return 'content from ' + box.left + ' to ' + box.right + ', want ' + want + ' to ' + (width - want);
+			return document.documentElement.scrollWidth > width ? 'the page scrolls sideways' : '';
 		}`, want).Str()
 	}
 	insets(map[string]int{"left": 44, "right": 44, "bottom": 21})

@@ -28,7 +28,7 @@ Read the file for the area you change:
 | [`realtime.md`](realtime.md) | the durable event log: payloads, routing, replay boundary and retention |
 | [`ephemeral-state.md`](ephemeral-state.md) | presence and typing as current state: generations, owners, delivery and reset |
 | [`typing.md`](typing.md) | memory-only typing summaries, lifetime, composer ordering, signal ingress, delivery and the page's status region |
-| [`streaming.md`](streaming.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
+| [SSE](streaming.md), [scope](stream-scope.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
 | [`recount-scheduler.md`](recount-scheduler.md) | bounded scheduler core, eligibility, completion mailbox and cancellation; explicit opt-in only |
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
 | [`pins.md`](pins.md) | pin ownership and live/reconnect delivery (planned, #880) |
@@ -73,7 +73,7 @@ Read the file for the area you change:
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |
 | [`load-restart.md`](load-restart.md) | the load client's restart harness: an owned child server, its exit, and the drain to the final watermark |
 | [`load-results-restart.md`](load-results-restart.md) | reconnect storm results: restarting with every stream open, exit time, recovery, replay and the comparison |
-| [`web-layers.md`](web-layers.md) | what handlers, templ, htmx and JavaScript are each responsible for |
+| [Web layers](web-layers.md) | what handlers, templ, htmx and [JavaScript](web-javascript.md) are each responsible for |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 
 Generated module API summaries: [identity](../api/identity.txt), [realtime](../api/realtime.txt),

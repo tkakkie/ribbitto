@@ -1,6 +1,7 @@
 # Web layers: how the rules are checked
 
-The rules are in [`web-layers.md`](web-layers.md).
+The rules are in [`web-layers.md`](web-layers.md) and
+[`web-javascript.md`](web-javascript.md).
 
 ## How the rules are checked
 

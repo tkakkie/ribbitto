@@ -127,6 +127,23 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	if err := checkBeforeWrite(root, dirs, files); err != nil {
 		return "", err
 	}
+	// Also before any directory is created: a shared file aliasing an owned
+	// one that does not exist yet is dangling, and refuses here (Codex on
+	// #1075).
+	checked := map[string]place{}
+	for name, fd := range dirs {
+		if fd < 0 {
+			continue
+		}
+		p, err := identity(fd)
+		if err != nil {
+			return "", err
+		}
+		checked[name] = p
+	}
+	if err := checkSharedFiles(accountHome, files, checked); err != nil {
+		return "", err
+	}
 
 	test.run(test.beforeWrite)
 	gemini2, dirs2, err := openOwned(root, true)

@@ -47,10 +47,12 @@ func snapshot(t *testing.T, dir string) map[string]string {
 		if err != nil {
 			return err
 		}
-		if d.Type()&fs.ModeSymlink != 0 {
+		if d.IsDir() {
+			files[path] = "<dir>"
+		} else if d.Type()&fs.ModeSymlink != 0 {
 			target, _ := os.Readlink(path)
 			files[path] = "-> " + target
-		} else if !d.IsDir() {
+		} else {
 			data, _ := os.ReadFile(path)
 			files[path] = string(data)
 		}
@@ -567,6 +569,21 @@ func TestPrepareRefusesASharedFileAliasingAnOwnedFile(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// With an empty dedicated HOME, a dangling shared link to an owned file is
+// refused before any directory is created (Codex on #1075).
+func TestPrepareRefusesASharedAliasBeforeCreatingDirectories(t *testing.T) {
+	account := resolved(t, t.TempDir())
+	home := filepath.Join(account, "dev", "agy-home")
+	mkdir(t, home)
+	symlink(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), filepath.Join(account, ".gemini/antigravity-cli/settings.json"))
+	if _, err := prepare(home, account, guardBinary); err == nil || !strings.Contains(err.Error(), "cannot be resolved") {
+		t.Fatalf("err = %v", err)
+	}
+	if entries, err := os.ReadDir(home); err != nil || len(entries) != 0 {
+		t.Fatalf("HOME holds %v, %v", entries, err)
 	}
 }
 

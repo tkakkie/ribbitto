@@ -68,7 +68,11 @@ func (s Stream) recount(ctx context.Context, sub Subscription, pending *sidebarD
 		return context.Cause(ctx)
 	}
 	covered := pending.observed // Publication during the persisted read remains pending.
-	out, err := s.Sidebar.Recount(ctx, sub)
+	out, err := s.computeSidebar(ctx, sub)
+	if errors.Is(err, errRecountDeferred) {
+		pending.next = s.RecountLimit.retryAt()
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("recounting sidebar: %w", err)
 	}

@@ -16,7 +16,7 @@ It changes only the text and visibility of server-rendered badges, never creates
 htmx sends resync requests. The markup contract is in
 [web layers](web-layers.md#htmx).
 
-- `message-stream-v9.js` emits `read-applied` only after successful DOM
+- `message-stream-v10.js` emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
   `read-visibility-v5.js` initializes on scoped `htmx:load`; automatic
   triggers send the snapshot, then the latest applied cursor.
@@ -26,7 +26,7 @@ htmx sends resync requests. The markup contract is in
   Success resets backoff and flushes newer shown work. Other failures flush only
   strictly newer work; the same cursor waits for another trigger. Cleanup clears
   timers. Composer responses and unapplied events cannot advance it.
-- `sidebar-unread-v1.js` attaches to scoped `htmx:load` and SSE open events.
+- `sidebar-unread-v2.js` attaches to scoped `htmx:load` and SSE open events.
   It increments server-rendered badges only for newer, unseen `unread` frames
   from other members; `message` frames never increment. Snapshots apply in
   stream order, dropping retained events at or below their sequence. Eligible
@@ -37,10 +37,12 @@ htmx sends resync requests. The markup contract is in
   Retention itself is not loss. Overflow, malformed frames and DOM/request
   failures stop increments; losses during a
   request reserve another, including repeated losses during retries. One pending
-  htmx request and one timer merge duplicate triggers, with a minimal 50–1,000 ms
-  backoff and 0–25 ms jitter; a 429 counts as a request failure, keeps
-  recovery open and retries through that backoff;
-  PR 4 tunes this. Visibility return and persisted `pageshow` request resync.
+  htmx request and one timer merge duplicate triggers, with exponential backoff
+  starting at 250 ms and capped at 8 s; each retry chooses uniformly between
+  half and all of that backoff. Visibility return and persisted `pageshow`
+  request resync after uniform 0–2 s jitter. Recovery clearing is unchanged.
+  A 429 counts as a request failure, keeps recovery open and retries
+  through that backoff.
   Cleanup clears the timer when its stream container is removed.
 
   | Attribute / target | Contract |
@@ -51,7 +53,7 @@ htmx sends resync requests. The markup contract is in
   | `data-unread-count` on every badge | raw numeric count, including hidden zero; only its number, text and visibility change |
   | `#sidebar-resync` | hidden htmx trigger; custom `sidebar-resync` event sends the member-scoped POST, without a swap |
 
-- SSE `reset` closes htmx's event source and reloads the page to obtain a fresh snapshot.
+- SSE `reset` closes htmx's event source and reloads the page after uniform 0–5 s jitter to obtain a fresh snapshot.
 - **No requests of its own:** no `fetch` or `XMLHttpRequest`. Requests go
   through HTML forms, links and htmx.
 - **Storage:** `localStorage` and `sessionStorage` may hold only

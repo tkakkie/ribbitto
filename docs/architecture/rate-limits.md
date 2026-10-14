@@ -112,8 +112,9 @@ The sidebar resync POST requires an independent `Services.ResyncLimits`
 instance, shared with neither typing, reads nor creation; missing or shared
 wiring fails startup. Its `MemberRateLimiter` allows an initial, unmeasured
 32 requests/s with burst 32 per trusted organisation/member pair, across
-all tabs, sessions and addresses. The script's 50–1,000 ms exponential
-backoff adds 0–25 ms jitter: at the cap, 16 tabs retry at most 16 times/s.
+all tabs, sessions and addresses. The script's exponential backoff starts
+at 250 ms and is capped at 8 s, each wait between half and all of it: at the
+cap, 16 tabs retry at most 4 times/s.
 The budget leaves steady retry headroom and a burst of two requests per tab
 for visibility return, persisted `pageshow` and early recovery retries.
 

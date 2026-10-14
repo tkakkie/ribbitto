@@ -54,6 +54,13 @@ func run(ctx context.Context, tailwind, templ string) error {
 	return supervise(ctx, []*exec.Cmd{css, server})
 }
 
+// waitWatcher reaps a watcher; a test replaces it to deliver a result late.
+var waitWatcher = func(cmd *exec.Cmd) error { return cmd.Wait() }
+
+// beforeSignals runs once per shutdown, just before its first signal; a test
+// uses it to order a late result after that point.
+var beforeSignals = func() {}
+
 type watcher struct {
 	cmd  *exec.Cmd
 	done chan error
@@ -75,7 +82,7 @@ func supervise(ctx context.Context, commands []*exec.Cmd) (err error) {
 		w := watcher{cmd, make(chan error, 1), cmd.Process.Pid}
 		watchers = append(watchers, w)
 		go func() {
-			w.done <- cmd.Wait()
+			w.done <- waitWatcher(cmd)
 			close(w.done)
 		}()
 	}
@@ -105,27 +112,38 @@ func supervise(ctx context.Context, commands []*exec.Cmd) (err error) {
 }
 
 func shutdown(watchers []watcher) (err error) {
-	// Copilot on #1042: preserve failures delivered before shutdown signals;
-	// later results may be caused by those signals.
-	var delivered error
-	for _, w := range watchers {
+	// A watcher whose leader had exited before shutdown signalled anything
+	// failed on its own, whenever Wait's result arrives; one still running
+	// then and ending later ended because of the signals. The state is read
+	// from the process table at that instant, so the verdict does not depend
+	// on when a result is delivered (Copilot and the maintainer on #1042).
+	exited := exitedLeaders(watchers)
+	results := make([]error, len(watchers))
+	received := make([]bool, len(watchers))
+	for i, w := range watchers {
 		select {
-		case result := <-w.done:
-			if result != nil {
-				delivered = errors.Join(delivered, fmt.Errorf("watcher %s failed: %w", w.cmd.Path, result))
+		case result, ok := <-w.done:
+			received[i], exited[i] = true, true
+			if ok {
+				results[i] = result
 			}
 		default:
 		}
 	}
 	defer func() {
-		err = errors.Join(err, delivered)
-		for _, w := range watchers {
-			<-w.done
+		for i, w := range watchers {
+			if !received[i] {
+				results[i] = <-w.done
+			}
+			if exited[i] && results[i] != nil {
+				err = errors.Join(err, fmt.Errorf("watcher %s failed: %w", w.cmd.Path, results[i]))
+			}
 		}
 	}()
 	if len(watchers) == 0 {
 		return nil
 	}
+	beforeSignals()
 	// Give the server time to drain, then kill stubborn descendants. Scanning
 	// again also catches a child forked between the first scan and its signal.
 	deadline := time.Now().Add(3 * time.Second)
@@ -134,8 +152,10 @@ func shutdown(watchers []watcher) (err error) {
 		if time.Until(deadline) < 2*time.Second {
 			sig = syscall.SIGKILL
 		}
-		for _, w := range watchers {
-			_ = w.cmd.Process.Signal(sig)
+		for i, w := range watchers {
+			if !exited[i] {
+				_ = w.cmd.Process.Signal(sig)
+			}
 		}
 		remaining, err := signalSessions(watchers, sig)
 		if err != nil {
@@ -189,4 +209,33 @@ func signalSessions(watchers []watcher, sig syscall.Signal) (int, error) {
 		}
 	}
 	return remaining, nil
+}
+
+// exitedLeaders reports, per watcher, whether its leader had already exited:
+// listed as a zombie, not listed, or listed under another session (a reused
+// PID). If ps fails, nothing counts as exited here; the cleanup scan reports
+// that failure.
+func exitedLeaders(watchers []watcher) []bool {
+	exited := make([]bool, len(watchers))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,stat=").Output()
+	if err != nil {
+		return exited
+	}
+	running := map[int]bool{}
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 || strings.HasPrefix(fields[1], "Z") {
+			continue
+		}
+		if pid, err := strconv.Atoi(fields[0]); err == nil {
+			running[pid] = true
+		}
+	}
+	for i, w := range watchers {
+		sid, err := unix.Getsid(w.pid)
+		exited[i] = !running[w.pid] || err != nil || sid != w.pid
+	}
+	return exited
 }

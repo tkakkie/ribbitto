@@ -193,6 +193,40 @@ func TestSupervisePreservesDeliveredFailure(t *testing.T) {
 	})
 }
 
+// The maintainer on #1042: a watcher that failed before shutdown signalled
+// anything must be reported even when its result is delivered only after the
+// signals. Here the failing watcher is reaped first, its result is held until
+// shutdown's first signal, and the other watcher exits cleanly only once the
+// failing one is reaped, so the order is fixed by synchronisation, not by
+// timing.
+func TestSuperviseReportsAFailureDeliveredAfterSignals(t *testing.T) {
+	dir := t.TempDir()
+	failing := exec.Command("/bin/sh", "-c", "exit 7")
+	clean := exec.Command("/bin/sh", "-c", `until [ -e "$1" ]; do sleep 0.01; done`, "clean", filepath.Join(dir, "reaped"))
+	release, reaped := make(chan struct{}), make(chan struct{})
+	wait, hook := waitWatcher, beforeSignals
+	t.Cleanup(func() { waitWatcher, beforeSignals = wait, hook })
+	waitWatcher = func(cmd *exec.Cmd) error {
+		err := cmd.Wait()
+		if cmd == failing {
+			close(reaped)
+			<-release
+		}
+		return err
+	}
+	beforeSignals = func() { close(release) }
+	go func() {
+		<-reaped
+		_ = os.WriteFile(filepath.Join(dir, "reaped"), nil, 0o600)
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var exit *exec.ExitError
+	if err := supervise(ctx, []*exec.Cmd{failing, clean}); !errors.As(err, &exit) || exit.ExitCode() != 7 {
+		t.Fatalf("supervise = %v, want the failure delivered after the signals", err)
+	}
+}
+
 func helper(role, root string) *exec.Cmd {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
 	cmd.Env = append(os.Environ(), "DEV_HELPER="+role, "DEV_ROOT="+root)

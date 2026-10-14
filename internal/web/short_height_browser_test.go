@@ -52,7 +52,11 @@ func testShortHeightBrowser(t *testing.T, browser *rod.Browser) {
 						}
 					}
 				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/read"):
-					reads <- struct{}{}
+					// Never block: a burst of POSTs must not keep server.Close waiting.
+					select {
+					case reads <- struct{}{}:
+					default:
+					}
 					w.WriteHeader(http.StatusNoContent)
 				case r.Method == http.MethodPost:
 					response := snapshot
@@ -68,53 +72,78 @@ func testShortHeightBrowser(t *testing.T, browser *rod.Browser) {
 			})
 			server := httptest.NewServer(mux)
 			defer server.Close()
-			page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-			defer page.MustClose()
-			page.MustSetViewport(size[0], size[1], 1, false)
-			page.MustNavigate(server.URL).MustWaitLoad()
-			// Each wait has its own bound and names the step that stalled.
+			// Each step runs under its own bound and names itself when it fails,
+			// with the time since the start (#1060). Every input here is a script
+			// the page evaluates, which the step's context bounds; nothing goes
+			// through rod's Mouse or Keyboard.
+			started := time.Now()
+			since := func() time.Duration { return time.Since(started).Round(time.Millisecond) }
+			current, stepCancel := "setup", context.CancelFunc(func() {})
+			defer func() { stepCancel() }()
+			base := browser.Context(ctx).MustPage().WithPanic(func(v any) { t.Fatalf("%s: %v (at %s)", current, v, since()) })
+			defer base.MustClose()
+			page := base
+			step := func(what string) {
+				stepCancel()
+				var stepCtx context.Context
+				stepCtx, stepCancel = context.WithTimeout(ctx, 15*time.Second)
+				current, page = what, base.Context(stepCtx)
+			}
 			wait := func(what, js string, args ...any) {
 				t.Helper()
-				stepCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				defer cancel()
-				if err := page.Context(stepCtx).Wait(rod.Eval(js, args...)); err != nil {
-					t.Fatalf("%s: %v", what, err)
+				if err := page.Timeout(10 * time.Second).Wait(rod.Eval(js, args...)); err != nil {
+					t.Fatalf("%s: %s: %v (at %s)", current, what, err, since())
+				}
+			}
+			send := func(out realtime.Outgoing) {
+				t.Helper()
+				select {
+				case events <- out:
+				case <-page.GetContext().Done():
+					t.Fatalf("%s: no stream took frame %d (at %s)", current, out.ID, since())
 				}
 			}
 			const state = `() => { const l = document.getElementById('message-list'), m = document.getElementById('conversation');
 				return {gap: l.scrollHeight - l.scrollTop - l.clientHeight, fromBottom: l.scrollHeight - l.scrollTop, conversation: m.scrollTop, window: scrollY}; }`
 			atNewest := `() => { const l = document.getElementById('message-list'); return l.scrollHeight - l.scrollTop - l.clientHeight <= 2; }`
+
+			step("loading the conversation")
+			page.MustSetViewport(size[0], size[1], 1, false)
+			page.MustNavigate(server.URL).MustWaitLoad()
 			select {
 			case <-reads:
-			case <-time.After(10 * time.Second):
-				t.Fatal("automatic reading did not post within 10 s")
+			case <-page.GetContext().Done():
+				t.Fatalf("%s: automatic reading did not post (at %s)", current, since())
 			}
 			wait("the list opens at the newest message", atNewest)
 
+			step("a live message")
 			before := page.MustEval(state)
-			events <- realtime.Outgoing{ID: 43, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(streamTestMessages(topic, 43)[0]))}
-			wait("a live message is appended and followed", `() => !!document.querySelector('#message-items > li[data-event-seq="43"]') && (`+atNewest+`)()`)
+			send(realtime.Outgoing{ID: 43, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(streamTestMessages(topic, 43)[0]))})
+			wait("it is appended and followed", `() => !!document.querySelector('#message-items > li[data-event-seq="43"]') && (`+atNewest+`)()`)
 			if after := page.MustEval(state); after.Get("conversation").Num() != before.Get("conversation").Num() || after.Get("window").Num() != before.Get("window").Num() {
-				t.Errorf("a live message moved the page: before %s, after %s", before.JSON("", ""), after.JSON("", ""))
+				t.Errorf("%s moved the page: before %s, after %s", current, before.JSON("", ""), after.JSON("", ""))
 			}
 
+			step("history paging")
 			page.MustEval(`() => { document.getElementById('message-list').scrollTop = 0; }`)
 			before = page.MustEval(state)
 			page.MustEval(`() => document.querySelector('#load-older a').click()`)
 			wait("older messages load and settle", `() => document.querySelector('#load-older').dataset.oldestSeq === '0' &&
 				!!document.querySelector('#message-items > li[data-event-seq="1"]') && !document.querySelector('.htmx-settling')`)
 			if after := page.MustEval(state); after.Get("fromBottom").Num() != before.Get("fromBottom").Num() {
-				t.Errorf("older messages moved the reader: before %s, after %s", before.JSON("", ""), after.JSON("", ""))
+				t.Errorf("%s moved the reader: before %s, after %s", current, before.JSON("", ""), after.JSON("", ""))
 			}
 
 			// Post from the composer as a reader there would, scrolled to it.
+			step("a composer post")
 			page.MustEval(`() => { const m = document.getElementById('conversation'); m.scrollTop = m.scrollHeight;
 				const form = document.getElementById('message-composer'); form.dataset.sent = '';
 				document.getElementById('message-body').value = 'hello'; form.requestSubmit(); }`)
 			// The response replaces the form; the stream script then takes its mark.
 			wait("the post response settles", `() => { const form = document.getElementById('message-composer');
 				return form.dataset.sent === undefined && form.dataset.postedMessage === undefined && !document.querySelector('.htmx-settling'); }`)
-			events <- realtime.Outgoing{ID: 44, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(streamTestMessages(topic, 44)[0]))}
+			send(realtime.Outgoing{ID: 44, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(streamTestMessages(topic, 44)[0]))})
 			// Four 22 px lines of it, as the width audit's rule: at 320 px the
 			// message is about as tall as the 128 px list.
 			wait("the posted message is scrolled into view", `() => { const item = document.querySelector('#message-items > li[data-event-seq="44"]');

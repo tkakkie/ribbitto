@@ -103,7 +103,7 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+	page := browser.Context(ctx).MustPage().WithPanic(func(v any) { t.Fatal(v) })
 	defer page.MustClose()
 	defer func() {
 		if err := (proto.NetworkDeleteCookies{Name: "lang", URL: server.URL}).Call(page); err != nil {
@@ -116,39 +116,13 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 			page.MustSetCookies(&proto.NetworkCookieParam{Name: "lang", Value: lang, URL: server.URL})
 			for _, c := range cases {
 				t.Run(fmt.Sprintf("%dx%d/%s/%s", size[0], size[1], lang, c.name), func(t *testing.T) {
-					path := "/" + c.name
-					if c.name == "home" {
-						path = "/"
-					}
-					page.MustNavigate(server.URL + path).MustWaitLoad()
-					// Wait for layout and panel modality before scanning active targets.
-					page.MustEval(`() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`)
-					audit := func(state string) {
-						t.Helper()
-						result := page.MustEval(widthAudit)
-						// The rate-limit page is the one page without a control.
-						if result.Get("checked").Int() == 0 && c.name != "rate-limit" {
-							t.Errorf("page=%s viewport=%dx%d language=%s state=%s: no visible control audited", c.name, size[0], size[1], lang, state)
-						}
-						for _, problem := range result.Get("problems").Arr() {
-							t.Errorf("page=%s viewport=%dx%d language=%s state=%s: %s", c.name, size[0], size[1], lang, state, problem.Str())
-						}
-					}
-					// Below the short height (#1056) a conversation scrolls as a whole
-					// around its message list, which must stay the scrolling pane the
-					// history, composer and stream scripts move.
-					shortAudit := func(state string) {
-						t.Helper()
-						if size[1] >= shortHeight || !strings.HasSuffix(c.name, "closed") {
-							return
-						}
-						for _, problem := range page.MustEval(shortConversationAudit, state != "loaded").Arr() {
-							t.Errorf("page=%s viewport=%dx%d language=%s state=%s: %s", c.name, size[0], size[1], lang, state, problem.Str())
-						}
-					}
-					// A click and its wait share one bound: rod dispatches the mouse
-					// through the original page, outside any step context (#1060), and
-					// a click into a collapsed list waited for the whole test's (#1056).
+					where := fmt.Sprintf("page=%s viewport=%dx%d language=%s", c.name, size[0], size[1], lang)
+					started := time.Now()
+					// step runs one named action and its waits under their own
+					// bound. rod dispatches mouse clicks through the original page,
+					// outside any page context (#1060), so the step also ends on its
+					// deadline; a click into a collapsed list once waited for the
+					// whole test's (#1056).
 					step := func(what string, fn func(p *rod.Page)) {
 						t.Helper()
 						stepCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -161,44 +135,71 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 						select {
 						case v := <-done:
 							if v != nil {
-								t.Fatalf("page=%s viewport=%dx%d language=%s: %s: %v", c.name, size[0], size[1], lang, what, v)
+								t.Fatalf("%s: %s: %v (at %s)", where, what, v, time.Since(started).Round(time.Millisecond))
 							}
 						case <-stepCtx.Done():
-							t.Fatalf("page=%s viewport=%dx%d language=%s: %s did not finish in 10 s", c.name, size[0], size[1], lang, what)
+							t.Fatalf("%s: %s did not finish in 10 s (at %s)", where, what, time.Since(started).Round(time.Millisecond))
 						}
 					}
-					audit("loaded")
-					shortAudit("loaded")
+					audit := func(p *rod.Page, state string) {
+						result := p.MustEval(widthAudit)
+						// The rate-limit page is the one page without a control.
+						if result.Get("checked").Int() == 0 && c.name != "rate-limit" {
+							t.Errorf("%s state=%s: no visible control audited", where, state)
+						}
+						for _, problem := range result.Get("problems").Arr() {
+							t.Errorf("%s state=%s: %s", where, state, problem.Str())
+						}
+						// Below the short height (#1056) a conversation scrolls as a
+						// whole around its message list, which must stay the scrolling
+						// pane the history, composer and stream scripts move.
+						if size[1] < shortHeight && strings.HasSuffix(c.name, "closed") && (state == "loaded" || state == "move-form-visible") {
+							for _, problem := range p.MustEval(shortConversationAudit, state != "loaded").Arr() {
+								t.Errorf("%s state=%s: %s", where, state, problem.Str())
+							}
+						}
+					}
+					step("loading", func(p *rod.Page) {
+						path := "/" + c.name
+						if c.name == "home" {
+							path = "/"
+						}
+						p.MustNavigate(server.URL + path).MustWaitLoad()
+						// Wait for layout and panel modality before scanning active targets.
+						p.MustEval(`() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`)
+					})
+					step("auditing the loaded page", func(p *rod.Page) { audit(p, "loaded") })
 					if strings.HasSuffix(c.name, "overview") {
 						step("opening the image picker", func(p *rod.Page) {
 							p.MustElement("#side-panel summary").MustClick()
 							p.MustWait(`() => document.querySelector('#side-panel details').open`)
+							audit(p, "image-picker-open")
 						})
-						audit("image-picker-open")
 					}
 					if strings.HasSuffix(c.name, "closed") {
 						step("checking a message", func(p *rod.Page) {
 							p.MustElement(`#message-items input[type=checkbox]`).MustClick()
 							p.MustWait(`() => document.querySelector('#message-items input[type=checkbox]:checked') &&
 								document.getElementById('branch-form').checkVisibility()`)
+							audit(p, "move-form-visible")
 						})
-						audit("move-form-visible")
-						shortAudit("move-form-visible")
 					}
 					if c.name == "channel-list" || strings.HasSuffix(c.name, "closed") {
 						for _, id := range []string{"channel-create", "account-menu"} {
-							if !page.MustEval(`id => [...document.querySelectorAll('[popovertarget="' + id + '"]')].some(e => e.checkVisibility())`, id).Bool() {
-								// Phone conversations expose these controls on the list page;
-								// anywhere else a missing invoker would skip the audit silently.
-								if c.name == "channel-list" || size[0] >= 852 {
-									t.Errorf("page=%s viewport=%dx%d language=%s: no visible invoker for %s", c.name, size[0], size[1], lang, id)
+							step("opening "+id, func(p *rod.Page) {
+								if !p.MustEval(`id => [...document.querySelectorAll('[popovertarget="' + id + '"]')].some(e => e.checkVisibility())`, id).Bool() {
+									// Phone conversations expose these controls on the list page;
+									// anywhere else a missing invoker would skip the audit silently.
+									if c.name == "channel-list" || size[0] >= 852 {
+										t.Errorf("%s: no visible invoker for %s", where, id)
+									}
+									return
 								}
-								continue
-							}
-							page.MustEval(`id => [...document.querySelectorAll('[popovertarget="' + id + '"]')].find(e => e.checkVisibility()).click()`, id)
-							page.MustWait(`id => document.getElementById(id).matches(':popover-open')`, id)
-							audit(id + "-open")
-							page.MustEval(`id => document.getElementById(id).hidePopover()`, id)
+								p.MustEval(`id => [...document.querySelectorAll('[popovertarget="' + id + '"]')].find(e => e.checkVisibility()).click()`, id)
+								p.MustWait(`id => document.getElementById(id).matches(':popover-open')`, id)
+								audit(p, id+"-open")
+								p.MustEval(`id => document.getElementById(id).hidePopover()`, id)
+							})
 						}
 					}
 				})

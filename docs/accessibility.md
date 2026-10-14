@@ -43,7 +43,10 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   running text (message and help text) are the one exception
   ([`ui.md`](ui.md#layout-principles), #966). Welcome text fields and
   buttons have a 48 px minimum height below `desk`, with at least 16 px
-  field text (#973).
+  field text (#973). `TestBrowser/width-audit`
+  (`internal/web/width_audit_browser_test.go`) checks these targets, control
+  reachability, and document and scroll-container horizontal overflow on
+  every page at phone, landscape and breakpoint widths (#974).
 - **Colour is never the only signal** (see [*Direction*](ui.md#direction)): a state also has
   text, an icon or a shape.
 - **Styles** ✓ only through the token utilities: no `style` attributes and

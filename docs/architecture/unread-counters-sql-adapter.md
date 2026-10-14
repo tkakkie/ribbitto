@@ -1,4 +1,4 @@
-# Write-time unread counters: SQL adapter (#957a–c2a)
+# Write-time unread counters: SQL adapter (#957a–c2b)
 
 The test-only adapter in `internal/realtime/unread_counters_sql_test.go` creates
 scoped bigint totals and complete member bundles with validity/revision. It uses
@@ -63,8 +63,28 @@ introduced. Fresh write-owned captures are still required for retries.
 Deterministic tests use virtual time and exact SQL/mutation expectations for
 posts, feed/topic reads, repeated reads, moves with notices, and lazy joins in
 both designs. Fixtures/oracles use a separate untraced pool/context; the seam
-rejects correctness-only coverage SQL. Lock-wait observation, per-move breakdown
-and gated contention accounting remain #957c2b.
+rejects correctness-only coverage SQL.
+
+`internal/realtime/unread_counters_contention_test.go` adds #957c2b's lock-wait
+observation to that seam. A separate connection polls PostgreSQL lock waits;
+only the waiting operation counts a distinct observed statement, even across
+repeated polls. The count is an observed lower bound (waits between polls are
+missed); cumulative lock-statement time from the injected clock is an upper
+bound on waiting, including execution, both per operation and separately for
+move member locks. Observation statements are reported separately,
+with no application statements, mutations or transaction samples, and never run
+inside the operation's transaction. Synthetic tags/boundaries and a real traced
+observation query prove exclusion. Transaction wall time still includes real
+blocking; observer work does not add SQL to that transaction.
+
+Move accounts separately report observed waits and locked row counts for
+channel reads, bundles and topic reads, from the existing locking SELECT tags
+(no added member scan). The first count is the number of channel member rows;
+the others expose materialised fan-out. Gated move/read tests in both orders
+and both designs hold COMMIT until PostgreSQL confirms the wait; repeated polls
+count once and a sequential control counts none. Two materialised members and
+two topics require 2/2/4 locked rows in the counter move. Every-member locking
+and #957c2a's deadlock/failure/retry accounting are unchanged.
 
 Production, migrations and #867's stability rule are unchanged. No measurements
 or adoption conclusion follow from these tests. Only the intended maintenance

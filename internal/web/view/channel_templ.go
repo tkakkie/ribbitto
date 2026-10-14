@@ -209,7 +209,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, " <div class=\"flex min-w-0 flex-1 gap-2\"><main id=\"conversation\" class=\"relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block\"><header class=\"flex shrink-0 items-center gap-3 border-b border-border px-6 py-2\"><a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, " <div class=\"flex min-w-0 flex-1 gap-2\"><main id=\"conversation\" class=\"relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-bg shadow-block max-desk:rounded-none\"><header class=\"flex shrink-0 items-center gap-3 border-b border-border px-6 py-2 max-desk:gap-0 max-desk:px-1\"><a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -235,7 +235,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-fg desk:hidden transition-feedback motion-safe:active:scale-96\"><span aria-hidden=\"true\" class=\"text-heading\">‹</span></a><div class=\"flex min-w-0 flex-1 items-center gap-2\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-fg desk:hidden transition-feedback motion-safe:active:scale-96\"><span aria-hidden=\"true\" class=\"text-heading\">‹</span></a><div class=\"flex min-w-0 flex-1 items-center gap-2 max-desk:gap-0\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -257,20 +257,20 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"min-w-0 truncate text-title text-muted hover:text-brand\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"min-w-0 truncate text-title text-muted hover:text-brand max-desk:flex max-desk:min-h-11 max-desk:w-11 max-desk:shrink-0 max-desk:items-center\"><span class=\"truncate\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(page.Current.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 176, Col: 170}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 176, Col: 279}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</a>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</span></a>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -282,7 +282,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<h1 class=\"flex min-w-0 items-center text-title font-semibold\"><span class=\"truncate\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<h1 class=\"flex min-w-0 items-center text-title font-semibold max-desk:flex-1\"><span class=\"truncate\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -444,7 +444,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, " class=\"peer mx-auto flex w-full max-w-reading flex-col gap-6 px-6 py-6 empty:hidden\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, " class=\"peer mx-auto flex w-full max-w-reading flex-col gap-6 px-6 py-6 empty:hidden max-desk:max-w-none max-desk:px-4\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -528,7 +528,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var18 = []any{"mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4", templ.KV("peer-has-checked/list:invisible", page.BranchError == "")}
+				var templ_7745c5c3_Var18 = []any{"mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4 max-desk:max-w-none max-desk:px-4 max-desk:pb-safe-4", templ.KV("peer-has-checked/list:invisible", page.BranchError == "")}
 				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var18...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -645,7 +645,7 @@ func ChannelScreen(stylesheetURL string, page ChannelPage) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\"></script> <script defer src=\"/static/message-composer-v5.js\" nonce=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\"></script> <script defer src=\"/static/message-composer-v6.js\" nonce=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -737,7 +737,7 @@ func channelFrame(page ChannelPage) templ.Component {
 			templ_7745c5c3_Var29 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var30 = []any{"flex h-dvh gap-2 bg-base p-2 text-body", templ.KV("max-desk:flex-col max-desk:pb-0", page.List)}
+		var templ_7745c5c3_Var30 = []any{"flex h-dvh gap-2 bg-base p-2 text-body", templ.KV("max-desk:p-0", !page.List), templ.KV("max-desk:flex-col max-desk:pb-0", page.List)}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var30...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -1412,14 +1412,14 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "\" aria-describedby=\"message-help\" class=\"w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "\" aria-describedby=\"message-help\" class=\"w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-entry\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var61 string
 		templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs("\n" + page.Body)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 398, Col: 238}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/view/channel.templ`, Line: 398, Col: 258}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 		if templ_7745c5c3_Err != nil {
@@ -1622,7 +1622,7 @@ func readForm(page ChannelPage) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 114, "><input type=\"hidden\" name=\"cursor\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 114, " class=\"max-desk:shrink-0\"><input type=\"hidden\" name=\"cursor\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1877,7 +1877,7 @@ func TopicHeadingCount(page ChannelPage, oob bool) templ.Component {
 			templ_7745c5c3_Var78 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, "<span id=\"topic-heading-count\" class=\"ml-2\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 126, "<span id=\"topic-heading-count\" class=\"ml-2 max-desk:ml-0\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

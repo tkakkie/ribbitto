@@ -183,11 +183,11 @@ func TestCostModelSendFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	out.Name, out.Ephemeral = "sidebar", true
-	if err := c.Send(t.Context(), out); !errors.Is(err, failure) || c.exact(sidebarOracleModel{}) == nil {
+	if err := c.Send(t.Context(), out); !errors.Is(err, failure) || c.exact(sidebarOracleModel{}) == nil || len(c.sent) != 0 {
 		t.Fatal("failed send installed full model")
 	}
 	c.sender = &retentionSender{send: func(realtime.Outgoing) error { return nil }}
-	if err := c.Send(t.Context(), out); err != nil || c.exact(sidebarOracleModel{}) != nil {
+	if err := c.Send(t.Context(), out); err != nil || c.exact(sidebarOracleModel{}) != nil || len(c.sent) != 1 {
 		t.Fatal("successful send did not install full model")
 	}
 	if c.Send(t.Context(), out) == nil {

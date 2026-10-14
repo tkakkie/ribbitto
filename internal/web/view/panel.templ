@@ -71,12 +71,14 @@ templ panelControl(page ChannelPage, panel, label string) {
 		}
 		if label == "" {
 			aria-label={ i18n.T(ctx, panelTitle(panel)) }
+		} else {
+			aria-label={ i18n.T(ctx, label) }
 		}
 		class={ "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-body transition-feedback motion-safe:active:scale-96", templ.KV("bg-selected font-semibold text-on-selected", open), templ.KV("text-muted hover:bg-hover hover:text-fg", !open) }
 	>
 		{ children... }
 		if label != "" {
-			{ i18n.T(ctx, label) }
+			<span class="max-desk:hidden">{ i18n.T(ctx, label) }</span>
 		}
 	</a>
 }

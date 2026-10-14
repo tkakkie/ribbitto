@@ -46,16 +46,16 @@ templ messageItem(entry Message, announcement string) {
 		if announcement != "" {
 			data-announcement={ announcement }
 		}
-		class="relative flex flex-col gap-1 pl-12"
+		class="relative flex flex-col gap-1 pl-12 max-desk:wrap-anywhere"
 	>
 		<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-body">
 			<span class="min-w-0 break-words">
 				@MemberName(entry.DisplayName, entry.Handle)
 			</span>
 			<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
-			<a href={ templ.SafeURL(entry.TopicURL) } class="inline-flex items-center gap-1 text-caption text-muted hover:text-brand">
+			<a href={ templ.SafeURL(entry.TopicURL) } class="inline-flex items-center gap-1 text-caption max-desk:min-w-0 text-muted hover:text-brand">
 				@Icon("branch-regular", 20)
-				<bdi>
+				<bdi class="max-desk:min-w-0">
 					if entry.DefaultTopic {
 						{ i18n.T(ctx, "topic.default") }
 					} else {

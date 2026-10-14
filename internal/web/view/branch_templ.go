@@ -47,7 +47,7 @@ func branchForm(page ChannelPage) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var2 = []any{"mx-auto flex w-full max-w-reading shrink-0 flex-wrap items-center gap-2 bg-bg px-6 py-3 text-body", templ.KV("peer-not-has-checked/list:hidden peer-has-checked/list:absolute peer-has-checked/list:inset-x-0 peer-has-checked/list:bottom-0", page.BranchError == "")}
+		var templ_7745c5c3_Var2 = []any{"mx-auto flex w-full max-w-reading shrink-0 flex-wrap items-center gap-2 bg-bg px-6 py-3 text-body max-desk:px-4 max-desk:pb-safe-3", templ.KV("peer-not-has-checked/list:hidden peer-has-checked/list:absolute peer-has-checked/list:inset-x-0 peer-has-checked/list:bottom-0", page.BranchError == "")}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var2...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

@@ -143,7 +143,7 @@ func TestCostRunnerMatchedWiringAndDrain(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				if q.stats().registered != 0 || scheduler.Stats().Registrations != 0 || len(r.senders[0].sidebars) != 2 || len(r.senders[1].sidebars) != 2 {
+				if q.stats().registered != 0 || scheduler.Stats().Registrations != 0 || r.senders[0].snapshots.Load() != 2 || r.senders[1].snapshots.Load() != 2 {
 					t.Fatal("runner retained registrations or lost sender-side frames")
 				}
 				if arm == "hybrid" {

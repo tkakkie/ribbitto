@@ -1,11 +1,12 @@
-GOLANGCI_LINT_VERSION := v2.14.0
 .DEFAULT_GOAL := check
-GOLANGCI_LINT := ./bin/golangci-lint-$(GOLANGCI_LINT_VERSION)/golangci-lint
+# tools/download/main.go owns the versions, hashes and versioned binary paths.
+TOOL_PATHS := $(shell go -C tools run ./download -paths)
+ifneq ($(words $(TOOL_PATHS)),2)
+$(error tools/download could not resolve the pinned binary paths)
+endif
+TAILWIND := $(word 1,$(TOOL_PATHS))
+GOLANGCI_LINT := $(word 2,$(TOOL_PATHS))
 TEMPL := ./bin/templ
-TAILWIND_VERSION := v4.3.3
-TAILWIND := ./bin/tailwindcss-$(TAILWIND_VERSION)
-TAILWIND_SHA_macos-arm64 := cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d
-TAILWIND_SHA_linux-x64 := dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a
 CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
 # The AI launchers' self-tests take most of check's time, so check-launchers
 # runs them only when the change since this base can affect them (an empty base always
@@ -30,8 +31,8 @@ generate: $(TEMPL)
 	$(TEMPL) generate
 	go tool -modfile=tools/go.mod sqlc generate
 
-schema-docs:
-	python3 scripts/ai_env.py run go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist
+schema-docs: bin/ai-db
+	./bin/ai-db run go tool -modfile=tools/tbls/go.mod tbls doc --rm-dist
 
 # Regenerates docs/dependencies.md; make check fails when it is stale.
 deps:
@@ -47,25 +48,15 @@ css: $(TAILWIND)
 	$(TAILWIND) $(CSS_ARGS)
 
 # Serve rebuilt CSS from disk so updates do not depend on a server restart.
-dev: $(TEMPL) css
+dev: $(TEMPL) css bin/ai-db
 	@set -eu; \
 	$(TAILWIND) $(CSS_ARGS) --watch=always & css_pid=$$!; \
 	trap 'kill "$$css_pid" 2>/dev/null || true; wait "$$css_pid" 2>/dev/null || true' EXIT; \
 	trap 'exit 130' INT; trap 'exit 143' TERM; \
-	RIBBITTO_DEV_ASSETS=web/static python3 scripts/ai_env.py run $(TEMPL) generate --watch --cmd 'go run ./cmd/ribbitto'
+	RIBBITTO_DEV_ASSETS=web/static ./bin/ai-db run $(TEMPL) generate --watch --cmd 'go run ./cmd/ribbitto'
 
 $(TAILWIND):
-	@mkdir -p "$(@D)"
-	@set -eu; platform="$$(uname -s)-$$(uname -m)"; \
-	case "$$platform" in \
-	  Darwin-arm64) asset=macos-arm64; sha=$(TAILWIND_SHA_macos-arm64) ;; \
-	  Linux-x86_64) asset=linux-x64; sha=$(TAILWIND_SHA_linux-x64) ;; \
-	  *) echo "Unsupported Tailwind platform: $$platform" >&2; exit 1 ;; \
-	esac; \
-	tmp=$$(mktemp "$@.XXXXXX"); trap 'rm -f "$$tmp"' EXIT; \
-	curl -fsSL "https://github.com/tailwindlabs/tailwindcss/releases/download/$(TAILWIND_VERSION)/tailwindcss-$$asset" -o "$$tmp"; \
-	printf '%s  %s\n' "$$sha" "$$tmp" | shasum -a 256 -c -; \
-	chmod +x "$$tmp"; mv "$$tmp" "$@"
+	go -C tools run ./download tailwind ..
 
 # tools/formatcheck excludes caches under bin/: they contain third-party
 # sources and invalid fixtures. Comparing formatter output keeps files untouched.
@@ -131,37 +122,10 @@ prepush: $(TEMPL) $(TAILWIND)
 vuln:
 	go tool -modfile=tools/go.mod govulncheck ./...
 
-# The lint fixtures (internal/lintfixture, built only with the lintfixture
-# tag) prove that depguard rejects a module root importing pgxbridge and
-# accepts a store doing so, and staticcheck rejects ignored results even in
-# generated templates, bodyclose rejects unclosed HTTP response bodies,
-# sqlclosecheck rejects unused, unclosed pgx rows, and nilerr rejects returning
-# nil after checking a non-nil error; plain lint never sees them. Any other rows
-# use satisfies sqlclosecheck: keep defer rows.Close(); lint does not catch a
-# missing Close once rows are used.
+# tools/lintfixtures proves the lint configuration rejects what it must, on
+# the fixtures in internal/lintfixture; its package comment lists them.
 lint-fixtures: $(GOLANGCI_LINT)
-	@set -eu; status=0; \
-	out=$$($(GOLANGCI_LINT) run --build-tags lintfixture ./internal/lintfixture/... 2>&1) || status=$$?; \
-	if [ "$$status" -eq 0 ] || ! printf '%s\n' "$$out" | grep -q 'lintfixture/badroot/root.go.*pgxbridge'; then \
-		echo "lint-fixtures: depguard must reject pgxbridge in a module root"; printf '%s\n' "$$out"; exit 1; \
-	fi; \
-	if printf '%s\n' "$$out" | grep -q 'lintfixture/internal/postgres/'; then \
-		echo "lint-fixtures: depguard must accept pgxbridge in a store"; printf '%s\n' "$$out"; exit 1; \
-	fi; \
-	for file in bad.go bad_templ.go; do \
-		if ! printf '%s\n' "$$out" | grep -F "lintfixture/$$file:" | grep -q 'SA4017:.*TrimSpace'; then \
-			echo "lint-fixtures: staticcheck must reject an ignored result in $$file"; printf '%s\n' "$$out"; exit 1; \
-		fi; \
-	done; \
-	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/bodyclose.go:' | grep -q 'response body must be closed.*(bodyclose)'; then \
-		echo "lint-fixtures: bodyclose must reject an unclosed HTTP response body"; printf '%s\n' "$$out"; exit 1; \
-	fi; \
-	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/sqlclosecheck.go:' | grep -Fq 'Rows/Stmt/NamedStmt was not closed (sqlclosecheck)'; then \
-		echo "lint-fixtures: sqlclosecheck must reject unused, unclosed pgx rows"; printf '%s\n' "$$out"; exit 1; \
-	fi; \
-	if ! printf '%s\n' "$$out" | grep -F 'lintfixture/nilerr.go:' | grep -q 'error is not nil (line [0-9]*) but it returns nil (nilerr)'; then \
-		echo "lint-fixtures: nilerr must reject returning nil after a non-nil error"; printf '%s\n' "$$out"; exit 1; \
-	fi
+	go -C tools run ./lintfixtures -lint ../$(GOLANGCI_LINT) ..
 
 lint: $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run ./...
@@ -172,30 +136,28 @@ db-up:
 db-down:
 	docker compose down
 
-# Keep versions in separate directories so changing the pin fetches a new binary.
 $(GOLANGCI_LINT):
-	@mkdir -p "$(@D)"
-	@set -eu; installer=$$(mktemp); \
-	trap 'rm -f "$$installer"' EXIT; \
-	curl -fsSL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOLANGCI_LINT_VERSION)/install.sh -o "$$installer"; \
-	sh "$$installer" -b "$(@D)" $(GOLANGCI_LINT_VERSION)
+	go -C tools run ./download golangci-lint ..
 
 # Credentials stay in the inherited admin environment, never in .env.local.
 bin/ai-db: $(wildcard cmd/devdb/*.go) $(wildcard internal/platform/postgres/*.go) $(wildcard db/migrations/*.sql) go.mod go.sum
 	mkdir -p "$(@D)"
 	go build -o $@ ./cmd/devdb
 
-ai-env ai-env-clean ai-health: bin/ai-db
-	@python3 scripts/ai_env.py $(patsubst ai-env-clean,clean,$(patsubst ai-health,health,$@))
+ai-env ai-env-clean: bin/ai-db
+	@python3 scripts/ai_env.py $(patsubst ai-env-clean,clean,$@)
+
+ai-health: bin/ai-db
+	@./bin/ai-db health
 
 db-health:
 	@if [ "$${RIBBITTO_TEST_DATABASE_URL+x}" = x ] || [ "$${RIBBITTO_REQUIRE_DB:-}" = 1 ]; then $(MAKE) ai-health; fi
 
-migrate:
-	@python3 scripts/ai_env.py run go run ./cmd/ribbitto migrate $(or $(DIRECTION),up)
+migrate: bin/ai-db
+	@./bin/ai-db run go run ./cmd/ribbitto migrate $(or $(DIRECTION),up)
 
-seed:
-	@python3 scripts/ai_env.py run go run ./cmd/seed $(ARGS)
+seed: bin/ai-db
+	@./bin/ai-db run go run ./cmd/seed $(ARGS)
 
 check-ai-env: bin/ai-db
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'ai_*_test.py'

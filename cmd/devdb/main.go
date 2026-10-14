@@ -1,10 +1,13 @@
-// Command devdb migrates worktree databases and observes development capacity.
-// It keeps admin credentials in the environment and suppresses driver errors,
-// which can contain connection strings. Used by ai_env.py and ai_capacity.py.
+// Command devdb migrates worktree databases, observes development capacity,
+// runs commands with a worktree's database and ports (run) and checks the
+// admin connection (health). It keeps admin credentials in the environment
+// and suppresses driver errors, which can contain connection strings. The
+// Makefile builds it as bin/ai-db; ai_env.py and ai_capacity.py also use it.
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +19,24 @@ import (
 )
 
 func main() {
+	if len(os.Args) >= 2 && (os.Args[1] == "run" || os.Args[1] == "health") {
+		var err error
+		if os.Args[1] == "run" {
+			err = runWithEnvironment(os.Args[2:])
+		} else {
+			err = health()
+		}
+		var shown failure
+		switch {
+		case errors.As(err, &shown):
+			fmt.Fprintln(os.Stderr, shown)
+		case err != nil:
+			fmt.Fprintln(os.Stderr, generic)
+		default:
+			return
+		}
+		os.Exit(1)
+	}
 	code, err := run()
 	if err != nil {
 		// The phase, never the driver error, is safe to expose to callers.
@@ -69,6 +90,27 @@ func run() (int, error) {
 		fmt.Println(values[0])
 	}
 	return 4, rows.Err()
+}
+
+// health reports whether the admin connection works, with the same phase
+// messages as the statement mode and never the driver error.
+func health() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	config, err := pgx.ParseConfig(os.Getenv("RIBBITTO_TEST_DATABASE_URL"))
+	if os.Getenv("RIBBITTO_TEST_DATABASE_URL") == "" || err != nil {
+		return failure("admin URL not set or invalid")
+	}
+	conn, err := pgx.ConnectConfig(ctx, config)
+	if err != nil {
+		return failure("PostgreSQL stopped or unreachable")
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	if _, err := conn.Exec(ctx, "SELECT 1"); err != nil {
+		return failure("PostgreSQL statement failed; check admin permissions")
+	}
+	fmt.Println("PostgreSQL reachable")
+	return nil
 }
 
 func observe(conn *pgx.Conn) error {

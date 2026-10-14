@@ -395,7 +395,7 @@ templ messageComposer(page ChannelPage, oob bool) {
 		}
 		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
 		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
-		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-input">{ "\n" + page.Body }</textarea>
+		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-entry">{ "\n" + page.Body }</textarea>
 		<div class="flex items-end justify-between gap-3">
 			if page.BodyError != "" {
 				<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, page.BodyError) }</p>

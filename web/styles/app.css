@@ -171,8 +171,8 @@
   --text-title: 0.9375rem;
   --text-title--line-height: 1.375rem;
   /* Phone input stays at 16 px so iOS does not zoom on focus. */
-  --text-input: 1rem;
-  --text-input--line-height: 1.375rem;
+  --text-entry: 1rem;
+  --text-entry--line-height: 1.375rem;
   --text-heading: 1.25rem;
   --text-heading--line-height: 1.75rem;
   --text-display: 1.75rem;

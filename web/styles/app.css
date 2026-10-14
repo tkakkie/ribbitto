@@ -170,6 +170,9 @@
   --text-body--line-height: 1.375rem;
   --text-title: 0.9375rem;
   --text-title--line-height: 1.375rem;
+  /* Phone input stays at 16 px so iOS does not zoom on focus. */
+  --text-entry: 1rem;
+  --text-entry--line-height: 1.375rem;
   --text-heading: 1.25rem;
   --text-heading--line-height: 1.75rem;
   --text-display: 1.75rem;
@@ -231,7 +234,7 @@
 
 /* Bottom padding of n spacing steps plus the bottom safe area (the home
    indicator), for what meets the screen's bottom edge below desk:
-   pb-safe-0 on the bottom navigation, pb-safe-4 on a bottom sheet. */
+   pb-safe-0 on navigation, pb-safe-4 on the composer and bottom sheet. */
 @utility pb-safe-* {
   padding-bottom: calc(var(--spacing) * --value(integer) + env(safe-area-inset-bottom));
 }

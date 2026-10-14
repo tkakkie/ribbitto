@@ -28,7 +28,7 @@ Rules: [unread](../domain/unread.md#counts); composition:
   **Precondition:** every member may read every channel. Private channels
   must add a per-channel check to `unread` frames before they ship.
 - **[Decision 24](24-a-cursor-that-cannot-be-served-gets-reset.md)** still
-  requires a page reload on `reset`; PR 4 adds its random delay.
+  requires a page reload on `reset`; PR 4 provides its random 0–5 s delay.
   **[Decision 32](32-read-state-is-a-set-of-read-ranges-per-member-and-channel.md)**
   is unchanged: read state, its writes and exact page-load SQL stay as they are.
 
@@ -100,10 +100,10 @@ even if losses recur.
 No event-history replay or unbounded retention is added. Extreme sustained load
 can keep recovery open, showing the last exact snapshot.
 
-PR 4 spreads connect recounts by 0–3 s, visibility/pageshow resyncs by 0–2 s
+PR 4 now spreads connect recounts by 0–3 s, visibility/pageshow resyncs by 0–2 s
 and `reset` reloads by 0–5 s. One bound on concurrent recount computations covers
 connect, read, resync and moves in synchronous and asynchronous modes, separately
-from stream registrations. Size and document it against normal-work pool headroom.
+from stream registrations. Its [current sizing](../recount-capacity.md#current-computation-sizing-1046) reserves normal-work pool headroom.
 After a bounded slot wait, leave the sidebar dirty and retry with jitter;
 established streams do not answer 503. The resync POST only publishes and
 answers immediately. The bound delays exactness rather than rejecting work.

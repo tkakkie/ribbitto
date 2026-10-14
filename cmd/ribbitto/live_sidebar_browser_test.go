@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -46,7 +47,10 @@ func TestLiveSidebarBrowser(t *testing.T) {
 	}
 	// Keep the reader's mixed read state while real EventSource, htmx and
 	// buildHandler deliver and apply production frames without interception.
-	page.MustEvalOnNewDocument(`Object.defineProperty(document, 'visibilityState', {get: () => 'hidden'});
+	page.MustEvalOnNewDocument(`window.sources=[]; const Native=window.EventSource;
+        window.EventSource=function(...args){const source=new Native(...args);window.sources.push(source);return source;};
+        Object.setPrototypeOf(window.EventSource, Native); // htmx reads EventSource.CLOSED to reconnect.
+        Object.defineProperty(document, 'visibilityState', {get: () => 'hidden'});
 		document.addEventListener('htmx:sseMessage', e => {
 			if (e.detail.type === 'sidebar') document.body.dataset.recounts = String(+(document.body.dataset.recounts || 0) + 1);
 		});`)
@@ -81,6 +85,24 @@ func TestLiveSidebarBrowser(t *testing.T) {
 		window.focusedLink = document.activeElement;
 		window.previousList = document.getElementById('sidebar-topics');
 	}`, source, channel, retained)
+	// The shared helper expects creation redirects to "/"; this one goes to the new channel.
+	response, _, err := f.owner.send(f.owner.request(t, "POST", "/organizations/branch/channels", url.Values{"name": {"other"}}))
+	if err != nil || response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("creating other channel: status %d, err %v", response.StatusCode, err)
+	}
+	otherBrowser := browser.MustIncognito()
+	defer otherBrowser.MustClose()
+	other := otherBrowser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
+	defer other.MustClose()
+	for _, cookie := range f.owner.client.Jar.Cookies(u) {
+		other.MustSetCookies(&proto.NetworkCookieParam{Name: cookie.Name, Value: cookie.Value, URL: f.owner.server.URL, Path: "/", Secure: true})
+	}
+	other.MustEvalOnNewDocument(sidebarUnreadBrowserClock + `;window.probe=0;
+        Object.defineProperty(document,'visibilityState',{get:()=> 'hidden'});
+        document.addEventListener('htmx:sseOpen', e => e.detail.source.addEventListener('unread', () => window.probe++));
+        document.addEventListener('htmx:sseMessage', e => {if(e.detail.type==='sidebar') window.sidebarTest.recounts=(window.sidebarTest.recounts||0)+1;});`)
+	other.MustNavigate(f.reader.server.URL + response.Header.Get("Location")).MustWaitLoad()
+	other.MustWait(`() => window.sidebarTest.recounts === 1`)
 	destination := branch(t, f.reader, view.ChannelURL("branch", f.channel), f.form, 303)
 	destinationID := "topic-" + strings.ReplaceAll(destination[strings.LastIndex(destination, "/")+1:], "-", "")
 	page.MustWait(`id => document.getElementById(id) && document.getElementById('sidebar-topics') !== window.previousList &&
@@ -97,6 +119,10 @@ func TestLiveSidebarBrowser(t *testing.T) {
 	}`, source, channel, retained, destinationID).Bool() {
 		t.Fatal("production branch recount lost focus, retained stale counts/ids or exceeded the topic bound")
 	}
+	other.MustWait(`() => window.probe >= 1`)
+	if other.MustEval(`() => window.sidebarTest.recounts`).Int() != 1 {
+		t.Fatal("move recounted stream showing another channel")
+	}
 	page.MustEval(`id => { document.getElementById('link-' + id).focus(); window.focusedLink = document.activeElement; }`, retained)
 	post(t, f.owner, f.path, "unlisted source stays live")
 	page.MustWait(`() => document.querySelector('#topic-heading-count [aria-hidden]')?.textContent === '1' &&
@@ -106,6 +132,8 @@ func TestLiveSidebarBrowser(t *testing.T) {
 	}
 	page.MustEval(`() => document.getElementById('sidebar-resync').dispatchEvent(new Event('sidebar-resync', {bubbles: true}))`)
 	page.MustWait(`() => +document.body.dataset.recounts >= 3 && !document.querySelector('.htmx-settling')`)
+	page.MustEval(`() => {const source=window.sources.at(-1);source.close();source.dispatchEvent(new Event('error'));}`)
+	page.MustWait(`() => +document.body.dataset.recounts >= 4 && !document.querySelector('.htmx-settling')`)
 	_, reload := f.reader.visit(t, "GET", f.path, nil, 200)
 	if !page.MustEval(`markup => {
 		const reload = new DOMParser().parseFromString(markup, 'text/html');

@@ -80,6 +80,10 @@ func (s Stream) scheduledRecount(ctx context.Context, sub Subscription, p *sched
 		p.observation = nil
 		outcome := "failed"
 		defer func() { observation.finish(outcome) }()
+		if errors.Is(completion.Err, errRecountDeferred) {
+			pending.next = s.RecountLimit.retryAt()
+			return nil
+		}
 		if completion.Err != nil {
 			return fmt.Errorf("recounting sidebar: %w", completion.Err)
 		}
@@ -135,7 +139,7 @@ func (s Stream) scheduledRecount(ctx context.Context, sub Subscription, p *sched
 		stop := context.AfterFunc(worker, cancel)
 		defer stop()
 		defer cancel()
-		return s.Sidebar.Recount(compute, sub)
+		return s.computeSidebar(compute, sub)
 	}
 	if s.RecountObserver != nil {
 		p.observation = s.RecountObserver.submit()

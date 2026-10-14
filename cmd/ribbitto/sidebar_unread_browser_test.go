@@ -26,9 +26,11 @@ import (
 const sidebarUnreadBrowserClock = `(() => {
  const timers = new Map(); let next = 0;
  const original = window.setTimeout, cancel = window.clearTimeout;
- window.sidebarTest = {started: 0};
+ window.sidebarTest = {started: 0, delays: []};
+ Math.random = () => 0.999999;
  window.setTimeout = (fn, ms, ...args) => {
-  if (!new Error().stack.includes('sidebar-unread-v1.js')) return original(fn, ms, ...args);
+  if (!/sidebar-unread-v2.js|message-stream-v10.js/.test(new Error().stack)) return original(fn, ms, ...args);
+  window.sidebarTest.delays.push(ms);
   const id = --next; timers.set(id, () => fn(...args)); return id;
  };
  window.clearTimeout = id => { if (!timers.delete(id)) cancel(id); };
@@ -92,7 +94,7 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 		}
 	})
 
-	for _, kind := range []string{"older-feed", "older-topic", "list", "hidden", "DOM", "malformed", "sequence-string", "sequence-fraction", "sequence-unsafe", "failed-request", "rate-limited", "during-resync", "continuous-posts", "before-request", "loss-during-resync", "overflow", "older-loss-snapshot", "second-overflow"} {
+	for _, kind := range []string{"older-feed", "older-topic", "list", "hidden", "DOM", "malformed", "sequence-string", "sequence-fraction", "sequence-unsafe", "failed-request", "rate-limited", "during-resync", "continuous-posts", "before-request", "loss-during-resync", "overflow", "older-loss-snapshot", "second-overflow", "reset-delay"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 			defer cancel()
@@ -165,7 +167,7 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 			defer page.MustClose()
 			page.MustEvalOnNewDocument(sidebarUnreadBrowserClock + `;window.visible = 'hidden'; window.probe = 0; window.completed = 0;
     Object.defineProperty(document, 'visibilityState', {get: () => window.visible});
-    document.addEventListener('htmx:sseOpen', e => { e.detail.source.addEventListener('probe', e => window.probe = +e.data); });
+    document.addEventListener('htmx:sseOpen', e => { e.detail.source.addEventListener('probe', e => window.probe = +e.data); e.detail.source.addEventListener('reset', () => window.reset = true); });
     document.addEventListener('htmx:afterRequest', e => { if(e.target.id === 'sidebar-resync') window.completed++; });`)
 			page.MustNavigate(server.URL + path).MustWaitLoad()
 			select {
@@ -214,6 +216,9 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 			}
 			next := func() chan int {
 				t.Helper()
+				if !page.MustEval(`() => window.sidebarTest.delays.every(ms => ms >= 0 && ms <= 8000)`).Bool() {
+					t.Fatal("resync jitter exceeded 8s backoff bound")
+				}
 				page.MustEval(`() => window.sidebarTest.advance()`)
 				select {
 				case reply := <-requests:
@@ -241,6 +246,18 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 					frames.WriteString(post(seq, kernel.ID{99}))
 				}
 				send(frames.String())
+			}
+			if kind == "reset-delay" {
+				select {
+				case frames <- "event: reset\ndata: reset\n\n":
+				case <-ctx.Done():
+					t.Fatal("reset gate")
+				}
+				page.MustWait(`() => window.reset && window.sidebarTest.pending() === 1`)
+				if !page.MustEval(`() => window.sidebarTest.delays.at(-1) > 4999 && window.sidebarTest.delays.at(-1) <= 5000`).Bool() {
+					t.Fatal("reset reload jitter outside 0–5s")
+				}
+				return
 			}
 			other := kernel.ID{99}
 			if olderPage || kind == "list" {
@@ -315,7 +332,17 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 				count(1005)
 			case "failed-request":
 				page.MustEval(`() => window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))`)
+				if !page.MustEval(`() => window.sidebarTest.delays.at(-1) > 1999 && window.sidebarTest.delays.at(-1) <= 2000`).Bool() {
+					t.Fatal("visibility/pageshow jitter outside 0–2s")
+				}
 				finish(next(), 500)
+				for i := 0; i < 6; i++ {
+					page.MustEval(`() => window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))`)
+					if !page.MustEval(`i => window.sidebarTest.pending() === 1 && window.sidebarTest.delays.at(-1) > Math.min(250 * 2 ** (i+1),8000) - 1 && window.sidebarTest.delays.at(-1) <= 8000`, i).Bool() {
+						t.Fatal("retry did not merge triggers or respect jittered exponential cap")
+					}
+					finish(next(), 500)
+				}
 			default:
 				send("event: unread\ndata: broken\n\n")
 			}

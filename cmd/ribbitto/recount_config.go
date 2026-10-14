@@ -71,3 +71,11 @@ func recountConfiguration(streamCap int) (recountConfig, error) {
 	}
 	return c, errors.Join(violations...)
 }
+
+// computationLimit reserves normal-work headroom even without the async budgets.
+func (c recountConfig) computationLimit(poolMax int32) int {
+	if c.enabled {
+		return int(c.workers)
+	} // W <= C-H was validated before opening.
+	return max(1, int(poolMax)/2)
+}

@@ -90,7 +90,9 @@ type costConnection struct {
 
 func (c *costConnection) Watch(organization, member kernel.ID) realtime.SidebarWatch {
 	if c.changes == nil {
-		return nil // Stopped comparison arms retain their historical wiring.
+		// Stream.Run releases every watch; a private, never-published one keeps
+		// the stopped comparison arms' historical behaviour without a nil watch.
+		return (&unread.Changes{}).Watch(organization, member)
 	}
 	c.watch = c.changes.Watch(organization, member)
 	return c.watch
@@ -361,4 +363,13 @@ func TestCostSidebarConfiguration(t *testing.T) {
 			t.Errorf("distinct=%t posts=%d: valid=%t, want %t", tt.distinct, tt.posts, got, tt.want)
 		}
 	}
+}
+
+func TestCostConnectionWatchIsNeverNil(t *testing.T) {
+	// Stream.Run defers Release on whatever Watch returns.
+	watch := (&costConnection{}).Watch(kernel.ID{1}, kernel.ID{2})
+	if watch == nil {
+		t.Fatal("comparison-arm connection returned a nil sidebar watch")
+	}
+	watch.Release()
 }

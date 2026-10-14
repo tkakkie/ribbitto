@@ -49,8 +49,10 @@ p50/p95/p99 in milliseconds.
 | 1,000 | 7.711/12.760/15.522 | 6.884/10.055/18.260 | 6.306/10.738/12.604 | 2.041 s | 1,004 | 13,140/4,150 | 0 |
 | 5,000 | 28.373/37.857/42.475 | 22.031/49.370/86.006 | 22.328/32.243/38.645 | 5.035 s | 5,004 | 61,111/20,466 | 0 |
 
-Recounts are each stream's initial and final snapshot (four count statements
-each); none ran while posts flowed. SQL includes posting and the final resync.
+Initial snapshots are excluded. Recounts are each stream's final snapshot plus
+four recounts of the posting member's own stream (author-only trigger, coalesced
+once per second over 4 s), four count statements each; no other stream
+recounted while posts flowed. SQL includes posting and the final resync.
 For comparison, the server-recount approach measured 1.5 s median arrival at
 5,000 streams and 20 posts/s ([results](stream-sidebar-results.md)).
 

@@ -146,15 +146,12 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	}
 
 	test.run(test.beforeWrite)
-	gemini2, dirs2, err := openOwned(root, true)
-	defer closeAll(gemini2, dirs2)
-	if err != nil {
+	// Just before creating or writing anything, HOME must still be the
+	// directory checked, and the shared configuration is resolved again, so
+	// a swap of either since the checks creates nothing (Argon on #1075).
+	if err := sameHome(home, root); err != nil {
 		return "", err
 	}
-	// The directories about to be written must be the ones just checked, and
-	// the shared configuration is resolved again, in case either was swapped
-	// since (Copilot on #1075). A directory created here was empty when made;
-	// the checks run on it again all the same.
 	current, err := openShared(accountHome)
 	defer current.close()
 	if err != nil {
@@ -163,6 +160,18 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 	if err := separate(root, current); err != nil {
 		return "", err
 	}
+	if err := checkSharedFiles(accountHome, files, checked); err != nil {
+		return "", err
+	}
+	gemini2, dirs2, err := openOwned(root, true)
+	defer closeAll(gemini2, dirs2)
+	if err != nil {
+		return "", err
+	}
+	// The directories about to be written must be the ones just checked, and
+	// still apart from the shared configuration, in case either was swapped
+	// since (Copilot on #1075). A directory created here was empty when made;
+	// the checks run on it again all the same.
 	written := map[string]place{}
 	for name, fd := range dirs2 {
 		p, err := identity(fd)
@@ -234,6 +243,23 @@ func prepareWith(home, accountHome, guardPath string, test hooks) (string, error
 		}
 	}
 	return home, nil
+}
+
+// sameHome refuses when the path no longer leads to the directory checked.
+func sameHome(home string, root int) error {
+	fd, err := walk(home)
+	if err != nil {
+		return fmt.Errorf("re-opening RIBBITTO_ARGON_HOME: %w", err)
+	}
+	defer closeFD(fd)
+	now, err := identity(fd)
+	if err != nil {
+		return err
+	}
+	if checked, err := identity(root); err != nil || checked != now {
+		return errors.New("refusing: RIBBITTO_ARGON_HOME changed after it was checked")
+	}
+	return nil
 }
 
 type place struct{ dev, ino uint64 }

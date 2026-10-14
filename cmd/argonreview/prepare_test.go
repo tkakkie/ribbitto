@@ -472,17 +472,23 @@ func TestPrepareRefusesADirectoryPlantedBeforeWriting(t *testing.T) {
 func TestPrepareRefusesASharedSwap(t *testing.T) {
 	for _, tc := range []struct {
 		name, target string
-		after        bool
+		after, empty bool
 	}{
-		{"before writing, to HOME/.gemini", ".gemini", false},
-		{"before writing, to HOME", "", false},
-		{"after writing, to HOME", "", true},
+		{"before writing, to HOME/.gemini", ".gemini", false, false},
+		{"before writing, to HOME", "", false, false},
+		// Dangling until prepare would create HOME/.gemini (Argon on #1075).
+		{"before writing, to an empty HOME's .gemini", ".gemini", false, true},
+		{"after writing, to HOME", "", true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			account := resolved(t, t.TempDir())
 			write(t, filepath.Join(account, ".gemini/config/hooks.json"), `{"tencle":{}}`)
 			home := filepath.Join(account, "dev", "agy-home")
-			write(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), "mine")
+			mkdir(t, home)
+			if !tc.empty {
+				write(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), "mine")
+			}
+			before := snapshot(t, home)
 			swap := func() {
 				shared := filepath.Join(account, ".gemini")
 				if err := os.Rename(shared, shared+".old"); err != nil {
@@ -497,13 +503,38 @@ func TestPrepareRefusesASharedSwap(t *testing.T) {
 			if _, err := prepareWith(home, account, guardBinary, test); err == nil {
 				t.Fatal("accepted")
 			}
-			if !tc.after {
-				if data, _ := os.ReadFile(filepath.Join(home, ".gemini/antigravity-cli/settings.json")); string(data) != "mine" {
-					t.Fatalf("settings.json, now shared, was rewritten: %q", data)
-				}
+			// Before writing, nothing is created or rewritten in HOME.
+			if !tc.after && !equal(before, snapshot(t, home)) {
+				t.Fatalf("HOME changed:\n%v\n%v", before, snapshot(t, home))
 			}
 		})
 	}
+}
+
+// HOME itself swapped after the checks: the checked directory, now moved
+// aside, gets nothing created or written (Argon on #1075).
+func TestPrepareRefusesAHomeSwapBeforeWriting(t *testing.T) {
+	account, unchanged := fixture(t)
+	home := filepath.Join(account, "dev", "agy-home")
+	write(t, filepath.Join(home, ".gemini/antigravity-cli/settings.json"), "mine")
+	before := snapshot(t, home)
+	swap := func() {
+		if err := os.Rename(home, home+".old"); err != nil {
+			t.Fatal(err)
+		}
+		mkdir(t, home)
+	}
+	if _, err := prepareWith(home, account, guardBinary, hooks{beforeWrite: swap}); err == nil || !strings.Contains(err.Error(), "changed after it was checked") {
+		t.Fatalf("err = %v", err)
+	}
+	moved := map[string]string{}
+	for path, content := range snapshot(t, home+".old") {
+		moved[strings.Replace(path, home+".old", home, 1)] = content
+	}
+	if !equal(before, moved) {
+		t.Fatalf("the checked HOME changed:\n%v\n%v", before, moved)
+	}
+	unchanged()
 }
 
 // An owned file swapped for a FIFO after writing makes prepare fail, not hang

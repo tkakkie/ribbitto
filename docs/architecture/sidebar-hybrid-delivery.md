@@ -32,9 +32,12 @@ with 2a–2c-b2, the tests cover #961's acceptance conditions.
 model, ordered lists, selection, display counts and badges. Sequence coverage is
 read in that model's repeatable-read snapshot. Its test-token sink installs state
 only after successful delivery and rejects duplicate completions. Application
-snapshot SQL is counted through the supplied pool; independent oracle checks are
-verification work outside application totals. The historical stage-1 source stays
-separate. Runner integration, repairs and new accounting remain #952b–952c.
+snapshot SQL is counted through the supplied pool. The optional checkpoint runs
+the independent oracle in that same transaction for deterministic verification
+only; measured callers must pass nil so oracle work stays out of application
+totals. The historical stage-1 source stays separate. Runner integration, repairs
+and new accounting remain #952b–952c; the measured report and recommendation are
+#952d.
 
 The baseline `costWriter` keeps its fair scheduler and now subscribes to scoped
 member watches before recounting, captures generations when queued work starts,

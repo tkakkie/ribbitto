@@ -13,7 +13,7 @@ const (
 	buttonPrimary buttonKind = iota
 	// buttonSecondary is an outlined, less prominent action.
 	buttonSecondary
-	// buttonSecondaryIcon adds a decorative child to the secondary look.
+	// buttonSecondaryIcon keeps only its named icon below desk.
 	buttonSecondaryIcon
 )
 
@@ -22,9 +22,15 @@ const (
 templ submitButton(kind buttonKind, label string) {
 	switch kind {
 		case buttonSecondary, buttonSecondaryIcon:
-			<button type="submit" class={ "min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover transition-feedback motion-safe:active:scale-96", templ.KV("inline-flex items-center justify-center gap-2 whitespace-nowrap", kind == buttonSecondaryIcon) }>
+			<button
+				type="submit"
+				if kind == buttonSecondaryIcon {
+					aria-label={ i18n.T(ctx, label) }
+				}
+				class={ "min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover transition-feedback motion-safe:active:scale-96", templ.KV("inline-flex items-center justify-center gap-2 whitespace-nowrap max-desk:size-11 max-desk:gap-0 max-desk:px-0", kind == buttonSecondaryIcon) }
+			>
 				{ children... }
-				{ i18n.T(ctx, label) }
+				<span class={ templ.KV("max-desk:hidden", kind == buttonSecondaryIcon) }>{ i18n.T(ctx, label) }</span>
 			</button>
 		default:
 			<button type="submit" class="min-h-11 rounded-md bg-brand px-4 py-2 text-body font-semibold text-on-brand hover:bg-brand-hover transition-feedback motion-safe:active:scale-96">{ i18n.T(ctx, label) }</button>

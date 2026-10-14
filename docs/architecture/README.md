@@ -45,6 +45,7 @@ Read the file for the area you change:
 | [`unread-writes.md`](unread-writes.md) | how read ranges are written: the current feed, topic-view, branch-notice and posting writes |
 | [`unread-counters-design.md`](unread-counters-design.md) | #955: proposed write-time counter maintenance; linked operations, concurrency, repair and pre-measurement adoption criteria |
 | [`unread-counters-verification.md`](unread-counters-verification.md) | #956: what the test-only counter prototype has verified against #950's oracle, and its limits |
+| [`unread-counters-sql-adapter.md`](unread-counters-sql-adapter.md) | #957a: real test-only SQL rows, production post/read maintenance and deterministic verification; remaining adapter and measurement boundaries |
 | [`sidebar-hybrid-coverage.md`](sidebar-hybrid-coverage.md) | #961 part 2c-a: pinned coverage, stale-input rejection and retained exact replay |
 | [`sidebar-hybrid-hypothetical.md`](sidebar-hybrid-hypothetical.md) | #960b: separate hypothetical metadata, exact deltas and reconciliation limits |
 | [`sidebar-hybrid-contract.md`](sidebar-hybrid-contract.md) | #950: production-only derivability, snapshot coverage and exact model/comparison for the test-only hybrid investigation |

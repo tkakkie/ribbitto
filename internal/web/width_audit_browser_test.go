@@ -103,17 +103,33 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	page := browser.Context(ctx).MustPage().WithPanic(func(v any) { t.Fatal(v) })
-	defer page.MustClose()
+	tab, closeTab := boundedPage(t, browser, ctx, "width audit")
+	defer closeTab()
+	page := tab.WithPanic(func(v any) { t.Fatal(v) })
+	// setup runs one browser setting under its own 10 s and fails by name.
+	setup := func(what string, call func(p *rod.Page) error) {
+		t.Helper()
+		setupCtx, stop := context.WithTimeout(ctx, 10*time.Second)
+		defer stop()
+		if err := call(page.Context(setupCtx)); err != nil {
+			t.Fatalf("%s: %v", what, err)
+		}
+	}
 	defer func() {
-		if err := (proto.NetworkDeleteCookies{Name: "lang", URL: server.URL}).Call(page); err != nil {
-			t.Error(err)
+		cleanupCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+		defer stop()
+		if err := (proto.NetworkDeleteCookies{Name: "lang", URL: server.URL}).Call(page.Context(cleanupCtx)); err != nil {
+			t.Errorf("deleting the lang cookie: %v", err)
 		}
 	}()
 	for _, size := range [][2]int{{320, 568}, {390, 844}, {851, 844}, {852, 844}, {1199, 844}, {1200, 844}, {844, 390}, {320, 200}, {640, 400}} {
-		page.MustSetViewport(size[0], size[1], 1, false)
+		setup(fmt.Sprintf("setting the viewport to %dx%d", size[0], size[1]), func(p *rod.Page) error {
+			return proto.EmulationSetDeviceMetricsOverride{Width: size[0], Height: size[1], DeviceScaleFactor: 1}.Call(p)
+		})
 		for _, lang := range []string{"en", "ja"} {
-			page.MustSetCookies(&proto.NetworkCookieParam{Name: "lang", Value: lang, URL: server.URL})
+			setup("setting the lang cookie to "+lang, func(p *rod.Page) error {
+				return p.SetCookies([]*proto.NetworkCookieParam{{Name: "lang", Value: lang, URL: server.URL}})
+			})
 			for _, c := range cases {
 				t.Run(fmt.Sprintf("%dx%d/%s/%s", size[0], size[1], lang, c.name), func(t *testing.T) {
 					where := fmt.Sprintf("page=%s viewport=%dx%d language=%s", c.name, size[0], size[1], lang)

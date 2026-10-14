@@ -11,6 +11,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/realtime"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -80,8 +81,9 @@ func testShortHeightBrowser(t *testing.T, browser *rod.Browser) {
 			since := func() time.Duration { return time.Since(started).Round(time.Millisecond) }
 			current, stepCancel := "setup", context.CancelFunc(func() {})
 			defer func() { stepCancel() }()
-			base := browser.Context(ctx).MustPage().WithPanic(func(v any) { t.Fatalf("%s: %v (at %s)", current, v, since()) })
-			defer base.MustClose()
+			tab, closeTab := boundedPage(t, browser, ctx, "short-height")
+			defer closeTab()
+			base := tab.WithPanic(func(v any) { t.Fatalf("%s: %v (at %s)", current, v, since()) })
 			page := base
 			step := func(what string) {
 				stepCancel()
@@ -151,5 +153,44 @@ func testShortHeightBrowser(t *testing.T, browser *rod.Browser) {
 				const r = item.getBoundingClientRect(), l = document.getElementById('message-list').getBoundingClientRect();
 				return Math.min(r.bottom, l.bottom, document.documentElement.clientHeight) - Math.max(r.top, l.top, 0) >= Math.min(r.height, 88) - 0.5; }`)
 		})
+	}
+}
+
+// boundedPage creates a tab within 15 s, failing by name, and returns it on
+// ctx with a close that has its own 10 s, so neither creation nor cleanup
+// can wait on the whole test's deadline (#1060). Close it before the test
+// server: an open tab keeps its stream request alive.
+func boundedPage(t *testing.T, browser *rod.Browser, ctx context.Context, what string) (*rod.Page, func()) {
+	t.Helper()
+	// The page keeps the context it was created with (rod's Mouse and
+	// Keyboard use it), so it is created with ctx and the wait is bounded
+	// here instead.
+	type created struct {
+		page *rod.Page
+		err  error
+	}
+	done := make(chan created, 1)
+	go func() {
+		page, err := browser.Context(ctx).Page(proto.TargetCreateTarget{})
+		done <- created{page, err}
+	}()
+	timer := time.NewTimer(15 * time.Second)
+	defer timer.Stop()
+	var page *rod.Page
+	select {
+	case c := <-done:
+		if c.err != nil {
+			t.Fatalf("%s: creating the page: %v", what, c.err)
+		}
+		page = c.page
+	case <-timer.C:
+		t.Fatalf("%s: creating the page did not finish within 15 s", what)
+	}
+	return page, func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := page.Context(closeCtx).Close(); err != nil {
+			t.Errorf("%s: closing the page: %v", what, err)
+		}
 	}
 }

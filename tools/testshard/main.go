@@ -1,9 +1,10 @@
 // Command testshard splits the application module's Go test packages
 // between CI's parallel jobs. It prints one shard's package patterns for
 // make check-test; -check fails unless the shards together list every
-// package of go list ./... exactly once. The named shards hold the slowest
-// packages; "rest" is everything else, so a package added later runs in CI
-// without editing this list or the workflow. make check runs -check.
+// package of go list ./... exactly once and the workflow runs each shard in
+// exactly one job. The named shards hold the slowest packages; "rest" is
+// everything else, so a package added later runs in CI without editing this
+// list or the workflow. make check runs -check.
 package main
 
 import (
@@ -11,6 +12,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -26,6 +29,16 @@ var shards = []struct {
 }
 
 const rest = "rest"
+
+const workflow = ".github/workflows/ci.yml"
+
+// The workflow names the shards it runs in a test matrix line and in rest's
+// make check-test step; -check reads both, so a shard dropped from or
+// repeated in the workflow fails make check.
+var (
+	matrixLine = regexp.MustCompile(`(?m)^\s*shard: \[(.*)\]\s*$`)
+	restRun    = regexp.MustCompile(`testshard \.\. ` + rest + `\)`)
+)
 
 func main() {
 	check := flag.Bool("check", false, "fail unless the shards list every package exactly once")
@@ -51,16 +64,35 @@ func run(root, shard string, check bool) error {
 		return err
 	}
 	if check {
-		return covers(parts, all)
+		if err := covers(parts, all); err != nil {
+			return err
+		}
+		source, err := os.ReadFile(filepath.Join(root, workflow))
+		if err != nil {
+			return fmt.Errorf("reading the workflow: %w", err)
+		}
+		return scheduled(string(source))
 	}
-	packages, ok := parts[shard]
-	if !ok {
-		return fmt.Errorf("unknown shard %q", shard)
+	packages, err := pick(parts, shard)
+	if err != nil {
+		return err
 	}
 	// One line: make check-test passes the list in a variable, and a newline
 	// there would end the recipe line.
 	fmt.Println(strings.Join(packages, " "))
 	return nil
+}
+
+func pick(parts map[string][]string, shard string) ([]string, error) {
+	packages, ok := parts[shard]
+	if !ok {
+		return nil, fmt.Errorf("unknown shard %q", shard)
+	}
+	// An empty list would make go test test only the root package and pass.
+	if len(packages) == 0 {
+		return nil, fmt.Errorf("shard %q has no packages", shard)
+	}
+	return packages, nil
 }
 
 // list returns the module's packages as ./-relative patterns, the form the
@@ -145,6 +177,36 @@ func covers(parts map[string][]string, all []string) error {
 	}
 	if len(seen) != len(all) {
 		return fmt.Errorf("shards list %d packages, go list ./... lists %d", len(seen), len(all))
+	}
+	return nil
+}
+
+// scheduled checks that the workflow runs every shard exactly once: each
+// named shard once in the test matrix and rest once in its own step.
+func scheduled(source string) error {
+	lines := matrixLine.FindAllStringSubmatch(source, -1)
+	if len(lines) != 1 {
+		return fmt.Errorf("%s: want one test matrix line \"shard: [...]\", found %d", workflow, len(lines))
+	}
+	var want, got []string
+	for _, s := range shards {
+		want = append(want, s.name)
+	}
+	for _, name := range strings.Split(lines[0][1], ",") {
+		got = append(got, strings.TrimSpace(name))
+	}
+	for _, name := range got {
+		if !slices.Contains(want, name) {
+			return fmt.Errorf("%s: the test matrix names unknown shard %q", workflow, name)
+		}
+	}
+	for _, name := range want {
+		if n := len(slices.DeleteFunc(slices.Clone(got), func(g string) bool { return g != name })); n != 1 {
+			return fmt.Errorf("%s: the test matrix runs shard %s %d times, want once", workflow, name, n)
+		}
+	}
+	if n := len(restRun.FindAllString(source, -1)); n != 1 {
+		return fmt.Errorf("%s: shard %s runs in %d steps, want one", workflow, rest, n)
 	}
 	return nil
 }

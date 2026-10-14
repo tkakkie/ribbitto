@@ -82,8 +82,13 @@ jobs:
       - name: check-static
         run: make check-static
 
+      # The list is taken in its own command, so a failed testshard fails
+      # the step under bash -e instead of leaving an empty package list.
       - name: check-test (rest)
-        run: make check-test GO_TEST_PACKAGES="$(go -C tools run ./testshard .. rest)"
+        run: |
+          packages=$(go -C tools run ./testshard .. rest)
+          test -n "$packages"
+          make check-test GO_TEST_PACKAGES="$packages"
 
       # The Makefile pins golangci-lint for both local checks and CI. On a
       # pull request, the AI launchers' self-tests run only when the diff from
@@ -115,7 +120,8 @@ jobs:
       - name: govulncheck
         run: make vuln
 
-  # The slowest packages, one tools/testshard shard per job.
+  # The slowest packages, one tools/testshard shard per job. testshard -check
+  # (in make check) fails unless this matrix names each of its shards once.
   test:
     strategy:
       fail-fast: false
@@ -150,7 +156,10 @@ jobs:
       - name: check-test (${{ matrix.shard }})
         env:
           SHARD: ${{ matrix.shard }}
-        run: make check-test GO_TEST_PACKAGES="$(go -C tools run ./testshard .. "$SHARD")"
+        run: |
+          packages=$(go -C tools run ./testshard .. "$SHARD")
+          test -n "$packages"
+          make check-test GO_TEST_PACKAGES="$packages"
 
   # The required check. A job whose needs failed is skipped by default, and a
   # skipped job satisfies a required check, so this one always runs and

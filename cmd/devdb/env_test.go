@@ -241,3 +241,24 @@ func TestDatabaseURL(t *testing.T) {
 		}
 	}
 }
+
+// A removed (prunable) worktree keeps its missing tail in order, however
+// many levels are gone, and its existing prefix is resolved through links.
+func TestResolveKeepsMissingLevelsInOrder(t *testing.T) {
+	base := resolve(t.TempDir())
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(base, alias); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ in, want string }{
+		{filepath.Join(base, "gone"), filepath.Join(base, "gone")},
+		{filepath.Join(base, "gone", "nested"), filepath.Join(base, "gone", "nested")},
+		{filepath.Join(base, "a", "b", "c"), filepath.Join(base, "a", "b", "c")},
+		{filepath.Join(alias, "gone", "nested"), filepath.Join(base, "gone", "nested")},
+		{base, base},
+	} {
+		if got := resolve(tc.in); got != tc.want {
+			t.Errorf("resolve(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

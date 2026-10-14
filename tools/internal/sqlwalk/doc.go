@@ -5,7 +5,8 @@
 // callers own other node acceptance, organisation scope and table ownership.
 //
 // Options preserve scopecheck's collected CTE names and opaque INSERT bodies,
-// while tablecheck uses sequential, lexical CTE scopes. Walk always passes write
+// while tablecheck uses sequential, lexical CTE scopes and opts into visiting
+// embedded set-operation branches as statements. Walk always passes write
 // targets to Relation, even when a visible CTE has the same name. ReasonRules
 // preserves scopecheck's colon-terminated pending marker and issue-comment syntax;
 // tablecheck also rejects bare markers and accepts review-comment provenance.

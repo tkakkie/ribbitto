@@ -51,7 +51,8 @@ need that branch's own WHERE scope, never ON or an outer predicate. `UNION`
 Any set operation in a statement containing INSERT, UPDATE or DELETE,
 including CTE sources or writes, also fails; this permission applies only
 to reads. Tablecheck's ownership
-walk and both gates' other refusals are unchanged.
+walk validates every branch, including nested ones, as a SELECT and refuses
+SELECT INTO there too; both gates' other refusals are unchanged.
 
 `tools/scopecheck/allowlist.txt` uses `module.QueryName reason…`; stale, unnecessary
 and `PENDING MAINTAINER:` entries fail (case-insensitive, with any non-alphanumeric
@@ -60,7 +61,10 @@ separator between the marker words).
 ## Expressions (tablecheck)
 
 Query expressions accept only `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower`.
-Query operators allow unqualified `=`, `<`, `>`, `<=`, `+`; casts allow
+Query operators allow unqualified `=`, `<`, `>`, `<=`, `+`. Operator names
+are checked in comparisons, quantified ANY/ALL subqueries and ORDER BY USING
+sort clauses alike; unclassifiable names fail. IN subqueries, EXISTS, scalar
+subqueries and plain/DESC sorts need no explicit operator. Casts allow
 unqualified `uuid`, `bigint`, `jsonb`.
 
 Tablecheck accepts scalar `sqlc.arg(name)::int8multirange` (#743), with

@@ -88,7 +88,11 @@ expressions and dynamic SQL fail closed; PL/pgSQL SELECT INTO a variable stays
 an assignment. Migration backfills and routine SQL allow only `count`, `max`,
 `lower` and `row_number`, plus the checked sequence calls below. Their operators
 are unqualified `=`, `<`, `>`, `<=`, `>=`, `<>`, `+`, `-` and `||` (including
-IS DISTINCT FROM / IS NOT DISTINCT FROM, parsed with `=`); casts are refused.
+IS DISTINCT FROM / IS NOT DISTINCT FROM, parsed with `=`). Operator names
+are checked in comparisons, quantified ANY/ALL subqueries and ORDER BY USING
+sort clauses alike; qualified or unclassifiable names fail. Every set-operation
+branch, nested ones included, is validated as a SELECT; SELECT INTO is refused.
+Casts are refused.
 Function definition options are limited to LANGUAGE and AS.
 
 Migration `nextval` and `currval` require exactly one bare literal sequence

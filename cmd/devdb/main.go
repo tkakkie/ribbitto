@@ -1,8 +1,8 @@
 // Command devdb migrates worktree databases, observes development capacity,
-// runs commands with a worktree's database and ports (run) and checks the
-// admin connection (health). It keeps admin credentials in the environment
+// reserves and releases a worktree's database and ports (reserve, release),
+// runs commands with them (run) and checks the admin connection (health). It keeps admin credentials in the environment
 // and suppresses driver errors, which can contain connection strings. The
-// Makefile builds it as bin/ai-db; ai_env.py and cmd/capacity also use it.
+// Makefile builds it as bin/ai-db; cmd/capacity also uses it.
 package main
 
 import (
@@ -19,12 +19,15 @@ import (
 )
 
 func main() {
-	if len(os.Args) >= 2 && (os.Args[1] == "run" || os.Args[1] == "health") {
+	if len(os.Args) >= 2 && (os.Args[1] == "run" || os.Args[1] == "health" || os.Args[1] == "reserve" || os.Args[1] == "release") {
 		var err error
-		if os.Args[1] == "run" {
+		switch os.Args[1] {
+		case "run":
 			err = runWithEnvironment(os.Args[2:])
-		} else {
+		case "health":
 			err = health()
+		default:
+			err = reserveHere(os.Args[1] == "release")
 		}
 		var shown failure
 		switch {
@@ -90,6 +93,18 @@ func run() (int, error) {
 		fmt.Println(values[0])
 	}
 	return 4, rows.Err()
+}
+
+// reserveHere reserves (make ai-env) or releases (make ai-env-clean) the
+// current worktree's database and ports.
+func reserveHere(release bool) error {
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	db := &server{}
+	defer db.close()
+	return reserve(dir, release, db)
 }
 
 // health reports whether the admin connection works, with the same phase

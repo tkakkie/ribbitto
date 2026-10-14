@@ -22,7 +22,7 @@ It imports only `internal/platform/postgres` from
 this module to reuse the migration runner; credentials stay in the environment.
 `cmd/capacity` runs two uncached required-DB checks and cleans up their sessions.
 It imports only `internal/platform/postgres/pgtest` from this module to report
-`pgtest.MaxConns`; it does not configure pools or import the Python worktree helper.
+`pgtest.MaxConns`; it does not configure pools.
 `cmd/dev` supervises the Tailwind and templ watchers in separate sessions,
 including templ's server in another process group, and confirms descendant
 cleanup on shutdown. It imports no application packages; `bin/ai-db run`

@@ -110,5 +110,23 @@ The callback is a seam for the later oracle; it is not itself a freshness proof.
 Close cancels and closes the response body, joins frame intake, then releases
 the member's stream ownership exactly once. Reset and unexplained EOF/read
 failure remain lifecycle errors; caller cancellation is planned shutdown.
-Fake-server tests gate frame delivery and cancellation without sleeps. Scheduled
-churn and refusal accounting belong to slice 4b; there is still no runner.
+Fake-server tests gate frame delivery and cancellation without sleeps.
+
+## Churn (slice 4b)
+
+`replace` takes a caller-chosen member's existing stream and scheduled logical
+replacement. Busy, expired and already missed slots never wait or reconnect.
+It closes and joins intake before reconnecting with the last complete applied
+durable cursor, retaining the session and scope without another page GET.
+Each attempt waits 250 ms plus seeded uniform 0–250 ms jitter, keyed by traffic
+seed and logical ID. Only 503 retries, within the original replacement's 2 s
+offline budget; header admission uses the remaining budget. No capacity signal
+is consulted. Cancellation, other statuses and prior lifecycle errors stay
+unsuccessful. Exhausted retries leave the stream offline until caller cleanup.
+
+Attempts retain logical ID, attempt number, status and offline-to-admission
+outage for the merged refusal gates. Scheduled replacements include misses;
+retries never enlarge that denominator. Recovery uses the first successful
+reconnect, never a later success. Fake servers and virtual delays verify cursor
+retention, bounded retries, 429/other failures and refusal accounting. There is
+still no runner, witness or measurement.

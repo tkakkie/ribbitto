@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -43,7 +44,7 @@ func (d *stage2Driver) establishStream(ctx context.Context, member uint64, start
 	m.mu.Unlock()
 	if err == nil && o.Outcome == "succeeded" && s.cursor > 0 {
 		o.Slot.Operation = "establishment"
-		s.connect(ctx, &o, start, now)
+		s.connect(ctx, &o, start, time.Time{}, now, 1, 10*time.Second)
 		if o.Outcome == "succeeded" {
 			return s, o.Attempts, nil
 		}
@@ -52,10 +53,10 @@ func (d *stage2Driver) establishStream(ctx context.Context, member uint64, start
 	return nil, o.Attempts, fmt.Errorf("establishing stage-2 stream failed")
 }
 
-func (s *stage2Stream) connect(ctx context.Context, o *stage2Observation, start time.Time, now func() time.Time) {
+func (s *stage2Stream) connect(ctx context.Context, o *stage2Observation, start, offline time.Time, now func() time.Time, attempt uint64, budget time.Duration) {
 	streamCtx, cancel := context.WithCancel(ctx)
 	// The header deadline ends at admission; an admitted stream stays alive.
-	timer := time.AfterFunc(10*time.Second, cancel)
+	timer := time.AfterFunc(budget, cancel)
 	endpoint := s.d.transport.origin.Scheme + "://" + s.d.transport.origin.Host + "/organizations/" + url.PathEscape(s.d.data.Slug) + "/events"
 	q := url.Values{"want": {"sidebar,messages,typing"}, "channel": {s.d.data.Stage2.HotChannelID}}
 	if scope := s.d.members[s.member].streamScope; scope != "feed" {
@@ -91,7 +92,7 @@ func (s *stage2Stream) connect(ctx context.Context, o *stage2Observation, start 
 		}
 		cancel()
 	}
-	o.finish(start, dispatch, now(), time.Time{}, 1, status, outcome)
+	o.finish(start, dispatch, now(), offline, attempt, status, outcome)
 }
 
 func (s *stage2Stream) consume(ctx context.Context) {
@@ -134,4 +135,49 @@ func (s *stage2Stream) close() error {
 		s.d.members[s.member].stream.Unlock()
 	}
 	return err
+}
+
+// The caller chooses an existing stream. Busy and expired slots never wait;
+// only 503 retries, within the same logical replacement's two-second budget.
+// wait is context-aware virtual time in tests, a timer in the later runner.
+func (s *stage2Stream) replace(ctx context.Context, o stage2Observation, start time.Time, seed uint64, now func() time.Time, wait func(context.Context, time.Duration) bool) (stage2Observation, error) {
+	if o.Outcome == "missed" {
+		return o, nil
+	}
+	if !now().Before(o.Slot.Expires) {
+		o.Dispatch, o.Completed, o.Outcome = time.Time{}, now(), "missed"
+		return o, nil
+	}
+	fail := func(err error) (stage2Observation, error) {
+		o.Dispatch, o.Completed, o.Outcome = now(), now(), "failed"
+		return o, err
+	}
+	if o.Slot.Operation != "replacement" || o.Slot.Endpoint != stage2StreamPage(s.member).Endpoint || !s.mu.TryLock() {
+		return fail(fmt.Errorf("stage-2 replacement unavailable"))
+	}
+	defer s.mu.Unlock()
+	if s.closed || s.cancel == nil || ctx.Err() != nil {
+		return fail(fmt.Errorf("stage-2 stream not connected or caller cancelled"))
+	}
+	o.Member, o.MemberSelected = s.member, true
+	offline := now()
+	if err := s.stop(); err != nil {
+		return fail(err)
+	}
+	rng := rand.New(rand.NewPCG(seed, o.Slot.LogicalID))
+	deadline := offline.Add(2 * time.Second)
+	for attempt := uint64(1); ; attempt++ {
+		delay := 250*time.Millisecond + time.Duration(rng.Int64N(int64(250*time.Millisecond)+1))
+		if !now().Add(delay).Before(deadline) || !wait(ctx, delay) || ctx.Err() != nil {
+			o.Dispatch, o.Completed, o.Outcome = now(), now(), "timeout"
+			if len(o.Attempts) > 0 {
+				o.Dispatch = start.Add(time.Duration(o.Attempts[0].OffsetNS))
+			}
+			return o, nil
+		}
+		s.connect(ctx, &o, start, offline, now, attempt, deadline.Sub(now()))
+		if o.Outcome != "failed" || o.Attempts[len(o.Attempts)-1].Status != 503 || !now().Before(deadline) {
+			return o, nil
+		}
+	}
 }

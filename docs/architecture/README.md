@@ -15,7 +15,7 @@ Read the file for the area you change:
 | File | Covers |
 |---|---|
 | [`packages.md`](packages.md) | packages, their responsibilities and allowed imports |
-| [`import-checks.md`](import-checks.md) | how the module manifest test (`module_imports_test.go`), depguard (non-module rules) and `make check` enforce imports and `doc.go` |
+| [`import-checks.md`](import-checks.md) | how the module manifest test (`module_imports_test.go`), depguard (non-module rules) and `tools/formatcheck` enforce imports and `doc.go` |
 | [`query-gate.md`](query-gate.md) | the rules tablecheck and scopecheck apply to production queries: organisation scope, accepted expressions and relation shapes |
 | [`features.md`](features.md) | the feature map: each feature's packages and tables, and the known exceptions |
 | [`cross-feature-access.md`](cross-feature-access.md) | how features reach each other's data: stores, posting's transaction, history and the page snapshot |

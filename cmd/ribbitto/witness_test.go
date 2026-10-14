@@ -288,6 +288,53 @@ func TestWitnessSnapshot(t *testing.T) {
 	}
 }
 
+func TestWitnessOwnership(t *testing.T) {
+	for _, kind := range []string{"sidebar", "page"} {
+		for _, selection := range []string{"selected", "nil"} {
+			t.Run(kind+"/"+selection, func(t *testing.T) {
+				pool := pgtest.New(t)
+				f := conversationtest.OrganizationWithOwner(t, pool, "witness", "general")
+				m, err := orgpg.NewAuthorizer(pool).Member(t.Context(), &identity.Account{ID: f.AccountID}, "witness")
+				feedRequire(t, err)
+				selectedID := f.Channel.DefaultTopicID
+				var selected *kernel.ID
+				if selection == "selected" {
+					selected = &selectedID
+				}
+				wantRange := conversation.WitnessRange{ChannelID: f.Channel.ID, Lo: 0, Hi: 2}
+				ranges := []conversation.WitnessRange{wantRange}
+				floors := map[kernel.ID]int64{f.Channel.DefaultTopicID: 1}
+				r := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn).WithWitness(func(context.Context, platform.Snapshot, org.Membership, kernel.ID, []kernel.ID, []kernel.ID) ([]conversation.WitnessRange, map[kernel.ID]int64, error) {
+					return ranges, floors, nil
+				})
+				_, w := witnessRead(t, r, m, f.Channel.ID, selected, kind)
+				if w == nil {
+					t.Fatal("missing witness")
+				}
+				selectedID = kernel.ID{255}
+				ranges[0] = conversation.WitnessRange{ChannelID: kernel.ID{255}, Lo: 9, Hi: 10}
+				floors[f.Channel.DefaultTopicID] = 9
+				floors[kernel.ID{255}] = 10
+				if selected != nil {
+					if w.Selected == nil {
+						t.Error("missing selected witness ID")
+					} else if *w.Selected != f.Channel.DefaultTopicID {
+						t.Errorf("witness selected ID changed after caller mutation: got %x, want %x", *w.Selected, f.Channel.DefaultTopicID)
+					}
+				} else if w.Selected != nil {
+					t.Errorf("nil selection became %x", *w.Selected)
+				}
+				if !reflect.DeepEqual(w.Ranges, []conversation.WitnessRange{wantRange}) {
+					t.Errorf("witness ranges changed after callback storage reuse: got %+v, want %+v", w.Ranges, []conversation.WitnessRange{wantRange})
+				}
+				if !reflect.DeepEqual(w.Floors, map[kernel.ID]int64{f.Channel.DefaultTopicID: 1}) {
+					t.Errorf("witness floors changed after callback storage reuse: got %v, want %v", w.Floors, map[kernel.ID]int64{f.Channel.DefaultTopicID: 1})
+				}
+			})
+		}
+	}
+}
+
 func TestWitnessScopes(t *testing.T) {
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "witness", "general")

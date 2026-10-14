@@ -2,6 +2,8 @@ package conversation
 
 import (
 	"context"
+	"maps"
+	"slices"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -40,11 +42,13 @@ func (s *Reader) capture(ctx context.Context, snapshot platform.Snapshot, m org.
 	if s.witness == nil {
 		return nil
 	}
-	w := &SidebarWitness{Version: 1, OrganizationID: m.Organization.ID, MemberID: m.Member.ID, ChannelID: channelID, Selected: selected, JoinedEventSeq: m.Member.JoinedEventSeq}
+	w := &SidebarWitness{Version: 1, OrganizationID: m.Organization.ID, MemberID: m.Member.ID, ChannelID: channelID, JoinedEventSeq: m.Member.JoinedEventSeq}
 	channels = append(append([]kernel.ID(nil), channels...), channelID)
 	topics = append([]kernel.ID(nil), topics...)
 	if selected != nil {
-		topics = append(topics, *selected)
+		id := *selected
+		w.Selected = &id
+		topics = append(topics, id)
 	}
 	if !platform.CaptureSnapshot(ctx, snapshot, func(bound platform.Snapshot) (err error) {
 		w.EventSeq, err = s.cursor(bound).EventSeq(ctx, m.Organization.ID)
@@ -56,5 +60,8 @@ func (s *Reader) capture(ctx context.Context, snapshot platform.Snapshot, m org.
 	}) {
 		return nil
 	}
+	// Capture callbacks may reuse their storage after this snapshot returns.
+	w.Ranges = slices.Clone(w.Ranges)
+	w.Floors = maps.Clone(w.Floors)
 	return w
 }

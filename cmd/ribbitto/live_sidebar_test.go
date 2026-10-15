@@ -82,6 +82,7 @@ func sidebarReload(t *testing.T, b acceptanceBrowser, path string, events <-chan
 }
 
 func TestLiveSidebar(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "live", "general")
 	other := conversationtest.Channel(t, pool, f.OrganizationID, "other", false)

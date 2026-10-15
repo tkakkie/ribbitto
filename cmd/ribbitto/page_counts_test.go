@@ -36,6 +36,7 @@ func (p *pageTrace) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pg
 }
 
 func TestPageCountsSnapshot(t *testing.T) {
+	t.Parallel()
 	statements := []string{"ListMessagesBefore", "GetEventSeq", "FirstChannelReadRanges", "CountChannelUnread", "ReadTopicState", "CountTopicUnread"}
 	for _, n := range []int{1, 51} {
 		for _, kind := range []string{"feed", "topic", "feed older", "topic older"} {

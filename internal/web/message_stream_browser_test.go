@@ -33,46 +33,56 @@ func TestBrowser(t *testing.T) {
 	// limit before the scenarios ran (#415); one that misses this still fails.
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	// Without the back/forward cache, Back and Forward load a page anew and
-	// run its scripts (the arrival case), and a page left behind keeps no
-	// stream open to exhaust HTTP/1.1's six connections per host.
-	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Set("disable-back-forward-cache").Context(ctx)
-	url, err := launch.Launch()
-	if err != nil {
-		browserUnavailable(t, err.Error())
+	// The scenarios run in parallel, but each one alone in a browser of the
+	// pool, as all of them once ran in a single browser one after another: no
+	// scenario shares a browser's focus, visibility or connections with
+	// another (#1131). Each scenario serves its own httptest server, so
+	// HTTP/1.1's six connections per host are per scenario as before.
+	const browsers = 3
+	pool := make(chan *rod.Browser, browsers)
+	for range browsers {
+		pool <- launchScenarioBrowser(t, ctx, bin)
 	}
-	t.Cleanup(launch.Kill)
-	browser := rod.New().ControlURL(url).MustConnect()
-	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
-	t.Run("typing/indicator", func(t *testing.T) { testTypingIndicatorBrowser(t, browser) })
-	t.Run("composer/typing", func(t *testing.T) { testTypingComposerBrowser(t, browser) })
-	t.Run("composer/no-javascript", func(t *testing.T) { testComposerWithoutJavaScript(t, browser) })
-	t.Run("read-recovery", func(t *testing.T) { testReadRecoveryBrowser(t, browser) })
-	t.Run("unread-divider", func(t *testing.T) { testUnreadDividerBrowser(t, browser) })
-	t.Run("read-control", func(t *testing.T) { testReadControlBrowser(t, browser) })
-	t.Run("progress", func(t *testing.T) { testStreamProgressBrowser(t, browser) })
-	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
-	t.Run("side-panel", func(t *testing.T) { testSidePanelBrowser(t, browser) })
-	t.Run("panel-sheet", func(t *testing.T) { testPanelSheetBrowser(t, browser) })
-	t.Run("sidebar-scroll", func(t *testing.T) { testSidebarScrollBrowser(t, browser) })
-	t.Run("branch-form", func(t *testing.T) { testBranchFormBrowser(t, browser) })
-	t.Run("arrival", func(t *testing.T) { testArrivalBrowser(t, browser) })
-	t.Run("motion-touch", func(t *testing.T) { testMotionTouchBrowser(t, browser) })
-	t.Run("width-audit", func(t *testing.T) { testWidthAuditBrowser(t, browser) })
-	t.Run("message-row", func(t *testing.T) { testMessageRowBrowser(t, browser) })
-	t.Run("message-time", func(t *testing.T) { testMessageTimeBrowser(t, browser) })
-	t.Run("short-height", func(t *testing.T) { testShortHeightBrowser(t, browser) })
-	t.Run("welcome", func(t *testing.T) { testWelcomeBrowser(t, browser) })
-	t.Run("input-text", func(t *testing.T) { testInputTextBrowser(t, browser) })
-	t.Run("static-headers", func(t *testing.T) { testStaticHeadersBrowser(t, browser) })
-	t.Run("popover-focus", func(t *testing.T) { testPopoverFocusBrowser(t, browser) })
+	run := func(name string, scenario func(*testing.T, *rod.Browser)) {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			browser := <-pool
+			// Registered first, so it runs after the scenario's own cleanups:
+			// the next scenario gets the browser only once this one's pages
+			// are closed, as when a subtest's cleanups ended before the next.
+			t.Cleanup(func() { pool <- browser })
+			scenario(t, browser)
+		})
+	}
+	run("typing/indicator", testTypingIndicatorBrowser)
+	run("composer/typing", testTypingComposerBrowser)
+	run("composer/no-javascript", testComposerWithoutJavaScript)
+	run("read-recovery", testReadRecoveryBrowser)
+	run("unread-divider", testUnreadDividerBrowser)
+	run("read-control", testReadControlBrowser)
+	run("progress", testStreamProgressBrowser)
+	run("per-entry/ephemeral", testEphemeralSinkBrowser)
+	run("side-panel", testSidePanelBrowser)
+	run("panel-sheet", testPanelSheetBrowser)
+	run("sidebar-scroll", testSidebarScrollBrowser)
+	run("branch-form", testBranchFormBrowser)
+	run("arrival", testArrivalBrowser)
+	run("motion-touch", testMotionTouchBrowser)
+	run("width-audit", testWidthAuditBrowser)
+	run("message-row", testMessageRowBrowser)
+	run("message-time", testMessageTimeBrowser)
+	run("short-height", testShortHeightBrowser)
+	run("welcome", testWelcomeBrowser)
+	run("input-text", testInputTextBrowser)
+	run("static-headers", testStaticHeadersBrowser)
+	run("popover-focus", testPopoverFocusBrowser)
 	for _, side := range []string{"source", "destination"} {
 		modes := []string{"before", "stale", "fresh", "abort", "4xx"}
 		if side == "source" {
 			modes = append(modes, "divider-first", "divider-other")
 		}
 		for _, mode := range modes {
-			t.Run(side+"/"+mode, func(t *testing.T) {
+			run(side+"/"+mode, func(t *testing.T, browser *rod.Browser) {
 				ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 				defer cancel()
 				source, destination := kernel.ID{1}, kernel.ID{2}
@@ -238,7 +248,7 @@ func TestBrowser(t *testing.T) {
 		}
 	}
 	for _, name := range []string{"feed", "topic", "older-feed", "older-topic"} {
-		t.Run(name+"/transport", func(t *testing.T) {
+		run(name+"/transport", func(t *testing.T, browser *rod.Browser) {
 			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 			defer cancel()
 			cursor, topic := int64(42), kernel.ID{2}
@@ -334,7 +344,7 @@ func TestBrowser(t *testing.T) {
 			}
 		})
 	}
-	t.Run("failed-move/replay", func(t *testing.T) {
+	run("failed-move/replay", func(t *testing.T, browser *rod.Browser) {
 		ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 		defer cancel()
 		cursor, source, destination := int64(42), kernel.ID{1}, kernel.ID{2}
@@ -552,6 +562,23 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 	// The extension recreates a CLOSED source from the page's updated URL.
 	page.MustEval(`() => { window.testSource.close(); window.testSource.dispatchEvent(new Event('error')); }`)
 	assertRequest("51", "")
+}
+
+// launchScenarioBrowser starts one browser of TestBrowser's pool.
+func launchScenarioBrowser(t *testing.T, ctx context.Context, bin string) *rod.Browser {
+	t.Helper()
+	// Without the back/forward cache, Back and Forward load a page anew and
+	// run its scripts (the arrival case), and a page left behind keeps no
+	// stream open to exhaust HTTP/1.1's six connections per host.
+	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Set("disable-back-forward-cache").Context(ctx)
+	url, err := launch.Launch()
+	if err != nil {
+		browserUnavailable(t, err.Error())
+	}
+	t.Cleanup(launch.Kill)
+	browser := rod.New().ControlURL(url).MustConnect()
+	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	return browser
 }
 
 func browserUnavailable(t *testing.T, reason string) {

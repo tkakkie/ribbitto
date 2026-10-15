@@ -252,6 +252,7 @@ func TestReadSidebarRecoveryHTTP(t *testing.T) {
 }
 
 func TestReadSidebarPostingHTTP(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"feed", "topic", "history"} {
 		t.Run(kind, func(t *testing.T) {
 			pool := pgtest.New(t)

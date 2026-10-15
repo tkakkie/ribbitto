@@ -558,6 +558,7 @@ func testTopicEventStream(t *testing.T) {
 
 // Keep every transport guarantee on the organisation endpoint.
 func TestStreamEndpoints(t *testing.T) {
+	t.Parallel()
 	for _, endpoint := range []string{"organisation"} {
 		t.Run(endpoint, func(t *testing.T) {
 			for _, suite := range []struct {

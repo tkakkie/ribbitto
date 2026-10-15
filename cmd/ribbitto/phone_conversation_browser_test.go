@@ -25,6 +25,7 @@ import (
 )
 
 func TestPhoneConversationBrowser(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	browser := launchBrowser(t, ctx, "phone conversation checks")

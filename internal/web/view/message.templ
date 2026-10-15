@@ -58,7 +58,11 @@ templ messageItem(entry Message, announcement string) {
 				<span class="min-w-0 break-words">
 					@MemberName(entry.DisplayName, entry.Handle)
 				</span>
-				<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
+				// From desk the time keeps its width when message-time-v2.js
+				// localises it, so the topic label and Select beside it do not
+				// move (#1094). Below desk they sit at the row's end, and the
+				// reserved width would push them to a row of their own.
+				<time datetime={ entry.CreatedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time class="text-caption text-muted desk:min-w-timestamp desk:tabular-nums">{ entry.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
 			</div>
 			<div class="contents max-desk:ml-auto max-desk:flex max-desk:min-w-0 max-desk:items-center max-desk:gap-x-2">
 				// A long topic name wraps at any width rather than widening the

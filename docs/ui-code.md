@@ -74,6 +74,7 @@ The fixed widths of the desktop layout, and the block shape
 | `w-sidebar` | 264 px | the channel sidebar |
 | `w-panel` | 340 px | a side panel (#874); room for an overview image and a members list with names and handles |
 | `max-w-reading` | 760 px | the conversation's reading column |
+| `min-w-timestamp` | 22 ch | a message's time from `desk` ([why](ui-components.md#shared-components)) |
 | `rounded-xl` | 12 px | the rounded blocks |
 | `shadow-block` | a 1 px ring and a soft drop in light; a faint 1 px ring in dark | blocks and cards |
 | `shadow-popover` | a deeper drop in light; a faint 1 px ring in dark | menus, popovers and dialogs |

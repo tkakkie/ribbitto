@@ -199,6 +199,10 @@
   --container-sidebar: 16.5rem;
   --container-panel: 21.25rem;
   --container-reading: 47.5rem;
+  /* A message's time from desk (min-w-timestamp), in ch of its tabular
+     digits: wider than the server's UTC text and the local format that
+     replaces it in either language and common system fonts (#1094). */
+  --container-timestamp: 22ch;
 
   /* Below desk (852 px) the phone layout applies: desk: and max-desk: (docs/ui-code.md).
      Below wide (1200 px) an open panel covers the conversation. */

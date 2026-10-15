@@ -30,19 +30,24 @@ changed; a review reads it only to hash it, and fails if the hash changes.
 
 ## The trusted invocation
 
-Build from a clean `origin/main` of the source checkout, then run:
+Build from a clean `origin/main` of the source checkout, outside its tree,
+then run:
 
 ```sh
-git -C "$RIBBITTO_ARGON_SOURCE" fetch --quiet origin &&
-  git -C "$RIBBITTO_ARGON_SOURCE" checkout --quiet --detach origin/main &&
-  (cd "$RIBBITTO_ARGON_SOURCE" &&
-    go build -o "$RIBBITTO_ARGON_HOME/bin/argonreview" ./cmd/argonreview) &&
+src=$RIBBITTO_ARGON_SOURCE &&
+  git -C "$src" fetch --quiet origin &&
+  git -C "$src" checkout --quiet --detach origin/main &&
+  test -z "$(git -C "$src" status --porcelain --ignored)" &&
+  (cd "$src" && go build -o "$RIBBITTO_ARGON_HOME/bin/argonreview" ./cmd/argonreview) &&
   "$RIBBITTO_ARGON_HOME/bin/argonreview" review <pr-number>
 ```
 
-Every subcommand but `guard` first runs `verify`, which refuses a binary not
-built from that commit with a clean tree (`go run` and a pull request's copy
-included). Never run a pull request's copy of the launcher.
+The `status` check stops on any local change, untracked or ignored file,
+which the build would otherwise compile. That clean checkout is the
+boundary: never build or run a pull request's copy of the launcher. Every
+subcommand but `guard` also runs `verify`, which refuses a binary not built
+from that commit with a clean tree (`go run` included); it catches a stale
+or accidental build, not a malicious one, whose own code could skip it.
 
 | Subcommand | Does |
 |---|---|
@@ -54,10 +59,11 @@ included). Never run a pull request's copy of the launcher.
 | `probe <repo> <prompt-file>` | the same pipeline on a scratch repository's `HEAD` with a trusted prompt; prints `agy`'s output and the verdict |
 | `guard` | the `PreToolUse` hook; Antigravity calls it, not you |
 
-`RIBBITTO_ARGON_TIMEOUT` (a Go duration, default `25m`) limits `agy`. Exit
-status: 0 for a report, 124 for the time limit, 130 or 143 for INT or TERM,
-a failing `agy`'s own status, and 1 for anything else, with the reason on
-stderr.
+`RIBBITTO_ARGON_TIMEOUT` (a Go duration, default `25m`) limits `agy`. A
+review or a probe exits 0 for a run that counts, 124 for the time limit,
+130 or 143 for INT or TERM, a failing `agy`'s own status, and 1 for
+anything else, with the reason on stderr. Bad arguments exit 2. `guard`
+exits 0 only for an allow, and non-zero for a deny or a failed write.
 
 ## What a review does
 
@@ -78,7 +84,8 @@ stderr.
 6. The run does not count on any of: a non-zero exit or the time limit;
    `AGY_ERROR`; a malformed, incomplete or duplicate-keyed transcript; a
    result that is not a `SUCCESS`, has no response or an empty one, or lists
-   `denied_actions`; a changed tree; changed shared settings.
+   `denied_actions`; a changed tree; changed shared settings; a process
+   cleanup the supervisor cannot confirm; a workspace it cannot remove.
 7. The workspace is removed, then the report is written, headed with the
    target and the launcher revision.
 
@@ -101,10 +108,13 @@ Remaining limits:
   count. The refusal stays in the transcript.
 - A process running as you can change the dedicated `HOME` between
   `prepare` and the launch; it could change your own configuration anyway.
+- The supervisor stops every process in `agy`'s session; a descendant that
+  calls `setsid` leaves it and is not stopped.
 
-What persists in the dedicated `HOME`: the sign-in, the launcher's three
-files, and Antigravity's logs and conversation store. Nothing else of a run
-outlives it.
+The workspace is always removed. The dedicated `HOME` keeps the sign-in,
+the launcher's three files and Antigravity's own state (logs, conversation
+store, caches); `prepare` refuses customisation there but does not police
+the rest.
 
 ## Evidence
 

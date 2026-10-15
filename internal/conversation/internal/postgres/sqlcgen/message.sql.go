@@ -50,7 +50,7 @@ func (q *Queries) FirstChannelMessageAfter(ctx context.Context, arg FirstChannel
 }
 
 const getMessage = `-- name: GetMessage :one
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND event_seq = $3
 `
 
@@ -73,12 +73,14 @@ func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message
 		&i.CreatedAt,
 		&i.TopicID,
 		&i.MovedEventSeq,
+		&i.PinnedByMemberID,
+		&i.PinnedAt,
 	)
 	return i, err
 }
 
 const getMessages = `-- name: GetMessages :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND id = ANY($3::uuid[])
 ORDER BY event_seq DESC
 `
@@ -108,6 +110,8 @@ func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Mes
 			&i.CreatedAt,
 			&i.TopicID,
 			&i.MovedEventSeq,
+			&i.PinnedByMemberID,
+			&i.PinnedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -121,7 +125,7 @@ func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Mes
 
 const insertMessage = `-- name: InsertMessage :one
 INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at
 `
 
 type InsertMessageParams struct {
@@ -153,6 +157,8 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 		&i.CreatedAt,
 		&i.TopicID,
 		&i.MovedEventSeq,
+		&i.PinnedByMemberID,
+		&i.PinnedAt,
 	)
 	return i, err
 }
@@ -177,7 +183,7 @@ func (q *Queries) LastChannelMessageBefore(ctx context.Context, arg LastChannelM
 }
 
 const listMessagesBefore = `-- name: ListMessagesBefore :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at FROM message
 WHERE organization_id = $1 AND channel_id = $2
   AND ($3::uuid IS NULL OR topic_id = $3::uuid)
   AND ($4::bigint IS NULL OR event_seq < $4::bigint)
@@ -218,6 +224,8 @@ func (q *Queries) ListMessagesBefore(ctx context.Context, arg ListMessagesBefore
 			&i.CreatedAt,
 			&i.TopicID,
 			&i.MovedEventSeq,
+			&i.PinnedByMemberID,
+			&i.PinnedAt,
 		); err != nil {
 			return nil, err
 		}

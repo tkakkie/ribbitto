@@ -75,6 +75,8 @@ erDiagram
   timestamp_with_time_zone created_at
   uuid topic_id FK
   bigint moved_event_seq
+  uuid pinned_by_member_id FK
+  timestamp_with_time_zone pinned_at
 }
 "public.topic_read_floor" {
   uuid organization_id FK

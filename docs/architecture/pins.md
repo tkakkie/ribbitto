@@ -3,7 +3,8 @@
 The [domain rules](../domain/pins.md) put pin metadata on messages, owned
 by `conversation`. The maintainer agreed this design on 2026-10-12 (#880);
 the generic channel-state writer seam is implemented in realtime (#891).
-Pin-specific storage, adapters and browser delivery remain separate work.
+Pin storage is implemented (#887); the use cases, adapters and browser
+delivery remain separate work.
 
 ## Durable invalidation, current display
 

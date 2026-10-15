@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -216,24 +217,62 @@ type refused struct {
 func (r *refused) Error() string { return r.err.Error() }
 func (r *refused) Unwrap() error { return r.err }
 
-// record records every entry of the sanitised tree, tracked, untracked and
-// ignored alike, so a run that changes the tree can be refused (#1071). It
-// keeps each entry's type, inode, size and change time rather than its
-// content: the change time moves with every write and every entry added to
-// or removed from a directory, and cannot be set back, so a change undone
-// before agy exits still shows; and nothing is read, so a huge file left
-// behind cannot exhaust memory or time (Codex on #1117).
-func record(tree string) (map[string]string, error) {
-	entries := map[string]string{}
+// entry is what the record keeps of a path: its type, inode, size and change
+// time, and a regular file's content hash.
+type entry struct {
+	meta string
+	sum  [sha256.Size]byte
+}
+
+// metadata is an entry's type, inode, size and change time, with its size
+// and file type.
+func metadata(path string) (string, int64, uint32, error) {
+	var st unix.Stat_t
+	if err := unix.Lstat(path, &st); err != nil {
+		return "", 0, 0, err
+	}
+	return fmt.Sprintf("%o %d %d %d.%09d", st.Mode, st.Ino, st.Size, st.Ctim.Sec, st.Ctim.Nsec), st.Size, uint32(st.Mode) & unix.S_IFMT, nil
+}
+
+// hashUpTo hashes at most limit+1 bytes of a regular file, without following
+// a link or blocking on a FIFO swapped in. The extra byte makes a file that
+// grew past its recorded size hash differently.
+func hashUpTo(path string, limit int64) ([sha256.Size]byte, error) {
+	var sum [sha256.Size]byte
+	f, err := os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+	if err != nil {
+		return sum, err
+	}
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	if _, err := io.CopyN(h, f, limit+1); err != nil && !errors.Is(err, io.EOF) {
+		return sum, err
+	}
+	copy(sum[:], h.Sum(nil))
+	return sum, nil
+}
+
+// record keeps every entry of the sanitised tree, tracked, untracked and
+// ignored alike, before agy starts (#1071). Content is hashed as well as
+// metadata: a change time can stay put within a coarse timestamp (Codex on
+// #1117).
+func record(tree string) (map[string]entry, error) {
+	entries := map[string]entry{}
 	err := filepath.WalkDir(tree, func(path string, _ fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		var st unix.Stat_t
-		if err := unix.Lstat(path, &st); err != nil {
+		meta, size, kind, err := metadata(path)
+		if err != nil {
 			return err
 		}
-		entries[path] = fmt.Sprintf("%o %d %d %d.%09d", st.Mode, st.Ino, st.Size, st.Ctim.Sec, st.Ctim.Nsec)
+		e := entry{meta: meta}
+		if kind == unix.S_IFREG {
+			if e.sum, err = hashUpTo(path, size); err != nil {
+				return err
+			}
+		}
+		entries[path] = e
 		return nil
 	})
 	if err != nil {
@@ -242,19 +281,81 @@ func record(tree string) (map[string]string, error) {
 	return entries, nil
 }
 
-// changed names an entry that differs between two records, or "".
-func changed(before, after map[string]string) string {
-	for path, entry := range after {
-		if before[path] != entry {
-			return path
+// verify compares the tree with its record while walking it and names the
+// first difference, or returns "". Nothing outside the record is kept or
+// read: directories are listed a chunk at a time and an unknown name ends the
+// walk at once, and a file is read only up to its recorded size, so memory
+// and time stay within the record's own size whatever a run left behind
+// (Codex on #1117).
+func verify(tree string, recorded map[string]entry) (string, error) {
+	seen := 0
+	var walk func(path string) (string, error)
+	walk = func(path string) (string, error) {
+		want, ok := recorded[path]
+		if !ok {
+			return path, nil
+		}
+		meta, size, kind, err := metadata(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if meta != want.meta {
+			return path, nil
+		}
+		seen++
+		if kind == unix.S_IFREG {
+			sum, err := hashUpTo(path, size)
+			if err != nil {
+				return "", err
+			}
+			if sum != want.sum {
+				return path, nil
+			}
+			return "", nil
+		}
+		if kind != unix.S_IFDIR {
+			return "", nil
+		}
+		dir, err := os.Open(path)
+		if err != nil {
+			return "", err
+		}
+		defer func() { _ = dir.Close() }()
+		for {
+			names, err := dir.Readdirnames(256)
+			for _, name := range names {
+				if changed, walkErr := walk(filepath.Join(path, name)); changed != "" || walkErr != nil {
+					return changed, walkErr
+				}
+			}
+			if errors.Is(err, io.EOF) {
+				return "", nil
+			}
+			if err != nil {
+				return "", err
+			}
 		}
 	}
-	for path := range before {
-		if _, ok := after[path]; !ok {
-			return path
-		}
+	changed, err := walk(tree)
+	if changed != "" || err != nil {
+		return changed, err
 	}
-	return ""
+	if seen != len(recorded) {
+		for path := range recorded {
+			_, err := os.Lstat(path)
+			if errors.Is(err, fs.ErrNotExist) {
+				return path, nil
+			}
+			if err != nil {
+				return "", err
+			}
+		}
+		return tree, nil
+	}
+	return "", nil
 }
 
 // removeAgents deletes every .agents entry in the worktree, nested ones,

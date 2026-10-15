@@ -131,9 +131,9 @@ func (r review) run(out io.Writer) (code int, err error) {
 	if err == nil {
 		response, err = judge(code, transcript, diagnostics)
 	}
-	if after, recordErr := record(w.tree); recordErr != nil {
-		err = errors.Join(err, recordErr)
-	} else if path := changed(baseline, after); path != "" {
+	if path, verifyErr := verify(w.tree, baseline); verifyErr != nil {
+		err = errors.Join(err, fmt.Errorf("checking the worktree: %w", verifyErr))
+	} else if path != "" {
 		err = errors.Join(err, fmt.Errorf("the run changed the worktree: %s", strings.TrimPrefix(path, w.tree+"/")))
 	}
 	if after, hashErr := hashFile(r.shared); hashErr != nil || after != before {

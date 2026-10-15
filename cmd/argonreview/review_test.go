@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -182,6 +183,88 @@ func TestReviewRefusesAChangedTree(t *testing.T) {
 			nothingLeft(t, r.source)
 		})
 	}
+}
+
+// A change that leaves the metadata as recorded, as a coarse timestamp can,
+// is still found: content by its hash, an addition by its unknown name, a
+// removal by the count (Codex on #1117).
+func TestVerifyBeyondMetadata(t *testing.T) {
+	for name, change := range map[string]func(path string) string{
+		"content":  func(path string) string { write(t, path, "two\n"); return path },
+		"addition": func(path string) string { write(t, path+"2", ""); return path + "2" },
+		"removal": func(path string) string {
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			return path
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tree := t.TempDir()
+			path := filepath.Join(tree, "a/file")
+			write(t, path, "one\n")
+			recorded, err := record(tree)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := change(path)
+			// Whatever now exists keeps its recorded metadata.
+			for p := range recorded {
+				if meta, _, _, err := metadata(p); err == nil {
+					e := recorded[p]
+					e.meta = meta
+					recorded[p] = e
+				}
+			}
+			if changed, err := verify(tree, recorded); changed != want || err != nil {
+				t.Fatalf("verify = %q, %v; want %s", changed, err, want)
+			}
+		})
+	}
+}
+
+// Whatever a run leaves behind, many files and a huge one, the check fails
+// promptly and the workspace is removed; a hang or an exhausted memory would
+// miss the deadline or end the helper by a signal (Codex on #1117).
+func TestReviewChecksALargeChangePromptly(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, executable, "-test.run=^TestLargeChangeHelper$")
+	cmd.Env = append(os.Environ(), "ARGONREVIEW_LARGE_HELPER="+dir, "TMPDIR="+t.TempDir())
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	if ctx.Err() != nil || cmd.ProcessState.ExitCode() != 1 || !strings.Contains(stderr.String(), "changed the worktree") {
+		t.Fatalf("helper: %v, exit %d, deadline %v\n%s", err, cmd.ProcessState.ExitCode(), ctx.Err(), stderr.String())
+	}
+	workspaces, err := os.ReadFile(filepath.Join(dir, "tmpdir"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entries, err := os.ReadDir(string(workspaces)); err != nil || len(entries) != 0 {
+		t.Fatalf("left behind: %v, %v", entries, err)
+	}
+}
+
+func TestLargeChangeHelper(t *testing.T) {
+	dir := os.Getenv("ARGONREVIEW_LARGE_HELPER")
+	if dir == "" {
+		t.Skip("run by TestReviewChecksALargeChangePromptly")
+	}
+	r, fake := newReview(t)
+	write(t, filepath.Join(fake, "mutate"), "mkdir many && (cd many && seq 1 20000 | xargs touch) && dd if=/dev/zero of=a/huge.log bs=1 count=0 seek=100G 2>/dev/null\n")
+	write(t, filepath.Join(dir, "tmpdir"), os.Getenv("TMPDIR"))
+	_, err := r.run(&bytes.Buffer{})
+	if err != nil {
+		_, _ = os.Stderr.WriteString(err.Error() + "\n")
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
 
 // A probe runs the same pipeline on a throwaway repository's HEAD with a

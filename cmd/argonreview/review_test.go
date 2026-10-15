@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -13,7 +14,8 @@ import (
 const okResult = `{"event":"result","result":{"status":"SUCCESS","response":"No findings.\n"}}` + "\n"
 
 // fakeAgy writes an agy into dir that records how it ran in dir/seen, exits
-// 9 unless prepare has run, prints dir/stdout and dir/stderr, appends to the
+// 9 unless prepare has run and 8 unless it runs in the sanitised checkout of
+// pull request 7, prints dir/stdout and dir/stderr, appends to the
 // file named in dir/touch, sleeps if dir/sleep exists, and exits with
 // dir/status.
 func fakeAgy(t *testing.T, dir string) string {
@@ -21,6 +23,7 @@ func fakeAgy(t *testing.T, dir string) string {
 	script := `#!/bin/sh
 { echo "HOME=$HOME"; echo "PWD=$(pwd -P)"; for a in "$@"; do echo "ARG=$a"; done; } > '` + dir + `/seen'
 [ -f "$HOME/prepared" ] || exit 9
+[ "$(cat README)" = two ] && [ -z "$(find . -iname .agents)" ] || exit 8
 cat '` + dir + `/stdout'
 cat '` + dir + `/stderr' >&2
 if [ -f '` + dir + `/touch' ]; then echo changed >> "$(cat '` + dir + `/touch')"; fi
@@ -85,7 +88,7 @@ func TestReview(t *testing.T) {
 	}
 	seen := string(data)
 	for _, want := range []string{
-		"HOME=" + r.home + "\n", "PWD=" + os.Getenv("TMPDIR") + "/argonreview-",
+		"HOME=" + r.home + "\n", "PWD=" + os.Getenv("TMPDIR") + "/argonreview-", "/tree\nARG=-p\n",
 		"ARG=-p\nARG=Review adversarially.\n", "UNTRUSTED_PAYLOAD_JSON: {",
 		"ARG=--model\nARG=gemini-4-argon-high\nARG=--sandbox\nARG=--print-timeout\nARG=5s\nARG=--output-format\nARG=stream-json\n",
 	} {
@@ -118,6 +121,11 @@ func TestReviewFailureRules(t *testing.T) {
 		{"no response field", `{"event":"result","result":{"status":"SUCCESS"}}` + "\n", "", "0", false, "no response", 1},
 		{"not a success", `{"event":"result","result":{"status":"ERROR","response":"x"}}` + "\n", "", "0", false, `status is "ERROR"`, 1},
 		{"an event after the result", okResult + `{"event":"init"}` + "\n", "", "0", false, "not the last", 1},
+		// A later duplicate would replace the evidence (Codex on #1113).
+		{"denied_actions overwritten", `{"event":"result","result":{"status":"SUCCESS","response":"x","denied_actions":["read_file"],"denied_actions":null}}` + "\n", "", "0", false, "duplicate key", 1},
+		{"denied_actions overwritten in another case", `{"event":"result","result":{"status":"SUCCESS","response":"x","denied_actions":["read_file"],"DENIED_ACTIONS":null}}` + "\n", "", "0", false, "duplicate key", 1},
+		{"status overwritten", `{"event":"result","result":{"status":"ERROR","response":"x","status":"SUCCESS"}}` + "\n", "", "0", false, "duplicate key", 1},
+		{"result overwritten", `{"event":"result","result":{"status":"SUCCESS","response":"","denied_actions":["x"]},"result":{"status":"SUCCESS","response":"x"}}` + "\n", "", "0", false, "duplicate key", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, fake := newReview(t)
@@ -131,6 +139,41 @@ func TestReviewFailureRules(t *testing.T) {
 			var out bytes.Buffer
 			if code, err := r.run(&out); code != tc.code || err == nil || !strings.Contains(err.Error(), tc.want) || out.Len() != 0 {
 				t.Fatalf("code = %d, err = %v, output %q; want %d and %q", code, err, out.String(), tc.code, tc.want)
+			}
+			nothingLeft(t, r.source)
+		})
+	}
+}
+
+// INT or TERM ends a review without a report, whether the supervisor takes it
+// while agy runs or it arrives during the cleanup after agy exited (Codex on
+// #1113).
+func TestReviewSignals(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		during bool
+		sig    syscall.Signal
+		code   int
+	}{{"before the launch", false, syscall.SIGINT, 130}, {"during the cleanup", true, syscall.SIGTERM, 143}} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, _ := newReview(t)
+			signals := make(chan os.Signal, 1)
+			r.sup.signals = signals
+			if tc.during {
+				scan := r.sup.ops.scan
+				r.sup.ops.scan = func(session int) ([]int, error) {
+					select {
+					case signals <- tc.sig:
+					default:
+					}
+					return scan(session)
+				}
+			} else {
+				signals <- tc.sig
+			}
+			var out bytes.Buffer
+			if code, err := r.run(&out); code != tc.code || err == nil || out.Len() != 0 {
+				t.Fatalf("code = %d, err = %v, output %q", code, err, out.String())
 			}
 			nothingLeft(t, r.source)
 		})

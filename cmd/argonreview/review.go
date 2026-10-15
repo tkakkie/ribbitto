@@ -12,6 +12,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -83,6 +84,14 @@ func (r review) run(out io.Writer) (code int, err error) {
 	}
 	if removeErr := w.remove(); removeErr != nil {
 		err = errors.Join(err, removeErr)
+	}
+	// The supervisor only reads signals while agy runs; one that arrived
+	// since, during its cleanup or the checks above, still ends the review
+	// without a report (Codex on #1113).
+	select {
+	case sig := <-r.sup.signals:
+		return 128 + int(sig.(syscall.Signal)), errors.Join(err, fmt.Errorf("interrupted by %v", sig))
+	default:
 	}
 	if err != nil {
 		return max(code, 1), err
@@ -165,6 +174,9 @@ func parseTranscript(transcript []byte) (string, error) {
 	lines := strings.Split(strings.TrimSuffix(string(transcript), "\n"), "\n")
 	var result json.RawMessage
 	for i, line := range lines {
+		if err := distinctKeys([]byte(line)); err != nil {
+			return "", fmt.Errorf("line %d is not a stream-json event: %w", i+1, err)
+		}
 		var event struct {
 			Event  string          `json:"event"`
 			Result json.RawMessage `json:"result"`
@@ -181,6 +193,9 @@ func parseTranscript(transcript []byte) (string, error) {
 	}
 	if result == nil {
 		return "", errors.New("there is no result event")
+	}
+	if err := distinctKeys(result); err != nil {
+		return "", fmt.Errorf("the result cannot be parsed: %w", err)
 	}
 	var r struct {
 		Status   string          `json:"status"`
@@ -199,6 +214,36 @@ func parseTranscript(transcript []byte) (string, error) {
 		return "", fmt.Errorf("the result's status is %q", r.Status)
 	}
 	return *r.Response, nil
+}
+
+// distinctKeys refuses a JSON object with two keys that Go's decoder would
+// treat as one field: the later value replaces the earlier, so a duplicate
+// denied_actions, status or result could hide failure evidence. The decoder
+// matches names case-insensitively, hence EqualFold (Codex on #1113).
+func distinctKeys(object []byte) error {
+	d := json.NewDecoder(bytes.NewReader(object))
+	if t, err := d.Token(); err != nil || t != json.Delim('{') {
+		return errors.New("not a JSON object")
+	}
+	var keys []string
+	for d.More() {
+		t, err := d.Token()
+		if err != nil {
+			return err
+		}
+		key, _ := t.(string)
+		for _, k := range keys {
+			if strings.EqualFold(k, key) {
+				return fmt.Errorf("duplicate key %q", key)
+			}
+		}
+		keys = append(keys, key)
+		var value json.RawMessage
+		if err := d.Decode(&value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // hashFile returns the SHA-256 of path's content, or "absent".

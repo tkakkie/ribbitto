@@ -129,6 +129,12 @@ func TestMembersPageAgainstPostgreSQL(t *testing.T) {
 	if len(seen) != conversation.MemberPageSize+3 || !seen["@person0"] || !seen["مريم <b> @person1"] {
 		t.Fatalf("names or paging lost members: %v", seen)
 	}
+	// Beside an around page (#1182) the panel adds presence to the
+	// sidebar-only stream; only the message list stops swapping.
+	around := serveForm(handler, "GET", view.ChannelURL("acme", local.Channel.ID)+"/members?around=1&unread=0", cookie, nil).Body.String()
+	if !strings.Contains(around, "want=sidebar,presence&amp;") || !strings.Contains(around, `sse-swap="sidebar,presence"`) || strings.Contains(around, `sse-swap="message,messages-moved"`) {
+		t.Fatalf("around page with members panel: %s", around)
+	}
 	// Each negative case changes one scope while keeping the other fixed.
 	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
 	for _, tt := range []struct {

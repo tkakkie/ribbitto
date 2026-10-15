@@ -120,6 +120,9 @@ type ReadStore interface {
 	// than event_seq before (the latest when before is nil), newest first,
 	// only of topicID when it is set.
 	ListMessagesBefore(ctx context.Context, organizationID, channelID kernel.ID, topicID *kernel.ID, before *int64, limit int32) ([]Message, error)
+	// ListMessagesAfter returns at most limit messages of the channel newer
+	// than event_seq after, oldest first, only of topicID when it is set.
+	ListMessagesAfter(ctx context.Context, organizationID, channelID kernel.ID, topicID *kernel.ID, after int64, limit int32) ([]Message, error)
 	// GetMessage returns the channel's message at eventSeq, or
 	// ErrMessageNotFound when the scoped key is absent.
 	GetMessage(ctx context.Context, organizationID, channelID kernel.ID, eventSeq int64) (Message, error)

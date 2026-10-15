@@ -36,6 +36,16 @@ type fakeMessages struct {
 	firstUnread int64
 	// before, when set, records the bound each read received.
 	before *[]*int64
+	// around, when set, records each around read's position.
+	around *[]int64
+}
+
+func (f fakeMessages) Around(ctx context.Context, m org.Membership, id kernel.ID, topicID *kernel.ID, around int64) (conversation.ChannelPage, error) {
+	if f.around != nil {
+		*f.around = append(*f.around, around)
+	}
+	f.before = nil
+	return f.Page(ctx, m, id, topicID, nil)
 }
 
 // One is not used by handler tests; the stream is tested end to end.
@@ -400,7 +410,7 @@ func TestMessagePagingHandler(t *testing.T) {
 		name, query string
 		older       bool
 		status      int
-		before      int64 // 0: the latest page
+		before      int64 // 0: the latest page; the around position on an around page
 		want, avoid []string
 		htmx        bool
 		path        string
@@ -422,12 +432,22 @@ func TestMessagePagingHandler(t *testing.T) {
 		{"malformed escape", "?before=%ZZ", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"repeated with a malformed escape", "?before=5&before=%ZZ", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"latest topic", "", true, 200, 0, []string{`href="` + topicURL + `?before=7&amp;unread=0"`, `hx-get="` + topicURL + `?before=7&amp;unread=0"`}, []string{"Jump to the newest"}, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
+		// An around page (decision 36) is an older page in every check below.
+		{"around page", "?around=40", true, 200, 40, []string{`?before=7&amp;unread=0"`, `Jump to the newest ribbits</a>`}, nil, false, channelURL, "", ""},
+		{"around topic with divider", "?around=40&unread=3", true, 200, 40, []string{`href="` + topicURL + `?before=7&amp;unread=3"`, `Jump to the newest ribbits</a>`}, nil, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
+		{"around zero", "?around=0", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"around not a number", "?around=abc", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"around repeated", "?around=5&around=6", false, 400, -1, nil, nil, false, channelURL, "", ""},
+		{"around with before", "?around=5&before=6", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"older topic", "?before=40", true, 200, 40, []string{`href="` + topicURL + `?before=7&amp;unread=0"`, `hx-get="` + topicURL + `?before=7&amp;unread=0"`, `Jump to the newest ribbits</a>`}, nil, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var seen []*int64
-			reader := fakeMessages{entries: []conversation.Entry{{Message: conversation.Message{ID: kernel.ID{8}, TopicID: kernel.ID{5}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen}
-			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Messages = reader }))
+			var arounds []int64
+			reader := fakeMessages{entries: []conversation.Entry{{Message: conversation.Message{ID: kernel.ID{8}, TopicID: kernel.ID{5}, EventSeq: 7, Body: "oldest shown"}, DisplayName: "A", Handle: "a"}}, older: tt.older, before: &seen, around: &arounds}
+			handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) {
+				s.Messages, s.Reading = reader, readCall(func(context.Context) error { return nil })
+			}))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -442,13 +462,21 @@ func TestMessagePagingHandler(t *testing.T) {
 				t.Fatalf("status %d", w.Code)
 			}
 			if tt.status != 200 {
-				if len(seen) != 0 {
+				if len(seen) != 0 || len(arounds) != 0 {
 					t.Fatal("a malformed bound reached the reader")
 				}
 				return
 			}
-			if len(seen) != 1 || (tt.before == 0) != (seen[0] == nil) || (seen[0] != nil && *seen[0] != tt.before) {
-				t.Fatalf("reader bounds %v", seen)
+			if strings.HasPrefix(tt.query, "?around=") {
+				if len(seen) != 0 || len(arounds) != 1 || arounds[0] != tt.before {
+					t.Fatalf("reader bounds %v, around %v", seen, arounds)
+				}
+			} else if len(seen) != 1 || (tt.before == 0) != (seen[0] == nil) || (seen[0] != nil && *seen[0] != tt.before) || len(arounds) != 0 {
+				t.Fatalf("reader bounds %v, around %v", seen, arounds)
+			}
+			// An older page neither reads nor shows typing.
+			if body := w.Body.String(); strings.Contains(body, `id="read-form"`) == (tt.before > 0) || strings.Contains(body, `id="typing-status"`) == (tt.before > 0) {
+				t.Fatalf("read form or typing status on an older page, or missing on the latest, before = %d", tt.before)
 			}
 			body := w.Body.String()
 			if strings.Contains(body, "data-announcement") {

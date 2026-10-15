@@ -88,12 +88,13 @@ post's scroll intent is consumed once; failed posts create none. Focus stays in
 the composer. Live appends are announced politely;
 replay duplicates replace the same message id without another announcement.
 
-*Planned (#1159, [decision 36](../decisions/36-one-message-has-a-stable-url.md)):* one message has its own URL,
+*Planned (#1170, [decision 36](../decisions/36-one-message-has-a-stable-url.md)):* one message has its own URL,
 `/organizations/{slug}/messages/{message-id}`. It answers 303 to the message's
 current topic, scrolled to the message and highlighted instead of the newest:
-the latest page when the message is on it, otherwise an older `?around=` page
-that holds the message with context on both sides. Unknown, other-organisation
-and unreadable messages answer 404.
+the latest page when the message is among the topic's newest 50, otherwise an
+older `?around=` page that holds the message with up to 25 messages from it on
+and older ones before it. Unknown, other-organisation and unreadable messages
+answer 404.
 
 ## Older pages
 
@@ -106,3 +107,7 @@ this channel's older messages, never that channel's. "Load older"
 prepends the page with htmx and keeps the reader's place; without
 JavaScript it is a link to that page, which links back to the newest. The
 control is gone once the oldest message is shown.
+An `?around=` page reads up to 25 messages from its position on with
+`ListMessagesAfter` and fills the page with older ones from
+`ListMessagesBefore`, bounded and scoped the same way, so an `around` value
+taken from another channel or topic never shows that channel's messages.

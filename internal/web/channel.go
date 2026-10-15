@@ -32,6 +32,7 @@ type Channels interface {
 // sidebar snapshot the channel list page shows, and one message by sequence or
 // a bounded batch by ID for the stream.
 type MessageReader interface {
+	Around(context.Context, org.Membership, kernel.ID, *kernel.ID, int64) (conversation.ChannelPage, error)
 	Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error)
 	Sidebar(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.SidebarSnapshot, error)
 	Many(context.Context, org.Membership, kernel.ID, []kernel.ID) ([]conversation.Entry, error)
@@ -94,13 +95,13 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 		return
 	}
 	page := view.ChannelPage{Panel: p.panel, OverviewImageError: p.overviewImageErr}
-	query, before, firstUnread, ok := conversationQuery(r.URL.RawQuery)
+	query, at, ok := conversationQuery(r.URL.RawQuery)
 	if !ok {
 		p.invalidQuery(w, r, m, id)
 		return
 	}
-	page.Before = before
-	// The members' cursor stays apart from the conversation's before and unread.
+	page.Before, page.Around = at.before, at.around
+	// The members' cursor stays apart from the conversation's position.
 	if raw, ok := query["after"]; ok && p.panel == view.PanelMembers {
 		after, valid := pathID(raw[0])
 		if len(raw) != 1 || !valid {
@@ -113,46 +114,63 @@ func (p channelPages) show(w http.ResponseWriter, r *http.Request, m org.Members
 	if p.overviewImageErr != "" {
 		status = http.StatusUnprocessableEntity
 	}
-	p.render(w, r, m, id, status, page, firstUnread)
+	p.render(w, r, m, id, status, page, at.firstUnread)
+}
+
+// position is where in a conversation a page is: the latest page, or an
+// older page before an event_seq or around one (decision 36).
+type position struct {
+	before, around int64
+	firstUnread    *int64
 }
 
 // conversationQuery parses a page's own parameters. ParseQuery, unlike
 // URL.Query, reports malformed pairs instead of dropping them, so a broken
 // link cannot fall back to the latest page.
-func conversationQuery(raw string) (query url.Values, before int64, firstUnread *int64, ok bool) {
+func conversationQuery(raw string) (query url.Values, at position, ok bool) {
 	query, err := url.ParseQuery(raw)
 	if err != nil {
-		return nil, 0, nil, false
+		return nil, position{}, false
 	}
-	if raw, ok := query["before"]; ok {
-		// An event_seq is positive; anything else is a malformed link.
-		parsed, err := strconv.ParseInt(raw[0], 10, 64)
-		if len(raw) != 1 || err != nil || parsed < 1 {
-			return nil, 0, nil, false
+	for key, dest := range map[string]*int64{"before": &at.before, "around": &at.around} {
+		if raw, ok := query[key]; ok {
+			// An event_seq is positive; anything else is a malformed link.
+			parsed, err := strconv.ParseInt(raw[0], 10, 64)
+			if len(raw) != 1 || err != nil || parsed < 1 {
+				return nil, position{}, false
+			}
+			*dest = parsed
 		}
-		before = parsed
+	}
+	if at.before > 0 && at.around > 0 {
+		return nil, position{}, false
 	}
 	// An older-history link carries the visit's divider so its read POSTs cannot move it.
 	if raw, ok := query["unread"]; ok {
 		seq, err := strconv.ParseInt(raw[0], 10, 64)
-		if len(raw) != 1 || err != nil || seq < 0 || before == 0 {
-			return nil, 0, nil, false
+		if len(raw) != 1 || err != nil || seq < 0 || !at.older() {
+			return nil, position{}, false
 		}
-		firstUnread = &seq
+		at.firstUnread = &seq
 	}
-	return query, before, firstUnread, true
+	return query, at, true
 }
+
+func (at position) older() bool { return at.before > 0 || at.around > 0 }
 
 // conversationState encodes the conversation position a page renders, so
 // panel links and redirects carry exactly that, never a request's other keys.
 // The divider belongs to an older page only, like the older link's.
-func conversationState(before int64, firstUnread *int64) string {
+func conversationState(at position) string {
 	state := url.Values{}
-	if before > 0 {
-		state.Set("before", strconv.FormatInt(before, 10))
-		if firstUnread != nil {
-			state.Set("unread", strconv.FormatInt(*firstUnread, 10))
-		}
+	switch {
+	case at.before > 0:
+		state.Set("before", strconv.FormatInt(at.before, 10))
+	case at.around > 0:
+		state.Set("around", strconv.FormatInt(at.around, 10))
+	}
+	if at.older() && at.firstUnread != nil {
+		state.Set("unread", strconv.FormatInt(*at.firstUnread, 10))
 	}
 	return state.Encode()
 }
@@ -267,11 +285,16 @@ func screenView(r *http.Request, page view.ChannelPage, m org.Membership, snapsh
 }
 
 func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage, firstUnread *int64) {
-	var before *int64
-	if page.Before > 0 {
-		before = &page.Before
+	var history conversation.ChannelPage
+	var err error
+	switch {
+	case page.Before > 0:
+		history, err = p.messages.Page(r.Context(), m, id, p.topicID, &page.Before)
+	case page.Around > 0:
+		history, err = p.messages.Around(r.Context(), m, id, p.topicID, page.Around)
+	default:
+		history, err = p.messages.Page(r.Context(), m, id, p.topicID, nil)
 	}
-	history, err := p.messages.Page(r.Context(), m, id, p.topicID, before)
 	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) || errors.Is(err, conversation.ErrTopicNotFound) {
 		http.NotFound(w, r)
 		return
@@ -316,7 +339,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			page.FirstUnread = *firstUnread
 		}
 		// Links carry the divider this page shows, as the older link does.
-		page.Query = conversationState(page.Before, &page.FirstUnread)
+		page.Query = conversationState(position{before: page.Before, around: page.Around, firstUnread: &page.FirstUnread})
 		page.Reading = p.reading != nil
 		page.EventCursor = history.EventCursor
 		return view.ChannelScreen(url, page)

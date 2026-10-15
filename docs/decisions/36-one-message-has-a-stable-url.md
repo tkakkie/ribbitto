@@ -1,8 +1,9 @@
 # 36. One message has a stable URL that resolves to its current place
 
-**Decided** (#1150, approved by the maintainer on 2026-10-16). **Not
-implemented yet:** the route, the `?around=` page and the highlight are
-#1159; until it lands, no page links to a message. One message is reached at
+**Decided** (#1150, approved by the maintainer on 2026-10-16). The
+`?around=` page is implemented (#1182). **Not implemented yet:** the route
+and the highlight are #1170; until it lands, no page links to a message.
+One message is reached at
 `GET /organizations/{slug}/messages/{message-id}`, where `message-id` is the
 message's UUID in its canonical text form. The URL names no channel or topic:
 the server finds where the message is now and answers `303 See Other` to that

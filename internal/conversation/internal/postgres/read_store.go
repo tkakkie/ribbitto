@@ -104,6 +104,20 @@ func (s ReadStore) ListMessagesBefore(ctx context.Context, organizationID, chann
 	return messagesFromRows(rows), nil
 }
 
+// ListMessagesAfter returns at most limit messages of the channel newer than
+// event_seq after, oldest first; a nil topicID includes every topic.
+func (s ReadStore) ListMessagesAfter(ctx context.Context, organizationID, channelID kernel.ID, topicID *kernel.ID, after int64, limit int32) ([]conversation.Message, error) {
+	params := sqlcgen.ListMessagesAfterParams{OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), AfterEventSeq: after, Limit: limit}
+	if topicID != nil {
+		params.TopicID = uuid(*topicID)
+	}
+	rows, err := s.queries.ListMessagesAfter(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("listing messages after a position: %w", err)
+	}
+	return messagesFromRows(rows), nil
+}
+
 // GetMessages returns the requested messages of the channel, newest first;
 // missing and out-of-scope IDs are omitted.
 func (s ReadStore) GetMessages(ctx context.Context, organizationID, channelID kernel.ID, ids []kernel.ID) ([]conversation.Message, error) {

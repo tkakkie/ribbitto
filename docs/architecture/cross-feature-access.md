@@ -17,7 +17,9 @@ by a one-line closure) on that transaction; an unknown organisation is
 composite foreign keys including `organization_id`. History uses one
 newest-first keyset query, `ListMessagesBefore`, with a nullable upper
 sequence bound for the latest page, an optional scoped topic filter passed
-explicitly through `Reader.Page` and `ReadStore`, and no author joins. `Reader.One` reads
+explicitly through `Reader.Page` and `ReadStore`, and no author joins; an
+`?around=` page (`Reader.Around`) adds the oldest-first `ListMessagesAfter`
+from its position on. `Reader.One` reads
 one message by organisation, channel and `event_seq`, returning `conversation.ErrMessageNotFound`
 for a missing or out-of-scope message. `conversation.Reader` resolves authors through
 its own `MemberDirectory.LookupMembers`, served by org (member IDs filtered by

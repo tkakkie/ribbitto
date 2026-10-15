@@ -182,6 +182,61 @@ func (q *Queries) LastChannelMessageBefore(ctx context.Context, arg LastChannelM
 	return event_seq, err
 }
 
+const listMessagesAfter = `-- name: ListMessagesAfter :many
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at FROM message
+WHERE organization_id = $1 AND channel_id = $2
+  AND ($3::uuid IS NULL OR topic_id = $3::uuid)
+  AND event_seq > $4::bigint
+ORDER BY event_seq
+LIMIT $5
+`
+
+type ListMessagesAfterParams struct {
+	OrganizationID pgtype.UUID
+	ChannelID      pgtype.UUID
+	TopicID        pgtype.UUID
+	AfterEventSeq  int64
+	Limit          int32
+}
+
+func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listMessagesAfter,
+		arg.OrganizationID,
+		arg.ChannelID,
+		arg.TopicID,
+		arg.AfterEventSeq,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.ChannelID,
+			&i.MemberID,
+			&i.Body,
+			&i.EventSeq,
+			&i.CreatedAt,
+			&i.TopicID,
+			&i.MovedEventSeq,
+			&i.PinnedByMemberID,
+			&i.PinnedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMessagesBefore = `-- name: ListMessagesBefore :many
 SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at FROM message
 WHERE organization_id = $1 AND channel_id = $2

@@ -66,7 +66,7 @@ with the sidebar of
 icon-and-label rows on the base, a wide reading column and a rounded
 composer, and on desktop the feel of Microsoft's Fluent 2. It replaced the
 "Clear water" direction and its colours from #9. M5 shipped light pages:
-it removed the old dark theme; M6 adds dark colours for the new direction
+it removed the old dark theme; M6 added dark colours for the new direction
 (#967).
 The completed outcomes are:
 
@@ -98,8 +98,7 @@ switching was 42 ms against 28 ms, from cross-document View Transitions, so
 unchanged. A Claude and Codex audit of M5 found no serious security issue;
 its follow-ups (#936–#940) are merged.
 
-Left for later: dark mode and the mobile layout (M6); the rich editor and
-the emoji picker.
+Left for later: the rich editor and the emoji picker.
 
 ## M6
 

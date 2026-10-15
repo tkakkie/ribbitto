@@ -4,8 +4,9 @@
 
 One organisation-wide SSE connection per tab, including older history pages,
 filtered by [interests](stream-scope.md#stream-scope).
-Named durable events are `message`, `messages-moved` and `reset`; wired
-ephemeral owners can also supply `presence` and `typing` without `id:`.
+Named events are `message`, `messages-moved`, `checkpoint` and durable
+`reset` with `id:`, plus `unread`, `sidebar`, `presence`, `typing` and owner
+`reset` without `id:`.
 Other browser actions use POST. One process serves every stream; multiple
 processes are future work (hub, stream caps and watermark are per process).
 

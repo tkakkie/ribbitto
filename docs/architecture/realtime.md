@@ -19,8 +19,9 @@ return; the reader only routes through their `Router`s, and consumers
 decode the payload (the renderer decodes moves). IDs are canonical UUID text
 (`realtime.FormatPayloadID`, `ParsePayloadID`), the JSON value SQL's
 `jsonb_build_object` wrote before (#398), so old and new rows decode alike.
-`message.posted` carries `{"channel_id","message_id","topic_id"}` (UUIDs);
-the topic is captured at posting time, in the message's transaction, including
+`message.posted` carries `{"channel_id","message_id","topic_id","author_id"}`
+(UUIDs); the topic and author are captured at posting time, in the message's
+transaction, including
 branch notices. `conversation.RoutePosted` gives it as the event's routing topic;
 old rows without the field have none, while a present malformed value fails
 the batch. A later move never
@@ -47,6 +48,9 @@ naming the kind, which stops the stream before that event instead of
 rendering it as a post. A render depends only on the event
 (`Renderer.Render(ctx, event)`); the stream has already applied the
 subscription, and the renderer reads only `MessageReader`'s `One` and `Many`.
+For `sidebar` streams whose message interest does not select a post,
+`RenderUnread` (`realtime.UnreadRenderer`) caches a language-independent
+`unread` frame from `message.posted`'s payload without reading `MessageReader`.
 Setup and sign-up append `member.joined` (`org.EncodeJoined`) the same way immediately after
 the member, with its `joined_event_seq`. Their root use cases own that
 transaction and inject realtime's writer through `org.EventAppenderIn`.

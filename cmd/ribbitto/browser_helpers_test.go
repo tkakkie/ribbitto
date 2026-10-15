@@ -69,6 +69,15 @@ func boundedPage(t *testing.T, browser *rod.Browser, ctx context.Context, what s
 		}
 		page = c.page
 	case <-timer.C:
+		// A page created after the timeout would stay open in a browser later
+		// subtests share, so it is closed when it arrives.
+		go func() {
+			if c := <-done; c.err == nil {
+				closeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				_ = c.page.Context(closeCtx).Close()
+			}
+		}()
 		t.Fatalf("%s: creating the page did not finish within 15 s", what)
 	}
 	return page.WithPanic(func(v any) { t.Fatalf("%s: %v", what, v) }), func() {

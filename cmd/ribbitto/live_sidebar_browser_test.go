@@ -70,7 +70,14 @@ func TestLiveSidebarBrowser(t *testing.T) {
 		t.Fatalf("creating other channel: status %d, err %v", response.StatusCode, err)
 	}
 	otherBrowser := browser.Context(ctx).MustIncognito()
-	defer otherBrowser.MustClose()
+	// Disposing of it gets its own bound: the test context may have ended.
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := otherBrowser.Context(closeCtx).Close(); err != nil {
+			t.Errorf("closing the other browser: %v", err)
+		}
+	}()
 	other, closeOther := boundedPage(t, otherBrowser, ctx, "other channel page")
 	defer closeOther()
 	for _, cookie := range f.owner.client.Jar.Cookies(u) {

@@ -7,6 +7,8 @@
 // a supervisor that leaves nothing behind, and needs Argon listed (#1070);
 // prompt builds a pull request's review workspace and prints the prompt a
 // review would send (#1068);
+// review runs Argon on a pull request there and prints the report only if
+// the run passes the failure rules (#1096);
 // guard is Antigravity's PreToolUse hook and never checks the build, because
 // Antigravity calls it for every tool.
 package main
@@ -32,19 +34,23 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	if len(args) == 2 && args[0] == "prompt" && prNumber.MatchString(args[1]) {
+	if len(args) == 2 && (args[0] == "prompt" || args[0] == "review") && prNumber.MatchString(args[1]) {
 		number, _ := strconv.Atoi(args[1])
 		info, ok := debug.ReadBuildInfo()
 		source := os.Getenv("RIBBITTO_ARGON_SOURCE")
 		revision, err := trusted(info, ok, func() (string, error) { return sourceRevision(source, git) })
-		if err == nil {
+		code := 1
+		if err == nil && args[0] == "prompt" {
 			err = printPrompt(source, revision, ribbittoURL, number, readPullRequest, func(dir string, args ...string) (string, error) {
 				return gitRaw(2*time.Minute, dir, args...)
 			}, stdout)
 		}
+		if err == nil && args[0] == "review" {
+			code, err = reviewHere(source, revision, number, stdout)
+		}
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "argonreview: %v\n", err)
-			return 1
+			return code
 		}
 		return 0
 	}
@@ -72,7 +78,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | guard")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | guard")
 	return 2
 }
 

@@ -19,14 +19,17 @@ func TestReducedMotion(t *testing.T) {
 	const reduce, safe = "@media (prefers-reduced-motion:reduce)", "@media (prefers-reduced-motion:no-preference)"
 	property := regexp.MustCompile(`^(animation|transition|scale|rotate|translate|transform)(-[a-z-]+)?$`)
 	state := regexp.MustCompile(`:(hover|active|focus)`)
-	// A pseudo-element is ::name, or one of the four CSS 2 names with a single
-	// colon, the form the minifier writes ::before and ::after in; the trailing
-	// class stops :first-line matching the start of a longer name.
-	pseudo := regexp.MustCompile(`::([a-z-]+)|:(before|after|first-line|first-letter)([^a-z-]|$)`)
-	// The reset (*, ::before, ::after) already stops these two.
+	// Every :name or ::name in full, so a name is never cut short and chained
+	// pseudo-elements (:before::marker) are each seen.
+	colon := regexp.MustCompile(`::?[a-zA-Z0-9_-]+`)
+	// The reset (*, ::before, ::after) already stops ::before and ::after. A
+	// pseudo-element is ::name, or one of the four CSS 2 names with a single
+	// colon, the form the minifier writes ::before and ::after in.
 	missed := func(selector string) bool {
-		for _, match := range pseudo.FindAllStringSubmatch(selector, -1) {
-			if name := match[1] + match[2]; name != "before" && name != "after" {
+		for _, token := range colon.FindAllString(selector, -1) {
+			switch name := strings.TrimLeft(token, ":"); {
+			case name == "before" || name == "after":
+			case strings.HasPrefix(token, "::") || name == "first-line" || name == "first-letter":
 				return true
 			}
 		}
@@ -42,9 +45,9 @@ func TestReducedMotion(t *testing.T) {
 			// missed exempts ::before and ::after because this rule names them.
 			selectors := map[string]bool{}
 			for _, selector := range strings.Split(rule.selector, ",") {
-				selectors[strings.TrimLeft(strings.TrimSpace(selector), ":")] = true
+				selectors[strings.TrimSpace(selector)] = true
 			}
-			reset = reset || selectors["*"] && selectors["before"] && selectors["after"] &&
+			reset = reset || selectors["*"] && (selectors[":before"] || selectors["::before"]) && (selectors[":after"] || selectors["::after"]) &&
 				strings.Contains(rule.declarations, "animation:none!important") && strings.Contains(rule.declarations, "transition:none!important")
 			continue
 		}

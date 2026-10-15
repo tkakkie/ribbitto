@@ -9,7 +9,9 @@ stream, unfragmented read ranges; sidebar steps alternate initial totals 0/1.
 Fresh disposable migrated database per run; fixtures and initial recounts excluded.
 
 Export `RIBBITTO_TEST_DATABASE_URL` as `<local test database>` first
-([database tests](../database-tests.md)). Historical commands (the server-recount mode has been removed):
+([database tests](../database-tests.md)). Commands as run (sequentially). The first still reproduces the
+no-unread baseline; the server-recount mode the two `SIDEBAR=1` runs measured has been removed, and
+`SIDEBAR=1` now measures [client-side counts](stream-client-counts-results.md):
 
 ```sh
 export GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod

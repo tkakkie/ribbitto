@@ -21,7 +21,8 @@ sequenceDiagram
     opt initial read, full-batch drain or newer uncovered durable level
       C->>DB: one snapshot: replay boundary + event_seq + events after cursor
     end
-    C->>C: check interest, render, authorize, send; cursor = last seq read
+    C->>C: refresh channel state on connect; classify durable triggers before message filtering
+    C->>C: check message interest, render, authorize, send; cursor = last seq read
     C->>C: read current ephemeral owners, filter, authorize, send without id or cursor advance
     C->>C: if caught up, wait on org's durable level, declared generations, heartbeat and context
   end
@@ -80,6 +81,7 @@ sequenceDiagram
   receive a shared `unread` frame when message filtering excludes a post: channel,
   posting-time topic, sequence and author, with no `id:`. Legacy posts without
   author or topic send none. Audience and final bound-member checks still apply.
+- Channel-state refreshes preserve cursors ([contract](pins.md#ordering-authorization-and-cost), #891).
 - **A topic page** subscribes to one topic of the channel
   (the organisation endpoint with
   `want=sidebar,messages,typing&channel=…&topic=…`; an unknown topic, or another channel's, is

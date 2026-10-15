@@ -2,8 +2,8 @@
 
 Pins keep important messages within reach in a channel's overview panel
 (#874). They are post-M6 message work, not M5 or M6 polish. The maintainer agreed
-these rules on 2026-10-12 (#880); nothing is implemented yet, and the
-work follows M6.
+these rules on 2026-10-12 (#880). Realtime's generic refresh seam is implemented
+(#891); pin-specific storage and delivery remain planned after M6.
 Message permalinks (roadmap steps 1–2) precede the jump from a pin.
 
 ## Permissions and limits

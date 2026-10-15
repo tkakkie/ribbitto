@@ -1656,7 +1656,6 @@ func messageComposer(page ChannelPage, oob bool) templ.Component {
 	})
 }
 
-// The snapshot bounds plain submissions; htmx uses the cursor of the shown DOM.
 // readable reports whether the page has #read-form: only a latest page with
 // reading wired and a snapshot cursor reads.
 func readable(page ChannelPage) bool {
@@ -1666,7 +1665,8 @@ func readable(page ChannelPage) bool {
 // Automatic reading posts through this form, live arrivals included, so it
 // stays when nothing was unread and only the button goes. Like the divider,
 // the button follows the snapshot for the whole visit: live messages are read
-// automatically once shown, and a page without JavaScript gets none.
+// automatically once shown, and a page without JavaScript gets none. The
+// snapshot bounds plain submissions; htmx uses the cursor of the shown DOM.
 func readForm(page ChannelPage) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context

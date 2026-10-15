@@ -120,7 +120,11 @@ func testMessageTimeBrowser(t *testing.T, browser *rod.Browser) {
 			if err := (proto.EmulationSetScriptExecutionDisabled{Value: true}).Call(p); err != nil {
 				panic(err)
 			}
-			p.MustNavigate(server.URL + "/").MustWaitLoad()
+			if err := navigateLoaded(p, server.URL+"/"); err != nil {
+				panic(err)
+			}
+		})
+		step(t, "reading the server's times without JavaScript", func(p *rod.Page) {
 			var stamps []struct {
 				Text  string
 				Width float64

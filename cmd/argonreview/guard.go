@@ -35,9 +35,13 @@ func decide(input []byte) (bool, string) {
 	return true, ""
 }
 
-// guard always prints one decision and lets the process exit 0: an error
-// here becomes a deny, never a missing answer.
-func guard(stdin io.Reader, stdout io.Writer) {
+// guard prints one decision and returns the process status: 0 only once an
+// allow decision has been written, and non-zero for every deny, unreadable
+// input or failed write. Antigravity treats a hook that prints nothing and
+// exits 0 as an allow, and any non-zero exit as a refusal whatever the hook
+// printed (#1071, #1130), so the status is what keeps a lost answer a deny.
+// The reason also goes to stderr, which Antigravity puts in the tool error.
+func guard(stdin io.Reader, stdout, stderr io.Writer) int {
 	allow, reason := false, "unreadable hook input"
 	if input, err := io.ReadAll(io.LimitReader(stdin, maxGuardInput+1)); err == nil {
 		allow, reason = decide(input)
@@ -46,5 +50,16 @@ func guard(stdin io.Reader, stdout io.Writer) {
 	if allow {
 		decision = map[string]string{"decision": "allow"}
 	}
-	_ = json.NewEncoder(stdout).Encode(decision)
+	if err := json.NewEncoder(stdout).Encode(decision); err != nil {
+		if !allow {
+			_, _ = fmt.Fprintf(stderr, "argonreview guard: %s\n", reason)
+		}
+		_, _ = fmt.Fprintf(stderr, "argonreview guard: writing the decision: %v\n", err)
+		return 1
+	}
+	if allow {
+		return 0
+	}
+	_, _ = fmt.Fprintf(stderr, "argonreview guard: %s\n", reason)
+	return 2
 }

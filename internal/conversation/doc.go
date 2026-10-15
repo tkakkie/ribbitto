@@ -14,9 +14,9 @@
 // Posting and branching own their transactions so content and events commit
 // together with page-post and branch-notice read state, then notify. History and
 // author lookups and injected unread counts share a snapshot so a page cannot mix states; the bounded channel-members page reads its
-// channel check, listing and display names in one snapshot, and the channel list page
-// shares its sidebar and cursor. Independent sidebar
-// snapshots read fresh bounded lists, counts and their event sequence without history or directories.
+// channel check, listing and display names in one snapshot. Independent sidebar
+// snapshots, which also serve the channel list page, read fresh bounded lists,
+// counts and their event sequence without history or directories.
 // Member lookups return org's directory entries, not copies. The topic lookup
 // is scoped by a resolved
 // membership so web cannot supply the organisation. The store also implements setup's injected

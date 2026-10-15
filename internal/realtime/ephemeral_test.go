@@ -93,7 +93,7 @@ func TestEphemeralScopesAndAuthorization(t *testing.T) {
 				if tt.deny && !errors.Is(got.err, ErrMembershipRevoked) {
 					t.Fatalf("denied bound member did not end Run: %+v", got)
 				}
-				if got.cursor != 0 || (tt.err != nil && !errors.Is(got.err, tt.err)) || checks != tt.checks || len(send.ids()) != tt.frames || log.readCount() != max(1, tt.checks) {
+				if got.cursor != 0 || (tt.err != nil && !errors.Is(got.err, tt.err)) || checks != tt.checks || len(send.ids()) != tt.frames || log.readCount() != 1 {
 					t.Fatalf("Run=%+v checks=%d frames=%v reads=%d", got, checks, send.ids(), log.readCount())
 				}
 			})

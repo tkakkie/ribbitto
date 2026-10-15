@@ -31,8 +31,8 @@ type EphemeralFrame struct {
 	Outgoing     Outgoing
 }
 
-// ephemeral never retries within a batch: raises during a read or send are
-// handled after the next durable batch, bounding both writes and checks.
+// ephemeral defers raises during a read or send to the next loop turn,
+// bounding writes and checks even when generations keep advancing.
 func (s Stream) ephemeral(ctx context.Context, sub Subscription, seen *streamLevels, connect bool, send Sender, written *time.Time) (bool, error) {
 	levels := s.Hub.sequence(sub.Organization)
 	for _, entry := range []struct {

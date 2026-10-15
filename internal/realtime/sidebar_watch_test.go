@@ -67,9 +67,14 @@ func TestSidebarWatchRaces(t *testing.T) {
 					}
 				}
 				gate, resume := make(chan struct{}), make(chan struct{})
+				recountGate := make(chan struct{})
 				source := watchedSidebar{sidebarSource{sidebarTrigger, func(context.Context, Subscription) (Outgoing, error) {
 					if !acquired {
 						t.Error("recount preceded subscription")
+					}
+					// A later recount no longer has an event-reader lock to order it after the assertions.
+					if len(counts) == 1 {
+						<-recountGate
 					}
 					value := persisted.Load() // The persisted read, before rendering.
 					counts = append(counts, value)
@@ -120,10 +125,11 @@ func TestSidebarWatchRaces(t *testing.T) {
 					synctest.Wait()
 				}
 				later := phase != "before subscribe" && phase != "after subscribe"
-				if len(counts) != 1 || log.readCount() != map[bool]int{false: 1, true: 2}[later] || h.Waiting(orgA) != 1 {
+				if len(counts) != 1 || log.readCount() != 1 || h.Waiting(orgA) != 1 {
 					t.Fatalf("lost wake or spin: counts=%v log reads=%d waiters=%d", counts, log.readCount(), h.Waiting(orgA))
 				}
-				time.Sleep(SidebarInterval) // Virtual time exercises the fixed deadline.
+				close(recountGate)
+				<-time.After(SidebarInterval) // Virtual time exercises the fixed deadline.
 				synctest.Wait()
 				want := 1
 				if later {

@@ -186,7 +186,7 @@ func TestTypingDeliveryGenerations(t *testing.T) {
 		other.Topic = kernel.ID{7}
 		state.Start(sub.Organization, other, person)
 		synctest.Wait()
-		if reads != 3 || log.reads != 3 || checks != 2 || len(send.frames) != 2 {
+		if reads != 3 || log.reads != 1 || checks != 2 || len(send.frames) != 2 {
 			t.Fatalf("unrelated wake repeated frame or spun: reads=%d log=%d checks=%d", reads, log.reads, checks)
 		}
 		closeStream()

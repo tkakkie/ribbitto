@@ -74,7 +74,7 @@ func TestStreamGenerationWake(t *testing.T) {
 			name     string
 			org      kernel.ID
 			interest Interest
-			reads    int
+			waits    int
 		}{
 			{"matching", orgA, kind, 2},
 			{"organisation", orgB, kind, 1},
@@ -84,7 +84,14 @@ func TestStreamGenerationWake(t *testing.T) {
 				synctest.Test(t, func(t *testing.T) {
 					h := NewHub()
 					read, resume := make(chan struct{}), make(chan struct{})
-					h.afterWaitRead = sync.OnceFunc(func() { close(read); <-resume })
+					captures := 0
+					h.afterWaitRead = func() {
+						captures++
+						if captures == 1 {
+							close(read)
+							<-resume
+						}
+					}
 					selected := sub
 					selected.Interests = []Interest{tt.interest}
 					log, send := &fakeLog{maxReads: 3}, newRecorder()
@@ -99,8 +106,8 @@ func TestStreamGenerationWake(t *testing.T) {
 					h.RaiseGeneration(tt.org, kind, 1)
 					close(resume)
 					synctest.Wait()
-					if got := log.readCount(); got != tt.reads {
-						t.Errorf("reads = %d, want %d after generation raise", got, tt.reads)
+					if got := log.readCount(); got != 1 || captures != tt.waits {
+						t.Errorf("reads = %d, want 1; wait captures = %d, want %d after generation raise", got, captures, tt.waits)
 					}
 					if h.Waiting(orgA) != 1 || len(send.ids()) != 0 || send.heartbeatCount() != 0 {
 						t.Error("writer spun, sent a frame, or failed to return to waiting")

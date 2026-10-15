@@ -84,8 +84,10 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   Each active read publication costs one locked lookup/update and replacement
   channel; wake work scales with that member's waiting tabs. Registry memory
   follows active member entries and watches; last release removes the entry.
-  Recounts remain per connection and interval-limited; wakes and event-log
-  reads are not rate-limited by the recount interval. This is single-process:
+  Recounts remain per connection and interval-limited; wakes are not rate-limited
+  by the recount interval. After catch-up, watch-only, ephemeral-only and
+  recount-deadline wakes reuse the covered durable level without a log read;
+  a newer durable level requires another read. This is single-process:
   shared member invalidation and subscription/reconnect coordination are needed
   across processes; bounded recovery additionally needs revisions or replay.
   [Short measurements](read-advance-results.md) isolate matching tabs from total

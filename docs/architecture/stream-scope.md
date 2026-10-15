@@ -11,8 +11,8 @@ delivers presence and typing as current state ([ephemeral state](ephemeral-state
 
 `GET /organizations/{slug}/events` accepts these parameters. `messages`
 delivers durable frames; `typing` and `presence` read their wired
-owners after each durable batch and before waiting, at most one frame per
-kind. Presence checks the organisation, typing
+owners after each durable batch or generation wake and before waiting, at most
+one frame per kind. Presence checks the organisation, typing
 the frame's channel, immediately before sending. Bound-member denies and errors stop the stream. Web's presence (#768) and viewer-filtered typing (#788) adapters are wired in production. Sidebar recounts are wired in production (#819); composition details are in [unread counts](unread-counts.md).
 
 The endpoint takes:

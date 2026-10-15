@@ -139,7 +139,8 @@ var errHeartbeatDue = errors.New("realtime: heartbeat due")
 // for example when the organisation's row is gone and reads come back empty,
 // so once caught up the loop waits for a sequence above both its cursor and
 // the last value the hub reported; otherwise it would read the same empty
-// range again and again.
+// range again and again. Watch-only, ephemeral-only and recount-deadline wakes
+// reuse that completed read until a newer durable level requires another.
 // A denied bound membership ends Run with ErrMembershipRevoked, without
 // advancing the cursor. Heartbeats re-check that membership even while idle.
 // A negative cursor is refused. Every event is authorized after it is
@@ -154,6 +155,8 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		batch = DefaultBatchSize
 	}
 	var seen streamLevels
+	var covered int64
+	draining := true
 	connected := false
 	// written is when the stream last wrote, which the next heartbeat counts
 	// from: wakeups that write nothing, such as another channel's events,
@@ -173,18 +176,27 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		}
 	}
 	for {
-		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
-		if errors.Is(err, ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
-			if ctx.Err() != nil {
-				return cursor, context.Cause(ctx)
+		var events []Event
+		if draining || seen.durable > covered {
+			// The cursor can lag an observed hub level even after a short read.
+			// Cover only the level known before this read so non-durable wakes
+			// do not repeat it, while raises during the read still require one.
+			covered = seen.durable
+			var err error
+			events, err = s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
+			if errors.Is(err, ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
+				if ctx.Err() != nil {
+					return cursor, context.Cause(ctx)
+				}
+				if err := s.checkMember(ctx, sub, Event{OrganizationID: sub.Organization}); err != nil {
+					return cursor, err
+				}
+				return cursor, send.Send(ctx, Outgoing{ID: cursor, Name: "reset"})
 			}
-			if err := s.checkMember(ctx, sub, Event{OrganizationID: sub.Organization}); err != nil {
-				return cursor, err
+			if err != nil {
+				return cursor, fmt.Errorf("reading events after %d: %w", cursor, err)
 			}
-			return cursor, send.Send(ctx, Outgoing{ID: cursor, Name: "reset"})
-		}
-		if err != nil {
-			return cursor, fmt.Errorf("reading events after %d: %w", cursor, err)
+			draining = len(events) == batch
 		}
 		for _, event := range events {
 			if s.Sidebar != nil && slices.Contains(sub.Interests, InterestSidebar) && event.OrganizationID == sub.Organization && s.Sidebar.Trigger(event) {
@@ -200,6 +212,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			}
 			cursor = event.Seq
 		}
+		covered = max(cursor, covered)
 		reset, err := s.ephemeral(ctx, sub, &seen, !connected, send, &written)
 		if err != nil || reset {
 			return cursor, err
@@ -209,7 +222,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		if err != nil {
 			return cursor, err
 		}
-		if len(events) == batch {
+		if draining {
 			// Draining a backlog that is all other channels' events writes
 			// nothing either; the heartbeat is still due on time.
 			if s.Heartbeat > 0 && time.Since(written) >= s.Heartbeat {

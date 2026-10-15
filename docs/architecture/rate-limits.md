@@ -98,7 +98,7 @@ Channel creation requires an independent `Services.CreateLimits` instance
 Its `MemberRateLimiter` allows burst 10, then
 one token per minute per trusted organisation/member pair. Session and
 membership resolution precede admission, which precedes form parsing and
-all channel work. Refusal is empty 429 with `Retry-After: 6` and creates
+all channel work. Refusal is empty 429 with `Retry-After: 60` and creates
 nothing. Failed admitted attempts also consume a token. Other members and
 organisations have independent budgets, as do typing and reads. The same
 10,000-bucket bound and full-refill eviction rule apply. State is in memory

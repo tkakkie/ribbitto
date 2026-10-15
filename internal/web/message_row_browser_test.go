@@ -131,49 +131,8 @@ func messagePageMux(t *testing.T, page view.ChannelPage, files http.Handler) *ht
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", files))
-	mux.HandleFunc("GET /organizations/acme/events", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
-		if sender.Heartbeat(r.Context()) == nil {
-			<-r.Context().Done()
-		}
-	})
+	mux.HandleFunc("GET /organizations/acme/events", idleStream)
 	mux.HandleFunc("POST /organizations/acme/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.Handle("/{$}", catalogues.Middleware(templ.Handler(view.ChannelScreen("/static/css/app.css", page))))
 	return mux
-}
-
-// pageStep returns a step that runs one named browser action and its waits
-// on tab under their own 10 s and fails by name (#1060); nothing given to it
-// may go through rod's input, which the page context does not bound.
-func pageStep(ctx context.Context, tab *rod.Page) func(t *testing.T, what string, fn func(p *rod.Page)) {
-	started := time.Now()
-	return func(t *testing.T, what string, fn func(p *rod.Page)) {
-		t.Helper()
-		stepCtx, stop := context.WithTimeout(ctx, 10*time.Second)
-		defer stop()
-		done := make(chan any, 1)
-		go func() {
-			defer func() { done <- recover() }()
-			fn(tab.Context(stepCtx).WithPanic(func(v any) { panic(v) }))
-		}()
-		select {
-		case v := <-done:
-			if v != nil {
-				t.Fatalf("%s: %v (at %s)", what, v, time.Since(started).Round(time.Millisecond))
-			}
-		case <-stepCtx.Done():
-			t.Fatalf("%s did not finish in 10 s (at %s)", what, time.Since(started).Round(time.Millisecond))
-		}
-	}
-}
-
-// deleteLangCookie removes the language cookie a test set, under its own 10 s.
-func deleteLangCookie(t *testing.T, tab *rod.Page, url string) {
-	t.Helper()
-	cleanupCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
-	defer stop()
-	if err := (proto.NetworkDeleteCookies{Name: "lang", URL: url}).Call(tab.Context(cleanupCtx)); err != nil {
-		t.Errorf("deleting the lang cookie: %v", err)
-	}
 }

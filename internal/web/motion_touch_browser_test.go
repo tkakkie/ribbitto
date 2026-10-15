@@ -27,13 +27,7 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 	general, random := view.Channel{ID: kernel.ID{1}, Name: "general"}, view.Channel{ID: kernel.ID{2}, Name: "random"}
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
-	mux.HandleFunc("GET /organizations/acme/events", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
-		if sender.Heartbeat(r.Context()) == nil {
-			<-r.Context().Done()
-		}
-	})
+	mux.HandleFunc("GET /organizations/acme/events", idleStream)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		page := view.ChannelPage{Organization: view.Organization{Name: "Acme", Slug: "acme"}, Current: general,
 			Channels: []view.Channel{general, random}, Handle: "alice", Role: "owner", EventCursor: &cursor}
@@ -51,7 +45,7 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 	// cannot wait on it.
 	defer server.CloseClientConnections()
 	// stage names what runs, for failures that reach the panic handler.
-	stage := "opening the tab"
+	stage, started := "opening the tab", time.Now()
 	tab := browser.Context(ctx).MustPage()
 	// Cleanup gets its own bound, so it works after ctx has expired and a
 	// stalled close cannot hang the test.
@@ -101,27 +95,12 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 		}
 		return at.X, at.Y
 	}
-	// touchTap taps through rod's Touch, which dispatches on the original tab
-	// outside ctx, so it runs under its own bound and fails by name (#1060).
+	// touchTap taps through rod's Touch under its own 10 s and fails by name.
 	touchTap := func(what string, x, y float64) {
 		t.Helper()
-		done := make(chan any, 1)
-		go func() {
-			defer func() { done <- recover() }()
-			tab.Touch.MustTap(x, y)
-		}()
-		timer := time.NewTimer(10 * time.Second)
-		defer timer.Stop()
-		select {
-		case v := <-done:
-			if v != nil {
-				t.Fatalf("tap on %s: %v", what, v)
-			}
-		case <-timer.C:
-			t.Fatalf("tap on %s did not finish within 10 s", what)
-		case <-ctx.Done():
-			t.Fatalf("tap on %s: the test's time ran out", what)
-		}
+		tapCtx, stop := context.WithTimeout(ctx, 10*time.Second)
+		defer stop()
+		runBounded(t, tapCtx, started, "tap on "+what, func() { tab.Touch.MustTap(x, y) })
 	}
 	// navigate taps the selector and waits for the page it leads to.
 	navigate := func(selector string) {

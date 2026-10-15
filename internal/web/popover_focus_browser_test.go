@@ -42,40 +42,13 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 	tab, closeTab := boundedPage(t, browser, ctx, "popover focus")
 	defer closeTab()
 
-	started := time.Now()
-	since := func() time.Duration { return time.Since(started).Round(time.Millisecond) }
-	current, stepCancel := "setup", context.CancelFunc(func() {})
-	defer func() { stepCancel() }()
-	base := tab.WithPanic(func(v any) { t.Fatalf("%s: %v (at %s)", current, v, since()) })
+	steps := newStepRunner(t, ctx, 20*time.Second)
+	base := tab.WithPanic(steps.fail)
 	page := base
-	step := func(what string) {
-		stepCancel()
-		var stepCtx context.Context
-		stepCtx, stepCancel = context.WithTimeout(ctx, 20*time.Second)
-		current, page = what, base.Context(stepCtx)
-	}
-	// device runs mouse and keyboard work, which rod dispatches through the
-	// original page outside any step context, under the step's deadline.
-	device := func(what string, fn func(p *rod.Page)) {
-		t.Helper()
-		p := page.WithPanic(func(v any) { panic(v) })
-		done := make(chan any, 1)
-		go func() {
-			defer func() { done <- recover() }()
-			fn(p)
-		}()
-		select {
-		case v := <-done:
-			if v != nil {
-				t.Fatalf("%s: %s: %v (at %s)", current, what, v, since())
-			}
-		case <-page.GetContext().Done():
-			t.Fatalf("%s: %s did not finish (at %s)", current, what, since())
-		}
-	}
+	step := func(what string) { page = base.Context(steps.next(what)) }
 	tabKey := func(what string, shift bool) {
 		t.Helper()
-		device(what, func(p *rod.Page) {
+		steps.device(page, what, func(p *rod.Page) {
 			if shift {
 				p.KeyActions().Press(input.ShiftLeft).Type(input.Tab).MustDo()
 			} else {
@@ -93,7 +66,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 	check := func(what, js string, args ...any) {
 		t.Helper()
 		if !page.MustEval(`async (...args) => { await new Promise(r => setTimeout(r)); return (`+js+`)(...args); }`, args...).Bool() {
-			t.Fatalf("%s: %s, with focus on %s (at %s)", current, what, focused(), since())
+			t.Fatalf("%s: %s, with focus on %s (at %s)", steps.current, what, focused(), steps.since())
 		}
 	}
 	// The visible one of a popover's invokers: the account menu has two.
@@ -123,7 +96,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 		open := func() {
 			t.Helper()
 			page.MustEval(closeAndFocus, c.popover)
-			device("Enter on the button", func(p *rod.Page) { p.Keyboard.MustType(input.Enter) })
+			steps.device(page, "Enter on the button", func(p *rod.Page) { p.Keyboard.MustType(input.Enter) })
 			check("the popover opens", isOpen, c.popover)
 			tabKey("Tab into the popover", false)
 			check("Tab enters the popover", inside, c.popover)
@@ -146,7 +119,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 			await new Promise(r => setTimeout(r));
 			return p.matches(':popover-open');
 		}`, c.popover).Bool() {
-			t.Fatalf("%s: a Tab's timer closed the popover Enter opened after it (at %s)", current, since())
+			t.Fatalf("%s: a Tab's timer closed the popover Enter opened after it (at %s)", steps.current, steps.since())
 		}
 		// The same for a popover open at the Tab, closed and reopened before
 		// its timer, with focus outside it.
@@ -161,7 +134,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 			await new Promise(r => setTimeout(r));
 			return p.matches(':popover-open');
 		}`, c.popover).Bool() {
-			t.Fatalf("%s: a Tab's timer closed the popover reopened after it (at %s)", current, since())
+			t.Fatalf("%s: a Tab's timer closed the popover reopened after it (at %s)", steps.current, steps.since())
 		}
 
 		// Opening the account menu from the keyboard moves focus into it,
@@ -175,7 +148,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 			}{{"Enter", input.Enter}, {"Space", input.Space}} {
 				step(c.name + ": opening with " + key.name)
 				page.MustEval(closeAndFocus, c.popover)
-				device(key.name+" on the button", func(p *rod.Page) { p.Keyboard.MustType(key.key) })
+				steps.device(page, key.name+" on the button", func(p *rod.Page) { p.Keyboard.MustType(key.key) })
 				check("opening moves focus into the popover", inside, c.popover)
 			}
 		}
@@ -184,13 +157,13 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 		open()
 		for i := 2; page.MustEval(isOpen, c.popover).Bool(); i++ {
 			if i > 10 {
-				t.Fatalf("%s: the popover is still open after %d Tabs", current, i-1)
+				t.Fatalf("%s: the popover is still open after %d Tabs", steps.current, i-1)
 			}
 			tabKey(fmt.Sprintf("Tab %d", i), false)
 			check(fmt.Sprintf("after Tab %d focus is inside the open popover or it is closed", i), settled, c.popover)
 		}
 		if page.MustEval(onInvoker, c.popover).Bool() {
-			t.Fatalf("%s: closing moved focus back to the button", current)
+			t.Fatalf("%s: closing moved focus back to the button", steps.current)
 		}
 
 		step(c.name + ": Shift-Tab before the first control")
@@ -200,12 +173,12 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 
 		step(c.name + ": Escape")
 		open()
-		device("Escape", func(p *rod.Page) { p.Keyboard.MustType(input.Escape) })
+		steps.device(page, "Escape", func(p *rod.Page) { p.Keyboard.MustType(input.Escape) })
 		check("Escape closes the popover with focus on its button", `id => !(`+isOpen+`)(id) && (`+onInvoker+`)(id)`, c.popover)
 
 		step(c.name + ": an outside click")
 		open()
-		device("clicking "+c.outside, func(p *rod.Page) { p.MustElement(c.outside).MustClick() })
+		steps.device(page, "clicking "+c.outside, func(p *rod.Page) { p.MustElement(c.outside).MustClick() })
 		check("the click closes the popover with focus on "+c.landed, `(id, landed) => !(`+isOpen+`)(id) && document.activeElement === document.querySelector(landed)`, c.popover, c.landed)
 	}
 }

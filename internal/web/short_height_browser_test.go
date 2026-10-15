@@ -77,24 +77,16 @@ func testShortHeightBrowser(t *testing.T, browser *rod.Browser) {
 			// with the time since the start (#1060). Every input here is a script
 			// the page evaluates, which the step's context bounds; nothing goes
 			// through rod's Mouse or Keyboard.
-			started := time.Now()
-			since := func() time.Duration { return time.Since(started).Round(time.Millisecond) }
-			current, stepCancel := "setup", context.CancelFunc(func() {})
-			defer func() { stepCancel() }()
+			steps := newStepRunner(t, ctx, 15*time.Second)
 			tab, closeTab := boundedPage(t, browser, ctx, "short-height")
 			defer closeTab()
-			base := tab.WithPanic(func(v any) { t.Fatalf("%s: %v (at %s)", current, v, since()) })
+			base := tab.WithPanic(steps.fail)
 			page := base
-			step := func(what string) {
-				stepCancel()
-				var stepCtx context.Context
-				stepCtx, stepCancel = context.WithTimeout(ctx, 15*time.Second)
-				current, page = what, base.Context(stepCtx)
-			}
+			step := func(what string) { page = base.Context(steps.next(what)) }
 			wait := func(what, js string, args ...any) {
 				t.Helper()
 				if err := page.Timeout(10 * time.Second).Wait(rod.Eval(js, args...)); err != nil {
-					t.Fatalf("%s: %s: %v (at %s)", current, what, err, since())
+					t.Fatalf("%s: %s: %v (at %s)", steps.current, what, err, steps.since())
 				}
 			}
 			send := func(out realtime.Outgoing) {
@@ -102,7 +94,7 @@ func testShortHeightBrowser(t *testing.T, browser *rod.Browser) {
 				select {
 				case events <- out:
 				case <-page.GetContext().Done():
-					t.Fatalf("%s: no stream took frame %d (at %s)", current, out.ID, since())
+					t.Fatalf("%s: no stream took frame %d (at %s)", steps.current, out.ID, steps.since())
 				}
 			}
 			const state = `() => { const l = document.getElementById('message-list'), m = document.getElementById('conversation');
@@ -115,7 +107,7 @@ func testShortHeightBrowser(t *testing.T, browser *rod.Browser) {
 			select {
 			case <-reads:
 			case <-page.GetContext().Done():
-				t.Fatalf("%s: automatic reading did not post (at %s)", current, since())
+				t.Fatalf("%s: automatic reading did not post (at %s)", steps.current, steps.since())
 			}
 			wait("the list opens at the newest message", atNewest)
 
@@ -124,7 +116,7 @@ func testShortHeightBrowser(t *testing.T, browser *rod.Browser) {
 			send(realtime.Outgoing{ID: 43, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(streamTestMessages(topic, 43)[0]))})
 			wait("it is appended and followed", `() => !!document.querySelector('#message-items > li[data-event-seq="43"]') && (`+atNewest+`)()`)
 			if after := page.MustEval(state); after.Get("conversation").Num() != before.Get("conversation").Num() || after.Get("window").Num() != before.Get("window").Num() {
-				t.Errorf("%s moved the page: before %s, after %s", current, before.JSON("", ""), after.JSON("", ""))
+				t.Errorf("%s moved the page: before %s, after %s", steps.current, before.JSON("", ""), after.JSON("", ""))
 			}
 
 			step("history paging")
@@ -134,7 +126,7 @@ func testShortHeightBrowser(t *testing.T, browser *rod.Browser) {
 			wait("older messages load and settle", `() => document.querySelector('#load-older').dataset.oldestSeq === '0' &&
 				!!document.querySelector('#message-items > li[data-event-seq="1"]') && !document.querySelector('.htmx-settling')`)
 			if after := page.MustEval(state); after.Get("fromBottom").Num() != before.Get("fromBottom").Num() {
-				t.Errorf("%s moved the reader: before %s, after %s", current, before.JSON("", ""), after.JSON("", ""))
+				t.Errorf("%s moved the reader: before %s, after %s", steps.current, before.JSON("", ""), after.JSON("", ""))
 			}
 
 			// Post from the composer as a reader there would, scrolled to it.

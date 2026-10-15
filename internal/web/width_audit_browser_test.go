@@ -86,13 +86,7 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
 	// Keep the ordinary stream and reading scripts running against idle fakes;
 	// the layout fixture must include the cursor-dependent Mark as read targets.
-	mux.HandleFunc("GET /organizations/acme/events", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
-		if sender.Heartbeat(r.Context()) == nil {
-			<-r.Context().Done()
-		}
-	})
+	mux.HandleFunc("GET /organizations/acme/events", idleStream)
 	mux.HandleFunc("POST /organizations/acme/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	for _, c := range cases {
 		path := "/" + c.name
@@ -105,57 +99,21 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 	defer server.Close()
 	tab, closeTab := boundedPage(t, browser, ctx, "width audit")
 	defer closeTab()
-	page := tab.WithPanic(func(v any) { t.Fatal(v) })
-	// setup runs one browser setting under its own 10 s and fails by name.
-	setup := func(what string, call func(p *rod.Page) error) {
-		t.Helper()
-		setupCtx, stop := context.WithTimeout(ctx, 10*time.Second)
-		defer stop()
-		if err := call(page.Context(setupCtx)); err != nil {
-			t.Fatalf("%s: %v", what, err)
-		}
-	}
-	defer func() {
-		cleanupCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
-		defer stop()
-		if err := (proto.NetworkDeleteCookies{Name: "lang", URL: server.URL}).Call(page.Context(cleanupCtx)); err != nil {
-			t.Errorf("deleting the lang cookie: %v", err)
-		}
-	}()
+	setup := pageStep(ctx, tab)
+	defer deleteLangCookie(t, tab, server.URL)
 	for _, size := range [][2]int{{320, 568}, {390, 844}, {851, 844}, {852, 844}, {1199, 844}, {1200, 844}, {844, 390}, {320, 200}, {640, 400}, {1280, 400}, {1280, 200}} {
-		setup(fmt.Sprintf("setting the viewport to %dx%d", size[0], size[1]), func(p *rod.Page) error {
-			return proto.EmulationSetDeviceMetricsOverride{Width: size[0], Height: size[1], DeviceScaleFactor: 1}.Call(p)
-		})
+		setup(t, fmt.Sprintf("setting the viewport to %dx%d", size[0], size[1]), func(p *rod.Page) { p.MustSetViewport(size[0], size[1], 1, false) })
 		for _, lang := range []string{"en", "ja"} {
-			setup("setting the lang cookie to "+lang, func(p *rod.Page) error {
-				return p.SetCookies([]*proto.NetworkCookieParam{{Name: "lang", Value: lang, URL: server.URL}})
+			setup(t, "setting the lang cookie to "+lang, func(p *rod.Page) {
+				p.MustSetCookies(&proto.NetworkCookieParam{Name: "lang", Value: lang, URL: server.URL})
 			})
 			for _, c := range cases {
 				t.Run(fmt.Sprintf("%dx%d/%s/%s", size[0], size[1], lang, c.name), func(t *testing.T) {
 					where := fmt.Sprintf("page=%s viewport=%dx%d language=%s", c.name, size[0], size[1], lang)
-					started := time.Now()
-					// step runs one named action and its waits under their own
-					// bound. rod dispatches mouse clicks through the original page,
-					// outside any page context (#1060), so the step also ends on its
-					// deadline; a click into a collapsed list once waited for the
-					// whole test's (#1056).
+					run := pageStep(ctx, tab)
 					step := func(what string, fn func(p *rod.Page)) {
 						t.Helper()
-						stepCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-						defer cancel()
-						done := make(chan any, 1)
-						go func() {
-							defer func() { done <- recover() }()
-							fn(page.Context(stepCtx).WithPanic(func(v any) { panic(v) }))
-						}()
-						select {
-						case v := <-done:
-							if v != nil {
-								t.Fatalf("%s: %s: %v (at %s)", where, what, v, time.Since(started).Round(time.Millisecond))
-							}
-						case <-stepCtx.Done():
-							t.Fatalf("%s: %s did not finish in 10 s (at %s)", where, what, time.Since(started).Round(time.Millisecond))
-						}
+						run(t, where+": "+what, fn)
 					}
 					audit := func(p *rod.Page, state string) {
 						result := p.MustEval(widthAudit)

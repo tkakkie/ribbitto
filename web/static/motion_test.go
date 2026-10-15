@@ -19,8 +19,10 @@ func TestReducedMotion(t *testing.T) {
 	const reduce, safe = "@media (prefers-reduced-motion:reduce)", "@media (prefers-reduced-motion:no-preference)"
 	property := regexp.MustCompile(`^(animation|transition|scale|rotate|translate|transform)(-[a-z-]+)?$`)
 	state := regexp.MustCompile(`:(hover|active|focus)`)
-	// Every :name or ::name in full, so a name is never cut short and chained
-	// pseudo-elements (:before::marker) are each seen.
+	// Every ASCII :name or ::name in full, so chained pseudo-elements
+	// (:before::marker) are each seen and :first-line2 is not read as
+	// :first-line. The built names are ASCII; an escaped colon in a class name
+	// (.hover\:bg-hover) reads as a pseudo-class and is ignored.
 	colon := regexp.MustCompile(`::?[a-zA-Z0-9_-]+`)
 	// The reset (*, ::before, ::after) already stops ::before and ::after. A
 	// pseudo-element is ::name, or one of the four CSS 2 names with a single

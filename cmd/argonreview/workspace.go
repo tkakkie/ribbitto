@@ -132,13 +132,15 @@ func newWorkspace(source, revision string, t target, git func(string, ...string)
 	return w, nil
 }
 
-// removeAgents deletes every .agents entry in the worktree, nested ones
-// included, and checks that none is left: a pull request's .agents/hooks.json
-// would run shell commands outside the sandbox (#1041).
+// removeAgents deletes every .agents entry in the worktree, nested ones,
+// files and any letter case included, and checks that none is left: a pull
+// request's .agents/hooks.json would run shell commands outside the sandbox
+// (#1041), and on a case-insensitive filesystem .AGENTS is .agents (Codex on
+// #1097).
 func removeAgents(tree string) error {
 	for _, remove := range []bool{true, false} {
 		err := filepath.WalkDir(tree, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.Name() != ".agents" {
+			if err != nil || !strings.EqualFold(d.Name(), ".agents") {
 				return err
 			}
 			if !remove {
@@ -168,6 +170,11 @@ func (w *workspace) remove() error {
 			errs = append(errs, fmt.Errorf("removing the worktree %s: %w", w.tree, err))
 		}
 	}
+	// Before the prune, so a worktree that git could not remove is gone from
+	// the disk and the prune drops its registration (Codex on #1097).
+	if err := os.RemoveAll(w.dir); err != nil {
+		errs = append(errs, fmt.Errorf("removing %s: %w", w.dir, err))
+	}
 	if _, err := w.git(w.source, "worktree", "prune"); err != nil {
 		errs = append(errs, fmt.Errorf("pruning worktrees: %w", err))
 	}
@@ -177,14 +184,12 @@ func (w *workspace) remove() error {
 			errs = append(errs, fmt.Errorf("deleting %s: %w", ref, err))
 		}
 	}
-	if err := os.RemoveAll(w.dir); err != nil {
-		errs = append(errs, fmt.Errorf("removing %s: %w", w.dir, err))
-	}
 	return errors.Join(errs...)
 }
 
-// printPrompt builds the workspace for pull request number, writes the prompt
-// a review would send, and removes the workspace again.
+// printPrompt builds the workspace for pull request number, removes it again,
+// and only then writes the prompt a review would send: a closed stdout can end
+// the process on SIGPIPE during the write (Codex on #1097).
 func printPrompt(source, revision string, number int, read func(int) (target, error), git func(string, ...string) (string, error), out io.Writer) error {
 	t, err := read(number)
 	if err != nil {
@@ -194,6 +199,9 @@ func printPrompt(source, revision string, number int, read func(int) (target, er
 	if err != nil {
 		return err
 	}
+	if err := w.remove(); err != nil {
+		return err
+	}
 	_, err = io.WriteString(out, w.prompt)
-	return errors.Join(err, w.remove())
+	return err
 }

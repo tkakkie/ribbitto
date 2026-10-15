@@ -16,7 +16,7 @@ Part 2f forwards optional `RecountObserver` through Stream and web Streaming,
 including RunReserved; nil adds no clocks, allocations or locks. Aggregates
 measure queue, compute, receipts, return→send and submit→send
 ([delivery metrics](dev-metrics.md#delivery-snapshot)). Stage 2 separates queue,
-compute and send delay but cannot prove freshness; PR 3 owns that oracle.
+compute and send delay but cannot prove freshness; that stage was stopped (decision 34).
 
 Part 2g closes an optional scheduler with HTTP shutdown, after `Hub.CancelAll`
 and before the pool ([order](stream-limits.md#shutdown)).

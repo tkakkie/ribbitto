@@ -18,7 +18,7 @@ day-to-day progress. What the steps aim at is in the [vision](vision.md).
 | **Topics** ✓ done | Topics inside channels: the default topic, the feed and topic view, branching ([decision 21](decisions/21-topics-inside-channels-a-default-topic-and-branching-instead-of-threads.md)) | A conversation started in the default topic can be branched into its own topic, and both views show it |
 | **M4 Awareness** ✓ done | Unread counts, presence, typing indicator | The four outcomes under [M4](#m4) below |
 | **M5 UI pass** ✓ done | The existing pages in a new visual direction, with icons, channel images and motion | The five outcomes under [M5](#m5) below |
-| **M6 Dark mode and mobile** ← next | Dark colours and a mobile layout for M5's design | The three outcomes under [M6](#m6) below |
+| **M6 Dark mode and mobile** ✓ done | Dark colours and a mobile layout for M5's design | The three outcomes under [M6](#m6) below |
 
 The modular-monolith migration ([decision 26](decisions/26-modules-by-feature-layout-seams-and-order.md),
 [decision 27](decisions/27-channels-topics-and-messages-are-one-conversation-module.md),
@@ -103,7 +103,7 @@ the emoji picker.
 
 ## M6
 
-M6 is done when, in M5's design:
+M6 is done (review #976), in M5's design:
 
 1. **Dark mode.** Every page ([listed in `ui.md`](ui.md#layout-principles);
    404 and 500 stay plain text) follows the system setting with dark

@@ -13,7 +13,6 @@ import (
 // First sequences are zero when absent or disabled. Older history uses the same counts.
 type PageCounts struct {
 	SnapshotSeq                       int64
-	Witness                           *SidebarWitness
 	ChannelCounts, TopicCounts        map[kernel.ID]int64
 	FeedFirstUnread, TopicFirstUnread int64
 }
@@ -59,6 +58,5 @@ func (s *Reader) readCounts(ctx context.Context, snapshot platform.Snapshot, m o
 	if err != nil {
 		return PageCounts{}, fmt.Errorf("reading page counts: %w", err)
 	}
-	counts.Witness = s.capture(ctx, snapshot, m, channelID, channelIDs, topicIDs, selected)
 	return counts, nil
 }

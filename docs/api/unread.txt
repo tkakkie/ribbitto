@@ -38,15 +38,6 @@ func NewFeedWriter(ranges RangeWriterIn, messages ChannelMessagesIn, cursor Even
 func NewReading(runner TxRunner, feed *FeedWriter, topic *TopicWriter, publisher ReadPublisher) *Reading // NewReading builds reading with transaction-bound writers and an optional publisher.
 func NewTopicCounts(state TopicStateReaderIn, messages TopicCounterIn) *TopicCounts // NewTopicCounts builds topic counts with snapshot-bound factories.
 func NewTopicWriter(prepare TopicPrepareIn, messages TopicMessagesIn, cursor EventCursorIn) *TopicWriter // NewTopicWriter builds the topic write with transaction-bound factories.
-type PersistedRange struct // PersistedRange is one stored range, including the zero-based prefix row.
-  field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
-  field Hi int64
-  field Lo int64
-type PersistedReader interface // PersistedReader reads only resolved member scope and permitted channel/topic IDs.
-  func (PersistedReader).Read(context.Context, Scope, []github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID) (PersistedState, error)
-type PersistedState struct // PersistedState contains all requested stored rows; missing floors stay absent.
-  field Floors map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64
-  field Ranges []PersistedRange
 type PreparedTopic interface // PreparedTopic holds read state and the channel lock until the caller completes its transaction.
   func (PreparedTopic).Add(context.Context, []int64, []int64, int64) error // Add unions candidate bounds and raises the floor, including an empty batch.
   func (PreparedTopic).ReadState() (prefix int64, floor int64, ranges []Range) // ReadState returns the prefix, floor and read ranges above the prefix.

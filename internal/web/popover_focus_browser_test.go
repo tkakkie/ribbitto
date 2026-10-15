@@ -19,7 +19,8 @@ import (
 // Tab and Shift-Tab never leave focus outside an open popover, which could
 // cover the focused control (#1092): leaving one closes it, and focus stays
 // where Tab moved it. Escape still closes it with focus back on its button,
-// and an outside click closes it with focus where the click put it.
+// and an outside click closes it with focus where the click put it. Opening
+// the account menu with Enter or Space moves focus into it (#1102).
 func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -99,6 +100,9 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 	const invoker = `id => [...document.querySelectorAll('[popovertarget="' + id + '"]')].find(e => e.checkVisibility())`
 	const isOpen = `id => document.getElementById(id).matches(':popover-open')`
 	const inside = `id => document.getElementById(id).matches(':popover-open') && document.getElementById(id).contains(document.activeElement)`
+	// closeAndFocus starts from the closed popover with focus on its button;
+	// Shift-Tab may have left it open, which the rule allows.
+	const closeAndFocus = `id => { const p = document.getElementById(id); if (p.matches(':popover-open')) p.hidePopover(); (` + invoker + `)(id).focus(); }`
 	const onInvoker = `id => document.activeElement === (` + invoker + `)(id)`
 	// settled is the rule: focus is inside the open popover, or it is closed.
 	const settled = `id => !document.getElementById(id).matches(':popover-open') || document.getElementById(id).contains(document.activeElement)`
@@ -118,8 +122,7 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 	} {
 		open := func() {
 			t.Helper()
-			// Shift-Tab may leave it open, which the rule allows.
-			page.MustEval(`id => { const p = document.getElementById(id); if (p.matches(':popover-open')) p.hidePopover(); (`+invoker+`)(id).focus(); }`, c.popover)
+			page.MustEval(closeAndFocus, c.popover)
 			device("Enter on the button", func(p *rod.Page) { p.Keyboard.MustType(input.Enter) })
 			check("the popover opens", isOpen, c.popover)
 			tabKey("Tab into the popover", false)
@@ -159,6 +162,22 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 			return p.matches(':popover-open');
 		}`, c.popover).Bool() {
 			t.Fatalf("%s: a Tab's timer closed the popover reopened after it (at %s)", current, since())
+		}
+
+		// Opening the account menu from the keyboard moves focus into it,
+		// since the phone sheet covers its own button (#1102). The create
+		// popover is left out: focus stays on its button, which it overlaps
+		// at the lower edge.
+		if c.popover == "account-menu" {
+			for _, key := range []struct {
+				name string
+				key  input.Key
+			}{{"Enter", input.Enter}, {"Space", input.Space}} {
+				step(c.name + ": opening with " + key.name)
+				page.MustEval(closeAndFocus, c.popover)
+				device(key.name+" on the button", func(p *rod.Page) { p.Keyboard.MustType(key.key) })
+				check("opening moves focus into the popover", inside, c.popover)
+			}
 		}
 
 		step(c.name + ": Tab past the last control")

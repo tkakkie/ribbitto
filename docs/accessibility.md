@@ -34,9 +34,9 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   and times, including a timezone and at most three fractional digits.
 - **Images** ✓ have `alt` (empty when decorative).
 - **Focus.** ✓ `tabindex` only as `-1` on a deliberate focus target (a
-  dialog's heading, an error summary) or `0` on a scrollable region with
-  `role="region"` and an `aria-label`. Focus is always visible (the focus
-  token); nothing removes the outline.
+  dialog's heading, an error summary, the account menu's first line) or
+  `0` on a scrollable region with `role="region"` and an `aria-label`.
+  Focus is always visible (the focus token); nothing removes the outline.
 - **Tap targets** at phone width are at least 44 × 44 px, stricter than
   AA's 24 px (2.5.8), which desktop keeps: links, buttons, form controls,
   `<summary>` and labels that act as a control's target. The exceptions
@@ -115,6 +115,16 @@ where the click put it; a click inside never closes it. Those three are
 the browser's own. Without JavaScript, Tab can still move behind an open
 popover. `testPopoverFocusBrowser` checks both popovers at desktop and
 phone width.
+
+Opening the account menu, by keyboard or pointer, moves focus to its first
+line, the signed-in text (`tabindex="-1"` and `autofocus`, the browser's
+own popover focusing, so also without JavaScript), because below `desk` the
+sheet covers the bottom navigation's button that opened it (#1102). Text
+rather than sign-out, so a repeated Enter or Space acts on nothing and the
+menu stays open; Tab then reaches sign-out. A pointer opening shows no
+focus ring there, as `:focus-visible` follows the input. The create popover
+keeps focus on its button. `testPopoverFocusBrowser` checks opening with
+Enter and with Space at desktop and phone width.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
 when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's

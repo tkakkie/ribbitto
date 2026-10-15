@@ -64,8 +64,11 @@ templ bottomNav(page ChannelPage) {
 // focus without JavaScript. Below desk it is a bottom sheet above the safe
 // area, narrow enough in landscape to stay clear of a notch.
 templ accountMenu(page ChannelPage) {
+	// Opening moves focus to the first line (the browser's popover autofocus),
+	// since the sheet covers the bottom navigation's button (#1102). Text, not
+	// sign-out, so a repeated Enter or Space acts on nothing.
 	<div id="account-menu" popover class="inset-auto bottom-3 left-24 m-0 w-64 rounded-xl border border-border bg-surface p-3 text-body text-fg shadow-popover max-desk:inset-x-0 max-desk:bottom-0 max-desk:mx-auto max-desk:w-full max-desk:max-w-md max-desk:rounded-b-none max-desk:border-b-0 max-desk:p-4 max-desk:pb-safe-4">
-		<p class="break-words text-caption text-muted">
+		<p tabindex="-1" autofocus class="break-words text-caption text-muted">
 			// templ drops the white space before a component call but keeps
 			// it after one, so only the first space is part of the text.
 			{ i18n.T(ctx, "hello.signed_in_as") + " " }

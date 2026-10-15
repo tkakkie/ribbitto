@@ -36,14 +36,14 @@ func TestDecide(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var out, stderr bytes.Buffer
 			code := run([]string{"guard"}, strings.NewReader(tc.input), &out, &stderr)
-			// Only an allow exits 0; a deny also fails by status and names
-			// its reason on stderr (#1130).
-			if tc.allow && (code != 0 || stderr.Len() != 0) || !tc.allow && (code == 0 || !strings.Contains(stderr.String(), tc.reason)) {
-				t.Fatalf("exit %d, stderr %q", code, stderr.String())
-			}
 			var decision map[string]string
 			if err := json.Unmarshal(out.Bytes(), &decision); err != nil {
 				t.Fatalf("output %q: %v", out.String(), err)
+			}
+			// Only an allow exits 0; a deny also fails by status and gives
+			// the same reason on stderr (#1130).
+			if tc.allow && (code != 0 || stderr.Len() != 0) || !tc.allow && (code == 0 || stderr.String() != "argonreview guard: "+decision["reason"]+"\n") {
+				t.Fatalf("exit %d, stderr %q", code, stderr.String())
 			}
 			want := "deny"
 			if tc.allow {
@@ -90,21 +90,32 @@ func TestGuardFailures(t *testing.T) {
 		name           string
 		stdin          io.Reader
 		stdout, stderr io.Writer
-		denyOutput     bool
+		// The diagnostics each case must leave, on stdout and stderr where
+		// they still work.
+		out, diagnostics []string
 	}{
-		{"stdin fails", failingReader{}, &bytes.Buffer{}, &bytes.Buffer{}, true},
-		{"stdin fails after allow bytes", &allowThenFail{}, &bytes.Buffer{}, &bytes.Buffer{}, true},
-		{"stdout fails on an allow", strings.NewReader(allowed), brokenWriter{0}, &bytes.Buffer{}, false},
-		{"stdout fails partway on an allow", strings.NewReader(allowed), brokenWriter{5}, &bytes.Buffer{}, false},
-		{"stdout fails on a deny", strings.NewReader(denied), brokenWriter{0}, &bytes.Buffer{}, false},
-		{"stderr fails on a deny", strings.NewReader(denied), &bytes.Buffer{}, brokenWriter{0}, true},
+		{"stdin fails", failingReader{}, &bytes.Buffer{}, &bytes.Buffer{}, []string{`"decision":"deny"`, "unreadable hook input"}, []string{"unreadable hook input"}},
+		{"stdin fails after allow bytes", &allowThenFail{}, &bytes.Buffer{}, &bytes.Buffer{}, []string{`"decision":"deny"`, "unreadable hook input"}, []string{"unreadable hook input"}},
+		{"stdout fails on an allow", strings.NewReader(allowed), brokenWriter{0}, &bytes.Buffer{}, nil, []string{"writing the decision: broken pipe"}},
+		{"stdout fails partway on an allow", strings.NewReader(allowed), brokenWriter{5}, &bytes.Buffer{}, nil, []string{"writing the decision: broken pipe"}},
+		{"stdout fails on a deny", strings.NewReader(denied), brokenWriter{0}, &bytes.Buffer{}, nil, []string{"search_web is not allowed", "writing the decision: broken pipe"}},
+		{"stdout fails partway on a deny", strings.NewReader(denied), brokenWriter{5}, &bytes.Buffer{}, nil, []string{"search_web is not allowed", "writing the decision: broken pipe"}},
+		{"stderr fails on a deny", strings.NewReader(denied), &bytes.Buffer{}, brokenWriter{0}, []string{`"decision":"deny"`, "search_web is not allowed"}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if code := run([]string{"guard"}, tc.stdin, tc.stdout, tc.stderr); code == 0 {
 				t.Fatal("exit 0")
 			}
-			if out, ok := tc.stdout.(*bytes.Buffer); ok && tc.denyOutput && !strings.Contains(out.String(), `"decision":"deny"`) {
-				t.Fatalf("output %q", out.String())
+			for _, w := range []struct {
+				writer io.Writer
+				want   []string
+			}{{tc.stdout, tc.out}, {tc.stderr, tc.diagnostics}} {
+				buffer, ok := w.writer.(*bytes.Buffer)
+				for _, want := range w.want {
+					if !ok || !strings.Contains(buffer.String(), want) {
+						t.Errorf("missing %q", want)
+					}
+				}
 			}
 		})
 	}

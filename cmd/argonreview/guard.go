@@ -51,6 +51,10 @@ func guard(stdin io.Reader, stdout, stderr io.Writer) int {
 		decision = map[string]string{"decision": "allow"}
 	}
 	if err := json.NewEncoder(stdout).Encode(decision); err != nil {
+		if !allow {
+			_, _ = fmt.Fprintf(stderr, "argonreview guard: %s\n", reason)
+		}
+		_, _ = fmt.Fprintf(stderr, "argonreview guard: writing the decision: %v\n", err)
 		return 1
 	}
 	if allow {

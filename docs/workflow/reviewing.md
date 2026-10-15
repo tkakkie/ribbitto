@@ -166,7 +166,7 @@ A change is **high** risk if it touches any of: `internal/org/**`,
 entry points `internal/web/org.go`, `internal/web/signin.go`,
 `internal/web/signup.go` and `internal/web/setup.go`,
 `internal/realtime/**`, `db/migrations/**`, `db/queries/**`,
-`.github/**`, `scripts/**`, `tools/**`, `Makefile`, `.golangci.yml`,
+`.github/**`, `cmd/argonreview/**`, `tools/**`, `Makefile`, `.golangci.yml`,
 `sqlc.yaml`, `go.mod`, `go.sum`, `docs/workflow/**`, or any `AGENTS.md`
 or `CLAUDE.md`. Everything else is **normal**. The author states the risk
 in the template; the reviewer checks it. Which adversarial review runs is

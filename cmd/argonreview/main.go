@@ -148,7 +148,10 @@ func gitRaw(limit time.Duration, dir string, args ...string) (string, error) {
 			cmd.Env = append(cmd.Env, value)
 		}
 	}
-	cmd.Env = append(cmd.Env, "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
+	// No replace refs either: a refs/replace/* entry in the source would
+	// make the trusted revision read as other content, such as another
+	// review prompt (the maintainer on #1097).
+	cmd.Env = append(cmd.Env, "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_REPLACE_OBJECTS=1")
 	out, err := cmd.Output()
 	return string(out), err
 }

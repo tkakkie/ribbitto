@@ -30,8 +30,6 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 
 - `make check` — checks formatting (Go and templ), vets, lints, builds and
   tests (race detector on); must pass before you open a pull request.
-  AI launcher self-tests run only when a change can affect them
-  (README *Checks*); `make check-ai` always runs them.
   Format templates with `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; it needs the network, so CI runs it,
   not `make check`.
@@ -145,6 +143,6 @@ only the token utilities, never raw colours; checked by `tools/sourcecheck`), [`
   state the head commit; after the instruction, push nothing more and run
   `gh pr merge <number> --squash --match-head-commit <that commit>`, so a
   later push makes the merge fail instead of slipping in.
-- When running `codex`, `grok` or `claude -p` headless, close stdin
+- When running `codex` or `claude -p` headless, close stdin
   (`< /dev/null`) and set a time limit, or they can wait forever
   (see `docs/workflow/running-other-ai.md`).

@@ -8,14 +8,6 @@ TAILWIND := $(word 1,$(TOOL_PATHS))
 GOLANGCI_LINT := $(word 2,$(TOOL_PATHS))
 TEMPL := ./bin/templ
 CSS_ARGS := -i web/styles/app.css -o web/static/css/app.css --minify
-# The AI launchers' self-tests take most of check's time, so check-launchers
-# runs them only when the change since this base can affect them (an empty base always
-# runs them); scripts/ai/launcher-tests.sh says what it chose and why. CI
-# passes HEAD^1 on a pull request (its merge commit's first parent, the base
-# as merged), or an empty base on main and nightly. It is exported so the
-# recipe reads it from the environment, unquoted by make.
-LAUNCHER_TESTS_BASE ?= origin/main
-export LAUNCHER_TESTS_BASE
 # The shared PostgreSQL's max_connections=100 was sized from two concurrent
 # checks at -p 2 (#636), so go test runs at most two packages at once by
 # default; go test's own default (-p = CPUs) can exceed it. Override only for
@@ -25,7 +17,7 @@ GO_TEST_FLAGS ?= -p 2
 # package runs.
 GO_TEST_PACKAGES ?= ./...
 
-.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools check-launchers check-ai prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
+.PHONY: ai-env ai-env-clean ai-health db-health migrate seed check check-static check-test check-tools prepush lint lint-fixtures vuln db-up db-down generate schema-docs deps api css dev
 
 generate: $(TEMPL)
 	$(TEMPL) generate
@@ -64,13 +56,12 @@ $(TAILWIND):
 # outside the tools module, which Go's test cache does not track, so a cached
 # pass would hide a changed query or manifest.
 #
-# check runs its four parts in order; CI runs them in parallel jobs (#992),
+# check runs its three parts in order; CI runs them in parallel jobs (#992),
 # check-test once per tools/testshard shard, so the two cannot drift.
 check:
 	$(MAKE) check-static
 	$(MAKE) check-test
 	$(MAKE) check-tools
-	$(MAKE) check-launchers
 
 check-static: $(TEMPL)
 	go -C tools run ./formatcheck -templ ../$(TEMPL) ..
@@ -92,14 +83,6 @@ check-tools: $(TEMPL)
 	go -C tools run ./testshard -check ..
 	go -C tools run ./docscheck ..
 	go -C tools run ./sourcecheck ..
-
-check-launchers:
-	bash scripts/ai/launcher-tests_test.sh
-	bash scripts/ai/launcher-tests.sh --base "$$LAUNCHER_TESTS_BASE"
-
-# Always runs the AI launchers' self-tests, whatever changed.
-check-ai:
-	bash scripts/ai/launcher-tests.sh
 
 # A quick subset of make check to run before pushing a follow-up commit
 # (#848): generated files and CSS are current, the API and dependency

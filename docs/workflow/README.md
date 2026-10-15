@@ -11,10 +11,9 @@ disagree, fix the disagreement in a pull request.
 |---|---|
 | `README.md` (this file) | Principles, roles, the lifecycles of an issue and a pull request, keeping state, the occasional audit, labels |
 | [`reviewing.md`](reviewing.md) | Reviewing, closure verification, the Copilot follow-up check, risk |
-| [`adversarial-review.md`](adversarial-review.md) | which adversarial review a change needs (Grok, Muse Code or none), and Muse Code |
-| [`running-grok.md`](running-grok.md) | running Grok's adversarial review: the launcher and its security boundary |
+| [`adversarial-review.md`](adversarial-review.md) | Which changes need an Argon adversarial review, and when it completes |
 | [`running-argon.md`](running-argon.md) | running Argon's adversarial review: setup, the Go launcher, its boundary and evidence |
-| [`running-other-ai.md`](running-other-ai.md) | Running Codex, Claude or Muse Code headless, and how the maintainer's sessions run Codex |
+| [`running-other-ai.md`](running-other-ai.md) | Running Codex or Claude headless, and how the maintainer's sessions run Codex |
 
 ## Principles
 
@@ -46,9 +45,7 @@ disagree, fix the disagreement in a pull request.
 | Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
 | Copilot | Reviews each pull request **once**, at **Lite**, guided by `.github/instructions/code-review.instructions.md`. The orchestrating AI requests that review by hand on the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), after the cross-review approves and `main` is merged, and before the initial adversarial review. The `main` ruleset does not request it on ready, and drafts and new pushes do not trigger it; re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
-| Grok | Adversarial review of tier A pull requests (#339, #498), run with `scripts/ai/grok-review.sh`. Advisory. |
-| Muse Code | Adversarial review of tier B pull requests, re-reviews of tier A ones after a completed Grok report unless the completion rule sends them back to Grok (#840), and tier A ones while Grok is unavailable (#330, #498). Advisory. |
-| Antigravity | Optional: the occasional documentation audit (below), UI screenshot review, experiments, an extra adversarial review that never satisfies a tier. |
+| Antigravity / Argon | One required adversarial review for tier A and tier B pull requests, through `cmd/argonreview` ([running it](running-argon.md)). Findings are advisory. Optional: the occasional documentation audit (below), UI screenshot review and experiments. |
 
 Claude and Codex should end up with roughly equal shares of implementation.
 If one has done the last few issues, give the next one to the other.
@@ -84,10 +81,7 @@ idea (maintainer, one line) or finding (AI)
      branch claude/<topic> or codex/<topic>)
   → draft pull request from the template, linked with "Closes #N";
     CI runs on every push (`make check`'s parts in parallel jobs, and
-    `make vuln`;
-    the bash launchers' self-tests only when the change can affect
-    them, and always on `main` and nightly (`make check-ai` locally);
-    see Checks in the README)
+    `make vuln`; see Checks in the README)
   → the AI that did not implement it reviews        (see reviewing.md)
   → implementer applies the review
   → at most two rounds; if round 2 leaves only mechanical fixes,
@@ -102,7 +96,7 @@ idea (maintainer, one line) or finding (AI)
   → the initial adversarial review the change's tier requires, on that
     head, still as a draft; never alongside the first cross-review; a
     fix for its finding gets the adversarial follow-up check, then a
-    re-review (after Grok, usually Muse Code)  (see adversarial-review.md)
+    re-review by Argon  (see adversarial-review.md)
   → label `ai-reviewed` → mark ready for review
   → Claude explains the PR to the maintainer in Japanese, in the chat
     (the PR itself stays in English)
@@ -111,7 +105,7 @@ idea (maintainer, one line) or finding (AI)
 ```
 
 - `high` risk: the maintainer reads the whole diff.
-- The adversarial review its tier requires (Grok, Muse Code or none,
+- The adversarial review its tier requires (Argon or none,
   [`adversarial-review.md`](adversarial-review.md#which-review-runs)) runs
   whatever the risk, after Copilot's one review and any follow-up, while the
   pull request is still a draft and before it is marked ready. GitHub cannot
@@ -141,13 +135,9 @@ idea (maintainer, one line) or finding (AI)
   log comments. An AI groups the comments since the last `Retrospective:`
   comment, proposes the smallest fixes (mechanical first, removal before
   addition), the maintainer picks, accepted ones become `process` issues,
-  and a `Retrospective:` summary comment closes the round. The M4
-  retrospective also checks whether any merged pull request without a
-  completed Grok report at its head (tiers B and C, and tier A merged on the
-  Muse Code fallback) later turned out to have a defect, wherever it was,
-  and revisits the tiers (#339, #498). Since #558 the initial adversarial
-  review runs late, once: in step 4, running it on the draft and again
-  after each merge of `main` cost 13 re-runs that found nothing. Since
+  and a `Retrospective:` summary comment closes the round. Since #558 the
+  initial adversarial review runs late, once: in step 4, running it on the
+  draft and again after each merge of `main` cost 13 re-runs that found nothing. Since
   #664 it also follows Copilot's review, requested by hand on the draft,
   so a Copilot follow-up no longer forces a second run.
 - **Roadmap:** `docs/roadmap.md`, updated when a milestone ends or the

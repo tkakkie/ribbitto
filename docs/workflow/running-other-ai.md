@@ -87,8 +87,8 @@ The prompt carries the issue and its review comments, plus these rules:
   which works in this profile. `make vuln` does not, because
   `vuln.go.dev` is not on the allowlist; CI runs it
   ([Checks](../../README.md#checks)). The sandbox does not permit `ps`, so
-  `check-test` fails in `cmd/argonreview`'s supervisor tests and `make check`
-  stops before `check-tools` and the launcher suites, which need `ps` too
+  `check-test` fails in the process tests of `cmd/argonreview`,
+  `cmd/capacity` and `cmd/dev`, and `make check` stops before `check-tools`
   ([#183](https://github.com/tkakkie/ribbitto/issues/183)). That failure is
   expected; the orchestrator runs the full `make check` outside it.
 
@@ -118,7 +118,7 @@ The prompt carries the issue and its review comments, plus these rules:
   credentials, a password, a token or a key: a command that needs one shows
   a placeholder such as `<local test database>` (#358). It also stays
   inside the handoff on the machine ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
-  no other AI CLIs (claude, grok, agy), no browser or Computer Use, since reviews
+  no other AI CLIs (claude, agy), no browser or Computer Use, since reviews
   and browser checks are the orchestrator's. It never re-signs, patches or
   replaces a tool binary to make it run, and reports the failure instead. It
   puts scratch files outside the worktree when the runner allows it; this
@@ -132,7 +132,7 @@ The orchestrator then:
 
 1. reviews the diff;
 2. runs what Codex could not (for example `make db-up`, a live `make dev`,
-   or the Grok and Muse launcher test scripts outside the sandbox);
+   or the Argon supervisor tests outside the sandbox);
 3. checks the PR text before it is published (#358): this prints nothing,
    or each match is reviewed, real credentials are redacted and harmless
    mentions (a placeholder, the word in prose) may stay. It joins
@@ -151,64 +151,3 @@ everything the review needs, as the examples above do:
 - the issue, or the pull request and its linked issue, with their comments
   (these include the earlier review rounds);
 - the Status issue (#1).
-
-## Running Muse Code
-
-Tier B's reviewer, tier A's re-reviewer after Grok and its fallback
-([`adversarial-review.md`](adversarial-review.md#muse-code)), invocation tested in
-[#246's preflight](https://github.com/tkakkie/ribbitto/issues/246#issuecomment-5932976563).
-It must name a Standard model (`muse-spark-1.3`): Meta does not
-train on Standard-tier prompts and completions,
-while a `-contributor` model grants that permission, so never use one. It reads only the workspace:
-writing, the shell, web tools and the network are off.
-
-Run the launcher from the maintainer's checkout, taking it from `main`:
-
-```sh
-git fetch origin main &&
-  launcher=$(git show origin/main:scripts/ai/muse-review.sh) &&
-  bash -c "$launcher" muse-review <pr-number>
-```
-
-**This invocation is the security boundary.** Never run a PR's copy of
-`scripts/ai/muse-review.sh`. A file that differs from `origin/main` is
-refused, but that self-check catches only accidental edits: a malicious
-copy could remove it. The `&&` chain stops on a failed read; do not use
-`bash <(git show …)`, which can run an empty script and report success.
-
-The launcher takes the prompt from `.github/prompts/adversarial.md` on
-`origin/main` and appends one `UNTRUSTED_PAYLOAD_JSON` object. One
-`gh pr view` supplies the title, description, base and head commits; the
-local diff and temporary worktree use those commits, never `FETCH_HEAD`.
-Any failed context read stops the run. Symlinks anywhere in the head's
-tree are refused before the prompt, diff or worktree is created, since a
-link could expose files outside the workspace.
-
-Muse runs with `--model muse-spark-1.3 --workspace <worktree> --json` and
-`--disable-write --disable-shell --disable-web-tools --sandbox-network
-restricted --no-session-log --no-foreign-personal-context --max-model-steps
-30 --prompt-file <prompt>`, with stdin closed. The launcher captures JSONL
-stdout in its temporary directory and passes stderr through. After a successful
-run, it checks that `run.model.configured` events exist and all name
-`muse-spark-1.3`, then prints the concatenated `run.output.delta` text in
-`sequence` order on stdout. Invalid JSONL, a missing or different model, or
-missing delta text fails the review.
-`RIBBITTO_MUSE_TIMEOUT` sets the limit in seconds (1–86400, default 1200).
-The supervisor stops Muse and its process group on success, failure,
-timeout (exit 124), INT (130) and TERM (143); the launcher removes the
-worktree and temporary files and reports cleanup failures. Muse failures
-keep their exit status; failure to create its process group exits 126.
-The same early Bash SIGINT limitation as [Grok's launcher](adversarial-review.md)
-applies. A failed run never counts as success: record it; retry a required
-run once, then ask the maintainer.
-
-`RIBBITTO_MUSE_TRUSTED_REF` overrides the launcher and prompt ref only for
-testing changes to them; `RIBBITTO_MUSE_TEST_SETUP_DELAY` is only for
-`scripts/ai/muse-review_test.sh`. `make check-ai` runs that suite as well
-as Grok's. Pre-launch Muse tests run without `ps`; process tests require it
-and fail with a diagnostic in the Codex sandbox, so the orchestrator runs
-the full suite outside it.
-
-The same handoff rules as for the other CLIs apply: it starts no other AI
-CLI, browser or Computer Use, and nobody re-signs, patches or replaces its
-binary to make it run.

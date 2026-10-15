@@ -112,8 +112,8 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
 
 **Adversarial follow-up check** (pull requests only; after a fix for a
 finding of the adversarial review; not a review round, so the two-round
-limit is untouched). A fix to a Grok or Muse Code finding would otherwise
-reach the re-review, often Muse Code's, without either AI checking it:
+limit is untouched). A fix to an adversarial finding would otherwise
+reach the re-review without either AI checking it:
 
 1. Apply only the fix, with a regression test that fails without it; the
    pull request is a draft. Only when no automated test can reproduce the
@@ -154,8 +154,8 @@ item) does more than combine, even when every line came from one side. Either wa
 from the last adversarially reviewed head to the merge result matches tier
 A or B, the pull request's tier, recomputed at the merge result, is
 reviewed again by the reviewer the completion rule names, counting this
-pull request's own commits since the last Grok-reviewed head, not only the
-resolution, before it is marked ready
+pull request's own commits since the last adversarially reviewed head, not
+only the resolution, before it is marked ready
 ([completion](adversarial-review.md#which-review-runs)); a pull request
 already marked ready is converted back to a draft until then.
 

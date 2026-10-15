@@ -121,9 +121,9 @@ line, the signed-in text (`tabindex="-1"` and `autofocus`, the browser's
 own popover focusing, so also without JavaScript), because below `desk` the
 sheet covers the bottom navigation's button that opened it (#1102). Text
 rather than sign-out, so a repeated Enter or Space acts on nothing and the
-menu stays open; Tab then reaches sign-out. A pointer opening shows no
-focus ring there, as `:focus-visible` follows the input. The create popover
-keeps focus on its button. `testPopoverFocusBrowser` checks opening with
+menu stays open; Tab then reaches sign-out. After a pointer opening the
+browser decides through `:focus-visible` whether to show a ring; tested
+Chrome shows none. The create popover keeps focus on its button. `testPopoverFocusBrowser` checks opening with
 Enter and with Space at desktop and phone width.
 
 A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus

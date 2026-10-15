@@ -30,8 +30,8 @@ applies worktree configuration to templ and its server.
 `cmd/argonreview` runs Argon adversarial reviews (#1065): `verify` refuses a
 binary not built from a clean `origin/main`; `prepare` writes Antigravity's
 configuration in a dedicated `HOME` (#1069); `check` lists its models there
-under a supervisor (#1070); `guard` is the tool hook. It imports no
-application packages.
+under a supervisor (#1070); `prompt` prints a pull request's review prompt
+(#1068); `guard` is the tool hook. It imports no application packages.
 
 `tools/download` is a tools-module command that owns the Tailwind and
 golangci-lint release pins, selects macOS arm64 or Linux amd64 assets, checks

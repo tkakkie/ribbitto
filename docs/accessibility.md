@@ -102,6 +102,19 @@ a browser without `:has()` shows both, as before. Below the
 [short height](ui-components.md#short-heights) the form follows the list in
 the column instead, and the composer is hidden.
 
+The account menu or sheet (`#account-menu`) and the create popover
+(`#channel-create`) are native popovers, which are not modal, so Tab can
+leave them while they stay open. Focus never rests outside an open popover,
+where the popover could cover it (#1092): a Tab or Shift-Tab that moves
+focus out of it closes it, and focus stays on the control Tab moved to
+(`popover-focus-v1.js`, on every page). They close rather than keep Tab
+inside because an outside click already closes them. Escape closes one
+with focus back on its button; an outside click closes it and leaves focus
+where the click put it; a click inside never closes it. Those three are
+the browser's own. Without JavaScript, Tab can still move behind an open
+popover. `testPopoverFocusBrowser` checks both popovers at desktop and
+phone width.
+
 A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
 when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's
 header control has `aria-current="true"`. Its close link, and Escape through

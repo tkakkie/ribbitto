@@ -48,7 +48,11 @@ their existing sizes.
 Topic links in messages and the overview wrap anywhere at every width, so a
 long name never widens the reading column or the panel (#974). Below `desk`
 a message's topic link and **Select** label are 44 px tall and an overview
-topic link fills its row. At every width the create popover may stretch to
+topic link fills its row. There a message's time sits under the name and
+the topic link and **Select** stay together at the row's end, so a
+one-line message takes that 44 px row and its body line; a long name or
+topic moves them to their own row (#1093, `testMessageRowBrowser` in
+`internal/web/message_row_browser_test.go`). At every width the create popover may stretch to
 16 px above the bottom, capped at its content height, so in a short
 viewport (a phone on its side, or a zoomed desktop, #1076) it scrolls to its
 submit button.

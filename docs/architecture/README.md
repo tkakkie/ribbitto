@@ -43,31 +43,11 @@ Read the file for the area you change:
 | [`unread-counts.md`](unread-counts.md) | read-state storage and the counting statements between the modules |
 | [`unread-count-costs.md`](unread-count-costs.md) | what the counts cost, expected load, fragmentation and the unread benchmark |
 | [`unread-writes.md`](unread-writes.md) | how read ranges are written: the current feed, topic-view, branch-notice and posting writes |
-| [`unread-counters-design.md`](unread-counters-design.md) | #955: proposed write-time counter maintenance; linked operations, concurrency, repair and pre-measurement adoption criteria |
-| [`unread-counters-verification.md`](unread-counters-verification.md) | #956: what the test-only counter prototype has verified against #950's oracle, and its limits |
-| #957: [SQL adapter](unread-counters-sql-adapter.md), [workload](unread-counters-workload.md) | test-only SQL, accounting, recounts/repair and fixed mixed schedule; unmeasured |
-| [`sidebar-hybrid-coverage.md`](sidebar-hybrid-coverage.md) | #961 part 2c-a: pinned coverage, stale-input rejection and retained exact replay |
-| [`sidebar-hybrid-progress.md`](sidebar-hybrid-progress.md) | #961 part 2c-b2: bounded recount/repair delivery under continuous posts, pinned full-model equality |
-| [`sidebar-hybrid-delivery.md`](sidebar-hybrid-delivery.md) | #961 part 2c-b1: stream lifecycle, authorization, send order and reconnect recovery |
-| [`sidebar-hybrid-hypothetical.md`](sidebar-hybrid-hypothetical.md) | #960b: separate hypothetical metadata, exact deltas and reconciliation limits |
-| [`sidebar-hybrid-contract.md`](sidebar-hybrid-contract.md) | #950: production-only derivability, snapshot coverage and exact model/comparison for the test-only hybrid investigation |
+| [Sidebar counts history](sidebar-counts-history.md) | Stopped recount: [bottleneck](stream-sidebar-bottleneck-results.md), [pool](stream-sidebar-pool-results.md), [queue](stream-sidebar-queue-results.md), [writer](stream-sidebar-writer-results.md), [arms](stream-sidebar-arms-results.md), [measured](stream-sidebar-arms-measured.md), [latency](stream-sidebar-arms-tables.md), [accounting](stream-sidebar-arms-accounting.md), [criterion](stream-sidebar-stability.md), [stage 1](stream-sidebar-stage1.md), [stage 2](stream-sidebar-stage2.md), [drivers](stream-sidebar-stage2-drivers.md), [telemetry](stream-sidebar-stage2-telemetry.md), [headroom](stream-sidebar-stage2-headroom.md), [stability](stream-sidebar-stage2-stability.md), [witness](stream-sidebar-stage2-witness.md); hybrid: [contract](sidebar-hybrid-contract.md), [hypothetical](sidebar-hybrid-hypothetical.md), [coverage](sidebar-hybrid-coverage.md), [delivery](sidebar-hybrid-delivery.md), [progress](sidebar-hybrid-progress.md); counters: [design](unread-counters-design.md), [adoption](unread-counters-adoption.md), [verification](unread-counters-verification.md), [SQL](unread-counters-sql-adapter.md), [workload](unread-counters-workload.md) |
 | [`unread-benchmark-results.md`](unread-benchmark-results.md) | the read-range benchmark's results (#283) and the go/no-go decision |
 | [`stream-cost.md`](stream-cost.md) | what the delivery loop costs per post as streams grow, and how to measure it |
 | [`read-advance-results.md`](read-advance-results.md) | short read-advance costs, member isolation, matched posting/branching unions and #711 acceptance |
 | [`stream-sidebar-results.md`](stream-sidebar-results.md) | measured cost of live sidebar recounts per stream with distinct members (#812) |
-| [`stream-sidebar-bottleneck-results.md`](stream-sidebar-bottleneck-results.md) | where live sidebar latency goes at thousands of streams, and two test-only experiments (#826) |
-| [`stream-sidebar-pool-results.md`](stream-sidebar-pool-results.md) | #832 part 1: protocol, freshness and synchronous writer witness, connection budget; controlled results linked, production validation open |
-| [`stream-sidebar-queue-results.md`](stream-sidebar-queue-results.md) | #832 PR 2: bounded fair scheduler, cancellation, completion mailbox and mutation evidence; test-only writer composition in PR 3 |
-| [`stream-sidebar-writer-results.md`](stream-sidebar-writer-results.md) | #832 PR 3: test-only single-writer composition, delivery between batches, audience/cursor safety, revocation and mutation evidence; production gaps |
-| [`stream-sidebar-arms-results.md`](stream-sidebar-arms-results.md) | #832 PR 4: fixed-budget comparison arms, aggregate pool/queue telemetry and backlog exclusion |
-| [`stream-sidebar-arms-measured.md`](stream-sidebar-arms-measured.md) | #832 controlled results: completion, writer fix, five-minute queue evidence, pool tradeoff and candidate pending stability/production validation |
-| [`stream-sidebar-arms-tables.md`](stream-sidebar-arms-tables.md) | #832 all arm/group workload totals, latency medians and min–max spreads, target/eligibility passes |
-| [`stream-sidebar-arms-accounting.md`](stream-sidebar-arms-accounting.md) | #832 all arm/group SQL/count/recount/acquisition/wait totals, peak leases, elapsed time and throughput |
-| [`stream-sidebar-stability.md`](stream-sidebar-stability.md) | #832 stability work parts 1–2: pre-registered queue stability criterion and complete regression evidence |
-| [`stream-sidebar-stage1.md`](stream-sidebar-stage1.md) | #832 stability work part 3: 36-connection configurations, 24-window runner and pre-registered stage-1 plan |
-| [`stream-sidebar-stage2.md`](stream-sidebar-stage2.md) | #865 PR 3: fixed mixed-load protocol, gates and versioned result contracts; execution requires explicit instruction |
-| [`stream-sidebar-stage2-drivers.md`](stream-sidebar-stage2-drivers.md) | #865 PR 3: authenticated post, page, read and stream drivers; evidence, lifecycle and proof limits |
-| Stage-2 slices 5–6a: [telemetry](stream-sidebar-stage2-telemetry.md), [headroom](stream-sidebar-stage2-headroom.md), [stability](stream-sidebar-stage2-stability.md), [capture](stream-sidebar-stage2-witness.md) | #865 PR 3: continuous evidence and gate evaluators |
 | [`load-testing.md`](load-testing.md) | what the end-to-end load tests assume about limits, and their dispositions |
 | [`load-results.md`](load-results.md) | end-to-end load test results: the connection ceiling and what hit the limit first |
 | [`load-results-steps.md`](load-results-steps.md) | every step of the load test run: streams, posts, memory and server snapshots |

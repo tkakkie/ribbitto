@@ -66,6 +66,8 @@ insertion, duplicate replay, moves before/during Load older, stale/fresh
 swaps, removal of the moved first-unread message's divider, preservation on
 other moves, and abort/400 followed by another request. Exact ordered ID lists
 detect duplicates and gaps; waits use DOM/lifecycle conditions, not sleeps.
+A check that something does not happen watches for a named window instead,
+such as the panel-sheet test's `noReadWindow` for reading POSTs.
 Script-disabled tabs wait for document readiness without page-side event
 listeners; `navigateLoaded` provides this for the message-time and
 panel-sheet tests. rod's `WaitLoad` listens in page JavaScript, so it hangs

@@ -40,6 +40,14 @@ func (v *sheetVisit) Page(ctx context.Context, m org.Membership, channel kernel.
 	return page, err
 }
 
+// noReadWindow is how long a check that expects no reading POST watches for
+// one. read-visibility-v5.js reads with no delay of its own: from read-applied
+// in the task that applies a stream event, from resize at the next frame. A
+// stray POST after a resize arrived within 10 ms when measured (#1122); the
+// rest is margin for a loaded machine. No such check follows a refused read,
+// whose retry timer would need longer.
+const noReadWindow = 200 * time.Millisecond
+
 // Below the wide breakpoint an open panel is a modal dialog over the dimmed
 // page, an overlay or below desk a bottom sheet: the page behind is inert
 // but still live, automatic reading waits for the dialog, Mark as read does
@@ -68,6 +76,8 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			var mu sync.Mutex
 			var reads []string
+			// arrived wakes read once a reading POST has been recorded.
+			arrived := make(chan struct{}, 1)
 			var throttle atomic.Bool // refuse the next reading POST with 429
 			frames := make(chan realtime.Outgoing)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +106,10 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					mu.Lock()
 					reads = append(reads, cursor)
 					mu.Unlock()
+					select {
+					case arrived <- struct{}{}:
+					default:
+					}
 					if refuse {
 						w.Header().Set("Retry-After", "0")
 						w.WriteHeader(http.StatusTooManyRequests)
@@ -128,17 +142,35 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					plain = plainBase.Context(stepCtx)
 				}
 			}
-			// read waits at least 200 ms for exactly the expected reading POSTs.
+			// read checks that exactly the expected reading POSTs have arrived,
+			// returning once they have; within 2 s, which covers a 429's first
+			// retry (at most 1 s with Retry-After 0, read-visibility-v5.js).
+			// Expecting none, it watches for one for noReadWindow instead. The
+			// list is cumulative: a POST arriving after a check returned is still
+			// compared by the next one.
 			var want []string
 			read := func(more ...string) {
 				t.Helper()
 				want = append(want, more...)
-				got := ""
-				for i := 0; i < 100 && (i < 10 || got != strings.Join(want, ",")); i++ {
-					time.Sleep(20 * time.Millisecond)
+				need, bound := len(want), 2*time.Second
+				if len(more) == 0 {
+					need, bound = len(want)+1, noReadWindow
+				}
+				timer := time.NewTimer(bound)
+				defer timer.Stop()
+				recorded := func() (int, string) {
 					mu.Lock()
-					got = strings.Join(reads, ",")
-					mu.Unlock()
+					defer mu.Unlock()
+					return len(reads), strings.Join(reads, ",")
+				}
+				n, got := recorded()
+				for n < need {
+					select {
+					case <-arrived:
+					case <-timer.C:
+						need = 0 // one last look, then stop
+					}
+					n, got = recorded()
 				}
 				if got != strings.Join(want, ",") {
 					t.Fatalf("%s: reading POSTs %q, want %q (at %s)", steps.current, got, want, steps.since())
@@ -312,6 +344,8 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			wait("typing shows behind the dialog", `() => document.getElementById('typing-status').textContent.includes('alice')`)
 			read()
 			step("sheet geometry at 390 and 320 px")
+			// The sheet slides in on opening; arrival-v1.js drops the mark at its end.
+			wait("the panel's arrival motion ends", `() => !('arrivePanel' in document.documentElement.dataset)`)
 			for _, width := range [][2]int{{390, 844}, {320, 568}} {
 				size(width[0], width[1])
 				if problem := page.MustEval(sheet).Str(); problem != "" {

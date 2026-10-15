@@ -51,10 +51,12 @@ type Channels struct // Channels runs the channel use cases for a member resolve
   func (*Channels).Get(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error) // Get returns a channel of the member's organisation by id, or ErrChannelNotFound.
   func (*Channels).SetImage(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, id github.com/tkakkie/ribbitto/internal/kernel.ID, image string) error // SetImage changes a channel's illustration within the resolved membership's organisation.
 func DecodeMoved(data []byte) (Moved, error) // DecodeMoved reads stored data.
+func DecodePinsChanged(data []byte) (channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID, err error) // DecodePinsChanged validates both required IDs, even though only the channel routes.
 func DecodePosted(data []byte) (Posted, error) // DecodePosted reads stored data.
 const DefaultChannelName untyped string = "general" // DefaultChannelName is the initial name of an organisation's default channel.
 const DefaultMaxChannels int32 = 500 // DefaultMaxChannels includes the default channel in the organisation cap.
 func EncodeMoved(m Moved) []byte // EncodeMoved returns the stored data of m: canonical UUID text under channel_id, from_topic_id and to_topic_id, and a message_ids array.
+func EncodePinsChanged(channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) []byte // EncodePinsChanged stores only routing IDs, never pin state or message content.
 func EncodePosted(channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, authorID github.com/tkakkie/ribbitto/internal/kernel.ID) []byte // EncodePosted returns the stored data of KindPosted for a post in topicID: canonical UUID text under channel_id, message_id, topic_id and author_id.
 type Entry struct // Entry is a stored message with its current author names and topic label.
   field DefaultTopic bool
@@ -73,6 +75,7 @@ var ErrInvalidChannelName error // ErrInvalidChannelName wraps a name that break
 var ErrInvalidPostCursor error // ErrInvalidPostCursor means the page cursor is invalid or ahead of committed events.
 var ErrInvalidTopicName error // ErrInvalidTopicName wraps a name that breaks ValidateTopicName.
 var ErrMessageNotFound error // ErrMessageNotFound means no message has the requested key in the caller's organisation and channel, including when the message exists in another scope.
+var ErrPinLimit error // ErrPinLimit means a new pin would exceed MaxChannelPins.
 var ErrTopicNameTaken error // ErrTopicNameTaken means the channel already has a topic with that name, ignoring case.
 var ErrTopicNotFound error // ErrTopicNotFound means the topic does not exist in the given organisation and channel, including when it exists in another channel or organisation.
 type EventAppender interface // EventAppender appends conversation's encoded events in the caller's transaction, so each commits with its row and sequence.
@@ -81,10 +84,11 @@ type EventAppenderIn func(github.com/tkakkie/ribbitto/internal/platform/postgres
 type EventCursor interface // EventCursor is what every history page needs from org: the organisation's committed event_seq in the page's snapshot, where its stream starts.
   func (EventCursor).EventSeq(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) (int64, error)
 type EventCursorIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) EventCursor // EventCursorIn binds org's cursor to the caller's snapshot, the one the page is read in.
-type EventSequence interface // EventSequence is what posting and branching need from org in their transaction: the organisation's next event_seq, taken first, whose row lock makes sequence order commit order (decision 5).
+type EventSequence interface // EventSequence is what posting, branching and pinning need from org in their transaction: the organisation's next event_seq, taken first, whose row lock makes sequence order commit order (decision 5).
   func (EventSequence).NextEventSeq(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) (int64, error)
 type EventSequenceIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) EventSequence // EventSequenceIn binds org's sequence to the caller's transaction.
 const KindMessagesMoved github.com/tkakkie/ribbitto/internal/realtime.EventKind = "messages.moved" // KindMessagesMoved is the kind of a branch's move, which conversation publishes and so owns (decision 26): the messages it moved, their channel, and the topics they left and joined (docs/domain/topics.md).
+const KindPinsChanged github.com/tkakkie/ribbitto/internal/realtime.EventKind = "pins.changed" // KindPinsChanged invalidates current channel pins, without retaining content.
 const KindPosted github.com/tkakkie/ribbitto/internal/realtime.EventKind = "message.posted" // KindPosted is the kind of a message's posting, which conversation publishes and so owns (decision 26): its message, channel and posting-time topic.
 const MaxBranchMessages untyped int = 100 // MaxBranchMessages bounds how many messages one branch may move, so its transaction and its event payload stay small.
 const MaxChannelPins untyped int = 50 // MaxChannelPins bounds a channel's curated list across all its topics.
@@ -116,11 +120,12 @@ type Moved struct // Moved is the payload of KindMessagesMoved.
 func NewBrancher(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads ReadRangeWriterIn, notifier Notifier) *Brancher // NewBrancher builds branching over transaction-bound factories.
 func NewChannels(store ChannelStore) *Channels // NewChannels returns a Channels.
 func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, notifier Notifier) *Posting // NewPagePosting builds posting with read writes bound to its transaction.
+func NewPinning(runner TxRunner, writer WriterIn, pins PinWriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Pinning // NewPinning builds pinning over transaction-bound factories; notifier may be nil.
 func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Posting // NewPosting builds posting over transaction-bound factories.
 func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account, cursor and count factories supplied by the composition root.
 func NewTopics(reader TopicReader) *Topics // NewTopics returns a Topics.
 func NewTransactionalChannels(store ChannelStore, runner TxRunner, creator ChannelCreatorIn) *Channels // NewTransactionalChannels adds atomic, capped creation to channel lookups.
-type Notifier interface // Notifier records the latest committed event sequence for an organisation, so open streams wake; posting and branching call it only after commit.
+type Notifier interface // Notifier records the latest committed event sequence for an organisation, so open streams wake; callers raise only after commit.
   func (Notifier).Raise(organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64)
 type Page struct // Page is one page of a channel's history, oldest first.
   field Entries []Entry
@@ -144,9 +149,13 @@ type PinWriter interface // PinWriter uses the caller's transaction without taki
   func (PinWriter).CountChannelPins(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (int64, error)
   func (PinWriter).GetMessagePin(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) (PinState, error)
   func (PinWriter).SetMessagePin(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID, pinnerID github.com/tkakkie/ribbitto/internal/kernel.ID) error
+type PinWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) PinWriter // PinWriterIn binds pin metadata to the caller's transaction.
 type PinnedMessage struct // PinnedMessage references current content, never a retained excerpt.
   field Message Message
   field PinState PinState
+type Pinning struct // Pinning commits pin changes with their durable invalidation, without read writes.
+  func (*Pinning).Pin(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) error // Pin pins any message the resolved member may write in the channel.
+  func (*Pinning).Unpin(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) error // Unpin removes any member's pin in a channel the resolved member may write.
 type PostReadWriter interface // PostReadWriter reads the page scope and adds the new message's range; floor is the safe topic floor computed by conversation from its own messages.
   func (PostReadWriter).Read(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, *int64, int64, int64, int64) error
 type PostReadWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) PostReadWriter // PostReadWriterIn binds read-state writes to posting's transaction.
@@ -179,6 +188,7 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
   func (*Reader).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64) (page ChannelPage, err error) // Page reads channel or topic history with the snapshot's event cursor, including older pages with a before bound.
   func (*Reader).Sidebar(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID) (sidebar SidebarSnapshot, err error) // Sidebar reads lists and counts in an independent read-only repeatable-read snapshot, including its organisation event sequence, without history or directories.
 func RouteMoved(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteMoved is messages.moved's realtime.Router: the channel and both topics, so a view of either sees the move.
+func RoutePinsChanged(data []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePinsChanged routes channel-wide invalidations across every topic.
 func RoutePosted(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePosted is message.posted's realtime.Router: the channel and, unless the payload is legacy, the posting-time topic.
 type SequenceRange struct // SequenceRange contains message sequences from Lo inclusive to Hi exclusive.
   field Hi int64
@@ -211,7 +221,7 @@ type TopicUnread interface // TopicUnread counts messages using supplied read st
   func (TopicUnread).CountWithFirstUnread(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, prefix int64, topics []github.com/tkakkie/ribbitto/internal/kernel.ID, floors []int64, readSet [][2]int64, selected *github.com/tkakkie/ribbitto/internal/kernel.ID, firstUnread bool) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]int64, int64, error) // CountWithFirstUnread explicitly chooses whether to compute first unread.
 type Topics struct // Topics runs the topic lookups for a member resolved by org.
   func (*Topics).Get(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // Get returns a topic of the channel in the member's organisation, or ErrTopicNotFound.
-type TxRunner interface // TxRunner runs channel creation, posting and branching (decision 26): the use case owns the boundary, the writers only bind to the Tx they are given.
+type TxRunner interface // TxRunner runs channel creation, posting, branching and pinning (decision 26): the use case owns the boundary, the writers only bind to the Tx they are given.
   func (TxRunner).InTx(ctx context.Context, fn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) error) error // InTx runs fn in a new transaction.
 func ValidateChannelImage(key string) error // ValidateChannelImage accepts a bundled key, or empty for the ID-based default.
 func ValidateChannelName(value string) (string, error) // ValidateChannelName returns a trimmed NFC name of 1–80 printable Unicode code points.

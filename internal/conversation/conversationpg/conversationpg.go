@@ -112,3 +112,13 @@ func ChannelUnreadIn(s platform.Snapshot) conversation.ChannelUnread {
 func TopicUnreadIn(s platform.Snapshot) conversation.TopicUnread {
 	return postgres.TopicUnreadIn(s)
 }
+
+// NewPinning binds pin changes and invalidations to the same transaction.
+func NewPinning(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, notifier conversation.Notifier) *conversation.Pinning {
+	return conversation.NewPinning(newTxRunner(pool), writerIn, func(tx platform.Tx) conversation.PinWriter { return postgres.WriterIn(tx) }, sequences, events, notifier)
+}
+
+// PinEventKinds supplies the pin router separately until live activation (#892).
+func PinEventKinds() realtime.Kinds {
+	return realtime.Kinds{conversation.KindPinsChanged: conversation.RoutePinsChanged}
+}

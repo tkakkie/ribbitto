@@ -1,7 +1,9 @@
 // Command argonreview runs adversarial reviews of pull requests with Gemini 4
 // Argon in Antigravity (#1041, #1065). verify refuses a binary not built from
 // a clean origin/main of the source checkout named by RIBBITTO_ARGON_SOURCE,
-// so a pull request's copy never acts as the launcher;
+// so a pull request's copy never acts as the launcher; prepare runs that
+// check, then writes and checks Antigravity's configuration in the dedicated
+// RIBBITTO_ARGON_HOME (#1069);
 // guard is Antigravity's PreToolUse hook and never checks the build, because
 // Antigravity calls it for every tool.
 package main
@@ -13,6 +15,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -29,20 +32,41 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		case "guard":
 			guard(stdin, stdout)
 			return 0
-		case "verify":
+		case "verify", "prepare":
 			info, ok := debug.ReadBuildInfo()
 			resolve := func() (string, error) { return sourceRevision(os.Getenv("RIBBITTO_ARGON_SOURCE"), git) }
-			revision, err := trusted(info, ok, resolve)
+			out, err := trusted(info, ok, resolve)
+			if err == nil && args[0] == "prepare" {
+				out, err = prepareHere()
+			}
 			if err != nil {
 				_, _ = fmt.Fprintf(stderr, "argonreview: %v\n", err)
 				return 1
 			}
-			_, _ = fmt.Fprintln(stdout, revision)
+			_, _ = fmt.Fprintln(stdout, out)
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | guard")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | guard")
 	return 2
+}
+
+// prepareHere runs prepare for RIBBITTO_ARGON_HOME, with the account's home
+// from the user database rather than HOME, which a caller can change, and
+// this binary as the guard.
+func prepareHere() (string, error) {
+	account, err := user.Current()
+	if err != nil {
+		return "", fmt.Errorf("finding the account's home: %w", err)
+	}
+	self, err := os.Executable()
+	if err == nil {
+		self, err = filepath.EvalSymlinks(self)
+	}
+	if err != nil {
+		return "", fmt.Errorf("finding this binary: %w", err)
+	}
+	return prepare(os.Getenv("RIBBITTO_ARGON_HOME"), account.HomeDir, self)
 }
 
 // sourceRevision resolves origin/main in the launcher's source checkout, never

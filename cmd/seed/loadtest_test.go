@@ -120,11 +120,18 @@ func TestLoadTestSeed(t *testing.T) {
 	if err := json.Unmarshal(raw, &file); err != nil {
 		t.Fatal(err)
 	}
-	if file.Stage2 != nil {
+	var schema struct {
+		Stage2   json.RawMessage              `json:"stage2"`
+		Accounts []map[string]json.RawMessage `json:"accounts"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if schema.Stage2 != nil {
 		t.Fatal("legacy load-test mode emitted stage-2 metadata")
 	}
-	for _, entry := range file.Accounts {
-		if entry.MemberID != "" {
+	for _, entry := range schema.Accounts {
+		if _, ok := entry["member_id"]; ok {
 			t.Fatal("legacy credential schema gained member IDs")
 		}
 	}

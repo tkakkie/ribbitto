@@ -77,33 +77,6 @@ Each use case commits separately: after an interrupted seed, discard the
 disposable database and start with a fresh migrated one. Seeding enables
 sign-up only inside this command; it does not change the server's settings.
 
-## Stage-2 fixture
-
-On a fresh migrated disposable database, fixture generation alone uses:
-```sh
-go run ./cmd/seed -stage2 -members 1000 -fixture-seed 42 -output /tmp/stage2.json
-```
-Use the group's stream count for `-members` (1,000 or 5,000); one distinct
-member and one normal session per member, with handles `stage2-1` through N.
-Both sizing and seed are required, including seed zero. Other seeding flags
-and expected mode cannot be combined. The existing 100,000 work budget allows
-1–98,000 members. Organisation/channel names remain those above; `general`
-is hot. Its 500 messages are 250 in the default topic (248 direct posts plus
-two branch notices), and 125 in each of `stage2-topic-1` and `stage2-topic-2`
-(one branched source plus 124 direct posts). Other channels have 500 default-topic
-posts. The feed includes all topics: every message, including a notice, counts
-once toward its channel's 500; move events do not count as messages.
-
-The credential JSON retains `organization_slug`, `channel_ids` and `accounts`.
-Only this mode adds `accounts[].member_id` and a `stage2` object with
-`version: 1`, `fixture_seed` (uint64), `hot_channel_id`, `default_topic_ids`
-(parallel to `channel_ids`) and `named_topics` (`[{"id":"<UUID>","name":"..."}]`,
-ordered topic 1 then 2). The hot channel is first in `channel_ids`; each account
-has exactly one token. File protections and disposal requirements above apply.
-PCG(seed, 1) reproduces authors, bodies and order, including branches/notices;
-IDs, times, passwords and tokens stay fresh. This is fixture preparation only;
-[stage-2 measurements](architecture/stream-sidebar-stage2.md) require explicit approval.
-
 ## Expected messages after a load run
 
 On the same disposable machine and database, after the load run settles:

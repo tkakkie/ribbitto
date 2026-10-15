@@ -37,13 +37,14 @@ then run:
 src=$RIBBITTO_ARGON_SOURCE &&
   git -C "$src" fetch --quiet origin &&
   git -C "$src" checkout --quiet --detach origin/main &&
-  test -z "$(git -C "$src" status --porcelain --ignored)" &&
+  tree_status=$(git -C "$src" status --porcelain --ignored --untracked-files=all) &&
+    test -z "$tree_status" &&
   (cd "$src" && go build -o "$RIBBITTO_ARGON_HOME/bin/argonreview" ./cmd/argonreview) &&
   "$RIBBITTO_ARGON_HOME/bin/argonreview" review <pr-number>
 ```
 
 The `status` check stops on any local change, untracked or ignored file,
-which the build would otherwise compile. That clean checkout is the
+which could otherwise affect the build. That clean checkout is the
 boundary: never build or run a pull request's copy of the launcher. Every
 subcommand but `guard` also runs `verify`, which refuses a binary not built
 from that commit with a clean tree (`go run` included); it catches a stale
@@ -111,10 +112,10 @@ Remaining limits:
 - The supervisor stops every process in `agy`'s session; a descendant that
   calls `setsid` leaves it and is not stopped.
 
-The workspace is always removed. The dedicated `HOME` keeps the sign-in,
-the launcher's three files and Antigravity's own state (logs, conversation
-store, caches); `prepare` refuses customisation there but does not police
-the rest.
+A review report is emitted only after successful workspace removal. The
+dedicated `HOME` keeps the sign-in, the launcher's three files and
+Antigravity's own state (logs, conversation store, caches); `prepare`
+refuses customisation there but does not police the rest.
 
 ## Evidence
 

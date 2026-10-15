@@ -5,6 +5,8 @@
 // Module: conversation (feature map in docs/architecture/features.md), which
 // owns the channel, topic and message tables and publishes message.posted
 // and messages.moved.
+// Message pin metadata is paired and organisation-scoped; transaction-bound
+// pin writes and bounded snapshot reads retain no historical body.
 // Channel.image holds a nullable illustration key; web resolves missing or
 // unknown keys to a stable image from the channel ID without a backfill.
 // Members choose validated bundled keys or restore NULL; image writes emit no event.

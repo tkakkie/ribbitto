@@ -44,6 +44,7 @@ func TestMigrations(t *testing.T) {
 		image    bool
 	}{
 		{"up", true, "applied", true, true, true, true, true, true, true},
+		{"down", true, "applied", true, true, true, true, true, true, true},
 		{"down", true, "applied", true, true, true, true, true, true, false},
 		{"down", true, "applied", true, true, true, true, true, false, false},
 		{"down", true, "applied", true, true, true, true, true, false, false},
@@ -82,6 +83,11 @@ func TestMigrations(t *testing.T) {
 		}
 		if err := db.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'channel' AND column_name = 'image')").Scan(&present); err != nil || present != step.image {
 			t.Fatalf("after %s: channel.image present = %t, want %t: %v", step.command, present, step.image, err)
+		}
+		for _, column := range []string{"pinned_at", "pinned_by_member_id"} {
+			if err := db.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'message' AND column_name = $1)", column).Scan(&present); err != nil || present != (step.command == "up") {
+				t.Fatalf("after %s: message.%s present = %t: %v", step.command, column, present, err)
+			}
 		}
 		var status bytes.Buffer
 		for _, table := range []string{"channel", "message"} {

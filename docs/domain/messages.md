@@ -8,8 +8,8 @@ these rules change.
 
 ## Identity and format
 
-A message is identified by its `id` (UUIDv7) — in the DOM, and later in
-permalinks, reactions, pins, editing and deleting. `event_seq` orders messages
+A message is identified by its `id` (UUIDv7) — in the DOM and pin metadata,
+and later in permalinks, reactions, editing and deleting. `event_seq` orders messages
 and drives paging and unread counts (unique per organisation). An event
 reads its message by organisation, channel and `event_seq`; the message's
 stable identifier for the DOM and links remains `id`.
@@ -29,7 +29,7 @@ message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
 
 Channel pins reference the current message; their permissions, limits
-and lifecycle rules are in [`pins.md`](pins.md) (*planned*, #880).
+and lifecycle rules are in [`pins.md`](pins.md) (storage implemented in #887; use cases and UI planned).
 
 ## Accepted bodies
 

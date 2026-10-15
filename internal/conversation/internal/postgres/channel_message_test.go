@@ -25,8 +25,8 @@ func TestChannelMessageSchema(t *testing.T) {
 	channels, messages, history := postgres.NewChannelStore(pool, conversation.DefaultMaxChannels), postgres.NewWriterForTest(pool), postgres.NewReadStoreForTest(pool)
 	var nullable []string
 	requireNoError(t, pool.QueryRow(ctx, "SELECT array_agg(table_name || '.' || column_name ORDER BY table_name, column_name) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('channel', 'message') AND is_nullable = 'YES'").Scan(&nullable))
-	if !slices.Equal(nullable, []string{"channel.image", "message.moved_event_seq"}) {
-		t.Fatalf("nullable columns = %v, want channel.image and message.moved_event_seq", nullable)
+	if !slices.Equal(nullable, []string{"channel.image", "message.moved_event_seq", "message.pinned_at", "message.pinned_by_member_id"}) {
+		t.Fatalf("nullable columns = %v, want channel image, move sequence and paired pin metadata", nullable)
 	}
 	account := identitytest.Account(t, pool, "a@b", "Author")
 	var orgs []kernel.ID

@@ -20,15 +20,17 @@ type Channel struct {
 }
 
 type Message struct {
-	ID             pgtype.UUID
-	OrganizationID pgtype.UUID
-	ChannelID      pgtype.UUID
-	MemberID       pgtype.UUID
-	Body           string
-	EventSeq       int64
-	CreatedAt      pgtype.Timestamptz
-	TopicID        pgtype.UUID
-	MovedEventSeq  pgtype.Int8
+	ID               pgtype.UUID
+	OrganizationID   pgtype.UUID
+	ChannelID        pgtype.UUID
+	MemberID         pgtype.UUID
+	Body             string
+	EventSeq         int64
+	CreatedAt        pgtype.Timestamptz
+	TopicID          pgtype.UUID
+	MovedEventSeq    pgtype.Int8
+	PinnedByMemberID pgtype.UUID
+	PinnedAt         pgtype.Timestamptz
 }
 
 type Topic struct {

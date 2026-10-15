@@ -13,6 +13,8 @@
 | created_at | timestamp with time zone | now() | false |  |  |  |
 | topic_id | uuid |  | false |  | [public.topic](public.topic.md) |  |
 | moved_event_seq | bigint |  | true |  |  |  |
+| pinned_by_member_id | uuid |  | true |  | [public.member](public.member.md) |  |
+| pinned_at | timestamp with time zone |  | true |  |  |  |
 
 ## Constraints
 
@@ -29,8 +31,10 @@
 | message_id_not_null | n | NOT NULL id |
 | message_member_id_not_null | n | NOT NULL member_id |
 | message_organization_id_not_null | n | NOT NULL organization_id |
+| message_pin_pair_check | CHECK | CHECK (((pinned_by_member_id IS NULL) = (pinned_at IS NULL))) |
 | message_topic_id_not_null | n | NOT NULL topic_id |
 | message_organization_id_member_id_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT |
+| message_pinner_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT |
 | message_organization_id_channel_id_fkey | FOREIGN KEY | FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT |
 | message_pkey | PRIMARY KEY | PRIMARY KEY (id) |
 | message_organization_id_event_seq_key | UNIQUE | UNIQUE (organization_id, event_seq) |
@@ -45,6 +49,7 @@
 | message_channel_event_seq_idx | CREATE INDEX message_channel_event_seq_idx ON public.message USING btree (organization_id, channel_id, event_seq) |
 | message_topic_event_seq_idx | CREATE INDEX message_topic_event_seq_idx ON public.message USING btree (organization_id, topic_id, event_seq) |
 | message_moved_event_seq_idx | CREATE INDEX message_moved_event_seq_idx ON public.message USING btree (organization_id, topic_id, moved_event_seq) WHERE (moved_event_seq IS NOT NULL) |
+| message_channel_pin_idx | CREATE INDEX message_channel_pin_idx ON public.message USING btree (organization_id, channel_id, pinned_at DESC, id) WHERE (pinned_at IS NOT NULL) |
 
 ## Relations
 
@@ -52,6 +57,7 @@
 erDiagram
 
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
 
@@ -65,6 +71,8 @@ erDiagram
   timestamp_with_time_zone created_at
   uuid topic_id FK
   bigint moved_event_seq
+  uuid pinned_by_member_id FK
+  timestamp_with_time_zone pinned_at
 }
 "public.member" {
   uuid id

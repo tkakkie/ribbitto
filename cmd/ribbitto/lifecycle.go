@@ -21,7 +21,6 @@ type serviceLifecycle struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	stopStreams func()
-	scheduler   *realtime.RecountScheduler
 	servers     []shutdownServer
 	serverDone  chan struct{}
 	serverJoins []func() error
@@ -30,10 +29,10 @@ type serviceLifecycle struct {
 	grace       time.Duration
 }
 
-func newServiceLifecycle(parent context.Context, hub *realtime.Hub, scheduler *realtime.RecountScheduler, closePool func()) *serviceLifecycle {
+func newServiceLifecycle(parent context.Context, hub *realtime.Hub, closePool func()) *serviceLifecycle {
 	ctx, cancel := context.WithCancel(context.WithoutCancel(parent))
 	return &serviceLifecycle{ctx: ctx, cancel: cancel, stopStreams: hub.CancelAll,
-		scheduler: scheduler, closePool: closePool, grace: 10 * time.Second, serverDone: make(chan struct{}, 1)}
+		closePool: closePool, grace: 10 * time.Second, serverDone: make(chan struct{}, 1)}
 }
 
 func (l *serviceLifecycle) close() error {
@@ -41,14 +40,6 @@ func (l *serviceLifecycle) close() error {
 	l.cancel()
 	ctx, cancel := context.WithTimeout(context.Background(), l.grace)
 	defer cancel()
-	// Close joins computations, so it cannot run on the HTTP deadline's path.
-	schedulerDone := make(chan struct{})
-	go func() {
-		defer close(schedulerDone)
-		if l.scheduler != nil {
-			l.scheduler.Close()
-		}
-	}()
 	drained := make(chan error, len(l.servers))
 	for _, server := range l.servers {
 		go func() {
@@ -63,7 +54,6 @@ func (l *serviceLifecycle) close() error {
 	for range l.servers {
 		err = errors.Join(err, <-drained)
 	}
-	<-schedulerDone
 	for _, stop := range l.workers {
 		stop()
 	}

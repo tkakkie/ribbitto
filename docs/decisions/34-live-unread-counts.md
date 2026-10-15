@@ -102,7 +102,7 @@ can keep recovery open, showing the last exact snapshot.
 
 PR 4 now spreads connect recounts by 0–3 s, visibility/pageshow resyncs by 0–2 s
 and `reset` reloads by 0–5 s. One bound on concurrent recount computations covers
-connect, read, resync and moves in synchronous and asynchronous modes, separately
+connect, read, resync and moves, separately
 from stream registrations. Its [current sizing](../recount-capacity.md#current-computation-sizing-1046) reserves normal-work pool headroom.
 After a bounded slot wait, leave the sidebar dirty and retry with jitter;
 established streams do not answer 503. The resync POST only publishes and

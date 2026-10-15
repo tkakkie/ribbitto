@@ -54,8 +54,7 @@ Sidebars recount on connect, own posts, current-channel moves, resync and the me
 regardless of message interests. With a hub, Reading and watches share
 one `unread.Changes`; otherwise the publisher is nil. Subscribe before recounting;
 release on exit. Capture before reads; send or deny covers that generation.
-Scheduled captures are per request. Scheduled tests pin a fresh bound check
-before every write, and no write after revocation or cancellation.
+A fresh bound check precedes every write; revocation or cancellation stops delivery.
 Changes dirty a [fixed deadline](stream-limits.md) checked
 between batches and in the combined wait. Authorize organisation and bound member
 after rendering, before sending. Frames omit `id:`; errors stop delivery. Reconnect recounts.
@@ -98,8 +97,8 @@ are not losses; otherwise show the snapshot numbers, resync again and stay
 recovering. No event-history
 replay or unbounded retention is added. PR 4 now spreads connect recounts by 0–3 s,
 visibility/pageshow resyncs by 0–2 s and `reset` reloads by 0–5 s. One bound on
-concurrent recount computations covers connect, read, resync and moves in both
-synchronous and asynchronous modes, separately from stream registrations, sized
+concurrent recount computations covers connect, read, resync and moves,
+separately from stream registrations, sized
 against [normal-work pool headroom](../recount-capacity.md#current-computation-sizing-1046). After a bounded slot wait, leave the sidebar
 dirty and retry with jitter; established streams do not return 503. The resync
 POST only publishes and answers immediately. Decision 34 defines the remaining

@@ -11,7 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
-	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // Development-only metrics and profiles for load tests (#218, #695). They
@@ -43,11 +42,9 @@ const devMutexProfileFraction = 5
 
 // devMetrics gathers the snapshot. Every source is read-only.
 type devMetrics struct {
-	queries  *platform.QueryCounter
-	pool     *pgxpool.Pool
-	streams  interface{ Connections() int }
-	recounts *realtime.RecountScheduler // nil reports disabled; composition owns it.
-	delivery *realtime.RecountObserver
+	queries *platform.QueryCounter
+	pool    *pgxpool.Pool
+	streams interface{ Connections() int }
 }
 
 // metricsSnapshot holds operational statistics only: no SQL, arguments, tokens, IDs,
@@ -81,39 +78,6 @@ type metricsSnapshot struct {
 	Streams struct {
 		Open int `json:"open"`
 	} `json:"streams"`
-	Scheduler schedulerMetrics `json:"scheduler"`
-	Delivery  deliveryMetrics  `json:"delivery"`
-}
-
-type deliveryMetrics struct {
-	Enabled bool `json:"enabled"`
-	realtime.RecountDeliveryStats
-	BucketUpperBoundsNS [5]int64 `json:"bucket_upper_bounds_ns"`
-}
-
-type schedulerMetrics struct {
-	Enabled                               bool      `json:"enabled"`
-	Closed                                bool      `json:"closed"`
-	SnapshotAtUnixNS                      int64     `json:"snapshot_at_unix_ns"`
-	WorkerLimit                           int       `json:"worker_limit"`
-	RegistrationLimit                     int       `json:"registration_limit"`
-	Pending                               int       `json:"pending"`
-	Eligible                              int       `json:"eligible"`
-	OldestPendingAgeNS                    int64     `json:"oldest_pending_age_ns"`
-	RunningWorkers                        int       `json:"running_workers"`
-	WaitingWorkers                        int       `json:"waiting_workers"`
-	OldestRunningAgeNS                    int64     `json:"oldest_running_age_ns"`
-	Registrations                         int       `json:"registrations"`
-	Completed                             uint64    `json:"completed"`
-	ProcessingDurationNS                  int64     `json:"processing_duration_ns"`
-	ProcessingDurationBucketCounts        [6]uint64 `json:"processing_duration_bucket_counts"`
-	ProcessingDurationBucketUpperBoundsNS [5]int64  `json:"processing_duration_bucket_upper_bounds_ns"`
-	Cancelled                             uint64    `json:"cancelled"`
-	RefusedCapacity                       uint64    `json:"refused_capacity"`
-	RefusedClosed                         uint64    `json:"refused_closed"`
-	RejectedSubmissions                   uint64    `json:"rejected_submissions"`
-	Errors                                uint64    `json:"errors"`
-	ErrorsAfterCancellation               uint64    `json:"errors_after_cancellation"`
 }
 
 func (m devMetrics) snapshot() metricsSnapshot {
@@ -132,26 +96,6 @@ func (m devMetrics) snapshot() metricsSnapshot {
 	runtime.ReadMemStats(&mem)
 	s.Runtime.Goroutines, s.Runtime.HeapInuseBytes = runtime.NumGoroutine(), mem.HeapInuse
 	s.Streams.Open = m.streams.Connections()
-	if m.recounts != nil {
-		stats := m.recounts.Stats()
-		s.Scheduler = schedulerMetrics{
-			Enabled: true, Closed: stats.Closed, SnapshotAtUnixNS: stats.SnapshotAt.UnixNano(),
-			WorkerLimit: stats.WorkerLimit, RegistrationLimit: stats.RegistrationLimit,
-			Pending: stats.Pending, Eligible: stats.Eligible, OldestPendingAgeNS: stats.OldestPendingAge.Nanoseconds(),
-			RunningWorkers: stats.RunningWorkers, WaitingWorkers: stats.WaitingWorkers,
-			OldestRunningAgeNS: stats.OldestRunningAge.Nanoseconds(), Registrations: stats.Registrations,
-			Completed: stats.Completed, ProcessingDurationNS: stats.ProcessingDuration.Nanoseconds(),
-			ProcessingDurationBucketCounts:        stats.DurationBuckets,
-			ProcessingDurationBucketUpperBoundsNS: [5]int64{int64(time.Millisecond), int64(10 * time.Millisecond), int64(100 * time.Millisecond), int64(time.Second), int64(10 * time.Second)},
-			Cancelled:                             stats.Cancelled, RefusedCapacity: stats.RefusedCapacity, RefusedClosed: stats.RefusedClosed,
-			RejectedSubmissions: stats.RejectedSubmissions, Errors: stats.Errors,
-			ErrorsAfterCancellation: stats.ErrorsAfterCancellation,
-		}
-	}
-	if m.delivery != nil {
-		s.Delivery = deliveryMetrics{Enabled: true, RecountDeliveryStats: m.delivery.Stats()}
-		s.Delivery.BucketUpperBoundsNS = [5]int64{int64(time.Millisecond), int64(10 * time.Millisecond), int64(100 * time.Millisecond), int64(time.Second), int64(10 * time.Second)}
-	}
 	return s
 }
 

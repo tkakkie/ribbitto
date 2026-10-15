@@ -450,7 +450,7 @@ func testEventStreamEndsOnSignOutOverHTTP1(t *testing.T) {
 func testShutdownEndsOpenStreams(t *testing.T) {
 	pool := acceptanceDatabase(t)
 	hub := realtime.NewHub()
-	lifetime := newServiceLifecycle(t.Context(), hub, nil, func() {})
+	lifetime := newServiceLifecycle(t.Context(), hub, func() {})
 	lifetime.grace = 5 * time.Second
 	handler, _, err := buildHandler(lifetime.ctx, pool, handlerConfig{maxChannels: conversation.DefaultMaxChannels, setupToken: acceptanceToken, signupEnabled: true,
 		trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, hub: hub})

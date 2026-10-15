@@ -32,9 +32,7 @@ func sidebarTrigger(e Event) bool { return e.Kind == kindPosted || e.Kind == kin
 
 // Negative fixtures differ in one predicate; the reader deliberately supplies
 // a foreign envelope so its own organisation scope cannot mask the pre-filter.
-func TestSidebarTriggersAndDeadline(t *testing.T) { testSidebarTriggersAndDeadline(t, false) }
-
-func testSidebarTriggersAndDeadline(t *testing.T, scheduled bool) {
+func TestSidebarTriggersAndDeadline(t *testing.T) {
 	for _, name := range []string{"burst", "moved", "channel", "topic", "sidebar only", "organisation", "kind", "interest"} {
 		t.Run(name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -67,7 +65,6 @@ func testSidebarTriggersAndDeadline(t *testing.T, scheduled bool) {
 							}
 							return Outgoing{ID: 999, Data: []byte("full recount")}, nil
 						}}}
-				stream = compatibilityStream(t, stream, &selected, scheduled)
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				done := make(chan result, 1)
@@ -120,10 +117,6 @@ func testSidebarTriggersAndDeadline(t *testing.T, scheduled bool) {
 }
 
 func TestSidebarReconnectAfterMessageBeforeRecount(t *testing.T) {
-	testSidebarReconnectAfterMessageBeforeRecount(t, false)
-}
-
-func testSidebarReconnectAfterMessageBeforeRecount(t *testing.T, scheduled bool) {
 	synctest.Test(t, func(t *testing.T) {
 		h, log, reads := NewHub(), &fakeLog{}, 0
 		selected := sub
@@ -133,7 +126,6 @@ func testSidebarReconnectAfterMessageBeforeRecount(t *testing.T, scheduled bool)
 				reads++
 				return Outgoing{ID: 999, Data: []byte{byte(reads)}}, nil
 			}}}
-		stream = compatibilityStream(t, stream, &selected, scheduled)
 		var frames []Outgoing
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan result, 1)
@@ -213,9 +205,7 @@ func testSidebarContinuingBacklog(t *testing.T, readChanges bool) {
 	})
 }
 
-func TestSidebarDeliverySafety(t *testing.T) { testSidebarDeliverySafety(t, false) }
-
-func testSidebarDeliverySafety(t *testing.T, scheduled bool) {
+func TestSidebarDeliverySafety(t *testing.T) {
 	for _, name := range []string{"deny after render", "replacement during render", "authorization error", "send failure", "cancel during render", "cancel during authorization"} {
 		t.Run(name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -256,7 +246,6 @@ func testSidebarDeliverySafety(t *testing.T, scheduled bool) {
 					})}
 				stream.Sidebar = watchedSidebar{stream.Sidebar.(sidebarSource), func(kernel.ID, kernel.ID) SidebarWatch { return w }}
 				done := make(chan result, 1)
-				stream = compatibilityStream(t, stream, &selected, scheduled)
 				go func() { c, err := stream.Run(ctx, selected, 7, send); done <- result{c, err} }()
 				<-gate
 				if name == "deny after render" {

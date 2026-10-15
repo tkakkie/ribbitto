@@ -13,13 +13,11 @@ func TestPoolMaximum(t *testing.T) {
 	t.Parallel()
 	base := pgtest.New(t).Config().ConnString()
 	for _, tt := range []struct {
-		name     string
-		urlMax   string
-		explicit int32
+		name   string
+		urlMax string
 	}{
-		{"pgx default", "", 0},
-		{"URL preserved", "7", 0},
-		{"explicit wins", "7", 36},
+		{"pgx default", ""},
+		{"URL preserved", "7"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			u, err := url.Parse(base)
@@ -32,18 +30,12 @@ func TestPoolMaximum(t *testing.T) {
 			config, err := pgxpool.ParseConfig(u.String())
 			requireNoError(t, err)
 			want := config.MaxConns
-			if tt.explicit > 0 {
-				want = tt.explicit
-			}
-			pool, err := postgres.OpenPoolWithOptions(t.Context(), u.String(), nil, postgres.PoolOptions{MaxConns: tt.explicit})
+			pool, err := postgres.OpenPool(t.Context(), u.String(), nil)
 			requireNoError(t, err)
 			t.Cleanup(pool.Close)
 			if got := pool.Stat().MaxConns(); got != want {
 				t.Fatalf("opened pool maximum = %d, want %d", got, want)
 			}
 		})
-	}
-	if _, err := postgres.OpenPoolWithOptions(t.Context(), base, nil, postgres.PoolOptions{MaxConns: -1}); err == nil {
-		t.Fatal("negative pool maximum accepted")
 	}
 }

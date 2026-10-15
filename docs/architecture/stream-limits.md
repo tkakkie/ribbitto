@@ -38,15 +38,6 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   receives sidebar/presence payloads. Register and
   RaiseIfActive still use the registry mutex for caps and active checks.
 
-  The combined wait accepts an optional recount completion mailbox (#865),
-  without a bridge or added scheduling, authorization or delivery. Buffered results
-  survive level capture; consumed results cannot wake again. Received completions
-  have no hub wait error; stream waits retain the parent's cause for the writer's
-  pre-delivery check. Closed
-  mailboxes are disabled. Completion wakes move neither the last write nor the
-  fixed recount deadline. `Run` with nil `Recounts` stays synchronous; `RunReserved`
-  uses pre-admission ([scheduler integration](recount-scheduler.md)).
-
 - Stream authorization caches allows per distinct (account ID, organisation
   slug), not per stream: streams with the same key share an entry. Entries
   stay after their streams close, until eviction; eviction is least recently
@@ -89,11 +80,7 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   restart the heartbeat deadline. Production streams supply a per-connection
   source (#819); its composition is in [unread counts](unread-counts.md).
   Production member watches (#711) feed this same coalescer.
-  Scheduled computations capture at execution, not submission; each request owns
-  its captured generation. Every received completion ends the active attempt and
-  sets the interval deadline, even when its version is too old to send.
-  Revocation gates prove exit before an uncooperative recount returns, with no
-  pending/late writes.
+  One shared [computation limit](../recount-capacity.md) bounds all recount triggers.
   Each active read publication costs one locked lookup/update and replacement
   channel; wake work scales with that member's waiting tabs. Registry memory
   follows active member entries and watches; last release removes the entry.
@@ -146,18 +133,11 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   #207); excess streams get 429. Closing the oldest would cause endless reconnects.
   htmx retries (0.5 s doubling to 64 s) until a slot frees. Caps are per process,
   not per address or installation-wide.
-- Optional `Streaming.Recounts` reserves sidebar interests with non-nil sources after hub
-  registration and session recheck/expiry, before presence/typing or SSE/200.
-  Full/closed schedulers return plain-text 503, free the hub slot and open no
-  presence/typing; hub overflow stays 429. The handler cancels unused reservations;
-  `RunReserved` owns accepted ones. No synchronous fallback; nil stays synchronous.
 
 ## Shutdown
 
-Exit/failure: `Hub.CancelAll` (503/`ErrShutdown`) → lifetime cancel → concurrent
-HTTP shutdown/scheduler close → workers → pool. After HTTP's 10 s grace,
-`Close` force-closes connections. Scheduler/maintenance workers and server
-goroutines are joined; handlers need not have returned, so may still use the
-pool when it closes last. Mailbox closure cannot wake idle waits
-([ownership](recount-scheduler.md)). Browsers reconnect/replay; Caddy uses HTTP/2;
-HTTP/1.1: six connections/origin.
+Exit/failure: `Hub.CancelAll` (503/`ErrShutdown`) → lifetime cancel → HTTP
+shutdown → workers → pool. After HTTP's 10 s grace, `Close` force-closes
+connections. Maintenance workers and server goroutines are joined; handlers
+need not have returned, so may still use the pool when it closes last.
+Browsers reconnect/replay; Caddy uses HTTP/2; HTTP/1.1: six connections/origin.

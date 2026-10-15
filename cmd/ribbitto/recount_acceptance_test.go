@@ -49,23 +49,18 @@ func recountAcceptanceWait(t *testing.T, ready func() bool) {
 }
 
 func TestRecountCompositionAcceptance(t *testing.T) {
-	for _, mode := range []string{"default", "on"} {
+	for _, mode := range []string{"default", "on", "invalid"} {
 		t.Run(mode, func(t *testing.T) {
 			saveMutexSampling(t)
-			async := mode == "on"
-			for key := range recountInputs(t) {
+			for _, key := range []string{
+				"RIBBITTO_POOL_MAX_CONNS", "RIBBITTO_RECOUNT_WORKERS", "RIBBITTO_DB_MAX_CONNECTIONS",
+				"RIBBITTO_DB_RESERVED_CONNECTIONS", "RIBBITTO_DB_EXTERNAL_CONNECTIONS",
+				"RIBBITTO_DB_PROCESSES", "RIBBITTO_DB_NORMAL_HEADROOM",
+			} {
 				t.Setenv(key, "stray-invalid")
 			}
-			if async {
-				for key, value := range map[string]string{
-					"RIBBITTO_POOL_MAX_CONNS": "4", "RIBBITTO_RECOUNT_WORKERS": "1",
-					"RIBBITTO_DB_MAX_CONNECTIONS": "10", "RIBBITTO_DB_RESERVED_CONNECTIONS": "1",
-					"RIBBITTO_DB_EXTERNAL_CONNECTIONS": "1", "RIBBITTO_DB_PROCESSES": "1",
-					"RIBBITTO_DB_NORMAL_HEADROOM": "2",
-				} {
-					t.Setenv(key, value)
-				}
-			} else {
+			t.Setenv("RIBBITTO_ASYNC_RECOUNTS", mode)
+			if mode == "default" {
 				acceptanceOK(t, os.Unsetenv("RIBBITTO_ASYNC_RECOUNTS"))
 			}
 			addr, metricsAddr := recountAcceptanceAddr(t), recountAcceptanceAddr(t)
@@ -103,15 +98,11 @@ func TestRecountCompositionAcceptance(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			done := make(chan error, 1)
 			owned := make(chan *serviceLifecycle, 1)
-			poolClosed := make(chan realtime.RecountStats, 1)
+			poolClosed := make(chan struct{}, 1)
 			go func() {
-				done <- serveWithLifecycle(ctx, databaseURL.String(), func(ctx context.Context, hub *realtime.Hub, scheduler *realtime.RecountScheduler, closePool func()) *serviceLifecycle {
-					l := newServiceLifecycle(ctx, hub, scheduler, func() {
-						var stats realtime.RecountStats
-						if scheduler != nil {
-							stats = scheduler.Stats()
-						}
-						poolClosed <- stats
+				done <- serveWithLifecycle(ctx, databaseURL.String(), func(ctx context.Context, hub *realtime.Hub, closePool func()) *serviceLifecycle {
+					l := newServiceLifecycle(ctx, hub, func() {
+						poolClosed <- struct{}{}
 						closePool()
 					})
 					owned <- l
@@ -128,14 +119,10 @@ func TestRecountCompositionAcceptance(t *testing.T) {
 				}
 			})
 			t.Cleanup(stop)
-			var l *serviceLifecycle
 			select {
-			case l = <-owned:
+			case <-owned:
 			case <-time.After(5 * time.Second):
 				t.Fatal("serve did not acquire its lifecycle")
-			}
-			if (l.scheduler != nil) != async {
-				t.Fatalf("scheduler constructed = %t, want %t", l.scheduler != nil, async)
 			}
 			client := &http.Client{Timeout: 2 * time.Second}
 			t.Cleanup(client.CloseIdleConnections)
@@ -155,14 +142,8 @@ func TestRecountCompositionAcceptance(t *testing.T) {
 				return true
 			})
 			s := snapshot()
-			if s.Scheduler.Enabled != async || s.Delivery.Enabled != async {
-				t.Fatalf("metrics enablement: scheduler=%t delivery=%t, want %t", s.Scheduler.Enabled, s.Delivery.Enabled, async)
-			}
-			if async && (s.Pool.MaxConns != 4 || s.Scheduler.WorkerLimit != 1 || s.Scheduler.RegistrationLimit != 2) {
-				t.Fatalf("opt-in capacity not composed: %+v", s)
-			}
-			if !async && s.Pool.MaxConns != 7 {
-				t.Fatalf("default path changed URL pool maximum: %d, want 7", s.Pool.MaxConns)
+			if s.Pool.MaxConns != 7 {
+				t.Fatalf("startup changed URL pool maximum: %d, want 7", s.Pool.MaxConns)
 			}
 
 			jar, err := cookiejar.New(nil)
@@ -212,72 +193,13 @@ func TestRecountCompositionAcceptance(t *testing.T) {
 			acceptanceOK(t, err)
 			acceptanceResponse(t, response, body, 204)
 			sidebarReload(t, b, path, events)
-			if async {
-				s = snapshot()
-				if s.Scheduler.Completed != 2 || s.Scheduler.Registrations != 1 {
-					t.Fatalf("real sidebar delivery bypassed scheduler: %+v", s.Scheduler)
-				}
-				recountAcceptanceWait(t, func() bool { return snapshot().Delivery.Delivered >= 2 })
-				s = snapshot()
-				if s.Delivery.Delivered != 2 || s.Delivery.Compute.Count != 2 || s.Database.Queries == 0 {
-					t.Fatalf("real sidebar delivery bypassed scheduler/observer/shared pool: %+v", s)
-				}
-				registration := l.scheduler.Register()
-				if registration == nil {
-					t.Fatal("second registration refused before capacity")
-				}
-				release, started, cancelled := make(chan struct{}), make(chan struct{}), make(chan struct{})
-				unblock := sync.OnceFunc(func() { close(release) })
-				t.Cleanup(unblock)
-				if !registration.Submit(1, func(ctx context.Context) (realtime.Outgoing, error) {
-					close(started)
-					<-ctx.Done()
-					close(cancelled)
-					<-release // Retain the actual worker past cancellation.
-					return realtime.Outgoing{}, ctx.Err()
-				}) {
-					t.Fatal("shutdown gate submission refused")
-				}
-				select {
-				case <-started:
-				case <-time.After(5 * time.Second):
-					t.Fatal("shutdown gate did not start")
-				}
-				if _, status, _ := openEndpointIn(t.Context(), t, b, endpoint, "2", ""); status != 503 {
-					t.Fatalf("registration capacity status = %d, want 503", status)
-				}
-				s = snapshot()
-				if s.Streams.Open != 1 || s.Scheduler.Registrations != 2 || s.Scheduler.RefusedCapacity != 1 {
-					t.Fatalf("refusal retained state or missed scheduler: %+v", s)
-				}
-				cancel()
-				select {
-				case <-cancelled:
-				case <-time.After(5 * time.Second):
-					t.Fatal("shutdown did not cancel the composed scheduler")
-				}
-				select {
-				case <-poolClosed:
-					t.Fatal("pool closed before actual scheduler return")
-				default:
-				}
-				unblock()
-			} else if s = snapshot(); s.Scheduler != (schedulerMetrics{}) || s.Delivery != (deliveryMetrics{}) {
-				t.Fatalf("default path constructed recount dependencies: %+v", s)
-			}
 			stop()
 			streamEndsWithin(t, events, time.Second)
-			if stats := <-poolClosed; async && (!stats.Closed || stats.RunningWorkers != 0 || stats.WaitingWorkers != 0 || stats.Registrations != 0) {
-				t.Fatalf("pool closed before scheduler joined: %+v", stats)
-			}
+			<-poolClosed
 			data, err := os.ReadFile(logs.Name())
 			acceptanceOK(t, err)
-			delivery := "synchronous"
-			if async {
-				delivery = "asynchronous"
-			}
-			if !strings.Contains(string(data), `"delivery":"`+delivery+`"`) {
-				t.Fatalf("startup did not report %s delivery: %s", delivery, data)
+			if !strings.Contains(string(data), `"computation_limit":3`) || !strings.Contains(string(data), `"registration_limit":2`) {
+				t.Fatalf("startup did not report computation/registration limits: %s", data)
 			}
 		})
 	}

@@ -148,3 +148,5 @@ the streams receiving shared unread frames. The simultaneous final resync took
 5.035 s. [Client count results](stream-client-counts-results.md) retain the
 comparison: a short single run, an older no-unread baseline and different frame
 placement. Delivery improved in that test; resync still incurs snapshot work.
+
+The optional asynchronous recount scheduler was removed in #1081.

@@ -12,21 +12,6 @@ import (
 // using Open's database/sql handle, which goose needs. A nil counter installs
 // no tracer at all, so the pool runs exactly as without metrics.
 func OpenPool(ctx context.Context, url string, counter *QueryCounter) (*pgxpool.Pool, error) {
-	return OpenPoolWithOptions(ctx, url, counter, PoolOptions{})
-}
-
-// PoolOptions holds explicit overrides of the URL's pgx pool configuration.
-type PoolOptions struct {
-	// MaxConns overrides pool_max_conns in the URL. Zero preserves the URL
-	// setting or pgx's default; negative values are rejected.
-	MaxConns int32
-}
-
-// OpenPoolWithOptions connects like OpenPool, applying options before creation.
-func OpenPoolWithOptions(ctx context.Context, url string, counter *QueryCounter, options PoolOptions) (*pgxpool.Pool, error) {
-	if options.MaxConns < 0 {
-		return nil, fmt.Errorf("pool MaxConns must be non-negative")
-	}
 	if url == "" {
 		return nil, fmt.Errorf("database URL is empty")
 	}
@@ -36,9 +21,6 @@ func OpenPoolWithOptions(ctx context.Context, url string, counter *QueryCounter,
 	}
 	if counter != nil {
 		config.ConnConfig.Tracer = counter
-	}
-	if options.MaxConns > 0 {
-		config.MaxConns = options.MaxConns
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {

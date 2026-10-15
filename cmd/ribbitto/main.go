@@ -74,16 +74,11 @@ func serve(ctx context.Context, databaseURL string) error {
 	return serveWithLifecycle(ctx, databaseURL, newServiceLifecycle)
 }
 
-func serveWithLifecycle(ctx context.Context, databaseURL string, own func(context.Context, *realtime.Hub, *realtime.RecountScheduler, func()) *serviceLifecycle) (result error) {
+func serveWithLifecycle(ctx context.Context, databaseURL string, own func(context.Context, *realtime.Hub, func()) *serviceLifecycle) (result error) {
 	streamCap, err := maxStreams()
 	if err != nil {
 		return err
 	}
-	recounts, err := recountConfiguration(streamCap)
-	if err != nil {
-		return err
-	}
-
 	authorizationCapacity, err := authorizationCacheCapacity(streamCap)
 	if err != nil {
 		return err
@@ -121,33 +116,23 @@ func serveWithLifecycle(ctx context.Context, databaseURL string, own func(contex
 		return err
 	}
 
-	pool, err := platform.OpenPoolWithOptions(ctx, databaseURL, queries, platform.PoolOptions{MaxConns: int32(recounts.poolMax)})
+	pool, err := platform.OpenPool(ctx, databaseURL, queries)
 	if err != nil {
 		return fmt.Errorf("opening RIBBITTO_DATABASE_URL: %w", err)
 	}
 	hub := realtime.NewHubWithMaxStreams(streamCap)
-	var scheduler *realtime.RecountScheduler
-	var observer *realtime.RecountObserver
-	delivery := "synchronous"
-	if recounts.enabled {
-		scheduler = realtime.NewRecountScheduler(int(recounts.workers), recounts.registrationLimit)
-		observer = &realtime.RecountObserver{}
-		delivery = "asynchronous"
-	}
-	limit := realtime.NewRecountLimit(recounts.computationLimit(pool.Config().MaxConns))
-	lifetime := own(ctx, hub, scheduler, pool.Close)
+	computationLimit := max(1, int(pool.Config().MaxConns)/2)
+	limit := realtime.NewRecountLimit(computationLimit)
+	lifetime := own(ctx, hub, pool.Close)
 	defer func() { result = errors.Join(result, lifetime.close()) }()
-	slog.Info("recount capacity configuration", "async_recounts", recounts.enabled, "delivery", delivery,
-		"pool_max_conns", pool.Config().MaxConns, "configured_workers", recounts.workers, "computation_limit", recounts.computationLimit(pool.Config().MaxConns),
-		"max_connections", recounts.maxConnections, "reserved", recounts.reserved, "external", recounts.external,
-		"processes", recounts.processes, "normal_headroom", recounts.headroom, "process_budget", recounts.budget,
-		"registration_limit", recounts.registrationLimit)
+	slog.Info("recount capacity configuration", "pool_max_conns", pool.Config().MaxConns,
+		"computation_limit", computationLimit, "registration_limit", streamCap)
 	// One hub per process: posting raises it, streams register their
 	// connections with it, and the metrics read its registry.
 	handler, sessions, err := buildHandler(lifetime.ctx, pool, handlerConfig{
 		maxChannels: maxChannels, setupToken: token, signupEnabled: enabled, trustedProxies: trusted,
 		devAssets: os.Getenv("RIBBITTO_DEV_ASSETS"), hub: hub,
-		recounts: scheduler, recountObserver: observer, recountLimit: limit,
+		recountLimit:          limit,
 		authorizationCapacity: authorizationCapacity,
 	})
 	if err != nil {
@@ -169,7 +154,7 @@ func serveWithLifecycle(ctx context.Context, databaseURL string, own func(contex
 		if err != nil {
 			return fmt.Errorf("RIBBITTO_DEV_METRICS_ADDR: %w", err)
 		}
-		metrics := newMetricsServer(metricsAddr, devMetrics{queries: queries, pool: pool, streams: hub, recounts: scheduler, delivery: observer})
+		metrics := newMetricsServer(metricsAddr, devMetrics{queries: queries, pool: pool, streams: hub})
 		lifetime.startServer(metrics, func() error { return metrics.Serve(ln) })
 		slog.Warn("development metrics enabled; use only on a disposable machine", "addr", metricsAddr)
 	}
@@ -272,9 +257,6 @@ type handlerConfig struct {
 	// hub, when set, is raised by posting and serves the event stream; nil
 	// leaves posting unnotified and the stream off.
 	hub *realtime.Hub
-	// Nil recount dependencies preserve synchronous sidebar delivery.
-	recounts        *realtime.RecountScheduler
-	recountObserver *realtime.RecountObserver
 	// streamWriteTimeout bounds each stream write; zero keeps the default.
 	// Tests shorten it.
 	streamWriteTimeout time.Duration
@@ -334,9 +316,9 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		state := presence.New(config.hub)
 		typingState = typing.New(config.hub)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout,
-			Recounts: config.recounts, RecountObserver: config.recountObserver, RecountLimit: config.recountLimit,
-			Sidebar:  sidebarSource(conversationpg.NewReader(pool, nil, nil, eventCursor, pageCountsIn), changes),
-			Presence: state, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
+			RecountLimit: config.recountLimit,
+			Sidebar:      sidebarSource(conversationpg.NewReader(pool, nil, nil, eventCursor, pageCountsIn), changes),
+			Presence:     state, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
 				closePresence, closeTyping := state.Open(organizationID, memberID), typingState.Open(organizationID, memberID, channelID)
 				return func() { closePresence(); closeTyping() }
 			},

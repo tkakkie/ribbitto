@@ -13,8 +13,8 @@ import (
 )
 
 func TestRecountLimit(t *testing.T) {
-	for _, async := range []bool{false, true} {
-		t.Run(map[bool]string{false: "sync", true: "async"}[async], func(t *testing.T) {
+	for _, name := range []string{"sync"} {
+		t.Run(name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				limit := NewRecountLimit(2)
 				limit.random = func(time.Duration) time.Duration { return 0 }
@@ -26,11 +26,6 @@ func TestRecountLimit(t *testing.T) {
 				sends := make([]*recorder, 4)
 				cancels := make([]context.CancelFunc, 4)
 				done := make(chan error, 4)
-				var q *RecountScheduler
-				if async {
-					q = NewRecountScheduler(4, 4)
-					defer q.Close()
-				}
 				release := sync.OnceFunc(func() { close(gate) })
 				defer func() {
 					release()
@@ -41,7 +36,7 @@ func TestRecountLimit(t *testing.T) {
 					}
 				}()
 				start := func(i int) {
-					stream := Stream{Hub: hub, Events: log, Recounts: q, RecountLimit: limit, Authorizer: authorizerFunc(allowAll),
+					stream := Stream{Hub: hub, Events: log, RecountLimit: limit, Authorizer: authorizerFunc(allowAll),
 						Sidebar: watchedSidebar{sidebarSource{func(e Event) bool { return i == 3 && e.Kind == kindMoved }, func(context.Context, Subscription) (Outgoing, error) {
 							n := running.Add(1)
 							calls.Add(1)
@@ -127,7 +122,7 @@ func TestRecountLimit(t *testing.T) {
 }
 
 func TestRecountConnectDelay(t *testing.T) {
-	for _, async := range []bool{false, true} {
+	t.Run("sync", func(t *testing.T) {
 		for _, delay := range []time.Duration{0, 3 * time.Second} {
 			synctest.Test(t, func(t *testing.T) {
 				limit := NewRecountLimit(1)
@@ -144,10 +139,6 @@ func TestRecountConnectDelay(t *testing.T) {
 				var calls atomic.Int32
 				stream := Stream{Hub: NewHub(), Events: log, Renderer: rendererFunc(render), Authorizer: authorizerFunc(allowAll), RecountLimit: limit,
 					Sidebar: sidebarSource{sidebarTrigger, func(context.Context, Subscription) (Outgoing, error) { calls.Add(1); return Outgoing{}, nil }}}
-				if async {
-					stream.Recounts = NewRecountScheduler(1, 1)
-					defer stream.Recounts.Close()
-				}
 				send := newRecorder()
 				send.failOn = -1
 				ctx, cancel := context.WithCancel(t.Context())
@@ -184,5 +175,5 @@ func TestRecountConnectDelay(t *testing.T) {
 				}
 			})
 		}
-	}
+	})
 }

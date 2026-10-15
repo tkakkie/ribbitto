@@ -29,7 +29,6 @@ Read the file for the area you change:
 | [`ephemeral-state.md`](ephemeral-state.md) | presence and typing as current state: generations, owners, delivery and reset |
 | [`typing.md`](typing.md) | memory-only typing summaries, lifetime, composer ordering, signal ingress, delivery and the page's status region |
 | [SSE](streaming.md), [scope](stream-scope.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
-| [`recount-scheduler.md`](recount-scheduler.md) | bounded scheduler core, eligibility, completion mailbox and cancellation; explicit opt-in only |
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
 | [`pins.md`](pins.md) | pin ownership and live/reconnect delivery (planned, #880) |
 | [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream caps, shutdown, HTTP/2 |

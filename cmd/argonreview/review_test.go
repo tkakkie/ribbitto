@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -178,6 +180,98 @@ func TestReviewSignals(t *testing.T) {
 			nothingLeft(t, r.source)
 		})
 	}
+}
+
+// Catching stops before the report is written: a signal that arrived just
+// before still suppresses it, and none is caught during the write.
+func TestReviewStopsCatchingBeforeTheReport(t *testing.T) {
+	for _, late := range []bool{true, false} {
+		r, _ := newReview(t)
+		signals := make(chan os.Signal, 1)
+		r.sup.signals = signals
+		stopped := false
+		r.stop = func() {
+			stopped = true
+			if late {
+				signals <- syscall.SIGINT
+			}
+		}
+		out := stoppedFirst{stopped: &stopped}
+		code, err := r.run(&out)
+		if late && (code != 130 || err == nil || out.Len() != 0) || !late && (code != 0 || err != nil || out.Len() == 0) {
+			t.Fatalf("late = %v: code = %d, err = %v, output %q", late, code, err, out.String())
+		}
+		if out.early {
+			t.Fatal("the report was written while signals were still caught")
+		}
+	}
+}
+
+// stoppedFirst is a buffer that notes a write before catching stopped.
+type stoppedFirst struct {
+	bytes.Buffer
+	stopped *bool
+	early   bool
+}
+
+func (b *stoppedFirst) Write(p []byte) (int, error) {
+	b.early = b.early || !*b.stopped
+	return b.Buffer.Write(p)
+}
+
+// INT during a report write that blocks, because nobody reads stdout yet,
+// ends the launcher instead of being swallowed (Codex on #1113).
+func TestReviewSignalDuringTheReport(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	cmd := exec.Command(executable, "-test.run=^TestReviewHelper$")
+	cmd.Env = append(os.Environ(), "ARGONREVIEW_REVIEW_HELPER="+dir, "TMPDIR="+t.TempDir())
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+	waitFor(t, filepath.Join(dir, "fake"))
+	fake, _ := os.ReadFile(filepath.Join(dir, "fake"))
+	workspaces, _ := os.ReadFile(filepath.Join(dir, "tmpdir"))
+	waitFor(t, filepath.Join(string(fake), "seen"))
+	// The workspace is removed just before the write starts.
+	for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if entries, err := os.ReadDir(string(workspaces)); err == nil && len(entries) == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the workspace was never removed")
+		}
+	}
+	time.Sleep(200 * time.Millisecond)
+	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, stdout)
+	if err := cmd.Wait(); err == nil {
+		t.Fatal("the review finished with its report despite INT")
+	}
+}
+
+func TestReviewHelper(t *testing.T) {
+	dir := os.Getenv("ARGONREVIEW_REVIEW_HELPER")
+	if dir == "" {
+		t.Skip("run by TestReviewSignalDuringTheReport")
+	}
+	r, fake := newReview(t)
+	// Far more than a pipe holds, so the write blocks.
+	write(t, filepath.Join(fake, "stdout"), `{"event":"result","result":{"status":"SUCCESS","response":"`+strings.Repeat("x", 1<<20)+`"}}`+"\n")
+	write(t, filepath.Join(dir, "tmpdir"), os.Getenv("TMPDIR"))
+	write(t, filepath.Join(dir, "fake"), fake)
+	code, _ := r.runCatching(os.Stdout)
+	os.Exit(code)
 }
 
 // The shared settings are read only to hash; a change during the run fails it.

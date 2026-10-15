@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,9 @@ type review struct {
 	read                     func(int) (target, error)
 	git                      func(string, ...string) (string, error)
 	sup                      supervisor
+	// stop ends the catching of INT and TERM before the report is written;
+	// runCatching sets it.
+	stop func()
 }
 
 // reviewHere reviews pull request number with this machine's configuration.
@@ -47,16 +51,25 @@ func reviewHere(source, revision string, number int, out io.Writer) (int, error)
 	if err != nil {
 		return 1, fmt.Errorf("finding the account's home: %w", err)
 	}
-	return withSignals(func(signals <-chan os.Signal) (int, error) {
-		return review{
-			source: source, revision: revision, remote: ribbittoURL, number: number,
-			home: os.Getenv("RIBBITTO_ARGON_HOME"), shared: filepath.Join(account.HomeDir, sharedSettings), agy: agy,
-			prepare: func() error { _, err := prepareHere(); return err },
-			read:    readPullRequest,
-			git:     func(dir string, args ...string) (string, error) { return gitRaw(2*time.Minute, dir, args...) },
-			sup:     supervisor{limit, 5 * time.Second, signals, systemCleanup()},
-		}.run(out)
-	})
+	return review{
+		source: source, revision: revision, remote: ribbittoURL, number: number,
+		home: os.Getenv("RIBBITTO_ARGON_HOME"), shared: filepath.Join(account.HomeDir, sharedSettings), agy: agy,
+		prepare: func() error { _, err := prepareHere(); return err },
+		read:    readPullRequest,
+		git:     func(dir string, args ...string) (string, error) { return gitRaw(2*time.Minute, dir, args...) },
+		sup:     supervisor{limit, 5 * time.Second, nil, systemCleanup()},
+	}.runCatching(out)
+}
+
+// runCatching runs r with INT and TERM handed to its supervisor, and back to
+// their default, ending this process, once the report is about to be written.
+func (r review) runCatching(out io.Writer) (int, error) {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	r.sup.signals = signals
+	r.stop = func() { signal.Stop(signals) }
+	return r.run(out)
 }
 
 // run prepares the configuration, builds the workspace, runs agy there and
@@ -85,9 +98,13 @@ func (r review) run(out io.Writer) (code int, err error) {
 	if removeErr := w.remove(); removeErr != nil {
 		err = errors.Join(err, removeErr)
 	}
-	// The supervisor only reads signals while agy runs; one that arrived
-	// since, during its cleanup or the checks above, still ends the review
-	// without a report (Codex on #1113).
+	// The supervisor only reads signals while agy runs. Catching stops here,
+	// so one arriving during the write ends the process as usual; one that
+	// arrived before, during the supervisor's cleanup or the checks above,
+	// ends the review without a report (Codex on #1113).
+	if r.stop != nil {
+		r.stop()
+	}
 	select {
 	case sig := <-r.sup.signals:
 		return 128 + int(sig.(syscall.Signal)), errors.Join(err, fmt.Errorf("interrupted by %v", sig))

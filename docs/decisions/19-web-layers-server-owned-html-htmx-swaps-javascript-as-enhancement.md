@@ -12,7 +12,7 @@ audit: [`web-layers.md`](../architecture/web-layers.md),
 [`web-javascript.md`](../architecture/web-javascript.md) and
 [`web-layers-checks.md`](../architecture/web-layers-checks.md).
 
-**Planned exception until PR 3 of #1039 lands:**
+**Current exception:**
 [decision 34](34-live-unread-counts.md) allows one script to own sidebar badge
 numbers and bounded recovery state. It never creates elements or makes
 requests; htmx sends resync requests.

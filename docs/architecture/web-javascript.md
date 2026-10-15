@@ -16,7 +16,8 @@ It changes only the text and visibility of server-rendered badges, never creates
 htmx sends resync requests. The markup contract is in
 [web layers](web-layers.md#htmx).
 
-- `message-stream-v10.js` emits `read-applied` only after successful DOM
+- `message-stream-v11.js` observes `checkpoint` to update only `sse-connect`'s
+  `after`, monotonically and independently of applied/shown cursors. It emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
   `read-visibility-v5.js` initializes on scoped `htmx:load`; automatic
   triggers send the snapshot, then the latest applied cursor.

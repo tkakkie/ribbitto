@@ -104,7 +104,7 @@ func TestSidebarTriggersAndDeadline(t *testing.T) {
 				if name == "interest" {
 					want = 0
 				}
-				if reads.Load() != int64(want) || len(send.ids()) != want || (name == "organisation" && triggers != 0) {
+				if reads.Load() != int64(want) || send.count("sidebar") != want || send.count("checkpoint") != 5 || len(send.ids()) != want+5 || (name == "organisation" && triggers != 0) {
 					t.Fatalf("recounts=%d frames=%v triggers=%d; want %d", reads.Load(), send.ids(), triggers, want)
 				}
 				cancel()

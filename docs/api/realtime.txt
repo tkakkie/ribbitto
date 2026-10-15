@@ -111,7 +111,7 @@ type Stream struct // Stream runs the per-connection delivery loop.
   field Authorizer Authorizer
   field BatchSize int // BatchSize bounds each read; zero means DefaultBatchSize.
   field Events EventReader
-  field Heartbeat time.Duration // Heartbeat is how long the loop waits on the hub before it sends a heartbeat and waits again; zero sends none.
+  field Heartbeat time.Duration // Heartbeat is how long the loop waits on the hub before it sends a heartbeat (or pending progress checkpoint) and waits again; nonpositive sends no heartbeats.
   field Hub *Hub
   field Owners map[Interest]EphemeralOwner // Owners supplies current frames; nil entries preserve durable-only delivery.
   field RecountLimit *RecountLimit // RecountLimit shares computation capacity; nil preserves unbounded test compositions.

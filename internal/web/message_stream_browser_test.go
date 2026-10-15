@@ -50,6 +50,7 @@ func TestBrowser(t *testing.T) {
 	t.Run("read-recovery", func(t *testing.T) { testReadRecoveryBrowser(t, browser) })
 	t.Run("unread-divider", func(t *testing.T) { testUnreadDividerBrowser(t, browser) })
 	t.Run("read-control", func(t *testing.T) { testReadControlBrowser(t, browser) })
+	t.Run("progress", func(t *testing.T) { testStreamProgressBrowser(t, browser) })
 	t.Run("per-entry/ephemeral", func(t *testing.T) { testEphemeralSinkBrowser(t, browser) })
 	t.Run("side-panel", func(t *testing.T) { testSidePanelBrowser(t, browser) })
 	t.Run("panel-sheet", func(t *testing.T) { testPanelSheetBrowser(t, browser) })

@@ -112,3 +112,15 @@ Known limits: a mass simultaneous `reset` has only the random reload delay;
 ordinary page loads gain no admission limit. Resync wakes all of the member's
 tabs (at most 16) in the same process; the member watch remains process-local.
 Without JavaScript, counts change only on page load.
+
+## Amendment: transport progress (#1103)
+
+Decision 30's checkpoint extension advances transport resume over unread-only
+and skipped events, without advancing `appliedCursor` or `data-event-cursor`.
+Both native reconnect and htmx source recreation resume from received progress.
+The `unread` frame still has no ID. Checkpoints change neither snapshot coverage,
+retention eligibility nor the resync/recovery rules above; a disconnect before
+checkpoint receipt may replay about one heartbeat interval of events as duplicates.
+Checkpoints are limited to one per heartbeat interval since the last checkpoint
+or ID-bearing write; pending progress replaces a due heartbeat comment. With
+heartbeats disabled, checkpoint before waiting.

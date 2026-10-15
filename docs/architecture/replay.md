@@ -116,9 +116,20 @@ sequenceDiagram
   [`stream-cost.md`](stream-cost.md).
 - Replay and live delivery go through the same per-connection loop, so they
   cannot interleave out of order. `Last-Event-ID` is preferred on reconnect;
-  before htmx recreates the `EventSource`, the client puts its last cursor
+  before htmx recreates the `EventSource`, the client puts its transport cursor
   into `after`. DOM updates are idempotent (elements are replaced by id), so
   a duplicate delivery is harmless.
+- Completed unread-only or skipped progress beyond the last sent ID produces
+  `event: checkpoint`, `id: <cursor>` and empty `data:` at most once per
+  heartbeat interval, measured from the last checkpoint or ID-bearing write.
+  Pending progress replaces a due heartbeat comment; with heartbeats disabled,
+  it is checkpointed before waiting.
+  A fresh organisation/bound-member check immediately precedes each send.
+  No checkpoint covers a failed render, authorization or send. The browser
+  updates only `sse-connect`'s `after`; applied/shown cursors still advance
+  only through message/move application and the visibility guard. Before a
+  checkpoint is received, disconnects may replay about one heartbeat interval
+  of events as duplicates.
 - A cursor below `organization.event_log_boundary_seq` or above the committed
   `organization.event_seq` gets one `reset` and the loop returns without
   advancing it or sending later events. The upper check covers a browser

@@ -113,7 +113,9 @@ are in [`replay.md`](replay.md); authorization is in [`streaming.md`](streaming.
   however often another channel's events wake it and while it drains a
   backlog of them: proxies keep it open, and a client
   that stopped reading is found out at that write's deadline. The loop
-  sends it while waiting on the hub (`Stream.Heartbeat`); a failed one ends
+  replaces a due comment with a checkpoint when transport progress is pending;
+  checkpoints also restart the write deadline. It sends while waiting on the
+  hub (`Stream.Heartbeat`); a failed write ends
   the stream without moving the cursor. Presence waits 30 s
   after the last stream closes before marking a member offline (#766;
   delivery/display current in #768), so a reload does

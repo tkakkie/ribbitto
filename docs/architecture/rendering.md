@@ -116,7 +116,7 @@ components never include it, so live replacements leave it in place. Its
 list children. Moving that message out of a topic view removes its divider;
 moving another message leaves it in place. Destination inserts add no divider.
 
-`message-stream-v10.js` listens to the vendored SSE extension's
+`message-stream-v11.js` listens to the vendored SSE extension's
 `htmx:sseBeforeMessage`. It passes the server's HTML to htmx for an append or
 same-id replacement, settling synchronously so replay stays ordered and local
 timestamps are ready before scrolling. Only appends update the separate polite
@@ -125,7 +125,7 @@ bottom, except for the sender's own post. A successful composer fragment's
 `data-posted-message` names that message; the script keeps it as a pending
 scroll outside the composer and scrolls to the item once it is present,
 whether it arrived before the response, after it, or after a reconnect. Each
-pending scroll is used once; failed posts create none. It updates `sse-connect`'s `after` after each delivery so replacement
+pending scroll is used once; failed posts create none. It updates `sse-connect`'s `after` after applied deliveries and transport checkpoints so replacement
 EventSources resume from the received id; native reconnects use Last-Event-ID.
 `messages-moved` carries a templ-rendered list of replacements. The script
 replaces feed IDs, removes source-topic IDs or inserts destination IDs in

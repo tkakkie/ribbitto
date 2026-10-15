@@ -111,7 +111,7 @@ this leaves the sidebar, app bar, panels and list page as they are.
 Two things differ there. A covering move form would scroll away from the
 composer with the conversation, so the form follows the list in the column
 and the composer is hidden; the fixed list still does not resize. A post
-scrolls its message into view (`message-stream-v10.js`), which there also
+scrolls its message into view (`message-stream-v11.js`), which there also
 scrolls the conversation up from the composer.
 
 ## Arrival motion

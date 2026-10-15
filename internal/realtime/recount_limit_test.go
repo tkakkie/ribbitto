@@ -92,7 +92,7 @@ func TestRecountLimit(t *testing.T) {
 				default:
 				}
 				for i := 2; i < 4; i++ {
-					if len(sends[i].ids()) != 1 {
+					if sends[i].count("sidebar") != 1 || sends[i].count("checkpoint") != 1 || len(sends[i].ids()) != 2 {
 						t.Fatalf("deferred stream %d sent a recount", i)
 					}
 				}
@@ -105,7 +105,7 @@ func TestRecountLimit(t *testing.T) {
 					t.Fatalf("dirty streams did not retry: calls=%d peak=%d", calls.Load(), peak.Load())
 				}
 				for i := range sends {
-					if len(sends[i].ids()) != 2 {
+					if sends[i].count("sidebar") != 2 || sends[i].count("checkpoint") != 1 || len(sends[i].ids()) != 3 {
 						t.Fatalf("stream %d did not deliver its deferred recount: %v", i, sends[i].ids())
 					}
 					cancels[i]()

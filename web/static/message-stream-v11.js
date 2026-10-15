@@ -35,18 +35,22 @@
     document.dispatchEvent(new Event("read-applied"));
   };
   document.addEventListener("visibilitychange", showApplied);
+  const progress = (message) => {
+    // CLOSED sources are recreated from this URL, without Last-Event-ID.
+    const connection = document.getElementById("organization-stream");
+    const url = new URL(connection.getAttribute("sse-connect"), location.href);
+    if (BigInt(message.lastEventId) < BigInt(url.searchParams.get("after"))) return;
+    url.searchParams.set("after", message.lastEventId);
+    connection.setAttribute("sse-connect", url.pathname + url.search);
+  };
   const resume = (message) => {
-    // Native reconnects send Last-Event-ID; htmx recreates CLOSED sources
-    // from this URL. Advance only after the page applies the event.
     const connection = document.getElementById("organization-stream");
     // Hidden applications may resume replay, but reading/composing must wait
     // until this DOM is shown. Duplicate deliveries cannot lower either cursor.
     const applied = connection.dataset.appliedCursor || connection.dataset.eventCursor;
     if (BigInt(message.lastEventId) < BigInt(applied)) return;
     connection.dataset.appliedCursor = message.lastEventId;
-    const url = new URL(connection.getAttribute("sse-connect"), location.href);
-    url.searchParams.set("after", message.lastEventId);
-    connection.setAttribute("sse-connect", url.pathname + url.search);
+    progress(message);
     showApplied();
   };
   document.addEventListener("htmx:sseOpen", (event) => {
@@ -54,6 +58,7 @@
     if (connection.id !== "organization-stream") return;
     const source = event.detail.source;
     source.addEventListener("reset", reset, { once: true });
+    source.addEventListener("checkpoint", progress);
   });
   const applyMove = (items, data, payload) => {
     const moved = payload.querySelectorAll("li");

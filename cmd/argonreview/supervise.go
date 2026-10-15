@@ -170,14 +170,23 @@ func (o cleanupOps) stop(c *child) error {
 	// scan cannot leave such a session unconfirmed (the maintainer on #1059),
 	// and again after it.
 	reused := func() bool { return c.exited && o.held(c.pid) }
+	failures := 0
 	for range 100 {
 		if reused() {
 			return o.reap(c, nil)
 		}
 		members, err := o.scan(c.pid)
 		if err != nil {
-			return o.reap(c, err)
+			// Once the leader is reaped, only a scan reaches its descendants,
+			// so a transient ps failure is retried; a persistent one leaves
+			// the cleanup unconfirmed (Copilot on #1089).
+			if failures++; failures == 5 {
+				return o.reap(c, err)
+			}
+			time.Sleep(20 * time.Millisecond)
+			continue
 		}
+		failures = 0
 		if reused() {
 			return o.reap(c, nil)
 		}

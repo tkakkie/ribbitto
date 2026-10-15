@@ -248,33 +248,36 @@ func TestSupervisorStopsSignallingWhenWaitingFails(t *testing.T) {
 func TestCleanup(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
-		scans     [][]int
-		fail      bool
+		scans     [][]int // nil is a failed scan; every scan is used
 		confirmed bool
 		killed    []int
 	}{
-		{"rescans", [][]int{{101}, {102}, {}}, false, true, []int{101, 102}},
-		{"reaped leader", [][]int{{}}, false, true, nil},
-		{"ps failure after reap", nil, true, false, nil},
+		{"rescans", [][]int{{101}, {102}, {}}, true, []int{101, 102}},
+		{"reaped leader", [][]int{{}}, true, nil},
+		{"transient ps failures", [][]int{nil, {101}, nil, nil, nil, nil, {}}, true, []int{101}},
+		{"ps failure after reap", [][]int{nil, nil, nil, nil, nil}, false, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := &child{pid: 41, exited: true}
 			var killed []int
 			o := cleanupOps{
 				scan: func(int) ([]int, error) {
-					if tc.fail {
-						return nil, fmt.Errorf("ps failed")
+					if len(tc.scans) == 0 {
+						t.Fatal("too many scans")
 					}
 					scan := tc.scans[0]
 					tc.scans = tc.scans[1:]
+					if scan == nil {
+						return nil, fmt.Errorf("ps failed")
+					}
 					return scan, nil
 				},
 				signalGroup: func(int, syscall.Signal) { t.Fatal("signalled a reaped leader's group") },
 				killMember:  func(pid int, _ *child) { killed = append(killed, pid) },
 				held:        func(int) bool { return false },
 			}
-			if err := o.stop(c); (err == nil) != tc.confirmed || !reflect.DeepEqual(killed, tc.killed) {
-				t.Fatalf("stop = %v, killed %v", err, killed)
+			if err := o.stop(c); (err == nil) != tc.confirmed || !reflect.DeepEqual(killed, tc.killed) || len(tc.scans) != 0 {
+				t.Fatalf("stop = %v, killed %v, unused scans %v", err, killed, tc.scans)
 			}
 		})
 	}

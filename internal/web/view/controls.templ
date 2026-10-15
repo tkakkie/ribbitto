@@ -61,7 +61,8 @@ templ submitButtonFor(kind buttonKind, label, form string) {
 type inputProps struct {
 	ID, Name, Type, Value, Autocomplete string
 	Required                            bool
-	Welcome                             bool
+	// Tall gives welcome fields the 48 px phone height of their buttons.
+	Tall bool
 	// Invalid becomes aria-invalid when set ("true" or "false"); empty omits it.
 	Invalid string
 	// DescribedBy becomes aria-describedby when set.
@@ -69,7 +70,8 @@ type inputProps struct {
 }
 
 // textInput is the one place a single-line text input gets its look. Its
-// label is the caller's: a wrapping <label> or one pointing at ID.
+// label is the caller's: a wrapping <label> or one pointing at ID. Below
+// desk its text is 16 px, since iOS Safari zooms into a smaller field.
 templ textInput(p inputProps) {
 	// templ's generated code reassigns ctx in every component; this one
 	// needs no context, so mark it used for staticcheck (SA4006).
@@ -95,7 +97,7 @@ templ textInput(p inputProps) {
 		if p.DescribedBy != "" {
 			aria-describedby={ p.DescribedBy }
 		}
-		class={ "min-h-11 min-w-0 rounded-md border border-border-strong border-b-2 bg-input px-3 py-2 text-body text-fg focus:border-b-brand", templ.KV("max-desk:min-h-12 max-desk:text-entry", p.Welcome) }
+		class={ "min-h-11 min-w-0 rounded-md border border-border-strong border-b-2 bg-input px-3 py-2 text-body text-fg max-desk:text-entry focus:border-b-brand", templ.KV("max-desk:min-h-12", p.Tall) }
 	/>
 }
 

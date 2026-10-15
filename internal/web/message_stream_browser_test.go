@@ -62,6 +62,7 @@ func TestBrowser(t *testing.T) {
 	t.Run("message-time", func(t *testing.T) { testMessageTimeBrowser(t, browser) })
 	t.Run("short-height", func(t *testing.T) { testShortHeightBrowser(t, browser) })
 	t.Run("welcome", func(t *testing.T) { testWelcomeBrowser(t, browser) })
+	t.Run("input-text", func(t *testing.T) { testInputTextBrowser(t, browser) })
 	t.Run("static-headers", func(t *testing.T) { testStaticHeadersBrowser(t, browser) })
 	t.Run("popover-focus", func(t *testing.T) { testPopoverFocusBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {

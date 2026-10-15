@@ -40,7 +40,7 @@ templ branchForm(page ChannelPage) {
 			<input type="hidden" name="unread" value={ fmt.Sprint(page.FirstUnread) }/>
 		}
 		<label for="branch-to">{ i18n.T(ctx, "topic.branch_to") }</label>
-		<select id="branch-to" name="to" class="min-h-11 max-w-full rounded-md border border-border-strong bg-input px-3 text-fg">
+		<select id="branch-to" name="to" class="min-h-11 max-w-full rounded-md border border-border-strong bg-input px-3 text-fg max-desk:text-entry">
 			<option value="">{ i18n.T(ctx, "topic.branch_new") }</option>
 			for _, topic := range page.Topics {
 				if page.Topic == nil || page.Topic.ID != topic.ID {

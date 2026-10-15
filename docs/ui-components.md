@@ -41,9 +41,10 @@ Today's shared controls:
   restyled, its repeated looks (links, for example) become components too.
 
 Welcome forms select `buttonWelcomePrimary` or `buttonWelcomeSecondary`
-for 48 px phone targets; `textField` sets `inputProps.Welcome` for the
-same height and `text-entry` (16 px) below `desk`. Other controls keep
-their existing sizes.
+for 48 px phone targets; `textField` sets `inputProps.Tall` for the same
+height. Every `textInput` has `text-entry` (16 px) text below `desk`, so
+iOS Safari does not zoom on focus (#1120); so has the move form's
+`<select>`. Other controls keep their existing sizes.
 
 Topic links in messages and the overview wrap anywhere at every width, so a
 long name never widens the reading column or the panel (#974). Below `desk`

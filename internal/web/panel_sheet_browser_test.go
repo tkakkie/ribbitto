@@ -422,7 +422,13 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 				t.Fatal(err)
 			}
 			plain.MustSetViewport(390, 844, 1, false)
-			// rod's element clicks do not return with scripts disabled.
+			// rod's element clicks and load waits do not return with scripts
+			// disabled; the test's own evaluations still run.
+			navigate := func(url string) {
+				if err := navigateLoaded(plain, url); err != nil {
+					t.Fatalf("%s: %v (at %s)", steps.current, err, steps.since())
+				}
+			}
 			follow := func(selector, want string) {
 				var at struct{ X, Y float64 }
 				if err := plain.MustEval(`s => { const r = document.querySelector(s).getBoundingClientRect(); return {x: r.x + r.width / 2, y: r.y + r.height / 2}; }`, selector).Unmarshal(&at); err != nil {
@@ -433,7 +439,7 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					t.Fatalf("without JavaScript, %s → %s: %v (at %s)", selector, want, err, steps.since())
 				}
 			}
-			plain.MustNavigate(server.URL + path + "/members").MustWaitLoad()
+			navigate(server.URL + path + "/members")
 			if problem := plain.MustEval(sheet).Str(); problem != "" {
 				t.Fatalf("without JavaScript: %s", problem)
 			}
@@ -442,7 +448,7 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			for _, width := range []int{390, 1000} {
 				step(fmt.Sprintf("without JavaScript: Mark as read at %d px", width))
 				plain.MustSetViewport(width, 800, 1, false)
-				plain.MustNavigate(server.URL + path + "/overview").MustWaitLoad()
+				navigate(server.URL + path + "/overview")
 				follow(`#side-panel button[form="read-form"]`, path)
 				read("102 plain")
 			}

@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -93,6 +95,25 @@ func (s *stepRunner) device(page *rod.Page, what string, fn func(p *rod.Page)) {
 	s.t.Helper()
 	p := page.Context(s.stepCtx).WithPanic(func(v any) { panic(v) })
 	runBounded(s.t, s.stepCtx, s.started, s.current+": "+what, func() { fn(p) })
+}
+
+// navigateLoaded navigates p to url and waits up to 8 s for the browser's load
+// event, for tabs with script execution disabled: rod's WaitLoad waits on a
+// load listener in page JavaScript, which never runs there, so a load still
+// pending when it starts never ends (#1129).
+func navigateLoaded(p *rod.Page, url string) error {
+	ctx, stop := context.WithTimeoutCause(p.GetContext(), 8*time.Second, errors.New("no load event within 8 s"))
+	defer stop()
+	p = p.Context(ctx)
+	loaded := p.WaitEvent(&proto.PageLoadEventFired{})
+	if err := p.Navigate(url); err != nil {
+		return fmt.Errorf("navigating to %s: %w", url, err)
+	}
+	loaded()
+	if ctx.Err() != nil {
+		return fmt.Errorf("loading %s: %w", url, context.Cause(ctx))
+	}
+	return nil
 }
 
 // deleteLangCookie removes the language cookie a test set, under its own 10 s.

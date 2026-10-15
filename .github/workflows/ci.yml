@@ -42,6 +42,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      # Its own cache (#1115) also restores Go's test result cache;
+      # this job's tests must run on every run as before.
+      GOFLAGS: -count=1
       RIBBITTO_TEST_DATABASE_URL: postgres://postgres:ribbitto-ci-only@127.0.0.1:5432/postgres?sslmode=disable
       RIBBITTO_REQUIRE_DB: "1"
       RIBBITTO_REQUIRE_BROWSER: "1"
@@ -54,6 +57,13 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # Own key: setup-go v6+ defaults to root go.mod, shared with tests.
+          # Primary-key hits never re-save, so a cache saved by a test job
+          # lacks the tools' dependencies (#1115).
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+            tools/tbls/go.sum
 
       - name: verify generated files
         run: |

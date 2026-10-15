@@ -18,11 +18,7 @@ the lint fixtures (`tools/lintfixtures`), the icon sprite
 (`tools/buildicons`), the tool downloads (`tools/download`), the worktree
 environment (`cmd/devdb`), the capacity runner (`cmd/capacity`) and
 `make dev` (`cmd/dev`) to Go; no Python remains.
-**Exceptions:** the Grok and Muse Code review launchers in `scripts/ai/` stay
-in bash until they are retired (#1066): they are the security boundary of the
-review workflow (`docs/workflow/running-grok.md`) and carry about 1,400 lines
-of bash tests. The Argon launcher that replaces them is Go (`cmd/argonreview`,
-#1065, at the maintainer's decision on 2026-10-15). Browser JavaScript in `web/static/` is application code, not
+**Exceptions:** Browser JavaScript in `web/static/` is application code, not
 tooling. `db-health` keeps a one-line shell test of two environment
 variables to decide whether to call `ai-health`: a guard on whether a tool
 runs, not logic of its own; it moves into `cmd/devdb` if it grows.

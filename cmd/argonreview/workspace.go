@@ -20,7 +20,7 @@ import (
 
 // target is one gh pr view snapshot of the pull request under review, so the
 // prompt, the worktree and the diff all describe the same commits even if the
-// pull request is pushed meanwhile (#1068, as in muse-review.sh).
+// pull request is pushed meanwhile (#1068).
 type target struct {
 	Number  int    `json:"-"`
 	Title   string `json:"title"`

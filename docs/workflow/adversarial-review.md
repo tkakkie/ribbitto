@@ -1,9 +1,8 @@
 # Adversarial review
 
 **A pull request gets the adversarial review its tier asks for before the
-maintainer is asked**, whatever its risk class: Grok (tier A), Muse Code
-(tier B), or none (tier C); after a completed Grok report, most re-reviews
-are Muse Code's (the completion rule). The required review must run; its
+maintainer is asked**, whatever its risk class: one Argon review for tier A
+or B, or none for tier C. The required review must run; its
 findings are advisory. It does not count towards the two review rounds. The
 initial review runs after the cross-review, after merging the current
 `main` (or confirming that no merge is needed) and after Copilot's one
@@ -15,8 +14,10 @@ reviewed again under the completion rule.
 
 The tier follows what the change alters, **wherever the code lives**
 (handlers, use cases, stores, queries, migrations, scripts), not its risk
-class, which only decides how much the maintainer reads. Grok's
-findings have come from concurrency, long-lived state and the gates
+class, which only decides how much the maintainer reads.
+
+**Historical evidence that led to the tiers.** Grok's
+findings came from concurrency, long-lived state and the gates
 themselves: up to #497, 8 of its 74 reviews (#334, #427 and #431 in real
 time and retention, #336 and #347 in launchers, #338, #340 and #364 in
 gates), and none of step 3's org, identity and web refactors (#339, #498).
@@ -24,15 +25,16 @@ In #760–#839,
 Grok's 23 first reviews found defects in 4 — #775 (read writes in posting's
 transaction), #795 (browser retry state), #833 (an htmx swap of a live form),
 #835 (a watch's ordering contract) — and its 7 re-runs none new (#840).
+
 A tier follows what the change does; a past review without findings is
 never a reason for a lower one.
 
 **Precedence: A, then B, then C.** **When in doubt, the higher tier.** In
-A's code areas Grok is for any change to what the code does or its order,
-except B's narrow carve-out; a change there that keeps both is tier B, by
-Muse Code (a move still gets one review: #427's had a defect).
+A's code areas a change to what the code does or its order is tier A,
+except B's narrow carve-out; a change there that keeps both is tier B
+(a move still gets one review: #427's had a defect).
 
-- **A — Grok required:**
+- **A — one Argon review required:**
   - in A's code areas — concurrency, caches or background work (goroutines,
     locks, timers, TTLs, clean-up and retention jobs), real-time delivery on
     the server (`internal/realtime/**`, the stream handlers and renderers in
@@ -55,16 +57,15 @@ Muse Code (a move still gets one review: #427's had a defect).
     which streams or members receive a frame, and authorisation before each
     send;
   - any change to the rules that guard these areas and the AI and CI
-    tooling: the AI launchers in `scripts/ai/**`; the trusted prompts and
+    tooling: the Argon launcher in `cmd/argonreview/`; the trusted prompts and
     review instructions in `.github/prompts/**` and
     `.github/instructions/**`; `.github/workflows/**`; the files that define
     the review gates (`docs/workflow/README.md`, `reviewing.md`,
-    `running-other-ai.md`, `running-grok.md`, this whole file, and
+    `running-other-ai.md`, `running-argon.md`, this whole file, and
     `.github/pull_request_template.md`); and the security and scoping rules
     in `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does
     not exempt a change from this item.
-- **B — one review by Muse Code, run by its launcher** (Antigravity may add
-  a review that never satisfies a tier):
+- **B — one Argon review required:**
   - a change in A's code areas that keeps behaviour and order: moves,
     extractions, new seams and their closures, and tests (including new
     tests of races or of the event log);
@@ -110,10 +111,8 @@ imports by its own area; A's second item applies to a tool's change too;
 tests that guard A's areas stay tier B; and loosening a check `make check`
 or CI runs stays at least tier B, in a listed tool too.
 
-The template's *Adversarial* field names the reviews: `Grok`,
-`Grok, then Muse Code re-review` (with the SHAs), `Muse Code (B)`,
-`Muse Code (Grok unavailable until <date>)`, or
-`skipped (C: <reason>)`, the reason naming the C case, for example
+The template's *Adversarial* field names the review: `Argon (A|B) at <SHA>`
+or `skipped (C: <reason>)`, the reason naming the C case, for example
 "dependency bump". "Behaviour unchanged" is never a C reason: in A's and B's
 areas that is tier B. The other AI checks the tier against what the diff
 does, not only the paths it touches.
@@ -133,62 +132,25 @@ request at its head commit, each finding with a disposition. After a later
 push (a fix for a finding, a Copilot follow-up or a merge of `main`
 included) whose diff from the last adversarially reviewed head (or the
 base, if none) matches tier A or B, the **pull request's** tier is
-recomputed over its whole diff at the new head, never lower than that
-diff's, and reviewed again:
-
-- a tier C pull request lifted to B or A gets its first review, and a tier
-  A one without a completed Grok report gets Grok;
-- a tier A pull request with a completed Grok report gets **Grok again**
-  when the commits since the **last Grok-reviewed head** — however many
-  Muse Code re-reviews came between — change anything A's second item
-  covers, add anything of A's first item beyond what a fix of a reported
-  finding needs, or the maintainer asks; otherwise **Muse Code**: fixes
-  (after the follow-up check in [reviewing](reviewing.md)), answers to
-  Copilot or the cross-review,
-  merges of `main` (what `main` brings was reviewed in its own pull
-  request; a conflict resolution beyond combining both sides counts as
-  this pull request's change) and tier B additions. When in doubt, Grok;
-- a tier B pull request gets Muse Code again.
+recomputed over its whole diff at the new head and never lowered. Argon
+reviews again. A tier C pull request lifted to B or A gets its first review,
+compared against the base when no reviewed head exists. Fixes first get the
+follow-up check in [reviewing](reviewing.md).
 
 A pull request already marked ready is converted back to a draft until that
-review completes. An earlier report
-covers a later head only when every later commit is tier C. A time-out, an outage or an
-empty run is not a review: retry once, then ask the maintainer.
-When Grok is unavailable (quota or outage), the failed runs and their
-errors are recorded on the pull request, a tier A pull request gets Muse
-Code under the same rule, and the maintainer decides whether to merge or
-wait for Grok.
+review completes. An earlier report covers a later head only when every
+later commit is tier C. A failed, timed-out or empty run never counts as a
+review; record these runs and their failures on the pull request. A
+time-out, an outage, exhausted quota or an empty run is retried once, then
+the maintainer decides.
 
-## Running Grok
+## Running Argon
 
-Run it from the maintainer's checkout, taking the launcher from `main`:
+Use `cmd/argonreview` through the trusted Go invocation in
+[`running-argon.md`](running-argon.md), which documents its setup, security
+boundary and limits. Build from clean `origin/main` as documented there;
+never build or run a pull request's copy of the launcher.
 
-```sh
-git fetch origin main &&
-  launcher=$(git show origin/main:scripts/ai/grok-review.sh) &&
-  bash -c "$launcher" grok-review <pr-number>
-```
-
-Never run a pull request's copy of the launcher; its security boundary and
-limits are in [`running-grok.md`](running-grok.md).
-
-## Muse Code
-
-Muse Code (#330, from #246's trial) is tier B's reviewer and, under the
-completion rule, tier A's re-reviewer after Grok (#840) and fallback when
-Grok is unavailable. It may
-also review any other pull request as an optional, extra adversarial
-reviewer; an extra run never satisfies or waives a requirement (the
-required tier's review, the Claude ↔ Codex rounds, Copilot's follow-up, the
-maintainer's decisions).
-
-- It reviews the same head commit with the same context Grok gets, run as in
-  [*Running Muse Code*](running-other-ai.md#running-muse-code).
-- Claude posts the report as `**Adversarial review — Muse Code** (at <SHA>)`,
-  or for a tier A re-review
-  `**Adversarial review — Muse Code** (re-review after Grok at <SHA>, at <SHA>)`.
-  A valid finding gets a disposition like any other: fixed, a follow-up
-  issue, or declined with the reason.
-- If an **extra** run fails (a provider outage, the time limit), record that
-  in the pull request and carry on. A failed **required** run is retried
-  once, then the maintainer decides.
+Post the report as `**Adversarial review — Gemini 4 Argon (tier A|B)** (at <SHA>)`.
+Each finding gets a disposition: fixed, a follow-up issue, or declined with
+the reason.

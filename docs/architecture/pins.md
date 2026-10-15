@@ -1,9 +1,10 @@
-# Pin delivery *(planned, #880)*
+# Pin delivery *(partially implemented, #880)*
 
 The [domain rules](../domain/pins.md) put pin metadata on messages, owned
 by `conversation`. The maintainer agreed this design on 2026-10-12 (#880);
-nothing here changes the current stream contract until the split issues
-implement it after M6.
+the generic channel-state writer seam is implemented in realtime (#891).
+Pin storage is implemented (#887); the use cases, adapters and browser
+delivery remain separate work.
 
 ## Durable invalidation, current display
 
@@ -46,6 +47,17 @@ disappearance cannot wedge replay; the existing post/move rules remain
 those in [replay](replay.md#vanished-messages).
 
 ## Ordering, authorization and cost
+
+`realtime.ChannelStateSource` supplies consumer-defined triggers and fresh
+whole-state reads/renders; `InterestChannelState` selects the connection's
+channel across topics. It is not yet exposed as a web parameter (#892).
+The writer validates the cursor before the connect refresh, then classifies
+scoped triggers before message rendering/filtering. It uses
+`ChannelStateInterval` (one second), a dirty flag and the existing combined
+wait; triggers committed during refresh are classified in later batches.
+It forces refresh frames to omit `id:` and checks the connection's channel
+and bound membership immediately before each send. Read/render/send failures
+end delivery. The adapter owns frame names, bounded reads and shared renders.
 
 The single stream writer sends at most one pending pins refresh between
 durable batches (currently at most 100 events), with a fixed coalescing

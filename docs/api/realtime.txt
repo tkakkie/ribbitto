@@ -12,6 +12,10 @@ type Cache[K comparable, V any] struct // Cache is a bounded, expiring in-memory
   func (*Cache[K, V]).Waiting(key K) int // Waiting reports how many callers have joined the load in flight for key (0 if none), so tests can synchronise on it instead of sleeping.
 type CachedEvents struct // CachedEvents is an EventReader that shares reads between an organisation's streams: streams at the same cursor share a full batch's read; for a short one, the read's joiners share one more private read.
   func (*CachedEvents).EventsAfter(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, after int64, limit int) ([]Event, error) // EventsAfter implements EventReader.
+const ChannelStateInterval time.Duration = 1000000000 // ChannelStateInterval bounds refresh frequency while coalescing durable bursts.
+type ChannelStateSource interface // ChannelStateSource classifies durable invalidations and reads/renders fresh, bounded whole state for the subscription's organisation/channel and context's language.
+  func (ChannelStateSource).Refresh(context.Context, Subscription) (Outgoing, error)
+  func (ChannelStateSource).Trigger(Event) bool
 type Connection struct // Connection names who holds a stream: the organisation from the URL, and the account and session that authenticated the request.
   field Account github.com/tkakkie/ribbitto/internal/kernel.ID
   field Organization github.com/tkakkie/ribbitto/internal/kernel.ID
@@ -63,6 +67,7 @@ type Hub struct // Hub holds, per organisation, the highest committed event sequ
   func (*Hub).Wait(ctx context.Context, org github.com/tkakkie/ribbitto/internal/kernel.ID, after int64) (int64, error) // Wait blocks until the organisation's latest sequence is greater than after and returns that sequence, at once if it already is.
   func (*Hub).Waiting(org github.com/tkakkie/ribbitto/internal/kernel.ID) int // Waiting reports how many durable or combined waits for the organisation are counted as blocked, so tests can synchronise instead of sleeping.
 type Interest string // Interest identifies output a connection asks to receive, never permission.
+const InterestChannelState Interest = "channel-state" // InterestChannelState requests whole current state for the channel, across topics.
 const InterestMessages Interest = "messages" // InterestMessages requests posts and moves in the selected channel or topic.
 const InterestPresence Interest = "presence" // InterestPresence requests current presence frames from its owner.
 const InterestSidebar Interest = "sidebar" // InterestSidebar requests shared unread frames for posts not selected as messages, plus full current recounts when a sidebar source is supplied.
@@ -110,6 +115,7 @@ type SidebarWatcher interface // SidebarWatcher optionally extends SidebarSource
 type Stream struct // Stream runs the per-connection delivery loop.
   field Authorizer Authorizer
   field BatchSize int // BatchSize bounds each read; zero means DefaultBatchSize.
+  field ChannelState ChannelStateSource // ChannelState supplies bounded refreshes independently of message selection.
   field Events EventReader
   field Heartbeat time.Duration // Heartbeat is how long the loop waits on the hub before it sends a heartbeat (or pending progress checkpoint) and waits again; nonpositive sends no heartbeats.
   field Hub *Hub

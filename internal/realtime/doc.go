@@ -40,6 +40,12 @@
 // quiet period nor a backlog loses pending work. Rendering precedes authorization,
 // and sidebar frames check the organisation and bound member, preserving the
 // durable cursor.
+// Channel-state sources supply bounded whole-state refreshes after cursor
+// validation on connect, then on channel-scoped durable triggers independently
+// of message/topic selection. A dirty flag and fixed deadline use the same
+// writer and combined wait; authorization checks the connection's channel and
+// bound member immediately before sending without an SSE id. Web adapters
+// supply kinds, rendering and language-specific sharing; none are wired yet.
 // Production presence and
 // typing are implemented; web renders their indicators.
 // Web's hidden sink receives sidebar/presence payloads. The hub is also the

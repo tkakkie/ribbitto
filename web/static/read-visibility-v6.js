@@ -19,11 +19,15 @@
     // reads everything shown, and its 429 retries pass a covering panel.
     let intent = null;
     const needed = () => !navigating && document.visibilityState === 'visible' && form.isConnected;
-    // An open panel out of flow covers the conversation (an overlay, or a
-    // phone's sheet): automatic reading waits, Mark as read never does.
+    // A modal panel covers the conversation (an overlay, or a phone's sheet):
+    // automatic reading waits, Mark as read never does. side-panel-v3.js
+    // alone decides it; the synchronous panel-cover event asks it to publish
+    // aria-modal for the current size first. Its listener is in place from
+    // htmx:load, which follows every deferred script.
     const covered = () => {
       const panel = document.getElementById('side-panel');
-      return panel !== null && getComputedStyle(panel).position !== 'static';
+      panel?.dispatchEvent(new Event('panel-cover'));
+      return panel?.getAttribute('aria-modal') === 'true';
     };
     const clearRetry = () => {
       clearTimeout(timer);

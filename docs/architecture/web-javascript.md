@@ -19,7 +19,7 @@ htmx sends resync requests. The markup contract is in
 - `message-stream-v11.js` observes `checkpoint` to update only `sse-connect`'s
   `after`, monotonically and independently of applied/shown cursors. It emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
-  `read-visibility-v5.js` initializes on scoped `htmx:load`; automatic
+  `read-visibility-v6.js` initializes on scoped `htmx:load`; automatic
   triggers send the snapshot, then the latest applied cursor.
   One request and one timer per page coalesce cursors. A 429 retries
   until success or hide/removal/navigation, with jittered exponential backoff

@@ -297,7 +297,7 @@ func sheetHeight(panel string) string {
 // below it the block covers the conversation over a dimmed page, whose
 // dimmed area is a link that closes it: an overlay on the conversation's
 // right side, below desk a bottom sheet. The heading takes focus when the
-// panel opens; side-panel-v2.js makes the covering panel a modal dialog,
+// panel opens; side-panel-v3.js makes the covering panel a modal dialog,
 // adds Escape and returns focus.
 func sidePanel(page ChannelPage) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {

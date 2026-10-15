@@ -29,6 +29,10 @@
   // flow: an overlay, or a phone's sheet) and is a modal dialog: everything
   // else on the page is inert, Tab stays inside, and widening the window
   // releases it to the complementary panel beside the conversation.
+  // Only this script decides it; aria-modal publishes it, and
+  // read-visibility-v6.js pauses automatic reading on it. That script first
+  // reads at htmx:load, which follows every deferred script, and adds its
+  // resize listener then: on load and on each resize this runs first.
   const panel = document.getElementById("side-panel");
   const background = [];
   for (let node = panel; node.parentElement && node !== document.body; node = node.parentElement) {

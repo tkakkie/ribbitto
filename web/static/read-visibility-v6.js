@@ -19,12 +19,11 @@
     // reads everything shown, and its 429 retries pass a covering panel.
     let intent = null;
     const needed = () => !navigating && document.visibilityState === 'visible' && form.isConnected;
-    // An open panel out of flow covers the conversation (an overlay, or a
-    // phone's sheet): automatic reading waits, Mark as read never does.
-    const covered = () => {
-      const panel = document.getElementById('side-panel');
-      return panel !== null && getComputedStyle(panel).position !== 'static';
-    };
+    // A modal panel covers the conversation (an overlay, or a phone's sheet):
+    // automatic reading waits, Mark as read never does. side-panel-v3.js
+    // alone decides it and has set aria-modal before this reads it, on load
+    // and on resize (that script's comment says why).
+    const covered = () => document.getElementById('side-panel')?.getAttribute('aria-modal') === 'true';
     const clearRetry = () => {
       clearTimeout(timer);
       timer = null;
@@ -117,6 +116,7 @@
     document.addEventListener('visibilitychange', visibility);
     document.addEventListener('read-applied', visible);
     // Crossing a breakpoint can uncover the conversation with the panel open.
+    // Added after side-panel-v3.js's listener, so it runs after that decides.
     window.addEventListener('resize', visible);
     window.addEventListener('pagehide', navigation);
     window.addEventListener('pageshow', restore);

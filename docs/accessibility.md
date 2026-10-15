@@ -129,7 +129,7 @@ Enter and with Space at desktop and phone width.
 A side panel (#874) is an `<aside>` labelled by its `h2`, which takes focus
 when the panel opens (`autofocus` with `tabindex="-1"`). The open panel's
 header control has `aria-current="true"`. Its close link, and Escape through
-`side-panel-v2.js`, return to the conversation; Escape acts only with focus
+`side-panel-v3.js`, return to the conversation; Escape acts only with focus
 in the panel or on nothing and no popover open, so Escape in the composer
 never closes the panel (a draft is still lost by leaving the page). After that close, focus returns to the control that opened the panel:
 its id crosses the page load in `sessionStorage`.

@@ -87,14 +87,18 @@ breakpoints ([`ui-code.md`](ui-code.md#dimension-tokens)) place it (#972):
 
 Below `wide` the overlay and the sheet are one modal: `#panel-backdrop` dims
 the whole page in `scrim`, a link to the close URL that only a pointer
-reaches. The panel covers the conversation exactly while it is out of flow,
-which scripts read as its computed `position`: `side-panel-v2.js` makes it
-a modal dialog over an inert page ([accessibility](accessibility.md)) and
-`read-visibility-v5.js` pauses automatic reading, while the stream still
-updates the page behind. The header's **Mark as read** is hidden below
-`wide`, where the overview shows a `submitButtonFor` the same
-`#read-form`. Without JavaScript the panel is its own page: its links still
-close it and page the members.
+reaches. The panel covers the conversation exactly while it is out of flow.
+`side-panel-v3.js` alone decides that, from the panel's computed `position`
+on load and on each resize, and makes it a modal dialog over an inert page
+([accessibility](accessibility.md)); its `aria-modal="true"` is the
+published state. `read-visibility-v6.js` reads that attribute and pauses
+automatic reading, while the stream still updates the page behind. The
+reader reads it first at `htmx:load`, after every deferred script, and adds
+its resize listener then, after the panel script's, so on load and on each
+resize it sees the state the panel script has just set. The header's **Mark
+as read** is hidden below `wide`, where the overview shows a
+`submitButtonFor` the same `#read-form`. Without JavaScript the panel is its
+own page: its links still close it and page the members.
 
 ## Short heights
 

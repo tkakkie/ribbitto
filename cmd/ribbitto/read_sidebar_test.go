@@ -98,6 +98,7 @@ func (f readSidebarFixture) read(t *testing.T, path string) {
 }
 
 func TestReadSidebarHTTPAllTabs(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	f := newReadSidebarFixture(t, pool)
 	pages := []string{f.feed, f.topicA, view.ConversationURL("read", f.channel, &f.b), f.topicA + "?before=6", f.feed + "/members"}
@@ -150,6 +151,7 @@ func (c *readSidebarCounts) TraceQueryStart(ctx context.Context, conn *pgx.Conn,
 }
 
 func TestReadSidebarHTTPIsolationAndNoop(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	counter := &readSidebarCounts{sidebarGate: sidebarGate{started: make(chan struct{}), release: make(chan struct{})}, counts: make(map[[2]kernel.ID]int)}
 	config := pool.Config()

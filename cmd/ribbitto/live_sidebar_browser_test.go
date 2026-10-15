@@ -13,6 +13,7 @@ import (
 )
 
 func TestLiveSidebarBrowser(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	browser := launchBrowser(t, ctx, "production sidebar acceptance")

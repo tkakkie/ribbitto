@@ -119,6 +119,7 @@ func TestSidebarBadgeRendering(t *testing.T) {
 }
 
 func TestLiveSidebarBranchDisplacement(t *testing.T) {
+	t.Parallel()
 	f := newSidebarBranchFixture(t)
 	endpoint := strings.Replace(streamEndpoint(t, f.path), "want=messages", "want=sidebar", 1)
 	var connections []<-chan sseEvent

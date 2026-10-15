@@ -40,6 +40,7 @@ const sidebarUnreadBrowserClock = `(() => {
 })()`
 
 func TestSidebarUnreadBrowser(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	browser := launchBrowser(t, ctx, "sidebar acceptance")

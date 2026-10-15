@@ -149,11 +149,14 @@ Settled in #305:
   values with explicit `from` still work. The event reader decodes the move's
   routing and message IDs and validates its payload. The feed delivers moves
   through the render cache shared with topic pages.
+  An independent [member budget](../architecture/rate-limits.md#member-admission-for-branching)
+  admits requests before parsing; refusal is empty 429 with `Retry-After: 6`,
+  with no move, event or redirect.
 - **Selection:** feed and topic views have ordinary branch forms; JavaScript
   disables other sources and the source destination after selection. The
-  destination list uses the existing bounded topic list. Plain errors render
+  destination list uses the existing bounded topic list. Plain 409/422 errors render
   the conversation again (including its topic and paging bound); enhanced
-  errors replace only feedback. Success navigates to the destination topic
+  409/422 errors replace only feedback. Success navigates to the destination topic
   (303 plain, `HX-Redirect` enhanced). Live replacements clear the replaced
   checkbox's selection and refresh single-source constraints, including on
   duplicate replay; other items keep their selections.

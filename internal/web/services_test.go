@@ -39,6 +39,7 @@ func testServices(overrides ...func(*Services)) Services {
 	s.ReadLimits = middleware.NewReadRateLimiter(time.Now)
 	s.CreateLimits = middleware.NewChannelCreationRateLimiter(time.Now)
 	s.ResyncLimits = middleware.NewSidebarResyncRateLimiter(time.Now)
+	s.BranchLimits = middleware.NewBranchRateLimiter(time.Now)
 	s.Branching = testBrancher(&fakeBranchWriter{})
 	for _, override := range overrides {
 		override(&s)
@@ -55,8 +56,8 @@ func asAlice(s *Services) {
 // postgresServices wires the PostgreSQL-backed services the way
 // cmd/ribbitto's buildHandler does, around the caller's sessions so a suite
 // can control their clock. A non-empty setupToken enables setup; signUp adds
-// sign-up with the operator's switch on. Rate limits stay off: a suite that
-// tests them sets Limits.
+// sign-up with the operator's switch on. Authentication rate limits stay
+// off: a suite that tests them sets Limits.
 func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessions, setupToken string, signUp bool) Services {
 	t.Helper()
 	hasher, err := identity.NewHasher()
@@ -76,6 +77,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 	s.ReadLimits = middleware.NewReadRateLimiter(time.Now)
 	s.CreateLimits = middleware.NewChannelCreationRateLimiter(time.Now)
 	s.ResyncLimits = middleware.NewSidebarResyncRateLimiter(time.Now)
+	s.BranchLimits = middleware.NewBranchRateLimiter(time.Now)
 	if setupToken != "" {
 		s.Setup, s.SetupSessions = orgpg.NewSetup(pool, hasher, setupToken,
 			accountCreator,

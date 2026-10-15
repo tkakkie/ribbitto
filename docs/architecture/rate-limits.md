@@ -94,11 +94,11 @@ there is no success guarantee under sustained overload.
 ## Member admission for channel creation
 
 Channel creation requires an independent `Services.CreateLimits` instance
-(shared with neither reads nor typing); missing or shared wiring fails startup.
+(shared with neither reads, typing nor branching); missing or shared wiring fails startup.
 Its `MemberRateLimiter` allows burst 10, then
 one token per minute per trusted organisation/member pair. Session and
 membership resolution precede admission, which precedes form parsing and
-all channel work. Refusal is empty 429 with `Retry-After: 60` and creates
+all channel work. Refusal is empty 429 with `Retry-After: 6` and creates
 nothing. Failed admitted attempts also consume a token. Other members and
 organisations have independent budgets, as do typing and reads. The same
 10,000-bucket bound and full-refill eviction rule apply. State is in memory
@@ -109,7 +109,7 @@ budgets. The separate persistent count cap is described in
 ## Member admission for sidebar resyncs
 
 The sidebar resync POST requires an independent `Services.ResyncLimits`
-instance, shared with neither typing, reads nor creation; missing or shared
+instance, shared with neither typing, reads, creation nor branching; missing or shared
 wiring fails startup. Its `MemberRateLimiter` allows an initial, unmeasured
 32 requests/s with burst 32 per trusted organisation/member pair, across
 all tabs, sessions and addresses. The script's exponential backoff starts
@@ -129,6 +129,19 @@ budgets. A 429 follows the script's failed-request path: recovery stays
 open and retries with backoff. Only a successful request with an applied,
 covering snapshot and no intervening loss clears recovery; overload has no
 convergence guarantee.
+
+## Member admission for branching
+
+Branch POSTs require independent `Services.BranchLimits`; missing or shared
+wiring fails startup. Burst 20, then one token every 6 s per trusted
+organisation/member: enough to tidy a channel, while moves recount each
+viewer's sidebar at most ~10 times/min. CSRF, session and
+membership precede admission; parsing and branch work follow it. Failed
+attempts spend tokens. Refusal is empty 429 with `Retry-After: 6`, without
+redirect, move or event, for plain and htmx forms. Channels, topics, sessions
+and addresses share it. Other members and organisations have independent
+budgets. The same 10,000-bucket bound, full-refill eviction
+and per-process reset rules apply.
 
 ## Reverse proxies
 

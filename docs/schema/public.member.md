@@ -56,6 +56,7 @@
 erDiagram
 
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.event_log" }o--|| "public.member" : "FOREIGN KEY (organization_id, audience_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.channel_read" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.member" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
@@ -80,6 +81,8 @@ erDiagram
   timestamp_with_time_zone created_at
   uuid topic_id FK
   bigint moved_event_seq
+  uuid pinned_by_member_id FK
+  timestamp_with_time_zone pinned_at
 }
 "public.event_log" {
   uuid organization_id FK

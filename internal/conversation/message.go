@@ -14,7 +14,7 @@ import (
 // ErrInvalidBody wraps a body that breaks ValidateMessageBody.
 var ErrInvalidBody = errors.New("invalid message body")
 
-// ErrMessageNotFound means no message has this event_seq in the caller's organisation
+// ErrMessageNotFound means no message has the requested key in the caller's organisation
 // and channel, including when the message exists in another scope.
 var ErrMessageNotFound = errors.New("message not found")
 

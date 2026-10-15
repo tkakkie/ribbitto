@@ -47,13 +47,13 @@ unread never queries `member`. Feed, topic and `?before=` pages
 return `PageCounts`: channel and topic count maps, the feed's first unread
 and the selected topic's first unread (zero without a selection).
 
-`Reader.Page`, `Reader.ChannelList` and `Reader.Sidebar` share one private context
-loader for the current channel, all channels in name/ID order, the optional
-selected topic and the first 50 topics (default first, then case-insensitive
-name/ID). The loader uses reads bound to the caller's snapshot and does not
-count. Page callers keep counts after their history and
-cursor reads; the independent sidebar caller reads its sequence after context,
-then counts in that same snapshot.
+`Reader.ChannelList` delegates to `Reader.Sidebar` with no selected topic.
+`Reader.Page` and `Reader.Sidebar` share a context loader: current channel,
+channels in name/ID order, optional selected topic, first 50 topics (default
+first, then case-insensitive name/ID). Its reads use the caller's snapshot.
+Pages read history, cursor, then counts; standalone sidebars read sequence,
+then counts. Pages render the snapshot sequence from their event cursor;
+standalone sidebars keep `SidebarSnapshot.SnapshotSeq`.
 
 `Reader.Sidebar` independently reads that context,
 with both count maps in the same read-only repeatable-read snapshot. It validates

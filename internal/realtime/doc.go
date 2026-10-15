@@ -19,7 +19,12 @@
 // its declared kinds' generations, its heartbeat and its context together.
 // Owner reads supply bounded frames after each durable batch, authorized
 // immediately before sending without moving the cursor. Sidebar sources supply
-// full recounts at connect and on consumer-defined organisation-wide triggers.
+// full recounts at connect and on consumer-defined triggers. Production posts
+// trigger only the author's streams; moves trigger only current-channel streams.
+// Member watches cover reads and resyncs. Posts not selected as messages send a
+// shared unread frame through UnreadRenderer for the sidebar interest, even
+// with no sidebar source.
+// These frames carry no SSE id and pass audience and final bound-member checks.
 // Optional member watches subscribe before the first recount and release on exit.
 // A shared RecountLimit bounds computation independently of stream registrations;
 // a bounded slot wait defers busy recounts without losing dirty state.

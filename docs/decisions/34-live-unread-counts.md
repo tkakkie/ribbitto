@@ -3,7 +3,7 @@
 **Decided** (#1039, 2026-10-14; documented by #1043): counts are exact at
 page load and at every successful resync, approximate in between, and always
 exact again after the next successful resync. PRs 2–3 of #1039 implement the
-contract, client increments and resync; PR 4's delays and server bound remain planned.
+contract, client increments and resync; PR 4 implements the delays and server bound.
 Rules: [unread](../domain/unread.md#counts); composition:
 [unread counts](../architecture/unread-counts.md); transport:
 [streaming](../architecture/streaming.md); markup:

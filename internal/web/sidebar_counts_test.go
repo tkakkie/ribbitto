@@ -42,7 +42,7 @@ func TestSidebarCountsMarkup(t *testing.T) {
 	for _, lang := range []string{"en", "ja"} {
 		for _, kind := range []string{"feed", "feed older", "topic", "topic older", "unlisted", "unlisted older", "unlisted zero", "members"} {
 			t.Run(lang+"/"+kind, func(t *testing.T) {
-				page := conversation.ChannelPage{EventCursor: new(int64(42)), PageCounts: conversation.PageCounts{SnapshotSeq: 42,
+				page := conversation.ChannelPage{EventCursor: new(int64(42)), PageCounts: conversation.PageCounts{
 					ChannelCounts: map[kernel.ID]int64{}, TopicCounts: map[kernel.ID]int64{},
 				}}
 				counts := []int64{0, 1, 99, 100}
@@ -107,7 +107,7 @@ func TestSidebarCountsMarkup(t *testing.T) {
 				catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 					frame, err = RenderSidebar(r.Context(), org.Membership{Organization: org.Organization{Slug: "acme"}}, conversation.SidebarSnapshot{
 						Current: page.Current, Channels: page.Channels, Topics: page.Topics, Topic: page.Topic,
-						ChannelCounts: page.ChannelCounts, TopicCounts: page.TopicCounts, SnapshotSeq: page.SnapshotSeq,
+						ChannelCounts: page.ChannelCounts, TopicCounts: page.TopicCounts, SnapshotSeq: *page.EventCursor,
 					})
 				})).ServeHTTP(httptest.NewRecorder(), r)
 				if err != nil {

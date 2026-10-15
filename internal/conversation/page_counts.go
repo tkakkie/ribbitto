@@ -12,7 +12,6 @@ import (
 // PageCounts holds capped sidebar counts and uncapped first unread sequences;
 // First sequences are zero when absent or disabled. Older history uses the same counts.
 type PageCounts struct {
-	SnapshotSeq                       int64
 	ChannelCounts, TopicCounts        map[kernel.ID]int64
 	FeedFirstUnread, TopicFirstUnread int64
 }

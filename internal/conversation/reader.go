@@ -65,7 +65,6 @@ func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID
 		}
 		page.EventCursor = &seq
 		page.PageCounts, err = s.pageCounts(ctx, snapshot, m, channelID, page.Channels, page.Topics, topicID)
-		page.SnapshotSeq = seq
 		return err
 	})
 	if err != nil {

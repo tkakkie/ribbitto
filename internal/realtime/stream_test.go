@@ -215,15 +215,6 @@ func TestStreamReplaysThenDeliversLive(t *testing.T) {
 	}
 }
 
-func runStreamAsync(ctx context.Context, s Stream, cursor int64, send Sender) <-chan result {
-	done := make(chan result, 1)
-	go func() {
-		c, err := s.Run(ctx, sub, cursor, send)
-		done <- result{c, err}
-	}()
-	return done
-}
-
 // A fresh hub knows no sequence, so the loop must drain every batch before
 // it waits, and skipped events must still move the cursor.
 func TestStreamDrainsBatchesOnAColdHub(t *testing.T) {
@@ -243,7 +234,7 @@ func TestStreamDrainsBatchesOnAColdHub(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
-	done := runStreamAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render), BatchSize: 2}, 0, send)
+	done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render), BatchSize: 2}, 0, send)
 	send.waitFor(t, 1, 6, 7)
 
 	cancel()
@@ -276,7 +267,7 @@ func TestStreamRechecksAccessBeforeEachSend(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
-	done := runStreamAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render)}, 0, send)
+	done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(render)}, 0, send)
 	send.waitFor(t, 1)
 	// Cancel only once event 2 has been checked: the loop checks
 	// cancellation before every event, so cancelling earlier would stop it
@@ -311,7 +302,7 @@ func TestStreamDeniesAccessLostWhileRendering(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	send := newRecorder()
-	done := runStreamAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(renderSlowly)}, 0, send)
+	done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(authorize), Renderer: rendererFunc(renderSlowly)}, 0, send)
 	<-rendering
 	mu.Lock()
 	member = false // the membership is removed while event 2 renders
@@ -634,7 +625,7 @@ func TestStreamResetsOnAGap(t *testing.T) {
 			// waits fails instead of hanging.
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
-			got := <-runStreamAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send)
+			got := <-runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 10, send)
 			if got.err != nil || got.cursor != 10 {
 				t.Fatalf("Run = %d, %v; want 10 and the reset sent", got.cursor, got.err)
 			}
@@ -668,7 +659,7 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 		log := &fakeLog{boundary: 5, events: []Event{posted(6, channelA)}}
 		ctx, cancel := context.WithCancel(t.Context())
 		send := newRecorder()
-		done := runStreamAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 5, send)
+		done := runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 5, send)
 		send.waitFor(t, 6)
 		cancel()
 		if got := <-done; got.cursor != 6 || !errors.Is(got.err, context.Canceled) {
@@ -680,7 +671,7 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 		send := newRecorder()
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
-		got := <-runStreamAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 4, send)
+		got := <-runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 4, send)
 		if got.err != nil || got.cursor != 4 || !slices.Equal(send.ids(), []int64{4}) || !slices.Equal(send.eventNames(), []string{"reset"}) {
 			t.Fatalf("Run = %d, %v, sent %v %v; want 4, nil and only a reset with id 4", got.cursor, got.err, send.eventNames(), send.ids())
 		}
@@ -691,7 +682,7 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 		send := newRecorder()
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
-		done := runStreamAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 0, send)
+		done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 0, send)
 		send.waitFor(t, 1)
 		waitForHubWaiters(t, hub, orgA, 1)
 		// Retention expires the log past the stream's cursor, then a new
@@ -710,7 +701,7 @@ func TestStreamResetsBelowTheBoundary(t *testing.T) {
 		defer cancel(nil)
 		log := cancelOnRead{log: &fakeLog{boundary: 5}, cancel: cancel, cause: cause}
 		send := newRecorder()
-		got := <-runStreamAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 4, send)
+		got := <-runAsync(ctx, Stream{Hub: NewHub(), Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render)}, 4, send)
 		cursor, err := got.cursor, got.err
 		if cursor != 4 || !errors.Is(err, cause) || len(send.ids()) != 0 {
 			t.Fatalf("Run = %d, %v, sent %v; want 4, %v and nothing sent", cursor, err, send.ids(), cause)

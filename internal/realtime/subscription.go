@@ -8,7 +8,8 @@ type Interest string
 const (
 	// InterestMessages requests posts and moves in the selected channel or topic.
 	InterestMessages Interest = "messages"
-	// InterestSidebar requests full current recounts from the supplied source.
+	// InterestSidebar requests shared unread frames for posts not selected as
+	// messages, plus full current recounts when a sidebar source is supplied.
 	InterestSidebar Interest = "sidebar"
 	// InterestPresence requests current presence frames from its owner.
 	InterestPresence Interest = "presence"

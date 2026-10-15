@@ -48,24 +48,6 @@ func (s *Reader) Sidebar(ctx context.Context, m org.Membership, channelID kernel
 	return sidebar, nil
 }
 
-// ChannelListPage is a sidebar snapshot, with the channel's topics nested and
-// no topic selected, plus the cursor its stream resumes after.
-type ChannelListPage struct {
-	SidebarSnapshot
-	EventCursor int64
-}
-
-// ChannelList reads the channel list page in one snapshot:
-// the cursor comes from the snapshot that counted, so the stream neither
-// skips nor repeats a change. The list shows no divider, so it reads counts only.
-func (s *Reader) ChannelList(ctx context.Context, m org.Membership, channelID kernel.ID) (ChannelListPage, error) {
-	sidebar, err := s.Sidebar(ctx, m, channelID, nil)
-	if err != nil {
-		return ChannelListPage{}, fmt.Errorf("reading channel list snapshot: %w", err)
-	}
-	return ChannelListPage{SidebarSnapshot: sidebar, EventCursor: sidebar.SnapshotSeq}, nil
-}
-
 // sidebarContext excludes counts so callers can read history and
 // their cursor before counting, all within the snapshot they already own.
 type sidebarContext struct {

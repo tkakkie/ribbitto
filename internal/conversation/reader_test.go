@@ -198,7 +198,8 @@ func TestReaderChannelListSnapshot(t *testing.T) {
 					f.bound(s, "bind counts")
 					return sidebarCountsFake{f}
 				})
-			page, err := reader.ChannelList(t.Context(), membership, kernel.ID{2})
+			// The channel list page is a sidebar snapshot with no topic selected.
+			page, err := reader.Sidebar(t.Context(), membership, kernel.ID{2}, nil)
 			want, wantErr := order, error(nil)
 			if fail != "" {
 				want, wantErr = order[:slices.Index(order, fail)+1], f.err
@@ -206,7 +207,7 @@ func TestReaderChannelListSnapshot(t *testing.T) {
 			if !reflect.DeepEqual(f.calls, want) || !errors.Is(err, wantErr) {
 				t.Fatalf("calls/error = %v/%v, want %v/%v", f.calls, err, want, wantErr)
 			}
-			if fail == "" && (page.EventCursor != 7 || page.Topic != nil || !reflect.DeepEqual(page.Channels, f.channels) || !reflect.DeepEqual(page.Topics, f.topics) ||
+			if fail == "" && (page.SnapshotSeq != 7 || page.Topic != nil || !reflect.DeepEqual(page.Channels, f.channels) || !reflect.DeepEqual(page.Topics, f.topics) ||
 				page.ChannelCounts[kernel.ID{3}] != 4 || page.TopicCounts[kernel.ID{5}] != 6) {
 				t.Fatalf("page = %+v, want the snapshot's lists, counts and cursor 7", page)
 			}

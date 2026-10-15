@@ -629,7 +629,7 @@ func (fakePostReads) Read(context.Context, org.Membership, kernel.ID, *kernel.ID
 	return nil
 }
 
-func (f fakeMessages) ChannelList(ctx context.Context, m org.Membership, id kernel.ID) (conversation.ChannelListPage, error) {
-	page, err := f.Page(ctx, m, id, nil, nil)
-	return conversation.ChannelListPage{SidebarSnapshot: conversation.SidebarSnapshot{Current: page.Current, Channels: page.Channels, Topics: page.Topics}, EventCursor: 42}, err
+func (f fakeMessages) Sidebar(ctx context.Context, m org.Membership, id kernel.ID, topic *kernel.ID) (conversation.SidebarSnapshot, error) {
+	page, err := f.Page(ctx, m, id, topic, nil)
+	return conversation.SidebarSnapshot{Current: page.Current, Channels: page.Channels, Topics: page.Topics, SnapshotSeq: 42}, err
 }

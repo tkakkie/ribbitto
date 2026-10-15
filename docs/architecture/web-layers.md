@@ -85,12 +85,12 @@ htmx does only requests and swaps; the server and templ own the HTML.
   Member identity, selected topic and the resync trigger are specified in the
   [sidebar script contract](web-javascript.md#javascript).
 
-- Every channel/topic page, including `?before=` and panel pages, carries
-  `data-event-cursor` on `#organization-stream`, the outer layout div outside
-  every swap target. It wraps the sidebar, conversation and any panel, with `hx-ext="sse"`
+- Every channel/topic page (`?before=` and panel pages included) and the
+  channel list page carry `data-event-cursor` on `#organization-stream`, the outer layout div outside
+  every swap target. It wraps the sidebar, conversation and any panel (the list page: the list), with `hx-ext="sse"`
   and `sse-connect="/organizations/<slug>/events?after=<cursor>&want=<interests>&channel=<id>"`
   (plus `topic=<id>` on all topic views). Latest pages declare
-  `sidebar,messages,typing`; older pages declare `sidebar`; the members panel adds `presence` with
+  `sidebar,messages,typing`; older pages and the channel list page declare `sidebar`; the members panel adds `presence` with
   `presence-after` from the same snapshot as its indicators. Older topic pages retain `topic`.
   Panels open, switch, page and close with ordinary links (#874); `#members-list` is bounded
   to 100 names and has no live list swap or live region. Presence entries replace

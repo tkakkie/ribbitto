@@ -47,7 +47,7 @@ unread never queries `member`. Feed, topic and `?before=` pages
 return `PageCounts`: channel and topic count maps, the feed's first unread
 and the selected topic's first unread (zero without a selection).
 
-`Reader.ChannelList` delegates to `Reader.Sidebar` with no selected topic.
+The channel list page reads `Reader.Sidebar` with no selected topic.
 `Reader.Page` and `Reader.Sidebar` share a context loader: current channel,
 channels in name/ID order, optional selected topic, first 50 topics (default
 first, then case-insensitive name/ID). Its reads use the caller's snapshot.

@@ -15,7 +15,7 @@ Today's shared controls:
 
 | Component | File | Use |
 |---|---|---|
-| `submitButton`, `submitButtonFor` | `internal/web/view/controls.templ` | a form's submit button, labelled by a message ID: `buttonPrimary` (the main action), `buttonSecondary` (outlined; `buttonSecondaryIcon` adds a decorative child, with its text hidden below `desk` and its accessible name kept); `submitButtonFor` submits a form named by its ID from outside it |
+| `submitButton`, `submitButtonFor` | `internal/web/view/controls.templ` | a form's submit button, labelled by a message ID: `buttonPrimary` (the main action), `buttonSecondary` (outlined; `buttonSecondaryIcon` adds a decorative child before the label); `submitButtonFor` submits a form named by its ID from outside it |
 | `textLink` | `internal/web/view/controls.templ` | underlined navigation links; callers supply a message ID and extra typography or spacing classes |
 | `textInput` | `internal/web/view/controls.templ` | a single-line text input with a control border and a brand underline on focus, alongside the focus outline; the caller supplies its label |
 | `textField` | `internal/web/view/text_field.templ` | a labelled `textInput` with its submit error (setup, sign-up); sign-in passes empty field errors and keeps its form-level alert |

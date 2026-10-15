@@ -17,8 +17,6 @@
   --rb-base: #edf4f2;
   --rb-bg: #ffffff;
   --rb-rail: #ffffff;
-  --rb-sidebar: #edf4f2;
-  --rb-panel: #f5f9f8;
   --rb-surface: #ffffff;
   --rb-input: #ffffff;
   --rb-hover: #e4edeb;
@@ -60,8 +58,6 @@
     --rb-base: #0f1514;
     --rb-bg: #1a2120;
     --rb-rail: #1a2120;
-    --rb-sidebar: #0f1514;
-    --rb-panel: #161d1c;
     --rb-surface: #212928;
     --rb-input: #212928;
     --rb-hover: #26302e;
@@ -107,8 +103,6 @@
   --color-base: var(--rb-base);
   --color-bg: var(--rb-bg);
   --color-rail: var(--rb-rail);
-  --color-sidebar: var(--rb-sidebar);
-  --color-panel: var(--rb-panel);
   --color-surface: var(--rb-surface);
   --color-input: var(--rb-input);
   --color-hover: var(--rb-hover);
@@ -248,7 +242,8 @@
 
 /* Bottom padding of n spacing steps plus the bottom safe area (the home
    indicator), for what meets the screen's bottom edge below desk:
-   pb-safe-0 on navigation, pb-safe-4 on the composer and bottom sheet. */
+   pb-safe-0 on navigation and the panel sheet, pb-safe-3 on the move form,
+   pb-safe-4 on the composer, the account sheet and welcome pages. */
 @utility pb-safe-* {
   padding-bottom: calc(var(--spacing) * --value(integer) + env(safe-area-inset-bottom));
 }

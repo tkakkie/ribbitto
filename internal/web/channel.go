@@ -28,11 +28,12 @@ type Channels interface {
 	CreateWithImage(context.Context, org.Membership, string, string) (conversation.Channel, error)
 }
 
-// MessageReader provides the channel page and cursor from one snapshot, and
-// one message by sequence or a bounded batch by ID for the stream.
+// MessageReader provides the channel page and cursor from one snapshot, the
+// sidebar snapshot the channel list page shows, and one message by sequence or
+// a bounded batch by ID for the stream.
 type MessageReader interface {
 	Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error)
-	ChannelList(context.Context, org.Membership, kernel.ID) (conversation.ChannelListPage, error)
+	Sidebar(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.SidebarSnapshot, error)
 	Many(context.Context, org.Membership, kernel.ID, []kernel.ID) ([]conversation.Entry, error)
 	Page(context.Context, org.Membership, kernel.ID, *kernel.ID, *int64) (conversation.ChannelPage, error)
 	One(context.Context, org.Membership, kernel.ID, int64) (conversation.Entry, error)
@@ -233,9 +234,12 @@ func (p channelPages) list(w http.ResponseWriter, r *http.Request, m org.Members
 }
 
 // renderList keeps the creation form's state; the snapshot checks that the
-// channel belongs to the resolved organisation.
+// channel belongs to the resolved organisation. The list nests the channel's
+// topics with none selected and shows no divider, so a sidebar snapshot is the
+// whole page, and its stream resumes after the sequence of the snapshot that
+// counted, neither skipping nor repeating a change.
 func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage) {
-	list, err := p.messages.ChannelList(r.Context(), m, id)
+	list, err := p.messages.Sidebar(r.Context(), m, id, nil)
 	if errors.Is(err, conversation.ErrChannelNotFound) || errors.Is(err, org.ErrNotFound) {
 		http.NotFound(w, r)
 		return
@@ -244,14 +248,22 @@ func (p channelPages) renderList(w http.ResponseWriter, r *http.Request, m org.M
 		serverError(w, r, "reading channel list", err)
 		return
 	}
-	account, _ := middleware.Account(r.Context())
 	p.pages.render(w, r, status, func(url string) templ.Component {
-		page.List, page.ImageKeys = true, conversation.ChannelImageKeys()
-		page = sidebarView(page, m, list.SidebarSnapshot)
-		page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
-		page.EventCursor = &list.EventCursor
+		page.List = true
+		page = screenView(r, page, m, list)
+		page.EventCursor = &list.SnapshotSeq
 		return view.ChannelListScreen(url, page)
 	})
+}
+
+// screenView fills what every full channel page shows around its content:
+// the sidebar, the account menu and the channel image choices.
+func screenView(r *http.Request, page view.ChannelPage, m org.Membership, snapshot conversation.SidebarSnapshot) view.ChannelPage {
+	account, _ := middleware.Account(r.Context())
+	page = sidebarView(page, m, snapshot)
+	page.ImageKeys = conversation.ChannelImageKeys()
+	page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
+	return page
 }
 
 func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membership, id kernel.ID, status int, page view.ChannelPage, firstUnread *int64) {
@@ -279,7 +291,6 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			return
 		}
 	}
-	account, _ := middleware.Account(r.Context())
 	if page.BodyError == "" {
 		page.Composer = p.issueComposer(m, history.Current, history.Topic)
 	}
@@ -292,12 +303,10 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		page.Messages[i] = viewMessage(m.Organization.Slug, entry)
 	}
 	p.pages.render(w, r, status, func(url string) templ.Component {
-		page.ImageKeys = conversation.ChannelImageKeys()
-		page = sidebarView(page, m, conversation.SidebarSnapshot{
+		page = screenView(r, page, m, conversation.SidebarSnapshot{
 			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics, SnapshotSeq: snapshotSeq,
 			ChannelCounts: history.ChannelCounts, TopicCounts: history.TopicCounts,
 		})
-		page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
 		page.Older = history.Older
 		page.FirstUnread = history.FeedFirstUnread
 		if history.Topic != nil {

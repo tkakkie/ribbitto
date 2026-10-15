@@ -18,7 +18,9 @@ sequenceDiagram
   B->>W: GET /organizations/{slug}/events?after=cursor&want=interests
   W->>C: start
   loop
-    C->>DB: one snapshot: replay boundary + event_seq + events after cursor
+    opt initial read, full-batch drain or newer uncovered durable level
+      C->>DB: one snapshot: replay boundary + event_seq + events after cursor
+    end
     C->>C: check interest, render, authorize, send; cursor = last seq read
     C->>C: read current ephemeral owners, filter, authorize, send without id or cursor advance
     C->>C: if caught up, wait on org's durable level, declared generations, heartbeat and context
@@ -31,8 +33,9 @@ sequenceDiagram
   messages and reading `event_seq` would be missing from the page *and*
   skipped by the stream.
 - **No lost wakeups.** The durable part of the combined wait means "block until
-  the hub's latest sequence for this organisation is greater than my cursor", and that
-  condition and wake channel are read from one immutable atomic snapshot
+  the hub's latest sequence for this organisation is greater than both my cursor
+  and the last observed durable level", and that condition and wake channel
+  are read from one immutable atomic snapshot
   *before* blocking. A raise publishes a higher snapshot and closes the
   old snapshot's channel; a waiter holding that channel wakes even if the
   raise lands before its select. The hub's
@@ -44,6 +47,11 @@ sequenceDiagram
   signal that could be dropped. The cursor advances to the last sequence
   *read*, including events this connection may not see, so a filtered event
   cannot keep the loop spinning.
+- After the initial read and full-batch drain, the stream retains the durable
+  level covered by its read, including when the hub is ahead of the log.
+  Watch-only, ephemeral-only and recount-deadline wakes perform no event-log
+  read without a newer durable level. Coverage uses the level known before
+  reading, so a raise during the read still prompts another read.
 - **The hub** (`realtime.Hub`, #157) implements this: `Raise(org, seq)`
   only raises the value, and `Wait(ctx, org, after)` returns the value
   once it is above `after`, or `context.Cause(ctx)`. It is also the connection

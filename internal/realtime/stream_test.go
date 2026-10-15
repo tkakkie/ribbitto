@@ -795,7 +795,7 @@ func TestStreamReplacementDeliveryAndIsolation(t *testing.T) {
 				synctest.Wait()
 				select {
 				case got := <-done:
-					if got.cursor != map[bool]int64{true: 0, false: 1}[kind == InterestMessages] || !errors.Is(got.err, ErrMembershipRevoked) {
+					if got.cursor != 0 || !errors.Is(got.err, ErrMembershipRevoked) {
 						t.Fatalf("replacement Run=%+v", got)
 					}
 				default:

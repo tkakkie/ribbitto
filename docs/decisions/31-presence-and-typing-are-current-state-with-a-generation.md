@@ -27,11 +27,11 @@ race/isolation/recovery/browser acceptance, and short measurements/documentation
   decision 23 says, and one generation per ephemeral kind. It still never
   holds or forwards events or state; a connection that wakes reads the
   current state from its owner.
-- **One writer per stream** wakes when the durable level passes its cursor,
+- **One writer per stream** wakes when the durable level passes its covered level,
   when the generation of a kind it is interested in passes the one it has
   seen, or when its heartbeat is due. After each durable batch (at most
-  100 events) and before waiting, it sends at most one coalesced frame per
-  kind whose generation advanced: durable events keep their order, wait at
+  100 events) or generation wake and before waiting, it sends at most one
+  coalesced frame per kind whose generation advanced: durable events keep their order, wait at
   most for those frames, and a durable backlog delays an ephemeral change
   by at most one batch.
 - **No `id:`.** Ephemeral frames carry no SSE `id:` line, so neither
@@ -93,8 +93,9 @@ member, rejecting revocation or replacement membership; frames carry no `id:`.
 
 Notification costs one locked lookup/update and replacement channel per active
 publication; wakes scale with matching waiting tabs. Memory follows active member
-entries and watches. Recounts stay per connection and interval-limited; wakes and
-event-log reads do not share that rate limit.
+entries and watches. Recounts stay per connection and interval-limited; wakes
+do not share that rate limit. After catch-up, member-watch-only wakes do not
+read the event log unless a newer durable level requires it (#1106).
 
 Healthy published changes converge to fresh counts; reconnect repairs omissions
 by recounting persisted state. The registry is single-process. Multiple processes

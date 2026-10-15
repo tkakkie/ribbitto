@@ -17,7 +17,9 @@
 // channel are published together atomically, without a registry lock on the
 // waiter's path. The single stream writer waits on the durable level, only
 // its declared kinds' generations, its heartbeat and its context together.
-// Owner reads supply bounded frames after each durable batch, authorized
+// After draining, only a newer uncovered durable level requires a log read;
+// member watches, ephemeral generations and recount deadlines reuse that coverage.
+// Owner reads supply bounded frames after batches and on generation wakes, authorized
 // immediately before sending without moving the cursor. Sidebar sources supply
 // full recounts at connect and on consumer-defined organisation-wide triggers.
 // Optional member watches subscribe before the first recount and release on exit.

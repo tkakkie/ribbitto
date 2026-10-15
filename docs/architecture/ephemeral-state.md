@@ -8,8 +8,8 @@ durable events are in [real time](realtime.md).
 
 The hub publishes durable, presence and typing levels per organisation as
 atomic level/channel snapshots ([stream limits](stream-limits.md)). The single
-writer waits on the durable cursor, declared generations, heartbeat and context
-without a lost wake-up or registry lock.
+writer waits on the covered durable level, declared generations, heartbeat and
+context without a lost wake-up or registry lock.
 
 ## Member read-change watches
 
@@ -35,7 +35,9 @@ acknowledges the generation captured before the persisted read. Changes during
 rendering remain pending.
 Atomic capture in the combined wait prevents a lost
 wake; advancing observation while throttled prevents spinning on already observed work.
-Recounts and authorisation retain per-tab costs; wakes/log reads are not throttled.
+Recounts and authorisation retain per-tab costs. After the initial log read
+and backlog drain, member-watch, ephemeral-only and recount-deadline wakes do
+not read the event log unless a newer durable level requires it.
 Sidebar frames render before checking both organisation and bound member, omit
 `id:` and preserve the cursor; a deny ends the stream (#852).
 
@@ -73,8 +75,8 @@ Delivery, sink, presence and typing state, signals and delivery are current
   and last-change generation.
   A read uses only its place's summary (the channel for a feed), subtracting
   the viewer in constant time; work never grows with other places' state.
-- **Delivery.** After each durable batch and before waiting, at most
-  one frame without `id:` per advanced kind. Durable order and the server
+- **Delivery.** After each durable batch or generation wake and before waiting,
+  at most one frame without `id:` per advanced kind. Durable order and the server
   cursor are unchanged; a backlog delays changes by at most one batch, and
   empty wakes preserve the heartbeat deadline since the last write.
   Presence reads at most 100 entries from the changed suffix; typing

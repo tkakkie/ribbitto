@@ -35,7 +35,7 @@ then run:
 
 ```sh
 src=$RIBBITTO_ARGON_SOURCE &&
-  pinned() { GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$src" "$@"; } &&
+  pinned() { env -i PATH="$PATH" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$src" "$@"; } &&
   pinned fetch --quiet https://github.com/tkakkie/ribbitto.git +refs/heads/main:refs/remotes/origin/main &&
   pinned checkout --quiet --detach origin/main &&
   tree_status=$(pinned status --porcelain --ignored --untracked-files=all) &&
@@ -44,12 +44,15 @@ src=$RIBBITTO_ARGON_SOURCE &&
   "$RIBBITTO_ARGON_HOME/bin/argonreview" review <pr-number>
 ```
 
-Git runs with global and system configuration off, as the launcher's own
-git calls do, and fetches from the pinned URL, so no `insteadOf` rule
-outside the clone can substitute another repository (Copilot on #1136);
-keep the clone's own configuration free of `url.*` rules. The `status`
-check stops on any local change, untracked or ignored file, which could
-otherwise affect the build. That clean checkout is the
+`pinned` runs git with an empty environment but `PATH`, so no inherited
+`GIT_*` variable or `GIT_CONFIG_*` setting applies, and with global and
+system configuration off, as the launcher's own git calls do. It fetches
+from the pinned URL, so no `insteadOf` rule outside the clone can
+substitute another repository (Copilot and Codex on #1136). Keep the
+clone's own configuration, and any file it includes, free of `url.*`
+rules. The `status` check stops on any local change, untracked or ignored
+file, which could otherwise affect the build. `go build` runs in your
+environment; its module downloads are checked against `go.sum`. That clean checkout is the
 boundary: never build or run a pull request's copy of the launcher. Every
 subcommand but `guard` also runs `verify`, which refuses a binary not built
 from that commit with a clean tree (`go run` included); it catches a stale

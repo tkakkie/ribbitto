@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // target is one gh pr view snapshot of the pull request under review, so the
@@ -61,8 +64,43 @@ const ribbittoURL = "https://github.com/tkakkie/ribbitto.git"
 type workspace struct {
 	source, revision string
 	target           target
+	name             string // what a report calls the target
 	dir, tree        string
 	prompt           string
+}
+
+// emptyWorkspace makes the temporary directory and its repository. No
+// template, so no hooks; global and system configuration are off in gitRaw,
+// so the repository's own configuration is all there is.
+func emptyWorkspace(source, revision string, git func(string, ...string) (string, error)) (*workspace, error) {
+	dir, err := os.MkdirTemp("", "argonreview-")
+	if err != nil {
+		return nil, fmt.Errorf("creating the workspace: %w", err)
+	}
+	w := &workspace{source: source, revision: revision, dir: dir, tree: filepath.Join(dir, "tree")}
+	if _, err := git(dir, "init", "--quiet", "--template=", w.tree); err != nil {
+		return w, fmt.Errorf("creating the workspace repository: %w", err)
+	}
+	return w, nil
+}
+
+// checkout refuses a tree with a symlink, before any checkout: a link could
+// expose files outside the worktree (keys, tokens) even with writing and the
+// shell denied. Then it checks head out and removes every .agents entry.
+func (w *workspace) checkout(head string, git func(string, ...string) (string, error)) error {
+	files, err := git(w.tree, "ls-tree", "-r", "--full-tree", head)
+	if err != nil {
+		return fmt.Errorf("listing %s: %w", head, err)
+	}
+	for _, line := range strings.Split(files, "\n") {
+		if strings.HasPrefix(line, "120000 ") {
+			return fmt.Errorf("refusing %s: it has a symlink: %s", w.name, line[strings.Index(line, "\t")+1:])
+		}
+	}
+	if _, err := git(w.tree, "checkout", "--quiet", "--detach", head); err != nil {
+		return fmt.Errorf("checking out %s: %w", head, err)
+	}
+	return removeAgents(w.tree)
 }
 
 // newWorkspace builds the workspace for t, fetched from remote, with the
@@ -72,27 +110,22 @@ func newWorkspace(source, revision, remote string, t target, git func(string, ..
 	if t.Number <= 0 || !commitID.MatchString(t.Base) || !commitID.MatchString(t.Head) {
 		return nil, fmt.Errorf("pull request #%d: the snapshot has no valid base and head commits", t.Number)
 	}
-	dir, err := os.MkdirTemp("", "argonreview-")
-	if err != nil {
-		return nil, fmt.Errorf("creating the workspace: %w", err)
+	// The base branch goes into a refspec; check-ref-format refuses ':', a
+	// leading '-' and the other characters that could change its meaning.
+	if _, err := git(os.TempDir(), "check-ref-format", "--branch", t.BaseRef); err != nil {
+		return nil, fmt.Errorf("pull request #%d: invalid base branch %q: %w", t.Number, t.BaseRef, err)
 	}
-	w = &workspace{source: source, revision: revision, target: t, dir: dir, tree: filepath.Join(dir, "tree")}
+	w, err = emptyWorkspace(source, revision, git)
 	defer func() {
-		if err != nil {
+		if err != nil && w != nil {
 			err = errors.Join(err, w.remove())
 			w = nil
 		}
 	}()
-	// The base branch goes into a refspec; check-ref-format refuses ':', a
-	// leading '-' and the other characters that could change its meaning.
-	if _, err := git(dir, "check-ref-format", "--branch", t.BaseRef); err != nil {
-		return w, fmt.Errorf("pull request #%d: invalid base branch %q: %w", t.Number, t.BaseRef, err)
+	if err != nil {
+		return w, err
 	}
-	// No template, so no hooks; global and system configuration are off in
-	// gitRaw, so the repository's own configuration is all there is.
-	if _, err := git(dir, "init", "--quiet", "--template=", w.tree); err != nil {
-		return w, fmt.Errorf("creating the workspace repository: %w", err)
-	}
+	w.target, w.name = t, fmt.Sprintf("tkakkie/ribbitto#%d", t.Number)
 	// Borrowing the source's objects saves fetching the history again; only
 	// objects are read from there.
 	objects, err := git(source, "rev-parse", "--path-format=absolute", "--git-path", "objects")
@@ -112,17 +145,6 @@ func newWorkspace(source, revision, remote string, t target, git func(string, ..
 	if _, err := git(w.tree, "cat-file", "-e", t.Base+"^{commit}"); err != nil {
 		return w, fmt.Errorf("base %s of pull request #%d is not available: %w", t.Base, t.Number, err)
 	}
-	// Refused before any checkout: a link could expose files outside the
-	// worktree (keys, tokens) even with writing and the shell denied.
-	files, err := git(w.tree, "ls-tree", "-r", "--full-tree", t.Head)
-	if err != nil {
-		return w, fmt.Errorf("listing %s: %w", t.Head, err)
-	}
-	for _, line := range strings.Split(files, "\n") {
-		if strings.HasPrefix(line, "120000 ") {
-			return w, fmt.Errorf("refusing pull request #%d: it has a symlink: %s", t.Number, line[strings.Index(line, "\t")+1:])
-		}
-	}
 	// From the trusted revision, never from the pull request, so a pull
 	// request cannot rewrite its own review instructions. cat-file applies no
 	// filter or textconv.
@@ -130,10 +152,7 @@ func newWorkspace(source, revision, remote string, t target, git func(string, ..
 	if err != nil {
 		return w, fmt.Errorf("reading the prompt at %s: %w", revision, err)
 	}
-	if _, err := git(w.tree, "checkout", "--quiet", "--detach", t.Head); err != nil {
-		return w, fmt.Errorf("checking out %s: %w", t.Head, err)
-	}
-	if err := removeAgents(w.tree); err != nil {
+	if err := w.checkout(t.Head, git); err != nil {
 		return w, err
 	}
 	// The workspace configures no external diff or textconv; the options
@@ -153,6 +172,201 @@ func newWorkspace(source, revision, remote string, t target, git func(string, ..
 	}
 	w.prompt = instructions + "\nUNTRUSTED_PAYLOAD_JSON: " + string(payload) + "\n"
 	return w, nil
+}
+
+// probeWorkspace builds a workspace from the HEAD of repo, a local throwaway
+// repository, with the trusted prompt written for the probe (#1071). It
+// takes the same checkout path as a review.
+func probeWorkspace(source, revision, repo, promptFile string, git func(string, ...string) (string, error)) (w *workspace, err error) {
+	instructions, err := os.ReadFile(promptFile)
+	if err != nil {
+		return nil, fmt.Errorf("reading the probe prompt: %w", err)
+	}
+	w, err = emptyWorkspace(source, revision, git)
+	defer func() {
+		if err != nil && w != nil {
+			err = errors.Join(err, w.remove())
+			w = nil
+		}
+	}()
+	if err != nil {
+		return w, err
+	}
+	w.name, w.prompt = repo, string(instructions)
+	if _, err := git(w.tree, "fetch", "--quiet", "--no-tags", repo, "+HEAD:refs/argonreview/head"); err != nil {
+		return w, fmt.Errorf("fetching %s: %w", repo, err)
+	}
+	head, err := git(w.tree, "rev-parse", "--verify", "refs/argonreview/head^{commit}")
+	if err != nil {
+		return w, fmt.Errorf("resolving the HEAD of %s: %w", repo, err)
+	}
+	w.target.Head = strings.TrimSpace(head)
+	if err := w.checkout(w.target.Head, git); err != nil {
+		return w, &refused{repo, w.target.Head, err}
+	}
+	return w, nil
+}
+
+// refused is a probe target refused before launch, such as a tree with a
+// symlink, with what a probe report names.
+type refused struct {
+	name, head string
+	err        error
+}
+
+func (r *refused) Error() string { return r.err.Error() }
+func (r *refused) Unwrap() error { return r.err }
+
+// entry is what the record keeps of a path: its type, inode, size and change
+// time, and a regular file's size and content hash.
+type entry struct {
+	meta string
+	size int64
+	sum  [sha256.Size]byte
+}
+
+// metadata is an entry's type, inode, size and change time, with its size
+// and file type.
+func metadata(path string) (string, int64, uint32, error) {
+	var st unix.Stat_t
+	if err := unix.Lstat(path, &st); err != nil {
+		return "", 0, 0, err
+	}
+	return fmt.Sprintf("%o %d %d %d.%09d", st.Mode, st.Ino, st.Size, st.Ctim.Sec, st.Ctim.Nsec), st.Size, uint32(st.Mode) & unix.S_IFMT, nil
+}
+
+// hashUpTo hashes at most limit+1 bytes of a regular file, without following
+// a link or blocking on a FIFO swapped in. The extra byte makes a file that
+// grew past its recorded size hash differently.
+func hashUpTo(path string, limit int64) ([sha256.Size]byte, error) {
+	var sum [sha256.Size]byte
+	f, err := os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+	if err != nil {
+		return sum, err
+	}
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	if _, err := io.CopyN(h, f, limit+1); err != nil && !errors.Is(err, io.EOF) {
+		return sum, err
+	}
+	copy(sum[:], h.Sum(nil))
+	return sum, nil
+}
+
+// record keeps every entry of the sanitised tree, tracked, untracked and
+// ignored alike, before agy starts (#1071). Content is hashed as well as
+// metadata: a change time can stay put within a coarse timestamp (Codex on
+// #1117).
+func record(tree string) (map[string]entry, error) {
+	entries := map[string]entry{}
+	err := filepath.WalkDir(tree, func(path string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		meta, size, kind, err := metadata(path)
+		if err != nil {
+			return err
+		}
+		e := entry{meta: meta, size: size}
+		if kind == unix.S_IFREG {
+			if e.sum, err = hashUpTo(path, size); err != nil {
+				return err
+			}
+		}
+		entries[path] = e
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("recording the worktree: %w", err)
+	}
+	return entries, nil
+}
+
+// verify compares the tree with its record while walking it and names the
+// first difference, or returns "". Nothing outside the record is kept or
+// read: directories are listed a chunk at a time and an unknown name ends the
+// walk at once, and a file is read only up to its recorded size, so memory
+// and time stay within the record's own size whatever a run left behind
+// (Codex on #1117).
+func verify(tree string, recorded map[string]entry) (string, error) {
+	return verifyWith(tree, recorded, listNames)
+}
+
+// listNames reads a directory's next names, a chunk at a time.
+func listNames(dir *os.File) ([]string, error) { return dir.Readdirnames(256) }
+
+// verifyWith is verify with the directory listing passed in, so a test can
+// count what it reads.
+func verifyWith(tree string, recorded map[string]entry, list func(*os.File) ([]string, error)) (string, error) {
+	seen := 0
+	var walk func(path string) (string, error)
+	walk = func(path string) (string, error) {
+		want, ok := recorded[path]
+		if !ok {
+			return path, nil
+		}
+		meta, _, kind, err := metadata(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if meta != want.meta {
+			return path, nil
+		}
+		seen++
+		if kind == unix.S_IFREG {
+			// Bounded by the recorded size, never by what is there now.
+			sum, err := hashUpTo(path, want.size)
+			if err != nil {
+				return "", err
+			}
+			if sum != want.sum {
+				return path, nil
+			}
+			return "", nil
+		}
+		if kind != unix.S_IFDIR {
+			return "", nil
+		}
+		dir, err := os.Open(path)
+		if err != nil {
+			return "", err
+		}
+		defer func() { _ = dir.Close() }()
+		for {
+			names, err := list(dir)
+			for _, name := range names {
+				if changed, walkErr := walk(filepath.Join(path, name)); changed != "" || walkErr != nil {
+					return changed, walkErr
+				}
+			}
+			if errors.Is(err, io.EOF) {
+				return "", nil
+			}
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+	changed, err := walk(tree)
+	if changed != "" || err != nil {
+		return changed, err
+	}
+	if seen != len(recorded) {
+		for path := range recorded {
+			_, err := os.Lstat(path)
+			if errors.Is(err, fs.ErrNotExist) {
+				return path, nil
+			}
+			if err != nil {
+				return "", err
+			}
+		}
+		return tree, nil
+	}
+	return "", nil
 }
 
 // removeAgents deletes every .agents entry in the worktree, nested ones,

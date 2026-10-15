@@ -9,6 +9,8 @@
 // review would send (#1068);
 // review runs Argon on a pull request there and prints the report only if
 // the run passes the failure rules (#1096);
+// probe runs the same pipeline on a local throwaway repository with a
+// trusted prompt and prints what agy did (#1071);
 // guard is Antigravity's PreToolUse hook and never checks the build, because
 // Antigravity calls it for every tool.
 package main
@@ -34,6 +36,20 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) == 3 && args[0] == "probe" {
+		info, ok := debug.ReadBuildInfo()
+		source := os.Getenv("RIBBITTO_ARGON_SOURCE")
+		revision, err := trusted(info, ok, func() (string, error) { return sourceRevision(source, git) })
+		code := 1
+		if err == nil {
+			code, err = probeArgs(source, revision, args[1], args[2], stdout)
+		}
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "argonreview: %v\n", err)
+			return code
+		}
+		return 0
+	}
 	if len(args) == 2 && (args[0] == "prompt" || args[0] == "review") && prNumber.MatchString(args[1]) {
 		number, _ := strconv.Atoi(args[1])
 		info, ok := debug.ReadBuildInfo()
@@ -78,8 +94,17 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | guard")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | prompt <pr-number> | review <pr-number> | probe <repository> <prompt-file> | guard")
 	return 2
+}
+
+// probeArgs resolves probe's repository to an absolute path.
+func probeArgs(source, revision, repo, promptFile string, out io.Writer) (int, error) {
+	repo, err := filepath.Abs(repo)
+	if err != nil {
+		return 1, fmt.Errorf("resolving %s: %w", repo, err)
+	}
+	return probeHere(source, revision, repo, promptFile, out)
 }
 
 // prepareHere runs prepare for RIBBITTO_ARGON_HOME, with the account's home

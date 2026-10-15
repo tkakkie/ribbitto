@@ -131,6 +131,36 @@ func testPopoverFocusBrowser(t *testing.T, browser *rod.Browser) {
 		page.MustActivate().MustSetViewport(c.width, c.height, 1, false)
 		page.MustNavigate(server.URL + c.path).MustWaitLoad()
 
+		// Enter can open the popover before the timer of the Tab that reached
+		// its button runs; that timer must leave the new popover open.
+		step(c.name + ": opening before a Tab's timer")
+		if !page.MustEval(`async id => {
+			const p = document.getElementById(id), button = (`+invoker+`)(id);
+			if (p.matches(':popover-open')) p.hidePopover();
+			button.focus();
+			document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
+			button.click();
+			await new Promise(r => setTimeout(r));
+			return p.matches(':popover-open');
+		}`, c.popover).Bool() {
+			t.Fatalf("%s: a Tab's timer closed the popover Enter opened after it (at %s)", current, since())
+		}
+		// The same for a popover open at the Tab, closed and reopened before
+		// its timer, with focus outside it.
+		if !page.MustEval(`async id => {
+			const p = document.getElementById(id), button = (`+invoker+`)(id);
+			if (!p.matches(':popover-open')) p.showPopover();
+			button.focus();
+			document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
+			p.hidePopover();
+			p.showPopover();
+			button.focus();
+			await new Promise(r => setTimeout(r));
+			return p.matches(':popover-open');
+		}`, c.popover).Bool() {
+			t.Fatalf("%s: a Tab's timer closed the popover reopened after it (at %s)", current, since())
+		}
+
 		step(c.name + ": Tab past the last control")
 		open()
 		for i := 2; page.MustEval(isOpen, c.popover).Bool(); i++ {

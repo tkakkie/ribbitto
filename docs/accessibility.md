@@ -104,10 +104,11 @@ the column instead, and the composer is hidden.
 
 The account menu or sheet (`#account-menu`) and the create popover
 (`#channel-create`) are native popovers, which are not modal, so Tab can
-leave them while they stay open. Focus never rests outside an open popover,
-where the popover could cover it (#1092): a Tab or Shift-Tab that moves
-focus out of it closes it, and focus stays on the control Tab moved to
-(`popover-focus-v1.js`, on every page). They close rather than keep Tab
+leave them while they stay open. Once a Tab or Shift-Tab settles, focus
+does not rest outside an open popover, where the popover could cover it
+(#1092): a Tab or Shift-Tab that moves focus out of it closes it, and focus
+stays on the control Tab moved to (`popover-focus-v1.js`, on every page;
+it suits these two, which nest no popover). They close rather than keep Tab
 inside because an outside click already closes them. Escape closes one
 with focus back on its button; an outside click closes it and leaves focus
 where the click put it; a click inside never closes it. Those three are

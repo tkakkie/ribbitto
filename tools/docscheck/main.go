@@ -188,7 +188,7 @@ func markdownFiles(root string) ([]string, error) {
 }
 
 // A bare reference names a Markdown file from the repository root, as
-// AGENTS.md, templates, prompts and scripts do in prose, code spans and
+// AGENTS.md, templates, prompts and workflows do in prose, code spans and
 // comments. The fragment is taken whole, Unicode included, so an unknown
 // anchor is reported rather than silently shortened; it stops at quotes,
 // brackets and backslashes (a "\n" in a shell string).
@@ -400,26 +400,24 @@ func bareText(path string, source []byte) []line {
 	return lines
 }
 
-// bareSources are AGENTS.md and every file under .github/ and scripts/.
+// bareSources are AGENTS.md and every file under .github/.
 func bareSources(root string) ([]string, error) {
 	sources := []string{"AGENTS.md"}
-	for _, dir := range []string{".github", "scripts"} {
-		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				if os.IsNotExist(err) {
-					return filepath.SkipDir
-				}
-				return err
-			}
-			if !d.IsDir() {
-				rel, _ := filepath.Rel(root, path)
-				sources = append(sources, filepath.ToSlash(rel))
-			}
-			return nil
-		})
+	err := filepath.WalkDir(filepath.Join(root, ".github"), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil, err
+			if os.IsNotExist(err) {
+				return filepath.SkipDir
+			}
+			return err
 		}
+		if !d.IsDir() {
+			rel, _ := filepath.Rel(root, path)
+			sources = append(sources, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return sources, nil
 }

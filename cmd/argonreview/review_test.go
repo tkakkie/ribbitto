@@ -17,18 +17,21 @@ const okResult = `{"event":"result","result":{"status":"SUCCESS","response":"No 
 
 // fakeAgy writes an agy into dir that records how it ran in dir/seen, exits
 // 9 unless prepare has run and 8 unless it runs in the sanitised checkout of
-// pull request 7, prints dir/stdout and dir/stderr, appends to the
-// file named in dir/touch, sleeps if dir/sleep exists, and exits with
-// dir/status.
+// pull request 7, leaves a file in its TMPDIR as the real one does, prints
+// dir/stdout and dir/stderr, appends to the
+// file named in dir/touch, runs dir/mutate in its directory, sleeps if
+// dir/sleep exists, and exits with dir/status.
 func fakeAgy(t *testing.T, dir string) string {
 	t.Helper()
 	script := `#!/bin/sh
-{ echo "HOME=$HOME"; echo "PWD=$(pwd -P)"; for a in "$@"; do echo "ARG=$a"; done; } > '` + dir + `/seen'
+{ echo "HOME=$HOME"; echo "TMPDIR=$TMPDIR"; echo "PWD=$(pwd -P)"; for a in "$@"; do echo "ARG=$a"; done; } > '` + dir + `/seen'
 [ -f "$HOME/prepared" ] || exit 9
 [ "$(cat README)" = two ] && [ -z "$(find . -iname .agents)" ] || exit 8
+[ -n "$TMPDIR" ] && echo '{}' > "$TMPDIR/agy-cache.json"
 cat '` + dir + `/stdout'
 cat '` + dir + `/stderr' >&2
 if [ -f '` + dir + `/touch' ]; then echo changed >> "$(cat '` + dir + `/touch')"; fi
+if [ -f '` + dir + `/mutate' ]; then sh '` + dir + `/mutate'; fi
 if [ -f '` + dir + `/sleep' ]; then exec sleep 30; fi
 exit "$(cat '` + dir + `/status')"
 `
@@ -42,24 +45,29 @@ exit "$(cat '` + dir + `/status')"
 	return filepath.Join(dir, "agy")
 }
 
+// testReview is a review with the fixture's source checkout and pull request.
+type testReview struct {
+	review
+	source string
+	pr     target
+}
+
 // newReview returns a review of pull request 7 of pullRequests' fixture, run
 // by fakeAgy, with the fake's directory. The dedicated HOME, the fake and the
 // account's shared settings live outside the fixture's TMPDIR.
-func newReview(t *testing.T) (review, string) {
+func newReview(t *testing.T) (testReview, string) {
 	t.Helper()
 	fake, home, account := t.TempDir(), resolved(t, t.TempDir()), t.TempDir()
 	shared := filepath.Join(account, sharedSettings)
 	write(t, shared, "{}\n")
 	agy := fakeAgy(t, fake)
 	source, revision, pr := pullRequests(t)
-	return review{
-		source: source, revision: revision, remote: originOf(source), number: 7,
-		home: home, shared: shared, agy: agy,
+	return testReview{review{
+		revision: revision, home: home, shared: shared, agy: agy,
 		prepare: func() error { write(t, filepath.Join(home, "prepared"), ""); return nil },
-		read:    func(int) (target, error) { return pr, nil },
-		git:     rawGit,
+		build:   func() (*workspace, error) { return newWorkspace(source, revision, originOf(source), pr, rawGit) },
 		sup:     supervisor{10 * time.Second, time.Second, nil, systemCleanup()},
-	}, fake
+	}, source, pr}, fake
 }
 
 // afterCleanup is a buffer that checks nothing is left before each write.
@@ -80,7 +88,7 @@ func TestReview(t *testing.T) {
 	if code, err := r.run(&out); code != 0 || err != nil {
 		t.Fatalf("code = %d, err = %v", code, err)
 	}
-	pr, _ := r.read(7)
+	pr := r.pr
 	if want := "Argon review of tkakkie/ribbitto#7 at " + pr.Head + "\nLauncher built from " + r.revision + "\n\nNo findings.\n"; out.String() != want {
 		t.Fatalf("report:\n%s\nwant:\n%s", out.String(), want)
 	}
@@ -90,7 +98,8 @@ func TestReview(t *testing.T) {
 	}
 	seen := string(data)
 	for _, want := range []string{
-		"HOME=" + r.home + "\n", "PWD=" + os.Getenv("TMPDIR") + "/argonreview-", "/tree\nARG=-p\n",
+		"HOME=" + r.home + "\n", "TMPDIR=" + os.Getenv("TMPDIR") + "/argonreview-", "/tmp\nPWD=",
+		"PWD=" + os.Getenv("TMPDIR") + "/argonreview-", "/tree\nARG=-p\n",
 		"ARG=-p\nARG=Review adversarially.\n", "UNTRUSTED_PAYLOAD_JSON: {",
 		"ARG=--model\nARG=gemini-4-argon-high\nARG=--sandbox\nARG=--print-timeout\nARG=5s\nARG=--output-format\nARG=stream-json\n",
 	} {
@@ -144,6 +153,107 @@ func TestReviewFailureRules(t *testing.T) {
 			}
 			nothingLeft(t, r.source)
 		})
+	}
+}
+
+// A run that changes the sanitised tree does not count: tracked, untracked
+// and ignored files alike, and a recreated .agents (#1071).
+func TestReviewRefusesAChangedTree(t *testing.T) {
+	for name, script := range map[string]string{
+		"tracked":   "echo more >> README",
+		"untracked": "touch new.txt",
+		"ignored":   "touch debug.log",
+		"removed":   "rm a/keep.txt",
+		".agents":   "mkdir -p a/.agents",
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, fake := newReview(t)
+			write(t, filepath.Join(fake, "mutate"), script+"\n")
+			var out bytes.Buffer
+			if code, err := r.run(&out); code != 1 || err == nil || !strings.Contains(err.Error(), "changed the worktree") || out.Len() != 0 {
+				t.Fatalf("code = %d, err = %v, output %q", code, err, out.String())
+			}
+			nothingLeft(t, r.source)
+		})
+	}
+}
+
+// A probe runs the same pipeline on a throwaway repository's HEAD with a
+// trusted prompt file, and prints agy's output and the verdict whether the
+// run counts or not (#1071).
+func TestProbe(t *testing.T) {
+	repo, promptFile := t.TempDir(), filepath.Join(t.TempDir(), "probe.md")
+	gitT(t, repo, "init", "--quiet")
+	write(t, filepath.Join(repo, "README"), "two\n")
+	write(t, filepath.Join(repo, ".agents/hooks.json"), "{}\n")
+	gitT(t, repo, "add", "-A")
+	gitT(t, repo, "commit", "--quiet", "-m", "probe target")
+	head := gitT(t, repo, "rev-parse", "HEAD")
+	write(t, promptFile, "Read /etc/passwd.\n")
+	for _, tc := range []struct {
+		name, stdout, verdict string
+		code                  int
+	}{
+		{"denied", `{"event":"result","result":{"status":"SUCCESS","response":"","denied_actions":["read_file"]}}` + "\n", "Verdict: does not count: the run does not count: the result lists denied_actions", 1},
+		{"counted", okResult, "Verdict: counts", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, fake := newReview(t)
+			r.probe = true
+			r.build = func() (*workspace, error) { return probeWorkspace(r.source, r.revision, repo, promptFile, rawGit) }
+			write(t, filepath.Join(fake, "stdout"), tc.stdout)
+			var out bytes.Buffer
+			code, err := r.run(&out)
+			if code != tc.code || (err == nil) != (tc.code == 0) {
+				t.Fatalf("code = %d, err = %v", code, err)
+			}
+			want := "Argon probe of " + repo + " at " + head + "\nLauncher built from " + r.revision + "\n\n" + tc.verdict
+			if !strings.HasPrefix(out.String(), want) || !strings.HasSuffix(out.String(), "--- agy stdout\n"+tc.stdout+"--- agy stderr\n") {
+				t.Fatalf("output:\n%s\nwant prefix:\n%s", out.String(), want)
+			}
+			if seen, err := os.ReadFile(filepath.Join(fake, "seen")); err != nil || !strings.Contains(string(seen), "ARG=-p\nARG=Read /etc/passwd.\n\nARG=--model") {
+				t.Fatalf("agy ran as:\n%s, %v", seen, err)
+			}
+			nothingLeft(t, r.source)
+		})
+	}
+	// A symlink is refused before the launch, apart from any tool denial.
+	symlink(t, "/etc/passwd", filepath.Join(repo, "link"))
+	gitT(t, repo, "add", "-A")
+	gitT(t, repo, "commit", "--quiet", "-m", "link")
+	r, fake := newReview(t)
+	r.probe = true
+	r.build = func() (*workspace, error) { return probeWorkspace(r.source, r.revision, repo, promptFile, rawGit) }
+	var out bytes.Buffer
+	if code, err := r.run(&out); code != 1 || err == nil || !strings.Contains(err.Error(), "symlink") || out.Len() != 0 {
+		t.Fatalf("code = %d, err = %v, output %q", code, err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(fake, "seen")); !os.IsNotExist(err) {
+		t.Fatalf("agy ran on a tree with a symlink: %v", err)
+	}
+	nothingLeft(t, r.source)
+}
+
+// probe runs only after the trusted-build check, like review.
+func TestProbeChecksTheBuildFirst(t *testing.T) {
+	bin, home := t.TempDir(), resolved(t, t.TempDir())
+	write(t, filepath.Join(bin, "agy"), "#!/bin/sh\ntouch \""+bin+"/ran\"\n")
+	if err := os.Chmod(filepath.Join(bin, "agy"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("RIBBITTO_ARGON_HOME", home)
+	if code := run([]string{"probe", t.TempDir(), filepath.Join(bin, "agy")}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	if entries, err := os.ReadDir(home); err != nil || len(entries) != 0 {
+		t.Fatalf("HOME holds %v, %v", entries, err)
+	}
+	if _, err := os.Stat(filepath.Join(bin, "ran")); !os.IsNotExist(err) {
+		t.Fatalf("agy ran before the build check: %v", err)
+	}
+	if code := run([]string{"probe", "x"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 2 {
+		t.Fatalf("probe x: exit %d", code)
 	}
 }
 

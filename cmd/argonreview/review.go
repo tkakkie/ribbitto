@@ -21,24 +21,25 @@ import (
 // never loads or changes it; it is read only to hash (#1041).
 const sharedSettings = ".gemini/antigravity-cli/settings.json"
 
-// review is one Argon review of a pull request (#1096).
+// review is one Argon run: a review of a pull request (#1096) or a probe of
+// a throwaway repository (#1071), which differ only in what build makes.
 type review struct {
-	source, revision, remote string
-	number                   int
-	home, shared, agy        string
-	prepare                  func() error
-	read                     func(int) (target, error)
-	git                      func(string, ...string) (string, error)
-	sup                      supervisor
+	revision          string
+	home, shared, agy string
+	prepare           func() error
+	build             func() (*workspace, error)
+	sup               supervisor
 	// stop ends the catching of INT and TERM before the report is written;
 	// runCatching sets it.
 	stop func()
+	// probe prints agy's output and the verdict whether the run counts or
+	// not, since a probe expects a denial.
+	probe bool
 }
 
-// reviewHere reviews pull request number with this machine's configuration.
-// A failing agy's status is kept, as in check: 124, 130 or 143 when the time
-// limit or a signal ended it; any other failure is 1.
-func reviewHere(source, revision string, number int, out io.Writer) (int, error) {
+// here is a run with this machine's configuration: the time limit, agy on
+// PATH, the dedicated HOME and the account's shared settings.
+func here(revision string, build func() (*workspace, error), probe bool, out io.Writer) (int, error) {
 	limit, err := timeLimit()
 	if err != nil {
 		return 1, err
@@ -52,13 +53,38 @@ func reviewHere(source, revision string, number int, out io.Writer) (int, error)
 		return 1, fmt.Errorf("finding the account's home: %w", err)
 	}
 	return review{
-		source: source, revision: revision, remote: ribbittoURL, number: number,
-		home: os.Getenv("RIBBITTO_ARGON_HOME"), shared: filepath.Join(account.HomeDir, sharedSettings), agy: agy,
+		revision: revision, home: os.Getenv("RIBBITTO_ARGON_HOME"), shared: filepath.Join(account.HomeDir, sharedSettings), agy: agy,
 		prepare: func() error { _, err := prepareHere(); return err },
-		read:    readPullRequest,
-		git:     func(dir string, args ...string) (string, error) { return gitRaw(2*time.Minute, dir, args...) },
+		build:   build,
 		sup:     supervisor{limit, 5 * time.Second, nil, systemCleanup()},
+		probe:   probe,
 	}.runCatching(out)
+}
+
+// workspaceGit is git for workspace builds: two minutes, untrimmed output.
+func workspaceGit(dir string, args ...string) (string, error) {
+	return gitRaw(2*time.Minute, dir, args...)
+}
+
+// reviewHere reviews pull request number. A failing agy's status is kept, as
+// in check: 124, 130 or 143 when the time limit or a signal ended it; any
+// other failure is 1.
+func reviewHere(source, revision string, number int, out io.Writer) (int, error) {
+	return here(revision, func() (*workspace, error) {
+		t, err := readPullRequest(number)
+		if err != nil {
+			return nil, err
+		}
+		return newWorkspace(source, revision, ribbittoURL, t, workspaceGit)
+	}, false, out)
+}
+
+// probeHere runs the review pipeline on the HEAD of repo with a trusted
+// prompt file, and prints what agy did (#1071).
+func probeHere(source, revision, repo, promptFile string, out io.Writer) (int, error) {
+	return here(revision, func() (*workspace, error) {
+		return probeWorkspace(source, revision, repo, promptFile, workspaceGit)
+	}, true, out)
 }
 
 // runCatching runs r with INT and TERM handed to its supervisor, and back to
@@ -73,8 +99,9 @@ func (r review) runCatching(out io.Writer) (int, error) {
 }
 
 // run prepares the configuration, builds the workspace, runs agy there and
-// writes the report only if the run counts. The workspace is removed before
-// anything is written, so a closed stdout cannot skip it.
+// writes the report only if the run counts; a probe writes agy's output and
+// the verdict either way. The workspace is removed before anything is
+// written, so a closed stdout cannot skip it.
 func (r review) run(out io.Writer) (code int, err error) {
 	if err := r.prepare(); err != nil {
 		return 1, err
@@ -83,15 +110,26 @@ func (r review) run(out io.Writer) (code int, err error) {
 	if err != nil {
 		return 1, err
 	}
-	t, err := r.read(r.number)
+	w, err := r.build()
 	if err != nil {
 		return 1, err
 	}
-	w, err := newWorkspace(r.source, r.revision, r.remote, t, r.git)
+	// The sanitised tree as agy gets it; any change during the run fails it,
+	// including a recreated .agents (#1071).
+	baseline, err := record(w.tree)
 	if err != nil {
-		return 1, err
+		return 1, errors.Join(err, w.remove())
 	}
-	code, response, err := r.launch(w)
+	code, transcript, diagnostics, err := r.launch(w)
+	var response string
+	if err == nil {
+		response, err = judge(code, transcript, diagnostics)
+	}
+	if after, recordErr := record(w.tree); recordErr != nil {
+		err = errors.Join(err, recordErr)
+	} else if path := changed(baseline, after); path != "" {
+		err = errors.Join(err, fmt.Errorf("the run changed the worktree: %s", strings.TrimPrefix(path, w.tree+"/")))
+	}
 	if after, hashErr := hashFile(r.shared); hashErr != nil || after != before {
 		err = errors.Join(err, hashErr, errors.New("the shared Antigravity settings changed during the run"))
 	}
@@ -110,28 +148,39 @@ func (r review) run(out io.Writer) (code int, err error) {
 		return 128 + int(sig.(syscall.Signal)), errors.Join(err, fmt.Errorf("interrupted by %v", sig))
 	default:
 	}
+	// The source revision and the target are named apart (#1068).
+	header := fmt.Sprintf("Argon %s of %s at %s\nLauncher built from %s\n\n", map[bool]string{false: "review", true: "probe"}[r.probe], w.name, w.target.Head, r.revision)
+	if r.probe {
+		verdict := "counts"
+		if err != nil {
+			verdict = "does not count: " + err.Error()
+		}
+		if _, writeErr := fmt.Fprintf(out, "%sVerdict: %s\n\n--- agy stdout\n%s--- agy stderr\n%s", header, verdict, transcript, diagnostics); writeErr != nil {
+			err = errors.Join(err, writeErr)
+		}
+	}
 	if err != nil {
 		return max(code, 1), err
 	}
-	// The source revision and the target are named apart (#1068).
-	_, err = fmt.Fprintf(out, "Argon review of tkakkie/ribbitto#%d at %s\nLauncher built from %s\n\n%s", t.Number, t.Head, r.revision, response)
-	if err != nil {
-		return 1, err
+	if !r.probe {
+		if _, err := io.WriteString(out, header+response); err != nil {
+			return 1, err
+		}
 	}
 	return 0, nil
 }
 
-// launch runs agy on the workspace under the supervisor and judges its
-// output, kept in the workspace directory.
-func (r review) launch(w *workspace) (int, string, error) {
+// launch runs agy on the workspace under the supervisor, with its output kept
+// in the workspace directory, and returns its status and output.
+func (r review) launch(w *workspace) (int, []byte, []byte, error) {
 	stdout, err := os.Create(filepath.Join(w.dir, "agy.jsonl"))
 	if err != nil {
-		return 1, "", fmt.Errorf("creating agy's output: %w", err)
+		return 1, nil, nil, fmt.Errorf("creating agy's output: %w", err)
 	}
 	defer func() { _ = stdout.Close() }()
 	stderr, err := os.Create(filepath.Join(w.dir, "agy.err"))
 	if err != nil {
-		return 1, "", fmt.Errorf("creating agy's error output: %w", err)
+		return 1, nil, nil, fmt.Errorf("creating agy's error output: %w", err)
 	}
 	defer func() { _ = stderr.Close() }()
 	// agy's own limit ends the turn before the supervisor's does.
@@ -141,20 +190,31 @@ func (r review) launch(w *workspace) (int, string, error) {
 	}
 	args := []string{"-p", w.prompt, "--model", argonModel, "--sandbox",
 		"--print-timeout", printLimit.String(), "--output-format", "stream-json"}
-	code, err := r.sup.run(r.agy, args, withHome(r.home), w.tree, stdout, stderr)
+	// agy writes its own temporary files (a feature-flag cache, seen live);
+	// a TMPDIR inside the workspace removes them with it (#1071).
+	tmp := filepath.Join(w.dir, "tmp")
+	if err := os.Mkdir(tmp, 0o700); err != nil {
+		return 1, nil, nil, fmt.Errorf("creating agy's temporary directory: %w", err)
+	}
+	env := []string{"TMPDIR=" + tmp}
+	for _, value := range withHome(r.home) {
+		if !strings.HasPrefix(value, "TMPDIR=") {
+			env = append(env, value)
+		}
+	}
+	code, err := r.sup.run(r.agy, args, env, w.tree, stdout, stderr)
 	if err != nil {
-		return max(code, 1), "", err
+		return max(code, 1), nil, nil, err
 	}
 	transcript, err := os.ReadFile(stdout.Name())
 	if err != nil {
-		return 1, "", fmt.Errorf("reading agy's output: %w", err)
+		return 1, nil, nil, fmt.Errorf("reading agy's output: %w", err)
 	}
 	diagnostics, err := os.ReadFile(stderr.Name())
 	if err != nil {
-		return 1, "", fmt.Errorf("reading agy's error output: %w", err)
+		return 1, nil, nil, fmt.Errorf("reading agy's error output: %w", err)
 	}
-	response, err := judge(code, transcript, diagnostics)
-	return code, response, err
+	return code, transcript, diagnostics, nil
 }
 
 // judge applies the failure rules (#1041, #1096): a non-zero exit or the time

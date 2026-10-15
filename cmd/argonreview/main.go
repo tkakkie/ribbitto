@@ -38,7 +38,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		source := os.Getenv("RIBBITTO_ARGON_SOURCE")
 		revision, err := trusted(info, ok, func() (string, error) { return sourceRevision(source, git) })
 		if err == nil {
-			err = printPrompt(source, revision, number, readPullRequest, func(dir string, args ...string) (string, error) {
+			err = printPrompt(source, revision, ribbittoURL, number, readPullRequest, func(dir string, args ...string) (string, error) {
 				return gitRaw(2*time.Minute, dir, args...)
 			}, stdout)
 		}
@@ -148,12 +148,7 @@ func gitRaw(limit time.Duration, dir string, args ...string) (string, error) {
 			cmd.Env = append(cmd.Env, value)
 		}
 	}
-	cmd.Env = append(cmd.Env, "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1",
-		// No hooks or fsmonitor: the source checkout's hooks would otherwise
-		// run on the checkout of a pull request's tree (Codex on #1097).
-		// Environment entries override local configuration.
-		"GIT_CONFIG_COUNT=2", "GIT_CONFIG_KEY_0=core.hooksPath", "GIT_CONFIG_VALUE_0="+os.DevNull,
-		"GIT_CONFIG_KEY_1=core.fsmonitor", "GIT_CONFIG_VALUE_1=false")
+	cmd.Env = append(cmd.Env, "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
 	out, err := cmd.Output()
 	return string(out), err
 }

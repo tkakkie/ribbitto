@@ -46,58 +46,75 @@ func readPullRequest(number int) (target, error) {
 
 var commitID = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
-// workspace is a temporary detached worktree of the target's head in the
-// source checkout, with the prompt a review sends. The source revision and
-// the target stay apart, so a report can name both.
+// ribbittoURL is where pull requests are fetched from: pinned, never the
+// source's origin, which a local url.*.insteadOf could redirect (Copilot on
+// #1097).
+const ribbittoURL = "https://github.com/tkakkie/ribbitto.git"
+
+// workspace is a temporary repository holding the target's head, with the
+// prompt a review sends. It is a repository of its own, not a worktree of the
+// source checkout, so nothing in the source's configuration (hooks, insteadOf,
+// external diff or textconv commands, filters, worktree configuration) applies
+// to the pull request's tree, and nothing is added to the source (Copilot on
+// #1097, the maintainer's choice). The source revision and the target stay
+// apart, so a report can name both.
 type workspace struct {
 	source, revision string
 	target           target
-	git              func(dir string, args ...string) (string, error)
-	dir, tree, refs  string
+	dir, tree        string
 	prompt           string
 }
 
-// newWorkspace builds the workspace for t in the source checkout, whose
-// trusted revision gives the prompt. On failure it removes whatever it made.
-func newWorkspace(source, revision string, t target, git func(string, ...string) (string, error)) (w *workspace, err error) {
+// newWorkspace builds the workspace for t, fetched from remote, with the
+// prompt from the source checkout's trusted revision. On failure it removes
+// whatever it made.
+func newWorkspace(source, revision, remote string, t target, git func(string, ...string) (string, error)) (w *workspace, err error) {
 	if t.Number <= 0 || !commitID.MatchString(t.Base) || !commitID.MatchString(t.Head) {
 		return nil, fmt.Errorf("pull request #%d: the snapshot has no valid base and head commits", t.Number)
-	}
-	// The base branch goes into a refspec; check-ref-format refuses ':', a
-	// leading '-' and the other characters that could change its meaning.
-	if _, err := git(source, "check-ref-format", "--branch", t.BaseRef); err != nil {
-		return nil, fmt.Errorf("pull request #%d: invalid base branch %q", t.Number, t.BaseRef)
-	}
-	if err := noHooks(source, git); err != nil {
-		return nil, err
 	}
 	dir, err := os.MkdirTemp("", "argonreview-")
 	if err != nil {
 		return nil, fmt.Errorf("creating the workspace: %w", err)
 	}
-	w = &workspace{source: source, revision: revision, target: t, git: git, dir: dir,
-		tree: filepath.Join(dir, "tree"), refs: "refs/argonreview/" + filepath.Base(dir)}
+	w = &workspace{source: source, revision: revision, target: t, dir: dir, tree: filepath.Join(dir, "tree")}
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, w.remove())
 			w = nil
 		}
 	}()
-	// Fetched into refs of this run only: --refmap= keeps origin/* (and so
-	// the origin/main the build was verified against) where it was.
-	if _, err := git(source, "fetch", "--quiet", "--no-tags", "--refmap=", "origin",
-		"+refs/heads/"+t.BaseRef+":"+w.refs+"/base", fmt.Sprintf("+refs/pull/%d/head:%s/head", t.Number, w.refs)); err != nil {
+	// The base branch goes into a refspec; check-ref-format refuses ':', a
+	// leading '-' and the other characters that could change its meaning.
+	if _, err := git(dir, "check-ref-format", "--branch", t.BaseRef); err != nil {
+		return w, fmt.Errorf("pull request #%d: invalid base branch %q: %w", t.Number, t.BaseRef, err)
+	}
+	// No template, so no hooks; global and system configuration are off in
+	// gitRaw, so the repository's own configuration is all there is.
+	if _, err := git(dir, "init", "--quiet", "--template=", w.tree); err != nil {
+		return w, fmt.Errorf("creating the workspace repository: %w", err)
+	}
+	// Borrowing the source's objects saves fetching the history again; only
+	// objects are read from there.
+	objects, err := git(source, "rev-parse", "--path-format=absolute", "--git-path", "objects")
+	if err != nil {
+		return w, fmt.Errorf("finding the source checkout's objects: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(w.tree, ".git/objects/info/alternates"), []byte(objects), 0o600); err != nil {
+		return w, fmt.Errorf("sharing the source checkout's objects: %w", err)
+	}
+	if _, err := git(w.tree, "fetch", "--quiet", "--no-tags", remote,
+		"+refs/heads/"+t.BaseRef+":refs/argonreview/base", fmt.Sprintf("+refs/pull/%d/head:refs/argonreview/head", t.Number)); err != nil {
 		return w, fmt.Errorf("fetching pull request #%d: %w", t.Number, err)
 	}
-	if _, err := git(source, "merge-base", "--is-ancestor", t.Head, w.refs+"/head"); err != nil {
+	if _, err := git(w.tree, "merge-base", "--is-ancestor", t.Head, "refs/argonreview/head"); err != nil {
 		return w, fmt.Errorf("%s is not on pull request #%d: %w", t.Head, t.Number, err)
 	}
-	if _, err := git(source, "cat-file", "-e", t.Base+"^{commit}"); err != nil {
+	if _, err := git(w.tree, "cat-file", "-e", t.Base+"^{commit}"); err != nil {
 		return w, fmt.Errorf("base %s of pull request #%d is not available: %w", t.Base, t.Number, err)
 	}
 	// Refused before any checkout: a link could expose files outside the
 	// worktree (keys, tokens) even with writing and the shell denied.
-	files, err := git(source, "ls-tree", "-r", "--full-tree", t.Head)
+	files, err := git(w.tree, "ls-tree", "-r", "--full-tree", t.Head)
 	if err != nil {
 		return w, fmt.Errorf("listing %s: %w", t.Head, err)
 	}
@@ -107,18 +124,21 @@ func newWorkspace(source, revision string, t target, git func(string, ...string)
 		}
 	}
 	// From the trusted revision, never from the pull request, so a pull
-	// request cannot rewrite its own review instructions.
-	instructions, err := git(source, "show", revision+":.github/prompts/adversarial.md")
+	// request cannot rewrite its own review instructions. cat-file applies no
+	// filter or textconv.
+	instructions, err := git(source, "cat-file", "blob", revision+":.github/prompts/adversarial.md")
 	if err != nil {
 		return w, fmt.Errorf("reading the prompt at %s: %w", revision, err)
 	}
-	if _, err := git(source, "worktree", "add", "--quiet", "--detach", w.tree, t.Head); err != nil {
+	if _, err := git(w.tree, "checkout", "--quiet", "--detach", t.Head); err != nil {
 		return w, fmt.Errorf("checking out %s: %w", t.Head, err)
 	}
 	if err := removeAgents(w.tree); err != nil {
 		return w, err
 	}
-	diff, err := git(source, "diff", t.Base+"..."+t.Head)
+	// The workspace configures no external diff or textconv; the options
+	// keep it so, as in .github/prompts/audit.md's read-only git forms.
+	diff, err := git(w.tree, "diff", "--no-ext-diff", "--no-textconv", t.Base+"..."+t.Head)
 	if err != nil {
 		return w, fmt.Errorf("computing the diff of pull request #%d: %w", t.Number, err)
 	}
@@ -133,23 +153,6 @@ func newWorkspace(source, revision string, t target, git func(string, ...string)
 	}
 	w.prompt = instructions + "\nUNTRUSTED_PAYLOAD_JSON: " + string(payload) + "\n"
 	return w, nil
-}
-
-// noHooks refuses a source checkout whose own configuration, includes
-// followed, sets hooks or fsmonitor. gitRaw already overrides core.hooksPath
-// and core.fsmonitor, but a configured hook (hook.<name>.command) would still
-// run in the pull request's worktree and could start a script from it; the
-// maintainer chose refusing over disabling each one (Codex on #1097).
-func noHooks(source string, git func(string, ...string) (string, error)) error {
-	found, err := git(source, "config", "--local", "--includes", "--get-regexp", `^(hook\.|core\.hookspath$|core\.fsmonitor$)`)
-	var exit *exec.ExitError
-	if errors.As(err, &exit) && exit.ExitCode() == 1 {
-		return nil // nothing matched
-	}
-	if err != nil {
-		return fmt.Errorf("reading the source checkout's configuration: %w", err)
-	}
-	return fmt.Errorf("refusing: the source checkout configures hooks or fsmonitor: %s", strings.TrimSpace(found))
 }
 
 // removeAgents deletes every .agents entry in the worktree, nested ones,
@@ -181,41 +184,23 @@ func removeAgents(tree string) error {
 	return nil
 }
 
-// remove deletes the worktree, its refs and the temporary directory, and
-// reports anything it could not remove.
+// remove deletes the workspace. Nothing of it is in the source checkout.
 func (w *workspace) remove() error {
-	var errs []error
-	if _, err := os.Stat(w.tree); err == nil {
-		if _, err := w.git(w.source, "worktree", "remove", "--force", w.tree); err != nil {
-			errs = append(errs, fmt.Errorf("removing the worktree %s: %w", w.tree, err))
-		}
-	}
-	// Before the prune, so a worktree that git could not remove is gone from
-	// the disk and the prune drops its registration (Codex on #1097).
 	if err := os.RemoveAll(w.dir); err != nil {
-		errs = append(errs, fmt.Errorf("removing %s: %w", w.dir, err))
+		return fmt.Errorf("removing %s: %w", w.dir, err)
 	}
-	if _, err := w.git(w.source, "worktree", "prune"); err != nil {
-		errs = append(errs, fmt.Errorf("pruning worktrees: %w", err))
-	}
-	for _, ref := range []string{w.refs + "/base", w.refs + "/head"} {
-		// Absent when the fetch failed; deleting a missing ref succeeds.
-		if _, err := w.git(w.source, "update-ref", "-d", ref); err != nil {
-			errs = append(errs, fmt.Errorf("deleting %s: %w", ref, err))
-		}
-	}
-	return errors.Join(errs...)
+	return nil
 }
 
 // printPrompt builds the workspace for pull request number, removes it again,
 // and only then writes the prompt a review would send: a closed stdout can end
 // the process on SIGPIPE during the write (Codex on #1097).
-func printPrompt(source, revision string, number int, read func(int) (target, error), git func(string, ...string) (string, error), out io.Writer) error {
+func printPrompt(source, revision, remote string, number int, read func(int) (target, error), git func(string, ...string) (string, error), out io.Writer) error {
 	t, err := read(number)
 	if err != nil {
 		return err
 	}
-	w, err := newWorkspace(source, revision, t, git)
+	w, err := newWorkspace(source, revision, remote, t, git)
 	if err != nil {
 		return err
 	}

@@ -15,10 +15,9 @@ import (
 )
 
 // RenderSidebar renders a validated snapshot for the resolved membership and
-// page selection. The last argument, the stream's panel=members, no longer
-// changes the selection: panels open beside the conversation (#874).
-// Counts are member-dependent: this path never uses the shared message cache.
-func RenderSidebar(ctx context.Context, m org.Membership, snapshot conversation.SidebarSnapshot, _ bool) (realtime.Outgoing, error) {
+// page selection. Counts are member-dependent: this path never uses the
+// shared message cache.
+func RenderSidebar(ctx context.Context, m org.Membership, snapshot conversation.SidebarSnapshot) (realtime.Outgoing, error) {
 	page := sidebarView(view.ChannelPage{}, m, snapshot)
 	var html bytes.Buffer
 	if err := view.SidebarLists(page).Render(ctx, &html); err != nil {

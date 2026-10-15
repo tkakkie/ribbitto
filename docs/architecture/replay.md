@@ -12,7 +12,7 @@ sequenceDiagram
   participant C as stream writer
   B->>W: GET page
   W->>DB: REPEATABLE READ, READ ONLY: page data + event_seq of this organisation
-  W->>DB: members panel: a later snapshot of the listing only, its cursor unused
+  W->>DB: members panel: a later snapshot of the listing only, with no cursor
   W->>W: members panel: one presence snapshot with token
   W-->>B: HTML with cursor = event_seq, presence indicators and token
   B->>W: GET /organizations/{slug}/events?after=cursor&want=interests

@@ -55,13 +55,9 @@ func newReadSidebarFixture(t *testing.T, pool *pgxpool.Pool, limits ...*middlewa
 
 func readSidebarConnect(t *testing.T, b acceptanceBrowser, streams *httptest.Server, page string) <-chan sseEvent {
 	t.Helper()
-	path := strings.Split(page, "?")[0]
-	members := strings.HasSuffix(path, "/members")
-	path = strings.TrimSuffix(path, "/members")
+	// A members panel's page streams like the conversation beside it.
+	path := strings.TrimSuffix(strings.Split(page, "?")[0], "/members")
 	endpoint := strings.Replace(streamEndpoint(t, path), "want=messages", "want=sidebar", 1)
-	if members {
-		endpoint += "panel=members&"
-	}
 	events, status, _ := openEndpointIn(t.Context(), t, on(b, streams), endpoint, "6", "")
 	if status != 200 {
 		t.Fatalf("sidebar connect status = %d", status)

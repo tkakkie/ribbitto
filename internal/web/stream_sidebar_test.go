@@ -16,7 +16,7 @@ import (
 )
 
 func TestStreamSidebarBinding(t *testing.T) {
-	for _, scope := range []string{"matching", "organisation", "member", "channel", "topic", "members", "no channel"} {
+	for _, scope := range []string{"matching", "organisation", "member", "channel", "topic", "no channel"} {
 		t.Run(scope, func(t *testing.T) {
 			m := org.Membership{Organization: org.Organization{ID: kernel.ID{9}, Slug: "acme"}, Member: org.Member{ID: kernel.ID{3}, JoinedEventSeq: 1}}
 			channel, topic := kernel.ID{1}, kernel.ID{6}
@@ -33,9 +33,9 @@ func TestStreamSidebarBinding(t *testing.T) {
 			hub, seen, calls := realtime.NewHub(), -1, 0
 			p := channelPages{channels: &fakeChannels{}, topics: fakeTopics{}, stream: &Streaming{Hub: hub, Events: organisationLog{},
 				Sessions: laterSession{hub: hub, session: identity.Session{ID: kernel.ID{0x51}, ExpiresAt: time.Now().Add(time.Hour)}, seen: &seen},
-				Sidebar: func(got org.Membership, c kernel.ID, selected *kernel.ID, members bool) realtime.SidebarSource {
+				Sidebar: func(got org.Membership, c kernel.ID, selected *kernel.ID) realtime.SidebarSource {
 					calls++
-					if got != m || c != channel || selected == nil || *selected != topic || members != (scope == "members") {
+					if got != m || c != channel || selected == nil || *selected != topic {
 						t.Fatal("sidebar binding lost resolved membership or page selection")
 					}
 					return nil
@@ -46,9 +46,6 @@ func TestStreamSidebarBinding(t *testing.T) {
 			wantCalls, wantStatus := 1, 200
 			if scope == "no channel" {
 				query, wantCalls, wantStatus = "after=0&want=sidebar", 0, 400
-			}
-			if scope == "members" {
-				query += "&panel=members"
 			}
 			r := httptest.NewRequest("GET", "/events?"+query, nil)
 			r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})

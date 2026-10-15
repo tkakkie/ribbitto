@@ -19,8 +19,24 @@ func TestReducedMotion(t *testing.T) {
 	const reduce, safe = "@media (prefers-reduced-motion:reduce)", "@media (prefers-reduced-motion:no-preference)"
 	property := regexp.MustCompile(`^(animation|transition|scale|rotate|translate|transform)(-[a-z-]+)?$`)
 	state := regexp.MustCompile(`:(hover|active|focus)`)
-	// Minified, ::before and ::after are written :before and :after.
-	pseudo := regexp.MustCompile(`::[a-z-]+`)
+	// Every ASCII :name or ::name in full, so chained pseudo-elements
+	// (:before::marker) are each seen and :first-line2 is not read as
+	// :first-line. The built names are ASCII; an escaped colon in a class name
+	// (.hover\:bg-hover) reads as a pseudo-class and is ignored.
+	colon := regexp.MustCompile(`::?[a-zA-Z0-9_-]+`)
+	// The reset (*, ::before, ::after) already stops ::before and ::after. A
+	// pseudo-element is ::name, or one of the four CSS 2 names with a single
+	// colon, the form the minifier writes ::before and ::after in.
+	missed := func(selector string) bool {
+		for _, token := range colon.FindAllString(selector, -1) {
+			switch name := strings.TrimLeft(token, ":"); {
+			case name == "before" || name == "after":
+			case strings.HasPrefix(token, "::") || name == "first-line" || name == "first-letter":
+				return true
+			}
+		}
+		return false
+	}
 	reset, built := false, map[string]bool{}
 	for _, rule := range cssRules(string(source)) {
 		context := strings.Join(rule.context, " ")
@@ -28,7 +44,12 @@ func TestReducedMotion(t *testing.T) {
 			continue
 		}
 		if strings.Contains(context, reduce) {
-			reset = reset || strings.HasPrefix(rule.selector, "*") &&
+			// missed exempts ::before and ::after because this rule names them.
+			selectors := map[string]bool{}
+			for _, selector := range strings.Split(rule.selector, ",") {
+				selectors[strings.TrimSpace(selector)] = true
+			}
+			reset = reset || selectors["*"] && (selectors[":before"] || selectors["::before"]) && (selectors[":after"] || selectors["::after"]) &&
 				strings.Contains(rule.declarations, "animation:none!important") && strings.Contains(rule.declarations, "transition:none!important")
 			continue
 		}
@@ -41,7 +62,7 @@ func TestReducedMotion(t *testing.T) {
 				built[rule.selector] = true
 				// The reset reaches elements, ::before and ::after only, not a
 				// sheet's ::backdrop or other pseudo-elements.
-				if pseudo.MatchString(rule.selector) && !strings.Contains(context, safe) {
+				if missed(rule.selector) && !strings.Contains(context, safe) {
 					t.Errorf("%s: %s on a pseudo-element the reset misses, outside %s", rule.selector, name, safe)
 				}
 				// Layered !important would outrank the unlayered reset.
@@ -58,7 +79,7 @@ func TestReducedMotion(t *testing.T) {
 		}
 	}
 	if !reset {
-		t.Errorf("no %s rule resets animation and transition on every element with !important", reduce)
+		t.Errorf("no %s rule resets animation and transition on every element, ::before and ::after with !important", reduce)
 	}
 	// The motion classes are built, so the checks above cover them.
 	for _, class := range []string{".animate-typing-dot-1", ".animate-typing-dot-3", ".transition-feedback", `.motion-safe\:active\:scale-96:active`} {

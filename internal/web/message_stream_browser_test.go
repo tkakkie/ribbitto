@@ -62,6 +62,7 @@ func TestBrowser(t *testing.T) {
 	t.Run("short-height", func(t *testing.T) { testShortHeightBrowser(t, browser) })
 	t.Run("welcome", func(t *testing.T) { testWelcomeBrowser(t, browser) })
 	t.Run("static-headers", func(t *testing.T) { testStaticHeadersBrowser(t, browser) })
+	t.Run("popover-focus", func(t *testing.T) { testPopoverFocusBrowser(t, browser) })
 	for _, side := range []string{"source", "destination"} {
 		modes := []string{"before", "stale", "fresh", "abort", "4xx"}
 		if side == "source" {
@@ -514,7 +515,7 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 		Channels: []conversation.Channel{{ID: snapshot.Current.ID, Name: "general"}},
 		Topics:   []conversation.Topic{{ID: topic, Name: "retained"}}, ChannelCounts: map[kernel.ID]int64{snapshot.Current.ID: 9}}
 	for _, focused := range []string{"link-" + view.ChannelDOMID(snapshot.Current.ID), "link-" + view.TopicDOMID(topic)} {
-		frame, err := RenderSidebar(ctx, org.Membership{Organization: org.Organization{Slug: "acme"}}, state, false)
+		frame, err := RenderSidebar(ctx, org.Membership{Organization: org.Organization{Slug: "acme"}}, state)
 		if err != nil {
 			t.Fatal(err)
 		}

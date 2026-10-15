@@ -26,6 +26,8 @@ templ layout(stylesheetURL, title string) {
 			<script defer src="/static/vendor/htmx-2.0.7.min.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/vendor/htmx-ext-sse-2.2.4.min.js" nonce={ templ.GetNonce(ctx) }></script>
 			<script defer src="/static/vendor/idiomorph-ext-0.7.4.min.js" nonce={ templ.GetNonce(ctx) }></script>
+			// Every popover follows one focus rule (docs/accessibility.md).
+			<script defer src="/static/popover-focus-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		</head>
 		<body class="bg-base">
 			{ children... }

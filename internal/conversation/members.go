@@ -18,27 +18,24 @@ type ChannelMember struct {
 	DisplayName, Handle string
 }
 
-// MembersPage is the channel context, sidebar, members and stream cursor from one snapshot.
+// MembersPage is one bounded page of a channel's members, read in one snapshot,
+// and the member ID the next page starts after (nil on the last page).
 type MembersPage struct {
-	PageCounts
-	Current     Channel
-	Channels    []Channel
-	Topics      []Topic
-	Members     []ChannelMember
-	Next        *kernel.ID
-	EventCursor *int64
+	Members []ChannelMember
+	Next    *kernel.ID
 }
 
 // Members reads a bounded channel membership page. Public channels currently
 // include every organisation member; this use case is the seam for private channels.
+// It reads no sidebar, counts or stream cursor: the panel renders beside a
+// conversation page that has its own (#903).
 func (s *Reader) Members(ctx context.Context, m org.Membership, channelID kernel.ID, after *kernel.ID) (page MembersPage, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
-		reads := s.reads(snapshot)
-		loaded, err := loadSidebarContext(ctx, reads, m.Organization.ID, channelID, nil)
-		if err != nil {
-			return err
+		// The listing is organisation-wide, so the channel check is what
+		// keeps another organisation's or a missing channel out.
+		if _, err := s.reads(snapshot).GetChannel(ctx, m.Organization.ID, channelID); err != nil {
+			return fmt.Errorf("finding channel: %w", err)
 		}
-		page.Current, page.Channels, page.Topics = loaded.current, loaded.channels, loaded.topics
 		members, err := s.members(snapshot).ListMembers(ctx, m.Organization.ID, after, MemberPageSize+1)
 		if err != nil {
 			return fmt.Errorf("listing channel members: %w", err)
@@ -62,14 +59,7 @@ func (s *Reader) Members(ctx context.Context, m org.Membership, channelID kernel
 			}
 			page.Members = append(page.Members, ChannelMember{ID: member.ID, DisplayName: name, Handle: member.Handle})
 		}
-		seq, err := s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
-		if err != nil {
-			return fmt.Errorf("reading members page cursor: %w", err)
-		}
-		page.EventCursor = &seq
-		page.PageCounts, err = s.pageCounts(ctx, snapshot, m, channelID, page.Channels, page.Topics, nil)
-		page.SnapshotSeq = seq
-		return err
+		return nil
 	})
 	if err != nil {
 		return MembersPage{}, fmt.Errorf("reading members page snapshot: %w", err)

@@ -55,7 +55,7 @@ type ChannelListPage struct {
 	EventCursor int64
 }
 
-// ChannelList reads the channel list page in one snapshot, as Members does:
+// ChannelList reads the channel list page in one snapshot:
 // the cursor comes from the snapshot that counted, so the stream neither
 // skips nor repeats a change. The list shows no divider, so it reads counts only.
 func (s *Reader) ChannelList(ctx context.Context, m org.Membership, channelID kernel.ID) (page ChannelListPage, err error) {
@@ -83,7 +83,7 @@ func (s *Reader) ChannelList(ctx context.Context, m org.Membership, channelID ke
 	return page, nil
 }
 
-// sidebarContext excludes counts so callers can read history or members and
+// sidebarContext excludes counts so callers can read history and
 // their cursor before counting, all within the snapshot they already own.
 type sidebarContext struct {
 	current  Channel

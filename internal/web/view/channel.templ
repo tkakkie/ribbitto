@@ -178,7 +178,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						<div class="flex min-w-0 flex-1 items-center gap-2 max-desk:gap-0">
 							@channelImage(page.Current.ImageURL, true)
 							if page.Topic != nil {
-								<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="min-w-0 truncate text-title text-muted hover:text-brand max-desk:flex max-desk:min-h-11 max-desk:w-11 max-desk:shrink-0 max-desk:items-center"><span class="truncate">{ page.Current.Name }</span></a>
+								<a href={ templ.SafeURL(ChannelURL(page.Organization.Slug, page.Current.ID)) } class="min-w-0 truncate text-title text-muted hover:text-brand max-desk:ml-1 max-desk:flex max-desk:min-h-11 max-desk:w-11 max-desk:shrink-0 max-desk:items-center"><span class="truncate">{ page.Current.Name }</span></a>
 								@Icon("chevron-right-regular", 20)
 								@Icon("branch-regular", 20)
 								<h1 class="flex min-w-0 items-center text-title font-semibold max-desk:flex-1">
@@ -186,7 +186,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 									@TopicHeadingCount(page, false)
 								</h1>
 							} else {
-								<h1 class="truncate text-title font-semibold">{ page.Current.Name }</h1>
+								<h1 class="truncate text-title font-semibold max-desk:ml-1">{ page.Current.Name }</h1>
 							}
 						</div>
 						@panelControls(page)

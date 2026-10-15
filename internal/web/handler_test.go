@@ -228,9 +228,10 @@ func TestHTMLSecurity(t *testing.T) {
 				}
 				previous = nonce
 				tags := scripts.FindAllString(w.Body.String(), -1)
-				// The layout's arrival script and htmx with its two extensions.
-				if len(tags) != 4 {
-					t.Fatalf("got %d scripts, want 4", len(tags))
+				// The layout's arrival script, htmx with its two extensions and
+				// the popover focus script.
+				if len(tags) != 5 {
+					t.Fatalf("got %d scripts, want 5", len(tags))
 				}
 				for _, tag := range tags {
 					if !strings.Contains(tag, ` nonce="`+nonce+`"`) {

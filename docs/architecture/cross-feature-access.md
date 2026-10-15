@@ -37,12 +37,13 @@ org's `organization.event_seq` on every channel or topic page, including
 `?before=` pages. It returns `conversation.ChannelPage` with that snapshot cursor;
 older pages connect with only the sidebar interest. The injected `PageCountsIn`
 factory also binds unread's two list reads to that snapshot, including older
-history and members pages; their plain results carry both count maps and
+history pages; their plain results carry both count maps and
 first-unread sequences. Org's membership API supplies the immutable join boundary.
 `conversation.Reader.Members` validates the channel through conversation's scoped
-`GetChannel`, then reads its sidebar, org's ID-ordered `Directory.ListMembers`
-(100 members plus one lookahead), identity's display names in one batch, and
-org's stream cursor in the same snapshot. All public channels include every
+`GetChannel`, then reads org's ID-ordered `Directory.ListMembers`
+(100 members plus one lookahead) and identity's display names in one batch, in
+the same snapshot; it reads no sidebar, counts or cursor, which the conversation
+page beside the panel supplies. All public channels include every
 organisation member today. The org query reads only its own member table;
 channel scope stays in conversation. A member-ID cursor only advances the
 organisation-scoped page and grants no access.

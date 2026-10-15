@@ -72,7 +72,7 @@ func TestStreamSynchronousSidebar(t *testing.T) {
 				}
 				return identity.Account{ID: kernel.ID{1}}, live, nil
 			})
-			stream.Sidebar = func(org.Membership, kernel.ID, *kernel.ID, bool) realtime.SidebarSource {
+			stream.Sidebar = func(org.Membership, kernel.ID, *kernel.ID) realtime.SidebarSource {
 				factories++
 				if seen != 1 {
 					t.Fatal("sidebar source created before session recheck")

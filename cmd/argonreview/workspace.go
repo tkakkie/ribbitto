@@ -218,9 +218,10 @@ func (r *refused) Error() string { return r.err.Error() }
 func (r *refused) Unwrap() error { return r.err }
 
 // entry is what the record keeps of a path: its type, inode, size and change
-// time, and a regular file's content hash.
+// time, and a regular file's size and content hash.
 type entry struct {
 	meta string
+	size int64
 	sum  [sha256.Size]byte
 }
 
@@ -266,7 +267,7 @@ func record(tree string) (map[string]entry, error) {
 		if err != nil {
 			return err
 		}
-		e := entry{meta: meta}
+		e := entry{meta: meta, size: size}
 		if kind == unix.S_IFREG {
 			if e.sum, err = hashUpTo(path, size); err != nil {
 				return err
@@ -288,6 +289,15 @@ func record(tree string) (map[string]entry, error) {
 // and time stay within the record's own size whatever a run left behind
 // (Codex on #1117).
 func verify(tree string, recorded map[string]entry) (string, error) {
+	return verifyWith(tree, recorded, listNames)
+}
+
+// listNames reads a directory's next names, a chunk at a time.
+func listNames(dir *os.File) ([]string, error) { return dir.Readdirnames(256) }
+
+// verifyWith is verify with the directory listing passed in, so a test can
+// count what it reads.
+func verifyWith(tree string, recorded map[string]entry, list func(*os.File) ([]string, error)) (string, error) {
 	seen := 0
 	var walk func(path string) (string, error)
 	walk = func(path string) (string, error) {
@@ -295,7 +305,7 @@ func verify(tree string, recorded map[string]entry) (string, error) {
 		if !ok {
 			return path, nil
 		}
-		meta, size, kind, err := metadata(path)
+		meta, _, kind, err := metadata(path)
 		if errors.Is(err, fs.ErrNotExist) {
 			return path, nil
 		}
@@ -307,7 +317,8 @@ func verify(tree string, recorded map[string]entry) (string, error) {
 		}
 		seen++
 		if kind == unix.S_IFREG {
-			sum, err := hashUpTo(path, size)
+			// Bounded by the recorded size, never by what is there now.
+			sum, err := hashUpTo(path, want.size)
 			if err != nil {
 				return "", err
 			}
@@ -325,7 +336,7 @@ func verify(tree string, recorded map[string]entry) (string, error) {
 		}
 		defer func() { _ = dir.Close() }()
 		for {
-			names, err := dir.Readdirnames(256)
+			names, err := list(dir)
 			for _, name := range names {
 				if changed, walkErr := walk(filepath.Join(path, name)); changed != "" || walkErr != nil {
 					return changed, walkErr

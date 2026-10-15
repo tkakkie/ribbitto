@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -220,6 +221,62 @@ func TestVerifyBeyondMetadata(t *testing.T) {
 				t.Fatalf("verify = %q, %v; want %s", changed, err, want)
 			}
 		})
+	}
+}
+
+// sameMetadata sets every recorded entry's metadata to what is there now,
+// as a coarse timestamp could leave it.
+func sameMetadata(recorded map[string]entry) {
+	for p := range recorded {
+		if meta, _, _, err := metadata(p); err == nil {
+			e := recorded[p]
+			e.meta = meta
+			recorded[p] = e
+		}
+	}
+}
+
+// Verification reads a file only up to its recorded size: a recorded 4-byte
+// file now 100 GB is found at once, not read through (Codex on #1117).
+func TestVerifyReadsWithinTheRecord(t *testing.T) {
+	tree := t.TempDir()
+	path := filepath.Join(tree, "file")
+	write(t, path, "one\n")
+	recorded, err := record(tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(path, 100<<30); err != nil {
+		t.Fatal(err)
+	}
+	sameMetadata(recorded)
+	started := time.Now()
+	if changed, err := verify(tree, recorded); changed != path || err != nil || time.Since(started) > 5*time.Second {
+		t.Fatalf("verify = %q, %v after %v", changed, err, time.Since(started))
+	}
+}
+
+// Verification lists a directory a chunk at a time and stops at the first
+// unknown name, so thousands of new entries cost one chunk (Codex on #1117).
+func TestVerifyListsWithinOneChunk(t *testing.T) {
+	tree := t.TempDir()
+	write(t, filepath.Join(tree, "d/known"), "")
+	recorded, err := record(tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 2000 {
+		write(t, filepath.Join(tree, "d", fmt.Sprintf("new%d", i)), "")
+	}
+	sameMetadata(recorded)
+	read := 0
+	counting := func(dir *os.File) ([]string, error) {
+		names, err := listNames(dir)
+		read += len(names)
+		return names, err
+	}
+	if changed, err := verifyWith(tree, recorded, counting); !strings.HasPrefix(changed, filepath.Join(tree, "d")+"/") || err != nil || read > 256+1 {
+		t.Fatalf("verify = %q, %v after reading %d names", changed, err, read)
 	}
 }
 

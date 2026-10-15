@@ -88,7 +88,7 @@ post's scroll intent is consumed once; failed posts create none. Focus stays in
 the composer. Live appends are announced politely;
 replay duplicates replace the same message id without another announcement.
 
-*Planned (#1170, [decision 36](../decisions/36-one-message-has-a-stable-url.md)):* one message has its own URL,
+One message has its own URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
 `/organizations/{slug}/messages/{message-id}`. It answers 303 to the message's
 current topic, scrolled to the message and highlighted instead of the newest:
 the latest page when the message is among the topic's newest 50, otherwise an

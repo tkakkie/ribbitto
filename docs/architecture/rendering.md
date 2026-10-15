@@ -72,7 +72,7 @@ fits both texts, so the rewrite moves nothing beside it (#1094,
 [`ui-components.md`](../ui-components.md#shared-components)).
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v6.js` also loads with the response nonce on channel pages.
+`message-composer-v7.js` also loads with the response nonce on channel pages.
 One key-to-command function maps Enter to `send` and Shift+Enter to `newline`,
 ignoring IME composition (`isComposing` or keyCode 229); one submit function
 uses the native form submission path through `requestSubmit`. The latest-page form uses
@@ -92,9 +92,11 @@ signals cannot disable the message controls or block submission. Delegated input
 and composition-end listeners trigger htmx for nonblank drafts, suppressing
 composing input. They survive replacement without storing drafts or sending
 requests themselves. Without scripts, this hidden form sends nothing.
-The script scrolls to the newest entry on load (*planned*, #1159: to the
-linked message on a page opened from its URL, [decision 36](../decisions/36-one-message-has-a-stable-url.md))
-and focuses the composer after its replacement. Scripts
+The script scrolls to the newest entry on load, except when the URL's
+fragment names a message on the page: a page opened from a message's URL
+([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170)
+keeps the browser's scroll to that message, which CSS `:target` highlights
+with or without scripts. It focuses the composer after its replacement. Scripts
 stay outside the replaced section; CSP and htmx evaluation remain unchanged.
 
 `message-history-v2.js` keeps the reader's place when "Load older"

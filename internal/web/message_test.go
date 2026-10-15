@@ -38,6 +38,8 @@ type fakeMessages struct {
 	before *[]*int64
 	// around, when set, records each around read's position.
 	around *[]int64
+	// located answers Locate; nil is ErrMessageNotFound.
+	located *conversation.Location
 }
 
 func (f fakeMessages) Around(ctx context.Context, m org.Membership, id kernel.ID, topicID *kernel.ID, around int64) (conversation.ChannelPage, error) {
@@ -46,6 +48,13 @@ func (f fakeMessages) Around(ctx context.Context, m org.Membership, id kernel.ID
 	}
 	f.before = nil
 	return f.Page(ctx, m, id, topicID, nil)
+}
+
+func (f fakeMessages) Locate(context.Context, org.Membership, kernel.ID) (conversation.Location, error) {
+	if f.located == nil {
+		return conversation.Location{}, conversation.ErrMessageNotFound
+	}
+	return *f.located, f.err
 }
 
 // One is not used by handler tests; the stream is tested end to end.

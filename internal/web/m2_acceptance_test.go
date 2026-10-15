@@ -216,6 +216,13 @@ func TestM2AcceptanceAgainstPostgreSQL(t *testing.T) {
 				}
 				path = strings.ReplaceAll(path, "{topicID}", id)
 			}
+			if strings.Contains(path, "{messageID}") {
+				var id string
+				if err := pool.QueryRow(ctx, "SELECT m.id::text FROM message m JOIN organization o ON o.id = m.organization_id WHERE o.slug = 'acceptance' ORDER BY m.event_seq LIMIT 1").Scan(&id); err != nil {
+					t.Fatal(err)
+				}
+				path = strings.ReplaceAll(path, "{messageID}", id)
+			}
 			if strings.ContainsAny(path, "{}") {
 				t.Fatalf("route needs a concrete acceptance fixture: %s", path)
 			}

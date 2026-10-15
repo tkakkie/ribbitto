@@ -235,8 +235,8 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						</ol>
 						<div class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
 						if !latest(page) {
-							// Only an older page reached by its own URL shows this: an
-							// around page, or "Load older" without JavaScript.
+							// Only an older page reached by its own URL shows this: a
+							// message's link, or "Load older" without JavaScript.
 							<p class="px-6 pb-4 text-center">
 								@historyLink(conversationURL(page), false) {
 									@Icon("chevron-down-regular", 20)
@@ -270,7 +270,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/read-visibility-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v6.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v7.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/side-panel-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v2.js" nonce={ templ.GetNonce(ctx) }></script>

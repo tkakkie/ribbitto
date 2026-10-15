@@ -24,6 +24,12 @@ type Message struct {
 	TopicURL string
 }
 
+// MessageURL is one message's stable URL (decision 36): the slug and the
+// message's UUID, never its channel or topic, which can change.
+func MessageURL(slug string, id kernel.ID) string {
+	return "/organizations/" + slug + "/messages/" + idValue(id)
+}
+
 // MessageDOMID is the stable DOM id shared by page and stream message items.
 func MessageDOMID(id kernel.ID) string {
 	return fmt.Sprintf("message-%x", id)
@@ -46,7 +52,10 @@ templ messageItem(entry Message, announcement string) {
 		if announcement != "" {
 			data-announcement={ announcement }
 		}
-		class="relative flex flex-col gap-1 pl-12 max-desk:wrap-anywhere"
+		// A message's URL lands on it (decision 36): :target highlights it
+		// without JavaScript, and the outline widens the fill past the text
+		// without moving it.
+		class="relative flex scroll-mt-6 flex-col gap-1 pl-12 max-desk:wrap-anywhere target:rounded-sm target:bg-selected target:outline-8 target:outline-selected"
 	>
 		// Below desk the time sits under the name and the topic label and Select
 		// stay together at the end, so a one-line message takes the 44 px target

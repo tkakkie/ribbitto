@@ -6,7 +6,7 @@ these rules on 2026-10-12 (#880). Metadata storage and bounded snapshot
 reads (#887), pin/unpin use cases (#888) and realtime's generic channel-state
 refresh seam (#891) are implemented; UI and delivery remain planned.
 The jump from a pin uses the message's URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md),
-implemented by #1159), which comes first.
+implemented by #1170), which comes first.
 
 ## Permissions and limits
 

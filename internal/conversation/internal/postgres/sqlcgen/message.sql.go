@@ -292,6 +292,41 @@ func (q *Queries) ListMessagesBefore(ctx context.Context, arg ListMessagesBefore
 	return items, nil
 }
 
+const locateMessage = `-- name: LocateMessage :one
+SELECT m.channel_id, m.topic_id, m.event_seq,
+       (SELECT count(*) FROM (SELECT 1 FROM message n
+         WHERE n.organization_id = $1 AND n.topic_id = m.topic_id
+           AND n.event_seq > m.event_seq
+         LIMIT $2) newer)::bigint AS newer
+FROM message m
+WHERE m.organization_id = $1 AND m.id = $3
+`
+
+type LocateMessageParams struct {
+	OrganizationID pgtype.UUID
+	Limit          int32
+	ID             pgtype.UUID
+}
+
+type LocateMessageRow struct {
+	ChannelID pgtype.UUID
+	TopicID   pgtype.UUID
+	EventSeq  int64
+	Newer     int64
+}
+
+func (q *Queries) LocateMessage(ctx context.Context, arg LocateMessageParams) (LocateMessageRow, error) {
+	row := q.db.QueryRow(ctx, locateMessage, arg.OrganizationID, arg.Limit, arg.ID)
+	var i LocateMessageRow
+	err := row.Scan(
+		&i.ChannelID,
+		&i.TopicID,
+		&i.EventSeq,
+		&i.Newer,
+	)
+	return i, err
+}
+
 const topicChangedBetween = `-- name: TopicChangedBetween :one
 SELECT EXISTS (SELECT 1 FROM message
  WHERE organization_id = $1 AND channel_id = $2

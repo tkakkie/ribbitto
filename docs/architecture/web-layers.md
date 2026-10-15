@@ -48,7 +48,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `data-posted-message` carries the posted message's DOM id; errors omit it.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
-  `message-composer-v6.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v7.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one.
   Fragments echo the submitted cursor; only stream application advances it. The action URL identifies the feed/topic. The stream script consumes that id to scroll once the item is present,

@@ -107,6 +107,20 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	place := typing.Place{Channel: acmeChannel, Topic: defaultTopic.ID}
+	// Every request for a message's URL names this valid, seeded message, so
+	// a 404 comes from authorisation, not from a malformed or unknown ID.
+	linked, err := services.Posting.PostToTopic(ctx, membership, acmeChannel, nil, "linked message")
+	if err != nil {
+		t.Fatal(err)
+	}
+	globexMembership, err := services.Authz.Member(ctx, &identity.Account{ID: bob}, "globex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignMessage, err := services.Posting.PostToTopic(ctx, globexMembership, globexChannel, nil, "foreign message")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer state.Open(acme, membership.Member.ID, acmeChannel)()
 	handler, err := NewHandler("", catalogues, services)
 	if err != nil {
@@ -126,6 +140,9 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		if strings.Contains(path, "{channelID}") {
 			// Keep what follows the channel, such as a topic path.
 			path = view.ChannelURL("acme", acmeChannel) + strings.TrimPrefix(route.path, "/channels/{channelID}")
+		}
+		if strings.Contains(path, "{messageID}") {
+			path = view.MessageURL("acme", linked.ID)
 		}
 		path = strings.ReplaceAll(path, "{topicID}", strings.TrimPrefix(view.ConversationURL("acme", acmeChannel, &defaultTopic.ID), view.ChannelURL("acme", acmeChannel)+"/topics/"))
 		for _, tt := range []struct {
@@ -162,6 +179,18 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 				"GET /channels/{channelID}/topics/{topicID}/members", "GET /channels/{channelID}/topics/{topicID}/overview":
 				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Acme Corporation") || !strings.Contains(w.Body.String(), "雑談") {
 					t.Fatalf("channel: %d %s", w.Code, w.Body.String())
+				}
+			case "GET /messages/{messageID}":
+				// The latest page of its topic; another organisation's message
+				// and a malformed ID are the same plain 404.
+				want := view.ConversationURL("acme", acmeChannel, &defaultTopic.ID) + "#" + view.MessageDOMID(linked.ID)
+				if w.Code != http.StatusSeeOther || w.Header().Get("Location") != want {
+					t.Fatalf("message: %d %s", w.Code, w.Header().Get("Location"))
+				}
+				for _, path := range []string{view.MessageURL("acme", foreignMessage.ID), view.MessageURL("acme", kernel.ID{0xee}), "/organizations/acme/messages/not-an-id"} {
+					if w := get("GET", path, aliceToken, now); w.Code != http.StatusNotFound || w.Body.String() != "404 page not found\n" {
+						t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
+					}
 				}
 			case "GET /channels":
 				// The default channel's row nests its topics; another organisation's
@@ -278,6 +307,35 @@ func TestOrgRoutesAgainstPostgreSQL(t *testing.T) {
 		older := get("GET", olderURL, aliceToken, now)
 		if older.Code != 200 || !strings.Contains(older.Body.String(), "topic-message-00") || strings.Contains(older.Body.String(), "topic-message-01") || !strings.Contains(older.Body.String(), `href="`+topicURL+`"`) {
 			t.Fatalf("older: %d %s", older.Code, older.Body.String())
+		}
+		// A message's URL (decision 36): the oldest of the topic's 51 is off
+		// its latest page, so it lands on the older page around it, which
+		// holds context after it and streams only the sidebar; the next one
+		// is on the latest page.
+		for _, tc := range []struct {
+			body   string
+			latest bool
+		}{{"topic-message-00", false}, {"topic-message-01", true}} {
+			var id kernel.ID
+			var seq int64
+			if err := pool.QueryRow(ctx, "SELECT id, event_seq FROM message WHERE organization_id = $1 AND body = $2", acme, tc.body).Scan(&id, &seq); err != nil {
+				t.Fatal(err)
+			}
+			want := topicURL
+			if !tc.latest {
+				want += fmt.Sprintf("?around=%d", seq)
+			}
+			w := get("GET", view.MessageURL("acme", id), aliceToken, now)
+			if w.Code != 303 || w.Header().Get("Location") != want+"#"+view.MessageDOMID(id) {
+				t.Fatalf("%s: %d %s", tc.body, w.Code, w.Header().Get("Location"))
+			}
+			page := get("GET", want, aliceToken, now).Body.String()
+			if !strings.Contains(page, `<li id="`+view.MessageDOMID(id)+`"`) || strings.Contains(page, "want=sidebar&amp;channel") == tc.latest {
+				t.Fatalf("%s: landing page %s", tc.body, page)
+			}
+			if !tc.latest && (!strings.Contains(page, "topic-message-24") || strings.Contains(page, "topic-message-25")) {
+				t.Fatalf("around page lacks the half page after the message: %s", page)
+			}
 		}
 		// The topic page's data attributes of the DOM contract (#351):
 		// the topic on the list, and the loaded bound on the latest page

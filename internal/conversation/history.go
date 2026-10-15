@@ -40,6 +40,14 @@ type Page struct {
 	Older bool
 }
 
+// Location is where a message is now. Latest reports that it is among its
+// topic's newest PageSize messages, the topic's latest page.
+type Location struct {
+	ChannelID, TopicID kernel.ID
+	EventSeq           int64
+	Latest             bool
+}
+
 // ChannelPage is a channel, its sidebar and history read in one snapshot.
 type ChannelPage struct {
 	PageCounts

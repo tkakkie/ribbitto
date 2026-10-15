@@ -29,10 +29,11 @@ type Channels interface {
 }
 
 // MessageReader provides the channel page and cursor from one snapshot, the
-// sidebar snapshot the channel list page shows, and one message by sequence or
-// a bounded batch by ID for the stream.
+// sidebar snapshot the channel list page shows, one message by sequence or
+// a bounded batch by ID for the stream, and where a message is now for its URL.
 type MessageReader interface {
 	Around(context.Context, org.Membership, kernel.ID, *kernel.ID, int64) (conversation.ChannelPage, error)
+	Locate(context.Context, org.Membership, kernel.ID) (conversation.Location, error)
 	Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error)
 	Sidebar(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.SidebarSnapshot, error)
 	Many(context.Context, org.Membership, kernel.ID, []kernel.ID) ([]conversation.Entry, error)

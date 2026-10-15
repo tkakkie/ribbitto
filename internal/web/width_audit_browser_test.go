@@ -185,6 +185,15 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 						p.MustEval(`() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`)
 					})
 					step("auditing the loaded page", func(p *rod.Page) { audit(p, "loaded") })
+					// The phone header has no gap between its items to fit at 320 px,
+					// but the channel name keeps one from the image (#1095).
+					if size == [2]int{390, 844} && strings.HasSuffix(c.name, "-closed") {
+						step("measuring the gap after the channel image", func(p *rod.Page) {
+							if problem := p.MustEval(headerImageGap).Str(); problem != "" {
+								t.Errorf("%s: %s", where, problem)
+							}
+						})
+					}
 					if strings.HasSuffix(c.name, "overview") {
 						step("opening the image picker", func(p *rod.Page) {
 							p.MustElement("#side-panel summary").MustClick()
@@ -294,6 +303,15 @@ const widthAudit = `() => {
 	for (const [e,x,y] of positions) { e.scrollLeft = x; e.scrollTop = y; }
 	window.scrollTo({left:windowPosition[0],top:windowPosition[1],behavior:'instant'});
 	return {problems, checked};
+}`
+
+// headerImageGap checks that at least 4 px separate the conversation header's
+// channel image from the channel name after it.
+const headerImageGap = `() => {
+	const image = document.querySelector('#conversation > header img'), name = image.nextElementSibling;
+	const gap = name.getBoundingClientRect().left - image.getBoundingClientRect().right;
+	return gap >= 4 ? '' : 'channel image ' + JSON.stringify(image.getBoundingClientRect().toJSON()) + ' is ' + gap +
+		' px from the channel name <' + name.tagName.toLowerCase() + '> ' + JSON.stringify(name.getBoundingClientRect().toJSON()) + ', want at least 4 px';
 }`
 
 // shortHeight is the short variant's 27.25 rem in web/styles/app.css.

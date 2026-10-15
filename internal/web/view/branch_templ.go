@@ -165,7 +165,7 @@ func branchForm(page ChannelPage) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</label> <select id=\"branch-to\" name=\"to\" class=\"min-h-11 max-w-full rounded-md border border-border-strong bg-input px-3 text-fg\"><option value=\"\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</label> <select id=\"branch-to\" name=\"to\" class=\"min-h-11 max-w-full rounded-md border border-border-strong bg-input px-3 text-fg max-desk:text-entry\"><option value=\"\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

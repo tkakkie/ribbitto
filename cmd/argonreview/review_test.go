@@ -219,57 +219,51 @@ func (b *stoppedFirst) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 
-// INT during a report write that blocks, because nobody reads stdout yet,
-// ends the launcher instead of being swallowed (Codex on #1113).
+// INT or TERM during a report write that blocks, because nobody reads
+// stdout, ends the launcher by that signal instead of being caught and lost
+// (Codex on #1113). The test reads the start of the report, so the write has
+// begun, then stops reading the remaining mebibyte and signals.
 func TestReviewSignalDuringTheReport(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
-	cmd := exec.Command(executable, "-test.run=^TestReviewHelper$")
-	cmd.Env = append(os.Environ(), "ARGONREVIEW_REVIEW_HELPER="+dir, "TMPDIR="+t.TempDir())
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
-	waitFor(t, filepath.Join(dir, "fake"))
-	fake, _ := os.ReadFile(filepath.Join(dir, "fake"))
-	workspaces, _ := os.ReadFile(filepath.Join(dir, "tmpdir"))
-	waitFor(t, filepath.Join(string(fake), "seen"))
-	// The workspace is removed just before the write starts.
-	for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(10 * time.Millisecond) {
-		if entries, err := os.ReadDir(string(workspaces)); err == nil && len(entries) == 0 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the workspace was never removed")
-		}
-	}
-	time.Sleep(200 * time.Millisecond)
-	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
-		t.Fatal(err)
-	}
-	_, _ = io.Copy(io.Discard, stdout)
-	if err := cmd.Wait(); err == nil {
-		t.Fatal("the review finished with its report despite INT")
+	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
+		t.Run(sig.String(), func(t *testing.T) {
+			cmd := exec.Command(executable, "-test.run=^TestReviewHelper$")
+			cmd.Env = append(os.Environ(), "ARGONREVIEW_REVIEW_HELPER=1", "TMPDIR="+t.TempDir())
+			stdout, err := cmd.StdoutPipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+			start := make([]byte, len("Argon review of"))
+			if _, err := io.ReadFull(stdout, start); err != nil || string(start) != "Argon review of" {
+				t.Fatalf("report start %q, %v", start, err)
+			}
+			time.Sleep(200 * time.Millisecond) // the rest fills the pipe
+			if err := cmd.Process.Signal(sig); err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.Copy(io.Discard, stdout)
+			_ = cmd.Wait()
+			if status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); !ok || !status.Signaled() || status.Signal() != sig {
+				t.Fatalf("the launcher ended with %v, not by %v", cmd.ProcessState, sig)
+			}
+		})
 	}
 }
 
 func TestReviewHelper(t *testing.T) {
-	dir := os.Getenv("ARGONREVIEW_REVIEW_HELPER")
-	if dir == "" {
+	if os.Getenv("ARGONREVIEW_REVIEW_HELPER") == "" {
 		t.Skip("run by TestReviewSignalDuringTheReport")
 	}
 	r, fake := newReview(t)
 	// Far more than a pipe holds, so the write blocks.
 	write(t, filepath.Join(fake, "stdout"), `{"event":"result","result":{"status":"SUCCESS","response":"`+strings.Repeat("x", 1<<20)+`"}}`+"\n")
-	write(t, filepath.Join(dir, "tmpdir"), os.Getenv("TMPDIR"))
-	write(t, filepath.Join(dir, "fake"), fake)
 	code, _ := r.runCatching(os.Stdout)
 	os.Exit(code)
 }

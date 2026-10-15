@@ -6,7 +6,7 @@
 // NewBrancher bind their writes to transactions over the pool; NewReader
 // binds conversation's reads to snapshots over the pool. Their runners and
 // own-module bindings are unexported; EventKinds registers the event routers
-// with realtime. MessageSequencesIn binds channel bounds and message existence to
+// with realtime (PinEventKinds stays separate until live activation). MessageSequencesIn binds channel bounds and message existence to
 // its caller's transaction; TopicReadCandidatesIn binds topic unread bounds
 // to that transaction. ChannelUnreadIn binds capped channel counts to the
 // caller's snapshot; TopicUnreadIn binds topic counts and selected first unread.

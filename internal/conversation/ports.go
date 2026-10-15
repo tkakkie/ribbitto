@@ -32,7 +32,7 @@ type AccountDirectory interface {
 // same one the member directory and the messages are read in.
 type AccountDirectoryIn func(platform.Snapshot) AccountDirectory
 
-// TxRunner runs channel creation, posting and branching (decision 26): the use
+// TxRunner runs channel creation, posting, branching and pinning (decision 26): the use
 // case owns the boundary, the writers only bind to the Tx they are given.
 type TxRunner interface {
 	// InTx runs fn in a new transaction. It commits when fn returns nil
@@ -74,7 +74,7 @@ type Writer interface {
 // WriterIn binds conversation's writes to the caller's transaction.
 type WriterIn func(platform.Tx) Writer
 
-// EventSequence is what posting and branching need from org in their
+// EventSequence is what posting, branching and pinning need from org in their
 // transaction: the organisation's next event_seq, taken first, whose row
 // lock makes sequence order commit order (decision 5). An unknown
 // organisation is org.ErrNotFound.
@@ -95,7 +95,7 @@ type EventAppender interface {
 type EventAppenderIn func(platform.Tx) EventAppender
 
 // Notifier records the latest committed event sequence for an organisation,
-// so open streams wake; posting and branching call it only after commit.
+// so open streams wake; callers raise only after commit.
 type Notifier interface {
 	Raise(organizationID kernel.ID, seq int64)
 }

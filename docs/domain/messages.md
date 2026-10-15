@@ -29,7 +29,7 @@ message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
 
 Channel pins reference the current message; their permissions, limits
-and lifecycle rules are in [`pins.md`](pins.md) (storage implemented in #887; use cases and UI planned).
+and lifecycle rules are in [`pins.md`](pins.md) (storage and use cases implemented in #887–#888; UI planned).
 
 ## Accepted bodies
 

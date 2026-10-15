@@ -1,9 +1,9 @@
-# Pin delivery *(planned, #880)*
+# Pin delivery *(durable writes implemented, #888; live delivery planned)*
 
 The [domain rules](../domain/pins.md) put pin metadata on messages, owned
 by `conversation`. The maintainer agreed this design on 2026-10-12 (#880);
-nothing here changes the current stream contract until the split issues
-implement it after M6.
+durable writes are implemented (#888). The separate router stays unregistered
+in live readers until #892, bypassing rendering; delivery below remains planned.
 
 ## Durable invalidation, current display
 

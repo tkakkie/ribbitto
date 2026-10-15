@@ -16,7 +16,7 @@ opening scrape while catching up. Drain is excluded. Aggregation accepts
 A valid terminal snapshot is retained if cancellation occurs during its fetch,
 but the sampler still returns a sampling-stopped error.
 
-The [stability protocol's](stream-sidebar-stability.md#new-window-rule-and-telemetry)
+The [historical stability protocol's](sidebar-counts-history.md#stability-and-validation-plans)
 inclusive two-second tolerance applies to the whole window's start and end,
 including those endpoints of the first and last minute buckets. Sampling accepts
 an opening dispatch at offsets `[0,2s]` and a closing dispatch at `[600s,602s]`;

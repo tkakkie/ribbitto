@@ -1,6 +1,6 @@
 # Stage-2 stability evaluator (#865, PR 3 slice 5c)
 
-`cmd/loadgen/stage2_stability.go` reimplements the unchanged [#867 rule](stream-sidebar-stability.md#new-window-rule-and-telemetry)
+`cmd/loadgen/stage2_stability.go` reimplements the unchanged [#867 rule](sidebar-counts-history.md#stability-and-validation-plans)
 and replaces the async stability placeholder; sync remains inconclusive.
 Stability rejects incomplete full-window evidence because #867 fixes that outcome, whereas the pinned headroom protocol makes incomplete evidence inconclusive.
 Short windows are inconclusive, checked before completeness or bound validity.
@@ -29,7 +29,7 @@ coverage failure offsets/buckets, duration, bound, posting count and completenes
 Positive 10/30 s diagnostic spikes slide 1 s after warm-up, retain each metric's
 earliest maximum offset and never change verdicts; no positive rise gives zero/zero.
 
-Both evaluators expand `testdata/stage2-stability.json` ranges without sorting
-and assert the same completeness/verdicts, proving identical verdicts without
-private-code imports or module edges. Tests use virtual offsets; mutation commands
+The evaluator expands `testdata/stage2-stability.json` ranges without sorting
+and asserts completeness/verdicts formerly shared with the removed private
+evaluator ([history](sidebar-counts-history.md#stability-and-validation-plans)). Tests use virtual offsets; mutation commands
 and failing assertions stay in the local PR body. No runner or load execution.

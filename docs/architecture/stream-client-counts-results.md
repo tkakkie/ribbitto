@@ -7,11 +7,10 @@ triggers, current-channel move triggers, the production `RecountLimit` and
 that cannot be imported from cmd/web; snapshot bytes replace HTML.
 `RIBBITTO_STREAM_COST_RECOUNTS` overrides the shared computation capacity;
 unset, it is `max(1, pool size / 2)`, matching synchronous production.
-The stopped comparison arms retain their historical wiring and knobs.
 
 `RIBBITTO_STREAM_COST_OTHER=0..100` places that percentage of streams on a
-second channel in the same organisation (default 0; sidebar mode, no comparison
-arm). Each step rounds down: the last `floor(N * percent / 100)` streams move.
+second channel in the same organisation (default 0; sidebar mode).
+Each step rounds down: the last `floor(N * percent / 100)` streams move.
 Each posting-channel stream must receive exactly one `message` per post;
 each other-channel stream exactly one shared `unread`, with no `message`.
 The initial snapshot still checks alternating read-state seeds (0/1);
@@ -26,7 +25,7 @@ SQL totals include posting and final resync; initial recounts remain excluded.
 Message arrival and unread delivery have separate p50/p95/p99 samples from
 `Post` returning to send, the same origin as the no-unread baseline.
 Final resync duration runs from publication to all streams becoming exact, including outstanding delivery. The delivery denominator includes both
-frame kinds. Historical recount-delay samples apply only to comparison arms.
+frame kinds.
 
 ## Results (2026-10-15)
 

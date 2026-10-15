@@ -9,7 +9,7 @@ stream, unfragmented read ranges; sidebar steps alternate initial totals 0/1.
 Fresh disposable migrated database per run; fixtures and initial recounts excluded.
 
 Export `RIBBITTO_TEST_DATABASE_URL` as `<local test database>` first
-([database tests](../database-tests.md)). Exact commands (run sequentially):
+([database tests](../database-tests.md)). Historical commands (the server-recount mode has been removed):
 
 ```sh
 export GOCACHE=$PWD/bin/.cache/go-build GOMODCACHE=$PWD/bin/.cache/mod
@@ -60,14 +60,15 @@ first failing step 5,000; they establish no production ceiling. Pool waits and
 sidebar SQL increased together; investigating that contention needs a follow-up.
 No optimisation or interval change was made.
 
-The test-only attribution and candidate comparisons for #826 are in
-[sidebar bottleneck results](stream-sidebar-bottleneck-results.md).
+The stopped test-only attribution and candidate comparisons for #826 are
+summarised in [sidebar counts history](sidebar-counts-history.md).
 
 Limits: single short runs, growing warm authorization caches, no controlled host
 load or CPU/memory sampling. No HTTP, HTML, network, slow clients, presence,
 typing, read advancement or production post-read writes; baseline has no unread
 seed, sidebar adds one excluded seed per step. No fragmented ranges, many lists,
 moves or deep history. These historical runs used a <=99-post guard so both totals proved freshness
-within the 100 cap. The [#832 harness](stream-sidebar-pool-results.md) replaces
-that guard with a same-snapshot sequence witness for longer runs. Recount output is per member
+within the 100 cap. The removed #832 harness replaced
+that guard with a same-snapshot sequence witness for longer runs
+([history](sidebar-counts-history.md)). Recount output is per member
 and never shared; this does not guarantee performance for larger data sets.

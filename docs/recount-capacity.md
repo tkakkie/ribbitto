@@ -38,8 +38,8 @@ stream composition and development metrics; shutdown joins the scheduler before
 closing the shared pool. Off constructs neither and keeps synchronous delivery;
 metrics report `scheduler.enabled: false` and `delivery.enabled: false`.
 **Async recounts are not enabled by default and are not yet validated for
-production.** Stage 2 / PR 3 of #865 decides activation using a freshness oracle
-and mixed-load validation; opt-in wiring alone is not that validation.
+production.** #865's stage 2, which was to decide activation, was stopped
+(decision 34), and #1081 removes the scheduler; opt-in wiring was never validated.
 See the [scheduler contract](architecture/recount-scheduler.md).
 
 Member/account fairness is out of scope: FIFO is per stream, so sixteen tabs

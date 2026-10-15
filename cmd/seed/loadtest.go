@@ -7,16 +7,14 @@ import (
 )
 
 type credentialFile struct {
-	Stage2           *stage2Credentials `json:"stage2,omitempty"`
-	OrganizationSlug string             `json:"organization_slug"`
-	ChannelIDs       []string           `json:"channel_ids"`
-	Accounts         []accountTokens    `json:"accounts"`
+	OrganizationSlug string          `json:"organization_slug"`
+	ChannelIDs       []string        `json:"channel_ids"`
+	Accounts         []accountTokens `json:"accounts"`
 }
 
 type accountTokens struct {
-	MemberID string   `json:"member_id,omitempty"`
-	Handle   string   `json:"handle"`
-	Tokens   []string `json:"tokens"`
+	Handle string   `json:"handle"`
+	Tokens []string `json:"tokens"`
 }
 
 func validateRun(messages, channels, members, streams, perAccount, sessions int, loadTest bool, output string) (int, error) {

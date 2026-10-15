@@ -2,7 +2,7 @@
 
 Test-only contract for #950 → #951 → #952, fixed before code or measurement.
 Production async remains off; this does not change #865's
-[stage-2 protocol](stream-sidebar-stage2.md), production events or intervals.
+[stage-2 protocol](sidebar-counts-history.md#stability-and-validation-plans), production events or intervals.
 Counts follow [unread rules](../domain/unread.md) and
 [persisted writes](unread-writes.md).
 

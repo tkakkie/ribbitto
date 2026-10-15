@@ -166,7 +166,3 @@ Each JSON object names its verdict's reasons: `Slow` (p95 over 1 s),
 `Sent` against `Scheduled`, `Missing`, and `Refused429`, `Refused503`,
 `Reset`, `Failed` and `PostFailed`. Latencies are `P50MS`, `P95MS` and
 `MaxMS`, and `Server.Delta` holds the step's database and pool costs.
-
-[Stage-2 credentials](../seed-data.md#stage-2-fixture) supply authenticated
-post, page and read [drivers](stream-sidebar-stage2-drivers.md) over loopback
-HTTP/1.1. Runs need approval.

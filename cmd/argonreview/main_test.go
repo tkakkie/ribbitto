@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,13 +34,16 @@ func TestDecide(t *testing.T) {
 		{"oversized", `{"toolCall":{"name":"view_file"},"pad":"` + strings.Repeat("x", maxGuardInput) + `"}`, false, "too large"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var out bytes.Buffer
-			if code := run([]string{"guard"}, strings.NewReader(tc.input), &out, &bytes.Buffer{}); code != 0 {
-				t.Fatalf("exit %d", code)
-			}
+			var out, stderr bytes.Buffer
+			code := run([]string{"guard"}, strings.NewReader(tc.input), &out, &stderr)
 			var decision map[string]string
 			if err := json.Unmarshal(out.Bytes(), &decision); err != nil {
 				t.Fatalf("output %q: %v", out.String(), err)
+			}
+			// Only an allow exits 0; a deny also fails by status and gives
+			// the same reason on stderr (#1130).
+			if tc.allow && (code != 0 || stderr.Len() != 0) || !tc.allow && (code == 0 || stderr.String() != "argonreview guard: "+decision["reason"]+"\n") {
+				t.Fatalf("exit %d, stderr %q", code, stderr.String())
 			}
 			want := "deny"
 			if tc.allow {
@@ -59,12 +63,61 @@ type failingReader struct{}
 
 func (failingReader) Read([]byte) (int, error) { return 0, errors.New("broken pipe") }
 
-// A stdin that fails mid-read is a deny, never a missing answer.
-func TestGuardReadError(t *testing.T) {
-	var out bytes.Buffer
-	guard(failingReader{}, &out)
-	if strings.TrimSpace(out.String()) != `{"decision":"deny","reason":"unreadable hook input"}` {
-		t.Fatalf("output %q", out.String())
+// allowThenFail returns an allowed tool call together with an error that is
+// not EOF.
+type allowThenFail struct{ done bool }
+
+func (r *allowThenFail) Read(p []byte) (int, error) {
+	if r.done {
+		return 0, errors.New("connection reset")
+	}
+	r.done = true
+	return copy(p, `{"toolCall":{"name":"view_file"}}`), errors.New("connection reset")
+}
+
+// brokenWriter writes at most n bytes, then fails.
+type brokenWriter struct{ n int }
+
+func (w brokenWriter) Write(p []byte) (int, error) {
+	return min(w.n, len(p)), errors.New("broken pipe")
+}
+
+// No failure of stdin, stdout or stderr can end the guard with status 0
+// unless an allow decision was written (#1130).
+func TestGuardFailures(t *testing.T) {
+	const allowed, denied = `{"toolCall":{"name":"view_file"}}`, `{"toolCall":{"name":"search_web"}}`
+	for _, tc := range []struct {
+		name           string
+		stdin          io.Reader
+		stdout, stderr io.Writer
+		// The diagnostics each case must leave, on stdout and stderr where
+		// they still work.
+		out, diagnostics []string
+	}{
+		{"stdin fails", failingReader{}, &bytes.Buffer{}, &bytes.Buffer{}, []string{`"decision":"deny"`, "unreadable hook input"}, []string{"unreadable hook input"}},
+		{"stdin fails after allow bytes", &allowThenFail{}, &bytes.Buffer{}, &bytes.Buffer{}, []string{`"decision":"deny"`, "unreadable hook input"}, []string{"unreadable hook input"}},
+		{"stdout fails on an allow", strings.NewReader(allowed), brokenWriter{0}, &bytes.Buffer{}, nil, []string{"writing the decision: broken pipe"}},
+		{"stdout fails partway on an allow", strings.NewReader(allowed), brokenWriter{5}, &bytes.Buffer{}, nil, []string{"writing the decision: broken pipe"}},
+		{"stdout fails on a deny", strings.NewReader(denied), brokenWriter{0}, &bytes.Buffer{}, nil, []string{"search_web is not allowed", "writing the decision: broken pipe"}},
+		{"stdout fails partway on a deny", strings.NewReader(denied), brokenWriter{5}, &bytes.Buffer{}, nil, []string{"search_web is not allowed", "writing the decision: broken pipe"}},
+		{"stderr fails on a deny", strings.NewReader(denied), &bytes.Buffer{}, brokenWriter{0}, []string{`"decision":"deny"`, "search_web is not allowed"}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if code := run([]string{"guard"}, tc.stdin, tc.stdout, tc.stderr); code == 0 {
+				t.Fatal("exit 0")
+			}
+			for _, w := range []struct {
+				writer io.Writer
+				want   []string
+			}{{tc.stdout, tc.out}, {tc.stderr, tc.diagnostics}} {
+				buffer, ok := w.writer.(*bytes.Buffer)
+				for _, want := range w.want {
+					if !ok || !strings.Contains(buffer.String(), want) {
+						t.Errorf("missing %q", want)
+					}
+				}
+			}
+		})
 	}
 }
 

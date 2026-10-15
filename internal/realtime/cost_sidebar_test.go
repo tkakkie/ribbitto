@@ -63,10 +63,6 @@ type costSnapshot struct {
 	generation uint64
 }
 
-func (s costSnapshot) covers(want, seq int64) bool {
-	return s.through >= seq && s.counts[0] >= min(want, 100) && s.counts[1] >= min(want, 100)
-}
-
 type costConnection struct {
 	reader         *conversation.Reader
 	member         org.Membership
@@ -76,8 +72,6 @@ type costConnection struct {
 	mu             sync.Mutex
 	snapshots      []costSnapshot
 	sequences      map[int64]bool
-	timings        *costTimings
-	slots          chan struct{}
 	changes        *unread.Changes
 	watch          *unread.ChangeWatch
 	other          bool
@@ -89,19 +83,11 @@ type costConnection struct {
 }
 
 func (c *costConnection) Watch(organization, member kernel.ID) realtime.SidebarWatch {
-	if c.changes == nil {
-		// Stream.Run releases every watch; a private, never-published one keeps
-		// the stopped comparison arms' historical behaviour without a nil watch.
-		return (&unread.Changes{}).Watch(organization, member)
-	}
 	c.watch = c.changes.Watch(organization, member)
 	return c.watch
 }
 
 func (c *costConnection) Trigger(e realtime.Event) (trigger bool) {
-	if c.changes == nil {
-		return e.Kind == conversation.KindPosted || e.Kind == conversation.KindMessagesMoved
-	}
 	// cmd/ and web are forbidden imports here; mirror only the bound trigger.
 	defer func() {
 		if trigger && e.Kind == conversation.KindPosted {
@@ -120,38 +106,17 @@ func (c *costConnection) Trigger(e realtime.Event) (trigger bool) {
 }
 
 func (c *costConnection) Recount(ctx context.Context, _ realtime.Subscription) (realtime.Outgoing, error) {
-	start := time.Now()
-	if c.slots != nil {
-		select {
-		case c.slots <- struct{}{}:
-			defer func() { <-c.slots }()
-		case <-ctx.Done():
-			c.timings.add(costGate, start, ctx.Err())
-			return realtime.Outgoing{}, context.Cause(ctx)
-		}
-	}
-	c.timings.add(costGate, start, nil)
-	start = time.Now()
-	ctx = context.WithValue(ctx, costRoleKey{}, costSidebar)
 	var through int64
 	ctx = context.WithValue(ctx, costWitnessKey{}, &through)
-	var generation uint64
-	if c.watch != nil {
-		generation, _ = c.watch.Snapshot() // Prove computation began after final publication.
-	}
+	generation, _ := c.watch.Snapshot() // Prove computation began after final publication.
 	s, err := c.reader.Sidebar(ctx, c.member, c.channel, nil)
-	c.timings.add(costWhole, start, err)
 	if err != nil {
 		return realtime.Outgoing{}, err
-	}
-	countChannel := c.channel
-	if c.changes != nil {
-		countChannel = c.postingChannel
 	}
 	if c.other && s.ChannelCounts[c.channel] != 0 {
 		return realtime.Outgoing{}, fmt.Errorf("other placement's empty channel has unread messages")
 	}
-	data, err := json.Marshal([4]int64{s.ChannelCounts[countChannel], s.TopicCounts[c.topic], through, int64(generation)})
+	data, err := json.Marshal([4]int64{s.ChannelCounts[c.postingChannel], s.TopicCounts[c.topic], through, int64(generation)})
 	return realtime.Outgoing{Data: data}, err
 }
 
@@ -207,10 +172,7 @@ func costComplete(connections []*costConnection, returned map[int64]time.Time) b
 	}
 	for _, c := range connections {
 		c.mu.Lock()
-		ready := len(c.snapshots) > 0 && c.snapshots[len(c.snapshots)-1].covers(c.initial+int64(len(returned)), last)
-		if c.changes != nil {
-			ready = len(c.snapshots) > 0 && c.snapshots[len(c.snapshots)-1].exact(c.expectedCounts(len(returned)), last, c.resyncAt)
-		}
+		ready := len(c.snapshots) > 0 && c.snapshots[len(c.snapshots)-1].exact(c.expectedCounts(len(returned)), last, c.resyncAt)
 		for seq := range returned {
 			ready = ready && c.sequences[seq]
 		}
@@ -308,13 +270,13 @@ func TestCostCompletion(t *testing.T) {
 		want      bool
 	}{
 		{"complete", [2]int64{2, 2}, true, true},
-		{"coalesced", [2]int64{3, 3}, true, true},
+		{"counts too high", [2]int64{3, 3}, true, false},
 		{"channel stale", [2]int64{1, 2}, true, false},
 		{"topic stale", [2]int64{2, 1}, true, false},
 		{"message missing", [2]int64{2, 2}, false, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			c := &costConnection{initial: 1, snapshots: []costSnapshot{{counts: tt.counts, through: 7, at: time.Now()}}, sequences: map[int64]bool{7: tt.delivered}}
+			c := &costConnection{initial: 1, snapshots: []costSnapshot{{counts: tt.counts, through: 7, at: time.Now(), generation: 1}}, sequences: map[int64]bool{7: tt.delivered}}
 			if got := costComplete([]*costConnection{c}, returned); got != tt.want {
 				t.Fatalf("completion = %t, want %t", got, tt.want)
 			}
@@ -345,6 +307,7 @@ func TestCostInitialAndEachConnection(t *testing.T) {
 	}
 	first.snapshots[0].counts = [2]int64{1, 1}
 	first.snapshots[0].through = 7
+	first.snapshots[0].generation = 1
 	first.sequences = map[int64]bool{7: true}
 	if costComplete([]*costConnection{first, second}, map[int64]time.Time{7: time.Now()}) {
 		t.Fatal("one connection satisfied another's drain")
@@ -367,9 +330,9 @@ func TestCostSidebarConfiguration(t *testing.T) {
 
 func TestCostConnectionWatchIsNeverNil(t *testing.T) {
 	// Stream.Run defers Release on whatever Watch returns.
-	watch := (&costConnection{}).Watch(kernel.ID{1}, kernel.ID{2})
+	watch := (&costConnection{changes: &unread.Changes{}}).Watch(kernel.ID{1}, kernel.ID{2})
 	if watch == nil {
-		t.Fatal("comparison-arm connection returned a nil sidebar watch")
+		t.Fatal("connection returned a nil sidebar watch")
 	}
 	watch.Release()
 }

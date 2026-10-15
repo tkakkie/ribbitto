@@ -27,10 +27,10 @@ a run stops at its first failing step), `_RATE` (posts per second, default
 10), `_DURATION` (posting time per step, default `10s`), `_POOL` (pool size,
 default pgx's), `_CACHE=1` (#227's shared reads), `_MEMBERS=distinct`
 (one member per stream) and `_STAGGER=<window>` (#671) tune it. `_SIDEBAR=1` adds live member counts (needs distinct members; set duration/rate explicitly). Its measured
-results and commands are in [sidebar cost results](stream-sidebar-results.md).
-`_ATTRIBUTION=1` times pool acquisitions and every sidebar statement;
-`_RECOUNTS=<n>` bounds concurrent recounts in tests only. The comparisons and
-protocol are in [bottleneck results](stream-sidebar-bottleneck-results.md).
+results and commands are in [client counts results](stream-client-counts-results.md).
+`_OTHER=0..100` places that percentage on another channel in sidebar mode.
+`_RECOUNTS=<n>` overrides the shared recount limit (default `max(1, pool/2)`).
+`_SMOKE=1` checks function without reporting timings.
 With a
 window, stream `i` of `N` waits `i × window / N` after its shared render
 returns and before its `MayReceive`, in a per-stream renderer wrapper: in the
@@ -65,7 +65,7 @@ Posts go through `conversation.Posting` with the hub as notifier.
   latency but fails no step (#227): with the caches, waits become rare and
   their per-acquisition mean can exceed half of a 5 ms p95, and without them
   the pool dominates a 30 ms p95 at 100 streams — neither is a ceiling.
-- **Baseline/arm latency** runs from `Post` returning after commit to the in-memory send
+- **Delivery latency** runs from `Post` returning after commit to the in-memory send
   (a delivery before `Post` returns counts as a negative sample), reported as
   p50, p95 and p99; it includes any stagger wait. It is not a commit
   timestamp.
@@ -84,8 +84,6 @@ Posts go through `conversation.Posting` with the hub as notifier.
   and the failed stream loops with the first error. CPU and memory, of this
   process or PostgreSQL, are not visible to it; watch them outside.
 
-Historical sidebar; [current mode](stream-client-counts-results.md) implements #1047.
-
 ## Sidebar mode (#812)
 
 Test adapters assemble `Reader.Sidebar` with the same exported channel and
@@ -96,19 +94,17 @@ The initial snapshot must match that member's two count totals before counters
 start. Initial recounts, seeds and read writes are excluded.
 
 Messages are collected separately. Drain requires each member's delivery of
-every posted sequence and a sent snapshot with both capped totals and a
-same-snapshot committed sequence covering every completed post. The test-only
+every posted sequence and an exact capped-count snapshot computed after resync
+publication, with the final same-snapshot committed sequence. The test-only
 freshness witness supports runs beyond 99 posts; timing alone cannot prove freshness. Snapshot bytes replace HTML; sidebar
 output bypasses the shared message render cache. The four count statements are
 classified by sqlc names, separately from list queries and transaction statements.
 Reports include absolute SQL totals, recounts, elapsed posting plus drain time,
 recounts/connection/second, count statements/recount and /post, pool wait totals
-and acquisitions, and message and recount p50/p95/p99. Recount delay is from
-`Post` returning to the first sent snapshot covering that post, one sample per
-post per member; coalescing means one snapshot can cover many samples.
-The [long-run protocol](stream-sidebar-pool-results.md) adds posting latency,
-scheduled-post-to-delivery latency and acquire/release peak connections, and
-provides the opt-in controlled pool ladder for #832.
+and acquisitions, and message and unread p50/p95/p99.
+[Client counts results](stream-client-counts-results.md) describes placement and
+final resync accounting; [sidebar counts history](sidebar-counts-history.md)
+summarises the stopped server-recount comparisons.
 
 ## Results, 2026-10-01
 

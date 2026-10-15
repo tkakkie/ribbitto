@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,9 +34,12 @@ func TestDecide(t *testing.T) {
 		{"oversized", `{"toolCall":{"name":"view_file"},"pad":"` + strings.Repeat("x", maxGuardInput) + `"}`, false, "too large"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var out bytes.Buffer
-			if code := run([]string{"guard"}, strings.NewReader(tc.input), &out, &bytes.Buffer{}); code != 0 {
-				t.Fatalf("exit %d", code)
+			var out, stderr bytes.Buffer
+			code := run([]string{"guard"}, strings.NewReader(tc.input), &out, &stderr)
+			// Only an allow exits 0; a deny also fails by status and names
+			// its reason on stderr (#1130).
+			if tc.allow && (code != 0 || stderr.Len() != 0) || !tc.allow && (code == 0 || !strings.Contains(stderr.String(), tc.reason)) {
+				t.Fatalf("exit %d, stderr %q", code, stderr.String())
 			}
 			var decision map[string]string
 			if err := json.Unmarshal(out.Bytes(), &decision); err != nil {
@@ -59,12 +63,50 @@ type failingReader struct{}
 
 func (failingReader) Read([]byte) (int, error) { return 0, errors.New("broken pipe") }
 
-// A stdin that fails mid-read is a deny, never a missing answer.
-func TestGuardReadError(t *testing.T) {
-	var out bytes.Buffer
-	guard(failingReader{}, &out)
-	if strings.TrimSpace(out.String()) != `{"decision":"deny","reason":"unreadable hook input"}` {
-		t.Fatalf("output %q", out.String())
+// allowThenFail returns an allowed tool call together with an error that is
+// not EOF.
+type allowThenFail struct{ done bool }
+
+func (r *allowThenFail) Read(p []byte) (int, error) {
+	if r.done {
+		return 0, errors.New("connection reset")
+	}
+	r.done = true
+	return copy(p, `{"toolCall":{"name":"view_file"}}`), errors.New("connection reset")
+}
+
+// brokenWriter writes at most n bytes, then fails.
+type brokenWriter struct{ n int }
+
+func (w brokenWriter) Write(p []byte) (int, error) {
+	return min(w.n, len(p)), errors.New("broken pipe")
+}
+
+// No failure of stdin, stdout or stderr can end the guard with status 0
+// unless an allow decision was written (#1130).
+func TestGuardFailures(t *testing.T) {
+	const allowed, denied = `{"toolCall":{"name":"view_file"}}`, `{"toolCall":{"name":"search_web"}}`
+	for _, tc := range []struct {
+		name           string
+		stdin          io.Reader
+		stdout, stderr io.Writer
+		denyOutput     bool
+	}{
+		{"stdin fails", failingReader{}, &bytes.Buffer{}, &bytes.Buffer{}, true},
+		{"stdin fails after allow bytes", &allowThenFail{}, &bytes.Buffer{}, &bytes.Buffer{}, true},
+		{"stdout fails on an allow", strings.NewReader(allowed), brokenWriter{0}, &bytes.Buffer{}, false},
+		{"stdout fails partway on an allow", strings.NewReader(allowed), brokenWriter{5}, &bytes.Buffer{}, false},
+		{"stdout fails on a deny", strings.NewReader(denied), brokenWriter{0}, &bytes.Buffer{}, false},
+		{"stderr fails on a deny", strings.NewReader(denied), &bytes.Buffer{}, brokenWriter{0}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if code := run([]string{"guard"}, tc.stdin, tc.stdout, tc.stderr); code == 0 {
+				t.Fatal("exit 0")
+			}
+			if out, ok := tc.stdout.(*bytes.Buffer); ok && tc.denyOutput && !strings.Contains(out.String(), `"decision":"deny"`) {
+				t.Fatalf("output %q", out.String())
+			}
+		})
 	}
 }
 

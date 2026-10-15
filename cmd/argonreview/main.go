@@ -11,8 +11,9 @@
 // the run passes the failure rules (#1096);
 // probe runs the same pipeline on a local throwaway repository with a
 // trusted prompt and prints what agy did (#1071);
-// guard is Antigravity's PreToolUse hook and never checks the build, because
-// Antigravity calls it for every tool.
+// guard is Antigravity's PreToolUse hook, exiting 0 only for an allow
+// (#1130), and never checks the build, because Antigravity calls it for every
+// tool.
 package main
 
 import (
@@ -73,8 +74,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 1 {
 		switch args[0] {
 		case "guard":
-			guard(stdin, stdout)
-			return 0
+			return guard(stdin, stdout, stderr)
 		case "verify", "prepare", "check":
 			info, ok := debug.ReadBuildInfo()
 			resolve := func() (string, error) { return sourceRevision(os.Getenv("RIBBITTO_ARGON_SOURCE"), git) }

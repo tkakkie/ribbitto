@@ -143,5 +143,5 @@ between snapshots: queue starts, compute returns and sends are separate stages.
 Stage 2 can separate waiting for a worker, computation cost and delay after return,
 plus total submission-to-send latency. It cannot infer freshness relative to
 persisted changes, count coalesced invalidations, or prove which committed changes
-a frame covers. PR 3 must supply a same-snapshot witness or equally rigorous oracle.
+a frame covers. The stage-2 oracle meant to supply that was stopped (decision 34).
 Only aggregates survive requests: no IDs, payloads or request history are retained.

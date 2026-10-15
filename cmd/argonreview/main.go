@@ -3,7 +3,8 @@
 // a clean origin/main of the source checkout named by RIBBITTO_ARGON_SOURCE,
 // so a pull request's copy never acts as the launcher; prepare runs that
 // check, then writes and checks Antigravity's configuration in the dedicated
-// RIBBITTO_ARGON_HOME (#1069);
+// RIBBITTO_ARGON_HOME (#1069); check runs prepare, then agy models there under
+// a supervisor that leaves nothing behind, and needs Argon listed (#1070);
 // guard is Antigravity's PreToolUse hook and never checks the build, because
 // Antigravity calls it for every tool.
 package main
@@ -32,22 +33,26 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		case "guard":
 			guard(stdin, stdout)
 			return 0
-		case "verify", "prepare":
+		case "verify", "prepare", "check":
 			info, ok := debug.ReadBuildInfo()
 			resolve := func() (string, error) { return sourceRevision(os.Getenv("RIBBITTO_ARGON_SOURCE"), git) }
 			out, err := trusted(info, ok, resolve)
+			code := 1
 			if err == nil && args[0] == "prepare" {
 				out, err = prepareHere()
 			}
+			if err == nil && args[0] == "check" {
+				out, code, err = checkHere()
+			}
 			if err != nil {
 				_, _ = fmt.Fprintf(stderr, "argonreview: %v\n", err)
-				return 1
+				return code
 			}
 			_, _ = fmt.Fprintln(stdout, out)
 			return 0
 		}
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | guard")
+	_, _ = fmt.Fprintln(stderr, "usage: argonreview verify | prepare | check | guard")
 	return 2
 }
 

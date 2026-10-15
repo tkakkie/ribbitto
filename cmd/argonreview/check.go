@@ -1,0 +1,96 @@
+package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+)
+
+// argonModel is the model every review runs on (#1041).
+const argonModel = "gemini-4-argon-high"
+
+// checkHere runs prepare, then agy models under supervision in the dedicated
+// HOME, and succeeds only if Argon is listed. The code is 124, 130 or 143
+// when the time limit or a signal ended agy, 1 for any other failure.
+func checkHere() (string, int, error) {
+	limit, err := timeLimit()
+	if err != nil {
+		return "", 1, err
+	}
+	agy, err := exec.LookPath("agy")
+	if err != nil {
+		return "", 1, fmt.Errorf("finding agy: %w", err)
+	}
+	if _, err := prepareHere(); err != nil {
+		return "", 1, err
+	}
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	code, err := check(os.Getenv("RIBBITTO_ARGON_HOME"), agy, supervisor{limit, 5 * time.Second, signals, systemCleanup()})
+	return "agy lists " + argonModel, code, err
+}
+
+// timeLimit reads RIBBITTO_ARGON_TIMEOUT, a Go duration; unset, it is the
+// trial runner's 25 minutes (#1041).
+func timeLimit() (time.Duration, error) {
+	value := os.Getenv("RIBBITTO_ARGON_TIMEOUT")
+	if value == "" {
+		return 25 * time.Minute, nil
+	}
+	limit, err := time.ParseDuration(value)
+	if err != nil || limit <= 0 {
+		return 0, fmt.Errorf("RIBBITTO_ARGON_TIMEOUT must be a positive duration such as 25m, not %q", value)
+	}
+	return limit, nil
+}
+
+// check runs agy models with HOME set to home and home as the working
+// directory, so neither the caller's HOME nor a checkout's .agents applies.
+func check(home, agy string, s supervisor) (int, error) {
+	out, err := os.CreateTemp("", "argonreview-models-*")
+	if err != nil {
+		return 1, fmt.Errorf("creating the models listing: %w", err)
+	}
+	defer func() { _ = out.Close(); _ = os.Remove(out.Name()) }()
+	env := []string{"HOME=" + home}
+	for _, value := range os.Environ() {
+		if !strings.HasPrefix(value, "HOME=") {
+			env = append(env, value)
+		}
+	}
+	code, err := s.run(agy, []string{"models"}, env, home, out, os.Stderr)
+	if err == nil && code != 0 {
+		err = fmt.Errorf("agy models exited with status %d", code)
+	}
+	if err != nil {
+		return max(code, 1), err
+	}
+	if _, err := out.Seek(0, io.SeekStart); err != nil {
+		return 1, fmt.Errorf("reading the models listing: %w", err)
+	}
+	listing, err := io.ReadAll(io.LimitReader(out, 1<<20))
+	if err != nil {
+		return 1, fmt.Errorf("reading the models listing: %w", err)
+	}
+	if !lists(string(listing), argonModel) {
+		return 1, fmt.Errorf("agy models does not list %s", argonModel)
+	}
+	return 0, nil
+}
+
+// lists reports whether a line of agy models names model; each line is the
+// model ID, a tab and its display name.
+func lists(listing, model string) bool {
+	for _, line := range strings.Split(listing, "\n") {
+		if fields := strings.Fields(line); len(fields) > 0 && fields[0] == model {
+			return true
+		}
+	}
+	return false
+}

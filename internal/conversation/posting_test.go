@@ -83,7 +83,7 @@ func (f *postingFake) InsertMessage(_ context.Context, organizationID, channelID
 func (f *postingFake) Append(_ context.Context, organizationID kernel.ID, seq int64, kind realtime.EventKind, audience *kernel.ID, payload []byte) error {
 	f.scope(organizationID, kernel.ID{3})
 	posted, err := conversation.DecodePosted(payload)
-	if err != nil || posted.ChannelID != (kernel.ID{3}) || posted.MessageID != (kernel.ID{5}) || posted.TopicID == nil || *posted.TopicID != f.topic || seq != 7 || kind != conversation.KindPosted || audience != nil {
+	if err != nil || posted.AuthorID == nil || *posted.AuthorID != (kernel.ID{2}) || posted.ChannelID != (kernel.ID{3}) || posted.MessageID != (kernel.ID{5}) || posted.TopicID == nil || *posted.TopicID != f.topic || seq != 7 || kind != conversation.KindPosted || audience != nil {
 		f.t.Fatalf("wrong event: %+v, %v", posted, err)
 	}
 	return f.step("append")

@@ -202,33 +202,8 @@ func TestDevMetricsSnapshot(t *testing.T) {
 	for section, keys := range want {
 		var have []string
 		for key, value := range got[section] {
-			switch key {
-			case "enabled", "closed":
-				if _, ok := value.(bool); !ok {
-					t.Errorf("%s.%s = %v, want a boolean", section, key, value)
-				}
-			case "queue", "compute", "completion_to_send", "submit_to_send":
-				d, ok := value.(map[string]any)
-				if !ok || len(d) != 3 {
-					t.Fatalf("invalid duration aggregate: %v", value)
-				}
-				if _, ok := d["count"].(float64); !ok {
-					t.Fatal("duration count must be numeric")
-				}
-				if _, ok := d["total_ns"].(float64); !ok {
-					t.Fatal("duration total must be numeric")
-				}
-				if buckets, ok := d["bucket_counts"].([]any); !ok || len(buckets) != 6 {
-					t.Fatal("duration buckets must have six entries")
-				}
-			case "bucket_upper_bounds_ns", "processing_duration_bucket_counts", "processing_duration_bucket_upper_bounds_ns":
-				if _, ok := value.([]any); !ok {
-					t.Errorf("%s.%s = %v, want an array", section, key, value)
-				}
-			default:
-				if _, ok := value.(float64); !ok {
-					t.Errorf("%s.%s = %v, want a number", section, key, value)
-				}
+			if _, ok := value.(float64); !ok {
+				t.Errorf("%s.%s = %v, want a number", section, key, value)
 			}
 			have = append(have, key)
 		}

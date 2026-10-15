@@ -93,7 +93,8 @@ type Stream struct {
 	Renderer   Renderer
 	// Owners supplies current frames; nil entries preserve durable-only delivery.
 	Owners map[Interest]EphemeralOwner
-	// Sidebar supplies coalesced recounts; nil leaves sidebar delivery unwired.
+	// Sidebar supplies coalesced recounts; nil disables recounts but still allows
+	// shared unread frames through UnreadRenderer for the sidebar interest.
 	Sidebar SidebarSource
 	// RecountLimit shares computation capacity; nil preserves unbounded test compositions.
 	RecountLimit *RecountLimit

@@ -131,7 +131,7 @@ func TestServeFailureCleanupOrder(t *testing.T) {
 	defer func() { _ = occupied.Close() }()
 	for _, failure := range []string{"handler", "metrics listener", "application listener", "normal shutdown"} {
 		t.Run(failure, func(t *testing.T) {
-			for key, value := range map[string]string{"RIBBITTO_ASYNC_RECOUNTS": "off", "RIBBITTO_DEV_ASSETS": "", "RIBBITTO_DEV_METRICS_ADDR": "", "RIBBITTO_ADDR": occupied.Addr().String(), "RIBBITTO_SIGNUP": "off", "RIBBITTO_SETUP_TOKEN": "", "RIBBITTO_EVENT_RETENTION": "168h"} {
+			for key, value := range map[string]string{"RIBBITTO_DEV_ASSETS": "", "RIBBITTO_DEV_METRICS_ADDR": "", "RIBBITTO_ADDR": occupied.Addr().String(), "RIBBITTO_SIGNUP": "off", "RIBBITTO_SETUP_TOKEN": "", "RIBBITTO_EVENT_RETENTION": "168h"} {
 				t.Setenv(key, value)
 			}
 			wantError := "address already in use"
@@ -181,7 +181,7 @@ func TestServeCollectsServerFailures(t *testing.T) {
 	for _, failed := range []string{"application", "metrics", "both"} {
 		for _, trigger := range []string{"failure", "signal ready", "signal wins", "startup failure", "shutdown failure"} {
 			t.Run(failed+"/"+trigger, func(t *testing.T) {
-				for key, value := range map[string]string{"RIBBITTO_ASYNC_RECOUNTS": "off", "RIBBITTO_DEV_ASSETS": "", "RIBBITTO_DEV_METRICS_ADDR": "", "RIBBITTO_ADDR": "127.0.0.1:0", "RIBBITTO_SIGNUP": "off", "RIBBITTO_SETUP_TOKEN": "", "RIBBITTO_EVENT_RETENTION": "168h"} {
+				for key, value := range map[string]string{"RIBBITTO_DEV_ASSETS": "", "RIBBITTO_DEV_METRICS_ADDR": "", "RIBBITTO_ADDR": "127.0.0.1:0", "RIBBITTO_SIGNUP": "off", "RIBBITTO_SETUP_TOKEN": "", "RIBBITTO_EVENT_RETENTION": "168h"} {
 					t.Setenv(key, value)
 				}
 				if trigger == "startup failure" {

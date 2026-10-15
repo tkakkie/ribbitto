@@ -283,6 +283,10 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	if page.BodyError == "" {
 		page.Composer = p.issueComposer(m, history.Current, history.Topic)
 	}
+	var snapshotSeq int64
+	if history.EventCursor != nil {
+		snapshotSeq = *history.EventCursor
+	}
 	page.Messages = make([]view.Message, len(history.Entries))
 	for i, entry := range history.Entries {
 		page.Messages[i] = viewMessage(m.Organization.Slug, entry)
@@ -290,7 +294,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 	p.pages.render(w, r, status, func(url string) templ.Component {
 		page.ImageKeys = conversation.ChannelImageKeys()
 		page = sidebarView(page, m, conversation.SidebarSnapshot{
-			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics, SnapshotSeq: history.SnapshotSeq,
+			Current: history.Current, Channels: history.Channels, Topic: history.Topic, Topics: history.Topics, SnapshotSeq: snapshotSeq,
 			ChannelCounts: history.ChannelCounts, TopicCounts: history.TopicCounts,
 		})
 		page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)

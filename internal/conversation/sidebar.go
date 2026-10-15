@@ -58,29 +58,12 @@ type ChannelListPage struct {
 // ChannelList reads the channel list page in one snapshot:
 // the cursor comes from the snapshot that counted, so the stream neither
 // skips nor repeats a change. The list shows no divider, so it reads counts only.
-func (s *Reader) ChannelList(ctx context.Context, m org.Membership, channelID kernel.ID) (page ChannelListPage, err error) {
-	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
-		loaded, err := loadSidebarContext(ctx, s.reads(snapshot), m.Organization.ID, channelID, nil)
-		if err != nil {
-			return err
-		}
-		page.Current, page.Channels, page.Topics = loaded.current, loaded.channels, loaded.topics
-		page.EventCursor, err = s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
-		if err != nil {
-			return fmt.Errorf("reading channel list cursor: %w", err)
-		}
-		counts, err := s.readCounts(ctx, snapshot, m, channelID, page.Channels, page.Topics, nil, false)
-		if err != nil {
-			return err
-		}
-		page.SnapshotSeq = page.EventCursor
-		page.ChannelCounts, page.TopicCounts = counts.ChannelCounts, counts.TopicCounts
-		return nil
-	})
+func (s *Reader) ChannelList(ctx context.Context, m org.Membership, channelID kernel.ID) (ChannelListPage, error) {
+	sidebar, err := s.Sidebar(ctx, m, channelID, nil)
 	if err != nil {
 		return ChannelListPage{}, fmt.Errorf("reading channel list snapshot: %w", err)
 	}
-	return page, nil
+	return ChannelListPage{SidebarSnapshot: sidebar, EventCursor: sidebar.SnapshotSeq}, nil
 }
 
 // sidebarContext excludes counts so callers can read history and

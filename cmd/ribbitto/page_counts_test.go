@@ -38,11 +38,8 @@ func (p *pageTrace) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pg
 func TestPageCountsSnapshot(t *testing.T) {
 	statements := []string{"ListMessagesBefore", "GetEventSeq", "FirstChannelReadRanges", "CountChannelUnread", "ReadTopicState", "CountTopicUnread"}
 	for _, n := range []int{1, 51} {
-		for _, kind := range []string{"feed", "topic", "feed older", "topic older", "members"} {
+		for _, kind := range []string{"feed", "topic", "feed older", "topic older"} {
 			for _, statement := range statements {
-				if kind == "members" && statement == "ListMessagesBefore" {
-					continue
-				}
 				t.Run(fmt.Sprintf("%d/%s/%s", n, kind, statement), func(t *testing.T) {
 					pool := pgtest.New(t)
 					f := conversationtest.OrganizationWithOwner(t, pool, "page", "general")
@@ -88,34 +85,26 @@ func TestPageCountsSnapshot(t *testing.T) {
 					feedRequire(t, err)
 					defer traced.Close()
 					reader := conversationpg.NewReader(traced, lookupMembers, lookupAccounts, eventCursor, pageCountsIn)
-					var counts conversation.PageCounts
-					var cursor *int64
 					wantTopics := min(n, 50)
-					if kind == "members" {
-						page, err := reader.Members(t.Context(), m, f.Channel.ID, nil)
-						feedRequire(t, err)
-						counts, cursor = page.PageCounts, page.EventCursor
-					} else {
-						var before *int64
-						if strings.Contains(kind, "older") {
-							bound := int64(3)
-							before = &bound
-						}
-						var topic *kernel.ID
-						if strings.HasPrefix(kind, "topic") {
-							topic = &selected
-							wantTopics = n
-						}
-						page, err := reader.Page(t.Context(), m, f.Channel.ID, topic, before)
-						feedRequire(t, err)
-						counts, cursor = page.PageCounts, page.EventCursor
-						wantHistory := 3
-						if before != nil {
-							wantHistory = 2
-						}
-						if len(page.Entries) != wantHistory || page.Entries[1].ID != initial.ID || page.Entries[1].TopicID != selected {
-							t.Fatalf("history mixed snapshots: %+v", page.Entries)
-						}
+					var before *int64
+					if strings.Contains(kind, "older") {
+						bound := int64(3)
+						before = &bound
+					}
+					var topic *kernel.ID
+					if strings.HasPrefix(kind, "topic") {
+						topic = &selected
+						wantTopics = n
+					}
+					page, err := reader.Page(t.Context(), m, f.Channel.ID, topic, before)
+					feedRequire(t, err)
+					counts, cursor := page.PageCounts, page.EventCursor
+					wantHistory := 3
+					if before != nil {
+						wantHistory = 2
+					}
+					if len(page.Entries) != wantHistory || page.Entries[1].ID != initial.ID || page.Entries[1].TopicID != selected {
+						t.Fatalf("history mixed snapshots: %+v", page.Entries)
 					}
 					first := int64(0)
 					if strings.HasPrefix(kind, "topic") {
@@ -136,9 +125,6 @@ func TestPageCountsSnapshot(t *testing.T) {
 					wantStatements := int64(12)
 					if strings.HasPrefix(kind, "topic") {
 						wantStatements = 13
-					}
-					if kind == "members" {
-						wantStatements = 10
 					}
 					if q := trace.Counts(); q.Begins != 1 || q.Commits != 1 || q.Rollbacks != 0 || q.Queries != wantStatements {
 						t.Fatalf("page transactions: %+v", q)

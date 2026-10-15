@@ -31,7 +31,7 @@ func (s sidebarReader) Page(context.Context, org.Membership, kernel.ID, *kernel.
 }
 
 func (s sidebarReader) Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error) {
-	return conversation.MembersPage{Current: s.page.Current, Channels: s.page.Channels, Topics: s.page.Topics, PageCounts: s.page.PageCounts, EventCursor: s.page.EventCursor}, nil
+	return conversation.MembersPage{}, nil
 }
 
 func TestSidebarCountsMarkup(t *testing.T) {
@@ -108,7 +108,7 @@ func TestSidebarCountsMarkup(t *testing.T) {
 					frame, err = RenderSidebar(r.Context(), org.Membership{Organization: org.Organization{Slug: "acme"}}, conversation.SidebarSnapshot{
 						Current: page.Current, Channels: page.Channels, Topics: page.Topics, Topic: page.Topic,
 						ChannelCounts: page.ChannelCounts, TopicCounts: page.TopicCounts, SnapshotSeq: page.SnapshotSeq,
-					}, kind == "members")
+					})
 				})).ServeHTTP(httptest.NewRecorder(), r)
 				if err != nil {
 					t.Fatal(err)

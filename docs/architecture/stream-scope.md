@@ -23,7 +23,6 @@ The endpoint takes:
 | `want` | comma-separated interests, each at most once: `sidebar`, `messages`, `typing`, `presence`; anything else is 400 |
 | `channel` | the page's channel: required with `messages`, `typing` or `sidebar` (for its initial recount); with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
 | `topic` | optional with `messages`, `typing` or `sidebar`; requires `channel`, narrows messages/typing and retains sidebar selection; another organisation or channel is 404 |
-| `panel` | optional `members`; ignored since #874 |
 | `presence-after` | required with `presence`: the process instance and presence generation the page was rendered with |
 
 | Page | `want` |

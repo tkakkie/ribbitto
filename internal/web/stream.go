@@ -35,7 +35,7 @@ type Streaming struct {
 	// Owners adapts feature state to current frames.
 	Owners map[realtime.Interest]realtime.EphemeralOwner
 	// Sidebar binds resolved membership and page selection to uncached recounts.
-	Sidebar func(org.Membership, kernel.ID, *kernel.ID, bool) realtime.SidebarSource
+	Sidebar func(org.Membership, kernel.ID, *kernel.ID) realtime.SidebarSource
 	// RecountLimit bounds computations independently of stream admission.
 	RecountLimit *realtime.RecountLimit
 	// StreamOpened counts every accepted stream, regardless of interests.
@@ -153,7 +153,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		Heartbeat:    heartbeat,
 	}
 	if p.stream.Sidebar != nil {
-		stream.Sidebar = p.stream.Sidebar(m, sub.Channel, sub.Topic, r.URL.Query().Get("panel") == "members")
+		stream.Sidebar = p.stream.Sidebar(m, sub.Channel, sub.Topic)
 	}
 	sub.Organization, sub.OrganizationSlug, sub.Account, sub.Member = m.Organization.ID, m.Organization.Slug, account.ID, m.Member.ID
 	cursor, err := stream.Run(ctx, sub, after, send)
@@ -271,7 +271,7 @@ func streamScope(r *http.Request) (realtime.Subscription, bool) {
 	for key, values := range query {
 		switch key {
 		case "after": // Last-Event-ID takes precedence, including over a broken after.
-		case "want", "channel", "topic", "presence-after", "panel":
+		case "want", "channel", "topic", "presence-after":
 			if len(values) != 1 || values[0] == "" {
 				return sub, false
 			}
@@ -314,9 +314,6 @@ func streamScope(r *http.Request) (realtime.Subscription, bool) {
 		sub.Topic = &selected
 	}
 	if slices.Contains(sub.Interests, realtime.InterestPresence) && query.Get("presence-after") == "" {
-		return sub, false
-	}
-	if panel := query.Get("panel"); panel != "" && panel != "members" {
 		return sub, false
 	}
 	sub.PresenceAfter = query.Get("presence-after")

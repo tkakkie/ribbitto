@@ -11,6 +11,8 @@ const (
 	// InterestSidebar requests shared unread frames for posts not selected as
 	// messages, plus full current recounts when a sidebar source is supplied.
 	InterestSidebar Interest = "sidebar"
+	// InterestChannelState requests whole current state for the channel, across topics.
+	InterestChannelState Interest = "channel-state"
 	// InterestPresence requests current presence frames from its owner.
 	InterestPresence Interest = "presence"
 	// InterestTyping requests current typing frames from its owner.

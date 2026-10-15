@@ -96,6 +96,8 @@ type Stream struct {
 	// Sidebar supplies coalesced recounts; nil disables recounts but still allows
 	// shared unread frames through UnreadRenderer for the sidebar interest.
 	Sidebar SidebarSource
+	// ChannelState supplies bounded refreshes independently of message selection.
+	ChannelState ChannelStateSource
 	// RecountLimit shares computation capacity; nil preserves unbounded test compositions.
 	RecountLimit *RecountLimit
 	// BatchSize bounds each read; zero means DefaultBatchSize.
@@ -165,6 +167,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	// from: wakeups that write nothing, such as an unchanged owner,
 	// must not put it off.
 	written := transport.written
+	channel := channelStateDelivery{dirty: s.ChannelState != nil && slices.Contains(sub.Interests, InterestChannelState)}
 	sidebar := sidebarDelivery{dirty: s.Sidebar != nil && slices.Contains(sub.Interests, InterestSidebar)}
 	if sidebar.dirty {
 		if s.RecountLimit != nil {
@@ -201,7 +204,16 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			}
 			draining = len(events) == batch
 		}
+		if !connected {
+			// Validate the cursor before exposing fresh state, even on reconnect.
+			if err := s.refreshChannel(ctx, sub, &channel, send, &written); err != nil {
+				return cursor, err
+			}
+		}
 		for _, event := range events {
+			if s.ChannelState != nil && slices.Contains(sub.Interests, InterestChannelState) && event.OrganizationID == sub.Organization && event.ChannelID == sub.Channel && s.ChannelState.Trigger(event) {
+				channel.dirty = true
+			}
 			if s.Sidebar != nil && slices.Contains(sub.Interests, InterestSidebar) && event.OrganizationID == sub.Organization && s.Sidebar.Trigger(event) {
 				sidebar.dirty = true
 			}
@@ -239,6 +251,9 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		if err != nil {
 			return cursor, err
 		}
+		if err := s.refreshChannel(ctx, sub, &channel, send, &written); err != nil {
+			return cursor, err
+		}
 		if draining {
 			// A batch with no write must not postpone the heartbeat.
 			if s.Heartbeat > 0 && time.Since(written) >= s.Heartbeat {
@@ -252,6 +267,9 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 		deadline := time.Time{}
 		if sidebar.dirty {
 			deadline = sidebar.next
+		}
+		if channel.dirty && (deadline.IsZero() || channel.next.Before(deadline)) {
+			deadline = channel.next
 		}
 		levels, err := s.wait(ctx, sub, seen, send, &written, deadline, sidebar.watch, sidebar.observed)
 		// Generations count as seen only after the owner returns their state.

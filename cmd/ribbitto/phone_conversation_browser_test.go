@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
-	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -27,27 +25,9 @@ import (
 )
 
 func TestPhoneConversationBrowser(t *testing.T) {
-	unavailable := func(reason string) {
-		t.Helper()
-		if os.Getenv("RIBBITTO_REQUIRE_BROWSER") == "1" {
-			t.Fatal(reason)
-		}
-		t.Skip(reason)
-	}
-	bin, found := launcher.LookPath()
-	if !found {
-		unavailable("no installed browser; Claude runs phone conversation checks")
-	}
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Context(ctx)
-	control, err := launch.Launch()
-	if err != nil {
-		unavailable(err.Error())
-	}
-	t.Cleanup(launch.Kill)
-	browser := rod.New().ControlURL(control).MustConnect().MustIgnoreCertErrors(true)
-	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	browser := launchBrowser(t, ctx, "phone conversation checks")
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "phone", strings.TrimSpace(strings.Repeat("long channel ", 5)))
 	topic := conversationtest.Topic(t, pool, f.OrganizationID, f.Channel.ID, strings.Repeat("LongTopicName", 6))
@@ -67,8 +47,8 @@ func TestPhoneConversationBrowser(t *testing.T) {
 	owner, reader := sidebarBrowser(t, pool, server, f.AccountID), sidebarBrowser(t, pool, server, account)
 	body := "https://example.org/" + strings.Repeat("longpath", 60) + "\nconst value = " + strings.Repeat("code_without_spaces", 30) + "\n" + strings.Repeat("日本語の長い文章", 60) + "\n" + strings.Repeat("EnglishWithoutSpaces", 30)
 	post(t, owner, topicURL, body)
-	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-	defer page.MustClose()
+	page, closePage := boundedPage(t, browser, ctx, "phone conversation")
+	defer closePage()
 	u, err := url.Parse(server.URL)
 	acceptanceOK(t, err)
 	for _, cookie := range reader.client.Jar.Cookies(u) {
@@ -199,8 +179,8 @@ func TestPhoneConversationBrowser(t *testing.T) {
 			t.Fatal("IME Enter sent a message")
 		}
 		text := fmt.Sprintf("phone sent %d", size[0])
-		page.MustElement("#message-body").MustSelectAllText().MustInput(text)
-		page.Keyboard.MustType(input.Enter)
+		inputStep(t, page, fmt.Sprintf("%d px typing", size[0]), func(p *rod.Page) { p.MustElement("#message-body").MustSelectAllText().MustInput(text) })
+		inputStep(t, page, fmt.Sprintf("%d px Enter", size[0]), func(p *rod.Page) { p.Keyboard.MustType(input.Enter) })
 		if err := page.Timeout(5 * time.Second).Wait(rod.Eval(`text => [...document.querySelectorAll('#message-items p')].some(e => e.textContent === text) && document.getElementById('message-body').value === '' && document.activeElement.id === 'message-body'`, text)); err != nil {
 			t.Fatalf("%d px send did not show, clear and retain focus: %v", size[0], err)
 		}

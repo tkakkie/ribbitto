@@ -3,44 +3,24 @@ package main
 import (
 	"context"
 	"net/url"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
 func TestReadSidebarBrowser(t *testing.T) {
-	unavailable := func(reason string) {
-		t.Helper()
-		if os.Getenv("RIBBITTO_REQUIRE_BROWSER") == "1" {
-			t.Fatal(reason)
-		}
-		t.Skip(reason)
-	}
-	bin, found := launcher.LookPath()
-	if !found {
-		unavailable("no installed browser; Claude runs read sidebar acceptance locally")
-	}
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Context(ctx)
-	control, err := launch.Launch()
-	if err != nil {
-		unavailable(err.Error())
-	}
-	t.Cleanup(launch.Kill)
-	browser := rod.New().ControlURL(control).MustConnect().MustIgnoreCertErrors(true)
-	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	browser := launchBrowser(t, ctx, "read sidebar acceptance")
 	f := newReadSidebarFixture(t, pgtest.New(t))
 	var pages []*rod.Page
 	for _, path := range []string{f.topicA, f.feed} {
-		page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-		defer page.MustClose()
+		page, closePage := boundedPage(t, browser, ctx, "read page")
+		defer closePage()
 		u, err := url.Parse(f.reader.server.URL)
 		acceptanceOK(t, err)
 		for _, cookie := range f.reader.client.Jar.Cookies(u) {
@@ -62,7 +42,7 @@ func TestReadSidebarBrowser(t *testing.T) {
 			t.Fatal("a hidden page read before it was revealed")
 		}
 	}
-	pages[0].MustActivate().MustElement("#message-body").MustInput("retain draft selection")
+	inputStep(t, pages[0].MustActivate(), "typing the draft", func(p *rod.Page) { p.MustElement("#message-body").MustInput("retain draft selection") })
 	pages[0].MustEval(`() => document.getElementById('message-body').setSelectionRange(2, 8)`)
 	pages[1].MustActivate().MustEval(`id => document.getElementById('link-' + id).focus()`, view.ChannelDOMID(f.channel))
 	for step, active := range pages {

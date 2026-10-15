@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -15,7 +14,6 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
-	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
@@ -31,27 +29,9 @@ import (
 // TestChannelListBrowser drives the channel list page at phone and desktop
 // widths through the production handler, stream and scripts (#969).
 func TestChannelListBrowser(t *testing.T) {
-	unavailable := func(reason string) {
-		t.Helper()
-		if os.Getenv("RIBBITTO_REQUIRE_BROWSER") == "1" {
-			t.Fatal(reason)
-		}
-		t.Skip(reason)
-	}
-	bin, found := launcher.LookPath()
-	if !found {
-		unavailable("no installed browser; Claude runs the channel list locally")
-	}
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Context(ctx)
-	control, err := launch.Launch()
-	if err != nil {
-		unavailable(err.Error())
-	}
-	t.Cleanup(launch.Kill)
-	browser := rod.New().ControlURL(control).MustConnect().MustIgnoreCertErrors(true)
-	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	browser := launchBrowser(t, ctx, "the channel list")
 
 	pool := pgtest.New(t)
 	f := conversationtest.OrganizationWithOwner(t, pool, "list", "general")
@@ -100,8 +80,8 @@ func TestChannelListBrowser(t *testing.T) {
 	}
 	owner, reader := sidebarBrowser(t, pool, server, f.AccountID), sidebarBrowser(t, pool, server, account)
 
-	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-	defer page.MustClose()
+	page, closePage := boundedPage(t, browser, ctx, "list page")
+	defer closePage()
 	u, err := url.Parse(server.URL)
 	acceptanceOK(t, err)
 	for _, cookie := range reader.client.Jar.Cookies(u) {
@@ -206,7 +186,7 @@ func TestChannelListBrowser(t *testing.T) {
 	for _, size := range [][2]int{{320, 568}, {390, 844}} {
 		page.MustSetViewport(size[0], size[1], 1, false)
 		page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
-		page.MustElement("[popovertarget=channel-create]").MustClick()
+		inputStep(t, page, "clicking add", func(p *rod.Page) { p.MustElement("[popovertarget=channel-create]").MustClick() })
 		page.MustWait(`() => document.getElementById('channel-create').matches(':popover-open')`)
 		if problem := page.MustEval(`() => {
 			const form = document.getElementById('channel-create'), box = form.getBoundingClientRect();
@@ -253,7 +233,7 @@ func TestChannelListBrowser(t *testing.T) {
 		t.Helper()
 		step := func(name string, open bool, keys ...input.Key) {
 			t.Helper()
-			p.Keyboard.MustType(keys...)
+			inputStep(t, p, invoker+" "+name, func(p *rod.Page) { p.Keyboard.MustType(keys...) })
 			if err := p.Timeout(5 * time.Second).Wait(rod.Eval(`open => document.getElementById('account-menu').matches(':popover-open') === open`, open)); err != nil {
 				t.Fatalf("%s %s: the menu is not open=%t: %v", invoker, name, open, err)
 			}
@@ -280,7 +260,7 @@ func TestChannelListBrowser(t *testing.T) {
 		p.MustEval(`s => document.querySelector(s).focus()`, invoker)
 		step("Space on the invoker", false, input.Space)
 		step("Enter", true, input.Enter)
-		p.Keyboard.MustType(input.Tab)
+		inputStep(t, p, invoker+" Tab", func(p *rod.Page) { p.Keyboard.MustType(input.Tab) })
 		if !p.MustEval(`() => !!document.activeElement.closest('#account-menu')`).Bool() {
 			t.Fatalf("%s: Tab does not enter the menu", invoker)
 		}
@@ -292,9 +272,13 @@ func TestChannelListBrowser(t *testing.T) {
 		tap()
 		step("outside tap", false)
 	}
-	tapHeading := func() { page.MustElement("main h1").MustClick() }
+	clickOn := func(selector string) {
+		t.Helper()
+		inputStep(t, page, "clicking "+selector, func(p *rod.Page) { p.MustElement(selector).MustClick() })
+	}
+	tapHeading := func() { clickOn("main h1") }
 	accountKeys(page, bottomAccount, tapHeading)
-	page.MustElement(bottomAccount).MustClick()
+	clickOn(bottomAccount)
 	sheet(true)
 	if problem := page.MustEval(`() => {
 		const menu = document.getElementById('account-menu'), box = menu.getBoundingClientRect();
@@ -304,7 +288,7 @@ func TestChannelListBrowser(t *testing.T) {
 	}`).Str(); problem != "" {
 		t.Fatalf("account sheet: %s", problem)
 	}
-	page.Keyboard.MustType(input.Escape)
+	inputStep(t, page, "Escape on the sheet", func(p *rod.Page) { p.Keyboard.MustType(input.Escape) })
 	sheet(false)
 
 	// A phone conversation hides the frame and leads back to its row.
@@ -327,7 +311,7 @@ func TestChannelListBrowser(t *testing.T) {
 	if phone := frame(); !phone.Back || phone.Width < 44 || phone.Height < 44 || phone.Label != "Back to lilypads" || phone.Rail || phone.Aside || phone.Bar {
 		t.Fatalf("phone conversation frame: %+v", phone)
 	}
-	page.MustElement("header a[aria-label]").MustClick()
+	clickOn("header a[aria-label]")
 	page.MustWait(`want => location.pathname + location.search + location.hash === want && document.readyState === 'complete'`,
 		view.ChannelListURL("list", expanded.ID)+"#"+row)
 	if !page.MustEval(`row => {
@@ -385,7 +369,7 @@ func TestChannelListBrowser(t *testing.T) {
 	page.MustNavigate(server.URL + view.ChannelListURL("list", expanded.ID)).MustWaitLoad()
 	const barAccount = "#organization-stream > nav:first-of-type [popovertarget=account-menu]"
 	accountKeys(page, barAccount, tapHeading)
-	page.MustElement(barAccount).MustClick()
+	clickOn(barAccount)
 	sheet(true)
 	if problem := page.MustEval(`homeLink => {
 		const box = document.getElementById('account-menu').getBoundingClientRect();
@@ -397,8 +381,8 @@ func TestChannelListBrowser(t *testing.T) {
 
 	// Without JavaScript, at phone width: the back link's fragment alone brings
 	// the row into view, and a failed creation can be corrected in place.
-	plain := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-	defer plain.MustClose()
+	plain, closePlain := boundedPage(t, browser, ctx, "page without scripts")
+	defer closePlain()
 	acceptanceOK(t, proto.EmulationSetScriptExecutionDisabled{Value: true}.Call(plain))
 	plain.MustSetViewport(390, 844, 1, false)
 	// rod's element clicks and input did not return with scripts disabled, so
@@ -411,7 +395,7 @@ func TestChannelListBrowser(t *testing.T) {
 		var at struct{ X, Y float64 }
 		acceptanceOK(t, plain.MustEval(`s => { const e = document.querySelector(s); e.scrollIntoView({block: 'center'});
 			const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }`, selector).Unmarshal(&at))
-		plain.Mouse.MustMoveTo(at.X, at.Y).MustClick(proto.InputMouseButtonLeft)
+		inputStep(t, plain, "pressing "+selector, func(p *rod.Page) { p.Mouse.MustMoveTo(at.X, at.Y).MustClick(proto.InputMouseButtonLeft) })
 	}
 	const inView = `row => {
 		const port = document.querySelector('main').getBoundingClientRect(), box = document.getElementById(row).getBoundingClientRect();
@@ -432,7 +416,7 @@ func TestChannelListBrowser(t *testing.T) {
 	}
 	click("[popovertarget=channel-create]")
 	click("#channel-name")
-	plain.MustInsertText("general")
+	inputStep(t, plain, "typing general", func(p *rod.Page) { p.MustInsertText("general") })
 	click("#channel-create button[type=submit]")
 	landed("/organizations/list/channels")
 	if !plain.MustEval(`() => {
@@ -446,7 +430,7 @@ func TestChannelListBrowser(t *testing.T) {
 	if !plain.MustEval(`() => document.activeElement.id === 'channel-name' && (document.activeElement.select(), true)`).Bool() {
 		t.Fatal("the invalid field does not take focus")
 	}
-	plain.MustInsertText("planning")
+	inputStep(t, plain, "typing planning", func(p *rod.Page) { p.MustInsertText("planning") })
 	click("#channel-create button[type=submit]")
 	plain.MustWait(`() => document.readyState === 'complete' && /^\/organizations\/list\/channels\/[0-9a-f-]{36}$/.test(location.pathname) && document.title.startsWith('planning ·')`)
 	mu.Lock()
@@ -464,9 +448,9 @@ func TestChannelListBrowser(t *testing.T) {
 	// Front the page again: a background tab paints no frames to click on.
 	page.MustActivate().MustSetViewport(390, 844, 1, false)
 	page.MustNavigate(server.URL + listURL).MustWaitLoad()
-	page.MustElement(bottomAccount).MustClick()
+	clickOn(bottomAccount)
 	sheet(true)
-	page.MustElement("#account-menu form[action='/signout'] button").MustClick()
+	clickOn("#account-menu form[action='/signout'] button")
 	page.MustWait(`() => location.pathname === '/signin' && document.readyState === 'complete'`)
 	reader.visit(t, "GET", listURL, nil, 404)
 	insets(map[string]int{"left": 44, "right": 44})

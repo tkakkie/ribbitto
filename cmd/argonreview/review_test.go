@@ -158,20 +158,26 @@ func TestReviewFailureRules(t *testing.T) {
 
 // A run that changes the sanitised tree does not count: tracked, untracked
 // and ignored files alike, and a recreated .agents (#1071).
+// Changes undone before agy exits count too, and a huge file left behind
+// fails promptly without being read (Codex on #1117).
 func TestReviewRefusesAChangedTree(t *testing.T) {
 	for name, script := range map[string]string{
-		"tracked":   "echo more >> README",
-		"untracked": "touch new.txt",
-		"ignored":   "touch debug.log",
-		"removed":   "rm a/keep.txt",
-		".agents":   "mkdir -p a/.agents",
+		"tracked":              "echo more >> README",
+		"untracked":            "touch new.txt",
+		"ignored":              "touch debug.log",
+		"removed":              "rm a/keep.txt",
+		".agents":              "mkdir -p a/.agents",
+		"rewritten, restored":  `c=$(cat README); echo other > README; printf '%s\n' "$c" > README`,
+		".agents, then gone":   "mkdir a/.agents && rmdir a/.agents",
+		"huge sparse, ignored": "dd if=/dev/zero of=huge.log bs=1 count=0 seek=100G 2>/dev/null",
 	} {
 		t.Run(name, func(t *testing.T) {
 			r, fake := newReview(t)
 			write(t, filepath.Join(fake, "mutate"), script+"\n")
 			var out bytes.Buffer
-			if code, err := r.run(&out); code != 1 || err == nil || !strings.Contains(err.Error(), "changed the worktree") || out.Len() != 0 {
-				t.Fatalf("code = %d, err = %v, output %q", code, err, out.String())
+			started := time.Now()
+			if code, err := r.run(&out); code != 1 || err == nil || !strings.Contains(err.Error(), "changed the worktree") || out.Len() != 0 || time.Since(started) > 10*time.Second {
+				t.Fatalf("code = %d, err = %v, output %q after %v", code, err, out.String(), time.Since(started))
 			}
 			nothingLeft(t, r.source)
 		})
@@ -217,16 +223,19 @@ func TestProbe(t *testing.T) {
 			nothingLeft(t, r.source)
 		})
 	}
-	// A symlink is refused before the launch, apart from any tool denial.
+	// A symlink is refused before the launch, recorded with the target's
+	// identity apart from any tool denial (Codex on #1117).
 	symlink(t, "/etc/passwd", filepath.Join(repo, "link"))
 	gitT(t, repo, "add", "-A")
 	gitT(t, repo, "commit", "--quiet", "-m", "link")
+	head = gitT(t, repo, "rev-parse", "HEAD")
 	r, fake := newReview(t)
 	r.probe = true
 	r.build = func() (*workspace, error) { return probeWorkspace(r.source, r.revision, repo, promptFile, rawGit) }
 	var out bytes.Buffer
-	if code, err := r.run(&out); code != 1 || err == nil || !strings.Contains(err.Error(), "symlink") || out.Len() != 0 {
-		t.Fatalf("code = %d, err = %v, output %q", code, err, out.String())
+	want := "Argon probe of " + repo + " at " + head + "\nLauncher built from " + r.revision + "\n\nVerdict: refused before launch: "
+	if code, err := r.run(&out); code != 1 || err == nil || !strings.HasPrefix(out.String(), want) || !strings.Contains(out.String(), "symlink: link") {
+		t.Fatalf("code = %d, err = %v, output:\n%s", code, err, out.String())
 	}
 	if _, err := os.Stat(filepath.Join(fake, "seen")); !os.IsNotExist(err) {
 		t.Fatalf("agy ran on a tree with a symlink: %v", err)

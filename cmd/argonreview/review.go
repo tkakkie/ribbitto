@@ -111,6 +111,12 @@ func (r review) run(out io.Writer) (code int, err error) {
 		return 1, err
 	}
 	w, err := r.build()
+	var ref *refused
+	if err != nil && r.probe && errors.As(err, &ref) {
+		// A probe records a refusal before launch with the target's
+		// identity, apart from tool denials (#1071, Codex on #1117).
+		return r.finish(out, ref.name, ref.head, 1, nil, nil, "", err)
+	}
 	if err != nil {
 		return 1, err
 	}
@@ -136,6 +142,11 @@ func (r review) run(out io.Writer) (code int, err error) {
 	if removeErr := w.remove(); removeErr != nil {
 		err = errors.Join(err, removeErr)
 	}
+	return r.finish(out, w.name, w.target.Head, code, transcript, diagnostics, response, err)
+}
+
+// finish writes what the run produced, after the workspace is gone.
+func (r review) finish(out io.Writer, name, head string, code int, transcript, diagnostics []byte, response string, err error) (int, error) {
 	// The supervisor only reads signals while agy runs. Catching stops here,
 	// so one arriving during the write ends the process as usual; one that
 	// arrived before, during the supervisor's cleanup or the checks above,
@@ -149,10 +160,14 @@ func (r review) run(out io.Writer) (code int, err error) {
 	default:
 	}
 	// The source revision and the target are named apart (#1068).
-	header := fmt.Sprintf("Argon %s of %s at %s\nLauncher built from %s\n\n", map[bool]string{false: "review", true: "probe"}[r.probe], w.name, w.target.Head, r.revision)
+	header := fmt.Sprintf("Argon %s of %s at %s\nLauncher built from %s\n\n", map[bool]string{false: "review", true: "probe"}[r.probe], name, head, r.revision)
 	if r.probe {
 		verdict := "counts"
-		if err != nil {
+		var ref *refused
+		switch {
+		case errors.As(err, &ref):
+			verdict = "refused before launch: " + err.Error()
+		case err != nil:
 			verdict = "does not count: " + err.Error()
 		}
 		if _, writeErr := fmt.Fprintf(out, "%sVerdict: %s\n\n--- agy stdout\n%s--- agy stderr\n%s", header, verdict, transcript, diagnostics); writeErr != nil {

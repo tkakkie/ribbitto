@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // target is one gh pr view snapshot of the pull request under review, so the
@@ -199,38 +200,40 @@ func probeWorkspace(source, revision, repo, promptFile string, git func(string, 
 		return w, fmt.Errorf("resolving the HEAD of %s: %w", repo, err)
 	}
 	w.target.Head = strings.TrimSpace(head)
-	return w, w.checkout(w.target.Head, git)
+	if err := w.checkout(w.target.Head, git); err != nil {
+		return w, &refused{repo, w.target.Head, err}
+	}
+	return w, nil
 }
 
+// refused is a probe target refused before launch, such as a tree with a
+// symlink, with what a probe report names.
+type refused struct {
+	name, head string
+	err        error
+}
+
+func (r *refused) Error() string { return r.err.Error() }
+func (r *refused) Unwrap() error { return r.err }
+
 // record records every entry of the sanitised tree, tracked, untracked and
-// ignored alike, with its type and content, so a run that changes the tree
-// can be refused (#1071).
+// ignored alike, so a run that changes the tree can be refused (#1071). It
+// keeps each entry's type, inode, size and change time rather than its
+// content: the change time moves with every write and every entry added to
+// or removed from a directory, and cannot be set back, so a change undone
+// before agy exits still shows; and nothing is read, so a huge file left
+// behind cannot exhaust memory or time (Codex on #1117).
 func record(tree string) (map[string]string, error) {
 	entries := map[string]string{}
-	err := filepath.WalkDir(tree, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(tree, func(path string, _ fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		info, err := d.Info()
-		if err != nil {
+		var st unix.Stat_t
+		if err := unix.Lstat(path, &st); err != nil {
 			return err
 		}
-		entry := info.Mode().String()
-		switch {
-		case info.Mode()&fs.ModeSymlink != 0:
-			target, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			entry += " " + target
-		case info.Mode().IsRegular():
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			entry += fmt.Sprintf(" %x", sha256.Sum256(data))
-		}
-		entries[path] = entry
+		entries[path] = fmt.Sprintf("%o %d %d %d.%09d", st.Mode, st.Ino, st.Size, st.Ctim.Sec, st.Ctim.Nsec)
 		return nil
 	})
 	if err != nil {

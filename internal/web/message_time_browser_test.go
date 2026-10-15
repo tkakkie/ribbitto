@@ -18,8 +18,10 @@ import (
 // Localising a message's time moves nothing on its row (#1094). The time
 // script is held until the server's UTC markup has painted, as on a slow
 // connection, and the layout shifts with a source inside a message row are
-// summed from navigation until 2 s after localisation, at desktop and phone
-// width in both languages. Without JavaScript the server's time stays.
+// summed from the script's release until 2 s after localisation, at desktop
+// and phone width in both languages. A shift before the release cannot come
+// from localisation, and one during the load failed CI once (#1138). Without
+// JavaScript the server's time stays.
 func testMessageTimeBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -90,6 +92,9 @@ func testMessageTimeBrowser(t *testing.T, browser *rod.Browser) {
 				case <-time.After(10 * time.Second):
 					t.Fatal("the page did not request the time script within 10 s")
 				}
+				// The page's clock just before the release; shifts before it
+				// are not counted.
+				var released float64
 				step(t, "painting the server's times", func(p *rod.Page) {
 					p.MustWait(`n => document.querySelectorAll('#message-items time[data-local-time]').length === n &&
 						performance.getEntriesByType('paint').some(e => e.name === 'first-contentful-paint')`, n)
@@ -97,6 +102,7 @@ func testMessageTimeBrowser(t *testing.T, browser *rod.Browser) {
 					if localised := p.MustEval(`() => [...document.querySelectorAll('time[data-local-time]')].filter(e => !e.textContent.includes('UTC')).length`).Int(); localised != 0 {
 						panic(fmt.Sprintf("%d times were localised before the server's markup painted", localised))
 					}
+					released = p.MustEval(`() => performance.now()`).Num()
 				})
 				close(release)
 				var shifts struct {
@@ -105,7 +111,7 @@ func testMessageTimeBrowser(t *testing.T, browser *rod.Browser) {
 				}
 				step(t, "localising the times and waiting 2 s", func(p *rod.Page) {
 					p.MustWait(`() => [...document.querySelectorAll('time[data-local-time]')].every(e => !e.textContent.includes('UTC'))`)
-					if err := p.MustEval(messageRowShifts).Unmarshal(&shifts); err != nil {
+					if err := p.MustEval(messageRowShifts, released).Unmarshal(&shifts); err != nil {
 						panic(err)
 					}
 				})
@@ -145,22 +151,27 @@ func testMessageTimeBrowser(t *testing.T, browser *rod.Browser) {
 }
 
 // messageRowShifts waits 2 s after localisation, then sums the recorded
-// layout shifts without recent input and with a source inside a message row,
-// and describes each.
-const messageRowShifts = `async () => {
+// layout shifts without recent input, from released (the page's clock at the
+// time script's release) on, with a source inside a message row. It describes
+// each by its time after the release and every row source's rectangles:
+// Chromium reports only moves of 3 CSS px or more, so a non-zero sum is a
+// real move, and the rectangles say which way it went.
+const messageRowShifts = `async released => {
 	const localised = performance.now();
 	await new Promise(r => setTimeout(r, 2000));
 	const inRow = n => { const e = n && (n.nodeType === 1 ? n : n.parentElement); return !!e?.closest('#message-items > li'); };
+	const px = v => Math.round(v * 10) / 10;
+	const rect = r => '(' + px(r.x) + ', ' + px(r.y) + ') ' + px(r.width) + '×' + px(r.height);
 	let sum = 0;
 	const entries = [];
 	for (const e of window.rowShifts) {
-		if (e.hadRecentInput || e.startTime > localised + 2000) continue;
+		if (e.hadRecentInput || e.startTime < released || e.startTime > localised + 2000) continue;
 		const rows = e.sources.filter(s => inRow(s.node));
 		if (rows.length === 0) continue;
 		sum += e.value;
-		entries.push(e.value.toPrecision(3) + ' at ' + Math.round(e.startTime) + ' ms from ' + rows.map(s => {
+		entries.push(e.value.toPrecision(3) + ' at ' + Math.round(e.startTime - released) + ' ms after the release from ' + rows.map(s => {
 			const n = s.node.nodeType === 1 ? s.node : s.node.parentElement;
-			return n.tagName.toLowerCase() + ' ' + JSON.stringify(s.node.textContent.trim().slice(0, 24)) + ' x ' + s.previousRect.x + ' → ' + s.currentRect.x;
+			return n.tagName.toLowerCase() + ' ' + JSON.stringify(s.node.textContent.trim().slice(0, 24)) + ' ' + rect(s.previousRect) + ' → ' + rect(s.currentRect);
 		}).join(', '));
 	}
 	return {sum, entries};

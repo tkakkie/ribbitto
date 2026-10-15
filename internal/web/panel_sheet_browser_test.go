@@ -422,8 +422,9 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 				t.Fatal(err)
 			}
 			plain.MustSetViewport(390, 844, 1, false)
-			// rod's element clicks and load waits do not return with scripts
-			// disabled; the test's own evaluations still run.
+			// rod's element clicks can stall with scripts disabled; WaitLoad
+			// also hangs if the load is still pending. The test's own
+			// evaluations still run.
 			navigate := func(url string) {
 				if err := navigateLoaded(plain, url); err != nil {
 					t.Fatalf("%s: %v (at %s)", steps.current, err, steps.since())

@@ -97,21 +97,24 @@ func (s *stepRunner) device(page *rod.Page, what string, fn func(p *rod.Page)) {
 	runBounded(s.t, s.stepCtx, s.started, s.current+": "+what, func() { fn(p) })
 }
 
-// navigateLoaded navigates p to url and waits up to 8 s for the browser's load
-// event, for tabs with script execution disabled: rod's WaitLoad waits on a
-// load listener in page JavaScript, which never runs there, so a load still
-// pending when it starts never ends (#1129).
+// navigateLoaded navigates p to url and waits up to 8 s until the new
+// document is complete, for tabs with script execution disabled: rod's
+// WaitLoad waits on a load listener in page JavaScript, which never runs
+// there, so it hangs if the load is still pending (#1129). The test's own
+// evaluation still runs, and once Page.navigate has returned it reads the
+// destination document, not the one before.
 func navigateLoaded(p *rod.Page, url string) error {
-	ctx, stop := context.WithTimeoutCause(p.GetContext(), 8*time.Second, errors.New("no load event within 8 s"))
+	ctx, stop := context.WithTimeoutCause(p.GetContext(), 8*time.Second, errors.New("not loaded within 8 s"))
 	defer stop()
 	p = p.Context(ctx)
-	loaded := p.WaitEvent(&proto.PageLoadEventFired{})
 	if err := p.Navigate(url); err != nil {
 		return fmt.Errorf("navigating to %s: %w", url, err)
 	}
-	loaded()
-	if ctx.Err() != nil {
-		return fmt.Errorf("loading %s: %w", url, context.Cause(ctx))
+	if err := p.Wait(rod.Eval(`() => document.readyState === 'complete'`)); err != nil {
+		if ctx.Err() != nil {
+			err = context.Cause(ctx)
+		}
+		return fmt.Errorf("loading %s: %w", url, err)
 	}
 	return nil
 }

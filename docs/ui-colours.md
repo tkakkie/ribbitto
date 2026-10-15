@@ -19,8 +19,6 @@ without a reload.
 | `base` | `#edf4f2` | `#0f1514` | page ground; the sidebar sits on it |
 | `bg` | `#ffffff` | `#1a2120` | blocks: the conversation, panels |
 | `rail` | `#ffffff` | `#1a2120` | the app bar block |
-| `sidebar` | `#edf4f2` | `#0f1514` | reserved for the sidebar (it sits on `base`) |
-| `panel` | `#f5f9f8` | `#161d1c` | reserved for side panels (they use `bg`) |
 | `surface` | `#ffffff` | `#212928` | cards, popovers |
 | `input` | `#ffffff` | `#212928` | text fields |
 | `hover` | `#e4edeb` | `#26302e` | hovered rows and buttons |
@@ -58,16 +56,15 @@ truncated, never rounded up. Decorative `border` and `accent-line` carry no
 information and are exempt; a control's boundary always uses
 `border-strong`. The current row is shown by `on-selected` text **and** the
 `brand` indicator, not by the `selected` fill alone. In light `bg`, `rail`,
-`surface` and `input` share one value, and `sidebar` equals `base`, so each
-light row below covers them. In dark, `rail` equals `bg` and `sidebar`
-equals `base`; `surface` and `input` have separate rows. No template uses
+`surface` and `input` share one value, so each light row below covers
+them. In dark, `rail` equals `bg`; `surface` and `input` have separate rows. No template uses
 placeholder text or a placeholder colour token. Input help uses `muted`.
 Ratios use the WCAG 2.x sRGB relative-luminance formula.
 
 | Scheme | Pair (foreground on background) | Used for | Needed | Ratio |
 |---|---|---|---|---|
-| Light | `fg` on `bg` / `base` / `panel` / `hover` | body text (`panel` reserved) | 4.5:1 | 17.23 / 15.44 / 16.24 / 14.45 |
-| Light | `muted` on `bg` / `base` / `panel` / `hover` | secondary text (`panel` reserved) | 4.5:1 | 6.78 / 6.08 / 6.39 / 5.69 |
+| Light | `fg` on `bg` / `base` / `hover` | body text | 4.5:1 | 17.23 / 15.44 / 14.45 |
+| Light | `muted` on `bg` / `base` / `hover` | secondary text | 4.5:1 | 6.78 / 6.08 / 5.69 |
 | Light | `on-brand` on `brand` | button label, unread count | 4.5:1 | 5.47 |
 | Light | `on-brand` on `brand-hover` | hovered button label | 4.5:1 | 7.52 |
 | Light | `on-selected` on `selected` | current row's label | 4.5:1 | 8.11 |
@@ -80,10 +77,10 @@ Ratios use the WCAG 2.x sRGB relative-luminance formula.
 | Light | `on-danger` on `danger` | destructive button label (reserved) | 4.5:1 | 6.57 |
 | Light | `border-strong` on `bg` / `base` | input border | 3:1 | 3.60 / 3.23 |
 | Light | `on-pastel-n` on `pastel-n` (1…6) | initials on avatars | 4.5:1 | 5.65 / 5.56 / 5.48 / 5.13 / 6.23 / 5.75 |
-| Dark | `fg` on `bg` / `base` / `panel` / `hover` | body text (`panel` reserved) | 4.5:1 | 13.63 / 15.36 / 14.25 / 11.31 |
+| Dark | `fg` on `bg` / `base` / `hover` | body text | 4.5:1 | 13.63 / 15.36 / 11.31 |
 | Dark | `fg` on `surface` | card and popover text | 4.5:1 | 12.37 |
 | Dark | `fg` on `input` | typed text | 4.5:1 | 12.37 |
-| Dark | `muted` on `bg` / `base` / `panel` / `hover` | secondary text (`panel` reserved) | 4.5:1 | 6.59 / 7.43 / 6.89 / 5.47 |
+| Dark | `muted` on `bg` / `base` / `hover` | secondary text | 4.5:1 | 6.59 / 7.43 / 5.47 |
 | Dark | `muted` on `surface` | card and popover secondary text | 4.5:1 | 5.98 |
 | Dark | `muted` on `input` | input help text | 4.5:1 | 5.98 |
 | Dark | `on-brand` on `brand` | button label, unread count | 4.5:1 | 8.07 |
@@ -91,7 +88,7 @@ Ratios use the WCAG 2.x sRGB relative-luminance formula.
 | Dark | `on-selected` on `selected` | current row's label | 4.5:1 | 9.08 |
 | Dark | `on-selected` on `bg` | app bar Home label (`rail` equals `bg`) | 4.5:1 | 12.58 |
 | Dark | `on-accent` on `accent` | "New" divider label | 4.5:1 | 9.75 |
-| Dark | `brand` on `bg` / `base` / `panel` / `hover` | link text; focus ring | 4.5:1 | 8.07 / 9.10 / 8.44 / 6.70 |
+| Dark | `brand` on `bg` / `base` / `hover` | link text; focus ring | 4.5:1 | 8.07 / 9.10 / 6.70 |
 | Dark | `brand` on `surface` | links; focus outline | 4.5:1 | 7.33 |
 | Dark | `brand` on `input` | focus outline and focused control border | 3:1 | 7.33 |
 | Dark | `brand` on `selected` | indicator on the current row | 3:1 | 5.82 |

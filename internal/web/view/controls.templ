@@ -16,7 +16,7 @@ const (
 	// buttonWelcomePrimary and buttonWelcomeSecondary give welcome forms 48 px phone targets.
 	buttonWelcomePrimary
 	buttonWelcomeSecondary
-	// buttonSecondaryIcon keeps only its named icon below desk.
+	// buttonSecondaryIcon is buttonSecondary with a decorative icon before its label.
 	buttonSecondaryIcon
 )
 
@@ -38,13 +38,10 @@ templ submitButtonFor(kind buttonKind, label, form string) {
 				if form != "" {
 					form={ form }
 				}
-				if kind == buttonSecondaryIcon {
-					aria-label={ i18n.T(ctx, label) }
-				}
-				class={ "min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover transition-feedback motion-safe:active:scale-96", templ.KV("max-desk:min-h-12", kind == buttonWelcomeSecondary), templ.KV("inline-flex items-center justify-center gap-2 whitespace-nowrap max-desk:size-11 max-desk:gap-0 max-desk:px-0", kind == buttonSecondaryIcon) }
+				class={ "min-h-11 rounded-md border border-border-strong bg-surface px-4 py-2 text-body text-fg hover:bg-hover transition-feedback motion-safe:active:scale-96", templ.KV("max-desk:min-h-12", kind == buttonWelcomeSecondary), templ.KV("inline-flex items-center justify-center gap-2 whitespace-nowrap", kind == buttonSecondaryIcon) }
 			>
 				{ children... }
-				<span class={ templ.KV("max-desk:hidden", kind == buttonSecondaryIcon) }>{ i18n.T(ctx, label) }</span>
+				<span>{ i18n.T(ctx, label) }</span>
 			</button>
 		default:
 			<button

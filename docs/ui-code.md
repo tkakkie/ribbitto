@@ -98,8 +98,8 @@ which `env(safe-area-inset-*)` stays 0, so pages extend under a phone's
 home indicator and, in landscape, its notch. The base style pads `body`
 by the side insets, as the default fit did, on a `bg-base` body. What meets the bottom edge
 below `desk` uses `pb-safe-<n>`, `n` spacing steps plus the bottom inset:
-`pb-safe-0` on the bottom navigation, `pb-safe-4` on the account sheet
-and composer, and welcome pages (`pb-safe-3` on the move form).
+`pb-safe-0` on the bottom navigation and the panel sheet, `pb-safe-4` on
+the account sheet, composer and welcome pages (`pb-safe-3` on the move form).
 
 **Phone conversation** (#971). `max-desk:` overrides remove the frame
 padding and conversation radius, give messages and composer 16 px gutters,

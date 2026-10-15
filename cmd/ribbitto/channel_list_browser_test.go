@@ -244,8 +244,10 @@ func TestChannelListBrowser(t *testing.T) {
 		page.MustWait(`open => document.getElementById('account-menu').matches(':popover-open') === open`, open)
 	}
 	// accountKeys drives the menu from its visible invoker, with or without
-	// scripts: Enter and Space each open and close it, Escape closes it from
-	// inside with focus back on the invoker, and an outside tap closes it.
+	// scripts: Enter and Space each open it, and repeating the key keeps it
+	// open, since opening moves focus to its first line (#1102); Escape closes
+	// it from inside with focus back on the invoker, Enter or Space on the
+	// invoker itself closes the open menu, and an outside tap closes it.
 	// After each step the invoker's accessibility node reports the state.
 	accountKeys := func(p *rod.Page, invoker string, tap func()) {
 		t.Helper()
@@ -270,9 +272,13 @@ func TestChannelListBrowser(t *testing.T) {
 		p.MustEval(`s => document.querySelector(s).focus()`, invoker)
 		step("closed", false)
 		step("Enter", true, input.Enter)
-		step("Enter again", false, input.Enter)
+		step("Enter again", true, input.Enter)
+		p.MustEval(`s => document.querySelector(s).focus()`, invoker)
+		step("Enter on the invoker", false, input.Enter)
 		step("Space", true, input.Space)
-		step("Space again", false, input.Space)
+		step("Space again", true, input.Space)
+		p.MustEval(`s => document.querySelector(s).focus()`, invoker)
+		step("Space on the invoker", false, input.Space)
 		step("Enter", true, input.Enter)
 		p.Keyboard.MustType(input.Tab)
 		if !p.MustEval(`() => !!document.activeElement.closest('#account-menu')`).Bool() {

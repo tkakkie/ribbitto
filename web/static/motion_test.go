@@ -20,8 +20,9 @@ func TestReducedMotion(t *testing.T) {
 	property := regexp.MustCompile(`^(animation|transition|scale|rotate|translate|transform)(-[a-z-]+)?$`)
 	state := regexp.MustCompile(`:(hover|active|focus)`)
 	// A pseudo-element is ::name, or one of the four CSS 2 names with a single
-	// colon, the form the minifier writes ::before and ::after in.
-	pseudo := regexp.MustCompile(`::([a-z-]+)|:(before|after|first-line|first-letter)\b`)
+	// colon, the form the minifier writes ::before and ::after in; the trailing
+	// class stops :first-line matching the start of a longer name.
+	pseudo := regexp.MustCompile(`::([a-z-]+)|:(before|after|first-line|first-letter)([^a-z-]|$)`)
 	// The reset (*, ::before, ::after) already stops these two.
 	missed := func(selector string) bool {
 		for _, match := range pseudo.FindAllStringSubmatch(selector, -1) {
@@ -38,7 +39,12 @@ func TestReducedMotion(t *testing.T) {
 			continue
 		}
 		if strings.Contains(context, reduce) {
-			reset = reset || strings.HasPrefix(rule.selector, "*") &&
+			// missed exempts ::before and ::after because this rule names them.
+			selectors := map[string]bool{}
+			for _, selector := range strings.Split(rule.selector, ",") {
+				selectors[strings.TrimLeft(strings.TrimSpace(selector), ":")] = true
+			}
+			reset = reset || selectors["*"] && selectors["before"] && selectors["after"] &&
 				strings.Contains(rule.declarations, "animation:none!important") && strings.Contains(rule.declarations, "transition:none!important")
 			continue
 		}
@@ -68,7 +74,7 @@ func TestReducedMotion(t *testing.T) {
 		}
 	}
 	if !reset {
-		t.Errorf("no %s rule resets animation and transition on every element with !important", reduce)
+		t.Errorf("no %s rule resets animation and transition on every element, ::before and ::after with !important", reduce)
 	}
 	// The motion classes are built, so the checks above cover them.
 	for _, class := range []string{".animate-typing-dot-1", ".animate-typing-dot-3", ".transition-feedback", `.motion-safe\:active\:scale-96:active`} {

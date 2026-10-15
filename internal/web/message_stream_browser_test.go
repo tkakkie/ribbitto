@@ -47,7 +47,10 @@ func TestBrowser(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			browser := <-pool
-			defer func() { pool <- browser }()
+			// Registered first, so it runs after the scenario's own cleanups:
+			// the next scenario gets the browser only once this one's pages
+			// are closed, as when a subtest's cleanups ended before the next.
+			t.Cleanup(func() { pool <- browser })
 			scenario(t, browser)
 		})
 	}

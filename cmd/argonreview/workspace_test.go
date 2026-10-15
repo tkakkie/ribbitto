@@ -170,6 +170,42 @@ func TestWorkspaceRefuses(t *testing.T) {
 	}
 }
 
+// A source whose configuration sets hooks or fsmonitor, directly or through
+// an include, is refused before anything runs; a configured post-checkout
+// hook would otherwise run in the pull request's worktree.
+func TestWorkspaceRefusesHooksInTheSource(t *testing.T) {
+	source, revision, pr := pullRequests(t)
+	marker := filepath.Join(filepath.Dir(source), "configured")
+	for _, tc := range []struct {
+		name string
+		set  [][2]string
+	}{
+		{"configured hook", [][2]string{{"hook.mark.command", "touch '" + marker + "'"}, {"hook.mark.event", "post-checkout"}}},
+		{"hooksPath", [][2]string{{"core.hooksPath", ".githooks"}}},
+		{"fsmonitor", [][2]string{{"core.fsmonitor", "true"}}},
+		{"through an include", [][2]string{{"include.path", "extra"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			write(t, filepath.Join(source, ".git/extra"), "[hook \"mark\"]\n\tcommand = touch '"+marker+"'\n\tevent = post-checkout\n")
+			for _, kv := range tc.set {
+				gitT(t, source, "config", kv[0], kv[1])
+			}
+			defer func() {
+				for _, kv := range tc.set {
+					gitT(t, source, "config", "--unset-all", kv[0])
+				}
+			}()
+			if _, err := newWorkspace(source, revision, pr, rawGit); err == nil || !strings.Contains(err.Error(), "configures hooks") {
+				t.Fatalf("err = %v", err)
+			}
+			if _, err := os.Stat(marker); !os.IsNotExist(err) {
+				t.Fatalf("the configured hook ran: %v", err)
+			}
+			nothingLeft(t, source)
+		})
+	}
+}
+
 // Each git step that fails leaves nothing behind, including after the
 // checkout.
 func TestWorkspaceCleansUpAfterEachFailure(t *testing.T) {

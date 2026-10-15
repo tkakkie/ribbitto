@@ -68,6 +68,9 @@ func newWorkspace(source, revision string, t target, git func(string, ...string)
 	if _, err := git(source, "check-ref-format", "--branch", t.BaseRef); err != nil {
 		return nil, fmt.Errorf("pull request #%d: invalid base branch %q", t.Number, t.BaseRef)
 	}
+	if err := noHooks(source, git); err != nil {
+		return nil, err
+	}
 	dir, err := os.MkdirTemp("", "argonreview-")
 	if err != nil {
 		return nil, fmt.Errorf("creating the workspace: %w", err)
@@ -130,6 +133,23 @@ func newWorkspace(source, revision string, t target, git func(string, ...string)
 	}
 	w.prompt = instructions + "\nUNTRUSTED_PAYLOAD_JSON: " + string(payload) + "\n"
 	return w, nil
+}
+
+// noHooks refuses a source checkout whose own configuration, includes
+// followed, sets hooks or fsmonitor. gitRaw already overrides core.hooksPath
+// and core.fsmonitor, but a configured hook (hook.<name>.command) would still
+// run in the pull request's worktree and could start a script from it; the
+// maintainer chose refusing over disabling each one (Codex on #1097).
+func noHooks(source string, git func(string, ...string) (string, error)) error {
+	found, err := git(source, "config", "--local", "--includes", "--get-regexp", `^(hook\.|core\.hookspath$|core\.fsmonitor$)`)
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return nil // nothing matched
+	}
+	if err != nil {
+		return fmt.Errorf("reading the source checkout's configuration: %w", err)
+	}
+	return fmt.Errorf("refusing: the source checkout configures hooks or fsmonitor: %s", strings.TrimSpace(found))
 }
 
 // removeAgents deletes every .agents entry in the worktree, nested ones,

@@ -37,8 +37,7 @@ Claude reviews Codex's work: the orchestrating Claude session reviews
 directly, or `limit 1800 claude -p "…" < /dev/null`.
 
 Post the result with `gh issue comment` / `gh pr comment`. Do not rely on
-GitHub's `@codex review`: it looks only at the most severe problems, so it
-does not replace this review.
+GitHub's `@codex review`: it looks only at the most severe problems.
 
 ## Running Codex
 
@@ -55,8 +54,8 @@ worktree. The profile allows:
   database, GitHub and the npm registry.
 
 Any other host is refused ("Network access to "example.com" was blocked:
-domain is not on the allowlist"). The command uses a Bash array, so run it
-from bash or zsh, with `limit` defined as above:
+domain is not on the allowlist"). It uses a Bash array, so run it from bash
+or zsh with `limit` as above:
 
 ```bash
 perms=(
@@ -93,6 +92,7 @@ The prompt carries the issue and its review comments, plus these rules:
   permit `ps`, which it needs to find its fake Grok processes
   ([#183](https://github.com/tkakkie/ribbitto/issues/183)), so Muse's suite
   never runs. Everything before has run, so that failure is expected.
+  `cmd/argonreview`'s supervisor tests need `ps` too.
 
   ```sh
   # Reuse the container if it is already running; either way, wait for it.
@@ -120,7 +120,7 @@ The prompt carries the issue and its review comments, plus these rules:
   credentials, a password, a token or a key: a command that needs one shows
   a placeholder such as `<local test database>` (#358). It also stays
   inside the handoff on the machine ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
-  no other AI CLIs (claude, grok), no browser or Computer Use, since reviews
+  no other AI CLIs (claude, grok, agy), no browser or Computer Use, since reviews
   and browser checks are the orchestrator's. It never re-signs, patches or
   replaces a tool binary to make it run, and reports the failure instead. It
   puts scratch files outside the worktree when the runner allows it; this

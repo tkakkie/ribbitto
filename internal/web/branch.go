@@ -30,6 +30,11 @@ func (p channelPages) branch(w http.ResponseWriter, r *http.Request, m org.Membe
 		http.NotFound(w, r)
 		return
 	}
+	if !p.branchLimit.Allow(m.Organization.ID, m.Member.ID) {
+		w.Header().Set("Retry-After", "6")
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
 	if !parseForm(w, r) {
 		return
 	}

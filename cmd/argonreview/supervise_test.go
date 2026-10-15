@@ -174,22 +174,53 @@ func TestSupervisorClosesStdin(t *testing.T) {
 }
 
 // A failed scan leaves the cleanup unconfirmed, so run fails even after a
-// status-0 exit; an unreaped leader is still killed and reaped.
+// status-0 exit. A leader that ignores TERM is still unreaped when the scan
+// fails, and must be killed and reaped there.
 func TestSupervisorReportsAFailedScan(t *testing.T) {
 	for _, tc := range []struct {
 		name, script string
+		sig          os.Signal
 		code         int
 	}{
-		{"time limit", `echo $$ > "$1/pids"; exec sleep 30`, 124},
-		{"status 0", `echo $$ > "$1/pids"`, 0},
+		{"unreaped leader", `trap "" TERM; echo $$ > "$1/pids"; touch "$1/ready"; exec sleep 30`, syscall.SIGTERM, 143},
+		{"status 0", `echo $$ > "$1/pids"`, nil, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
 			ops := systemCleanup()
 			ops.scan = func(int) ([]int, error) { return nil, fmt.Errorf("ps failed") }
-			if r := supervised(t, tc.script, 200*time.Millisecond, 200*time.Millisecond, ops); r.code != tc.code || r.err == nil {
-				t.Fatalf("code = %d, err = %v", r.code, r.err)
+			signals := make(chan os.Signal, 1)
+			if tc.sig != nil {
+				// Only once TERM is ignored, so terminate cannot reap it.
+				go func() { waitFor(t, filepath.Join(dir, "ready")); signals <- tc.sig }()
+			}
+			code, err := supervisor{30 * time.Second, 200 * time.Millisecond, signals, ops}.run("/bin/sh", []string{"-c", tc.script, "sh", dir}, os.Environ(), dir, os.Stdout, os.Stderr)
+			if code != tc.code || err == nil {
+				t.Fatalf("code = %d, err = %v", code, err)
+			}
+			pids := recorded(t, dir)
+			if pid, err := syscall.Wait4(pids[0], nil, syscall.WNOHANG, nil); err != syscall.ECHILD {
+				t.Fatalf("leader %d left unreaped: Wait4 = %d, %v", pids[0], pid, err)
 			}
 		})
+	}
+}
+
+// A leader that cannot be reaped within reapWithin, as in uninterruptible
+// I/O, fails the run instead of blocking it (Codex on #1089).
+func TestSupervisorGivesUpOnAnUnreapableLeader(t *testing.T) {
+	ops := systemCleanup()
+	ops.wait = func(int, *syscall.WaitStatus) (int, error) { return 0, nil }
+	ops.reapWithin = 300 * time.Millisecond
+	dir := t.TempDir()
+	started := time.Now()
+	code, err := supervisor{100 * time.Millisecond, 100 * time.Millisecond, nil, ops}.run("/bin/sh", []string{"-c", `echo $$ > "$1/pids"; exec sleep 30`, "sh", dir}, os.Environ(), dir, os.Stdout, os.Stderr)
+	if elapsed := time.Since(started); code != 124 || err == nil || elapsed > 5*time.Second {
+		t.Fatalf("code = %d, err = %v after %v", code, err, elapsed)
+	}
+	// The group KILL ended it; reap the zombie the fake wait never saw.
+	for _, pid := range recorded(t, dir) {
+		_, _ = syscall.Wait4(pid, nil, 0, nil)
 	}
 }
 

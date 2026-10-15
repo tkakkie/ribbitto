@@ -131,6 +131,8 @@ type cleanupOps struct {
 	scan        func(int) ([]int, error)
 	killMember  func(int, *child)
 	held        func(int) bool
+	// reapWithin bounds the wait for a killed leader.
+	reapWithin time.Duration
 }
 
 func systemCleanup() cleanupOps {
@@ -139,7 +141,7 @@ func systemCleanup() cleanupOps {
 			return syscall.Wait4(pid, status, syscall.WNOHANG, nil)
 		},
 		func(pid int, sig syscall.Signal) { _ = syscall.Kill(-pid, sig) },
-		sessionMembers, killMember, pidHeld,
+		sessionMembers, killMember, pidHeld, 5 * time.Second,
 	}
 }
 
@@ -196,10 +198,22 @@ func (o cleanupOps) stop(c *child) error {
 }
 
 // reap waits for a leader its group KILL left unreaped, so no zombie stays.
+// It polls with a deadline: a leader that KILL cannot end at once, such as one
+// in uninterruptible I/O, makes the cleanup unconfirmed instead of blocking
+// the launcher past its time limit (Codex on #1089).
 func (o cleanupOps) reap(c *child, err error) error {
-	if !c.exited {
-		_, _ = c.process.Wait()
-		c.exited = true
+	deadline := time.Now().Add(o.reapWithin)
+	for !c.exited && !c.lost {
+		if pollErr := c.poll(); pollErr != nil {
+			return errors.Join(err, pollErr)
+		}
+		if c.exited {
+			break
+		}
+		if time.Now().After(deadline) {
+			return errors.Join(err, fmt.Errorf("%d did not exit after KILL", c.pid))
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	return err
 }

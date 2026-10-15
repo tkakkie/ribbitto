@@ -59,3 +59,17 @@ only (the sidebar and presence go stale elsewhere); sending every event to
 every connection and filtering in the browser (authorization must decide on
 the server); sharing one stream between tabs in the browser (decision 25's
 deferred option, more client code).
+
+## Amendment: transport progress (#1103)
+
+A named `checkpoint` frame may also move `Last-Event-ID`. Completed unread-only
+or skipped progress beyond the last sent ID is checkpointed at most once per
+heartbeat interval since the last checkpoint or ID-bearing write, with its
+cursor as `id:` and empty data. Pending progress replaces a due heartbeat comment;
+with heartbeats disabled, checkpoint before waiting. Authorize the organisation and bound
+member immediately before every checkpoint. Never cover a render, authorization
+or send failure. The browser updates `sse-connect`'s `after` independently of its
+applied and shown cursors. Disconnects before receipt may replay about one
+heartbeat interval of events as duplicates.
+Sidebar recounts still carry no ID; reading and composing still use only shown
+message/move application.

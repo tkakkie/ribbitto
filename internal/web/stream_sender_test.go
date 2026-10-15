@@ -289,3 +289,14 @@ func TestSSEEphemeralFrameAndPresenceToken(t *testing.T) {
 		}
 	}
 }
+
+func TestSSECheckpointObservable(t *testing.T) {
+	w := &deadlineWriter{ResponseRecorder: httptest.NewRecorder()}
+	sender := &sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+	if err := sender.Send(t.Context(), realtime.Outgoing{ID: 7, Name: "checkpoint"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := w.Body.String(), "id: 7\nevent: checkpoint\ndata: \n\n"; got != want {
+		t.Fatalf("checkpoint=%q, want browser-dispatched frame %q", got, want)
+	}
+}

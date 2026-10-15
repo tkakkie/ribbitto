@@ -73,7 +73,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
 
   | Attribute | On | Present | Meaning |
   |---|---|---|---|
-  | `data-applied-cursor` | `#organization-stream` | after durable application | newest sequence applied to the DOM, including while hidden; reconnects use it |
+  | `data-applied-cursor` | `#organization-stream` | after durable application | newest sequence applied to the DOM, including while hidden |
   | `data-oldest-seq` | `#load-older` | always | `event_seq` of the oldest loaded message, `0` once nothing older remains; a moved item is inserted only at or above it |
   | `data-topic` | `#message-items` | topic pages only | the topic's ID, compared with a move's topics |
   | `data-from-topic`, `data-to-topic` | a `messages-moved` payload's `<ul>` | always | the move's source and destination topic IDs |
@@ -96,7 +96,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
   to 100 names and has no live list swap or live region. Presence entries replace
   individual labeled indicators by stable DOM id.
   See [stream scope](stream-scope.md#stream-scope). `reset` handling attaches to
-  this container. Its reconnect cursor and `data-applied-cursor` advance after an inserted message
+  this container. Its reconnect cursor also advances on transport checkpoints.
+  `data-applied-cursor` advances after an inserted message
   settles or a move applies successfully. `data-event-cursor` advances only while
   visible, or when a hidden application is shown again.
   Its hidden, non-focusable `#stream-sink` receives `sidebar,presence` with

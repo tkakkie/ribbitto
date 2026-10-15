@@ -34,8 +34,16 @@ The endpoint takes:
 | With the members panel | the page's own interests plus `presence`, with `presence-after` |
 
 Every page, including `?before=`, carries a snapshot cursor on
-`#organization-stream` and holds a slot under both caps. Only `message`
-and `messages-moved` frames advance the browser's durable cursor.
+`#organization-stream` and holds a slot under both caps. `message`,
+`messages-moved` and transport-only `checkpoint` frames advance native resume.
+A checkpoint covers completed unread-only or skipped progress at most once per
+heartbeat interval since the last checkpoint or ID-bearing write, replacing a
+heartbeat comment when due. With heartbeats disabled, pending progress is
+checkpointed before waiting. A fresh organisation/bound-member authorization
+immediately precedes send.
+Failures are never covered. The browser also updates `sse-connect` for source
+recreation; checkpoints never change applied/shown, read or composer cursors.
+Disconnects before receipt may replay about one heartbeat interval of events.
 
 Ephemeral delivery filters organisation, interest and typing channel/topic
 before authorization, preserving the durable cursor and heartbeat deadlines.
@@ -108,6 +116,7 @@ Swap targets:
 | Event | `id:` | Where htmx puts it |
 |---|---|---|
 | `message`, `messages-moved` | the sequence | `#message-items` |
+| `checkpoint` | completed cursor | stream script updates only `sse-connect` |
 | `unread` | none | the sidebar script increments shown server-rendered badges |
 | `sidebar` | none | whole sidebar lists and selected heading count, out of band (#818) |
 | `presence` | none | each member's indicator, out of band by its DOM id (#768) |

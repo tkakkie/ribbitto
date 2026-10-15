@@ -101,7 +101,8 @@ type Stream struct {
 	// BatchSize bounds each read; zero means DefaultBatchSize.
 	BatchSize int
 	// Heartbeat is how long the loop waits on the hub before it sends a
-	// heartbeat and waits again; zero sends none. An idle stream otherwise
+	// heartbeat (or pending progress checkpoint) and waits again; nonpositive
+	// sends no heartbeats. An idle stream otherwise
 	// writes nothing, so a proxy may close it and a client that stopped
 	// reading is never found out.
 	Heartbeat time.Duration
@@ -154,14 +155,16 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 	if batch <= 0 {
 		batch = DefaultBatchSize
 	}
+	transport := &transportSender{Sender: send, cursor: cursor, progress: cursor, written: time.Now()}
+	send = transport
 	var seen streamLevels
 	var covered int64
 	draining := true
 	connected := false
 	// written is when the stream last wrote, which the next heartbeat counts
-	// from: wakeups that write nothing, such as another channel's events,
+	// from: wakeups that write nothing, such as an unchanged owner,
 	// must not put it off.
-	written := time.Now()
+	written := transport.written
 	sidebar := sidebarDelivery{dirty: s.Sidebar != nil && slices.Contains(sub.Interests, InterestSidebar)}
 	if sidebar.dirty {
 		if s.RecountLimit != nil {
@@ -212,6 +215,20 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			}
 			cursor = event.Seq
 		}
+		transport.progress = cursor
+		// Without heartbeats, checkpoint only before waiting; draining may still
+		// reach an ID-bearing frame that covers the pending progress.
+		if cursor > transport.cursor && (s.Heartbeat > 0 && time.Since(transport.written) >= s.Heartbeat || s.Heartbeat <= 0 && !draining) {
+			// Only completed batches can cover skipped or unread-only progress.
+			// Re-check membership even when no event in the batch was selected.
+			if err := s.checkMember(ctx, sub, Event{OrganizationID: sub.Organization}); err != nil {
+				return cursor, err
+			}
+			if err := send.Send(ctx, Outgoing{ID: cursor, Name: "checkpoint"}); err != nil {
+				return cursor, fmt.Errorf("sending checkpoint: %w", err)
+			}
+			written = time.Now()
+		}
 		covered = max(cursor, covered)
 		reset, err := s.ephemeral(ctx, sub, &seen, !connected, send, &written)
 		if err != nil || reset {
@@ -223,8 +240,7 @@ func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Se
 			return cursor, err
 		}
 		if draining {
-			// Draining a backlog that is all other channels' events writes
-			// nothing either; the heartbeat is still due on time.
+			// A batch with no write must not postpone the heartbeat.
 			if s.Heartbeat > 0 && time.Since(written) >= s.Heartbeat {
 				if err := s.heartbeat(ctx, sub, send, &written); err != nil {
 					return cursor, err
@@ -323,7 +339,7 @@ func (s Stream) checkMember(ctx context.Context, sub Subscription, event Event) 
 	return nil
 }
 
-// heartbeat checks idle membership before writing and recording the last write.
+// heartbeat checks idle membership before writing a comment or pending progress.
 func (s Stream) heartbeat(ctx context.Context, sub Subscription, send Sender, written *time.Time) error {
 	if err := s.checkMember(ctx, sub, Event{OrganizationID: sub.Organization}); err != nil {
 		return err
@@ -388,4 +404,33 @@ func contiguous(cursor int64, events []Event) bool {
 		next++
 	}
 	return true
+}
+
+// transportSender tracks IDs actually written so message-only batches need no
+// extra frame, and a failed write never becomes checkpointed progress.
+type transportSender struct {
+	Sender
+	cursor   int64
+	progress int64
+	written  time.Time
+}
+
+func (s *transportSender) Send(ctx context.Context, out Outgoing) error {
+	if err := s.Sender.Send(ctx, out); err != nil {
+		return err
+	}
+	if !out.Ephemeral {
+		s.cursor = out.ID
+		s.written = time.Now()
+	}
+	return nil
+}
+
+// Heartbeat replaces the comment with pending progress under the same final
+// membership check, so an idle stream checkpoints within one interval too.
+func (s *transportSender) Heartbeat(ctx context.Context) error {
+	if s.progress > s.cursor {
+		return s.Send(ctx, Outgoing{ID: s.progress, Name: "checkpoint"})
+	}
+	return s.Sender.Heartbeat(ctx)
 }

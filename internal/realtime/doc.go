@@ -27,6 +27,9 @@
 // shared unread frame through UnreadRenderer for the sidebar interest, even
 // with no sidebar source.
 // These frames carry no SSE id and pass audience and final bound-member checks.
+// Completed unread-only/skipped progress checkpoints at most once per heartbeat
+// interval after a fresh organisation/bound-member check, independently of
+// browser application; without heartbeats it checkpoints before waiting.
 // Optional member watches subscribe before the first recount and release on exit.
 // A shared RecountLimit bounds computation independently of stream registrations;
 // a bounded slot wait defers busy recounts without losing dirty state.

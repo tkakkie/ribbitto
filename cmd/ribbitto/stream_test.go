@@ -139,6 +139,11 @@ func openEndpointIn(ctx context.Context, t *testing.T, b acceptanceBrowser, endp
 		defer func() { _ = response.Body.Close() }()
 		lines := bufio.NewReader(response.Body)
 		var e sseEvent
+		resume := after
+		if lastEventID != "" {
+			resume = lastEventID
+		}
+		cursor, _ := strconv.ParseInt(resume, 10, 64)
 		for {
 			line, err := lines.ReadString('\n')
 			if err != nil {
@@ -147,7 +152,19 @@ func openEndpointIn(ctx context.Context, t *testing.T, b acceptanceBrowser, endp
 			line = strings.TrimSuffix(line, "\n")
 			switch {
 			case line == "":
-				events <- e
+				seq, err := strconv.ParseInt(e.id, 10, 64)
+				// Keep application assertions exact while validating transport-only frames.
+				if e.name == "checkpoint" {
+					if err != nil || seq <= cursor || e.data != "" {
+						t.Errorf("invalid checkpoint %+v after %d", e, cursor)
+						return
+					}
+				} else {
+					events <- e
+				}
+				if err == nil {
+					cursor = seq
+				}
 				e = sseEvent{}
 			case strings.HasPrefix(line, "id: "):
 				e.id = strings.TrimPrefix(line, "id: ")

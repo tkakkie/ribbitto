@@ -166,6 +166,16 @@ func (r *recorder) ids() []int64 {
 	return slices.Clone(r.sent)
 }
 
+func (r *recorder) count(name string) int {
+	n := 0
+	for _, got := range r.eventNames() {
+		if got == name {
+			n++
+		}
+	}
+	return n
+}
+
 // waitFor blocks until the recorder has sent exactly want.
 func (r *recorder) waitFor(t *testing.T, want ...int64) {
 	t.Helper()
@@ -522,31 +532,28 @@ func TestStreamStopsOnAFailedHeartbeat(t *testing.T) {
 	}
 }
 
-// Wakeups that write nothing, such as another channel's events, do not put
-// the heartbeat off: it counts from the stream's last write.
+// Filtered traffic shares one progress write per interval; idle comments resume
+// after the pending progress is covered, without leaking another channel.
 func TestStreamHeartbeatsThroughOtherChannelsTraffic(t *testing.T) {
-	hub := NewHub()
-	log := &fakeLog{}
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	send := newRecorder()
-	runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), Heartbeat: 50 * time.Millisecond}, 0, send)
-	// Another channel's event every 5 ms, far more often than the heartbeat.
-	go func() {
-		for seq := int64(1); ctx.Err() == nil; seq++ {
+	synctest.Test(t, func(t *testing.T) {
+		hub, log, send := NewHub(), &fakeLog{}, newRecorder()
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		done := runAsync(ctx, Stream{Hub: hub, Events: log, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), Heartbeat: time.Second}, 0, send)
+		synctest.Wait()
+		for seq := int64(1); seq <= 4; seq++ {
 			log.append(posted(seq, channelB))
 			hub.Raise(orgA, seq)
-			time.Sleep(5 * time.Millisecond)
+			synctest.Wait()
 		}
-	}()
-	for deadline := time.Now().Add(5 * time.Second); send.heartbeatCount() < 2; time.Sleep(time.Millisecond) {
-		if time.Now().After(deadline) {
-			t.Fatalf("%d heartbeats under another channel's traffic, want at least 2", send.heartbeatCount())
+		<-time.After(3 * time.Second)
+		synctest.Wait()
+		if !slices.Equal(send.ids(), []int64{4}) || !slices.Equal(send.eventNames(), []string{"checkpoint"}) || send.heartbeatCount() != 2 {
+			t.Fatalf("frames=%v ids=%v heartbeats=%d, want checkpoint 4 then two heartbeats", send.eventNames(), send.ids(), send.heartbeatCount())
 		}
-	}
-	if ids := send.ids(); len(ids) != 0 {
-		t.Fatalf("sent %v, want only heartbeats: every event was another channel's", ids)
-	}
+		cancel()
+		<-done
+	})
 }
 
 // When the stream's own context has ended, its cause wins, even if the
@@ -591,21 +598,33 @@ func (l slowFilteredLog) EventsAfter(_ context.Context, org kernel.ID, after int
 	return events, nil
 }
 
-// Draining full batches that are all filtered out still sends heartbeats
-// on time, before the stream ever catches up.
+// A filtered backlog checkpoints while still draining; later idle progress
+// replaces a heartbeat too, then ordinary comments resume.
 func TestStreamHeartbeatsWhileDrainingFilteredBatches(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	send := newRecorder()
-	runAsync(ctx, Stream{Hub: NewHub(), Events: slowFilteredLog{delay: 2 * time.Millisecond}, Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), BatchSize: 10, Heartbeat: 30 * time.Millisecond}, 0, send)
-	for deadline := time.Now().Add(5 * time.Second); send.heartbeatCount() < 2; time.Sleep(time.Millisecond) {
-		if time.Now().After(deadline) {
-			t.Fatalf("%d heartbeats while draining, want at least 2", send.heartbeatCount())
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		send := newRecorder()
+		done := runAsync(ctx, Stream{Hub: NewHub(), Events: sidebarReader(func(ctx context.Context, org kernel.ID, after int64, limit int) ([]Event, error) {
+			if after >= 50 {
+				return nil, nil
+			}
+			return (slowFilteredLog{delay: time.Second / 4}).EventsAfter(ctx, org, after, limit)
+		}), Authorizer: authorizerFunc(allowAll), Renderer: rendererFunc(render), BatchSize: 10, Heartbeat: time.Second}, 0, send)
+		synctest.Wait()
+		<-time.After(time.Second)
+		synctest.Wait()
+		if !slices.Equal(send.ids(), []int64{40}) {
+			t.Fatalf("progress while draining=%v, want [40]", send.ids())
 		}
-	}
-	if ids := send.ids(); len(ids) != 0 {
-		t.Fatalf("sent %v, want only heartbeats", ids)
-	}
+		<-time.After(2 * time.Second)
+		synctest.Wait()
+		if !slices.Equal(send.ids(), []int64{40, 50}) || !slices.Equal(send.eventNames(), []string{"checkpoint", "checkpoint"}) || send.heartbeatCount() != 1 {
+			t.Fatalf("frames=%v ids=%v heartbeats=%d, want checkpoints 40/50 then heartbeat", send.eventNames(), send.ids(), send.heartbeatCount())
+		}
+		cancel()
+		<-done
+	})
 }
 
 // A gap resets the stream before anything of that batch is delivered,

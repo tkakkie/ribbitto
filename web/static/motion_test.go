@@ -19,8 +19,18 @@ func TestReducedMotion(t *testing.T) {
 	const reduce, safe = "@media (prefers-reduced-motion:reduce)", "@media (prefers-reduced-motion:no-preference)"
 	property := regexp.MustCompile(`^(animation|transition|scale|rotate|translate|transform)(-[a-z-]+)?$`)
 	state := regexp.MustCompile(`:(hover|active|focus)`)
-	// Minified, ::before and ::after are written :before and :after.
-	pseudo := regexp.MustCompile(`::[a-z-]+`)
+	// A pseudo-element is ::name, or one of the four CSS 2 names with a single
+	// colon, the form the minifier writes ::before and ::after in.
+	pseudo := regexp.MustCompile(`::([a-z-]+)|:(before|after|first-line|first-letter)\b`)
+	// The reset (*, ::before, ::after) already stops these two.
+	missed := func(selector string) bool {
+		for _, match := range pseudo.FindAllStringSubmatch(selector, -1) {
+			if name := match[1] + match[2]; name != "before" && name != "after" {
+				return true
+			}
+		}
+		return false
+	}
 	reset, built := false, map[string]bool{}
 	for _, rule := range cssRules(string(source)) {
 		context := strings.Join(rule.context, " ")
@@ -41,7 +51,7 @@ func TestReducedMotion(t *testing.T) {
 				built[rule.selector] = true
 				// The reset reaches elements, ::before and ::after only, not a
 				// sheet's ::backdrop or other pseudo-elements.
-				if pseudo.MatchString(rule.selector) && !strings.Contains(context, safe) {
+				if missed(rule.selector) && !strings.Contains(context, safe) {
 					t.Errorf("%s: %s on a pseudo-element the reset misses, outside %s", rule.selector, name, safe)
 				}
 				// Layered !important would outrank the unlayered reset.

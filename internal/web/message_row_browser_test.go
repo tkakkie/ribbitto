@@ -117,7 +117,7 @@ func testMessageRowBrowser(t *testing.T, browser *rod.Browser) {
 			})
 			var problems []string
 			step(t, "measuring the rows", func(p *rod.Page) {
-				for _, problem := range p.MustEval(messageRowAudit).Arr() {
+				for _, problem := range p.MustEval(messageRowAudit, len(messages)).Arr() {
 					problems = append(problems, problem.Str())
 				}
 			})
@@ -128,14 +128,15 @@ func testMessageRowBrowser(t *testing.T, browser *rod.Browser) {
 	}
 }
 
-// messageRowAudit returns a problem for each message whose header is taller
+// messageRowAudit returns a problem if the page does not render want message
+// items, and for each message whose header is taller
 // than one 44 px target row or whose item is taller than that row plus one
 // body line, and for each topic label or Select box placed differently from
 // the first message's, relative to its item.
-const messageRowAudit = `() => {
+const messageRowAudit = `want => {
 	const problems = [], box = e => e.getBoundingClientRect(), round = n => Math.round(n * 10) / 10;
 	const items = [...document.querySelectorAll('#message-items > li[data-event-seq]')];
-	if (items.length === 0) return ['no message items'];
+	if (items.length !== want) return ['rendered ' + items.length + ' message items, want ' + want];
 	const place = (item, e) => [round(box(e).left - box(item).left), round(box(e).top - box(item).top), round(box(e).width), round(box(e).height)];
 	const first = items[0];
 	for (const item of items) {

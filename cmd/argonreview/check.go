@@ -15,8 +15,9 @@ import (
 const argonModel = "gemini-4-argon-high"
 
 // checkHere runs prepare, then agy models under supervision in the dedicated
-// HOME, and succeeds only if Argon is listed. The code is 124, 130 or 143
-// when the time limit or a signal ended agy, 1 for any other failure.
+// HOME, and succeeds only if Argon is listed. A failing agy's status is kept:
+// 124, 130 or 143 when the time limit or a signal ended it. Any other failure
+// is 1.
 func checkHere() (string, int, error) {
 	limit, err := timeLimit()
 	if err != nil {
@@ -26,14 +27,20 @@ func checkHere() (string, int, error) {
 	if err != nil {
 		return "", 1, fmt.Errorf("finding agy: %w", err)
 	}
-	if _, err := prepareHere(); err != nil {
-		return "", 1, err
-	}
+	prepare := func() error { _, err := prepareHere(); return err }
+	code, err := withSignals(func(signals <-chan os.Signal) (int, error) {
+		return check(os.Getenv("RIBBITTO_ARGON_HOME"), agy, prepare, supervisor{limit, 5 * time.Second, signals, systemCleanup()})
+	})
+	return "agy lists " + argonModel, code, err
+}
+
+// withSignals hands INT and TERM to the supervisor instead of letting them
+// end this process with agy still running.
+func withSignals(f func(<-chan os.Signal) (int, error)) (int, error) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
-	code, err := check(os.Getenv("RIBBITTO_ARGON_HOME"), agy, supervisor{limit, 5 * time.Second, signals, systemCleanup()})
-	return "agy lists " + argonModel, code, err
+	return f(signals)
 }
 
 // timeLimit reads RIBBITTO_ARGON_TIMEOUT, a Go duration; unset, it is the
@@ -50,9 +57,13 @@ func timeLimit() (time.Duration, error) {
 	return limit, nil
 }
 
-// check runs agy models with HOME set to home and home as the working
-// directory, so neither the caller's HOME nor a checkout's .agents applies.
-func check(home, agy string, s supervisor) (int, error) {
+// check runs prepare, then agy models with HOME set to home and home as the
+// working directory, so neither the caller's HOME nor a checkout's .agents
+// applies.
+func check(home, agy string, prepare func() error, s supervisor) (int, error) {
+	if err := prepare(); err != nil {
+		return 1, err
+	}
 	out, err := os.CreateTemp("", "argonreview-models-*")
 	if err != nil {
 		return 1, fmt.Errorf("creating the models listing: %w", err)

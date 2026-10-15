@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -20,23 +21,38 @@ func TestCheck(t *testing.T) {
 		{"only a longer ID", argonModel + "-preview\tPreview\n", 0, 1},
 		{"only a display name", "other\t" + argonModel + "\n", 0, 1},
 		{"agy failed", argonModel + "\tGemini 4 Argon (High)\n", 2, 2},
+		{"prepare refused", argonModel + "\tGemini 4 Argon (High)\n", 0, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home, bin := t.TempDir(), t.TempDir()
 			agy := filepath.Join(bin, "agy")
 			write(t, filepath.Join(bin, "listing"), tc.output)
-			// The fake records where it ran and with which HOME.
-			script := "#!/bin/sh\necho \"$HOME $(pwd -P) $*\" > \"$HOME/seen\"\ncat '" + filepath.Join(bin, "listing") + "'\nexit " + strconv.Itoa(tc.status) + "\n"
+			// The fake runs only after prepare, and records where it ran and
+			// with which HOME.
+			script := "#!/bin/sh\n[ -f \"$HOME/prepared\" ] || exit 9\necho \"$HOME $(pwd -P) $*\" > \"$HOME/seen\"\ncat '" + filepath.Join(bin, "listing") + "'\nexit " + strconv.Itoa(tc.status) + "\n"
 			write(t, agy, script)
 			if err := os.Chmod(agy, 0o755); err != nil {
 				t.Fatal(err)
 			}
 			home = resolved(t, home)
-			code, err := check(home, agy, supervisor{10 * time.Second, time.Second, nil, systemCleanup()})
+			prepare := func() error {
+				if tc.name == "prepare refused" {
+					return errors.New("refused")
+				}
+				write(t, filepath.Join(home, "prepared"), "")
+				return nil
+			}
+			code, err := check(home, agy, prepare, supervisor{10 * time.Second, time.Second, nil, systemCleanup()})
 			if code != tc.code || (err == nil) != (tc.code == 0) {
 				t.Fatalf("code = %d, err = %v; want %d", code, err, tc.code)
 			}
 			seen, err := os.ReadFile(filepath.Join(home, "seen"))
+			if tc.name == "prepare refused" {
+				if !os.IsNotExist(err) {
+					t.Fatalf("agy ran after prepare refused: %q, %v", seen, err)
+				}
+				return
+			}
 			if err != nil || string(seen) != home+" "+home+" models\n" {
 				t.Fatalf("agy ran as %q, %v", seen, err)
 			}

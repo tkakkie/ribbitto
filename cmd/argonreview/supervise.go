@@ -19,8 +19,12 @@ import (
 type child struct {
 	process *os.Process
 	pid     int // Process.Release changes Process.Pid to -1; retain the session ID.
+	wait    func(int, *syscall.WaitStatus) (int, error)
 	exited  bool
-	code    int
+	// lost is set when waiting fails: the PID is no longer proven ours, so
+	// nothing signals its group or waits for it again (Codex on #1089).
+	lost bool
+	code int
 }
 
 // supervisor runs one command with a time limit and leaves nothing it started.
@@ -49,15 +53,15 @@ func (s supervisor) run(path string, args, env []string, dir string, stdout, std
 	if err != nil {
 		return 1, fmt.Errorf("starting %s: %w", path, err)
 	}
-	c := &child{process: process, pid: process.Pid}
+	c := &child{process: process, pid: process.Pid, wait: s.ops.wait}
 	limit := time.NewTimer(s.limit)
 	defer limit.Stop()
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	code := -1
-	var pollErr error
+	var runErr error
 	for code < 0 {
-		if pollErr = c.poll(); pollErr != nil {
+		if runErr = c.poll(); runErr != nil {
 			code = 1
 			break
 		}
@@ -73,39 +77,41 @@ func (s supervisor) run(path string, args, env []string, dir string, stdout, std
 		case <-ticker.C:
 		}
 	}
-	if !c.exited {
-		s.terminate(c)
+	if !c.exited && !c.lost {
+		runErr = errors.Join(runErr, s.terminate(c))
 	}
-	if !s.ops.stop(c) {
-		pollErr = errors.Join(pollErr, fmt.Errorf("could not confirm that every process %s started stopped", path))
+	if err := s.ops.stop(c); err != nil {
+		runErr = errors.Join(runErr, fmt.Errorf("could not confirm that every process %s started stopped: %w", path, err))
 	}
-	return code, pollErr
+	return code, runErr
 }
 
 // terminate sends TERM to the unreaped leader's group and gives it the grace
 // period to exit; cleanupOps.stop kills whatever is left.
-func (s supervisor) terminate(c *child) {
+func (s supervisor) terminate(c *child) error {
 	// Unreaped, the leader still holds its PID, so the group is ours.
-	_ = syscall.Kill(-c.pid, syscall.SIGTERM)
+	s.ops.signalGroup(c.pid, syscall.SIGTERM)
 	deadline := time.Now().Add(s.grace)
 	for !c.exited && time.Now().Before(deadline) {
-		if c.poll() != nil {
-			return
+		if err := c.poll(); err != nil {
+			return err
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	return nil
 }
 
 func (c *child) poll() error {
-	if c.exited {
+	if c.exited || c.lost {
 		return nil
 	}
 	var status syscall.WaitStatus
-	pid, err := syscall.Wait4(c.pid, &status, syscall.WNOHANG, nil)
+	pid, err := c.wait(c.pid, &status)
 	if err == syscall.EINTR {
 		return nil
 	}
 	if err != nil {
+		c.lost = true
 		return fmt.Errorf("polling %d: %w", c.pid, err)
 	}
 	if pid != 0 {
@@ -118,15 +124,23 @@ func (c *child) poll() error {
 	return nil
 }
 
+// cleanupOps are the system calls the supervisor uses; tests replace them.
 type cleanupOps struct {
-	scan       func(int) ([]int, error)
-	killGroup  func(int)
-	killMember func(int, *child)
-	held       func(int) bool
+	wait        func(int, *syscall.WaitStatus) (int, error)
+	signalGroup func(int, syscall.Signal)
+	scan        func(int) ([]int, error)
+	killMember  func(int, *child)
+	held        func(int) bool
 }
 
 func systemCleanup() cleanupOps {
-	return cleanupOps{sessionMembers, func(pid int) { _ = syscall.Kill(-pid, syscall.SIGKILL) }, killMember, pidHeld}
+	return cleanupOps{
+		func(pid int, status *syscall.WaitStatus) (int, error) {
+			return syscall.Wait4(pid, status, syscall.WNOHANG, nil)
+		},
+		func(pid int, sig syscall.Signal) { _ = syscall.Kill(-pid, sig) },
+		sessionMembers, killMember, pidHeld,
+	}
 }
 
 // pidHeld reports whether any process, ours or not, has the PID; EPERM means
@@ -136,12 +150,17 @@ func pidHeld(pid int) bool {
 }
 
 // stop kills the leader's group and every member left in its session, and
-// reports whether it could confirm that none is left.
-func (o cleanupOps) stop(c *child) bool {
-	_ = c.poll()
+// returns an error unless it could confirm that none is left.
+func (o cleanupOps) stop(c *child) error {
+	if err := c.poll(); err != nil {
+		return err
+	}
+	if c.lost {
+		return fmt.Errorf("lost track of %d", c.pid)
+	}
 	// A reaped leader no longer reserves its PID; only an unreaped group is safe.
 	if !c.exited {
-		o.killGroup(c.pid)
+		o.signalGroup(c.pid, syscall.SIGKILL)
 	}
 	// The kernel never hands out a PID still in use as a session ID, so once
 	// the leader is reaped, a process holding its PID means nothing of ours
@@ -151,14 +170,14 @@ func (o cleanupOps) stop(c *child) bool {
 	reused := func() bool { return c.exited && o.held(c.pid) }
 	for range 100 {
 		if reused() {
-			return o.reap(c, true)
+			return o.reap(c, nil)
 		}
 		members, err := o.scan(c.pid)
 		if err != nil {
-			return o.reap(c, false)
+			return o.reap(c, err)
 		}
 		if reused() {
-			return o.reap(c, true)
+			return o.reap(c, nil)
 		}
 		remaining := 0
 		for _, pid := range members {
@@ -168,20 +187,21 @@ func (o cleanupOps) stop(c *child) bool {
 			}
 		}
 		if remaining == 0 {
-			return o.reap(c, true)
+			return o.reap(c, nil)
 		}
 		// A member can fork before it dies; its child inherits the session.
 		time.Sleep(20 * time.Millisecond)
 	}
-	return o.reap(c, false)
+	return o.reap(c, fmt.Errorf("members of session %d remain", c.pid))
 }
 
-func (o cleanupOps) reap(c *child, confirmed bool) bool {
+// reap waits for a leader its group KILL left unreaped, so no zombie stays.
+func (o cleanupOps) reap(c *child, err error) error {
 	if !c.exited {
 		_, _ = c.process.Wait()
 		c.exited = true
 	}
-	return confirmed
+	return err
 }
 
 func sessionMembers(session int) ([]int, error) {

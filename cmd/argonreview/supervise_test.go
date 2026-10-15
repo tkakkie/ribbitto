@@ -13,28 +13,35 @@ import (
 	"time"
 )
 
-// supervised runs script under sh with a fresh directory as $1, sending sig
-// once the script has created $1/ready, and returns the exit code, how long it
-// took, the PIDs the script recorded in $1/pids, all checked dead, and $1.
-func supervised(t *testing.T, script string, limit, grace time.Duration, sig os.Signal) (int, time.Duration, []int, string) {
+// result is what supervised observed; every PID the script recorded in
+// $1/pids has been checked dead.
+type result struct {
+	code    int
+	err     error
+	elapsed time.Duration
+	pids    []int
+	dir     string
+}
+
+// supervised runs script under sh with a fresh directory as $1 and the given
+// operations.
+func supervised(t *testing.T, script string, limit, grace time.Duration, ops cleanupOps) result {
 	t.Helper()
-	dir := t.TempDir()
-	signals := make(chan os.Signal, 1)
-	if sig != nil {
-		go func() {
-			for _, err := os.Stat(filepath.Join(dir, "ready")); err != nil; _, err = os.Stat(filepath.Join(dir, "ready")) {
-				time.Sleep(10 * time.Millisecond)
-			}
-			signals <- sig
-		}()
-	}
-	s := supervisor{limit, grace, signals, systemCleanup()}
+	r := result{dir: t.TempDir()}
 	started := time.Now()
-	code, err := s.run("/bin/sh", []string{"-c", script, "sh", dir}, os.Environ(), dir, os.Stdout, os.Stderr)
-	elapsed := time.Since(started)
-	data, readErr := os.ReadFile(filepath.Join(dir, "pids"))
-	if err != nil || readErr != nil {
-		t.Fatalf("run: %v; pids: %v", err, readErr)
+	r.code, r.err = supervisor{limit, grace, nil, ops}.run("/bin/sh", []string{"-c", script, "sh", r.dir}, os.Environ(), r.dir, os.Stdout, os.Stderr)
+	r.elapsed = time.Since(started)
+	r.pids = recorded(t, r.dir)
+	return r
+}
+
+// recorded reads $1/pids once it is complete and checks that none of the
+// PIDs is alive.
+func recorded(t *testing.T, dir string) []int {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, "pids"))
+	if err != nil {
+		t.Fatal(err)
 	}
 	var pids []int
 	for _, field := range strings.Fields(string(data)) {
@@ -43,50 +50,96 @@ func supervised(t *testing.T, script string, limit, grace time.Duration, sig os.
 			t.Fatal(err)
 		}
 		pids = append(pids, pid)
-	}
-	for _, pid := range pids {
 		if alive(t, pid) {
 			t.Errorf("process %d survived", pid)
 			_ = syscall.Kill(pid, syscall.SIGKILL)
 		}
 	}
-	return code, elapsed, pids, dir
+	return pids
 }
 
-// A descendant that ignores TERM, started with exec so $! is its PID.
-const stubborn = `( trap "" TERM; exec sleep 30 ) & echo $! >> "$1/pids"; `
+// Descendants that ignore TERM, started with exec so $! is their PID: one in
+// the leader's group, one in its own group in the same session.
+const stubborn = `( trap "" TERM; exec sleep 30 ) & echo $! >> "$1/pids"; ` +
+	`perl -e '$SIG{TERM} = "IGNORE"; setpgrp(0, 0); exec "sleep", "30"' & echo $! >> "$1/pids"; `
 
 func TestSupervisorTimeLimit(t *testing.T) {
 	script := `trap 'touch "$1/term"; exit 0' TERM; echo $$ >> "$1/pids"; ` + stubborn + `touch "$1/ready"; while :; do sleep 0.1; done`
-	code, elapsed, pids, dir := supervised(t, script, 300*time.Millisecond, 5*time.Second, nil)
-	if code != 124 || len(pids) != 2 {
-		t.Fatalf("code = %d, pids %v", code, pids)
+	r := supervised(t, script, 300*time.Millisecond, 5*time.Second, systemCleanup())
+	if r.code != 124 || r.err != nil || len(r.pids) != 3 {
+		t.Fatalf("code = %d, err = %v, pids %v", r.code, r.err, r.pids)
 	}
 	// The leader gets TERM first and exits well within the grace period.
-	if _, err := os.Stat(filepath.Join(dir, "term")); err != nil || elapsed > 3*time.Second {
-		t.Fatalf("elapsed %v, TERM marker: %v", elapsed, err)
+	if _, err := os.Stat(filepath.Join(r.dir, "term")); err != nil || r.elapsed > 3*time.Second {
+		t.Fatalf("elapsed %v, TERM marker: %v", r.elapsed, err)
 	}
 }
 
 func TestSupervisorKillsALeaderThatIgnoresTERM(t *testing.T) {
 	script := `trap "" TERM; echo $$ >> "$1/pids"; touch "$1/ready"; while :; do sleep 0.1; done`
-	code, elapsed, _, _ := supervised(t, script, 300*time.Millisecond, 700*time.Millisecond, nil)
-	if code != 124 || elapsed < time.Second {
-		t.Fatalf("code = %d after %v; want 124 after the grace period", code, elapsed)
+	r := supervised(t, script, 300*time.Millisecond, 700*time.Millisecond, systemCleanup())
+	if r.code != 124 || r.err != nil || r.elapsed < time.Second {
+		t.Fatalf("code = %d, err = %v after %v; want 124 after the grace period", r.code, r.err, r.elapsed)
 	}
 }
 
+// INT and TERM sent to the launcher process itself reach the supervisor
+// through withSignals; signalHelper is that launcher.
 func TestSupervisorSignals(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		sig  syscall.Signal
 		code int
 	}{{syscall.SIGINT, 130}, {syscall.SIGTERM, 143}} {
 		t.Run(tc.sig.String(), func(t *testing.T) {
-			script := `echo $$ >> "$1/pids"; ` + stubborn + `touch "$1/ready"; wait`
-			if code, _, pids, _ := supervised(t, script, 30*time.Second, time.Second, tc.sig); code != tc.code || len(pids) != 2 {
-				t.Fatalf("code = %d, pids %v", code, pids)
+			dir := t.TempDir()
+			cmd := exec.Command(executable, "-test.run=^TestSignalHelper$")
+			cmd.Env = append(os.Environ(), "ARGONREVIEW_SIGNAL_HELPER="+dir)
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+			waitFor(t, filepath.Join(dir, "ready"))
+			if err := cmd.Process.Signal(tc.sig); err != nil {
+				t.Fatal(err)
+			}
+			if err := cmd.Wait(); cmd.ProcessState.ExitCode() != tc.code {
+				t.Fatalf("exit %v, want %d", err, tc.code)
+			}
+			if pids := recorded(t, dir); len(pids) != 3 {
+				t.Fatalf("pids %v", pids)
 			}
 		})
+	}
+}
+
+func TestSignalHelper(t *testing.T) {
+	dir := os.Getenv("ARGONREVIEW_SIGNAL_HELPER")
+	if dir == "" {
+		t.Skip("run by TestSupervisorSignals")
+	}
+	script := `echo $$ >> "$1/pids"; ` + stubborn + `touch "$1/ready"; wait`
+	code, err := withSignals(func(signals <-chan os.Signal) (int, error) {
+		return supervisor{30 * time.Second, time.Second, signals, systemCleanup()}.run("/bin/sh", []string{"-c", script, "sh", dir}, os.Environ(), dir, os.Stdout, os.Stderr)
+	})
+	if err != nil {
+		code = 1
+	}
+	os.Exit(code)
+}
+
+func waitFor(t *testing.T, path string) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("waiting for %s", path)
+		}
 	}
 }
 
@@ -95,9 +148,9 @@ func TestSupervisorSignals(t *testing.T) {
 func TestSupervisorKillsDescendantsAfterExit(t *testing.T) {
 	for _, status := range []int{0, 3} {
 		t.Run(strconv.Itoa(status), func(t *testing.T) {
-			script := `sleep 30 & echo $! >> "$1/pids"; ` + stubborn + `exit ` + strconv.Itoa(status)
-			if code, _, pids, _ := supervised(t, script, 30*time.Second, time.Second, nil); code != status || len(pids) != 2 {
-				t.Fatalf("code = %d, pids %v", code, pids)
+			r := supervised(t, `sleep 30 & echo $! >> "$1/pids"; `+stubborn+`exit `+strconv.Itoa(status), 30*time.Second, time.Second, systemCleanup())
+			if r.code != status || r.err != nil || len(r.pids) != 3 {
+				t.Fatalf("code = %d, err = %v, pids %v", r.code, r.err, r.pids)
 			}
 		})
 	}
@@ -114,9 +167,50 @@ func TestSupervisorClosesStdin(t *testing.T) {
 	stdin := os.Stdin
 	os.Stdin = reader
 	t.Cleanup(func() { os.Stdin = stdin; _ = reader.Close() })
-	_, _, _, dir := supervised(t, `echo $$ > "$1/pids"; cat > "$1/stdin"`, 10*time.Second, time.Second, nil)
-	if data, err := os.ReadFile(filepath.Join(dir, "stdin")); err != nil || len(data) != 0 {
-		t.Fatalf("agy read %q from stdin, %v", data, err)
+	r := supervised(t, `echo $$ > "$1/pids"; cat > "$1/stdin"`, 10*time.Second, time.Second, systemCleanup())
+	if data, err := os.ReadFile(filepath.Join(r.dir, "stdin")); r.err != nil || err != nil || len(data) != 0 {
+		t.Fatalf("agy read %q from stdin, %v, %v", data, err, r.err)
+	}
+}
+
+// A failed scan leaves the cleanup unconfirmed, so run fails even after a
+// status-0 exit; an unreaped leader is still killed and reaped.
+func TestSupervisorReportsAFailedScan(t *testing.T) {
+	for _, tc := range []struct {
+		name, script string
+		code         int
+	}{
+		{"time limit", `echo $$ > "$1/pids"; exec sleep 30`, 124},
+		{"status 0", `echo $$ > "$1/pids"`, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ops := systemCleanup()
+			ops.scan = func(int) ([]int, error) { return nil, fmt.Errorf("ps failed") }
+			if r := supervised(t, tc.script, 200*time.Millisecond, 200*time.Millisecond, ops); r.code != tc.code || r.err == nil {
+				t.Fatalf("code = %d, err = %v", r.code, r.err)
+			}
+		})
+	}
+}
+
+// Once waiting fails, the leader's PID is not proven ours: nothing signals
+// its group or scans its session, and run fails (Codex on #1089).
+func TestSupervisorStopsSignallingWhenWaitingFails(t *testing.T) {
+	ops := systemCleanup()
+	ops.wait = func(int, *syscall.WaitStatus) (int, error) { return 0, syscall.ECHILD }
+	ops.signalGroup = func(pid int, _ syscall.Signal) { t.Errorf("signalled group %d", pid) }
+	ops.scan = func(pid int) ([]int, error) { t.Errorf("scanned session %d", pid); return nil, nil }
+	dir := t.TempDir()
+	code, err := supervisor{10 * time.Second, time.Second, nil, ops}.run("/bin/sh", []string{"-c", `echo $$ > "$1/pids"; exec sleep 30`, "sh", dir}, os.Environ(), dir, os.Stdout, os.Stderr)
+	if code != 1 || err == nil {
+		t.Fatalf("code = %d, err = %v", code, err)
+	}
+	// The leader is really still this process's unreaped child.
+	waitFor(t, filepath.Join(dir, "pids"))
+	data, _ := os.ReadFile(filepath.Join(dir, "pids"))
+	if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+		_, _ = syscall.Wait4(pid, nil, 0, nil)
 	}
 }
 
@@ -144,12 +238,12 @@ func TestCleanup(t *testing.T) {
 					tc.scans = tc.scans[1:]
 					return scan, nil
 				},
-				killGroup:  func(int) { t.Fatal("killed a reaped leader's group") },
-				killMember: func(pid int, _ *child) { killed = append(killed, pid) },
-				held:       func(int) bool { return false },
+				signalGroup: func(int, syscall.Signal) { t.Fatal("signalled a reaped leader's group") },
+				killMember:  func(pid int, _ *child) { killed = append(killed, pid) },
+				held:        func(int) bool { return false },
 			}
-			if got := o.stop(c); got != tc.confirmed || !reflect.DeepEqual(killed, tc.killed) {
-				t.Fatalf("stop = %v, killed %v", got, killed)
+			if err := o.stop(c); (err == nil) != tc.confirmed || !reflect.DeepEqual(killed, tc.killed) {
+				t.Fatalf("stop = %v, killed %v", err, killed)
 			}
 		})
 	}
@@ -170,12 +264,12 @@ func TestCleanupSkipsAReusedLeaderPID(t *testing.T) {
 				scanned = true
 				return []int{41, 101}, nil
 			},
-			killGroup:  func(int) { t.Fatal("killed a reaped leader's group") },
-			killMember: func(pid int, _ *child) { t.Fatalf("signalled %d", pid) },
-			held:       func(int) bool { return fail || scanned },
+			signalGroup: func(int, syscall.Signal) { t.Fatal("signalled a reaped leader's group") },
+			killMember:  func(pid int, _ *child) { t.Fatalf("signalled %d", pid) },
+			held:        func(int) bool { return fail || scanned },
 		}
-		if !o.stop(c) {
-			t.Fatalf("fail = %v: cleanup of a reused session was not confirmed", fail)
+		if err := o.stop(c); err != nil {
+			t.Fatalf("fail = %v: cleanup of a reused session was not confirmed: %v", fail, err)
 		}
 	}
 }
@@ -196,8 +290,8 @@ func TestCleanupLeavesAReusedSessionAlone(t *testing.T) {
 		data, _ = os.ReadFile(filepath.Join(dir, "child"))
 	}
 	sleeper, _ := strconv.Atoi(strings.TrimSpace(string(data)))
-	if !systemCleanup().stop(&child{pid: stranger.Process.Pid, exited: true}) {
-		t.Fatal("cleanup of a reused session was not confirmed")
+	if err := systemCleanup().stop(&child{pid: stranger.Process.Pid, exited: true}); err != nil {
+		t.Fatalf("cleanup of a reused session was not confirmed: %v", err)
 	}
 	if !alive(t, stranger.Process.Pid) || !alive(t, sleeper) {
 		t.Fatal("cleanup signalled the unrelated session")

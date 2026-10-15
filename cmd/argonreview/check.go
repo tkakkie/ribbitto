@@ -69,13 +69,7 @@ func check(home, agy string, prepare func() error, s supervisor) (int, error) {
 		return 1, fmt.Errorf("creating the models listing: %w", err)
 	}
 	defer func() { _ = out.Close(); _ = os.Remove(out.Name()) }()
-	env := []string{"HOME=" + home}
-	for _, value := range os.Environ() {
-		if !strings.HasPrefix(value, "HOME=") {
-			env = append(env, value)
-		}
-	}
-	code, err := s.run(agy, []string{"models"}, env, home, out, os.Stderr)
+	code, err := s.run(agy, []string{"models"}, withHome(home), home, out, os.Stderr)
 	if err == nil && code != 0 {
 		err = fmt.Errorf("agy models exited with status %d", code)
 	}
@@ -93,6 +87,17 @@ func check(home, agy string, prepare func() error, s supervisor) (int, error) {
 		return 1, fmt.Errorf("agy models does not list %s", argonModel)
 	}
 	return 0, nil
+}
+
+// withHome is this process's environment with HOME set to home.
+func withHome(home string) []string {
+	env := []string{"HOME=" + home}
+	for _, value := range os.Environ() {
+		if !strings.HasPrefix(value, "HOME=") {
+			env = append(env, value)
+		}
+	}
+	return env
 }
 
 // lists reports whether a line of agy models names model; each line is the

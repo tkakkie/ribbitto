@@ -3,10 +3,10 @@
 A self-hostable team chat that is fast, where nothing gets buried, and
 with nothing to learn. There is a frog on the logo.
 
-> **Status: early development.** Accounts, channels, topics and real-time
-> messages work; unread counts, presence and the rest of the MVP are in
-> progress, and there is no release yet. See the [roadmap](docs/roadmap.md)
-> and the pinned Status issue.
+> **Status: early development.** Accounts, channels, topics, real-time
+> messages, unread counts, presence and typing indicators work; the rest of the
+> MVP is in progress, and there is no release yet. See the
+> [roadmap](docs/roadmap.md) and the pinned Status issue.
 
 ## What it will be
 

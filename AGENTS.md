@@ -54,7 +54,8 @@ depguard keeps the non-module rules. Never break them.
 Modules ([`modules.md`](docs/architecture/modules.md), from decision 26):
 
 - Others import only a module's root (`internal/identity`, `internal/realtime`,
-  `internal/org`, `internal/conversation`); its
+  `internal/org`, `internal/conversation`, `internal/presence`,
+  `internal/typing`, `internal/unread`); its
   store only its wiring (`<module>pg`) and own tests; the wiring only
   `cmd/*` and tests. Exception: a module's fixture package (`<module>test`,
   decision 29) is imported only by `_test.go` files and by the fixture

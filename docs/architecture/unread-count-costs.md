@@ -45,8 +45,9 @@ index, `R` ranges of the current channel at or above `P`:
 
 Production recounts disable first unread independently of selection. Four count
 statements still run: feed recounts use 7 total, listed and unlisted topic
-recounts 8, in one begin/commit pair. Normal pages remain 12 feed, 13 topic,
-10 members. No execution saving is claimed.
+recounts 8, in one begin/commit pair. Normal pages remain 12 feed and 13 topic
+(10 on the standalone members page before #903 moved members into a panel on the
+feed or topic page). No execution saving is claimed.
 
 Measured on local PostgreSQL 18.6, default planner settings, ANALYZE and second
 (warm) EXPLAIN on 2026-10-12: 10k history messages, 1k unread moves below floor

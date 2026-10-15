@@ -55,21 +55,21 @@ library; Make asks it for the versioned paths and invokes it on first use.
 | `web/static` | Embedded CSS, application JavaScript, vendored JavaScript, SVG icons, brand images and channel illustrations. | — |
 
 A package's sub-packages may import each other, apart from the store,
-wiring and fixture rules. [Modules](modules.md) states the rule for the
-test-only fixture packages and [import checks](import-checks.md) how it is
-enforced. The [module manifest and Go tests](../../module_imports_test.go)
-check module imports; depguard retains the other boundaries; [import checks](import-checks.md)
-lists those rules and the `doc.go` requirement.
+wiring and fixture rules. [Modules](modules.md) states the test-only
+fixture rule. The [module manifest and Go tests](../../module_imports_test.go)
+check module imports; depguard retains the other boundaries;
+[import checks](import-checks.md) lists those rules, fixture enforcement
+and the `doc.go` requirement.
 
 ```mermaid
 flowchart LR
-  cmd[cmd/ribbitto] --> web & orgpg[org/orgpg] & conversationpg[conversation/conversationpg] & identity & identitypg[identity/identitypg] & realtimepg & realtime & presence & unread & unreadpg & platform[platform/postgres]
-  seed[cmd/seed] --> conversation & conversationpg & org & orgpg & identity & identitypg & realtimepg & platform & kernel
+  cmd[cmd/ribbitto] --> web & orgpg[org/orgpg] & conversationpg[conversation/conversationpg] & identity & identitypg[identity/identitypg] & realtimepg & realtime & presence & typing & unread & unreadpg & platform[platform/postgres]
+  seed[cmd/seed] --> conversation & conversationpg & org & orgpg & identity & identitypg & realtimepg & unread & unreadpg & platform & kernel
   devdb[cmd/devdb] --> platform
   capacity[cmd/capacity] --> pgtest[platform/postgres/pgtest]
-  web[internal/web] --> org & conversation & identity & kernel & realtime & presence & unread & static[web/static]
+  web[internal/web] --> org & conversation & identity & kernel & realtime & presence & typing & unread & static[web/static]
   conversationpg --> conversation[internal/conversation] & cstore[conversation/internal/postgres] & realtime & platform
-  conversation --> identity & org & realtime & kernel & platform
+  conversation --> org & realtime & kernel & platform
   cstore --> conversation & org & platform & kernel
   conversationtest[conversation/conversationtest] --> orgtest[org/orgtest] & identitytest[identity/identitytest] & org & kernel
   orgtest --> org & kernel
@@ -80,14 +80,14 @@ flowchart LR
   org[internal/org] --> identity & realtime & kernel & platform
   orgpg --> org & ostore[org/internal/postgres] & platform & identity & realtime
   ostore --> org & platform & kernel
-  identity[internal/identity] --> kernel & platform
+  identity[internal/identity] --> kernel
   identitypg --> identity & store[identity/internal/postgres] & platform
   store --> identity & platform & kernel
   presence[internal/presence] --> kernel & realtime
   typing[internal/typing] --> kernel & realtime
   unread[internal/unread] --> kernel & platform
   unreadpg[unread/unreadpg] --> unread & ustore[unread/internal/postgres] & platform
-  ustore --> unread & platform
+  ustore --> unread & platform & kernel
   platform --> kernel[internal/kernel] & migrations[db/migrations]
 ```
 

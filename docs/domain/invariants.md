@@ -69,8 +69,9 @@ invariant changes. Keep the numbers stable: other documents cite them.
 
 These are **requirements for all code and migrations**, not a description
 of what is implemented today: `organization`, `account`, `session`,
-`member`, `setup`, `channel`, `message`, `event_log` and `topic` have tables; setup authorization is implemented, and
-organisation routes go through `internal/org`. Every migration that adds an
+`member`, `setup`, `channel`, `message`, `event_log`, `topic`, `channel_read`,
+`read_range` and `topic_read_floor` have tables; setup authorization is
+implemented, and organisation routes go through `internal/org`. Every migration that adds an
 organisation-owned table must include `organization_id` and
 composite foreign keys (1–3), and every use case must be covered by tests
 for 4–5 as it is written. Row-level security in PostgreSQL is planned as a

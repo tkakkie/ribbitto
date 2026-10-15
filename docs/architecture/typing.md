@@ -134,5 +134,5 @@ read organisation generation even for unchanged places. Raises during rendering
 remain pending for the next batch; an unrelated topic's wake is acknowledged
 without repeated frames or a busy loop. Existing interest, organisation and
 channel/topic filters precede per-frame authorization after rendering immediately
-before sending; a denial acknowledges the read, an error stops the stream. Frames
+before sending; a denial or an error stops the stream (#852). Frames
 carry no SSE ID and leave durable replay and its cursor unchanged.

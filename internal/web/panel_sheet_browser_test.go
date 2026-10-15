@@ -106,7 +106,12 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 				r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
 				handler.ServeHTTP(w, r)
 			}))
+			// Teardown is bounded whatever happened before: each tab closes
+			// under its own fresh 10 s context (boundedPage), and closing the
+			// client connections first ends the event stream even if a tab
+			// did not close, so server.Close cannot wait on it (#1119).
 			defer server.Close()
+			defer server.CloseClientConnections()
 			path := view.ChannelURL("acme", kernel.ID{1})
 			if topic {
 				path = view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{5})
@@ -166,8 +171,9 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					t.Fatalf("%s: reading POSTs %q, want %q (at %s)", current, got, want, since())
 				}
 			}
-			base = browser.Context(ctx).MustPage().WithPanic(fail)
-			defer base.MustClose()
+			tab, closeTab := boundedPage(t, browser, ctx, "panel sheet")
+			defer closeTab()
+			base = tab.WithPanic(fail)
 			page = base
 			wait := func(what, js string, args ...any) {
 				t.Helper()
@@ -435,8 +441,9 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 
 			// Without JavaScript the panel is a page: its member paging, close
 			// link and Mark as read work, and nothing reads automatically.
-			plainBase = browser.Context(ctx).MustPage().WithPanic(fail)
-			defer plainBase.MustClose()
+			plainTab, closePlainTab := boundedPage(t, browser, ctx, "panel sheet without JavaScript")
+			defer closePlainTab()
+			plainBase = plainTab.WithPanic(fail)
 			step("without JavaScript: the members page")
 			if err := (proto.EmulationSetScriptExecutionDisabled{Value: true}).Call(plain); err != nil {
 				t.Fatal(err)

@@ -28,7 +28,8 @@ including templ's server in another process group, and confirms descendant
 cleanup on shutdown. It imports no application packages; `bin/ai-db run`
 applies worktree configuration to templ and its server.
 `cmd/argonreview` runs Argon adversarial reviews (#1065): `verify` refuses a
-binary not built from a clean `origin/main`; `guard` is Antigravity's tool hook.
+binary not built from a clean `origin/main`; `prepare` writes Antigravity's
+configuration in a dedicated `HOME` (#1069); `guard` is Antigravity's tool hook.
 It imports no application packages.
 
 `tools/download` is a tools-module command that owns the Tailwind and

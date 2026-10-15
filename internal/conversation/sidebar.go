@@ -13,7 +13,6 @@ import (
 // Topic is the validated selection; it never extends the 50-topic Topics list.
 type SidebarSnapshot struct {
 	SnapshotSeq                int64
-	Witness                    *SidebarWitness
 	Current                    Channel
 	Channels                   []Channel
 	Topics                     []Topic
@@ -41,7 +40,6 @@ func (s *Reader) Sidebar(ctx context.Context, m org.Membership, channelID kernel
 			return err
 		}
 		sidebar.ChannelCounts, sidebar.TopicCounts = counts.ChannelCounts, counts.TopicCounts
-		sidebar.Witness = counts.Witness
 		return nil
 	})
 	if err != nil {
@@ -77,7 +75,6 @@ func (s *Reader) ChannelList(ctx context.Context, m org.Membership, channelID ke
 		}
 		page.SnapshotSeq = page.EventCursor
 		page.ChannelCounts, page.TopicCounts = counts.ChannelCounts, counts.TopicCounts
-		page.Witness = counts.Witness
 		return nil
 	})
 	if err != nil {

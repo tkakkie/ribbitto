@@ -79,6 +79,7 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 			// arrived wakes read once a reading POST has been recorded.
 			arrived := make(chan struct{}, 1)
 			var throttle atomic.Bool // refuse the next reading POST with 429
+			var fail atomic.Bool     // fail the next reading POST with 500
 			frames := make(chan realtime.Outgoing)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/organizations/acme/events" {
@@ -99,9 +100,12 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					if r.Header.Get("HX-Request") == "" {
 						cursor += " plain"
 					}
-					refuse := throttle.Swap(false)
+					refuse, failed := throttle.Swap(false), fail.Swap(false)
 					if refuse {
 						cursor += " 429"
+					}
+					if failed {
+						cursor += " 500"
 					}
 					mu.Lock()
 					reads = append(reads, cursor)
@@ -113,6 +117,10 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 					if refuse {
 						w.Header().Set("Retry-After", "0")
 						w.WriteHeader(http.StatusTooManyRequests)
+						return
+					}
+					if failed {
+						w.WriteHeader(http.StatusInternalServerError)
 						return
 					}
 				}
@@ -445,6 +453,67 @@ func testPanelSheetBrowser(t *testing.T, browser *rod.Browser) {
 				steps.device(page, "a click on the dimmed conversation", func(p *rod.Page) { p.Mouse.MustMoveTo(195, 40).MustClick(proto.InputMouseButtonLeft) })
 			})
 			read("102")
+			step("1280 px: the panel beside the conversation")
+			size(1280, 800)
+			// Installed before the page's scripts, so its resize listener runs
+			// first: at the target, listeners run in the order they were added.
+			page.MustEvalOnNewDocument(`(() => {
+				const test = window.panelTest = {hidden: false, held: false};
+				Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => test.hidden ? 'hidden' : 'visible'});
+				Object.defineProperty(document, 'hidden', {configurable: true, get: () => test.hidden});
+				addEventListener('resize', e => { if (test.held) e.stopImmediatePropagation(); });
+			})()`)
+			page.MustNavigate(server.URL + path + "/overview").MustWaitLoad()
+			read("102")
+			// A failed read waits for a newer trigger; narrowing must not retry it
+			// behind the dialog, and widening again does.
+			step("1280 → 1000 px with a failed read pending")
+			fail.Store(true)
+			live(103)
+			read("103 500")
+			size(1000, 800)
+			modal("1280 → 1000 px with a failed read")
+			read()
+			size(1280, 800)
+			read("103")
+			// A page shown again after its size crossed wide while hidden gets
+			// its resize event only at its next rendering update, yet reading on
+			// showing follows the size it is shown at. A headless tab is never
+			// hidden, so the test overrides the page's visibility, dispatches the
+			// lifecycle events and holds resize events back until shown (#1125).
+			const released = `() => { const p = document.getElementById('side-panel'); return !p.hasAttribute('aria-modal') && !document.querySelector('[inert]'); }`
+			seq := 103
+			for _, persisted := range []bool{false, true} {
+				for _, width := range []int{1000, 1280} {
+					how := map[bool]string{false: "visibilitychange", true: "a persisted pageshow"}[persisted]
+					step(fmt.Sprintf("hidden, resized to %d px, shown by %s before its resize", width, how))
+					page.MustEval(`persisted => {
+						panelTest.hidden = panelTest.held = true;
+						if (persisted) dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}));
+						document.dispatchEvent(new Event('visibilitychange'));
+					}`, persisted)
+					size(width, 800)
+					wait("the layout takes the new width", `width => innerWidth === width`, width)
+					seq++
+					live(seq) // unread work arrives while hidden
+					page.MustEval(`persisted => {
+						panelTest.hidden = false;
+						document.dispatchEvent(new Event('visibilitychange'));
+						if (persisted) dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}));
+					}`, persisted)
+					if width < 1200 {
+						read()
+					} else {
+						read(fmt.Sprint(seq))
+					}
+					page.MustEval(`() => { panelTest.held = false; dispatchEvent(new Event('resize')); }`)
+					if width < 1200 {
+						modal(fmt.Sprintf("shown at %d px", width))
+					} else {
+						wait("the panel is released", released)
+					}
+				}
+			}
 
 			// Without JavaScript the panel is a page: its member paging, close
 			// link and Mark as read work, and nothing reads automatically.

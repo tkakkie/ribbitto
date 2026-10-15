@@ -92,10 +92,12 @@ reaches. The panel covers the conversation exactly while it is out of flow.
 on load and on each resize, and makes it a modal dialog over an inert page
 ([accessibility](accessibility.md)); its `aria-modal="true"` is the
 published state. `read-visibility-v6.js` reads that attribute and pauses
-automatic reading, while the stream still updates the page behind. The
-reader reads it first at `htmx:load`, after every deferred script, and adds
-its resize listener then, after the panel script's, so on load and on each
-resize it sees the state the panel script has just set. The header's **Mark
+automatic reading, while the stream still updates the page behind. Each time
+it reads, it first dispatches a synchronous `panel-cover` event on the panel,
+and the panel script publishes the state for the current size: a page shown
+again after a size change while hidden gets its resize event only later, and
+no listener order matters. The panel script listens from its deferred run,
+before the reader's first read at `htmx:load`. The header's **Mark
 as read** is hidden below `wide`, where the overview shows a
 `submitButtonFor` the same `#read-form`. Without JavaScript the panel is its
 own page: its links still close it and page the members.

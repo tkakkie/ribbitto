@@ -254,7 +254,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		}
 		// Scripts stay outside swap targets; htmx will not run swapped scripts.
 		// read-visibility starts at htmx:load, after every deferred script, so
-		// it reads side-panel's published state whatever the order here.
+		// side-panel already answers its panel-cover request whatever the order.
 		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/read-visibility-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>

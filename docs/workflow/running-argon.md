@@ -35,16 +35,21 @@ then run:
 
 ```sh
 src=$RIBBITTO_ARGON_SOURCE &&
-  git -C "$src" fetch --quiet origin &&
-  git -C "$src" checkout --quiet --detach origin/main &&
-  tree_status=$(git -C "$src" status --porcelain --ignored --untracked-files=all) &&
+  pinned() { GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$src" "$@"; } &&
+  pinned fetch --quiet https://github.com/tkakkie/ribbitto.git +refs/heads/main:refs/remotes/origin/main &&
+  pinned checkout --quiet --detach origin/main &&
+  tree_status=$(pinned status --porcelain --ignored --untracked-files=all) &&
     test -z "$tree_status" &&
   (cd "$src" && go build -o "$RIBBITTO_ARGON_HOME/bin/argonreview" ./cmd/argonreview) &&
   "$RIBBITTO_ARGON_HOME/bin/argonreview" review <pr-number>
 ```
 
-The `status` check stops on any local change, untracked or ignored file,
-which could otherwise affect the build. That clean checkout is the
+Git runs with global and system configuration off, as the launcher's own
+git calls do, and fetches from the pinned URL, so no `insteadOf` rule
+outside the clone can substitute another repository (Copilot on #1136);
+keep the clone's own configuration free of `url.*` rules. The `status`
+check stops on any local change, untracked or ignored file, which could
+otherwise affect the build. That clean checkout is the
 boundary: never build or run a pull request's copy of the launcher. Every
 subcommand but `guard` also runs `verify`, which refuses a binary not built
 from that commit with a clean tree (`go run` included); it catches a stale

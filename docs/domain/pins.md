@@ -4,7 +4,8 @@ Pins keep important messages within reach in a channel's overview panel
 (#874). They are post-M6 message work, not M5 or M6 polish. The maintainer agreed
 these rules on 2026-10-12 (#880). Metadata storage and bounded snapshot
 reads are implemented (#887); use cases, UI and delivery remain planned.
-Message permalinks (roadmap steps 1–2) precede the jump from a pin.
+The jump from a pin uses the message's URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md),
+implemented by #1159), which comes first.
 
 ## Permissions and limits
 
@@ -44,7 +45,8 @@ Considered and rejected: oldest first (stable reference order), full bodies (lar
 panel), or manual ordering (additional state and controls).
 
 Each entry shows the current message excerpt, its author, its current topic,
-who pinned it and when, and an ordinary permalink to the message. Author
+who pinned it and when, and the message's ordinary URL
+([decision 36](../decisions/36-one-message-has-a-stable-url.md)). Author
 and pinner use current [display names and handles](names.md); the pin time
 is server-assigned and uses the normal timestamp fallback. The overview
 includes every topic, even when opened from one topic. A reply can be pinned

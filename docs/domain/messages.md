@@ -88,6 +88,13 @@ post's scroll intent is consumed once; failed posts create none. Focus stays in
 the composer. Live appends are announced politely;
 replay duplicates replace the same message id without another announcement.
 
+*Planned (#1159, [decision 36](../decisions/36-one-message-has-a-stable-url.md)):* one message has its own URL,
+`/organizations/{slug}/messages/{message-id}`. It answers 303 to the message's
+current topic, scrolled to the message and highlighted instead of the newest:
+the latest page when the message is on it, otherwise an older `?around=` page
+that holds the message with context on both sides. Unknown, other-organisation
+and unreadable messages answer 404.
+
 ## Older pages
 
 Older history is read a page of 50 at a time with `ListMessagesBefore`,

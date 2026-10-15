@@ -67,7 +67,9 @@ page once, then only the element reported by each `htmx:load` and its
 descendants. It reuses one `Intl.DateTimeFormat` for the page language and
 tracks localised elements in a `WeakSet` so overlapping load events do not
 rewrite them. Invalid dates retain their fallback, as do all timestamps
-when JavaScript is disabled.
+when JavaScript is disabled. From `desk` the element reserves a width that
+fits both texts, so the rewrite moves nothing beside it (#1094,
+[`ui-components.md`](../ui-components.md#shared-components)).
 Application script URLs are versioned because static assets are immutable.
 
 `message-composer-v6.js` also loads with the response nonce on channel pages.

@@ -27,76 +27,14 @@ import (
 func testMessageRowBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	catalogues, err := i18n.New(slog.Default())
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The members come from the seed's data, so a member added there is
-	// checked too.
-	seedFile, err := os.ReadFile("../../cmd/seed/conversations.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var seed struct {
-		Members []struct{ Name, Handle string }
-	}
-	if err := json.Unmarshal(seedFile, &seed); err != nil || len(seed.Members) == 0 {
-		t.Fatalf("reading the seed members: %v (%d members)", err, len(seed.Members))
-	}
-	topic, cursor := kernel.ID{2}, int64(42)
-	var messages []view.Message
-	for i, member := range seed.Members {
-		messages = append(messages, view.Message{ID: kernel.ID{byte(i + 7)}, MemberID: kernel.ID{byte(i + 20)}, TopicID: topic, EventSeq: int64(i + 7),
-			DisplayName: member.Name, Handle: member.Handle, Body: "on it", DefaultTopic: true, TopicURL: view.ConversationURL("acme", kernel.ID{1}, &topic),
-			CreatedAt: time.Date(2026, 12, 28, 13, 58, 58, 0, time.UTC)})
-	}
-	page := view.ChannelPage{Organization: view.Organization{Name: "Paper Lantern", Slug: "acme"},
-		Current:     view.Channel{ID: kernel.ID{1}, DefaultTopicID: topic, Name: "general", ImageURL: view.ChannelImageURL("lake")},
-		DisplayName: seed.Members[0].Name, Handle: seed.Members[0].Handle, Role: "owner", Messages: messages, EventCursor: &cursor}
-	page.Channels = []view.Channel{page.Current}
-	mux := http.NewServeMux()
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(static.FS())))
-	mux.HandleFunc("GET /organizations/acme/events", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
-		if sender.Heartbeat(r.Context()) == nil {
-			<-r.Context().Done()
-		}
-	})
-	mux.HandleFunc("POST /organizations/acme/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	mux.Handle("/{$}", catalogues.Middleware(templ.Handler(view.ChannelScreen("/static/css/app.css", page))))
-	server := httptest.NewServer(mux)
+	page := seedMessagePage(t)
+	messages := page.Messages
+	server := httptest.NewServer(messagePageMux(t, page, http.FileServerFS(static.FS())))
 	defer server.Close()
 	tab, closeTab := boundedPage(t, browser, ctx, "message rows")
 	defer closeTab()
-	started := time.Now()
-	// step runs one named browser action and its waits under their own 10 s
-	// and fails by name (#1060); nothing here goes through rod's input.
-	step := func(t *testing.T, what string, fn func(p *rod.Page)) {
-		t.Helper()
-		stepCtx, stop := context.WithTimeout(ctx, 10*time.Second)
-		defer stop()
-		done := make(chan any, 1)
-		go func() {
-			defer func() { done <- recover() }()
-			fn(tab.Context(stepCtx).WithPanic(func(v any) { panic(v) }))
-		}()
-		select {
-		case v := <-done:
-			if v != nil {
-				t.Fatalf("%s: %v (at %s)", what, v, time.Since(started).Round(time.Millisecond))
-			}
-		case <-stepCtx.Done():
-			t.Fatalf("%s did not finish in 10 s (at %s)", what, time.Since(started).Round(time.Millisecond))
-		}
-	}
-	defer func() {
-		cleanupCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
-		defer stop()
-		if err := (proto.NetworkDeleteCookies{Name: "lang", URL: server.URL}).Call(tab.Context(cleanupCtx)); err != nil {
-			t.Errorf("deleting the lang cookie: %v", err)
-		}
-	}()
+	step := pageStep(ctx, tab)
+	defer deleteLangCookie(t, tab, server.URL)
 	step(t, "setting the viewport to 390x844 and the time zone to Asia/Tokyo", func(p *rod.Page) {
 		if err := (proto.EmulationSetDeviceMetricsOverride{Width: 390, Height: 844, DeviceScaleFactor: 1}).Call(p); err != nil {
 			panic(err)
@@ -153,3 +91,89 @@ const messageRowAudit = `want => {
 	}
 	return problems;
 }`
+
+// seedMessagePage returns a channel page with one message by each seed
+// member in the default topic, all at one fixed time. The members come from
+// the seed's data, so a member added there is checked too.
+func seedMessagePage(t *testing.T) view.ChannelPage {
+	t.Helper()
+	seedFile, err := os.ReadFile("../../cmd/seed/conversations.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seed struct {
+		Members []struct{ Name, Handle string }
+	}
+	if err := json.Unmarshal(seedFile, &seed); err != nil || len(seed.Members) == 0 {
+		t.Fatalf("reading the seed members: %v (%d members)", err, len(seed.Members))
+	}
+	topic, cursor := kernel.ID{2}, int64(42)
+	var messages []view.Message
+	for i, member := range seed.Members {
+		messages = append(messages, view.Message{ID: kernel.ID{byte(i + 7)}, MemberID: kernel.ID{byte(i + 20)}, TopicID: topic, EventSeq: int64(i + 7),
+			DisplayName: member.Name, Handle: member.Handle, Body: "on it", DefaultTopic: true, TopicURL: view.ConversationURL("acme", kernel.ID{1}, &topic),
+			CreatedAt: time.Date(2026, 12, 28, 13, 58, 58, 0, time.UTC)})
+	}
+	page := view.ChannelPage{Organization: view.Organization{Name: "Paper Lantern", Slug: "acme"},
+		Current:     view.Channel{ID: kernel.ID{1}, DefaultTopicID: topic, Name: "general", ImageURL: view.ChannelImageURL("lake")},
+		DisplayName: seed.Members[0].Name, Handle: seed.Members[0].Handle, Role: "owner", Messages: messages, EventCursor: &cursor}
+	page.Channels = []view.Channel{page.Current}
+	return page
+}
+
+// messagePageMux serves page at / in the lang cookie's language, files under
+// /static/, a stream that only sends its heartbeat, and 204 to every POST.
+func messagePageMux(t *testing.T, page view.ChannelPage, files http.Handler) *http.ServeMux {
+	t.Helper()
+	catalogues, err := i18n.New(slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/static/", http.StripPrefix("/static/", files))
+	mux.HandleFunc("GET /organizations/acme/events", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		sender := sseSender{w: w, rc: http.NewResponseController(w), timeout: time.Second}
+		if sender.Heartbeat(r.Context()) == nil {
+			<-r.Context().Done()
+		}
+	})
+	mux.HandleFunc("POST /organizations/acme/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.Handle("/{$}", catalogues.Middleware(templ.Handler(view.ChannelScreen("/static/css/app.css", page))))
+	return mux
+}
+
+// pageStep returns a step that runs one named browser action and its waits
+// on tab under their own 10 s and fails by name (#1060); nothing given to it
+// may go through rod's input, which the page context does not bound.
+func pageStep(ctx context.Context, tab *rod.Page) func(t *testing.T, what string, fn func(p *rod.Page)) {
+	started := time.Now()
+	return func(t *testing.T, what string, fn func(p *rod.Page)) {
+		t.Helper()
+		stepCtx, stop := context.WithTimeout(ctx, 10*time.Second)
+		defer stop()
+		done := make(chan any, 1)
+		go func() {
+			defer func() { done <- recover() }()
+			fn(tab.Context(stepCtx).WithPanic(func(v any) { panic(v) }))
+		}()
+		select {
+		case v := <-done:
+			if v != nil {
+				t.Fatalf("%s: %v (at %s)", what, v, time.Since(started).Round(time.Millisecond))
+			}
+		case <-stepCtx.Done():
+			t.Fatalf("%s did not finish in 10 s (at %s)", what, time.Since(started).Round(time.Millisecond))
+		}
+	}
+}
+
+// deleteLangCookie removes the language cookie a test set, under its own 10 s.
+func deleteLangCookie(t *testing.T, tab *rod.Page, url string) {
+	t.Helper()
+	cleanupCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+	defer stop()
+	if err := (proto.NetworkDeleteCookies{Name: "lang", URL: url}).Call(tab.Context(cleanupCtx)); err != nil {
+		t.Errorf("deleting the lang cookie: %v", err)
+	}
+}

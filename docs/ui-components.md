@@ -52,7 +52,13 @@ topic link fills its row. There a message's time sits under the name and
 the topic link and **Select** stay together at the row's end, so at 390 px
 a one-line message by a seed member takes that 44 px row and its body line;
 a narrower screen or a long name or topic moves them to their own row (#1093, `testMessageRowBrowser` in
-`internal/web/message_row_browser_test.go`). At every width the create popover may stretch to
+`internal/web/message_row_browser_test.go`). From `desk` a message's time
+reserves `min-w-timestamp` with tabular digits, wider than the server's UTC
+text and the local format of either language, so `message-time-v2.js`
+replacing it moves neither the topic link nor **Select** (#1094,
+`testMessageTimeBrowser` in `internal/web/message_time_browser_test.go`). Below
+`desk` they sit at the row's end, where the time's width moves them only if
+it changes how the header wraps; reserving it there would wrap seed rows at 390 px. At every width the create popover may stretch to
 16 px above the bottom, capped at its content height, so in a short
 viewport (a phone on its side, or a zoomed desktop, #1076) it scrolls to its
 submit button.

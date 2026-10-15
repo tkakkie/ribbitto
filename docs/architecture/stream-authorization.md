@@ -154,9 +154,7 @@ for a primary-key read, and the choice should be revisited.
 ### Tests that prove (a2)
 
 - **Unchanged:** tests above, #207's register-then-recheck and session
-  cancellation. #865 1f-b repeats safety assertions on scheduled Run and gates
-  recount/render revocation with cancellation/errors. Audience denies advance;
-  bound revocation and check errors do not.
+  cancellation. Audience denies advance; bound revocation and check errors do not.
 - **`org`, no database:** an unchanged epoch runs no membership query
   (counted, even after snapshot eviction); a changed one queries and denies;
   a failed epoch read is an error, never a deny; organisation and audience

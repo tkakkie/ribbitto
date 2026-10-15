@@ -25,7 +25,7 @@ func (s gatedShutdown) Shutdown(ctx context.Context) error {
 
 func (s gatedShutdown) Close() error { close(s.forced); return nil }
 
-type idleShutdownStream struct{ release chan struct{} }
+type idleShutdownStream struct{}
 
 func (s idleShutdownStream) EventsAfter(context.Context, kernel.ID, int64, int) ([]realtime.Event, error) {
 	return nil, nil
@@ -33,51 +33,41 @@ func (s idleShutdownStream) EventsAfter(context.Context, kernel.ID, int64, int) 
 func (s idleShutdownStream) MayReceive(context.Context, kernel.ID, string, realtime.Event) (bool, error) {
 	return true, nil
 }
-func (s idleShutdownStream) Trigger(realtime.Event) bool { return false }
-func (s idleShutdownStream) Recount(context.Context, realtime.Subscription) (realtime.Outgoing, error) {
-	<-s.release // Deliberately ignores cancellation.
-	return realtime.Outgoing{}, nil
-}
 
 func TestLifecycleWaitsForActualReturn(t *testing.T) {
-	for _, blocked := range []string{"scheduler", "maintenance"} {
+	for _, blocked := range []string{"maintenance"} {
 		t.Run(blocked, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				hub, scheduler := realtime.NewHub(), realtime.NewRecountScheduler(1, 1)
-				defer scheduler.Close()
-				poolClosed, release := make(chan struct{}), make(chan struct{})
-				l := newServiceLifecycle(t.Context(), hub, scheduler, func() { close(poolClosed) })
+				hub := realtime.NewHub()
+				poolClosed := make(chan struct{})
+				l := newServiceLifecycle(t.Context(), hub, func() { close(poolClosed) })
 				server := gatedShutdown{make(chan struct{}), make(chan struct{})}
 				l.servers = append(l.servers, server)
 				workerRelease, workerJoined := make(chan struct{}, 1), make(chan struct{})
 				var closed chan struct{}
 				var shutdownErr error
 				defer func() {
-					close(release)
 					close(workerRelease)
 					if closed != nil {
 						<-closed
 					}
 				}()
-				if blocked == "scheduler" {
-					workerRelease <- struct{}{}
-				}
 				l.workers = append(l.workers, func() { <-workerRelease; close(workerJoined) })
 				ctx, unregister, err := hub.Register(l.ctx, realtime.Connection{Organization: kernel.ID{1}}, 1)
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer unregister()
-				source := idleShutdownStream{release}
+				source := idleShutdownStream{}
 				streamDone := make(chan error, 1)
 				go func() {
-					_, err := (realtime.Stream{Hub: hub, Events: source, Authorizer: source, Sidebar: source, Recounts: scheduler}).Run(ctx,
-						realtime.Subscription{Organization: kernel.ID{1}, Interests: []realtime.Interest{realtime.InterestSidebar}}, 0, nil)
+					_, err := (realtime.Stream{Hub: hub, Events: source, Authorizer: source}).Run(ctx,
+						realtime.Subscription{Organization: kernel.ID{1}}, 0, nil)
 					streamDone <- err
 				}()
 				synctest.Wait()
-				if hub.Waiting(kernel.ID{1}) != 1 || scheduler.Stats().RunningWorkers != 1 {
-					t.Fatal("stream did not enter the combined wait with a running computation")
+				if hub.Waiting(kernel.ID{1}) != 1 {
+					t.Fatal("stream did not enter the combined wait")
 				}
 				closed = make(chan struct{})
 				go func() { shutdownErr = l.close(); close(closed) }()
@@ -95,10 +85,7 @@ func TestLifecycleWaitsForActualReturn(t *testing.T) {
 					t.Fatal("HTTP grace expired before idle stream woke")
 				default:
 				}
-				if stats := scheduler.Stats(); !stats.Closed || stats.RunningWorkers != 1 {
-					t.Fatalf("scheduler did not start closure alongside HTTP: %+v", stats)
-				}
-				// Let synctest advance to the HTTP deadline while the computation stays gated.
+				// Advance to the HTTP deadline while maintenance stays gated.
 				<-server.expired
 				synctest.Wait()
 				select {
@@ -108,21 +95,10 @@ func TestLifecycleWaitsForActualReturn(t *testing.T) {
 				}
 				select {
 				case <-poolClosed:
-					t.Fatal("pool closed before computation returned")
+					t.Fatal("pool closed before maintenance worker joined")
 				default:
 				}
-				release <- struct{}{}
-				synctest.Wait()
-				if blocked == "maintenance" {
-					select {
-					case <-poolClosed:
-						t.Fatal("pool closed before maintenance worker joined")
-					default:
-					}
-				}
-				if blocked == "maintenance" {
-					workerRelease <- struct{}{}
-				}
+				workerRelease <- struct{}{}
 				<-closed
 				if !errors.Is(shutdownErr, context.DeadlineExceeded) {
 					t.Fatalf("shutdown error = %v, want HTTP deadline", shutdownErr)
@@ -174,8 +150,8 @@ func TestServeFailureCleanupOrder(t *testing.T) {
 			}
 			var order []string
 			record := func(step string) { order = append(order, step) }
-			err := serveWithLifecycle(ctx, os.Getenv("RIBBITTO_TEST_DATABASE_URL"), func(ctx context.Context, hub *realtime.Hub, scheduler *realtime.RecountScheduler, closePool func()) *serviceLifecycle {
-				l := newServiceLifecycle(ctx, hub, scheduler, func() { record("pool"); closePool() })
+			err := serveWithLifecycle(ctx, os.Getenv("RIBBITTO_TEST_DATABASE_URL"), func(ctx context.Context, hub *realtime.Hub, closePool func()) *serviceLifecycle {
+				l := newServiceLifecycle(ctx, hub, func() { record("pool"); closePool() })
 				if failure == "normal shutdown" {
 					cancel()
 				}
@@ -215,8 +191,8 @@ func TestServeCollectsServerFailures(t *testing.T) {
 				defer cancel()
 				failures := map[string]error{"application": errors.New("application failed"), "metrics": errors.New("metrics failed")}
 				shutdownErr := errors.New("shutdown failed")
-				err := serveWithLifecycle(ctx, os.Getenv("RIBBITTO_TEST_DATABASE_URL"), func(ctx context.Context, hub *realtime.Hub, scheduler *realtime.RecountScheduler, closePool func()) *serviceLifecycle {
-					l := newServiceLifecycle(ctx, hub, scheduler, closePool)
+				err := serveWithLifecycle(ctx, os.Getenv("RIBBITTO_TEST_DATABASE_URL"), func(ctx context.Context, hub *realtime.Hub, closePool func()) *serviceLifecycle {
+					l := newServiceLifecycle(ctx, hub, closePool)
 					if trigger == "shutdown failure" {
 						l.servers = append(l.servers, failedShutdown{shutdownErr})
 					}

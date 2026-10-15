@@ -21,19 +21,15 @@
 // immediately before sending without moving the cursor. Sidebar sources supply
 // full recounts at connect and on consumer-defined organisation-wide triggers.
 // Optional member watches subscribe before the first recount and release on exit.
-// Optional RecountScheduler bounds computations and registrations; RunReserved
-// consumes admission once and cancels on every exit, releasing unused reservations
-// immediately. The writer
-// alone sends completions, with each request's own captured watch generation
-// and an exit seal before release (docs/architecture/recount-scheduler.md).
+// A shared RecountLimit bounds computation independently of stream registrations;
+// a bounded slot wait defers busy recounts without losing dirty state.
 // Generations captured before fresh snapshots are covered only after send or
 // denial; later publications dirty the same coalescer and join the combined wait.
 // This is process-local; activation and cross-process recovery are separate work.
 // A dirty flag and fixed deadline coalesce recounts between batches; neither a
 // quiet period nor a backlog loses pending work. Rendering precedes authorization,
 // and sidebar frames check the organisation and bound member, preserving the
-// durable cursor. Scheduled authorization gates also pin audience-deny cursor
-// progress, revocation during computation/rendering and suppression after exit.
+// durable cursor.
 // Production presence and
 // typing are implemented; web renders their indicators.
 // Web's hidden sink receives sidebar/presence payloads. The hub is also the

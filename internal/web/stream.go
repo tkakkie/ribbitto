@@ -36,12 +36,8 @@ type Streaming struct {
 	Owners map[realtime.Interest]realtime.EphemeralOwner
 	// Sidebar binds resolved membership and page selection to uncached recounts.
 	Sidebar func(org.Membership, kernel.ID, *kernel.ID, bool) realtime.SidebarSource
-	// Recounts admits sidebar streams before opening; nil keeps synchronous recounts.
-	Recounts *realtime.RecountScheduler
 	// RecountLimit bounds computations independently of stream admission.
 	RecountLimit *realtime.RecountLimit
-	// RecountObserver optionally aggregates scheduled delivery; nil disables observations.
-	RecountObserver *realtime.RecountObserver
 	// StreamOpened counts every accepted stream, regardless of interests.
 	// Its returned cleanup releases organisation presence and channel typing counts.
 	StreamOpened func(organizationID, memberID, channelID kernel.ID) func()
@@ -111,27 +107,7 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 		http.NotFound(w, r)
 		return
 	}
-	var sidebar realtime.SidebarSource
-	var registration *realtime.RecountRegistration
-	var admit func() bool
-	if p.stream.Recounts != nil && p.stream.Sidebar != nil && slices.Contains(sub.Interests, realtime.InterestSidebar) {
-		admit = func() bool {
-			sidebar = p.stream.Sidebar(m, sub.Channel, sub.Topic, r.URL.Query().Get("panel") == "members")
-			if sidebar == nil {
-				return true
-			}
-			registration = p.stream.Recounts.Register()
-			return registration != nil
-		}
-		// Until RunReserved takes ownership, even a failed initial flush must
-		// release admission. Register itself does not watch the request context.
-		defer func() {
-			if registration != nil {
-				registration.Cancel()
-			}
-		}()
-	}
-	ctx, cleanup, ok := p.openStream(w, r, m.Organization.ID, account.ID, m.Member.ID, sub.Channel, session, admit)
+	ctx, cleanup, ok := p.openStream(w, r, m.Organization.ID, account.ID, m.Member.ID, sub.Channel, session)
 	if !ok {
 		return
 	}
@@ -171,26 +147,16 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	stream := realtime.Stream{
 		Hub: p.stream.Hub, Events: p.stream.Events, Authorizer: p.stream.Authorizer,
-		Owners:          p.stream.Owners,
-		RecountObserver: p.stream.RecountObserver, RecountLimit: p.stream.RecountLimit,
-		Renderer:  messageRenderer{messages: p.messages, membership: m, renders: p.renders},
-		Heartbeat: heartbeat,
+		Owners:       p.stream.Owners,
+		RecountLimit: p.stream.RecountLimit,
+		Renderer:     messageRenderer{messages: p.messages, membership: m, renders: p.renders},
+		Heartbeat:    heartbeat,
 	}
-	if admit != nil {
-		stream.Sidebar = sidebar
-	} else if p.stream.Sidebar != nil {
+	if p.stream.Sidebar != nil {
 		stream.Sidebar = p.stream.Sidebar(m, sub.Channel, sub.Topic, r.URL.Query().Get("panel") == "members")
 	}
 	sub.Organization, sub.OrganizationSlug, sub.Account, sub.Member = m.Organization.ID, m.Organization.Slug, account.ID, m.Member.ID
-	var cursor int64
-	var err error
-	if registration != nil {
-		reserved := registration
-		registration = nil
-		cursor, err = stream.RunReserved(ctx, sub, after, send, reserved)
-	} else {
-		cursor, err = stream.Run(ctx, sub, after, send)
-	}
+	cursor, err := stream.Run(ctx, sub, after, send)
 	if err != nil && ctx.Err() == nil && !errors.Is(err, realtime.ErrMembershipRevoked) {
 		// Neither the client nor the session went away: delivery failed.
 		// The browser reconnects with the last id it received, which is
@@ -200,10 +166,9 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 }
 
 // openStream keeps the register-then-re-check order that closes the race
-// with sign-out. Optional admission follows the re-check, before StreamOpened;
-// the caller owns any reservation it creates. On success the caller must
+// with sign-out. On success the caller must
 // defer cleanup; on failure it has written the response and freed the slot.
-func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID, memberID, channelID kernel.ID, session identity.Session, admit func() bool) (ctx context.Context, cleanup func(), ok bool) {
+func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organizationID, accountID, memberID, channelID kernel.ID, session identity.Session) (ctx context.Context, cleanup func(), ok bool) {
 	limit := p.stream.MaxPerAccount
 	if limit <= 0 {
 		limit = DefaultMaxStreamsPerAccount
@@ -260,18 +225,6 @@ func (p channelPages) openStream(w http.ResponseWriter, r *http.Request, organiz
 		cancel()
 		streamCancelled(w, r, ctx)
 		return nil, nil, false
-	}
-	if admit != nil {
-		if !admit() {
-			cancel()
-			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
-			return nil, nil, false
-		}
-		if ctx.Err() != nil {
-			cancel()
-			streamCancelled(w, r, ctx)
-			return nil, nil, false
-		}
 	}
 	closed := func() {}
 	if p.stream.StreamOpened != nil {

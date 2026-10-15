@@ -95,12 +95,8 @@ type Stream struct {
 	Owners map[Interest]EphemeralOwner
 	// Sidebar supplies coalesced recounts; nil leaves sidebar delivery unwired.
 	Sidebar SidebarSource
-	// Recounts optionally schedules sidebar computation; nil keeps synchronous delivery.
-	Recounts *RecountScheduler
 	// RecountLimit shares computation capacity; nil preserves unbounded test compositions.
 	RecountLimit *RecountLimit
-	// RecountObserver optionally aggregates scheduled delivery; nil disables observations.
-	RecountObserver *RecountObserver
 	// BatchSize bounds each read; zero means DefaultBatchSize.
 	BatchSize int
 	// Heartbeat is how long the loop waits on the hub before it sends a
@@ -149,31 +145,6 @@ var errHeartbeatDue = errors.New("realtime: heartbeat due")
 // rendered and immediately before it is sent, including ones read in an
 // earlier batch, since access may have been lost in between.
 func (s Stream) Run(ctx context.Context, sub Subscription, cursor int64, send Sender) (int64, error) {
-	return s.run(ctx, sub, cursor, send, nil)
-}
-
-// RunReserved consumes an already-admitted registration without registering again.
-// It returns ErrRecountRefused for nil, cancelled or already-consumed reservations,
-// or a reservation from a different non-nil Recounts scheduler. A failed second
-// consumption does not cancel the first owner's stream. Every consumed reservation
-// is cancelled on exit, or immediately when sidebar delivery is unwired/unwanted.
-// With Recounts nil, the reservation supplies the scheduler. Delivery follows Run.
-func (s Stream) RunReserved(ctx context.Context, sub Subscription, cursor int64, send Sender, registration *RecountRegistration) (int64, error) {
-	if registration == nil || !registration.consume() {
-		return cursor, ErrRecountRefused
-	}
-	defer registration.Cancel()
-	if s.Recounts != nil && s.Recounts != registration.q {
-		return cursor, ErrRecountRefused
-	}
-	if s.Sidebar == nil || !slices.Contains(sub.Interests, InterestSidebar) {
-		registration.Cancel()
-		registration = nil
-	}
-	return s.run(ctx, sub, cursor, send, registration)
-}
-
-func (s Stream) run(ctx context.Context, sub Subscription, cursor int64, send Sender, registration *RecountRegistration) (int64, error) {
 	if cursor < 0 {
 		return cursor, fmt.Errorf("negative cursor %d", cursor)
 	}
@@ -200,18 +171,6 @@ func (s Stream) run(ctx context.Context, sub Subscription, cursor int64, send Se
 			defer sidebar.watch.Release()
 		}
 	}
-	var scheduled *scheduledSidebar
-	if sidebar.dirty && (registration != nil || s.Recounts != nil) {
-		if registration == nil {
-			registration = s.Recounts.Register()
-		}
-		if registration == nil {
-			return cursor, ErrRecountRefused
-		}
-		scheduled = &scheduledSidebar{registration: registration, pending: &sidebar, version: 1}
-		defer scheduled.cancel()
-	}
-	var completion *RecountCompletion
 	for {
 		events, err := s.Events.EventsAfter(ctx, sub.Organization, cursor, batch)
 		if errors.Is(err, ErrCursorExpired) || (err == nil && !contiguous(cursor, events)) {
@@ -229,9 +188,6 @@ func (s Stream) run(ctx context.Context, sub Subscription, cursor int64, send Se
 		for _, event := range events {
 			if s.Sidebar != nil && slices.Contains(sub.Interests, InterestSidebar) && event.OrganizationID == sub.Organization && s.Sidebar.Trigger(event) {
 				sidebar.dirty = true
-				if scheduled != nil {
-					scheduled.version++
-				}
 			}
 			sent, err := s.deliver(ctx, sub, event, send)
 			if err != nil {
@@ -248,12 +204,7 @@ func (s Stream) run(ctx context.Context, sub Subscription, cursor int64, send Se
 			return cursor, err
 		}
 		connected = true
-		if scheduled != nil {
-			err = s.scheduledRecount(ctx, sub, scheduled, completion, send, &written)
-			completion = nil
-		} else {
-			err = s.recount(ctx, sub, &sidebar, send, &written)
-		}
+		err = s.recount(ctx, sub, &sidebar, send, &written)
 		if err != nil {
 			return cursor, err
 		}
@@ -269,18 +220,10 @@ func (s Stream) run(ctx context.Context, sub Subscription, cursor int64, send Se
 		}
 		seen.durable = max(cursor, seen.durable)
 		deadline := time.Time{}
-		if sidebar.dirty && (scheduled == nil || !scheduled.active) {
+		if sidebar.dirty {
 			deadline = sidebar.next
 		}
-		var completions <-chan RecountCompletion
-		if scheduled != nil {
-			completions = scheduled.registration.Completions()
-		}
-		levels, received, err := s.wait(ctx, sub, seen, send, &written, deadline, sidebar.watch, sidebar.observed, completions)
-		completion = received
-		if received != nil {
-			scheduled.received()
-		}
+		levels, err := s.wait(ctx, sub, seen, send, &written, deadline, sidebar.watch, sidebar.observed)
 		// Generations count as seen only after the owner returns their state.
 		seen.durable = levels.durable
 		if err != nil {
@@ -380,17 +323,9 @@ func (s Stream) heartbeat(ctx context.Context, sub Subscription, send Sender, wr
 
 // wait combines durable and generation wakes with a pending recount deadline,
 // sending heartbeats counted from *written, even while the recount is pending.
-// A non-nil completion belongs to the writer; receiving it changes no deadline.
-// It is returned even when the parent context ends, then with that cause.
-func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, send Sender, written *time.Time, recount time.Time, watch SidebarWatch, observed uint64, completions <-chan RecountCompletion) (streamLevels, *RecountCompletion, error) {
+func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, send Sender, written *time.Time, recount time.Time, watch SidebarWatch, observed uint64) (streamLevels, error) {
 	if s.Heartbeat <= 0 && recount.IsZero() {
-		levels, completion, err := s.Hub.waitFor(ctx, sub, after, watch, observed, completions)
-		// The hub returns a received completion without an error; report a
-		// parent that ended as the deadline path does through heartbeatDue.
-		if completion != nil && ctx.Err() != nil {
-			err = context.Cause(ctx)
-		}
-		return levels, completion, err
+		return s.Hub.waitFor(ctx, sub, after, watch, observed)
 	}
 	for {
 		deadline, cause := recount, errSidebarDue
@@ -398,16 +333,16 @@ func (s Stream) wait(ctx context.Context, sub Subscription, after streamLevels, 
 			deadline, cause = written.Add(s.Heartbeat), errHeartbeatDue
 		}
 		waitCtx, cancel := context.WithDeadlineCause(ctx, deadline, cause)
-		levels, completion, err := s.Hub.waitFor(waitCtx, sub, after, watch, observed, completions)
+		levels, err := s.Hub.waitFor(waitCtx, sub, after, watch, observed)
 		cancel()
 		if ctx.Err() == nil && errors.Is(err, errSidebarDue) {
-			return after, nil, nil
+			return after, nil
 		}
 		if due, err := heartbeatDue(ctx, err); !due {
-			return levels, completion, err
+			return levels, err
 		}
 		if err := s.heartbeat(ctx, sub, send, written); err != nil {
-			return streamLevels{}, nil, err
+			return streamLevels{}, err
 		}
 	}
 }

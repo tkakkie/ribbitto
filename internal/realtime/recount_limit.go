@@ -9,7 +9,7 @@ import (
 
 var errRecountDeferred = errors.New("realtime: recount slot wait expired")
 
-// RecountLimit bounds computations across all sidebar triggers and delivery modes.
+// RecountLimit bounds computations across all sidebar triggers.
 // Registration capacity is independent; a deferred computation retains its stream.
 type RecountLimit struct {
 	slots  chan struct{}

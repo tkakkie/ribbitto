@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"io"
@@ -12,13 +10,11 @@ import (
 	"runtime"
 	"slices"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
-	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 func TestDevMetricsSetup(t *testing.T) {
@@ -195,12 +191,10 @@ func TestDevMetricsSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string][]string{
-		"delivery":  {"bucket_upper_bounds_ns", "cancelled", "completion_to_send", "compute", "delivered", "denied", "enabled", "failed", "queue", "received", "submit_to_send", "submitted"},
-		"database":  {"queries", "transactions_begun", "transactions_committed", "transactions_rolled_back"},
-		"pool":      {"acquire_count", "acquire_duration_ns", "acquired_conns", "canceled_acquire_count", "empty_acquire_count", "empty_acquire_wait_ns", "idle_conns", "max_conns", "total_conns"},
-		"runtime":   {"goroutines", "heap_inuse_bytes"},
-		"streams":   {"open"},
-		"scheduler": {"cancelled", "closed", "completed", "eligible", "enabled", "errors", "errors_after_cancellation", "oldest_pending_age_ns", "oldest_running_age_ns", "pending", "processing_duration_bucket_counts", "processing_duration_bucket_upper_bounds_ns", "processing_duration_ns", "refused_capacity", "refused_closed", "registration_limit", "registrations", "rejected_submissions", "running_workers", "snapshot_at_unix_ns", "waiting_workers", "worker_limit"},
+		"database": {"queries", "transactions_begun", "transactions_committed", "transactions_rolled_back"},
+		"pool":     {"acquire_count", "acquire_duration_ns", "acquired_conns", "canceled_acquire_count", "empty_acquire_count", "empty_acquire_wait_ns", "idle_conns", "max_conns", "total_conns"},
+		"runtime":  {"goroutines", "heap_inuse_bytes"},
+		"streams":  {"open"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("sections = %v", got)
@@ -256,93 +250,6 @@ func TestDevMetricsSnapshot(t *testing.T) {
 	}
 }
 
-func TestDevMetricsScheduler(t *testing.T) {
-	pool := lazyPool(t)
-	synctest.Test(t, func(t *testing.T) {
-		m := devMetrics{queries: platform.NewQueryCounter(), pool: pool, streams: fakeStreams(0)}
-		check := func(want schedulerMetrics) {
-			t.Helper()
-			synctest.Wait()
-			if want.Enabled {
-				want.SnapshotAtUnixNS = time.Now().UnixNano()
-			}
-			w := httptest.NewRecorder()
-			m.handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/metrics", nil))
-			var got metricsSnapshot
-			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-				t.Fatal(err)
-			}
-			if got.Scheduler.Enabled != want.Enabled {
-				t.Fatalf("scheduler.enabled = %t, want %t", got.Scheduler.Enabled, want.Enabled)
-			}
-			if got.Scheduler.Pending != want.Pending {
-				t.Fatalf("scheduler.pending = %d, want %d", got.Scheduler.Pending, want.Pending)
-			}
-			if got.Scheduler.Errors != want.Errors {
-				t.Fatalf("scheduler.errors = %d, want %d", got.Scheduler.Errors, want.Errors)
-			}
-			if got.Scheduler.ErrorsAfterCancellation != want.ErrorsAfterCancellation {
-				t.Fatalf("scheduler.errors_after_cancellation = %d, want %d", got.Scheduler.ErrorsAfterCancellation, want.ErrorsAfterCancellation)
-			}
-			if got.Scheduler != want {
-				t.Fatalf("scheduler JSON = %+v; want %+v", got.Scheduler, want)
-			}
-		}
-		check(schedulerMetrics{}) // No dependency: disabled, not an idle scheduler.
-		q := realtime.NewRecountScheduler(1, 2)
-		defer q.Close()
-		m.recounts = q
-		want := schedulerMetrics{Enabled: true, WorkerLimit: 1, RegistrationLimit: 2, WaitingWorkers: 1,
-			ProcessingDurationBucketUpperBoundsNS: [5]int64{1_000_000, 10_000_000, 100_000_000, 1_000_000_000, 10_000_000_000}}
-		check(want) // Enabled and idle, with configured limits.
-		a, b := q.Register(), q.Register()
-		gate := make(chan struct{})
-		defer close(gate)
-		compute := func(ctx context.Context) (realtime.Outgoing, error) {
-			<-gate
-			return realtime.Outgoing{}, ctx.Err()
-		}
-		a.Submit(1, compute)
-		synctest.Wait()
-		a.Submit(2, compute)
-		b.Submit(3, func(context.Context) (realtime.Outgoing, error) {
-			return realtime.Outgoing{}, errors.New("live failure")
-		})
-		if q.Register() != nil || b.Submit(4, nil) {
-			t.Fatal("scheduler accepted refused work")
-		}
-		<-time.NewTimer(3 * time.Millisecond).C
-		want.Pending, want.Eligible, want.Registrations = 2, 1, 2
-		want.RunningWorkers, want.WaitingWorkers = 1, 0
-		want.OldestPendingAgeNS, want.OldestRunningAgeNS = 3_000_000, 3_000_000
-		want.RefusedCapacity, want.RejectedSubmissions = 1, 1
-		check(want) // Saturated: a successor and another eligible registration.
-		a.Cancel()
-		want.Pending, want.Cancelled = 1, 2
-		check(want) // Cancellation retains the worker and registration until return.
-		// Release without closing: the deferred close also unblocks failure cleanup.
-		gate <- struct{}{}
-		synctest.Wait()
-		if completion := <-b.Completions(); completion.Err == nil {
-			t.Fatal("live failure did not reach completion")
-		}
-		want.Pending, want.Eligible, want.RunningWorkers = 0, 0, 0
-		want.OldestPendingAgeNS, want.OldestRunningAgeNS = 0, 0
-		want.WaitingWorkers, want.Registrations, want.Completed = 1, 1, 2
-		want.ProcessingDurationNS = 3_000_000
-		want.ProcessingDurationBucketCounts = [6]uint64{1, 1}
-		want.Errors, want.ErrorsAfterCancellation = 1, 1 // Live failure and cancelled return are disjoint.
-		check(want)
-		q.Close()
-		if q.Register() != nil || b.Submit(5, compute) {
-			t.Fatal("closed scheduler accepted work")
-		}
-		want.Closed, want.WaitingWorkers, want.Registrations = true, 0, 0
-		want.RefusedClosed, want.RejectedSubmissions = 1, 2
-		check(want) // Closed still reports enabled and retains lifetime counters.
-	})
-}
-
 func TestDevMetricsAcquiredConns(t *testing.T) {
 	pool := pgtest.NewEmpty(t)
 	conn, err := pool.Acquire(t.Context())
@@ -371,16 +278,4 @@ func lazyPool(t *testing.T) *pgxpool.Pool {
 	}
 	t.Cleanup(pool.Close)
 	return pool
-}
-
-func TestDevMetricsDelivery(t *testing.T) {
-	m := devMetrics{queries: platform.NewQueryCounter(), pool: lazyPool(t), streams: fakeStreams(0)}
-	if got := m.snapshot().Delivery; got != (deliveryMetrics{}) {
-		t.Fatalf("disabled delivery: %+v", got)
-	}
-	m.delivery = &realtime.RecountObserver{}
-	got := m.snapshot().Delivery
-	if !got.Enabled || got.RecountDeliveryStats != m.delivery.Stats() || got.BucketUpperBoundsNS != [5]int64{1e6, 1e7, 1e8, 1e9, 1e10} {
-		t.Fatalf("enabled delivery: %+v", got)
-	}
 }

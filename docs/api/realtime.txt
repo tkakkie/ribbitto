@@ -31,7 +31,6 @@ type EphemeralOwner interface // EphemeralOwner reads current state and the gene
 var ErrAccountCancelled error // ErrAccountCancelled ends connections cancelled by CancelAccount.
 var ErrCursorExpired error // ErrCursorExpired means the cursor is outside the valid replay range: below the replay boundary or above the committed event_seq.
 var ErrMembershipRevoked error // ErrMembershipRevoked ends a stream whose bound member is no longer authorized.
-var ErrRecountRefused error // ErrRecountRefused ends a stream when its configured scheduler refuses work.
 var ErrSessionEnded error // ErrSessionEnded ends connections cancelled by CancelSession.
 var ErrShutdown error // ErrShutdown ends every connection when the server shuts down.
 var ErrTooManyConnections error // ErrTooManyConnections refuses a registration over either stream limit.
@@ -75,7 +74,6 @@ func NewCachedEvents(parent context.Context, events EventReader, hub *Hub, capac
 func NewHub() *Hub // NewHub returns an empty hub with DefaultMaxStreams as its process cap.
 func NewHubWithMaxStreams(maxStreams int) *Hub // NewHubWithMaxStreams returns an empty hub with the given process cap.
 func NewRecountLimit(capacity int) *RecountLimit // NewRecountLimit creates a process-wide limit; capacity must be positive.
-func NewRecountScheduler(workers int, registrations int) *RecountScheduler // NewRecountScheduler requires positive worker and registration limits.
 type Outgoing struct // Outgoing is one event ready to send.
   field Data []byte
   field Ephemeral bool // Ephemeral omits the SSE id field, preserving the durable cursor.
@@ -83,57 +81,7 @@ type Outgoing struct // Outgoing is one event ready to send.
   field Name string
   field Topic github.com/tkakkie/ribbitto/internal/kernel.ID // Topic is the message's topic as the shared render read it.
 func ParsePayloadID(value string) (github.com/tkakkie/ribbitto/internal/kernel.ID, error) // ParsePayloadID parses a payload ID in the canonical 8-4-4-4-12 layout.
-type RecountCompletion struct // RecountCompletion carries computation output, without authorizing or sending it.
-  field Err error // Err is the computation error, or a recovered panic with its stack trace.
-  field Outgoing Outgoing // Outgoing is computation output for the writer to authorize before sending.
-  field Version uint64 // Version identifies the submitted request, not a scheduler sequence.
-type RecountDeliveryStats struct // RecountDeliveryStats contains lifetime counters, independently of scheduler Stats.
-  field Cancelled uint64 // Cancelled counts outstanding attempts abandoned on writer exit or cancellation.
-  field CompletionToSend RecountDuration // CompletionToSend measures actual return to successful send, including mailbox wait.
-  field Compute RecountDuration // Compute measures invocation to return, including watch capture, panics and late returns.
-  field Delivered uint64 // Delivered counts only successful sends with an uncancelled context.
-  field Denied uint64 // Denied counts bound membership revocations.
-  field Failed uint64 // Failed counts computation, authorization-check, submission and send errors.
-  field Queue RecountDuration // Queue measures submission to computation invocation, before watch capture.
-  field Received uint64 // Received counts completions received by the writer.
-  field SubmitToSend RecountDuration // SubmitToSend measures submission to successful send.
-  field Submitted uint64 // Submitted counts writer submissions, including refusals.
-type RecountDuration struct // RecountDuration aggregates disjoint buckets with the scheduler's bounds.
-  field Buckets [6]uint64 // Buckets counts <=1ms, <=10ms, <=100ms, <=1s, <=10s, then >10s.
-  field Count uint64 // Count is the number of samples.
-  field Total time.Duration // Total sums sample durations in nanoseconds.
-type RecountLimit struct // RecountLimit bounds computations across all sidebar triggers and delivery modes.
-type RecountObserver struct // RecountObserver optionally aggregates scheduled writer delivery timing.
-  func (*RecountObserver).Stats() RecountDeliveryStats // Stats returns a consistent, allocation-free copy of the aggregates.
-type RecountRegistration struct // RecountRegistration owns one running and one replaceable pending computation.
-  func (*RecountRegistration).Cancel() // Cancel removes eligibility, cancels computation and drops buffered/late results.
-  func (*RecountRegistration).Completions() <-chan RecountCompletion // Completions is a one-slot mailbox; an unread result is replaced on completion.
-  func (*RecountRegistration).Submit(version uint64, compute func(context.Context) (Outgoing, error)) bool // Submit replaces pending work without changing its eligibility position.
-type RecountScheduler struct // RecountScheduler bounds concurrent computations and registered streams.
-  func (*RecountScheduler).Close() // Close refuses new work, cancels registrations and waits for actual returns.
-  func (*RecountScheduler).Register() *RecountRegistration // Register returns nil when capacity is retained or the scheduler is closed.
-  func (*RecountScheduler).Stats() RecountStats // Stats copies counters and scans the bounded registrations under the mutex.
-type RecountStats struct // RecountStats is a scheduler snapshot; counters accumulate for its lifetime.
-  field Cancelled uint64 // Cancelled counts pending work removed and running work first cancelled.
-  field Closed bool // Closed reports whether admission has stopped.
-  field Completed uint64 // Completed counts actual returns, including errors, panics and cancelled work.
-  field DurationBuckets [6]uint64 // DurationBuckets are disjoint counts: <=1ms, <=10ms, <=100ms, <=1s, <=10s, >10s.
-  field Eligible int // Eligible counts pending registrations queued for a worker.
-  field Errors uint64 // Errors counts returned errors and recovered panics from live registrations.
-  field ErrorsAfterCancellation uint64 // ErrorsAfterCancellation counts returned errors and recovered panics whose registration was already cancelled when the return was processed under the scheduler mutex.
-  field OldestPendingAge time.Duration // OldestPendingAge preserves continuous pending time across replacement.
-  field OldestRunningAge time.Duration // OldestRunningAge includes unfinished, cancelled computations.
-  field Pending int // Pending includes successors waiting behind running computations.
-  field ProcessingDuration time.Duration // ProcessingDuration sums dispatch-to-return durations for Completed.
-  field RefusedCapacity uint64 // RefusedCapacity counts Register calls refused by the registration limit.
-  field RefusedClosed uint64 // RefusedClosed counts Register calls refused after closure, ahead of capacity.
-  field RegistrationLimit int // RegistrationLimit is the configured registration capacity.
-  field Registrations int // Registrations includes cancelled registrations retained by running work.
-  field RejectedSubmissions uint64 // RejectedSubmissions counts Submit calls rejected for nil compute or closure.
-  field RunningWorkers int // RunningWorkers includes cancelled computations until actual return.
-  field SnapshotAt time.Time // SnapshotAt is sampled under the scheduler mutex.
-  field WaitingWorkers int // WaitingWorkers counts workers idle in the scheduler's condition wait.
-  field WorkerLimit int // WorkerLimit is the configured computation concurrency bound.
+type RecountLimit struct // RecountLimit bounds computations across all sidebar triggers.
 type Renderer interface // Renderer turns an event the subscription wants into what the stream sends; the stream does the subscription's filtering, so a render depends only on the event.
   func (Renderer).Render(ctx context.Context, event Event) (Outgoing, error)
 type Retention struct // Retention expires replay history at start and on each tick; messages and unread state remain.
@@ -167,11 +115,8 @@ type Stream struct // Stream runs the per-connection delivery loop.
   field Hub *Hub
   field Owners map[Interest]EphemeralOwner // Owners supplies current frames; nil entries preserve durable-only delivery.
   field RecountLimit *RecountLimit // RecountLimit shares computation capacity; nil preserves unbounded test compositions.
-  field RecountObserver *RecountObserver // RecountObserver optionally aggregates scheduled delivery; nil disables observations.
-  field Recounts *RecountScheduler // Recounts optionally schedules sidebar computation; nil keeps synchronous delivery.
   field Renderer Renderer
   func (Stream).Run(ctx context.Context, sub Subscription, cursor int64, send Sender) (int64, error) // Run delivers the subscription's events with a sequence above cursor until ctx ends or delivery fails, and returns the last sequence it delivered or skipped, with the reason it stopped.
-  func (Stream).RunReserved(ctx context.Context, sub Subscription, cursor int64, send Sender, registration *RecountRegistration) (int64, error) // RunReserved consumes an already-admitted registration without registering again.
   field Sidebar SidebarSource // Sidebar supplies coalesced recounts; nil leaves sidebar delivery unwired.
 type Subscription struct // Subscription is one connection's explicit interests in an organisation, scoped to a channel or topic for messages, on behalf of an account.
   field Account github.com/tkakkie/ribbitto/internal/kernel.ID

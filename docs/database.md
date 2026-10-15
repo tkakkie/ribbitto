@@ -11,10 +11,10 @@ them into the shell as shown in the README. `.env` is ignored by Git.
 
 See [worktree environments](worktree-env.md) for per-worktree dev databases, ports, health checks and cleanup.
 
-## Recount capacity configuration
+## Recount capacity
 
-See [recount capacity](recount-capacity.md#recount-capacity-configuration) for
-explicit async budgets and the current shared computation limit.
+See [recount capacity](recount-capacity.md) for the shared computation limit
+and its sizing from the effective pgx pool maximum.
 
 ## Database workflow
 

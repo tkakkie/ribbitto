@@ -45,7 +45,6 @@ make generate              # regenerates committed templ Go files
 make css                   # rebuilds committed, minified Tailwind CSS
 make dev                   # watches templ and CSS; restarts the server
 make check                 # checks formatting, vets, lints, builds and tests (with -race)
-make check-ai              # always runs the AI launchers' self-tests (see Checks)
 make vuln                  # govulncheck: known vulnerabilities reachable from our code
 make deps                  # regenerates docs/dependencies.md after an import change
 make api                   # regenerates docs/api/ after a module API or doc-comment change
@@ -102,7 +101,7 @@ so local notes and tools do not change the output.
 ### Checks
 
 `make check` must pass before a pull request. It runs `check-static`,
-`check-test`, `check-tools` and `check-launchers` in order. CI runs them in
+`check-test` and `check-tools` in order. CI runs them in
 parallel, with `check-test` once per [`tools/testshard`](tools/testshard/main.go)
 shard (`.github/workflows/ci.yml`). It
 checks formatting and internal packages' `doc.go` files through
@@ -130,13 +129,8 @@ the first failure. It does not run Go or templ formatting, the `doc.go` check,
 `go vet`, `sourcecheck` or the tests, which `make check` keeps, nor the schema
 docs or `make vuln`, which CI runs separately.
 
-The bash launchers' self-tests (Grok and Muse Code), most of its time, run
-only when the change since `LAUNCHER_TESTS_BASE` (default `origin/main`;
-commits, staged, unstaged and untracked files) touches `scripts/ai/`,
-`.github/prompts/`, `.github/workflows/` or the `Makefile`, or when that
-comparison fails; `make check` prints what it chose. `make check-ai` always
-runs them; the Argon launcher's Go tests run with the others. CI compares a pull request's merge commit with its first parent
-(the base as merged), and always runs them on `main` and nightly. CI also runs
+The Argon launcher's Go tests run with the other command tests in
+`make check`. CI also runs
 `make vuln`, which runs the pinned `govulncheck` over the application module
 and fails when a known vulnerability is statically reachable from our code.
 It needs the network, so it is not part of `make check`. When it fails:

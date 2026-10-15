@@ -4,42 +4,21 @@ import (
 	"context"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
 func TestLiveSidebarBrowser(t *testing.T) {
-	unavailable := func(reason string) {
-		t.Helper()
-		if os.Getenv("RIBBITTO_REQUIRE_BROWSER") == "1" {
-			t.Fatal(reason)
-		}
-		t.Skip(reason)
-	}
-	bin, found := launcher.LookPath()
-	if !found {
-		unavailable("no installed browser; Claude runs production sidebar acceptance locally")
-	}
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
-	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Context(ctx)
-	control, err := launch.Launch()
-	if err != nil {
-		unavailable(err.Error())
-	}
-	t.Cleanup(launch.Kill)
-	browser := rod.New().ControlURL(control).MustConnect().MustIgnoreCertErrors(true)
-	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	browser := launchBrowser(t, ctx, "production sidebar acceptance")
 	f := newSidebarBranchFixture(t)
-	page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-	defer page.MustClose()
+	page, closePage := boundedPage(t, browser, ctx, "reader page")
+	defer closePage()
 	u, err := url.Parse(f.reader.server.URL)
 	acceptanceOK(t, err)
 	for _, cookie := range f.reader.client.Jar.Cookies(u) {
@@ -90,10 +69,17 @@ func TestLiveSidebarBrowser(t *testing.T) {
 	if err != nil || response.StatusCode != http.StatusSeeOther {
 		t.Fatalf("creating other channel: status %d, err %v", response.StatusCode, err)
 	}
-	otherBrowser := browser.MustIncognito()
-	defer otherBrowser.MustClose()
-	other := otherBrowser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-	defer other.MustClose()
+	otherBrowser := browser.Context(ctx).MustIncognito()
+	// Disposing of it gets its own bound: the test context may have ended.
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := otherBrowser.Context(closeCtx).Close(); err != nil {
+			t.Errorf("closing the other browser: %v", err)
+		}
+	}()
+	other, closeOther := boundedPage(t, otherBrowser, ctx, "other channel page")
+	defer closeOther()
 	for _, cookie := range f.owner.client.Jar.Cookies(u) {
 		other.MustSetCookies(&proto.NetworkCookieParam{Name: cookie.Name, Value: cookie.Value, URL: f.owner.server.URL, Path: "/", Secure: true})
 	}

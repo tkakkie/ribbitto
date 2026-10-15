@@ -8,14 +8,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationtest"
 	"github.com/tkakkie/ribbitto/internal/identity/identitytest"
@@ -29,27 +27,9 @@ import (
 )
 
 func TestReadPostBrowser(t *testing.T) {
-	unavailable := func(reason string) {
-		t.Helper()
-		if os.Getenv("RIBBITTO_REQUIRE_BROWSER") == "1" {
-			t.Fatal(reason)
-		}
-		t.Skip(reason)
-	}
-	bin, found := launcher.LookPath()
-	if !found {
-		unavailable("no installed browser; Claude runs read visibility locally")
-	}
 	ctx, cancel := context.WithTimeout(t.Context(), 180*time.Second)
 	defer cancel()
-	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Context(ctx)
-	control, err := launch.Launch()
-	if err != nil {
-		unavailable(err.Error())
-	}
-	t.Cleanup(launch.Kill)
-	browser := rod.New().ControlURL(control).MustConnect()
-	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	browser := launchBrowser(t, ctx, "read visibility")
 	for _, kind := range []string{"feed", "topic", "older-feed", "older-topic", "retry-feed", "retry-in-flight-feed"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -135,8 +115,8 @@ func TestReadPostBrowser(t *testing.T) {
 				handler.ServeHTTP(w, r)
 			}))
 			defer server.Close()
-			page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-			defer page.MustClose()
+			page, closePage := boundedPage(t, browser, ctx, "read page")
+			defer closePage()
 			// Control visibility before scripts run; keep real htmx and application listeners.
 			page.MustEvalOnNewDocument(`window.testVisibility = 'hidden'; Object.defineProperty(document, 'visibilityState', {get: () => window.testVisibility});`)
 			page.MustNavigate(server.URL + path).MustWaitLoad()
@@ -307,7 +287,7 @@ func TestReadPostBrowser(t *testing.T) {
 					page.MustEval(`() => document.addEventListener('htmx:afterSettle', e => {
 						if (e.target.id === 'message-composer') document.body.dataset.ownResponse = 'done';
 					})`)
-					page.MustElement("#message-body").MustInput("own response without stream delivery")
+					inputStep(t, page, "typing the own response", func(p *rod.Page) { p.MustElement("#message-body").MustInput("own response without stream delivery") })
 					page.MustEval(`() => document.querySelector('#message-composer').requestSubmit()`)
 					page.MustWait(`() => document.body.dataset.ownResponse === 'done'`)
 					if form := <-compositions; form.Get("cursor") != "11" {
@@ -320,8 +300,8 @@ func TestReadPostBrowser(t *testing.T) {
 				}
 			}
 			if older {
-				page.MustElement("#message-body").MustInput("own history post")
-				page.MustElement("#message-composer button[type=submit]").MustClick()
+				inputStep(t, page, "typing the history post", func(p *rod.Page) { p.MustElement("#message-body").MustInput("own history post") })
+				inputStep(t, page, "sending the history post", func(p *rod.Page) { p.MustElement("#message-composer button[type=submit]").MustClick() })
 				select {
 				case form := <-compositions:
 					if _, present := form["cursor"]; present || form.Get("body") != "own history post" {

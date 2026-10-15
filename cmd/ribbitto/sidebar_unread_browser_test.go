@@ -6,13 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/conversation/conversationpg"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -42,26 +40,9 @@ const sidebarUnreadBrowserClock = `(() => {
 })()`
 
 func TestSidebarUnreadBrowser(t *testing.T) {
-	bin, found := launcher.LookPath()
-	if !found {
-		if os.Getenv("RIBBITTO_REQUIRE_BROWSER") == "1" {
-			t.Fatal("no browser")
-		}
-		t.Skip("no installed browser; Claude runs sidebar acceptance")
-	}
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
-	launch := launcher.New().Bin(bin).UserDataDir(t.TempDir()).Leakless(false).Context(ctx)
-	control, err := launch.Launch()
-	if err != nil {
-		if os.Getenv("RIBBITTO_REQUIRE_BROWSER") == "1" {
-			t.Fatal(err)
-		}
-		t.Skip(err)
-	}
-	t.Cleanup(launch.Kill)
-	browser := rod.New().ControlURL(control).MustConnect().MustIgnoreCertErrors(true)
-	t.Cleanup(func() { browser.Timeout(5 * time.Second).MustClose() })
+	browser := launchBrowser(t, ctx, "sidebar acceptance")
 	t.Run("author's other tab", func(t *testing.T) {
 		pool := pgtest.New(t)
 		f := newReadSidebarFixture(t, pool)
@@ -69,8 +50,8 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 		acceptanceOK(t, err)
 		var pages []*rod.Page
 		for _, path := range []string{f.topicA, f.feed + "?before=6"} {
-			page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-			defer page.MustClose()
+			page, closePage := boundedPage(t, browser, ctx, "author tab")
+			defer closePage()
 			for _, cookie := range f.reader.client.Jar.Cookies(u) {
 				page.MustSetCookies(&proto.NetworkCookieParam{Name: cookie.Name, Value: cookie.Value, URL: f.reader.server.URL, Path: "/", Secure: true})
 			}
@@ -163,8 +144,8 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 				f.reader.server.Config.Handler.ServeHTTP(w, r)
 			}))
 			defer server.Close()
-			page := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
-			defer page.MustClose()
+			page, closePage := boundedPage(t, browser, ctx, "sidebar page")
+			defer closePage()
 			page.MustEvalOnNewDocument(sidebarUnreadBrowserClock + `;window.visible = 'hidden'; window.probe = 0; window.completed = 0;
     Object.defineProperty(document, 'visibilityState', {get: () => window.visible});
     document.addEventListener('htmx:sseOpen', e => { e.detail.source.addEventListener('probe', e => window.probe = +e.data); e.detail.source.addEventListener('reset', () => window.reset = true); });

@@ -168,13 +168,19 @@ func TestChannelStateBacklogAndTriggerDuringRefresh(t *testing.T) {
 }
 
 func TestChannelStateFailuresAndCursor(t *testing.T) {
-	for _, name := range []string{"read", "state read", "render", "send", "channel denied", "member denied", "authorization", "reset", "message render", "message send"} {
+	for _, name := range []string{"read", "state read", "render", "cancel during refresh", "send", "channel denied", "member denied", "authorization", "reset", "message render", "message send"} {
 		t.Run(name, func(t *testing.T) {
 			failure, reads, sent, rendered := errors.New("failed"), 0, 0, false
+			canceled := errors.New("session revoked during refresh")
+			ctx, cancel := context.WithCancelCause(t.Context())
+			defer cancel(nil)
 			selected := sub
 			selected.Member, selected.Interests = kernel.ID{1}, []Interest{InterestChannelState, InterestMessages}
 			log := &fakeLog{events: []Event{posted(8, channelA)}}
 			want := failure
+			if name == "cancel during refresh" {
+				want = canceled
+			}
 			if name == "read" {
 				log.failOn, log.err = 1, failure
 			}
@@ -184,12 +190,19 @@ func TestChannelStateFailuresAndCursor(t *testing.T) {
 			stream := Stream{Hub: NewHub(), Events: log, ChannelState: channelSource{func(Event) bool { return true },
 				func(context.Context, Subscription) (Outgoing, error) {
 					reads++
+					if name == "cancel during refresh" {
+						cancel(canceled)
+					}
 					if name == "state read" || name == "render" {
 						return Outgoing{}, failure
 					}
 					rendered = true
 					return Outgoing{ID: 999, Name: "state"}, nil
 				}}, Authorizer: authorizerFunc(func(e Event) (bool, error) {
+				if ctx.Err() != nil {
+					t.Error("authorization ran after cancellation")
+					return false, failure
+				}
 				if name != "reset" && (!rendered || e.OrganizationID != selected.Organization || e.ChannelID != selected.Channel || e.AudienceMemberID == nil || *e.AudienceMemberID != selected.Member) {
 					t.Fatal("authorization lost scope or ran before render")
 				}
@@ -204,7 +217,7 @@ func TestChannelStateFailuresAndCursor(t *testing.T) {
 				}
 				return render(e)
 			})}
-			cursor, err := stream.Run(t.Context(), selected, 7, frameSender{func(out Outgoing) error {
+			cursor, err := stream.Run(ctx, selected, 7, frameSender{func(out Outgoing) error {
 				if name == "send" || out.Name == "message" {
 					return failure
 				}

@@ -33,6 +33,9 @@ func (s Stream) refreshChannel(ctx context.Context, sub Subscription, pending *c
 		return context.Cause(ctx)
 	}
 	out, err := s.ChannelState.Refresh(ctx, sub)
+	if ctx.Err() != nil {
+		return context.Cause(ctx)
+	}
 	if err != nil {
 		return fmt.Errorf("refreshing channel state: %w", err)
 	}

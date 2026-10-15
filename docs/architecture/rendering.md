@@ -92,7 +92,8 @@ signals cannot disable the message controls or block submission. Delegated input
 and composition-end listeners trigger htmx for nonblank drafts, suppressing
 composing input. They survive replacement without storing drafts or sending
 requests themselves. Without scripts, this hidden form sends nothing.
-The script scrolls to the newest entry on load
+The script scrolls to the newest entry on load (*planned*, #1159: to the
+linked message on a page opened from its URL, [decision 36](../decisions/36-one-message-has-a-stable-url.md))
 and focuses the composer after its replacement. Scripts
 stay outside the replaced section; CSP and htmx evaluation remain unchanged.
 

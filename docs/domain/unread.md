@@ -82,6 +82,9 @@ and later the newest durable sequence the visible page has applied, covering pos
 and moves. An application while hidden counts only once the page becomes visible.
 At most one reading POST is in flight; afterwards it sends the newest shown
 cursor. Hidden tabs, `?before=` pages and the channel list page send no reading POST.
+*Planned (#1159, [decision 36](../decisions/36-one-message-has-a-stable-url.md)):* a `?around=` page, opened from
+a message's URL, counts as an older page here: no reading POST, and a post from
+it carries no cursor.
 A cursor above the organisation's committed `event_seq` is refused, so a
 later message is never read in advance. A message that is still unread
 when the POST runs, but has moved out of the topic since the page showed

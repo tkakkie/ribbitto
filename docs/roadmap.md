@@ -128,8 +128,8 @@ finish the MVP may change after M6 where a need is shown, each through a new
 decision that records why and what changes, never by quietly breaking an
 old one. Roughly in this order:
 
-1. **Revisit the constraints (short).** Measure in the browser, starting in
-   M5: input latency, INP, switching, initial JavaScript, memory. Then
+1. **Revisit the constraints (short).** Measure in the browser: input
+   latency, INP, switching, initial JavaScript, memory. Then
    decide, each in its own issue and on measurements or a prototype: the
    front end's roles, including whether Svelte islands serve client-state UI
    such as the composer (decisions
@@ -140,8 +140,9 @@ old one. Roughly in this order:
    ([web layers](architecture/web-javascript.md#javascript)); a message format
    and safe Markdown rendering
    ([decision 18](decisions/18-stored-message-formats-never-change-meaning.md),
-   no `templ.Raw`); the URL of one message. Nothing here is adopted until
-   its decision is made.
+   no `templ.Raw`); the URL of one message, settled by
+   [decision 36](decisions/36-one-message-has-a-stable-url.md). The rest
+   waits for its decision.
 2. **Two tracks in parallel.** The composer track never blocks the basics.
    - *Basics:* private channels → direct messages → email (Mailer →
      password reset → email verification) → invitations (#128).

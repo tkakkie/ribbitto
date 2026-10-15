@@ -20,8 +20,9 @@ import (
 // connection, and the layout shifts with a source inside a message row are
 // summed from the script's release until 2 s after localisation, at desktop
 // and phone width in both languages. A shift before the release cannot come
-// from localisation, and one during the load failed CI once (#1138). Without
-// JavaScript the server's time stays.
+// from localisation; a CI failure whose timing against the release was
+// unknown prompted this window (#1138). Without JavaScript the server's time
+// stays.
 func testMessageTimeBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()

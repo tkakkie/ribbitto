@@ -71,6 +71,12 @@ Migration 00013 adds nullable `channel.image` (text), an illustration key.
 Existing rows stay NULL; web picks a stable image from the channel ID for
 NULL or unknown keys. Down drops the column.
 
+Migration 00014 adds nullable `message.pinned_by_member_id` and `pinned_at`.
+A CHECK pairs their nullability; the pinner references `(organization_id, id)`
+in `member`. A partial index on `(organization_id, channel_id, pinned_at DESC, id)`
+covers pinned rows only. Pins retain no body copy. Down removes both columns
+and the index.
+
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations

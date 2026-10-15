@@ -72,7 +72,7 @@ var ErrInvalidChannelImage error // ErrInvalidChannelImage means the key is outs
 var ErrInvalidChannelName error // ErrInvalidChannelName wraps a name that breaks ValidateChannelName.
 var ErrInvalidPostCursor error // ErrInvalidPostCursor means the page cursor is invalid or ahead of committed events.
 var ErrInvalidTopicName error // ErrInvalidTopicName wraps a name that breaks ValidateTopicName.
-var ErrMessageNotFound error // ErrMessageNotFound means no message has this event_seq in the caller's organisation and channel, including when the message exists in another scope.
+var ErrMessageNotFound error // ErrMessageNotFound means no message has the requested key in the caller's organisation and channel, including when the message exists in another scope.
 var ErrTopicNameTaken error // ErrTopicNameTaken means the channel already has a topic with that name, ignoring case.
 var ErrTopicNotFound error // ErrTopicNotFound means the topic does not exist in the given organisation and channel, including when it exists in another channel or organisation.
 type EventAppender interface // EventAppender appends conversation's encoded events in the caller's transaction, so each commits with its row and sequence.
@@ -87,6 +87,7 @@ type EventSequenceIn func(github.com/tkakkie/ribbitto/internal/platform/postgres
 const KindMessagesMoved github.com/tkakkie/ribbitto/internal/realtime.EventKind = "messages.moved" // KindMessagesMoved is the kind of a branch's move, which conversation publishes and so owns (decision 26): the messages it moved, their channel, and the topics they left and joined (docs/domain/topics.md).
 const KindPosted github.com/tkakkie/ribbitto/internal/realtime.EventKind = "message.posted" // KindPosted is the kind of a message's posting, which conversation publishes and so owns (decision 26): its message, channel and posting-time topic.
 const MaxBranchMessages untyped int = 100 // MaxBranchMessages bounds how many messages one branch may move, so its transaction and its event payload stay small.
+const MaxChannelPins untyped int = 50 // MaxChannelPins bounds a channel's curated list across all its topics.
 type MemberDirectory interface // MemberDirectory is the author lookup and bounded member listing the page reader needs from org.
   func (MemberDirectory).ListMembers(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, int32) ([]github.com/tkakkie/ribbitto/internal/org.ListedMember, error) // ListMembers returns a bounded ID-ordered page after the optional member ID.
   func (MemberDirectory).LookupMembers(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberIDs []github.com/tkakkie/ribbitto/internal/kernel.ID) (map[github.com/tkakkie/ribbitto/internal/kernel.ID]github.com/tkakkie/ribbitto/internal/org.DirectoryEntry, error)
@@ -133,6 +134,19 @@ type PageCounts struct // PageCounts holds capped sidebar counts and uncapped fi
   field TopicFirstUnread int64
 type PageCountsIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) PageCounter // PageCountsIn binds unread's count orchestration to a page or sidebar snapshot.
 const PageSize untyped int = 50 // PageSize is how many messages one page of history holds.
+type PinReader interface // PinReader reads at most MaxChannelPins current messages, newest pin first then message ID.
+  func (PinReader).ListChannelPins(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) ([]PinnedMessage, error)
+type PinState struct // PinState is current message metadata; both fields are zero when unpinned.
+  field PinnedAt time.Time
+  field PinnedByMemberID github.com/tkakkie/ribbitto/internal/kernel.ID
+type PinWriter interface // PinWriter uses the caller's transaction without taking locks.
+  func (PinWriter).ClearMessagePin(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) error
+  func (PinWriter).CountChannelPins(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (int64, error)
+  func (PinWriter).GetMessagePin(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID) (PinState, error)
+  func (PinWriter).SetMessagePin(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, messageID github.com/tkakkie/ribbitto/internal/kernel.ID, pinnerID github.com/tkakkie/ribbitto/internal/kernel.ID) error
+type PinnedMessage struct // PinnedMessage references current content, never a retained excerpt.
+  field Message Message
+  field PinState PinState
 type PostReadWriter interface // PostReadWriter reads the page scope and adds the new message's range; floor is the safe topic floor computed by conversation from its own messages.
   func (PostReadWriter).Read(context.Context, github.com/tkakkie/ribbitto/internal/org.Membership, github.com/tkakkie/ribbitto/internal/kernel.ID, *github.com/tkakkie/ribbitto/internal/kernel.ID, *int64, int64, int64, int64) error
 type PostReadWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) PostReadWriter // PostReadWriterIn binds read-state writes to posting's transaction.

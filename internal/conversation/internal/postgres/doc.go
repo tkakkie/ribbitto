@@ -1,6 +1,6 @@
 // Package postgres is conversation's store (decisions 26 and 27): channel
 // reads, image updates and creation, including the default topic, the topic lookup,
-// posting's and branching's writes and the page snapshot's reads, in
+// pin metadata writes and bounded reads, posting's and branching's writes and the page snapshot's reads, in
 // db/queries/conversation on their own sqlc entry. Only conversationpg and
 // this package's tests import it. It accepts a pool, or unwraps a
 // caller-owned transaction or snapshot through pgxbridge, and never opens,

@@ -1,9 +1,9 @@
-# Pinned messages *(planned, #880)*
+# Pinned messages *(storage implemented, #887)*
 
 Pins keep important messages within reach in a channel's overview panel
 (#874). They are post-M6 message work, not M5 or M6 polish. The maintainer agreed
-these rules on 2026-10-12 (#880); nothing is implemented yet, and the
-work follows M6.
+these rules on 2026-10-12 (#880). Metadata storage and bounded snapshot
+reads are implemented (#887); use cases, UI and delivery remain planned.
 The jump from a pin uses the message's URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md),
 implemented by #1159), which comes first.
 

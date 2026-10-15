@@ -11,7 +11,7 @@
 | [public.member](public.member.md) | 7 |  | BASE TABLE |
 | [public.setup](public.setup.md) | 3 |  | BASE TABLE |
 | [public.channel](public.channel.md) | 8 |  | BASE TABLE |
-| [public.message](public.message.md) | 9 |  | BASE TABLE |
+| [public.message](public.message.md) | 11 |  | BASE TABLE |
 | [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
 | [public.topic](public.topic.md) | 6 |  | BASE TABLE |
 | [public.channel_read](public.channel_read.md) | 3 |  | BASE TABLE |
@@ -39,6 +39,7 @@ erDiagram
 "public.channel" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.channel" }o--|| "public.topic" : "FOREIGN KEY (organization_id, id, default_topic_id, default_topic_is_default) REFERENCES topic(organization_id, channel_id, id, is_default) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
 "public.event_log" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
@@ -113,6 +114,8 @@ erDiagram
   timestamp_with_time_zone created_at
   uuid topic_id FK
   bigint moved_event_seq
+  uuid pinned_by_member_id FK
+  timestamp_with_time_zone pinned_at
 }
 "public.event_log" {
   uuid organization_id FK

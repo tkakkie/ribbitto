@@ -210,7 +210,7 @@ func TestSidebarUnreadBrowser(t *testing.T) {
 			exact := func(seq int64, n int64) {
 				snapshot.SnapshotSeq = seq
 				snapshot.ChannelCounts[f.channel], snapshot.TopicCounts[f.a] = n, n
-				frame, err := web.RenderSidebar(ctx, m, snapshot, false)
+				frame, err := web.RenderSidebar(ctx, m, snapshot)
 				acceptanceOK(t, err)
 				send("event: sidebar\ndata: " + string(frame.Data) + "\n\n")
 			}

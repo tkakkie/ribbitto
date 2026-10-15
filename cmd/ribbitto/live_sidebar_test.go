@@ -179,9 +179,6 @@ func TestLiveSidebar(t *testing.T) {
 		if !strings.Contains(page, "/topics/") {
 			endpoint = strings.Replace(streamEndpoint(t, view.ChannelURL("live", f.Channel.ID)), "want=messages", "want=sidebar", 1)
 		}
-		if strings.HasSuffix(page, "/members") {
-			endpoint += "panel=members&"
-		}
 		events, _, _ := openEndpointIn(t.Context(), t, on(reader, streams), endpoint, "105", "")
 		sidebarReload(t, reader, page, events)
 	}

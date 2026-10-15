@@ -16,15 +16,14 @@ type liveSidebar struct {
 	membership org.Membership
 	channel    kernel.ID
 	topic      *kernel.ID
-	members    bool
 	changes    *unread.Changes
 }
 
 var _ realtime.SidebarWatcher = liveSidebar{}
 
-func sidebarSource(reader *conversation.Reader, changes *unread.Changes) func(org.Membership, kernel.ID, *kernel.ID, bool) realtime.SidebarSource {
-	return func(m org.Membership, channel kernel.ID, topic *kernel.ID, members bool) realtime.SidebarSource {
-		return liveSidebar{reader, m, channel, topic, members, changes}
+func sidebarSource(reader *conversation.Reader, changes *unread.Changes) func(org.Membership, kernel.ID, *kernel.ID) realtime.SidebarSource {
+	return func(m org.Membership, channel kernel.ID, topic *kernel.ID) realtime.SidebarSource {
+		return liveSidebar{reader, m, channel, topic, changes}
 	}
 }
 
@@ -50,5 +49,5 @@ func (s liveSidebar) Recount(ctx context.Context, _ realtime.Subscription) (real
 	if err != nil {
 		return realtime.Outgoing{}, err
 	}
-	return web.RenderSidebar(ctx, s.membership, snapshot, s.members)
+	return web.RenderSidebar(ctx, s.membership, snapshot)
 }

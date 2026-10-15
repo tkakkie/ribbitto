@@ -43,15 +43,15 @@ tables. Page and independent sidebar snapshots (`conversation.Reader`) reach
 `conversation`'s snapshot-bound message queries. The composition root supplies conversation's consumer-owned
 `PageCountsIn` factory. `PageCounter` adapts `newChannelCounts` and
 `newTopicCounts` using org's resolved `Membership.Member.JoinedEventSeq`;
-unread never queries `member`. Feed, topic, `?before=` and members pages
+unread never queries `member`. Feed, topic and `?before=` pages
 return `PageCounts`: channel and topic count maps, the feed's first unread
 and the selected topic's first unread (zero without a selection).
 
-`Reader.Page`, `Reader.Members` and `Reader.Sidebar` share one private context
+`Reader.Page`, `Reader.ChannelList` and `Reader.Sidebar` share one private context
 loader for the current channel, all channels in name/ID order, the optional
 selected topic and the first 50 topics (default first, then case-insensitive
 name/ID). The loader uses reads bound to the caller's snapshot and does not
-count. Page and members callers keep counts after their history or members and
+count. Page callers keep counts after their history and
 cursor reads; the independent sidebar caller reads its sequence after context,
 then counts in that same snapshot.
 
@@ -73,8 +73,8 @@ Posts send shared `unread` frames instead of recounting every sidebar; client
 increments are approximate between exact snapshots. Resync goes through SSE.
 
 Production streams bind the already-resolved membership, channel and selected
-topic to one `cmd/ribbitto` sidebar source (#819); its `panel` flag no longer
-changes the selection, since panels open beside the conversation (#874). Own posts
+topic to one `cmd/ribbitto` sidebar source (#819); a page with a panel open
+binds the same selection as the conversation beside it (#874). Own posts
 and current-channel moves trigger snapshots through this page-count adapter;
 resync wakes the member's streams through `unread.Changes`. Web's `RenderSidebar`
 shares one sidebar view builder with channel and topic pages, with or without a

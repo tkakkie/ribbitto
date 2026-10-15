@@ -100,7 +100,7 @@ func TestSidebarRendererFreshLists(t *testing.T) {
 			snapshot.Topics = append([]conversation.Topic{{ID: kernel.ID{99}, Name: "new"}}, snapshot.Topics[:49]...)
 		}
 		snapshot.ChannelCounts[snapshot.Current.ID], snapshot.TopicCounts[selected.ID] = count, count
-		frame, err := RenderSidebar(ctx, m, snapshot, false)
+		frame, err := RenderSidebar(ctx, m, snapshot)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -513,7 +513,7 @@ func testEphemeralSinkBrowser(t *testing.T, browser *rod.Browser) {
 		Channels: []conversation.Channel{{ID: snapshot.Current.ID, Name: "general"}},
 		Topics:   []conversation.Topic{{ID: topic, Name: "retained"}}, ChannelCounts: map[kernel.ID]int64{snapshot.Current.ID: 9}}
 	for _, focused := range []string{"link-" + view.ChannelDOMID(snapshot.Current.ID), "link-" + view.TopicDOMID(topic)} {
-		frame, err := RenderSidebar(ctx, org.Membership{Organization: org.Organization{Slug: "acme"}}, state, false)
+		frame, err := RenderSidebar(ctx, org.Membership{Organization: org.Organization{Slug: "acme"}}, state)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -19,9 +19,13 @@ Approved on [#1247](https://github.com/tkakkie/ribbitto/issues/1247).
   [completion rule](adversarial-review.md#which-review-runs) requires are
   Codex's: a follow-up check as in
   [running the other AI](running-other-ai.md), with `$base` the reviewed
-  SHA; a re-review with the fixed invocation on the new head. The
-  sequencing, head and CI checks, dispositions, and the failure and retry
-  rules are unchanged; only the reviewer is Codex instead of Argon.
+  SHA, its stdin also carrying the whole diff up to `$base` from its merge
+  base with `origin/main`, and, for a regression test, the scratch pull
+  request's diff and the failing job's log
+  ([mutation evidence](#mutation-evidence)); a re-review with the fixed
+  invocation on the new head. The sequencing, head and CI checks,
+  dispositions, and the failure and retry rules are unchanged; only the
+  reviewer is Codex instead of Argon.
 
 The template's *Adversarial* field says `Codex (B) at <SHA>`. Claude posts
 the report as `**Adversarial review — Codex (tier B)** (at <SHA>)`, each
@@ -30,7 +34,7 @@ finding with a disposition.
 ## The fixed invocation
 
 Codex runs read-only, under a time limit, in a clean worktree at the pull
-request's base, a commit of `origin/main`, never in Argon's tree. Its instructions are the
+request's base (the merge base, on `origin/main`), never in Argon's tree. Its instructions are the
 trusted `.github/prompts/adversarial.md` from `origin/main` with three
 adaptations and nothing else: the working directory is the base, the
 head's changes come from the supplied diff, and nothing is executed. The
@@ -40,8 +44,9 @@ results added. Copy this block from `origin/main`, never from a pull
 request; `limit` is in [running the other AI](running-other-ai.md).
 
 ```sh
-# $W: Argon's worktree; $clean: a clean worktree detached at the pull
-# request's baseRefOid, after fetching origin/main; P: the pull request.
+# $W: Argon's worktree; $clean: a clean worktree detached at the merge
+# base of the pull request's baseRefOid and headRefOid, after fetching
+# origin/main; P: the pull request.
 # gh pr checks fails unless CI is green, which the review needs first.
 # Every command substitution is its own assignment, so a failing git or gh
 # stops the chain.
@@ -52,14 +57,15 @@ d=$(mktemp -d) &&
   gh pr view P --json number,title,body,baseRefOid,headRefOid > "$d/pr" &&
   base=$(jq -r .baseRefOid "$d/pr") && head=$(jq -r .headRefOid "$d/pr") &&
   local_head=$(hg "$W" rev-parse HEAD) && test "$head" = "$local_head" &&
-  hg "$clean" merge-base --is-ancestor "$base" origin/main &&
-  clean_head=$(hg "$clean" rev-parse HEAD) && test "$clean_head" = "$base" &&
+  mb=$(hg "$W" merge-base "$base" "$head") &&
+  hg "$clean" merge-base --is-ancestor "$mb" origin/main &&
+  clean_head=$(hg "$clean" rev-parse HEAD) && test "$clean_head" = "$mb" &&
   clean_status=$(hg "$clean" status --porcelain --ignored --untracked-files=all) &&
   test -z "$clean_status" &&
   gh pr checks P > /dev/null &&
   gh api "repos/tkakkie/ribbitto/commits/$head/check-runs?per_page=100" \
     --jq '[.check_runs[] | {name, status, conclusion}]' > "$d/ci" &&
-  hg "$W" diff --no-ext-diff --no-textconv "$base...$head" > "$d/diff" &&
+  hg "$W" diff --no-ext-diff --no-textconv "$mb..$head" > "$d/diff" &&
   hg "$clean" cat-file blob origin/main:.github/prompts/adversarial.md > "$d/in" &&
   cat >> "$d/in" <<'EOF' &&
 
@@ -76,8 +82,8 @@ everything else above stands.
   search files only.
 EOF
   printf 'UNTRUSTED_PAYLOAD_JSON: ' >> "$d/in" &&
-  jq -c --rawfile diff "$d/diff" --slurpfile ci "$d/ci" '{pull_request: .number,
-    base_commit: .baseRefOid, head_commit: .headRefOid, title,
+  jq -c --arg mb "$mb" --rawfile diff "$d/diff" --slurpfile ci "$d/ci" \
+    '{pull_request: .number, base_commit: $mb, head_commit: .headRefOid, title,
     description: .body, diff: $diff, ci_checks: $ci[0]}' "$d/pr" >> "$d/in" &&
   now=$(gh pr view P --json baseRefOid,headRefOid -q '.baseRefOid+" "+.headRefOid') &&
   test "$now" = "$base $head" &&
@@ -86,8 +92,9 @@ EOF
 ```
 
 The base and head must equal the pull request's `baseRefOid` and
-`headRefOid` at the start and just before Codex runs, the base must be on
-`origin/main`, and the CI results are those of that head. A
+`headRefOid` at the start and just before Codex runs; the checkout and
+the diff start from their merge base, which must be on `origin/main`; and
+the CI results are those of that head. A
 failed, timed-out or empty run does not count
 ([completion](adversarial-review.md#which-review-runs)).
 

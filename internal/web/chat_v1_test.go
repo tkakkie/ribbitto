@@ -46,19 +46,24 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID, OrganizationID: f.OrganizationID}}
 	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
-	plain, err := posting.Post(ctx, m, f.Channel.ID, "**not bold** "+ref(bob)+" https://example.com")
-	if err != nil {
-		t.Fatal(err)
+	// Posting refuses references outside the organisation and stores chat_v1,
+	// so the fixture writes these rows itself, as a bad row could hold them:
+	// the first plain_text like a row from before chat_v1.
+	stored := func(body string, format conversation.Format) conversation.Message {
+		t.Helper()
+		posted, err := posting.Post(ctx, m, f.Channel.ID, "fixture")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, "UPDATE message SET body = $2, format = $3 WHERE id = $1", posted.ID, body, string(format)); err != nil {
+			t.Fatal(err)
+		}
+		posted.Body, posted.Format = body, format
+		return posted
 	}
-	rich, err := posting.Post(ctx, m, f.Channel.ID, "**Hi** "+ref(bob)+" and "+ref(blank)+", _see_ https://example.com/a.\n> from "+ref(spy)+
-		" `x<y`\n```go\nfmt.Print(\"<b>\")\n```\nunknown "+ref(kernel.ID{0xee}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Posting writes plain_text until #1203, so the fixture marks the row chat_v1.
-	if _, err := pool.Exec(ctx, "UPDATE message SET format = 'chat_v1' WHERE id = $1", rich.ID); err != nil {
-		t.Fatal(err)
-	}
+	plain := stored("**not bold** "+ref(bob)+" https://example.com", conversation.FormatPlainText)
+	rich := stored("**Hi** "+ref(bob)+" and "+ref(blank)+", _see_ https://example.com/a.\n> from "+ref(spy)+
+		" `x<y`\n```go\nfmt.Print(\"<b>\")\n```\nunknown "+ref(kernel.ID{0xee}), conversation.FormatChatV1)
 
 	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	if err != nil {
@@ -174,7 +179,7 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 		t.Errorf("Japanese announcement %q", ja)
 	}
 	// Pins and branching carry the format: the pin reads the chat_v1 row as
-	// stored, the move renders parsed markup, and the notice is plain_text.
+	// stored, the move renders parsed markup, and the notice is escaped chat_v1.
 	if err := conversationpg.NewPinning(pool, postingSequence, postingEvents, nil).Pin(ctx, m, f.Channel.ID, rich.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -196,9 +201,9 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 	if out, err := (messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}).Render(ctx, move); err != nil || !strings.Contains(item(out.Data, rich.ID), `<strong dir="auto">Hi</strong>`) {
 		t.Fatalf("moved item lost its markup: %v", err)
 	}
-	var format string
-	if err := pool.QueryRow(ctx, "SELECT format FROM message WHERE organization_id = $1 AND event_seq = $2", f.OrganizationID, notice).Scan(&format); err != nil || format != "plain_text" {
-		t.Fatalf("notice format %q, %v", format, err)
+	var format, body string
+	if err := pool.QueryRow(ctx, "SELECT format, body FROM message WHERE organization_id = $1 AND event_seq = $2", f.OrganizationID, notice).Scan(&format, &body); err != nil || format != "chat_v1" || body != `\*\*notice\*\*` {
+		t.Fatalf("notice %q in %q, %v", body, format, err)
 	}
 	wantPlain := `<p id="body-` + view.MessageDOMID(plain.ID) + `" dir="auto" class="whitespace-pre-wrap break-words text-title">**not bold** &lt;@` + realtime.FormatPayloadID(bob) + `&gt; https://example.com</p>`
 	if !strings.Contains(string(ownerPage), wantPlain) {

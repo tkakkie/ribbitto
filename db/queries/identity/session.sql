@@ -11,3 +11,6 @@ DELETE FROM session WHERE token_hash = $1 RETURNING id;
 
 -- name: DeleteExpiredSessions :exec
 DELETE FROM session WHERE expires_at < $1;
+
+-- name: SessionHorizon :one
+SELECT uuidv7()::uuid AS horizon;

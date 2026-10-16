@@ -199,7 +199,8 @@ func walkOwnedSQL(stmt any, module, query string, owners map[string]string, allo
 				switch {
 				case len(parts) == 2 && parts[0] == "sqlc" && (parts[1] == "arg" || parts[1] == "narg"):
 				case len(parts) == 1 && name == "unnest" && unnests[n["location"].(float64)]:
-				case len(parts) == 1 && (name == "count" || name == "max" || name == "lower"):
+				// uuidv7 reads no table: identity.SessionHorizon (decision 37).
+				case len(parts) == 1 && (name == "count" || name == "max" || name == "lower" || name == "uuidv7"):
 				default:
 					return fmt.Errorf("unsupported function %s", name)
 				}

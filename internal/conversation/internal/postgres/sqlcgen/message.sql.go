@@ -160,8 +160,8 @@ func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Mes
 }
 
 const insertMessage = `-- name: InsertMessage :one
-INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq, idempotency_key)
-VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format
+INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, format, event_seq, idempotency_key)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format
 `
 
 type InsertMessageParams struct {
@@ -170,6 +170,7 @@ type InsertMessageParams struct {
 	TopicID        pgtype.UUID
 	MemberID       pgtype.UUID
 	Body           string
+	Format         string
 	EventSeq       int64
 	IdempotencyKey pgtype.UUID
 }
@@ -181,6 +182,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 		arg.TopicID,
 		arg.MemberID,
 		arg.Body,
+		arg.Format,
 		arg.EventSeq,
 		arg.IdempotencyKey,
 	)

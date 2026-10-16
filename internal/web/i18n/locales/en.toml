@@ -203,7 +203,7 @@ other = "ribbits"
 other = "ribbit"
 
 ["message.help"]
-other = "Enter sends; Shift+Enter adds a line break."
+other = "Enter sends; Shift+Enter adds a line break. **bold**, _italic_, `code`, > quote."
 
 ["message.send"]
 other = "Send"
@@ -213,6 +213,9 @@ other = "Sending…"
 
 ["message.error.body"]
 other = "Enter 1–4000 characters without control characters or directional embeddings and overrides."
+
+["message.error.reference"]
+other = "A member reference does not match a member of this organization. Your text is kept."
 
 ["message.error.repeat"]
 other = "A different message was already sent from this composer. Your text is kept: send again to post it."

@@ -11,7 +11,8 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
-// ErrInvalidBody wraps a body that breaks ValidateMessageBody.
+// ErrInvalidBody wraps a body that breaks ValidateMessageBody or, as
+// ErrUnknownReference, references a member posting cannot find.
 var ErrInvalidBody = errors.New("invalid message body")
 
 // ErrMessageNotFound means no message has the requested key in the caller's organisation
@@ -40,7 +41,7 @@ type Message struct {
 	Pinned bool
 }
 
-// ValidateMessageBody normalizes line endings and trims the whole plain-text body.
+// ValidateMessageBody normalizes line endings and trims the whole body source text.
 // It preserves other text, including decomposed characters and emoji joiners.
 func ValidateMessageBody(value string) (string, error) {
 	if !utf8.ValidString(value) {

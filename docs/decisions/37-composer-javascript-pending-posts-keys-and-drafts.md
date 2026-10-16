@@ -1,7 +1,7 @@
 # 37. Composer JavaScript: pending posts, idempotency keys and drafts on the device
 
-**Decided** (#1151, approved by the maintainer on 2026-10-16). Nothing here is
-implemented yet; each use names the issue that implements it. It is the second
+**Decided** (#1151, approved by the maintainer on 2026-10-16). Each use names
+the issue that implements it. It is the second
 narrow exception to
 [decision 19](19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md),
 beside [decision 34](34-live-unread-counts.md). The rules apply to any

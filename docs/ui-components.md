@@ -25,6 +25,7 @@ Today's shared controls:
 | `unreadBadge` | `internal/web/view/channel.templ` | an unread count with its screen-reader text |
 | `Icon` | `internal/web/view/icon.templ` | a decorative Fluent icon from the vendored sprite ([Icons](ui-code.md#icons)) |
 | `Avatar` | `internal/web/view/avatar.templ` | a fixed 36 px round initial; six pastel pairs chosen from the member ID, hidden from assistive technology beside the visible name |
+| `messageBody` | `internal/web/view/message_body.templ` | a body: `plain_text` as one pre-wrapped `<p>`; `chat_v1` node by node as paragraphs, quotes, code blocks, bold, italic, code spans, links and member references, each isolated in direction |
 | `messageActions` | `internal/web/view/message.templ` | every message's one actions menu (#1159) that later actions join: a 44 px button opening a native popover below it from `desk`, and below `desk` a bottom sheet, with the button under the avatar |
 | `PinControl` | `internal/web/view/message.templ` | the menu's Pin or Unpin (#890): a 44 px button htmx swaps in place; an alert at the limit |
 | `historyLink` | `internal/web/view/channel.templ` | the rounded older/newest navigation link; only older links carry the history prepend attributes |
@@ -38,15 +39,16 @@ Today's shared controls:
 - **Components take small inputs** — a label, a kind, a props struct —
   and decide nothing about permissions or data; handlers prepare view
   models (`docs/architecture/web-layers.md`).
-- **A new component arrives with its first user.** The account menu came with #872 (`appBar`, using an HTML popover), the avatar with
-  #873, the panel with #874, the channel image with #875. When a page is
+- **A new component arrives with its first user.** The account menu came
+  with #872 (`appBar`, an HTML popover), the avatar with #873, the panel
+  with #874, the image with #875. When a page is
   restyled, its repeated looks (links, for example) become components too.
 
 Welcome forms select `buttonWelcomePrimary` or `buttonWelcomeSecondary`
 for 48 px phone targets; `textField` sets `inputProps.Tall` for the same
 height. Every `textInput` has `text-entry` (16 px) text below `desk`, so
 iOS Safari does not zoom on focus (#1120). The move form's `<select>`
-has it too. Other controls keep their existing sizes.
+has it too.
 
 Topic links in messages and the overview wrap anywhere at every width, so a
 long name never widens the reading column or the panel (#974). Below `desk`
@@ -68,7 +70,7 @@ submit button.
 
 Message avatars and the account button use the first grapheme of the
 display name (via `uniseg`), falling back to the handle when the web layer
-blanks a legacy name. Message avatars choose from all six pairs by member ID.
+blanks a legacy name.
 Text precedes the avatar in both page and live markup; a fixed gutter reserves
 its space without loading an image or web font.
 
@@ -83,9 +85,8 @@ breakpoints ([`ui-code.md`](ui-code.md#dimension-tokens)) place it (#972):
 - **Below `desk`** a bottom sheet: fixed to the bottom edge, full width,
   rounded only at the top, above the bottom safe area. Its height comes from
   `sheetHeight(panel)`: members and the overview at most 80 %
-  (`max-desk:max-h-4/5`), so a later full-height panel, such as the reply
-  chain, needs no new structure. The sheet scrolls itself, with
-  `overscroll-contain`.
+  (`max-desk:max-h-4/5`), so a later full-height panel needs no new
+  structure. The sheet scrolls itself, with `overscroll-contain`.
 
 Below `wide` the overlay and the sheet are one modal: `#panel-backdrop` dims
 the whole page in `scrim`, a link to the close URL that only a pointer
@@ -111,11 +112,11 @@ the header, the composer and the frame's padding take 307 px from `desk`
 (291 px below it), so 436 px leaves the list 128 px, `h-32`, a few short
 messages. There `#conversation` scrolls as a whole (`short:overflow-y-auto`)
 and the list is fixed at `h-32` (`short:flex-none`). It is still the pane the
-composer, history and stream scripts move, so they need no change, and
-automatic reading never depended on it. The frame keeps `h-dvh`: a frame of
-`min-h-dvh` would let the desktop sidebar and a panel beside the
-conversation grow to their content and stop scrolling themselves, while
-this leaves the sidebar, app bar, panels and list page as they are.
+composer, history and stream scripts move, so they need no change. The
+frame keeps `h-dvh`: a frame of `min-h-dvh` would let the desktop sidebar
+and a panel beside the conversation grow to their content and stop
+scrolling themselves, while this leaves the sidebar, app bar, panels and
+list page as they are.
 
 Two things differ there. A covering move form would scroll away from the
 composer with the conversation, so the form follows the list in the column
@@ -140,7 +141,7 @@ removed at `DOMContentLoaded`. The script sits in `<head>` and is not
 deferred: it must mark the page before the first paint, or the pill shows
 at rest first. Browsers without the Navigation API show no arrival motion.
 `testArrivalBrowser` (`internal/web/arrival_browser_test.go`) checks these
-cases in the shared `TestBrowser` suite.
+cases.
 
 Below `desk` a conversation hides the sidebar, so its pill never moves; the
 list page's pill grows in when a conversation's back link leads there, and

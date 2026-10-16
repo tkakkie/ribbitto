@@ -191,7 +191,7 @@ func TestReadAdaptersCommitAndNotify(t *testing.T) {
 				if kind == "topic" {
 					target = &topic
 				}
-				_, err := conversationpg.NewPagePosting(pool, sequences, events, reads, notifier).PostFromPage(t.Context(), m, scope.ChannelID, target, "post", 2)
+				_, err := conversationpg.NewPagePosting(pool, sequences, events, reads, lookupMembers, notifier).PostFromPage(t.Context(), m, scope.ChannelID, target, "post", 2)
 				feedRequire(t, err)
 			}
 			if !reflect.DeepEqual(steps, want) {

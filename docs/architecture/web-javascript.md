@@ -75,10 +75,10 @@ htmx sends resync requests. The markup contract is in
   URLs come from server-rendered attributes, never built by a script. The
   one kept rewrite is `message-stream-v12.js` updating only the `after`
   parameter of the server-rendered `sse-connect` URL (above).
-- **Storage:** `localStorage` and `sessionStorage` may hold only
-  non-sensitive UX settings whose loss affects no function and no server
-  state, such as whether a panel is open or a display preference, plus the
-  one drafts allowance below
+- **Storage:** `sessionStorage` may hold only non-sensitive UX settings
+  whose loss affects no function and no server state, such as whether a
+  panel is open or a display preference; `localStorage` only the one
+  [drafts](#drafts) allowance, in the drafts script alone
   ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)).
   They never hold messages, credentials, session tokens or other
   server-derived application data, except that allowance's bounded draft
@@ -119,19 +119,39 @@ the composer script keeps none of their state.
   on 422. Scoped by the server to the authorised membership; never in a
   stream payload. Planned (#1156): the script may replace it with
   `crypto.randomUUID()`.
-- **Drafts** (planned: #1178 sign-out and sign-in cleanup, #1181
-  organisation-page cleanup, #1162 save and restore, #1177 sidebar marker):
-  one drafts script keeps unsent text in `localStorage` under
-  `ribbitto.draft.v1:<member>:<session>:<channel>:<place>` (the place is
-  the literal `feed` or the topic's canonical UUID), at most 50 entries per
-  member and session (best effort across tabs, #1186), 7 days after the
-  last edit. It
-  restores only its own member and session's unexpired entries, writes only
-  before its session's deadline, and cleans up only entries strictly older,
-  to the millisecond, than a time-ordered horizon (the page's session
-  marker, or the sign-in page's PostgreSQL `uuidv7()`). In the sidebar it
-  only shows or hides a server-rendered draft marker.
+- **Drafts:** [below](#drafts).
 - **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.
+
+### Drafts
+
+Only `message-drafts-vN.js` may use `localStorage` (the pattern check). It
+runs on the sign-in page (#1178); organisation-page cleanup (#1181), saving
+and restoring (#1162) and the sidebar marker (#1177) are planned: a page
+restores only its own member and session's unexpired entries, writes only
+before its session's deadline, and only shows or hides a server-rendered
+sidebar marker.
+
+- **Key:** `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, in
+  canonical lower-case UUIDs; the session is its id, a UUIDv7, and the place
+  the literal `feed` or the topic's ID.
+- **Value:** JSON `{member, session, expires, text, at}`; at most 50 entries
+  per member and session (best effort across tabs, #1186), each kept 7 days
+  after its last edit (`at`).
+- **Notice:** `ribbitto.signed-out.v1`, without content; its value is the
+  horizon that wrote it, so each write fires a `storage` event in other tabs.
+- **Millisecond rule:** a cleanup removes an entry only if its session's
+  48-bit millisecond prefix (the first 12 hex digits) is strictly before its
+  horizon's, plus every `ribbitto.draft.v1:` key without that format. Entries
+  in the horizon's millisecond stay until expiry or a later cleanup, so a
+  stale page never removes a newer session's entry. It reads no values.
+- **Sign-in page:** the form's `data-drafts-horizon` is a `uuidv7()` from
+  PostgreSQL (`identity.SessionHorizon`, the clock of session ids), rendered
+  only for signed-out requests, including `POST /signin`'s error renders.
+  With it the script cleans up, then writes the notice, once per document
+  load, never on a back-forward cache restore. A storage error leaves the
+  page working.
+- **Sign-out:** a successful `POST /signout` adds `Clear-Site-Data: "storage"`
+  where the browser supports it (Chromium); the sign-in page covers the rest.
 
 [a11y]: ../accessibility.md

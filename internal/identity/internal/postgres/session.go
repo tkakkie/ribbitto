@@ -116,3 +116,13 @@ func (s *SessionStore) DeleteExpiredSessions(ctx context.Context, before time.Ti
 	}
 	return nil
 }
+
+// SessionHorizon returns PostgreSQL's uuidv7(), the function that stamps
+// session ids (DEFAULT uuidv7()).
+func (s *SessionStore) SessionHorizon(ctx context.Context) (kernel.ID, error) {
+	id, err := s.queries.SessionHorizon(ctx)
+	if err != nil {
+		return kernel.ID{}, fmt.Errorf("selecting uuidv7: %w", err)
+	}
+	return id.Bytes, nil
+}

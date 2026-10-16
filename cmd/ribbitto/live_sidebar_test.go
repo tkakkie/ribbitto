@@ -101,7 +101,7 @@ func TestLiveSidebar(t *testing.T) {
 	defer unblock()
 	api, streams, hub := streamServersWithHub(t, traced)
 	owner, reader := sidebarBrowser(t, pool, api, f.AccountID), sidebarBrowser(t, pool, api, account)
-	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, hub)
+	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, hub)
 	for range 101 {
 		_, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, nil, "cap")
 		acceptanceOK(t, err)

@@ -92,6 +92,13 @@ same page, status (422) and message; the typed email is kept and the
 password never echoed. An email rejected by `identity.ValidateEmail` or an
 empty password gets 422 with its own message, without revealing whether an
 account exists. A busy hasher answers 503. `POST /signout` deletes
-the session row, clears the cookie and redirects to `/signin`; there is no
-GET sign-out. `cmd/ribbitto` creates the process's one `identity.Hasher` here
-and shares it with every authentication use case.
+the session row, clears the cookie and redirects to `/signin` with
+`Clear-Site-Data: "storage"`, which drops stored drafts (never `"cookies"`,
+which covers the whole registrable domain); a failed sign-out answers 500
+without it. There is no GET sign-out. `cmd/ribbitto` creates the process's
+one `identity.Hasher` here and shares it with every authentication use case.
+
+**Drafts horizon.** `SignIn.SessionHorizon` returns a `uuidv7()` from
+PostgreSQL, the clock of session ids, so a later session's id has a
+millisecond prefix at or after it; it grants nothing. Only signed-out renders
+of the sign-in page read it ([drafts](web-javascript.md#drafts)).

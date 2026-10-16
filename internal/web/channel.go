@@ -432,7 +432,13 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		if keyed {
 			kept = &submittedKey[0]
 		}
-		p.renderComposer(w, r, m, c, topic, http.StatusUnprocessableEntity, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.body", IdempotencyKey: kept})
+		// One message for a missing and another organisation's member, so
+		// the answer tells nothing about other organisations.
+		bodyError := "message.error.body"
+		if errors.Is(err, conversation.ErrUnknownReference) {
+			bodyError = "message.error.reference"
+		}
+		p.renderComposer(w, r, m, c, topic, http.StatusUnprocessableEntity, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: bodyError, IdempotencyKey: kept})
 	case errors.Is(err, conversation.ErrPostKeyReused):
 		// Not a retry: keep the text, name the stored message and issue a
 		// fresh key, so sending again posts the new text.

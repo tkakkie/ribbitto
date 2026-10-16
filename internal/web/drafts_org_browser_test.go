@@ -83,6 +83,9 @@ func testOrgDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		login.Store(&draftsLogin{alice, session, expires})
 		tab := browser.MustPage().Context(ctx).WithPanic(func(v any) { t.Fatal(v) })
 		t.Cleanup(tab.MustClose)
+		// Records the longest timer a page asks for: setTimeout overflows
+		// above 2^31 - 1 ms.
+		tab.MustEvalOnNewDocument(`window.longestTimer = 0; const set = window.setTimeout; window.setTimeout = (f, d, ...a) => { longestTimer = Math.max(longestTimer, d || 0); return set(f, d, ...a); };`)
 		tab.MustNavigate(server.URL + "/healthz").MustWaitLoad()
 		tab.MustEval(`seed => { localStorage.clear(); for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v); }`, seed)
 		tab.MustNavigate(server.URL + path).MustWaitLoad()
@@ -136,6 +139,7 @@ func testOrgDraftsBrowser(t *testing.T, browser *rod.Browser) {
 				// Malformed or expired own values.
 				own(10): "not JSON",
 				own(11): value(expires, now, map[string]any{"text": nil}),
+				own(19): value(expires, now, map[string]any{"text": []string{}}),
 				own(12): value(expires, now, map[string]any{"at": fmt.Sprint(now.UnixMilli())}),
 				own(13): value(expires, now, map[string]any{"member": bob}),
 				own(14): value(expires, now, map[string]any{"session": later}),
@@ -146,7 +150,11 @@ func testOrgDraftsBrowser(t *testing.T, browser *rod.Browser) {
 			}
 			seed := maps.Clone(kept)
 			maps.Copy(seed, removed)
-			expect(t, open(t, path, expires, seed), kept)
+			tab := open(t, path, expires, seed)
+			expect(t, tab, kept)
+			if longest := tab.MustEval(`() => longestTimer`).Num(); longest <= 0 || longest > 1<<31-1 {
+				t.Fatalf("longest timer %v ms", longest)
+			}
 		})
 	}
 

@@ -57,8 +57,10 @@ Opening the link follows ordinary message navigation and read rules; the
 pin itself adds no read scope ([decision 22](../decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md)).
 
 The excerpt is derived from the stored message, never a retained copy.
-Plain text remains plain text; a future format needs explicit, safe text
-extraction for that format, never reinterpretation of old bodies
+It shortens the message's extracted text: one extraction function per
+format, owned by `conversation`, which returns a `plain_text` body unchanged
+and leaves out a quote's snapshot ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md), *planned*). A future
+format adds its own extraction, never reinterpretation of old bodies
 ([decision 18](../decisions/18-stored-message-formats-never-change-meaning.md)).
 Web escapes the excerpt through templ and isolates its direction. No HTML
 is stored as pin content and no `templ.Raw` is used.

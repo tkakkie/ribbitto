@@ -42,7 +42,7 @@ erDiagram
 | `channel_read` | exists | `organization_id`, `channel_id`, `member_id` (one member's lock row in a channel; [`unread.md`](unread.md)) |
 | `read_range` | exists | `organization_id`, `channel_id`, `member_id`, `lo`, `hi` (read messages: `lo ≤ event_seq < hi`) |
 | `topic_read_floor` | exists | `organization_id`, `topic_id`, `member_id`, `channel_id`, `floor_seq` |
-| `message` | exists | `id`, `organization_id`, `channel_id`, `topic_id`, `member_id`, `body`, `event_seq`, nullable `moved_event_seq` (latest move; [`unread-counts.md`](../architecture/unread-counts.md)), `created_at`; nullable `pinned_by_member_id` and `pinned_at`, both set or both null, the pinner a member of the same organisation ([`pins.md`](pins.md)); planned: nullable `reply_to_message_id` ([`replies.md`](replies.md)) |
+| `message` | exists | `id`, `organization_id`, `channel_id`, `topic_id`, `member_id`, `body`, `event_seq`, nullable `moved_event_seq` (latest move; [`unread-counts.md`](../architecture/unread-counts.md)), `created_at`; nullable `pinned_by_member_id` and `pinned_at`, both set or both null, the pinner a member of the same organisation ([`pins.md`](pins.md)); planned: nullable `reply_to_message_id` ([`replies.md`](replies.md)); planned (#1176): a nullable quoted message ID, quoted member ID and text snapshot, author and snapshot both set or both null, the message ID set only with them and nulled when the original is deleted ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)) |
 | `event_log` | exists | `organization_id`, `seq` (composite key), `kind`, nullable `audience_member_id`, IDs-only `data`, `created_at` |
 
 An event's NULL audience means organisation-wide; a non-NULL audience names

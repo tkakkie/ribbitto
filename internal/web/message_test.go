@@ -649,7 +649,13 @@ func assertMessageTopicLink(t *testing.T, markup string, entry conversation.Entr
 }
 
 func (f fakeMessages) Overview(ctx context.Context, m org.Membership, id kernel.ID, topicID *kernel.ID, before *int64, around int64) (conversation.ChannelPage, error) {
-	page, err := f.Page(ctx, m, id, topicID, before)
+	// Like Reader.Overview, a positive around reads Around's page, so the
+	// positions a test records are the ones the page asked for.
+	read := func() (conversation.ChannelPage, error) { return f.Page(ctx, m, id, topicID, before) }
+	if around > 0 {
+		read = func() (conversation.ChannelPage, error) { return f.Around(ctx, m, id, topicID, around) }
+	}
+	page, err := read()
 	page.Pins = f.pins
 	return page, err
 }

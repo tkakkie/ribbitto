@@ -235,6 +235,9 @@ other = "Link copied"
 ["message.new"]
 other = "New ribbit"
 
+["message.unknown_member"]
+other = "unknown member"
+
 ["topic.default"]
 other = "chorus"
 

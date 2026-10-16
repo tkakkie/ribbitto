@@ -16,6 +16,7 @@
 | pinned_by_member_id | uuid |  | true |  | [public.member](public.member.md) |  |
 | pinned_at | timestamp with time zone |  | true |  |  |  |
 | idempotency_key | uuid |  | true |  |  |  |
+| format | text | 'plain_text'::text | false |  |  |  |
 
 ## Constraints
 
@@ -29,6 +30,8 @@
 | message_created_at_not_null | n | NOT NULL created_at |
 | message_event_seq_check | CHECK | CHECK ((event_seq >= 1)) |
 | message_event_seq_not_null | n | NOT NULL event_seq |
+| message_format_check | CHECK | CHECK ((format = ANY (ARRAY['plain_text'::text, 'chat_v1'::text]))) |
+| message_format_not_null | n | NOT NULL format |
 | message_id_not_null | n | NOT NULL id |
 | message_member_id_not_null | n | NOT NULL member_id |
 | message_organization_id_not_null | n | NOT NULL organization_id |
@@ -76,6 +79,7 @@ erDiagram
   uuid pinned_by_member_id FK
   timestamp_with_time_zone pinned_at
   uuid idempotency_key
+  text format
 }
 "public.member" {
   uuid id

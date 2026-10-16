@@ -13,7 +13,7 @@ disagree, fix the disagreement in a pull request.
 | [`reviewing.md`](reviewing.md) | Reviewing, closure verification, the Copilot follow-up check, risk |
 | [`adversarial-review.md`](adversarial-review.md) | Which changes need an Argon adversarial review, and when it completes |
 | [`running-argon.md`](running-argon.md) | running Argon's adversarial review: setup, the Go launcher, its boundary and evidence |
-| [`running-other-ai.md`](running-other-ai.md) | Running Codex or Claude headless, and how the maintainer's sessions run Codex |
+| [`running-other-ai.md`](running-other-ai.md) | Running Codex or Claude headless, how the maintainer's sessions run Codex, and the handoff of another AI's code |
 | [`argon-implementer.md`](argon-implementer.md) | The trial of Argon implementing a few tier C issues: eligibility, roles, boundary, preflight, records |
 
 ## Principles
@@ -86,7 +86,8 @@ idea (maintainer, one line) or finding (AI)
      branch claude/<topic>, codex/<topic> or argon/<topic>)
   → draft pull request from the template, linked with "Closes #N";
     CI runs on every push (`make check`'s parts in parallel jobs, and
-    `make vuln`; see Checks in the README)
+    `make vuln`; see Checks in the README); for another AI's code,
+    green CI before the review  (see running-other-ai.md)
   → the AI that did not implement it reviews        (see reviewing.md;
     Claude for Argon's)
   → implementer applies the review

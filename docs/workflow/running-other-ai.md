@@ -39,9 +39,38 @@ directly, or `limit 1800 claude -p "…" < /dev/null`.
 Post the result with `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems.
 
-Argon implementing a trial issue runs under its own boundary, preflight and
-handoff, in [`argon-implementer.md`](argon-implementer.md); Claude reviews
-its work.
+Argon implementing a trial issue runs under its own boundary and preflight,
+in [`argon-implementer.md`](argon-implementer.md); Claude reviews its work.
+Its handoff follows the same rule as Codex's (below).
+
+## Handoff of another AI's code
+
+One rule for code Codex or Argon wrote (maintainer, 2026-10-16,
+[#1220](https://github.com/tkakkie/ribbitto/issues/1220)): no unreasoned
+difference between the AIs, enough safety for practice, little to operate.
+
+- **In its own sandbox,** the implementing AI may build and test as before:
+  Codex in its profile ([below](#running-codex)), Argon inside its
+  [boundary](argon-implementer.md#the-boundary).
+- **After handoff, no AI runs another AI's unverified code directly on
+  the host**, outside those sandboxes: not `make check`, `make prepush`,
+  `go test`, a build, `make dev` or any tool from that tree.
+- **CI is the check.** GitHub Actions runs pull request code with read-only
+  access and no secrets. Green CI on the draft replaces the local
+  `make check` before the first review; after a follow-up push, green CI
+  on the pushed head replaces `make prepush`; closure verification and follow-up checks read CI
+  instead of re-running anything.
+- **Still done on the host:** code and diff review, the credential grep on
+  `PR_BODY.md` ([below](#running-codex)), and Argon's protected-file and
+  workspace checks ([boundary](argon-implementer.md#the-boundary)).
+- **UI changes:** CI's browser tests by default. Where a manual check is
+  essential, the maintainer decides case by case whether and how it runs.
+- **No Docker verification environment** for now; reconsider when one is
+  actually needed.
+
+A branch with only Claude's own code on top of `main` is not a handoff:
+Claude runs `make check` before opening its pull request and `make prepush`
+before a follow-up push.
 
 ## Running Codex
 
@@ -94,7 +123,7 @@ The prompt carries the issue and its review comments, plus these rules:
   `check-test` fails in the process tests of `cmd/argonreview`,
   `cmd/capacity` and `cmd/dev`, and `make check` stops before `check-tools`
   ([#183](https://github.com/tkakkie/ribbitto/issues/183)). That failure is
-  expected; the orchestrator runs the full `make check` outside it.
+  expected; CI runs the full check ([handoff](#handoff-of-another-ais-code)).
 
   ```sh
   # Reuse the container if it is already running; either way, wait for it.
@@ -122,8 +151,9 @@ The prompt carries the issue and its review comments, plus these rules:
   credentials, a password, a token or a key: a command that needs one shows
   a placeholder such as `<local test database>` (#358). It also stays
   inside the handoff on the machine ([#2](https://github.com/tkakkie/ribbitto/issues/2#issuecomment-5891926762)):
-  no other AI CLIs (claude, agy), no browser or Computer Use, since reviews
-  and browser checks are the orchestrator's. It never re-signs, patches or
+  no other AI CLIs (claude, agy), no browser or Computer Use: reviews are the
+  orchestrator's, and browser checks follow the
+  [handoff](#handoff-of-another-ais-code). It never re-signs, patches or
   replaces a tool binary to make it run, and reports the failure instead. It
   puts scratch files outside the worktree when the runner allows it; this
   profile does not, so Codex may create them in the worktree but deletes
@@ -132,12 +162,11 @@ The prompt carries the issue and its review comments, plus these rules:
   pick files up there. The orchestrator likewise reports a tool that will not
   run instead of modifying it.
 
-The orchestrator then:
+The orchestrator then, running nothing from the tree
+([handoff](#handoff-of-another-ais-code)):
 
 1. reviews the diff;
-2. runs what Codex could not (for example `make db-up`, a live `make dev`,
-   or the Argon supervisor tests outside the sandbox);
-3. checks the PR text before it is published (#358): this prints nothing,
+2. checks the PR text before it is published (#358): this prints nothing,
    or each match is reviewed, real credentials are redacted and harmless
    mentions (a placeholder, the word in prose) may stay. It joins
    backslash-continued lines and flags any URL with user information:
@@ -147,7 +176,8 @@ The orchestrator then:
      grep -niE '://[^/@[:space:]]*@|password|passwd|secret|token|(api|access|private)[-_[:space:]]?key'
    ```
 
-4. commits, pushes and opens the PR.
+3. commits, pushes and opens the draft PR; green CI on it comes before
+   the review.
 
 **Reviews.** In `-s read-only` mode Codex cannot reach GitHub, so pipe in
 everything the review needs, as the examples above do:

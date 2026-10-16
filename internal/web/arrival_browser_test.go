@@ -106,6 +106,35 @@ func testArrivalBrowser(t *testing.T, browser *rod.Browser) {
 		t.Helper()
 		navigate(func() { page.MustElement(selector).MustClick() })
 	}
+	// Reload, Back and Forward start from the browser. rod's MustReload,
+	// MustNavigateBack and MustNavigateForward call location.reload() or
+	// history.back() in the page instead; the new document can then commit
+	// in a new frame host before that call has answered, and Chrome fails
+	// the call with "Inspected target navigated or closed" (#1251).
+	reload := func() {
+		t.Helper()
+		navigate(func() {
+			if err := (proto.PageReload{}).Call(page); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	traverse := func(delta int) {
+		t.Helper()
+		navigate(func() {
+			history, err := proto.PageGetNavigationHistory{}.Call(page)
+			if err != nil {
+				t.Fatal(err)
+			}
+			to := history.CurrentIndex + delta
+			if to < 0 || to >= len(history.Entries) {
+				t.Fatalf("no history entry %d from %d of %d", delta, history.CurrentIndex, len(history.Entries))
+			}
+			if err := (proto.PageNavigateToHistoryEntry{EntryID: history.Entries[to].ID}).Call(page); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
 	link := func(id kernel.ID) string { return "#link-" + view.ChannelDOMID(id) }
 	// replaceSidebar delivers a live sidebar list for the current page through
 	// the stream sink and waits until it replaced the old list.
@@ -131,15 +160,15 @@ func testArrivalBrowser(t *testing.T, browser *rod.Browser) {
 	expect("first load", "")
 	click(link(channels[1].ID))
 	expect("channel link", "rb-pill-in")
-	navigate(func() { page.MustReload() })
+	reload()
 	expect("reload", "")
 	click(link(channels[0].ID))
 	expect("channel link back", "rb-pill-in")
 	click("#link-" + view.TopicDOMID(topic.ID))
 	expect("topic link", "rb-pill-in")
-	navigate(func() { page.MustNavigateBack() })
+	traverse(-1)
 	expect("Back", "")
-	navigate(func() { page.MustNavigateForward() })
+	traverse(1)
 	expect("Forward", "")
 	click("#panel-control-members")
 	expect("panel open", "rb-panel-in")

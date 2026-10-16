@@ -33,8 +33,12 @@ templ pinsSection(page ChannelPage) {
 					<li class="flex flex-col gap-1 break-words">
 						// dir="auto" isolates the excerpt's direction from the names after it.
 						<a href={ templ.SafeURL(MessageURL(page.Organization.Slug, pin.MessageID)) } dir="auto" class="text-fg wrap-anywhere underline hover:text-brand max-desk:min-h-11">{ pin.Excerpt }</a>
+						// Names shrink and wrap like a message's author, so an unbroken
+						// name cannot widen the panel.
 						<p class="flex flex-wrap gap-x-2 text-caption">
-							@MemberName(pin.AuthorDisplayName, pin.AuthorHandle)
+							<span class="min-w-0 break-words">
+								@MemberName(pin.AuthorDisplayName, pin.AuthorHandle)
+							</span>
 							<span class="inline-flex min-w-0 items-center gap-1 text-muted wrap-anywhere">
 								@Icon("branch-regular", 16)
 								<bdi class="min-w-0">{ topicName(ctx, pin.Topic) }</bdi>
@@ -42,7 +46,9 @@ templ pinsSection(page ChannelPage) {
 						</p>
 						<p class="flex flex-wrap gap-x-2 text-caption text-muted">
 							<span>{ i18n.T(ctx, "pins.pinned_by") }</span>
-							@MemberName(pin.PinnerDisplayName, pin.PinnerHandle)
+							<span class="min-w-0 break-words">
+								@MemberName(pin.PinnerDisplayName, pin.PinnerHandle)
+							</span>
 							<time datetime={ pin.PinnedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time>{ pin.PinnedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
 						</p>
 					</li>

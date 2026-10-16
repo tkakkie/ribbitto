@@ -62,7 +62,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
   `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
-  `pin-form-message-<hex>` and `pin-message-<hex>` for a message's pin control (htmx keeps focus on the button through the swap),
+  `pin-form-message-<hex>` and `pin-<true|false>-message-<hex>` for a message's pin controls (the pins script restores button focus),
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
   `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and
@@ -131,6 +131,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   defaults, adding global 409/422 swaps (`error: false`) before `[45]..`.
   Composer errors replace `#message-composer`; branch errors replace only
   `#branch-feedback`, so selections and drafts survive.
+
+The overview adds `pins` on latest and history pages; whole-section swaps and
+control synchronization follow the [pins contract](pins.md).
 
 ## JavaScript
 

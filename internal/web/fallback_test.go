@@ -33,6 +33,9 @@ func checkFallbackURLs(doc *html.Node) []string {
 				}
 				if form != nil && form.DataAtom == atom.Form {
 					fallback, plainMethod = attr(form, "action"), strings.ToLower(attr(form, "method"))
+					if override := attr(n, "formaction"); override != "" {
+						fallback = override
+					}
 				}
 			}
 			if plainMethod != method || !sameFallbackURL(enhanced, fallback) {
@@ -77,6 +80,8 @@ func TestCheckFallbackURLs(t *testing.T) {
 		{"query order", `<a href="/x?a=1&amp;b=2" hx-get="/x?b=2&amp;a=1">Open</a>`, 0},
 		{"form", `<form action="/x" method="POST" hx-post="/x"></form>`, 0},
 		{"submit button", `<form action="/x" method="post"><button type="submit" hx-post="/x">Send</button></form>`, 0},
+		{"submit override", `<form action="/x" method="post"><button type="submit" formaction="/y" hx-post="/y">Send</button></form>`, 0},
+		{"wrong submit override", `<form action="/x" method="post"><button type="submit" formaction="/y" hx-post="/x">Send</button></form>`, 1},
 		{"get form", `<form action="/x" method="get" hx-get="/x"></form>`, 0},
 		{"missing href", `<a hx-get="/x">Open</a>`, 1},
 		{"different route", `<a href="/y" hx-get="/x">Open</a>`, 1},

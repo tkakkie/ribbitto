@@ -306,7 +306,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		changes := &unread.Changes{}
 		readPublisher = changes
 		sidebarResync = changes
-		kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), orgpg.EventKinds())
+		kinds, err := realtime.MergeKinds(conversationpg.EventKinds(), conversationpg.PinEventKinds(), orgpg.EventKinds())
 		if err != nil {
 			return nil, nil, fmt.Errorf("merging event kinds: %w", err)
 		}
@@ -317,6 +317,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 		typingState = typing.New(config.hub)
 		stream = &web.Streaming{Lifetime: ctx, Hub: config.hub, Events: events, Authorizer: authorizer, Sessions: sessions, WriteTimeout: config.streamWriteTimeout,
 			RecountLimit: config.recountLimit,
+			Pins:         web.NewPinsSource(ctx, conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, nil)),
 			Sidebar:      sidebarSource(conversationpg.NewReader(pool, nil, nil, eventCursor, pageCountsIn), changes),
 			Presence:     state, StreamOpened: func(organizationID, memberID, channelID kernel.ID) func() {
 				closePresence, closeTyping := state.Open(organizationID, memberID), typingState.Open(organizationID, memberID, channelID)

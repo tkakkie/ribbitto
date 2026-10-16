@@ -24,8 +24,9 @@ import (
 
 type pinsReadFunc func(context.Context, org.Membership, kernel.ID) ([]conversation.Pin, error)
 
-func (f pinsReadFunc) Pins(ctx context.Context, m org.Membership, c kernel.ID) ([]conversation.Pin, error) {
-	return f(ctx, m, c)
+func (f pinsReadFunc) ReadPins(ctx context.Context, m org.Membership, c kernel.ID) (conversation.PinsSnapshot, error) {
+	pins, err := f(ctx, m, c)
+	return conversation.PinsSnapshot{Pins: pins}, err
 }
 
 func TestPinsSourceCost(t *testing.T) {

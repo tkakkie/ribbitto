@@ -152,7 +152,7 @@ old one. Roughly in this order:
      mentions (#117) → links to one message → quoting, including a
      selection → device drafts (#1162; #88 cross-device).
 3. **Messages:** reactions, editing and deleting, [pins](domain/pins.md)
-   (#880; rules agreed, implementation after M6), reply chains
+   (#880; implemented after M6, including live delivery in #1205), reply chains
    ([decision 22](decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md)),
    file uploads.
 4. **Topics:** resolving a topic with its conclusion, following and muting

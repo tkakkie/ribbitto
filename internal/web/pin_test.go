@@ -50,7 +50,7 @@ func TestPinRoutes(t *testing.T) {
 		{name: "pin", path: base + "/pin", status: 303, want: []string{view.MessageURL("acme", kernel.ID{8})}, calls: 1},
 		{name: "unpin", path: base + "/unpin", status: 303, want: []string{view.MessageURL("acme", kernel.ID{8})}, calls: 1},
 		// The control flips to the other desired action, keeping its ids for focus.
-		{name: "enhanced pin", path: base + "/pin", hx: true, status: 200, want: []string{`action="` + base + `/unpin"`, `id="pin-` + view.MessageDOMID(kernel.ID{8}) + `"`, ">Unpin</button>"}, calls: 1},
+		{name: "enhanced pin", path: base + "/pin", hx: true, status: 200, want: []string{`action="` + base + `/unpin"`, `id="pin-true-` + view.MessageDOMID(kernel.ID{8}) + `"`, ">Unpin</button>"}, calls: 1},
 		{name: "enhanced unpin", path: base + "/unpin", hx: true, status: 200, want: []string{`action="` + base + `/pin"`, ">Pin</button>"}, calls: 1},
 		{name: "limit", path: base + "/pin", err: conversation.ErrPinLimit, status: 409, want: []string{"already has 50 pinned messages", `href="` + view.MessageURL("acme", kernel.ID{8}) + `"`}, calls: 1},
 		{name: "enhanced limit", path: base + "/pin", err: conversation.ErrPinLimit, hx: true, status: 409, want: []string{`role="alert"`, "already has 50 pinned messages", ">Pin</button>"}, calls: 1},

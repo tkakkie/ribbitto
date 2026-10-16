@@ -60,7 +60,7 @@ state, and a link grants no read scope
 message is plain text; how a future message format renders it belongs to
 that format's decision
 ([decision 18](18-stored-message-formats-never-change-meaning.md)):
-[decision 39](39-message-bodies-use-a-small-frozen-markup.md) makes it an ordinary link (planned).
+[decision 39](39-message-bodies-use-a-small-frozen-markup.md) makes it an ordinary link (rendered since #1202; posting in `chat_v1` is #1203).
 
 **Considered:** `/channels/{channel-id}/messages/{message-id}` (readable, but
 stale after a move to another channel and repeating what the message row

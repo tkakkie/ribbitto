@@ -44,7 +44,7 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 	_, spy := member(foreign.OrganizationID, "spy", "Foreign Spy")
 	ref := func(id kernel.ID) string { return "<@" + realtime.FormatPayloadID(id) + ">" }
 
-	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID}}
+	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID, Slug: "acme"}, Member: org.Member{ID: f.MemberID, OrganizationID: f.OrganizationID}}
 	posting := conversationpg.NewPosting(pool, postingSequence, postingEvents, nil)
 	plain, err := posting.Post(ctx, m, f.Channel.ID, "**not bold** "+ref(bob)+" https://example.com")
 	if err != nil {
@@ -142,6 +142,29 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 	}
 	if ja := item(stream("ja"), rich.ID); strings.Count(ja, "@不明なメンバー") != 2 {
 		t.Errorf("Japanese placeholder:\n%s", ja)
+	}
+	// Pins and branching carry the format: the pin reads the chat_v1 row as
+	// stored, the move renders parsed markup, and the notice is plain_text.
+	if err := conversationpg.NewPinning(pool, postingSequence, postingEvents, nil).Pin(ctx, m, f.Channel.ID, rich.ID); err != nil {
+		t.Fatal(err)
+	}
+	if pins, err := reader.Pins(ctx, m, f.Channel.ID); err != nil || len(pins) != 1 || pins[0].Format != conversation.FormatChatV1 || pins[0].Body != rich.Body {
+		t.Fatalf("pins %+v, %v", pins, err)
+	}
+	notifier := &recordingNotifier{}
+	topic, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, notifier).Branch(ctx, m, f.Channel.ID,
+		conversation.Branch{From: rich.TopicID, Messages: []kernel.ID{rich.ID}, NewName: "moved"}, func(conversation.Topic) string { return "**notice**" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	notice := notifier.raised(t)
+	move := eventOf(t, f.OrganizationID, notice-1, conversation.KindMessagesMoved, conversation.Moved{ChannelID: f.Channel.ID, FromTopicID: rich.TopicID, ToTopicID: topic.ID, MessageIDs: []kernel.ID{rich.ID}})
+	if out, err := (messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}).Render(ctx, move); err != nil || !strings.Contains(item(out.Data, rich.ID), `<strong dir="auto">Hi</strong>`) {
+		t.Fatalf("moved item lost its markup: %v", err)
+	}
+	var format string
+	if err := pool.QueryRow(ctx, "SELECT format FROM message WHERE organization_id = $1 AND event_seq = $2", f.OrganizationID, notice).Scan(&format); err != nil || format != "plain_text" {
+		t.Fatalf("notice format %q, %v", format, err)
 	}
 	wantPlain := `<p id="body-` + view.MessageDOMID(plain.ID) + `" dir="auto" class="whitespace-pre-wrap break-words text-title">**not bold** &lt;@` + realtime.FormatPayloadID(bob) + `&gt; https://example.com</p>`
 	if !strings.Contains(string(ownerPage), wantPlain) {

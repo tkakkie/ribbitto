@@ -79,6 +79,7 @@ type Entry struct // Entry is a stored message with its current author names and
   field DisplayName string
   field Handle string
   field Message Message
+  field QuoteAuthor Reference // QuoteAuthor is the quoted member's current names when Quote is set.
   field References map[github.com/tkakkie/ribbitto/internal/kernel.ID]Reference // References holds the members Blocks names that the organisation's directory resolved.
   func (Entry).Text(placeholder string) string // Text returns the message as plain text, one extraction per format (decision 38): a plain_text body unchanged, and a chat_v1 body's extraction with each reference resolved through References to its "@handle", or to placeholder when the organisation's directory did not return the member.
   field TopicName string
@@ -96,6 +97,7 @@ var ErrMessageNotFound error // ErrMessageNotFound means no message has the requ
 var ErrPinLimit error // ErrPinLimit means a new pin would exceed MaxChannelPins.
 var ErrPostKeyReused error // ErrPostKeyReused means the author already sent another body or channel under the key; Send returns that stored message with it and writes nothing.
 var ErrPostKeyTaken error // ErrPostKeyTaken is Writer.InsertMessage's signal that the author's key is already stored; Send turns it into a repeat and never returns it.
+var ErrQuoteNotFound error // ErrQuoteNotFound means the quoted message is not in the poster's organisation and channel: unknown, another organisation's and another channel's are the same error, so the answer reveals none of them.
 var ErrTopicNameTaken error // ErrTopicNameTaken means the channel already has a topic with that name, ignoring case.
 var ErrTopicNotFound error // ErrTopicNotFound means the topic does not exist in the given organisation and channel, including when it exists in another channel or organisation.
 var ErrUnknownReference error // ErrUnknownReference wraps ErrInvalidBody for a body referencing a member the URL's organisation's directory did not return.
@@ -150,6 +152,7 @@ type Message struct // Message is a post identified by ID, its body read under F
   field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
   field Pinned bool // Pinned is the message's current pin state, the same for every member.
+  field Quote *Quote // Quote is the earlier message this one quotes, or nil.
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
 type MessageSequences interface // MessageSequences supplies channel bounds without exposing message storage.
   func (MessageSequences).FirstMessageAfter(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64) (int64, error) // FirstMessageAfter returns the channel's first event_seq strictly above cursor, or zero if none exists, in the transaction it was bound to.
@@ -162,7 +165,7 @@ type Moved struct // Moved is the payload of KindMessagesMoved.
 func NewBrancher(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads ReadRangeWriterIn, notifier Notifier) *Brancher // NewBrancher builds branching over transaction-bound factories.
 func NewChannels(store ChannelStore) *Channels // NewChannels returns a Channels.
 func NewIdempotencyKey() IdempotencyKey // NewIdempotencyKey returns a random version-4 UUID.
-func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, snapshots SnapshotRunner, members MemberDirectoryIn, notifier Notifier) *Posting // NewPagePosting builds posting with read writes bound to its transaction and member references checked through members in a snapshot of their own.
+func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, snapshots SnapshotRunner, members MemberDirectoryIn, quotes ReadStoreIn, notifier Notifier) *Posting // NewPagePosting builds posting with read writes bound to its transaction, and member references and quoted messages read through members and quotes in a snapshot of their own.
 func NewPinning(runner TxRunner, writer WriterIn, pins PinWriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Pinning // NewPinning builds pinning over transaction-bound factories; notifier may be nil.
 func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Posting // NewPosting builds posting over transaction-bound factories.
 func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account, cursor and count factories supplied by the composition root.
@@ -223,6 +226,10 @@ type Posting struct // Posting owns the transaction that commits a message with 
   func (*Posting).PostFromPage(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, body string, cursor int64) (Message, error) // PostFromPage reads the composer scope through its applied-and-shown cursor and the new message in the posting transaction.
   func (*Posting).PostToTopic(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, body string) (Message, error) // PostToTopic posts to a topic of the channel; nil selects its default topic.
   func (*Posting).Send(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, s Send) (Sent, error) // Send posts a composer submission.
+type Quote struct // Quote is a message's copy of an earlier message's text in the same channel (decision 38).
+  field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field MessageID *github.com/tkakkie/ribbitto/internal/kernel.ID // MessageID is the original, or nil once it is deleted.
+  field Text string
 type ReadRangeWriter interface // ReadRangeWriter adds a range to a member's read set, including their persisted join prefix.
   func (ReadRangeWriter).Merge(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, joinedEventSeq int64, lo int64, hi int64) error
 type ReadRangeWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) ReadRangeWriter // ReadRangeWriterIn binds read-state writes to branching's transaction.
@@ -242,7 +249,7 @@ type ReadStoreIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Sna
 type Reader struct // Reader owns page, sidebar, single-message and batch snapshots across conversation, org, identity and unread through factories bound to the same read-only snapshot.
   func (*Reader).Around(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, around int64) (ChannelPage, error) // Around reads the older page holding event_seq around, with context on both sides, in the same snapshot as Page.
   func (*Reader).Locate(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, id github.com/tkakkie/ribbitto/internal/kernel.ID) (at Location, err error) // Locate finds where a message of the member's organisation is now, for its URL (decision 36).
-  func (*Reader).Many(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, ids []github.com/tkakkie/ribbitto/internal/kernel.ID) (entries []Entry, err error) // Many reads a move's bounded message batch and directories in one snapshot.
+  func (*Reader).Many(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, ids []github.com/tkakkie/ribbitto/internal/kernel.ID) (entries []Entry, err error) // Many reads a bounded batch of the channel's messages, such as a move's or one to quote, with their quotes and directories in one snapshot.
   func (*Reader).Members(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, after *github.com/tkakkie/ribbitto/internal/kernel.ID) (page MembersPage, err error) // Members reads a bounded channel membership page.
   func (*Reader).One(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64) (entry Entry, err error) // One reads one message, its author names and topic in a read-only snapshot.
   func (*Reader).Overview(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64, around int64) (ChannelPage, error) // Overview reads the page Page or Around would (around when it is positive, else before) and the channel's bounded pins across all its topics, with their topics and author and pinner names, in the page's snapshot, so the pins and the page cursor agree.
@@ -260,7 +267,9 @@ type Send struct // Send is one composer submission.
   field Body string
   field Cursor *int64 // Cursor is the page's applied-and-shown cursor; nil reads only the new message.
   field Key *IdempotencyKey // Key makes a repeated send return the first message; nil posts without it.
+  field Quote *github.com/tkakkie/ribbitto/internal/kernel.ID // Quote is a message of the channel to quote whole (decision 38), or nil.
   field Topic *github.com/tkakkie/ribbitto/internal/kernel.ID
+  field UnknownMember string // UnknownMember stands in the quote's text for a member the quoted chat_v1 message references and the directory did not return.
 type Sent struct // Sent is what a send produced.
   field Message Message // Message is the new message or, on a repeat or with ErrPostKeyReused, the author's stored one, wherever branching has moved it since.
   field Repeat bool // Repeat reports that an earlier send with the key stored Message.
@@ -310,10 +319,11 @@ type Writer interface // Writer is posting's and branching's reads and writes in
   func (Writer).CreateTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, name string) (Topic, error) // CreateTopic creates a named topic.
   func (Writer).GetDefaultTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // GetDefaultTopic returns the channel's default topic; none, as for another organisation's channel, is ErrTopicNotFound.
   func (Writer).GetTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // GetTopic returns a topic of the channel, or ErrTopicNotFound.
-  func (Writer).InsertMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64, key *IdempotencyKey) (Message, error) // InsertMessage inserts posting's message at the sequence the caller took, into a topic it resolved in the same transaction first (GetDefaultTopic or GetTopic).
+  func (Writer).InsertMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64, key *IdempotencyKey, quote *Quote) (Message, error) // InsertMessage inserts posting's message at the sequence the caller took, into a topic it resolved in the same transaction first (GetDefaultTopic or GetTopic).
   func (Writer).InsertNotice(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64) (Message, error) // InsertNotice inserts branching's notice like InsertMessage but maps no error, so a failure there stays a server error (R2 on #502).
   func (Writer).KeyedMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, key IdempotencyKey) (Message, error) // KeyedMessage returns the author's message stored with the key in the organisation, or ErrMessageNotFound.
   func (Writer).LastMessageBefore(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64) (int64, error) // LastMessageBefore returns the channel's previous message sequence, or zero.
   func (Writer).MoveMessages(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, fromTopicID github.com/tkakkie/ribbitto/internal/kernel.ID, toTopicID github.com/tkakkie/ribbitto/internal/kernel.ID, messageIDs []github.com/tkakkie/ribbitto/internal/kernel.ID, movedEventSeq int64) (int64, error) // MoveMessages moves the given messages still in the source topic of the channel to the destination, recording the move sequence, and returns how many moved.
+  func (Writer).QuotedMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Message, error) // QuotedMessage returns the channel's message with the ID, or ErrQuoteNotFound when it is missing or in another organisation or channel.
   func (Writer).TopicChangedBetween(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, int64) (bool, error) // TopicChangedBetween reports a topic post or move strictly between two sequences.
 type WriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) Writer // WriterIn binds conversation's writes to the caller's transaction.

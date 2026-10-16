@@ -21,6 +21,7 @@ type Posting struct {
 	reads     PostReadWriterIn
 	snapshots SnapshotRunner
 	members   MemberDirectoryIn
+	quotes    ReadStoreIn
 }
 
 // NewPosting builds posting over transaction-bound factories. A nil notifier
@@ -29,12 +30,13 @@ func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, eve
 	return &Posting{runner: runner, writer: writer, sequences: sequences, events: events, notifier: notifier}
 }
 
-// NewPagePosting builds posting with read writes bound to its transaction
-// and member references checked through members in a snapshot of their own.
-// Posting built without members refuses every body with a reference.
-func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, snapshots SnapshotRunner, members MemberDirectoryIn, notifier Notifier) *Posting {
+// NewPagePosting builds posting with read writes bound to its transaction,
+// and member references and quoted messages read through members and
+// quotes in a snapshot of their own. Posting built without members refuses
+// every body with a reference, and without quotes every quote.
+func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, snapshots SnapshotRunner, members MemberDirectoryIn, quotes ReadStoreIn, notifier Notifier) *Posting {
 	p := NewPosting(runner, writer, sequences, events, notifier)
-	p.reads, p.snapshots, p.members = reads, snapshots, members
+	p.reads, p.snapshots, p.members, p.quotes = reads, snapshots, members, quotes
 	return p
 }
 
@@ -74,6 +76,11 @@ type Send struct {
 	Cursor *int64
 	// Key makes a repeated send return the first message; nil posts without it.
 	Key *IdempotencyKey
+	// Quote is a message of the channel to quote whole (decision 38), or nil.
+	Quote *kernel.ID
+	// UnknownMember stands in the quote's text for a member the quoted
+	// chat_v1 message references and the directory did not return.
+	UnknownMember string
 }
 
 // Sent is what a send produced.
@@ -101,6 +108,12 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	}
 	if err := p.checkReferences(ctx, m.Organization.ID, body); err != nil {
 		return Sent{}, err
+	}
+	var quoted map[kernel.ID]Reference
+	if s.Quote != nil {
+		if quoted, err = p.quoteReferences(ctx, m.Organization.ID, channelID, *s.Quote); err != nil {
+			return Sent{}, err
+		}
 	}
 	topicID, cursor := s.Topic, s.Cursor
 	organizationID := m.Organization.ID
@@ -133,7 +146,19 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 			}
 		}
 		requested = topic.ID
-		posted, err = writer.InsertMessage(ctx, organizationID, channelID, topic.ID, m.Member.ID, body, seq, s.Key)
+		var quote *Quote
+		if s.Quote != nil {
+			// Read under the organisation lock, which moves take too, so the
+			// original is still in this channel when the quote is inserted.
+			original, err := writer.QuotedMessage(ctx, organizationID, channelID, *s.Quote)
+			if err != nil {
+				return err
+			}
+			if quote, err = quoteOf(original, quoted, s.UnknownMember); err != nil {
+				return err
+			}
+		}
+		posted, err = writer.InsertMessage(ctx, organizationID, channelID, topic.ID, m.Member.ID, body, seq, s.Key, quote)
 		if err != nil {
 			return err
 		}
@@ -164,7 +189,7 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	if errors.Is(err, ErrPostKeyTaken) && s.Key != nil {
 		// The rollback returned the sequence (no holes); read the stored
 		// message in a transaction of its own.
-		return p.repeat(ctx, m, channelID, body, requested, *s.Key)
+		return p.repeat(ctx, m, channelID, body, s.Quote, requested, *s.Key)
 	}
 	if err != nil {
 		return Sent{}, fmt.Errorf("posting message: %w", err)
@@ -207,7 +232,7 @@ func (p *Posting) checkReferences(ctx context.Context, organizationID kernel.ID,
 
 // repeat answers a send whose key the author already stored. The topic is
 // not compared: branching may have moved the message since.
-func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel.ID, body string, requested kernel.ID, key IdempotencyKey) (Sent, error) {
+func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel.ID, body string, quote *kernel.ID, requested kernel.ID, key IdempotencyKey) (Sent, error) {
 	var stored Message
 	err := p.runner.InTx(ctx, func(tx platform.Tx) error {
 		var err error
@@ -218,8 +243,64 @@ func (p *Posting) repeat(ctx context.Context, m org.Membership, channelID kernel
 		return Sent{}, fmt.Errorf("finding repeated message: %w", err)
 	}
 	sent := Sent{Message: stored, Topic: requested, Repeat: true}
-	if stored.Body != body || stored.ChannelID != channelID {
+	if stored.Body != body || stored.ChannelID != channelID || !sameQuote(stored.Quote, quote) {
 		return sent, ErrPostKeyReused
 	}
 	return sent, nil
+}
+
+// sameQuote reports whether a stored message quotes the requested original.
+func sameQuote(stored *Quote, requested *kernel.ID) bool {
+	if stored == nil || requested == nil {
+		return stored == nil && requested == nil
+	}
+	return stored.MessageID != nil && *stored.MessageID == *requested
+}
+
+// quoteReferences reads the original in a snapshot of its own, before the
+// posting transaction, to resolve the members a chat_v1 original references,
+// so the organisation lock never waits on the directory. It decides nothing:
+// a missing original has no references, and the scoped read in the
+// transaction refuses it.
+func (p *Posting) quoteReferences(ctx context.Context, organizationID, channelID, id kernel.ID) (map[kernel.ID]Reference, error) {
+	if p.quotes == nil {
+		return nil, errors.New("posting has no reader to check quotes")
+	}
+	var references map[kernel.ID]Reference
+	err := p.snapshots.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
+		found, err := p.quotes(snapshot).GetMessages(ctx, organizationID, channelID, []kernel.ID{id})
+		if err != nil {
+			return err
+		}
+		if len(found) != 1 {
+			return nil
+		}
+		blocks := ParseChatV1(found[0].Body)
+		ids := appendReferences(nil, blocks)
+		if found[0].Format != FormatChatV1 || len(ids) == 0 {
+			return nil
+		}
+		if p.members == nil {
+			return errors.New("posting has no member directory to resolve a quote")
+		}
+		members, err := p.members(snapshot).LookupMembers(ctx, organizationID, ids)
+		references = resolveReferences(blocks, members, nil)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("reading quoted message: %w", err)
+	}
+	return references, nil
+}
+
+// quoteOf copies the original's own text, never its quote (decision 38): a
+// plain_text body as stored, a chat_v1 body's extraction with references
+// resolved at quote time. The text must pass a body's checks after trimming,
+// so an extraction with nothing left is refused like an invalid body.
+func quoteOf(original Message, references map[kernel.ID]Reference, unknown string) (*Quote, error) {
+	text, err := ValidateMessageBody(Entry{Message: original, References: references}.Text(unknown))
+	if err != nil {
+		return nil, fmt.Errorf("%w: quoted text: %w", ErrInvalidBody, err)
+	}
+	return &Quote{MessageID: &original.ID, MemberID: original.MemberID, Text: text}, nil
 }

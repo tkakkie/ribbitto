@@ -151,5 +151,13 @@ func messagesFromRows(rows []sqlcgen.Message) []conversation.Message {
 }
 
 func messageFromRow(row sqlcgen.Message) conversation.Message {
-	return conversation.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, Format: conversation.Format(row.Format), EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time, Pinned: row.PinnedAt.Valid}
+	message := conversation.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, Format: conversation.Format(row.Format), EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time, Pinned: row.PinnedAt.Valid}
+	// message_quote_check keeps the author and the text together.
+	if row.QuoteText.Valid {
+		message.Quote = &conversation.Quote{MemberID: row.QuotedMemberID.Bytes, Text: row.QuoteText.String}
+		if row.QuotedMessageID.Valid {
+			message.Quote.MessageID = new(kernel.ID(row.QuotedMessageID.Bytes))
+		}
+	}
+	return message
 }

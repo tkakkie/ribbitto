@@ -69,7 +69,7 @@ func TestPostingReferences(t *testing.T) {
 				func(tx platform.Tx) conversation.Writer { f.bound(tx); return f },
 				func(tx platform.Tx) conversation.EventSequence { f.bound(tx); return f },
 				func(tx platform.Tx) conversation.EventAppender { f.bound(tx); return f },
-				nil, d, func(platform.Snapshot) conversation.MemberDirectory { return d }, nil)
+				nil, d, func(platform.Snapshot) conversation.MemberDirectory { return d }, nil, nil)
 			posted, err := posting.Post(t.Context(), m, kernel.ID{3}, tt.body)
 			if !reflect.DeepEqual(d.lookups, tt.lookups) {
 				t.Fatalf("lookups %v, want %v", d.lookups, tt.lookups)

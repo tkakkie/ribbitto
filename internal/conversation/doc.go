@@ -25,7 +25,10 @@
 // snapshot before its transaction; branching's notice is escaped chat_v1. A message's
 // format column is never updated; history and pins reads parse chat_v1 bodies
 // and resolve their member references in the authors' organisation-scoped
-// batches, and Entry.Text is a message's plain text in either format. The topic lookup
+// batches, and Entry.Text is a message's plain text in either format. A quote
+// is a snapshot of the original's text with its author and nullable ID
+// (decision 38), checked in the posting transaction by organisation and
+// channel; quoted authors join the authors' batches. The topic lookup
 // is scoped by a resolved
 // membership so web cannot supply the organisation. The store also implements setup's injected
 // default-channel write and transaction-bound channel message and topic unread

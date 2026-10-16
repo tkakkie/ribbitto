@@ -11,7 +11,7 @@
 | [public.member](public.member.md) | 7 |  | BASE TABLE |
 | [public.setup](public.setup.md) | 3 |  | BASE TABLE |
 | [public.channel](public.channel.md) | 8 |  | BASE TABLE |
-| [public.message](public.message.md) | 13 |  | BASE TABLE |
+| [public.message](public.message.md) | 16 |  | BASE TABLE |
 | [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
 | [public.topic](public.topic.md) | 6 |  | BASE TABLE |
 | [public.channel_read](public.channel_read.md) | 3 |  | BASE TABLE |
@@ -40,8 +40,10 @@ erDiagram
 "public.channel" }o--|| "public.topic" : "FOREIGN KEY (organization_id, id, default_topic_id, default_topic_is_default) REFERENCES topic(organization_id, channel_id, id, is_default) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, pinned_by_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
+"public.message" }o--|| "public.member" : "FOREIGN KEY (organization_id, quoted_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
 "public.message" }o--|| "public.topic" : "FOREIGN KEY (organization_id, channel_id, topic_id) REFERENCES topic(organization_id, channel_id, id) ON DELETE RESTRICT"
+"public.message" }o--|| "public.message" : "FOREIGN KEY (organization_id, quoted_message_id) REFERENCES message(organization_id, id) ON DELETE SET NULL (quoted_message_id)"
 "public.event_log" }o--|| "public.organization" : "FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE RESTRICT"
 "public.event_log" }o--|| "public.member" : "FOREIGN KEY (organization_id, audience_member_id) REFERENCES member(organization_id, id) ON DELETE RESTRICT"
 "public.topic" }o--|| "public.channel" : "FOREIGN KEY (organization_id, channel_id) REFERENCES channel(organization_id, id) ON DELETE RESTRICT"
@@ -119,6 +121,9 @@ erDiagram
   timestamp_with_time_zone pinned_at
   uuid idempotency_key
   text format
+  uuid quoted_message_id FK
+  uuid quoted_member_id FK
+  text quote_text
 }
 "public.event_log" {
   uuid organization_id FK

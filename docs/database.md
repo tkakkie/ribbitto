@@ -101,6 +101,17 @@ with the CHECK `account_send_key_check` allowing `enter` and
 default without a table rewrite, so they keep sending on Enter; checking the
 CHECK scans `account` while `migrate up` runs. Down drops the column.
 
+Migration 00018 adds a message's quote (#1176,
+[decision 38](decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)):
+nullable `quoted_message_id`, `quoted_member_id` and `quote_text`, the text
+under `body`'s three CHECKs, and `message_quote_check` (author and text
+together, the message ID only with them). `UNIQUE (organization_id, id)` on
+`message` lets `message_quoted_message_fkey` reference the original in the
+same organisation with `ON DELETE SET NULL (quoted_message_id)`;
+`message_quoted_member_fkey` references `member`. The unique index and the
+partial index `message_quoted_message_idx` (for deleting an original) are
+built while `migrate up` holds `message`. Down drops them with the columns.
+
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations

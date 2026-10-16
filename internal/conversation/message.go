@@ -19,6 +19,11 @@ var ErrInvalidBody = errors.New("invalid message body")
 // and channel, including when the message exists in another scope.
 var ErrMessageNotFound = errors.New("message not found")
 
+// ErrQuoteNotFound means the quoted message is not in the poster's
+// organisation and channel: unknown, another organisation's and another
+// channel's are the same error, so the answer reveals none of them.
+var ErrQuoteNotFound = errors.New("quoted message not found")
+
 // Format names the grammar a stored body is read with (decision 39). A
 // stored message keeps its format (decision 18).
 type Format string
@@ -39,6 +44,18 @@ type Message struct {
 	CreatedAt                                        time.Time
 	// Pinned is the message's current pin state, the same for every member.
 	Pinned bool
+	// Quote is the earlier message this one quotes, or nil.
+	Quote *Quote
+}
+
+// Quote is a message's copy of an earlier message's text in the same
+// channel (decision 38). It belongs to the quoting message: the text stays
+// as posted whatever happens to the original.
+type Quote struct {
+	// MessageID is the original, or nil once it is deleted.
+	MessageID *kernel.ID
+	MemberID  kernel.ID
+	Text      string
 }
 
 // ValidateMessageBody normalizes line endings and trims the whole body source text.

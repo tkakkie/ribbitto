@@ -33,6 +33,17 @@ type Message struct {
 	// Text is the body as plain text (conversation.Entry.Text), which only
 	// a live item announces, so only the stream's renderer sets it.
 	Text string
+	// Quote is the earlier message this one quotes, or nil.
+	Quote *Quote
+}
+
+// Quote is a quote as every reader sees it (decision 38): the quoted
+// author's current names, the text as posted and the original's MessageURL,
+// empty once the original is deleted.
+type Quote struct {
+	DisplayName, Handle string
+	Text                string
+	URL                 string
 }
 
 // PinURL is the base of a message's pin and unpin routes. It names the
@@ -113,11 +124,32 @@ templ messageItem(entry Message, announcement string) {
 		</div>
 		// Text precedes the avatar, whose fixed gutter reserves its space
 		// without waiting for an image or font request.
+		if entry.Quote != nil {
+			@messageQuote(*entry.Quote)
+		}
 		@messageBody(entry)
 		<div class="absolute left-0 top-0">
 			@Avatar(entry.MemberID, entry.DisplayName, entry.Handle)
 		</div>
 	</li>
+}
+
+// messageQuote shows nothing current from the original but the link, which
+// names only the slug and its ID, so a shared live render suits every
+// reader. The snapshot stays outside the body's id, which describes the
+// message's controls, because it is the original's text, not this message's.
+templ messageQuote(quote Quote) {
+	<figure class="m-0 border-l-4 border-border pl-3">
+		<figcaption class="flex flex-wrap items-center gap-x-2 text-caption">
+			<span class="min-w-0 break-words">
+				@MemberName(quote.DisplayName, quote.Handle)
+			</span>
+			if quote.URL != "" {
+				<a href={ templ.SafeURL(quote.URL) } class="inline-flex items-center text-muted underline hover:text-brand max-desk:min-h-11">{ i18n.T(ctx, "message.quote_link") }</a>
+			}
+		</figcaption>
+		<blockquote dir="auto" class="m-0 whitespace-pre-wrap break-words text-body text-muted">{ quote.Text }</blockquote>
+	</figure>
 }
 
 // messageActions is every message's one actions menu (#1159); later actions

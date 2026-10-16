@@ -68,6 +68,11 @@ type ChannelPage struct {
 	IdempotencyKey *string
 	// PostedMessageID correlates a successful enhanced post with stream delivery.
 	PostedMessageID *kernel.ID
+	// SentBody is, on an enhanced 409 whose text starts with it, the stored
+	// body of the message the key names: always the requester's own, since
+	// posting looks keys up by author. The script removes it, so the 409's
+	// field error is not shown.
+	SentBody string
 	// Older reports that messages before Messages[0] exist.
 	Older bool
 	// Before is the event_seq bound of an older page; 0 shows the latest.
@@ -283,7 +288,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/read-visibility-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v8.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v9.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/pins-sync-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
@@ -432,6 +437,8 @@ templ messageComposer(page ChannelPage) {
 			hx-swap="outerHTML"
 			hx-disabled-elt="find button"
 			hx-sync="this:drop"
+			// htmx sets no timeout of its own: a hung send would never end.
+			hx-request={ `{"timeout":30000}` }
 		}
 		class="flex shrink-0 flex-col gap-2 rounded-xl border border-border-strong bg-input p-3"
 	>
@@ -443,6 +450,20 @@ templ messageComposer(page ChannelPage) {
 			// composer does not change height while a post is in flight.
 			<div class="relative min-w-0">
 				@composerState(page)
+				// Outside the swapped state, so a 422's answer keeps it; the script
+				// inserts one of these texts with textContent (#1179).
+				if latest(page) {
+					<p
+						id="message-send-alert"
+						role="alert"
+						data-unconfirmed={ i18n.T(ctx, "message.send_alert.unconfirmed") }
+						data-not-sent={ i18n.T(ctx, "message.send_alert.not_sent") }
+						data-still-unconfirmed={ i18n.T(ctx, "message.send_alert.still_unconfirmed") }
+						data-recovered={ i18n.T(ctx, "message.send_alert.recovered") }
+						data-repeat={ i18n.T(ctx, "message.error.repeat") }
+						class="text-caption text-danger sending:invisible"
+					></p>
+				}
 				<p id="message-sending" role="status" class="absolute inset-0 text-caption text-muted"><span class="hidden sending:inline">{ i18n.T(ctx, "message.sending") }</span></p>
 			</div>
 			<button type="submit" aria-label={ i18n.T(ctx, "message.send") } class="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand enabled:hover:bg-brand-hover transition-feedback motion-safe:active:scale-96 disabled:opacity-50">
@@ -461,7 +482,10 @@ templ composerState(page ChannelPage) {
 		if page.PostedMessageID != nil {
 			data-posted-message={ MessageDOMID(*page.PostedMessageID) }
 		}
-		if page.BodyError != "" {
+		if page.SentBody != "" {
+			data-sent-body={ page.SentBody }
+		}
+		if fieldError(page) != "" {
 			data-invalid
 		}
 		class="sending:invisible"
@@ -475,12 +499,20 @@ templ composerState(page ChannelPage) {
 		if latest(page) && page.EventCursor != nil {
 			<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		}
-		if page.BodyError != "" {
-			<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, page.BodyError) }</p>
+		if fieldError(page) != "" {
+			<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, fieldError(page)) }</p>
 		} else {
 			<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
 		}
 	</div>
+}
+
+// fieldError is the help's error: none on a 409 the script recovers from.
+func fieldError(page ChannelPage) string {
+	if page.SentBody != "" {
+		return ""
+	}
+	return page.BodyError
 }
 
 // A sibling isolates signal controls and synchronization from submission.

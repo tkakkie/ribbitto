@@ -456,7 +456,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	case errors.Is(err, conversation.ErrPostKeyReused):
 		// Not a retry: keep the text, name the stored message and issue a
 		// fresh key, so sending again posts the new text.
-		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, IdempotencyKey: freshKey()})
+		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, SentBody: recovered(enhanced, c.ID, body, quote != nil, posted), IdempotencyKey: freshKey()})
 	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound),
 		errors.Is(err, conversation.ErrQuoteNotFound):
 		// The channel, membership or organisation went away after this
@@ -498,6 +498,19 @@ func (p channelPages) issueComposer(m org.Membership, channel, topic kernel.ID) 
 		return nil
 	}
 	return new(p.typing.IssueComposer(m.Organization.ID, typing.Place{Channel: channel, Topic: topic}, m.Member.ID))
+}
+
+// recovered returns the stored body when an enhanced retry's text starts
+// with it: the earlier answer was lost while the member typed on, and the
+// script removes the stored part instead of showing the 409's error (#1179).
+// A plain form, or text that no longer starts with it, keeps the error, as
+// does a quote on either side: a stored one may still be in the composer for
+// the rest, and a requested one would be dropped with the text.
+func recovered(enhanced bool, channel kernel.ID, body string, quoted bool, stored conversation.Message) string {
+	if !enhanced || stored.ChannelID != channel || quoted || stored.Quote != nil || !strings.HasPrefix(body, stored.Body) {
+		return ""
+	}
+	return stored.Body
 }
 
 // freshKey renders a new composer key: on every render but a 422, which

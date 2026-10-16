@@ -116,6 +116,25 @@ func TestComposerIdempotencyKey(t *testing.T) {
 				if !state.Signal(m.Organization.ID, place, typing.Typist{Member: m.Member.ID}, generation, time.Now()) {
 					t.Fatal("409 closed the submitted generation")
 				}
+				// Text that starts with the stored body, as after a lost answer:
+				// htmx gets the body to remove instead of the error (#1179); a
+				// plain form, or a stored message in another channel or with a
+				// quote, keeps the error.
+				for _, c := range []struct {
+					channel kernel.ID
+					quote   *conversation.Quote
+				}{{place.Channel, nil}, {kernel.ID{9}, nil}, {place.Channel, &conversation.Quote{}}} {
+					for k, stored := range writer.keyed {
+						stored.ChannelID, stored.Quote = c.channel, c.quote
+						writer.keyed[k] = stored
+					}
+					reused.Set("body", "hello again")
+					body := keyedSend(t, h, path, reused, hx, http.StatusConflict).Body.String()
+					recovered := hx && c.channel == place.Channel && c.quote == nil
+					if strings.Contains(body, `data-sent-body="hello"`) != recovered || strings.Contains(body, "A different message was already sent") == recovered {
+						t.Fatalf("409 in channel %v, quote %v: %s", c.channel, c.quote, body)
+					}
+				}
 			})
 		}
 	}
@@ -252,5 +271,17 @@ func TestIdempotencyKeyStaysOutOfStreams(t *testing.T) {
 		if strings.Contains(data, key) || strings.Contains(data, hexKey) || strings.Contains(data, "idempotency") {
 			t.Fatalf("%s carries the key: %s", name, data)
 		}
+	}
+}
+
+// A retry that adds a quote is not the stored send: its 409 keeps the error
+// instead of removing the text and dropping the quote (#1179).
+func TestRecoveredNeedsAnUnquotedRetry(t *testing.T) {
+	stored := conversation.Message{ChannelID: kernel.ID{1}, Body: "hello"}
+	if got := recovered(true, kernel.ID{1}, "hello again", false, stored); got != "hello" {
+		t.Fatalf("unquoted retry recovered %q", got)
+	}
+	if got := recovered(true, kernel.ID{1}, "hello again", true, stored); got != "" {
+		t.Fatalf("quoted retry recovered %q", got)
 	}
 }

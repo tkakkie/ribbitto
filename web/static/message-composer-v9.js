@@ -17,7 +17,18 @@
   // setRangeText keeps the caret and selection on the remaining text and
   // fires no input event, so no typing signal follows.
   const removeSent = (body, sent) => {
-    if (sent && body.value.startsWith(sent)) body.setRangeText("", 0, sent.length, "preserve");
+    if (!sent || !body.value.startsWith(sent)) return false;
+    body.setRangeText("", 0, sent.length, "preserve");
+    return true;
+  };
+  const afterComposition = (body, removal) => {
+    if (composing.has(body)) pendingRemoval.set(body, removal);
+    else removal();
+  };
+  // The alert's texts are server-rendered and localised; an empty name clears it.
+  const say = (name) => {
+    const alert = document.getElementById("message-send-alert");
+    if (alert) alert.textContent = name ? alert.dataset[name] : "";
   };
   document.addEventListener("compositionstart", (event) => {
     if (event.target.id === "message-body") composing.add(event.target);
@@ -28,7 +39,7 @@
     compositionEnded.set(body, event.timeStamp);
     composing.delete(body);
     if (pendingRemoval.has(body)) {
-      removeSent(body, pendingRemoval.get(body));
+      pendingRemoval.get(body)();
       pendingRemoval.delete(body);
     }
   });
@@ -68,15 +79,46 @@
     if (state.id !== "message-composer-state") return;
     const body = document.getElementById("message-body");
     body.setAttribute("aria-invalid", String(state.hasAttribute("data-invalid")));
-    if (event.detail.xhr.status === 200) {
+    const status = event.detail.xhr.status;
+    if (status === 200) {
       const sent = event.detail.requestConfig.formData.get("body");
-      if (composing.has(body)) pendingRemoval.set(body, sent);
-      else removeSent(body, sent);
+      say("");
+      afterComposition(body, () => removeSent(body, sent));
+    }
+    // A 409 names the stored message for this key. The server sends its body
+    // only when the retried text started with it: the earlier answer was
+    // lost while the member typed on (#1179). If the start has been edited
+    // since, the 409's error, which the help then omits, is said here.
+    if (status === 409) {
+      const sent = state.dataset.sentBody;
+      say("");
+      if (sent) afterComposition(body, () => say(removeSent(body, sent) ? "recovered" : "repeat"));
     }
     // Focus on the send button returns to the textarea. htmx disables the
     // button in flight, and Chrome then moves its focus to the body at the
     // next frame.
     const active = document.activeElement;
     if (active === body.form.querySelector("button") || active === document.body) body.focus({ preventScroll: true });
+  });
+  // Every failure keeps the text and the key, so sending again repeats this
+  // send (decision 37 (b)). Only a 200 or a 409 comes after the server's key
+  // lookup and brings a new key; until then an unconfirmed send stays marked
+  // on its key, whatever a retry is answered (#1179).
+  document.addEventListener("htmx:afterRequest", (event) => {
+    const form = event.target;
+    if (form.id !== "message-composer") return;
+    const status = event.detail.xhr.status;
+    const key = form.elements.idempotency_key?.value;
+    if (form.dataset.unconfirmedKey !== key) delete form.dataset.unconfirmedKey;
+    if (status === 200 || status === 409) return;
+    // The post handler answers 400/404/413/422 before any write; 429 rejects
+    // the request by spec. Other 4xx, 5xx, network errors or timeouts may
+    // follow a commit.
+    if (status === 400 || status === 404 || status === 413 || status === 422 || status === 429) {
+      say(form.dataset.unconfirmedKey ? "stillUnconfirmed" : "notSent");
+    } else {
+      form.dataset.unconfirmedKey = key;
+      say("unconfirmed");
+    }
   });
 })();

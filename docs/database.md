@@ -95,6 +95,12 @@ query updates a stored row's format; posting and
 branching notices take the default until posting names `chat_v1` (#1203).
 Down drops the column.
 
+Migration 00017 adds `account.send_key` (text, not null, default `enter`)
+with the CHECK `account_send_key_check` allowing `enter` and
+`modifier_enter` (#1175). Existing accounts become `enter` through the
+default without a table rewrite, so they keep sending on Enter; checking the
+CHECK scans `account` while `migrate up` runs. Down drops the column.
+
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations

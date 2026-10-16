@@ -131,7 +131,7 @@ the composer script keeps none of their state.
   to the millisecond, than a time-ordered horizon (the page's session
   marker, or the sign-in page's PostgreSQL `uuidv7()`). In the sidebar it
   only shows or hides a server-rendered draft marker.
-- **Send key** (planned, #1158 and #1175): a server-stored preference read
+- **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.
 
 [a11y]: ../accessibility.md

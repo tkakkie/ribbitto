@@ -60,7 +60,7 @@ func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash []byte
 }
 
 const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
-SELECT session.id AS session_id, session.expires_at, account.id, account.email, account.display_name
+SELECT session.id AS session_id, session.expires_at, account.id, account.email, account.display_name, account.send_key
 FROM session JOIN account ON account.id = session.account_id
 WHERE session.token_hash = $1 AND session.expires_at > $2
 `
@@ -76,6 +76,7 @@ type GetSessionByTokenHashRow struct {
 	ID          pgtype.UUID
 	Email       string
 	DisplayName string
+	SendKey     string
 }
 
 func (q *Queries) GetSessionByTokenHash(ctx context.Context, arg GetSessionByTokenHashParams) (GetSessionByTokenHashRow, error) {
@@ -87,6 +88,7 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, arg GetSessionByTok
 		&i.ID,
 		&i.Email,
 		&i.DisplayName,
+		&i.SendKey,
 	)
 	return i, err
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgxbridge"
 )
 
-// AccountStore implements identity.AccountStore.
+// AccountStore implements identity.AccountStore and identity.PreferenceStore.
 type AccountStore struct {
 	queries *sqlcgen.Queries
 }

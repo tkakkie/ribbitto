@@ -8,7 +8,7 @@ Closes #
 
 **Verified by:** <!-- tests, commands; for UI changes, how to see them and what was checked in a browser (screenshots when the look is the point) -->
 
-**Risk:** <!-- high | normal — see docs/workflow/reviewing.md#risk --> · **Author:** · **Reviewer:** · **Adversarial:** <!-- Argon (A|B) at <SHA> | skipped (C: <reason>) — see docs/workflow/adversarial-review.md#which-review-runs -->
+**Risk:** <!-- high | normal — see docs/workflow/reviewing.md#risk --> · **Author:** · **Reviewer:** · **Adversarial:** <!-- Argon (A|B) at <SHA> | Codex (B) at <SHA> (Argon's pull requests) | skipped (C: <reason>) — see docs/workflow/adversarial-review.md#which-review-runs -->
 
 <details><summary>Details</summary>
 

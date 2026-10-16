@@ -13,10 +13,11 @@ disagree, fix the disagreement in a pull request.
 | [`pull-requests.md`](pull-requests.md) | The lifecycle of a pull request, from a `ready` issue to the merge decision |
 | [`reviewing.md`](reviewing.md) | Reviewing, closure verification, the adversarial follow-up check, risk |
 | [`copilot.md`](copilot.md) | The Copilot follow-up check, and docs-only pull requests, which skip Copilot |
-| [`adversarial-review.md`](adversarial-review.md) | Which changes need an Argon adversarial review, and when it completes |
+| [`adversarial-review.md`](adversarial-review.md) | Which changes need an Argon adversarial review (Codex for Argon's own pull requests), and when it completes |
 | [`running-argon.md`](running-argon.md) | running Argon's adversarial review: setup, the Go launcher, its boundary and evidence |
 | [`running-other-ai.md`](running-other-ai.md) | Running Codex or Claude headless, how the maintainer's sessions run Codex, and the handoff of another AI's code |
-| [`argon-implementer.md`](argon-implementer.md) | The trial of Argon implementing a few tier C issues: eligibility, roles, boundary, preflight, records |
+| [`argon-implementer.md`](argon-implementer.md) | Argon implementing eligible normal-risk tier B and C issues: eligibility, roles, boundary, preflight, records |
+| [`argon-pull-requests.md`](argon-pull-requests.md) | Argon's pull requests: who reviews them, Codex's fixed adversarial review invocation, mutation evidence on CI |
 
 ## Principles
 
@@ -48,13 +49,13 @@ disagree, fix the disagreement in a pull request.
 |---|---|
 | Maintainer | Writes rough ideas, approves issues, decides every merge. |
 | Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
-| Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
+| Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work, and runs the adversarial review of Argon's tier B pull requests ([Argon's pull requests](argon-pull-requests.md)). |
 | Copilot | Reviews each pull request **once** (not a [docs-only](copilot.md#docs-only-pull-requests) one), at **Lite**, guided by `.github/instructions/code-review.instructions.md`. The orchestrating AI requests that review by hand on the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), after the cross-review approves and `main` is merged, and before the initial adversarial review. The `main` ruleset does not request it on ready, and drafts and new pushes do not trigger it; re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
-| Antigravity / Argon | One required adversarial review for tier A and tier B pull requests, through `cmd/argonreview` ([running it](running-argon.md)). Findings are advisory. During its trial, implements a few eligible tier C issues, reviewed by Claude ([trial](argon-implementer.md)). Optional: the occasional documentation audit (below), UI screenshot review and experiments. |
+| Antigravity / Argon | One required adversarial review for tier A and tier B pull requests, through `cmd/argonreview` ([running it](running-argon.md)), except its own: Codex reviews Argon's tier B pull requests ([Argon's pull requests](argon-pull-requests.md)). Findings are advisory. Implements eligible normal-risk tier B and C issues, reviewed by Claude ([as implementer](argon-implementer.md)). Optional: the occasional documentation audit (below), UI screenshot review and experiments. |
 
 Claude and Codex should end up with roughly equal shares of implementation.
 If one has done the last few issues, give the next one to the other. Argon's
-trial issues do not count towards these shares.
+issues do not count towards these shares.
 
 ## Lifecycle of an issue
 
@@ -69,7 +70,7 @@ idea (maintainer, one line) or finding (AI)
 
 - The author proposes the *Implementer* (Claude or Codex, keeping the
   shares even, or Argon for an
-  [eligible trial issue](argon-implementer.md#which-issues)); the maintainer
+  [eligible issue](argon-implementer.md#which-issues)); the maintainer
   confirms or changes it when adding `ready`.
 - Always start from the matching template, for example
   `gh issue create --template Feature --title "…"`. The other templates

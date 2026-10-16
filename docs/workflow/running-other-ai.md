@@ -39,14 +39,16 @@ directly, or `limit 1800 claude -p "…" < /dev/null`.
 Post the result with `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems.
 
-On an Argon trial pull request, the pull request example above does not
+On an Argon pull request, the pull request example above does not
 apply: Codex runs in a clean worktree of `origin/main`, never at the pull
 request's head, and gets the diff on stdin
-([who does what](argon-implementer.md#who-does-what)):
+([who does what](argon-implementer.md#who-does-what); for a follow-up
+check also [more context](argon-pull-requests.md#who-reviews)):
 
 ```sh
 # $W: Argon's worktree; $clean: a clean worktree at origin/main; $base:
-# origin/main for a review, or the approved SHA for a follow-up check.
+# origin/main for a review; for a follow-up check, the approved SHA
+# (Copilot) or the reviewed one (adversarial).
 # gh pr checks fails unless CI is green, which the review needs first.
 g() { env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
   GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
@@ -63,8 +65,10 @@ diff=$(mktemp) && head=$(g rev-parse HEAD) &&
     "Review the pull request diff and GitHub context on stdin. Do not run git or any build here. Follow docs/workflow/reviewing.md and reply in the report format." < "$diff")
 ```
 
-Argon implementing a trial issue runs under its own boundary and preflight,
-in [`argon-implementer.md`](argon-implementer.md); Claude reviews its work.
+Argon implementing an eligible issue runs under its own boundary and
+preflight, in [`argon-implementer.md`](argon-implementer.md); Claude reviews
+its work, and Codex runs its tier B adversarial review
+([Argon's pull requests](argon-pull-requests.md)).
 Its handoff follows the same rule as Codex's (below).
 
 ## Handoff of another AI's code
@@ -75,8 +79,7 @@ difference between the AIs, enough safety for practice, little to operate.
 
 - **In its own sandbox,** the implementing AI may build and test as before:
   Codex in its profile ([below](#running-codex)), Argon only as its
-  [boundary](argon-implementer.md#the-boundary) allows, which during the
-  trial is no commands at all.
+  [boundary](argon-implementer.md#the-boundary) allows: no commands at all.
 - **After handoff, no AI runs another AI's unverified code directly on
   the host**, outside those sandboxes: not `make check`, `make prepush`,
   `go test`, a build, `make dev` or any tool from that tree.

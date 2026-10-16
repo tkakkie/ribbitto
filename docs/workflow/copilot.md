@@ -13,7 +13,7 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
    ready, convert it back to a draft first.)
 2. The AI that approved the pull request checks that the whole diff since
    the SHA it approved contains only those changes and that each one is
-   right. On an Argon trial pull request, Codex checks a change Claude
+   right. On an Argon pull request, Codex checks a change Claude
    wrote, from CI and a diff on stdin, never in Argon's tree
    ([who does what](argon-implementer.md#who-does-what)). It reports:
 

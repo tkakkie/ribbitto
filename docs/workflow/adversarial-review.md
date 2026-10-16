@@ -2,8 +2,9 @@
 
 **A pull request gets the adversarial review its tier asks for before the
 maintainer is asked**, whatever its risk class: one Argon review for tier A
-or B, or none for tier C. The required review must run; its
-findings are advisory. It does not count towards the two review rounds. The
+or B, or none for tier C. An Argon pull request's tier B review is Codex's
+([Argon's pull requests](argon-pull-requests.md)). The required review
+must run; its findings are advisory. It does not count towards the two review rounds. The
 initial review runs after the cross-review, after merging the current
 `main` (or confirming that no merge is needed) and after Copilot's one
 review and any follow-up (*When it runs*, below), while the pull request is
@@ -61,7 +62,8 @@ except B's narrow carve-out; a change there that keeps both is tier B
     review instructions in `.github/prompts/**` and
     `.github/instructions/**`; `.github/workflows/**`; the files that define
     the review gates (`docs/workflow/README.md`, `pull-requests.md`, `reviewing.md`,
-    `copilot.md`, `running-other-ai.md`, `running-argon.md`, `argon-implementer.md`, this
+    `copilot.md`, `running-other-ai.md`, `running-argon.md`, `argon-implementer.md`,
+    `argon-pull-requests.md`, this
     whole file, and `.github/pull_request_template.md`); and the security and scoping rules
     in `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does
     not exempt a change from this item.
@@ -111,9 +113,9 @@ imports by its own area; A's second item applies to a tool's change too;
 tests that guard A's areas stay tier B; and loosening a check `make check`
 or CI runs stays at least tier B, in a listed tool too.
 
-The template's *Adversarial* field names the review: `Argon (A|B) at <SHA>`
-or `skipped (C: <reason>)`, the reason naming the C case, for example
-"dependency bump". "Behaviour unchanged" is never a C reason: in A's and B's
+The template's *Adversarial* field names the review: `Argon (A|B) at <SHA>`,
+`Codex (B) at <SHA>` for an Argon pull request, or `skipped (C: <reason>)`,
+the reason naming the C case, for example "dependency bump". "Behaviour unchanged" is never a C reason: in A's and B's
 areas that is tier B. The other AI checks the tier against what the diff
 does, not only the paths it touches.
 
@@ -133,12 +135,13 @@ push (a fix for a finding, a Copilot follow-up or a merge of `main`
 included) whose diff from the last adversarially reviewed head (or the
 base, if none) matches tier A or B, the **pull request's** tier is
 recomputed over its whole diff at the new head and never lowered. Argon
-reviews again. A tier C pull request lifted to B or A gets its first review,
-compared against the base when no reviewed head exists, and Copilot's
+reviews again (Codex for an Argon pull request). A tier C pull request
+lifted to B or A gets its first review, compared against the base when no reviewed head exists, and Copilot's
 review before it if it had skipped Copilot under the
 [docs-only rule](copilot.md#docs-only-pull-requests); one Argon implemented
-leaves its trial instead, and the maintainer decides, since Argon never
-reviews its own work ([trial](argon-implementer.md#which-issues)). Fixes first get the
+gets Codex's at B and at A leaves Argon for the maintainer to decide, since
+Argon never reviews its own work
+([who reviews](argon-pull-requests.md#who-reviews)). Fixes first get the
 follow-up check in [reviewing](reviewing.md) or [Copilot](copilot.md).
 
 A pull request already marked ready is converted back to a draft until that
@@ -153,8 +156,11 @@ the maintainer decides.
 Use `cmd/argonreview` through the trusted Go invocation in
 [`running-argon.md`](running-argon.md), which documents its setup, security
 boundary and limits. Build from clean `origin/main` as documented there;
-never build or run a pull request's copy of the launcher.
+never build or run a pull request's copy of the launcher. Codex reviews
+an Argon pull request with the fixed invocation in
+[`argon-pull-requests.md`](argon-pull-requests.md#the-fixed-invocation).
 
-Post the report as `**Adversarial review — Gemini 4 Argon (tier A|B)** (at <SHA>)`.
+Post the report as `**Adversarial review — Gemini 4 Argon (tier A|B)** (at <SHA>)`,
+or Codex's as `**Adversarial review — Codex (tier B)** (at <SHA>)`.
 Each finding gets a disposition: fixed, a follow-up issue, or declined with
 the reason.

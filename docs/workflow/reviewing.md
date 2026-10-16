@@ -2,9 +2,8 @@
 
 **Who reviews:** for an issue, the AI that did not write the issue; for a
 pull request, the AI that did not implement it. Claude's work → Codex;
-Codex's work → Claude; Argon's work in its
-[trial](argon-implementer.md) → Claude, and a fix Claude writes there →
-Codex.
+Codex's work → Claude; Argon's work → Claude, and a fix Claude writes
+there → Codex ([Argon's pull requests](argon-pull-requests.md)).
 
 **How many rounds:** at most **two** reviews by the other AI per issue or
 pull request, counting re-reviews. Copilot and the adversarial review do
@@ -17,7 +16,8 @@ case, stop and ask the maintainer.
 - Every *Done when* item is observable and testable; 2–5 of them.
 - *Risk* is right (see below) and *Implementer* is set; Argon only for an
   [eligible issue](argon-implementer.md#which-issues), with its expected
-  tier checked (in doubt, the higher tier, so not Argon).
+  tier checked (in doubt, the higher tier; a possible tier A means not
+  Argon).
 - Nothing contradicts `AGENTS.md`, `docs/`, or an earlier decision in
   `docs/decisions/` (indexed by [`DECISIONS.md`](../../DECISIONS.md)).
 - Security or data-boundary concerns are called out if relevant.
@@ -40,7 +40,8 @@ case, stop and ask the maintainer.
   *Verified by*, one deliberate defect in the code under test that breaks
   the behaviour the test guards and fails its assertion (not a crash or a
   compile error), and that the test passes again once it is reverted
-  (#360).
+  (#360). For Argon's code, Claude records it on CI
+  ([mutation evidence](argon-pull-requests.md#mutation-evidence)).
 - Comments explain *why*; `docs/` is updated when terminology,
   invariants, data flow or dependencies change.
 
@@ -101,8 +102,9 @@ reach the re-review without either AI checking it:
    gate) record instead why, and the alternative verification done: a
    scripted or manual reproduction, a mutation showing the guard matters,
    or the exact text change. Effort or time is never such a reason.
-2. The AI that did not write the fix (Claude ↔ Codex; never on an Argon
-   trial pull request, which leaves the trial at tier A or B) checks that the diff since the reviewed head contains only that fix,
+2. The AI that did not write the fix (Claude ↔ Codex; Codex on an Argon
+   pull request, [who reviews](argon-pull-requests.md#who-reviews)) checks
+   that the diff since the reviewed head contains only that fix,
    that it answers the original finding, and that the test fails without
    it (where the
    [handoff rule](running-other-ai.md#handoff-of-another-ais-code) keeps

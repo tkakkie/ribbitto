@@ -28,6 +28,14 @@ A reply will remain an ordinary message in the stream, linked to the
 message it answers; the link opens a paged reply-chain view
 ([`replies.md`](replies.md), *planned*).
 
+A message may quote one earlier message of the same channel
+([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md), *planned*: #1176, #1160, #1161). The quote stores the
+quoted message's ID, its author's member ID and a text snapshot that the
+server copies or, for a selection, checks against the original's extracted
+text, in the posting transaction. The snapshot belongs to the quoting
+message and stays as posted when the original is edited, moved or deleted;
+deletion sets only the quoted message ID to null. A quote is not a reply.
+
 Channel pins reference the current message; their permissions, limits
 and lifecycle rules are in [`pins.md`](pins.md) (implemented in #887–#890; live delivery planned).
 
@@ -66,7 +74,18 @@ The channel page shows the latest page of 50 messages, oldest first. templ escap
 stored bodies at render time (never `templ.Raw`); `whitespace-pre-wrap`
 keeps line breaks and `dir="auto"` isolates each body's direction. DOM ids
 use `message.id`. Authors use `view.MemberName` with current display names
-and handles. Times have a UTC `<time datetime>` fallback; an external script
+and handles. A quote (*planned*, #1176) shows its author's current name, the
+snapshot escaped the same way and a link built from the slug and message ID
+([decision 36](../decisions/36-one-message-has-a-stable-url.md)), or no link
+once the original is deleted; nothing current from the original, so it
+renders the same for every reader.
+
+**Plain text from a message** comes from one extraction function per format,
+owned by `conversation` ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md), *planned*); for `plain_text`
+it returns the body unchanged. The pins excerpt, the live announcement
+(today `view.LiveMessageItem` concatenates `entry.Body`), the selection
+check and later notifications and search use it. A quote's snapshot is left
+out of the quoting message's extraction. Times have a UTC `<time datetime>` fallback; an external script
 shows browser-local time.
 
 ## Posting from the channel page

@@ -26,7 +26,11 @@ Prefer the simplest store that is enough, in this order:
 This decision does not widen either Web Storage allowance. The server
 remains the source of truth. Requests stay with htmx under decision 37 (c),
 unless a later decision allows otherwise; storage gives JavaScript no new
-request or HTML-generation permission.
+request or HTML-generation permission. These rules apply alike to plain
+scripts and to
+[decision 40](40-plain-javascript-by-default-library-islands-by-measured-exception.md)'s
+UI-library islands; an island's IndexedDB use also meets decision 40's
+measurement rules, and one measurement may serve both.
 
 ## Data classes
 
@@ -108,19 +112,20 @@ Every IndexedDB use states in its issue:
 ## Cleanup today and what each use adds
 
 Today a successful sign-out sends `Clear-Site-Data: "storage"` (decision
-37 (d)), which also clears IndexedDB in supporting browsers. The sign-in
-page's `web/static/message-drafts-v1.js` cleanup removes only
-`ribbitto.draft.v1:` keys in `localStorage`; it does not clean IndexedDB.
+37 (d)), which also clears IndexedDB in supporting browsers. The cleanup in
+`web/static/message-drafts-v2.js`, on the sign-in page and organisation
+pages, removes only `ribbitto.draft.v1:` keys in `localStorage`; it does not
+clean IndexedDB.
 
 Each class 2 or 3 use must extend sign-in and organisation-page cleanup to
 its own store, with the ownership and horizon rules above. It must test
 stale-tab writes, session expiry and sign-out when the header is
 unsupported. A header alone does not address a pending save in another
 tab. The drafts requirements are spread across #1178 (sign-out and
-sign-in page cleanup, implemented), #1181 (organisation-page cleanup, not
-yet implemented) and #1162 (interleaved tabs, owner-checked restore and
-sign-out with a pending save, not yet implemented). Each new use supplies
-its own protection; these drafts issues do not implement it for IndexedDB.
+sign-in page cleanup, implemented), #1181 (organisation-page cleanup,
+implemented) and #1162 (interleaved tabs, owner-checked restore and sign-out
+with a pending save, not yet implemented). Each new use supplies its own
+protection; these drafts issues do not implement it for IndexedDB.
 Class 1 needs no session cleanup.
 
 This decision changes documentation only. The `indexedDB` pattern remains

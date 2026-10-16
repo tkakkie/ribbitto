@@ -7,16 +7,18 @@ JavaScript responsibilities and constraints for browser enhancements.
 JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
 keyboard, local time, selection constraints, copying to the clipboard, and
 htmx/SSE input glue. The bounded composer state of decision 37 is the
-[composer](#composer) exception. Scripts are plain JavaScript; a UI-library
-island comes only as a scoped exception under [decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md),
-and none exists today.
+[composer](#composer) exception. A UI-library island is only a scoped
+exception under
+[decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md);
+none exists today.
 
-**Exception ([#1039](../decisions/34-live-unread-counts.md)):**
+**Exception (#1039):**
 [decision 34](../decisions/34-live-unread-counts.md) lets one script own
 sidebar badge numbers and bounded recovery state: the snapshot sequence,
 at most 1,000 retained `unread` events with eligibility and application flags,
 a recovering flag, loss generations and the highest possibly lost sequence.
-It changes only the text and visibility of server-rendered badges, never creates elements and never makes requests;
+It changes only the text and visibility of server-rendered badges, never
+creates elements or makes requests;
 htmx sends resync requests. The markup contract is in
 [web contracts](web-contracts.md).
 
@@ -77,18 +79,16 @@ htmx sends resync requests. The markup contract is in
   URLs come from server-rendered attributes, never built by a script. The
   one kept rewrite is `message-stream-v12.js` updating only the `after`
   parameter of the server-rendered `sse-connect` URL (above).
-- **Storage:** prefer memory, then the HTTP cache of an immutable, versioned
-  asset, then Web Storage within its existing allowances, then IndexedDB
-  only under [decision 41](../decisions/41-client-storage-indexeddb-by-data-class.md)'s
-  data classes. `sessionStorage` may hold only non-sensitive UX settings
-  whose loss affects no function or server state, such as whether a panel is
-  open or a display preference; `localStorage` only the [drafts](#drafts)
-  allowance, in the drafts script alone
-  ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)).
-  They never hold messages, credentials, session tokens or other
-  server-derived application data, except that allowance's bounded draft
-  text (which may quote messages), owner metadata and sign-out notice.
-  Credentials, session tokens and their hashes are never stored.
+- **Storage:** `sessionStorage` may hold only non-sensitive UX settings
+  whose loss affects no function and no server state, such as whether a
+  panel is open or a display preference; `localStorage` only the one
+  [drafts](#drafts) allowance, in the drafts script alone
+  ([decision 37][d37]). They never hold messages, credentials, session
+  tokens or other server-derived application data, except that allowance's
+  bounded draft text (which may quote messages), owner metadata and
+  sign-out notice. IndexedDB is allowed only by
+  [decision 41](../decisions/41-client-storage-indexeddb-by-data-class.md)'s
+  data classes.
 - **Files:** every script is external in `web/static` and loaded with the
   response nonce. Application scripts also define no globals and are
   versioned by file name (`-vN`), since static assets are immutable
@@ -99,10 +99,9 @@ htmx sends resync requests. The markup contract is in
 
 ## Composer
 
-[Decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
-allows bounded composer state. The server-rendered key and the sending
-glue below exist; the parts marked *planned* await their issues, and today
-the composer script keeps none of their state.
+[Decision 37][d37] allows bounded composer state. The server-rendered key and
+the sending glue below exist; the parts marked *planned* await their issues,
+and today the composer script keeps none of their state.
 
 - **Sending** (input glue, #1173): the textarea stays usable while a post is
   in flight, since answers replace only `#message-composer-state`. On a 200
@@ -174,3 +173,4 @@ only shows or hides a server-rendered sidebar marker.
   where the browser supports it (Chromium); the sign-in page covers the rest.
 
 [a11y]: ../accessibility.md
+[d37]: ../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md

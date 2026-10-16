@@ -40,6 +40,8 @@ type fakeMessages struct {
 	around *[]int64
 	// located answers Locate; nil is ErrMessageNotFound.
 	located *conversation.Location
+	// pins are the overview's pins.
+	pins []conversation.Pin
 }
 
 func (f fakeMessages) Around(ctx context.Context, m org.Membership, id kernel.ID, topicID *kernel.ID, around int64) (conversation.ChannelPage, error) {
@@ -681,6 +683,18 @@ func assertMessageTopicLink(t *testing.T, markup string, entry conversation.Entr
 		}
 	}
 	t.Fatalf("topic label %q must link to %s", label, url)
+}
+
+func (f fakeMessages) Overview(ctx context.Context, m org.Membership, id kernel.ID, topicID *kernel.ID, before *int64, around int64) (conversation.ChannelPage, error) {
+	// Like Reader.Overview, a positive around reads Around's page, so the
+	// positions a test records are the ones the page asked for.
+	read := func() (conversation.ChannelPage, error) { return f.Page(ctx, m, id, topicID, before) }
+	if around > 0 {
+		read = func() (conversation.ChannelPage, error) { return f.Around(ctx, m, id, topicID, around) }
+	}
+	page, err := read()
+	page.Pins = f.pins
+	return page, err
 }
 
 func (f fakeMessages) Members(ctx context.Context, m org.Membership, id kernel.ID, _ *kernel.ID) (conversation.MembersPage, error) {

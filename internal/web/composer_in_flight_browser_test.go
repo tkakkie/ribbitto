@@ -89,8 +89,8 @@ func testComposerInFlightBrowser(t *testing.T, browser *rod.Browser) {
 		if got := state(); got != `["  ",2,2,true,"true"]` {
 			t.Fatalf("after a 422: %s", got)
 		}
-		// A line break in the sent text: htmx's parameters keep the
-		// textarea's LF, not the CRLF of the encoded request.
+		// A line break in the sent text: htmx's parameters hold the
+		// textarea's value with LF, which the prefix check compares.
 		page.MustEval(`() => { const body = document.getElementById('message-body'); body.value = 'first\nline'; body.setSelectionRange(10, 10); }`)
 		page.Keyboard.MustType(input.Enter)
 		release := next()

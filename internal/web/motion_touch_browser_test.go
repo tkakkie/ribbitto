@@ -65,6 +65,10 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 	if err := (proto.EmulationSetTouchEmulationEnabled{Enabled: true}).Call(page); err != nil {
 		t.Fatal(err)
 	}
+	// The animation domain carries a playback rate to the next document.
+	if err := (proto.AnimationEnable{}).Call(page); err != nil {
+		t.Fatal(err)
+	}
 	// Every animation and transition that starts, with the properties its
 	// first keyframe sets and any delay.
 	page.MustEvalOnNewDocument(`window.motion = [];
@@ -111,6 +115,27 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 		if err := page.Timeout(10 * time.Second).Wait(rod.Eval(`() => !window.leaving && document.readyState === 'complete'`)); err != nil {
 			t.Fatalf("tap on %s led to no loaded page: %v", selector, err)
 		}
+	}
+	// arrive navigates by tapping the selector and checks the motion on the
+	// page it leads to, with animations at 1/100 speed meanwhile. The check
+	// reads an animation's keyframes when its start event is handled, after
+	// the frame that started it; on a busy runner that frame can outlast a
+	// 100 ms arrival, which has then finished and left no effect to read
+	// (#1251). Speed changes neither the keyframes nor the delay read. The
+	// press checks (tap) run at full speed, so their press ends as on a
+	// phone; only the tap that navigates runs slowed.
+	rate := func(r float64) {
+		t.Helper()
+		if err := (proto.AnimationSetPlaybackRate{PlaybackRate: r}).Call(page); err != nil {
+			t.Fatalf("%s: animation speed %v: %v", stage, r, err)
+		}
+	}
+	arrive := func(step, selector, want string) {
+		t.Helper()
+		rate(0.01)
+		navigate(selector)
+		expect(step, want)
+		rate(1)
 	}
 	const look = `s => { const c = getComputedStyle(document.querySelector(s)); return [c.backgroundColor, c.color, c.outlineStyle, c.scale].join(' / '); }`
 	// tap taps the selector with its click blocked, so the page stays: it
@@ -191,14 +216,11 @@ func testMotionTouchBrowser(t *testing.T, browser *rod.Browser) {
 		tap(where, "#message-composer button[type=submit]", pass.reduce)
 		// The back link leads to the list page, whose pill grows in; the
 		// page itself does not move.
-		navigate(`#conversation header a[href*="channels?channel="]`)
-		expect(where+": the list page", pill)
+		arrive(where+": the list page", `#conversation header a[href*="channels?channel="]`, pill)
 		tap(where, link(random.ID), pass.reduce)
 		tap(where, `nav:has(> a[aria-current="page"]) > button`, pass.reduce)
 		// A conversation hides the sidebar, so its pill does not move.
-		navigate(link(general.ID))
-		expect(where+": the conversation from the list", "")
-		navigate("#panel-control-members")
-		expect(where+": the panel's sheet", sheet)
+		arrive(where+": the conversation from the list", link(general.ID), "")
+		arrive(where+": the panel's sheet", "#panel-control-members", sheet)
 	}
 }

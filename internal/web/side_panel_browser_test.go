@@ -101,7 +101,10 @@ func testSidePanelBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	page.MustElement("#panel-heading").MustFocus()
 	page.Keyboard.MustType(input.Escape)
-	page.MustWait(`() => !document.getElementById('side-panel') && document.activeElement.id === 'panel-control-members'`)
+	// The wait polls across the closing page load: until the parser reaches
+	// <body>, which arrival-v1.js in <head> holds back, the new document has
+	// no active element at all (#1251).
+	page.MustWait(`() => !document.getElementById('side-panel') && document.activeElement?.id === 'panel-control-members'`)
 	if got := page.MustInfo().URL; got != server.URL+conversationPath {
 		t.Fatalf("closed to %s", got)
 	}

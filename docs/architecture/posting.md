@@ -77,7 +77,7 @@ membership's organisation and the posting channel) in a snapshot of its own,
 with the members a `chat_v1` original references, so the organisation lock
 never waits on the directory. In the transaction, after the topic and under
 the organisation lock that moves take too, `Writer.QuotedMessage` reads it
-again with the same scope; that read decides. The snapshot is the original's
+again with the same scope; only that read decides. The snapshot is the original's
 own text, never its quote: `Entry.Text` with references as `@handle` or
 `Send.UnknownMember`, trimmed by `ValidateMessageBody`, which refuses an
 empty one as `ErrInvalidBody`. Missing, another organisation's and another

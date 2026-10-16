@@ -259,8 +259,9 @@ func sameQuote(stored *Quote, requested *kernel.ID) bool {
 
 // quoteReferences reads the original in a snapshot of its own, before the
 // posting transaction, to resolve the members a chat_v1 original references,
-// so the organisation lock never waits on the directory. A missing original,
-// or one outside the organisation or channel, is ErrQuoteNotFound here too.
+// so the organisation lock never waits on the directory. It decides nothing:
+// a missing original has no references, and the scoped read in the
+// transaction refuses it.
 func (p *Posting) quoteReferences(ctx context.Context, organizationID, channelID, id kernel.ID) (map[kernel.ID]Reference, error) {
 	if p.quotes == nil {
 		return nil, errors.New("posting has no reader to check quotes")
@@ -272,7 +273,7 @@ func (p *Posting) quoteReferences(ctx context.Context, organizationID, channelID
 			return err
 		}
 		if len(found) != 1 {
-			return ErrQuoteNotFound
+			return nil
 		}
 		blocks := ParseChatV1(found[0].Body)
 		ids := appendReferences(nil, blocks)

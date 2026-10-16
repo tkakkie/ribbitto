@@ -63,7 +63,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
   `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-composer-state`, `message-help`, `message-status`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
-  `pins-section`, `pin-form-message-<hex>`, `pin-<true|false>-message-<hex>`,
+  `pins-section`, `pin-form-message-<hex>` and `pin-<true|false>-message-<hex>` for pins,
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
   `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and
@@ -75,8 +75,11 @@ htmx does only requests and swaps; the server and templ own the HTML.
 
   | Attribute | On | Present | Meaning |
   |---|---|---|---|
-  | `data-pins-seq`, `data-pinned-ids` | `#pins-section` | always | snapshot sequence; pinned message IDs |
-  | `data-pin-control`, `data-pinned`, `data-pin-action` | pin form, buttons | always | message ID; state; `true` Unpin |
+  | `data-pins-seq` | `#pins-section` | always | snapshot sequence |
+  | `data-pinned-ids` | `#pins-section` | always | space-separated message IDs |
+  | `data-pin-control` | pin form | always | message ID |
+  | `data-pinned` | pin form | always | pin state |
+  | `data-pin-action` | pin button | always | `true`: Unpin; `false`: Pin |
   | `data-applied-cursor` | `#organization-stream` | after durable application | newest sequence applied to the DOM, including while hidden |
   | `data-oldest-seq` | `#load-older` | always | `event_seq` of the oldest loaded message, `0` once nothing older remains; a moved item is inserted only at or above it |
   | `data-topic` | `#message-items` | topic pages only | the topic's ID, compared with a move's topics |

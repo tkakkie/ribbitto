@@ -101,6 +101,34 @@ func TestReadStoreIn(t *testing.T) {
 				t.Errorf("ListMessagesAfter, %s = %x, %v; want %x", tc.name, got, err, tc.want)
 			}
 		}
+		// Newer counts only the message's topic, up to the limit.
+		for _, tc := range []struct {
+			id    kernel.ID
+			limit int32
+			want  conversation.Location
+			newer int
+		}{
+			{m[1], 50, conversation.Location{ChannelID: f.general, TopicID: f.generalTopic, EventSeq: 1}, 1},
+			{m[1], 0, conversation.Location{ChannelID: f.general, TopicID: f.generalTopic, EventSeq: 1}, 0},
+			{m[2], 50, conversation.Location{ChannelID: f.general, TopicID: beta, EventSeq: 2}, 0},
+		} {
+			if got, newer, err := store.LocateMessage(ctx, f.acme, tc.id, tc.limit); err != nil || got != tc.want || newer != tc.newer {
+				t.Errorf("LocateMessage(%x, %d) = %+v, %d, %v; want %+v, %d", tc.id, tc.limit, got, newer, err, tc.want, tc.newer)
+			}
+		}
+		for _, tc := range []struct {
+			name           string
+			organizationID kernel.ID
+			id             kernel.ID
+		}{
+			{"another organisation's message", f.acme, m[5]},
+			{"read as another organisation", f.globex, m[1]},
+			{"unknown ID", f.acme, kernel.ID{0xee}},
+		} {
+			if got, _, err := store.LocateMessage(ctx, tc.organizationID, tc.id, 50); !errors.Is(err, conversation.ErrMessageNotFound) {
+				t.Errorf("LocateMessage, %s = %+v, %v; want ErrMessageNotFound", tc.name, got, err)
+			}
+		}
 		for _, tc := range []struct {
 			name           string
 			organizationID kernel.ID

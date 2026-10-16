@@ -31,8 +31,13 @@
   };
   document.addEventListener("input", signal);
   document.addEventListener("compositionend", signal);
+  // A message's URL (decision 36) lands on the message its fragment names,
+  // which the browser has brought into view; only other loads start at the
+  // newest entry.
   const newest = () => {
     const list = document.getElementById("message-list");
+    const target = document.getElementById(location.hash.slice(1));
+    if (target && target.parentElement?.id === "message-items") return;
     if (list) list.scrollTop = list.scrollHeight;
   };
   newest();

@@ -8,8 +8,8 @@ these rules change.
 
 ## Identity and format
 
-A message is identified by its `id` (UUIDv7) — in the DOM and pin metadata,
-and later in permalinks, reactions, editing and deleting. `event_seq` orders messages
+A message is identified by its `id` (UUIDv7) — in the DOM, pin metadata and
+its URL, and later in reactions, editing and deleting. `event_seq` orders messages
 and drives paging and unread counts (unique per organisation). An event
 reads its message by organisation, channel and `event_seq`; the message's
 stable identifier for the DOM and links remains `id`.
@@ -88,7 +88,7 @@ post's scroll intent is consumed once; failed posts create none. Focus stays in
 the composer. Live appends are announced politely;
 replay duplicates replace the same message id without another announcement.
 
-*Planned (#1170, [decision 36](../decisions/36-one-message-has-a-stable-url.md)):* one message has its own URL,
+One message has its own URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
 `/organizations/{slug}/messages/{message-id}`. It answers 303 to the message's
 current topic, scrolled to the message and highlighted instead of the newest:
 the latest page when the message is among the topic's newest 50, otherwise an

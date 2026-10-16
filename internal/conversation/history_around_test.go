@@ -2,6 +2,7 @@ package conversation_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -17,11 +18,26 @@ func (f fullHistory) ListMessagesAfter(_ context.Context, _, _ kernel.ID, _ *ker
 	return out, nil
 }
 
+// located is a history whose LocateMessage answers newer, or err.
+type located struct {
+	fullHistory
+	newer int
+	err   error
+}
+
 func (f *snapshotFake) ListMessagesAfter(ctx context.Context, orgID, ch kernel.ID, topic *kernel.ID, after int64, limit int32) ([]conversation.Message, error) {
 	if err := f.step("history after"); err != nil {
 		return nil, err
 	}
 	return f.historyData.(fullHistory).ListMessagesAfter(ctx, orgID, ch, topic, after, limit)
+}
+
+func (f *snapshotFake) LocateMessage(_ context.Context, orgID, id kernel.ID, limit int32) (conversation.Location, int, error) {
+	if orgID != f.organizationID || id != (kernel.ID{9}) || limit != conversation.PageSize {
+		f.t.Fatalf("LocateMessage(%x, %x, %d): wrong scope or limit", orgID, id, limit)
+	}
+	data := f.historyData.(located)
+	return conversation.Location{ChannelID: kernel.ID{2}, TopicID: kernel.ID{7}, EventSeq: 90}, data.newer, data.err
 }
 
 // An around page holds up to half a page from the position on and fills
@@ -54,6 +70,28 @@ func TestPageAround(t *testing.T) {
 			if page.Entries[i].EventSeq != page.Entries[i-1].EventSeq+1 {
 				t.Fatalf("%d messages around %d: not oldest first", tt.messages, tt.around)
 			}
+		}
+	}
+}
+
+// A message is on its topic's latest page while fewer than PageSize newer
+// messages follow it there; a missing one stays ErrMessageNotFound.
+func TestReaderLocate(t *testing.T) {
+	membership := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
+	for _, tt := range []struct {
+		data   located
+		latest bool
+	}{
+		{located{newer: 0}, true},
+		{located{newer: conversation.PageSize - 1}, true},
+		{located{newer: conversation.PageSize}, false},
+		{located{err: conversation.ErrMessageNotFound}, false},
+	} {
+		reader, f := testReader(t, tt.data)
+		f.organizationID = membership.Organization.ID
+		at, err := reader.Locate(t.Context(), membership, kernel.ID{9})
+		if !errors.Is(err, tt.data.err) || err == nil && (at.Latest != tt.latest || at.ChannelID != (kernel.ID{2}) || at.TopicID != (kernel.ID{7}) || at.EventSeq != 90) {
+			t.Errorf("newer %d: Locate = %+v, %v; want latest %v, error %v", tt.data.newer, at, err, tt.latest, tt.data.err)
 		}
 	}
 }

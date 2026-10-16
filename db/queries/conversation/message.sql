@@ -22,6 +22,15 @@ WHERE organization_id = sqlc.arg(organization_id) AND channel_id = sqlc.arg(chan
 ORDER BY event_seq
 LIMIT sqlc.arg('limit');
 
+-- name: LocateMessage :one
+SELECT m.channel_id, m.topic_id, m.event_seq,
+       (SELECT count(*) FROM (SELECT 1 FROM message n
+         WHERE n.organization_id = sqlc.arg(organization_id) AND n.topic_id = m.topic_id
+           AND n.event_seq > m.event_seq
+         LIMIT sqlc.arg('limit')) newer)::bigint AS newer
+FROM message m
+WHERE m.organization_id = sqlc.arg(organization_id) AND m.id = sqlc.arg(id);
+
 -- name: GetMessages :many
 SELECT * FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND id = ANY(sqlc.arg(message_ids)::uuid[])

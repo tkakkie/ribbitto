@@ -86,6 +86,23 @@ func (s *Reader) page(ctx context.Context, m org.Membership, channelID kernel.ID
 	return page, nil
 }
 
+// Locate finds where a message of the member's organisation is now, for its
+// URL (decision 36). Every channel is public, so the organisation scope is
+// the whole read check; an unknown ID and another organisation's message are
+// both ErrMessageNotFound, so the answer never says which.
+func (s *Reader) Locate(ctx context.Context, m org.Membership, id kernel.ID) (at Location, err error) {
+	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
+		var newer int
+		at, newer, err = s.reads(snapshot).LocateMessage(ctx, m.Organization.ID, id, PageSize)
+		at.Latest = newer < PageSize
+		return err
+	})
+	if err != nil {
+		return Location{}, fmt.Errorf("locating message: %w", err)
+	}
+	return at, nil
+}
+
 // Many reads a move's bounded message batch and directories in one snapshot.
 func (s *Reader) Many(ctx context.Context, m org.Membership, channelID kernel.ID, ids []kernel.ID) (entries []Entry, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {

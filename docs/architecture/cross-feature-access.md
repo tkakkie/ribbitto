@@ -19,7 +19,8 @@ newest-first keyset query, `ListMessagesBefore`, with a nullable upper
 sequence bound for the latest page, an optional scoped topic filter passed
 explicitly through `Reader.Page` and `ReadStore`, and no author joins; an
 `?around=` page (`Reader.Around`) adds the oldest-first `ListMessagesAfter`
-from its position on. `Reader.One` reads
+from its position on. `Reader.Locate` finds a message's current channel, topic
+and `event_seq` by organisation and ID for its URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md)). `Reader.One` reads
 one message by organisation, channel and `event_seq`, returning `conversation.ErrMessageNotFound`
 for a missing or out-of-scope message. `conversation.Reader` resolves authors through
 its own `MemberDirectory.LookupMembers`, served by org (member IDs filtered by

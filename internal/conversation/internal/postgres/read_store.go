@@ -118,6 +118,20 @@ func (s ReadStore) ListMessagesAfter(ctx context.Context, organizationID, channe
 	return messagesFromRows(rows), nil
 }
 
+// LocateMessage returns where the organisation's message is now and how many
+// newer messages its topic holds, counted up to limit, or
+// conversation.ErrMessageNotFound.
+func (s ReadStore) LocateMessage(ctx context.Context, organizationID, id kernel.ID, limit int32) (conversation.Location, int, error) {
+	row, err := s.queries.LocateMessage(ctx, sqlcgen.LocateMessageParams{OrganizationID: uuid(organizationID), ID: uuid(id), Limit: limit})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return conversation.Location{}, 0, conversation.ErrMessageNotFound
+	}
+	if err != nil {
+		return conversation.Location{}, 0, fmt.Errorf("locating message: %w", err)
+	}
+	return conversation.Location{ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, EventSeq: row.EventSeq}, int(row.Newer), nil
+}
+
 // GetMessages returns the requested messages of the channel, newest first;
 // missing and out-of-scope IDs are omitted.
 func (s ReadStore) GetMessages(ctx context.Context, organizationID, channelID kernel.ID, ids []kernel.ID) ([]conversation.Message, error) {

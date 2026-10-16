@@ -125,6 +125,38 @@ func (f *fakeChannels) CreateWithImage(_ context.Context, _ org.Membership, name
 	return conversation.Channel{ID: kernel.ID{3}, Name: name}, f.createErr
 }
 
+// TestUpperCaseChannelURL proves that the upper-case spelling of a known
+// channel's URL is not a second URL for it: it answers the same 404 as a
+// malformed one (#1223).
+func TestUpperCaseChannelURL(t *testing.T) {
+	catalogues, err := i18n.New(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := fakeChannels{channels: []conversation.Channel{{ID: kernel.ID{0xab, 0xcd, 0xef, 15: 0x0a}, Name: "general", IsDefault: true}}}
+	handler, err := NewHandler("", catalogues, testServices(asAlice, func(s *Services) { s.Channels, s.Messages = &fake, fakeMessages{channels: &fake} }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := func(path string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", path, nil)
+		r.AddCookie(&http.Cookie{Name: middleware.SessionCookie, Value: "live"})
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	const prefix = "/organizations/acme/channels/"
+	lower := view.ChannelURL("acme", fake.channels[0].ID)
+	upper := prefix + strings.ToUpper(strings.TrimPrefix(lower, prefix))
+	if w := get(lower); w.Code != 200 {
+		t.Fatalf("lower case: status %d", w.Code)
+	}
+	malformed, got := get(prefix+"bad"), get(upper)
+	if malformed.Code != 404 || got.Code != malformed.Code || got.Body.String() != malformed.Body.String() {
+		t.Fatalf("%s: status %d; malformed: status %d; same body %t", upper, got.Code, malformed.Code, got.Body.String() == malformed.Body.String())
+	}
+}
+
 func TestChannelHandlers(t *testing.T) {
 	current := view.ChannelURL("acme", kernel.ID{1})
 	for _, tt := range []struct {

@@ -4,7 +4,11 @@ What each route under `/organizations/{slug}/` answers, after
 [request flow](request-flow.md)'s organisation check resolved the membership.
 
 The channel handlers in `internal/web/channel.go` call `conversation.Channels`
-with that membership; they never query the database directly:
+with that membership; they never query the database directly. Every UUID in a
+path segment, query or form value must be in the canonical lower-case form the
+views render; any other spelling, upper or mixed case included, is malformed
+and gets the route's answer for a malformed value below, never a redirect
+(#1223):
 
 | Route | Result |
 |---|---|

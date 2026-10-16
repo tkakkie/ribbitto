@@ -152,11 +152,12 @@ message, wherever branching has moved it since, and the composer stays on the
 requested feed or topic. The same key with other text, another quote or
 another channel is not a retry: 409 keeps the text with an error and a fresh key, so sending
 again posts it. A malformed key answers 400; a form without one posts without
-deduplication. A failed enhanced send (#1179) keeps the text and the key. A
-network error, a 30 s timeout or a 5xx could not be confirmed (a retry cannot
-post twice); a 4xx was not sent, unless an earlier send of that key is still
-unconfirmed. A 409 whose stored message starts the retried text removes it,
-keeping what was typed since, instead of the error.
+deduplication. A failed enhanced send (#1179) keeps text and key: a network
+error, 30 s timeout or 5xx is unconfirmed (a retry cannot post twice); a
+4xx other than 409 was not sent, unless the key's earlier send is
+unconfirmed. An htmx 409 in the same channel, unquoted on both sides, removes
+the stored body instead of the error if it starts the sent text and,
+re-checked, the textarea.
 
 One message has its own URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
 `/organizations/{slug}/messages/{message-id}`. It answers 303 to the message's

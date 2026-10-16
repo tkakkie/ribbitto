@@ -273,3 +273,15 @@ func TestIdempotencyKeyStaysOutOfStreams(t *testing.T) {
 		}
 	}
 }
+
+// A retry that adds a quote is not the stored send: its 409 keeps the error
+// instead of removing the text and dropping the quote (#1179).
+func TestRecoveredNeedsAnUnquotedRetry(t *testing.T) {
+	stored := conversation.Message{ChannelID: kernel.ID{1}, Body: "hello"}
+	if got := recovered(true, kernel.ID{1}, "hello again", false, stored); got != "hello" {
+		t.Fatalf("unquoted retry recovered %q", got)
+	}
+	if got := recovered(true, kernel.ID{1}, "hello again", true, stored); got != "" {
+		t.Fatalf("quoted retry recovered %q", got)
+	}
+}

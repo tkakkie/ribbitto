@@ -1,0 +1,2 @@
+go test fuzz v1
+string("> **a _b_** <@0190a0b1-2c3d-7e4f-8a9b-0c1d2e3f4a5b>\n>> x\n```go\n\\*keep*\n```\n**_c_** (https://x.y/(z)).\n```")

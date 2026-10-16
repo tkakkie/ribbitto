@@ -1,0 +1,2 @@
+go test fuzz v1
+string("**a _b **c _d_ e** f_ g** __x__ ***y*** _\u65e5_\u672c_ e\u0301_a_")

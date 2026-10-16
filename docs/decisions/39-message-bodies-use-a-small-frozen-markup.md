@@ -1,8 +1,9 @@
 # 39. Message bodies use a small, frozen markup with member references
 
-**Decided** (#1171, approved by the maintainer). Nothing here is implemented
-yet; one later issue adds the migration, parser, renderer and composer help
-together. It follows [decision 18](18-stored-message-formats-never-change-meaning.md)
+**Decided** (#1171, approved by the maintainer). Four issues implement it:
+#1201 the parser, #1202 the `format` column and rendering, #1204 text
+extraction and its users, and #1203 posting. Nothing is stored as `chat_v1`
+until #1203, so members see the four as one change. It follows [decision 18](18-stored-message-formats-never-change-meaning.md)
 and extracts text under [decision 38](38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)'s
 contract.
 

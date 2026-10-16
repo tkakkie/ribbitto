@@ -1,0 +1,2 @@
+go test fuzz v1
+string("https://a.b\u2067c http://x?.!) (http://y/(a)b)) https://. http:// \"https://q.r\"")

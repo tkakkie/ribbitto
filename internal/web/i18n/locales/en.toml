@@ -217,6 +217,15 @@ other = "Load older ribbits"
 ["message.newest"]
 other = "Jump to the newest ribbits"
 
+["message.actions"]
+other = "Ribbit actions"
+
+["message.copy_link"]
+other = "Copy link"
+
+["message.link_copied"]
+other = "Link copied"
+
 ["message.new"]
 other = "New ribbit"
 

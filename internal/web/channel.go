@@ -519,7 +519,7 @@ func viewMessage(slug string, entry conversation.Entry) view.Message {
 		ID: entry.ID, MemberID: entry.MemberID, DisplayName: memberDisplayName(entry.DisplayName), Handle: entry.Handle,
 		CreatedAt: entry.CreatedAt, Body: entry.Body, EventSeq: entry.EventSeq,
 		TopicID: entry.TopicID, TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
-		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID),
+		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID), URL: view.MessageURL(slug, entry.ID),
 	}
 }
 

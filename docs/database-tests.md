@@ -36,10 +36,12 @@ RIBBITTO_REQUIRE_DB=1 go test -count=1 -v ./internal/conversation/...
 env -u RIBBITTO_TEST_DATABASE_URL -u RIBBITTO_REQUIRE_DB go test -count=1 -v ./internal/conversation/...
 ```
 
-Top-level PostgreSQL-backed tests in conversation's store, `conversationpg`
-and `internal/web` run in parallel with isolated databases and test-local state.
-Their subtests remain sequential, preserving shared fixtures, clocks and
-order-dependent assertions, unless each subtest opens its own database.
+A top-level PostgreSQL-backed test may call `t.Parallel()` when it opens its
+own database with `pgtest` and keeps its state test-local; `cmd/ribbitto`'s
+database tests (#1135) follow the same rule. Subtests remain sequential,
+preserving shared fixtures, clocks and order-dependent assertions, unless each
+subtest opens its own database (as in `TestBranchingPartlyStaleSelection`,
+`internal/conversation/conversationpg/branch_test.go`).
 
 Fixtures live with the module that owns their tables
 ([decision 29](decisions/29-test-fixtures-live-with-the-module-that-owns-their-tables.md)):

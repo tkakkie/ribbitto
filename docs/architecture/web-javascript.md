@@ -56,6 +56,9 @@ htmx sends resync requests. The markup contract is in
   | `data-unread-count` on every badge | raw numeric count, including hidden zero; only its number, text and visibility change |
   | `#sidebar-resync` | hidden htmx trigger; custom `sidebar-resync` event sends the member-scoped POST, without a swap |
 
+- `pins-sync-v1.js` compares server snapshot sequences before pins/response
+  swaps and selects loaded controls' server-rendered actions from the section's
+  pin IDs. It restores button focus without touching history, draft or cursors.
 - `message-link-v1.js` handles "Copy link" in a message's actions menu
   (#1159): it copies the link's browser-resolved absolute `href` with the
   Clipboard API, so shared live renders hold no origin; marks the link

@@ -31,7 +31,7 @@ Read the file for the area you change:
 | [`typing.md`](typing.md) | memory-only typing summaries, lifetime, composer ordering, signal ingress, delivery and the page's status region |
 | [SSE](streaming.md), [scope](stream-scope.md) | Server-Sent Events: the connection, retention, authorization and revocation, resource limits |
 | [`replay.md`](replay.md) | ordering and replay of events, resets, and messages that vanished |
-| [`pins.md`](pins.md) | pin ownership and durable writes (#888); channel-state writer and shared pins source implemented (#891–#892), activation pending (#1205) |
+| [`pins.md`](pins.md) | pin ownership and durable writes (#888); channel-state writer and shared pins source implemented (#891–#892), live delivery active (#1205) |
 | [`stream-limits.md`](stream-limits.md) | Stream resource limits: cache loads, write deadlines, heartbeats, the stream caps, shutdown, HTTP/2 |
 | [`rendering.md`](rendering.md) | templates, assets, the Content Security Policy, languages |
 | [`dev-metrics.md`](dev-metrics.md) | the development-only metrics listener for load tests |

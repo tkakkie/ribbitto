@@ -62,6 +62,7 @@ func TestBrowser(t *testing.T) {
 	run("unread-divider", testUnreadDividerBrowser)
 	run("read-control", testReadControlBrowser)
 	run("progress", testStreamProgressBrowser)
+	run("pins", testPinsBrowser)
 	run("per-entry/ephemeral", testEphemeralSinkBrowser)
 	run("side-panel", testSidePanelBrowser)
 	run("panel-sheet", testPanelSheetBrowser)

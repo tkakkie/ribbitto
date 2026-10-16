@@ -27,7 +27,7 @@ index below for everything else.
 | [`topics.md`](topics.md) | topics, the default topic, the feed and branching |
 | [`messages.md`](messages.md) | message identity, accepted bodies and rendering |
 | [`replies.md`](replies.md) | reply references and the reply-chain view (planned) |
-| [`pins.md`](pins.md) | channel pins: permissions, limits, previews and message changes (implemented; live delivery planned) |
+| [`pins.md`](pins.md) | channel pins: permissions, limits, previews and message changes (including live delivery) |
 | [`setup-and-signup.md`](../architecture/setup-and-signup.md) | first-run setup and sign-up |
 
 ## Glossary
@@ -64,5 +64,5 @@ accounts join the setup row's organisation as members. `off`, empty or unset dis
 Two roles: `owner` and `member`. Public channels only: every member can read and write them.
 
 Later, in roughly this order: private channels, direct messages,
-invitations, reactions, editing and deleting, live pins, row-level security, several
+invitations, reactions, editing and deleting, row-level security, several
 organisations (see [`docs/roadmap.md`](../roadmap.md)).

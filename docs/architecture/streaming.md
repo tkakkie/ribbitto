@@ -5,7 +5,7 @@
 One organisation-wide SSE connection per tab, including older history pages,
 filtered by [interests](stream-scope.md#stream-scope).
 Named events are `message`, `messages-moved`, `checkpoint` and durable
-`reset` with `id:`, plus `unread`, `sidebar`, `presence`, `typing` and owner
+`reset` with `id:`, plus `unread`, `sidebar`, `presence`, `typing`, `pins` and owner
 `reset` without `id:`.
 Other browser actions use POST. One process serves every stream; multiple
 processes are future work (hub, stream caps and watermark are per process).
@@ -14,7 +14,7 @@ Ordering, replay and vanished messages are in [`replay.md`](replay.md).
 A [shared reader per organisation](shared-reader.md) is designed but not built (#232).
 The generic [channel-state refresh seam](pins.md#ordering-authorization-and-cost)
 is implemented (#891), with consumer-defined frames and no SSE IDs; its web
-pins adapter is implemented (#892); wiring and browser interests await #1205.
+pins adapter (#892) and production wiring/browser interests (#1205) are active.
 
 ### Retention
 

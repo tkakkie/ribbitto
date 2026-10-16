@@ -1,6 +1,8 @@
 package view
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -20,9 +22,20 @@ type Pin struct {
 
 // PinsSection lists the channel's pins across all its topics, newest first.
 // The excerpt links to the message's URL (decision 36), so opening it follows
-// ordinary navigation and read rules. Live activation is separate (#1205).
-templ PinsSection(page ChannelPage) {
-	<section aria-labelledby="pins-heading" class="flex flex-col gap-2">
+// ordinary navigation and read rules.
+templ PinsSection(page ChannelPage, oob ...bool) {
+	<section
+		id="pins-section"
+		sse-swap="pins"
+		hx-swap="outerHTML"
+		data-pins-seq={ fmt.Sprint(page.SnapshotSeq) }
+		data-pinned-ids={ pinnedIDs(page.Pins) }
+		if len(oob) > 0 && oob[0] {
+			hx-swap-oob="outerHTML"
+		}
+		aria-labelledby="pins-heading"
+		class="flex flex-col gap-2"
+	>
 		<h3 id="pins-heading" class="font-semibold">{ i18n.T(ctx, "pins.title") }</h3>
 		if len(page.Pins) == 0 {
 			<p class="text-muted">{ i18n.T(ctx, "pins.empty") }</p>
@@ -55,4 +68,20 @@ templ PinsSection(page ChannelPage) {
 			</ol>
 		}
 	</section>
+}
+
+func pinnedIDs(pins []Pin) string {
+	ids := make([]string, len(pins))
+	for i, pin := range pins {
+		ids[i] = idValue(pin.MessageID)
+	}
+	return strings.Join(ids, " ")
+}
+
+// PinResponse updates the control and any loaded overview from one fresh snapshot.
+templ PinResponse(entry Message, errorKey string, page ChannelPage, showPins bool) {
+	@PinControl(entry, errorKey)
+	if showPins {
+		@PinsSection(page, true)
+	}
 }

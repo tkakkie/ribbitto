@@ -20,9 +20,9 @@ The endpoint takes:
 | Parameter | Meaning |
 |---|---|
 | `after` | the durable cursor; `Last-Event-ID` wins |
-| `want` | comma-separated interests, each at most once: `sidebar`, `messages`, `typing`, `presence`; anything else is 400 |
-| `channel` | the page's channel: required with `messages`, `typing` or `sidebar` (for its initial recount); with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
-| `topic` | optional with `messages`, `typing` or `sidebar`; requires `channel`, narrows messages/typing and retains sidebar selection; another organisation or channel is 404 |
+| `want` | comma-separated interests, each at most once: `sidebar`, `messages`, `typing`, `presence`, `pins`; anything else is 400 |
+| `channel` | the page's channel: required with `messages`, `typing`, `pins` or `sidebar` (for its initial recount); with `sidebar` it selects whose topics the sidebar counts; a channel the member cannot see is 404 |
+| `topic` | optional with `messages`, `typing`, `pins` or `sidebar`; requires `channel`, narrows messages/typing and retains sidebar selection; another organisation or channel is 404 |
 | `presence-after` | required with `presence`: the process instance and presence generation the page was rendered with |
 
 | Page | `want` |
@@ -32,6 +32,7 @@ The endpoint takes:
 | `?before=` page | `sidebar` with `channel` and, on topic pages, `topic` |
 | `?around=` page ([decision 36](../decisions/36-one-message-has-a-stable-url.md)) | the same as a `?before=` page |
 | Channel list page | `sidebar` with `channel`, the channel whose topics it nests |
+| With the overview panel | the page's own interests plus `pins`, including `?before=` and `?around=` |
 | With the members panel | the page's own interests plus `presence`, with `presence-after` |
 
 Every page, including `?before=`, carries a snapshot cursor on
@@ -121,6 +122,7 @@ Swap targets:
 | `unread` | none | the sidebar script increments shown server-rendered badges |
 | `sidebar` | none | whole sidebar lists and selected heading count, out of band (#818) |
 | `presence` | none | each member's indicator, out of band by its DOM id (#768) |
+| `pins` | none | whole `#pins-section`, including empty lists |
 | `typing` | none | `#typing-status` content replacement on latest feeds/topics (#790) |
 | `reset` | the cursor for durable reset; none for owner reset | the stream script reloads the page |
 

@@ -132,7 +132,7 @@ func TestPhoneConversationBrowser(t *testing.T) {
 					if (phone && (wrapperStyle.paddingLeft !== '16px' || wrapperStyle.paddingRight !== '16px')) return 'composer side padding: want 16px, got ' + wrapperStyle.paddingLeft + ' and ' + wrapperStyle.paddingRight;
 					if (phone && (parseFloat(getComputedStyle(input).fontSize) < 16 || box(send).width < 44 || box(send).height < 44)) return 'composer font or send target too small';
 					if (phone && (getComputedStyle(composer.parentElement).paddingBottom !== '50px' || box(composer).bottom > document.documentElement.clientHeight - 34)) return 'composer below safe area';
-					if (composer.hasAttribute('hx-post') !== !location.pathname.includes('/topics/')) return 'topic submission was enhanced';
+					if (composer.getAttribute('hx-post') !== location.pathname) return 'latest submission was not enhanced to its own feed or topic';
 					if (phone) {
 						const checkbox = document.querySelector('#message-items input[type="checkbox"]');
 						checkbox.checked = true;
@@ -151,9 +151,11 @@ func TestPhoneConversationBrowser(t *testing.T) {
 			})
 		}
 	}
-	page.MustNavigate(server.URL + feed + "?before=3").MustWaitLoad()
-	if page.MustElement("#message-composer").MustAttribute("hx-post") != nil {
-		t.Fatal("history submission was enhanced")
+	for _, path := range []string{feed, topicURL} {
+		page.MustNavigate(server.URL + path + "?before=3").MustWaitLoad()
+		if page.MustElement("#message-composer").MustAttribute("hx-post") != nil {
+			t.Fatalf("%s history submission was enhanced", path)
+		}
 	}
 	for _, size := range [][2]int{{390, 844}, {320, 568}} {
 		page.MustSetViewport(size[0], size[1], 1, false)

@@ -316,7 +316,11 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		}
 	}
 	if page.BodyError == "" {
-		page.Composer = p.issueComposer(m, history.Current, history.Topic)
+		place := history.Current.DefaultTopicID
+		if history.Topic != nil {
+			place = history.Topic.ID
+		}
+		page.Composer = p.issueComposer(m, history.Current.ID, place)
 	}
 	var snapshotSeq int64
 	if history.EventCursor != nil {
@@ -383,29 +387,52 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	if err == nil && p.typing != nil {
 		p.typing.Posted(posted.OrganizationID, typing.Place{Channel: posted.ChannelID, Topic: posted.TopicID}, posted.MemberID, r.PostForm.Get("composer"))
 	}
+	enhanced := r.Header.Get("HX-Request") == "true"
+	topic := p.topicID
+	if errors.Is(err, conversation.ErrInvalidBody) && enhanced && topic != nil {
+		// Validation fails before posting resolves the topic, and the
+		// fragment reads no history that would: resolve it here, so an
+		// unknown or other channel's topic stays a 404 without a fragment.
+		if resolved, lookupErr := p.topics.Get(r.Context(), m, c.ID, *topic); lookupErr != nil {
+			err = lookupErr
+		} else {
+			topic = &resolved.ID
+		}
+	}
 	switch {
 	case errors.Is(err, conversation.ErrInvalidPostCursor):
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 	case errors.Is(err, conversation.ErrInvalidBody):
-		p.renderComposer(w, r, m, c, http.StatusUnprocessableEntity, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.body"})
+		p.renderComposer(w, r, m, c, topic, http.StatusUnprocessableEntity, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.body"})
 	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member.
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "posting message", err)
-	case r.Header.Get("HX-Request") == "true" && p.topicID == nil:
-		p.renderComposer(w, r, m, c, http.StatusOK, view.ChannelPage{EventCursor: cursor, PostedMessageID: &posted.ID})
+	case enhanced:
+		// The posting transaction resolved the topic; reusing it keeps
+		// issuance free of another lookup.
+		if topic != nil {
+			topic = &posted.TopicID
+		}
+		p.renderComposer(w, r, m, c, topic, http.StatusOK, view.ChannelPage{EventCursor: cursor, PostedMessageID: &posted.ID})
 	default:
 		http.Redirect(w, r, view.ConversationURL(m.Organization.Slug, c.ID, p.topicID), http.StatusSeeOther)
 	}
 }
 
 // Enhanced posts never replace history or the connection's snapshot cursor.
-func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, status int, page view.ChannelPage) {
-	if r.Header.Get("HX-Request") == "true" && p.topicID == nil {
+// topic is the resolved posting topic of a topic view, nil on the feed; the
+// fragment posts there and its generation is scoped to it.
+func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, topic *kernel.ID, status int, page view.ChannelPage) {
+	if r.Header.Get("HX-Request") == "true" {
+		place := c.DefaultTopicID
+		if topic != nil {
+			place, page.Topic = *topic, &view.Topic{ID: *topic}
+		}
 		if page.BodyError == "" {
-			page.Composer = p.issueComposer(m, c, nil)
+			page.Composer = p.issueComposer(m, c.ID, place)
 		}
 		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, viewChannel(c)
 		templ.Handler(view.MessageComposer(page), templ.WithStatus(status)).ServeHTTP(w, r)
@@ -415,15 +442,11 @@ func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m o
 }
 
 // Reuse resolved scope: issuance needs no channel or topic lookup of its own.
-func (p channelPages) issueComposer(m org.Membership, c conversation.Channel, topic *conversation.Topic) *string {
+func (p channelPages) issueComposer(m org.Membership, channel, topic kernel.ID) *string {
 	if p.typing == nil {
 		return nil
 	}
-	topicID := c.DefaultTopicID
-	if topic != nil {
-		topicID = topic.ID
-	}
-	return new(p.typing.IssueComposer(m.Organization.ID, typing.Place{Channel: c.ID, Topic: topicID}, m.Member.ID))
+	return new(p.typing.IssueComposer(m.Organization.ID, typing.Place{Channel: channel, Topic: topic}, m.Member.ID))
 }
 
 // channelID parses the {channelID} path segment: the UUID in its canonical

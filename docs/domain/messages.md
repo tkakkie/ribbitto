@@ -30,6 +30,7 @@ disposable cache
 a small markup frozen per version (code spans and fences, block quotes,
 bold, italic, `http`/`https` autolinks and member references `<@uuid>`);
 every existing message stays `plain_text`, and new posts use `chat_v1`.
+Its parser, `conversation.ParseChatV1` (#1201), exists and is not used yet.
 A reference to a member who is not in the URL's organisation, checked
 through org's directory, rejects the post with 422.
 

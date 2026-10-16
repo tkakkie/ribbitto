@@ -18,11 +18,10 @@ type Pin struct {
 	PinnedAt                        time.Time
 }
 
-// pinsSection lists the channel's pins across all its topics, newest first.
+// PinsSection lists the channel's pins across all its topics, newest first.
 // The excerpt links to the message's URL (decision 36), so opening it follows
-// ordinary navigation and read rules. Before live delivery (#892) the list is
-// as current as the page.
-templ pinsSection(page ChannelPage) {
+// ordinary navigation and read rules. Live activation is separate (#1205).
+templ PinsSection(page ChannelPage) {
 	<section aria-labelledby="pins-heading" class="flex flex-col gap-2">
 		<h3 id="pins-heading" class="font-semibold">{ i18n.T(ctx, "pins.title") }</h3>
 		if len(page.Pins) == 0 {

@@ -22,7 +22,7 @@ sequenceDiagram
       C->>DB: one snapshot: replay boundary + event_seq + events after cursor
     end
     C->>C: refresh channel state on connect; classify durable triggers before message filtering
-    C->>C: check message interest, render, authorize, send; cursor = last seq read
+    C->>C: check consumer filter and message interest, render, authorize, send; cursor = last seq read
     C->>C: read current ephemeral owners, filter, authorize, send without id or cursor advance
     C->>C: if caught up, wait on org's durable level, declared generations, heartbeat and context
   end

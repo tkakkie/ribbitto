@@ -46,6 +46,8 @@
 // writer and combined wait; authorization checks the connection's channel and
 // bound member immediately before sending without an SSE id. Web adapters
 // supply kinds, rendering and language-specific sharing; none are wired yet.
+// An optional renderer EventFilter excludes kinds from message and unread
+// rendering after trigger classification, preserving skipped cursor progress.
 // Production presence and
 // typing are implemented; web renders their indicators.
 // Web's hidden sink receives sidebar/presence payloads. The hub is also the

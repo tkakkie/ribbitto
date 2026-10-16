@@ -144,7 +144,7 @@ templ overviewPanel(page ChannelPage) {
 			<dd><time datetime={ page.Current.Created.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) }>{ page.Current.Created.UTC().Format("2006-01-02") }</time></dd>
 		</dl>
 		@textLink(panelURL(page, PanelMembers), "people.title", "")
-		@pinsSection(page)
+		@PinsSection(page)
 		<h3 class="font-semibold">{ i18n.T(ctx, "topic.list") }</h3>
 		<ul class="flex flex-col gap-1">
 			for _, topic := range page.Topics {

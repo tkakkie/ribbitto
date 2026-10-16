@@ -16,7 +16,7 @@ at most 1,000 retained `unread` events with eligibility and application flags,
 a recovering flag, loss generations and the highest possibly lost sequence.
 It changes only the text and visibility of server-rendered badges, never creates elements and never makes requests;
 htmx sends resync requests. The markup contract is in
-[web layers](web-layers.md#htmx).
+[web contracts](web-contracts.md).
 
 - `message-stream-v12.js` observes `checkpoint` to update only `sse-connect`'s
   `after`, monotonically and independently of applied/shown cursors. It emits `read-applied` only after successful DOM

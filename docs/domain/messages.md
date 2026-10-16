@@ -14,11 +14,16 @@ and drives paging and unread counts (unique per organisation). An event
 reads its message by organisation, channel and `event_seq`; the message's
 stable identifier for the DOM and links remains `id`.
 
-Bodies are **plain text**, and the stored body is the source of truth. If
-Markdown or rich text comes later, an explicit format is added with it and
-every existing message stays `plain_text`; a stored message is never
-reinterpreted, and rendered HTML is at most a disposable cache
+Bodies are **plain text** today, and the stored body is the source of truth.
+A stored message is never reinterpreted, and rendered HTML is at most a
+disposable cache
 ([decision 18](../decisions/18-stored-message-formats-never-change-meaning.md)).
+*Planned* ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md)): a `format` column arrives with `chat_v1`,
+a small markup frozen per version (code spans and fences, block quotes,
+bold, italic, `http`/`https` autolinks and member references `<@uuid>`);
+every existing message stays `plain_text`, and new posts use `chat_v1`.
+A reference to a member who is not in the URL's organisation, checked
+through org's directory, rejects the post with 422.
 
 Every channel message is in exactly one topic of its channel
 ([`topics.md`](topics.md)). Branching moves it to another topic without
@@ -74,7 +79,8 @@ The channel page shows the latest page of 50 messages, oldest first. templ escap
 stored bodies at render time (never `templ.Raw`); `whitespace-pre-wrap`
 keeps line breaks and `dir="auto"` isolates each body's direction. DOM ids
 use `message.id`. Authors use `view.MemberName` with current display names
-and handles. A quote (*planned*, #1176) shows its author's current name, the
+and handles. Times have a UTC `<time datetime>` fallback; an external script
+shows browser-local time. A quote (*planned*, #1176) shows its author's current name, the
 snapshot escaped the same way and a link built from the slug and message ID
 ([decision 36](../decisions/36-one-message-has-a-stable-url.md)), or no link
 once the original is deleted; nothing current from the original, so it
@@ -85,8 +91,16 @@ owned by `conversation` ([decision 38](../decisions/38-a-quote-is-a-snapshot-own
 it returns the body unchanged. The pins excerpt, the live announcement
 (today `view.LiveMessageItem` concatenates `entry.Body`), the selection
 check and later notifications and search use it. A quote's snapshot is left
-out of the quoting message's extraction. Times have a UTC `<time datetime>` fallback; an external script
-shows browser-local time.
+out of the quoting message's extraction.
+
+A `chat_v1` body (*planned*, [decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md)) is parsed by
+`conversation` into plain structs and rendered node by node with templ,
+each block and inline element isolated in direction; never `templ.Raw` or
+HTML built from strings, no raw HTML or images. Links allow only `http` and
+`https`, with `rel="noopener noreferrer"`, and are never fetched; a pasted
+message URL is an ordinary link. A member reference shows the current
+`Display name @handle`, or a localised placeholder when it cannot be
+resolved. Its extraction resolves references to `@handle` at use.
 
 ## Posting from the channel page
 

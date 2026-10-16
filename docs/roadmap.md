@@ -138,9 +138,9 @@ old one. Roughly in this order:
    tried first in one composer prototype with a size and INP budget; composer
    state and browser storage, set by
    [decision 37](decisions/37-composer-javascript-pending-posts-keys-and-drafts.md);
-   a message format and safe Markdown rendering
-   ([decision 18](decisions/18-stored-message-formats-never-change-meaning.md),
-   no `templ.Raw`); the URL of one message, set by
+   a body format and safe rendering, set by
+   [decision 39](decisions/39-message-bodies-use-a-small-frozen-markup.md);
+   the URL of one message, set by
    [decision 36](decisions/36-one-message-has-a-stable-url.md). The rest
    waits for its decision.
 2. **Two tracks in parallel.** The composer track never blocks the basics.

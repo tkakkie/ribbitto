@@ -60,8 +60,8 @@ except B's narrow carve-out; a change there that keeps both is tier B
     tooling: the Argon launcher in `cmd/argonreview/`; the trusted prompts and
     review instructions in `.github/prompts/**` and
     `.github/instructions/**`; `.github/workflows/**`; the files that define
-    the review gates (`docs/workflow/README.md`, `reviewing.md`,
-    `running-other-ai.md`, `running-argon.md`, `argon-implementer.md`, this
+    the review gates (`docs/workflow/README.md`, `pull-requests.md`, `reviewing.md`,
+    `copilot.md`, `running-other-ai.md`, `running-argon.md`, `argon-implementer.md`, this
     whole file, and `.github/pull_request_template.md`); and the security and scoping rules
     in `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does
     not exempt a change from this item.
@@ -121,7 +121,7 @@ does, not only the paths it touches.
 its findings are fixed, after the branch has merged the current `main` or
 it is confirmed that no merge is needed, and after Copilot, requested by
 hand on the draft, has reviewed and any change answering it has passed the
-Copilot follow-up check ([reviewing](reviewing.md)): on that head, while the
+Copilot follow-up check ([Copilot](copilot.md)): on that head, while the
 pull request is still a draft, immediately before `ai-reviewed`. GitHub
 cannot merge a draft, so this holds the merge until the review completes.
 It does not run alongside the first cross-review. A report on an earlier
@@ -136,7 +136,7 @@ recomputed over its whole diff at the new head and never lowered. Argon
 reviews again. A tier C pull request lifted to B or A gets its first review,
 compared against the base when no reviewed head exists, and Copilot's
 review before it if it had skipped Copilot under the
-[docs-only rule](reviewing.md#docs-only-pull-requests); one Argon implemented
+[docs-only rule](copilot.md#docs-only-pull-requests); one Argon implemented
 leaves its trial instead, and the maintainer decides, since Argon never
 reviews its own work ([trial](argon-implementer.md#which-issues)). Fixes first get the
 follow-up check in [reviewing](reviewing.md).

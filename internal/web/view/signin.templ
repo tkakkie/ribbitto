@@ -1,6 +1,9 @@
 package view
 
-import "github.com/tkakkie/ribbitto/internal/web/i18n"
+import (
+	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
 
 // SignInForm is what the sign-in page shows again after a failed attempt.
 // It never carries the password.
@@ -8,6 +11,9 @@ type SignInForm struct {
 	SignUpOpen bool
 	Email      string
 	Error      string // message ID, empty when there is no error
+	// Horizon, set only on signed-out renders, makes the drafts script
+	// remove stored drafts older than it (decision 37 (d)).
+	Horizon *kernel.ID
 }
 
 // SignIn renders the sign-in page.
@@ -18,7 +24,14 @@ templ SignIn(stylesheetURL string, form SignInForm) {
 			if form.Error != "" {
 				<p role="alert" class="text-body text-danger">{ i18n.T(ctx, form.Error) }</p>
 			}
-			<form method="post" action="/signin" class="flex flex-col gap-4">
+			<form
+				method="post"
+				action="/signin"
+				class="flex flex-col gap-4"
+				if form.Horizon != nil {
+					data-drafts-horizon={ idValue(*form.Horizon) }
+				}
+			>
 				@textField("email", "email", "username", form.Email, "signin.email", "")
 				@textField("password", "password", "current-password", "", "signin.password", "")
 				@submitButton(buttonWelcomePrimary, "signin.submit")
@@ -27,5 +40,6 @@ templ SignIn(stylesheetURL string, form SignInForm) {
 				@textLink("/signup", "signup.title", "text-body font-semibold")
 			}
 		}
+		<script defer src="/static/message-drafts-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }

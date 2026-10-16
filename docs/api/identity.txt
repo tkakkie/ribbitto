@@ -36,6 +36,7 @@ type SessionStore interface // SessionStore persists sessions by the SHA-256 has
   func (SessionStore).DeleteSession(ctx context.Context, tokenHash []byte) (ended github.com/tkakkie/ribbitto/internal/kernel.ID, found bool, err error) // DeleteSession deletes the session with this hash, if there is one, and reports its id.
   func (SessionStore).ReplaceSession(ctx context.Context, oldHash []byte, newHash []byte, accountID github.com/tkakkie/ribbitto/internal/kernel.ID, expiresAt time.Time) (ended github.com/tkakkie/ribbitto/internal/kernel.ID, found bool, err error) // ReplaceSession deletes the session with oldHash, if there is one, and stores the new session, atomically: either both happen or neither.
   func (SessionStore).SessionAccount(ctx context.Context, tokenHash []byte, now time.Time) (Account, Session, error) // SessionAccount returns the account and the session with this hash if it expires after now, and ErrNoSession otherwise.
+  func (SessionStore).SessionHorizon(ctx context.Context) (github.com/tkakkie/ribbitto/internal/kernel.ID, error) // SessionHorizon returns a UUIDv7 from the clock that stamps new session ids.
 type Sessions struct // Sessions creates, resolves and deletes server-side sessions.
   func (*Sessions).Create(ctx context.Context, accountID github.com/tkakkie/ribbitto/internal/kernel.ID) (string, time.Time, error) // Create starts a session for the account and returns its token, which only the caller (the browser's cookie) keeps, and its expiry.
   func (*Sessions).Delete(ctx context.Context, token string) error // Delete ends the session with this token, if there is one.
@@ -43,6 +44,7 @@ type Sessions struct // Sessions creates, resolves and deletes server-side sessi
   func (*Sessions).Replace(ctx context.Context, previousToken string, accountID github.com/tkakkie/ribbitto/internal/kernel.ID) (string, time.Time, error) // Replace starts a session for the account and, in the same transaction, ends the session named by previousToken (the browser's cookie, possibly empty or stale).
   func (*Sessions).Resolve(ctx context.Context, token string) (Account, Session, error) // Resolve returns the account and session of a live session.
 type SignIn struct // SignIn signs accounts in and out.
+  func (*SignIn).SessionHorizon(ctx context.Context) (github.com/tkakkie/ribbitto/internal/kernel.ID, error) // SessionHorizon returns a UUIDv7 generated now by the clock that stamps session ids, so every session created after it returns has a millisecond prefix at or after the horizon's.
   func (*SignIn).SignIn(ctx context.Context, email string, password string, previousToken string) (string, time.Time, error) // SignIn checks the credentials and starts a new session.
   func (*SignIn).SignOut(ctx context.Context, token string) error // SignOut ends the session with this token.
 func ValidateDisplayName(value string) (string, error) // ValidateDisplayName returns a trimmed NFC name of 1–50 printable Unicode code points that is not blank-looking (IsBlankLookingName).

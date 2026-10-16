@@ -1,6 +1,7 @@
 package postgres_test
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -170,5 +171,24 @@ func TestSessionStoreReportsEndedSessions(t *testing.T) {
 	}
 	if _, found, err := store.DeleteSession(ctx, second); err != nil || found {
 		t.Fatalf("deleting a missing session reported %t, %v", found, err)
+	}
+}
+
+// A session created after SessionHorizon returns never has an earlier
+// millisecond prefix: both come from PostgreSQL's uuidv7() (decision 37 (d)).
+func TestSessionHorizon(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	id := identitytest.Account(t, pool, "h@example.com", "H")
+	sessions := identity.NewSessions(postgres.NewSessionStore(pool), time.Now, nil)
+	horizon, err := identity.NewSignIn(nil, nil, sessions).SessionHorizon(ctx)
+	requireNoError(t, err)
+	_, _, err = sessions.Create(ctx, id)
+	requireNoError(t, err)
+	var session kernel.ID
+	requireNoError(t, pool.QueryRow(ctx, "SELECT id FROM session WHERE account_id = $1", id).Scan(&session))
+	if horizon[6]>>4 != 7 || bytes.Compare(session[:6], horizon[:6]) < 0 {
+		t.Fatalf("horizon %x, later session %x", horizon, session)
 	}
 }

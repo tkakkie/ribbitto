@@ -3,11 +3,13 @@ package web
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/identity"
+	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/web/middleware"
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
@@ -16,6 +18,7 @@ import (
 type SignInService interface {
 	SignIn(ctx context.Context, email, password, previousToken string) (string, time.Time, error)
 	SignOut(ctx context.Context, token string) error
+	SessionHorizon(ctx context.Context) (kernel.ID, error)
 }
 
 func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInService, signup SignUpService, allow func(http.ResponseWriter, *http.Request) bool) {
@@ -27,6 +30,17 @@ func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInServic
 				return
 			}
 			form.SignUpOpen = open
+		}
+		// Only a signed-out render cleans up stored drafts (decision 37 (d)):
+		// a signed-in browser's rejected attempt, from a stale form, leaves
+		// its session and so its drafts intact. The horizon comes from
+		// PostgreSQL, the clock of session ids, never this server's.
+		if _, signedIn := middleware.Account(r.Context()); !signedIn {
+			if horizon, err := service.SessionHorizon(r.Context()); err != nil {
+				slog.ErrorContext(r.Context(), "reading the drafts horizon", "err", err)
+			} else {
+				form.Horizon = &horizon
+			}
 		}
 		pages.render(w, r, status, func(url string) templ.Component { return view.SignIn(url, form) })
 	}
@@ -72,6 +86,9 @@ func registerSignIn(routes sessionMux, pages *pageRenderer, service SignInServic
 			}
 		}
 		middleware.ClearSessionCookie(w)
+		// Drops stored drafts (decision 37 (d)). Never "cookies", which
+		// covers the whole registrable domain, nor "cache" or "*".
+		w.Header().Set("Clear-Site-Data", `"storage"`)
 		http.Redirect(w, r, "/signin", http.StatusSeeOther)
 	})
 }

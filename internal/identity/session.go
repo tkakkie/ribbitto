@@ -44,6 +44,9 @@ type SessionStore interface {
 	// reports the deleted session's id.
 	ReplaceSession(ctx context.Context, oldHash, newHash []byte, accountID kernel.ID, expiresAt time.Time) (ended kernel.ID, found bool, err error)
 	DeleteExpiredSessions(ctx context.Context, before time.Time) error
+	// SessionHorizon returns a UUIDv7 from the clock that stamps new
+	// session ids.
+	SessionHorizon(ctx context.Context) (kernel.ID, error)
 }
 
 // SessionCanceller ends what still runs on a session that is deleted or may

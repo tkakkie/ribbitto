@@ -60,7 +60,8 @@ separator between the marker words).
 
 ## Expressions (tablecheck)
 
-Query expressions accept only `sqlc.arg`, `sqlc.narg`, `count`, `max` and `lower`.
+Query expressions accept only `sqlc.arg`, `sqlc.narg`, `count`, `max`, `lower`
+and `uuidv7` (the drafts horizon, #1178).
 Query operators allow unqualified `=`, `<`, `>`, `<=`, `+`. Operator names
 are checked in comparisons, quantified ANY/ALL subqueries and ORDER BY USING
 sort clauses alike; unclassifiable names fail. IN subqueries, EXISTS, scalar

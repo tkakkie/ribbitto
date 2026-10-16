@@ -120,7 +120,7 @@ the composer script keeps none of their state.
   stream payload. Planned (#1156): the script may replace it with
   `crypto.randomUUID()`.
 - **Drafts:** [below](#drafts).
-- **Send key** (planned, #1158 and #1175): a server-stored preference read
+- **Send key** (planned, #1158): a server-stored preference (`account.send_key`, #1175) read
   from a rendered attribute, never browser storage.
 
 ### Drafts

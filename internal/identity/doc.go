@@ -3,6 +3,7 @@
 // sign in.
 //
 // Module: identity (feature map in docs/architecture/features.md), which
-// owns the account and session tables and the email, password and display-name
-// rules. It writes no other feature's tables and publishes no event kinds.
+// owns the account and session tables, the email, password and display-name
+// rules, and the account's send-key preference. It writes no other feature's
+// tables and publishes no event kinds.
 package identity

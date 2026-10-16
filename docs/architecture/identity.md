@@ -4,6 +4,17 @@
 connects it to HTTP. `internal/identity` also owns `Account` and the email,
 password and display-name rules ([validation](../domain/validation.md)).
 
+**Send-key preference** (#1175). `account.send_key` says which key sends from
+the composer: `enter` (the default, so accounts that existed before migration
+00017 keep sending on Enter) or `modifier_enter` (Ctrl+Enter, ⌘+Enter on a
+Mac). It is the person's, so it applies in every organisation and on every
+device. `GetSessionByTokenHash` selects it with the account, so
+`identity.Account.SendKey` reaches each request through the session
+middleware with no extra query. `identity.Preferences.SetSendKey` checks the
+value with `ParseSendKey` and updates only the account whose ID its caller
+passes, which must be the signed-in account's own; an unknown ID is
+`identity.ErrNoAccount`. Nothing in `web` uses it yet (#1158).
+
 **Account creation in a caller's transaction.** `org.AccountCreator` and its
 `AccountCreatorIn` factory accept validated, normalised values and a password
 hash. `identitypg.AccountCreatorIn` binds identity's store to the supplied

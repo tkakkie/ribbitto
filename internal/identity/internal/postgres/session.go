@@ -90,7 +90,8 @@ func (s *SessionStore) SessionAccount(ctx context.Context, tokenHash []byte, now
 	if err != nil {
 		return identity.Account{}, identity.Session{}, fmt.Errorf("selecting session: %w", err)
 	}
-	return identity.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName},
+	// The column's CHECK admits only the values ParseSendKey accepts.
+	return identity.Account{ID: row.ID.Bytes, Email: row.Email, DisplayName: row.DisplayName, SendKey: identity.SendKey(row.SendKey)},
 		identity.Session{ID: row.SessionID.Bytes, ExpiresAt: row.ExpiresAt.Time}, nil
 }
 

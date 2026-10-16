@@ -33,7 +33,7 @@ erDiagram
 | Entity | Status | Key columns |
 |---|---|---|
 | `organization` | exists | `id` (UUIDv7), `slug` (1–63 chars, `a-z0-9-`, no leading or trailing `-`), `name`, `event_seq`, `event_log_boundary_seq`, `access_epoch` |
-| `account` | exists | normalised unique email, display name, Argon2id password hash |
+| `account` | exists | normalised unique email, display name, Argon2id password hash, `send_key` (`enter` or `modifier_enter`, default `enter`; loaded with the session; [identity](../architecture/identity.md)) |
 | `session` | exists | SHA-256 hash of the session token, expiry |
 | `setup` | exists | boolean key fixed to `true`, `organization_id`, `completed_at` |
 | `member` | exists | `organization_id`, `account_id`, role (`owner` or `member`), `joined_event_seq`, `handle` (unique per organisation) |

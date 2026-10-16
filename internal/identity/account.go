@@ -19,4 +19,6 @@ type Account struct {
 	ID          kernel.ID
 	Email       string
 	DisplayName string
+	// SendKey is loaded with the session, so pages need no extra query.
+	SendKey SendKey
 }

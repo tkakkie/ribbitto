@@ -6,7 +6,7 @@
 | ---- | ------- | ------- | ---- |
 | [public.goose_db_version](public.goose_db_version.md) | 4 |  | BASE TABLE |
 | [public.organization](public.organization.md) | 7 |  | BASE TABLE |
-| [public.account](public.account.md) | 5 |  | BASE TABLE |
+| [public.account](public.account.md) | 6 |  | BASE TABLE |
 | [public.session](public.session.md) | 5 |  | BASE TABLE |
 | [public.member](public.member.md) | 7 |  | BASE TABLE |
 | [public.setup](public.setup.md) | 3 |  | BASE TABLE |
@@ -72,6 +72,7 @@ erDiagram
   text display_name
   text password_hash
   timestamp_with_time_zone created_at
+  text send_key
 }
 "public.session" {
   uuid id

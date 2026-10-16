@@ -114,6 +114,7 @@ erDiagram
   text display_name
   text password_hash
   timestamp_with_time_zone created_at
+  text send_key
 }
 ```
 

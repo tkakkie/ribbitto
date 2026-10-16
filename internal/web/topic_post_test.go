@@ -92,11 +92,11 @@ func TestTopicPostScopeAgainstPostgreSQL(t *testing.T) {
 		}
 	}
 	// The visible topic, by contrast, answers the enhanced fragments.
-	if w := post(owner, visible, "", true); w.Code != http.StatusUnprocessableEntity || !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) || !strings.Contains(w.Body.String(), `name="composer" value="submitted"`) {
+	if w := post(owner, visible, "", true); w.Code != http.StatusUnprocessableEntity || !strings.HasPrefix(w.Body.String(), composerFragment) || !strings.Contains(w.Body.String(), `name="composer" value="submitted"`) {
 		t.Fatalf("visible topic 422: status %d: %s", w.Code, w.Body.String())
 	}
 	before := messages()
-	if w := post(owner, visible, "hello", true); w.Code != http.StatusOK || !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) || messages() != before+1 {
+	if w := post(owner, visible, "hello", true); w.Code != http.StatusOK || !strings.HasPrefix(w.Body.String(), composerFragment) || messages() != before+1 {
 		t.Fatalf("visible topic post: status %d: %s", w.Code, w.Body.String())
 	}
 	var stored kernel.ID

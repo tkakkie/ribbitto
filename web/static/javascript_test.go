@@ -49,7 +49,7 @@ func checkJavaScript(name, source string) []javascriptFinding {
 		pattern *regexp.Regexp
 	}{
 		{"HTML generation", regexp.MustCompile(`\b(?:innerHTML|outerHTML)\s*` + assignment + `|\b(?:insertAdjacentHTML|createContextualFragment)\s*\(|\bdocument\s*\.\s*(?:write|writeln)\s*\(`)},
-		{"requests", regexp.MustCompile(`\b(?:fetch|XMLHttpRequest)\b`)},
+		{"requests", regexp.MustCompile(`\b(?:fetch|XMLHttpRequest|sendBeacon|WebSocket|EventSource)\b|\bhtmx\s*\.\s*ajax\b`)},
 		{"IndexedDB", regexp.MustCompile(`\bindexedDB\b`)},
 		{"code evaluation", regexp.MustCompile("\\beval\\s*\\(|\\bnew\\s+Function\\b|\\b(?:setTimeout|setInterval)\\s*\\(\\s*[\"'`]")},
 		{"global write", regexp.MustCompile(`\b(?:window|globalThis)\s*\.\s*[A-Za-z_$][\w$]*\s*(?:` + assignment + `|\+\+|--)|(?:\+\+|--)\s*(?:window|globalThis)\s*\.\s*[A-Za-z_$][\w$]*`)},
@@ -161,6 +161,10 @@ func TestJavaScriptPatterns(t *testing.T) {
 		{"fetch", `fetch(url);`, "requests"},
 		{"qualified fetch", `window.fetch(url);`, "requests"},
 		{"xhr", `new XMLHttpRequest();`, "requests"},
+		{"htmx ajax", `htmx.ajax("POST", url, target);`, "requests"},
+		{"beacon", `navigator.sendBeacon(url, data);`, "requests"},
+		{"websocket", `new WebSocket(url);`, "requests"},
+		{"event source", `new EventSource(url);`, "requests"},
 		{"indexed db", `indexedDB.open("state");`, "IndexedDB"},
 		{"eval", `eval(code);`, "code evaluation"},
 		{"function constructor", `new Function(code);`, "code evaluation"},

@@ -132,11 +132,11 @@ func testShortHeightBrowser(t *testing.T, browser *rod.Browser) {
 			// Post from the composer as a reader there would, scrolled to it.
 			step("a composer post")
 			page.MustEval(`() => { const m = document.getElementById('conversation'); m.scrollTop = m.scrollHeight;
-				const form = document.getElementById('message-composer'); form.dataset.sent = '';
-				document.getElementById('message-body').value = 'hello'; form.requestSubmit(); }`)
-			// The response replaces the form; the stream script then takes its mark.
-			wait("the post response settles", `() => { const form = document.getElementById('message-composer');
-				return form.dataset.sent === undefined && form.dataset.postedMessage === undefined && !document.querySelector('.htmx-settling'); }`)
+				document.getElementById('message-composer-state').dataset.sent = '';
+				document.getElementById('message-body').value = 'hello'; document.getElementById('message-composer').requestSubmit(); }`)
+			// The response replaces the state; the stream script then takes its mark.
+			wait("the post response settles", `() => { const state = document.getElementById('message-composer-state');
+				return state.dataset.sent === undefined && state.dataset.postedMessage === undefined && !document.querySelector('.htmx-settling'); }`)
 			send(realtime.Outgoing{ID: 44, Name: "message", Data: streamTestMarkup(t, view.LiveMessageItem(streamTestMessages(topic, 44)[0]))})
 			// Four 22 px lines of it, as the width audit's rule: at 320 px the
 			// message is about as tall as the 128 px list.

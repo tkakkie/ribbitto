@@ -222,6 +222,10 @@
    (docs/ui-code.md). Tailwind's breakpoints are widths, so this is a variant. */
 @custom-variant short (@media (height < 27.25rem));
 
+/* htmx marks the element whose request is in flight with htmx-request; the
+   composer shows its sending state through this (docs/architecture/rendering.md). */
+@custom-variant sending (&:where(.htmx-request *));
+
 @layer base {
   html {
     background-color: var(--color-bg);

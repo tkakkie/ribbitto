@@ -85,7 +85,7 @@ func testTypingComposerBrowser(t *testing.T, browser *rod.Browser) {
  // The out-of-band typing form settles a second time for the same request.
  const settled = new WeakSet();
  document.addEventListener('htmx:afterSettle', e => {
-  if (e.detail.target.id !== 'message-composer' || settled.has(e.detail.xhr)) return;
+  if (e.detail.target.id !== 'message-composer-state' || settled.has(e.detail.xhr)) return;
   settled.add(e.detail.xhr);
   document.body.dataset.posts = String(+(document.body.dataset.posts || 0) + 1);
  });
@@ -337,7 +337,7 @@ func testTypingIndicatorBrowser(t *testing.T, browser *rod.Browser) {
 			// next input signals with the fragment's fresh generation.
 			typist.page.MustActivate()
 			typist.page.MustEval(`() => document.addEventListener('htmx:afterSettle', e => {
-				if (e.target.id === 'message-composer') document.body.dataset.sent = 'yes';
+				if (e.target.id === 'message-composer-state') document.body.dataset.sent = 'yes';
 			})`)
 			typist.page.MustElement("#message-body").MustType(input.Enter)
 			typist.page.MustWait(`() => document.body.dataset.sent === 'yes'`)

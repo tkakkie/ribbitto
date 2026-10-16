@@ -19,6 +19,8 @@ requests; htmx sends resync requests.
 [Decision 37](37-composer-javascript-pending-posts-keys-and-drafts.md) allows
 bounded composer state: pending own posts in the DOM, an idempotency key and
 session-bound drafts in `localStorage`. Requests still go through htmx.
+[Decision 40](40-plain-javascript-by-default-library-islands-by-measured-exception.md) is the route for scoped UI-library islands; each
+adopted island is listed here as its own exception. None exists today.
 
 **Why:** M3 adds SSE fragments and more scripts across exactly these
 boundaries; without written rules each change would pick its own (#193).

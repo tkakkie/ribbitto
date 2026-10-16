@@ -25,7 +25,9 @@ import (
 	"github.com/tkakkie/ribbitto/internal/web/view"
 )
 
-var pageNonce = regexp.MustCompile(` nonce="[^"]*"`)
+// pageNonce matches what differs on every full page: the script nonce and
+// the render time.
+var pageNonce = regexp.MustCompile(` (nonce|data-rendered-at)="[^"]*"`)
 
 // Every composer path stores chat_v1; a reference to an unknown and to
 // another organisation's member gets the same 422 and keeps the draft; a

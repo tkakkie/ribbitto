@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -285,6 +286,8 @@ func screenView(r *http.Request, page view.ChannelPage, m org.Membership, snapsh
 	page = sidebarView(page, m, snapshot)
 	page.ImageKeys = conversation.ChannelImageKeys()
 	page.DisplayName, page.Handle, page.Role = memberDisplayName(account.DisplayName), m.Member.Handle, string(m.Member.Role)
+	session, _ := middleware.CurrentSession(r.Context())
+	page.Session, page.SessionExpires, page.Rendered = session.ID, session.ExpiresAt, time.Now()
 	return page
 }
 

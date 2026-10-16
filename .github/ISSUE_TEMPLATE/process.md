@@ -28,4 +28,6 @@ labels: ["process"]
 ## Implementer
 
 <!-- Claude or Codex, proposed by the author; the maintainer confirms it
-     when adding `ready`. Outside contributors can leave this empty. -->
+     when adding `ready`. Argon only for an eligible trial issue, with its
+     expected tier (docs/workflow/argon-implementer.md#which-issues).
+     Outside contributors can leave this empty. -->

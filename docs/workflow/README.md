@@ -14,13 +14,15 @@ disagree, fix the disagreement in a pull request.
 | [`adversarial-review.md`](adversarial-review.md) | Which changes need an Argon adversarial review, and when it completes |
 | [`running-argon.md`](running-argon.md) | running Argon's adversarial review: setup, the Go launcher, its boundary and evidence |
 | [`running-other-ai.md`](running-other-ai.md) | Running Codex or Claude headless, and how the maintainer's sessions run Codex |
+| [`argon-implementer.md`](argon-implementer.md) | The trial of Argon implementing a few tier C issues: eligibility, roles, boundary, preflight, records |
 
 ## Principles
 
-1. **Every issue and every pull request an AI writes is reviewed by the
-   other AI before the maintainer is asked to look at it** — including any
-   documentation the pull request changes. Review reports, Status updates,
-   workflow-log comments and chat messages are not reviewed.
+1. **Every issue and every pull request an AI writes is reviewed by an AI
+   that did not write it before the maintainer is asked to look at it** —
+   including any documentation the pull request changes. Review reports,
+   Status updates, workflow-log comments and chat messages are not
+   reviewed.
 2. **The maintainer decides at two normal delivery gates:** approving an
    issue (`ready`) and merging a pull request. Everything between is done
    by the AIs. Deciding is the gate, not clicking: after the maintainer's
@@ -45,10 +47,11 @@ disagree, fix the disagreement in a pull request.
 | Claude | Writes issues, implements (mainly design-heavy work), reviews Codex's work, drives the other CLIs. |
 | Codex | Writes issues, implements (mainly well-specified work), reviews Claude's work. |
 | Copilot | Reviews each pull request **once**, at **Lite**, guided by `.github/instructions/code-review.instructions.md`. The orchestrating AI requests that review by hand on the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), after the cross-review approves and `main` is merged, and before the initial adversarial review. The `main` ruleset does not request it on ready, and drafts and new pushes do not trigger it; re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
-| Antigravity / Argon | One required adversarial review for tier A and tier B pull requests, through `cmd/argonreview` ([running it](running-argon.md)). Findings are advisory. Optional: the occasional documentation audit (below), UI screenshot review and experiments. |
+| Antigravity / Argon | One required adversarial review for tier A and tier B pull requests, through `cmd/argonreview` ([running it](running-argon.md)). Findings are advisory. During its trial, implements a few eligible tier C issues, reviewed by Claude ([trial](argon-implementer.md)). Optional: the occasional documentation audit (below), UI screenshot review and experiments. |
 
 Claude and Codex should end up with roughly equal shares of implementation.
-If one has done the last few issues, give the next one to the other.
+If one has done the last few issues, give the next one to the other. Argon's
+trial issues do not count towards these shares.
 
 ## Lifecycle of an issue
 
@@ -62,7 +65,9 @@ idea (maintainer, one line) or finding (AI)
 ```
 
 - The author proposes the *Implementer* (Claude or Codex, keeping the
-  shares even); the maintainer confirms or changes it when adding `ready`.
+  shares even, or Argon for an
+  [eligible trial issue](argon-implementer.md#which-issues)); the maintainer
+  confirms or changes it when adding `ready`.
 - Always start from the matching template, for example
   `gh issue create --template Feature --title "…"`. The other templates
   are `Bug`, `Task` and `"Process improvement"`; with `--body-file`, copy
@@ -78,11 +83,12 @@ idea (maintainer, one line) or finding (AI)
 `ready` issue
   → implementer AI works in its own worktree
     (maintainer setup: `../wt/<name>` next to the main checkout;
-     branch claude/<topic> or codex/<topic>)
+     branch claude/<topic>, codex/<topic> or argon/<topic>)
   → draft pull request from the template, linked with "Closes #N";
     CI runs on every push (`make check`'s parts in parallel jobs, and
     `make vuln`; see Checks in the README)
-  → the AI that did not implement it reviews        (see reviewing.md)
+  → the AI that did not implement it reviews        (see reviewing.md;
+    Claude for Argon's)
   → implementer applies the review
   → at most two rounds; if round 2 leaves only mechanical fixes,
     closure verification; otherwise the maintainer decides

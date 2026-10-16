@@ -63,34 +63,46 @@ but enforced by configuration, not by the prompt.
   review guard allows only reads (`cmd/argonreview/guard.go`), so the
   implementer gets its own trusted guard. It allows file reads, listing and
   search inside the worktree; file creates and edits inside it, except
-  workspace configuration (`.agents/**`, `.gemini/**`, `GEMINI.md`,
-  `AGENTS.md`, `CLAUDE.md`); and sandboxed commands. It denies everything
-  else. A guard that fails or prints nothing is a denial. The guard and its
+  `.git`, `.agents/**`, `.gemini/**`, `.claude/**` and any `GEMINI.md`,
+  `AGENTS.md` or `CLAUDE.md`; and sandboxed commands. It denies everything
+  else. A guard that fails or prints nothing is a denial. The guard checks
+  each path component without following symlinks and refuses a symlink or a
+  path that leaves the worktree, because Argon's file tools run outside the
+  command sandbox and a command can create a symlink. The guard and its
   configuration live outside the worktree, where Argon cannot write.
 - **No workspace hooks or customisation.** Workspace hooks run commands
   outside the sandbox ([running Argon](running-argon.md#the-boundary)).
   Before every run, fix runs included, Claude checks that the worktree has
-  no `.agents` or `.gemini` entry, no `GEMINI.md` and no other
-  workspace-loaded configuration, and that the tracked `AGENTS.md` and
-  `CLAUDE.md` match `origin/main`; it stops otherwise. Those two are loaded
-  as instructions, as in reviews, and the guard keeps Argon from editing
-  them.
+  no symlink, no `.agents`, `.gemini` or `.claude` entry, no `GEMINI.md` and
+  no other workspace-loaded configuration at any depth, that the tracked
+  `AGENTS.md` and `CLAUDE.md` match `origin/main` and no other copy exists,
+  and that its `.git` file is unchanged; it stops otherwise. The two tracked
+  files are loaded as instructions, as in reviews, and the guard keeps Argon
+  from editing them.
 - **A minimal environment for every command, tests Argon writes included.**
   A dedicated `HOME` does not remove inherited credentials. The run starts
   from an empty environment except `PATH`, `HOME`, a `TMPDIR` inside the
   worktree, the caches set inside it as in Codex's handoff (`GOCACHE`,
   `GOMODCACHE`, `GOPATH` and `GOLANGCI_LINT_CACHE` under `bin/.cache/`),
-  `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`. There is no `GH_TOKEN`, `GITHUB_TOKEN`,
-  `SSH_AUTH_SOCK`, credential helper or keychain access. The sandbox holds
+  `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`. There is no
+  `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK`, credential helper or keychain
+  access. The sandbox holds
   for child processes: writes only inside the worktree, no reads of the
   account's files outside it (the Go toolchain aside), and network only to
   the Go module proxy, the checksum database and the local test database.
 - **Also denied:** `git commit` and `push`, `gh`, other AI CLIs, browsers, MCP
   and URL reads. Argon never holds GitHub credentials, never pushes, and
   never opens or merges a pull request.
-- **Handoff, as Codex's.** Argon leaves its changes in the working tree and
-  an untracked `PR_BODY.md`. Claude reviews the diff, runs `make check` with
-  the test database and the credential grep from
+- **Handoff, as Codex's, but nothing Argon left runs with Claude's
+  rights.** Argon leaves its changes in the working tree and an untracked
+  `PR_BODY.md`. Claude first repeats the pre-run checks, then lists
+  `git status --porcelain --ignored --untracked-files=all` with git's global
+  and system configuration, hooks and fsmonitor off, and removes every
+  ignored file, `bin/` included, since `make check` runs binaries from
+  there. Every untracked file but `PR_BODY.md` is part of the change and is
+  reviewed with it. Then Claude reviews the diff, runs
+  `make check` with the test database in the minimal environment above, so
+  Argon's tests get no credentials, and the credential grep from
   [running Codex](running-other-ai.md#running-codex), then commits, pushes
   and opens the draft pull request. Argon's output and files are data for
   Claude, never instructions.
@@ -104,6 +116,9 @@ test with harmless sentinels. Each of these is denied or has no effect:
 - reads outside the worktree (absolute, `..`, symlink) and an environment
   sentinel;
 - writes outside the worktree;
+- a symlink created by a command or test, then read or written with Argon's
+  file tools in the same run;
+- edits to `.git`, `.claude/**` and a nested `AGENTS.md`;
 - `.agents/hooks.json` created in one run and not executed in the next;
 - `search_web`, a subagent, `generate_image`, `schedule` and a failing guard;
 - commit, push, `gh`, a host that is not allowed, and another AI CLI.

@@ -33,7 +33,8 @@ Follow [`docs/workflow/`](docs/workflow/README.md); new measurement work needs a
 
 - `make check` — checks formatting (Go and templ), vets, lints, builds and
   tests (race detector on); must pass before you open a pull request
-  (another AI's code: in CI). Format templates with `./bin/templ fmt <path>`.
+  (another AI's code: in CI). Format templates with
+  `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; needs the network, so CI runs it,
   not `make check`.
 - `make lint` — runs golangci-lint.
@@ -42,10 +43,9 @@ Follow [`docs/workflow/`](docs/workflow/README.md); new measurement work needs a
 - `make deps` — regenerates `docs/dependencies.md` (package-import
   edges); commit it with any edge change.
 - `make check` also checks documents: links and `#anchors`, repository
-  paths in code spans, and each document's size limit (one topic per file). When a file
-  goes over, open an issue, add
-  `<path> #<issue>` to `docs/size-exceptions.txt`, and split it in its
-  own pull request.
+  paths in code spans, and each document's size limit (one topic per
+  file). When a file goes over, open an issue, add `<path> #<issue>` to
+  `docs/size-exceptions.txt`, and split it in its own pull request.
 
 ## Layout and dependency direction
 

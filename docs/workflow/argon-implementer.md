@@ -113,8 +113,8 @@ but enforced by configuration, not by the prompt.
   its changes in the working tree and an untracked `PR_BODY.md`. Once the
   supervisor has confirmed that no process from the run is left, Claude
   repeats the pre-run checks, reads the diff and runs the credential grep
-  from [running Codex](running-other-ai.md#running-codex). Before every commit and push, Claude repeats the pre-run
-  checks. Every git command Claude runs in the worktree has
+  from [running Codex](running-other-ai.md#running-codex). Before every
+  commit and push, Claude repeats the pre-run checks. Every git command Claude runs in the worktree has
   `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`,
   `-c core.hooksPath=/dev/null -c core.fsmonitor=false`, and
   `--no-ext-diff --no-textconv` for diffs; a push adds only the credential

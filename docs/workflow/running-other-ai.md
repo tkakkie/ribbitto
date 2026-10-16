@@ -53,8 +53,9 @@ difference between the AIs, enough safety for practice, little to operate.
   Codex in its profile ([below](#running-codex)), Argon inside its
   [boundary](argon-implementer.md#the-boundary).
 - **After handoff, no AI runs that code directly on the host**, outside
-  those sandboxes, until it is on `main`: not `make check`, `make prepush`, `go test`, a build, `make dev`
-  or any tool from that tree.
+  those sandboxes, until it is on `main`: not `make check`,
+  `make prepush`, `go test`, a build, `make dev` or any tool from that
+  tree.
 - **CI is the check.** GitHub Actions runs pull request code with read-only
   access and no secrets. Green CI on the draft replaces the local
   `make check` before the first review and `make prepush` before a

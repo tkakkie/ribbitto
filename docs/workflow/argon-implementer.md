@@ -85,9 +85,19 @@ but enforced by configuration, not by the prompt.
   (`cmd/argonreview/prepare.go`); `AGENTS.md`, `AGENTS.override.md`,
   `GEMINI.md`, `CLAUDE.md`, `CLAUDE.local.md`; `.claude`, `.codex`,
   `.mcp.json`; `.agents`, `.agent`, `_agents`, `_agent`; `hooks.json`,
-  `plugin.json`, `skills.json`, `plugins.json`. It stops otherwise. The
-  home's conversation store (`brain/`) is emptied before and after every
-  run, of either trial.
+  `plugin.json`, `skills.json`, `plugins.json`. It stops otherwise. Only
+  agy's own `builtin/` (while it matches the trusted hash list for the
+  running agy version) and `cli.log` (while it links to a regular
+  `log/cli-<timestamp>.log` in the home) are exempt. The home's
+  conversation store (`brain/`) is emptied before and after every run, of
+  either trial.
+- **A custom agent.** agy offers `grep_search`, `find_by_name` and
+  `list_dir` only to custom agents that list them, so `agy` runs with
+  `--agent argon-implementer`: a Markdown agent whose `tools` are exactly
+  the seven file tools the guard allows. Its definition stays in the
+  trusted part of the home; Claude copies it into `.gemini/config/agents/`
+  for each run, the checks accept it only as a byte-identical copy, and it
+  is removed afterwards.
 - **A fail-closed tool allowlist.** Deny rules cannot name `search_web`,
   subagents, `generate_image` or `schedule`, so a trusted guard, apart from
   the review guard (`cmd/argonreview/guard.go`), allows only file reads,

@@ -82,6 +82,7 @@ func TestBrowser(t *testing.T) {
 	run("static-headers", testStaticHeadersBrowser)
 	run("popover-focus", testPopoverFocusBrowser)
 	run("drafts", testDraftsBrowser)
+	run("drafts-org", testOrgDraftsBrowser)
 	for _, side := range []string{"source", "destination"} {
 		modes := []string{"before", "stale", "fresh", "abort", "4xx"}
 		if side == "source" {

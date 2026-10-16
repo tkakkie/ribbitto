@@ -36,6 +36,7 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `data-sent-body` | `#message-composer-state` | an htmx 409 whose text starts with it, unquoted | the stored body of the requester's message the key names; the help then shows no error |
   | `data-unconfirmed`, `data-not-sent`, `data-still-unconfirmed`, `data-recovered`, `data-repeat` | `#message-send-alert` | latest composers | localised alert texts |
   | `data-drafts-horizon` | the sign-in form | signed-out renders only | UUIDv7; stored drafts of sessions from earlier milliseconds are removed ([drafts](web-javascript.md#drafts)) |
+  | `data-session`, `data-session-expires`, `data-rendered-at` | `#organization-stream` | always | the session's id (a UUIDv7, never its token), its expiry and the render time in Unix milliseconds: the drafts cleanup's horizon and deadline ([drafts](web-javascript.md#drafts)) |
 
   Member identity, selected topic and the resync trigger are specified in the
   [sidebar script contract](web-javascript.md#javascript).

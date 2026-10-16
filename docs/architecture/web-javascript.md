@@ -7,7 +7,9 @@ JavaScript responsibilities and constraints for browser enhancements.
 JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
 keyboard, local time, selection constraints, copying to the clipboard, and
 htmx/SSE input glue. The bounded composer state of decision 37 is the
-[composer](#composer) exception.
+[composer](#composer) exception. Scripts are plain JavaScript; a UI-library
+island comes only as a scoped exception under [decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md),
+and none exists today.
 
 **Exception ([#1039](../decisions/34-live-unread-counts.md)):**
 [decision 34](../decisions/34-live-unread-counts.md) lets one script own
@@ -136,12 +138,12 @@ the composer script keeps none of their state.
 
 ### Drafts
 
-Only `message-drafts-vN.js` may use `localStorage` (the pattern check). It
-runs on the sign-in page (#1178); organisation-page cleanup (#1181), saving
-and restoring (#1162) and the sidebar marker (#1177) are planned: a page
-restores only its own member and session's unexpired entries, writes only
-before its session's deadline, and only shows or hides a server-rendered
-sidebar marker.
+Only `message-drafts-vN.js` may use `localStorage` (the pattern check).
+`message-drafts-v2.js` cleans up on the sign-in page (#1178) and on
+organisation pages (#1181); saving and restoring (#1162) and the sidebar
+marker (#1177) are planned: a page restores only its own member and
+session's unexpired entries, writes only before its session's deadline, and
+only shows or hides a server-rendered sidebar marker.
 
 - **Key:** `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, in
   canonical lower-case UUIDs; the session is its id, a UUIDv7, and the place
@@ -155,13 +157,27 @@ sidebar marker.
   48-bit millisecond prefix (the first 12 hex digits) is strictly before its
   horizon's, plus every `ribbitto.draft.v1:` key without that format. Entries
   in the horizon's millisecond stay until expiry or a later cleanup, so a
-  stale page never removes a newer session's entry. It reads no values.
+  stale page never removes a newer session's entry, and never reads another
+  session's value.
 - **Sign-in page:** the form's `data-drafts-horizon` is a `uuidv7()` from
   PostgreSQL (`identity.SessionHorizon`, the clock of session ids), rendered
   only for signed-out requests, including `POST /signin`'s error renders.
   With it the script cleans up, then writes the notice, once per document
   load, never on a back-forward cache restore. A storage error leaves the
   page working.
+- **Organisation pages:** the channel and channel list pages render on
+  `#organization-stream` `data-session` (the session's id, never its token
+  or hash), `data-session-expires` and `data-rendered-at` (Unix
+  milliseconds) beside `data-member`. Once per document load the script
+  decides each key under the prefix by the first rule that applies: without
+  the format, or with the page's session and another member, removed;
+  another session's, removed if its millisecond is before the page's, else
+  kept unread; the page's own, the only values read, removed if not JSON,
+  lacking or mistyping a field, differing from the key and page in member,
+  session or expiry, over 4,000 code points, or with `at` 7 days old or more
+  than a day ahead. At the deadline (expiry minus render time, timed with
+  `performance.now()` from the document's time origin) an open page removes
+  its own session's keys unread.
 - **Sign-out:** a successful `POST /signout` adds `Clear-Site-Data: "storage"`
   where the browser supports it (Chromium); the sign-in page covers the rest.
 

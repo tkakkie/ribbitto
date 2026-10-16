@@ -12,10 +12,9 @@ enhancement, not full parity.
   branching, marking a feed or topic read, and creating channels or changing their images. Plain forms and links work alone;
   htmx and scripts improve them.
 - **Enhancement only:** real-time updates, focus and scroll handling,
-  keyboard shortcuts (Enter to send), and local-time display. Without
+  keyboard shortcuts (Enter to send), local-time display, and the planned
+  pending own posts and drafts on the device ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)). Without
   JavaScript a page may lack these, but nothing core breaks.
-
-Topic views use plain composer submissions.
 
 ## Go handlers
 
@@ -61,6 +60,7 @@ htmx does only requests and swaps; the server and templ own the HTML.
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
   `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
+  `pin-form-message-<hex>` and `pin-message-<hex>` for a message's pin control (htmx keeps focus on the button through the swap),
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
   `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and
@@ -134,10 +134,13 @@ htmx does only requests and swaps; the server and templ own the HTML.
 
 See [JavaScript responsibilities and constraints](web-javascript.md).
 
-**Current exception:** [decision 34](../decisions/34-live-unread-counts.md)
-adds one exception to the no-application-state rule: one script owns sidebar
-badge numbers and bounded recovery state, never creates elements and never
-makes requests. The server still renders the badges; htmx sends resync requests.
+**Current exceptions** to the no-application-state rule:
+[decision 34](../decisions/34-live-unread-counts.md) lets one script own sidebar
+badge numbers and bounded recovery state, never creating elements or making
+requests; the server still renders the badges and htmx sends resync requests.
+[Decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
+allows bounded composer state (pending posts, idempotency keys, session-bound
+drafts), planned in its issues; requests stay with htmx.
 
 ## How the rules are checked
 

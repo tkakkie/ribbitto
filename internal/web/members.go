@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/web/view"
@@ -47,4 +48,20 @@ func (p channelPages) memberListing(ctx context.Context, m org.Membership, id ke
 		}
 	}
 	return listing, nil
+}
+
+// viewPins maps the overview's pins, read in the page's snapshot; live
+// delivery (#892) replaces the list from its own snapshots.
+func viewPins(pinned []conversation.Pin) []view.Pin {
+	pins := make([]view.Pin, len(pinned))
+	for i, pin := range pinned {
+		pins[i] = view.Pin{
+			MessageID: pin.ID, Excerpt: pin.Excerpt,
+			AuthorDisplayName: memberDisplayName(pin.DisplayName), AuthorHandle: pin.Handle,
+			Topic:             view.Topic{Name: pin.TopicName, IsDefault: pin.DefaultTopic},
+			PinnerDisplayName: memberDisplayName(pin.PinnerName), PinnerHandle: pin.PinnerHandle,
+			PinnedAt: pin.PinnedAt,
+		}
+	}
+	return pins
 }

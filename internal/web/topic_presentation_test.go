@@ -78,6 +78,10 @@ func TestTopicPresentation(t *testing.T) {
 // listedTopic lists the viewed topic, so the sidebar and overview name it.
 type listedTopic struct{ fakeMessages }
 
+func (f listedTopic) Overview(ctx context.Context, m org.Membership, channel kernel.ID, topic *kernel.ID, before *int64, _ int64) (conversation.ChannelPage, error) {
+	return f.Page(ctx, m, channel, topic, before)
+}
+
 func (f listedTopic) Page(ctx context.Context, m org.Membership, id kernel.ID, topicID *kernel.ID, before *int64) (conversation.ChannelPage, error) {
 	page, err := f.fakeMessages.Page(ctx, m, id, topicID, before)
 	if page.Topic != nil {

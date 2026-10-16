@@ -13,7 +13,6 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
-	"github.com/go-rod/rod/lib/proto"
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -334,17 +333,19 @@ func testTypingIndicatorBrowser(t *testing.T, browser *rod.Browser) {
 			expect(topicA, "")
 			signalInput()
 			expect(feed, one)
-			navigated := typist.page.WaitNavigation(proto.PageLifecycleEventNameLoad)
+			// The topic composer posts with htmx (#1154): no navigation, and the
+			// next input signals with the fragment's fresh generation.
 			typist.page.MustActivate()
+			typist.page.MustEval(`() => document.addEventListener('htmx:afterSettle', e => {
+				if (e.target.id === 'message-composer') document.body.dataset.sent = 'yes';
+			})`)
 			typist.page.MustElement("#message-body").MustType(input.Enter)
-			navigated()
+			typist.page.MustWait(`() => document.body.dataset.sent === 'yes'`)
 			if len(state.Read(kernel.ID{7}, typing.Place{Channel: kernel.ID{1}, Topic: a}, kernel.ID{9}).Typists) != 0 {
 				t.Fatal("send did not clear typing")
 			}
 			expect(feed, "")
 			expect(topicA, "")
-			next(typist)
-			typist.page.MustWait(`() => +document.body.dataset.typingFrames > 0`)
 			signalInput()
 			expect(feed, one)
 			// Native retry restores current content; next checks its durable cursor.

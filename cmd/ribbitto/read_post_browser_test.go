@@ -284,7 +284,9 @@ func TestReadPostBrowser(t *testing.T) {
 				if posts.Load() != 4 || len(reads) != 0 {
 					t.Fatal("reading did not coalesce to the newest shown cursor")
 				}
-				if kind == "feed" {
+				// The composer response alone leaves the shown cursor; only
+				// stream application advances it (TestTopicPostBrowser).
+				if kind == "feed" || kind == "topic" {
 					page.MustEval(`() => document.addEventListener('htmx:afterSettle', e => {
 						if (e.target.id === 'message-composer') document.body.dataset.ownResponse = 'done';
 					})`)

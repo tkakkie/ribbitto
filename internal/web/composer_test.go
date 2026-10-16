@@ -165,10 +165,15 @@ func TestComposerValidationPreservation(t *testing.T) {
 					if w.Code != 422 {
 						t.Fatalf("status %d", w.Code)
 					}
-					if !hx || topic {
+					if !hx {
 						assertFullConversationPage(t, w.Body.String())
+					} else if !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) {
+						t.Fatal("enhanced 422 must render only the composer")
 					}
-					_, kept := composerForm(t, w)
+					action, kept := composerForm(t, w)
+					if action != path {
+						t.Fatalf("422 composer posts to %q, want %q", action, path)
+					}
 					if kept.Has("composer") != (submitted != nil) || (submitted != nil && kept.Get("composer") != *submitted) {
 						t.Fatal("422 replaced submitted generation")
 					}
@@ -183,10 +188,10 @@ func TestComposerValidationPreservation(t *testing.T) {
 
 func TestComposerPostLifecycle(t *testing.T) {
 	for _, check := range []string{"fresh", "closing"} {
-		for _, mode := range []string{"enhanced-feed", "plain-feed", "topic", "older-feed", "older-topic"} {
+		for _, mode := range []string{"enhanced-feed", "enhanced-topic", "plain-feed", "plain-topic", "older-feed", "older-topic"} {
 			for _, retry := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/retry=%t", check, mode, retry), func(t *testing.T) {
-					topic, hx := strings.Contains(mode, "topic"), mode == "enhanced-feed"
+					topic, hx := strings.Contains(mode, "topic"), strings.HasPrefix(mode, "enhanced")
 					h, state, m, place := composerHandler(t, topic)
 					path := view.ConversationURL("acme", place.Channel, nil)
 					if topic {
@@ -223,8 +228,11 @@ func TestComposerPostLifecycle(t *testing.T) {
 					values.Set("body", "posted")
 					w = composerRequest(h, action, values, hx)
 					if hx {
-						if w.Code != 200 {
+						if w.Code != 200 || !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) {
 							t.Fatalf("enhanced status %d", w.Code)
+						}
+						if next, _ := composerForm(t, w); next != path {
+							t.Fatalf("fragment posts to %q, want %q", next, path)
 						}
 					} else {
 						if w.Code != 303 || w.Header().Get("Location") != path {
@@ -292,26 +300,32 @@ func TestTypingComposerMarkup(t *testing.T) {
 				for _, lang := range []string{"en", "ja"} {
 					checkHTMXRequests(t, h, doc, lang, true)
 				}
-				// Topic composers submit plainly and reload the whole page.
-				if !topic {
-					action, posted := composerForm(t, w)
-					posted.Set("body", "fragment")
-					fragment, err := html.Parse(composerRequest(h, action, posted, true).Body)
-					if err != nil {
-						t.Fatal(err)
-					}
-					var renewed int
-					for n := range fragment.Descendants() {
-						if attr(n, "id") == "typing-form" {
-							renewed++
-							if attr(n, "hx-swap-oob") != "outerHTML" {
-								t.Fatal("enhanced fragment does not replace the signal form")
-							}
+				// Latest composers post with htmx to their own feed or topic;
+				// older pages keep the plain form.
+				wantPost := path
+				if older {
+					wantPost = ""
+				}
+				if attr(message, "hx-post") != wantPost {
+					t.Fatalf("composer hx-post %q, want %q", attr(message, "hx-post"), wantPost)
+				}
+				action, posted := composerForm(t, w)
+				posted.Set("body", "fragment")
+				fragment, err := html.Parse(composerRequest(h, action, posted, true).Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var renewed int
+				for n := range fragment.Descendants() {
+					if attr(n, "id") == "typing-form" {
+						renewed++
+						if attr(n, "hx-swap-oob") != "outerHTML" || attr(n, "hx-post") != want {
+							t.Fatal("enhanced fragment does not replace the signal form for the posting topic")
 						}
 					}
-					if renewed != 1 {
-						t.Fatalf("enhanced fragment rendered %d signal forms", renewed)
-					}
+				}
+				if renewed != 1 {
+					t.Fatalf("enhanced fragment rendered %d signal forms", renewed)
 				}
 			})
 		}

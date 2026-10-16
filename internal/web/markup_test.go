@@ -566,7 +566,7 @@ func TestPagesMarkup(t *testing.T) {
 	signedIn := func(authorizer Authorizer) func() Services {
 		return func() Services {
 			s := base()
-			s.Sessions, s.Authz = oneSession{}, authorizer
+			s.Sessions, s.Authz, s.Pinning = oneSession{}, authorizer, &fakePinning{}
 			return s
 		}
 	}
@@ -642,8 +642,14 @@ func TestPagesMarkup(t *testing.T) {
 		}
 		cases = append(cases, markupCase{name: "topic " + method, route: method + " /organizations/{slug}/channels/{channelID}/topics/{topicID}", services: func() Services { s := signedIn(oneOrganisation{})(); s.Messages = olderMessages(); return s }, method: method, path: view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{2}), cookie: true, form: url.Values{"cursor": {"0"}, "body": {""}}, status: status, alerts: alerts})
 	}
+	// Without JavaScript only a full channel renders a page; success is 303.
+	cases = append(cases, markupCase{name: "pin limit", route: "POST /organizations/{slug}/channels/{channelID}/messages/{messageID}/pin", services: func() Services {
+		s := signedIn(oneOrganisation{})()
+		s.Pinning = &fakePinning{err: conversation.ErrPinLimit}
+		return s
+	}, method: "POST", path: view.PinURL("acme", kernel.ID{1}, kernel.ID{8}) + "/pin", cookie: true, status: http.StatusConflict, alerts: 1})
 	cases = append(cases, markupCase{name: "branch invalid", route: "POST /organizations/{slug}/channels/{channelID}/branch", services: signedIn(oneOrganisation{}), method: "POST", path: view.ChannelURL("acme", kernel.ID{1}) + "/branch", cookie: true, status: 422, alerts: 1})
-	noPage := []string{"POST /organizations/{slug}/sidebar/resync", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing", "POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/messages/{messageID}"}
+	noPage := []string{"POST /organizations/{slug}/sidebar/resync", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/typing", "POST /organizations/{slug}/channels/{channelID}/read", "POST /organizations/{slug}/channels/{channelID}/topics/{topicID}/read", "GET /organizations/{slug}/events", "POST /signout", "GET /organizations/{slug}/{$}", "GET /organizations/{slug}/messages/{messageID}", "POST /organizations/{slug}/channels/{channelID}/messages/{messageID}/unpin"}
 
 	_, patterns, err := newHandler("", catalogues, withSignUp(true, nil)())
 	if err != nil {

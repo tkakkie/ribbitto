@@ -34,6 +34,7 @@ type ChannelPage struct // ChannelPage is a channel, its sidebar and history rea
   field EventCursor *int64 // EventCursor is the snapshot's organisation sequence, including on older pages.
   field Page Page
   field PageCounts PageCounts
+  field Pins []Pin // Pins are the channel's pins, newest first; only Overview reads them.
   field Topic *Topic
   field Topics []Topic
 type ChannelStore interface // ChannelStore reads and writes channels, always within one organisation.
@@ -113,6 +114,7 @@ type Message struct // Message is a plain-text post identified by ID.
   field ID github.com/tkakkie/ribbitto/internal/kernel.ID
   field MemberID github.com/tkakkie/ribbitto/internal/kernel.ID
   field OrganizationID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Pinned bool // Pinned is the message's current pin state, the same for every member.
   field TopicID github.com/tkakkie/ribbitto/internal/kernel.ID
 type MessageSequences interface // MessageSequences supplies channel bounds without exposing message storage.
   func (MessageSequences).FirstMessageAfter(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64) (int64, error) // FirstMessageAfter returns the channel's first event_seq strictly above cursor, or zero if none exists, in the transaction it was bound to.
@@ -144,6 +146,14 @@ type PageCounts struct // PageCounts holds capped sidebar counts and uncapped fi
   field TopicFirstUnread int64
 type PageCountsIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) PageCounter // PageCountsIn binds unread's count orchestration to a page or sidebar snapshot.
 const PageSize untyped int = 50 // PageSize is how many messages one page of history holds.
+type Pin struct // Pin is one overview entry: the current message with its author and topic, its excerpt, and who pinned it when, with current names.
+  field Entry Entry
+  field Excerpt string
+  field PinnedAt time.Time
+  field PinnerHandle string
+  field PinnerName string
+func PinExcerpt(body string) string // PinExcerpt collapses whitespace runs to one space and shortens the result to PinExcerptLength code points, ending a shortened one with an ellipsis.
+const PinExcerptLength untyped int = 200 // PinExcerptLength bounds a pin's excerpt in Unicode code points, ellipsis included (docs/domain/pins.md).
 type PinReader interface // PinReader reads at most MaxChannelPins current messages, newest pin first then message ID.
   func (PinReader).ListChannelPins(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) ([]PinnedMessage, error)
 type PinState struct // PinState is current message metadata; both fields are zero when unpinned.
@@ -176,11 +186,12 @@ type Posting struct // Posting owns the transaction that commits a message with 
 type ReadRangeWriter interface // ReadRangeWriter adds a range to a member's read set, including their persisted join prefix.
   func (ReadRangeWriter).Merge(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, joinedEventSeq int64, lo int64, hi int64) error
 type ReadRangeWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) ReadRangeWriter // ReadRangeWriterIn binds read-state writes to branching's transaction.
-type ReadStore interface // ReadStore is conversation's reads in the caller's snapshot: the channel reads are scoped by organisation, the others by organisation and channel.
+type ReadStore interface [embeds PinReader] // ReadStore is conversation's reads in the caller's snapshot: the channel reads are scoped by organisation, the others by organisation and channel.
   func (ReadStore).GetChannel(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Channel, error) // GetChannel returns a channel of the organisation, or ErrChannelNotFound.
   func (ReadStore).GetMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64) (Message, error) // GetMessage returns the channel's message at eventSeq, or ErrMessageNotFound when the scoped key is absent.
   func (ReadStore).GetMessages(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, ids []github.com/tkakkie/ribbitto/internal/kernel.ID) ([]Message, error) // GetMessages returns the requested IDs of the channel only, newest first; missing or out-of-scope IDs are omitted.
   func (ReadStore).GetTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // GetTopic returns a topic of the channel, or ErrTopicNotFound.
+  func (PinReader).ListChannelPins(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) ([]PinnedMessage, error)
   func (ReadStore).ListChannels(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) ([]Channel, error) // ListChannels returns the organisation's channels by name, then ID.
   func (ReadStore).ListMessagesAfter(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, after int64, limit int32) ([]Message, error) // ListMessagesAfter returns at most limit messages of the channel newer than event_seq after, oldest first, only of topicID when it is set.
   func (ReadStore).ListMessagesBefore(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64, limit int32) ([]Message, error) // ListMessagesBefore returns at most limit messages of the channel older than event_seq before (the latest when before is nil), newest first, only of topicID when it is set.
@@ -194,6 +205,7 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
   func (*Reader).Many(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, ids []github.com/tkakkie/ribbitto/internal/kernel.ID) (entries []Entry, err error) // Many reads a move's bounded message batch and directories in one snapshot.
   func (*Reader).Members(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, after *github.com/tkakkie/ribbitto/internal/kernel.ID) (page MembersPage, err error) // Members reads a bounded channel membership page.
   func (*Reader).One(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, eventSeq int64) (entry Entry, err error) // One reads one message, its author names and topic in a read-only snapshot.
+  func (*Reader).Overview(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64, around int64) (ChannelPage, error) // Overview reads the page Page or Around would (around when it is positive, else before) and the channel's bounded pins across all its topics, with their topics and author and pinner names, in the page's snapshot, so the pins and the page cursor agree.
   func (*Reader).Page(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, before *int64) (ChannelPage, error) // Page reads channel or topic history with the snapshot's event cursor, including older pages with a before bound.
   func (*Reader).Sidebar(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID) (sidebar SidebarSnapshot, err error) // Sidebar reads lists and counts in an independent read-only repeatable-read snapshot, including its organisation event sequence, without history or directories.
 func RouteMoved(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteMoved is messages.moved's realtime.Router: the channel and both topics, so a view of either sees the move.

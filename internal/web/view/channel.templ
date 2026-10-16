@@ -59,6 +59,8 @@ type ChannelPage struct {
 	// Panel names the side panel open beside the conversation, if any.
 	Panel   string
 	Members *MemberPage
+	// Pins are the overview's entries, read only when that panel is open.
+	Pins []Pin
 	// Composer preserves absence separately from an empty submitted value.
 	Composer *string
 	// PostedMessageID correlates a successful enhanced post with stream delivery.
@@ -408,8 +410,8 @@ templ messageComposer(page ChannelPage, oob bool) {
 		}
 		method="post"
 		action={ conversationURL(page) }
-		if latest(page) && page.Topic == nil {
-			hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) }
+		if latest(page) {
+			hx-post={ conversationURL(page) }
 			hx-target="#message-composer"
 			hx-swap="outerHTML"
 			hx-disabled-elt="find textarea, find button"

@@ -140,6 +140,7 @@ type ReadStore interface {
 	ListChannels(ctx context.Context, organizationID kernel.ID) ([]Channel, error)
 	// GetTopic returns a topic of the channel, or ErrTopicNotFound.
 	GetTopic(ctx context.Context, organizationID, channelID, id kernel.ID) (Topic, error)
+	PinReader
 	// ListTopics returns at most limit topics of the channel: the default
 	// first, then by name ignoring case, then by ID. A limit outside
 	// 1…math.MaxInt32 is an error.

@@ -29,21 +29,30 @@ Blocks are found line by line:
 - **Text:** every other line. Line breaks, blank lines included, are kept as
   typed.
 
-Inline, outside code:
+Inline, outside code, each line is read once from left to right. At each
+position the first rule that applies wins, in this order:
 
-- a backslash before ASCII punctuation makes that character literal; any
-  other backslash is literal;
-- a code span is text between single backticks on one line; its content is
-  literal;
-- bold is `**text**`, italic `_text_`, on one line, with no white space just
-  inside the delimiters; `_` opens and closes only at a word boundary, so
-  `snake_case` stays literal; nesting is at most two levels (bold in italic
-  or italic in bold); an unmatched delimiter is literal;
-- an autolink is `http://` or `https://` at the start or after white space or
-  `(`, with a host, up to white space, `<`, `>`, `"` or a bidi isolate or
-  mark (LRI, RLI, FSI, PDI, LRM, RLM, ALM); trailing `.,:;!?'` and an
-  unbalanced `)` stay outside it;
-- a member reference is `<@` + a canonical lowercase member UUID + `>`.
+1. a backslash before ASCII punctuation makes that character literal; any
+   other backslash is literal;
+2. a code span is text between single backticks on the same line; its
+   content is literal; without a closing backtick the backtick is literal;
+3. a member reference is `<@` + a canonical lowercase member UUID + `>`;
+4. an autolink is `http://` or `https://` at the start or after white space
+   or `(`, with a host, up to white space, `<`, `>`, `"` or a bidi isolate
+   or mark (LRI, RLI, FSI, PDI, LRM, RLM, ALM); trailing `.,:;!?'*_` and an
+   unbalanced `)` stay outside it;
+5. `**` (bold) and `_` (italic) are delimiters.
+
+A delimiter can open when the next character is not white space, and close
+when the previous one is not. `_` also needs a word boundary: it opens only
+after the start, white space or punctuation, and closes only before the end,
+white space or punctuation, where letters, digits and marks of any script
+are word characters. So `snake_case` and `日本_語_` stay literal, while
+`これは**重要**です` is bold. Open delimiters form a stack: a delimiter
+closes the top of the stack if it can close and matches it, and otherwise
+opens if it can, unless two are already open, when it is literal. A closer
+that matches a delimiter deeper in the stack (crossing) is literal, and
+delimiters still open at the end of the line are literal.
 
 Everything else is literal: headings, lists, tables, images, raw HTML,
 `*single asterisks*` and `[text](url)`, whose text could hide its target.
@@ -54,8 +63,8 @@ Everything else is literal: headings, lists, tables, images, raw HTML,
 returns plain structs (blocks, inline nodes, references). It adds no
 dependency and runs in time linear in the body's length. Golden tests fix
 input → tree per format version; fuzz tests check that parsing and
-extraction never panic, respect the nesting limit, and never put a UUID in
-extracted text.
+extraction never panic, respect the nesting limit, and that an unresolved
+reference node yields the placeholder, never its UUID.
 Rendered HTML stays at most a disposable cache.
 
 ## Text extraction
@@ -67,9 +76,14 @@ resolved, never the UUID. No name is stored, so renames never leave stale
 text. Delimiters, escape backslashes, fences and language tags are dropped;
 code content is kept literally; each block boundary becomes one line break;
 line breaks inside a block stay; an autolink is its URL. The pins excerpt
-counts its 200 code points after resolution. A quote of a `chat_v1` message
-copies the extraction resolved when the quote is posted, and #1161 sends a
-selection in that same form (a selected mention as `@handle`).
+counts its 200 code points after resolution.
+
+A quote of a `chat_v1` message copies its extraction, resolved when the quote
+is posted, then trimmed of white space at both ends to meet decision 38's
+snapshot checks; if nothing is left (a body of only `>`), the quote is
+rejected like an invalid body. The shared extraction itself keeps code
+content exactly. #1161 sends a selection in the same resolved form (a
+selected mention as `@handle`), trimmed the same way before the check.
 
 | Stored | Extracted |
 |---|---|
@@ -79,6 +93,8 @@ selection in that same form (a selected mention as `@handle`).
 | `> quoted line`, line break, `reply` | `quoted line`, line break, `reply` |
 | a fence tagged `go` holding `x := 1` | `x := 1` |
 | `see https://example.com/a.` | `see https://example.com/a.` |
+| `**see https://example.com/x**` | `see https://example.com/x` (bold link) |
+| `**a _b** c_` | `**a b** c` (the crossing `**` is literal; `b** c` is italic) |
 | `hi <@{member UUID}>` | `hi @tomoya`, resolved at use |
 
 ## Member references
@@ -114,8 +130,9 @@ rendering) and carry `rel="noopener noreferrer"`. The server never fetches a
 URL from a message: no unfurling, no previews. A pasted message URL
 ([decision 36](36-one-message-has-a-stable-url.md)) is an ordinary link
 with nothing from the target message; ribbitto has no configured public
-origin to recognise it by. Each block and each link, code span and
-reference is isolated in direction (`dir="auto"` or `<bdi>`).
+origin to recognise it by. Every block and every inline element (bold,
+italic, link, code span, reference) is isolated in direction with
+`dir="auto"` or `<bdi>`; plain text runs take their block's isolation.
 
 Output is the same for every reader, so the shared render cache stays
 valid; highlighting one's own mentions happens in the browser from a data

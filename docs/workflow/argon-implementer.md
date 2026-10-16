@@ -1,51 +1,54 @@
-# Argon as implementer (trial)
+# Argon as implementer
 
-A time-boxed trial ([#1206](https://github.com/tkakkie/ribbitto/issues/1206)):
-Argon (Gemini 4 Argon in Antigravity's `agy` CLI) implements **2 or 3 tier C
-issues**. Everything else in this directory stays as it is. The cap is the
-preflight plus at most 3 trial pull requests, retries included. The trial ends
-at the cap or on 2026-11-30, whichever comes first, and at once if a boundary
-below fails. At the cap it stops and reports, even without a conclusion
-([investigations](investigations.md)).
+Argon (Gemini 4 Argon in Antigravity's `agy` CLI) implements eligible issues
+(below) under the boundary, preflight and records in this file, which
+grew out of [#1206](https://github.com/tkakkie/ribbitto/issues/1206) and
+became a standing rule with
+[#1247](https://github.com/tkakkie/ribbitto/issues/1247). Everything else in
+this directory applies as usual. If a boundary below fails, Argon stops at
+once and the maintainer decides.
 
-**Start gate.** No trial run starts until the pull request for
-[#1221](https://github.com/tkakkie/ribbitto/issues/1221) is merged and
-#1206 records a preflight (below) that passed in full.
+**Start gate.** No Argon run starts until an issue records a preflight
+(below) that passed in full for the `agy` version and custom agent in use.
 
 ## Which issues
 
 An issue is eligible only if its *Risk* is `normal`
 ([risk](reviewing.md#risk)) **and** its *Implementer* field states an expected
-adversarial tier C and the C case it matches
+adversarial tier C or B and the case it matches
 ([tiers](adversarial-review.md#which-review-runs)), for example
-`Argon (trial #1206; normal risk; expected tier C: ordinary feature work
-outside A and B)`, and only if it can be verified without running its code
-locally: no `make dev` or browser check unless the maintainer runs it. Argon
-runs no commands, so CI is its only build and test. Tier A or B, or `high`
-risk, means Codex or Claude, as usual. The issue reviewer checks the expected
-tier like any other field; in doubt, the higher tier, so not Argon. The
-maintainer confirms the implementer when adding `ready`. No M7 issue is
-picked unless the maintainer names it.
+`Argon (normal risk; expected tier B: tests in A's areas)`, and only if it
+can be verified without running its code locally: no `make dev` or browser
+check unless the maintainer runs it. Go code and tests are eligible. Argon
+runs no commands, so CI is its only build and test. Tier A or `high` risk
+means Codex or Claude, as usual. The issue reviewer checks the expected
+tier like any other field; in doubt, the higher tier, and a possible tier A
+means not Argon. The maintainer confirms the implementer when adding
+`ready`. No M7 issue is picked unless the maintainer names it.
 
 **The tier follows the diff, not the expectation.** If an Argon change
-matches tier A or B or touches a `high` risk path, it leaves the trial and the
+matches tier A or touches a `high` risk path, it leaves Argon and the
 maintainer decides; Claude checks this against `origin/main` before every
-push and does not push such a change. Argon is the only adversarial
-reviewer, and an implementer never reviews its own work.
+push and does not push such a change. Argon never reviews its own work:
+Codex is the adversarial reviewer of Argon's tier B pull requests
+([Argon's pull requests](argon-pull-requests.md)).
 
 ## Who does what
 
 - **Claude** reviews the pull request: the AI that did not implement it, at
   most two rounds ([reviewing](reviewing.md)). Claude also does the Copilot
   follow-up check of Argon's fixes. Closure verification and every check
-  re-run rely on CI, not on local runs.
-- **Argon** applies the review and Copilot fixes, in further runs in the same
-  worktree. If it cannot finish a fix in one more run, the maintainer decides:
-  reassign or stop. A reassigned issue restarts from a clean `origin/main`.
+  re-run rely on CI, not on local runs. Claude prepares any mutation
+  evidence on CI ([mutation evidence](argon-pull-requests.md#mutation-evidence)).
+- **Argon** applies the review, Copilot and adversarial fixes, in further
+  runs in the same worktree. If it cannot finish a fix in one more run, the
+  maintainer decides: reassign or stop. A reassigned issue restarts from a clean `origin/main`.
 - **Codex** checks any fix Claude writes itself, a Copilot fix included,
   since that is not Argon's work. It reads CI and a diff Claude makes with
   the hardened git settings below and passes on stdin, and it runs in a clean
-  worktree of `origin/main`, never in Argon's.
+  worktree of `origin/main`, never in Argon's. Codex is also the
+  adversarial reviewer of a tier B pull request, with its follow-up checks
+  and re-reviews ([Argon's pull requests](argon-pull-requests.md)).
 - No AI runs Argon's code on the host; CI checks it
   ([handoff](running-other-ai.md#handoff-of-another-ais-code)).
 - Argon's issues do not count towards Claude's and Codex's equal shares.
@@ -68,11 +71,11 @@ but enforced by configuration, not by the prompt.
 - **No commands** (maintainer, 2026-10-16). `run_command` and every other
   command tool are refused, by the deny rule `command(*)` and by the guard.
   The #1206 preflight showed that a command under `agy --sandbox` reaches
-  loopback services outside it. Allowing commands again is a later stage,
-  after this trial.
+  loopback services outside it. Allowing commands again needs its own
+  `process` issue.
 - **Its own `HOME`.** A dedicated Antigravity home, signed in once by the
   maintainer, shared only with the shadow trial of
-  [#1207](https://github.com/tkakkie/ribbitto/issues/1207); the two trials
+  [#1207](https://github.com/tkakkie/ribbitto/issues/1207); the two
   never run at the same time, and each writes its own settings and guard
   before every run. It is never the account's home and never the review
   home (`RIBBITTO_ARGON_HOME`), whose files `prepare` rewrites for reviews.
@@ -89,8 +92,8 @@ but enforced by configuration, not by the prompt.
   agy's own `builtin/` (while it matches the trusted hash list for the
   running agy version) and `cli.log` (while it links to a regular
   `log/cli-<timestamp>.log` in the home) are exempt. The home's
-  conversation store (`brain/`) is emptied before and after every run, of
-  either trial.
+  conversation store (`brain/`) is emptied before and after every run,
+  Argon's or #1207's.
 - **A custom agent.** agy offers `grep_search`, `find_by_name` and
   `list_dir` only to custom agents that list them, so `agy` runs with
   `--agent argon-implementer`: a Markdown agent whose `tools` are exactly
@@ -142,7 +145,8 @@ but enforced by configuration, not by the prompt.
 
 ## Preflight
 
-Before any trial issue, a minimal preflight tested on effects as in #1041
+Before Argon's first issue, and again when the `agy` version or the custom
+agent changes, a minimal preflight tested on effects as in #1041
 and #1071, in a throwaway repository, through Argon's own tools. Each of
 these is refused or has no effect:
 
@@ -165,18 +169,15 @@ The account's shared settings stay unchanged. Telemetry and AI credits are
 confirmed off in the home used, as running-argon.md records for the review
 home. #1041's accepted data and cost terms (the flat fee only; no API key and
 no pay-as-you-go) are confirmed to cover write-mode use. If any of this
-cannot be verified, the trial stops and the maintainer gets the reason.
+cannot be verified, Argon does not run and the maintainer gets the reason.
 
 ## Records
 
-- **Per trial pull request,** one comment on #2: the issue, the final tier,
-  review rounds and blocking findings, Argon's runs (count, time, failures),
-  rework (fixes by Argon, changes Claude or Codex had to make), CI failures,
-  and the CI round trips and fix effort caused by Argon running no commands.
-- **Weekly while the trial runs,** one comment on #1206, not #2, so it does
-  not trigger retrospectives. Per AI (Claude, Codex, Antigravity, Copilot):
-  whether a limit was hit, when and what it stopped, the runs by role, and
-  the maintainer's dashboard reading if he gives one.
+Per Argon pull request, one comment on #2: the issue, the final tier,
+review rounds and blocking findings, Argon's runs (count, time, failures),
+rework (fixes by Argon, changes Claude or Codex had to make), CI failures,
+the CI round trips and fix effort caused by Argon running no commands, and
+the mutation runs.
 
-Widening beyond tier C, and choosing its adversarial reviewer, is a new
-`process` issue.
+Changing the eligibility, the boundary or the reviewers is a new `process`
+issue.

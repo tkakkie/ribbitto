@@ -89,7 +89,9 @@ counts its 200 code points after resolution.
 A quote of a `chat_v1` message copies its extraction, resolved when the quote
 is posted, then trimmed of white space at both ends to meet decision 38's
 snapshot checks; if nothing is left (a body of only `>`), the quote is
-rejected like an invalid body. The shared extraction itself keeps code
+rejected like an invalid body. A reference that cannot be resolved then is
+stored as the placeholder in the quoting member's language (maintainer,
+2026-10-16, #1176). The shared extraction itself keeps code
 content exactly. #1161 sends a selection in the same resolved form (a
 selected mention as `@handle`), trimmed the same way before the check.
 

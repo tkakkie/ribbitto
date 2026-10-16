@@ -97,10 +97,12 @@ func TestPinExcerptChatV1(t *testing.T) {
 	// references' own lookup can resolve them.
 	curator := orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "curator@example.org", "Curator"), org.RoleMember, "curator", 1)
 	ref := func(id kernel.ID) string { return "<@" + realtime.FormatPayloadID(id) + ">" }
-	posted, err := newPosting(pool).Post(ctx, m, f.Channel.ID, "**Deploy** "+ref(curator)+"\n> _by_ "+ref(other.MemberID))
+	posted, err := newPosting(pool).Post(ctx, m, f.Channel.ID, "fixture")
 	requireNoError(t, err)
-	// Posting writes plain_text until #1203, so the fixture marks the row chat_v1.
-	_, err = pool.Exec(ctx, "UPDATE message SET format = 'chat_v1' WHERE id = $1", posted.ID)
+	// Posting refuses another organisation's member, so the fixture writes
+	// the reference itself, as a bad row could hold it.
+	posted.Body = "**Deploy** " + ref(curator) + "\n> _by_ " + ref(other.MemberID)
+	_, err = pool.Exec(ctx, "UPDATE message SET body = $2 WHERE id = $1", posted.ID, posted.Body)
 	requireNoError(t, err)
 	requireNoError(t, conversationpg.NewPinning(pool, eventSequence, appendEvents, nil).Pin(ctx, m, f.Channel.ID, posted.ID))
 	pins, err := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn).Pins(ctx, m, f.Channel.ID)

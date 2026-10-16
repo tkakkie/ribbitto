@@ -75,10 +75,12 @@ func (w Writer) InsertNotice(ctx context.Context, organizationID, channelID, top
 }
 
 // insert runs the query posting and branching share and wraps any error.
+// Every new message and notice is chat_v1 (decision 39): posting has checked
+// its references and branching has escaped its notice.
 func (w Writer) insert(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *conversation.IdempotencyKey) (conversation.Message, error) {
 	params := sqlcgen.InsertMessageParams{
 		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), TopicID: uuid(topicID),
-		MemberID: uuid(memberID), Body: body, EventSeq: eventSeq,
+		MemberID: uuid(memberID), Body: body, Format: string(conversation.FormatChatV1), EventSeq: eventSeq,
 	}
 	if key != nil {
 		params.IdempotencyKey = pgtype.UUID{Bytes: *key, Valid: true}

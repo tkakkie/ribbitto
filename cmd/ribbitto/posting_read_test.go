@@ -85,7 +85,7 @@ func TestPostingRead(t *testing.T) {
 			}
 			var steps []string
 			trace := &pageTrace{QueryCounter: platform.NewQueryCounter(), names: map[string]int{}, hook: func(name string) { steps = append(steps, name) }}
-			posting := conversationpg.NewPagePosting(readTracedPool(t, pool, trace), postingSequence, events, postReads, nil)
+			posting := conversationpg.NewPagePosting(readTracedPool(t, pool, trace), postingSequence, events, postReads, lookupMembers, nil)
 			if strings.HasSuffix(mode, "history rollback") {
 				_, err = posting.PostToTopic(t.Context(), m, s.ChannelID, topic, "own post")
 			} else {

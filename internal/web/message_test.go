@@ -310,7 +310,7 @@ func testPosting(writer conversation.Writer) *conversation.Posting {
 	return conversation.NewPagePosting(fakeTxRunner{},
 		func(platform.Tx) conversation.Writer { return writer },
 		func(platform.Tx) conversation.EventSequence { return fakeEventSequence{} },
-		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} }, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, nil)
+		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} }, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, nil, nil, nil)
 }
 
 func testPoster() *conversation.Posting { return testPosting(&fakePostingWriter{}) }

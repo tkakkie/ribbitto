@@ -218,7 +218,7 @@ func checkTopicFixtures(t *testing.T, pool *pgxpool.Pool, count int) {
 			AND notice.body = $3 AND logged.kind = 'message.posted'
 			AND logged.data->>'message_id' = notice.id::text
 			AND logged.data->>'topic_id' = c.default_topic_id::text
-		)`, topicID, sourceSeq, "Moved 1 message to "+name+".").Scan(&valid); err != nil || !valid {
+		)`, topicID, sourceSeq, conversation.EscapeChatV1("Moved 1 message to "+name+".")).Scan(&valid); err != nil || !valid {
 			t.Fatalf("%s: invalid branch, notice or events: %v", name, err)
 		}
 		page, err := reader.Page(t.Context(), member, channelID, &topicID, nil)

@@ -19,6 +19,8 @@ type Posting struct {
 	events    EventAppenderIn
 	notifier  Notifier
 	reads     PostReadWriterIn
+	snapshots SnapshotRunner
+	members   MemberDirectoryIn
 }
 
 // NewPosting builds posting over transaction-bound factories. A nil notifier
@@ -27,10 +29,12 @@ func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, eve
 	return &Posting{runner: runner, writer: writer, sequences: sequences, events: events, notifier: notifier}
 }
 
-// NewPagePosting builds posting with read writes bound to its transaction.
-func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, notifier Notifier) *Posting {
+// NewPagePosting builds posting with read writes bound to its transaction
+// and member references checked through members in a snapshot of their own.
+// Posting built without members refuses every body with a reference.
+func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, snapshots SnapshotRunner, members MemberDirectoryIn, notifier Notifier) *Posting {
 	p := NewPosting(runner, writer, sequences, events, notifier)
-	p.reads = reads
+	p.reads, p.snapshots, p.members = reads, snapshots, members
 	return p
 }
 
@@ -52,6 +56,12 @@ func (p *Posting) PostFromPage(ctx context.Context, m org.Membership, channelID 
 	sent, err := p.Send(ctx, m, channelID, Send{Topic: topicID, Body: body, Cursor: &cursor})
 	return sent.Message, err
 }
+
+// ErrUnknownReference wraps ErrInvalidBody for a body referencing a member
+// the URL's organisation's directory did not return. A missing and another
+// organisation's member are the same error, so the answer reveals nothing
+// about other organisations (decision 39).
+var ErrUnknownReference = errors.New("message references an unknown member")
 
 // ErrInvalidPostCursor means the page cursor is invalid or ahead of committed events.
 var ErrInvalidPostCursor = errors.New("invalid posting cursor")
@@ -88,6 +98,9 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 	body, err := ValidateMessageBody(s.Body)
 	if err != nil {
 		return Sent{}, fmt.Errorf("%w: %w", ErrInvalidBody, err)
+	}
+	if err := p.checkReferences(ctx, m.Organization.ID, body); err != nil {
+		return Sent{}, err
 	}
 	topicID, cursor := s.Topic, s.Cursor
 	organizationID := m.Organization.ID
@@ -160,6 +173,36 @@ func (p *Posting) Send(ctx context.Context, m org.Membership, channelID kernel.I
 		p.notifier.Raise(organizationID, posted.EventSeq)
 	}
 	return Sent{Message: posted, Topic: requested}, nil
+}
+
+// checkReferences looks every member reference in body up in one batch in
+// the organisation's directory, before and outside the posting transaction,
+// so the organisation lock is never held for it. A member who leaves between
+// the check and the insert is shown as the placeholder, like any member who
+// leaves later (decision 39).
+func (p *Posting) checkReferences(ctx context.Context, organizationID kernel.ID, body string) error {
+	ids := appendReferences(nil, ParseChatV1(body))
+	if len(ids) == 0 {
+		return nil
+	}
+	if p.members == nil {
+		return errors.New("posting has no member directory to check references")
+	}
+	var found map[kernel.ID]org.DirectoryEntry
+	err := p.snapshots.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
+		var err error
+		found, err = p.members(snapshot).LookupMembers(ctx, organizationID, ids)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("checking member references: %w", err)
+	}
+	for _, id := range ids {
+		if _, ok := found[id]; !ok {
+			return fmt.Errorf("%w: %w", ErrInvalidBody, ErrUnknownReference)
+		}
+	}
+	return nil
 }
 
 // repeat answers a send whose key the author already stored. The topic is

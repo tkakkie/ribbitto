@@ -42,7 +42,7 @@ func newReadSidebarFixture(t *testing.T, pool *pgxpool.Pool, limits ...*middlewa
 	account := identitytest.Account(t, pool, "reader@example.org", "reader")
 	member := orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, "reader", 1)
 	m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID, JoinedEventSeq: 1}}
-	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, nil)
+	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, nil)
 	// Interleave topics so a topic read must preserve holes in the read set.
 	for _, topic := range []kernel.ID{a.ID, b.ID, a.ID, b.ID, b.ID} {
 		_, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &topic, "unread")

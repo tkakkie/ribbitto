@@ -89,6 +89,23 @@ func ParseChatV1(body string) []BodyBlock {
 	return blocks
 }
 
+// EscapeChatV1 returns text that chat_v1 reads back as exactly text, all of
+// it literal: every ASCII punctuation character gets a backslash, so no
+// delimiter, code span, member reference, autolink, quote or fence can start.
+// It is for text the server writes itself, such as branching's notice, whose
+// topic name must never become markup or a reference. ASCII bytes never occur
+// inside a multi-byte UTF-8 sequence, so a byte loop is safe.
+func EscapeChatV1(text string) string {
+	var escaped strings.Builder
+	for i := 0; i < len(text); i++ {
+		if isASCIIPunctuation(text[i]) {
+			escaped.WriteByte('\\')
+		}
+		escaped.WriteByte(text[i])
+	}
+	return escaped.String()
+}
+
 func fenceOpening(line string) (string, bool) {
 	language, ok := strings.CutPrefix(line, "```")
 	if !ok || len(language) > 20 {

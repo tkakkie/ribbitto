@@ -86,7 +86,7 @@ var ErrBranchConflict error // ErrBranchConflict means a selected message is no 
 var ErrChannelLimit error // ErrChannelLimit means the organisation cannot create another channel.
 var ErrChannelNameTaken error // ErrChannelNameTaken means the organisation already has a channel with that name.
 var ErrChannelNotFound error // ErrChannelNotFound means the channel does not exist in the caller's organisation, including when it exists in another one.
-var ErrInvalidBody error // ErrInvalidBody wraps a body that breaks ValidateMessageBody.
+var ErrInvalidBody error // ErrInvalidBody wraps a body that breaks ValidateMessageBody or, as ErrUnknownReference, references a member posting cannot find.
 var ErrInvalidBranch error // ErrInvalidBranch means the request itself is unusable: no messages, too many, a repeated one, no destination or two, or the source as destination.
 var ErrInvalidChannelImage error // ErrInvalidChannelImage means the key is outside the bundled set.
 var ErrInvalidChannelName error // ErrInvalidChannelName wraps a name that breaks ValidateChannelName.
@@ -98,6 +98,8 @@ var ErrPostKeyReused error // ErrPostKeyReused means the author already sent ano
 var ErrPostKeyTaken error // ErrPostKeyTaken is Writer.InsertMessage's signal that the author's key is already stored; Send turns it into a repeat and never returns it.
 var ErrTopicNameTaken error // ErrTopicNameTaken means the channel already has a topic with that name, ignoring case.
 var ErrTopicNotFound error // ErrTopicNotFound means the topic does not exist in the given organisation and channel, including when it exists in another channel or organisation.
+var ErrUnknownReference error // ErrUnknownReference wraps ErrInvalidBody for a body referencing a member the URL's organisation's directory did not return.
+func EscapeChatV1(text string) string // EscapeChatV1 returns text that chat_v1 reads back as exactly text, all of it literal: every ASCII punctuation character gets a backslash, so no delimiter, code span, member reference, autolink, quote or fence can start.
 type EventAppender interface // EventAppender appends conversation's encoded events in the caller's transaction, so each commits with its row and sequence.
   func (EventAppender).Append(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64, kind github.com/tkakkie/ribbitto/internal/realtime.EventKind, audience *github.com/tkakkie/ribbitto/internal/kernel.ID, payload []byte) error
 type EventAppenderIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) EventAppender // EventAppenderIn binds realtime's appender to the caller's transaction.
@@ -160,7 +162,7 @@ type Moved struct // Moved is the payload of KindMessagesMoved.
 func NewBrancher(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads ReadRangeWriterIn, notifier Notifier) *Brancher // NewBrancher builds branching over transaction-bound factories.
 func NewChannels(store ChannelStore) *Channels // NewChannels returns a Channels.
 func NewIdempotencyKey() IdempotencyKey // NewIdempotencyKey returns a random version-4 UUID.
-func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, notifier Notifier) *Posting // NewPagePosting builds posting with read writes bound to its transaction.
+func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, snapshots SnapshotRunner, members MemberDirectoryIn, notifier Notifier) *Posting // NewPagePosting builds posting with read writes bound to its transaction and member references checked through members in a snapshot of their own.
 func NewPinning(runner TxRunner, writer WriterIn, pins PinWriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Pinning // NewPinning builds pinning over transaction-bound factories; notifier may be nil.
 func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Posting // NewPosting builds posting over transaction-bound factories.
 func NewReader(runner SnapshotRunner, reads ReadStoreIn, members MemberDirectoryIn, accounts AccountDirectoryIn, cursor EventCursorIn, counts PageCountsIn) *Reader // NewReader builds the snapshot use case with conversation's reads and the member, account, cursor and count factories supplied by the composition root.
@@ -302,7 +304,7 @@ type TxRunner interface // TxRunner runs channel creation, posting, branching an
   func (TxRunner).InTx(ctx context.Context, fn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) error) error // InTx runs fn in a new transaction.
 func ValidateChannelImage(key string) error // ValidateChannelImage accepts a bundled key, or empty for the ID-based default.
 func ValidateChannelName(value string) (string, error) // ValidateChannelName returns a trimmed NFC name of 1–80 printable Unicode code points.
-func ValidateMessageBody(value string) (string, error) // ValidateMessageBody normalizes line endings and trims the whole plain-text body.
+func ValidateMessageBody(value string) (string, error) // ValidateMessageBody normalizes line endings and trims the whole body source text.
 func ValidateTopicName(value string) (string, error) // ValidateTopicName returns a trimmed NFC name of 1–80 printable Unicode code points, the same rule as channel names (docs/domain/topics.md).
 type Writer interface // Writer is posting's and branching's reads and writes in the caller's transaction, on validated values.
   func (Writer).CreateTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, name string) (Topic, error) // CreateTopic creates a named topic.

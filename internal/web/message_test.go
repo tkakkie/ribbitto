@@ -342,7 +342,7 @@ func TestMessagePostHandler(t *testing.T) {
 				w := httptest.NewRecorder()
 				h.ServeHTTP(w, r)
 				want := tt.status
-				if hx && !mode.topic && want == 303 {
+				if hx && want == 303 {
 					want = 200
 				}
 				if w.Code != want {
@@ -371,10 +371,10 @@ func TestMessagePostHandler(t *testing.T) {
 					}
 				}
 				marker := `data-posted-message="` + view.MessageDOMID(writer.id) + `"`
-				if hx && !mode.topic && want == 200 {
-					if !strings.Contains(w.Body.String(), `name="cursor" value="0"`) {
-						t.Fatal("composer must echo submitted cursor, not post sequence")
-					}
+				if hx && (want == 200 || want == 422) && !strings.Contains(w.Body.String(), `name="cursor" value="0"`) {
+					t.Fatal("composer must echo submitted cursor, not post sequence")
+				}
+				if hx && want == 200 {
 					if !strings.Contains(w.Body.String(), marker) {
 						t.Fatal("success must identify the posted message for stream correlation")
 					}
@@ -384,9 +384,24 @@ func TestMessagePostHandler(t *testing.T) {
 				if want != 422 && want != 200 {
 					return
 				}
-				if hx && !mode.topic {
+				if hx {
 					if len(reads) != 0 || strings.Contains(w.Body.String(), `id="conversation"`) || !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) {
 						t.Fatal("enhanced post must render only the composer without reading history")
+					}
+					// A topic fragment posts to the topic: on success the one the
+					// posting transaction returned (the fake returns another
+					// topic than the URL's), after a failure the looked-up one.
+					target := path
+					if mode.topic && want == 200 {
+						target = view.ConversationURL("acme", kernel.ID{1}, &actual.TopicID)
+					}
+					typingTarget := view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{}) + "/typing" // The fake channel's default topic.
+					if mode.topic {
+						typingTarget = target + "/typing"
+					}
+					form, signal := enhancedForms(t, w.Body.String())
+					if attr(form, "action") != target || attr(form, "hx-post") != target || attr(signal, "hx-post") != typingTarget {
+						t.Fatalf("fragment posts to %q (htmx %q, typing %q), want %q", attr(form, "action"), attr(form, "hx-post"), attr(signal, "hx-post"), target)
 					}
 				} else {
 					assertFullConversationPage(t, w.Body.String())
@@ -407,6 +422,28 @@ func TestMessagePostHandler(t *testing.T) {
 			})
 		}
 	}
+}
+
+// enhancedForms returns a composer fragment's message form and its
+// out-of-band signal form.
+func enhancedForms(t *testing.T, body string) (form, signal *html.Node) {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for n := range doc.Descendants() {
+		switch attr(n, "id") {
+		case "message-composer":
+			form = n
+		case "typing-form":
+			signal = n
+		}
+	}
+	if form == nil || signal == nil {
+		t.Fatal("fragment lacks the message or signal form")
+	}
+	return form, signal
 }
 
 func TestMessagePagingHandler(t *testing.T) {
@@ -442,7 +479,7 @@ func TestMessagePagingHandler(t *testing.T) {
 		{"overflow", "?before=9223372036854775808", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"malformed escape", "?before=%ZZ", false, 400, -1, nil, nil, false, channelURL, "", ""},
 		{"repeated with a malformed escape", "?before=5&before=%ZZ", false, 400, -1, nil, nil, false, channelURL, "", ""},
-		{"latest topic", "", true, 200, 0, []string{`href="` + topicURL + `?before=7&amp;unread=0"`, `hx-get="` + topicURL + `?before=7&amp;unread=0"`}, []string{"Jump to the newest"}, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},
+		{"latest topic", "", true, 200, 0, []string{`href="` + topicURL + `?before=7&amp;unread=0"`, `hx-get="` + topicURL + `?before=7&amp;unread=0"`}, []string{"Jump to the newest"}, false, topicURL, "05000000-0000-0000-0000-000000000000", topicURL},
 		// An around page (decision 36) is an older page in every check below.
 		{"around page", "?around=40", true, 200, 40, []string{`?before=7&amp;unread=0"`, `Jump to the newest ribbits</a>`}, nil, false, channelURL, "", ""},
 		{"around topic with divider", "?around=40&unread=3", true, 200, 40, []string{`href="` + topicURL + `?before=7&amp;unread=3"`, `Jump to the newest ribbits</a>`}, nil, false, topicURL, "05000000-0000-0000-0000-000000000000", ""},

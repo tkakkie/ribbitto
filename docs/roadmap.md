@@ -135,22 +135,22 @@ old one. Roughly in this order:
    such as the composer (decisions
    [2](decisions/02-server-rendered-html-with-htmx-not-an-spa.md) and
    [19](decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)),
-   tried first in one composer prototype with a size and INP budget; what
-   browser storage may hold, by use
-   ([web layers](architecture/web-javascript.md#javascript)); a message format
-   and safe Markdown rendering
+   tried first in one composer prototype with a size and INP budget; composer
+   state and browser storage, set by
+   [decision 37](decisions/37-composer-javascript-pending-posts-keys-and-drafts.md);
+   a message format and safe Markdown rendering
    ([decision 18](decisions/18-stored-message-formats-never-change-meaning.md),
-   no `templ.Raw`); the URL of one message, settled by
+   no `templ.Raw`); the URL of one message, set by
    [decision 36](decisions/36-one-message-has-a-stable-url.md). The rest
    waits for its decision.
 2. **Two tracks in parallel.** The composer track never blocks the basics.
    - *Basics:* private channels → direct messages → email (Mailer →
      password reset → email verification) → invitations (#128).
    - *Composer:* reliable sending (no duplicate posts, the text kept when
-     sending fails, the sending state shown, and the post shown before the
-     server answers if step 1's decisions allow it) → an input that grows and a
-     send-key setting → mentions (#117) → links to one message → quoting,
-     including a selection → drafts (#88, revisited after step 1).
+     sending fails, the sending state and the post shown before the
+     server answers) → an input that grows and a send-key setting →
+     mentions (#117) → links to one message → quoting, including a
+     selection → device drafts (#1162; #88 cross-device).
 3. **Messages:** reactions, editing and deleting, [pins](domain/pins.md)
    (#880; rules agreed, implementation after M6), reply chains
    ([decision 22](decisions/22-replies-stay-in-the-stream-with-a-reply-chain-panel.md)),

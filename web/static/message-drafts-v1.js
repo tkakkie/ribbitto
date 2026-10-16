@@ -16,9 +16,9 @@
   const millisecond = (id) => id.slice(0, 8) + id.slice(9, 13);
   try {
     const storage = window.localStorage;
-    const keys = [];
-    for (let i = 0; i < storage.length; i++) keys.push(storage.key(i));
-    for (const key of keys) {
+    // One snapshot of the keys: storage.key(i) can return null while
+    // another tab changes the shared storage.
+    for (const key of Object.keys(storage)) {
       if (!key.startsWith(prefix)) continue;
       const match = draft.exec(key);
       // Only the key is read, never another session's value. An entry in

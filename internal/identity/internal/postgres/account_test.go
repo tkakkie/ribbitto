@@ -69,6 +69,7 @@ func TestAccountSchema(t *testing.T) {
 		{"empty name", "UPDATE account SET display_name = '' WHERE id = $1", "23514"},
 		{"long name", "UPDATE account SET display_name = repeat('界', 51) WHERE id = $1", "23514"},
 		{"hash format", "UPDATE account SET password_hash = 'x$argon2id$' WHERE id = $1", "23514"},
+		{"send key", "UPDATE account SET send_key = 'ctrl_enter' WHERE id = $1", "23514"},
 		{"missing session account", "UPDATE session SET account_id = uuidv7() WHERE account_id = $1", "23503"},
 		{"short token", "UPDATE session SET token_hash = decode(repeat('00', 31), 'hex') WHERE account_id = $1", "23514"},
 		{"duplicate token", "INSERT INTO session (token_hash, account_id, expires_at) SELECT token_hash, account_id, expires_at FROM session WHERE account_id = $1", "23505"},

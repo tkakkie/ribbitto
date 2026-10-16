@@ -5,6 +5,7 @@ type Account struct // Account is a person who can sign in.
   field DisplayName string
   field Email string
   field ID github.com/tkakkie/ribbitto/internal/kernel.ID
+  field SendKey SendKey // SendKey is loaded with the session, so pages need no extra query.
 type AccountStore interface // AccountStore finds accounts for signing in.
   func (AccountStore).AccountCredentials(ctx context.Context, email string) (accountID github.com/tkakkie/ribbitto/internal/kernel.ID, passwordHash string, err error) // AccountCredentials returns the ID and stored password hash of the account with this normalised email, or ErrNoAccount.
 type Directory interface // Directory exposes identity's display names for only the requested accounts.
@@ -15,6 +16,7 @@ var ErrInvalidCredentials error // ErrInvalidCredentials means the email is unkn
 var ErrInvalidEmail error // ErrInvalidEmail means the email violates an account email constraint.
 var ErrInvalidHash error // ErrInvalidHash means a stored hash is malformed or outside the supported parameters.
 var ErrInvalidInput error // ErrInvalidInput means the email is not an address or the password is empty; nothing was looked up or hashed.
+var ErrInvalidSendKey error // ErrInvalidSendKey means the value names no send key; nothing was stored.
 var ErrNoAccount error // ErrNoAccount is what an AccountStore returns for an unknown email.
 var ErrNoSession error // ErrNoSession means a token is malformed, unknown, deleted or expired.
 type Hasher struct // Hasher hashes and verifies passwords with Argon2id.
@@ -22,8 +24,17 @@ type Hasher struct // Hasher hashes and verifies passwords with Argon2id.
   func (*Hasher).Verify(ctx context.Context, password string, stored string) (bool, error) // Verify reports whether password matches the stored PHC string.
 func IsBlankLookingName(name string) bool // IsBlankLookingName reports whether a name is made only of characters that show as nothing or as white space: the ASCII and ideographic spaces, the Hangul fillers U+3164, U+FFA0, U+115F and U+1160, the braille blank U+2800, and combining marks (Unicode category M), which have no base character to attach to when nothing else is there.
 func NewHasher() (*Hasher, error) // NewHasher returns a Hasher with min(GOMAXPROCS, 4) slots.
+func NewPreferences(store PreferenceStore) *Preferences // NewPreferences returns Preferences backed by store.
 func NewSessions(store SessionStore, now func() time.Time, cancel SessionCanceller) *Sessions // NewSessions returns Sessions backed by store; now is time.Now outside tests.
 func NewSignIn(accounts AccountStore, hasher *Hasher, sessions *Sessions) *SignIn // NewSignIn returns SignIn; share the process's one Hasher.
+func ParseSendKey(value string) (SendKey, error) // ParseSendKey returns the send key value names exactly, or ErrInvalidSendKey.
+type PreferenceStore interface // PreferenceStore writes an account's preferences.
+  func (PreferenceStore).SetSendKey(ctx context.Context, accountID github.com/tkakkie/ribbitto/internal/kernel.ID, key SendKey) error // SetSendKey stores the send key on the account with this ID, or returns ErrNoAccount when there is none.
+type Preferences struct // Preferences changes an account's own preferences.
+  func (*Preferences).SetSendKey(ctx context.Context, accountID github.com/tkakkie/ribbitto/internal/kernel.ID, value string) error // SetSendKey validates value and stores it on the account.
+type SendKey string // SendKey is which key sends a message from the composer.
+const SendKeyEnter SendKey = "enter" // SendKeyEnter sends on Enter; it is every account's default.
+const SendKeyModifierEnter SendKey = "modifier_enter" // SendKeyModifierEnter sends on Ctrl+Enter, or ⌘+Enter on a Mac.
 type Session struct // Session identifies a live session and says when it expires.
   field ExpiresAt time.Time
   field ID github.com/tkakkie/ribbitto/internal/kernel.ID

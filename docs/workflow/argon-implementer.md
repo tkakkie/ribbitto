@@ -105,10 +105,11 @@ but enforced by configuration, not by the prompt.
 - **No workspace hooks or customisation.** Workspace hooks run commands
   outside the sandbox ([running Argon](running-argon.md#the-boundary)).
   Before every run, fix runs included, Claude checks that the worktree has
-  no symlink, no nested `.git`, none of the guard's refused names that
-  `origin/main` does not track and no other workspace-loaded configuration,
-  at any depth; that `.github` and the tracked `AGENTS.md`, `CLAUDE.md`,
-  `.gitattributes` and `.gitmodules` match `origin/main`; and that its
+  no symlink, no nested `.git`, none of the guard's refused names and no
+  other workspace-loaded configuration, at any depth, except the trusted
+  baseline: `.github` and the root `AGENTS.md`, `CLAUDE.md`, `.gitattributes`
+  and `.gitmodules`, each present only if `origin/main` tracks it and then
+  identical to it; and that its
   `.git` file is unchanged. It stops otherwise. The two tracked files are
   loaded as instructions, as in reviews, and the guard keeps Argon from
   editing them.

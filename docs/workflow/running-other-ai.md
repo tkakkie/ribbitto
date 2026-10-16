@@ -39,9 +39,21 @@ directly, or `limit 1800 claude -p "…" < /dev/null`.
 Post the result with `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems.
 
-On an Argon trial pull request, Codex runs in a clean worktree of
-`origin/main`, never at the pull request's head, and gets the diff on stdin
-([who does what](argon-implementer.md#who-does-what)).
+On an Argon trial pull request, the pull request example above does not
+apply: Codex runs in a clean worktree of `origin/main`, never at the pull
+request's head, and gets the diff on stdin
+([who does what](argon-implementer.md#who-does-what)):
+
+```sh
+# $W: Argon's worktree; $clean: a clean worktree at origin/main.
+diff=$(mktemp) &&
+  env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
+    -c core.fsmonitor=false diff --no-ext-diff --no-textconv origin/main...HEAD > "$diff" &&
+  gh pr view P --json title,body,comments >> "$diff" &&
+  (cd "$clean" && limit 1800 codex exec -s read-only -o review.md \
+    "Review the pull request diff and GitHub context on stdin. Do not run git or any build here. Follow docs/workflow/reviewing.md and reply in the report format." < "$diff")
+```
 
 Argon implementing a trial issue runs under its own boundary, preflight and
 handoff, in [`argon-implementer.md`](argon-implementer.md); Claude reviews

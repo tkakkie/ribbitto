@@ -111,9 +111,10 @@
     const key = form.elements.idempotency_key?.value;
     if (form.dataset.unconfirmedKey !== key) delete form.dataset.unconfirmedKey;
     if (status === 200 || status === 409) return;
-    // A 4xx is answered before any write (a proxy's 429 too); a 5xx may come
-    // after the commit, and a network error or timeout may follow it.
-    if (status >= 400 && status < 500) {
+    // The post handler answers 400/404/413/422 before any write; 429 rejects
+    // the request by spec. Other 4xx, 5xx, network errors or timeouts may
+    // follow a commit.
+    if (status === 400 || status === 404 || status === 413 || status === 422 || status === 429) {
       say(form.dataset.unconfirmedKey ? "stillUnconfirmed" : "notSent");
     } else {
       form.dataset.unconfirmedKey = key;

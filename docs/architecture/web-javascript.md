@@ -113,11 +113,12 @@ and today the composer script keeps none of their state.
   that one removal per textarea in a `WeakMap`. Every answer sets the
   textarea's `aria-invalid` from the state's `data-invalid`.
 - **Failures** (#1179) keep the text and the key; `#message-send-alert` says
-  which. A network error, a timeout or a 5xx may follow a commit: *could not
-  confirm*, and the key is marked in `data-unconfirmed-key`. A 4xx (a 422, a
-  proxy's 429) comes before any write: *not sent*, or with the mark, *this
-  retry was refused and the earlier send is still unconfirmed*. Only a 200 or
-  a 409 follows the key lookup; both bring a new key, and the mark goes
+  which. The handler rejects 400/404/413/422 before any write; 429 rejects
+  by spec: *not sent*, or with the mark, *this retry was refused and the
+  earlier send is still unconfirmed*. A network error, a timeout, a 5xx or
+  another 4xx (except 409) may follow a commit: *could not confirm*, and the
+  key is marked in `data-unconfirmed-key`. Only a 200 or a 409 follows the
+  key lookup; both bring a new key, and the mark goes
   exactly when the key changes. A 409 carries `data-sent-body`, and omits
   its error, only when the retried text started with the stored body: the
   script removes that body under the same rules (*the earlier message was

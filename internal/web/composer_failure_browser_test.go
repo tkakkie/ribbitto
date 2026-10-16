@@ -76,6 +76,8 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 		default:
 			code, _ := strconv.Atoi(answer)
 			h.Response.Payload().ResponseCode = code
+			// Synthetic rejections have no composer state to swap (422 swaps).
+			h.Response.SetHeader("HX-Reswap", "none")
 			h.Response.SetBody("refused")
 		}
 	})
@@ -114,10 +116,13 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 		text, answer, alert string
 		marked              bool
 	}{
+		{"hello", "400", notSent, false}, {"hello", "404", notSent, false},
+		{"hello", "413", notSent, false}, {"hello", "422", notSent, false},
 		{"hello", "429", notSent, false}, {"hello", "failed", unconfirmed, true},
 		{"hello", "hung", unconfirmed, true}, {"hello", "500", unconfirmed, true},
 		{"hello", "429", refused, true}, {"hello", "pass", "", false},
-		{"second", "lost", unconfirmed, true}, {"second", "404", refused, true}, {"second", "pass", "", false},
+		{"second", "408", unconfirmed, true}, {"second", "lost", unconfirmed, true},
+		{"second", "404", refused, true}, {"second", "pass", "", false},
 	} {
 		if state()[0] == "" {
 			page.MustEval(`text => { document.getElementById('message-body').value = text; }`, step.text)

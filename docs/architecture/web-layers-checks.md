@@ -1,6 +1,7 @@
 # Web layers: how the rules are checked
 
-The rules are in [`web-layers.md`](web-layers.md) and
+The rules are in [`web-layers.md`](web-layers.md),
+[`web-contracts.md`](web-contracts.md) and
 [`web-javascript.md`](web-javascript.md).
 
 ## How the rules are checked
@@ -23,7 +24,7 @@ are not swap selectors. The real sibling typing form is checked for its POST
 route, matching action/method, generation-only controls, no-swap and empty 204;
 other requests retain the existing response and fallback checks.
 
-The data attributes in the DOM contract are asserted on the elements that
+The data attributes in the [DOM contract](web-contracts.md) are asserted on the elements that
 own them, where they are produced (#351): `TestMessagePagingHandler` on full
 pages and Load older responses, `TestOrgRoutesAgainstPostgreSQL` on topic
 pages (`data-topic`), and `TestMessageRendererSharesRenders` on the `message`

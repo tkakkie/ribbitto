@@ -238,7 +238,7 @@ func (*fakePostingWriter) GetTopic(_ context.Context, org, channel, id kernel.ID
 	return conversation.Topic{ID: id, OrganizationID: org, ChannelID: channel}, nil
 }
 
-func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic, member kernel.ID, body string, seq int64, key *conversation.IdempotencyKey) (conversation.Message, error) {
+func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic, member kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, _ *conversation.Quote) (conversation.Message, error) {
 	if _, taken := w.keyed[[3][16]byte{org, member, keyBytes(key)}]; key != nil && taken {
 		return conversation.Message{}, conversation.ErrPostKeyTaken
 	}
@@ -279,6 +279,10 @@ func (*fakePostingWriter) CreateTopic(context.Context, kernel.ID, kernel.ID, str
 	panic("posting fake: unexpected CreateTopic")
 }
 
+func (*fakePostingWriter) QuotedMessage(context.Context, kernel.ID, kernel.ID, kernel.ID) (conversation.Message, error) {
+	panic("posting fake: unexpected QuotedMessage")
+}
+
 func (*fakePostingWriter) InsertNotice(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, string, int64) (conversation.Message, error) {
 	panic("posting fake: unexpected InsertNotice")
 }
@@ -310,7 +314,7 @@ func testPosting(writer conversation.Writer) *conversation.Posting {
 	return conversation.NewPagePosting(fakeTxRunner{},
 		func(platform.Tx) conversation.Writer { return writer },
 		func(platform.Tx) conversation.EventSequence { return fakeEventSequence{} },
-		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} }, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, nil, nil, nil)
+		func(platform.Tx) conversation.EventAppender { return fakeEventAppender{} }, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, nil, nil, nil, nil)
 }
 
 func testPoster() *conversation.Posting { return testPosting(&fakePostingWriter{}) }

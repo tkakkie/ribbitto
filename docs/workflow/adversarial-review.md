@@ -134,7 +134,9 @@ included) whose diff from the last adversarially reviewed head (or the
 base, if none) matches tier A or B, the **pull request's** tier is
 recomputed over its whole diff at the new head and never lowered. Argon
 reviews again. A tier C pull request lifted to B or A gets its first review,
-compared against the base when no reviewed head exists; one Argon implemented
+compared against the base when no reviewed head exists, and Copilot's
+review before it if it had skipped Copilot under the
+[docs-only rule](reviewing.md#docs-only-pull-requests); one Argon implemented
 leaves its trial instead, and the maintainer decides, since Argon never
 reviews its own work ([trial](argon-implementer.md#which-issues)). Fixes first get the
 follow-up check in [reviewing](reviewing.md).

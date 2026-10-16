@@ -21,7 +21,9 @@ preserve it. A missing or different token marks a reused Git ID, releasing its o
 ports and dropping its old database. The main worktree needs no token.
 IDs absent from Git's worktree list are cleaned up too; prunable entries remain
 until pruned. No prefix scans or test-template cleanup.
-`make ai-env-clean` drops only this worktree's dev database and releases ports.
+`make ai-env-clean` drops this worktree's dev database, removes its `.env.local`
+and releases its ports, and, like every `make ai-env` run, also drops the
+databases and releases the ports of stale registry entries.
 `make ai-health` distinguishes missing/invalid admin configuration, connection
 failures and SQL failures without credentials;
 `make check` runs it before tests when DB configuration is set or required.

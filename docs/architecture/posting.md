@@ -70,6 +70,21 @@ and tests) refuses any reference as a server error. The store inserts
 `format = 'chat_v1'` for posts and branching's notices; branching escapes
 its notice (`EscapeChatV1`), so a topic name is never markup or a reference.
 
+**Quotes** ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)).
+`Send.Quote` names a message to quote whole. Before the transaction, `Send`
+reads it through conversation's `ReadStore` (`GetMessages`, scoped to the
+membership's organisation and the posting channel) in a snapshot of its own,
+with the members a `chat_v1` original references, so the organisation lock
+never waits on the directory. In the transaction, after the topic and under
+the organisation lock that moves take too, `Writer.QuotedMessage` reads it
+again with the same scope; only that read decides. The snapshot is the original's
+own text, never its quote: `Entry.Text` with references as `@handle` or
+`Send.UnknownMember`, trimmed by `ValidateMessageBody`, which refuses an
+empty one as `ErrInvalidBody`. Missing, another organisation's and another
+channel's originals are one `ErrQuoteNotFound` (web: 404), which rolls back
+the sequence; so does an original deleted before the insert, through
+`message_quoted_message_fkey`. A repeat compares the quote too.
+
 **Repeated sends** ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
 Web posts through `conversation.Posting.Send`, which takes the optional
 cursor and the composer's `IdempotencyKey`; `PostToTopic` and `PostFromPage`
@@ -81,7 +96,7 @@ the stored message by the membership's organisation, author and key in a
 short transaction of its own (`Writer.KeyedMessage`) and returns it with no
 event and no notification. The organisation lock serialises two sends with
 one key, so the second always sees the first's row. A repeat whose validated
-body or channel differs returns `ErrPostKeyReused` with the stored message:
+body, quote or channel differs returns `ErrPostKeyReused` with the stored message:
 it is not a retry, and its text must not be dropped. The topic is not
 compared, because branching may have moved the message. `Sent.Topic` is the
 requested place resolved before the insert; a repeat's composer and typing

@@ -80,8 +80,9 @@ Rendered HTML stays at most a disposable cache.
 `chat_v1`'s extraction returns text segments and member-reference segments.
 The caller resolves references through org when it uses the text, to
 `@handle`, or to a fixed localised placeholder when the member cannot be
-resolved, never the UUID. No name is stored, so renames never leave stale
-text. Delimiters, escape backslashes, fences and language tags are dropped;
+resolved, never the UUID. A body stores no name, so renames never leave
+stale text in it; a quote's snapshot keeps the handles as they were when it
+was posted, on purpose (below). Delimiters, escape backslashes, fences and language tags are dropped;
 code content is kept literally; each block boundary becomes one line break;
 line breaks inside a block stay; an autolink is its URL. The pins excerpt
 counts its 200 code points after resolution.
@@ -89,7 +90,9 @@ counts its 200 code points after resolution.
 A quote of a `chat_v1` message copies its extraction, resolved when the quote
 is posted, then trimmed of white space at both ends to meet decision 38's
 snapshot checks; if nothing is left (a body of only `>`), the quote is
-rejected like an invalid body. The shared extraction itself keeps code
+rejected like an invalid body. A reference that cannot be resolved then is
+stored as the placeholder in the quoting member's language (maintainer,
+2026-10-16, #1176). The shared extraction itself keeps code
 content exactly. #1161 sends a selection in the same resolved form (a
 selected mention as `@handle`), trimmed the same way before the check.
 

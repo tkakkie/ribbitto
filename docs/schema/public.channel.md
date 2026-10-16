@@ -85,6 +85,9 @@ erDiagram
   timestamp_with_time_zone pinned_at
   uuid idempotency_key
   text format
+  uuid quoted_message_id FK
+  uuid quoted_member_id FK
+  text quote_text
 }
 "public.channel_read" {
   uuid organization_id FK

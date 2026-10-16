@@ -244,6 +244,9 @@ other = "ribbitの操作"
 ["message.copy_link"]
 other = "リンクをコピー"
 
+["message.quote_link"]
+other = "元のribbit"
+
 ["message.link_copied"]
 other = "リンクをコピーしました"
 

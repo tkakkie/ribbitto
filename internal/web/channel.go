@@ -396,12 +396,23 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		key = new(conversation.IdempotencyKey(parsed))
 	}
+	// A message of this channel to quote whole (decision 38); posting checks
+	// its organisation and channel.
+	var quote *kernel.ID
+	if submitted, present := r.PostForm["quote"]; present {
+		parsed, ok := pathID(submitted[0])
+		if !ok || len(submitted) != 1 {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		quote = &parsed
+	}
 	body := r.PostForm.Get("body")
 	var composer *string
 	if _, present := r.PostForm["composer"]; present {
 		composer = new(r.PostForm.Get("composer"))
 	}
-	sent, err := p.posting.Send(r.Context(), m, c.ID, conversation.Send{Topic: p.topicID, Body: body, Cursor: cursor, Key: key})
+	sent, err := p.posting.Send(r.Context(), m, c.ID, conversation.Send{Topic: p.topicID, Body: body, Cursor: cursor, Key: key, Quote: quote, UnknownMember: view.UnknownMember(r.Context())})
 	posted := sent.Message
 	// A repeat closes the generation in the requested place it was issued
 	// for, not in the topic branching may have moved the message into.
@@ -443,9 +454,11 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		// Not a retry: keep the text, name the stored message and issue a
 		// fresh key, so sending again posts the new text.
 		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, SentBody: recovered(enhanced, c.ID, body, posted), IdempotencyKey: freshKey()})
-	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound):
+	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound),
+		errors.Is(err, conversation.ErrQuoteNotFound):
 		// The channel, membership or organisation went away after this
-		// request resolved them; answer as for a non-member.
+		// request resolved them; answer as for a non-member. A quoted
+		// message outside this channel gets the same answer, with none of its text.
 		http.NotFound(w, r)
 	case err != nil:
 		serverError(w, r, "posting message", err)
@@ -573,6 +586,7 @@ func viewMessage(slug string, entry conversation.Entry) view.Message {
 		TopicID: entry.TopicID, TopicName: entry.TopicName, DefaultTopic: entry.DefaultTopic,
 		TopicURL: view.ConversationURL(slug, entry.ChannelID, &entry.TopicID), URL: view.MessageURL(slug, entry.ID),
 		PinURL: view.PinURL(slug, entry.ChannelID, entry.ID), Pinned: entry.Pinned, Blocks: viewBody(entry),
+		Quote: viewQuote(slug, entry),
 	}
 }
 

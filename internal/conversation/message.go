@@ -18,10 +18,22 @@ var ErrInvalidBody = errors.New("invalid message body")
 // and channel, including when the message exists in another scope.
 var ErrMessageNotFound = errors.New("message not found")
 
-// Message is a plain-text post identified by ID. EventSeq orders it within its organisation.
+// Format names the grammar a stored body is read with (decision 39). A
+// stored message keeps its format (decision 18).
+type Format string
+
+// The formats the message table's CHECK allows.
+const (
+	FormatPlainText Format = "plain_text"
+	FormatChatV1    Format = "chat_v1"
+)
+
+// Message is a post identified by ID, its body read under Format. EventSeq
+// orders it within its organisation.
 type Message struct {
 	ID, OrganizationID, ChannelID, TopicID, MemberID kernel.ID
 	Body                                             string
+	Format                                           Format
 	EventSeq                                         int64
 	CreatedAt                                        time.Time
 	// Pinned is the message's current pin state, the same for every member.

@@ -28,6 +28,8 @@ type Message struct {
 	// Pinned, the same for every member, picks the one shown (#890).
 	PinURL string
 	Pinned bool
+	// Blocks is a chat_v1 body; nil shows Body as plain text.
+	Blocks []BodyBlock
 }
 
 // PinURL is the base of a message's pin and unpin routes. It names the
@@ -108,7 +110,7 @@ templ messageItem(entry Message, announcement string) {
 		</div>
 		// Text precedes the avatar, whose fixed gutter reserves its space
 		// without waiting for an image or font request.
-		<p id={ "body-" + MessageDOMID(entry.ID) } dir="auto" class="whitespace-pre-wrap break-words text-title">{ entry.Body }</p>
+		@messageBody(entry)
 		<div class="absolute left-0 top-0">
 			@Avatar(entry.MemberID, entry.DisplayName, entry.Handle)
 		</div>

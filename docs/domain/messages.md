@@ -22,16 +22,17 @@ or organisation may use the same key for their own message. The key grants
 nothing, is never shown to anyone else and lives as long as its message.
 Branching's notices and messages posted without a key have none.
 
-Bodies are **plain text** today, and the stored body is the source of truth.
+Bodies are stored with a `format`, and the stored body is the source of truth.
 A stored message is never reinterpreted, and rendered HTML is at most a
 disposable cache
 ([decision 18](../decisions/18-stored-message-formats-never-change-meaning.md)).
-*Planned* ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md)): a `format` column arrives with `chat_v1`,
+Every existing message is `plain_text`; [decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md) adds `chat_v1`,
 a small markup frozen per version (code spans and fences, block quotes,
-bold, italic, `http`/`https` autolinks and member references `<@uuid>`);
-every existing message stays `plain_text`, and new posts use `chat_v1`.
-Its parser, `conversation.ParseChatV1` (#1201), exists and is not used yet.
-A reference to a member who is not in the URL's organisation, checked
+bold, italic, `http`/`https` autolinks and member references `<@uuid>`).
+Its storage and rendering exist (#1201, #1202), but posting stores
+`plain_text` until #1203 and extraction's callers wait for #1204.
+*Planned* (#1203): new posts use `chat_v1`, and a reference to a member who
+is not in the URL's organisation, checked
 through org's directory, rejects the post with 422.
 
 Every channel message is in exactly one topic of its channel
@@ -102,14 +103,16 @@ it returns the body unchanged. The pins excerpt, the live announcement
 check and later notifications and search use it. A quote's snapshot is left
 out of the quoting message's extraction.
 
-A `chat_v1` body (*planned*, [decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md)) is parsed by
+A `chat_v1` body ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md)) is parsed by
 `conversation` into plain structs and rendered node by node with templ,
 each block and inline element isolated in direction; never `templ.Raw` or
 HTML built from strings, no raw HTML or images. Links allow only `http` and
-`https`, with `rel="noopener noreferrer"`, and are never fetched; a pasted
+`https`, checked again when rendering, with `rel="noopener noreferrer"`, and are never fetched; a pasted
 message URL is an ordinary link. A member reference shows the current
-`Display name @handle`, or a localised placeholder when it cannot be
-resolved. Its extraction resolves references to `@handle` at use.
+`Display name @handle` (`view.MemberName`), or a localised placeholder when
+the organisation's directory, read in the authors' batches, does not return
+it. The markup is the same for every reader of one language. Its extraction
+(*planned*, #1204) resolves references to `@handle` at use.
 
 ## Posting from the channel page
 

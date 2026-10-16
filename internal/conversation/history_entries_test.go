@@ -94,7 +94,7 @@ func TestOne(t *testing.T) {
 				t.Fatalf("calls = %v, want %v", f.calls, tt.wantCalls)
 			}
 			if tt.wantError != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantError) || got != (conversation.Entry{}) {
+				if err == nil || !strings.Contains(err.Error(), tt.wantError) || !reflect.DeepEqual(got, conversation.Entry{}) {
 					t.Fatalf("entry = %+v, error = %v; want zero entry and %q", got, err, tt.wantError)
 				}
 				for _, cause := range []error{tt.readErr, tt.memberErr, tt.nameErr} {
@@ -104,7 +104,7 @@ func TestOne(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || got != (conversation.Entry{Message: msg, DisplayName: "Current Name", Handle: "current-handle"}) {
+			if err != nil || !reflect.DeepEqual(got, conversation.Entry{Message: msg, DisplayName: "Current Name", Handle: "current-handle"}) {
 				t.Fatalf("entry = %+v, error = %v", got, err)
 			}
 		})

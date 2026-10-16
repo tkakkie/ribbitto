@@ -151,5 +151,5 @@ func messagesFromRows(rows []sqlcgen.Message) []conversation.Message {
 }
 
 func messageFromRow(row sqlcgen.Message) conversation.Message {
-	return conversation.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time, Pinned: row.PinnedAt.Valid}
+	return conversation.Message{ID: row.ID.Bytes, OrganizationID: row.OrganizationID.Bytes, ChannelID: row.ChannelID.Bytes, TopicID: row.TopicID.Bytes, MemberID: row.MemberID.Bytes, Body: row.Body, Format: conversation.Format(row.Format), EventSeq: row.EventSeq, CreatedAt: row.CreatedAt.Time, Pinned: row.PinnedAt.Valid}
 }

@@ -4,9 +4,9 @@ The [domain rules](../domain/pins.md) put pin metadata on messages, owned
 by `conversation`. The maintainer agreed this design on 2026-10-12 (#880);
 pin storage (#887), durable writes (#888) and the overview's pins read in
 the page's snapshot (`conversation.Reader.Overview`, #889) are implemented,
-and so is the generic channel-state writer seam in realtime (#891). The separate router
-stays unregistered in live readers until #892, bypassing rendering; the
-adapters and browser delivery remain separate work.
+and so are the generic channel-state writer seam (#891), pins-only snapshot
+source and consumer renderer filter (#892). The separate router and web
+source stay unwired until live activation (#1205), which also owns browser delivery.
 
 ## Durable invalidation, current display
 
@@ -52,7 +52,7 @@ those in [replay](replay.md#vanished-messages).
 
 `realtime.ChannelStateSource` supplies consumer-defined triggers and fresh
 whole-state reads/renders; `InterestChannelState` selects the connection's
-channel across topics. It is not yet exposed as a web parameter (#892).
+channel across topics. It is not yet exposed as a web parameter (#1205).
 The writer validates the cursor before the connect refresh, then classifies
 scoped triggers before message rendering/filtering. It uses
 `ChannelStateInterval` (one second), a dirty flag and the existing combined
@@ -74,8 +74,14 @@ every send. Denial of the connection's own membership ends it. The bounded
 source returns at most 50 entries and batched names, not one query per pin.
 Share snapshots/renders for the same organisation, channel and language
 within a refresh round; never reuse an event-sequence cache entry as current
-pin state. No member-specific controls enter shared output. Measure the
-bounded refresh cost with distinct connections in the live-delivery issue.
+pin state. `web.NewPinsSource` groups overlapping refresh calls by organisation
+and channel, sharing one `Reader.Pins` snapshot and one `PinsSection` render per
+language. A newer invalidation starts another round; the last caller discards
+its round, so a later call reads again. Shared output has no member controls.
+The deterministic test covers 1, 10 and 100 connections, in one
+and two languages (#892). The optional renderer `EventFilter` excludes pin
+invalidations from both renderer paths after trigger classification; skipped
+events still advance the durable cursor.
 
 **Considered and rejected:** replay pin/unpin deltas as new frames with `id:` (adds
 ordering and vanished-target cases, and needs an explicit extension to

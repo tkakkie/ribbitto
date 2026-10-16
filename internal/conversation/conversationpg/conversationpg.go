@@ -118,7 +118,7 @@ func NewPinning(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, even
 	return conversation.NewPinning(newTxRunner(pool), writerIn, func(tx platform.Tx) conversation.PinWriter { return postgres.WriterIn(tx) }, sequences, events, notifier)
 }
 
-// PinEventKinds supplies the pin router separately until live activation (#892).
+// PinEventKinds supplies the pin router separately until live activation (#1205).
 func PinEventKinds() realtime.Kinds {
 	return realtime.Kinds{conversation.KindPinsChanged: conversation.RoutePinsChanged}
 }

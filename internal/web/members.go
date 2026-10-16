@@ -51,7 +51,7 @@ func (p channelPages) memberListing(ctx context.Context, m org.Membership, id ke
 }
 
 // viewPins maps the overview's pins, read in the page's snapshot; live
-// delivery (#892) replaces the list from its own snapshots.
+// delivery (#1205) replaces the list from its own snapshots.
 func viewPins(pinned []conversation.Pin) []view.Pin {
 	pins := make([]view.Pin, len(pinned))
 	for i, pin := range pinned {

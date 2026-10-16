@@ -42,16 +42,19 @@ request; `limit` is in [running the other AI](running-other-ai.md).
 ```sh
 # $W: Argon's worktree; $clean: a clean worktree, detached at origin/main
 # just fetched; P: the pull request. gh pr checks fails unless CI is
-# green, which the review needs first.
+# green, which the review needs first. Every command substitution is its
+# own assignment, so a failing git or gh stops the chain.
 g() { env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
   GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
   -c core.fsmonitor=false "$@"; }
 d=$(mktemp -d) &&
   gh pr view P --json number,title,body,baseRefOid,headRefOid > "$d/pr" &&
   base=$(jq -r .baseRefOid "$d/pr") && head=$(jq -r .headRefOid "$d/pr") &&
-  test "$head" = "$(g rev-parse HEAD)" &&
-  test "$(git -C "$clean" rev-parse HEAD)" = "$(git -C "$clean" rev-parse origin/main)" &&
-  test -z "$(git -C "$clean" status --porcelain --untracked-files=all)" &&
+  local_head=$(g rev-parse HEAD) && test "$head" = "$local_head" &&
+  clean_head=$(git -C "$clean" rev-parse HEAD) &&
+  main=$(git -C "$clean" rev-parse origin/main) && test "$clean_head" = "$main" &&
+  clean_status=$(git -C "$clean" status --porcelain --untracked-files=all) &&
+  test -z "$clean_status" &&
   gh pr checks P > /dev/null &&
   gh api "repos/tkakkie/ribbitto/commits/$head/check-runs?per_page=100" \
     --jq '[.check_runs[] | {name, status, conclusion}]' > "$d/ci" &&
@@ -75,7 +78,8 @@ EOF
   jq -c --rawfile diff "$d/diff" --slurpfile ci "$d/ci" '{pull_request: .number,
     base_commit: .baseRefOid, head_commit: .headRefOid, title,
     description: .body, diff: $diff, ci_checks: $ci[0]}' "$d/pr" >> "$d/in" &&
-  test "$head" = "$(gh pr view P --json headRefOid -q .headRefOid)" &&
+  head_now=$(gh pr view P --json headRefOid -q .headRefOid) &&
+  test "$head" = "$head_now" &&
   (cd "$clean" && limit 1800 codex exec -m gpt-6-astra -s read-only \
     -o "$d/report.md" - < "$d/in")
 ```

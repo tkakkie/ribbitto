@@ -20,7 +20,10 @@
 // channel check, listing and display names in one snapshot. Independent sidebar
 // snapshots, which also serve the channel list page, read fresh bounded lists,
 // counts and their event sequence without history or directories.
-// Member lookups return org's directory entries, not copies. The topic lookup
+// Member lookups return org's directory entries, not copies. A message's
+// format column is never updated; history reads parse chat_v1 bodies and
+// resolve their member references in the authors' organisation-scoped
+// batches. The topic lookup
 // is scoped by a resolved
 // membership so web cannot supply the organisation. The store also implements setup's injected
 // default-channel write and transaction-bound channel message and topic unread

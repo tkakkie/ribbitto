@@ -86,6 +86,15 @@ current sizes (no `CONCURRENTLY`, which would need goose's `NO TRANSACTION`).
 Keys live as long as their message: there is no cleanup. Down drops the index
 and the column.
 
+Migration 00016 adds `message.format` (text, not null, default `plain_text`)
+with the CHECK `message_format_check` allowing `plain_text` and `chat_v1`
+([decision 39](decisions/39-message-bodies-use-a-small-frozen-markup.md)).
+Existing rows become `plain_text` through the default without a table
+rewrite; checking the CHECK still scans `message` while `migrate up` runs. No
+query updates a stored row's format; posting and
+branching notices take the default until posting names `chat_v1` (#1203).
+Down drops the column.
+
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations

@@ -15,6 +15,16 @@ type Entry struct {
 	DisplayName, Handle string
 	TopicName           string
 	DefaultTopic        bool
+	// Blocks is a chat_v1 body, parsed; it is nil for plain_text.
+	Blocks []BodyBlock
+	// References holds the members Blocks names that the organisation's
+	// directory resolved. A reference missing from it is shown as unresolved.
+	References map[kernel.ID]Reference
+}
+
+// Reference is a referenced member's current names.
+type Reference struct {
+	DisplayName, Handle string
 }
 
 // historyReader composes history with the topic labels and with the author lookups
@@ -140,11 +150,20 @@ func (s historyReader) Many(ctx context.Context, m org.Membership, channelID ker
 	return s.entries(ctx, m, channelID, messages)
 }
 
-// entries adds topic labels and author names, returning messages oldest first.
+// entries adds topic labels, author names and chat_v1 bodies with their
+// references, returning messages oldest first. Referenced members join the
+// authors' batches, so a page or a live render reads names once; they are
+// looked up only in m's organisation, which omits foreign and missing
+// members, so a stored reference cannot show another organisation's member.
 func (s historyReader) entries(ctx context.Context, m org.Membership, channelID kernel.ID, messages []Message) ([]Entry, error) {
 	ids := make([]kernel.ID, 0, len(messages))
-	for _, msg := range messages {
+	bodies := make([][]BodyBlock, len(messages))
+	for i, msg := range messages {
 		ids = append(ids, msg.MemberID)
+		if msg.Format == FormatChatV1 {
+			bodies[i] = ParseChatV1(msg.Body)
+			ids = appendReferences(ids, bodies[i])
+		}
 	}
 	members, err := s.Members.LookupMembers(ctx, m.Organization.ID, ids)
 	if err != nil {
@@ -178,7 +197,35 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 		if !ok {
 			return nil, fmt.Errorf("missing topic for message %x", msg.ID)
 		}
-		entries = append(entries, Entry{Message: msg, DisplayName: name, Handle: author.Handle, TopicName: topic.Name, DefaultTopic: topic.IsDefault})
+		entry := Entry{Message: msg, DisplayName: name, Handle: author.Handle, TopicName: topic.Name, DefaultTopic: topic.IsDefault}
+		if bodies[i] != nil {
+			entry.Blocks, entry.References = bodies[i], map[kernel.ID]Reference{}
+			for _, id := range appendReferences(nil, bodies[i]) {
+				if member, ok := members[id]; ok {
+					entry.References[id] = Reference{DisplayName: names[member.AccountID], Handle: member.Handle}
+				}
+			}
+		}
+		entries = append(entries, entry)
 	}
 	return entries, nil
+}
+
+// appendReferences appends the members blocks reference, in order.
+func appendReferences(ids []kernel.ID, blocks []BodyBlock) []kernel.ID {
+	var walk func([]BodyInline)
+	walk = func(nodes []BodyInline) {
+		for _, node := range nodes {
+			if node.Kind == InlineReference {
+				ids = append(ids, node.Member)
+			}
+			walk(node.Children)
+		}
+	}
+	for _, block := range blocks {
+		for _, line := range block.Lines {
+			walk(line)
+		}
+	}
+	return ids
 }

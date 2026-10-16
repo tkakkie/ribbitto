@@ -235,6 +235,9 @@ other = "リンクをコピーしました"
 ["message.new"]
 other = "新しいribbit"
 
+["message.unknown_member"]
+other = "不明なメンバー"
+
 ["topic.default"]
 other = "chorus"
 

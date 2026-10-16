@@ -71,7 +71,7 @@ func (q *Queries) GetMessagePin(ctx context.Context, arg GetMessagePinParams) (G
 }
 
 const listChannelPins = `-- name: ListChannelPins :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key, format FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND pinned_at IS NOT NULL
 ORDER BY pinned_at DESC, id
 LIMIT $3
@@ -105,6 +105,7 @@ func (q *Queries) ListChannelPins(ctx context.Context, arg ListChannelPinsParams
 			&i.PinnedByMemberID,
 			&i.PinnedAt,
 			&i.IdempotencyKey,
+			&i.Format,
 		); err != nil {
 			return nil, err
 		}

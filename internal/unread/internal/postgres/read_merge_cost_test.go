@@ -130,7 +130,7 @@ func TestReadMergeCost(t *testing.T) {
 						exec(t, "INSERT INTO channel_read (organization_id,channel_id,member_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING", f.OrganizationID, f.Channel.ID, f.MemberID)
 						exec(t, "INSERT INTO read_range (organization_id,channel_id,member_id,lo,hi) SELECT $1::uuid,$2::uuid,$3::uuid,s,s+1 FROM generate_series(3,$4::bigint,2) s UNION ALL SELECT $1::uuid,$2::uuid,$3::uuid,0,2", f.OrganizationID, f.Channel.ID, f.MemberID, int64(fragments*2+1))
 						adapter := func(tx platform.Tx) mergeCostAdapter { return mergeCostAdapter{WriterIn(tx), arm == 0} }
-						posting := conversationpg.NewPagePosting(pool, mergeCostSequence, mergeCostEvents, func(tx platform.Tx) conversation.PostReadWriter { return adapter(tx) }, nil)
+						posting := conversationpg.NewPagePosting(pool, mergeCostSequence, mergeCostEvents, func(tx platform.Tx) conversation.PostReadWriter { return adapter(tx) }, nil, nil)
 						branching := conversationpg.NewBrancher(pool, mergeCostSequence, mergeCostEvents, func(tx platform.Tx) conversation.ReadRangeWriter { return adapter(tx) }, nil)
 						before := q.Counts()
 						var mem0, mem1 runtime.MemStats

@@ -71,7 +71,7 @@ func postgresServices(t *testing.T, pool *pgxpool.Pool, sessions *identity.Sessi
 		Channels:  conversationpg.NewChannels(pool, conversation.DefaultMaxChannels),
 		Topics:    conversationpg.NewTopics(pool),
 		Messages:  conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn),
-		Posting:   conversationpg.NewPagePosting(pool, postingSequence, postingEvents, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, nil),
+		Posting:   conversationpg.NewPagePosting(pool, postingSequence, postingEvents, func(platform.Tx) conversation.PostReadWriter { return fakePostReads{} }, lookupMembers, nil),
 		Branching: conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, nil),
 		Pinning:   conversationpg.NewPinning(pool, postingSequence, postingEvents, nil),
 	}

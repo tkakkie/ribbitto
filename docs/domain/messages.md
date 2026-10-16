@@ -29,11 +29,12 @@ disposable cache
 Every existing message is `plain_text`; [decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md) adds `chat_v1`,
 a small markup frozen per version (code spans and fences, block quotes,
 bold, italic, `http`/`https` autolinks and member references `<@uuid>`).
-Its storage, rendering and text extraction exist (#1201, #1202, #1204),
-but posting stores `plain_text` until #1203.
-*Planned* (#1203): new posts use `chat_v1`, and a reference to a member who
-is not in the URL's organisation, checked
-through org's directory, rejects the post with 422.
+New posts use `chat_v1` (#1203). Every reference is checked through org's
+directory in the URL's organisation: one to an unknown or another
+organisation's member rejects the post with 422 and one message for both,
+keeping the draft; a malformed token is text. Branching's notice is
+`chat_v1` too, but server text, never checked: escaped, a topic named
+`**Deploy**` or like a reference shows as typed.
 
 Every channel message is in exactly one topic of its channel
 ([`topics.md`](topics.md)). Branching moves it to another topic without
@@ -136,7 +137,7 @@ success gets a 303 to the latest page; errors render a full latest page with
 the draft. Posting without JavaScript uses the same 303/422 flow. The channel
 and organisation are resolved before posting; a non-member gets 404.
 Enter sends, Shift+Enter inserts a line break, and IME composition never
-sends. The page opens at the newest message; live delivery keeps it in view only
+sends; the help under the composer also names bold, italic, code and quotes. The page opens at the newest message; live delivery keeps it in view only
 when the reader is already at the bottom, except for their own successful post:
 the composer's success fragment identifies its message, and the sender scrolls
 to that item even when scrolled up. This works whether the stream arrives before

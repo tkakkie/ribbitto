@@ -50,12 +50,12 @@ func TestReaderOne(t *testing.T) {
 		want       conversation.Entry
 		wantErr    error
 	}{
-		{"hydrated", membership, local.Channel.ID, posted.EventSeq, conversation.Entry{Message: posted, DisplayName: "Current Name", Handle: "current-handle", DefaultTopic: true}, nil},
+		{"hydrated", membership, local.Channel.ID, posted.EventSeq, conversation.Entry{Message: posted, DisplayName: "Current Name", Handle: "current-handle", DefaultTopic: true, Blocks: conversation.ParseChatV1(posted.Body), References: map[kernel.ID]conversation.Reference{}}, nil},
 		{"missing", membership, local.Channel.ID, posted.EventSeq + 100, conversation.Entry{}, conversation.ErrMessageNotFound},
 		{"wrong channel", membership, otherChannel.ID, posted.EventSeq, conversation.Entry{}, conversation.ErrMessageNotFound},
 		{"foreign message", membership, foreign.Channel.ID, foreignPost.EventSeq, conversation.Entry{}, conversation.ErrMessageNotFound},
 		{"foreign member", foreignMembership, local.Channel.ID, posted.EventSeq, conversation.Entry{}, conversation.ErrMessageNotFound},
-		{"foreign hydrated", foreignMembership, foreign.Channel.ID, foreignPost.EventSeq, conversation.Entry{Message: foreignPost, DisplayName: "globex", Handle: "owner", DefaultTopic: true}, nil},
+		{"foreign hydrated", foreignMembership, foreign.Channel.ID, foreignPost.EventSeq, conversation.Entry{Message: foreignPost, DisplayName: "globex", Handle: "owner", DefaultTopic: true, Blocks: conversation.ParseChatV1(foreignPost.Body), References: map[kernel.ID]conversation.Reference{}}, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := reader.One(ctx, tt.membership, tt.channel, tt.seq)

@@ -45,7 +45,7 @@ func newSidebarBranchFixture(t *testing.T) sidebarBranchFixture {
 	member := orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, "reader", 1)
 	m, err := orgpg.NewAuthorizer(pool).Member(t.Context(), &identity.Account{ID: f.AccountID}, "branch")
 	acceptanceOK(t, err)
-	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, nil)
+	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, nil)
 	read, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &source, "read moves")
 	acceptanceOK(t, err)
 	unreadPost, err := posting.PostToTopic(t.Context(), m, f.Channel.ID, &source, "unread moves")

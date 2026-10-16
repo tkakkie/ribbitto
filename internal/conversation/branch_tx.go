@@ -50,8 +50,11 @@ func (s *Brancher) run(ctx context.Context, m org.Membership, channelID kernel.I
 			return err
 		}
 		// InsertNotice deliberately maps no errors: a failed notice stays a
-		// server error, unlike posting's mapped insert (R2 on #502).
-		posted, err := writer.InsertNotice(ctx, organizationID, channelID, source.ID, memberID, notice(destination), noticeSeq)
+		// server error, unlike posting's mapped insert (R2 on #502). The
+		// notice is stored as chat_v1 but is not composer text: escaped, a
+		// topic named like markup or a reference shows as typed, so it is
+		// never checked and never fails branching.
+		posted, err := writer.InsertNotice(ctx, organizationID, channelID, source.ID, memberID, EscapeChatV1(notice(destination)), noticeSeq)
 		if err != nil {
 			return err
 		}

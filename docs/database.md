@@ -91,8 +91,8 @@ with the CHECK `message_format_check` allowing `plain_text` and `chat_v1`
 ([decision 39](decisions/39-message-bodies-use-a-small-frozen-markup.md)).
 Existing rows become `plain_text` through the default without a table
 rewrite; checking the CHECK still scans `message` while `migrate up` runs. No
-query updates a stored row's format; posting and
-branching notices take the default until posting names `chat_v1` (#1203).
+query updates a stored row's format; posting and branching's notices insert
+`chat_v1` (#1203), so the default only covers older rows.
 Down drops the column.
 
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven

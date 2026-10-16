@@ -56,6 +56,20 @@ keys also enforce the message's organisation scope.
   each listener would raise its local hub's value, and after reconnecting
   read `organization.event_seq` and raise the value to that (#236).
 
+**Member references** ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md#member-references)).
+`Send` parses the validated body as `chat_v1` and, if it holds references,
+looks them all up in one batch through org's directory
+(`LookupMembers`, scoped to the membership's organisation) in a snapshot of
+its own, before the transaction, so the organisation lock never waits on it.
+A reference the directory does not return, missing or another
+organisation's, is `ErrUnknownReference` (wrapping `ErrInvalidBody`): web
+answers 422 with one message and keeps the draft. A member who leaves
+between the check and the insert shows as the placeholder, like any later
+leaver. `NewPagePosting` takes the directory; posting without one (seeding
+and tests) refuses any reference as a server error. The store inserts
+`format = 'chat_v1'` for posts and branching's notices; branching escapes
+its notice (`EscapeChatV1`), so a topic name is never markup or a reference.
+
 **Repeated sends** ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
 Web posts through `conversation.Posting.Send`, which takes the optional
 cursor and the composer's `IdempotencyKey`; `PostToTopic` and `PostFromPage`

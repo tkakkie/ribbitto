@@ -179,7 +179,7 @@ func readFaultServer(t *testing.T, pool *pgxpool.Pool, p *readPublicationSpy) *h
 		Sessions: sessions, SignIn: identitypg.NewSignIn(pool, nil, sessions), Authz: auth, ReadLimits: middleware.NewReadRateLimiter(time.Now), CreateLimits: middleware.NewChannelCreationRateLimiter(time.Now),
 		Channels: conversationpg.NewChannels(pool, conversation.DefaultMaxChannels), Topics: conversationpg.NewTopics(pool),
 		Messages: conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, pageCountsIn),
-		Posting:  conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, hub),
+		Posting:  conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, hub),
 		Reading:  unreadpg.NewReading(pool, newFeedWriter(), newTopicWriter(), p),
 		Stream: &web.Streaming{Lifetime: t.Context(), Hub: hub, Sessions: sessions, Authorizer: auth,
 			Events:  realtimepg.NewReader(pool, orgpg.BoundsIn, kinds),

@@ -91,7 +91,7 @@ func TestRecountCompositionAcceptance(t *testing.T) {
 			account := identitytest.Account(t, pool, "reader@example.org", "reader")
 			orgtest.Member(t, pool, f.OrganizationID, account, org.RoleMember, "reader", 1)
 			m := org.Membership{Organization: org.Organization{ID: f.OrganizationID}, Member: org.Member{ID: f.MemberID, JoinedEventSeq: 1}}
-			posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, nil)
+			posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, nil)
 			_, err = posting.PostToTopic(t.Context(), m, f.Channel.ID, &topic.ID, "unread")
 			acceptanceOK(t, err)
 

@@ -38,9 +38,11 @@ func NewPosting(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, even
 	return conversation.NewPosting(newTxRunner(pool), writerIn, sequences, events, notifier)
 }
 
-// NewPagePosting binds posting and its read-state factory to the same transaction.
-func NewPagePosting(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, reads conversation.PostReadWriterIn, notifier conversation.Notifier) *conversation.Posting {
-	return conversation.NewPagePosting(newTxRunner(pool), writerIn, sequences, events, reads, notifier)
+// NewPagePosting binds posting and its read-state factory to the same
+// transaction, and checks member references through org's directory in a
+// snapshot of their own.
+func NewPagePosting(pool *pgxpool.Pool, sequences conversation.EventSequenceIn, events conversation.EventAppenderIn, reads conversation.PostReadWriterIn, members conversation.MemberDirectoryIn, notifier conversation.Notifier) *conversation.Posting {
+	return conversation.NewPagePosting(newTxRunner(pool), writerIn, sequences, events, reads, newSnapshotRunner(pool), members, notifier)
 }
 
 // NewBrancher builds branching with org's sequence, realtime's appender and

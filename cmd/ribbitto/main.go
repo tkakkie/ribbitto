@@ -325,7 +325,7 @@ func buildHandler(ctx context.Context, pool *pgxpool.Pool, config handlerConfig)
 			},
 			Owners: map[realtime.Interest]realtime.EphemeralOwner{realtime.InterestPresence: web.NewPresenceOwner(ctx, state), realtime.InterestTyping: web.NewTypingOwner(typingState)}}
 	}
-	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, postingNotifier)
+	posting := conversationpg.NewPagePosting(pool, postingSequence, postingEvents, postReads, lookupMembers, postingNotifier)
 	branching := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, postingNotifier)
 	handler, err := web.NewHandler(config.devAssets, catalogues, web.Services{
 		Sessions: sessions,

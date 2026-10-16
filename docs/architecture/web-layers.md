@@ -38,18 +38,20 @@ formatting, choosing an i18n message ID) belongs in them.
 htmx does only requests and swaps; the server and templ own the HTML.
 
 - A normal request gets a full page. `hx-select` can select part of it (Load older).
-  Enhanced posts return `MessageComposer`: the message form plus a hidden
+  Enhanced posts return `MessageComposer`: `#message-composer-state` (hidden
+  controls and `#message-help`; never the textarea, #1173) plus a hidden
   `typing-form`, refreshed out of band with the same generation (only there: Load
   older would install an unclosed one). Signals use the
   actual posting topic's `/typing` POST, `typing-input throttle:2s queue:none`,
   independent `this:drop` synchronization and no swap. Input/IME glue only triggers
-  htmx. On success the message form's
+  htmx. On success the state's
   `data-posted-message` carries the posted message's DOM id; errors omit it,
-  except a 409, which names the stored message. Every composer has a hidden
+  except a 409, which names the stored message. A field error sets its
+  `data-invalid`, copied to the textarea's `aria-invalid`. Every composer has a hidden
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
-  `message-composer-v7.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v8.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one.
   Fragments echo the submitted cursor; only stream application advances it. The action URL identifies the feed/topic. The stream script consumes that id to scroll once the item is present,
@@ -59,9 +61,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
 - **DOM ids are a contract.** Templates define ids used by `hx-target`,
   `hx-select`, `hx-select-oob` and scripts; rename all references together. Contract ids
   are `organization-stream`, `sidebar-resync`, `stream-sink`, `account-menu`, `channel-create`, `conversation`, `message-list`, `message-items`, `load-older`,
-  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-help`, `message-status`,
+  `typing-form`, `typing-status`, `unread-divider`, `message-body`, `message-composer`, `message-composer-state`, `message-help`, `message-status`,
   `read-form`, `side-panel`, `panel-close`, `panel-backdrop`, `panel-control-<name>`, `members-list`, `branch-form`, `branch-to`, `branch-name` and `branch-feedback`, plus
-  `pins-section`, `pin-form-message-<hex>` and `pin-<true|false>-message-<hex>` for pins,
+  `pins-section`, `pin-form-message-<hex>`, `pin-<true|false>-message-<hex>`,
   `message-<hex>` from `MessageDOMID` and `select-message-<hex>` for its
   checkbox, `channel-<hex>` from `ChannelDOMID` and `topic-<hex>` from
   `TopicDOMID` for sidebar `<li>` entries, `link-channel-<hex>` and
@@ -69,15 +71,12 @@ htmx does only requests and swaps; the server and templ own the HTML.
   `sidebar-topics` for whole lists and `topic-heading-count` for every topic heading, and `presence-<hex>` from `PresenceDOMID` for member indicators
   (32 lowercase hex digits). Load older selects `#message-items > li`.
 - **Script-read data attributes are a contract too** (#351). The same renaming
-  rule covers `data-event-cursor`, `data-posted-message`, `data-announcement` and:
+  rule covers `data-event-cursor`, `data-posted-message`, `data-invalid`, `data-announcement` and:
 
   | Attribute | On | Present | Meaning |
   |---|---|---|---|
-  | `data-pins-seq` | `#pins-section` | always | snapshot sequence |
-  | `data-pinned-ids` | `#pins-section` | always | space-separated message IDs |
-  | `data-pin-control` | pin form | always | message ID |
-  | `data-pinned` | pin form | always | pin state |
-  | `data-pin-action` | pin button | always | `true`: Unpin; `false`: Pin |
+  | `data-pins-seq`, `data-pinned-ids` | `#pins-section` | always | snapshot sequence; pinned message IDs |
+  | `data-pin-control`, `data-pinned`, `data-pin-action` | pin form, buttons | always | message ID; state; `true` Unpin |
   | `data-applied-cursor` | `#organization-stream` | after durable application | newest sequence applied to the DOM, including while hidden |
   | `data-oldest-seq` | `#load-older` | always | `event_seq` of the oldest loaded message, `0` once nothing older remains; a moved item is inserted only at or above it |
   | `data-topic` | `#message-items` | topic pages only | the topic's ID, compared with a move's topics |
@@ -132,10 +131,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
 - The layout's `htmx-config` meta tag holds htmx's security settings and
   `responseHandling` ([`rendering.md`](rendering.md)). It keeps the three
   defaults, adding global 409/422 swaps (`error: false`) before `[45]..`.
-  Composer errors replace `#message-composer`; branch errors replace only
+  Composer answers replace only `#message-composer-state`, branch errors only
   `#branch-feedback`, so selections and drafts survive.
-
-The overview adds `pins` on latest/history pages ([pins contract](pins.md)).
 
 ## JavaScript
 

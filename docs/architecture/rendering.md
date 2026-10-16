@@ -54,7 +54,7 @@ assets.
 The same meta tag sets `responseHandling` to htmx's defaults (`204`: no
 swap; `[23]..`: swap; `[45]..`: no swap, error), with
 409 and 422 entries with `swap: true, error: false` before `[45]..`. The first
-matching entry wins: composer errors replace `#message-composer`, branch
+matching entry wins: composer errors replace `#message-composer-state`, branch
 errors replace `#branch-feedback`. New htmx requests inherit both rules
 ([`web-layers.md`](web-layers.md)). Other status codes retain their defaults.
 
@@ -72,11 +72,14 @@ fits both texts, so the rewrite moves nothing beside it (#1094,
 [`ui-components.md`](../ui-components.md#shared-components)).
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v7.js` also loads with the response nonce on channel pages.
+`message-composer-v8.js` also loads with the response nonce on channel pages.
 One key-to-command function maps Enter to `send` and Shift+Enter to `newline`,
 ignoring IME composition (`isComposing` or keyCode 229); one submit function
 uses the native form submission path through `requestSubmit`. The latest-page form uses
-htmx to replace only `#message-composer`, disabling its controls in flight.
+htmx to replace only `#message-composer-state` (#1173). In flight only the send
+button is disabled, `hx-sync="this:drop"` drops another send, and the `sending:`
+variant (htmx's `htmx-request` class) shows a polite "Sending…" status over the
+help, which keeps its space; the textarea stays usable.
 Older pages use a plain form. Every feed/topic composer, including older pages,
 submits a hidden server-issued `composer` generation scoped to the resolved
 organisation/member/channel and actual posting topic. A failed message post
@@ -88,8 +91,8 @@ The post closes the submitted generation in the requested place
 fresh one, including a 409's. The hidden sibling `#typing-form` carries only that
 generation to the resolved posting topic's `/typing` route, with matching plain/enhanced POST URLs,
 `hx-trigger="typing-input throttle:2s queue:none"`, `hx-sync="this:drop"` and
-`hx-swap="none"`. Composer responses replace it out of band alongside the message
-form, keeping their generations equal. Each form coordinates its own requests;
+`hx-swap="none"`. Composer responses replace it out of band alongside the
+state, keeping their generations equal. Each form coordinates its own requests;
 signals cannot disable the message controls or block submission. Delegated input
 and composition-end listeners trigger htmx for nonblank drafts, suppressing
 composing input. They survive replacement without storing drafts or sending
@@ -98,7 +101,8 @@ The script scrolls to the newest entry on load, except when the URL's
 fragment names a message on the page: a page opened from a message's URL
 ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170)
 keeps the browser's scroll to that message, which CSS `:target` highlights
-with or without scripts. It focuses the composer after its replacement. Scripts
+with or without scripts. Focus left on the disabled send button returns to the
+textarea. Scripts
 stay outside the replaced section; CSP and htmx evaluation remain unchanged.
 
 `message-history-v2.js` keeps the reader's place when "Load older"
@@ -121,7 +125,7 @@ components never include it, so live replacements leave it in place. Its
 list children. Moving that message out of a topic view removes its divider;
 moving another message leaves it in place. Destination inserts add no divider.
 
-`message-stream-v11.js` listens to the vendored SSE extension's
+`message-stream-v12.js` listens to the vendored SSE extension's
 `htmx:sseBeforeMessage`. It passes the server's HTML to htmx for an append or
 same-id replacement, settling synchronously so replay stays ordered and local
 timestamps are ready before scrolling. Only appends update the separate polite

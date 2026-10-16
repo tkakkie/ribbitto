@@ -23,7 +23,7 @@ import (
 )
 
 // TestTopicPostBrowser posts with JavaScript from a topic view against real
-// PostgreSQL and the real stream: only the composer is replaced, and the own
+// PostgreSQL and the real stream: only the composer's state is replaced, and the own
 // message arrives once through the topic's stream (#1154).
 func TestTopicPostBrowser(t *testing.T) {
 	t.Parallel()

@@ -68,3 +68,4 @@ coverage and the normal document size limit for both the index and entries.
 - [37. Composer JavaScript: pending posts, idempotency keys and drafts on the device](docs/decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
 - [38. A quote is a snapshot owned by the quoting message; text extraction is per format](docs/decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)
 - [39. Message bodies use a small, frozen markup with member references](docs/decisions/39-message-bodies-use-a-small-frozen-markup.md)
+- [41. Client storage: IndexedDB by data class](docs/decisions/41-client-storage-indexeddb-by-data-class.md)

@@ -180,10 +180,7 @@ provisioning, never through the public `/signup` form.
 
 ## Not planned
 
-Native mobile apps, federation, voice and video. These may be revisited,
-but nothing in the design should be bent for them now.
-
-Not planned for now either: turning the front end into a Svelte
-single-page app (the message list, sidebar and counts stay server-rendered),
-caching messages in IndexedDB for offline reading, read receipts per
-message, and tasks.
+Native mobile apps, federation, voice and video; per-message read receipts;
+tasks; a Svelte single-page app (message list, sidebar and counts stay
+server-rendered). Offline message caching in IndexedDB needs its own
+decision: [decision 41, class 3](decisions/41-client-storage-indexeddb-by-data-class.md#3-message-content).

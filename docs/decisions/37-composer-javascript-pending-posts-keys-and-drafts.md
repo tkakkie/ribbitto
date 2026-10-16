@@ -140,15 +140,16 @@ lives in browser storage.
 
 ## What stays forbidden
 
-- HTML built from strings (what the pattern check rejects) and `templ.Raw`.
-- Composer JavaScript building request URLs, and requests outside htmx.
-- Messages, credentials, session tokens or other server-derived data in
-  browser storage, except (d)'s bounded draft text (which may quote messages),
-  its owner metadata (member UUID, session marker, expiry) and the
-  content-free sign-out notice key with its horizon value. No IndexedDB.
-- Client state for the message list, sidebar, unread counts or presence beyond
-  decision 34, except toggling (d)'s draft marker. These stay server-rendered;
-  a pending item is never turned into a real message in place.
+- HTML from strings; `templ.Raw`.
+- Composer-built URLs; requests outside htmx.
+- Browser storage of messages or server-derived data, except (d)'s drafts
+  (including quotes), owner metadata and content-free sign-out notice with
+  its horizon, or [decision 41](41-client-storage-indexeddb-by-data-class.md)'s
+  classes 1–2. Class 3 needs its own decision. IndexedDB follows decision 41;
+  credentials, session tokens and their hashes stay forbidden.
+- Client state for the message list, sidebar, unread or presence beyond
+  decision 34 and (d)'s draft-marker toggle. All stay server-rendered;
+  pending items never become real messages in place.
 
 **Kept:** `message-stream-v11.js` rewrites only the `after` parameter of the
 server-rendered `sse-connect` URL

@@ -19,6 +19,8 @@ requests; htmx sends resync requests.
 [Decision 37](37-composer-javascript-pending-posts-keys-and-drafts.md) allows
 bounded composer state: pending own posts in the DOM, an idempotency key and
 session-bound drafts in `localStorage`. Requests still go through htmx.
+[Decision 41](41-client-storage-indexeddb-by-data-class.md) is the exception
+route for IndexedDB by data class; Web Storage allowances stay unchanged.
 
 **Why:** M3 adds SSE fragments and more scripts across exactly these
 boundaries; without written rules each change would pick its own (#193).

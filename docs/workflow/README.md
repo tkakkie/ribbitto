@@ -15,6 +15,7 @@ disagree, fix the disagreement in a pull request.
 | [`running-argon.md`](running-argon.md) | running Argon's adversarial review: setup, the Go launcher, its boundary and evidence |
 | [`running-other-ai.md`](running-other-ai.md) | Running Codex or Claude headless, and how the maintainer's sessions run Codex |
 | [`argon-implementer.md`](argon-implementer.md) | The trial of Argon implementing a few tier C issues: eligibility, roles, boundary, preflight, records |
+| [`argon-handoff.md`](argon-handoff.md) | The trial's sandboxed handoff check: profile, commands, evidence |
 
 ## Principles
 

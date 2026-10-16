@@ -1,0 +1,47 @@
+; Seatbelt profile for the handoff check of an Argon trial pull request
+; (docs/workflow/argon-handoff.md). Claude copies it from origin/main and
+; runs: sandbox-exec -D TREE=<run dir> -D GOROOT=<go env GOROOT> -f ...
+; TREE must be a directory directly under /private/var/tmp/ribbitto-handoff.
+; Later rules win over earlier ones.
+(version 1)
+(allow default)
+
+; Writes only inside the run directory and to the terminal devices.
+(deny file-write* (subpath "/"))
+(allow file-write* (subpath (param "TREE"))
+  (literal "/dev/null") (literal "/dev/zero") (literal "/dev/tty")
+  (regex #"^/dev/fd/") (regex #"^/dev/ttys[0-9]+$"))
+
+; No reads of the account's files, other runs, temporary files or
+; keychains; only the run directory and the Go toolchain.
+(deny file-read* (subpath "/Users") (subpath "/Volumes")
+  (subpath "/private/tmp") (subpath "/private/var/tmp")
+  (subpath "/private/var/folders") (subpath "/Library/Keychains"))
+(allow file-read* (subpath (param "GOROOT")) (subpath (param "TREE")))
+; Go and golangci-lint resolve the working directory through its parents.
+(allow file-read-metadata (literal "/private/var/tmp")
+  (literal "/private/var/tmp/ribbitto-handoff"))
+
+; Loopback only: the test database and the tests' own servers. Seatbelt
+; cannot name other hosts, so modules are downloaded before the run.
+(deny network*)
+(allow network-outbound (remote ip "localhost:*"))
+(allow network-bind network-inbound (local ip "localhost:*"))
+
+; Nothing that starts work outside the sandbox: no Apple events, and no
+; mach services but the few Go, git and the system logger need (so no
+; Launch Services, keychain or launchd jobs).
+(deny appleevent-send)
+(deny mach-lookup)
+(allow mach-lookup
+  (global-name "com.apple.system.opendirectoryd.libinfo")
+  (global-name "com.apple.system.notification_center")
+  (global-name "com.apple.system.logger")
+  (global-name "com.apple.logd")
+  (global-name "com.apple.diagnosticd")
+  (global-name "com.apple.trustd")
+  (global-name "com.apple.trustd.agent")
+  (global-name "com.apple.SystemConfiguration.configd")
+  (global-name "com.apple.SystemConfiguration.DNSConfiguration")
+  (global-name "com.apple.dnssd.service")
+  (global-name "com.apple.mDNSResponder"))

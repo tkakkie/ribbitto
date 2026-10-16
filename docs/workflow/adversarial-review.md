@@ -61,8 +61,9 @@ except B's narrow carve-out; a change there that keeps both is tier B
     review instructions in `.github/prompts/**` and
     `.github/instructions/**`; `.github/workflows/**`; the files that define
     the review gates (`docs/workflow/README.md`, `reviewing.md`,
-    `running-other-ai.md`, `running-argon.md`, `argon-implementer.md`, this
-    whole file, and `.github/pull_request_template.md`); and the security and scoping rules
+    `running-other-ai.md`, `running-argon.md`, `argon-implementer.md`,
+    `argon-handoff.md` and its `argon-handoff.sb`, this whole file, and
+    `.github/pull_request_template.md`); and the security and scoping rules
     in `AGENTS.md` and `docs/domain/invariants.md`. Being documentation does
     not exempt a change from this item.
 - **B — one Argon review required:**

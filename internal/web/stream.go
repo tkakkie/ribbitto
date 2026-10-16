@@ -36,6 +36,8 @@ type Streaming struct {
 	Owners map[realtime.Interest]realtime.EphemeralOwner
 	// Sidebar binds resolved membership and page selection to uncached recounts.
 	Sidebar func(org.Membership, kernel.ID, *kernel.ID) realtime.SidebarSource
+	// Pins binds current channel pins to the existing stream.
+	Pins func(org.Membership, kernel.ID) realtime.ChannelStateSource
 	// RecountLimit bounds computations independently of stream admission.
 	RecountLimit *realtime.RecountLimit
 	// StreamOpened counts every accepted stream, regardless of interests.
@@ -154,6 +156,9 @@ func (p channelPages) events(w http.ResponseWriter, r *http.Request, m org.Membe
 	}
 	if p.stream.Sidebar != nil {
 		stream.Sidebar = p.stream.Sidebar(m, sub.Channel, sub.Topic)
+	}
+	if p.stream.Pins != nil {
+		stream.ChannelState = p.stream.Pins(m, sub.Channel)
 	}
 	sub.Organization, sub.OrganizationSlug, sub.Account, sub.Member = m.Organization.ID, m.Organization.Slug, account.ID, m.Member.ID
 	cursor, err := stream.Run(ctx, sub, after, send)
@@ -283,6 +288,8 @@ func streamScope(r *http.Request) (realtime.Subscription, bool) {
 		interest := realtime.Interest(want)
 		switch want {
 		case "sidebar", "messages", "typing", "presence":
+		case "pins":
+			interest = realtime.InterestChannelState
 		default:
 			return sub, false
 		}
@@ -291,7 +298,7 @@ func streamScope(r *http.Request) (realtime.Subscription, bool) {
 		}
 		sub.Interests = append(sub.Interests, interest)
 	}
-	scoped := slices.Contains(sub.Interests, realtime.InterestMessages) || slices.Contains(sub.Interests, realtime.InterestTyping)
+	scoped := slices.Contains(sub.Interests, realtime.InterestChannelState) || slices.Contains(sub.Interests, realtime.InterestMessages) || slices.Contains(sub.Interests, realtime.InterestTyping)
 	raw := query.Get("channel")
 	// Every page names its channel; a sidebar recount needs it to bind the
 	// connection's source, so a sidebar stream without one is refused rather

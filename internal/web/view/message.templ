@@ -141,21 +141,25 @@ templ messageActions(entry Message) {
 	</div>
 }
 
-// PinControl offers the one action that changes the message's pin state: Pin
-// when unpinned, Unpin when pinned, so a repeated submission asks for the same
-// state again (a no-op). Without JavaScript it posts and follows the 303 to
-// the message; htmx swaps only this form, keeping the composer and its draft,
-// and keeps focus on the button through its stable id. Other tabs and the
-// overview show the change on reload until live pins (#1205).
+// PinControl renders both explicit desired actions; pins frames select visibility.
+// Repeated submissions remain no-ops, even without an overview subscription.
 templ PinControl(entry Message, errorKey string) {
 	{{
-		action, label := entry.PinURL+"/pin", "message.pin"
+		action := entry.PinURL + "/pin"
 		if entry.Pinned {
-			action, label = entry.PinURL+"/unpin", "message.unpin"
+			action = entry.PinURL + "/unpin"
 		}
 	}}
-	<form id={ "pin-form-" + MessageDOMID(entry.ID) } method="post" action={ templ.SafeURL(action) } hx-post={ action } hx-target="this" hx-swap="outerHTML">
-		<button id={ "pin-" + MessageDOMID(entry.ID) } type="submit" class="flex min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover">{ i18n.T(ctx, label) }</button>
+	<form id={ "pin-form-" + MessageDOMID(entry.ID) } method="post" action={ templ.SafeURL(action) } hx-target="closest form" hx-swap="outerHTML" data-pin-control={ idValue(entry.ID) } data-pinned={ fmt.Sprint(entry.Pinned) }>
+		for _, pinned := range []bool{false, true} {
+			{{
+				action, label := entry.PinURL+"/pin", "message.pin"
+				if pinned {
+					action, label = entry.PinURL+"/unpin", "message.unpin"
+				}
+			}}
+			<button id={ fmt.Sprintf("pin-%t-", pinned) + MessageDOMID(entry.ID) } type="submit" formaction={ templ.SafeURL(action) } hx-post={ action } hx-sync="closest form:drop" data-pin-action={ fmt.Sprint(pinned) } class="min-h-11 w-full items-center rounded-md px-3 text-left hover:bg-hover" hidden?={ pinned != entry.Pinned }>{ i18n.T(ctx, label) }</button>
+		}
 		if errorKey != "" {
 			<p role="alert" class="px-3 text-caption text-danger">{ i18n.T(ctx, errorKey) }</p>
 		}

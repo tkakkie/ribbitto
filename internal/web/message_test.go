@@ -757,3 +757,7 @@ func (f fakeMessages) Sidebar(ctx context.Context, m org.Membership, id kernel.I
 	page, err := f.Page(ctx, m, id, topic, nil)
 	return conversation.SidebarSnapshot{Current: page.Current, Channels: page.Channels, Topics: page.Topics, SnapshotSeq: 42}, err
 }
+
+func (f fakeMessages) ReadPins(context.Context, org.Membership, kernel.ID) (conversation.PinsSnapshot, error) {
+	return conversation.PinsSnapshot{Pins: f.pins, SnapshotSeq: 42}, nil
+}

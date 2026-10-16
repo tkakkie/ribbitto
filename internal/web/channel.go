@@ -32,6 +32,7 @@ type Channels interface {
 // the channel's pins when the overview is open, the sidebar snapshot the channel list page shows, one message by sequence or
 // a bounded batch by ID for the stream, and where a message is now for its URL.
 type MessageReader interface {
+	ReadPins(context.Context, org.Membership, kernel.ID) (conversation.PinsSnapshot, error)
 	Around(context.Context, org.Membership, kernel.ID, *kernel.ID, int64) (conversation.ChannelPage, error)
 	Locate(context.Context, org.Membership, kernel.ID) (conversation.Location, error)
 	Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error)

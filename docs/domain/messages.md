@@ -52,7 +52,7 @@ message and stays as posted when the original is edited, moved or deleted;
 deletion sets only the quoted message ID to null. A quote is not a reply.
 
 Channel pins reference the current message; their permissions, limits
-and lifecycle rules are in [`pins.md`](pins.md) (implemented in #887–#890; live delivery planned).
+and lifecycle rules are in [`pins.md`](pins.md) (implemented in #887–#890 and #1205).
 
 ## Accepted bodies
 

@@ -16,14 +16,14 @@ import (
 )
 
 type pinsReader interface {
-	Pins(context.Context, org.Membership, kernel.ID) ([]conversation.Pin, error)
+	ReadPins(context.Context, org.Membership, kernel.ID) (conversation.PinsSnapshot, error)
 }
 
 type pinsScope struct{ organization, channel kernel.ID }
 type pinsRound struct {
 	users   int
 	trigger int64
-	pins    *realtime.Cache[bool, []conversation.Pin]
+	pins    *realtime.Cache[bool, conversation.PinsSnapshot]
 	renders *realtime.Cache[string, realtime.Outgoing]
 }
 
@@ -79,7 +79,7 @@ func (s *pinsSource) Refresh(ctx context.Context, _ realtime.Subscription) (real
 		at := time.Now()
 		now := func() time.Time { return at }
 		round = &pinsRound{trigger: s.trigger,
-			pins:    realtime.NewCache[bool, []conversation.Pin](shared.parent, 1, 1, time.Second, 10*time.Second, nil, now),
+			pins:    realtime.NewCache[bool, conversation.PinsSnapshot](shared.parent, 1, 1, time.Second, 10*time.Second, nil, now),
 			renders: realtime.NewCache[string, realtime.Outgoing](shared.parent, 2, 2, time.Second, 10*time.Second, nil, now)}
 		shared.rounds[key] = round
 	}
@@ -94,14 +94,14 @@ func (s *pinsSource) Refresh(ctx context.Context, _ realtime.Subscription) (real
 			delete(shared.rounds, key)
 		}
 	}()
-	pins, err := round.pins.Get(ctx, true, func(ctx context.Context) ([]conversation.Pin, error) {
-		return shared.reader.Pins(ctx, s.membership, s.channel)
+	state, err := round.pins.Get(ctx, true, func(ctx context.Context) (conversation.PinsSnapshot, error) {
+		return shared.reader.ReadPins(ctx, s.membership, s.channel)
 	})
 	if err != nil {
 		return realtime.Outgoing{}, err
 	}
 	return round.renders.Get(ctx, i18n.Language(ctx), func(ctx context.Context) (realtime.Outgoing, error) {
-		page := view.ChannelPage{Organization: view.Organization{Slug: s.membership.Organization.Slug}, Pins: viewPins(pins)}
+		page := view.ChannelPage{Organization: view.Organization{Slug: s.membership.Organization.Slug}, Pins: viewPins(state.Pins), SnapshotSeq: state.SnapshotSeq}
 		return shared.render(ctx, page)
 	})
 }

@@ -53,7 +53,7 @@ branch-notice reads are current.
 
 Branch-notice reads, visible-page reading POSTs and posting writes are current.
 Only a POST advances read state; a GET never changes it
-([request flow](../architecture/request-flow.md)). Each reading POST carries its
+([routes](../architecture/routes.md)). Each reading POST carries its
 scope and `S`, the newest durable sequence the page has applied and shown while
 visible. `S` bounds the scope, not a list of rendered messages: messages of the scope outside the loaded
 window, older history included, are read with it.

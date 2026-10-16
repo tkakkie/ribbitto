@@ -86,7 +86,7 @@ var ErrBranchConflict error // ErrBranchConflict means a selected message is no 
 var ErrChannelLimit error // ErrChannelLimit means the organisation cannot create another channel.
 var ErrChannelNameTaken error // ErrChannelNameTaken means the organisation already has a channel with that name.
 var ErrChannelNotFound error // ErrChannelNotFound means the channel does not exist in the caller's organisation, including when it exists in another one.
-var ErrInvalidBody error // ErrInvalidBody wraps a body that breaks ValidateMessageBody.
+var ErrInvalidBody error // ErrInvalidBody wraps a body that breaks ValidateMessageBody or, as ErrUnknownReference, references a member posting cannot find.
 var ErrInvalidBranch error // ErrInvalidBranch means the request itself is unusable: no messages, too many, a repeated one, no destination or two, or the source as destination.
 var ErrInvalidChannelImage error // ErrInvalidChannelImage means the key is outside the bundled set.
 var ErrInvalidChannelName error // ErrInvalidChannelName wraps a name that breaks ValidateChannelName.
@@ -304,7 +304,7 @@ type TxRunner interface // TxRunner runs channel creation, posting, branching an
   func (TxRunner).InTx(ctx context.Context, fn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) error) error // InTx runs fn in a new transaction.
 func ValidateChannelImage(key string) error // ValidateChannelImage accepts a bundled key, or empty for the ID-based default.
 func ValidateChannelName(value string) (string, error) // ValidateChannelName returns a trimmed NFC name of 1–80 printable Unicode code points.
-func ValidateMessageBody(value string) (string, error) // ValidateMessageBody normalizes line endings and trims the whole plain-text body.
+func ValidateMessageBody(value string) (string, error) // ValidateMessageBody normalizes line endings and trims the whole body source text.
 func ValidateTopicName(value string) (string, error) // ValidateTopicName returns a trimmed NFC name of 1–80 printable Unicode code points, the same rule as channel names (docs/domain/topics.md).
 type Writer interface // Writer is posting's and branching's reads and writes in the caller's transaction, on validated values.
   func (Writer).CreateTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, name string) (Topic, error) // CreateTopic creates a named topic.

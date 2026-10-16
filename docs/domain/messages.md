@@ -26,7 +26,7 @@ Bodies are stored with a `format`, and the stored body is the source of truth.
 A stored message is never reinterpreted, and rendered HTML is at most a
 disposable cache
 ([decision 18](../decisions/18-stored-message-formats-never-change-meaning.md)).
-Every existing message is `plain_text`; [decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md) adds `chat_v1`,
+Messages stored before `chat_v1` remain `plain_text`; [decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md) adds `chat_v1`,
 a small markup frozen per version (code spans and fences, block quotes,
 bold, italic, `http`/`https` autolinks and member references `<@uuid>`).
 New posts use `chat_v1` (#1203). Every reference is checked through org's

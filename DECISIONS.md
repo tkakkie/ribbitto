@@ -69,3 +69,4 @@ coverage and the normal document size limit for both the index and entries.
 - [38. A quote is a snapshot owned by the quoting message; text extraction is per format](docs/decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)
 - [39. Message bodies use a small, frozen markup with member references](docs/decisions/39-message-bodies-use-a-small-frozen-markup.md)
 - [40. Front-end JavaScript: plain by default, UI-library islands by measured exception](docs/decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md)
+- [41. Client storage: IndexedDB by data class](docs/decisions/41-client-storage-indexeddb-by-data-class.md)

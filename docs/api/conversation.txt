@@ -76,6 +76,8 @@ var ErrInvalidPostCursor error // ErrInvalidPostCursor means the page cursor is 
 var ErrInvalidTopicName error // ErrInvalidTopicName wraps a name that breaks ValidateTopicName.
 var ErrMessageNotFound error // ErrMessageNotFound means no message has the requested key in the caller's organisation and channel, including when the message exists in another scope.
 var ErrPinLimit error // ErrPinLimit means a new pin would exceed MaxChannelPins.
+var ErrPostKeyReused error // ErrPostKeyReused means the author already sent another body or channel under the key; Send returns that stored message with it and writes nothing.
+var ErrPostKeyTaken error // ErrPostKeyTaken is Writer.InsertMessage's signal that the author's key is already stored; Send turns it into a repeat and never returns it.
 var ErrTopicNameTaken error // ErrTopicNameTaken means the channel already has a topic with that name, ignoring case.
 var ErrTopicNotFound error // ErrTopicNotFound means the topic does not exist in the given organisation and channel, including when it exists in another channel or organisation.
 type EventAppender interface // EventAppender appends conversation's encoded events in the caller's transaction, so each commits with its row and sequence.
@@ -87,6 +89,8 @@ type EventCursorIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.S
 type EventSequence interface // EventSequence is what posting, branching and pinning need from org in their transaction: the organisation's next event_seq, taken first, whose row lock makes sequence order commit order (decision 5).
   func (EventSequence).NextEventSeq(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) (int64, error)
 type EventSequenceIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) EventSequence // EventSequenceIn binds org's sequence to the caller's transaction.
+type IdempotencyKey [16]byte // IdempotencyKey is a composer's key for one send (decision 37 (b)): a random UUID, its own type because kernel.ID values are UUIDv7 that PostgreSQL generates.
+  func (IdempotencyKey).String() string // String returns the canonical 36-character form composers render.
 const KindMessagesMoved github.com/tkakkie/ribbitto/internal/realtime.EventKind = "messages.moved" // KindMessagesMoved is the kind of a branch's move, which conversation publishes and so owns (decision 26): the messages it moved, their channel, and the topics they left and joined (docs/domain/topics.md).
 const KindPinsChanged github.com/tkakkie/ribbitto/internal/realtime.EventKind = "pins.changed" // KindPinsChanged invalidates current channel pins, without retaining content.
 const KindPosted github.com/tkakkie/ribbitto/internal/realtime.EventKind = "message.posted" // KindPosted is the kind of a message's posting, which conversation publishes and so owns (decision 26): its message, channel and posting-time topic.
@@ -124,6 +128,7 @@ type Moved struct // Moved is the payload of KindMessagesMoved.
   field ToTopicID github.com/tkakkie/ribbitto/internal/kernel.ID
 func NewBrancher(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads ReadRangeWriterIn, notifier Notifier) *Brancher // NewBrancher builds branching over transaction-bound factories.
 func NewChannels(store ChannelStore) *Channels // NewChannels returns a Channels.
+func NewIdempotencyKey() IdempotencyKey // NewIdempotencyKey returns a random version-4 UUID.
 func NewPagePosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, reads PostReadWriterIn, notifier Notifier) *Posting // NewPagePosting builds posting with read writes bound to its transaction.
 func NewPinning(runner TxRunner, writer WriterIn, pins PinWriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Pinning // NewPinning builds pinning over transaction-bound factories; notifier may be nil.
 func NewPosting(runner TxRunner, writer WriterIn, sequences EventSequenceIn, events EventAppenderIn, notifier Notifier) *Posting // NewPosting builds posting over transaction-bound factories.
@@ -173,6 +178,7 @@ type Posting struct // Posting owns the transaction that commits a message with 
   func (*Posting).Post(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, body string) (Message, error) // Post writes body to the channel's default topic.
   func (*Posting).PostFromPage(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, body string, cursor int64) (Message, error) // PostFromPage reads the composer scope through its applied-and-shown cursor and the new message in the posting transaction.
   func (*Posting).PostToTopic(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID *github.com/tkakkie/ribbitto/internal/kernel.ID, body string) (Message, error) // PostToTopic posts to a topic of the channel; nil selects its default topic.
+  func (*Posting).Send(ctx context.Context, m github.com/tkakkie/ribbitto/internal/org.Membership, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, s Send) (Sent, error) // Send posts a composer submission.
 type ReadRangeWriter interface // ReadRangeWriter adds a range to a member's read set, including their persisted join prefix.
   func (ReadRangeWriter).Merge(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, joinedEventSeq int64, lo int64, hi int64) error
 type ReadRangeWriterIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) ReadRangeWriter // ReadRangeWriterIn binds read-state writes to branching's transaction.
@@ -199,6 +205,15 @@ type Reader struct // Reader owns page, sidebar, single-message and batch snapsh
 func RouteMoved(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RouteMoved is messages.moved's realtime.Router: the channel and both topics, so a view of either sees the move.
 func RoutePinsChanged(data []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePinsChanged routes channel-wide invalidations across every topic.
 func RoutePosted(payload []byte) (github.com/tkakkie/ribbitto/internal/kernel.ID, []github.com/tkakkie/ribbitto/internal/kernel.ID, error) // RoutePosted is message.posted's realtime.Router: the channel and, unless the payload is legacy, the posting-time topic.
+type Send struct // Send is one composer submission.
+  field Body string
+  field Cursor *int64 // Cursor is the page's applied-and-shown cursor; nil reads only the new message.
+  field Key *IdempotencyKey // Key makes a repeated send return the first message; nil posts without it.
+  field Topic *github.com/tkakkie/ribbitto/internal/kernel.ID
+type Sent struct // Sent is what a send produced.
+  field Message Message // Message is the new message or, on a repeat or with ErrPostKeyReused, the author's stored one, wherever branching has moved it since.
+  field Repeat bool // Repeat reports that an earlier send with the key stored Message.
+  field Topic github.com/tkakkie/ribbitto/internal/kernel.ID // Topic is the requested place: the topic resolved before the insert, which a repeat's composer and typing stay on.
 type SequenceRange struct // SequenceRange contains message sequences from Lo inclusive to Hi exclusive.
   field Hi int64
   field Lo int64
@@ -240,8 +255,9 @@ type Writer interface // Writer is posting's and branching's reads and writes in
   func (Writer).CreateTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, name string) (Topic, error) // CreateTopic creates a named topic.
   func (Writer).GetDefaultTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // GetDefaultTopic returns the channel's default topic; none, as for another organisation's channel, is ErrTopicNotFound.
   func (Writer).GetTopic(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, id github.com/tkakkie/ribbitto/internal/kernel.ID) (Topic, error) // GetTopic returns a topic of the channel, or ErrTopicNotFound.
-  func (Writer).InsertMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64) (Message, error) // InsertMessage inserts posting's message at the sequence the caller took, into a topic it resolved in the same transaction first (GetDefaultTopic or GetTopic).
+  func (Writer).InsertMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64, key *IdempotencyKey) (Message, error) // InsertMessage inserts posting's message at the sequence the caller took, into a topic it resolved in the same transaction first (GetDefaultTopic or GetTopic).
   func (Writer).InsertNotice(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, topicID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, body string, eventSeq int64) (Message, error) // InsertNotice inserts branching's notice like InsertMessage but maps no error, so a failure there stays a server error (R2 on #502).
+  func (Writer).KeyedMessage(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, memberID github.com/tkakkie/ribbitto/internal/kernel.ID, key IdempotencyKey) (Message, error) // KeyedMessage returns the author's message stored with the key in the organisation, or ErrMessageNotFound.
   func (Writer).LastMessageBefore(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, seq int64) (int64, error) // LastMessageBefore returns the channel's previous message sequence, or zero.
   func (Writer).MoveMessages(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID, fromTopicID github.com/tkakkie/ribbitto/internal/kernel.ID, toTopicID github.com/tkakkie/ribbitto/internal/kernel.ID, messageIDs []github.com/tkakkie/ribbitto/internal/kernel.ID, movedEventSeq int64) (int64, error) // MoveMessages moves the given messages still in the source topic of the channel to the destination, recording the move sequence, and returns how many moved.
   func (Writer).TopicChangedBetween(context.Context, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, github.com/tkakkie/ribbitto/internal/kernel.ID, int64, int64) (bool, error) // TopicChangedBetween reports a topic post or move strictly between two sequences.

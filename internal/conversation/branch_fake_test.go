@@ -63,7 +63,7 @@ func (f *branchFake) InsertNotice(_ context.Context, organizationID, channelID, 
 	}
 	return conversation.Message{ID: kernel.ID{6}, TopicID: topicID}, f.step("notice insert")
 }
-func (f *branchFake) InsertMessage(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, string, int64) (conversation.Message, error) {
+func (f *branchFake) InsertMessage(context.Context, kernel.ID, kernel.ID, kernel.ID, kernel.ID, string, int64, *conversation.IdempotencyKey) (conversation.Message, error) {
 	f.t.Fatal("branching called posting's mapped insert")
 	return conversation.Message{}, nil
 }

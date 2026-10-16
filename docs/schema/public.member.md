@@ -83,6 +83,7 @@ erDiagram
   bigint moved_event_seq
   uuid pinned_by_member_id FK
   timestamp_with_time_zone pinned_at
+  uuid idempotency_key
 }
 "public.event_log" {
   uuid organization_id FK

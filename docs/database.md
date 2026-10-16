@@ -77,6 +77,15 @@ in `member`. A partial index on `(organization_id, channel_id, pinned_at DESC, i
 covers pinned rows only. Pins retain no body copy. Down removes both columns
 and the index.
 
+Migration 00015 adds nullable `message.idempotency_key` (uuid) and the partial
+unique index `message_idempotency_key_idx` on `(organization_id, member_id,
+idempotency_key) WHERE idempotency_key IS NOT NULL` (#1155). Existing rows and
+notices stay NULL, so the index starts empty; building it still scans
+`message` and blocks writes while `migrate up` runs, which is acceptable at
+current sizes (no `CONCURRENTLY`, which would need goose's `NO TRANSACTION`).
+Keys live as long as their message: there is no cleanup. Down drops the index
+and the column.
+
 `RIBBITTO_EVENT_RETENTION` is a positive Go duration (default `168h`, seven
 days; for example `24h`). The server cleans expired events once at start
 and then hourly, with a one-minute timeout per run. It lists organisations

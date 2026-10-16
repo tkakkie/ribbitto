@@ -1,6 +1,10 @@
 -- name: InsertMessage :one
-INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
+INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq, idempotency_key)
+VALUES ($1, $2, $3, $4, $5, $6, sqlc.narg(idempotency_key)) RETURNING *;
+
+-- name: GetKeyedMessage :one
+SELECT * FROM message
+WHERE organization_id = $1 AND member_id = $2 AND idempotency_key = $3;
 
 -- name: GetMessage :one
 SELECT * FROM message

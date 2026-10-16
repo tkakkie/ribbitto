@@ -49,10 +49,14 @@ func (w Writer) GetDefaultTopic(ctx context.Context, organizationID, channelID k
 // organisation's channel or member fails here. The caller resolves topicID
 // in the same transaction first, so a topic outside the channel never
 // reaches the insert and message_topic_fkey stays unmapped.
-func (w Writer) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (conversation.Message, error) {
-	posted, err := w.insert(ctx, organizationID, channelID, topicID, memberID, body, eventSeq)
+// The unique index, not a lookup first, decides a repeated key, so the common
+// path costs no extra query under the organisation lock.
+func (w Writer) InsertMessage(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *conversation.IdempotencyKey) (conversation.Message, error) {
+	posted, err := w.insert(ctx, organizationID, channelID, topicID, memberID, body, eventSeq, key)
 	var pgErr *pgconn.PgError
 	switch {
+	case errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "message_idempotency_key_idx":
+		return conversation.Message{}, conversation.ErrPostKeyTaken
 	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_channel_id_fkey":
 		return conversation.Message{}, conversation.ErrChannelNotFound
 	case errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "message_organization_id_member_id_fkey":
@@ -67,17 +71,35 @@ func (w Writer) InsertMessage(ctx context.Context, organizationID, channelID, to
 // foreign key: branching never translated them, so its failure stays a
 // server error rather than a 404 (R2 on #502).
 func (w Writer) InsertNotice(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (conversation.Message, error) {
-	return w.insert(ctx, organizationID, channelID, topicID, memberID, body, eventSeq)
+	return w.insert(ctx, organizationID, channelID, topicID, memberID, body, eventSeq, nil)
 }
 
 // insert runs the query posting and branching share and wraps any error.
-func (w Writer) insert(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64) (conversation.Message, error) {
-	row, err := w.queries.InsertMessage(ctx, sqlcgen.InsertMessageParams{
+func (w Writer) insert(ctx context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, eventSeq int64, key *conversation.IdempotencyKey) (conversation.Message, error) {
+	params := sqlcgen.InsertMessageParams{
 		OrganizationID: uuid(organizationID), ChannelID: uuid(channelID), TopicID: uuid(topicID),
 		MemberID: uuid(memberID), Body: body, EventSeq: eventSeq,
-	})
+	}
+	if key != nil {
+		params.IdempotencyKey = pgtype.UUID{Bytes: *key, Valid: true}
+	}
+	row, err := w.queries.InsertMessage(ctx, params)
 	if err != nil {
 		return conversation.Message{}, fmt.Errorf("inserting message: %w", err)
+	}
+	return messageFromRow(row), nil
+}
+
+// KeyedMessage looks the key up only within the organisation and author.
+func (w Writer) KeyedMessage(ctx context.Context, organizationID, memberID kernel.ID, key conversation.IdempotencyKey) (conversation.Message, error) {
+	row, err := w.queries.GetKeyedMessage(ctx, sqlcgen.GetKeyedMessageParams{
+		OrganizationID: uuid(organizationID), MemberID: uuid(memberID), IdempotencyKey: pgtype.UUID{Bytes: key, Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return conversation.Message{}, conversation.ErrMessageNotFound
+	}
+	if err != nil {
+		return conversation.Message{}, fmt.Errorf("getting keyed message: %w", err)
 	}
 	return messageFromRow(row), nil
 }

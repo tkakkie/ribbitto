@@ -82,8 +82,10 @@ submits a hidden server-issued `composer` generation scoped to the resolved
 organisation/member/channel and actual posting topic. A failed message post
 keeps that exact control value (or its absence) in both 422 fragments and full
 pages; successful replacement or redirect rendering issues a fresh generation.
-The post closes the submitted generation using the returned message's scope
-([`typing.md`](typing.md)). The hidden sibling `#typing-form` carries only that
+The post closes the submitted generation in the requested place
+([`typing.md`](typing.md)). Composers also carry a hidden `idempotency_key`
+(decision 37 (b)) with the same rule: a 422 keeps it, every other render has a
+fresh one, including a 409's. The hidden sibling `#typing-form` carries only that
 generation to the resolved posting topic's `/typing` route, with matching plain/enhanced POST URLs,
 `hx-trigger="typing-input throttle:2s queue:none"`, `hx-sync="this:drop"` and
 `hx-swap="none"`. Composer responses replace it out of band alongside the message

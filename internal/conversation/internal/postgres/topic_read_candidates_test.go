@@ -27,7 +27,7 @@ func TestTopicReadCandidates(t *testing.T) {
 		if seq == 11 || seq == 13 || seq == 15 || seq == 14 {
 			topic = f.Channel.DefaultTopicID
 		}
-		m, err := writer.InsertMessage(t.Context(), f.OrganizationID, f.Channel.ID, topic, f.MemberID, "candidate", seq)
+		m, err := writer.InsertMessage(t.Context(), f.OrganizationID, f.Channel.ID, topic, f.MemberID, "candidate", seq, nil)
 		requireNoError(t, err)
 		messages[seq] = m.ID
 	}
@@ -94,11 +94,11 @@ func TestTopicReadCandidatesScope(t *testing.T) {
 				if seq == 10 {
 					id = a.ID
 				}
-				_, err := writer.InsertMessage(t.Context(), f.OrganizationID, f.Channel.ID, id, f.MemberID, "in scope", seq)
+				_, err := writer.InsertMessage(t.Context(), f.OrganizationID, f.Channel.ID, id, f.MemberID, "in scope", seq, nil)
 				requireNoError(t, err)
 			}
 			for _, seq := range []int64{9, 11} {
-				_, err := writer.InsertMessage(t.Context(), org, channel, topic, member, "single-scope decoy", seq)
+				_, err := writer.InsertMessage(t.Context(), org, channel, topic, member, "single-scope decoy", seq, nil)
 				requireNoError(t, err)
 			}
 			want := []conversation.SequenceRange{{Lo: 6, Hi: 15}}

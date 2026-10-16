@@ -30,7 +30,7 @@ func TestFirstMessageAfterScope(t *testing.T) {
 		{other.OrganizationID, f.Channel.ID, f.Channel.DefaultTopicID, other.MemberID, 4},
 		{f.OrganizationID, sibling.ID, f.Channel.DefaultTopicID, f.MemberID, 5},
 	} {
-		_, err := writer.InsertMessage(t.Context(), m.org, m.channel, m.topic, m.member, "bounds", m.seq)
+		_, err := writer.InsertMessage(t.Context(), m.org, m.channel, m.topic, m.member, "bounds", m.seq, nil)
 		requireNoError(t, err)
 	}
 	requireNoError(t, platform.InTx(t.Context(), pool, func(tx platform.Tx) error {

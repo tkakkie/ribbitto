@@ -211,6 +211,9 @@ other = "Send"
 ["message.error.body"]
 other = "Enter 1–4000 characters without control characters or directional embeddings and overrides."
 
+["message.error.repeat"]
+other = "A different message was already sent from this composer. Your text is kept: send again to post it."
+
 ["message.load_older"]
 other = "Load older ribbits"
 

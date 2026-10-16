@@ -61,6 +61,9 @@ type ChannelPage struct {
 	Members *MemberPage
 	// Composer preserves absence separately from an empty submitted value.
 	Composer *string
+	// IdempotencyKey is the composer's key for one send (decision 37 (b));
+	// like Composer, a 422 keeps the submitted value or its absence.
+	IdempotencyKey *string
 	// PostedMessageID correlates a successful enhanced post with stream delivery.
 	PostedMessageID *kernel.ID
 	// Older reports that messages before Messages[0] exist.
@@ -418,6 +421,9 @@ templ messageComposer(page ChannelPage, oob bool) {
 	>
 		if page.Composer != nil {
 			<input type="hidden" name="composer" value={ *page.Composer }/>
+		}
+		if page.IdempotencyKey != nil {
+			<input type="hidden" name="idempotency_key" value={ *page.IdempotencyKey }/>
 		}
 		if latest(page) && page.EventCursor != nil {
 			<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>

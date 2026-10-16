@@ -73,12 +73,15 @@ func (f *postingFake) GetTopic(_ context.Context, organizationID, channelID, id 
 	}
 	return conversation.Topic{ID: id}, f.step("selected")
 }
-func (f *postingFake) InsertMessage(_ context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64) (conversation.Message, error) {
+func (f *postingFake) InsertMessage(_ context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, _ *conversation.IdempotencyKey) (conversation.Message, error) {
 	f.scope(organizationID, channelID)
 	if topicID != f.topic || memberID != (kernel.ID{2}) || seq != 7 {
 		f.t.Fatal("wrong insert arguments")
 	}
 	return conversation.Message{ID: kernel.ID{5}, OrganizationID: organizationID, ChannelID: channelID, TopicID: topicID, MemberID: memberID, Body: body, EventSeq: seq}, f.step("insert")
+}
+func (f *postingFake) KeyedMessage(context.Context, kernel.ID, kernel.ID, conversation.IdempotencyKey) (conversation.Message, error) {
+	panic("unexpected KeyedMessage")
 }
 func (f *postingFake) Append(_ context.Context, organizationID kernel.ID, seq int64, kind realtime.EventKind, audience *kernel.ID, payload []byte) error {
 	f.scope(organizationID, kernel.ID{3})

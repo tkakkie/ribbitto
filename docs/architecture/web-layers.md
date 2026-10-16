@@ -44,7 +44,9 @@ htmx does only requests and swaps; the server and templ own the HTML.
   actual posting topic's `/typing` POST, `typing-input throttle:2s queue:none`,
   independent `this:drop` synchronization and no swap. Input/IME glue only triggers
   htmx. On success the message form's
-  `data-posted-message` carries the posted message's DOM id; errors omit it.
+  `data-posted-message` carries the posted message's DOM id; errors omit it,
+  except a 409, which names the stored message. Every composer has a hidden
+  server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
   `message-composer-v7.js` copies `#organization-stream`'s applied-and-shown

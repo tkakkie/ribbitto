@@ -813,16 +813,20 @@ func TestPagesMarkup(t *testing.T) {
 					}
 				}
 				// Every invalid field's error is rendered, so each is checked too.
-				if c.alerts > 0 {
-					alerts := 0
-					for n := range doc.Descendants() {
-						if attr(n, "role") == "alert" {
-							alerts++
+				// The composer's send alert is an empty live region the script
+				// fills after a failed send (#1179); no render fills it.
+				alerts := 0
+				for n := range doc.Descendants() {
+					if attr(n, "id") == "message-send-alert" {
+						if n.FirstChild != nil {
+							t.Error("a render filled the send alert")
 						}
+					} else if attr(n, "role") == "alert" {
+						alerts++
 					}
-					if alerts != c.alerts {
-						t.Errorf("%d alerts rendered, want %d", alerts, c.alerts)
-					}
+				}
+				if c.alerts > 0 && alerts != c.alerts {
+					t.Errorf("%d alerts rendered, want %d", alerts, c.alerts)
 				}
 			})
 		}

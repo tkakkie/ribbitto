@@ -211,6 +211,18 @@ other = "Send"
 ["message.sending"]
 other = "Sending…"
 
+["message.send_alert.unconfirmed"]
+other = "Your message could not be confirmed as sent. Sending again will not post it twice."
+
+["message.send_alert.not_sent"]
+other = "Your message was not sent. Your text is kept."
+
+["message.send_alert.still_unconfirmed"]
+other = "This retry was refused, and your earlier send is still unconfirmed. Check the conversation before sending again."
+
+["message.send_alert.recovered"]
+other = "Your earlier message was sent. What you typed after it is kept."
+
 ["message.error.body"]
 other = "Enter 1–4000 characters without control characters or directional embeddings and overrides."
 

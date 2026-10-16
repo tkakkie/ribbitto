@@ -72,14 +72,17 @@ fits both texts, so the rewrite moves nothing beside it (#1094,
 [`ui-components.md`](../ui-components.md#shared-components)).
 Application script URLs are versioned because static assets are immutable.
 
-`message-composer-v8.js` also loads with the response nonce on channel pages.
+`message-composer-v9.js` also loads with the response nonce on channel pages.
 One key-to-command function maps Enter to `send` and Shift+Enter to `newline`,
 ignoring IME composition (`isComposing` or keyCode 229); one submit function
 uses the native form submission path through `requestSubmit`. The latest-page form uses
 htmx to replace only `#message-composer-state` (#1173). In flight only the send
 button is disabled, `hx-sync="this:drop"` drops another send, and the `sending:`
 variant (htmx's `htmx-request` class) shows a polite "Sending…" status over the
-help, which keeps its space; the textarea stays usable.
+help, which keeps its space; the textarea stays usable. A send times out after
+30 s (`hx-request`). Failures fill `#message-send-alert` (#1179,
+[web JavaScript](web-javascript.md#composer)); a 409's state carries the
+stored body in `data-sent-body` when the retried text starts with it.
 Older pages use a plain form. Every feed/topic composer, including older pages,
 submits a hidden server-issued `composer` generation scoped to the resolved
 organisation/member/channel and actual posting topic. A failed message post

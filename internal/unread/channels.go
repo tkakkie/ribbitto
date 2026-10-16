@@ -57,7 +57,9 @@ func (c *ChannelCounts) ReadWithFirstUnread(ctx context.Context, s platform.Snap
 	ids := make([]kernel.ID, 0, len(channels))
 	seen := make(map[kernel.ID]bool, len(channels))
 	for _, id := range channels {
-		ids, seen[id] = append(ids, id), true
+		if !seen[id] {
+			ids, seen[id] = append(ids, id), true
+		}
 	}
 	states, err := c.ranges(s).Read(ctx, organizationID, memberID, joined, ids)
 	if err != nil {
@@ -68,7 +70,7 @@ func (c *ChannelCounts) ReadWithFirstUnread(ctx context.Context, s platform.Snap
 	for _, id := range ids {
 		for _, gap := range states[id].Gaps {
 			gapChannels = append(gapChannels, id)
-			los, his = append(los, gap.Lo), append(his, gap.Hi)
+			los, his = append(los, gap.Hi), append(his, gap.Lo)
 		}
 	}
 	counts, first, err := c.messages(s).CountWithFirstUnread(ctx, organizationID, ids, gapChannels, los, his, firstUnread)

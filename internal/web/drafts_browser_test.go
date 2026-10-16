@@ -97,8 +97,8 @@ func testDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		tab.MustNavigate(server.URL + path).MustWaitLoad()
 		return tab
 	}
-	seed := func(tab *rod.Page) {
-		tab.MustEval(`keys => { localStorage.clear(); for (const k of keys) localStorage.setItem(k, "{}"); }`, all)
+	seed := func(tab *rod.Page, keys []string) {
+		tab.MustEval(`keys => { localStorage.clear(); for (const k of keys) localStorage.setItem(k, "{}"); }`, keys)
 	}
 	// expect compares the whole of localStorage with keys holding "{}" and
 	// the notice's value, if any.
@@ -126,7 +126,7 @@ func testDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	t.Run("cleanup", func(t *testing.T) {
 		state(false, false, horizon)
 		tab := newTab(t, "/")
-		seed(tab)
+		seed(tab, all)
 		listener := newTab(t, "/")
 		listener.MustEval(`() => { window.notices = []; addEventListener("storage", e => notices.push(e.key + "=" + e.newValue)); }`)
 		tab.MustNavigate(server.URL + "/signin").MustWaitLoad()
@@ -141,7 +141,7 @@ func testDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		router.MustAdd("*.js", func(h *rod.Hijack) { h.Response.Fail(proto.NetworkErrorReasonBlockedByClient) })
 		go router.Run()
 		defer router.MustStop()
-		seed(tab)
+		seed(tab, all)
 		submit(tab, `form[action="/signout"]`)
 		if !strings.HasSuffix(tab.MustInfo().URL, "/signin") {
 			t.Fatalf("not signed out: %s", tab.MustInfo().URL)
@@ -153,7 +153,7 @@ func testDraftsBrowser(t *testing.T, browser *rod.Browser) {
 	t.Run("failed sign-out", func(t *testing.T) {
 		state(true, true, "019a1b2c-3d4e-7a00-8000-000000000000")
 		tab := newTab(t, "/")
-		seed(tab)
+		seed(tab, all)
 		submit(tab, `form[action="/signout"]`)
 		if !strings.HasSuffix(tab.MustInfo().URL, "/signout") {
 			t.Fatalf("sign-out did not fail: %s", tab.MustInfo().URL)
@@ -167,12 +167,15 @@ func testDraftsBrowser(t *testing.T, browser *rod.Browser) {
 		state(false, false, "019a1b2c-3d4e-7b00-8000-000000000000")
 		tab := newTab(t, "/signin")
 		state(true, false, "019a1b2c-3d4f-7c00-8000-000000000000")
-		seed(tab)
-		tab.MustEval(`() => { document.querySelector("#email").value = "alice@example.com"; document.querySelector("#password").value = "wrong password 123"; }`)
-		submit(tab, `form[action="/signin"]`)
-		if !tab.MustEval(`() => !!document.querySelector("[role=alert]") && !document.querySelector("[data-drafts-horizon]")`).Bool() {
-			t.Fatal("no re-rendered form without a horizon")
+		// Then with malformed keys alone, which a cleanup would remove first.
+		for _, keys := range [][]string{all, malformed} {
+			seed(tab, keys)
+			tab.MustEval(`() => { document.querySelector("#email").value = "alice@example.com"; document.querySelector("#password").value = "wrong password 123"; }`)
+			submit(tab, `form[action="/signin"]`)
+			if !tab.MustEval(`() => !!document.querySelector("[role=alert]") && !document.querySelector("[data-drafts-horizon]")`).Bool() {
+				t.Fatal("no re-rendered form without a horizon")
+			}
+			expect(t, tab, keys, "")
 		}
-		expect(t, tab, all, "")
 	})
 }

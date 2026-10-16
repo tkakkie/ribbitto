@@ -53,19 +53,26 @@ func TestRunningExpiryCallback(t *testing.T) {
 				s.mu.Lock()
 				time.Sleep(Expiry)
 				// Stop returning false proves the callback started while the lock is held.
-				if streams.topics[place.Topic].Stop() {
-					s.mu.Unlock()
-					t.Fatal("callback has not started")
+				// The sleep ends at the timer's instant, and the woken goroutine can call
+				// Stop before the runtime fires the timer (#1200); that stops the timer,
+				// so re-arm it and try again. Sleeping past the instant would hang: a
+				// callback waiting for s.mu is not durably blocked, so time stops.
+				for attempt := 1; streams.topics[place.Topic].Stop(); attempt++ {
+					if attempt == 100 {
+						s.mu.Unlock()
+						t.Fatal("callback has not started")
+					}
+					s.refresh(org, place, person.Member, streams)
+					time.Sleep(Expiry)
 				}
 				if restart {
+					// Restart under the same lock, so the callback always runs after it.
 					s.stop(org, place, person.Member)
+					s.start(org, place, person)
 				} else {
 					s.refresh(org, place, person.Member, streams)
 				}
 				s.mu.Unlock()
-				if restart {
-					s.Start(org, place, person)
-				}
 				synctest.Wait()
 				want := int64(1)
 				if restart {

@@ -15,8 +15,8 @@ sequenceDiagram
   A->>H: Notifier.Raise(organizationID, posted.EventSeq) (after commit)
 ```
 
-`conversation.Posting.PostToTopic` validates and owns the transaction through
-its `TxRunner`: its transaction-bound `EventSequence` takes the sequence, then
+`conversation.Posting.Send` validates and owns the transaction through
+its `TxRunner` (`PostToTopic`, `PostFromPage` and `Post` delegate to it): its transaction-bound `EventSequence` takes the sequence, then
 its `Writer` reads the default topic (and the selected topic, if supplied)
 and inserts the message; `Post` is its shorthand for the default topic. It
 encodes the post with `conversation.EncodePosted` and calls its

@@ -84,8 +84,8 @@ htmx sends resync requests. The markup contract is in
 ## Composer
 
 [Decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
-allows bounded composer state. Each part is *planned*, awaiting its issue;
-today the composer keeps none of it.
+allows bounded composer state. Each part but the server-rendered key is
+*planned*, awaiting its issue; today the composer script keeps none of it.
 
 - **Pending own post** (planned, #1156; queue #1174): on enhanced latest
   composers only, a pending item cloned from a server-rendered `<template>`,
@@ -93,10 +93,11 @@ today the composer keeps none of it.
   most 10 per tab, DOM only; matched to its message through the response's
   `data-posted-message`. It never moves `data-event-cursor` or
   `data-applied-cursor`, reads, counts or announces.
-- **Idempotency key** (planned, #1155): the hidden `idempotency_key`,
-  rendered fresh on the initial render, after success and with 409, kept
-  on 422; the script may replace it with `crypto.randomUUID()`. Scoped by
-  the server to the authorised membership; never in a stream payload.
+- **Idempotency key** (#1155): the hidden `idempotency_key`, rendered by
+  the server fresh on the initial render, after success and with 409, kept
+  on 422. Scoped by the server to the authorised membership; never in a
+  stream payload. Planned (#1156): the script may replace it with
+  `crypto.randomUUID()`.
 - **Drafts** (planned: #1178 sign-out and sign-in cleanup, #1181
   organisation-page cleanup, #1162 save and restore, #1177 sidebar marker):
   one drafts script keeps unsent text in `localStorage` under

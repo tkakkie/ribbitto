@@ -157,36 +157,44 @@ func TestComposerKeyField(t *testing.T) {
 // composer stays on the requested feed or topic, and so does typing.
 func TestComposerRepeatAfterMove(t *testing.T) {
 	for _, topic := range []bool{false, true} {
-		t.Run(fmt.Sprintf("topic=%t", topic), func(t *testing.T) {
-			h, writer, state, m, place, path := keyedComposer(t, topic)
-			defer state.Open(m.Organization.ID, m.Member.ID, place.Channel)()
-			_, values := composerForm(t, serveForm(h, "GET", path, "live", nil))
-			key := values.Get("idempotency_key")
-			values.Set("body", "hello")
-			_, values = composerForm(t, keyedSend(t, h, path, values, true, http.StatusOK))
-			moved := typing.Place{Channel: place.Channel, Topic: kernel.ID{9}}
-			for scope, stored := range writer.keyed {
-				stored.TopicID = moved.Topic
-				writer.keyed[scope] = stored
-			}
-			submitted := values.Get("composer")
-			values.Set("idempotency_key", key)
-			values.Set("body", "hello")
-			w := keyedSend(t, h, path, values, true, http.StatusOK)
-			form, signal := enhancedForms(t, w.Body.String())
-			typingURL := view.ConversationURL("acme", place.Channel, &place.Topic) + "/typing"
-			if attr(form, "action") != path || attr(form, "hx-post") != path || attr(signal, "hx-post") != typingURL || writer.inserts != 1 {
-				t.Fatalf("repeat composer posts to %q / %q, typing %q, inserts %d", attr(form, "action"), attr(form, "hx-post"), attr(signal, "hx-post"), writer.inserts)
-			}
-			_, fresh := composerForm(t, w)
-			typist := typing.Typist{Member: m.Member.ID}
-			if state.Signal(m.Organization.ID, place, typist, submitted, time.Now()) {
-				t.Fatal("the repeat did not close the submitted generation in the requested place")
-			}
-			if state.Signal(m.Organization.ID, moved, typist, fresh.Get("composer"), time.Now()) || !state.Signal(m.Organization.ID, place, typist, fresh.Get("composer"), time.Now()) {
-				t.Fatal("the new generation is not scoped to the requested place")
-			}
-		})
+		for _, hx := range []bool{false, true} {
+			t.Run(fmt.Sprintf("topic=%t/htmx=%t", topic, hx), func(t *testing.T) {
+				success := http.StatusSeeOther
+				if hx {
+					success = http.StatusOK
+				}
+				h, writer, state, m, place, path := keyedComposer(t, topic)
+				defer state.Open(m.Organization.ID, m.Member.ID, place.Channel)()
+				_, values := composerForm(t, serveForm(h, "GET", path, "live", nil))
+				key := values.Get("idempotency_key")
+				values.Set("body", "hello")
+				_, values = composerForm(t, keyedSend(t, h, path, values, hx, success))
+				moved := typing.Place{Channel: place.Channel, Topic: kernel.ID{9}}
+				for scope, stored := range writer.keyed {
+					stored.TopicID = moved.Topic
+					writer.keyed[scope] = stored
+				}
+				submitted := values.Get("composer")
+				values.Set("idempotency_key", key)
+				values.Set("body", "hello")
+				// A plain repeat redirects to the requested path; keyedSend
+				// follows it to the page the browser would show.
+				w := keyedSend(t, h, path, values, hx, success)
+				form, signal := enhancedForms(t, w.Body.String())
+				typingURL := view.ConversationURL("acme", place.Channel, &place.Topic) + "/typing"
+				if attr(form, "action") != path || attr(form, "hx-post") != path || attr(signal, "hx-post") != typingURL || writer.inserts != 1 {
+					t.Fatalf("repeat composer posts to %q / %q, typing %q, inserts %d", attr(form, "action"), attr(form, "hx-post"), attr(signal, "hx-post"), writer.inserts)
+				}
+				_, fresh := composerForm(t, w)
+				typist := typing.Typist{Member: m.Member.ID}
+				if state.Signal(m.Organization.ID, place, typist, submitted, time.Now()) {
+					t.Fatal("the repeat did not close the submitted generation in the requested place")
+				}
+				if state.Signal(m.Organization.ID, moved, typist, fresh.Get("composer"), time.Now()) || !state.Signal(m.Organization.ID, place, typist, fresh.Get("composer"), time.Now()) {
+					t.Fatal("the new generation is not scoped to the requested place")
+				}
+			})
+		}
 	}
 }
 

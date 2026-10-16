@@ -2,7 +2,7 @@ package conversationpg_test
 
 import (
 	"errors"
-	"slices"
+	"reflect"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
@@ -47,7 +47,7 @@ func TestReaderOverview(t *testing.T) {
 	}
 	pins, err := reader.Pins(ctx, m, f.Channel.ID)
 	requireNoError(t, err)
-	if !slices.Equal(pins, page.Pins) {
+	if !reflect.DeepEqual(pins, page.Pins) {
 		t.Fatalf("pins-only snapshot = %+v", pins)
 	}
 	newest, oldest := pins[0], pins[1]

@@ -52,10 +52,9 @@ difference between the AIs, enough safety for practice, little to operate.
 - **In its own sandbox,** the implementing AI may build and test as before:
   Codex in its profile ([below](#running-codex)), Argon inside its
   [boundary](argon-implementer.md#the-boundary).
-- **After handoff, no AI runs that code directly on the host**, outside
-  those sandboxes, until it is on `main`: not `make check`,
-  `make prepush`, `go test`, a build, `make dev` or any tool from that
-  tree.
+- **After handoff, no AI runs another AI's unverified code directly on
+  the host**, outside those sandboxes: not `make check`, `make prepush`,
+  `go test`, a build, `make dev` or any tool from that tree.
 - **CI is the check.** GitHub Actions runs pull request code with read-only
   access and no secrets. Green CI on the draft replaces the local
   `make check` before the first review and `make prepush` before a
@@ -65,7 +64,7 @@ difference between the AIs, enough safety for practice, little to operate.
   `PR_BODY.md` ([below](#running-codex)), and Argon's protected-file and
   workspace checks ([boundary](argon-implementer.md#the-boundary)).
 - **UI changes:** CI's browser tests by default. Where a manual check is
-  essential, the maintainer decides case by case.
+  essential, the maintainer decides case by case whether and how it runs.
 - **No Docker verification environment** for now; reconsider when one is
   actually needed.
 

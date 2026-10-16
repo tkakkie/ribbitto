@@ -22,8 +22,8 @@ Follow [`docs/workflow/`](docs/workflow/README.md); new measurement work needs a
   rounds; then closure verification (only mechanical, verified fixes
   left; `docs/workflow/reviewing.md`) or ask the maintainer.
 - **[Handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code):**
-  no AI runs another AI's code directly on the host until `main` has it;
-  CI checks it.
+  no AI runs another AI's unverified code directly on the host; CI
+  checks it.
 - Issues start from a template in `.github/ISSUE_TEMPLATE/`; keep its
   headings. No implementation without the `ready` label.
 - **End of a unit of work:** overwrite the Status issue body. When the
@@ -33,7 +33,7 @@ Follow [`docs/workflow/`](docs/workflow/README.md); new measurement work needs a
 
 - `make check` — checks formatting (Go and templ), vets, lints, builds and
   tests (race detector on); must pass before you open a pull request
-  (another AI's code: in CI). Format templates with
+  (another AI's: green CI before review). Format templates with
   `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; needs the network, so CI runs it,
   not `make check`.

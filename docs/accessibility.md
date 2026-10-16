@@ -81,7 +81,8 @@ The `<ol>` isolates authors, timestamps and plain-text bodies
 state when populated. Its labelled, keyboard-focusable pane scrolls independently.
 The empty `#message-status` has `role="status"`, `aria-live="polite"` and
 `aria-relevant="additions"`. History and paging stay outside live regions.
-Only live appends announce stream-only text. History, prepends and duplicate
+Only live appends announce stream-only text, and "Copy link" its
+confirmation (#1159). History, prepends and duplicate
 replacements stay silent. The status keeps the latest 10 entries; pruning is silent.
 Latest feeds/topics have a separate visible `#typing-status`, localized and
 polite with `aria-atomic="true"`. Content replacement keeps the region and focus;

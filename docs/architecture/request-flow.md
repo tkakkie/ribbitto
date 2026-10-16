@@ -35,32 +35,8 @@ as soon as it is added. `GET /` redirects a member of the setup
 organisation to its page (`org.Authorizer.HomeSlug`); everyone else sees
 the home page.
 
-The channel handlers in `internal/web/channel.go` call `conversation.Channels`
-with that membership; they never query the database directly:
-
-| Route | Result |
-|---|---|
-| `GET /organizations/{slug}/` | 303 to `conversation.Channels.Default`, found by `is_default`; a missing default is logged and answers 500 |
-| `GET /organizations/{slug}/channels` | The channel list page (#969): the sidebar as the page, nesting the topics of `?channel=<channel-id>` or else the default channel, with a sidebar-only stream; a malformed query or a malformed, unknown or other organisation's channel answers 404. The list is the page's `<main>`; below the `desk` breakpoint it fills the screen above the bottom navigation, and at desktop width a block beside it asks the member to open a channel |
-| `GET /organizations/{slug}/channels/{channel-id}` | Channel page and sidebar; malformed, unknown and other organisations' UUIDs answer 404. `?before=<event_seq>` shows the older page and `?around=<event_seq>` the older page holding that position; a bound that is not one positive integer, both bounds, or a malformed query, answers 400 |
-| `GET …/channels/{channel-id}/topics/{topic-id}` | Topic view and sidebar for that channel's topic; malformed, unknown, other-organisation or other-channel UUIDs answer 404, with the same `?before=` and `?around=` paging and `unread` divider query |
-| `GET /organizations/{slug}/messages/{message-id}` | One message ([decision 36](../decisions/36-one-message-has-a-stable-url.md)): 303 to its current topic view with `#message-<hex>`, as the latest page when the message is on it, otherwise with `?around=<event_seq>` (an older page); a malformed or unknown UUID, another organisation's message or one the member may not read answers 404 |
-| `GET …/channels/{channel-id}[/topics/{topic-id}]/members` | The feed or topic page with the members panel: display names and handles, 100 per page in ID order, `?after=<member-id>` for the next page beside the conversation's own `before` and `unread`. Panel and close links carry the position the page renders, error renders included: an older page's `before` or `around` and the divider it shows as `unread`, never the request's other keys. Invalid cursors answer 400; invisible channels or topics and non-members get 404. Its stream adds `presence` |
-| `GET …/channels/{channel-id}[/topics/{topic-id}]/overview` | The same page with the overview panel: the channel's name, creation date, pins (all topics, newest first; #889) and topics; the same 404s |
-| `POST …/channels/{channel-id}[/topics/{topic-id}]/overview` | Changes the image through `conversation.Channels.SetImage`; unknown keys render an open picker with a visible error (422). Empty stores NULL. A malformed `before`, `around` or `unread`, or `before` with `around`, answers 400 before anything is stored. Success returns 303 to the same overview with the page's own `before` or `around` and `unread` (other keys dropped), with or without JavaScript; no event |
-| `POST /organizations/{slug}/channels/{channel-id}` | `conversation.Posting.Send`, optional `cursor` and `idempotency_key` (malformed or repeated: 400; absent: no deduplication); htmx gets the reset composer, else 303 back. A repeated key answers so too, naming the stored message; with another body or channel, 409 keeps the draft with a fresh key. Invalid bodies: 422 keeping the key |
-| `POST …/channels/{channel-id}/topics/{topic-id}` | As the channel row, into that topic; unknown or other-channel topics are 404, with or without htmx. The composer stays on this topic, even after a repeat of a branched message |
-| `POST …/channels/{channel-id}/messages/{message-id}/pin`, `…/unpin` | Pins or unpins through `conversation.Pinning` (#890); another channel's or organisation's message, or a missing one, is 404. Success is 303 to the message's URL, or the control for the new state for htmx; a full channel is 409 with an explanation (a fragment for htmx) |
-| `POST …/channels/{channel-id}/branch` | Moves selected messages through `conversation.Brancher.Branch` after the member's branch limiter (429 with `Retry-After: 6`); unknown channel or topic answers 404, conflicts 409 and invalid input 422 (`BranchFeedback` for htmx, full page otherwise); success redirects to the destination topic view (`HX-Redirect` or 303) |
-| `POST …/channels/{channel-id}[/topics/{topic-id}]/read` | Advances feed or topic read state through `unread.Reading` up to `cursor` after the read limiter (429 with `Retry-After: 1`) and scope lookup (404); missing or invalid `cursor`, a malformed query, or any `before` or `around` query or form parameter answers 400; 204 for htmx or 303 to the conversation |
-| `POST /organizations/{slug}/channels/{channel-id}/topics/{topic-id}/typing` | A typing signal with one opaque `composer` generation ([typing](typing.md#http-ingress-and-posting)): after membership, the member's shared limiter (429), then the membership-scoped channel and topic lookups (404); an empty 204 whether or not the signal changed state. Successful posts and repeats stop the poster's typing in the requested place |
-| `POST /organizations/{slug}/sidebar/resync` | After the member's resync limiter (429 with `Retry-After: 1`), publishes a member read-change wake (`unread.Changes`) so the member's streams recount the sidebar, and answers 204 |
-| `GET /organizations/{slug}/events` | Organisation stream, filtered by [interests](stream-scope.md#stream-scope); malformed queries answer 400, an invisible channel or topic 404 before registration. A present `Sec-Fetch-Site` other than a single `same-origin` value answers 403 (absent is allowed), an ended session 404, either stream cap 429, shutdown 503. Cancellation before the first write answers 404 (session ended) or 503 (shutdown); see [streaming](streaming.md) and [stream limits](stream-limits.md) |
-| `POST /organizations/{slug}/channels` | Creates a channel with an optional bundled image and answers 303 to its UUID URL; invalid images, invalid or duplicate names, or the organisation cap render the list page with a field error (422), preserving the name and image, with the default channel expanded; admission after membership and before parsing uses the independent creation budget (429 with `Retry-After: 60`) |
-
-The creation form inherits the shared CSRF protection and body limit.
-Its organisation comes only from the resolved membership. Names are escaped
-by templ and never become URL identifiers.
+Every route under `/organizations/{slug}/` and its result is listed in
+[`routes.md`](routes.md).
 
 ## Server timeouts
 

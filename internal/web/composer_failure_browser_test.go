@@ -43,7 +43,7 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 	}
 	// Each composer POST takes the next answer: pass, lost (reaches the
 	// handler, then fails), failed, hung, or a status replacing the handler.
-	answers, sent := make(chan string, 1), make(chan url.Values, 1)
+	answers, sent, held := make(chan string, 1), make(chan url.Values, 1), make(chan struct{})
 	router := page.HijackRequests()
 	router.MustAdd(server.URL+path, func(h *rod.Hijack) {
 		if h.Request.Method() != "POST" {
@@ -54,6 +54,12 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 		sent <- form
 		switch answer := <-answers; answer {
 		case "pass":
+			h.ContinueRequest(&proto.FetchContinueRequest{})
+		case "held":
+			select {
+			case <-held:
+			case <-ctx.Done():
+			}
 			h.ContinueRequest(&proto.FetchContinueRequest{})
 		case "lost":
 			if err := h.LoadResponse(http.DefaultClient, true); err != nil {
@@ -137,9 +143,34 @@ func testComposerFailureBrowser(t *testing.T, browser *rod.Browser) {
 			t.Fatalf("after %s: %q, want %q", step.answer, got, want)
 		}
 	}
+	// "third" is stored and its answer lost; the retry's 409 arrives during
+	// an IME composition, and the stored text leaves only when it ends, with
+	// the caret kept on the remaining text (#1173's rules).
+	page.MustEval(`() => { document.getElementById('message-body').value = 'third'; }`)
+	send("lost")
+	page.MustEval(`() => { const body = document.getElementById('message-body'); body.value = 'third world'; body.setSelectionRange(7, 7); body.focus(); }`)
+	answers <- "held"
+	n := page.MustEval(`() => window.composerAnswers`).Int()
+	page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+	<-sent
+	if err := (proto.InputImeSetComposition{Text: "に", SelectionStart: 1, SelectionEnd: 1}).Call(page); err != nil {
+		t.Fatal(err)
+	}
+	held <- struct{}{}
+	page.MustWait(`n => window.composerAnswers > n`, n)
+	if got := state(); got[0] != "third wにorld" || got[3] != "" {
+		t.Fatalf("the 409 changed the composition: %q", got)
+	}
+	if err := (proto.InputInsertText{Text: "日本"}).Call(page); err != nil {
+		t.Fatal(err)
+	}
+	caret := page.MustEval(`() => document.getElementById('message-body').selectionStart`).Int()
+	if got := state(); got[0] != " w日本orld" || caret != 4 || got[3] != "Your earlier message was sent. What you typed after it is kept." {
+		t.Fatalf("after the composition: %q, caret %d", got, caret)
+	}
 	mu.Lock()
 	defer mu.Unlock()
-	if writer.inserts != 2 {
-		t.Fatalf("%d messages stored, want 2", writer.inserts)
+	if writer.inserts != 3 {
+		t.Fatalf("%d messages stored, want 3", writer.inserts)
 	}
 }

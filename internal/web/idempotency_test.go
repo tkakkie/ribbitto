@@ -118,18 +118,21 @@ func TestComposerIdempotencyKey(t *testing.T) {
 				}
 				// Text that starts with the stored body, as after a lost answer:
 				// htmx gets the body to remove instead of the error (#1179); a
-				// plain form, or the stored message in another channel, keeps
-				// the error.
-				for _, channel := range []kernel.ID{place.Channel, {9}} {
+				// plain form, or a stored message in another channel or with a
+				// quote, keeps the error.
+				for _, c := range []struct {
+					channel kernel.ID
+					quote   *conversation.Quote
+				}{{place.Channel, nil}, {kernel.ID{9}, nil}, {place.Channel, &conversation.Quote{}}} {
 					for k, stored := range writer.keyed {
-						stored.ChannelID = channel
+						stored.ChannelID, stored.Quote = c.channel, c.quote
 						writer.keyed[k] = stored
 					}
 					reused.Set("body", "hello again")
 					body := keyedSend(t, h, path, reused, hx, http.StatusConflict).Body.String()
-					recovered := hx && channel == place.Channel
+					recovered := hx && c.channel == place.Channel && c.quote == nil
 					if strings.Contains(body, `data-sent-body="hello"`) != recovered || strings.Contains(body, "A different message was already sent") == recovered {
-						t.Fatalf("409 in channel %v: %s", channel, body)
+						t.Fatalf("409 in channel %v, quote %v: %s", c.channel, c.quote, body)
 					}
 				}
 			})

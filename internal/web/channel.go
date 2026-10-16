@@ -500,9 +500,10 @@ func (p channelPages) issueComposer(m org.Membership, channel, topic kernel.ID) 
 // recovered returns the stored body when an enhanced retry's text starts
 // with it: the earlier answer was lost while the member typed on, and the
 // script removes the stored part instead of showing the 409's error (#1179).
-// A plain form, or text that no longer starts with it, keeps the error.
+// A plain form, or text that no longer starts with it, keeps the error, as
+// does a stored quote: the composer may still hold it for the rest.
 func recovered(enhanced bool, channel kernel.ID, body string, stored conversation.Message) string {
-	if !enhanced || stored.ChannelID != channel || !strings.HasPrefix(body, stored.Body) {
+	if !enhanced || stored.ChannelID != channel || stored.Quote != nil || !strings.HasPrefix(body, stored.Body) {
 		return ""
 	}
 	return stored.Body

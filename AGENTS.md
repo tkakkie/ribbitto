@@ -17,10 +17,11 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 - **Start of a session:** read the pinned Status issue (`gh issue view 1`)
   and `docs/roadmap.md`.
 - **Every issue and pull request an AI writes (including the docs it
-  changes) is reviewed by the other AI (Claude ↔ Codex) before the
-  maintainer is asked.** At most two review rounds; then either
-  closure verification (PRs with only mechanical, verified fixes left —
-  see `docs/workflow/reviewing.md`) or ask the maintainer.
+  changes) is reviewed by an AI that did not write it (Claude ↔ Codex;
+  Argon → Claude) before the maintainer is asked.** At most two review
+  rounds; then either closure verification (PRs with only mechanical,
+  verified fixes left — see `docs/workflow/reviewing.md`) or ask the
+  maintainer.
 - Issues start from a template in `.github/ISSUE_TEMPLATE/`; keep its
   headings. No implementation without the `ready` label.
 - **End of a unit of work:** overwrite the Status issue body. When the
@@ -29,8 +30,8 @@ Follow [`docs/workflow/`](docs/workflow/README.md) (its README says which file c
 ## Commands
 
 - `make check` — checks formatting (Go and templ), vets, lints, builds and
-  tests (race detector on); must pass before you open a pull request.
-  Format templates with `./bin/templ fmt <path>`.
+  tests (race detector on); must pass before you open a pull request
+  (Argon's: in CI). Format templates with `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; it needs the network, so CI runs it,
   not `make check`.
 - `make lint` — runs golangci-lint.
@@ -125,8 +126,8 @@ only the token utilities, never raw colours; checked by `tools/sourcecheck`), [`
 
 ## Pull requests
 
-- Maintainer AI branches use `claude/<topic>` or `codex/<topic>`. Branch
-  names of outside contributors are not restricted.
+- Maintainer AI branches use `claude/<topic>`, `codex/<topic>` or
+  `argon/<topic>`. Branch names of outside contributors are not restricted.
 - Conventional Commits title; squash-merged. Keep the diff under about 400
   lines excluding generated files; split larger work.
 - Fill in the pull request template briefly. UI changes say how to see

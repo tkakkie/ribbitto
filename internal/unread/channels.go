@@ -63,7 +63,7 @@ func (c *ChannelCounts) ReadWithFirstUnread(ctx context.Context, s platform.Snap
 	}
 	states, err := c.ranges(s).Read(ctx, organizationID, memberID, joined, ids)
 	if err != nil {
-		return nil, fmt.Errorf("loading channel count ranges: %w", err)
+		return nil, fmt.Errorf("loading channel ranges: %w", err)
 	}
 	var gapChannels []kernel.ID
 	var los, his []int64
@@ -73,9 +73,9 @@ func (c *ChannelCounts) ReadWithFirstUnread(ctx context.Context, s platform.Snap
 			los, his = append(los, gap.Lo), append(his, gap.Hi)
 		}
 	}
-	counts, first, err := c.messages(s).CountWithFirstUnread(ctx, organizationID, ids, gapChannels, los, his, firstUnread)
+	counts, first, err := c.messages(s).CountWithFirstUnread(ctx, organizationID, ids, gapChannels, los, his, true)
 	if err != nil {
-		return nil, fmt.Errorf("reading channel counts: %w", err)
+		return nil, fmt.Errorf("reading channel count: %w", err)
 	}
 	result := make(map[kernel.ID]ChannelCount, len(ids))
 	for _, id := range ids {

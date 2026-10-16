@@ -103,9 +103,9 @@ func TestPinsSourceConnectDuringRefresh(t *testing.T) {
 		factory := NewPinsSource(t.Context(), pinsReadFunc(func(context.Context, org.Membership, kernel.ID) ([]conversation.Pin, error) {
 			if reads.Add(1) == 1 {
 				<-release
-				return []conversation.Pin{{Excerpt: "earlier snapshot"}}, nil
+				return []conversation.Pin{{Entry: conversation.Entry{Message: conversation.Message{Body: "earlier snapshot"}}}}, nil
 			}
-			return []conversation.Pin{{Excerpt: "later snapshot"}}, nil
+			return []conversation.Pin{{Entry: conversation.Entry{Message: conversation.Message{Body: "later snapshot"}}}}, nil
 		}))
 		refresh := func(source realtime.ChannelStateSource) <-chan realtime.Outgoing {
 			done := make(chan realtime.Outgoing, 1)
@@ -201,7 +201,7 @@ func TestPinsRefreshScopes(t *testing.T) {
 		factory := NewPinsSource(t.Context(), pinsReadFunc(func(_ context.Context, m org.Membership, c kernel.ID) ([]conversation.Pin, error) {
 			reads.Add(1)
 			<-release
-			return []conversation.Pin{{Excerpt: fmt.Sprintf("scope-%d-%d", m.Organization.ID[0], c[0])}}, nil
+			return []conversation.Pin{{Entry: conversation.Entry{Message: conversation.Message{Body: fmt.Sprintf("scope-%d-%d", m.Organization.ID[0], c[0])}}}}, nil
 		}))
 		done := make(chan struct{}, 4)
 		for _, scope := range []pinsScope{{kernel.ID{1}, kernel.ID{2}}, {kernel.ID{3}, kernel.ID{2}}, {kernel.ID{1}, kernel.ID{3}}} {

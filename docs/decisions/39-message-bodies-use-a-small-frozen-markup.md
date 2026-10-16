@@ -2,9 +2,9 @@
 
 **Decided** (#1171, approved by the maintainer). Four issues implement it:
 #1201 the parser, #1202 the `format` column and rendering, #1204 text
-extraction and its users, and #1203 posting. The parser, the column and
-rendering exist; posting still stores `plain_text`, and extraction's callers
-wait for #1204. Nothing is stored as `chat_v1` until #1203, so members see
+extraction and its users, and #1203 posting. The parser, the column,
+rendering and extraction with its callers exist; posting still stores
+`plain_text`. Nothing is stored as `chat_v1` until #1203, so members see
 the four as one change. It follows [decision 18](18-stored-message-formats-never-change-meaning.md)
 and extracts text under [decision 38](38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)'s
 contract.

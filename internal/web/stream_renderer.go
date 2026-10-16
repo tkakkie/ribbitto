@@ -114,8 +114,12 @@ func (r messageRenderer) renderPosted(ctx context.Context, event realtime.Event)
 	if err != nil {
 		return realtime.Outgoing{}, err
 	}
+	item := viewMessage(r.membership.Organization.Slug, entry)
+	// The announcement is plain text: chat_v1 markup and member UUIDs never
+	// reach it, and its references resolve in the organisation's scope only.
+	item.Text = entry.Text(view.UnknownMember(ctx))
 	var html bytes.Buffer
-	if err := view.LiveMessageItem(viewMessage(r.membership.Organization.Slug, entry)).Render(ctx, &html); err != nil {
+	if err := view.LiveMessageItem(item).Render(ctx, &html); err != nil {
 		return realtime.Outgoing{}, fmt.Errorf("rendering message: %w", err)
 	}
 	return realtime.Outgoing{ID: event.Seq, Name: "message", Data: html.Bytes(), Topic: entry.TopicID}, nil

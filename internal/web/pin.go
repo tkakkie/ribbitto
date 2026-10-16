@@ -65,7 +65,7 @@ func (p channelPages) changePin(w http.ResponseWriter, r *http.Request, m org.Me
 				serverError(w, r, "reading pin response", err)
 				return
 			}
-			page.Pins, page.SnapshotSeq = viewPins(state.Pins), state.SnapshotSeq
+			page.Pins, page.SnapshotSeq = viewPins(r.Context(), state.Pins), state.SnapshotSeq
 		}
 		entry := view.Message{ID: message, PinURL: view.PinURL(m.Organization.Slug, channel, message), Pinned: pin}
 		templ.Handler(view.PinResponse(entry, errorKey, page, showPins), templ.WithStatus(status)).ServeHTTP(w, r)

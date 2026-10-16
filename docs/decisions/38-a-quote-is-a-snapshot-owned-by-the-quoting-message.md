@@ -1,11 +1,12 @@
 # 38. A quote is a snapshot owned by the quoting message; text extraction is per format
 
-**Decided** (#1153, approved by the maintainer). Nothing here is implemented
-yet: #1176 stores, posts and shows a quote of a whole message, #1160 adds the
-"Quote" action and the composer chip, and #1161 quotes a selection. The body
-format, its rendering and how a pasted message URL renders belong to #1171
-([decision 39](39-message-bodies-use-a-small-frozen-markup.md): rendering
-exists, extraction is #1204), which adds its format's extraction rule under the contract below.
+**Decided** (#1153, approved by the maintainer). Text extraction and two of
+its users (the pins excerpt and the live announcement) exist (#1204); quoting
+does not yet: #1176 stores, posts and shows a quote of a whole message, #1160
+adds the "Quote" action and the composer chip, and #1161 quotes a selection.
+The body format, its rendering and how a pasted message URL renders belong to
+#1171 ([decision 39](39-message-bodies-use-a-small-frozen-markup.md):
+rendering and extraction exist), which adds its format's extraction rule under the contract below.
 
 ## What a quote stores
 
@@ -95,8 +96,8 @@ unchanged. It is used for:
 
 - the pins excerpt ([pins](../domain/pins.md), 200 code points; shortening
   and collapsing white space stay with the excerpt);
-- the live announcement (`view.LiveMessageItem` concatenates `entry.Body`
-  today);
+- the live announcement (`view.LiveMessageItem`'s `data-announcement`,
+  since #1204);
 - checking a selection;
 - later, notifications and search.
 

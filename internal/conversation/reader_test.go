@@ -14,6 +14,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
 	platform "github.com/tkakkie/ribbitto/internal/platform/postgres"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 // historyData is ReadStore's message and topic-batch reads, which the reader
@@ -162,7 +163,7 @@ func TestReaderOverviewSnapshot(t *testing.T) {
 			if !reflect.DeepEqual(f.calls, want) || !errors.Is(err, wantErr) {
 				t.Fatalf("calls/error = %v/%v, want %v/%v", f.calls, err, want, wantErr)
 			}
-			wantPins := []conversation.Pin{{Entry: conversation.Entry{Message: f.pins[0].Message, DisplayName: "Author"}, Excerpt: "a b", PinnerName: "Author", PinnedAt: pinnedAt}}
+			wantPins := []conversation.Pin{{Entry: conversation.Entry{Message: f.pins[0].Message, DisplayName: "Author"}, PinnerName: "Author", PinnedAt: pinnedAt}}
 			if fail == "" && (!reflect.DeepEqual(page.Pins, wantPins) || page.EventCursor == nil || *page.EventCursor != 7) || fail != "" && page.Pins != nil {
 				t.Fatalf("page = %+v", page)
 			}
@@ -172,16 +173,34 @@ func TestReaderOverviewSnapshot(t *testing.T) {
 
 func TestPinExcerpt(t *testing.T) {
 	long := strings.Repeat("é", conversation.PinExcerptLength)
-	for _, tt := range []struct{ body, want string }{
-		{"plain", "plain"},
-		{"  two\n\n\tlines  ", "two lines"},
-		{"<b dir=rtl>&amp;</b>", "<b dir=rtl>&amp;</b>"},
-		{long, long},
-		{long + "x", strings.Repeat("é", conversation.PinExcerptLength-1) + "…"},
-		{strings.Repeat("a", conversation.PinExcerptLength-2) + " bc", strings.Repeat("a", conversation.PinExcerptLength-2) + "…"},
+	member, err := realtime.ParsePayloadID(memberUUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := "<@" + memberUUID + ">"
+	// The placeholder is long enough to push an unresolved reference past
+	// the limit that its stored token stays under.
+	placeholder := "@" + strings.Repeat("?", 49)
+	for _, tt := range []struct {
+		format     conversation.Format
+		body, want string
+	}{
+		{conversation.FormatPlainText, "plain", "plain"},
+		{conversation.FormatPlainText, "  two\n\n\tlines  ", "two lines"},
+		{conversation.FormatPlainText, "<b dir=rtl>&amp;</b>", "<b dir=rtl>&amp;</b>"},
+		{conversation.FormatPlainText, long, long},
+		{conversation.FormatPlainText, long + "x", strings.Repeat("é", conversation.PinExcerptLength-1) + "…"},
+		{conversation.FormatPlainText, strings.Repeat("a", conversation.PinExcerptLength-2) + " bc", strings.Repeat("a", conversation.PinExcerptLength-2) + "…"},
+		{conversation.FormatPlainText, "**Deploy** " + ref, "**Deploy** " + ref},
+		// chat_v1 counts its 200 code points after resolution.
+		{conversation.FormatChatV1, "**Deploy**\n> " + ref, "Deploy @tomoya"},
+		{conversation.FormatChatV1, "**" + long + "**", long},
+		{conversation.FormatChatV1, strings.Repeat("a", 160) + " " + ref, strings.Repeat("a", 160) + " @tomoya"},
+		{conversation.FormatChatV1, strings.Repeat("a", 160) + " <@" + otherUUID + ">", strings.Repeat("a", 160) + " " + placeholder[:38] + "…"},
 	} {
-		if got := conversation.PinExcerpt(tt.body); got != tt.want || utf8.RuneCountInString(got) > conversation.PinExcerptLength {
-			t.Errorf("PinExcerpt(%q) = %q, want %q", tt.body, got, tt.want)
+		entry := conversation.Entry{Message: conversation.Message{Format: tt.format, Body: tt.body}, References: map[kernel.ID]conversation.Reference{member: {Handle: "tomoya"}}}
+		if got := conversation.PinExcerpt(entry, placeholder); got != tt.want || utf8.RuneCountInString(got) > conversation.PinExcerptLength {
+			t.Errorf("PinExcerpt(%s %q) = %q, want %q", tt.format, tt.body, got, tt.want)
 		}
 	}
 }

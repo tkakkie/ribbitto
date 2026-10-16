@@ -99,19 +99,24 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 		return serveForm(handler, http.MethodGet, view.ChannelURL("acme", f.Channel.ID), cookie, nil).Body.Bytes()
 	}
 	reader := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn)
-	stream := func(lang string) []byte {
-		t.Helper()
-		var langCtx context.Context
+	inLanguage := func(lang string) (langCtx context.Context) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("Accept-Language", lang)
 		catalogues.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { langCtx = r.Context() })).ServeHTTP(httptest.NewRecorder(), r)
+		return langCtx
+	}
+	// streamAs renders the live item for one member's stream, in its own
+	// cache, so each member's render reads with that membership.
+	streamAs := func(m org.Membership, lang string) []byte {
+		t.Helper()
 		event := eventOf(t, f.OrganizationID, rich.EventSeq, conversation.KindPosted, conversation.Moved{ChannelID: f.Channel.ID, ToTopicID: rich.TopicID})
-		out, err := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}.Render(langCtx, event)
+		out, err := messageRenderer{messages: reader, membership: m, renders: newRenderCache(ctx)}.Render(inLanguage(lang), event)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return out.Data
 	}
+	stream := func(lang string) []byte { return streamAs(m, lang) }
 
 	ownerPage := page(f.AccountID)
 	got := item(ownerPage, rich.ID)
@@ -143,13 +148,42 @@ func TestChatV1RenderAgainstPostgreSQL(t *testing.T) {
 	if ja := item(stream("ja"), rich.ID); strings.Count(ja, "@不明なメンバー") != 2 {
 		t.Errorf("Japanese placeholder:\n%s", ja)
 	}
+	// The announcement is the resolved extraction, the same for two members
+	// of one language, as the shared render cache needs; the foreign member
+	// and unknown references are the placeholder.
+	announcement := func(m org.Membership, lang string) string {
+		t.Helper()
+		doc, err := html.Parse(bytes.NewReader(streamAs(m, lang)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for n := range doc.Descendants() {
+			if attr(n, "id") == view.MessageDOMID(rich.ID) {
+				return attr(n, "data-announcement")
+			}
+		}
+		t.Fatal("no live item")
+		return ""
+	}
+	bobM := org.Membership{Organization: m.Organization, Member: org.Member{ID: bob, OrganizationID: f.OrganizationID}}
+	wantText := "Hi @bob and @blank, see https://example.com/a.\nfrom @unknown member x<y\nfmt.Print(\"<b>\")\nunknown @unknown member"
+	if got, other := announcement(m, "en"), announcement(bobM, "en"); got != "New ribbit @owner: "+wantText || other != got {
+		t.Errorf("announcements differ or are not the resolved extraction:\n%q\n%q", got, other)
+	}
+	if ja := announcement(m, "ja"); ja != "新しいribbit @owner: "+strings.ReplaceAll(wantText, "@unknown member", "@不明なメンバー") {
+		t.Errorf("Japanese announcement %q", ja)
+	}
 	// Pins and branching carry the format: the pin reads the chat_v1 row as
 	// stored, the move renders parsed markup, and the notice is plain_text.
 	if err := conversationpg.NewPinning(pool, postingSequence, postingEvents, nil).Pin(ctx, m, f.Channel.ID, rich.ID); err != nil {
 		t.Fatal(err)
 	}
-	if pins, err := reader.Pins(ctx, m, f.Channel.ID); err != nil || len(pins) != 1 || pins[0].Format != conversation.FormatChatV1 || pins[0].Body != rich.Body {
+	pins, err := reader.Pins(ctx, m, f.Channel.ID)
+	if err != nil || len(pins) != 1 || pins[0].Format != conversation.FormatChatV1 || pins[0].Body != rich.Body {
 		t.Fatalf("pins %+v, %v", pins, err)
+	}
+	if excerpt := viewPins(inLanguage("ja"), pins)[0].Excerpt; excerpt != strings.ReplaceAll(strings.ReplaceAll(wantText, "\n", " "), "@unknown member", "@不明なメンバー") {
+		t.Errorf("pin excerpt %q", excerpt)
 	}
 	notifier := &recordingNotifier{}
 	topic, err := conversationpg.NewBrancher(pool, postingSequence, postingEvents, branchReads, notifier).Branch(ctx, m, f.Channel.ID,

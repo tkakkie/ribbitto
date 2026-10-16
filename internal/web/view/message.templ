@@ -30,6 +30,9 @@ type Message struct {
 	Pinned bool
 	// Blocks is a chat_v1 body; nil shows Body as plain text.
 	Blocks []BodyBlock
+	// Text is the body as plain text (conversation.Entry.Text), which only
+	// a live item announces, so only the stream's renderer sets it.
+	Text string
 }
 
 // PinURL is the base of a message's pin and unpin routes. It names the
@@ -56,7 +59,7 @@ templ MessageItem(entry Message) {
 
 // LiveMessageItem adds announcement text only for delivery over the stream.
 templ LiveMessageItem(entry Message) {
-	@messageItem(entry, i18n.T(ctx, "message.new")+" @"+entry.Handle+": "+entry.Body)
+	@messageItem(entry, i18n.T(ctx, "message.new")+" @"+entry.Handle+": "+entry.Text)
 }
 
 templ messageItem(entry Message, announcement string) {

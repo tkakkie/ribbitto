@@ -1,6 +1,7 @@
 package view
 
 import (
+	"context"
 	"strings"
 
 	"github.com/tkakkie/ribbitto/internal/web/i18n"
@@ -46,6 +47,13 @@ type BodyInline struct {
 // the string, never templ.SafeURL, so templ's own URL sanitising applies too.
 func webURL(url string) bool {
 	return strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://")
+}
+
+// UnknownMember is the localised placeholder for a member reference the
+// organisation's directory did not resolve, the same in a rendered body and
+// in its text (conversation.Entry.Text).
+func UnknownMember(ctx context.Context) string {
+	return "@" + i18n.T(ctx, "message.unknown_member")
 }
 
 // messageBody renders a plain_text body exactly as before chat_v1, and a
@@ -106,7 +114,7 @@ templ bodyInlines(nodes []BodyInline) {
 			case BodyMember:
 				<bdi class="rounded-sm bg-selected px-1">
 					if node.Handle == "" {
-						{ "@" + i18n.T(ctx, "message.unknown_member") }
+						{ UnknownMember(ctx) }
 					} else {
 						@MemberName(node.DisplayName, node.Handle)
 					}

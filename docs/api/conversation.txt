@@ -80,6 +80,7 @@ type Entry struct // Entry is a stored message with its current author names and
   field Handle string
   field Message Message
   field References map[github.com/tkakkie/ribbitto/internal/kernel.ID]Reference // References holds the members Blocks names that the organisation's directory resolved.
+  func (Entry).Text(placeholder string) string // Text returns the message as plain text, one extraction per format (decision 38): a plain_text body unchanged, and a chat_v1 body's extraction with each reference resolved through References to its "@handle", or to placeholder when the organisation's directory did not return the member.
   field TopicName string
 var ErrBranchConflict error // ErrBranchConflict means a selected message is no longer in the topic the request expected (someone else branched it first): nothing changed.
 var ErrChannelLimit error // ErrChannelLimit means the organisation cannot create another channel.
@@ -106,6 +107,7 @@ type EventCursorIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.S
 type EventSequence interface // EventSequence is what posting, branching and pinning need from org in their transaction: the organisation's next event_seq, taken first, whose row lock makes sequence order commit order (decision 5).
   func (EventSequence).NextEventSeq(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID) (int64, error)
 type EventSequenceIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Tx) EventSequence // EventSequenceIn binds org's sequence to the caller's transaction.
+func ExtractChatV1(blocks []BodyBlock) []TextSegment // ExtractChatV1 returns a parsed chat_v1 body's text under decision 39: delimiters, escapes, fences and language tags are gone, code keeps its content exactly, an autolink is its URL, line breaks inside a block stay and each block boundary is one line break.
 type Format string // Format names the grammar a stored body is read with (decision 39).
 const FormatChatV1 Format = "chat_v1" // The formats the message table's CHECK allows.
 const FormatPlainText Format = "plain_text" // The formats the message table's CHECK allows.
@@ -179,13 +181,12 @@ type PageCounts struct // PageCounts holds capped sidebar counts and uncapped fi
 type PageCountsIn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) PageCounter // PageCountsIn binds unread's count orchestration to a page or sidebar snapshot.
 const PageSize untyped int = 50 // PageSize is how many messages one page of history holds.
 func ParseChatV1(body string) []BodyBlock // ParseChatV1 parses a body that ValidateMessageBody returned under chat_v1's grammar (decision 39).
-type Pin struct // Pin is one overview entry: the current message with its author and topic, its excerpt, and who pinned it when, with current names.
+type Pin struct // Pin is one overview entry: the current message with its author, topic and resolved references, and who pinned it when, with current names.
   field Entry Entry
-  field Excerpt string
   field PinnedAt time.Time
   field PinnerHandle string
   field PinnerName string
-func PinExcerpt(body string) string // PinExcerpt collapses whitespace runs to one space and shortens the result to PinExcerptLength code points, ending a shortened one with an ellipsis.
+func PinExcerpt(entry Entry, placeholder string) string // PinExcerpt collapses whitespace runs in the message's text (Entry.Text, with placeholder for an unresolved reference) to one space and shortens the result to PinExcerptLength code points, ending a shortened one with an ellipsis.
 const PinExcerptLength untyped int = 200 // PinExcerptLength bounds a pin's excerpt in Unicode code points, ellipsis included (docs/domain/pins.md).
 type PinReader interface // PinReader reads at most MaxChannelPins current messages, newest pin first then message ID.
   func (PinReader).ListChannelPins(ctx context.Context, organizationID github.com/tkakkie/ribbitto/internal/kernel.ID, channelID github.com/tkakkie/ribbitto/internal/kernel.ID) ([]PinnedMessage, error)
@@ -277,6 +278,10 @@ type SidebarSnapshot struct // SidebarSnapshot holds fresh sidebar lists and exp
   field Topics []Topic
 type SnapshotRunner interface // SnapshotRunner runs page/sidebar snapshots, One and Many (decision 26): the use case owns the read boundary, and the stores and directories only bind to the Snapshot they are given, so every read sees the same committed state.
   func (SnapshotRunner).InSnapshot(ctx context.Context, fn func(github.com/tkakkie/ribbitto/internal/platform/postgres.Snapshot) error) error // InSnapshot runs fn in a new read-only, repeatable-read transaction, returning fn's error as is.
+type TextSegment struct // TextSegment is one piece of a chat_v1 body's text extraction: literal text, or a member reference that the caller resolves when it uses the text, so no name is stored and a rename never leaves stale text.
+  field Member github.com/tkakkie/ribbitto/internal/kernel.ID
+  field Reference bool // Reference marks a segment that names Member; its Text is empty.
+  field Text string
 type Topic struct // Topic is a named conversation inside a channel, identified by ID.
   field ChannelID github.com/tkakkie/ribbitto/internal/kernel.ID
   field CreatedAt time.Time

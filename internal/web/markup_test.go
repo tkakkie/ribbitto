@@ -951,7 +951,7 @@ func TestComponentsMarkup(t *testing.T) {
 		{"LiveMessageItem", view.LiveMessageItem(view.Message{
 			ID: kernel.ID{0xab, 0xcd}, DisplayName: "مريم", Handle: "author",
 			CreatedAt: time.Date(2026, 9, 29, 21, 0, 0, 123456789, time.FixedZone("JST", 9*60*60)),
-			Body:      "<script>bad()</script>\nمرحبا",
+			Body:      "<script>bad()</script>\nمرحبا", Text: "<script>bad()</script>\nمرحبا",
 		})},
 		{"SignOutButton", view.SignOutButton()},
 		{"MemberName", view.MemberName("مريم", "author")},

@@ -93,11 +93,11 @@ text on the page. Order: #1178 → #1181 → #1162 → #1177.
   `uuidv7()` read from PostgreSQL in the request (`identity.SessionHorizon`,
   #1178), the same clock as session ids, never the web server's. Cleanup
   compares the 48-bit millisecond prefix and removes only entries **strictly
-  older** than the horizon, plus malformed ones; same-millisecond entries stay
-  until their expiry or a later cleanup. So a cleanup never removes a newer
-  session's entry, never its own session's, and reads no other session's
-  values. The sign-in page renders a horizon and cleans up only for signed-out
-  requests: `GET /signin` and the error renders of `POST /signin` without a
+  older** than the horizon, plus malformed ones; other sessions'
+  same-millisecond entries stay until their expiry or a later cleanup. So a
+  cleanup never removes a newer session's entry or a valid own one, and reads
+  only its own session's values (#1181). The sign-in page renders a horizon
+  and cleans up only for signed-out requests: `GET /signin` and the error renders of `POST /signin` without a
   signed-in account. If reading the horizon fails, that render does no cleanup.
 - **Writes:** a page writes only its own session's keys, and only before its
   session's deadline (expiry minus render time, measured with
@@ -105,9 +105,8 @@ text on the page. Order: #1178 → #1181 → #1162 → #1177.
   open page stops writing and removes its own keys.
 - **Sign-out** (#1178): a successful `POST /signout` answers 303 to `/signin`
   with `Clear-Site-Data: "storage"` where the browser supports it; a failure
-  answers 500 with neither. The sign-in page's cleanup then removes every
-  entry strictly older than its horizon. The sign-out form has no submit handler: it would clear
-  drafts even when sign-out fails. After its cleanup the sign-in page writes a
+  answers 500 with neither. The sign-in page then cleans up. The sign-out
+  form has no submit handler: it would clear drafts even when sign-out fails. After its cleanup the sign-in page writes a
   content-free sign-out notice key whose value is its horizon, so each write
   fires a `storage` event; other open pages stop writing on it (#1162). The
   notice is best effort: what a stale tab still writes is bound to its ended
@@ -117,16 +116,13 @@ text on the page. Order: #1178 → #1181 → #1162 → #1177.
   signed-out sign-in page with a horizon; and in an open page at its
   session's deadline. Signed-out organisation requests get a plain 404, so
   after an expiry cleanup waits for one of those pages.
-- **Limits:** with no ribbitto page open nothing runs, so leftover entries
-  stay on disk until ribbitto next loads in that browser (on a shared
-  computer, sign out). If the database clock steps backwards between a render
+- **Limits:** with no ribbitto page open nothing runs: leftover entries stay
+  on disk until one loads in that browser (on a shared computer, sign out). If the database clock steps backwards between a render
   and a later sign-in, a newer session's marker can sort before an older
-  horizon. Same-millisecond entries survive a cleanup.
-- **Cost:** signing in again, after an expiry or not, drops the earlier
-  session's drafts; rare, since sessions last 30 days and drafts 7.
+  horizon.
+- **Cost:** signing in again drops the earlier session's drafts; rare, since sessions last 30 days and drafts 7.
 - **Sidebar** (#1177): the script may only show or hide a server-rendered,
-  hidden draft marker, reapplying it after each sidebar swap; it creates no
-  elements.
+  hidden draft marker, reapplying it after each sidebar swap.
 - **Privacy:** stored text is plaintext in the browser profile, readable by
   anyone using it, and may include quoted text from others' messages (#1160,
   #1161) that the member chose to insert. That is the accepted cost.
@@ -167,9 +163,9 @@ being visible.
 
 **Considered:** `fetch` in one composer script (direct control of queueing and
 retries, but a second request path beside htmx's `hx-sync`, error handling and
-422 swaps; no measurement shows htmx is the bottleneck); `sessionStorage` for
-drafts (lost with the tab); one owner record per member (a stale tab's write
-could be restored under a new session); the web server's clock as the horizon (not the clock of session
-ids); a submit handler on the sign-out form (clears drafts when sign-out
-fails); a separate public time-ordered marker (the id is not a credential);
-the send-key preference in browser storage (it must follow the member).
+422 swaps; no measurement shows htmx is the bottleneck); one owner record per
+member (a stale tab's write could be restored under a new session); a
+separate public time-ordered marker (the id is not a credential); the
+send-key preference in browser storage (it must follow the member); and, for
+the reasons (d) gives, `sessionStorage`, the web server's clock as the
+horizon and a submit handler on the sign-out form.

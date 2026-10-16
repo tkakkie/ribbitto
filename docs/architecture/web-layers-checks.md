@@ -27,8 +27,9 @@ other requests retain the existing response and fallback checks.
 The data attributes in the [DOM contract](web-contracts.md) are asserted on the elements that
 own them, where they are produced (#351): `TestMessagePagingHandler` on full
 pages and Load older responses, `TestOrgRoutesAgainstPostgreSQL` on topic
-pages (`data-topic`), and `TestMessageRendererSharesRenders` on the `message`
-and `messages-moved` stream payloads.
+pages (`data-topic`), `TestMessageRendererSharesRenders` on the `message`
+and `messages-moved` stream payloads, and `TestPagesCarryOwnSession` on the
+session marker of both organisation pages.
 
 `TestComponentsMarkup` renders `SignOutButton`, `MemberName`, `MessageItem`
 and `LiveMessageItem` alone in both languages and applies the fragment
@@ -74,14 +75,14 @@ is limited to `message-drafts-vN.js`. No checks change for decision 41.
 Since #1178, `TestBrowser/drafts` covers sign-in cleanup: the millisecond
 rule, same-millisecond and newer entries kept, malformed keys removed,
 the notice in another tab, sign-out with scripts blocked, failed sign-out,
-and a signed-in error render with no cleanup. Planned, each awaiting its issue:
+and a signed-in error render with no cleanup. Since #1181,
+`TestBrowser/drafts-org` covers both organisation pages: a stale page keeps
+newer and same-millisecond sessions' entries unread, a later member or
+session removes earlier ones, each malformed key and own value goes, and an
+expiring page cleans up. Planned, each awaiting its issue:
 
 - #1156 adds a browser test that a body with markup shows as text and that
   the pending item is removed.
-- #1181 tests organisation-page cleanup: a stale page of an earlier session
-  never removes a newer session's entry, a later member or session removes
-  the earlier entries, and a page whose session expires without a sign-in
-  navigation cleans up.
 - #1162 tests a controlled interleaving: a tab of an earlier session writes
   after a later session's page has loaded and cleaned, and the later session
   never restores that text. It also tests sign-out with two tabs open and a

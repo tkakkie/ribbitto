@@ -33,6 +33,7 @@ DOM ids and script-read data attributes shared by templ, htmx and scripts.
   | `data-snapshot-seq` | `#sidebar-channels` | always | organisation event sequence read in the same repeatable-read snapshot as the sidebar counts ([decision 34](../decisions/34-live-unread-counts.md)) |
   | `data-unread-count` | every sidebar badge, including the heading badge | always, including zero | numeric unread count; a zero badge remains present but hidden ([decision 34](../decisions/34-live-unread-counts.md)) |
   | `data-drafts-horizon` | the sign-in form | signed-out renders only | UUIDv7; stored drafts of sessions from earlier milliseconds are removed ([drafts](web-javascript.md#drafts)) |
+  | `data-session`, `data-session-expires`, `data-rendered-at` | `#organization-stream` | always | the session's id (a UUIDv7, never its token), its expiry and the render time in Unix milliseconds: the drafts cleanup's horizon and deadline ([drafts](web-javascript.md#drafts)) |
 
   Member identity, selected topic and the resync trigger are specified in the
   [sidebar script contract](web-javascript.md#javascript).

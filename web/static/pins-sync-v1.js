@@ -31,7 +31,7 @@
     if (control.contains(document.activeElement)) focused.add(event.detail.xhr);
   });
   const swapped = (event) => {
-    if (event.detail.target?.id === "pins-section") {
+    if ((event.detail.target ?? event.detail.elt)?.id === "pins-section") {
       document.querySelectorAll("[data-pin-control]").forEach(sync);
     }
     const control = document.getElementById(event.detail.target?.id);

@@ -102,7 +102,9 @@ idea (maintainer, one line) or finding (AI)
   → the initial adversarial review the change's tier requires, on that
     head, still as a draft; never alongside the first cross-review; a
     fix for its finding gets the adversarial follow-up check, then a
-    re-review by Argon  (see adversarial-review.md)
+    re-review by Argon  (see adversarial-review.md); an Argon pull
+    request whose diff is tier A or B leaves its trial and goes to the
+    maintainer instead  (see argon-implementer.md)
   → label `ai-reviewed` → mark ready for review
   → Claude explains the PR to the maintainer in Japanese, in the chat
     (the PR itself stays in English)

@@ -70,13 +70,17 @@ but enforced by configuration, not by the prompt.
 - **No workspace hooks or customisation.** Workspace hooks run commands
   outside the sandbox ([running Argon](running-argon.md#the-boundary)).
   Before every run, fix runs included, Claude checks that the worktree has
-  no `.agents` entry or other workspace-loaded configuration, and stops if
-  one appears.
+  no `.agents` or `.gemini` entry, no `GEMINI.md` and no other
+  workspace-loaded configuration, and that the tracked `AGENTS.md` and
+  `CLAUDE.md` match `origin/main`; it stops otherwise. Those two are loaded
+  as instructions, as in reviews, and the guard keeps Argon from editing
+  them.
 - **A minimal environment for every command, tests Argon writes included.**
   A dedicated `HOME` does not remove inherited credentials. The run starts
-  from an empty environment except `PATH`, `HOME`, a `TMPDIR` and the Go
-  caches inside the worktree, with `GIT_CONFIG_GLOBAL=/dev/null` and
-  `GIT_CONFIG_NOSYSTEM=1`. There is no `GH_TOKEN`, `GITHUB_TOKEN`,
+  from an empty environment except `PATH`, `HOME`, a `TMPDIR` inside the
+  worktree, the caches set inside it as in Codex's handoff (`GOCACHE`,
+  `GOMODCACHE`, `GOPATH` and `GOLANGCI_LINT_CACHE` under `bin/.cache/`),
+  `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`. There is no `GH_TOKEN`, `GITHUB_TOKEN`,
   `SSH_AUTH_SOCK`, credential helper or keychain access. The sandbox holds
   for child processes: writes only inside the worktree, no reads of the
   account's files outside it (the Go toolchain aside), and network only to

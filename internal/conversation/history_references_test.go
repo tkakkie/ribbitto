@@ -35,25 +35,29 @@ func (f *referencedMessage) LookupDisplayNames(_ context.Context, ids []kernel.I
 	return map[kernel.ID]string{{6}: "Author", {7}: "Bob", {8}: "Foreign", {}: "Nobody"}, nil
 }
 
-// References join the author's member and name batches, one each per
-// render, and resolve only to members the organisation's directory returns.
+// References and a quoted author join the author's member and name batches,
+// one each per render, and resolve only to members the organisation's
+// directory returns.
 func TestEntryResolvesReferencesInOneScopedBatch(t *testing.T) {
 	local, foreign := kernel.ID{0x11}, kernel.ID{0x22}
 	msg := conversation.Message{ID: kernel.ID{4}, OrganizationID: kernel.ID{1}, ChannelID: kernel.ID{2}, MemberID: kernel.ID{3}, EventSeq: 9, Format: conversation.FormatChatV1,
-		Body: "hi <@" + realtime.FormatPayloadID(local) + "> and **<@" + realtime.FormatPayloadID(foreign) + ">**"}
+		Body: "hi <@" + realtime.FormatPayloadID(local) + "> and **<@" + realtime.FormatPayloadID(foreign) + ">**", Quote: &conversation.Quote{MemberID: local, Text: "quoted"}}
 	f := &referencedMessage{singleMessage: &singleMessage{t: t, msg: msg}, local: local}
 	reader, _ := testReader(t, f)
 	got, err := reader.One(t.Context(), org.Membership{Organization: org.Organization{ID: msg.OrganizationID}}, msg.ChannelID, msg.EventSeq)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(f.memberCalls, [][]kernel.ID{{msg.MemberID, local, foreign}}) {
-		t.Fatalf("member lookups = %v, want one batch of the author and both references", f.memberCalls)
+	if !reflect.DeepEqual(f.memberCalls, [][]kernel.ID{{msg.MemberID, local, local, foreign}}) {
+		t.Fatalf("member lookups = %v, want one batch of the author, the quoted author and both references", f.memberCalls)
 	}
 	if len(f.nameCalls) != 1 || len(f.nameCalls[0]) != 2 || !slices.Contains(f.nameCalls[0], kernel.ID{6}) || !slices.Contains(f.nameCalls[0], kernel.ID{7}) {
 		t.Fatalf("name lookups = %v, want one batch of the accounts org returned", f.nameCalls)
 	}
 	if got.Blocks == nil || !reflect.DeepEqual(got.References, map[kernel.ID]conversation.Reference{local: {DisplayName: "Bob", Handle: "bob"}}) {
 		t.Fatalf("blocks %v, references %v; want the parsed body and only the local member", got.Blocks, got.References)
+	}
+	if got.QuoteAuthor != (conversation.Reference{DisplayName: "Bob", Handle: "bob"}) {
+		t.Fatalf("quoted author %+v", got.QuoteAuthor)
 	}
 }

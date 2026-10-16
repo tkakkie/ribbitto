@@ -33,6 +33,9 @@ type Message struct {
 	PinnedAt         pgtype.Timestamptz
 	IdempotencyKey   pgtype.UUID
 	Format           string
+	QuotedMessageID  pgtype.UUID
+	QuotedMemberID   pgtype.UUID
+	QuoteText        pgtype.Text
 }
 
 type Topic struct {

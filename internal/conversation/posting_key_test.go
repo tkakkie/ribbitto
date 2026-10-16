@@ -55,7 +55,10 @@ func (s *keyedStore) GetDefaultTopic(_ context.Context, _, channelID kernel.ID) 
 func (s *keyedStore) GetTopic(_ context.Context, _, channelID, id kernel.ID) (conversation.Topic, error) {
 	return conversation.Topic{ID: id, ChannelID: channelID}, nil
 }
-func (s *keyedStore) InsertMessage(_ context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, key *conversation.IdempotencyKey) (conversation.Message, error) {
+func (s *keyedStore) QuotedMessage(context.Context, kernel.ID, kernel.ID, kernel.ID) (conversation.Message, error) {
+	panic("unexpected QuotedMessage")
+}
+func (s *keyedStore) InsertMessage(_ context.Context, organizationID, channelID, topicID, memberID kernel.ID, body string, seq int64, key *conversation.IdempotencyKey, _ *conversation.Quote) (conversation.Message, error) {
 	s.tx.inserted++
 	m := conversation.Message{ID: kernel.ID{byte(s.tx.inserted)}, OrganizationID: organizationID, ChannelID: channelID, TopicID: topicID, MemberID: memberID, Body: body, EventSeq: seq}
 	if key == nil {

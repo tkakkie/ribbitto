@@ -11,7 +11,7 @@
 | [public.member](public.member.md) | 7 |  | BASE TABLE |
 | [public.setup](public.setup.md) | 3 |  | BASE TABLE |
 | [public.channel](public.channel.md) | 8 |  | BASE TABLE |
-| [public.message](public.message.md) | 12 |  | BASE TABLE |
+| [public.message](public.message.md) | 13 |  | BASE TABLE |
 | [public.event_log](public.event_log.md) | 6 |  | BASE TABLE |
 | [public.topic](public.topic.md) | 6 |  | BASE TABLE |
 | [public.channel_read](public.channel_read.md) | 3 |  | BASE TABLE |
@@ -117,6 +117,7 @@ erDiagram
   uuid pinned_by_member_id FK
   timestamp_with_time_zone pinned_at
   uuid idempotency_key
+  text format
 }
 "public.event_log" {
   uuid organization_id FK

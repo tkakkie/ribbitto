@@ -4,8 +4,8 @@
 yet: #1176 stores, posts and shows a quote of a whole message, #1160 adds the
 "Quote" action and the composer chip, and #1161 quotes a selection. The body
 format, its rendering and how a pasted message URL renders belong to #1171
-([decision 39](39-message-bodies-use-a-small-frozen-markup.md), planned),
-which adds its format's extraction rule under the contract below.
+([decision 39](39-message-bodies-use-a-small-frozen-markup.md): rendering
+exists, extraction is #1204), which adds its format's extraction rule under the contract below.
 
 ## What a quote stores
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -58,7 +59,7 @@ func TestReaderOne(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := reader.One(ctx, tt.membership, tt.channel, tt.seq)
-			if !errors.Is(err, tt.wantErr) || got != tt.want {
+			if !errors.Is(err, tt.wantErr) || !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("entry = %+v, error = %v; want %+v, %v", got, err, tt.want, tt.wantErr)
 			}
 		})

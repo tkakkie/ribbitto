@@ -485,14 +485,23 @@ func freshKey() *string {
 }
 
 // channelID parses the {channelID} path segment: the UUID in its canonical
-// form, the only one ChannelURL produces.
+// lower-case form, the only one ChannelURL produces; any other spelling is
+// malformed.
 func channelID(r *http.Request) (kernel.ID, bool) {
 	return pathID(r.PathValue("channelID"))
 }
 
+// pathID parses an identifier from a path segment, query or form value.
+// It accepts only the canonical lower-case form the views render, so one
+// resource has one URL (decision 36): hex.DecodeString would also take upper
+// case, which is refused here like any malformed identifier rather than
+// redirected, since nothing in ribbitto produces it (#1223).
 func pathID(raw string) (kernel.ID, bool) {
 	var id kernel.ID
 	if len(raw) != 36 || raw[8] != '-' || raw[13] != '-' || raw[18] != '-' || raw[23] != '-' {
+		return id, false
+	}
+	if strings.ToLower(raw) != raw {
 		return id, false
 	}
 	decoded, err := hex.DecodeString(strings.ReplaceAll(raw, "-", ""))

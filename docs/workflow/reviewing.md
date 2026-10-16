@@ -67,8 +67,9 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
 2. The implementer applies exactly those fixes and nothing else.
 3. The reviewer checks that the whole diff since the round-2 SHA contains
    only the named fixes, then re-runs the failing check or live test for
-   each finding — not the rest of the PR; on an Argon trial pull request,
-   reads CI instead — and reports:
+   each finding — not the rest of the PR; where the
+   [handoff rule](running-other-ai.md#handoff-of-another-ais-code) keeps
+   it from running another AI's code, reads CI instead — and reports:
 
    ```
    **Closure verification — <Claude|Codex>** (at <SHA>)
@@ -131,7 +132,11 @@ reach the re-review without either AI checking it:
 2. The AI that did not write the fix (Claude ↔ Codex; never on an Argon
    trial pull request, which leaves the trial at tier A or B) checks that the diff since the reviewed head contains only that fix,
    that it answers the original finding, and that the test fails without
-   it — or that the recorded reason holds and the alternative verification
+   it (where the
+   [handoff rule](running-other-ai.md#handoff-of-another-ais-code) keeps
+   it from running the test, it reads a
+   run without the fix in CI or in the implementer's own sandbox) — or
+   that the recorded reason holds and the alternative verification
    was done; a reason it does not accept is ❌. It reports:
 
    ```
@@ -151,9 +156,9 @@ reach the re-review without either AI checking it:
 for a failing check, a merge of `main` — run `make prepush`
 ([Checks](../../README.md#checks)) and push only if it passes: it regenerates
 files and checks the manifests, document sizes and lint, keeping each exit
-status. Ad-hoc command chains have hidden a failure before (#848). On an
-Argon trial pull request, green CI replaces it
-([handoff](argon-implementer.md#the-boundary)).
+status. Ad-hoc command chains have hidden a failure before (#848). On a
+branch with another AI's code, green CI on the pushed head replaces it
+([handoff](running-other-ai.md#handoff-of-another-ais-code)).
 
 A later merge of `main` to resolve conflicts is reported in a PR comment
 listing the files and how they were resolved; if the resolution does more

@@ -46,8 +46,8 @@ reviewer, and an implementer never reviews its own work.
   since that is not Argon's work. It reads CI and a diff Claude makes with
   the hardened git settings below and passes on stdin, and it runs in a clean
   worktree of `origin/main`, never in Argon's.
-- No AI runs a build, a test or a tool from a tree that holds Argon's
-  commits; CI checks them.
+- No AI runs Argon's code on the host; CI checks it
+  ([handoff](running-other-ai.md#handoff-of-another-ais-code)).
 - Argon's issues do not count towards Claude's and Codex's equal shares.
 
 ## The boundary
@@ -116,18 +116,14 @@ but enforced by configuration, not by the prompt.
 - **Also denied:** `git commit` and `push`, `gh`, other AI CLIs, browsers, MCP
   and URL reads. Argon never holds GitHub credentials, never pushes, and
   never opens or merges a pull request.
-- **Handoff: Claude runs nothing Argon wrote; CI checks it.** Argon leaves
+- **Handoff: the [shared rule](running-other-ai.md#handoff-of-another-ais-code)
+  for Codex and Argon.** Claude runs nothing Argon wrote, and green CI on
+  the draft replaces the local checks before any review. Argon leaves
   its changes in the working tree and an untracked `PR_BODY.md`. Once the
   supervisor has confirmed that no process from the run is left, Claude
   repeats the pre-run checks, reads the diff and runs the credential grep
-  from [running Codex](running-other-ai.md#running-codex). It never runs
-  `make check`, `make prepush`, `go test`, a build or a tool from Argon's
-  tree; CI, which runs pull request code with read-only access and no
-  secrets, is the check instead (maintainer, 2026-10-16). So for an Argon
-  pull request, AGENTS.md's local `make check` and reviewing.md's
-  `make prepush` before a push are replaced by green CI on the draft before
-  any review. Before every commit and push, Claude repeats the pre-run
-  checks. Every git command Claude runs in the worktree has
+  from [running Codex](running-other-ai.md#running-codex). Before every
+  commit and push, Claude repeats the pre-run checks. Every git command Claude runs in the worktree has
   `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`,
   `-c core.hooksPath=/dev/null -c core.fsmonitor=false`, and
   `--no-ext-diff --no-textconv` for diffs; a push adds only the credential

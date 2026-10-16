@@ -1,15 +1,17 @@
 package web
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
 )
 
-// TestPathID pins what pathID refuses. Handler tests reach it only with
+// TestPathID pins what pathID refuses. Handler tests reach it mostly with
 // short or non-hex IDs; a moved hyphen is refused only by the position check,
 // and an appended one only by the length check, since both still leave 32 hex
-// digits for the decode.
+// digits for the decode. Upper-case hex digits decode too, so only the case
+// check refuses them (#1223; TestUpperCaseChannelURL covers a handler).
 func TestPathID(t *testing.T) {
 	t.Parallel()
 	const valid = "0123abcd-4567-89ef-0123-456789abcdef"
@@ -26,6 +28,9 @@ func TestPathID(t *testing.T) {
 		"non-hex":          "0123abcd-4567-89ef-0123-456789abcdeg",
 		"braces":           "{" + valid + "}",
 		"urn:uuid: prefix": "urn:uuid:" + valid,
+		"upper case":       strings.ToUpper(valid),
+		"mixed case":       "0123ABcd-4567-89ef-0123-456789abcdef",
+		"one upper digit":  "0123abcd-4567-89ef-0123-456789abcdeF",
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

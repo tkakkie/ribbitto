@@ -37,24 +37,35 @@ func (f fakeTopics) Get(_ context.Context, m org.Membership, channel, id kernel.
 
 func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 	for _, tt := range []struct {
-		name, method, query string
-		lookupErr           error
-		status              int
+		name, method, query, body string
+		htmx                      bool
+		lookupErr                 error
+		status                    int
 	}{
-		{"post", "POST", "", nil, 303},
-		{"invalid bound", "GET", "?before=bad", nil, 400},
-		{"malformed query", "GET", "?before=%zz", nil, 400},
-		{"unknown topic", "GET", "?before=bad", conversation.ErrTopicNotFound, 404},
-		{"lookup failure", "GET", "?before=bad", errors.New("offline"), 500},
+		{"post", "POST", "", "hello", false, nil, 303},
+		{"enhanced post", "POST", "", "hello", true, nil, 200},
+		// Validation fails before posting resolves the topic, so only the
+		// enhanced 422, which reads no history, looks the topic up itself.
+		{"enhanced invalid body", "POST", "", "", true, nil, 422},
+		{"enhanced invalid body, unknown topic", "POST", "", "", true, conversation.ErrTopicNotFound, 404},
+		{"enhanced invalid body, lookup failure", "POST", "", "", true, errors.New("offline"), 500},
+		{"invalid bound", "GET", "?before=bad", "", false, nil, 400},
+		{"malformed query", "GET", "?before=%zz", "", false, nil, 400},
+		{"unknown topic", "GET", "?before=bad", "", false, conversation.ErrTopicNotFound, 404},
+		{"lookup failure", "GET", "?before=bad", "", false, errors.New("offline"), 500},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			selected := kernel.ID{3}
 			var lookups [][3]kernel.ID
-			p := channelPages{channels: &fakeChannels{}, posting: testPoster(), topics: fakeTopics{err: tt.lookupErr, lookups: &lookups}}
+			writer := &fakePostingWriter{}
+			p := channelPages{channels: &fakeChannels{}, posting: testPosting(writer), topics: fakeTopics{err: tt.lookupErr, lookups: &lookups}}
 			// A nil message reader makes any unnecessary history read fail.
 			path := view.ConversationURL("acme", kernel.ID{1}, &selected)
-			r := httptest.NewRequest(tt.method, path+tt.query, strings.NewReader("body=hello&cursor=0"))
+			r := httptest.NewRequest(tt.method, path+tt.query, strings.NewReader(url.Values{"body": {tt.body}, "cursor": {"0"}}.Encode()))
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if tt.htmx {
+				r.Header.Set("HX-Request", "true")
+			}
 			r.SetPathValue("channelID", "01000000-0000-0000-0000-000000000000")
 			r.SetPathValue("topicID", "03000000-0000-0000-0000-000000000000")
 			w := httptest.NewRecorder()
@@ -62,12 +73,16 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 			if w.Code != tt.status {
 				t.Fatalf("status %d, body %s", w.Code, w.Body.String())
 			}
-			if tt.method == "POST" {
-				if len(lookups) != 0 || w.Header().Get("Location") != path {
-					t.Fatal("post must redirect without a separate topic lookup")
+			fragment := strings.Contains(w.Body.String(), `id="message-composer"`)
+			switch {
+			case tt.method == "POST" && tt.body != "":
+				if len(lookups) != 0 || writer.body != tt.body || fragment != tt.htmx || !tt.htmx && w.Header().Get("Location") != path {
+					t.Fatal("post must answer without a separate topic lookup")
 				}
-			} else if len(lookups) != 1 || lookups[0] != ([3]kernel.ID{{9}, {1}, {3}}) {
+			case len(lookups) != 1 || lookups[0] != ([3]kernel.ID{{9}, {1}, {3}}):
 				t.Fatalf("topic lookup scope: %v", lookups)
+			case tt.method == "POST" && (writer.body != "" || fragment != (tt.status == 422)):
+				t.Fatal("a refused topic must answer without a fragment or a write")
 			}
 		})
 	}

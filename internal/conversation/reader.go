@@ -48,7 +48,7 @@ func (s *Reader) One(ctx context.Context, m org.Membership, channelID kernel.ID,
 func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, before *int64) (ChannelPage, error) {
 	return s.page(ctx, m, channelID, topicID, func(reader historyReader) (Page, error) {
 		return reader.Before(ctx, m, channelID, topicID, before)
-	})
+	}, false)
 }
 
 // Around reads the older page holding event_seq around, with context on
@@ -56,10 +56,10 @@ func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID
 func (s *Reader) Around(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, around int64) (ChannelPage, error) {
 	return s.page(ctx, m, channelID, topicID, func(reader historyReader) (Page, error) {
 		return reader.Around(ctx, m, channelID, topicID, around)
-	})
+	}, false)
 }
 
-func (s *Reader) page(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, read func(historyReader) (Page, error)) (page ChannelPage, err error) {
+func (s *Reader) page(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, read func(historyReader) (Page, error), withPins bool) (page ChannelPage, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		reads := s.reads(snapshot)
 		loaded, err := loadSidebarContext(ctx, reads, m.Organization.ID, channelID, topicID)
@@ -71,6 +71,11 @@ func (s *Reader) page(ctx context.Context, m org.Membership, channelID kernel.ID
 		page.Page, err = read(s.history(snapshot, reads))
 		if err != nil {
 			return err
+		}
+		if withPins {
+			if page.Pins, err = s.pins(ctx, snapshot, reads, m, channelID); err != nil {
+				return err
+			}
 		}
 		seq, err := s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
 		if err != nil {

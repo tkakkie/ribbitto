@@ -40,6 +40,10 @@ func (v *readControlVisit) Topic(context.Context, unread.TopicScope, int64, int6
 	return nil
 }
 
+func (v *readControlVisit) Overview(ctx context.Context, m org.Membership, channel kernel.ID, topic *kernel.ID, before *int64, _ int64) (conversation.ChannelPage, error) {
+	return v.Page(ctx, m, channel, topic, before)
+}
+
 func (v *readControlVisit) Page(ctx context.Context, m org.Membership, channel kernel.ID, topic *kernel.ID, before *int64) (conversation.ChannelPage, error) {
 	page, err := v.fakeMessages.Page(ctx, m, channel, topic, before)
 	if v.reads.Load() == 0 {

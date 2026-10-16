@@ -40,20 +40,51 @@ comparison is structural; paging success uses positive cursors in
 `TestMessagePagingHandler`.
 
 `TestMessagePostHandler` covers ordinary/HX success (303/200) and validation
-errors (422). `TestMessagePagingHandler` covers Load older with and without
+errors (422) for feeds and topics; an HX topic fragment targets the posted
+message's topic. `TestTopicPostScopeAgainstPostgreSQL` keeps unknown,
+other-channel and non-member topic posts 404 with and without HX. `TestMessagePagingHandler` covers Load older with and without
 HX (200 full pages). `TestChannelHandlers` verifies that HX changes nothing
 for unenhanced channel creation (303/422). Plain posting errors and history
 responses assert the full layout; enhanced posting responses assert the
 composer alone, without another history read.
 
 Left to review, because a pattern check cannot prove them: that a stored
-value is only a UX setting, that a script owns no application state, and
-that a component makes no authorisation decision.
+value is only a UX setting or a draft entry within decision 37's bounds,
+that a script owns no application state beyond decisions 34 and 37, that a
+composer request URL comes from a server-rendered attribute, and that a
+component makes no authorisation decision.
 
-**Current exception:** review the no-application-state
+**Current exceptions:** review the no-application-state
 rule with [decision 34](../decisions/34-live-unread-counts.md)'s narrow allowance
 for one script's sidebar badge numbers and bounded recovery state. It never
-creates elements or makes requests.
+creates elements or makes requests. Review composer code with
+[decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)'s allowances: pending own posts, the idempotency key and
+session-bound drafts, with their bounds and owner checks.
+
+### Decision 37 checks
+
+Existing checks already cover part of it: the HTML-generation patterns
+(a pending item's body goes in through `textContent`), the `fetch`,
+`XMLHttpRequest` and `indexedDB` patterns, and `TestComponentsMarkup` for
+components rendered alone. Planned, each awaiting its issue:
+
+- #1173 extends the requests pattern to `htmx.ajax`, `sendBeacon`,
+  `WebSocket` and `EventSource`.
+- #1156 adds a browser test that a body with markup shows as text and that
+  the pending item is removed.
+- #1178 limits `localStorage` to the drafts script and tests the sign-in
+  cleanup: the millisecond rule with same-millisecond entries kept, a stale
+  sign-in page that never removes a newer session's entry, sign-out with the
+  sign-in page's scripts blocked, a failed sign-out, and a signed-in error
+  render with no cleanup.
+- #1181 tests organisation-page cleanup: a stale page of an earlier session
+  never removes a newer session's entry, a later member or session removes
+  the earlier entries, and a page whose session expires without a sign-in
+  navigation cleans up.
+- #1162 tests a controlled interleaving: a tab of an earlier session writes
+  after a later session's page has loaded and cleaned, and the later session
+  never restores that text. It also tests sign-out with two tabs open and a
+  debounced save pending.
 
 ### Shared browser tests
 
@@ -75,7 +106,9 @@ there if the load is still pending (#1129).
 
 Composer cases run real signal/post handlers with request and DOM gates: IME,
 input throttling, draft isolation, independent in-flight signals, 422/retry,
-replacement, closed/fresh generations and plain feed/topic posts (latest/older).
+replacement, closed/fresh generations, enhanced latest feed/topic posts and
+plain feed/topic posts (latest/older). `TestTopicPostBrowser` (`cmd/ribbitto`)
+posts from a topic view through real PostgreSQL and the real stream.
 The composer harness controls only the two-second throttle timer, without sleeps.
 Typing indicator cases use production handlers, stream lifecycle, owner and writer
 for A/feed/B scope, self-exclusion, English/Japanese counts, expiry, send, multiple
@@ -125,8 +158,9 @@ their contents can be mistaken for code, comments or delimiters. Delimiter
 depth is not scope analysis: block-level `var`, implicit globals and other
 indirect writes can escape it, while some named function expressions can
 look like declarations. Reviewers check these cases, all HTML writes and
-globals by hand. `localStorage` and `sessionStorage` pass mechanically; the
-check cannot prove that a stored value is only a non-sensitive UX setting.
+globals by hand. `localStorage` and `sessionStorage` pass mechanically
+until #1178 limits `localStorage` to the drafts script; the check cannot
+prove that a stored value is only a non-sensitive UX setting.
 
 ## Audit, 2026-10-01 (M3)
 

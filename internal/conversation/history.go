@@ -56,6 +56,8 @@ type ChannelPage struct {
 	Topics   []Topic
 	Current  Channel
 	Channels []Channel
+	// Pins are the channel's pins, newest first; only Overview reads them.
+	Pins []Pin
 	// EventCursor is the snapshot's organisation sequence, including on older pages.
 	EventCursor *int64
 }

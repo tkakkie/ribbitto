@@ -5,7 +5,10 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/tkakkie/ribbitto/internal/conversation"
 	"github.com/tkakkie/ribbitto/internal/kernel"
@@ -33,6 +36,7 @@ type snapshotFake struct {
 	// Sentinel lists, empty unless a test needs to see them reach its page.
 	channels []conversation.Channel
 	topics   []conversation.Topic
+	pins     []conversation.PinnedMessage
 }
 
 func (f *snapshotFake) InSnapshot(_ context.Context, fn func(platform.Snapshot) error) error {
@@ -72,6 +76,9 @@ func (f *snapshotFake) ListMessagesBefore(ctx context.Context, orgID, ch kernel.
 		return nil, err
 	}
 	return f.historyData.ListMessagesBefore(ctx, orgID, ch, topic, before, limit)
+}
+func (f *snapshotFake) ListChannelPins(context.Context, kernel.ID, kernel.ID) ([]conversation.PinnedMessage, error) {
+	return f.pins, f.step("pins")
 }
 func (f *snapshotFake) EventSeq(context.Context, kernel.ID) (int64, error) {
 	return 7, f.step("cursor")
@@ -134,6 +141,48 @@ func TestReaderMembersSnapshot(t *testing.T) {
 				t.Fatalf("calls/error = %v/%v, want %v/%v", f.calls, err, want, wantErr)
 			}
 		})
+	}
+}
+
+func TestReaderOverviewSnapshot(t *testing.T) {
+	membership := org.Membership{Organization: org.Organization{ID: kernel.ID{1}}}
+	// The page's reads, then the pins with their names, then the cursor.
+	order := []string{"snapshot", "reads", "channel", "channels", "topics", "members", "accounts", "history", "pins", "members", "accounts", "bind cursor", "cursor", "bind counts", "counts"}
+	pinnedAt := time.Unix(5, 0)
+	for _, fail := range []string{"", "channel", "history", "pins", "cursor"} {
+		t.Run("failure="+fail, func(t *testing.T) {
+			reader, f := testReader(t, fullHistory{})
+			f.fail, f.organizationID = fail, membership.Organization.ID
+			f.pins = []conversation.PinnedMessage{{Message: conversation.Message{ID: kernel.ID{8}, MemberID: kernel.ID{3}, Body: " a\n b "}, PinState: conversation.PinState{PinnedByMemberID: kernel.ID{3}, PinnedAt: pinnedAt}}}
+			page, err := reader.Overview(t.Context(), membership, kernel.ID{2}, nil, nil, 0)
+			want, wantErr := order, error(nil)
+			if fail != "" {
+				want, wantErr = order[:slices.Index(order, fail)+1], f.err
+			}
+			if !reflect.DeepEqual(f.calls, want) || !errors.Is(err, wantErr) {
+				t.Fatalf("calls/error = %v/%v, want %v/%v", f.calls, err, want, wantErr)
+			}
+			wantPins := []conversation.Pin{{Entry: conversation.Entry{Message: f.pins[0].Message, DisplayName: "Author"}, Excerpt: "a b", PinnerName: "Author", PinnedAt: pinnedAt}}
+			if fail == "" && (!reflect.DeepEqual(page.Pins, wantPins) || page.EventCursor == nil || *page.EventCursor != 7) || fail != "" && page.Pins != nil {
+				t.Fatalf("page = %+v", page)
+			}
+		})
+	}
+}
+
+func TestPinExcerpt(t *testing.T) {
+	long := strings.Repeat("é", conversation.PinExcerptLength)
+	for _, tt := range []struct{ body, want string }{
+		{"plain", "plain"},
+		{"  two\n\n\tlines  ", "two lines"},
+		{"<b dir=rtl>&amp;</b>", "<b dir=rtl>&amp;</b>"},
+		{long, long},
+		{long + "x", strings.Repeat("é", conversation.PinExcerptLength-1) + "…"},
+		{strings.Repeat("a", conversation.PinExcerptLength-2) + " bc", strings.Repeat("a", conversation.PinExcerptLength-2) + "…"},
+	} {
+		if got := conversation.PinExcerpt(tt.body); got != tt.want || utf8.RuneCountInString(got) > conversation.PinExcerptLength {
+			t.Errorf("PinExcerpt(%q) = %q, want %q", tt.body, got, tt.want)
+		}
 	}
 }
 

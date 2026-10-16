@@ -67,7 +67,8 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
 2. The implementer applies exactly those fixes and nothing else.
 3. The reviewer checks that the whole diff since the round-2 SHA contains
    only the named fixes, then re-runs the failing check or live test for
-   each finding — not the rest of the PR — and reports:
+   each finding — not the rest of the PR; on an Argon trial pull request,
+   reads CI instead — and reports:
 
    ```
    **Closure verification — <Claude|Codex>** (at <SHA>)
@@ -95,7 +96,8 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
    ready, convert it back to a draft first.)
 2. The AI that approved the pull request checks that the whole diff since
    the SHA it approved contains only those changes and that each one is
-   right, and reports:
+   right (on an Argon trial pull request, Codex checks a change Claude
+   wrote), and reports:
 
    ```
    **Copilot follow-up check — <Claude|Codex>** (at <SHA>)
@@ -125,8 +127,8 @@ reach the re-review without either AI checking it:
    gate) record instead why, and the alternative verification done: a
    scripted or manual reproduction, a mutation showing the guard matters,
    or the exact text change. Effort or time is never such a reason.
-2. The AI that did not write the fix (Claude ↔ Codex; Claude for Argon's)
-   checks that the diff since the reviewed head contains only that fix,
+2. The AI that did not write the fix (Claude ↔ Codex; never on an Argon
+   trial pull request, which leaves the trial at tier A or B) checks that the diff since the reviewed head contains only that fix,
    that it answers the original finding, and that the test fails without
    it — or that the recorded reason holds and the alternative verification
    was done; a reason it does not accept is ❌. It reports:

@@ -16,26 +16,29 @@ An issue is eligible only if its *Risk* is `normal`
 adversarial tier C and the C case it matches
 ([tiers](adversarial-review.md#which-review-runs)), for example
 `Argon (trial #1206; normal risk; expected tier C: ordinary feature work
-outside A and B)`. Tier A or B, or `high` risk, means Codex or Claude, as
-usual. The issue reviewer checks the expected tier like any other field; in
+outside A and B)`, and only if it can be verified without running its code
+locally: no `make dev` or browser check unless the maintainer runs it. Tier A
+or B, or `high` risk, means Codex or Claude, as usual. The issue reviewer checks the expected tier like any other field; in
 doubt, the higher tier, so not Argon. The maintainer confirms the implementer
 when adding `ready`. No M7 issue is picked unless the maintainer names it.
 
-**The tier follows the diff, not the expectation.** If an Argon pull
-request's diff matches tier A or B, it leaves the trial and the maintainer
-decides. Argon is the only adversarial reviewer, and an implementer never
+**The tier follows the diff, not the expectation.** If an Argon change
+matches tier A or B or touches a `high` risk path, it leaves the trial and the
+maintainer decides; Claude checks this against `origin/main` before every
+push and does not push such a change. Argon is the only adversarial reviewer, and an implementer never
 reviews its own work.
 
 ## Who does what
 
 - **Claude** reviews the pull request: the AI that did not implement it, at
   most two rounds ([reviewing](reviewing.md)). Claude also does the Copilot
-  follow-up check.
+  follow-up check of Argon's fixes. Closure verification and every check
+  re-run rely on CI, not on local runs.
 - **Argon** applies the review and Copilot fixes, in further runs in the same
   worktree. If it cannot finish a fix in one more run, the maintainer decides:
   reassign or stop.
-- **Codex** checks any fix Claude writes itself, since that is not Argon's
-  work.
+- **Codex** checks any fix Claude writes itself, a Copilot fix included,
+  since that is not Argon's work.
 - Argon's issues do not count towards Claude's and Codex's equal shares.
 
 ## The boundary
@@ -68,10 +71,11 @@ but enforced by configuration, not by the prompt.
   image written outside the worktree before the review guard existed. The
   review guard allows only reads (`cmd/argonreview/guard.go`), so the
   implementer gets its own trusted guard. It allows file reads, listing and
-  search inside the worktree; file creates and edits inside it, except any
-  `.git`, `.gitattributes`, `.gitmodules`, `.agents`, `.gemini`, `.claude`,
-  `GEMINI.md`, `AGENTS.md` or `CLAUDE.md` at any depth; and sandboxed
-  commands. It denies everything else. A guard that fails or prints nothing
+  search inside the worktree; file creates and edits inside it, except
+  `.github` and any `.git`, `.gitattributes`, `.gitmodules`, `.agents`,
+  `.gemini`, `.claude`, `.codex`, `.mcp.json`, `GEMINI.md`, `AGENTS.md`,
+  `AGENTS.override.md`, `CLAUDE.md` or `CLAUDE.local.md` at any depth; and
+  sandboxed commands. It denies everything else. A guard that fails or prints nothing
   is a denial. The guard checks each path component without following symlinks and refuses a symlink or a
   path that leaves the worktree, because Argon's file tools run outside the
   command sandbox and a command can create a symlink; it also refuses every
@@ -80,11 +84,10 @@ but enforced by configuration, not by the prompt.
 - **No workspace hooks or customisation.** Workspace hooks run commands
   outside the sandbox ([running Argon](running-argon.md#the-boundary)).
   Before every run, fix runs included, Claude checks that the worktree has
-  no symlink, no `.agents`, `.gemini` or `.claude` entry, no nested `.git`,
-  no `GEMINI.md` and no other workspace-loaded configuration at any depth,
-  that the tracked `AGENTS.md`, `CLAUDE.md`, `.gitattributes` and
-  `.gitmodules` match `origin/main` and no other copy exists, and that its
-  `.git` file is unchanged; it stops otherwise. The two tracked
+  no symlink, no nested `.git` and none of the guard's other refused names
+  that `origin/main` does not track, at any depth; that `.github` and the
+  tracked `AGENTS.md`, `CLAUDE.md`, `.gitattributes` and `.gitmodules` match
+  `origin/main`; and that its `.git` file is unchanged; it stops otherwise. The two tracked
   files are loaded as instructions, as in reviews, and the guard keeps Argon
   from editing them.
 - **A minimal environment for every command, tests Argon writes included.**

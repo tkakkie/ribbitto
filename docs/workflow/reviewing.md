@@ -4,8 +4,8 @@
 pull request, the AI that did not implement it. Claude's work → Codex;
 Codex's work → Claude; Argon's work → Claude, and a fix Claude writes
 there → Codex ([Argon's pull requests](argon-pull-requests.md)).
-Claude's work includes issues, review fixes and implementation only when
-the maintainer names Claude for a specific issue.
+Claude's own work is its issues, the fixes it writes during a review, and
+an issue the maintainer named Claude to implement.
 
 **How many rounds:** at most **two** reviews by the other AI per issue or
 pull request, counting re-reviews. Copilot and the adversarial review do

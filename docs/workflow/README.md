@@ -48,7 +48,7 @@ disagree, fix the disagreement in a pull request.
 | Who | Does |
 |---|---|
 | Maintainer | Writes rough ideas, approves issues, decides every merge. |
-| Claude | Writes and details issues, orchestrates (drives the other CLIs), reviews Codex's and Argon's pull requests, and does the [CI-only handoff](running-other-ai.md#handoff-of-another-ais-code). |
+| Claude | Writes and details issues, orchestrates (drives the other CLIs), reviews Codex's issues and pull requests and Argon's pull requests, and does the [CI-only handoff](running-other-ai.md#handoff-of-another-ais-code). |
 | Codex | Writes issues, implements tier A, `high` risk and other work Argon may not take, reviews Claude's work, and runs the adversarial review of Argon's tier B pull requests ([Argon's pull requests](argon-pull-requests.md)). |
 | Copilot | Reviews each pull request **once** (not a [docs-only](copilot.md#docs-only-pull-requests) one), at **Lite**, guided by `.github/instructions/code-review.instructions.md`. The orchestrating AI requests that review by hand on the draft (`gh pr edit <n> --add-reviewer @copilot`, verified on #681), after the cross-review approves and `main` is merged, and before the initial adversarial review. The `main` ruleset does not request it on ready, and drafts and new pushes do not trigger it; re-request it by hand if a later change needs another look. Advisory. Balanced is not used: it can only be chosen by hand in the *Reviewers* panel, and the CLI and API cannot set the effort. |
 | Antigravity / Argon | One required adversarial review for tier A and tier B pull requests, through `cmd/argonreview` ([running it](running-argon.md)), except its own: Codex reviews Argon's tier B pull requests ([Argon's pull requests](argon-pull-requests.md)). Findings are advisory. Implements eligible normal-risk tier B and C issues, reviewed by Claude ([as implementer](argon-implementer.md)). Optional: the occasional documentation audit (below), UI screenshot review and experiments. |
@@ -75,7 +75,7 @@ idea (maintainer, one line) or finding (AI)
   → maintainer reads it → adds `ready`, or comments  ← gate 1
 ```
 
-- The author proposes the *Implementer* (Codex or Argon for an
+- The author proposes the *Implementer* (Codex, or Argon for an
   [eligible issue](argon-implementer.md#which-issues); Claude only when
   the maintainer names Claude for that issue); the maintainer confirms
   or changes it when adding `ready`.

@@ -40,7 +40,9 @@ comparison is structural; paging success uses positive cursors in
 `TestMessagePagingHandler`.
 
 `TestMessagePostHandler` covers ordinary/HX success (303/200) and validation
-errors (422). `TestMessagePagingHandler` covers Load older with and without
+errors (422) for feeds and topics; an HX topic fragment targets the posted
+message's topic. `TestTopicPostScopeAgainstPostgreSQL` keeps unknown,
+other-channel and non-member topic posts 404 with and without HX. `TestMessagePagingHandler` covers Load older with and without
 HX (200 full pages). `TestChannelHandlers` verifies that HX changes nothing
 for unenhanced channel creation (303/422). Plain posting errors and history
 responses assert the full layout; enhanced posting responses assert the
@@ -75,7 +77,9 @@ there if the load is still pending (#1129).
 
 Composer cases run real signal/post handlers with request and DOM gates: IME,
 input throttling, draft isolation, independent in-flight signals, 422/retry,
-replacement, closed/fresh generations and plain feed/topic posts (latest/older).
+replacement, closed/fresh generations, enhanced latest feed/topic posts and
+plain feed/topic posts (latest/older). `TestTopicPostBrowser` (`cmd/ribbitto`)
+posts from a topic view through real PostgreSQL and the real stream.
 The composer harness controls only the two-second throttle timer, without sleeps.
 Typing indicator cases use production handlers, stream lifecycle, owner and writer
 for A/feed/B scope, self-exclusion, English/Japanese counts, expiry, send, multiple

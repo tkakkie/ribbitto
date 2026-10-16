@@ -15,8 +15,6 @@ enhancement, not full parity.
   keyboard shortcuts (Enter to send), and local-time display. Without
   JavaScript a page may lack these, but nothing core breaks.
 
-Topic views use plain composer submissions.
-
 ## Go handlers
 
 Handlers in `internal/web` validate requests, call use cases, convert results

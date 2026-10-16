@@ -45,12 +45,16 @@ request's head, and gets the diff on stdin
 ([who does what](argon-implementer.md#who-does-what)):
 
 ```sh
-# $W: Argon's worktree; $clean: a clean worktree at origin/main.
+# $W: Argon's worktree; $clean: a clean worktree at origin/main; $base:
+# origin/main for a review, or the approved SHA for a follow-up check.
 # gh pr checks fails unless CI is green, which the review needs first.
-diff=$(mktemp) &&
-  env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
-    GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
-    -c core.fsmonitor=false diff --no-ext-diff --no-textconv origin/main...HEAD > "$diff" &&
+g() { env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
+  GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
+  -c core.fsmonitor=false "$@"; }
+diff=$(mktemp) && head=$(g rev-parse HEAD) &&
+  test "$head" = "$(gh pr view P --json headRefOid -q .headRefOid)" &&
+  echo "Compared: $base..$head" > "$diff" &&
+  g diff --no-ext-diff --no-textconv "$base...$head" >> "$diff" &&
   gh pr view P --json title,body,comments,headRefOid >> "$diff" &&
   gh pr checks P >> "$diff" &&
   gh issue view N --json title,body,comments >> "$diff" &&

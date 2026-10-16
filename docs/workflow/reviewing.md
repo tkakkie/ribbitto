@@ -97,7 +97,8 @@ reach the maintainer unreviewed. If answering Copilot needs a change:
 2. The AI that approved the pull request checks that the whole diff since
    the SHA it approved contains only those changes and that each one is
    right (on an Argon trial pull request, Codex checks a change Claude
-   wrote), and reports:
+   wrote, from CI and a diff on stdin, never in Argon's tree:
+   [who does what](argon-implementer.md#who-does-what)), and reports:
 
    ```
    **Copilot follow-up check — <Claude|Codex>** (at <SHA>)

@@ -39,6 +39,10 @@ directly, or `limit 1800 claude -p "…" < /dev/null`.
 Post the result with `gh issue comment` / `gh pr comment`. Do not rely on
 GitHub's `@codex review`: it looks only at the most severe problems.
 
+On an Argon trial pull request, Codex runs in a clean worktree of
+`origin/main`, never at the pull request's head, and gets the diff on stdin
+([who does what](argon-implementer.md#who-does-what)).
+
 Argon implementing a trial issue runs under its own boundary, preflight and
 handoff, in [`argon-implementer.md`](argon-implementer.md); Claude reviews
 its work.

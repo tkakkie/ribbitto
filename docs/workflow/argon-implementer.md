@@ -6,8 +6,11 @@ issues**. Everything else in this directory stays as it is. The cap is the
 preflight plus at most 3 trial pull requests, retries included. The trial ends
 at the cap or on 2026-11-30, whichever comes first, and at once if a boundary
 below fails. At the cap it stops and reports, even without a conclusion
-([investigations](investigations.md)). Nothing here runs before the preflight
-is recorded on #1206.
+([investigations](investigations.md)).
+
+**Start gate.** No trial run starts until the pull request for
+[#1221](https://github.com/tkakkie/ribbitto/issues/1221) is merged and
+#1206 records a preflight (below) that passed in full.
 
 ## Which issues
 
@@ -17,16 +20,18 @@ adversarial tier C and the C case it matches
 ([tiers](adversarial-review.md#which-review-runs)), for example
 `Argon (trial #1206; normal risk; expected tier C: ordinary feature work
 outside A and B)`, and only if it can be verified without running its code
-locally: no `make dev` or browser check unless the maintainer runs it. Tier A
-or B, or `high` risk, means Codex or Claude, as usual. The issue reviewer checks the expected tier like any other field; in
-doubt, the higher tier, so not Argon. The maintainer confirms the implementer
-when adding `ready`. No M7 issue is picked unless the maintainer names it.
+locally: no `make dev` or browser check unless the maintainer runs it. Argon
+runs no commands, so CI is its only build and test. Tier A or B, or `high`
+risk, means Codex or Claude, as usual. The issue reviewer checks the expected
+tier like any other field; in doubt, the higher tier, so not Argon. The
+maintainer confirms the implementer when adding `ready`. No M7 issue is
+picked unless the maintainer names it.
 
 **The tier follows the diff, not the expectation.** If an Argon change
 matches tier A or B or touches a `high` risk path, it leaves the trial and the
 maintainer decides; Claude checks this against `origin/main` before every
-push and does not push such a change. Argon is the only adversarial reviewer, and an implementer never
-reviews its own work.
+push and does not push such a change. Argon is the only adversarial
+reviewer, and an implementer never reviews its own work.
 
 ## Who does what
 
@@ -36,9 +41,13 @@ reviews its own work.
   re-run rely on CI, not on local runs.
 - **Argon** applies the review and Copilot fixes, in further runs in the same
   worktree. If it cannot finish a fix in one more run, the maintainer decides:
-  reassign or stop.
+  reassign or stop. A reassigned issue restarts from a clean `origin/main`.
 - **Codex** checks any fix Claude writes itself, a Copilot fix included,
-  since that is not Argon's work.
+  since that is not Argon's work. It reads CI and a diff Claude makes with
+  the hardened git settings below and passes on stdin, and it runs in a clean
+  worktree of `origin/main`, never in Argon's.
+- No AI runs a build, a test or a tool from a tree that holds Argon's
+  commits; CI checks them.
 - Argon's issues do not count towards Claude's and Codex's equal shares.
 
 ## The boundary
@@ -53,7 +62,14 @@ but enforced by configuration, not by the prompt.
   `--dangerously-skip-permissions`. `agy` runs in its own session under a
   supervisor like the review launcher's (`cmd/argonreview/supervise.go`),
   which stops every process in that session after the run and confirms
-  none is left; a process that calls `setsid` leaves it, as for reviews.
+  none is left. `agy` starts from an empty environment except `PATH`,
+  `HOME` and a fresh `TMPDIR` beside the worktree, removed after the run:
+  no `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK` or credential helper.
+- **No commands** (maintainer, 2026-10-16). `run_command` and every other
+  command tool are refused, by the deny rule `command(*)` and by the guard.
+  The #1206 preflight showed that a command under `agy --sandbox` reaches
+  loopback services outside it. Allowing commands again is a later stage,
+  after this trial.
 - **Its own `HOME`.** A dedicated Antigravity home, signed in once by the
   maintainer, shared only with the shadow trial of
   [#1207](https://github.com/tkakkie/ribbitto/issues/1207); the two trials
@@ -63,47 +79,39 @@ but enforced by configuration, not by the prompt.
   The account's `~/.gemini/antigravity-cli/settings.json` is never edited,
   not even temporarily with a restore; its hash is checked before and after
   every run, as the review launcher does. Before and after every run,
-  Claude also checks that the dedicated home's own settings, hooks and MCP
-  files are the ones written and that it holds no customisation or symlink;
-  it stops otherwise.
+  Claude checks that the home's own settings, hooks and MCP files are the
+  ones written and that it holds no symlink and, at any depth outside those
+  files, none of: the customisation `prepare` refuses
+  (`cmd/argonreview/prepare.go`); `AGENTS.md`, `AGENTS.override.md`,
+  `GEMINI.md`, `CLAUDE.md`, `CLAUDE.local.md`; `.claude`, `.codex`,
+  `.mcp.json`; `.agents`, `.agent`, `_agents`, `_agent`; `hooks.json`,
+  `plugin.json`, `skills.json`, `plugins.json`. It stops otherwise. The
+  home's conversation store (`brain/`) is emptied before and after every
+  run, of either trial.
 - **A fail-closed tool allowlist.** Deny rules cannot name `search_web`,
-  subagents, `generate_image` or `schedule`, and #1041 saw web access and an
-  image written outside the worktree before the review guard existed. The
-  review guard allows only reads (`cmd/argonreview/guard.go`), so the
-  implementer gets its own trusted guard. It allows file reads, listing and
-  search inside the worktree; file creates and edits inside it, except
-  `.github` and any `.git`, `.gitattributes`, `.gitmodules`, `.agents`,
-  `.gemini`, `.claude`, `.codex`, `.mcp.json`, `GEMINI.md`, `AGENTS.md`,
-  `AGENTS.override.md`, `CLAUDE.md` or `CLAUDE.local.md` at any depth; and
-  sandboxed commands. It denies everything else. A guard that fails or prints nothing
-  is a denial. The guard checks each path component without following symlinks and refuses a symlink or a
-  path that leaves the worktree, because Argon's file tools run outside the
-  command sandbox and a command can create a symlink; it also refuses every
-  file tool call while the worktree holds a symlink at any depth. The guard
-  and its configuration live outside the worktree, where Argon cannot write.
+  subagents, `generate_image` or `schedule`, so a trusted guard, apart from
+  the review guard (`cmd/argonreview/guard.go`), allows only file reads,
+  listing and search inside the worktree, and file creates and edits
+  inside it. It refuses, case-insensitively and at any depth, `.github` and
+  any `.git`, `.gitattributes`, `.gitmodules`, `.agents`, `.agent`,
+  `_agents`, `_agent`, `.gemini`, `.claude`, `.codex`, `.mcp.json`,
+  `hooks.json`, `plugin.json`, `skills.json`, `plugins.json`, `GEMINI.md`,
+  `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md` or `CLAUDE.local.md`. It
+  denies every other tool. A guard that fails or prints nothing is a
+  denial. It checks each path component without following symlinks,
+  refuses a symlink or a path that leaves the worktree, and refuses every
+  file tool call while the worktree holds a symlink. The guard and its
+  configuration live outside the worktree, where Argon cannot write.
 - **No workspace hooks or customisation.** Workspace hooks run commands
   outside the sandbox ([running Argon](running-argon.md#the-boundary)).
   Before every run, fix runs included, Claude checks that the worktree has
-  no symlink, no nested `.git`, none of the guard's other refused names that
+  no symlink, no nested `.git`, none of the guard's refused names that
   `origin/main` does not track and no other workspace-loaded configuration,
-  at any depth; that `.github` and the
-  tracked `AGENTS.md`, `CLAUDE.md`, `.gitattributes` and `.gitmodules` match
-  `origin/main`; and that its `.git` file is unchanged; it stops otherwise. The two tracked
-  files are loaded as instructions, as in reviews, and the guard keeps Argon
-  from editing them.
-- **A minimal environment for every command, tests Argon writes included.**
-  A dedicated `HOME` does not remove inherited credentials. The run starts
-  from an empty environment except `PATH`, `HOME`, a fresh `TMPDIR` beside
-  the worktree, not in it, as reviews keep theirs
-  (`cmd/argonreview/review.go`), removed after the run, the caches set
-  inside the worktree as in Codex's handoff (`GOCACHE`,
-  `GOMODCACHE`, `GOPATH` and `GOLANGCI_LINT_CACHE` under `bin/.cache/`),
-  `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`. There is no
-  `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK`, credential helper or keychain
-  access. The sandbox holds for child processes: writes only inside the
-  worktree, no reads of the account's files outside it (the Go toolchain
-  aside), and network only to the Go module proxy, the checksum database
-  and the local test database.
+  at any depth; that `.github` and the tracked `AGENTS.md`, `CLAUDE.md`,
+  `.gitattributes` and `.gitmodules` match `origin/main`; and that its
+  `.git` file is unchanged. It stops otherwise. The two tracked files are
+  loaded as instructions, as in reviews, and the guard keeps Argon from
+  editing them.
 - **Also denied:** `git commit` and `push`, `gh`, other AI CLIs, browsers, MCP
   and URL reads. Argon never holds GitHub credentials, never pushes, and
   never opens or merges a pull request.
@@ -127,49 +135,37 @@ but enforced by configuration, not by the prompt.
 
 ## Preflight
 
-Before any trial issue, a minimal preflight of the known dangerous
-crossings, tested on effects as in #1041 and #1071, in a throwaway
-repository, through Argon's own tools **and** through an allowed Go test with
-harmless sentinels. Each of these is denied or has no effect:
+Before any trial issue, a minimal preflight tested on effects as in #1041
+and #1071, in a throwaway repository, through Argon's own tools. Each of
+these is refused or has no effect:
 
-- reads outside the worktree (absolute, `..`, symlink) and an environment
-  sentinel;
-- writes outside the worktree, and a symlink made by a command then read or
-  written with Argon's file tools in the same run: by path, through a
-  directory searched or listed (`list_dir`, `grep_search`, `find_by_name`),
-  and swapped in a race with a file tool;
-- a symlink a command plants in `agy`'s `TMPDIR`;
-- edits to `.git`, `.claude/**` and a nested `AGENTS.md`, by file tools and
-  by commands;
-- `.agents/hooks.json` created by a command, in the same run and in the
-  next;
-- a background process that leaves the worktree's directory: the supervisor
-  stops it, or the trial stops;
-- a command reading the dedicated home's sign-in token, changing its
-  settings or hooks, or planting a symlink in its conversation store
-  (`brain/`); if any works, the trial stops;
-- `search_web`, a subagent, `generate_image`, `schedule` and a failing guard;
-- commit, push, `gh`, another AI CLI and an outside host that is not allowed;
-- **a local service other than the test database:** a loopback listener the
-  probe starts outside the sandbox, standing for the Antigravity app, editor
-  helpers or browser debugging ports that listen on this machine. If Argon's
-  sandbox can reach it, the trial stops there and the maintainer decides.
+- **commands:** `run_command`, plainly, through a shell and in the
+  background; and a loopback listener started outside, as in the
+  [#1206 probe](https://github.com/tkakkie/ribbitto/issues/1206#issuecomment-6216008404),
+  logs no request;
+- reads outside the worktree (absolute, `..`, symlink) and writes outside
+  it;
+- edits to the guard's refused names, among them `.git`, `.github`,
+  `.claude`, a nested `AGENTS.md`, `.agent/hooks.json` and
+  `_agents/plugin.json`;
+- in the dedicated home: reading the sign-in token, changing its settings
+  or hooks, and reading or writing a regular file in `brain/`;
+- URL reads, MCP, browser tools, `search_web`, a subagent,
+  `generate_image`, `schedule` and a failing guard;
+- commit, push, `gh` and another AI CLI.
 
 The account's shared settings stay unchanged. Telemetry and AI credits are
 confirmed off in the home used, as running-argon.md records for the review
 home. #1041's accepted data and cost terms (the flat fee only; no API key and
 no pay-as-you-go) are confirmed to cover write-mode use. If any of this
 cannot be verified, the trial stops and the maintainer gets the reason.
-Argon's reviews of #1208 named the symlink, background-process, same-run
-hook, `TMPDIR` and dedicated-home cases; the preflight tests them on effects instead of the
-trial building more mechanism first (maintainer, 2026-10-16).
 
 ## Records
 
 - **Per trial pull request,** one comment on #2: the issue, the final tier,
   review rounds and blocking findings, Argon's runs (count, time, failures),
-  rework (fixes by Argon, changes Claude or Codex had to make) and CI
-  failures.
+  rework (fixes by Argon, changes Claude or Codex had to make), CI failures,
+  and the CI round trips and fix effort caused by Argon running no commands.
 - **Weekly while the trial runs,** one comment on #1206, not #2, so it does
   not trigger retrospectives. Per AI (Claude, Codex, Antigravity, Copilot):
   whether a limit was hit, when and what it stopped, the runs by role, and

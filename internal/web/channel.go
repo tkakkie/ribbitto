@@ -442,7 +442,7 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	case errors.Is(err, conversation.ErrPostKeyReused):
 		// Not a retry: keep the text, name the stored message and issue a
 		// fresh key, so sending again posts the new text.
-		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, IdempotencyKey: freshKey()})
+		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, SentBody: posted.Body, IdempotencyKey: freshKey()})
 	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member.

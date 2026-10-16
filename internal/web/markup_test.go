@@ -816,6 +816,15 @@ func TestPagesMarkup(t *testing.T) {
 				if c.alerts > 0 {
 					alerts := 0
 					for n := range doc.Descendants() {
+						// The composer's send alert is an empty live region the
+						// script fills after a failed send (#1179); a render never
+						// fills it.
+						if attr(n, "id") == "message-send-alert" {
+							if n.FirstChild != nil {
+								t.Error("a render filled the send alert")
+							}
+							continue
+						}
 						if attr(n, "role") == "alert" {
 							alerts++
 						}

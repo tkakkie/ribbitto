@@ -26,7 +26,10 @@ rules marked ✓; a new route fails the test until it has a rendered case.
   valid inputs omit both attributes. Sign-in uses `textField` with empty
   field errors and keeps one form-level alert. A radio group's error (the
   channel image picker) is its own alert: every radio in the group has
-  `aria-invalid="true"` and is described by it.
+  `aria-invalid="true"` and is described by it. A failed enhanced send fills
+  the composer's empty `#message-send-alert` (`role="alert"`), outside the
+  swapped state, with a server-rendered text saying whether it was not sent,
+  could not be confirmed or was recovered.
 - **References resolve.** ✓ IDs are unique; `for`, `aria-describedby` and
   `aria-labelledby` targets exist in the rendered document or fragment, and
   `form` targets in the page.

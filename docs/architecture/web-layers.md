@@ -46,12 +46,13 @@ htmx does only requests and swaps; the server and templ own the HTML.
   independent `this:drop` synchronization and no swap. Input/IME glue only triggers
   htmx. On success the state's
   `data-posted-message` carries the posted message's DOM id; errors omit it,
-  except a 409, which names the stored message. A field error sets its
+  except a 409, which names the stored message and carries its body in
+  `data-sent-body`. Sends time out after 30 s (`hx-request`). A field error sets its
   `data-invalid`, copied to the textarea's `aria-invalid`. Every composer has a hidden
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.
   Composers on `?before=` pages omit it, so posting reads only the author's own message.
-  `message-composer-v8.js` copies `#organization-stream`'s applied-and-shown
+  `message-composer-v9.js` copies `#organization-stream`'s applied-and-shown
   `data-event-cursor` on each submit only when the form has a cursor field,
   including after composer replacement; it never adds one.
   Fragments echo the submitted cursor; only stream application advances it. The action URL identifies the feed/topic. The stream script consumes that id to scroll once the item is present,

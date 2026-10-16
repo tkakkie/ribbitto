@@ -101,7 +101,7 @@ so local notes and tools do not change the output.
 ### Checks
 
 `make check` must pass before a pull request; for code another AI wrote,
-green CI on the draft must pass before review
+green CI on the draft replaces it and must pass before review
 ([handoff](docs/workflow/running-other-ai.md#handoff-of-another-ais-code)).
 It runs `check-static`, `check-test` and `check-tools` in order. CI runs them in
 parallel, with `check-test` once per [`tools/testshard`](tools/testshard/main.go)

@@ -33,8 +33,8 @@ Follow [`docs/workflow/`](docs/workflow/README.md); new measurement work needs a
 
 - `make check` — checks formatting (Go and templ), vets, lints, builds and
   tests (race detector on); must pass before you open a pull request
-  (another AI's: green CI before review). Format templates with
-  `./bin/templ fmt <path>`.
+  (another AI's: green CI on the draft instead, before review).
+  Format templates with `./bin/templ fmt <path>`.
 - `make vuln` — runs `govulncheck`; needs the network, so CI runs it,
   not `make check`.
 - `make lint` — runs golangci-lint.
@@ -134,8 +134,8 @@ only the token utilities, never raw colours; checked by `tools/sourcecheck`), [`
 - Fill in the pull request template briefly. UI changes say how to see
   them (`make dev`, the URL and any configuration, e.g.
   `RIBBITTO_SIGNUP=on`) and what was checked in a browser. Screenshots are
-  needed only when the look itself is the point (tokens, layout, polish)
-  or the maintainer asks for them; whoever can upload them attaches them.
+  needed only when the look itself is the point or the maintainer asks
+  for them; whoever can upload them attaches them.
 - Do not push to `main`. Do not decide to merge pull requests. The
   maintainer decides every merge; an AI may execute the merge only after
   an explicit maintainer instruction for that specific pull request. No

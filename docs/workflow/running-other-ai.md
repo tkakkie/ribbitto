@@ -57,8 +57,8 @@ difference between the AIs, enough safety for practice, little to operate.
   `go test`, a build, `make dev` or any tool from that tree.
 - **CI is the check.** GitHub Actions runs pull request code with read-only
   access and no secrets. Green CI on the draft replaces the local
-  `make check` before the first review and `make prepush` before a
-  follow-up push; closure verification and follow-up checks read CI
+  `make check` before the first review; after a follow-up push, green CI
+  on the pushed head replaces `make prepush`; closure verification and follow-up checks read CI
   instead of re-running anything.
 - **Still done on the host:** code and diff review, the credential grep on
   `PR_BODY.md` ([below](#running-codex)), and Argon's protected-file and

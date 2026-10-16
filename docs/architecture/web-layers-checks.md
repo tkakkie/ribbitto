@@ -50,11 +50,12 @@ for unenhanced channel creation (303/422). Plain posting errors and history
 responses assert the full layout; enhanced posting responses assert the
 composer alone, without another history read.
 
-Left to review, because a pattern check cannot prove them: that a stored
-value is only a UX setting or a draft entry within decision 37's bounds,
-that a script owns no application state beyond decisions 34 and 37, that a
-composer request URL comes from a server-rendered attribute, and that a
-component makes no authorisation decision.
+Reviewers check what patterns cannot prove: stored values stay within UX settings,
+decision 37's drafts or [decision 41](../decisions/41-client-storage-indexeddb-by-data-class.md)'s
+classes (1 public, 2 organisation, 3 message content, requiring its own
+decision); a script owns no application state beyond decisions 34 and 37;
+composer request URLs come from server-rendered attributes; components make
+no authorisation decisions.
 
 **Current exceptions:** review the no-application-state
 rule with [decision 34](../decisions/34-live-unread-counts.md)'s narrow allowance
@@ -65,19 +66,20 @@ session-bound drafts, with their bounds and owner checks.
 
 ### Decision 37 checks
 
-Existing checks already cover part of it: the HTML-generation patterns
-(a pending item's body goes in through `textContent`), the requests
-patterns (since #1173 also `htmx.ajax`, `sendBeacon`, `WebSocket` and
-`EventSource`) and the `indexedDB` pattern, and `TestComponentsMarkup` for
-components rendered alone. Since #1178, `TestBrowser/drafts` covers the
-sign-in cleanup: the millisecond rule, same-millisecond and newer entries
-kept, malformed keys removed, the notice in another tab, sign-out with
-scripts blocked, a failed sign-out, and a signed-in error render with no
-cleanup. Since #1181, `TestBrowser/drafts-org` covers both organisation
-pages: a stale page keeps newer and same-millisecond sessions' entries
-unread, a later member or session removes earlier ones, each malformed key
-and own value goes, and an expiring page cleans up. Planned, each awaiting
-its issue:
+Existing checks cover HTML generation (pending bodies use `textContent`),
+requests (since #1173 also `htmx.ajax`, `sendBeacon`, `WebSocket` and
+`EventSource`) and components rendered alone (`TestComponentsMarkup`). The
+`indexedDB` pattern stays in force in every application script until the
+first allowed use; its issue makes the check file-scoped, as `localStorage`
+is limited to `message-drafts-vN.js`. No checks change for decision 41.
+Since #1178, `TestBrowser/drafts` covers sign-in cleanup: the millisecond
+rule, same-millisecond and newer entries kept, malformed keys removed,
+the notice in another tab, sign-out with scripts blocked, failed sign-out,
+and a signed-in error render with no cleanup. Since #1181,
+`TestBrowser/drafts-org` covers both organisation pages: a stale page keeps
+newer and same-millisecond sessions' entries unread, a later member or
+session removes earlier ones, each malformed key and own value goes, and an
+expiring page cleans up. Planned, each awaiting its issue:
 
 - #1156 adds a browser test that a body with markup shows as text and that
   the pending item is removed.
@@ -161,8 +163,7 @@ their contents can be mistaken for code, comments or delimiters. Delimiter
 depth is not scope analysis: block-level `var`, implicit globals and other
 indirect writes can escape it, while some named function expressions can
 look like declarations. Reviewers check these cases, all HTML writes and
-globals by hand. The check cannot prove that a stored value is only a
-non-sensitive UX setting or a draft entry.
+globals by hand. Stored values need the review described above.
 
 ## Audit, 2026-10-01 (M3)
 

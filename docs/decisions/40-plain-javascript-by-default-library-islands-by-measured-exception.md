@@ -68,9 +68,10 @@ All of these, stated in the feature's own issue:
   list, sidebar, counts and presence stay server-rendered. Requests and
   storage follow decision 37 and the *Storage* rules in
   [`web-javascript.md`](../architecture/web-javascript.md), and any later
-  decision that changes them (client storage: #1244) applies to islands as
-  to plain scripts. Each island is a scoped exception to decision 19,
-  listed there like decisions 34 and 37.
+  decision that changes them (client storage:
+  [decision 41](41-client-storage-indexeddb-by-data-class.md)) applies to
+  islands as to plain scripts. Each island is a scoped exception to decision
+  19, listed there like decisions 34 and 37.
 - **Toolchain:** a vendored file needs no exception. npm and a build step
   need the adopting decision to name them as an exception to decision 2 and
   [decision 35](35-tooling-in-go.md). For Svelte that is #1172, #1194,

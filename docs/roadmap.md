@@ -131,11 +131,8 @@ old one. Roughly in this order:
 1. **Revisit the constraints (short).** Measure in the browser: input
    latency, INP, switching, initial JavaScript, memory. Then
    decide, each in its own issue and on measurements or a prototype: the
-   front end's roles, including whether Svelte islands serve client-state UI
-   such as the composer (decisions
-   [2](decisions/02-server-rendered-html-with-htmx-not-an-spa.md) and
-   [19](decisions/19-web-layers-server-owned-html-htmx-swaps-javascript-as-enhancement.md)),
-   tried first in one composer prototype with a size and INP budget; composer
+   front end's roles, set by
+   [decision 40](decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md); composer
    state and browser storage, set by
    [decision 37](decisions/37-composer-javascript-pending-posts-keys-and-drafts.md);
    a body format and safe rendering, set by

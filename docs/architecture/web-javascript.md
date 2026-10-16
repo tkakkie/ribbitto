@@ -7,7 +7,9 @@ JavaScript responsibilities and constraints for browser enhancements.
 JavaScript generates no HTML and owns no application state. It supplies focus, scroll,
 keyboard, local time, selection constraints, copying to the clipboard, and
 htmx/SSE input glue. The bounded composer state of decision 37 is the
-[composer](#composer) exception.
+[composer](#composer) exception. Scripts are plain JavaScript; a UI-library
+island comes only as a scoped exception under [decision 40](../decisions/40-plain-javascript-by-default-library-islands-by-measured-exception.md),
+and none exists today.
 
 **Exception ([#1039](../decisions/34-live-unread-counts.md)):**
 [decision 34](../decisions/34-live-unread-counts.md) lets one script own

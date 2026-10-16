@@ -45,6 +45,7 @@ index below for everything else.
 | **message** | A post in a channel, written by a member. |
 | **reply** *(planned)* | A message linked to an earlier message it answers in the same channel. |
 | **reply chain** *(planned)* | A selected message's ancestor path and all its descendants, in `event_seq` order. |
+| **quote** *(planned)* | A message's copy of an earlier message's text in the same channel, with its author and a link; the copy belongs to the quoting message ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)). |
 | **pin** *(UI planned)* | A channel's reference to an important message, shown in its overview panel. |
 | **topic** | A named conversation inside a channel; every channel message is in exactly one. |
 | **default topic** | The one topic every channel has, where a message goes when no topic is chosen. Not the default channel. |

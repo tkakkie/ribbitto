@@ -93,12 +93,10 @@ text on the page. Order: #1178 → #1181 → #1162 → #1177.
   `uuidv7()` read from PostgreSQL in the request (`identity.SessionHorizon`,
   #1178), the same clock as session ids, never the web server's. Cleanup
   compares the 48-bit millisecond prefix and removes only entries **strictly
-  older** than the horizon, plus malformed ones; other sessions'
-  same-millisecond entries stay until their expiry or a later cleanup. An
-  organisation page reads only its own member and session's values and
-  removes those that are malformed or past their 7 days (#1181). So a cleanup
-  never removes a newer session's entry or a valid, unexpired entry of its
-  own session, and reads no other session's values. The sign-in page renders a horizon and cleans up only for signed-out
+  older** than the horizon, plus malformed ones; others' same-millisecond
+  entries stay until their expiry or a later cleanup. So a cleanup never
+  removes a newer session's entry or a valid own one (it checks only its
+  own values, #1181), and reads no other session's values. The sign-in page renders a horizon and cleans up only for signed-out
   requests: `GET /signin` and the error renders of `POST /signin` without a
   signed-in account. If reading the horizon fails, that render does no cleanup.
 - **Writes:** a page writes only its own session's keys, and only before its

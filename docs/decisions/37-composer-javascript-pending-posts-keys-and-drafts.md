@@ -45,14 +45,14 @@ Each send carries an opaque key in the composer's hidden `idempotency_key`. The
 server renders a fresh one on the initial render, after a success and with a
 409; a 422 keeps the submitted key exactly, so plain forms are deduplicated
 too. The composer script may replace it with `crypto.randomUUID()` when it
-empties the composer before the answer (#1156); the session cookie is `Secure`,
-so pages are a secure context. The server scopes the key to the organisation
+empties the composer before the answer (#1156); that needs a secure context
+(HTTPS or a potentially trustworthy origin such as localhost). The server scopes the key to the organisation
 and member of the authorised membership, which `registerOrgRoutes` gets from
 `Authorizer.Member` for the signed-in account and the URL's slug, never to
 identifiers in the request body (invariants 3–5). The key grants nothing; a
 repeat returns only that member's own message. It never appears in another
-member's page or a stream payload: live items are rendered once for every
-member, and matching uses `data-posted-message`.
+member's page or a stream payload: live items are rendered once per language
+and shared by every member's stream, and matching uses `data-posted-message`.
 
 ## (c) Requests stay with htmx (#1173)
 
@@ -68,7 +68,8 @@ Mention suggestions (#117) come as server-rendered fragments over `hx-get`.
 One drafts script may keep unsent composer text in `localStorage`: it must
 survive reloads and closed tabs, and `sessionStorage` does not. **Bound:** text
 up to the message limit (4,000 code points) and at most 50 entries per member
-and session, evicting the least recently edited. An entry is removed 7 days
+and session, evicting the least recently edited; across tabs the cap and
+eviction are best effort (#1186). An entry is removed 7 days
 after its last edit. A storage error drops only the stored copy, never the
 text on the page. Order: #1178 → #1181 → #1162 → #1177.
 
@@ -78,7 +79,8 @@ text on the page. Order: #1178 → #1181 → #1162 → #1177.
   is the session's id, a UUIDv7 that PostgreSQL generates, so it is
   time-ordered. It is not a credential (sessions are found only by token
   hash); the page never carries the token or its hash. Key:
-  `ribbitto.draft.v1:<member>:<session>:<channel>:<feed|topic>`; value: JSON
+  `ribbitto.draft.v1:<member>:<session>:<channel>:<place>`, where the place
+  is the literal `feed` or the topic's canonical UUID; value: JSON
   `{member, session, expires, text, at}` (#1178 fixes the format). No owner
   record is shared between sessions.
 - **Restore checks the owner** (#1162). A page reads only its own member and
@@ -104,9 +106,9 @@ text on the page. Order: #1178 → #1181 → #1162 → #1177.
 - **Sign-out** (#1178): a successful `POST /signout` answers 303 to `/signin`
   with `Clear-Site-Data: "storage"` where the browser supports it; a failure
   answers 500 with neither. The sign-in page's cleanup then removes every
-  earlier entry. The sign-out form has no submit handler: it would clear
+  entry strictly older than its horizon. The sign-out form has no submit handler: it would clear
   drafts even when sign-out fails. After its cleanup the sign-in page writes a
-  content-free sign-out notice key whose value is its horizon, so every write
+  content-free sign-out notice key whose value is its horizon, so each write
   fires a `storage` event; other open pages stop writing on it (#1162). The
   notice is best effort: what a stale tab still writes is bound to its ended
   session, never restored and removed by a later cleanup.
@@ -141,9 +143,9 @@ lives in browser storage.
 - HTML built from strings (what the pattern check rejects) and `templ.Raw`.
 - Composer JavaScript building request URLs, and requests outside htmx.
 - Messages, credentials, session tokens or other server-derived data in
-  browser storage, except (d)'s bounded owner metadata (member UUID, session
-  marker, expiry) stored with each draft and the content-free sign-out notice
-  key with its horizon value. IndexedDB stays unused.
+  browser storage, except (d)'s bounded draft text (which may quote messages),
+  its owner metadata (member UUID, session marker, expiry) and the
+  content-free sign-out notice key with its horizon value. No IndexedDB.
 - Client state for the message list, sidebar, unread counts or presence beyond
   decision 34, except toggling (d)'s draft marker. These stay server-rendered;
   a pending item is never turned into a real message in place.
@@ -154,21 +156,19 @@ server-rendered `sse-connect` URL
 it is not composer code.
 
 **Why:** the M7 composer needs a post to feel sent at once, a retry that never
-posts twice and text that survives a reload, without turning the client into
-an application that owns messages. [The vision](../vision.md) asks a
+posts twice and text that survives a reload, without the client owning
+messages. [The vision](../vision.md) asks a
 client-side change that alters decision 19 to come with measurements: #1149's
 [own-post baseline](https://github.com/tkakkie/ribbitto/issues/1149#issuecomment-6199142777)
 is 30.9 ms median send → visible on the desktop feed and 75.5 ms on the phone
-feed (45.5 and 124.5 ms in topic views). #1156 reports against it, measured to
-the text being visible.
+feed (45.5 and 124.5 ms in topic views). #1156 reports against it, to the text
+being visible.
 
 **Considered:** `fetch` in one composer script (direct control of queueing and
 retries, but a second request path beside htmx's `hx-sync`, error handling and
 422 swaps; no measurement shows htmx is the bottleneck); `sessionStorage` for
-drafts (lost with the tab); one owner record per member (a tab of an ended
-session could write after a new session's page loaded, and the new page would
-restore it); the web server's clock as the horizon (not the clock of session
+drafts (lost with the tab); one owner record per member (a stale tab's write
+could be restored under a new session); the web server's clock as the horizon (not the clock of session
 ids); a submit handler on the sign-out form (clears drafts when sign-out
 fails); a separate public time-ordered marker (the id is not a credential);
-the send-key preference in browser storage (it must follow the member); matching a
-pending post by a key in the stream (live payloads are shared).
+the send-key preference in browser storage (it must follow the member).

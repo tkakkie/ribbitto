@@ -70,8 +70,8 @@ htmx sends resync requests. The markup contract is in
   one drafts allowance below
   ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)).
   They never hold messages, credentials, session tokens or other
-  server-derived application data, except that allowance's owner metadata
-  and sign-out notice. IndexedDB is not used; a clear need, such as offline
+  server-derived application data, except that allowance's bounded draft
+  text (which may quote messages), owner metadata and sign-out notice. IndexedDB is not used; a clear need, such as offline
   support, gets its own issue.
 - **Files:** every script is external in `web/static` and loaded with the
   response nonce. Application scripts also define no globals and are
@@ -100,8 +100,10 @@ today the composer keeps none of it.
 - **Drafts** (planned: #1178 sign-out and sign-in cleanup, #1181
   organisation-page cleanup, #1162 save and restore, #1177 sidebar marker):
   one drafts script keeps unsent text in `localStorage` under
-  `ribbitto.draft.v1:<member>:<session>:<channel>:<feed|topic>`, at most
-  50 entries per member and session, 7 days after the last edit. It
+  `ribbitto.draft.v1:<member>:<session>:<channel>:<place>` (the place is
+  the literal `feed` or the topic's canonical UUID), at most 50 entries per
+  member and session (best effort across tabs, #1186), 7 days after the
+  last edit. It
   restores only its own member and session's unexpired entries, writes only
   before its session's deadline, and cleans up only entries strictly older,
   to the millisecond, than a time-ordered horizon (the page's session

@@ -139,7 +139,7 @@ review before it if it had skipped Copilot under the
 [docs-only rule](copilot.md#docs-only-pull-requests); one Argon implemented
 leaves its trial instead, and the maintainer decides, since Argon never
 reviews its own work ([trial](argon-implementer.md#which-issues)). Fixes first get the
-follow-up check in [reviewing](reviewing.md).
+follow-up check in [reviewing](reviewing.md) or [Copilot](copilot.md).
 
 A pull request already marked ready is converted back to a draft until that
 review completes. An earlier report covers a later head only when every

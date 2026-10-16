@@ -20,7 +20,8 @@ Read the file for the area you change:
 | [`features.md`](features.md) | the feature map: each feature's packages and tables, and the known exceptions |
 | [`cross-feature-access.md`](cross-feature-access.md) | how features reach each other's data: stores, posting's transaction, history and the page snapshot |
 | [`modules.md`](modules.md) | module construction, the modules, what they own and may import |
-| [`request-flow.md`](request-flow.md) | the request flow, organisation routes, server timeouts, middleware order |
+| [`request-flow.md`](request-flow.md) | the request flow, the organisation membership check, server timeouts, middleware order |
+| [`routes.md`](routes.md) | each route under `/organizations/{slug}/` and its result |
 | [`setup-and-signup.md`](setup-and-signup.md) | first-run setup and sign-up |
 | [`identity.md`](identity.md) | sessions, signing in and out, the session cookie |
 | [`rate-limits.md`](rate-limits.md) | authentication and member limits; the reverse-proxy contract |

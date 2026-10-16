@@ -92,8 +92,9 @@ htmx sends resync requests. The markup contract is in
 ## Composer
 
 [Decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
-allows bounded composer state. Each part but the server-rendered key is
-*planned*, awaiting its issue; today the composer script keeps none of it.
+allows bounded composer state. The server-rendered key and the sending
+glue below exist; the parts marked *planned* await their issues, and today
+the composer script keeps none of their state.
 
 - **Sending** (input glue, #1173): the textarea stays usable while a post is
   in flight, since answers replace only `#message-composer-state`. On a 200

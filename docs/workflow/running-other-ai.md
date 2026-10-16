@@ -46,6 +46,7 @@ request's head, and gets the diff on stdin
 
 ```sh
 # $W: Argon's worktree; $clean: a clean worktree at origin/main.
+# gh pr checks fails unless CI is green, which the review needs first.
 diff=$(mktemp) &&
   env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
     GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \

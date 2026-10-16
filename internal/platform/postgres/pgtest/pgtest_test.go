@@ -185,3 +185,16 @@ func TestPoolMaxConns(t *testing.T) {
 		})
 	}
 }
+
+// maxConnsFloor is five because a test holds five connections at once (#844);
+// with fewer it waits on its own pool until it times out, as it did when CI's
+// two-CPU runners gave it four.
+const maxConnsFloor = 5
+
+// TestPoolMaxConns compares the pools with MaxConns itself, so it passes for
+// any value; this test keeps the floor and needs no database.
+func TestMaxConnsFloor(t *testing.T) {
+	if MaxConns < maxConnsFloor {
+		t.Fatalf("MaxConns = %d, below the floor of %d connections (#849)", MaxConns, maxConnsFloor)
+	}
+}

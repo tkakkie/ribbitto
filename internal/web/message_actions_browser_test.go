@@ -18,8 +18,9 @@ import (
 
 // A message's actions menu (#1159) opens below its button at desktop width
 // and as a bottom sheet on a phone. "Copy link" copies the absolute message
-// URL, shows and announces "Link copied", and forgets it when the menu
-// closes; when copying fails the link opens instead.
+// URL, shows and announces "Link copied" (the status keeping ten entries),
+// and forgets it when the menu closes, also when the copy settles after
+// that; when copying fails the link opens instead.
 func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
@@ -65,6 +66,19 @@ func testMessageActionsBrowser(t *testing.T, browser *rod.Browser) {
 		if page.MustEval(`menu => document.querySelector(menu + ' a').hasAttribute('data-copied')`, menu).Bool() {
 			t.Fatalf("%s: a closed menu keeps the confirmation", what)
 		}
+	}
+	// Twelve copies leave ten announcements, without a live message to prune them.
+	if n := page.MustEval(`async menu => { const m = document.querySelector(menu);
+		for (let i = 0; i < 11; i++) { m.showPopover(); m.querySelector('a').click(); await new Promise(r => setTimeout(r, 50)); m.hidePopover(); }
+		return document.getElementById('message-status').childNodes.length; }`, menu).Int(); n != 10 {
+		t.Fatalf("the status region holds %d announcements, want 10", n)
+	}
+	// A copy that settles after the menu closed leaves it saying "Copy link".
+	if page.MustEval(`async menu => { const m = document.querySelector(menu), a = m.querySelector('a'), write = navigator.clipboard.writeText.bind(navigator.clipboard);
+		navigator.clipboard.writeText = text => new Promise(r => setTimeout(r, 100)).then(() => write(text));
+		m.hidePopover(); m.showPopover(); a.click(); m.hidePopover(); m.showPopover();
+		await new Promise(r => setTimeout(r, 300)); const copied = a.hasAttribute('data-copied'); navigator.clipboard.writeText = write; m.hidePopover(); return copied; }`, menu).Bool() {
+		t.Fatal("a copy that settled after the menu closed marked it copied")
 	}
 	// A failed copy opens the link, as without JavaScript.
 	page.MustEval(`button => { navigator.clipboard.writeText = () => Promise.reject(new Error('denied')); document.querySelector(button).click(); }`, button)

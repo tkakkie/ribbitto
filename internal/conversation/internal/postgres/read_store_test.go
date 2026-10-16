@@ -80,6 +80,27 @@ func TestReadStoreIn(t *testing.T) {
 				t.Errorf("ListMessagesBefore, %s = %x, %v; want %x", tc.name, got, err, tc.want)
 			}
 		}
+		// Oldest first after the bound; each case changes one scope predicate.
+		for _, tc := range []struct {
+			name                      string
+			organizationID, channelID kernel.ID
+			topicID                   *kernel.ID
+			after                     int64
+			limit                     int32
+			want                      []kernel.ID
+		}{
+			{"after is exclusive, every topic", f.acme, f.general, nil, 1, 50, []kernel.ID{m[2], m[3]}},
+			{"limit", f.acme, f.general, nil, 0, 2, []kernel.ID{m[1], m[2]}},
+			{"default topic", f.acme, f.general, &f.generalTopic, 0, 50, []kernel.ID{m[1], m[3]}},
+			{"topic of another channel", f.acme, f.general, &randomTopic, 0, 50, []kernel.ID{}},
+			{"another organisation's channel", f.acme, f.foreign, nil, 0, 50, []kernel.ID{}},
+			{"read as another organisation", f.globex, f.general, nil, 0, 50, []kernel.ID{}},
+		} {
+			history, err := store.ListMessagesAfter(ctx, tc.organizationID, tc.channelID, tc.topicID, tc.after, tc.limit)
+			if got := messageIDs(history); err != nil || !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("ListMessagesAfter, %s = %x, %v; want %x", tc.name, got, err, tc.want)
+			}
+		}
 		for _, tc := range []struct {
 			name           string
 			organizationID kernel.ID

@@ -3,6 +3,7 @@ package conversation
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/tkakkie/ribbitto/internal/kernel"
 	"github.com/tkakkie/ribbitto/internal/org"
@@ -72,6 +73,33 @@ func (s historyReader) Before(ctx context.Context, m org.Membership, channelID k
 		return Page{}, err
 	}
 	return Page{Entries: entries, Older: older}, nil
+}
+
+// Around returns the page holding event_seq around with context on both
+// sides: up to half a page from around on, the rest older. Like Before it is
+// bounded and scoped to the organisation, channel and topic, so a value taken
+// from another channel or topic cannot reach its messages.
+func (s historyReader) Around(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, around int64) (Page, error) {
+	newer, err := s.Reads.ListMessagesAfter(ctx, m.Organization.ID, channelID, topicID, around-1, PageSize/2)
+	if err != nil {
+		return Page{}, fmt.Errorf("reading history around a message: %w", err)
+	}
+	room := PageSize - len(newer)
+	older, err := s.Reads.ListMessagesBefore(ctx, m.Organization.ID, channelID, topicID, &around, int32(room+1))
+	if err != nil {
+		return Page{}, fmt.Errorf("reading history before a message: %w", err)
+	}
+	more := len(older) > room
+	if more {
+		older = older[:room]
+	}
+	// entries takes messages newest first.
+	slices.Reverse(newer)
+	entries, err := s.entries(ctx, m, channelID, append(newer, older...))
+	if err != nil {
+		return Page{}, err
+	}
+	return Page{Entries: entries, Older: more}, nil
 }
 
 // One returns a message with current author names, or ErrMessageNotFound.

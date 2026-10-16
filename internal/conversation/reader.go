@@ -45,7 +45,21 @@ func (s *Reader) One(ctx context.Context, m org.Membership, channelID kernel.ID,
 
 // Page reads channel or topic history with the snapshot's event cursor,
 // including older pages with a before bound.
-func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, before *int64) (page ChannelPage, err error) {
+func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, before *int64) (ChannelPage, error) {
+	return s.page(ctx, m, channelID, topicID, func(reader historyReader) (Page, error) {
+		return reader.Before(ctx, m, channelID, topicID, before)
+	})
+}
+
+// Around reads the older page holding event_seq around, with context on
+// both sides, in the same snapshot as Page.
+func (s *Reader) Around(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, around int64) (ChannelPage, error) {
+	return s.page(ctx, m, channelID, topicID, func(reader historyReader) (Page, error) {
+		return reader.Around(ctx, m, channelID, topicID, around)
+	})
+}
+
+func (s *Reader) page(ctx context.Context, m org.Membership, channelID kernel.ID, topicID *kernel.ID, read func(historyReader) (Page, error)) (page ChannelPage, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		reads := s.reads(snapshot)
 		loaded, err := loadSidebarContext(ctx, reads, m.Organization.ID, channelID, topicID)
@@ -54,8 +68,7 @@ func (s *Reader) Page(ctx context.Context, m org.Membership, channelID kernel.ID
 		}
 		page.Current, page.Channels, page.Topics = loaded.current, loaded.channels, loaded.topics
 		page.Topic = loaded.topic
-		reader := s.history(snapshot, reads)
-		page.Page, err = reader.Before(ctx, m, channelID, topicID, before)
+		page.Page, err = read(s.history(snapshot, reads))
 		if err != nil {
 			return err
 		}

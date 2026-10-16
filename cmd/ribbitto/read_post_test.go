@@ -105,6 +105,8 @@ func TestReadPost(t *testing.T) {
 			{"non-member POST", "POST", base + "/read", outsider, "", "3", 404},
 			{"older GET", "GET", base + "?before=3", token, "", "3", 200},
 			{"older POST", "POST", base + "/read?before=3", token, "", "3", 400},
+			{"around GET", "GET", base + "?around=3", token, "", "3", 200},
+			{"around POST", "POST", base + "/read?around=3", token, "", "3", 400},
 			{"foreign channel GET", "GET", view.ChannelURL("read", foreign.Channel.ID), token, "", "", 404},
 			{"foreign topic GET", "GET", view.ConversationURL("read", f.Channel.ID, &foreign.Channel.DefaultTopicID), token, "", "", 404},
 			{"other channel topic GET", "GET", view.ConversationURL("read", f.Channel.ID, &other.DefaultTopicID), token, "", "", 404},

@@ -127,9 +127,10 @@ func (p channelPages) branchError(w http.ResponseWriter, r *http.Request, m org.
 		p.topicID = &selected
 	}
 	before, _ := strconv.ParseInt(r.PostForm.Get("before"), 10, 64)
+	around, _ := strconv.ParseInt(r.PostForm.Get("around"), 10, 64)
 	var firstUnread *int64
-	if seq, err := strconv.ParseInt(r.PostForm.Get("unread"), 10, 64); err == nil && seq >= 0 && before > 0 {
+	if seq, err := strconv.ParseInt(r.PostForm.Get("unread"), 10, 64); err == nil && seq >= 0 && (before > 0 || around > 0) {
 		firstUnread = &seq
 	}
-	p.render(w, r, m, id, status, view.ChannelPage{Before: before, BranchError: key, BranchName: r.PostForm.Get("name")}, firstUnread)
+	p.render(w, r, m, id, status, view.ChannelPage{Before: before, Around: around, BranchError: key, BranchName: r.PostForm.Get("name")}, firstUnread)
 }

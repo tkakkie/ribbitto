@@ -33,7 +33,7 @@ func (p channelPages) changeImage(w http.ResponseWriter, r *http.Request, m org.
 	}
 	// The redirect returns to the page's own position; a malformed one
 	// changes nothing, like the page it came from would refuse it.
-	_, before, firstUnread, ok := conversationQuery(r.URL.RawQuery)
+	_, at, ok := conversationQuery(r.URL.RawQuery)
 	if !ok {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
@@ -54,7 +54,7 @@ func (p channelPages) changeImage(w http.ResponseWriter, r *http.Request, m org.
 		serverError(w, r, "changing channel image", err)
 	default:
 		target := r.URL.EscapedPath()
-		if state := conversationState(before, firstUnread); state != "" {
+		if state := conversationState(at); state != "" {
 			target += "?" + state
 		}
 		http.Redirect(w, r, target, http.StatusSeeOther)

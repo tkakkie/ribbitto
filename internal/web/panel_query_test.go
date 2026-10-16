@@ -15,9 +15,9 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// Panel links carry the position the page renders (#936): the older page's
-// before and the divider it shows, never the request's other keys, on the
-// plain branching error too. The older link reads the same divider, so it
+// Panel links carry the position the page renders (#936, #1170): the older
+// page's before or around and the divider it shows, never the request's
+// other keys, on the plain branching error too. The older link reads the same divider, so it
 // shows what the page displays.
 func TestPanelLinksFollowPageState(t *testing.T) {
 	channel := view.ChannelURL("acme", kernel.ID{1})
@@ -41,6 +41,9 @@ func TestPanelLinksFollowPageState(t *testing.T) {
 		{"older page without divider", "GET", channel + "?before=9", nil, 6, 200, "?before=9&unread=6", "6"},
 		{"unknown keys", "GET", channel + "?before=9&unread=4&x=1", nil, 6, 200, "?before=9&unread=4", "4"},
 		{"latest page", "GET", channel + "?after=zzz&x=1", nil, 6, 200, "", ""},
+		{"around page", "GET", channel + "?around=9&unread=4&x=1", nil, 6, 200, "?around=9&unread=4", "4"},
+		{"around page without divider", "GET", channel + "?around=9", nil, 6, 200, "?around=9&unread=6", "6"},
+		{"branching error, around page", "POST", channel + "/branch", branchError("before", "0", "around", "9", "unread", "4"), 6, 422, "?around=9&unread=4", "4"},
 		{"branching error, older page", "POST", channel + "/branch", branchError("before", "9", "unread", "4"), 6, 422, "?before=9&unread=4", "4"},
 		{"branching error, nothing unread", "POST", channel + "/branch", branchError("before", "9", "unread", "0"), 6, 422, "?before=9&unread=0", "0"},
 		{"branching error, no divider sent", "POST", channel + "/branch", branchError("before", "9"), 6, 422, "?before=9&unread=6", "6"},
@@ -73,7 +76,7 @@ func TestPanelLinksFollowPageState(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			panels, branchUnread, older := 0, "", ""
+			panels, branchUnread, branchAround, older := 0, "", "", ""
 			for n := range doc.Descendants() {
 				href := attr(n, "href")
 				switch {
@@ -90,6 +93,8 @@ func TestPanelLinksFollowPageState(t *testing.T) {
 					older = u.Query().Get("unread")
 				case n.DataAtom == atom.Input && attr(n, "name") == "unread":
 					branchUnread = attr(n, "value")
+				case n.DataAtom == atom.Input && attr(n, "name") == "around":
+					branchAround = attr(n, "value")
 				}
 			}
 			if panels == 0 {
@@ -106,6 +111,10 @@ func TestPanelLinksFollowPageState(t *testing.T) {
 			if tc.query != "" && older != linked.Get("unread") {
 				t.Errorf("older link divider %q, panel links %q", older, linked.Get("unread"))
 			}
+			// A failed plain branch returns to the same around page.
+			if branchAround != linked.Get("around") {
+				t.Errorf("branch form around = %q, want %q", branchAround, linked.Get("around"))
+			}
 		})
 	}
 }
@@ -120,6 +129,9 @@ func TestImageChangeQuery(t *testing.T) {
 		location     string
 	}{
 		{"kept position", "?before=9&unread=4&x=1", http.StatusSeeOther, 1, overview + "?before=9&unread=4"},
+		{"kept around position", "?around=9&unread=4&x=1", http.StatusSeeOther, 1, overview + "?around=9&unread=4"},
+		{"malformed around", "?around=abc", http.StatusBadRequest, 0, ""},
+		{"around with before", "?around=9&before=9", http.StatusBadRequest, 0, ""},
 		{"latest page", "?x=1", http.StatusSeeOther, 1, overview},
 		{"malformed before", "?before=abc", http.StatusBadRequest, 0, ""},
 		{"unread without before", "?unread=4", http.StatusBadRequest, 0, ""},

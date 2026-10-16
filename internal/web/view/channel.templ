@@ -67,6 +67,9 @@ type ChannelPage struct {
 	Older bool
 	// Before is the event_seq bound of an older page; 0 shows the latest.
 	Before int64
+	// Around is the event_seq an older page is centred on (decision 36), for
+	// a message's URL; 0 unless that page is shown.
+	Around int64
 	// FirstUnread stays the same for the whole visit; zero means nothing was unread.
 	FirstUnread int64
 	// EventCursor starts replay after every page's snapshot, including history.
@@ -123,6 +126,13 @@ func oldestSequence(page ChannelPage) int64 {
 	return page.Messages[0].EventSeq
 }
 
+// latest reports whether the page is the conversation's latest page: live,
+// reading and typing. Older pages, before or around a position, are none of
+// these.
+func latest(page ChannelPage) bool {
+	return page.Before == 0 && page.Around == 0
+}
+
 // olderURL links to the page before the oldest message shown.
 func olderURL(page ChannelPage) string {
 	return fmt.Sprintf("%s?before=%d&unread=%d", conversationURL(page), page.Messages[0].EventSeq, page.FirstUnread)
@@ -133,7 +143,7 @@ func olderURL(page ChannelPage) string {
 // list page shows only the sidebar, bound to the channel it nests.
 func streamURL(page ChannelPage) string {
 	want := "sidebar"
-	if page.Before == 0 && !page.List {
+	if latest(page) && !page.List {
 		want += ",messages,typing"
 	}
 	if page.Members != nil && page.Members.PresenceAfter != "" {
@@ -212,7 +222,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							if page.Topic != nil {
 								data-topic={ idValue(page.Topic.ID) }
 							}
-							if page.EventCursor != nil && page.Before == 0 {
+							if page.EventCursor != nil && latest(page) {
 								sse-swap="message,messages-moved"
 								hx-swap="beforeend"
 							}
@@ -224,8 +234,9 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 							}
 						</ol>
 						<div class="hidden min-h-full items-center justify-center p-8 peer-empty:flex"><p class="text-muted">{ i18n.T(ctx, "channel.empty") }</p></div>
-						if page.Before > 0 {
-							// Only an older page reached without JavaScript shows this.
+						if !latest(page) {
+							// Only an older page reached by its own URL shows this: an
+							// around page, or "Load older" without JavaScript.
 							<p class="px-6 pb-4 text-center">
 								@historyLink(conversationURL(page), false) {
 									@Icon("chevron-down-regular", 20)
@@ -241,7 +252,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 					// Below the short height the form takes its place in the column,
 					// and the fixed list still neither shrinks nor scrolls.
 					<div class={ "mx-auto flex w-full max-w-reading shrink-0 flex-col px-6 pb-4 max-desk:max-w-none max-desk:px-4 max-desk:pb-safe-4", templ.KV("peer-has-checked/list:invisible short:peer-has-checked/list:hidden", page.BranchError == "") }>
-						if page.Before == 0 && page.EventCursor != nil {
+						if latest(page) && page.EventCursor != nil {
 							<div id="typing-status" sse-swap="typing" hx-swap="innerHTML" role="status" aria-live="polite" aria-atomic="true" aria-label={ i18n.T(ctx, "activity.label") } class="min-h-6 px-3 text-caption text-muted"></div>
 						}
 						@messageComposer(page, false)
@@ -396,7 +407,7 @@ templ messageComposer(page ChannelPage, oob bool) {
 		}
 		method="post"
 		action={ conversationURL(page) }
-		if page.Before == 0 && page.Topic == nil {
+		if latest(page) && page.Topic == nil {
 			hx-post={ ChannelURL(page.Organization.Slug, page.Current.ID) }
 			hx-target="#message-composer"
 			hx-swap="outerHTML"
@@ -408,7 +419,7 @@ templ messageComposer(page ChannelPage, oob bool) {
 		if page.Composer != nil {
 			<input type="hidden" name="composer" value={ *page.Composer }/>
 		}
-		if page.Before == 0 && page.EventCursor != nil {
+		if latest(page) && page.EventCursor != nil {
 			<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		}
 		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
@@ -450,7 +461,7 @@ templ messageComposer(page ChannelPage, oob bool) {
 // readable reports whether the page has #read-form: only a latest page with
 // reading wired and a snapshot cursor reads.
 func readable(page ChannelPage) bool {
-	return page.Reading && page.Before == 0 && page.EventCursor != nil
+	return page.Reading && latest(page) && page.EventCursor != nil
 }
 
 // Automatic reading posts through this form, live arrivals included, so it

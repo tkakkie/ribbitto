@@ -45,7 +45,7 @@ func (p channelPages) read(w http.ResponseWriter, r *http.Request, m org.Members
 	query, queryErr := url.ParseQuery(r.URL.RawQuery)
 	values := r.PostForm["cursor"]
 	cursor, err := strconv.ParseInt(r.PostForm.Get("cursor"), 10, 64)
-	if err != nil || queryErr != nil || len(values) != 1 || query.Has("before") || r.PostForm.Has("before") {
+	if err != nil || queryErr != nil || len(values) != 1 || query.Has("before") || r.PostForm.Has("before") || query.Has("around") || r.PostForm.Has("around") {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}

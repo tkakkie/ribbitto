@@ -16,11 +16,11 @@ import (
 // included (docs/domain/pins.md).
 const PinExcerptLength = 200
 
-// Pin is one overview entry: the current message with its author and topic,
-// its excerpt, and who pinned it when, with current names.
+// Pin is one overview entry: the current message with its author, topic
+// and resolved references, and who pinned it when, with current names. Its
+// excerpt is PinExcerpt's, with the caller's placeholder.
 type Pin struct {
 	Entry
-	Excerpt                  string
 	PinnerName, PinnerHandle string
 	PinnedAt                 time.Time
 }
@@ -73,16 +73,21 @@ func (s *Reader) Overview(ctx context.Context, m org.Membership, channelID kerne
 }
 
 // pins reads the channel's pins with their authors and topics, and the
-// pinners in the same member batch: a bounded number of reads, never one
-// per pin.
+// pinners and chat_v1 bodies' references in the same organisation-scoped
+// member batch: a bounded number of reads, never one per pin.
 func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads ReadStore, m org.Membership, channelID kernel.ID) ([]Pin, error) {
 	pinned, err := reads.ListChannelPins(ctx, m.Organization.ID, channelID)
 	if err != nil {
 		return nil, err
 	}
 	topicIDs, memberIDs := make([]kernel.ID, len(pinned)), make([]kernel.ID, 0, 2*len(pinned))
+	bodies := make([][]BodyBlock, len(pinned))
 	for i, p := range pinned {
 		topicIDs[i], memberIDs = p.TopicID, append(memberIDs, p.MemberID, p.PinnedByMemberID)
+		if p.Format == FormatChatV1 {
+			bodies[i] = ParseChatV1(p.Body)
+			memberIDs = appendReferences(memberIDs, bodies[i])
+		}
 	}
 	topics, err := reads.LookupTopics(ctx, m.Organization.ID, channelID, topicIDs)
 	if err != nil {
@@ -109,19 +114,23 @@ func (s *Reader) pins(ctx context.Context, snapshot platform.Snapshot, reads Rea
 			return nil, fmt.Errorf("missing names or topic for pin %x", p.ID)
 		}
 		pins[i] = Pin{
-			Entry:   Entry{Message: p.Message, DisplayName: authorName, Handle: author.Handle, TopicName: topic.Name, DefaultTopic: topic.IsDefault},
-			Excerpt: PinExcerpt(p.Body), PinnerName: pinnerName, PinnerHandle: pinner.Handle, PinnedAt: p.PinnedAt,
+			Entry:      Entry{Message: p.Message, DisplayName: authorName, Handle: author.Handle, TopicName: topic.Name, DefaultTopic: topic.IsDefault},
+			PinnerName: pinnerName, PinnerHandle: pinner.Handle, PinnedAt: p.PinnedAt,
+		}
+		if bodies[i] != nil {
+			pins[i].Blocks, pins[i].References = bodies[i], resolveReferences(bodies[i], members, names)
 		}
 	}
 	return pins, nil
 }
 
-// PinExcerpt collapses whitespace runs to one space and shortens the result
-// to PinExcerptLength code points, ending a shortened one with an ellipsis.
-// It reads plain text only; a future body format needs its own extraction
-// (decision 18).
-func PinExcerpt(body string) string {
-	text := strings.Join(strings.Fields(body), " ")
+// PinExcerpt collapses whitespace runs in the message's text (Entry.Text,
+// with placeholder for an unresolved reference) to one space and shortens
+// the result to PinExcerptLength code points, ending a shortened one with
+// an ellipsis. It counts after resolution, so a chat_v1 excerpt never hides
+// markup or a UUID within its length.
+func PinExcerpt(entry Entry, placeholder string) string {
+	text := strings.Join(strings.Fields(entry.Text(placeholder)), " ")
 	if utf8.RuneCountInString(text) <= PinExcerptLength {
 		return text
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/tkakkie/ribbitto/internal/org"
 	"github.com/tkakkie/ribbitto/internal/org/orgtest"
 	"github.com/tkakkie/ribbitto/internal/platform/postgres/pgtest"
+	"github.com/tkakkie/ribbitto/internal/realtime"
 )
 
 func TestReaderOverview(t *testing.T) {
@@ -54,7 +55,7 @@ func TestReaderOverview(t *testing.T) {
 	if newest.ID != second.ID || !newest.DefaultTopic || newest.PinnerName != "Curator" || newest.PinnerHandle != "curator" || newest.Handle != "owner" {
 		t.Fatalf("newest = %+v", newest)
 	}
-	if oldest.ID != first.ID || oldest.DefaultTopic || oldest.TopicName != "design" || oldest.Excerpt != "in design" || oldest.PinnerHandle != "owner" || !oldest.PinnedAt.Before(newest.PinnedAt) {
+	if oldest.ID != first.ID || oldest.DefaultTopic || oldest.TopicName != "design" || conversation.PinExcerpt(oldest.Entry, "") != "in design" || oldest.PinnerHandle != "owner" || !oldest.PinnedAt.Before(newest.PinnedAt) {
 		t.Fatalf("oldest = %+v", oldest)
 	}
 	if readState() != before {
@@ -78,5 +79,36 @@ func TestReaderOverview(t *testing.T) {
 		if !errors.Is(err, conversation.ErrChannelNotFound) || got != nil {
 			t.Fatalf("%s: %+v, %v", name, got, err)
 		}
+	}
+}
+
+// A chat_v1 pin's excerpt is its resolved extraction: references resolve in
+// the reader's organisation only, so another organisation's member is the
+// placeholder, never its handle, name or UUID.
+func TestPinExcerptChatV1(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx := t.Context()
+	f := conversationtest.OrganizationWithOwner(t, pool, "acme", "general")
+	other := conversationtest.OrganizationWithOwner(t, pool, "globex", "general")
+	m := membership(f.OrganizationID, f.MemberID)
+	m.Member.OrganizationID = f.OrganizationID
+	// Neither referenced member is the author or the pinner, so only the
+	// references' own lookup can resolve them.
+	curator := orgtest.Member(t, pool, f.OrganizationID, identitytest.Account(t, pool, "curator@example.org", "Curator"), org.RoleMember, "curator", 1)
+	ref := func(id kernel.ID) string { return "<@" + realtime.FormatPayloadID(id) + ">" }
+	posted, err := newPosting(pool).Post(ctx, m, f.Channel.ID, "**Deploy** "+ref(curator)+"\n> _by_ "+ref(other.MemberID))
+	requireNoError(t, err)
+	// Posting writes plain_text until #1203, so the fixture marks the row chat_v1.
+	_, err = pool.Exec(ctx, "UPDATE message SET format = 'chat_v1' WHERE id = $1", posted.ID)
+	requireNoError(t, err)
+	requireNoError(t, conversationpg.NewPinning(pool, eventSequence, appendEvents, nil).Pin(ctx, m, f.Channel.ID, posted.ID))
+	pins, err := conversationpg.NewReader(pool, lookupMembers, lookupAccounts, eventCursor, emptyPageCountsIn).Pins(ctx, m, f.Channel.ID)
+	requireNoError(t, err)
+	if len(pins) != 1 {
+		t.Fatalf("pins = %+v", pins)
+	}
+	if got := conversation.PinExcerpt(pins[0].Entry, "@?"); got != "Deploy @curator by @?" {
+		t.Fatalf("excerpt %q", got)
 	}
 }

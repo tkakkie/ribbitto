@@ -606,7 +606,7 @@ type browserReply struct {
 func streamTestMessages(topic kernel.ID, seqs ...int) []view.Message {
 	var messages []view.Message
 	for _, seq := range seqs {
-		messages = append(messages, view.Message{ID: kernel.ID{byte(seq)}, TopicID: topic, EventSeq: int64(seq), Body: fmt.Sprint(seq)})
+		messages = append(messages, view.Message{ID: kernel.ID{byte(seq)}, TopicID: topic, EventSeq: int64(seq), Body: fmt.Sprint(seq), Text: fmt.Sprint(seq)})
 	}
 	return messages
 }

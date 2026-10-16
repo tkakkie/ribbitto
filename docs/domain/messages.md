@@ -29,8 +29,8 @@ disposable cache
 Every existing message is `plain_text`; [decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md) adds `chat_v1`,
 a small markup frozen per version (code spans and fences, block quotes,
 bold, italic, `http`/`https` autolinks and member references `<@uuid>`).
-Its storage and rendering exist (#1201, #1202), but posting stores
-`plain_text` until #1203 and extraction's callers wait for #1204.
+Its storage, rendering and text extraction exist (#1201, #1202, #1204),
+but posting stores `plain_text` until #1203.
 *Planned* (#1203): new posts use `chat_v1`, and a reference to a member who
 is not in the URL's organisation, checked
 through org's directory, rejects the post with 422.
@@ -97,11 +97,14 @@ once the original is deleted; nothing current from the original, so it
 renders the same for every reader.
 
 **Plain text from a message** comes from one extraction function per format,
-owned by `conversation` ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md), *planned*); for `plain_text`
-it returns the body unchanged. The pins excerpt, the live announcement
-(today `view.LiveMessageItem` concatenates `entry.Body`), the selection
-check and later notifications and search use it. A quote's snapshot is left
-out of the quoting message's extraction.
+owned by `conversation` ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md)):
+`Entry.Text` returns a `plain_text` body unchanged and a `chat_v1` body's
+resolved extraction (below). Its users are the pins excerpt
+(`conversation.PinExcerpt`, 200 code points counted after resolution) and
+the live item's `data-announcement`; *planned*: the quote snapshot (#1176,
+trimmed at both ends, an empty one rejected), the selection check (#1161),
+and later notifications and search. A quote's snapshot is left out of the
+quoting message's extraction.
 
 A `chat_v1` body ([decision 39](../decisions/39-message-bodies-use-a-small-frozen-markup.md)) is parsed by
 `conversation` into plain structs and rendered node by node with templ,
@@ -112,7 +115,14 @@ message URL is an ordinary link. A member reference shows the current
 `Display name @handle` (`view.MemberName`), or a localised placeholder when
 the organisation's directory, read in the authors' batches, does not return
 it. The markup is the same for every reader of one language. Its extraction
-(*planned*, #1204) resolves references to `@handle` at use.
+(`conversation.ExtractChatV1`) is text and member-reference segments:
+delimiters, escapes, fences and language tags dropped, code kept exactly,
+an autolink as its URL, one line break per block boundary. A reference
+resolves at use, in the reader's organisation-scoped directory batch, to
+`@handle` or to the caller's localised placeholder (`view.UnknownMember`),
+never its UUID; a UUID typed as text or in code stays. So the announcement,
+kept in the shared stream render cache, is the same for every reader of one
+language too.
 
 ## Posting from the channel page
 

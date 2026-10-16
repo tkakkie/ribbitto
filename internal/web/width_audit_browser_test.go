@@ -45,7 +45,7 @@ func testWidthAuditBrowser(t *testing.T, browser *rod.Browser) {
 		Topics:    []view.Topic{{ID: kernel.ID{2}, Name: longName}, {ID: kernel.ID{3}, Name: "短"}},
 		ImageKeys: []string{"lake", "flowers", "moon", "kite"}, Reading: true, FirstUnread: 7, Older: true, EventCursor: &cursor}
 	// Unbroken author and pinner names must wrap inside the overview (#889).
-	base.Pins = []view.Pin{{MessageID: kernel.ID{7}, Excerpt: conversation.PinExcerpt(messages[0].Body), AuthorDisplayName: longName, AuthorHandle: "long_member_handle", Topic: view.Topic{Name: longName}, PinnerDisplayName: longName, PinnerHandle: "long_member_handle", PinnedAt: messages[0].CreatedAt}}
+	base.Pins = []view.Pin{{MessageID: kernel.ID{7}, Excerpt: conversation.PinExcerpt(conversation.Entry{Message: conversation.Message{Body: messages[0].Body}}, ""), AuthorDisplayName: longName, AuthorHandle: "long_member_handle", Topic: view.Topic{Name: longName}, PinnerDisplayName: longName, PinnerHandle: "long_member_handle", PinnedAt: messages[0].CreatedAt}}
 	for i := range 20 {
 		base.Channels = append(base.Channels, view.Channel{ID: kernel.ID{byte(i + 1)}, Name: longName, ImageURL: base.Current.ImageURL})
 	}

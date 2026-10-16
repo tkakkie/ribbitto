@@ -20,8 +20,8 @@ func TestOverviewPins(t *testing.T) {
 	at := time.Date(2026, 10, 16, 9, 30, 0, 0, time.UTC)
 	pins := []conversation.Pin{
 		// A literal tag and right-to-left text stay text, isolated by dir="auto".
-		{Entry: conversation.Entry{Message: conversation.Message{ID: kernel.ID{0xab}}, DisplayName: "مريم", Handle: "author", TopicName: "<design>"}, Excerpt: `<b dir="rtl">x</b> مرحبا`, PinnerName: "Bob", PinnerHandle: "bob", PinnedAt: at},
-		{Entry: conversation.Entry{Message: conversation.Message{ID: kernel.ID{0xcd}}, Handle: "legacy", DefaultTopic: true}, Excerpt: "second", PinnerName: "Bob", PinnerHandle: "bob", PinnedAt: at.Add(-time.Hour)},
+		{Entry: conversation.Entry{Message: conversation.Message{ID: kernel.ID{0xab}, Body: `<b dir="rtl">x</b> مرحبا`}, DisplayName: "مريم", Handle: "author", TopicName: "<design>"}, PinnerName: "Bob", PinnerHandle: "bob", PinnedAt: at},
+		{Entry: conversation.Entry{Message: conversation.Message{ID: kernel.ID{0xcd}, Body: "second"}, Handle: "legacy", DefaultTopic: true}, PinnerName: "Bob", PinnerHandle: "bob", PinnedAt: at.Add(-time.Hour)},
 	}
 	labels := map[string][3]string{
 		"en": {"Pinned messages", "No pinned messages yet.", "Pinned by"},
@@ -60,7 +60,7 @@ func TestOverviewPins(t *testing.T) {
 						links = append(links, attr(n, "href")+" "+text(n))
 					}
 				}
-				if want := []string{view.MessageURL("acme", kernel.ID{0xab}) + " " + pins[0].Excerpt, view.MessageURL("acme", kernel.ID{0xcd}) + " second"}; !slices.Equal(links, want) {
+				if want := []string{view.MessageURL("acme", kernel.ID{0xab}) + " " + pins[0].Body, view.MessageURL("acme", kernel.ID{0xcd}) + " second"}; !slices.Equal(links, want) {
 					t.Fatalf("%s %s: isolated plain-text links %q, want %q", path, lang, links, want)
 				}
 				for _, part := range []string{"مريم", "@author", "<design>", "@legacy", "chorus", want[2], "Bob", "@bob", "2026-10-16 09:30:00 UTC"} {

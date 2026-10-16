@@ -51,12 +51,14 @@ func (p channelPages) memberListing(ctx context.Context, m org.Membership, id ke
 }
 
 // viewPins maps the overview's pins, read in the page's snapshot; live
-// delivery (#1205) replaces the list from its own snapshots.
-func viewPins(pinned []conversation.Pin) []view.Pin {
+// delivery (#1205) replaces the list from its own snapshots. Excerpts take
+// ctx's language for an unresolved reference, as the pins renders are kept
+// per language.
+func viewPins(ctx context.Context, pinned []conversation.Pin) []view.Pin {
 	pins := make([]view.Pin, len(pinned))
 	for i, pin := range pinned {
 		pins[i] = view.Pin{
-			MessageID: pin.ID, Excerpt: pin.Excerpt,
+			MessageID: pin.ID, Excerpt: conversation.PinExcerpt(pin.Entry, view.UnknownMember(ctx)),
 			AuthorDisplayName: memberDisplayName(pin.DisplayName), AuthorHandle: pin.Handle,
 			Topic:             view.Topic{Name: pin.TopicName, IsDefault: pin.DefaultTopic},
 			PinnerDisplayName: memberDisplayName(pin.PinnerName), PinnerHandle: pin.PinnerHandle,

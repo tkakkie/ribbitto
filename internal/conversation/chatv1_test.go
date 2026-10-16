@@ -109,14 +109,19 @@ func FuzzParseChatV1(f *testing.F) {
 	for _, tc := range chatV1Cases {
 		f.Add(tc.in)
 	}
+	for _, tc := range textCases {
+		f.Add(tc.in)
+	}
 	f.Fuzz(func(t *testing.T, input string) {
 		body, err := conversation.ValidateMessageBody(input)
 		if err != nil {
 			return
 		}
+		blocks := conversation.ParseChatV1(body)
+		checkExtraction(t, body, blocks)
 		lines := strings.Split(body, "\n")
 		n := 0
-		for _, b := range conversation.ParseChatV1(body) {
+		for _, b := range blocks {
 			if b.Kind == conversation.BlockCode {
 				if n+len(b.Code)+1 >= len(lines) || lines[n] != "```"+b.Language || lines[n+len(b.Code)+1] != "```" ||
 					strings.Join(lines[n+1:n+1+len(b.Code)], "\n") != strings.Join(b.Code, "\n") {

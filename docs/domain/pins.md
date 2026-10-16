@@ -60,7 +60,9 @@ pin itself adds no read scope ([decision 22](../decisions/22-replies-stay-in-the
 The excerpt is derived from the stored message, never a retained copy.
 It shortens the message's extracted text: one extraction function per
 format, owned by `conversation`, which returns a `plain_text` body unchanged
-and leaves out a quote's snapshot ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md), *planned*). A future
+and a `chat_v1` body with its references resolved, counting the 200 code
+points after resolution ([messages](messages.md#showing-bodies)), and
+leaves out a quote's snapshot ([decision 38](../decisions/38-a-quote-is-a-snapshot-owned-by-the-quoting-message.md), *planned*). A future
 format adds its own extraction, never reinterpretation of old bodies
 ([decision 18](../decisions/18-stored-message-formats-never-change-meaning.md)).
 Web escapes the excerpt through templ and isolates its direction. No HTML

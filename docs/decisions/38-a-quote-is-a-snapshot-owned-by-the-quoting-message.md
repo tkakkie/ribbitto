@@ -95,8 +95,8 @@ unchanged. It is used for:
 
 - the pins excerpt ([pins](../domain/pins.md), 200 code points; shortening
   and collapsing white space stay with the excerpt);
-- the live announcement (`view.LiveMessageItem` concatenates `entry.Body`
-  today);
+- the live announcement (`view.LiveMessageItem`'s `data-announcement`,
+  since #1204);
 - checking a selection;
 - later, notifications and search.
 

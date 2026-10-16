@@ -101,7 +101,7 @@ func (s *pinsSource) Refresh(ctx context.Context, _ realtime.Subscription) (real
 		return realtime.Outgoing{}, err
 	}
 	return round.renders.Get(ctx, i18n.Language(ctx), func(ctx context.Context) (realtime.Outgoing, error) {
-		page := view.ChannelPage{Organization: view.Organization{Slug: s.membership.Organization.Slug}, Pins: viewPins(state.Pins), SnapshotSeq: state.SnapshotSeq}
+		page := view.ChannelPage{Organization: view.Organization{Slug: s.membership.Organization.Slug}, Pins: viewPins(ctx, state.Pins), SnapshotSeq: state.SnapshotSeq}
 		return shared.render(ctx, page)
 	})
 }

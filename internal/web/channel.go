@@ -325,7 +325,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 			return
 		}
 	}
-	page.Pins = viewPins(history.Pins)
+	page.Pins = viewPins(r.Context(), history.Pins)
 	if page.BodyError == "" {
 		place := history.Current.DefaultTopicID
 		if history.Topic != nil {

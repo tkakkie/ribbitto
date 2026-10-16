@@ -199,12 +199,7 @@ func (s historyReader) entries(ctx context.Context, m org.Membership, channelID 
 		}
 		entry := Entry{Message: msg, DisplayName: name, Handle: author.Handle, TopicName: topic.Name, DefaultTopic: topic.IsDefault}
 		if bodies[i] != nil {
-			entry.Blocks, entry.References = bodies[i], map[kernel.ID]Reference{}
-			for _, id := range appendReferences(nil, bodies[i]) {
-				if member, ok := members[id]; ok {
-					entry.References[id] = Reference{DisplayName: names[member.AccountID], Handle: member.Handle}
-				}
-			}
+			entry.Blocks, entry.References = bodies[i], resolveReferences(bodies[i], members, names)
 		}
 		entries = append(entries, entry)
 	}

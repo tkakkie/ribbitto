@@ -24,13 +24,14 @@ The token is ordering evidence, not authorization: scope and identity are truste
 server-resolved inputs, and callers still authorize them.
 
 `Signal` takes the generation and the caller's handling-start time. `Posted`
-takes the returned successful message's actual scope and its composer's
+takes a successful send's scope, the requested place it was issued for (a
+repeat's message may since have been branched elsewhere), and its composer's
 generation. Under the same state lock, it closes that generation and stops the
 member's activity in exactly that organisation/member/channel/topic. Missing or
 invalid generations still stop that scope, but cannot close another scope's
 composer. Another tab's composer remains usable, and a new
 composer rendered after success can start typing again. A failed submission must
-not call `Posted`: its 422 re-render carries the submitted generation unchanged,
+not call `Posted`: its 422 or 409 re-render carries the submitted generation unchanged,
 so the successful retry closes signals sent before the failure (#787, #827).
 
 Closures stay for `ClosedRetention` (one minute after the latest successful post
@@ -103,7 +104,8 @@ Empty 429 means limited; empty 204 means no swap, including invalid, closed or
 overdue generations. Refusals change no activity, deadline or generation.
 
 Feed/topic posts, plain or enhanced, pass optional `composer` to `Posted` only on
-success, using every scope ID from the returned message. Failure preserves activity
+success or a repeat, using the returned message's organisation, channel and
+author and the requested topic (`Sent.Topic`, #1155). Failure preserves activity
 and ordering. Feed composers issue for the snapshot channel's `DefaultTopicID`;
 topic composers use the snapshot's resolved selected topic ID. Issuance reuses
 loaded scope, with no additional queries. Latest and older pages submit the

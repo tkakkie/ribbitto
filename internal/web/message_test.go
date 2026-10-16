@@ -224,6 +224,10 @@ type fakePostingWriter struct {
 	err                  error
 	body                 string
 	org, channel, member kernel.ID
+	// keyed holds the author's messages by key, as the unique index does;
+	// fakeTxRunner has no rollback, so a taken key writes no field above.
+	keyed   map[[3][16]byte]conversation.Message
+	inserts int
 }
 
 func (*fakePostingWriter) GetDefaultTopic(_ context.Context, org, channel kernel.ID) (conversation.Topic, error) {
@@ -234,15 +238,40 @@ func (*fakePostingWriter) GetTopic(_ context.Context, org, channel, id kernel.ID
 	return conversation.Topic{ID: id, OrganizationID: org, ChannelID: channel}, nil
 }
 
-func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic, member kernel.ID, body string, seq int64) (conversation.Message, error) {
+func (w *fakePostingWriter) InsertMessage(_ context.Context, org, channel, topic, member kernel.ID, body string, seq int64, key *conversation.IdempotencyKey) (conversation.Message, error) {
+	if _, taken := w.keyed[[3][16]byte{org, member, keyBytes(key)}]; key != nil && taken {
+		return conversation.Message{}, conversation.ErrPostKeyTaken
+	}
 	w.org, w.channel, w.member, w.body = org, channel, member, body
 	if w.err != nil {
 		return conversation.Message{}, w.err
 	}
+	w.inserts++
+	posted := conversation.Message{ID: w.id, OrganizationID: org, ChannelID: channel, TopicID: topic, MemberID: member, Body: body, EventSeq: seq}
 	if w.returned != nil {
-		return *w.returned, nil
+		posted = *w.returned
 	}
-	return conversation.Message{ID: w.id, OrganizationID: org, ChannelID: channel, TopicID: topic, MemberID: member, Body: body, EventSeq: seq}, nil
+	if key != nil {
+		if w.keyed == nil {
+			w.keyed = map[[3][16]byte]conversation.Message{}
+		}
+		w.keyed[[3][16]byte{org, member, *key}] = posted
+	}
+	return posted, nil
+}
+
+func (w *fakePostingWriter) KeyedMessage(_ context.Context, org, member kernel.ID, key conversation.IdempotencyKey) (conversation.Message, error) {
+	if m, ok := w.keyed[[3][16]byte{org, member, key}]; ok {
+		return m, nil
+	}
+	return conversation.Message{}, conversation.ErrMessageNotFound
+}
+
+func keyBytes(key *conversation.IdempotencyKey) [16]byte {
+	if key == nil {
+		return [16]byte{}
+	}
+	return *key
 }
 
 // Branching's methods must fail if a posting test calls them.
@@ -312,7 +341,10 @@ func TestMessagePostHandler(t *testing.T) {
 				state := typing.New(realtime.NewHub())
 				actual := conversation.Message{ID: writer.id, OrganizationID: kernel.ID{7}, ChannelID: kernel.ID{8}, TopicID: kernel.ID{6}, MemberID: kernel.ID{5}}
 				writer.returned = &actual
-				place := typing.Place{Channel: actual.ChannelID, Topic: actual.TopicID}
+				// Posting closes the generation in the requested place: the
+				// fake's default topic and the topic URL's are both {2}, and
+				// the returned message's topic {6} is never used (#1155).
+				place := typing.Place{Channel: actual.ChannelID, Topic: kernel.ID{2}}
 				other := typing.Place{Channel: place.Channel, Topic: kernel.ID{3}}
 				defer state.Open(actual.OrganizationID, actual.MemberID, place.Channel)()
 				token := state.IssueComposer(actual.OrganizationID, place, actual.MemberID)
@@ -388,13 +420,9 @@ func TestMessagePostHandler(t *testing.T) {
 					if len(reads) != 0 || strings.Contains(w.Body.String(), `id="conversation"`) || !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) {
 						t.Fatal("enhanced post must render only the composer without reading history")
 					}
-					// A topic fragment posts to the topic: on success the one the
-					// posting transaction returned (the fake returns another
-					// topic than the URL's), after a failure the looked-up one.
+					// A topic fragment posts to the requested topic, never to the
+					// returned message's (the fake returns another topic).
 					target := path
-					if mode.topic && want == 200 {
-						target = view.ConversationURL("acme", kernel.ID{1}, &actual.TopicID)
-					}
 					typingTarget := view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{}) + "/typing" // The fake channel's default topic.
 					if mode.topic {
 						typingTarget = target + "/typing"

@@ -180,6 +180,9 @@ func TestComposerValidationPreservation(t *testing.T) {
 					if kept.Get("body") != values.Get("body") {
 						t.Fatal("422 lost draft")
 					}
+					if kept.Has("idempotency_key") {
+						t.Fatal("422 added a key the request did not send")
+					}
 				})
 			}
 		}

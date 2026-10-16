@@ -49,8 +49,39 @@ func (q *Queries) FirstChannelMessageAfter(ctx context.Context, arg FirstChannel
 	return event_seq, err
 }
 
+const getKeyedMessage = `-- name: GetKeyedMessage :one
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key FROM message
+WHERE organization_id = $1 AND member_id = $2 AND idempotency_key = $3
+`
+
+type GetKeyedMessageParams struct {
+	OrganizationID pgtype.UUID
+	MemberID       pgtype.UUID
+	IdempotencyKey pgtype.UUID
+}
+
+func (q *Queries) GetKeyedMessage(ctx context.Context, arg GetKeyedMessageParams) (Message, error) {
+	row := q.db.QueryRow(ctx, getKeyedMessage, arg.OrganizationID, arg.MemberID, arg.IdempotencyKey)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ChannelID,
+		&i.MemberID,
+		&i.Body,
+		&i.EventSeq,
+		&i.CreatedAt,
+		&i.TopicID,
+		&i.MovedEventSeq,
+		&i.PinnedByMemberID,
+		&i.PinnedAt,
+		&i.IdempotencyKey,
+	)
+	return i, err
+}
+
 const getMessage = `-- name: GetMessage :one
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND event_seq = $3
 `
 
@@ -75,12 +106,13 @@ func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (Message
 		&i.MovedEventSeq,
 		&i.PinnedByMemberID,
 		&i.PinnedAt,
+		&i.IdempotencyKey,
 	)
 	return i, err
 }
 
 const getMessages = `-- name: GetMessages :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key FROM message
 WHERE organization_id = $1 AND channel_id = $2 AND id = ANY($3::uuid[])
 ORDER BY event_seq DESC
 `
@@ -112,6 +144,7 @@ func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Mes
 			&i.MovedEventSeq,
 			&i.PinnedByMemberID,
 			&i.PinnedAt,
+			&i.IdempotencyKey,
 		); err != nil {
 			return nil, err
 		}
@@ -124,8 +157,8 @@ func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]Mes
 }
 
 const insertMessage = `-- name: InsertMessage :one
-INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at
+INSERT INTO message (organization_id, channel_id, topic_id, member_id, body, event_seq, idempotency_key)
+VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key
 `
 
 type InsertMessageParams struct {
@@ -135,6 +168,7 @@ type InsertMessageParams struct {
 	MemberID       pgtype.UUID
 	Body           string
 	EventSeq       int64
+	IdempotencyKey pgtype.UUID
 }
 
 func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (Message, error) {
@@ -145,6 +179,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 		arg.MemberID,
 		arg.Body,
 		arg.EventSeq,
+		arg.IdempotencyKey,
 	)
 	var i Message
 	err := row.Scan(
@@ -159,6 +194,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (M
 		&i.MovedEventSeq,
 		&i.PinnedByMemberID,
 		&i.PinnedAt,
+		&i.IdempotencyKey,
 	)
 	return i, err
 }
@@ -183,7 +219,7 @@ func (q *Queries) LastChannelMessageBefore(ctx context.Context, arg LastChannelM
 }
 
 const listMessagesAfter = `-- name: ListMessagesAfter :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key FROM message
 WHERE organization_id = $1 AND channel_id = $2
   AND ($3::uuid IS NULL OR topic_id = $3::uuid)
   AND event_seq > $4::bigint
@@ -226,6 +262,7 @@ func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterPa
 			&i.MovedEventSeq,
 			&i.PinnedByMemberID,
 			&i.PinnedAt,
+			&i.IdempotencyKey,
 		); err != nil {
 			return nil, err
 		}
@@ -238,7 +275,7 @@ func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterPa
 }
 
 const listMessagesBefore = `-- name: ListMessagesBefore :many
-SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at FROM message
+SELECT id, organization_id, channel_id, member_id, body, event_seq, created_at, topic_id, moved_event_seq, pinned_by_member_id, pinned_at, idempotency_key FROM message
 WHERE organization_id = $1 AND channel_id = $2
   AND ($3::uuid IS NULL OR topic_id = $3::uuid)
   AND ($4::bigint IS NULL OR event_seq < $4::bigint)
@@ -281,6 +318,7 @@ func (q *Queries) ListMessagesBefore(ctx context.Context, arg ListMessagesBefore
 			&i.MovedEventSeq,
 			&i.PinnedByMemberID,
 			&i.PinnedAt,
+			&i.IdempotencyKey,
 		); err != nil {
 			return nil, err
 		}

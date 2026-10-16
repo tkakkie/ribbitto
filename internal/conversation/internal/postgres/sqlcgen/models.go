@@ -31,6 +31,7 @@ type Message struct {
 	MovedEventSeq    pgtype.Int8
 	PinnedByMemberID pgtype.UUID
 	PinnedAt         pgtype.Timestamptz
+	IdempotencyKey   pgtype.UUID
 }
 
 type Topic struct {

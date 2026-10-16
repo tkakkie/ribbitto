@@ -14,6 +14,14 @@ and drives paging and unread counts (unique per organisation). An event
 reads its message by organisation, channel and `event_seq`; the message's
 stable identifier for the DOM and links remains `id`.
 
+A message posted from a composer may also store that composer's
+**idempotency key**, a random UUID the server renders into the form
+([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
+An organisation and author have at most one message per key; another member
+or organisation may use the same key for their own message. The key grants
+nothing, is never shown to anyone else and lives as long as its message.
+Branching's notices and messages posted without a key have none.
+
 Bodies are **plain text** today, and the stored body is the source of truth.
 A stored message is never reinterpreted, and rendered HTML is at most a
 disposable cache
@@ -104,7 +112,7 @@ resolved. Its extraction resolves references to `@handle` at use.
 
 ## Posting from the channel page
 
-The bottom composer posts through `conversation.Posting.PostToTopic`. On the
+The bottom composer posts through `conversation.Posting.Send`. On the
 latest page, htmx replaces only the composer with an empty form; the message arrives
 through the stream (on reconnect if disconnected). A 422 replaces only the
 composer, keeping the draft and its field error. Older pages use a plain form:
@@ -120,6 +128,14 @@ or after the response, including delivery after reconnect. Each successful
 post's scroll intent is consumed once; failed posts create none. Focus stays in
 the composer. Live appends are announced politely;
 replay duplicates replace the same message id without another announcement.
+
+A **repeated send** (the same key again, after a lost response or a double
+submission) posts nothing: it is answered as a success naming the first
+message, wherever branching has moved it since, and the composer stays on the
+requested feed or topic. The same key with other text or another channel is
+not a retry: 409 keeps the text with an error and a fresh key, so sending
+again posts it. A malformed key answers 400; a form without one posts without
+deduplication.
 
 One message has its own URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
 `/organizations/{slug}/messages/{message-id}`. It answers 303 to the message's

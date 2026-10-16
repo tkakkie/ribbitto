@@ -81,7 +81,7 @@ func TestWriterIn(t *testing.T) {
 		if got, err := writer.GetTopic(ctx, f.acme, f.general, planning); err != nil || got.ID != planning || got.Name != "Planning" || got.IsDefault {
 			t.Fatalf("GetTopic = %+v, %v; want Planning", got, err)
 		}
-		posted, err := writer.InsertMessage(ctx, f.acme, f.general, planning, f.alice, "hello", 1)
+		posted, err := writer.InsertMessage(ctx, f.acme, f.general, planning, f.alice, "hello", 1, nil)
 		if err != nil || posted.ID == (kernel.ID{}) || posted.OrganizationID != f.acme || posted.ChannelID != f.general || posted.TopicID != planning ||
 			posted.MemberID != f.alice || posted.Body != "hello" || posted.EventSeq != 1 || posted.CreatedAt.IsZero() {
 			t.Fatalf("InsertMessage = %+v, %v", posted, err)
@@ -108,7 +108,7 @@ func TestWriterErrors(t *testing.T) {
 	ctx, f := t.Context(), newFixtures(t, pool)
 	insert := func(channelID, topicID, memberID kernel.ID, body string) func(conversation.Writer) error {
 		return func(w conversation.Writer) error {
-			_, err := w.InsertMessage(ctx, f.acme, channelID, topicID, memberID, body, 1)
+			_, err := w.InsertMessage(ctx, f.acme, channelID, topicID, memberID, body, 1, nil)
 			return err
 		}
 	}
@@ -331,4 +331,47 @@ func TestLastChannelMessageBeforeScopes(t *testing.T) {
 		}
 		return nil
 	}))
+}
+
+// A key decides only within one organisation and author: the index takes
+// the same key from another author, and the lookup never crosses authors.
+func TestWriterIdempotencyKey(t *testing.T) {
+	t.Parallel()
+	pool := pgtest.New(t)
+	ctx, f := t.Context(), newFixtures(t, pool)
+	carol := orgtest.Member(t, pool, f.acme, identitytest.Account(t, pool, "carol@example.org", "carol"), org.RoleMember, "carol", 1)
+	key := conversation.NewIdempotencyKey()
+	requireNoError(t, platform.InTx(ctx, pool, func(tx platform.Tx) error {
+		w := writerIn(tx)
+		stored := map[[2]kernel.ID]kernel.ID{}
+		for i, author := range []struct{ organization, channel, topic, member kernel.ID }{
+			{f.acme, f.general, f.generalTopic, f.alice}, {f.acme, f.general, f.generalTopic, carol}, {f.globex, f.foreign, f.foreignTopic, f.bob},
+		} {
+			posted, err := w.InsertMessage(ctx, author.organization, author.channel, author.topic, author.member, "keyed", int64(i+1), &key)
+			requireNoError(t, err)
+			stored[[2]kernel.ID{author.organization, author.member}] = posted.ID
+		}
+		for scope, id := range stored {
+			if got, err := w.KeyedMessage(ctx, scope[0], scope[1], key); err != nil || got.ID != id {
+				t.Fatalf("KeyedMessage(%v) = %+v, %v; want %v", scope, got, err, id)
+			}
+		}
+		for _, scope := range [][2]kernel.ID{{f.globex, f.alice}, {f.acme, f.bob}} {
+			if _, err := w.KeyedMessage(ctx, scope[0], scope[1], key); !errors.Is(err, conversation.ErrMessageNotFound) {
+				t.Fatalf("KeyedMessage across scopes %v: %v", scope, err)
+			}
+		}
+		if _, err := w.KeyedMessage(ctx, f.acme, f.alice, conversation.NewIdempotencyKey()); !errors.Is(err, conversation.ErrMessageNotFound) {
+			t.Fatalf("KeyedMessage with an unused key: %v", err)
+		}
+		return nil
+	}))
+	// A taken key fails the insert, which aborts its transaction.
+	err := platform.InTx(ctx, pool, func(tx platform.Tx) error {
+		_, err := writerIn(tx).InsertMessage(ctx, f.acme, f.general, f.generalTopic, f.alice, "again", 4, &key)
+		return err
+	})
+	if !errors.Is(err, conversation.ErrPostKeyTaken) {
+		t.Fatalf("taken key: %v, want ErrPostKeyTaken", err)
+	}
 }

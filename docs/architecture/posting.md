@@ -15,8 +15,8 @@ sequenceDiagram
   A->>H: Notifier.Raise(organizationID, posted.EventSeq) (after commit)
 ```
 
-`conversation.Posting.PostToTopic` validates and owns the transaction through
-its `TxRunner`: its transaction-bound `EventSequence` takes the sequence, then
+`conversation.Posting.Send` validates and owns the transaction through
+its `TxRunner` (`PostToTopic`, `PostFromPage` and `Post` delegate to it): its transaction-bound `EventSequence` takes the sequence, then
 its `Writer` reads the default topic (and the selected topic, if supplied)
 and inserts the message; `Post` is its shorthand for the default topic. It
 encodes the post with `conversation.EncodePosted` and calls its
@@ -55,6 +55,23 @@ keys also enforce the message's organisation scope.
   (payload: organisation and sequence) sent inside the writing transaction;
   each listener would raise its local hub's value, and after reconnecting
   read `organization.event_seq` and raise the value to that (#236).
+
+**Repeated sends** ([decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md#b-idempotency-key-1155)).
+Web posts through `conversation.Posting.Send`, which takes the optional
+cursor and the composer's `IdempotencyKey`; `PostToTopic` and `PostFromPage`
+delegate to it. The insert stores the key, and the partial unique index
+`message_idempotency_key_idx` on (organisation, author, key) decides a repeat,
+not a lookup first. Its `23505` becomes `ErrPostKeyTaken`, which rolls back
+the transaction with its `event_seq` increment (no holes). `Send` then reads
+the stored message by the membership's organisation, author and key in a
+short transaction of its own (`Writer.KeyedMessage`) and returns it with no
+event and no notification. The organisation lock serialises two sends with
+one key, so the second always sees the first's row. A repeat whose validated
+body or channel differs returns `ErrPostKeyReused` with the stored message:
+it is not a retry, and its text must not be dropped. The topic is not
+compared, because branching may have moved the message. `Sent.Topic` is the
+requested place resolved before the insert; a repeat's composer and typing
+stay there.
 
 The channel page reads its channel, sidebar, history and both author batches
 in one `REPEATABLE READ READ ONLY` transaction owned by `conversation.Reader`

@@ -15,6 +15,7 @@
 | moved_event_seq | bigint |  | true |  |  |  |
 | pinned_by_member_id | uuid |  | true |  | [public.member](public.member.md) |  |
 | pinned_at | timestamp with time zone |  | true |  |  |  |
+| idempotency_key | uuid |  | true |  |  |  |
 
 ## Constraints
 
@@ -50,6 +51,7 @@
 | message_topic_event_seq_idx | CREATE INDEX message_topic_event_seq_idx ON public.message USING btree (organization_id, topic_id, event_seq) |
 | message_moved_event_seq_idx | CREATE INDEX message_moved_event_seq_idx ON public.message USING btree (organization_id, topic_id, moved_event_seq) WHERE (moved_event_seq IS NOT NULL) |
 | message_channel_pin_idx | CREATE INDEX message_channel_pin_idx ON public.message USING btree (organization_id, channel_id, pinned_at DESC, id) WHERE (pinned_at IS NOT NULL) |
+| message_idempotency_key_idx | CREATE UNIQUE INDEX message_idempotency_key_idx ON public.message USING btree (organization_id, member_id, idempotency_key) WHERE (idempotency_key IS NOT NULL) |
 
 ## Relations
 
@@ -73,6 +75,7 @@ erDiagram
   bigint moved_event_seq
   uuid pinned_by_member_id FK
   timestamp_with_time_zone pinned_at
+  uuid idempotency_key
 }
 "public.member" {
   uuid id

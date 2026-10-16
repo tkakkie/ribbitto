@@ -27,7 +27,7 @@ func TestTxRunnerCommits(t *testing.T) {
 	channel := conversationtest.Channel(t, pool, organizationID, "general", false)
 	runner := newTxRunner(pool)
 	requireNoError(t, runner.InTx(ctx, func(tx platform.Tx) error {
-		_, err := writerIn(tx).InsertMessage(ctx, organizationID, channel.ID, channel.DefaultTopicID, memberID, "hello", 1)
+		_, err := writerIn(tx).InsertMessage(ctx, organizationID, channel.ID, channel.DefaultTopicID, memberID, "hello", 1, nil)
 		return err
 	}))
 	var n int

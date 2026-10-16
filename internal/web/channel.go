@@ -330,7 +330,7 @@ func (p channelPages) render(w http.ResponseWriter, r *http.Request, m org.Membe
 		if history.Topic != nil {
 			place = history.Topic.ID
 		}
-		page.Composer = p.issueComposer(m, history.Current.ID, place)
+		page.Composer, page.IdempotencyKey = p.issueComposer(m, history.Current.ID, place), freshKey()
 	}
 	var snapshotSeq int64
 	if history.EventCursor != nil {
@@ -383,19 +383,29 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		}
 		cursor = &value
 	}
+	// A key deduplicates repeated sends (decision 37 (b)); pages rendered
+	// before keys existed send none and post without deduplication.
+	var key *conversation.IdempotencyKey
+	submittedKey, keyed := r.PostForm["idempotency_key"]
+	if keyed {
+		parsed, ok := pathID(submittedKey[0])
+		if !ok || len(submittedKey) != 1 {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		key = new(conversation.IdempotencyKey(parsed))
+	}
 	body := r.PostForm.Get("body")
 	var composer *string
 	if _, present := r.PostForm["composer"]; present {
 		composer = new(r.PostForm.Get("composer"))
 	}
-	var posted conversation.Message
-	if cursor == nil {
-		posted, err = p.posting.PostToTopic(r.Context(), m, c.ID, p.topicID, body)
-	} else {
-		posted, err = p.posting.PostFromPage(r.Context(), m, c.ID, p.topicID, body, *cursor)
-	}
+	sent, err := p.posting.Send(r.Context(), m, c.ID, conversation.Send{Topic: p.topicID, Body: body, Cursor: cursor, Key: key})
+	posted := sent.Message
+	// A repeat closes the generation in the requested place it was issued
+	// for, not in the topic branching may have moved the message into.
 	if err == nil && p.typing != nil {
-		p.typing.Posted(posted.OrganizationID, typing.Place{Channel: posted.ChannelID, Topic: posted.TopicID}, posted.MemberID, r.PostForm.Get("composer"))
+		p.typing.Posted(posted.OrganizationID, typing.Place{Channel: posted.ChannelID, Topic: sent.Topic}, posted.MemberID, r.PostForm.Get("composer"))
 	}
 	enhanced := r.Header.Get("HX-Request") == "true"
 	topic := p.topicID
@@ -408,12 +418,24 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 		} else {
 			topic = &resolved.ID
 		}
+	} else if topic != nil {
+		// The posting transaction resolved the requested topic; reusing it
+		// keeps issuance free of another lookup.
+		topic = &sent.Topic
 	}
 	switch {
 	case errors.Is(err, conversation.ErrInvalidPostCursor):
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 	case errors.Is(err, conversation.ErrInvalidBody):
-		p.renderComposer(w, r, m, c, topic, http.StatusUnprocessableEntity, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.body"})
+		var kept *string
+		if keyed {
+			kept = &submittedKey[0]
+		}
+		p.renderComposer(w, r, m, c, topic, http.StatusUnprocessableEntity, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.body", IdempotencyKey: kept})
+	case errors.Is(err, conversation.ErrPostKeyReused):
+		// Not a retry: keep the text, name the stored message and issue a
+		// fresh key, so sending again posts the new text.
+		p.renderComposer(w, r, m, c, topic, http.StatusConflict, view.ChannelPage{Composer: composer, EventCursor: cursor, Body: body, BodyError: "message.error.repeat", PostedMessageID: &posted.ID, IdempotencyKey: freshKey()})
 	case errors.Is(err, conversation.ErrChannelNotFound), errors.Is(err, org.ErrNotFound), errors.Is(err, conversation.ErrTopicNotFound):
 		// The channel, membership or organisation went away after this
 		// request resolved them; answer as for a non-member.
@@ -421,11 +443,6 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 	case err != nil:
 		serverError(w, r, "posting message", err)
 	case enhanced:
-		// The posting transaction resolved the topic; reusing it keeps
-		// issuance free of another lookup.
-		if topic != nil {
-			topic = &posted.TopicID
-		}
 		p.renderComposer(w, r, m, c, topic, http.StatusOK, view.ChannelPage{EventCursor: cursor, PostedMessageID: &posted.ID})
 	default:
 		http.Redirect(w, r, view.ConversationURL(m.Organization.Slug, c.ID, p.topicID), http.StatusSeeOther)
@@ -442,7 +459,7 @@ func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m o
 			place, page.Topic = *topic, &view.Topic{ID: *topic}
 		}
 		if page.BodyError == "" {
-			page.Composer = p.issueComposer(m, c.ID, place)
+			page.Composer, page.IdempotencyKey = p.issueComposer(m, c.ID, place), freshKey()
 		}
 		page.Organization, page.Current = view.Organization{Slug: m.Organization.Slug, Name: m.Organization.Name}, viewChannel(c)
 		templ.Handler(view.MessageComposer(page), templ.WithStatus(status)).ServeHTTP(w, r)
@@ -457,6 +474,12 @@ func (p channelPages) issueComposer(m org.Membership, channel, topic kernel.ID) 
 		return nil
 	}
 	return new(p.typing.IssueComposer(m.Organization.ID, typing.Place{Channel: channel, Topic: topic}, m.Member.ID))
+}
+
+// freshKey renders a new composer key: on every render but a 422, which
+// keeps the submitted one so that a corrected send is still deduplicated.
+func freshKey() *string {
+	return new(conversation.NewIdempotencyKey().String())
 }
 
 // channelID parses the {channelID} path segment: the UUID in its canonical

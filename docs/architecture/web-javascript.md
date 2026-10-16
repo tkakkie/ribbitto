@@ -18,7 +18,7 @@ It changes only the text and visibility of server-rendered badges, never creates
 htmx sends resync requests. The markup contract is in
 [web layers](web-layers.md#htmx).
 
-- `message-stream-v11.js` observes `checkpoint` to update only `sse-connect`'s
+- `message-stream-v12.js` observes `checkpoint` to update only `sse-connect`'s
   `after`, monotonically and independently of applied/shown cursors. It emits `read-applied` only after successful DOM
   application is shown while visible, including on return from a hidden tab.
   `read-visibility-v6.js` initializes on scoped `htmx:load`; automatic
@@ -56,6 +56,9 @@ htmx sends resync requests. The markup contract is in
   | `data-unread-count` on every badge | raw numeric count, including hidden zero; only its number, text and visibility change |
   | `#sidebar-resync` | hidden htmx trigger; custom `sidebar-resync` event sends the member-scoped POST, without a swap |
 
+- `pins-sync-v1.js` compares server snapshot sequences before pins/response
+  swaps and selects loaded controls' server-rendered actions from the section's
+  pin IDs. It restores button focus without touching history, draft or cursors.
 - `message-link-v1.js` handles "Copy link" in a message's actions menu
   (#1159): it copies the link's browser-resolved absolute `href` with the
   Clipboard API, so shared live renders hold no origin; marks the link
@@ -70,7 +73,7 @@ htmx sends resync requests. The markup contract is in
   form-control values and call `requestSubmit()`, `htmx.trigger` and
   `htmx.process` on server-rendered or template-cloned elements; request
   URLs come from server-rendered attributes, never built by a script. The
-  one kept rewrite is `message-stream-v11.js` updating only the `after`
+  one kept rewrite is `message-stream-v12.js` updating only the `after`
   parameter of the server-rendered `sse-connect` URL (above).
 - **Storage:** `localStorage` and `sessionStorage` may hold only
   non-sensitive UX settings whose loss affects no function and no server
@@ -92,9 +95,19 @@ htmx sends resync requests. The markup contract is in
 ## Composer
 
 [Decision 37](../decisions/37-composer-javascript-pending-posts-keys-and-drafts.md)
-allows bounded composer state. Each part but the server-rendered key is
-*planned*, awaiting its issue; today the composer script keeps none of it.
+allows bounded composer state. The server-rendered key and the sending
+glue below exist; the parts marked *planned* await their issues, and today
+the composer script keeps none of their state.
 
+- **Sending** (input glue, #1173): the textarea stays usable while a post is
+  in flight, since answers replace only `#message-composer-state`. On a 200
+  the script removes the sent body (htmx's request parameters) from the
+  textarea's start, only if it still starts with it, with
+  `setRangeText("", 0, length, "preserve")`: the caret and selection stay on
+  the remaining text, and no `input` event fires, so no typing signal
+  follows. During an IME composition it waits for `compositionend`, keeping
+  that one removal per textarea in a `WeakMap`. Every answer sets the
+  textarea's `aria-invalid` from the state's `data-invalid`.
 - **Pending own post** (planned, #1156; queue #1174): on enhanced latest
   composers only, a pending item cloned from a server-rendered `<template>`,
   body through `textContent`, in its own list beside `#message-items`. At

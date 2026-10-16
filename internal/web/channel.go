@@ -32,6 +32,7 @@ type Channels interface {
 // the channel's pins when the overview is open, the sidebar snapshot the channel list page shows, one message by sequence or
 // a bounded batch by ID for the stream, and where a message is now for its URL.
 type MessageReader interface {
+	ReadPins(context.Context, org.Membership, kernel.ID) (conversation.PinsSnapshot, error)
 	Around(context.Context, org.Membership, kernel.ID, *kernel.ID, int64) (conversation.ChannelPage, error)
 	Locate(context.Context, org.Membership, kernel.ID) (conversation.Location, error)
 	Members(context.Context, org.Membership, kernel.ID, *kernel.ID) (conversation.MembersPage, error)
@@ -451,7 +452,8 @@ func (p channelPages) post(w http.ResponseWriter, r *http.Request, m org.Members
 
 // Enhanced posts never replace history or the connection's snapshot cursor.
 // topic is the resolved posting topic of a topic view, nil on the feed; the
-// fragment posts there and its generation is scoped to it.
+// fragment's typing form signals there and its generation is scoped to it,
+// while the page's message form keeps its own action.
 func (p channelPages) renderComposer(w http.ResponseWriter, r *http.Request, m org.Membership, c conversation.Channel, topic *kernel.ID, status int, page view.ChannelPage) {
 	if r.Header.Get("HX-Request") == "true" {
 		place := c.DefaultTopicID

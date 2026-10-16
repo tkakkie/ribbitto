@@ -1,12 +1,11 @@
-# Pin delivery *(partially implemented, #880)*
+# Pin delivery
 
 The [domain rules](../domain/pins.md) put pin metadata on messages, owned
 by `conversation`. The maintainer agreed this design on 2026-10-12 (#880);
 pin storage (#887), durable writes (#888) and the overview's pins read in
 the page's snapshot (`conversation.Reader.Overview`, #889) are implemented,
 and so are the generic channel-state writer seam (#891), pins-only snapshot
-source and consumer renderer filter (#892). The separate router and web
-source stay unwired until live activation (#1205), which also owns browser delivery.
+source and consumer renderer filter (#892). Production registers the pin router and wires the web source (#1205).
 
 ## Durable invalidation, current display
 
@@ -52,7 +51,7 @@ those in [replay](replay.md#vanished-messages).
 
 `realtime.ChannelStateSource` supplies consumer-defined triggers and fresh
 whole-state reads/renders; `InterestChannelState` selects the connection's
-channel across topics. It is not yet exposed as a web parameter (#1205).
+channel across topics, exposed as browser-facing `want=pins` (#1205).
 The writer validates the cursor before the connect refresh, then classifies
 scoped triggers before message rendering/filtering. It uses
 `ChannelStateInterval` (one second), a dirty flag and the existing combined
@@ -92,3 +91,10 @@ but needs separate missed-notification recovery); polling (extra delay and
 requests). The design uses durable triggers for persisted changes,
 with current-state display as the sidebar does. Pins are not ephemeral
 presence/typing, so decision 31's memory-only owners remain unchanged.
+
+The section carries `data-pins-seq` from its repeatable-read snapshot and
+`data-pinned-ids`. Pin responses include the same current section out of band;
+`pins-sync-v1.js` rejects older frames or responses before swapping. This
+orders racing transports without changing durable or applied cursors. Loaded
+controls render both explicit actions; the script only selects visibility and
+restores focus. Closing the overview unsubscribes; its controls recover on reload.

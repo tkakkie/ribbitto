@@ -144,7 +144,7 @@ func olderURL(page ChannelPage) string {
 }
 
 // streamURL declares the page's interests independently of its history URL.
-// A panel adds presence only; the conversation beside it keeps its own. The
+// A panel adds presence or pins; the conversation beside it keeps its own. The
 // list page shows only the sidebar, bound to the channel it nests.
 func streamURL(page ChannelPage) string {
 	want := "sidebar"
@@ -153,6 +153,9 @@ func streamURL(page ChannelPage) string {
 	}
 	if page.Members != nil && page.Members.PresenceAfter != "" {
 		want += ",presence"
+	}
+	if page.Panel == "overview" {
+		want += ",pins"
 	}
 	endpoint := fmt.Sprintf("/organizations/%s/events?after=%d&want=%s&channel=%s", page.Organization.Slug, *page.EventCursor, want, idValue(page.Current.ID))
 	if page.Topic != nil {
@@ -260,7 +263,7 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 						if latest(page) && page.EventCursor != nil {
 							<div id="typing-status" sse-swap="typing" hx-swap="innerHTML" role="status" aria-live="polite" aria-atomic="true" aria-label={ i18n.T(ctx, "activity.label") } class="min-h-6 px-3 text-caption text-muted"></div>
 						}
-						@messageComposer(page, false)
+						@messageComposer(page)
 					</div>
 				</main>
 				if page.Panel != "" {
@@ -275,12 +278,13 @@ templ ChannelScreen(stylesheetURL string, page ChannelPage) {
 		<script defer src="/static/read-visibility-v6.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/branch-selection-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-time-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-composer-v7.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-composer-v8.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/pins-sync-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-link-v1.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/message-history-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/side-panel-v3.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v11.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v12.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
 
@@ -364,7 +368,7 @@ templ ChannelListScreen(stylesheetURL string, page ChannelPage) {
 		}
 		<script defer src="/static/sidebar-scroll-v2.js" nonce={ templ.GetNonce(ctx) }></script>
 		<script defer src="/static/sidebar-unread-v2.js" nonce={ templ.GetNonce(ctx) }></script>
-		<script defer src="/static/message-stream-v11.js" nonce={ templ.GetNonce(ctx) }></script>
+		<script defer src="/static/message-stream-v12.js" nonce={ templ.GetNonce(ctx) }></script>
 	}
 }
 
@@ -397,30 +401,60 @@ templ unreadDivider(seq, firstUnread int64) {
 	}
 }
 
-// MessageComposer refreshes both sibling forms after enhanced submissions.
+// MessageComposer answers an enhanced post: the composer's state and, out of
+// band, the signal form with the same generation. It never holds the
+// textarea, so text typed while the post was in flight stays (#1173).
 templ MessageComposer(page ChannelPage) {
-	@messageComposer(page, true)
+	@composerState(page)
+	@typingForm(page, true)
 }
 
-// Only the enhanced fragment replaces the signal form out of band. htmx
-// applies out-of-band swaps from any response, including the history page
-// Load older fetches, which would install a generation no post ever closes.
-templ messageComposer(page ChannelPage, oob bool) {
+// The textarea and the send button stay outside every swap: only the state
+// is replaced, and the button alone is disabled while a post is in flight.
+templ messageComposer(page ChannelPage) {
 	<form
 		id="message-composer"
-		if page.PostedMessageID != nil {
-			data-posted-message={ MessageDOMID(*page.PostedMessageID) }
-		}
 		method="post"
 		action={ conversationURL(page) }
 		if latest(page) {
 			hx-post={ conversationURL(page) }
-			hx-target="#message-composer"
+			hx-target="#message-composer-state"
 			hx-swap="outerHTML"
-			hx-disabled-elt="find textarea, find button"
+			hx-disabled-elt="find button"
 			hx-sync="this:drop"
 		}
 		class="flex shrink-0 flex-col gap-2 rounded-xl border border-border-strong bg-input p-3"
+	>
+		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
+		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
+		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-entry">{ "\n" + page.Body }</textarea>
+		<div class="flex items-end justify-between gap-3">
+			// The sending status covers the help, which keeps its space, so the
+			// composer does not change height while a post is in flight.
+			<div class="relative min-w-0">
+				@composerState(page)
+				<p id="message-sending" role="status" class="absolute inset-0 text-caption text-muted"><span class="hidden sending:inline">{ i18n.T(ctx, "message.sending") }</span></p>
+			</div>
+			<button type="submit" aria-label={ i18n.T(ctx, "message.send") } class="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand enabled:hover:bg-brand-hover transition-feedback motion-safe:active:scale-96 disabled:opacity-50">
+				@Icon("send-regular", 20)
+			</button>
+		</div>
+	</form>
+	@typingForm(page, false)
+}
+
+// composerState holds what each answer renews; data-invalid is the field
+// error the script copies to the textarea's aria-invalid.
+templ composerState(page ChannelPage) {
+	<div
+		id="message-composer-state"
+		if page.PostedMessageID != nil {
+			data-posted-message={ MessageDOMID(*page.PostedMessageID) }
+		}
+		if page.BodyError != "" {
+			data-invalid
+		}
+		class="sending:invisible"
 	>
 		if page.Composer != nil {
 			<input type="hidden" name="composer" value={ *page.Composer }/>
@@ -431,21 +465,20 @@ templ messageComposer(page ChannelPage, oob bool) {
 		if latest(page) && page.EventCursor != nil {
 			<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		}
-		<label for="message-body" class="font-semibold">{ i18n.T(ctx, "message.body") }</label>
-		// HTML consumes the first newline after <textarea>; add one so drafts keep theirs.
-		<textarea id="message-body" name="body" rows="3" dir="auto" aria-invalid={ fmt.Sprint(page.BodyError != "") } aria-describedby="message-help" class="w-full resize-none rounded-md bg-input px-3 py-2 text-title text-fg max-desk:text-entry">{ "\n" + page.Body }</textarea>
-		<div class="flex items-end justify-between gap-3">
-			if page.BodyError != "" {
-				<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, page.BodyError) }</p>
-			} else {
-				<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
-			}
-			<button type="submit" aria-label={ i18n.T(ctx, "message.send") } class="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand enabled:hover:bg-brand-hover transition-feedback motion-safe:active:scale-96 disabled:opacity-50">
-				@Icon("send-regular", 20)
-			</button>
-		</div>
-	</form>
-	// A sibling isolates signal controls and synchronization from submission.
+		if page.BodyError != "" {
+			<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, page.BodyError) }</p>
+		} else {
+			<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
+		}
+	</div>
+}
+
+// A sibling isolates signal controls and synchronization from submission.
+// Only the enhanced fragment replaces it out of band. htmx applies
+// out-of-band swaps from any response, including the history page Load older
+// fetches, which would install a generation no post ever closes.
+templ typingForm(page ChannelPage, oob bool) {
+	{{ _ = ctx }}
 	<form
 		id="typing-form"
 		hidden

@@ -18,7 +18,7 @@ Selection may use response-only ids. The selector helper supports `#id`
 and `#id > tag`, including comma-separated lists; new syntax needs explicit
 test support. Non-id targets `this`, `closest …` and `find …` are allowed;
 any ids they name are still checked in the page. The composer's
-`hx-disabled-elt="find textarea, find button"` and `hx-sync="this:drop"`
+`hx-disabled-elt="find button"` and `hx-sync="this:drop"`
 are not swap selectors. The real sibling typing form is checked for its POST
 route, matching action/method, generation-only controls, no-swap and empty 204;
 other requests retain the existing response and fallback checks.
@@ -64,12 +64,11 @@ session-bound drafts, with their bounds and owner checks.
 ### Decision 37 checks
 
 Existing checks already cover part of it: the HTML-generation patterns
-(a pending item's body goes in through `textContent`), the `fetch`,
-`XMLHttpRequest` and `indexedDB` patterns, and `TestComponentsMarkup` for
+(a pending item's body goes in through `textContent`), the requests
+patterns (since #1173 also `htmx.ajax`, `sendBeacon`, `WebSocket` and
+`EventSource`) and the `indexedDB` pattern, and `TestComponentsMarkup` for
 components rendered alone. Planned, each awaiting its issue:
 
-- #1173 extends the requests pattern to `htmx.ajax`, `sendBeacon`,
-  `WebSocket` and `EventSource`.
 - #1156 adds a browser test that a body with markup shows as text and that
   the pending item is removed.
 - #1178 limits `localStorage` to the drafts script and tests the sign-in
@@ -89,7 +88,7 @@ components rendered alone. Planned, each awaiting its issue:
 ### Shared browser tests
 
 `TestBrowser` in `internal/web/message_stream_browser_test.go` is the shared
-browser suite. Its stream cases run the embedded `message-stream-v11.js`, vendored htmx and SSE extension
+browser suite. Its stream cases run the embedded `message-stream-v12.js`, vendored htmx and SSE extension
 in headless Chrome through go-rod. An HTTP test server renders real
 `ChannelScreen` and `MovedMessageItems` components without a database. Controlled
 SSE deliveries and history responses cover both topic sides, bounded
@@ -106,7 +105,8 @@ there if the load is still pending (#1129).
 
 Composer cases run real signal/post handlers with request and DOM gates: IME,
 input throttling, draft isolation, independent in-flight signals, 422/retry,
-replacement, closed/fresh generations, enhanced latest feed/topic posts and
+replacement, closed/fresh generations, a post held in flight while typing
+and composing (#1173), enhanced latest feed/topic posts and
 plain feed/topic posts (latest/older). `TestTopicPostBrowser` (`cmd/ribbitto`)
 posts from a topic view through real PostgreSQL and the real stream.
 The composer harness controls only the two-second throttle timer, without sleeps.
@@ -141,7 +141,8 @@ It rejects:
   as `+=`; calls to `insertAdjacentHTML`, `document.write`,
   `document.writeln` and `createContextualFragment`. Reads and comparisons
   of HTML properties pass.
-- `fetch`, `XMLHttpRequest` and `indexedDB` identifiers.
+- `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource` and
+  `indexedDB` identifiers, and `htmx.ajax`.
 - Calls to `eval`, `new Function`, and `setTimeout`/`setInterval` with a
   directly quoted first argument. These evaluation restrictions restate
   the existing CSP without `'unsafe-eval'` ([`rendering.md`](rendering.md)).
@@ -172,7 +173,7 @@ application script in `web/static` was read against these rules, first on
 |---|---|---|
 | `view/channel.templ`: `ChannelPage.Messages` | The handler now converts app entries to `view.Message` values | #194; depguard `view` rule |
 | Composer script's `htmx:beforeSwap` made 422 responses swap | JavaScript decided what htmx swaps | #198: layout's htmx config |
-| `message-stream-v11.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
+| `message-stream-v12.js` swaps through `htmx.swap`: `outerHTML` for a message id already present, else append | The extension's swap style is fixed per element, so it cannot replace by id or append | Kept, by design: SSE glue; the HTML stays server-rendered (#159) |
 
 Everything else conforms:
 

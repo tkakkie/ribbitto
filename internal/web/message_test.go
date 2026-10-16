@@ -417,20 +417,28 @@ func TestMessagePostHandler(t *testing.T) {
 					return
 				}
 				if hx {
-					if len(reads) != 0 || strings.Contains(w.Body.String(), `id="conversation"`) || !strings.HasPrefix(w.Body.String(), `<form id="message-composer"`) {
-						t.Fatal("enhanced post must render only the composer without reading history")
+					if len(reads) != 0 || strings.Contains(w.Body.String(), `id="conversation"`) || !strings.HasPrefix(w.Body.String(), composerFragment) {
+						t.Fatal("enhanced post must render only the composer state without reading history")
 					}
-					// A topic fragment posts to the requested topic, never to the
+					// A topic fragment signals the requested topic, never the
 					// returned message's (the fake returns another topic).
-					target := path
 					typingTarget := view.ConversationURL("acme", kernel.ID{1}, &kernel.ID{}) + "/typing" // The fake channel's default topic.
 					if mode.topic {
-						typingTarget = target + "/typing"
+						typingTarget = path + "/typing"
 					}
-					form, signal := enhancedForms(t, w.Body.String())
-					if attr(form, "action") != target || attr(form, "hx-post") != target || attr(signal, "hx-post") != typingTarget {
-						t.Fatalf("fragment posts to %q (htmx %q, typing %q), want %q", attr(form, "action"), attr(form, "hx-post"), attr(signal, "hx-post"), target)
+					state, signal := enhancedForms(t, w.Body.String())
+					if attr(signal, "hx-post") != typingTarget {
+						t.Fatalf("fragment signals %q, want %q", attr(signal, "hx-post"), typingTarget)
 					}
+					// The script copies this flag to the page's textarea, which
+					// the answer never replaces (#1173).
+					if _, invalid := attrOK(state, "data-invalid"); invalid != (want == 422) || find(state, atom.Textarea) != nil {
+						t.Fatal("enhanced answer flags the field wrongly or replaces the textarea")
+					}
+					if want == 422 && (attr(find(state, atom.P), "role") != "alert" || writer.body != "") {
+						t.Fatal("enhanced 422 lacks its alert or posted")
+					}
+					return
 				} else {
 					assertFullConversationPage(t, w.Body.String())
 				}
@@ -452,9 +460,9 @@ func TestMessagePostHandler(t *testing.T) {
 	}
 }
 
-// enhancedForms returns a composer fragment's message form and its
-// out-of-band signal form.
-func enhancedForms(t *testing.T, body string) (form, signal *html.Node) {
+// enhancedForms returns a composer fragment's state and its out-of-band
+// signal form.
+func enhancedForms(t *testing.T, body string) (state, signal *html.Node) {
 	t.Helper()
 	doc, err := html.Parse(strings.NewReader(body))
 	if err != nil {
@@ -462,16 +470,16 @@ func enhancedForms(t *testing.T, body string) (form, signal *html.Node) {
 	}
 	for n := range doc.Descendants() {
 		switch attr(n, "id") {
-		case "message-composer":
-			form = n
+		case "message-composer-state":
+			state = n
 		case "typing-form":
 			signal = n
 		}
 	}
-	if form == nil || signal == nil {
-		t.Fatal("fragment lacks the message or signal form")
+	if state == nil || signal == nil {
+		t.Fatal("fragment lacks the composer state or signal form")
 	}
-	return form, signal
+	return state, signal
 }
 
 func TestMessagePagingHandler(t *testing.T) {
@@ -748,4 +756,8 @@ func (fakePostReads) Read(context.Context, org.Membership, kernel.ID, *kernel.ID
 func (f fakeMessages) Sidebar(ctx context.Context, m org.Membership, id kernel.ID, topic *kernel.ID) (conversation.SidebarSnapshot, error) {
 	page, err := f.Page(ctx, m, id, topic, nil)
 	return conversation.SidebarSnapshot{Current: page.Current, Channels: page.Channels, Topics: page.Topics, SnapshotSeq: 42}, err
+}
+
+func (f fakeMessages) ReadPins(context.Context, org.Membership, kernel.ID) (conversation.PinsSnapshot, error) {
+	return conversation.PinsSnapshot{Pins: f.pins, SnapshotSeq: 42}, nil
 }

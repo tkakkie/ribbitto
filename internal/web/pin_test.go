@@ -50,10 +50,13 @@ func TestPinRoutes(t *testing.T) {
 		{name: "pin", path: base + "/pin", status: 303, want: []string{view.MessageURL("acme", kernel.ID{8})}, calls: 1},
 		{name: "unpin", path: base + "/unpin", status: 303, want: []string{view.MessageURL("acme", kernel.ID{8})}, calls: 1},
 		// The control flips to the other desired action, keeping its ids for focus.
-		{name: "enhanced pin", path: base + "/pin", hx: true, status: 200, want: []string{`action="` + base + `/unpin"`, `id="pin-` + view.MessageDOMID(kernel.ID{8}) + `"`, ">Unpin</button>"}, calls: 1},
+		{name: "enhanced pin", path: base + "/pin", hx: true, status: 200, want: []string{`action="` + base + `/unpin"`, `id="pin-true-` + view.MessageDOMID(kernel.ID{8}) + `"`, ">Unpin</button>"}, calls: 1},
 		{name: "enhanced unpin", path: base + "/unpin", hx: true, status: 200, want: []string{`action="` + base + `/pin"`, ">Pin</button>"}, calls: 1},
 		{name: "limit", path: base + "/pin", err: conversation.ErrPinLimit, status: 409, want: []string{"already has 50 pinned messages", `href="` + view.MessageURL("acme", kernel.ID{8}) + `"`}, calls: 1},
 		{name: "enhanced limit", path: base + "/pin", err: conversation.ErrPinLimit, hx: true, status: 409, want: []string{`role="alert"`, "already has 50 pinned messages", ">Pin</button>"}, calls: 1},
+		{name: "enhanced pin with overview", path: base + "/pin", hx: true, headers: map[string]string{"X-Pins-Section": "true"}, status: 200, want: []string{`id="pins-section"`, `hx-swap-oob="outerHTML"`}, calls: 1},
+		{name: "enhanced unpin with overview", path: base + "/unpin", hx: true, headers: map[string]string{"X-Pins-Section": "true"}, status: 200, want: []string{`id="pins-section"`, `hx-swap-oob="outerHTML"`}, calls: 1},
+		{name: "enhanced limit with overview", path: base + "/pin", err: conversation.ErrPinLimit, hx: true, headers: map[string]string{"X-Pins-Section": "true"}, status: 409, want: []string{`role="alert"`, `id="pins-section"`, `hx-swap-oob="outerHTML"`}, calls: 1},
 		// Out-of-scope targets are the same 404 as missing ones.
 		{name: "other channel", path: base + "/pin", err: conversation.ErrChannelNotFound, status: 404, calls: 1},
 		{name: "other message", path: base + "/unpin", err: conversation.ErrMessageNotFound, status: 404, calls: 1},
@@ -85,6 +88,9 @@ func TestPinRoutes(t *testing.T) {
 				if !strings.Contains(got, part) {
 					t.Fatalf("%q lacks %q", got, part)
 				}
+			}
+			if tt.hx && tt.headers["X-Pins-Section"] != "true" && strings.Contains(got, `hx-swap-oob=`) {
+				t.Fatal("response without overview marker contains an out-of-band section")
 			}
 			// The URL names the organisation, channel and message; the route names the action.
 			action := strings.TrimPrefix(tt.path[strings.LastIndex(tt.path, "/"):], "/")

@@ -57,10 +57,12 @@ func TestBrowser(t *testing.T) {
 	run("typing/indicator", testTypingIndicatorBrowser)
 	run("composer/typing", testTypingComposerBrowser)
 	run("composer/no-javascript", testComposerWithoutJavaScript)
+	run("composer/in-flight", testComposerInFlightBrowser)
 	run("read-recovery", testReadRecoveryBrowser)
 	run("unread-divider", testUnreadDividerBrowser)
 	run("read-control", testReadControlBrowser)
 	run("progress", testStreamProgressBrowser)
+	run("pins", testPinsBrowser)
 	run("per-entry/ephemeral", testEphemeralSinkBrowser)
 	run("side-panel", testSidePanelBrowser)
 	run("panel-sheet", testPanelSheetBrowser)
@@ -315,7 +317,7 @@ func TestBrowser(t *testing.T) {
 				// The composer response also swaps its sibling typing form out of band,
 				// which settles a second time for the same request: count requests.
 				page.MustEval(`() => { const settled = new WeakSet(); document.addEventListener('htmx:afterSettle', e => {
-     if (e.detail.target.id !== 'message-composer' || settled.has(e.detail.xhr)) return;
+     if (e.detail.target.id !== 'message-composer-state' || settled.has(e.detail.xhr)) return;
      settled.add(e.detail.xhr);
      document.body.dataset.posts = String(+(document.body.dataset.posts || 0) + 1);
     }); }`)

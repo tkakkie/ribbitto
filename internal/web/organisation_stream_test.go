@@ -26,7 +26,7 @@ const streamTopic = "06000000-0000-0000-0000-000000000000"
 func TestOrganisationStreamValidation(t *testing.T) {
 	for _, query := range []string{
 		"", "want=unknown", "want=sidebar,sidebar", "want=", "want=sidebar&want=messages",
-		"want=messages", "want=typing", "want=sidebar", "want=sidebar&panel=members", "want=sidebar&topic=" + streamTopic,
+		"want=pins", "want=pins,pins&channel=" + streamChannel, "want=messages", "want=typing", "want=sidebar", "want=sidebar&panel=members", "want=sidebar&topic=" + streamTopic,
 		"want=presence&presence-after=instance:0&channel=" + streamChannel + "&topic=" + streamTopic,
 		"want=sidebar&channel=" + streamChannel + "&topic=bad", "want=sidebar&channel=" + streamChannel + "&panel=members",
 		"want=presence", "want=presence&presence-after=", "want=sidebar&channel=bad",
@@ -36,7 +36,7 @@ func TestOrganisationStreamValidation(t *testing.T) {
 	} {
 		t.Run(query, func(t *testing.T) { organisationStream(t, query, realtime.Event{}, false, nil, 400, false, 0) })
 	}
-	for _, want := range []string{"sidebar", "messages", "typing", "sidebar,messages,typing", "presence&presence-after=instance:0"} {
+	for _, want := range []string{"pins", "sidebar", "messages", "typing", "sidebar,messages,typing", "presence&presence-after=instance:0"} {
 		t.Run(want, func(t *testing.T) {
 			query := "want=" + want + "&channel=" + streamChannel
 			organisationStream(t, query, realtime.Event{}, false, conversation.ErrChannelNotFound, 404, false, 0)
@@ -175,5 +175,14 @@ func TestSidebarStreamScope(t *testing.T) {
 				t.Fatalf("status %d, registered %d, reads %d; want %d before any registration or delivery on refusal", w.Code, seen, reads.Load(), tt.status)
 			}
 		})
+	}
+}
+
+func TestPinsInterestMapping(t *testing.T) {
+	for _, topic := range []string{"", "&topic=" + streamTopic} {
+		sub, ok := streamScope(httptest.NewRequest("GET", "/events?want=pins&channel="+streamChannel+topic, nil))
+		if !ok || len(sub.Interests) != 1 || sub.Interests[0] != realtime.InterestChannelState || sub.Channel != (kernel.ID{1}) {
+			t.Fatalf("pins scope: %+v, %v", sub, ok)
+		}
 	}
 }

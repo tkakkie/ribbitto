@@ -45,7 +45,7 @@
 // of message/topic selection. A dirty flag and fixed deadline use the same
 // writer and combined wait; authorization checks the connection's channel and
 // bound member immediately before sending without an SSE id. Web adapters
-// supply kinds, rendering and language-specific sharing; none are wired yet.
+// supply kinds, rendering and language-specific sharing; production wires pins.
 // An optional renderer EventFilter excludes kinds from message and unread
 // rendering after trigger classification, preserving skipped cursor progress.
 // Production presence and

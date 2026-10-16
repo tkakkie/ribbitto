@@ -25,22 +25,38 @@ type Pin struct {
 	PinnedAt                 time.Time
 }
 
-// Pins reads only the channel's bounded pins, current topics and names in
+// PinsSnapshot holds current pins and their snapshot sequence for ordering UI swaps.
+type PinsSnapshot struct {
+	Pins        []Pin
+	SnapshotSeq int64
+}
+
+// Pins reads the bounded current pins without exposing their display sequence.
+func (s *Reader) Pins(ctx context.Context, m org.Membership, channelID kernel.ID) ([]Pin, error) {
+	state, err := s.ReadPins(ctx, m, channelID)
+	return state.Pins, err
+}
+
+// ReadPins reads only the channel's bounded pins, current topics and names in
 // one read-only snapshot. Like Members, public-channel access is checked
 // against the resolved membership's organisation before reading the list.
-func (s *Reader) Pins(ctx context.Context, m org.Membership, channelID kernel.ID) (pins []Pin, err error) {
+func (s *Reader) ReadPins(ctx context.Context, m org.Membership, channelID kernel.ID) (state PinsSnapshot, err error) {
 	err = s.runner.InSnapshot(ctx, func(snapshot platform.Snapshot) error {
 		reads := s.reads(snapshot)
 		if _, err := reads.GetChannel(ctx, m.Organization.ID, channelID); err != nil {
 			return err
 		}
-		pins, err = s.pins(ctx, snapshot, reads, m, channelID)
+		state.Pins, err = s.pins(ctx, snapshot, reads, m, channelID)
+		if err != nil {
+			return err
+		}
+		state.SnapshotSeq, err = s.cursor(snapshot).EventSeq(ctx, m.Organization.ID)
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("reading pins snapshot: %w", err)
+		return PinsSnapshot{}, fmt.Errorf("reading pins snapshot: %w", err)
 	}
-	return pins, nil
+	return state, nil
 }
 
 // Overview reads the page Page or Around would (around when it is positive,

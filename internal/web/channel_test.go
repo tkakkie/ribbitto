@@ -73,7 +73,7 @@ func TestTopicHandlersWithoutHistoryRead(t *testing.T) {
 			if w.Code != tt.status {
 				t.Fatalf("status %d, body %s", w.Code, w.Body.String())
 			}
-			fragment := strings.Contains(w.Body.String(), `id="message-composer"`)
+			fragment := strings.HasPrefix(w.Body.String(), composerFragment)
 			switch {
 			case tt.method == "POST" && tt.body != "":
 				if len(lookups) != 0 || writer.body != tt.body || fragment != tt.htmx || !tt.htmx && w.Header().Get("Location") != path {
@@ -296,7 +296,7 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	if mains != 1 || topics != 1 || streams != 1 {
 		t.Errorf("%d mains, %d topic lists and %d streams, want one each", mains, topics, streams)
 	}
-	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v11.js"] || scripts["/static/read-visibility-v6.js"] || scripts["/static/message-composer-v7.js"] {
+	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v12.js"] || scripts["/static/read-visibility-v6.js"] || scripts["/static/message-composer-v8.js"] {
 		t.Errorf("list page scripts %v", scripts)
 	}
 	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`, `id="conversation"`} {

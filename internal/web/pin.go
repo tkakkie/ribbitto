@@ -57,8 +57,18 @@ func (p channelPages) changePin(w http.ResponseWriter, r *http.Request, m org.Me
 	}
 	messageURL := view.MessageURL(m.Organization.Slug, message)
 	if r.Header.Get("HX-Request") == "true" {
+		showPins := r.Header.Get("X-Pins-Section") == "true"
+		page := view.ChannelPage{Organization: view.Organization{Slug: m.Organization.Slug}}
+		if showPins {
+			state, err := p.messages.ReadPins(r.Context(), m, channel)
+			if err != nil {
+				serverError(w, r, "reading pin response", err)
+				return
+			}
+			page.Pins, page.SnapshotSeq = viewPins(state.Pins), state.SnapshotSeq
+		}
 		entry := view.Message{ID: message, PinURL: view.PinURL(m.Organization.Slug, channel, message), Pinned: pin}
-		templ.Handler(view.PinControl(entry, errorKey), templ.WithStatus(status)).ServeHTTP(w, r)
+		templ.Handler(view.PinResponse(entry, errorKey, page, showPins), templ.WithStatus(status)).ServeHTTP(w, r)
 		return
 	}
 	if errorKey != "" {

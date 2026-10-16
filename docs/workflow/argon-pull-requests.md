@@ -29,8 +29,8 @@ finding with a disposition.
 
 ## The fixed invocation
 
-Codex runs read-only, under a time limit, in a clean worktree of the
-current `origin/main`, never in Argon's tree. Its instructions are the
+Codex runs read-only, under a time limit, in a clean worktree at the pull
+request's base, a commit of `origin/main`, never in Argon's tree. Its instructions are the
 trusted `.github/prompts/adversarial.md` from `origin/main` with three
 adaptations and nothing else: the working directory is the base, the
 head's changes come from the supplied diff, and nothing is executed. The
@@ -40,26 +40,27 @@ results added. Copy this block from `origin/main`, never from a pull
 request; `limit` is in [running the other AI](running-other-ai.md).
 
 ```sh
-# $W: Argon's worktree; $clean: a clean worktree, detached at origin/main
-# just fetched; P: the pull request. gh pr checks fails unless CI is
-# green, which the review needs first. Every command substitution is its
-# own assignment, so a failing git or gh stops the chain.
-g() { env -i PATH=/usr/bin:/bin HOME=/nonexistent GIT_CONFIG_GLOBAL=/dev/null \
-  GIT_CONFIG_NOSYSTEM=1 git -C "$W" -c core.hooksPath=/dev/null \
-  -c core.fsmonitor=false "$@"; }
+# $W: Argon's worktree; $clean: a clean worktree detached at the pull
+# request's baseRefOid, after fetching origin/main; P: the pull request.
+# gh pr checks fails unless CI is green, which the review needs first.
+# Every command substitution is its own assignment, so a failing git or gh
+# stops the chain.
+hg() { r=$1; shift; env -i PATH=/usr/bin:/bin HOME=/nonexistent \
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_REPLACE_OBJECTS=1 \
+  git -C "$r" -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"; }
 d=$(mktemp -d) &&
   gh pr view P --json number,title,body,baseRefOid,headRefOid > "$d/pr" &&
   base=$(jq -r .baseRefOid "$d/pr") && head=$(jq -r .headRefOid "$d/pr") &&
-  local_head=$(g rev-parse HEAD) && test "$head" = "$local_head" &&
-  clean_head=$(git -C "$clean" rev-parse HEAD) &&
-  main=$(git -C "$clean" rev-parse origin/main) && test "$clean_head" = "$main" &&
-  clean_status=$(git -C "$clean" status --porcelain --untracked-files=all) &&
+  local_head=$(hg "$W" rev-parse HEAD) && test "$head" = "$local_head" &&
+  hg "$clean" merge-base --is-ancestor "$base" origin/main &&
+  clean_head=$(hg "$clean" rev-parse HEAD) && test "$clean_head" = "$base" &&
+  clean_status=$(hg "$clean" status --porcelain --ignored --untracked-files=all) &&
   test -z "$clean_status" &&
   gh pr checks P > /dev/null &&
   gh api "repos/tkakkie/ribbitto/commits/$head/check-runs?per_page=100" \
     --jq '[.check_runs[] | {name, status, conclusion}]' > "$d/ci" &&
-  g diff --no-ext-diff --no-textconv "$base...$head" > "$d/diff" &&
-  git -C "$clean" cat-file blob origin/main:.github/prompts/adversarial.md > "$d/in" &&
+  hg "$W" diff --no-ext-diff --no-textconv "$base...$head" > "$d/diff" &&
+  hg "$clean" cat-file blob origin/main:.github/prompts/adversarial.md > "$d/in" &&
   cat >> "$d/in" <<'EOF' &&
 
 ## Adaptations for this review
@@ -67,7 +68,7 @@ d=$(mktemp -d) &&
 These three replace what the text above says about the working directory;
 everything else above stands.
 
-- The working directory is a clean checkout of the base (origin/main), not
+- The working directory is a clean checkout of the base (base_commit), not
   of the pull request's head.
 - Read the head's changes from the payload's `diff` (base_commit...head_commit),
   and its CI results from `ci_checks`.
@@ -78,14 +79,15 @@ EOF
   jq -c --rawfile diff "$d/diff" --slurpfile ci "$d/ci" '{pull_request: .number,
     base_commit: .baseRefOid, head_commit: .headRefOid, title,
     description: .body, diff: $diff, ci_checks: $ci[0]}' "$d/pr" >> "$d/in" &&
-  head_now=$(gh pr view P --json headRefOid -q .headRefOid) &&
-  test "$head" = "$head_now" &&
+  now=$(gh pr view P --json baseRefOid,headRefOid -q '.baseRefOid+" "+.headRefOid') &&
+  test "$now" = "$base $head" &&
   (cd "$clean" && limit 1800 codex exec -m gpt-6-astra -s read-only \
     -o "$d/report.md" - < "$d/in")
 ```
 
-The head must equal the pull request's `headRefOid` at the start and
-just before Codex runs, and the CI results are those of that head. A
+The base and head must equal the pull request's `baseRefOid` and
+`headRefOid` at the start and just before Codex runs, the base must be on
+`origin/main`, and the CI results are those of that head. A
 failed, timed-out or empty run does not count
 ([completion](adversarial-review.md#which-review-runs)).
 

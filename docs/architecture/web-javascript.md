@@ -114,9 +114,11 @@ the composer script keeps none of their state.
   proxy's 429) comes before any write: *not sent*, or with the mark, *this
   retry was refused and the earlier send is still unconfirmed*. Only a 200 or
   a 409 follows the key lookup; both bring a new key, and the mark goes
-  exactly when the key changes. A 409 whose `data-sent-body` starts the
-  textarea removes it under the same rules (*the earlier message was sent*);
-  otherwise the text stays with the 409's error.
+  exactly when the key changes. A 409 carries `data-sent-body`, and omits
+  its error, only when the retried text started with the stored body: the
+  script removes that body under the same rules (*the earlier message was
+  sent*), or says the 409's error if the start was edited since. Otherwise
+  the text stays with the error.
 - **Pending own post** (planned, #1156; queue #1174): on enhanced latest
   composers only, a pending item cloned from a server-rendered `<template>`,
   body through `textContent`, in its own list beside `#message-items`. At

@@ -152,11 +152,11 @@ message, wherever branching has moved it since, and the composer stays on the
 requested feed or topic. The same key with other text or another channel is
 not a retry: 409 keeps the text with an error and a fresh key, so sending
 again posts it. A malformed key answers 400; a form without one posts without
-deduplication. When an enhanced send fails (#1179), the composer keeps the text
-and the key and says whether the message was not sent (a 4xx) or could not be
-confirmed (a network error, a 30 s timeout or a 5xx, after which a retry
-cannot post twice); after a lost answer, a 409 whose stored message starts the
-text removes it and keeps what was typed since.
+deduplication. A failed enhanced send (#1179) keeps the text and the key. A
+network error, a 30 s timeout or a 5xx could not be confirmed (a retry cannot
+post twice); a 4xx was not sent, unless an earlier send of that key is still
+unconfirmed. A 409 whose stored message starts the retried text removes it,
+keeping what was typed since, instead of the error.
 
 One message has its own URL ([decision 36](../decisions/36-one-message-has-a-stable-url.md), #1170),
 `/organizations/{slug}/messages/{message-id}`. It answers 303 to the message's

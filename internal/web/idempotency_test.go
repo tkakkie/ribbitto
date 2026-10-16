@@ -116,6 +116,22 @@ func TestComposerIdempotencyKey(t *testing.T) {
 				if !state.Signal(m.Organization.ID, place, typing.Typist{Member: m.Member.ID}, generation, time.Now()) {
 					t.Fatal("409 closed the submitted generation")
 				}
+				// Text that starts with the stored body, as after a lost answer:
+				// htmx gets the body to remove instead of the error (#1179); a
+				// plain form, or the stored message in another channel, keeps
+				// the error.
+				for _, channel := range []kernel.ID{place.Channel, {9}} {
+					for k, stored := range writer.keyed {
+						stored.ChannelID = channel
+						writer.keyed[k] = stored
+					}
+					reused.Set("body", "hello again")
+					body := keyedSend(t, h, path, reused, hx, http.StatusConflict).Body.String()
+					recovered := hx && channel == place.Channel
+					if strings.Contains(body, `data-sent-body="hello"`) != recovered || strings.Contains(body, "A different message was already sent") == recovered {
+						t.Fatalf("409 in channel %v: %s", channel, body)
+					}
+				}
 			})
 		}
 	}

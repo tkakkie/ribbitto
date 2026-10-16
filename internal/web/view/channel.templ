@@ -68,8 +68,10 @@ type ChannelPage struct {
 	IdempotencyKey *string
 	// PostedMessageID correlates a successful enhanced post with stream delivery.
 	PostedMessageID *kernel.ID
-	// SentBody is, on a 409, the stored body of the message the key names:
-	// always the requester's own, since posting looks keys up by author.
+	// SentBody is, on an enhanced 409 whose text starts with it, the stored
+	// body of the message the key names: always the requester's own, since
+	// posting looks keys up by author. The script removes it, so the 409's
+	// field error is not shown.
 	SentBody string
 	// Older reports that messages before Messages[0] exist.
 	Older bool
@@ -448,6 +450,7 @@ templ messageComposer(page ChannelPage) {
 						data-not-sent={ i18n.T(ctx, "message.send_alert.not_sent") }
 						data-still-unconfirmed={ i18n.T(ctx, "message.send_alert.still_unconfirmed") }
 						data-recovered={ i18n.T(ctx, "message.send_alert.recovered") }
+						data-repeat={ i18n.T(ctx, "message.error.repeat") }
 						class="text-caption text-danger sending:invisible"
 					></p>
 				}
@@ -472,7 +475,7 @@ templ composerState(page ChannelPage) {
 		if page.SentBody != "" {
 			data-sent-body={ page.SentBody }
 		}
-		if page.BodyError != "" {
+		if fieldError(page) != "" {
 			data-invalid
 		}
 		class="sending:invisible"
@@ -486,12 +489,20 @@ templ composerState(page ChannelPage) {
 		if latest(page) && page.EventCursor != nil {
 			<input type="hidden" name="cursor" value={ fmt.Sprint(*page.EventCursor) }/>
 		}
-		if page.BodyError != "" {
-			<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, page.BodyError) }</p>
+		if fieldError(page) != "" {
+			<p id="message-help" role="alert" class="text-danger">{ i18n.T(ctx, fieldError(page)) }</p>
 		} else {
 			<p id="message-help" class="text-caption text-muted">{ i18n.T(ctx, "message.help") }</p>
 		}
 	</div>
+}
+
+// fieldError is the help's error: none on a 409 the script recovers from.
+func fieldError(page ChannelPage) string {
+	if page.SentBody != "" {
+		return ""
+	}
+	return page.BodyError
 }
 
 // A sibling isolates signal controls and synchronization from submission.

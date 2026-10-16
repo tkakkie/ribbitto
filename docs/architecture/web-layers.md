@@ -46,8 +46,8 @@ htmx does only requests and swaps; the server and templ own the HTML.
   independent `this:drop` synchronization and no swap. Input/IME glue only triggers
   htmx. On success the state's
   `data-posted-message` carries the posted message's DOM id; errors omit it,
-  except a 409, which names the stored message and carries its body in
-  `data-sent-body`. Sends time out after 30 s (`hx-request`). A field error sets its
+  except a 409, which names the stored message and, when the text starts
+  with its body, carries it in `data-sent-body` instead of the error. Sends time out after 30 s (`hx-request`). A field error sets its
   `data-invalid`, copied to the textarea's `aria-invalid`. Every composer has a hidden
   server-rendered `idempotency_key`: fresh on each render, kept on a 422.
   Latest composers carry a hidden `cursor`; plain forms use the page snapshot.

@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,16 +28,23 @@ func TestSendRetryBrowser(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 120*time.Second)
 	defer cancel()
 	browser := launchBrowser(t, ctx, "send retry checks")
+	const (
+		recovered = "Your earlier message was sent. What you typed after it is kept."
+		repeat    = "A different message was already sent from this composer. Your text is kept: send again to post it."
+	)
 	for _, tc := range []struct {
 		name string
-		// edit runs on the textarea after the lost answer; retried and alert
-		// are the textarea and the alert after the retry's answer.
-		edit, retried, alert string
-		stored               []string
+		// typed and retyped run on the textarea while the lost send and the
+		// retry are in flight; retried, alert and invalid describe the
+		// composer after the retry's answer.
+		typed, retyped, retried, alert string
+		invalid                        bool
+		stored                         []string
 	}{
-		{"unchanged", "", "", "", []string{"first"}},
-		{"added", "body.value += 'second'", "second", "Your earlier message was sent. What you typed after it is kept.", []string{"first", "second"}},
-		{"edited", "body.value = 'First draft'", "First draft", "", []string{"first", "First draft"}},
+		{"unchanged", "", "", "", "", false, []string{"first"}},
+		{"added", "body.setRangeText('second', 5, 5, 'end')", "", "second", recovered, false, []string{"first", "second"}},
+		{"edited", "body.value = 'First draft'", "", "First draft", "", true, []string{"first", "First draft"}},
+		{"edited-in-retry", "body.setRangeText('second', 5, 5, 'end')", "body.value = 'First second'", "First second", repeat, false, []string{"first", "First second"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -59,28 +68,40 @@ func TestSendRetryBrowser(t *testing.T) {
  document.addEventListener('htmx:afterRequest', e => { if (e.target.id === 'message-composer') window.composerAnswers++; });
 })()`)
 			page.MustNavigate(server.URL + path).MustWaitLoad()
-			// Only the first send's answer is lost, after the handler committed.
-			lost := make(chan struct{}, 1)
-			lost <- struct{}{}
+			// Each send is held while the test types; only the first is
+			// answered by the handler, which commits it, and then lost.
+			var answered atomic.Bool
+			inFlight, release := make(chan struct{}), make(chan struct{})
 			router := page.HijackRequests()
 			router.MustAdd(server.URL+path, func(h *rod.Hijack) {
+				lose := !answered.Swap(true)
+				if lose {
+					if err := h.LoadResponse(http.DefaultClient, true); err != nil {
+						t.Error(err)
+					}
+				}
 				select {
-				case <-lost:
-				default:
+				case inFlight <- struct{}{}:
+					<-release
+				case <-ctx.Done():
+				}
+				if lose {
+					h.Response.Fail(proto.NetworkErrorReasonConnectionReset)
+				} else {
 					h.ContinueRequest(&proto.FetchContinueRequest{})
-					return
 				}
-				if err := h.LoadResponse(http.DefaultClient, true); err != nil {
-					t.Error(err)
-				}
-				h.Response.Fail(proto.NetworkErrorReasonConnectionReset)
 			})
 			go router.Run()
 			defer func() { _ = router.Stop() }()
-			send := func() {
+			send := func(typed string) {
 				t.Helper()
 				n := page.MustEval(`() => window.composerAnswers`).Int()
 				page.MustEval(`() => document.getElementById('message-composer').requestSubmit()`)
+				<-inFlight
+				if typed != "" {
+					page.MustEval(`() => { const body = document.getElementById('message-body'); ` + typed + `; }`)
+				}
+				release <- struct{}{}
 				page.MustWait(`n => window.composerAnswers > n`, n)
 			}
 			state := func() (string, string, string) {
@@ -88,6 +109,10 @@ func TestSendRetryBrowser(t *testing.T) {
  return [form.elements.body.value, form.elements.idempotency_key.value, document.getElementById('message-send-alert').textContent]; }`).Arr()
 				return got[0].Str(), got[1].Str(), got[2].Str()
 			}
+			// The caret stays at the end, and the help shows the 409's error
+			// exactly when the textarea is marked invalid.
+			composer := `() => { const body = document.getElementById('message-body'), help = document.getElementById('message-help');
+ return [body.selectionStart, body.getAttribute('aria-invalid'), help.getAttribute('role') === 'alert']; }`
 			page.MustEval(`() => { document.getElementById('message-body').value = 'first'; }`)
 			_, key, _ := state()
 			// The fixture's five messages come first.
@@ -101,21 +126,22 @@ func TestSendRetryBrowser(t *testing.T) {
 					t.Fatalf("stored %q, want %q", got, want)
 				}
 			}
-			send()
+			send(tc.typed)
 			stored([]string{"first"})
 			if page.MustEval(`() => document.getElementById('message-composer').dataset.unconfirmedKey`).Str() != key {
 				t.Fatal("the lost answer did not mark the send unconfirmed")
 			}
-			if tc.edit != "" {
-				page.MustEval(`() => { const body = document.getElementById('message-body'); ` + tc.edit + `; }`)
-			}
-			send()
+			send(tc.retyped)
 			text, retryKey, alert := state()
 			if text != tc.retried || retryKey == key || alert != tc.alert {
 				t.Fatalf("after the retry: text %q, alert %q, key changed %t", text, alert, retryKey != key)
 			}
+			got := page.MustEval(composer).Arr()
+			if got[0].Int() != len(text) || got[1].Str() != fmt.Sprint(tc.invalid) || got[2].Bool() != tc.invalid {
+				t.Fatalf("after the retry: caret, aria-invalid, help alert %v", got)
+			}
 			if tc.retried != "" {
-				send()
+				send("")
 			}
 			stored(tc.stored)
 			page.MustWait(`want => { const shown = [...document.querySelectorAll('#message-items [id^="body-"]')].map(e => e.textContent.trim()).filter(text => text !== 'message');

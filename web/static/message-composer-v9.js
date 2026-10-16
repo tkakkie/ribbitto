@@ -85,12 +85,14 @@
       say("");
       afterComposition(body, () => removeSent(body, sent));
     }
-    // A 409 names the stored message for this key: after a lost answer, the
-    // textarea may hold that message followed by text typed since (#1179).
+    // A 409 names the stored message for this key. The server sends its body
+    // only when the retried text started with it: the earlier answer was
+    // lost while the member typed on (#1179). If the start has been edited
+    // since, the 409's error, which the help then omits, is said here.
     if (status === 409) {
       const sent = state.dataset.sentBody;
       say("");
-      afterComposition(body, () => removeSent(body, sent) && say("recovered"));
+      if (sent) afterComposition(body, () => say(removeSent(body, sent) ? "recovered" : "repeat"));
     }
     // Focus on the send button returns to the textarea. htmx disables the
     // button in flight, and Chrome then moves its focus to the body at the

@@ -17,15 +17,16 @@ Approved on [#1247](https://github.com/tkakkie/ribbitto/issues/1247).
 - **After the adversarial review:** the adversarial follow-up checks
   ([reviewing](reviewing.md)) and every re-review the
   [completion rule](adversarial-review.md#which-review-runs) requires are
-  Codex's: a follow-up check as in
-  [running the other AI](running-other-ai.md), with `$base` the reviewed
-  SHA, its stdin also carrying the whole diff up to `$base` from its merge
-  base with `origin/main`, and, for a regression test, the scratch pull
-  request's diff and the failing job's log
-  ([mutation evidence](#mutation-evidence)); a re-review with the fixed
-  invocation on the new head. The sequencing, head and CI checks,
-  dispositions, and the failure and retry rules are unchanged; only the
-  reviewer is Codex instead of Argon.
+  Codex's: a follow-up check with `$base` the reviewed SHA; a re-review
+  with the fixed invocation on the new head. The sequencing, head and CI
+  checks, dispositions, and the failure and retry rules are unchanged;
+  only the reviewer is Codex instead of Argon.
+
+**Codex's follow-up checks** (Copilot or adversarial) run as in
+[running the other AI](running-other-ai.md). Their stdin also carries the
+whole diff up to `$base` from its merge base with `origin/main`, and, for
+a regression test, the scratch pull request's diff and the failing job's
+log ([mutation evidence](#mutation-evidence)).
 
 The template's *Adversarial* field says `Codex (B) at <SHA>`. Claude posts
 the report as `**Adversarial review — Codex (tier B)** (at <SHA>)`, each

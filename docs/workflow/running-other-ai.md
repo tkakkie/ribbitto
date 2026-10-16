@@ -42,7 +42,8 @@ GitHub's `@codex review`: it looks only at the most severe problems.
 On an Argon pull request, the pull request example above does not
 apply: Codex runs in a clean worktree of `origin/main`, never at the pull
 request's head, and gets the diff on stdin
-([who does what](argon-implementer.md#who-does-what)):
+([who does what](argon-implementer.md#who-does-what); for a follow-up
+check also [more context](argon-pull-requests.md#who-reviews)):
 
 ```sh
 # $W: Argon's worktree; $clean: a clean worktree at origin/main; $base:

@@ -6,7 +6,7 @@ import (
 	"io/fs"
 )
 
-//go:embed css vendor brand *.js channel-images-v1
+//go:embed css vendor brand *.js channel-images-v1 islands
 var files embed.FS
 
 // FS returns the embedded assets including CSS, vendored libraries, brand

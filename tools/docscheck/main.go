@@ -173,7 +173,8 @@ func markdownFiles(root string) ([]string, error) {
 		rel, _ := filepath.Rel(root, path)
 		rel = filepath.ToSlash(rel)
 		if d.IsDir() {
-			if rel == ".git" || rel == "bin" || rel == "node_modules" {
+			// web/islands/node_modules is #1152's prototype npm install.
+			if rel == ".git" || rel == "bin" || rel == "node_modules" || rel == "web/islands/node_modules" {
 				return filepath.SkipDir
 			}
 			return nil

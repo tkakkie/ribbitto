@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "name": "ribbitto-islands",
+  "type": "module",
+  "devDependencies": {
+    "svelte": "5.57.2"
+  }
+}

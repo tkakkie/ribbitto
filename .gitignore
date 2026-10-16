@@ -21,3 +21,4 @@ coverage.*
 
 # Local AI tool state (settings meant for everyone are committed explicitly)
 .claude/settings.local.json
+/web/islands/node_modules/

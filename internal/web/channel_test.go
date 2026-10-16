@@ -328,7 +328,7 @@ func assertChannelListPage(t *testing.T, body string, channel kernel.ID) {
 	if mains != 1 || topics != 1 || streams != 1 {
 		t.Errorf("%d mains, %d topic lists and %d streams, want one each", mains, topics, streams)
 	}
-	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v12.js"] || scripts["/static/read-visibility-v6.js"] || scripts["/static/message-composer-v8.js"] {
+	if !scripts["/static/sidebar-scroll-v2.js"] || !scripts["/static/message-stream-v12.js"] || scripts["/static/read-visibility-v6.js"] || scripts["/static/islands/composer-v1.js"] {
 		t.Errorf("list page scripts %v", scripts)
 	}
 	for _, absent := range []string{`id="read-form"`, `id="message-composer"`, `id="message-items"`, `id="typing-status"`, `id="typing-form"`, `id="conversation"`} {

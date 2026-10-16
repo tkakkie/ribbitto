@@ -54,6 +54,7 @@ Read the file for the area you change:
 | [`load-restart.md`](load-restart.md) | the load client's restart harness: an owned child server, its exit, and the drain to the final watermark |
 | [`load-results-restart.md`](load-results-restart.md) | reconnect storm results: restarting with every stream open, exit time, recovery, replay and the comparison |
 | [Web layers](web-layers.md) | what handlers, templ, htmx and [JavaScript](web-javascript.md) are each responsible for |
+| [`web-composer.md`](web-composer.md) | composer JavaScript: sending, failures, pending own posts, the idempotency key, drafts and the send key |
 | [`web-contracts.md`](web-contracts.md) | the DOM-id and script-read data-attribute contract shared by templ, htmx and scripts |
 | [`web-layers-checks.md`](web-layers-checks.md) | how the web-layer rules are checked, and the M3 audit |
 

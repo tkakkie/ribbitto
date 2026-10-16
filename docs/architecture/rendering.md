@@ -81,7 +81,7 @@ button is disabled, `hx-sync="this:drop"` drops another send, and the `sending:`
 variant (htmx's `htmx-request` class) shows a polite "Sending…" status over the
 help, which keeps its space; the textarea stays usable. A send times out after
 30 s (`hx-request`). Failures fill `#message-send-alert` (#1179,
-[web JavaScript](web-javascript.md#composer)); a 409's state carries the
+[web JavaScript](web-composer.md#composer)); a 409's state carries the
 stored body in `data-sent-body` when the retried text starts with it.
 Older pages use a plain form. Every feed/topic composer, including older pages,
 submits a hidden server-issued `composer` generation scoped to the resolved

@@ -78,7 +78,8 @@ at most once per PR; not a review round). Evidence: #2, the case of #14.
    ```
 
 4. All pass → the remaining steps (merge the current `main` or confirm no
-   merge is needed, then Copilot, requested by hand on the draft, and its
+   merge is needed, then Copilot, requested by hand on the draft unless the
+   [docs-only rule](#docs-only-pull-requests) applies, and its
    follow-up check if answering it needs a change, then the initial
    adversarial review its
    [tier requires](adversarial-review.md#which-review-runs) on that head,
@@ -172,6 +173,25 @@ pull request's own commits since the last adversarially reviewed head, not
 only the resolution, before it is marked ready
 ([completion](adversarial-review.md#which-review-runs)); a pull request
 already marked ready is converted back to a draft until then.
+
+## Docs-only pull requests
+
+Copilot is not requested for a pull request meeting all four conditions
+(#1234):
+
+- documentation only: Markdown files and `docs/size-exceptions.txt`;
+- no gate document: no file tier A's second item in
+  [`adversarial-review.md`](adversarial-review.md#which-review-runs) names;
+- risk `normal` ([Risk](#risk));
+- adversarial tier C, so a `docs/size-exceptions.txt` change beyond tier C
+  (one that loosens a check) is not exempt.
+
+Everything else stays: the cross-review (at most two rounds, closure
+verification), `make check` and CI, `ai-reviewed` after the reviewer
+approves, and the maintainer's merge decision. The pull request
+body states that the docs-only rule applied. If Copilot reviews anyway, its
+comments are handled as above. A pull request that stops meeting a
+condition returns to the normal chain from that point, Copilot included.
 
 ## Risk
 

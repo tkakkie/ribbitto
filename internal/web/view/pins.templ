@@ -1,0 +1,59 @@
+package view
+
+import (
+	"time"
+
+	"github.com/tkakkie/ribbitto/internal/kernel"
+	"github.com/tkakkie/ribbitto/internal/web/i18n"
+)
+
+// Pin is one entry of the overview's pins: the current message's excerpt,
+// author and topic, and who pinned it when (docs/domain/pins.md).
+type Pin struct {
+	MessageID                       kernel.ID
+	Excerpt                         string
+	AuthorDisplayName, AuthorHandle string
+	Topic                           Topic
+	PinnerDisplayName, PinnerHandle string
+	PinnedAt                        time.Time
+}
+
+// pinsSection lists the channel's pins across all its topics, newest first.
+// The excerpt links to the message's URL (decision 36), so opening it follows
+// ordinary navigation and read rules. Before live delivery (#892) the list is
+// as current as the page.
+templ pinsSection(page ChannelPage) {
+	<section aria-labelledby="pins-heading" class="flex flex-col gap-2">
+		<h3 id="pins-heading" class="font-semibold">{ i18n.T(ctx, "pins.title") }</h3>
+		if len(page.Pins) == 0 {
+			<p class="text-muted">{ i18n.T(ctx, "pins.empty") }</p>
+		} else {
+			<ol class="flex flex-col gap-3">
+				for _, pin := range page.Pins {
+					<li class="flex flex-col gap-1 break-words">
+						// dir="auto" isolates the excerpt's direction from the names after it.
+						<a href={ templ.SafeURL(MessageURL(page.Organization.Slug, pin.MessageID)) } dir="auto" class="text-fg wrap-anywhere underline hover:text-brand max-desk:min-h-11">{ pin.Excerpt }</a>
+						// Names shrink and wrap like a message's author, so an unbroken
+						// name cannot widen the panel.
+						<p class="flex flex-wrap gap-x-2 text-caption">
+							<span class="min-w-0 break-words">
+								@MemberName(pin.AuthorDisplayName, pin.AuthorHandle)
+							</span>
+							<span class="inline-flex min-w-0 items-center gap-1 text-muted wrap-anywhere">
+								@Icon("branch-regular", 16)
+								<bdi class="min-w-0">{ topicName(ctx, pin.Topic) }</bdi>
+							</span>
+						</p>
+						<p class="flex flex-wrap gap-x-2 text-caption text-muted">
+							<span>{ i18n.T(ctx, "pins.pinned_by") }</span>
+							<span class="min-w-0 break-words">
+								@MemberName(pin.PinnerDisplayName, pin.PinnerHandle)
+							</span>
+							<time datetime={ pin.PinnedAt.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano) } data-local-time>{ pin.PinnedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</time>
+						</p>
+					</li>
+				}
+			</ol>
+		}
+	</section>
+}

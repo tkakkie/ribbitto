@@ -274,6 +274,15 @@ other = "lilypadの概要"
 ["overview.created"]
 other = "作成日"
 
+["pins.title"]
+other = "ピン留めしたメッセージ"
+
+["pins.empty"]
+other = "ピン留めしたメッセージはまだありません。"
+
+["pins.pinned_by"]
+other = "ピン留め:"
+
 ["people.empty"]
 other = "このページにメンバーはいません。"
 

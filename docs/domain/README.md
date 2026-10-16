@@ -27,7 +27,7 @@ index below for everything else.
 | [`topics.md`](topics.md) | topics, the default topic, the feed and branching |
 | [`messages.md`](messages.md) | message identity, accepted bodies and rendering |
 | [`replies.md`](replies.md) | reply references and the reply-chain view (planned) |
-| [`pins.md`](pins.md) | channel pins: permissions, limits, previews and message changes (storage and use cases implemented; UI planned) |
+| [`pins.md`](pins.md) | channel pins: permissions, limits, previews and message changes (storage, use cases and overview implemented; controls planned) |
 | [`setup-and-signup.md`](../architecture/setup-and-signup.md) | first-run setup and sign-up |
 
 ## Glossary
@@ -45,7 +45,7 @@ index below for everything else.
 | **message** | A post in a channel, written by a member. |
 | **reply** *(planned)* | A message linked to an earlier message it answers in the same channel. |
 | **reply chain** *(planned)* | A selected message's ancestor path and all its descendants, in `event_seq` order. |
-| **pin** *(UI planned)* | A channel's reference to an important message, shown in its overview panel. |
+| **pin** *(controls planned)* | A channel's reference to an important message, shown in its overview panel. |
 | **topic** | A named conversation inside a channel; every channel message is in exactly one. |
 | **default topic** | The one topic every channel has, where a message goes when no topic is chosen. Not the default channel. |
 | **feed** | A channel's messages from all its topics, interleaved by time and labelled with their topic. |
@@ -63,5 +63,5 @@ accounts join the setup row's organisation as members. `off`, empty or unset dis
 Two roles: `owner` and `member`. Public channels only: every member can read and write them.
 
 Later, in roughly this order: private channels, direct messages,
-invitations, reactions, editing and deleting, pin overview/UI, row-level security, several
+invitations, reactions, editing and deleting, pin controls, row-level security, several
 organisations (see [`docs/roadmap.md`](../roadmap.md)).
